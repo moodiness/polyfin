@@ -42,7 +42,8 @@ type Config struct {
 	// their remuxes and the guides being read; it is emptied at start.
 	CacheDir string
 	// FontsDir holds the fallback fonts apps load to render subtitles, read
-	// with the folders within.
+	// with the folders within, which also write the names of generated
+	// images.
 	FontsDir string
 	// WebDir is the folder of jellyfin-web, the web client served at
 	// /web/. A folder without its index.html leaves the web client off.

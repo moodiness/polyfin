@@ -73,6 +73,9 @@ type Service struct {
 	// automaticImage).
 	libraryImages *cache.Cache[pageKey, fetched[string]]
 	sizes         pageSizes
+	// generated remembers what the generated images of collections and
+	// libraries show (see generated.go).
+	generated generatedImages
 	// prefetches holds a place for each listing read ahead (see
 	// readAhead); readAhead turns reading ahead on.
 	prefetches chan struct{}
@@ -509,11 +512,15 @@ func (s *Service) Libraries(ctx context.Context, user accounts.User) ([]Item, er
 	records := make([]record, 0, len(v.libraries))
 	for i, l := range v.libraries {
 		item := l.item
-		if !v.restricted() {
-			item.Images.Primary = images[i]
+		image, shown := images[i], !v.restricted()
+		if l.image == addons.LibraryImageGenerated {
+			image, shown = s.libraryImage(ctx, v, l)
+		}
+		if shown {
+			item.Images.Primary = image
 		}
 		items = append(items, item)
-		records = append(records, libraryRecord(l, images[i]))
+		records = append(records, libraryRecord(l, image))
 	}
 	for _, l := range v.smart {
 		if l.item.Kind == KindLibrary {
@@ -1066,6 +1073,9 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		}
 		items, records = append(items, item), append(records, r)
 	}
+	if l.catalog.Type == "collection" {
+		s.addGenerated(ctx, v, items, records)
+	}
 	result := page(items, start, totalWithinMax(total, l.maxItems))
 	if result.More && !first {
 		s.prefetch(ctx, v, l.addon, func(ctx context.Context) { _, _, _ = s.window(ctx, v, src, start+count, count) })
@@ -1353,6 +1363,12 @@ func (s *Service) collectionSources(ctx context.Context, addon installed, meta s
 		group.SetLimit(metaFetches)
 		for i, id := range within {
 			group.Go(func() error {
+				// A generated image's titles take the descriptions kept
+				// (see collectionCandidates).
+				if descriptionsKept(ctx) {
+					level[i], _ = s.keptDescription(ctx, addon, metaKey{addon.addon.ID, "collection", id}, inDatabase)
+					return nil
+				}
 				m, err := s.meta(ctx, addon, "collection", id)
 				if err != nil && ctx.Err() == nil {
 					s.logger.Debug("A collection could not be described", "collection", id, "error", err)
@@ -1821,7 +1837,8 @@ func (s *Service) goneVideos(ctx context.Context, records []record) (map[account
 func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error) {
 	if l, ok := v.library(id); ok {
 		item := l.item
-		if l.image == addons.LibraryImageAutomatic && !v.restricted() {
+		switch {
+		case l.image == addons.LibraryImageAutomatic && !v.restricted():
 			item.Images.Primary = s.automaticImage(ctx, l.catalogSource(), func() string {
 				r, err := s.load(ctx, id)
 				if err != nil {
@@ -1829,11 +1846,17 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 				}
 				return r.Poster
 			})
+		case l.image == addons.LibraryImageGenerated:
+			if image, shown := s.libraryImage(ctx, v, l); shown {
+				item.Images.Primary = image
+			}
 		}
 		return item, nil
 	}
 	if l, ok := v.smartList(id); ok {
-		return l.item, nil
+		items := []Item{l.item}
+		s.smartCollectionImages(ctx, v, items)
+		return items[0], nil
 	}
 	if id == ReplayViewID {
 		return s.replayView(ctx, v)
@@ -1864,7 +1887,9 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		}
 		item := Item{ID: id, Kind: KindCollection, ParentID: deref(r.Parent)}
 		fromMeta(&item, *r.Meta)
-		return item, nil
+		items := []Item{item}
+		s.addGenerated(ctx, v, items, []record{r})
+		return items[0], nil
 	case KindMovie, KindSeries, KindVideo:
 		meta := *r.Meta
 		full, described := s.titleMeta(ctx, v, r)
@@ -2382,6 +2407,13 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		return url, false, nil
 	}
 	r, err := s.load(ctx, id)
+	// A smart list shown as a collection has no record: its generated
+	// image, if any, is remembered apart.
+	if errors.Is(err, ErrNotFound) {
+		if url := s.generatedArtwork(ctx, id, imageType); url != "" {
+			return url, false, nil
+		}
+	}
 	// An IPTV channel shows its line-up's logo at once, listed or not: the
 	// admin app shows those of hidden channels too.
 	if s.iptv != nil && strings.EqualFold(imageType, "Primary") && (errors.Is(err, ErrNotFound) || err == nil && r.Kind == KindChannel &&
@@ -2439,7 +2471,8 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 	case r.Kind == KindPerson && r.Person != nil:
 		images.Primary = r.Person.Image
 	case r.Kind == KindLibrary:
-		// A library's automatic image, when it was last looked up.
+		// A library's automatic or generated image, when it was last
+		// looked up.
 		images.Primary = r.Poster
 	case r.Music != nil:
 		images.Primary = r.Music.Artwork
@@ -2476,6 +2509,11 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		confined = series.Confined || describer.confined
 	}
 	url := images.URL(imageType)
+	if url == "" && r.Kind == KindCollection && images.Primary == "" {
+		// An addon's collection without a poster shows its generated
+		// images, if any.
+		url, confined = s.generatedArtwork(ctx, id, imageType), false
+	}
 	if url == "" {
 		return "", false, ErrNotFound
 	}

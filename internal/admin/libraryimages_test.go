@@ -139,6 +139,16 @@ func TestLibraryImages(t *testing.T) {
 	if movie = find(administrator.libraries("shared"), "movie", "top"); movie["image"] != "automatic" || movie["name"] != "Renamed" {
 		t.Errorf("after saving the libraries: %v", movie)
 	}
+	// A generated image, drawn from the posters of the first page kept,
+	// listed with the libraries.
+	status, code, libraries = administrator.libraryImageCall("shared", with(map[string]any{"image": "generated"}))
+	generated := find(libraries, "movie", "top")
+	if status != http.StatusOK || generated["image"] != "generated" || generated["imageTag"] == nil || generated["imageTag"] == movie["imageTag"] {
+		t.Errorf("generated: %d %s %v", status, code, generated)
+	}
+	if listed := find(administrator.libraries("shared"), "movie", "top"); listed["image"] != "generated" || listed["imageTag"] != generated["imageTag"] {
+		t.Errorf("generated, listed: %v", listed)
+	}
 
 	status, code, libraries = administrator.libraryImageCall("shared", with(map[string]any{"image": "custom",
 		"data": base64.StdEncoding.EncodeToString(picture)}))

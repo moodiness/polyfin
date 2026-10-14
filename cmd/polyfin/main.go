@@ -91,7 +91,7 @@ Environment:
   POLYFIN_LISTEN        HTTP address (default :8096)
   POLYFIN_FFPROBE       ffprobe executable (default ffprobe, from PATH)
   POLYFIN_FFMPEG        FFmpeg executable (default ffmpeg, from PATH)
-  POLYFIN_FONTS_DIR     fallback fonts for subtitles (default /usr/share/fonts)
+  POLYFIN_FONTS_DIR     fallback fonts for subtitles and generated images (default /usr/share/fonts)
   POLYFIN_WEB_DIR       jellyfin-web, served at /web/ (default /usr/share/polyfin/jellyfin-web)
 
 Every other option is a setting of the admin app.

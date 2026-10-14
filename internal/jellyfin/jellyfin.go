@@ -98,7 +98,8 @@ type Options struct {
 	// describes.
 	CacheDir string
 	// FontsDir holds the fonts apps load to render subtitles whose own
-	// fonts are missing; empty or missing, it offers none.
+	// fonts are missing, which also write the names of generated images;
+	// empty or missing, it offers none.
 	FontsDir string
 	// Thumbnails makes and keeps the scrubbing thumbnails and chapter
 	// images of the versions played; nil makes none.
@@ -120,8 +121,11 @@ type Options struct {
 // Handler serves the Jellyfin API.
 type Handler struct {
 	Options
-	routes   http.Handler
-	images   imageCache
+	routes http.Handler
+	images imageCache
+	// fonts write the names of generated images, from FontsDir (see
+	// fontsFor).
+	fonts    fontsFor
 	sessions *playback.Sessions
 	// subtitleFiles remembers the subtitle files described for each item,
 	// for players that fetch them without credentials.

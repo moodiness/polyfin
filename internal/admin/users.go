@@ -327,6 +327,7 @@ type settingsJSON struct {
 	SegmentSourcesOff     *[]string `json:"segmentSourcesOff"`
 	AudioIntros           *bool     `json:"audioIntros"`
 	SimilarTitles         *bool     `json:"similarTitles"`
+	GenerateImages        *bool     `json:"generateImages"`
 	Lyrics                *bool     `json:"lyrics"`
 	PlayedPercent         *int      `json:"playedPercent"`
 	ResumePercent         *int      `json:"resumePercent"`
@@ -547,6 +548,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		SegmentSourcesOff:     &settings.SegmentSourcesOff,
 		AudioIntros:           &settings.AudioIntros,
 		SimilarTitles:         &settings.SimilarTitles,
+		GenerateImages:        &settings.GenerateImages,
 		MDBListRatingsKeySet:  settings.MDBListRatingsKey != "",
 		CriticRatingShows:     &settings.CriticRatingShows,
 		Lyrics:                &settings.Lyrics,
@@ -1112,6 +1114,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		SegmentSourcesOff:     valueOr(body.SegmentSourcesOff, current.SegmentSourcesOff),
 		AudioIntros:           valueOr(body.AudioIntros, current.AudioIntros),
 		SimilarTitles:         valueOr(body.SimilarTitles, current.SimilarTitles),
+		GenerateImages:        valueOr(body.GenerateImages, current.GenerateImages),
 		MDBListRatingsKey:     ratingsKey,
 		CriticRatingShows:     valueOr(body.CriticRatingShows, current.CriticRatingShows),
 		Lyrics:                valueOr(body.Lyrics, current.Lyrics),

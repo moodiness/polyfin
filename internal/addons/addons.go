@@ -154,8 +154,9 @@ type Library struct {
 	// catalog, which makes no menu entry, and for a disabled catalog.
 	HideInMenus bool
 	// Image is how an enabled library finds the image apps show on its
-	// tile: LibraryImageNone or LibraryImageAutomatic. An image uploaded for
-	// the library's item wins over both (see library.LibraryImages).
+	// tile: LibraryImageNone, LibraryImageAutomatic or
+	// LibraryImageGenerated. An image uploaded for the library's item wins
+	// over all three (see library.LibraryImages).
 	Image string
 	// Guides are the XMLTV guides of an enabled live TV catalog, in order;
 	// nil for any other library. GuideChannels counts the catalog's channels
@@ -197,10 +198,13 @@ func GenreChoices(catalog stremio.Catalog) []string {
 	return nil
 }
 
-// The images a library may find on its own (see Library.Image).
+// The images a library may find on its own (see Library.Image): none,
+// one found in its catalog, or one Polyfin draws from its first titles
+// (see library.GeneratedImage).
 const (
 	LibraryImageNone      = "none"
 	LibraryImageAutomatic = "automatic"
+	LibraryImageGenerated = "generated"
 )
 
 // MaxGuides bounds the guides of a live TV catalog.
@@ -1126,7 +1130,7 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 // makes none.
 func (s *Store) SetLibraryImage(ctx context.Context, scope Scope, key LibraryKey, image string) error {
 	defer s.changed()
-	if image != LibraryImageNone && image != LibraryImageAutomatic {
+	if image != LibraryImageNone && image != LibraryImageAutomatic && image != LibraryImageGenerated {
 		return ErrInvalidLibrary
 	}
 	tag, err := s.db.Exec(ctx, `UPDATE libraries l SET image = $5 FROM addons a WHERE a.id = l.addon_id AND l.addon_id = $1

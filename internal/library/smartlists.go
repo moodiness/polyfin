@@ -134,6 +134,7 @@ func (s *Service) SmartCollections(ctx context.Context, user accounts.User) ([]I
 			items = append(items, l.item)
 		}
 	}
+	s.smartCollectionImages(ctx, v, items)
 	return s.overridden(items), nil
 }
 

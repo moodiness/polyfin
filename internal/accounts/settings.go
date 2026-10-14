@@ -1007,6 +1007,11 @@ type Settings struct {
 	// SimilarTitles lists titles close to a movie or series from the
 	// addons' catalogs; off, titles have none.
 	SimilarTitles bool
+	// GenerateImages gives the addons' collections without a poster, and
+	// the smart lists shown as collections, an image Polyfin draws from
+	// the posters of their first titles (see library.GeneratedImage); off,
+	// they show none. Libraries set to a generated image keep theirs.
+	GenerateImages bool
 	// MDBListRatingsKey is the server's MDBList API key, which movies and
 	// series have their IMDb rating, critics' score and audience score
 	// looked up with (see package ratings); empty, MDBList is never asked
@@ -1350,7 +1355,7 @@ func validWebText(text string, max int) bool {
 // Settings.fields.
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
 	"update_check, local_discovery, local_address, " +
-	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
+	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"mdblist_ratings_key, critic_rating_shows, " +
 	"personal_addons, server_imports, login_attempts, inactive_device_days, known_proxies, known_proxy_names, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
@@ -1384,7 +1389,7 @@ func (settings *Settings) fields() []any {
 		&settings.PrepareAhead, &settings.Transcoding, &settings.CatalogLimit, &settings.ChannelLimit,
 		&settings.UpdateCheck, &settings.LocalDiscovery, &settings.LocalAddress,
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff, &settings.AudioIntros,
-		&settings.SimilarTitles, &settings.Lyrics, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
+		&settings.SimilarTitles, &settings.GenerateImages, &settings.Lyrics, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.MDBListRatingsKey, &settings.CriticRatingShows,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
 		&settings.KnownProxyNames, &settings.DetailedLog,

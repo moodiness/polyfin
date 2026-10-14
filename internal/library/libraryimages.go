@@ -17,16 +17,17 @@ import (
 //
 // Jellyfin apps show each library on a tile, with the library's Primary
 // image. Each enabled library finds it as its scope chooses (see
-// addons.Library.Image): none, as before, or automatically, from the
-// titles its catalog lists first. An image uploaded for the library's item
-// wins over both, as uploaded artwork does for any item (see UploadImage):
+// addons.Library.Image): none, as before, automatically, from the titles
+// its catalog lists first, or drawn from the posters of those titles (see
+// generated.go). An image uploaded for the library's item wins over all
+// three, as uploaded artwork does for any item (see UploadImage):
 // administrators upload it from the admin app or from jellyfin-web, users
 // for their own libraries from the admin app.
 //
-// The automatic image is the same for everyone who sees the library, and
-// is remembered with the library's record, which serves it (see Artwork).
-// A user under parental control or blocking genres is not shown it: the
-// title it comes from may be one hidden from them.
+// The automatic and generated images are the same for everyone who sees
+// the library, and are remembered with the library's record, which serves
+// them (see Artwork). A user under parental control or blocking genres is
+// not shown them: the titles they come from may be hidden from them.
 //
 // Listing libraries never waits for an addon: an image not looked up yet
 // is found in the catalog's first page when it is kept, else the
@@ -208,15 +209,35 @@ type LibraryImage struct {
 // may only reach public addresses. Catalogs that are not enabled
 // libraries have no item and show none; live TV catalogs make no library.
 // Automatic images are looked up as apps would, and remembered for the
-// libraries' items, so that the image can be loaded at once.
+// libraries' items, so that the image can be loaded at once; generated
+// ones are chosen from what Polyfin keeps of the catalogs.
 func (s *Service) LibraryImages(ctx context.Context, scope addons.Scope, confined bool, catalogs []addons.Library) ([]LibraryImage, error) {
 	list, err := s.addons.Addons(ctx, scope)
 	if err != nil {
 		return nil, err
 	}
+	settings := s.settings()
+	// The view generated images read the catalogs in: the scope's
+	// enabled addons, as everyone sees them.
+	v := view{catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}.unfiltered()
 	byID := map[accounts.ID]addons.Addon{}
 	for _, addon := range list {
 		byID[addon.ID] = addon
+		if addon.Enabled {
+			v.addons = append(v.addons, installed{addon: addon, confined: confined, shared: scope.Owner == nil})
+		}
+	}
+	// The libraries' names, as apps list them.
+	var listed []addons.Library
+	var at []int
+	for i, c := range catalogs {
+		if addon, ok := byID[c.AddonID]; ok && addon.Enabled && c.Enabled && !LiveCatalog(c.Catalog.Type) {
+			listed, at = append(listed, c), append(at, i)
+		}
+	}
+	names := make([]string, len(catalogs))
+	for i, name := range LibraryNames(listed, settings.Language) {
+		names[at[i]] = name
 	}
 	result := make([]LibraryImage, len(catalogs))
 	var records []record
@@ -237,12 +258,15 @@ func (s *Service) LibraryImages(ctx context.Context, scope addons.Scope, confine
 		if !ok || !addon.Enabled {
 			continue
 		}
-		l := library{item: Item{ID: id}, addon: installed{addon: addon, confined: confined, shared: scope.Owner == nil}, catalog: c.Catalog,
-			genre: c.Genre, maxItems: c.MaxItems, image: c.Image}
+		l := library{item: Item{ID: id, Kind: KindLibrary, Name: names[i]}, addon: installed{addon: addon, confined: confined, shared: scope.Owner == nil},
+			catalog: c.Catalog, genre: c.Genre, maxItems: c.MaxItems, image: c.Image}
 		group.Go(func() error {
 			var image string
-			if l.image == addons.LibraryImageAutomatic {
+			switch l.image {
+			case addons.LibraryImageAutomatic:
 				image = s.lookUpImage(ctx, l.catalogSource())
+			case addons.LibraryImageGenerated:
+				image, _ = s.libraryImage(ctx, v, l)
 			}
 			mu.Lock()
 			defer mu.Unlock()

@@ -27,8 +27,8 @@ type LibraryImages interface {
 }
 
 // libraryImageRequest chooses the image of one of the scope's libraries:
-// "none", "automatic", or "custom" with a picture, sent in Data (base64)
-// or found at URL, which the server downloads once.
+// "none", "automatic", "generated", or "custom" with a picture, sent in
+// Data (base64) or found at URL, which the server downloads once.
 type libraryImageRequest struct {
 	AddonID     string `json:"addonId"`
 	CatalogType string `json:"catalogType"`
@@ -41,8 +41,9 @@ type libraryImageRequest struct {
 // saveLibraryImage chooses the image one of the scope's enabled libraries
 // shows in Jellyfin apps, and answers the scope's libraries. A custom
 // picture is kept as the library item's uploaded Primary image, within the
-// limits of the artwork jellyfin-web uploads; choosing none or automatic
-// drops it. Only administrators' downloads may reach local networks.
+// limits of the artwork jellyfin-web uploads; choosing none, automatic or
+// generated drops it. Only administrators' downloads may reach local
+// networks.
 func (h *handler) saveLibraryImage(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.scope(w, r)
 	if !ok {
@@ -57,7 +58,7 @@ func (h *handler) saveLibraryImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	custom := body.Image == "custom"
-	if !custom && body.Image != addons.LibraryImageNone && body.Image != addons.LibraryImageAutomatic ||
+	if !custom && body.Image != addons.LibraryImageNone && body.Image != addons.LibraryImageAutomatic && body.Image != addons.LibraryImageGenerated ||
 		custom && (body.Data == "") == (body.URL == "") || !custom && (body.Data != "" || body.URL != "") {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return

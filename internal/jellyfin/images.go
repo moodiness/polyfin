@@ -583,7 +583,9 @@ func resizable(contentType string) bool {
 // redirecting: some apps (Infuse) do not follow image redirects, and apps
 // may not reach the addresses addons use. Artwork an administrator
 // uploaded comes first, for any item, and is served from the database; a
-// local folder's comes next, read from the folder (see localArtwork).
+// local folder's comes next, read from the folder (see localArtwork). A
+// generated image is drawn from the posters it shows (see
+// generatedArtwork).
 func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 	id, err := accounts.ParseID(r.PathValue("itemId"))
 	if err != nil {
@@ -647,7 +649,9 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 	}
 	h.images.open(h.imageDir(), h.Logger)
 	var image artwork
-	if key, ok := library.LocalArtworkKey(url); ok {
+	if generated, ok := library.ParseGenerated(url); ok {
+		image, err = h.generatedArtwork(r.Context(), url, generated)
+	} else if key, ok := library.LocalArtworkKey(url); ok {
 		image, err = h.localArtwork(r.Context(), url, key)
 	} else {
 		image, err = h.fetchArtwork(r.Context(), url, confined, h.iptvHost(r.Context(), url))

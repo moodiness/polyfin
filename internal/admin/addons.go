@@ -185,9 +185,9 @@ type libraryJSON struct {
 	HideInMenus bool `json:"hideInMenus"`
 	// ItemID is the library's item in Jellyfin apps, null for a catalog
 	// that is not an enabled library. Image is how it finds the image apps
-	// show on its tile: "none", "automatic", or "custom" when one was
-	// uploaded for it; ImageTag tags that image, served as the item's
-	// Primary image, null when it shows none.
+	// show on its tile: "none", "automatic", "generated", or "custom" when
+	// one was uploaded for it; ImageTag tags that image, served as the
+	// item's Primary image, null when it shows none.
 	ItemID   *string `json:"itemId"`
 	Image    string  `json:"image"`
 	ImageTag *string `json:"imageTag"`
