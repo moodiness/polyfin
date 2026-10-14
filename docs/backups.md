@@ -50,6 +50,8 @@ Each destination has its own **Backups to keep** (7 by default, from 1 to 90). A
 
 A destination whose last upload failed shows its error in the **Database backups** panel, under **Settings › Backups**, and as an error under **System › Health**. A destination whose newest backup is more than two days old is a warning there. Both reach the notification targets as Health problems (see [Health problems](notifications.md#health-problems)). A destination that fails does not fail the backup itself: the backup is in the folder, and goes to the destination at the next backup that reaches it.
 
+A destination that stops answering fails too, and Polyfin goes on with the next one: when no byte moves to or from it for 2 minutes, or when it has not taken the backups within 10 minutes plus one second per 32 KB they hold. A restore never waits for an upload: the backup made before it only waits for a backup being written to the folder.
+
 ## Restoring a backup from the admin app
 
 **Restore**, in the **Database backups** panel of **System › Schedule**, lists the backups of the folder and of each destination, with their date and size, and also takes a `.dump` file sent from your computer. Choosing one, Polyfin checks it first, without changing anything:
@@ -60,15 +62,15 @@ A destination whose last upload failed shows its error in the **Database backups
 
 The confirmation then says what happens, and asks you to type the server's name. When some stored keys of the backup cannot be decrypted with the current key, it counts them by kind: settings, tracking connections, app connections, notification targets, share passwords and backup destinations. **Cancel** leaves everything as it was: set the key that was set when the backup was made, and restore again. **Restore anyway** goes ahead, and those keys must then be entered again.
 
-A backup from a destination is downloaded into the backups folder under a hidden temporary name, and a file sent is written there too: backups must be on, into a folder with room for it. A restore needs `pg_restore` 18, which the Docker image includes; without it, **Restore** says so.
+A backup from a destination is downloaded into the backups folder under a hidden temporary name, and a file sent is written there too: backups must be on, into a folder with room for it. The download stops with an error when the destination sends more bytes than it lists for the file; a WebDAV server that does not tell a file's size lists it without one, and its download is bounded at 64 GB, as a file sent is. The file is deleted when the dialog is closed or another backup is chosen, an hour after it was checked if the restore was not started (or as soon as a restore started past that hour fails), and at Polyfin's next start if it stopped meanwhile. A restore needs `pg_restore` 18, which the Docker image includes; without it, **Restore** says so.
 
 ### What a restore does
 
 1. Polyfin backs the current database up first, into the backups folder, as `polyfin-YYYYMMDD-HHMMSS-before-restore.dump`. Retention never deletes it: delete it yourself once it is no longer needed. If this backup fails, nothing is restored.
-2. Polyfin stops as it does when its container stops: playbacks, conversions and recordings in progress stop, and the tasks running are cancelled. Meanwhile, apps get `503 Service Unavailable`, and `/healthz` still answers.
+2. Polyfin stops as it does when its container stops: playbacks, conversions and recordings in progress stop, and the tasks running are cancelled. While the restore runs, apps get `503 Service Unavailable`, and `/healthz` answers.
 3. The backup is restored into Polyfin's database in one transaction: what the database user owns there is dropped, and the backup's tables and data are created again. If anything fails, the transaction is rolled back, and the database is exactly as it was.
 4. The restored database is migrated to this Polyfin's schema, and records who restored which backup in its activity log.
-5. Polyfin starts again on it, in the same process, and the admin app reloads.
+5. Polyfin starts again on it, in the same process, and the admin app reloads. For a moment while it starts again, connections are refused, `/healthz` included: Docker's health check, which counts a container unhealthy only after 3 failures in a row, rides this out.
 
 Afterwards, everything is as it was when the backup was made, users, settings, addons, watch history and the `devices` and `admin_sessions` tables included. Apps signed in after that time must sign in again, and so does the administrator who restored, unless they signed in before it. Stream links handed out before the restore stop working, as the server secret that signs them comes from the backup too. The server identity is the backup's, so apps that knew the server before the backup reconnect without being set up again.
 
