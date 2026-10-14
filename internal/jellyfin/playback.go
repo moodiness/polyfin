@@ -890,10 +890,10 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 			wanted = id
 		}
 	}
-	// With a quality group, the title's own identifier stands for the
-	// version PlaybackInfo offers first under it, which leaves out those
-	// taller than the group.
-	if wanted == item.ID && user.QualityGroup > 0 && versioned(item.Kind) {
+	// With the version rules or a quality group, the title's own
+	// identifier stands for the version PlaybackInfo offers first under
+	// them, which leaves out those they hide.
+	if wanted == item.ID && h.reordered(user) && versioned(item.Kind) {
 		wanted = h.firstWorkingVersion(r.Context(), user, item)
 	}
 	version, err := h.version(r.Context(), user, item, wanted)
@@ -1060,12 +1060,17 @@ const trackWait = 2 * time.Minute
 
 // sourceVersion is the version a subtitle URL names, for a signed-in
 // caller: the URL carries the caller's token, as Jellyfin writes
-// DeliveryUrls.
+// DeliveryUrls. With the version rules or a quality group, the title's own
+// identifier stands for the version they offer first, as its first media
+// source does.
 func (h *Handler) sourceVersion(r *http.Request, item accounts.ID) (library.Version, bool) {
 	user, _, signedIn := h.streamAccess(r)
 	wanted, ok := parseGUID(r.PathValue("mediaSourceId"))
 	if !signedIn || !ok {
 		return library.Version{}, false
+	}
+	if wanted == item && h.reordered(user) {
+		wanted = h.firstWorkingVersion(r.Context(), user, library.Item{ID: item})
 	}
 	version, err := h.Library.Version(r.Context(), user, item, wanted)
 	return version, err == nil

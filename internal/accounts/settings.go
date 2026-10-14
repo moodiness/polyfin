@@ -265,6 +265,105 @@ const (
 // heights of usual video.
 var ConversionHeights = []int{0, 480, 720, 1080, 1440, 2160}
 
+// VersionCriteria are the values Settings.VersionOrder holds, each once
+// at most and one of each kind: the user's preferred audio language, the
+// height of the video, highest or lowest first, the size, largest or
+// smallest first, the video codec, in the order of
+// Settings.VersionCodecOrder, and HDR or Dolby Vision, first or last.
+var VersionCriteria = []string{"language", "resolution-high", "resolution-low", "size-large", "size-small", "codec", "hdr-first", "hdr-last"}
+
+// VersionCodecs are the video codecs the version rules know, by FFmpeg's
+// names, in the default order of Settings.VersionCodecOrder: the most
+// efficient first.
+var VersionCodecs = []string{"av1", "hevc", "vp9", "h264", "vc1", "mpeg4", "mpeg2video"}
+
+// The bounds of the version rules: MaxVersionCriteria criteria order the
+// versions at most, versions are hidden above MaxHideVersionsLargerGB at
+// most, and MaxHiddenVersionWords words, of MaxHiddenVersionWordLength
+// characters at most, hide versions.
+const (
+	MaxVersionCriteria         = 4
+	MaxHideVersionsLargerGB    = 1000
+	MaxHiddenVersionWords      = 50
+	MaxHiddenVersionWordLength = 100
+)
+
+// The errors of the version rules: ErrInvalidVersionOrder reports a
+// Settings.VersionOrder with a value that is not one of VersionCriteria,
+// two of one kind, or more than MaxVersionCriteria;
+// ErrInvalidVersionCodecOrder a VersionCodecOrder that is not every one of
+// VersionCodecs once; ErrInvalidHideVersionsLarger a HideVersionsLargerGB
+// outside [0, MaxHideVersionsLargerGB]; ErrInvalidHiddenVersionCodecs a
+// HiddenVersionCodecs holding another codec, or one twice; and
+// ErrInvalidHiddenVersionWords a HiddenVersionWords with more than
+// MaxHiddenVersionWords words, or one longer than
+// MaxHiddenVersionWordLength characters or holding a control character.
+var (
+	ErrInvalidVersionOrder        = errors.New("invalid version order")
+	ErrInvalidVersionCodecOrder   = errors.New("invalid version codec order")
+	ErrInvalidHideVersionsLarger  = errors.New("invalid size above which versions are hidden")
+	ErrInvalidHiddenVersionCodecs = errors.New("invalid hidden video codecs")
+	ErrInvalidHiddenVersionWords  = errors.New("invalid words hiding versions")
+)
+
+// VersionCriterionKind is what a criterion of VersionCriteria looks at,
+// whichever way it sorts: "resolution" for resolution-high and
+// resolution-low.
+func VersionCriterionKind(criterion string) string {
+	kind, _, _ := strings.Cut(criterion, "-")
+	return kind
+}
+
+// validVersionOrder reports whether order holds criteria of
+// VersionCriteria, one of each kind at most, MaxVersionCriteria at most.
+func validVersionOrder(order []string) bool {
+	if len(order) > MaxVersionCriteria {
+		return false
+	}
+	for i, criterion := range order {
+		if !slices.Contains(VersionCriteria, criterion) ||
+			slices.ContainsFunc(order[:i], func(before string) bool { return VersionCriterionKind(before) == VersionCriterionKind(criterion) }) {
+			return false
+		}
+	}
+	return true
+}
+
+// validVersionCodecs reports whether codecs are some of VersionCodecs,
+// each once.
+func validVersionCodecs(codecs []string) bool {
+	for i, codec := range codecs {
+		if !slices.Contains(VersionCodecs, codec) || slices.Contains(codecs[:i], codec) {
+			return false
+		}
+	}
+	return true
+}
+
+// canonicalHiddenVersionWords checks the words hiding versions and returns
+// them trimmed, each once whatever its letter case, with the spelling it
+// first has, in the order given, empty lines left out; empty, not nil, for
+// none, as the column holds no NULL.
+func canonicalHiddenVersionWords(words []string) ([]string, error) {
+	canonical := make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == "" {
+			continue
+		}
+		if !utf8.ValidString(word) || utf8.RuneCountInString(word) > MaxHiddenVersionWordLength || strings.ContainsFunc(word, unicode.IsControl) {
+			return nil, ErrInvalidHiddenVersionWords
+		}
+		if !slices.ContainsFunc(canonical, func(kept string) bool { return strings.EqualFold(kept, word) }) {
+			canonical = append(canonical, word)
+		}
+	}
+	if len(canonical) > MaxHiddenVersionWords {
+		return nil, ErrInvalidHiddenVersionWords
+	}
+	return canonical, nil
+}
+
 // The errors of the settings tuning conversions, reporting a value
 // outside the bounds or choices below.
 var (
@@ -968,6 +1067,22 @@ type Settings struct {
 	// it is, or repackaged with its tracks copied) rather than the first
 	// that plays at all.
 	PreferDirectPlay bool
+	// VersionOrder are the criteria ordering a title's versions, of
+	// VersionCriteria, each grouping them and the next sorting within
+	// them; ties keep the addons' order, as does none, the default.
+	// VersionCodecOrder is the order of the video codecs for the codec
+	// criterion, every one of VersionCodecs once.
+	VersionOrder      []string
+	VersionCodecOrder []string
+	// HideVersionsLargerGB hides the versions known to be larger, in
+	// gigabytes (10^9 bytes), 0 for no limit; HiddenVersionCodecs, those
+	// known to be in these video codecs, of VersionCodecs; and
+	// HiddenVersionWords, those whose labels hold one of these words,
+	// matched without case. When they would hide every version of a title,
+	// none is hidden.
+	HideVersionsLargerGB int
+	HiddenVersionCodecs  []string
+	HiddenVersionWords   []string
 	// SyncAddonSubtitles times the addons' subtitles to the version played,
 	// against when the version has speech (see playback.Service.FindSpeech).
 	SyncAddonSubtitles bool
@@ -1234,7 +1349,9 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"mdblist_ratings_key, critic_rating_shows, " +
 	"personal_addons, server_imports, login_attempts, inactive_device_days, known_proxies, known_proxy_names, detailed_log, " +
-	"analysis_timeout, version_attempts, prefer_direct_play, sync_addon_subtitles, max_conversions, max_conversion_height, " +
+	"analysis_timeout, version_attempts, prefer_direct_play, " +
+	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, " +
+	"sync_addon_subtitles, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
@@ -1267,7 +1384,9 @@ func (settings *Settings) fields() []any {
 		&settings.MDBListRatingsKey, &settings.CriticRatingShows,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
 		&settings.KnownProxyNames, &settings.DetailedLog,
-		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight,
+		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
+		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs, &settings.HiddenVersionWords,
+		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
 		&settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
@@ -1543,6 +1662,34 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.VersionAttempts < MinVersionAttempts || settings.VersionAttempts > MaxVersionAttempts {
 		return Settings{}, ErrInvalidVersionAttempts
 	}
+	if !validVersionOrder(settings.VersionOrder) {
+		return Settings{}, ErrInvalidVersionOrder
+	}
+	if len(settings.VersionCodecOrder) != len(VersionCodecs) || !validVersionCodecs(settings.VersionCodecOrder) {
+		return Settings{}, ErrInvalidVersionCodecOrder
+	}
+	if settings.HideVersionsLargerGB < 0 || settings.HideVersionsLargerGB > MaxHideVersionsLargerGB {
+		return Settings{}, ErrInvalidHideVersionsLarger
+	}
+	if !validVersionCodecs(settings.HiddenVersionCodecs) {
+		return Settings{}, ErrInvalidHiddenVersionCodecs
+	}
+	words, err := canonicalHiddenVersionWords(settings.HiddenVersionWords)
+	if err != nil {
+		return Settings{}, err
+	}
+	// The lists are kept apart from the caller's, none being an empty
+	// list: the columns hold no NULL. The codecs hidden are kept in the
+	// order of VersionCodecs.
+	settings.VersionOrder = append([]string{}, settings.VersionOrder...)
+	settings.VersionCodecOrder = slices.Clone(settings.VersionCodecOrder)
+	hidden := []string{}
+	for _, codec := range VersionCodecs {
+		if slices.Contains(settings.HiddenVersionCodecs, codec) {
+			hidden = append(hidden, codec)
+		}
+	}
+	settings.HiddenVersionCodecs, settings.HiddenVersionWords = hidden, words
 	if settings.MaxConversions < MinMaxConversions || settings.MaxConversions > MaxMaxConversions {
 		return Settings{}, ErrInvalidMaxConversions
 	}

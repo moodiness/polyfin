@@ -81,8 +81,9 @@ func (h *Handler) writeProgress(w http.ResponseWriter, progress VersionProgress)
 }
 
 // watchedPages are the title pages users opened lately, by title, then by
-// user, each with the identifiers it was opened with and until when it is
-// watched; scheduled holds the titles whose push is due.
+// user, each with the identifiers it was opened with, the versions it
+// lists and until when it is watched; scheduled holds the titles whose
+// push is due.
 type watchedPages struct {
 	mu        sync.Mutex
 	titles    map[accounts.ID]map[accounts.ID]*pageWatch
@@ -92,6 +93,11 @@ type watchedPages struct {
 type pageWatch struct {
 	user   accounts.User
 	opened map[accounts.ID]bool
+	// listed are the versions the page's details listed last, in order,
+	// which keep their places while the page is watched (see keptInPlace),
+	// as long as the criteria ordering them, rules, stay the same.
+	listed []accounts.ID
+	rules  string
 	until  time.Time
 }
 
@@ -129,6 +135,33 @@ func (h *Handler) watch(user accounts.User, title, opened accounts.ID) {
 		users[user.ID] = page
 	}
 	page.user, page.opened[opened], page.until = user, true, now.Add(watchedFor)
+}
+
+// shown returns the versions a user's page of a title lists, in order,
+// while the page is watched and the criteria that ordered them, rules,
+// are still those in force; nil otherwise.
+func (w *watchedPages) shown(user, title accounts.ID, rules string) []accounts.ID {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	page := w.titles[title][user]
+	if page == nil || time.Now().After(page.until) || page.rules != rules {
+		return nil
+	}
+	return page.listed
+}
+
+// show records the versions a user's page of a title lists, as its
+// details list them, ordered by rules, when the page is watched.
+func (w *watchedPages) show(user, title accounts.ID, versions []library.Version, rules string) {
+	listed := make([]accounts.ID, len(versions))
+	for i, version := range versions {
+		listed[i] = version.ID
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if page := w.titles[title][user]; page != nil {
+		page.listed, page.rules = listed, rules
+	}
 }
 
 // versionsChanged is told by the library that a title's versions may have

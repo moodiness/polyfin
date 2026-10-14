@@ -602,6 +602,14 @@ func videoRange(s media.Stream) (videoRange, rangeType string) {
 	return "SDR", "SDR"
 }
 
+// HighRange reports whether a video track is HDR or Dolby Vision, as its
+// VideoRange and VideoRangeType tell it: Dolby Vision on an SDR base layer
+// counts as Dolby Vision.
+func HighRange(s media.Stream) bool {
+	videoRange, rangeType := videoRange(s)
+	return videoRange == "HDR" || strings.HasPrefix(rangeType, "DOVI")
+}
+
 // doviTitle names a Dolby Vision configuration in display titles, such as
 // "Dolby Vision Profile 8.1 (HDR10)". [INFERENCE]
 func doviTitle(dv *media.DolbyVision) string {

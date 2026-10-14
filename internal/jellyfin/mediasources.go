@@ -70,9 +70,9 @@ type playable struct {
 }
 
 // playable gathers a title's versions and subtitles, both asked of the
-// addons at once. Versions that recently failed are left out; so are those
-// taller than the user's quality group, while one fits (see inGroup), and
-// subtitles that cannot be listed.
+// addons at once. Versions that recently failed are left out, and the
+// others are offered as the version rules and the user's quality group
+// have them (see offered); so are subtitles that cannot be listed.
 func (h *Handler) playable(ctx context.Context, user accounts.User, item library.Item) (playable, error) {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
 	if item.Kind == library.KindRecording {
@@ -97,8 +97,9 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 // versions and subtitles known now, stale lists' included, without waiting
 // for addons, which are asked for the others in the background (see
 // library.Service.VersionsNow). complete reports whether every addon's
-// versions were known, and none asked again. Like playable, it leaves out
-// versions that recently failed and those taller than the user's group.
+// versions were known, and none asked again. Like playable, it offers the
+// versions as the rules and the user's group have them, and the page keeps
+// the versions it lists in place (see keptInPlace).
 // The page, opened as opened, is told of the versions as they come (see
 // versionsChanged). RemuxDB, when on, is asked about the versions it was
 // not asked about lately, for a moment at most (see remuxdb.Describe).
@@ -110,6 +111,9 @@ func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item li
 	}
 	h.RemuxDB.Describe(ctx, versions)
 	p.versions = h.offered(ctx, user, versions)
+	if err == nil {
+		h.watched.show(user.ID, item.ID, p.versions, h.rulesFor(ctx, user).key())
+	}
 	if subtitles, listed, err := h.Library.SubtitlesNow(ctx, user, item.ID); err == nil {
 		p.subtitles = subtitles
 		if listed {
@@ -121,8 +125,8 @@ func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item li
 
 // cachedPlayable is what listings show of a title's versions: only what is
 // already known, stale lists included, as asking addons for every listed
-// title is too costly. Like playable, it leaves out versions taller than
-// the user's group.
+// title is too costly. Like playable, it offers them as the rules and the
+// user's group have them.
 func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item library.Item) playable {
 	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
 	if item.Kind == library.KindRecording {
@@ -136,10 +140,15 @@ func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item l
 	return p
 }
 
-// offered leaves out of a title's versions those that recently failed, and
-// those taller than the user's quality group while one fits (see inGroup).
+// offered leaves out of a title's versions those that recently failed,
+// and, with the version rules or the user's quality group, those they
+// hide, ordering the others (see ordered).
 func (h *Handler) offered(ctx context.Context, user accounts.User, versions []library.Version) []library.Version {
-	return h.inGroup(ctx, user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
+	versions = slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) })
+	if !h.reordered(user) {
+		return versions
+	}
+	return h.ordered(ctx, user, versions)
 }
 
 // externals are the subtitle files a version offers as streams: its

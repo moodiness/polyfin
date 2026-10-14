@@ -1,8 +1,10 @@
 package admin
 
 import (
+	"fmt"
 	"maps"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -88,5 +90,46 @@ func TestSettingsRemuxDB(t *testing.T) {
 	}
 	if got := api.store.Settings(); !got.RemuxDB || got.RemuxDBURL != "https://remuxdb.example/base" {
 		t.Errorf("stored after a refused address: %v %q", got.RemuxDB, got.RemuxDBURL)
+	}
+}
+
+// The version rules are saved as sent, the words trimmed and each once; a
+// PUT leaving them out keeps them, and one breaking them is refused with
+// its code.
+func TestSettingsVersionRules(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
+	settings := maps.Clone(base)
+	maps.Copy(settings, map[string]any{"versionOrder": []string{"language", "resolution-high"}, "hideVersionsLargerGb": 40,
+		"hiddenVersionCodecs": []string{"av1"}, "hiddenVersionWords": []string{" Downloading", "downloading", ""}})
+	rules := func(body map[string]any) string {
+		return fmt.Sprint(body["versionOrder"], body["versionCodecOrder"], body["hideVersionsLargerGb"], body["hiddenVersionCodecs"],
+			body["hiddenVersionWords"])
+	}
+	want := "[language resolution-high] [av1 hevc vp9 h264 vc1 mpeg4 mpeg2video] 40 [av1] [Downloading]"
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK || rules(body) != want {
+		t.Fatalf("saving the version rules: %d %s", status, rules(body))
+	}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK || rules(body) != want {
+		t.Errorf("saving without them: %d %s", status, rules(body))
+	}
+	for _, tc := range []struct {
+		key   string
+		value any
+		code  string
+	}{
+		{"versionOrder", []string{"size-large", "size-small"}, "invalid_version_order"},
+		{"versionCodecOrder", []string{"av1"}, "invalid_version_codec_order"},
+		{"hideVersionsLargerGb", -1, "invalid_hide_versions_larger"},
+		{"hiddenVersionCodecs", []string{"theora"}, "invalid_hidden_version_codecs"},
+		{"hiddenVersionWords", []string{strings.Repeat("a", accounts.MaxHiddenVersionWordLength+1)}, "invalid_hidden_version_words"},
+	} {
+		refused := maps.Clone(base)
+		refused[tc.key] = tc.value
+		if status, body, _ := administrator.call(http.MethodPut, "/settings", refused); status != http.StatusBadRequest || body["error"] != tc.code {
+			t.Errorf("%s %v: %d %v", tc.key, tc.value, status, body)
+		}
 	}
 }

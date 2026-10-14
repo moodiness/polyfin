@@ -1,12 +1,20 @@
 import { ArrowSquareOutIcon, PlayIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
-import { fetchStatus, queryKeys, revealServerSecret } from '@/api'
+import {
+  fetchStatus,
+  queryKeys,
+  revealServerSecret,
+  type VersionCodec,
+  type VersionCriterion,
+} from '@/api'
 import type { SettingsSectionId } from '@/app/navigation'
 import { formatHour } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
 import {
+  Checkbox,
   ExternalButtonLink,
+  FieldError,
   Notice,
   NumberInput,
   SecretField,
@@ -23,6 +31,7 @@ import MetricsToken from './MetricsToken'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
+import VersionOrder, { CodecOrder } from './VersionOrder'
 
 /** The redirect URI of a Trakt or Simkl app whose users enter a code instead of being redirected. */
 const oobRedirectUri = 'urn:ietf:wg:oauth:2.0:oob'
@@ -237,6 +246,81 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
           />
         </FieldRow>
       </SettingsGroup>
+      <SettingsGroup title={s.versionOrderGroup}>
+        <SettingRow anchor="version-order">
+          <VersionOrder
+            order={form.versionOrder}
+            choices={(form.bounds.versionOrder?.choices ?? []) as VersionCriterion[]}
+            onChange={(versionOrder) => update({ versionOrder })}
+            error={error('version-order')}
+          />
+        </SettingRow>
+        <SettingRow anchor="version-codec-order">
+          <CodecOrder
+            order={form.versionCodecOrder}
+            onChange={(versionCodecOrder) => update({ versionCodecOrder })}
+            error={error('version-codec-order')}
+          />
+        </SettingRow>
+        <FieldRow
+          anchor="hide-versions-larger"
+          label={s.hideVersionsLarger}
+          help={s.hideVersionsLargerHelp(range('hideVersionsLargerGb'))}
+          error={error('hide-versions-larger')}
+        >
+          <NumberInput
+            {...limits('hideVersionsLargerGb')}
+            step={1}
+            {...number('hide-versions-larger', form.hideVersionsLargerGb, (value) =>
+              update({ hideVersionsLargerGb: Math.trunc(value) }),
+            )}
+          />
+        </FieldRow>
+        <SettingRow anchor="hidden-version-codecs">
+          <fieldset aria-describedby="hidden-version-codecs-help">
+            <legend className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+              {s.hiddenVersionCodecs}
+            </legend>
+            <p id="hidden-version-codecs-help" className="mt-1 max-w-[60ch] text-small text-ink-3">
+              {s.hiddenVersionCodecsHelp}
+            </p>
+            <div className="mt-3.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {((form.bounds.hiddenVersionCodecs?.choices ?? []) as VersionCodec[]).map(
+                (codec, _, all) => (
+                  <Checkbox
+                    key={codec}
+                    label={s.versionCodecs[codec]}
+                    checked={form.hiddenVersionCodecs.includes(codec)}
+                    onChange={(checked) =>
+                      update({
+                        hiddenVersionCodecs: all.filter((other) =>
+                          other === codec ? checked : form.hiddenVersionCodecs.includes(other),
+                        ),
+                      })
+                    }
+                  />
+                ),
+              )}
+            </div>
+            {error('hidden-version-codecs') && (
+              <div className="mt-2">
+                <FieldError>{error('hidden-version-codecs')}</FieldError>
+              </div>
+            )}
+          </fieldset>
+        </SettingRow>
+        <FieldRow
+          anchor="hidden-version-words"
+          label={s.hiddenVersionWords}
+          help={s.hiddenVersionWordsHelp(range('hiddenVersionWords'))}
+          error={error('hidden-version-words')}
+        >
+          <WordList
+            value={form.hiddenVersionWords}
+            onValue={(hiddenVersionWords) => update({ hiddenVersionWords })}
+          />
+        </FieldRow>
+      </SettingsGroup>
       <SettingsGroup title={s.playbackHistoryGroup}>
         <SwitchRow
           anchor="playback-history"
@@ -261,6 +345,35 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
         </FieldRow>
       </SettingsGroup>
     </>
+  )
+}
+
+/**
+ * The words hiding versions, one a line. The text stays as typed while it lists the same words,
+ * so that a new line can be started; discarding or saving writes it anew.
+ */
+function WordList({ value, onValue }: { value: string[]; onValue: (value: string[]) => void }) {
+  const [text, setText] = useState(() => value.join('\n'))
+  const words = (typed: string) =>
+    typed
+      .split('\n')
+      .map((word) => word.trim())
+      .filter(Boolean)
+  if (words(text).join('\n') !== value.join('\n')) {
+    setText(value.join('\n'))
+  }
+  return (
+    <Textarea
+      rows={3}
+      value={text}
+      autoComplete="off"
+      spellCheck={false}
+      className="max-w-md"
+      onValue={(next) => {
+        setText(next)
+        onValue(words(next))
+      }}
+    />
   )
 }
 

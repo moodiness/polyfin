@@ -78,6 +78,46 @@ const settings = {
     preferDirectPlay: 'Prefer versions the app plays without conversion',
     preferDirectPlayHelp:
       'When an app plays a title without choosing a version, Polyfin picks the first version the app plays as it is or simply repackaged, rather than the first that plays at all. The very first play of a title can be a little slower, as more versions may be analyzed; nothing changes once they are known.',
+    versionOrderGroup: 'Version order',
+    versionOrder: {
+      label: 'Order versions by',
+      help: 'Each criterion groups the versions of a movie or an episode, and the next one sorts them within each group; versions that tie keep the addons’ order. The first version is the one Play starts, and the versions tried when it does not work come next. Polyfin goes by what it knows of a version without reading the file: its analysis once played, else RemuxDB’s description, else the words of its labels. A version a criterion knows nothing of comes after the others. The preferred audio language is each user’s own, set in their app: versions known in that language come first, then those labeled MULTI or DUAL, then those of unknown language. While a title’s page is open, the versions it shows keep their places.',
+      none: 'None: versions keep the addons’ order.',
+      add: 'Add a criterion',
+      remove: (name: string) => `Remove ${name}`,
+      criterion: (position: number) => `Criterion ${position}`,
+      criteria: {
+        language: 'Preferred audio language',
+        'resolution-high': 'Resolution, highest first',
+        'resolution-low': 'Resolution, lowest first',
+        'size-large': 'File size, largest first',
+        'size-small': 'File size, smallest first',
+        codec: 'Video codec, in the order below',
+        'hdr-first': 'HDR and Dolby Vision first',
+        'hdr-last': 'HDR and Dolby Vision last',
+      },
+    },
+    versionCodecOrder: {
+      label: 'Order of video codecs',
+      help: 'The order the Video codec criterion puts versions in.',
+    },
+    versionCodecs: {
+      av1: 'AV1',
+      hevc: 'HEVC (H.265)',
+      vp9: 'VP9',
+      h264: 'H.264 (AVC)',
+      vc1: 'VC-1',
+      mpeg4: 'MPEG-4 Part 2 (Xvid, DivX)',
+      mpeg2video: 'MPEG-2',
+    },
+    hideVersionsLarger: 'Hide versions larger than (GB, 0 = no limit)',
+    hideVersionsLargerHelp: (r: RangeText) =>
+      `Versions known to be larger are listed nowhere: not on title pages, in playback or in downloads. When the rules below and this one would hide every version of a title, none is hidden. Up to ${r.max} GB; ${r.default} by default.`,
+    hiddenVersionCodecs: 'Hide these video codecs',
+    hiddenVersionCodecsHelp: 'Versions known to be in these codecs are listed nowhere.',
+    hiddenVersionWords: 'Hide versions whose labels contain',
+    hiddenVersionWordsHelp: (r: RangeText) =>
+      `One word or phrase a line, matched in any letter case in a version’s name, description and file name: for addons that say in their labels that a file is not ready to play yet. Up to ${r.max} lines; none by default.`,
     syncAddonSubtitles: 'Sync addon subtitles',
     syncAddonSubtitlesHelp:
       'Times the addons’ subtitles to the version played, when they run early, late, or faster or slower than it. At a version’s first play, Polyfin finds in the background when it has speech: from a text subtitle inside the file, else from three stretches of its audio, reading at most 300 MB of an addon’s file. From then on, a subtitle that fits clearly better shifted or sped up comes synced, its name ending with “(synced)”.',

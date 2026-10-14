@@ -22,7 +22,7 @@ Whether a version plays directly or is converted decides how much bandwidth the 
 
 A title's details list every stream the addons offer as a version (see [Title pages](#title-pages) for when). The first time a version is played, Polyfin analyzes it with ffprobe, which takes a few seconds, and keeps the result. It then tells the app whether the app can play the version as it is, as a Jellyfin server would.
 
-- Versions always keep the addons' order. Picking or playing one never moves it.
+- Versions keep the addons' order, addon after addon, unless the [version order](#version-order) settings order them or hide some. Picking or playing one never moves it.
 - When the app has not picked a version, a version that cannot be read, or does not play on the app, is skipped in favor of the next one. It is also left out of the versions Polyfin lists, which keep their order starting from the one chosen, for apps that let the user pick at that point.
 - A version that would play over HLS but whose keyframe index cannot be read is skipped the same way, as nothing could stream it.
 - The first versions are analyzed together, up to 3 at once, and taken in order. Once a later one is ready, Polyfin waits 3 more seconds for those before it, then plays the later one: a source that never answers delays playback by those 3 seconds rather than by the whole analysis time. The analyses still running go on in the background and are kept for the next play.
@@ -167,11 +167,48 @@ Five more settings change how Polyfin picks a version and how much video the ser
 ### Prefer versions the app plays without conversion
 
 - The first play of a title may analyze more versions. Nothing changes once they are known.
+- It looks among the first versions in the order the [version order](#version-order) settings give them.
 - A version above the user's **Maximum quality** never counts as one that plays without conversion.
 
 **Compared with Jellyfin:**
 
 - Jellyfin 12.2 keeps the version opened first however it plays, as Polyfin does with this setting off.
+
+### Version order
+
+The **Version order** group of **Settings › Playback** orders a movie's or an episode's versions, and hides some of them. By default it changes nothing: versions keep the addons' order and none is hidden.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Order versions by** | **Settings › Playback** | None | Up to four criteria, each grouping the versions and the next sorting within them: **Preferred audio language**; **Resolution, highest first** or **Resolution, lowest first**; **File size, largest first** or **File size, smallest first**; **Video codec, in the order below**; **HDR and Dolby Vision first** or **HDR and Dolby Vision last**. Versions that tie keep the addons' order. |
+| **Order of video codecs** | **Settings › Playback** | AV1, HEVC, VP9, H.264, VC-1, MPEG-4 Part 2, MPEG-2 | The order the video codec criterion puts versions in. |
+| **Hide versions larger than (GB, 0 = no limit)** | **Settings › Playback** | 0 (up to 1,000) | Hides the versions known to be larger. |
+| **Hide these video codecs** | **Settings › Playback** | None | Hides the versions known to be in these codecs. |
+| **Hide versions whose labels contain** | **Settings › Playback** | None (up to 50 lines) | Hides the versions whose name, description or file name holds one of these words, one a line, in any letter case: for addons that say in their labels that a file is not ready to play yet. |
+
+**What the rules know of a version.** Nothing is read from the source for them. For each thing they look at, they take the version's analysis when Polyfin has one, else the description of its file from [RemuxDB](#tracks-from-remuxdb) when it is on, else its addon's labels:
+
+- the height, as [quality groups](users.md#how-the-height-of-a-version-is-found) find it;
+- the size the addon gives (`videoSize`);
+- the codec its labels name: HEVC, x265 or H.265; H.264, x264 or AVC; AV1; VP9; VC-1; MPEG-2; Xvid or DivX;
+- HDR when they name HDR, HDR10, HDR10+, HLG, DV, DoVi or Dolby Vision. Labels that name the height or the codec but no HDR count as SDR;
+- the audio languages they name: language names in English (French, German…), some others used by releases (TRUEFRENCH, VFF, Latino, Castellano…), ISO 639-2 codes in capitals (ENG, ITA, GER…) and flags. MULTI and DUAL say a version has several languages. A word of the movie's or the series' name is never taken for a language.
+
+A version a criterion knows nothing of comes after those it knows, and a hide rule never hides it.
+
+**Preferred audio language** is each user's own, the audio language they set in their app. Versions known to carry it come first, then those that say MULTI or DUAL without naming it, then those of unknown language, then the others. For a user without a preferred language, it changes nothing.
+
+**In what order things happen:**
+
+1. The versions that failed lately are left out (see [Sources that fail](#sources-that-fail)).
+2. The hide rules apply. When they would hide every version of a title, none is hidden.
+3. The user's [quality group](users.md#quality-groups) leaves out the taller versions. When no version fits, the closest height comes first, and the criteria order the versions of the same height.
+4. The criteria order the others.
+
+- Item details and `PlaybackInfo` list the versions in that order, so version menus show it. The first, named after the title, is the one Play starts first and **Prepare playback in advance** analyzes. **Versions tried when one does not work** and **Prefer versions the app plays without conversion** take the versions in that order.
+- Hidden versions are listed nowhere: not in details, `PlaybackInfo`, downloads or trickplay. A version an app asks for by its own identifier, one it was shown before a rule hid it, is refused as if it were gone.
+- While a title's page is open, and Polyfin follows it (see [Title pages](#title-pages)), the versions it shows keep their places, even when an analysis tells more of them; versions that come later take their places by the rules. A page opened again lists them in the rules' order.
+- Merged Live TV channels keep their own order (see [IPTV](iptv.md)).
 
 ### Video conversions at once
 

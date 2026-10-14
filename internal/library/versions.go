@@ -48,6 +48,10 @@ type Version struct {
 	// LabelHeight), 0 when they give none; its analysis, once there, is
 	// what counts.
 	Height int
+	// Labels is what the addon's labels tell of the stream's video codec,
+	// dynamic range and audio languages (see ReadLabels); its analysis,
+	// once there, is what counts.
+	Labels Labels
 	// Expires is when the link stops working, zero when the addon does
 	// not say; Audio is what a music addon tells of a track's stream.
 	Expires time.Time
@@ -96,6 +100,9 @@ type target struct {
 	metaType string
 	id       string
 	runtime  time.Duration
+	// name is the movie's or the series' name, whose words labels may
+	// repeat (see ReadLabels).
+	name string
 }
 
 type streamKey struct {
@@ -130,7 +137,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		if full, _, ok := s.describedMeta(ctx, v, r, false, inDatabase); ok {
 			meta = &full
 		}
-		return target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime))}, v, nil
+		return target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime)), name: meta.Name}, v, nil
 	case r.Kind == KindChannel && r.Meta != nil:
 		return target{item: id, kind: KindChannel, metaType: r.Meta.Type, id: r.Meta.ID}, v, nil
 	case r.Kind == KindReplay:
@@ -145,7 +152,8 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		if err != nil || series.Meta == nil {
 			return target{}, view{}, ErrNotFound
 		}
-		return target{item: id, kind: KindEpisode, metaType: series.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime))}, v, nil
+		return target{item: id, kind: KindEpisode, metaType: series.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
+			name: series.Meta.Name}, v, nil
 	default:
 		return target{}, view{}, ErrNotFound
 	}
@@ -381,7 +389,7 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 		if err != nil {
 			return Version{}, err
 		}
-		if version, ok := s.renewed(t, entry, streams, old.ID); ok {
+		if version, ok := s.renewed(t, entry, streams, old); ok {
 			return version, nil
 		}
 		return Version{}, ErrNotFound
@@ -391,7 +399,7 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 	if _, err := s.streamAnswer(ctx, entry, key); err != nil {
 		return Version{}, err
 	}
-	if version, ok := s.renewedFromAnswer(t, entry, key, old.ID); ok {
+	if version, ok := s.renewedFromAnswer(t, entry, key, old); ok {
 		return version, nil
 	}
 	asked := s.hurryFollowUp(key)
@@ -406,30 +414,32 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 	case <-ctx.Done():
 		return Version{}, ctx.Err()
 	}
-	if version, ok := s.renewedFromAnswer(t, entry, key, old.ID); ok {
+	if version, ok := s.renewedFromAnswer(t, entry, key, old); ok {
 		return version, nil
 	}
 	return Version{}, ErrNotFound
 }
 
-// renewedFromAnswer finds the version id among the streams of the addon's
+// renewedFromAnswer finds the version old among the streams of the addon's
 // last answer kept under key.
-func (s *Service) renewedFromAnswer(t target, entry installed, key streamKey, id accounts.ID) (Version, bool) {
+func (s *Service) renewedFromAnswer(t target, entry installed, key streamKey, old Version) (Version, bool) {
 	l, ok := s.streamLists.Get(key)
 	if !ok {
 		return Version{}, false
 	}
-	return s.renewed(t, entry, l.items[:l.answer], id)
+	return s.renewed(t, entry, l.items[:l.answer], old)
 }
 
-// renewed finds the version id among streams, and remembers it with the
-// link they give.
-func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, id accounts.ID) (Version, bool) {
+// renewed finds the version old among streams, and remembers it with the
+// link they give. It keeps what old's labels told, read knowing the
+// title's name, which a renewal does not load.
+func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, old Version) (Version, bool) {
 	for _, stream := range streams {
 		if !stream.Playable() {
 			continue
 		}
-		if version := newVersion(t, entry, stream); version.ID == id {
+		if version := newVersion(t, entry, stream); version.ID == old.ID {
+			version.Labels = old.Labels
 			s.versions.Put(version.ID, version)
 			return version, true
 		}
@@ -451,6 +461,7 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		Confined: entry.confined,
 		Runtime:  t.runtime,
 		Height:   LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
+		Labels:   ReadLabels(t.name, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
 		// A replay holds one of its provider's connections, as a channel does.
 		HoldsConnection: t.kind == KindReplay,
 	}

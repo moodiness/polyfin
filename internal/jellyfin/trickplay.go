@@ -82,8 +82,8 @@ func (h *Handler) trickplayManifest(ctx context.Context, user accounts.User, ite
 // media source it names, else the version the item was opened as. The
 // title's own identifier names the version it plays first for the user,
 // as its first media source carries it: the first of its versions known,
-// those taller than their quality group left out; zero when none is known,
-// for the title's version whose thumbnails were used last.
+// as the version rules and the user's quality group offer them; zero when
+// none is known, for the title's version whose thumbnails were used last.
 func (h *Handler) trickplayVersion(ctx context.Context, user accounts.User, item library.Item, opened, mediaSource accounts.ID) accounts.ID {
 	named := mediaSource
 	if named == (accounts.ID{}) {
@@ -95,7 +95,7 @@ func (h *Handler) trickplayVersion(ctx context.Context, user accounts.User, item
 	if versions := h.cachedPlayable(ctx, user, item).versions; len(versions) > 0 {
 		return versions[0].ID
 	}
-	if user.QualityGroup > 0 {
+	if h.reordered(user) {
 		if first := h.firstWorkingVersion(ctx, user, item); first != item.ID {
 			return first
 		}
@@ -127,14 +127,15 @@ func (h *Handler) queueImages(ctx context.Context, user accounts.User, device ac
 }
 
 // startedVersion is the version of item a playback started with, named
-// by the media source it reported. With a quality group, the title's own
-// identifier stands for its first version that fits, as in PlaybackInfo.
+// by the media source it reported. With the version rules or a quality
+// group, the title's own identifier stands for the first version they
+// offer, as in PlaybackInfo.
 func (h *Handler) startedVersion(ctx context.Context, user accounts.User, item library.Item, mediaSource string) (library.Version, bool) {
 	id, ok := parseGUID(mediaSource)
 	if !ok {
 		return library.Version{}, false
 	}
-	if id == item.ID && user.QualityGroup > 0 {
+	if id == item.ID && h.reordered(user) {
 		id = h.firstWorkingVersion(ctx, user, item)
 	}
 	version, err := h.Library.Version(ctx, user, item.ID, id)

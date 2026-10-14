@@ -84,10 +84,11 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		}
 	}
 	version, err := h.Library.Version(r.Context(), user, item.ID, wanted)
-	if err != nil || h.Playback.ReadsInput(version) {
+	if err != nil || h.Playback.ReadsInput(version) || h.hiddenVersion(r.Context(), user, version) {
 		// Jellyfin refuses to download what has no file, a series or a
 		// season, as a request it cannot process; a version that is not one
-		// file, a DVD, is refused the same way.
+		// file, a DVD, is refused the same way, as is one the version rules
+		// hide, which is listed nowhere.
 		processingError(w, http.StatusBadRequest)
 		return
 	}
@@ -115,16 +116,15 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 }
 
 // firstWorkingVersion is the version a title's own identifier stands for:
-// its first that has not recently failed, of those that fit the user's
-// quality group while one does, else the title's identifier, which stands
-// for its first.
+// its first as the user is offered them (see offered), those that failed
+// lately left out, else the title's identifier, which stands for its
+// first.
 func (h *Handler) firstWorkingVersion(ctx context.Context, user accounts.User, item library.Item) accounts.ID {
 	versions, err := h.Library.Versions(ctx, user, item.ID)
 	if err != nil {
 		return item.ID
 	}
-	versions = h.inGroup(ctx, user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
-	if len(versions) > 0 {
+	if versions = h.offered(ctx, user, versions); len(versions) > 0 {
 		return versions[0].ID
 	}
 	return item.ID

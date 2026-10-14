@@ -3,6 +3,7 @@ package accounts
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -128,6 +129,75 @@ func TestRemuxDBSettings(t *testing.T) {
 		"remuxdb_url = 'https://" + strings.Repeat("a", MaxRemuxDBURLBytes) + "'"} {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
 			t.Errorf("the database took %.40s", column)
+		}
+	}
+}
+
+// The version rules start empty, the addons' order kept and nothing
+// hidden. Up to four criteria order versions, one of each kind; the codec
+// order lists every codec once; the words are kept trimmed, each once
+// whatever its case, empty lines left out; and the database refuses what
+// the store refuses.
+func TestVersionRulesSettings(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	got := store.Settings()
+	if len(got.VersionOrder) != 0 || !slices.Equal(got.VersionCodecOrder, VersionCodecs) || got.HideVersionsLargerGB != 0 ||
+		len(got.HiddenVersionCodecs) != 0 || len(got.HiddenVersionWords) != 0 {
+		t.Errorf("defaults: %v %v %d %v %v", got.VersionOrder, got.VersionCodecOrder, got.HideVersionsLargerGB, got.HiddenVersionCodecs,
+			got.HiddenVersionWords)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*Settings)
+		err    error
+	}{
+		{"two resolutions", func(s *Settings) { s.VersionOrder = []string{"resolution-high", "resolution-low"} }, ErrInvalidVersionOrder},
+		{"five criteria", func(s *Settings) {
+			s.VersionOrder = []string{"language", "resolution-high", "size-large", "codec", "hdr-first"}
+		}, ErrInvalidVersionOrder},
+		{"an unknown criterion", func(s *Settings) { s.VersionOrder = []string{"bitrate"} }, ErrInvalidVersionOrder},
+		{"a codec missing from the order", func(s *Settings) { s.VersionCodecOrder = VersionCodecs[1:] }, ErrInvalidVersionCodecOrder},
+		{"a codec twice in the order", func(s *Settings) {
+			s.VersionCodecOrder = append([]string{"hevc"}, VersionCodecs[:len(VersionCodecs)-1]...)
+		}, ErrInvalidVersionCodecOrder},
+		{"a negative size", func(s *Settings) { s.HideVersionsLargerGB = -1 }, ErrInvalidHideVersionsLarger},
+		{"a size too large", func(s *Settings) { s.HideVersionsLargerGB = MaxHideVersionsLargerGB + 1 }, ErrInvalidHideVersionsLarger},
+		{"an unknown hidden codec", func(s *Settings) { s.HiddenVersionCodecs = []string{"theora"} }, ErrInvalidHiddenVersionCodecs},
+		{"a word too long", func(s *Settings) { s.HiddenVersionWords = []string{strings.Repeat("é", MaxHiddenVersionWordLength+1)} },
+			ErrInvalidHiddenVersionWords},
+		{"a control character", func(s *Settings) { s.HiddenVersionWords = []string{"a\tb"} }, ErrInvalidHiddenVersionWords},
+	} {
+		changed := store.Settings()
+		tc.change(&changed)
+		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, tc.err) {
+			t.Errorf("%s: got %v, want %v", tc.name, err, tc.err)
+		}
+	}
+	changed := store.Settings()
+	changed.VersionOrder = []string{"language", "resolution-low", "codec", "hdr-last"}
+	changed.VersionCodecOrder = []string{"h264", "hevc", "av1", "vp9", "vc1", "mpeg4", "mpeg2video"}
+	changed.HideVersionsLargerGB = 40
+	changed.HiddenVersionCodecs = []string{"mpeg4", "av1"}
+	changed.HiddenVersionWords = []string{" Downloading ", "", "downloading", "⏳ queued"}
+	saved, err := store.UpdateSettings(ctx, changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(saved.HiddenVersionCodecs, []string{"av1", "mpeg4"}) || !slices.Equal(saved.HiddenVersionWords, []string{"Downloading", "⏳ queued"}) {
+		t.Errorf("saved: %v %v", saved.HiddenVersionCodecs, saved.HiddenVersionWords)
+	}
+	reopened, err := Open(ctx, store.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Settings(); !reflect.DeepEqual(got, saved) {
+		t.Errorf("after reopening: %+v, want %+v", got, saved)
+	}
+	for _, column := range []string{"version_order = '{bitrate}'", "version_order = '{language,codec,size-large,hdr-first,resolution-high}'",
+		"version_codec_order = '{theora}'", "hide_versions_larger_gb = 1001", "hidden_version_codecs = '{theora}'"} {
+		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
+			t.Errorf("the database took %s", column)
 		}
 	}
 }

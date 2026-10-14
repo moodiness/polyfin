@@ -230,6 +230,19 @@ export type Settings = {
   versionAttempts: number
   /** Prefers the first version an app plays without conversion over the first that plays at all. */
   preferDirectPlay: boolean
+  /**
+   * Up to four criteria ordering a title's versions, each grouping them and the next sorting within
+   * them; none keeps the addons' order.
+   */
+  versionOrder: VersionCriterion[]
+  /** The order of the video codecs for the codec criterion, every codec once. */
+  versionCodecOrder: VersionCodec[]
+  /** Hides the versions known to be larger, in GB; 0 hides none. */
+  hideVersionsLargerGb: number
+  /** Hides the versions known to be in these video codecs. */
+  hiddenVersionCodecs: VersionCodec[]
+  /** Hides the versions whose labels hold one of these words, in any letter case. */
+  hiddenVersionWords: string[]
   /** Times the addons' subtitles to the version played, against when it has speech. */
   syncAddonSubtitles: boolean
   /** Playbacks whose video the server converts at once, 0 for no limit. */
@@ -399,6 +412,16 @@ export type EncoderPreset =
 export type HardwareAcceleration = 'auto' | 'nvenc' | 'vaapi' | 'none'
 export type HardwareDecodingCodec =
   'h264' | 'hevc' | 'hevc_10bit' | 'vp9' | 'av1' | 'mpeg2video' | 'vc1'
+export type VersionCriterion =
+  | 'language'
+  | 'resolution-high'
+  | 'resolution-low'
+  | 'size-large'
+  | 'size-small'
+  | 'codec'
+  | 'hdr-first'
+  | 'hdr-last'
+export type VersionCodec = 'av1' | 'hevc' | 'vp9' | 'h264' | 'vc1' | 'mpeg4' | 'mpeg2video'
 export type ToneMappingAlgorithm =
   'auto' | 'bt2390' | 'hable' | 'reinhard' | 'mobius' | 'clip' | 'linear'
 export type DeinterlaceMethod = 'yadif' | 'bwdif'

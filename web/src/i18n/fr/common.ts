@@ -80,6 +80,16 @@ const common: typeof en = {
       'Le temps pour analyser une version doit être un nombre entier de secondes de 5 à 120.',
     invalid_version_attempts:
       'Le nombre de versions essayées doit être un nombre entier de 1 à 10.',
+    invalid_version_order:
+      'Choisissez au plus quatre critères pour trier les versions, un de chaque sorte. Rechargez la page.',
+    invalid_version_codec_order:
+      'L’ordre des codecs vidéo doit citer chaque codec une fois. Rechargez la page.',
+    invalid_hide_versions_larger:
+      'La taille au-delà de laquelle les versions sont masquées doit être 0, ou un nombre entier de Go de 1 à 1 000.',
+    invalid_hidden_version_codecs:
+      'Cette liste de codecs masqués n’est pas prise en charge. Rechargez la page.',
+    invalid_hidden_version_words:
+      'Saisissez au plus 50 mots masquant des versions, un par ligne, de 100 caractères au plus chacun.',
     invalid_max_conversions:
       'Le nombre de conversions vidéo en même temps doit être un nombre entier de 0 à 32.',
     invalid_max_conversion_height: 'Choisissez la qualité max des vidéos converties dans la liste.',

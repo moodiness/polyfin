@@ -562,9 +562,11 @@ While at least one version fits the group or has an unknown height:
 
 - versions taller than the group are left out of what the user is offered and of the versions tried for playback;
 - they are not analyzed;
-- the others keep their order.
+- the others keep their order: the addons', or the one the [version order](playback.md#version-order) settings give.
 
-When every version is taller, all are kept rather than none, the closest to the group first (720p before 1080p before 4K; versions of the same height keep their order). That way the least is read and decoded.
+When every version is taller, all are kept rather than none, the closest to the group first (720p before 1080p before 4K; versions of the same height keep their order, or are ordered by the version order settings). That way the least is read and decoded.
+
+The group applies after the version order settings hide versions, and before they order them (see [Version order](playback.md#version-order)).
 
 - The version played is converted down to the group, or to **Maximum quality of converted video** when that is lower, and to 1080p at most when the processor converts (4K on a GPU), as every conversion is. See [Transcoding](transcoding.md).
 - A version that fits plays as it is, or remuxed, as before.

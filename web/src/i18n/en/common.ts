@@ -75,6 +75,15 @@ const common = {
     invalid_analysis_timeout:
       'The time to analyze a version must be a whole number of seconds from 5 to 120.',
     invalid_version_attempts: 'Versions tried must be a whole number from 1 to 10.',
+    invalid_version_order:
+      'Choose at most four criteria to order versions, one of each kind. Reload the page.',
+    invalid_version_codec_order:
+      'The order of the video codecs must list each codec once. Reload the page.',
+    invalid_hide_versions_larger:
+      'The size above which versions are hidden must be 0, or a whole number of GB from 1 to 1,000.',
+    invalid_hidden_version_codecs: 'This list of hidden codecs is not supported. Reload the page.',
+    invalid_hidden_version_words:
+      'Enter at most 50 words hiding versions, one a line, each at most 100 characters.',
     invalid_max_conversions: 'Video conversions at once must be a whole number from 0 to 32.',
     invalid_max_conversion_height: 'Choose the maximum quality of converted video from the list.',
     invalid_encoder_preset: 'Choose an encoding speed from the list.',

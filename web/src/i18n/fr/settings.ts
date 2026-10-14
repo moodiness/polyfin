@@ -81,6 +81,47 @@ const settings: typeof en = {
     preferDirectPlay: 'Préférer les versions lues sans conversion',
     preferDirectPlayHelp:
       'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées ; rien ne change une fois qu’elles sont connues.',
+    versionOrderGroup: 'Ordre des versions',
+    versionOrder: {
+      label: 'Trier les versions par',
+      help: 'Chaque critère regroupe les versions d’un film ou d’un épisode, et le suivant les trie dans chaque groupe ; les versions à égalité gardent l’ordre des addons. La première version est celle que lance « Lire », et les versions essayées quand elle ne marche pas viennent ensuite. Polyfin se fie à ce qu’il sait d’une version sans lire le fichier : son analyse une fois lue, sinon la description de RemuxDB, sinon les mots de ses libellés. Une version dont un critère ne sait rien passe après les autres. La langue audio préférée est celle de chaque utilisateur, réglée dans son appli : les versions connues dans cette langue d’abord, puis celles marquées MULTI ou DUAL, puis celles de langue inconnue. Tant que la page d’un titre est ouverte, les versions qu’elle affiche gardent leur place.',
+      none: 'Aucun : les versions gardent l’ordre des addons.',
+      add: 'Ajouter un critère',
+      remove: (name: string) => `Retirer « ${name} »`,
+      criterion: (position: number) => `Critère ${position}`,
+      criteria: {
+        language: 'Langue audio préférée',
+        'resolution-high': 'Résolution, la plus haute d’abord',
+        'resolution-low': 'Résolution, la plus basse d’abord',
+        'size-large': 'Taille du fichier, le plus gros d’abord',
+        'size-small': 'Taille du fichier, le plus petit d’abord',
+        codec: 'Codec vidéo, dans l’ordre ci-dessous',
+        'hdr-first': 'HDR et Dolby Vision d’abord',
+        'hdr-last': 'HDR et Dolby Vision en dernier',
+      },
+    },
+    versionCodecOrder: {
+      label: 'Ordre des codecs vidéo',
+      help: 'L’ordre dans lequel le critère « Codec vidéo » range les versions.',
+    },
+    versionCodecs: {
+      av1: 'AV1',
+      hevc: 'HEVC (H.265)',
+      vp9: 'VP9',
+      h264: 'H.264 (AVC)',
+      vc1: 'VC-1',
+      mpeg4: 'MPEG-4 partie 2 (Xvid, DivX)',
+      mpeg2video: 'MPEG-2',
+    },
+    hideVersionsLarger: 'Masquer les versions de plus de (Go, 0 = sans limite)',
+    hideVersionsLargerHelp: (r: RangeText) =>
+      `Les versions dont on sait qu’elles sont plus grosses ne sont listées nulle part : ni sur la page des titres, ni à la lecture, ni dans les téléchargements. Si cette règle et les suivantes masquaient toutes les versions d’un titre, aucune n’est masquée. Jusqu’à ${r.max} Go ; ${r.default} par défaut.`,
+    hiddenVersionCodecs: 'Masquer ces codecs vidéo',
+    hiddenVersionCodecsHelp:
+      'Les versions dont on sait qu’elles sont dans ces codecs ne sont listées nulle part.',
+    hiddenVersionWords: 'Masquer les versions dont les libellés contiennent',
+    hiddenVersionWordsHelp: (r: RangeText) =>
+      `Un mot ou une expression par ligne, cherché sans tenir compte des majuscules dans le nom, la description et le nom de fichier d’une version : pour les addons qui disent dans leurs libellés qu’un fichier n’est pas encore prêt à être lu. Jusqu’à ${r.max} lignes ; aucun par défaut.`,
     syncAddonSubtitles: 'Recaler les sous-titres des addons',
     syncAddonSubtitlesHelp:
       'Cale les sous-titres des addons sur la version lue, quand ils arrivent trop tôt, trop tard, ou défilent plus vite ou plus lentement qu’elle. À la première lecture d’une version, Polyfin repère en arrière-plan quand on y parle : grâce à un sous-titre texte du fichier, sinon dans trois passages de son audio, en lisant au plus 300 Mo du fichier d’un addon. Ensuite, un sous-titre qui colle nettement mieux décalé ou accéléré arrive recalé, son nom finissant par « (recalé) ».',

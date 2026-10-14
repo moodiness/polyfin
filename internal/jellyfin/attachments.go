@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
 )
@@ -128,6 +129,11 @@ func (h *Handler) attachment(w http.ResponseWriter, r *http.Request) {
 	if !okSource {
 		writeJSON(w, http.StatusNotFound, fmt.Sprintf("MediaSource %s not found", source))
 		return
+	}
+	// With the version rules or a quality group, the title's own
+	// identifier stands for the version they offer first.
+	if wanted == item && h.reordered(user) {
+		wanted = h.firstWorkingVersion(r.Context(), user, library.Item{ID: item})
 	}
 	version, err := h.Library.Version(r.Context(), user, item, wanted)
 	if err != nil {

@@ -351,12 +351,21 @@ type settingsJSON struct {
 	// AnalysisTimeout, VersionAttempts, PreferDirectPlay,
 	// SyncAddonSubtitles, MaxConversions and MaxConversionHeight keep their
 	// current values when a PUT leaves them out.
-	AnalysisTimeout     *int  `json:"analysisTimeout"`
-	VersionAttempts     *int  `json:"versionAttempts"`
-	PreferDirectPlay    *bool `json:"preferDirectPlay"`
-	SyncAddonSubtitles  *bool `json:"syncAddonSubtitles"`
-	MaxConversions      *int  `json:"maxConversions"`
-	MaxConversionHeight *int  `json:"maxConversionHeight"`
+	AnalysisTimeout  *int  `json:"analysisTimeout"`
+	VersionAttempts  *int  `json:"versionAttempts"`
+	PreferDirectPlay *bool `json:"preferDirectPlay"`
+	// The version rules keep their current values when a PUT leaves them
+	// out: VersionOrder holds up to four criteria (see
+	// accounts.VersionCriteria), VersionCodecOrder every video codec once,
+	// and HiddenVersionWords the words, one per entry.
+	VersionOrder         *[]string `json:"versionOrder"`
+	VersionCodecOrder    *[]string `json:"versionCodecOrder"`
+	HideVersionsLargerGB *int      `json:"hideVersionsLargerGb"`
+	HiddenVersionCodecs  *[]string `json:"hiddenVersionCodecs"`
+	HiddenVersionWords   *[]string `json:"hiddenVersionWords"`
+	SyncAddonSubtitles   *bool     `json:"syncAddonSubtitles"`
+	MaxConversions       *int      `json:"maxConversions"`
+	MaxConversionHeight  *int      `json:"maxConversionHeight"`
 	// The settings tuning conversions keep their current values when a
 	// PUT leaves them out. ConversionHardware is what conversions run on;
 	// a PUT cannot change it.
@@ -552,6 +561,11 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		AnalysisTimeout:       &settings.AnalysisTimeout,
 		VersionAttempts:       &settings.VersionAttempts,
 		PreferDirectPlay:      &settings.PreferDirectPlay,
+		VersionOrder:          &settings.VersionOrder,
+		VersionCodecOrder:     &settings.VersionCodecOrder,
+		HideVersionsLargerGB:  &settings.HideVersionsLargerGB,
+		HiddenVersionCodecs:   &settings.HiddenVersionCodecs,
+		HiddenVersionWords:    &settings.HiddenVersionWords,
 		SyncAddonSubtitles:    &settings.SyncAddonSubtitles,
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
@@ -1112,6 +1126,11 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		AnalysisTimeout:       valueOr(body.AnalysisTimeout, current.AnalysisTimeout),
 		VersionAttempts:       valueOr(body.VersionAttempts, current.VersionAttempts),
 		PreferDirectPlay:      valueOr(body.PreferDirectPlay, current.PreferDirectPlay),
+		VersionOrder:          valueOr(body.VersionOrder, current.VersionOrder),
+		VersionCodecOrder:     valueOr(body.VersionCodecOrder, current.VersionCodecOrder),
+		HideVersionsLargerGB:  valueOr(body.HideVersionsLargerGB, current.HideVersionsLargerGB),
+		HiddenVersionCodecs:   valueOr(body.HiddenVersionCodecs, current.HiddenVersionCodecs),
+		HiddenVersionWords:    valueOr(body.HiddenVersionWords, current.HiddenVersionWords),
 		SyncAddonSubtitles:    valueOr(body.SyncAddonSubtitles, current.SyncAddonSubtitles),
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
