@@ -107,6 +107,8 @@ type historyEntryJSON struct {
 	Played    int64           `json:"played"`
 	Position  int64           `json:"position"`
 	Method    string          `json:"method"`
+	// Shared is true for a guest's playback through a share link.
+	Shared bool `json:"shared"`
 }
 
 type historyUserJSON struct {
@@ -289,7 +291,7 @@ func (s statisticsRoutes) history(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, historyEntryJSON{ID: e.ID, User: historyUserJSON{ID: e.User.String(), Name: e.UserName}, Item: item, App: e.App,
 			Device: e.Device, StartedAt: e.Started.UTC(), EndedAt: e.Ended.UTC(), Played: secondsOf(e.Played),
-			Position: secondsOf(e.Position), Method: e.Method})
+			Position: secondsOf(e.Position), Method: e.Method, Shared: e.Shared})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total})
 }

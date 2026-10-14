@@ -149,6 +149,9 @@ type Options struct {
 	// collections they may list.
 	HomeRows       *homerows.Store
 	HomeRowChoices HomeRowChoices
+	// Sharing finds the titles users give through share links; nil lets
+	// no one make a link.
+	Sharing Sharing
 }
 
 type handler struct {
@@ -213,6 +216,12 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/home-rows", h.signedIn(h.ownHomeRows))
 	mux.Handle("PUT /admin/api/account/home-rows/{id}", h.signedIn(h.setOwnHomeRow))
 	mux.Handle("DELETE /admin/api/account/hidden/{id}", h.signedIn(h.showOwnHidden))
+	mux.Handle("GET /admin/api/account/share-links", h.signedIn(h.ownShareLinks))
+	mux.Handle("POST /admin/api/account/share-links", h.signedIn(h.createShareLink))
+	mux.Handle("POST /admin/api/account/share-links/{id}/revoke", h.signedIn(h.revokeOwnShareLink))
+	mux.Handle("GET /admin/api/account/share-titles", h.signedIn(h.shareTitles))
+	mux.Handle("GET /admin/api/account/share-titles/{id}", h.signedIn(h.shareTitle))
+	mux.Handle("GET /admin/api/account/share-titles/{id}/episodes", h.signedIn(h.shareEpisodes))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
 
@@ -234,6 +243,8 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/invites", h.administrator(h.invites))
 	mux.Handle("POST /admin/api/invites", h.administrator(h.createInvite))
 	mux.Handle("POST /admin/api/invites/{id}/revoke", h.administrator(h.revokeInvite))
+	mux.Handle("GET /admin/api/users/{id}/share-links", h.administrator(h.userShareLinks))
+	mux.Handle("POST /admin/api/share-links/{id}/revoke", h.administrator(h.revokeAnyShareLink))
 	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))

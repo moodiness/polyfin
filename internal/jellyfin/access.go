@@ -10,8 +10,9 @@ import (
 
 // playbackLimitReached reports whether the caller's user already plays on
 // as many of their other devices as they may play on at once: the devices
-// /Sessions shows playing. The caller's own device does not count, so that
-// it can go on to another title.
+// /Sessions shows playing, and the guests playing through their share
+// links. The caller's own device does not count, so that it can go on to
+// another title.
 //
 // Jellyfin's MaxActiveSessions counts the user's signed-in sessions and
 // refuses signing in once they are reached; Polyfin counts playbacks
@@ -22,17 +23,12 @@ func (h *Handler) playbackLimitReached(ctx context.Context, c caller) (bool, err
 	if most <= 0 {
 		return false, nil
 	}
-	devices, err := h.Accounts.Devices(ctx, c.User.ID)
+	playing, err := h.devicesPlaying(ctx, c.User, c.Device.ID)
 	if err != nil {
 		return false, err
 	}
-	playing := 0
-	for _, device := range devices {
-		if _, ok := h.sessions.Playing(device.ID); ok && device.ID != c.Device.ID {
-			playing++
-		}
-	}
-	return playing >= most, nil
+	h.endStaleGuests()
+	return playing+h.guests.ofUser(c.User.ID) >= most, nil
 }
 
 // rateLimitExceeded answers a PlaybackInfo refused for the user's limit of

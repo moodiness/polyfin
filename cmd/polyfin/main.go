@@ -459,6 +459,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Backups:        backups,
 		Trackers:       tracking,
 		Plays:          playbacks,
+		// Guests playing through share links are told through the
+		// notifications, made below.
+		SharePlayed: func(link accounts.ShareLink) { notifier.SharePlayed(link) },
 	})
 	adminOptions := admin.Options{
 		Version:       version,
@@ -491,6 +494,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// may list as the Jellyfin API tells them.
 		HomeRows:       homeRows,
 		HomeRowChoices: jellyfinAPI,
+		Sharing:        lib,
 		Health: admin.HealthSources{
 			Addons:       addonClient,
 			Cache:        sources,
@@ -534,6 +538,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			Admin:         adminApp,
 			AdminAPI:      admin.New(adminOptions),
 			Jellyfin:      jellyfinAPI,
+			Share:         jellyfinAPI.Share(),
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,
 			CustomJs:      func() string { return store.Settings().CustomJs },
@@ -690,6 +695,25 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 			ended, err := store.EndedAccounts(ctx)
 			for _, user := range ended {
 				activityLog.AccountEnded(ctx, user)
+			}
+			return err
+		},
+	})
+	// A share link stops at its expiry on its own: this only writes the
+	// expiry to the activity log, and forgets the links ended long ago.
+	registry.Register(tasks.Task{
+		Key:      "RecordExpiredShareLinks",
+		Category: tasks.CategoryMaintenance,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Record expired share links", Description: "Writes to the activity log, once each, the share links that expired, and deletes those that ended more than 30 days ago."},
+			"fr": {Name: "Noter les liens de partage expirés", Description: "Inscrit au journal d’activité, une fois chacun, les liens de partage qui ont expiré, et supprime ceux qui ont pris fin il y a plus de 30 jours."},
+		},
+		Interval: accounts.ShareLinkCheckInterval,
+		AtStart:  true,
+		Run: func(ctx context.Context) error {
+			expired, err := store.ExpiredShareLinks(ctx)
+			for _, link := range expired {
+				activityLog.ShareLinkExpiredAt(ctx, link)
 			}
 			return err
 		},

@@ -134,6 +134,19 @@ type remuxRequest struct {
 	files []library.ExternalSubtitle
 	// live is set for a channel, whose stream FFmpeg converts as it comes.
 	live bool
+	// uris is the query the playlists' URIs repeat, which carries the
+	// play session of an app; renditions lists the text subtitles in the
+	// master playlist.
+	uris       string
+	renditions bool
+}
+
+// withQuery is uri with query, if any.
+func withQuery(uri, query string) string {
+	if query == "" {
+		return uri
+	}
+	return uri + "?" + query
 }
 
 // remuxOf reads which remux an HLS request is about. HLS requests carry
@@ -156,6 +169,15 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		w.WriteHeader(http.StatusUnauthorized)
 		return remuxRequest{}, false
 	}
+	req, ok := h.remuxFor(w, r, user, opened, grant.Version, session)
+	req.uris, req.renditions = r.URL.RawQuery, strings.EqualFold(query(r, "subtitleMethod"), "Hls")
+	return req, ok
+}
+
+// remuxFor reads the remux of version of the item opened, for user, in the
+// play session session, from the parameters of r's query, as
+// PlaybackInfo's TranscodingUrl gives them.
+func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts.User, opened, versionID accounts.ID, session string) (remuxRequest, bool) {
 	// A conversion the user may not have is refused, as Jellyfin refuses
 	// it once FFmpeg is about to start. PlaybackInfo plans none: this
 	// guards URLs kept from before a permission was taken away, or made up.
@@ -172,7 +194,7 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false
 	}
-	version, err := h.version(r.Context(), user, item, grant.Version)
+	version, err := h.version(r.Context(), user, item, versionID)
 	if err != nil {
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false
@@ -311,11 +333,19 @@ func audioTrack(analysis media.Analysis, files int, asked string) int {
 	return fallback
 }
 
+// remuxer reads which remux an HLS request is about, or answers it.
+type remuxer func(http.ResponseWriter, *http.Request) (remuxRequest, bool)
+
 // hlsPlaylist serves master.m3u8 and main.m3u8, or live.m3u8 for a
 // channel. Their URIs are relative and repeat the query, which carries the
 // play session.
 func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name string) {
-	req, ok := h.remuxOf(w, r)
+	h.servePlaylist(w, r, name, h.remuxOf)
+}
+
+// servePlaylist serves the playlist name of the remux remuxOf reads.
+func (h *Handler) servePlaylist(w http.ResponseWriter, r *http.Request, name string, remuxOf remuxer) {
+	req, ok := remuxOf(w, r)
 	if !ok {
 		return
 	}
@@ -339,17 +369,17 @@ func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name strin
 	if strings.EqualFold(name, "master") {
 		var variant hls.Variant
 		if variant, err = h.Playback.Variant(r.Context(), req.remux); err == nil {
-			if strings.EqualFold(query(r, "subtitleMethod"), "Hls") {
-				variant.Subtitles = h.renditions(r.Context(), req, query(r, "subtitleStreamIndex"), r.URL.RawQuery)
+			if req.renditions {
+				variant.Subtitles = h.renditions(r.Context(), req, query(r, "subtitleStreamIndex"), req.uris)
 			}
-			err = hls.WriteMaster(w, variant, "main.m3u8?"+r.URL.RawQuery)
+			err = hls.WriteMaster(w, variant, withQuery("main.m3u8", req.uris))
 		}
 	} else {
 		var plan hls.Plan
 		if plan, err = h.Playback.Plan(r.Context(), req.remux.Version); err == nil {
 			extension := req.remux.Format.Extension()
 			err = hls.WriteMedia(w, plan, req.remux.Format, func(n int) string {
-				return "hls1/main/" + strconv.Itoa(n) + "." + extension + "?" + r.URL.RawQuery
+				return withQuery("hls1/main/"+strconv.Itoa(n)+"."+extension, req.uris)
 			})
 		}
 	}
@@ -375,7 +405,7 @@ func (h *Handler) renditions(ctx context.Context, req remuxRequest, selected, ra
 		}
 		index := strconv.Itoa(stream.Index)
 		renditions = append(renditions, hls.Rendition{Name: stream.DisplayTitle, Language: playback.LanguageTag(stream.Language),
-			Default: index == selected, Forced: stream.IsForced, URI: "hls1/subtitles" + index + "/main.m3u8?" + rawQuery})
+			Default: index == selected, Forced: stream.IsForced, URI: withQuery("hls1/subtitles"+index+"/main.m3u8", rawQuery)})
 	}
 	return renditions
 }
@@ -384,10 +414,15 @@ func (h *Handler) renditions(ctx context.Context, req remuxRequest, selected, ra
 // initialization segment as -1, and its subtitle renditions under
 // hls1/subtitles{index}.
 func (h *Handler) hlsSegment(w http.ResponseWriter, r *http.Request) {
+	h.serveSegment(w, r, h.remuxOf)
+}
+
+// serveSegment serves a segment of the remux remuxOf reads.
+func (h *Handler) serveSegment(w http.ResponseWriter, r *http.Request, remuxOf remuxer) {
 	playlist := strings.ToLower(r.PathValue("playlistId"))
 	if raw, ok := strings.CutPrefix(playlist, "subtitles"); ok {
 		if index, err := strconv.Atoi(raw); err == nil && index >= 0 {
-			h.hlsSubtitles(w, r, index)
+			h.hlsSubtitles(w, r, index, remuxOf)
 			return
 		}
 	}
@@ -397,7 +432,7 @@ func (h *Handler) hlsSegment(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusNotFound)
 		return
 	}
-	req, ok := h.remuxOf(w, r)
+	req, ok := remuxOf(w, r)
 	if !ok {
 		return
 	}
@@ -435,9 +470,9 @@ func (h *Handler) hlsSegment(w http.ResponseWriter, r *http.Request) {
 // rendition, index being the Jellyfin index of its stream. The segments of
 // an addon's file are cut from it; those of an embedded track wait for
 // FFmpeg to extract them.
-func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int) {
+func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int, remuxOf remuxer) {
 	name, extension, _ := strings.Cut(r.PathValue("file"), ".")
-	req, ok := h.remuxOf(w, r)
+	req, ok := remuxOf(w, r)
 	if !ok {
 		return
 	}
@@ -458,7 +493,7 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 	if strings.EqualFold(r.PathValue("file"), "main.m3u8") {
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		w.Header().Set("Cache-Control", "no-cache")
-		if err := hls.WriteSubtitlePlaylist(w, plan, func(n int) string { return strconv.Itoa(n) + ".vtt?" + r.URL.RawQuery }); err != nil {
+		if err := hls.WriteSubtitlePlaylist(w, plan, func(n int) string { return withQuery(strconv.Itoa(n)+".vtt", req.uris) }); err != nil {
 			h.remuxError(w, r, req.remux, err)
 		}
 		return

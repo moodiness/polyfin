@@ -37,7 +37,7 @@ func (s *Service) playbackEvent(c plays.Change) Event {
 	ev.User = &UserJSON{ID: p.User.String(), Name: p.UserName}
 	j := &PlaybackJSON{ItemID: t.Item.String(), Kind: t.Kind, Name: t.Name, App: p.App, Device: p.DeviceName,
 		Position: int64(p.Position.Seconds()), Paused: p.Paused, Converted: p.Method == plays.Conversion, StartedAt: p.Started.UTC(),
-		Played: int64(p.Played.Seconds())}
+		Played: int64(p.Played.Seconds()), Shared: p.Shared}
 	if t.Kind == plays.Episode {
 		j.SeriesName, j.Season, j.Number = &t.SeriesName, &t.Season, &t.Episode
 		if t.SeriesID != (accounts.ID{}) {

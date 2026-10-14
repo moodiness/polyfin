@@ -42,6 +42,9 @@ type Options struct {
 	AdminAPI http.Handler
 	// Jellyfin serves every path not owned by Polyfin itself.
 	Jellyfin http.Handler
+	// Share serves the share links' page and its playback, under /share/;
+	// nil leaves /share/ to the Jellyfin API, which answers 404.
+	Share http.Handler
 	// Web holds the files of jellyfin-web, the web client served at /web/;
 	// nil serves none.
 	Web fs.FS
@@ -97,6 +100,9 @@ func New(options Options) http.Handler {
 	mux.Handle("/admin/", rootOnly(adminApp(options.Admin, options.Logger), options.Jellyfin))
 	// As the mux would, but at the root only.
 	mux.Handle("/admin", rootOnly(http.RedirectHandler(adminPrefix, http.StatusMovedPermanently), options.Jellyfin))
+	if options.Share != nil {
+		mux.Handle("/share/", rootOnly(options.Share, options.Jellyfin))
+	}
 	if options.Web != nil {
 		mux.Handle(webPrefix, webClient(options.Web, func(ctx context.Context) bool {
 			return setUp(ctx, options.SetupRequired)

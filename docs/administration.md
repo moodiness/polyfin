@@ -246,7 +246,8 @@ The activity log records:
 - playback start and stop;
 - users created, changed or deleted, and accounts that reach their end date (see [Ending an account](users.md#ending-an-account));
 - settings saved;
-- addons installed or removed.
+- addons installed or removed;
+- share links made, revoked or expired, and each guest playback through one, as "A link shared by alex played Example Movie (2008)" (see [Share links](users.md#share-links)).
 
 It keeps 30 days. Its last entries show on the admin app's [**Home**](#home), and Jellyfin apps can read it.
 
@@ -266,6 +267,7 @@ Jellyfin apps see Polyfin's own jobs and can start and stop them:
 - signing out unused devices, hourly;
 - cleaning the activity log, daily;
 - recording ended accounts in the activity log, hourly;
+- recording expired share links in the activity log, every 10 minutes, and deleting the links that ended more than 30 days ago;
 - fetching the IPTV channel lists, then the Live TV guides due under **Settings › Live TV**. Polyfin looks for due ones every 5 minutes; started by hand, the task fetches every list and guide;
 - refreshing ratings, which asks addons and runs only when started.
 

@@ -68,6 +68,7 @@ func DefaultSettings() Settings {
 
 		PersonalAddons:     true,
 		ServerImports:      true,
+		ShareLinks:         false,
 		LoginAttempts:      DefaultLoginAttempts,
 		InactiveDeviceDays: DefaultInactiveDeviceDays,
 		KnownProxies:       []netip.Prefix{},
@@ -226,6 +227,7 @@ func SettingsBounds() map[string]SettingBounds {
 
 		"personalAddons":     is(d.PersonalAddons),
 		"serverImports":      is(d.ServerImports),
+		"shareLinks":         is(d.ShareLinks),
 		"loginAttempts":      orZero(MinLoginAttempts, MaxLoginAttempts, d.LoginAttempts),
 		"inactiveDeviceDays": between(0, MaxInactiveDeviceDays, d.InactiveDeviceDays),
 		"knownProxies":       between(0, MaxKnownProxies, d.KnownProxies),

@@ -68,6 +68,10 @@ type userJSON struct {
 	// /UserImage, null without one.
 	SubtitleManagement bool    `json:"subtitleManagement"`
 	ImageTag           *string `json:"imageTag"`
+	// CanShare lets the user give a movie or an episode to someone
+	// without an account, through a share link, while the server allows
+	// them.
+	CanShare bool `json:"canShare"`
 	// QualityGroup is the tallest video the user is offered, in lines: 480,
 	// 720, 1080, 1440 or 2160, or 0 for Original, no limit.
 	QualityGroup int `json:"qualityGroup"`
@@ -161,6 +165,7 @@ func newUserJSON(user accounts.User) userJSON {
 		// Subtitles and the profile picture.
 		SubtitleManagement: user.SubtitleManagement,
 		ImageTag:           imageTag(user),
+		CanShare:           user.CanShare,
 		// Whether the user may schedule and delete recordings.
 		LiveTvManagement: user.LiveTvManagement,
 		// The tallest video the user is offered.
@@ -346,6 +351,7 @@ type settingsJSON struct {
 	// them out, too.
 	PersonalAddons     *bool `json:"personalAddons"`
 	ServerImports      *bool `json:"serverImports"`
+	ShareLinks         *bool `json:"shareLinks"`
 	LoginAttempts      *int  `json:"loginAttempts"`
 	InactiveDeviceDays *int  `json:"inactiveDeviceDays"`
 	DetailedLog        *bool `json:"detailedLog"`
@@ -563,6 +569,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		CatalogRefreshMinutes: &settings.CatalogRefreshMinutes,
 		PersonalAddons:        &settings.PersonalAddons,
 		ServerImports:         &settings.ServerImports,
+		ShareLinks:            &settings.ShareLinks,
 		LoginAttempts:         &settings.LoginAttempts,
 		InactiveDeviceDays:    &settings.InactiveDeviceDays,
 		KnownProxies:          new(accounts.FormatKnownProxies(settings.KnownProxies, settings.KnownProxyNames)),
@@ -847,6 +854,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		CollectionManagement *bool `json:"collectionManagement"`
 		// SubtitleManagement, see userJSON.
 		SubtitleManagement *bool `json:"subtitleManagement"`
+		// CanShare, see userJSON.
+		CanShare *bool `json:"canShare"`
 		// LiveTvManagement, see userJSON.
 		LiveTvManagement *bool `json:"liveTvManagement"`
 		// QualityGroup, see userJSON.
@@ -883,6 +892,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		SubtitleManagement:   body.SubtitleManagement,
 		LiveTvManagement:     body.LiveTvManagement,
 		QualityGroup:         body.QualityGroup,
+		CanShare:             body.CanShare,
 	}
 	if p := body.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
@@ -1131,6 +1141,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		CatalogRefreshMinutes: valueOr(body.CatalogRefreshMinutes, current.CatalogRefreshMinutes),
 		PersonalAddons:        valueOr(body.PersonalAddons, current.PersonalAddons),
 		ServerImports:         valueOr(body.ServerImports, current.ServerImports),
+		ShareLinks:            valueOr(body.ShareLinks, current.ShareLinks),
 		LoginAttempts:         valueOr(body.LoginAttempts, current.LoginAttempts),
 		InactiveDeviceDays:    valueOr(body.InactiveDeviceDays, current.InactiveDeviceDays),
 		KnownProxies:          knownProxies,

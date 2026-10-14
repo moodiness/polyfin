@@ -16,10 +16,13 @@ import (
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
-// LiveSession is a device playing, as the admin dashboard shows it.
+// LiveSession is a device playing, as the admin dashboard shows it, or a
+// guest playing through a share link: Shared then, under the sharer's name,
+// with guestApp as its app.
 type LiveSession struct {
 	User   accounts.User
 	Device accounts.Device
+	Shared bool
 	// Controllable tells whether the device's app takes commands, such as
 	// stopping or showing a message.
 	Controllable bool
@@ -42,10 +45,13 @@ type LiveSession struct {
 	Size *playback.ConversionSize
 }
 
-// LiveSessions lists the devices playing, the latest started first.
+// LiveSessions lists the devices playing, and the guests through share
+// links, the latest started first.
 func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
+	h.endStaleGuests()
 	playing := h.sessions.All()
-	if len(playing) == 0 {
+	guests := h.guests.all()
+	if len(playing) == 0 && len(guests) == 0 {
 		return []LiveSession{}, nil
 	}
 	encodings := map[string][]hls.Running{}
@@ -53,7 +59,8 @@ func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 		encodings[running.Key.Session] = append(encodings[running.Key.Session], running)
 	}
 	users := map[accounts.ID]accounts.User{}
-	sessions := make([]LiveSession, 0, len(playing))
+	sessions := make([]LiveSession, 0, len(playing)+len(guests))
+	sessions = append(sessions, h.guestSessions(ctx, encodings)...)
 	for deviceID := range playing {
 		now, ok := h.sessions.Playing(deviceID)
 		if !ok {

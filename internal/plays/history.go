@@ -65,10 +65,10 @@ func (h *History) Record(ctx context.Context, c Change) {
 		ended = p.Started
 	}
 	_, err := h.db.Exec(context.WithoutCancel(ctx), `INSERT INTO playback_history (user_id, item_id, kind, name, series_id, series_name, season,
-			episode, channel_id, channel_name, app, device, started_at, ended_at, played_seconds, position_seconds, method)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+			episode, channel_id, channel_name, app, device, started_at, ended_at, played_seconds, position_seconds, method, shared)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
 		p.User, t.Item, t.Kind, clip(t.Name), series, clip(t.SeriesName), season, episode, channel, clip(t.ChannelName), clip(p.App),
-		clip(p.DeviceName), p.Started, ended, int(p.Played.Seconds()), int(p.Position.Seconds()), p.Method)
+		clip(p.DeviceName), p.Started, ended, int(p.Played.Seconds()), int(p.Position.Seconds()), p.Method, p.Shared)
 	if err != nil {
 		h.logger.Warn("A playback could not be kept in the history", "error", err)
 	}
@@ -128,18 +128,20 @@ type Entry struct {
 	Played   time.Duration
 	Position time.Duration
 	Method   string
+	// Shared is set for a guest's playback through a share link of User's.
+	Shared bool
 }
 
 const entryColumns = `h.id, h.user_id, u.name, h.item_id, h.kind, h.name, coalesce(h.series_id, '00000000-0000-0000-0000-000000000000'),
 	h.series_name, coalesce(h.season, 0), coalesce(h.episode, 0), coalesce(h.channel_id, '00000000-0000-0000-0000-000000000000'),
-	h.channel_name, h.app, h.device, h.started_at, h.ended_at, h.played_seconds, h.position_seconds, h.method`
+	h.channel_name, h.app, h.device, h.started_at, h.ended_at, h.played_seconds, h.position_seconds, h.method, h.shared`
 
 func scanEntry(row pgx.CollectableRow) (Entry, error) {
 	var e Entry
 	var played, position int
 	err := row.Scan(&e.ID, &e.User, &e.UserName, &e.Title.Item, &e.Title.Kind, &e.Title.Name, &e.Title.SeriesID, &e.Title.SeriesName,
 		&e.Title.Season, &e.Title.Episode, &e.Title.ChannelID, &e.Title.ChannelName, &e.App, &e.Device, &e.Started, &e.Ended, &played,
-		&position, &e.Method)
+		&position, &e.Method, &e.Shared)
 	e.Played, e.Position = time.Duration(played)*time.Second, time.Duration(position)*time.Second
 	return e, err
 }
@@ -162,7 +164,7 @@ func (h *History) Entries(ctx context.Context, f Filter, offset, limit int) ([]E
 
 // csvHeader names the columns of WriteCSV.
 var csvHeader = []string{"started_at", "ended_at", "user", "kind", "title", "series", "season", "episode", "channel", "app", "device",
-	"played_seconds", "position_seconds", "method"}
+	"played_seconds", "position_seconds", "method", "shared"}
 
 // WriteCSV writes the playbacks f selects to w as CSV, the latest started
 // first, with a header line. Times are in UTC, as RFC 3339.
@@ -188,7 +190,7 @@ func (h *History) WriteCSV(ctx context.Context, w io.Writer, f Filter) error {
 		}
 		record := []string{e.Started.UTC().Format(time.RFC3339), e.Ended.UTC().Format(time.RFC3339), e.UserName, e.Title.Kind, e.Title.Name,
 			e.Title.SeriesName, season, episode, e.Title.ChannelName, e.App, e.Device, strconv.Itoa(int(e.Played.Seconds())),
-			strconv.Itoa(int(e.Position.Seconds())), e.Method}
+			strconv.Itoa(int(e.Position.Seconds())), e.Method, strconv.FormatBool(e.Shared)}
 		for i := range record {
 			record[i] = cell(record[i])
 		}

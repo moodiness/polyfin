@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="{{.Language}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>{{if .Title}}{{.Title.Name}} · {{end}}{{.Text.PageTitle}}</title>
+<link rel="stylesheet" href="/share/assets/share.css">
+<script src="/share/assets/hls.min.js" defer></script>
+<script src="/share/assets/share.js" defer></script>
+</head>
+<body{{if .Title}} class="has-title"{{end}}>
+<main class="share">
+<p class="from">{{.Text.SharedFrom}} <strong>{{.Server}}</strong></p>
+{{- if .Title}}
+<div class="player">
+<video id="video" controls playsinline preload="none" poster="" data-backdrop="image/backdrop"></video>
+<button id="play" class="play" type="button">{{.Text.Play}}</button>
+</div>
+<p id="message" class="message" role="status" aria-live="polite" hidden></p>
+<section class="title">
+<img class="poster" src="" data-src="image/primary" alt="" width="160" hidden>
+<div>
+<h1>{{.Title.Name}}</h1>
+{{- if .Title.Subtitle}}
+<p class="subtitle">{{.Title.Subtitle}}</p>
+{{- end}}
+<p class="facts">{{if .Title.Year}}<span>{{.Title.Year}}</span>{{end}}{{if .Title.Minutes}}<span>{{.Title.Minutes}} {{.Text.Minutes}}</span>{{end}}</p>
+{{- if .Title.Overview}}
+<p class="overview">{{.Title.Overview}}</p>
+{{- end}}
+<p class="expires">{{.Text.Expires}} <time datetime="{{.Title.Expires.UTC.Format "2006-01-02T15:04:05Z07:00"}}">{{.Title.Expires.UTC.Format "2006-01-02 15:04 UTC"}}</time></p>
+</div>
+</section>
+{{- else}}
+<h1>{{.Text.NoTitle}}</h1>
+<p class="message">{{.Message}}</p>
+{{- end}}
+</main>
+<script id="share-messages" type="application/json">{{.Messages}}</script>
+</body>
+</html>

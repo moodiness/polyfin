@@ -84,6 +84,9 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Connection stopped | `connection_stopped` | The targets of the user whose connection stopped, and the server's. |
 | Account blocked | `account_blocked` | The server's targets and administrators' own, and the targets of the user whose account it is. |
 | Sign-in on a new device | `new_device` | The targets of the user who signed in only: the server's targets cannot choose it. |
+| Shared link played | `share_played` | The targets of the user who made the share link, and the server's: at most once an hour per link. |
+
+**Shared link played** is not chosen by default for a new target. It tells that a guest without an account started a title through a share link (see [Share links](users.md#share-links)), as "Shared link played: Example Movie (2008)" and "A link shared by alex played Example Movie (2008).", and opens **My account › Shared links**. The event's `share` object holds the link's `id`, the title's `itemId`, `kind` (`movie` or `episode`) and `name`, and the link's `expiresAt`. The guest's playback also counts as the sharer's for the playback events, with `shared` true in their `playback` object and "Shared link" as its `app`.
 
 ### New episodes
 

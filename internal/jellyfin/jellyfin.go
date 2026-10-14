@@ -124,6 +124,9 @@ type Options struct {
 	// Plays follows the playbacks apps report, for the statistics and the
 	// notifications; nil follows none.
 	Plays *plays.Tracker
+	// SharePlayed is told of a guest's playback through a share link, at
+	// most once an hour per link; nil tells nothing.
+	SharePlayed func(accounts.ShareLink)
 }
 
 // Handler serves the Jellyfin API.
@@ -175,6 +178,9 @@ type Handler struct {
 	// plays remembers each device's last PlaybackInfo profile and bitrate,
 	// which item details name versions for (see detailsNamer).
 	plays *cache.Cache[accounts.ID, devicePlay]
+	// guests are the playbacks of guests through share links (see
+	// share.go).
+	guests *guestPlays
 }
 
 // New returns the Jellyfin API handler.
@@ -194,6 +200,7 @@ func New(options Options) *Handler {
 		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 		sizes:          cache.New[string, playback.ConversionSize](2000, 12*time.Hour),
 		plays:          cache.New[accounts.ID, devicePlay](1000, 30*24*time.Hour),
+		guests:         newGuestPlays(),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.listings = newListings(h.listVersions)
@@ -268,6 +275,7 @@ func New(options Options) *Handler {
 	h.metadataRoutes(rt)
 	h.rootRoutes(rt)
 	signedIn(http.MethodGet, "/Videos/{itemId}/Trickplay/{width}/{file}", h.trickplayFile)
+	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Share", h.mayShare)
 
 	h.routes = cors(rt)
 	return h

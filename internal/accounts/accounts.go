@@ -114,6 +114,10 @@ type User struct {
 	// from that date in the server's time zone, it is refused as a
 	// disabled one is (see Ended). An administrator's never ends.
 	EndsOn *time.Time
+	// CanShare lets the user give a movie or an episode to someone without
+	// an account, through a share link, while the server allows them
+	// (Settings.ShareLinks). Losing it revokes the user's links.
+	CanShare bool
 }
 
 // NewUser describes an account to create.
@@ -161,6 +165,8 @@ type UserChanges struct {
 	// administrator's cannot be set (ErrAdministratorEnds), and making a
 	// user an administrator clears theirs. See User.
 	EndsOn *time.Time
+	// CanShare, see User.
+	CanShare *bool
 }
 
 // Store is the accounts repository.
@@ -252,7 +258,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on"
+	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -263,7 +269,7 @@ func (user *User) fields() []any {
 		&user.PersonalAddons, &user.UseSharedAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
-		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn}
+		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -614,7 +620,8 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 				quality_group = coalesce($26, quality_group),
 				use_shared_addons = coalesce($27, use_shared_addons),
 				ends_on = $28,
-				end_recorded = end_recorded AND ends_on IS NOT DISTINCT FROM $28
+				end_recorded = end_recorded AND ends_on IS NOT DISTINCT FROM $28,
+				can_share = coalesce($29, can_share)
 			WHERE id = $1 RETURNING `+userColumns,
 			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
@@ -622,7 +629,7 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 			changes.PersonalAddons,
 			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 			hidden, genres, schedules, changes.CollectionManagement,
-			changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn))
+			changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare))
 		if uniqueViolation(err) {
 			return ErrNameTaken
 		}
@@ -631,8 +638,15 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 		}
 		if hash != nil || (updated.IsDisabled && !current.IsDisabled) {
 			signedOut, err = signOutEverywhere(ctx, tx, id, keep)
+			if err != nil {
+				return err
+			}
 		}
-		return err
+		// A user who may no longer share, or is disabled, loses their links.
+		if !updated.CanShare || updated.IsDisabled {
+			return revokeShareLinks(ctx, tx, id)
+		}
+		return nil
 	})
 	// Whatever changed, permissions, limits or a sign-out, applies from
 	// the user's next request.

@@ -42,7 +42,10 @@ type liveSessionJSON struct {
 	User         liveUserJSON   `json:"user"`
 	Device       liveDeviceJSON `json:"device"`
 	Controllable bool           `json:"controllable"`
-	Item         *liveItemJSON  `json:"item"`
+	// Shared is true for a guest playing through a share link of the
+	// user's.
+	Shared bool          `json:"shared"`
+	Item   *liveItemJSON `json:"item"`
 	// Position is in seconds.
 	Position  float64   `json:"position"`
 	Paused    bool      `json:"paused"`
@@ -159,6 +162,7 @@ func newLiveSessionJSON(s jellyfin.LiveSession) liveSessionJSON {
 		User:         liveUserJSON{ID: s.User.ID.String(), Name: s.User.Name, ImageTag: imageTag(s.User), QualityGroup: s.User.QualityGroup},
 		Device:       liveDeviceJSON{Name: s.Device.DeviceName, App: s.Device.Client, AppVersion: s.Device.ClientVersion, Address: s.Device.RemoteAddress},
 		Controllable: s.Controllable,
+		Shared:       s.Shared,
 		Position:     s.Playing.Position.Seconds(),
 		Paused:       s.Playing.Paused,
 		StartedAt:    s.Playing.Started,

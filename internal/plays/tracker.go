@@ -111,6 +111,9 @@ type Report struct {
 	// Method is how the playback reaches the app, empty when the report
 	// does not tell.
 	Method string
+	// Shared is set for a guest playing through a share link of User's:
+	// Device is then the guest's playback.
+	Shared bool
 }
 
 // Playback is one playback of a title on a device, from its start to its
@@ -133,6 +136,8 @@ type Playback struct {
 	// Method is the method that converted most while it played (see
 	// Methods), empty when no report told.
 	Method string
+	// Shared is set for a guest's playback through a share link.
+	Shared bool
 }
 
 // The changes of a playback.
@@ -217,7 +222,7 @@ func (t *Tracker) Report(r Report) {
 		}
 	case p == nil:
 		p = &Playback{User: r.User, UserName: r.UserName, App: r.App, DeviceName: r.DeviceName, Title: r.Title, Started: now,
-			LastReport: now, Paused: r.Paused}
+			LastReport: now, Paused: r.Paused, Shared: r.Shared}
 		p.apply(r)
 		t.playing[r.Device] = p
 		changes = append(changes, Change{Kind: Started, Playback: *p})

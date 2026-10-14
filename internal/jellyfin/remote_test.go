@@ -1,7 +1,6 @@
 package jellyfin
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -89,12 +88,6 @@ func sessionIDs(sessions []SessionInfo) []string {
 func sorted(values ...string) []string {
 	slices.Sort(values)
 	return values
-}
-
-func randomID() accounts.ID {
-	var id accounts.ID
-	_, _ = rand.Read(id[:])
-	return id
 }
 
 // command reads the next message as a command of the kind given, its data

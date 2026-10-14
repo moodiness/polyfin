@@ -96,6 +96,10 @@ const (
 	// never used, to their own targets only (see signins.go).
 	AccountBlocked = "account_blocked"
 	NewDevice      = "new_device"
+	// SharePlayed tells that a guest played a title through a share link,
+	// to the sharer's targets and the server's, at most once an hour per
+	// link (see Service.SharePlayed).
+	SharePlayed = "share_played"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 )
@@ -104,7 +108,7 @@ const (
 // shows them.
 var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined, NewVersion,
 	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary, MonthlySummary, YearlySummary, ConnectionStopped,
-	AccountBlocked, NewDevice}
+	AccountBlocked, NewDevice, SharePlayed}
 
 // administratorsEvent reports whether event is one only the server's
 // targets and administrators' own receive: about System › Health, a user

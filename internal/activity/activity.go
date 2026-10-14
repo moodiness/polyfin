@@ -345,3 +345,42 @@ func (s *Store) RecordingDeleted(ctx context.Context, user accounts.User, title 
 	s.record(ctx, Entry{Name: s.phrase("%s deleted the recording of %s", "%s a supprimé l’enregistrement de %s", user.Name, title),
 		Type: "RecordingDeleted", UserID: &user.ID})
 }
+
+// The types of the entries about share links, which Jellyfin does not
+// have.
+const (
+	ShareLinkCreated = "ShareLinkCreated"
+	ShareLinkRevoked = "ShareLinkRevoked"
+	ShareLinkExpired = "ShareLinkExpired"
+	SharedPlayback   = "SharedLinkPlayback"
+)
+
+// ShareLinkMade records that the user of link shared its title.
+func (s *Store) ShareLinkMade(ctx context.Context, link accounts.ShareLink) {
+	s.record(ctx, Entry{Name: s.phrase("%s shared %s through a link", "%s a partagé %s par un lien", link.User.Name, link.Title),
+		Type: ShareLinkCreated, UserID: &link.User.ID, ItemID: new(link.Item.String())})
+}
+
+// ShareLinkRevokedBy records that by revoked link, theirs or another
+// user's.
+func (s *Store) ShareLinkRevokedBy(ctx context.Context, link accounts.ShareLink, by accounts.User) {
+	e := Entry{Name: s.phrase("The link %s shared for %s was revoked", "Le lien partagé par %s pour %s a été révoqué", link.User.Name, link.Title),
+		Type: ShareLinkRevoked, UserID: &link.User.ID, ItemID: new(link.Item.String())}
+	if by.ID != link.User.ID {
+		e.ShortOverview = new(s.phrase("Revoked by %s", "Révoqué par %s", by.Name))
+	}
+	s.record(ctx, e)
+}
+
+// ShareLinkExpiredAt records that link expired.
+func (s *Store) ShareLinkExpiredAt(ctx context.Context, link accounts.ShareLink) {
+	s.record(ctx, Entry{Name: s.phrase("The link %s shared for %s expired", "Le lien partagé par %s pour %s a expiré", link.User.Name, link.Title),
+		Type: ShareLinkExpired, UserID: &link.User.ID, ItemID: new(link.Item.String())})
+}
+
+// SharedPlayed records that a guest without an account, from address,
+// played the title of link.
+func (s *Store) SharedPlayed(ctx context.Context, link accounts.ShareLink, address string) {
+	s.record(ctx, Entry{Name: s.phrase("A link shared by %s played %s", "Un lien partagé par %s a lu %s", link.User.Name, link.Title),
+		Type: SharedPlayback, UserID: &link.User.ID, ItemID: new(link.Item.String()), ShortOverview: s.address(address)})
+}

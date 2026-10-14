@@ -396,6 +396,66 @@ Each account created through a link is written to the activity log, as "sam join
   - `POST /admin/api/invite/{token}` with `name` and `password` creates the account. It answers 201 with `user` (`id`, `name`, `isAdministrator`, `imageTag`) and `webClient`. Without the web client (`webClient` false), the answer opens an admin session, as signing in does. With it, the page signs in with `POST /Users/AuthenticateByName` as jellyfin-web does, naming jellyfin-web's app and device, and keeps the session where jellyfin-web 12.2 reads it, in `jellyfin_credentials` in the browser's local storage.
   - A token that is no link's answers 404 `invite_unknown`, and a link used up, expired or revoked 410 `invite_used_up`, `invite_expired` or `invite_revoked`. A refused name or password answers as creating a user does: `invalid_name`, `invalid_password` or `name_taken`. Too many failures answer 429 `too_many_attempts`, with `Retry-After`.
 
+## Share links
+
+A share link lets a member give one movie or one episode to someone who has no account, for a while, without an administrator creating an account. The guest sees that title alone.
+
+Two switches allow it, both off by default:
+
+- **Allow share links**, under **Settings › Security**, for the server. Turned off, no link can be made, and every link is refused with 410, without being deleted: turning it on again makes the links work again until they expire.
+- **Can share titles**, under **Access** on a user's page, for each user, administrators included. An invite link's model passes it on, as the other **Access** permissions.
+
+A user who loses **Can share titles**, is disabled, ends (see [Ending an account](#ending-an-account)) or is deleted loses their links at once: they are revoked, or deleted with the account.
+
+### Making a link
+
+Under **My account › Shared links**, **Share a title** searches the libraries the user sees. A movie is shared as it is; a series opens its episodes, and one episode is shared. A series, a channel or a recording is never shared. Parental control, blocked genres and the titles the user hid apply: a title the user may not see cannot be shared. On a movie's or an episode's page in the web client, **Share** opens the same form with the title chosen (see [Web client](web-client.md)).
+
+The form asks for:
+
+- **Expires after**: 1 hour, 1 day (the default), 7 days or 30 days.
+- **Viewers at once**: from 1 (the default) to 5 guests watching through the link at the same time.
+
+**Create link** shows the link once, with **Copy link**: Polyfin keeps only a hash of it. It starts with the **Public address** (**Settings › Notifications**) when one is set, as an invite link does, and with the address the admin app is open at otherwise.
+
+**My account › Shared links** lists the user's links, with the title, when each expires, how many times it was played, its state (**Active**, **Expired** or **Revoked**) and **Revoke**. Administrators see a user's links in the **Shared links** section of that user's page, and can revoke them. Links that ended more than 30 days ago are deleted.
+
+### What the guest sees
+
+The link opens a page Polyfin serves at `/share/…`, which needs no account, in English or French as the guest's browser prefers (else the server's language). It shows the server's name, the title, its artwork and overview, when the link expires, a player, and the text subtitles of the version played, which the player's captions menu offers. It lists no library, no search and no other title. A link expired, revoked, turned off or unknown says so.
+
+The page plays HTTP Live Streaming, natively where the browser can, else with [hls.js](https://github.com/video-dev/hls.js) 1.6.16, which Polyfin serves itself: the page loads nothing from elsewhere.
+
+### Limits
+
+The guest plays as the sharer would, with less:
+
+- Everything goes through Polyfin: the guest is never sent to the source, as stream addresses can hold keys. The page gets HLS playlists and segments only: there is no download.
+- The version played is the one the sharer's version rules choose (see [Playback](playback.md)). Video is sent at 1080p at most, and never above the sharer's [quality group](#quality-groups) or **Maximum quality**: a taller version is converted down, and plays only when the sharer may have video converted.
+- A guest counts as one of the sharer's playbacks for **Playbacks at once**, and a conversion for **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)). At the limit, the page says that the owner of the link is already watching on as many devices as allowed. A link takes no more guests at once than its **Viewers at once**.
+- The sharer's **Allowed hours** apply: outside them, nothing plays.
+- A guest changes nothing of the sharer's played marks, resume points or Next Up. Their plays count in the sharer's statistics, marked **Shared**, and Home in the admin app shows them under the sharer's name, with "Shared link" as the app.
+
+Each link made, revoked or expired, and each guest playback, is written to the activity log, as "A link shared by alex played Example Movie" (see [Administration](administration.md#activity-log)). The event **Shared link played** tells the sharer's notification targets and the server's, at most once an hour per link (see [Notifications](notifications.md#events)).
+
+### How share links are kept safe
+
+- A link's token is made and checked as an invite link's: its ID followed by 32 random bytes, only the SHA-256 hash of which is kept, compared in constant time (see [How links are kept safe](#how-links-are-kept-safe)).
+- A token that is no link's counts as a failed sign-in of the client; after too many, the client is refused for a while (429).
+- The token opens the page's routes only: the Jellyfin API, the admin API and the web client refuse it as any unknown token. The guest's play session is signed for no one, so the API's own HLS routes refuse it too.
+- What is converted and sent is kept by the server when the playback starts: the guest's requests cannot change it.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no share links: watching needs an account.
+
+**For app developers:**
+
+- The admin API serves a user's own links: `GET /admin/api/account/share-links` answers `allowed` (whether the user may make one now) and `links`; each link has `id`, `user` (`id`, `name`), `item` (`id`, `kind`: `movie` or `episode`, `name`), `maxViewers`, `createdAt`, `expiresAt`, `revokedAt`, `plays` and `state`: `active`, `expired` or `revoked`. `POST /admin/api/account/share-links` makes one from `itemId`, `expiresInHours` (1, 24 by default, 168 or 720) and `maxViewers` (1 by default, up to 5), and answers 201 with the link, its `token` and its `url` (null without a public address: the link is then `/share/<token>`). Errors: 403 `share_links_off`, 400 `not_shareable`, `invalid_share_expiry` or `invalid_share_viewers`, 404 `not_found`. `POST /admin/api/account/share-links/{id}/revoke` revokes one.
+- `GET /admin/api/account/share-titles?search=…` finds movies and series to share, `GET /admin/api/account/share-titles/{id}` describes one title and `GET /admin/api/account/share-titles/{id}/episodes` lists a series' episodes.
+- Administrators: `GET /admin/api/users/{id}/share-links` and `POST /admin/api/share-links/{id}/revoke`. Users carry `canShare`, and the settings `shareLinks`.
+- The guest's page uses `GET /share/{token}`, `GET /share/{token}/image/primary` and `…/backdrop`, `POST /share/{token}/play` (which answers `session`, or `error`: `limit`, `viewers`, `hours`, `busy` or `unavailable`), `GET /share/{token}/play/{session}/master.m3u8` with its playlists and segments, and `POST /share/{token}/play/{session}/progress` and `…/stop`. A link that opens nothing answers 404 `unknown`, or 410 `expired`, `revoked`, `off` or `unavailable`.
+
 ## Parental control
 
 On a user's page under **Users**, the **Parental control** section can limit the user to titles up to a rating (**Maximum rating**). The administrator can also hide from them the movies or shows that have no rating (**Block unrated movies**, **Block unrated shows**). Administrators' Jellyfin apps can set the same limit from their user settings.
@@ -592,12 +652,13 @@ The group applies after the version order settings hide versions, and before the
 
 ## Security settings
 
-**Settings › Security** gathers six settings, and **Settings › Diagnostics** a seventh. They apply at once, without a restart.
+**Settings › Security** gathers seven settings, and **Settings › Diagnostics** an eighth. They apply at once, without a restart.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Allow users' own addons** | **Settings › Security** | On | Lets users add addons of their own under **My sources**. |
 | **Users may import their watch history from another server or app** | **Settings › Security** | On | Shows the imports from a Jellyfin or Emby server and from an app under **My account** (see [Importing your own watch history](#importing-your-own-watch-history) and [Importing from an app](#importing-from-an-app)). |
+| **Allow share links** | **Settings › Security** | Off | Lets the users with **Can share titles** give a movie or an episode to someone without an account, through a link that expires (see [Share links](#share-links)). Off, every link is refused, without being deleted. |
 | **Import connected accounts every** | **Settings › Security** | 6 h (or 15 min, 30 min, 1 h, 2 h, 3 h, 12 h, 24 h) | How often the apps users stay connected to, and the watch histories they import from tracking services, are imported again (see [How often connected accounts are imported](#how-often-connected-accounts-are-imported)). |
 | **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
 | **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |

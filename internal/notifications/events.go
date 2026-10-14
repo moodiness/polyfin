@@ -52,6 +52,8 @@ type Event struct {
 	Connection *ConnectionJSON `json:"connection,omitempty"`
 	SignIn     *SignInJSON     `json:"signIn,omitempty"`
 	Block      *BlockJSON      `json:"block,omitempty"`
+	// Share is the share link a share_played event tells of.
+	Share *ShareJSON `json:"share,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its
@@ -151,7 +153,9 @@ var connectionNames = map[string]string{
 // where it is, in seconds; Played how long it played since StartedAt,
 // pauses left out. Method tells how it reaches the app: "direct_play",
 // "direct_stream" (remuxed, nothing converted) or "conversion", null when
-// not known yet; Converted is true for "conversion".
+// not known yet; Converted is true for "conversion". Shared is true for a
+// guest playing through a share link of the user's, App then "Shared
+// link".
 type PlaybackJSON struct {
 	ItemID      string    `json:"itemId"`
 	Kind        string    `json:"kind"`
@@ -171,6 +175,7 @@ type PlaybackJSON struct {
 	Converted   bool      `json:"converted"`
 	StartedAt   time.Time `json:"startedAt"`
 	Played      int64     `json:"played"`
+	Shared      bool      `json:"shared"`
 }
 
 // newEvent starts an event of type kind, now.

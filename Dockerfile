@@ -141,6 +141,9 @@ COPY --from=pg-dump /pg-dump/ /
 # its source is, in the usual documentation folder.
 COPY --from=jellyfin-web /jellyfin/jellyfin-web/ /usr/share/polyfin/jellyfin-web/
 COPY third_party/jellyfin-web/LICENSE third_party/jellyfin-web/NOTICE /usr/share/doc/jellyfin-web/
+# hls.js, embedded in Polyfin for the page of share links (Apache-2.0): its
+# license and a notice.
+COPY third_party/hls.js/LICENSE third_party/hls.js/NOTICE /usr/share/doc/hls.js/
 COPY --from=build /polyfin /polyfin
 # Polyfin's files: the parts of the files being read, which it empties
 # when it starts, and by default the Live TV recordings and the database

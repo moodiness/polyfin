@@ -48,12 +48,24 @@ func endDate(change time.Time) *time.Time {
 
 // EndedAccounts returns the accounts that reached their end date at now and
 // were not returned yet, once each: an account given a new end date is
-// returned again when it reaches it.
+// returned again when it reaches it. Their share links are revoked, which
+// their end already refuses.
 func (s *Store) EndedAccounts(ctx context.Context) ([]User, error) {
-	rows, err := s.db.Query(ctx, "UPDATE users SET end_recorded = true WHERE ends_on <= $1 AND NOT end_recorded RETURNING "+userColumns,
-		Day(s.now()))
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (User, error) { return scanUser(row) })
+	var ended []User
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, "UPDATE users SET end_recorded = true WHERE ends_on <= $1 AND NOT end_recorded RETURNING "+userColumns,
+			Day(s.now()))
+		if err != nil {
+			return err
+		}
+		if ended, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (User, error) { return scanUser(row) }); err != nil {
+			return err
+		}
+		ids := make([]ID, len(ended))
+		for i, user := range ended {
+			ids[i] = user.ID
+		}
+		return revokeShareLinks(ctx, tx, ids...)
+	})
+	return ended, err
 }
