@@ -1,20 +1,26 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/userdata"
 )
 
 // customRowsOf answers GET /Polyfin/HomeRows for token.
@@ -52,9 +58,9 @@ func rowSummary(rows []CustomRowDto) []string {
 // homeRowsServer installs the catalog addon with its movie catalog alone
 // as a library, signs a member and an administrator in, and returns the
 // addon's identifier and the movies of the library.
-func homeRowsServer(t *testing.T) (s testServer, member, admin string, addon accounts.ID, movies []BaseItemDto) {
+func homeRowsServer(t *testing.T, configure ...func(*Options, *pgxpool.Pool)) (s testServer, member, admin string, addon accounts.ID, movies []BaseItemDto) {
 	t.Helper()
-	s = newTestServer(t, 10)
+	s = newProbingServer(t, 10, "ffprobe-not-installed", configure...)
 	s.user("member", nil)
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator, c.CollectionManagement = new(true), new(true) })
 	installed, err := s.addons.Install(t.Context(), addons.Shared(), catalogAddon(t), false)
@@ -274,6 +280,68 @@ func TestBecauseYouWatchedFollowsTheLastMovie(t *testing.T) {
 		return strings.HasPrefix(name, "Because")
 	}) {
 		t.Errorf("with similar titles off: %q, views %v", got, itemNames(views.Items))
+	}
+}
+
+// playedReads counts the reads of the titles users played.
+type playedReads struct{ reads atomic.Int64 }
+
+func (c *playedReads) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	if strings.Contains(data.SQL, "FROM user_data WHERE user_id = $1 AND played") {
+		c.reads.Add(1)
+	}
+	return ctx
+}
+
+func (c *playedReads) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+// /UserViews, which apps ask on every home page, reads the titles a user
+// played only when a Because you watched row is a library, and so does an
+// identifier nothing knows; a Because you watched row's folder is found
+// all the same.
+func TestUserViewsReadNoPlayedTitlesWithoutARowLibrary(t *testing.T) {
+	t.Parallel()
+	counter := &playedReads{}
+	s, member, _, addon, movies := homeRowsServer(t, func(o *Options, pool *pgxpool.Pool) {
+		config := pool.Config()
+		config.ConnConfig.Tracer = counter
+		counted, err := pgxpool.NewWithConfig(t.Context(), config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(counted.Close)
+		o.UserData = userdata.New(counted)
+	})
+	s.addRow(t, homerows.Row{Name: "Because you watched", Kind: homerows.KindBecause, Place: homerows.PlaceResume, Count: 1, Everyone: true})
+	s.addRow(t, homerows.Row{Name: "Picks", Kind: homerows.KindCatalog, Place: homerows.PlaceTop, Addon: addon,
+		CatalogType: "movie", CatalogID: "top", Everyone: true})
+	if status, _ := s.call(http.MethodPost, "/UserPlayedItems/"+movies[0].Id, app("tv", member), nil); status != http.StatusOK {
+		t.Fatalf("played: %d", status)
+	}
+	rows := s.customRowsOf(t, member)
+	if got := rowSummary(rows); !slices.Equal(got, []string{"Because you watched Movie 0 @AfterResume: Movie 2", "Picks @Top: Movie 0, Movie 1, Movie 2"}) {
+		t.Fatalf("rows: %q", got)
+	}
+	counter.reads.Store(0)
+	var views QueryResult
+	if status := s.get(t, "/UserViews", member, &views); status != http.StatusOK || slices.ContainsFunc(itemNames(views.Items), func(name string) bool {
+		return strings.HasPrefix(name, "Because") || name == "Picks"
+	}) {
+		t.Errorf("views: %d %v", status, itemNames(views.Items))
+	}
+	unknown, _ := accounts.ParseID(nameID("test", "nothing"))
+	if status := s.get(t, "/Items/"+unknown.String(), member, nil); status == http.StatusOK {
+		t.Errorf("an identifier nothing knows: %d", status)
+	}
+	if n := counter.reads.Load(); n != 0 {
+		t.Errorf("the titles played read %d times", n)
+	}
+	var listed QueryResult
+	if status := s.get(t, "/Items?ParentId="+rows[0].Id, member, &listed); status != http.StatusOK || !slices.Equal(itemNames(listed.Items), []string{"Movie 2"}) {
+		t.Errorf("the Because you watched row's list: %d %v", status, itemNames(listed.Items))
+	}
+	if counter.reads.Load() == 0 {
+		t.Error("the row's list did not read the titles played")
 	}
 }
 

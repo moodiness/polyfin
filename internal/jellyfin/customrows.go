@@ -45,8 +45,11 @@ import (
 // in other apps (homerows.Row.Library) is also listed by /UserViews, as
 // the Watchlist view is: apps give it a home row of latest items, its
 // first titles. A Because you watched row is a folder for each title it
-// follows. The rows' folders are found only after everything else, as an
-// identifier nothing else knows.
+// follows, whose identifier holds the title's. The rows' folders are found
+// only after everything else, as an identifier nothing else knows. The
+// titles a user played are read for /UserViews only when a Because you
+// watched row is a library, and for an identifier only when it names, as
+// such a row's folder, a title they played.
 
 const (
 	// customRowItems is how many titles a row shows unless asked.
@@ -87,20 +90,27 @@ type customRow struct {
 }
 
 // customRowID identifies the folder of a row, or of the row of a title a
-// Because you watched row follows.
+// Because you watched row follows: the row's own with the title's mixed
+// in, so that the title is found again (see customRowBaseline).
 func customRowID(row, baseline accounts.ID) accounts.ID {
-	name := "homerow|" + row.String()
-	if baseline != (accounts.ID{}) {
-		name += "|" + baseline.String()
+	id, _ := accounts.ParseID(nameID("view", "homerow|"+row.String()))
+	for i := range id {
+		id[i] ^= baseline[i]
 	}
-	id, _ := accounts.ParseID(nameID("view", name))
 	return id
 }
 
-// customRows lists the rows user sees, in order, a Because you watched row
-// as one for each title it follows; none for a request made with an API
-// key, and none of them while Similar titles is off.
-func (h *Handler) customRows(ctx context.Context, user accounts.User) ([]customRow, error) {
+// customRowBaseline is the title a Because you watched row's folder id
+// follows, if id is one of row's.
+func customRowBaseline(row, id accounts.ID) accounts.ID {
+	return customRowID(row, id)
+}
+
+// customRows lists the rows user sees that keep accepts, every one when
+// keep is nil, in order, a Because you watched row as one for each title
+// it follows; none for a request made with an API key, and none of them
+// while Similar titles is off.
+func (h *Handler) customRows(ctx context.Context, user accounts.User, keep func(homerows.Row) bool) ([]customRow, error) {
 	if h.HomeRows == nil || user.ID == (accounts.ID{}) {
 		return nil, nil
 	}
@@ -108,6 +118,14 @@ func (h *Handler) customRows(ctx context.Context, user accounts.User) ([]customR
 	if err != nil {
 		return nil, err
 	}
+	if keep != nil {
+		rows = slices.DeleteFunc(rows, func(row homerows.Row) bool { return !keep(row) })
+	}
+	return h.userCustomRows(ctx, user, rows)
+}
+
+// userCustomRows is customRows for rows, the user's rows.
+func (h *Handler) userCustomRows(ctx context.Context, user accounts.User, rows []homerows.Row) ([]customRow, error) {
 	most := 0
 	for _, row := range rows {
 		if row.Kind == homerows.KindBecause {
@@ -116,6 +134,7 @@ func (h *Handler) customRows(ctx context.Context, user accounts.User) ([]customR
 	}
 	var baselines []library.Item
 	if most > 0 && h.Accounts.Settings().SimilarTitles {
+		var err error
 		if baselines, err = h.recentlyPlayedTitles(ctx, user, most); err != nil {
 			return nil, err
 		}
@@ -133,17 +152,68 @@ func (h *Handler) customRows(ctx context.Context, user accounts.User) ([]customR
 	return result, nil
 }
 
-// customRowOf returns the row of user whose folder is id.
+// customRowOf returns the row of user whose folder is id. The titles the
+// user played are read only when id names one of them for a Because you
+// watched row.
 func (h *Handler) customRowOf(ctx context.Context, user accounts.User, id accounts.ID) (customRow, bool, error) {
-	rows, err := h.customRows(ctx, user)
+	if h.HomeRows == nil || user.ID == (accounts.ID{}) {
+		return customRow{}, false, nil
+	}
+	rows, err := h.HomeRows.Shown(ctx, user.ID)
 	if err != nil {
 		return customRow{}, false, err
 	}
-	i := slices.IndexFunc(rows, func(row customRow) bool { return row.id == id })
+	var because []homerows.Row
+	var baselines []accounts.ID
+	similar := h.Accounts.Settings().SimilarTitles
+	for _, row := range rows {
+		switch {
+		case row.Kind != homerows.KindBecause:
+			if customRowID(row.ID, accounts.ID{}) == id {
+				return customRow{row: row, id: id, name: row.Name}, true, nil
+			}
+		case similar:
+			because, baselines = append(because, row), append(baselines, customRowBaseline(row.ID, id))
+		}
+	}
+	if len(because) == 0 {
+		return customRow{}, false, nil
+	}
+	played, err := h.playedTitles(ctx, user, baselines)
+	if err != nil {
+		return customRow{}, false, err
+	}
+	because = slices.DeleteFunc(because, func(row homerows.Row) bool { return !played[customRowBaseline(row.ID, id)] })
+	if len(because) == 0 {
+		return customRow{}, false, nil
+	}
+	result, err := h.userCustomRows(ctx, user, because)
+	if err != nil {
+		return customRow{}, false, err
+	}
+	i := slices.IndexFunc(result, func(row customRow) bool { return row.id == id })
 	if i < 0 {
 		return customRow{}, false, nil
 	}
-	return rows[i], true, nil
+	return result[i], true, nil
+}
+
+// playedTitles reports which of ids the user played, as an item or as a
+// series one of whose episodes they played.
+func (h *Handler) playedTitles(ctx context.Context, user accounts.User, ids []accounts.ID) (map[accounts.ID]bool, error) {
+	data, err := h.UserData.Get(ctx, user.ID, ids)
+	if err != nil {
+		return nil, err
+	}
+	counts, err := h.UserData.EpisodeCounts(ctx, user.ID, ids)
+	if err != nil {
+		return nil, err
+	}
+	played := make(map[accounts.ID]bool, len(ids))
+	for _, id := range ids {
+		played[id] = data[id].Played || counts[id].Played > 0
+	}
+	return played, nil
 }
 
 // recentlyPlayedTitles lists up to count of the movies and series the user
@@ -277,7 +347,7 @@ func (h *Handler) customRowsAnswer(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := h.customRows(r.Context(), user)
+	rows, err := h.customRows(r.Context(), user, nil)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -328,17 +398,15 @@ func customRowFolder(row customRow) library.Item {
 }
 
 // addCustomRowViews adds to views the folders of the rows user sees that
-// are libraries in other apps too.
+// are libraries in other apps too: only these rows are read.
 func (h *Handler) addCustomRowViews(r *http.Request, user accounts.User, views []BaseItemDto) ([]BaseItemDto, error) {
-	rows, err := h.customRows(r.Context(), user)
+	rows, err := h.customRows(r.Context(), user, func(row homerows.Row) bool { return row.Library })
 	if err != nil {
 		return nil, err
 	}
-	var folders []library.Item
+	folders := make([]library.Item, 0, len(rows))
 	for _, row := range rows {
-		if row.row.Library {
-			folders = append(folders, customRowFolder(row))
-		}
+		folders = append(folders, customRowFolder(row))
 	}
 	if len(folders) == 0 {
 		return views, nil
