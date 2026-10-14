@@ -55,6 +55,8 @@ Their words follow the web client's language, English or French. See [Watch stat
 
 jellyfin-web keeps what its home rows list for up to a minute, also across a reload, and draws a row again from it without asking. So that a card taken off does not come back meanwhile, the script remembers what it took off for 2 minutes, in the browser tab's session storage, for that server and user only, and leaves it out of the rows. Nothing is kept past that.
 
+On the home page, it adds the rows chosen under **Settings › Web player › Home rows** (see [Home rows](#home-rows)), each at its place among the sections the user chose under jellyfin-web's **Settings › Home**. They look like the library rows: posters, played marks, counts of unplayed episodes and progress bars, with the ⋮ menu and the play button. A card opens the title's page, and the row's name opens its full list. The script asks for the rows each time the home page shows, and puts them back when jellyfin-web redraws the page. It changes nothing elsewhere.
+
 ### Signing in to the admin app
 
 A user signed in to the web client, administrator or member, arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.
@@ -82,7 +84,7 @@ A user signed in to the web client, administrator or member, arrives in the admi
 
 ## Customizing the web client
 
-**Settings › Web player** in the admin app holds three texts for the web client: **Custom CSS**, **Sign-in message** and **Custom JavaScript**, and one switch, **Add versions to an open title's page**. By default, **Custom CSS** and **Custom JavaScript** load the LumaaGlaass theme (see [Default theme](#default-theme)), and **Sign-in message** is empty. **Open the web player** shows the result.
+**Settings › Web player** in the admin app holds three texts for the web client: **Custom CSS**, **Sign-in message** and **Custom JavaScript**, one switch, **Add versions to an open title's page**, and the [home rows](#home-rows). By default, **Custom CSS** and **Custom JavaScript** load the LumaaGlaass theme (see [Default theme](#default-theme)), and **Sign-in message** is empty. **Open the web player** shows the result.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -90,6 +92,28 @@ A user signed in to the web client, administrator or member, arrives in the admi
 | **Sign-in message** | **Settings › Web player** | Empty | Text shown under the sign-in form. Plain text, Markdown or HTML. Up to 8 KB. |
 | **Custom JavaScript** | **Settings › Web player** | The theme's script | Script run on every page of the web client. Up to 2 MB. |
 | **Add versions to an open title's page** | **Settings › Web player** | On | Adds the versions the addons find to a title's page while it is open. Off, a page opened before any version was found still lists the first ones, and the play buttons still wait for a version; the others show when the page is opened again. See [Title pages](playback.md#title-pages). |
+
+### Home rows
+
+**Settings › Web player › Home rows** adds rows to the web player's home page. The list is empty by default; it holds up to 20 rows, in order, each with **Edit**, **Delete** and arrows to move it. Each row has:
+
+- a **Name**, its title on the home page;
+- a **Kind**, what it lists:
+  - **A catalog**: the first page of a catalog of the server's addons, a library or not, such as a trending one;
+  - **A collection**: a collection made by users, a smart list shown as a collection, or an addon's collection;
+  - **Because you watched**: one row for each of the last movies and series the user played, up to the number chosen (3 by default, 10 at most), of the titles similar to it as [movie recommendations](jellyfin-compatibility.md#movie-recommendations) give them, without those already played. Each row is the name followed by the title it follows, such as "Because you watched Example Movie". There are none while **Similar titles** is off;
+  - **New in your libraries**: the titles that came into the catalogs of the user's libraries in the last 7 days, newest first;
+- a **Place**: **At the top**, **After Continue Watching**, **After Next Up** or **At the bottom**. When a user's home page doesn't show Continue Watching or Next Up, the row takes the place before: after the rows above it, or at the top;
+- **Shown to**: **Every user**, or **Chosen users**;
+- **Also a library in other apps**, off by default.
+
+Every row leaves out, for each user, what their other lists leave out: titles above their [parental control](users.md#parental-control), their blocked genres, the titles they hid, and the libraries of the server hidden from them, whose catalog or collection makes no row. A catalog row needs the user to use the server's addons. A row without any title isn't shown. Each user can turn off a row under **My account › Home rows** (see [Users](users.md#home-rows)); jellyfin-web's own sections stay under its **Settings › Home**.
+
+**New in your libraries** counts from the first time Polyfin saw each title in each catalog, as apps list the libraries and as Polyfin reads their first pages every hour. The titles a catalog held when Polyfin first read it, or first read a page of it, were there before: they are not new. A library narrowed to a genre counts that genre's titles. Smart lists, IPTV sources and local folders are left out. A title that leaves a catalog and comes back after 180 days is new again.
+
+No app can be given a new kind of home section. With **Also a library in other apps** on, the row is also a library of its own, without type, as the Watchlist is (see [Tracking](tracking.md)): other apps list it among the user's libraries and show its latest titles on their home. The web player shows it too, in its libraries and with its own "Recently Added" row. A **Because you watched** row is then one library for each title it follows.
+
+**For app developers:** `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do. A row's `Id` is a folder: `/Items?ParentId=` lists the whole row, up to 500 titles, and `/Items/{Id}` describes it.
 
 ### Default theme
 

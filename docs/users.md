@@ -37,6 +37,10 @@ Polyfin keeps each user's played titles, resume points, favorites and ratings. T
 
 Users can also make playlists of movies and episodes from their apps. A playlist can be private, shared with other users, or open to all.
 
+### Home rows
+
+**My account › Home rows** lists the rows the administrator added to the web player's home page for the user (see [Home rows](web-client.md#home-rows)), each with its kind and place, and a switch. Off, the row leaves the user's home page, and, when it is also a library in other apps, their libraries there. Other users keep it. jellyfin-web's own home sections stay under its **Settings › Home**.
+
 ### Played and resume thresholds
 
 Two settings under **Settings › Content** decide when a title counts as played and when a resume point is kept.
