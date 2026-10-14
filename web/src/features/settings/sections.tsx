@@ -786,6 +786,13 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
           className="max-w-xs"
         />
       </FieldRow>
+      <SwitchRow
+        anchor="share-links"
+        label={s.shareLinks}
+        help={s.shareLinksHelp}
+        checked={form.shareLinks}
+        onChange={(shareLinks) => update({ shareLinks })}
+      />
       <FieldRow
         anchor="login-attempts"
         label={s.loginAttempts}

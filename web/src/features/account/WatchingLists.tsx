@@ -37,7 +37,7 @@ import {
 } from '@/ui'
 
 /** The poster of a title, or the icon of its kind when it has none or fails to load. */
-function TitlePoster({ title }: { title: AccountTitle }) {
+export function TitlePoster({ title }: { title: AccountTitle }) {
   const [failed, setFailed] = useState(false)
   const KindIcon =
     title.kind === 'series' || title.kind === 'episode' ? TelevisionSimpleIcon : FilmSlateIcon
@@ -63,7 +63,7 @@ function TitlePoster({ title }: { title: AccountTitle }) {
 }
 
 /** A title's name for its row: an episode under its series, with its number. */
-function titleName(title: AccountTitle) {
+export function titleName(title: AccountTitle) {
   return title.kind === 'episode' && title.seriesName
     ? `${title.seriesName} ${formatEpisode(title.season, title.episode)} · ${title.name}`
     : title.name

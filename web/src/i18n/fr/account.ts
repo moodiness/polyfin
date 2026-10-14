@@ -11,6 +11,7 @@ const account: typeof en = {
       resume: 'Continuer de regarder',
       hidden: 'Titres masqués',
       homeRows: 'Rangées d’accueil',
+      sharedLinks: 'Liens partagés',
       import: 'Importer depuis un autre serveur',
       appImport: 'Importer depuis une appli',
       notifications: 'Notifications',
@@ -236,6 +237,8 @@ const account: typeof en = {
         disconnected: (app: string) => `${app} déconnecté.`,
       },
     },
+    sharedLinksHelp:
+      'Partagez un film ou un épisode avec quelqu’un qui n’a pas de compte : il le regarde dans son navigateur grâce à un lien qui expire, et compte parmi vos lectures simultanées.',
     statisticsHelp:
       'Ce que vous avez regardé sur ce serveur : heures, titres, applis et appareils, et vos lectures récentes.',
     notificationsHelp:
@@ -361,6 +364,56 @@ const account: typeof en = {
         },
       },
     },
+  },
+  shareLinks: {
+    share: 'Partager un titre',
+    off: 'Vous ne pouvez pas créer de lien de partage pour le moment : un administrateur les a désactivés pour ce serveur ou pour votre compte. Les liens encore actifs ne sont pas lus en attendant.',
+    empty: 'Aucun lien partagé',
+    emptyHelp:
+      '« Partager un titre » donne un film ou un épisode grâce à un lien. Dans le lecteur web, la page d’un film ou d’un épisode propose aussi « Partager ».',
+    userEmpty: 'Cet utilisateur n’a aucun lien partagé.',
+    expiresLabel: 'Expire',
+    expiredLabel: 'Expiré',
+    revokedLabel: 'Révoqué',
+    plays: (count: number) => (count <= 1 ? `${count} lecture` : `${count} lectures`),
+    viewers: (count: number) =>
+      count === 1 ? '1 spectateur à la fois' : `${count} spectateurs à la fois`,
+    states: { active: 'Actif', expired: 'Expiré', revoked: 'Révoqué' },
+    revoke: 'Révoquer',
+    revokeLabel: (title: string) => `Révoquer le lien vers ${title}`,
+    revokeTitle: 'Révoquer ce lien partagé ?',
+    revokeConfirm:
+      'Le lien cesse aussitôt de fonctionner, et la personne qui regarde grâce à lui est arrêtée en quelques secondes.',
+    revoking: 'Révocation…',
+    revoked: 'Le lien partagé est révoqué.',
+    search: 'Chercher dans vos bibliothèques',
+    searchHelp: 'Un film, ou une série pour choisir l’un de ses épisodes.',
+    searchButton: 'Chercher',
+    searching: 'Recherche…',
+    noTitles: 'Aucun film ni aucune série trouvé.',
+    titlesFound: (term: string) => `Titres trouvés pour ${term}`,
+    pickTitle: (name: string, details: string) => `Partager ${name}, ${details}`,
+    episodesOf: (series: string) => `Épisodes de ${series}`,
+    noEpisodes: 'Cette série n’a aucun épisode que vous pouvez partager.',
+    back: 'Retour aux résultats',
+    chosen: 'Titre',
+    change: 'Changer',
+    expires: 'Expire après',
+    expiresHelp: 'Personne ne peut plus ouvrir le lien ensuite. Vous pouvez le révoquer avant.',
+    after: (hours: number) =>
+      hours === 1 ? '1 heure' : hours === 24 ? '1 jour' : `${hours / 24} jours`,
+    viewersLabel: 'Spectateurs à la fois',
+    viewersHelp:
+      'Combien de personnes peuvent regarder grâce au lien en même temps. Chacune compte comme l’une de vos lectures simultanées.',
+    submit: 'Créer le lien',
+    creating: 'Création…',
+    createdTitle: 'Lien créé',
+    createdNotice: (title: string) =>
+      `Toute personne qui a ce lien peut regarder ${title} dans un navigateur, sans compte, jusqu’à son expiration. Copiez-le maintenant : il n’est affiché que cette fois.`,
+    copy: 'Copier le lien',
+    copied: 'Lien copié.',
+    copyFailed: 'Le lien n’a pas pu être copié. Sélectionnez-le et copiez-le à la main.',
+    done: 'Terminé',
   },
 }
 

@@ -246,7 +246,9 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
             <Avatar name={session.user.name} image={userImageUrl(session.user)} size="sm" />
             <b className="truncate font-medium text-ink">{session.user.name}</b>
             <span aria-hidden="true" className="size-[3px] shrink-0 rounded-full bg-ink-3" />
-            <span className="truncate">{live.appOn(app, session.device.name)}</span>
+            <span className="truncate">
+              {session.shared ? live.sharedLink : live.appOn(app, session.device.name)}
+            </span>
           </p>
           <h3 className="mt-2 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[21px] leading-tight font-semibold tracking-[-0.02em] text-ink max-sm:text-[18px]">
             <span className="min-w-0 truncate" title={title}>
@@ -336,7 +338,9 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
               />
             </>
           ) : (
-            <p className="text-small text-ink-3 lg:max-w-32">{live.notControllable}</p>
+            <p className="text-small text-ink-3 lg:max-w-32">
+              {session.shared ? live.sharedNotControllable : live.notControllable}
+            </p>
           )}
         </div>
 

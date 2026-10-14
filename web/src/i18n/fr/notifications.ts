@@ -105,6 +105,7 @@ const notifications: typeof en = {
       connection_stopped: 'Connexion arrêtée',
       account_blocked: 'Compte bloqué',
       new_device: 'Connexion depuis un nouvel appareil',
+      share_played: 'Lien partagé lu',
     },
     eventHelp: {
       new_episode:
@@ -136,6 +137,8 @@ const notifications: typeof en = {
         'Des mots de passe erronés ont bloqué un compte pour un moment : une fois par blocage, avec jusqu’à quand, l’adresse et l’appli de la dernière tentative. Les cibles du serveur et des administrateurs apprennent ceux de tous les comptes, les autres ceux de leur compte.',
       new_device:
         'Votre compte s’est connecté depuis une appli Jellyfin ou le client web sur un appareil qu’il n’avait jamais utilisé, avec l’appli, l’appareil et l’adresse. Le premier appareil d’un compte n’est pas signalé.',
+      share_played:
+        'Quelqu’un sans compte a lancé un film ou un épisode grâce à un lien de partage : au plus une fois par heure et par lien, avec le titre et qui l’a partagé. Les cibles du serveur apprennent ceux de tous les liens, les autres ceux de leurs liens.',
     },
     enabled: 'Envoyer les messages à cette cible',
     create: 'Ajouter',

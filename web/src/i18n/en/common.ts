@@ -58,6 +58,11 @@ const common = {
     invite_used_up: 'This invite link is used up.',
     invite_expired: 'This invite link has expired.',
     invite_revoked: 'This invite link was revoked.',
+    share_links_off:
+      'You cannot make share links: an administrator turned them off for this server or for your account.',
+    not_shareable: 'Only a movie or an episode you can see can be shared.',
+    invalid_share_expiry: 'Choose when the link expires from the list.',
+    invalid_share_viewers: 'Viewers at once must be a whole number from 1 to 5.',
     last_administrator:
       'This is the last enabled administrator: it cannot be deleted, demoted or disabled.',
     invalid_server_name: 'The server name must be 1 to 64 characters long.',

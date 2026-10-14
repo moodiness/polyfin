@@ -57,6 +57,9 @@ const statistics: typeof en = {
     },
     appOn: (app: string, device: string) =>
       app && device ? `${app} sur ${device}` : app || device,
+    shared: 'Partagé',
+    sharedHelp: 'Lu par un invité grâce à un lien de partage',
+    sharedLink: 'Lien partagé',
     showMore: 'Afficher plus',
     loadingMore: 'Chargement…',
   },

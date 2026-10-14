@@ -82,6 +82,8 @@ const home = {
       remaining: (time: string) => `${time} left`,
       startedAt: (time: string) => `Started ${time}`,
       appOn: (app: string, device: string) => (app ? `${app} on ${device}` : device),
+      /** A guest's playback through a share link, in place of its app and device. */
+      sharedLink: 'Shared link',
       howItPlays: 'How it plays',
       details: 'Details',
       delivery: {
@@ -132,6 +134,8 @@ const home = {
       send: 'Send',
       messageSent: 'Message sent.',
       notControllable: 'This app does not accept remote control.',
+      sharedNotControllable:
+        'A guest watching through a share link. Revoking the link, on the user’s page, stops it.',
     },
     reasons: {
       ContainerNotSupported: 'File format not supported',

@@ -410,6 +410,9 @@ const settings = {
     importEveryMinutes: 'Import connected accounts every',
     importEveryMinutesHelp:
       'How often Polyfin imports again the Stremio and Nuvio accounts users stay connected to, and the watch histories they import from tracking services. A change applies at once: each next import comes this long after the last one. Each import reads the whole account again, so a short interval sends more requests to those services, and, for Stremio, whose terms forbid automated extraction, makes that grey area more pronounced. 6 hours by default.',
+    shareLinks: 'Allow share links',
+    shareLinksHelp:
+      'Users with Can share titles, on their page under Users, may give a movie or an episode to someone without an account, through a link that expires after 1 hour to 30 days. The guest watches in a browser, at 1080p at most and within the user’s quality group, and counts among the user’s playbacks at once. When off, no link can be made and every link is refused, without being deleted. Off by default.',
     importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
     loginAttempts: 'Block an account after this many wrong passwords (0 = never)',
     loginAttemptsHelp: (r: RangeText) =>

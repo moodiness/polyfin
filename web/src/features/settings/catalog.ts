@@ -606,6 +606,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'security',
+    anchor: 'share-links',
+    label: (t) => s(t).shareLinks,
+    help: (t) => s(t).shareLinksHelp,
+    keywords: ['share', 'guest', 'link'],
+  },
+  {
+    section: 'security',
     anchor: 'login-attempts',
     label: (t) => s(t).loginAttempts,
     help: (t, r) => s(t).loginAttemptsHelp(r('loginAttempts')),

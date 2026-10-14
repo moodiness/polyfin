@@ -84,6 +84,7 @@ const home: typeof en = {
       remaining: (time: string) => `reste ${time}`,
       startedAt: (time: string) => `Commencé ${time}`,
       appOn: (app: string, device: string) => (app ? `${app} sur ${device}` : device),
+      sharedLink: 'Lien partagé',
       howItPlays: 'Comment c’est lu',
       details: 'Détails',
       delivery: {
@@ -134,6 +135,8 @@ const home: typeof en = {
       send: 'Envoyer',
       messageSent: 'Message envoyé.',
       notControllable: 'Cette appli n’accepte pas le contrôle à distance.',
+      sharedNotControllable:
+        'Un invité qui regarde grâce à un lien de partage. Révoquer le lien, sur la page de l’utilisateur, l’arrête.',
     },
     reasons: {
       ContainerNotSupported: 'Format de fichier non pris en charge',

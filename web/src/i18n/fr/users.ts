@@ -166,6 +166,12 @@ const users: typeof en = {
     canManageSubtitles: 'Peut gérer les sous-titres',
     canManageSubtitlesHelp:
       'Permet à cet utilisateur d’ajouter des fichiers de sous-titres aux titres depuis ses applications Jellyfin, et d’y chercher les sous-titres des addons.',
+    canShare: 'Peut partager des titres',
+    canShareHelp:
+      'Permet à cet utilisateur de donner un film ou un épisode à quelqu’un qui n’a pas de compte, grâce à un lien qui expire, depuis Mon compte ou la page d’un titre dans le lecteur web, tant que Paramètres › Sécurité › « Autoriser les liens de partage » est activé. Le désactiver révoque ses liens.',
+    shareLinksTitle: 'Liens partagés',
+    shareLinksHelp:
+      'Les liens que cet utilisateur a créés pour partager un film ou un épisode. « Révoquer » en arrête un tout de suite.',
     qualityGroup: 'Groupe de qualité',
     qualityGroupHelp:
       'La meilleure définition proposée à cet utilisateur. Les versions de définition supérieure sont écartées tant qu’une autre convient ; si aucune ne convient, elles sont converties, ou refusées si cet utilisateur ne peut pas utiliser la conversion. La TV en direct est aussi convertie, et seules les versions qui conviennent peuvent être téléchargées.',

@@ -58,6 +58,12 @@ const common: typeof en = {
     invite_used_up: 'Ce lien d’invitation est épuisé.',
     invite_expired: 'Ce lien d’invitation a expiré.',
     invite_revoked: 'Ce lien d’invitation a été révoqué.',
+    share_links_off:
+      'Vous ne pouvez pas créer de lien de partage : un administrateur les a désactivés pour ce serveur ou pour votre compte.',
+    not_shareable: 'Seul un film ou un épisode que vous pouvez voir peut être partagé.',
+    invalid_share_expiry: 'Choisissez l’expiration du lien dans la liste.',
+    invalid_share_viewers:
+      'Le nombre de spectateurs à la fois doit être un nombre entier de 1 à 5.',
     last_administrator:
       'C’est le dernier administrateur actif : il ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',

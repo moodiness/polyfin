@@ -10,6 +10,7 @@ const account = {
       resume: 'Continue Watching',
       hidden: 'Hidden titles',
       homeRows: 'Home rows',
+      sharedLinks: 'Shared links',
       import: 'Import from another server',
       appImport: 'Import from an app',
       notifications: 'Notifications',
@@ -230,6 +231,8 @@ const account = {
         disconnected: (app: string) => `${app} disconnected.`,
       },
     },
+    sharedLinksHelp:
+      'Share a movie or an episode with someone who has no account: they watch it in their browser through a link that expires, and count among your playbacks at once.',
     statisticsHelp:
       'What you watched on this server: hours, titles, apps and devices, and your recent playbacks.',
     notificationsHelp:
@@ -352,6 +355,56 @@ const account = {
         },
       },
     },
+  },
+  /** My account › Shared links, and the Shared links of a user's page. */
+  shareLinks: {
+    share: 'Share a title',
+    off: 'You cannot make share links now: an administrator turned them off for this server or for your account. Links still active do not play meanwhile.',
+    empty: 'No shared link',
+    emptyHelp:
+      'Share a title gives a movie or an episode through a link. In the web player, a movie’s or an episode’s page has Share too.',
+    userEmpty: 'This user has no shared link.',
+    expiresLabel: 'Expires',
+    expiredLabel: 'Expired',
+    revokedLabel: 'Revoked',
+    plays: (count: number) => (count === 1 ? '1 play' : `${count} plays`),
+    viewers: (count: number) => (count === 1 ? '1 viewer at once' : `${count} viewers at once`),
+    states: { active: 'Active', expired: 'Expired', revoked: 'Revoked' },
+    revoke: 'Revoke',
+    revokeLabel: (title: string) => `Revoke the link to ${title}`,
+    revokeTitle: 'Revoke this shared link?',
+    revokeConfirm:
+      'The link stops working at once, and whoever watches through it stops within seconds.',
+    revoking: 'Revoking…',
+    revoked: 'The shared link is revoked.',
+    search: 'Search your libraries',
+    searchHelp: 'A movie, or a series to pick one of its episodes.',
+    searchButton: 'Search',
+    searching: 'Searching…',
+    noTitles: 'No movie or series found.',
+    titlesFound: (term: string) => `Titles found for ${term}`,
+    pickTitle: (name: string, details: string) => `Share ${name}, ${details}`,
+    episodesOf: (series: string) => `Episodes of ${series}`,
+    noEpisodes: 'This series has no episode you can share.',
+    back: 'Back to the results',
+    chosen: 'Title',
+    change: 'Change',
+    expires: 'Expires after',
+    expiresHelp: 'Nobody can open the link after that. You can revoke it sooner.',
+    after: (hours: number) =>
+      hours === 1 ? '1 hour' : hours === 24 ? '1 day' : `${hours / 24} days`,
+    viewersLabel: 'Viewers at once',
+    viewersHelp:
+      'How many people may watch through the link at the same time. Each counts as one of your playbacks at once.',
+    submit: 'Create link',
+    creating: 'Creating…',
+    createdTitle: 'Link created',
+    createdNotice: (title: string) =>
+      `Anyone with this link can watch ${title} in a browser, without an account, until it expires. Copy it now: it is shown this once.`,
+    copy: 'Copy the link',
+    copied: 'Link copied.',
+    copyFailed: 'The link could not be copied. Select it and copy it by hand.',
+    done: 'Done',
   },
 }
 

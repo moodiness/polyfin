@@ -53,6 +53,10 @@ const statistics = {
       method: 'How it played',
     },
     appOn: (app: string, device: string) => (app && device ? `${app} on ${device}` : app || device),
+    /** A playback a guest started through a share link. */
+    shared: 'Shared',
+    sharedHelp: 'Played by a guest through a share link',
+    sharedLink: 'Shared link',
     showMore: 'Show more',
     loadingMore: 'Loading…',
   },

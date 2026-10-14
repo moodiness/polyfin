@@ -423,6 +423,9 @@ const settings: typeof en = {
     importEveryMinutes: 'Importer les comptes connectés toutes les',
     importEveryMinutesHelp:
       'Tous les combien Polyfin importe de nouveau les comptes Stremio et Nuvio auxquels les utilisateurs restent connectés, et les historiques qu’ils importent depuis les services de suivi. Un changement s’applique tout de suite : chaque prochaine importation a lieu ce délai après la dernière. Chaque importation relit tout le compte : un intervalle court envoie plus de requêtes à ces services et, pour Stremio, dont les conditions interdisent l’extraction automatisée, rend cette zone grise plus marquée. 6 heures par défaut.',
+    shareLinks: 'Autoriser les liens de partage',
+    shareLinksHelp:
+      'Les utilisateurs qui ont « Peut partager des titres », sur leur page sous Utilisateurs, peuvent donner un film ou un épisode à quelqu’un qui n’a pas de compte, grâce à un lien qui expire après 1 heure à 30 jours. L’invité regarde dans un navigateur, en 1080p au plus et dans le groupe de qualité de l’utilisateur, et compte parmi les lectures simultanées de l’utilisateur. Sinon, aucun lien ne peut être créé et tous les liens sont refusés, sans être supprimés. Désactivé par défaut.',
     importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
     loginAttempts: 'Bloquer un compte après ce nombre de mots de passe faux (0 = jamais)',
     loginAttemptsHelp: (r: RangeText) =>

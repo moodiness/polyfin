@@ -159,6 +159,12 @@ const users = {
     canManageSubtitles: 'Can manage subtitles',
     canManageSubtitlesHelp:
       'Lets this user add subtitle files to titles from their Jellyfin apps, and search the addons’ subtitles there.',
+    canShare: 'Can share titles',
+    canShareHelp:
+      'Lets this user give a movie or an episode to someone without an account, through a link that expires, from My account or a title’s page in the web player, while Settings › Security › Allow share links is on. Turning it off revokes their links.',
+    shareLinksTitle: 'Shared links',
+    shareLinksHelp:
+      'The links this user made to share a movie or an episode. Revoke stops one at once.',
     qualityGroup: 'Quality group',
     qualityGroupHelp:
       'The highest resolution this user is offered. Higher versions are left out while one fits; if none fits, they are converted down, or refused when this user cannot use conversion. Live TV is converted down too, and only versions that fit can be downloaded.',

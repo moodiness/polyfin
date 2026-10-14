@@ -101,6 +101,7 @@ const notifications = {
       connection_stopped: 'Connection stopped',
       account_blocked: 'Account blocked',
       new_device: 'Sign-in on a new device',
+      share_played: 'Shared link played',
     },
     eventHelp: {
       new_episode:
@@ -129,6 +130,8 @@ const notifications = {
         'Wrong passwords blocked an account for a while: once per block, with until when and the address and app of the last attempt. The server’s and administrators’ targets hear of every account, the others of their own.',
       new_device:
         'Your account signed in from a Jellyfin app or the web client on a device it never used, with the app, the device and the address. An account’s first device is not told.',
+      share_played:
+        'Someone without an account started a movie or an episode through a share link: at most once an hour per link, with the title and who shared it. The server’s targets hear of every link, the others of their own.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',

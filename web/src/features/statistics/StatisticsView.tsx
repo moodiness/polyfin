@@ -19,6 +19,7 @@ import { settingsPath } from '@/app/navigation'
 import { dateTime, errorMessage, formatClock, formatEpisode, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import {
+  Badge,
   Block,
   Button,
   ButtonLink,
@@ -320,8 +321,17 @@ function History({ scope, query }: { scope: StatisticsScope; query: PlaybacksQue
                   {scope === 'server' && <td className="text-ink">{entry.user.name}</td>}
                   <td className="text-ink">
                     <EntryTitle entry={entry} />
+                    {entry.shared && (
+                      <span title={text.sharedHelp} className="mt-1 block">
+                        <Badge tone="accent">{text.shared}</Badge>
+                      </span>
+                    )}
                   </td>
-                  <td>{text.appOn(entry.app, entry.device) || text.unknownDevice}</td>
+                  <td>
+                    {entry.shared
+                      ? text.sharedLink
+                      : text.appOn(entry.app, entry.device) || text.unknownDevice}
+                  </td>
                   <td
                     className="figures text-right whitespace-nowrap"
                     title={formatClock(entry.position)}

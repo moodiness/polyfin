@@ -68,6 +68,11 @@ export type User = {
   passwordResetPin: PasswordResetPin | null
   /** Whether the user may add subtitle files to titles from their apps. */
   subtitleManagement: boolean
+  /**
+   * Whether the user may give a movie or an episode to someone without an account, through a share
+   * link, while the server allows share links (Settings.shareLinks).
+   */
+  canShare: boolean
   /** Identifies the user's profile picture, served at /UserImage; null without one. */
   imageTag: string | null
   /** The tallest video the user is offered, in lines (480 to 2160); 0 for Original, no limit. */
@@ -219,6 +224,8 @@ export type Settings = {
   personalAddons: boolean
   /** Whether users may import their own watch history from another server, under My account. */
   serverImports: boolean
+  /** Whether users with the permission may share a movie or an episode through a link that expires. */
+  shareLinks: boolean
   /** Wrong passwords in a row that block an account for 15 minutes; 0 never blocks. */
   loginAttempts: number
   /** Days unused after which a Jellyfin app is signed out; 0 never signs it out. */
@@ -488,6 +495,7 @@ export type UserPatch = Partial<{
   accessSchedules: AccessSchedule[]
   collectionManagement: boolean
   subtitleManagement: boolean
+  canShare: boolean
   qualityGroup: QualityGroup
   /** YYYY-MM-DD, or null for never. */
   endsOn: string | null
@@ -1509,6 +1517,7 @@ export type NotificationEvent =
   | 'connection_stopped'
   | 'account_blocked'
   | 'new_device'
+  | 'share_played'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is
@@ -1670,6 +1679,88 @@ export const createInvite = (body: {
 }) => request<NewInvite>('POST', '/invites', body)
 
 export const revokeInvite = (id: string) => request<Invite>('POST', `/invites/${seg(id)}/revoke`)
+
+export type ShareLinkState = 'active' | 'expired' | 'revoked'
+
+/**
+ * A share link: the movie or episode it gives, named as it was when the link was made, who made it,
+ * when it expires, how many guests may watch at once, and how many times it was played.
+ */
+export type ShareLink = {
+  id: string
+  user: { id: string; name: string }
+  item: { id: string; kind: 'movie' | 'episode'; name: string }
+  maxViewers: number
+  createdAt: string
+  expiresAt: string
+  revokedAt: string | null
+  plays: number
+  state: ShareLinkState
+}
+
+/**
+ * A share link just made, with the token of its address, given this once, and that address when
+ * the server's public address is set (null otherwise: the admin app completes it).
+ */
+export type NewShareLink = ShareLink & { token: string; url: string | null }
+
+/** The expiries the server accepts for a share link, in hours: 1 hour, 1 day, 7 and 30 days. */
+export const shareLinkHours = [1, 24, 168, 720] as const
+export type ShareLinkHours = (typeof shareLinkHours)[number]
+
+/** The most guests a share link lets watch at once. */
+export const maxShareViewers = 5
+
+/**
+ * The signed-in user's share links, with whether they may make one now: the server allows share
+ * links, and their account may share.
+ */
+export const fetchOwnShareLinks = (signal?: AbortSignal) =>
+  request<{ allowed: boolean; links: ShareLink[] }>(
+    'GET',
+    '/account/share-links',
+    undefined,
+    signal,
+  )
+
+export const createShareLink = (body: {
+  itemId: string
+  expiresInHours: ShareLinkHours
+  maxViewers: number
+}) => request<NewShareLink>('POST', '/account/share-links', body)
+
+export const revokeOwnShareLink = (id: string) =>
+  request<ShareLink>('POST', `/account/share-links/${seg(id)}/revoke`)
+
+/** Movies and series the signed-in user may share, up to 20; a series gives one episode at a time. */
+export const searchShareTitles = (term: string, signal?: AbortSignal) =>
+  request<AccountTitle[]>(
+    'GET',
+    `/account/share-titles?${new URLSearchParams({ search: term })}`,
+    undefined,
+    signal,
+  )
+
+/** A movie or an episode the signed-in user may share, as the web client's Share opens it. */
+export const fetchShareTitle = (id: string, signal?: AbortSignal) =>
+  request<AccountTitle>('GET', `/account/share-titles/${seg(id)}`, undefined, signal)
+
+/** The episodes of a series the signed-in user may share, in order. */
+export const fetchShareEpisodes = (seriesId: string, signal?: AbortSignal) =>
+  request<AccountTitle[]>(
+    'GET',
+    `/account/share-titles/${seg(seriesId)}/episodes`,
+    undefined,
+    signal,
+  )
+
+/** A user's share links, for an administrator. */
+export const fetchUserShareLinks = (userId: string, signal?: AbortSignal) =>
+  request<ShareLink[]>('GET', `/users/${seg(userId)}/share-links`, undefined, signal)
+
+/** Revokes any user's share link, for an administrator. */
+export const revokeShareLink = (id: string) =>
+  request<ShareLink>('POST', `/share-links/${seg(id)}/revoke`)
 
 /** Whether an invite's link may still create an account, with the server's name; no session. */
 export const fetchPublicInvite = (token: string, signal?: AbortSignal) =>
@@ -2535,6 +2626,11 @@ export type LiveSession = {
   device: { name: string; app: string; appVersion: string; address: string }
   /** Whether the app takes commands: stopping and messages. */
   controllable: boolean
+  /**
+   * A guest playing through a share link: it shows under the sharer, with "Shared link" as its
+   * app, and takes no command.
+   */
+  shared: boolean
   item: {
     id: string
     kind: 'movie' | 'episode' | 'channel' | 'recording' | string
@@ -3048,6 +3144,8 @@ export type HistoryEntry = {
   played: number
   position: number
   method: PlayMethod
+  /** Whether a guest played it through the user's share link. */
+  shared: boolean
 }
 
 export type HistoryPage = { items: HistoryEntry[]; total: number }
@@ -3142,6 +3240,11 @@ export const queryKeys = {
   userContentChoices: ['user-content-choices'] as const,
   apiKeys: ['api-keys'] as const,
   invites: ['invites'] as const,
+  ownShareLinks: ['account', 'share-links'] as const,
+  shareTitles: (term: string) => ['account', 'share-titles', term] as const,
+  shareTitle: (id: string) => ['account', 'share-title', id] as const,
+  shareEpisodes: (seriesId: string) => ['account', 'share-episodes', seriesId] as const,
+  userShareLinks: (id: string) => ['users', id, 'share-links'] as const,
   activity: (query: ActivityQuery) => ['activity', query] as const,
   /** Everything a source's line-up shows: invalidated after any change to it. */
   lineup: (scope: Scope, id: string) => ['lineup', scope, id] as const,

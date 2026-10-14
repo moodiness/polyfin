@@ -6,6 +6,7 @@ import {
   KeyIcon,
   PlayCircleIcon,
   ProhibitIcon,
+  ShareNetworkIcon,
   ShieldCheckIcon,
   TrashIcon,
   UserCircleDashedIcon,
@@ -18,9 +19,11 @@ import {
   ApiError,
   deleteUser,
   fetchUserDevices,
+  fetchUserShareLinks,
   fetchUsers,
   queryClient,
   queryKeys,
+  revokeShareLink,
   signOutUserDevice,
   unblockUser,
   userImageUrl,
@@ -28,6 +31,7 @@ import {
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
+import { ShareLinkList } from '@/features/account/SharedLinks'
 import { errorMessage, formatDate } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -76,6 +80,7 @@ const sectionIds = [
   'libraries',
   'genres',
   'hours',
+  'share-links',
   'devices',
 ] as const
 
@@ -174,6 +179,12 @@ function UserPage({ user }: { user: User }) {
         },
         { id: 'genres', label: t.users.blockedGenresTitle, icon: ProhibitIcon, to: '#genres' },
         { id: 'hours', label: t.users.allowedHoursTitle, icon: ClockIcon, to: '#hours' },
+        {
+          id: 'share-links',
+          label: t.users.shareLinksTitle,
+          icon: ShareNetworkIcon,
+          to: '#share-links',
+        },
         { id: 'devices', label: t.users.devicesTitle, icon: DevicesIcon, to: '#devices' },
       ]}
     />
@@ -234,6 +245,7 @@ function UserPage({ user }: { user: User }) {
         <VisibleLibrariesForm id="libraries" user={user} />
         <BlockedGenresForm id="genres" user={user} />
         <AllowedHoursForm id="hours" user={user} />
+        <ShareLinksSection user={user} />
         <section id="devices" aria-labelledby="devices-title" className={sectionClass}>
           <h2 id="devices-title" className="mb-4 text-h3 text-ink">
             {t.users.devicesTitle}
@@ -407,8 +419,14 @@ function AccessPanel({ user }: { user: User }) {
   const { t } = useI18n()
   const toast = useToast()
   const access = useUserPatch(user)
+  // Losing the permission, or being disabled, revokes the user's share links.
   const change = (patch: Parameters<typeof access.mutate>[0]) =>
-    access.mutate(patch, { onSuccess: () => toast(t.users.updated) })
+    access.mutate(patch, {
+      onSuccess: () => {
+        toast(t.users.updated)
+        void queryClient.invalidateQueries({ queryKey: queryKeys.userShareLinks(user.id) })
+      },
+    })
   const lastAdmin = access.error instanceof ApiError && access.error.code === 'last_administrator'
 
   return (
@@ -487,9 +505,49 @@ function AccessPanel({ user }: { user: User }) {
             disabled={access.isPending}
             onChange={(subtitleManagement) => change({ subtitleManagement })}
           />
+          <SwitchRow
+            title={t.users.canShare}
+            help={t.users.canShareHelp}
+            checked={user.canShare}
+            disabled={access.isPending}
+            onChange={(canShare) => change({ canShare })}
+          />
         </div>
       </Panel>
     </div>
+  )
+}
+
+/** The user's share links, for an administrator, each with Revoke while it is active. */
+function ShareLinksSection({ user }: { user: User }) {
+  const { t } = useI18n()
+  const links = useQuery({
+    queryKey: queryKeys.userShareLinks(user.id),
+    queryFn: ({ signal }) => fetchUserShareLinks(user.id, signal),
+  })
+
+  return (
+    <section id="share-links" aria-labelledby="share-links-title" className={sectionClass}>
+      <h2 id="share-links-title" className="text-h3 text-ink">
+        {t.users.shareLinksTitle}
+      </h2>
+      <p className="mt-1.5 mb-4 max-w-[60ch] text-small text-ink-2">{t.users.shareLinksHelp}</p>
+      {links.isPending ? (
+        <SkeletonRows rows={2} boxed label={t.common.loading} />
+      ) : links.isError ? (
+        <InlineError onRetry={() => void links.refetch()} retrying={links.isFetching}>
+          {errorMessage(t, links.error)}
+        </InlineError>
+      ) : links.data.length === 0 ? (
+        <EmptyState icon={ShareNetworkIcon} title={t.shareLinks.userEmpty} />
+      ) : (
+        <ShareLinkList
+          links={links.data}
+          queryKey={queryKeys.userShareLinks(user.id)}
+          revoke={revokeShareLink}
+        />
+      )}
+    </section>
   )
 }
 

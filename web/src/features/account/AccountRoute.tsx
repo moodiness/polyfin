@@ -9,13 +9,16 @@ import {
   ListChecksIcon,
   PasswordIcon,
   RowsIcon,
+  ShareNetworkIcon,
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useLocation, useSearchParams } from 'react-router'
 import {
   fetchMyDevices,
   fetchOwnAppImport,
   fetchOwnImport,
+  fetchOwnShareLinks,
   ownAppConnections,
   ownAppReaders,
   queryClient,
@@ -34,6 +37,7 @@ import { SectionNav } from '@/ui'
 import AppImport, { AppConnections } from './AppImport'
 import PasswordForm from './PasswordForm'
 import ServerImport from './ServerImport'
+import SharedLinks from './SharedLinks'
 import TrackingServices from './TrackingServices'
 import { HiddenList, HomeRowList, ResumeList } from './WatchingLists'
 
@@ -43,6 +47,7 @@ const sectionIds = [
   'resume',
   'hidden',
   'home-rows',
+  'shared-links',
   'import',
   'app-import',
   'notifications',
@@ -55,9 +60,10 @@ type SectionId = (typeof sectionIds)[number]
 const ownImportPollMs = 2000
 
 /**
- * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows,
- * importing from another server and from an app (unless the server turns it off), notifications,
- * devices and password, with a list of sections beside them.
+ * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows, shared
+ * links (while the user may share or has links), importing from another server and from an app
+ * (unless the server turns it off), notifications, devices and password, with a list of sections
+ * beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -85,6 +91,22 @@ export default function AccountRoute() {
   const importing = ownImport.data?.enabled === true
   const importingFromApps = ownAppImport.data?.enabled === true
   const appConnections = ownAppImport.data?.connections ?? []
+  const shareLinks = useQuery({
+    queryKey: queryKeys.ownShareLinks,
+    queryFn: ({ signal }) => fetchOwnShareLinks(signal),
+  })
+  // Shown while the user may share or has links, and when the web player's Share opened the page,
+  // which then says why no link can be made.
+  const [params] = useSearchParams()
+  const sharing =
+    shareLinks.data !== undefined &&
+    (shareLinks.data.allowed || shareLinks.data.links.length > 0 || params.has('share'))
+  const { hash } = useLocation()
+
+  // Sections drawn once their answer comes: a #section address scrolls once it is there.
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
+  }, [hash, sharing])
 
   return (
     <PageLayout
@@ -125,6 +147,16 @@ export default function AccountRoute() {
               icon: RowsIcon,
               to: '#home-rows',
             },
+            ...(sharing
+              ? [
+                  {
+                    id: 'shared-links' as const,
+                    label: text.sections.sharedLinks,
+                    icon: ShareNetworkIcon,
+                    to: '#shared-links',
+                  },
+                ]
+              : []),
             ...(importing
               ? [
                   {
@@ -174,6 +206,15 @@ export default function AccountRoute() {
       <AccountSection id="home-rows" title={text.sections.homeRows} help={text.homeRows.help}>
         <HomeRowList />
       </AccountSection>
+      {sharing && (
+        <AccountSection
+          id="shared-links"
+          title={text.sections.sharedLinks}
+          help={text.sharedLinksHelp}
+        >
+          <SharedLinks allowed={shareLinks.data.allowed} links={shareLinks.data.links} />
+        </AccountSection>
+      )}
       {importing && (
         <AccountSection
           id="import"
