@@ -277,6 +277,7 @@ const common = {
       'Enter the token: up to 256 characters, without spaces. A Telegram bot’s looks like 123456:ABC-DEF.',
     invalid_user_key: 'A Pushover user key is letters and digits only.',
     invalid_events: 'One of the events chosen is not available for this target.',
+    invalid_reminder_settings: 'Choose 1, 5, 10, 15, 30 or 60 minutes.',
     too_many_targets: 'There are 20 targets already. Delete one to add another.',
     target_unreadable:
       'This target’s address or token cannot be decrypted with POLYFIN_SECRET_KEY. Enter it again.',

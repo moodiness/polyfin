@@ -1395,6 +1395,58 @@ export const fetchOwnHidden = (signal?: AbortSignal) =>
 
 export const showOwnHidden = (id: string) => request<void>('DELETE', `/account/hidden/${seg(id)}`)
 
+/** A reminder of one programme, set from the web player. */
+export type ProgrammeReminder = {
+  id: string
+  programId: string
+  name: string
+  channelId: string
+  channelName: string
+  start: string
+  end: string
+}
+
+/** A reminder of every airing of a title on a channel, at the time of day of `start`. */
+export type SeriesReminder = {
+  id: string
+  name: string
+  channelId: string
+  channelName: string
+  start: string
+  /** The next airing in the guide, null while none is. */
+  next: string | null
+}
+
+/** My account › Reminders: `available` is false without the Live TV permission. */
+export type OwnReminders = {
+  available: boolean
+  reminders: ProgrammeReminder[]
+  series: SeriesReminder[]
+}
+
+/**
+ * How long before a programme its reminder comes, one of `choices`, and whether it also shows on
+ * the user's apps; `available` is false without the Live TV permission.
+ */
+export type ReminderSettings = {
+  available: boolean
+  beforeMinutes: number
+  onApps: boolean
+  choices: number[]
+}
+
+export const fetchOwnReminders = (signal?: AbortSignal) =>
+  request<OwnReminders>('GET', '/account/reminders', undefined, signal)
+
+export const deleteOwnReminder = (id: string) =>
+  request<void>('DELETE', `/account/reminders/${seg(id)}`)
+
+export const fetchReminderSettings = (signal?: AbortSignal) =>
+  request<ReminderSettings>('GET', '/account/reminders/settings', undefined, signal)
+
+export const updateReminderSettings = (settings: { beforeMinutes: number; onApps: boolean }) =>
+  request<ReminderSettings>('PUT', '/account/reminders/settings', settings)
+
 /** The tracking services, in the order the server lists them. */
 export type TrackingServiceName =
   'trakt' | 'simkl' | 'mdblist' | 'publicmetadb' | 'lastfm' | 'listenbrainz'
@@ -1518,6 +1570,7 @@ export type NotificationEvent =
   | 'account_blocked'
   | 'new_device'
   | 'share_played'
+  | 'programme_reminder'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is
@@ -3310,6 +3363,8 @@ export const queryKeys = {
   ownHomeRows: ['account', 'home-rows'] as const,
   homeRows: ['home-rows'] as const,
   homeRowChoices: ['home-rows', 'choices'] as const,
+  ownReminders: ['account', 'reminders'] as const,
+  reminderSettings: ['account', 'reminders', 'settings'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   jellyfinImport: ['jellyfin-import'] as const,

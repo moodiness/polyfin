@@ -11,6 +11,7 @@ const account = {
       hidden: 'Hidden titles',
       homeRows: 'Home rows',
       sharedLinks: 'Shared links',
+      reminders: 'Reminders',
       import: 'Import from another server',
       appImport: 'Import from an app',
       notifications: 'Notifications',
@@ -51,6 +52,29 @@ const account = {
         video: 'Home video',
         replay: 'Replay',
       } as Record<string, string>,
+    },
+    /** My account › Reminders, and the reminder settings under Notifications. */
+    reminders: {
+      help: 'The Live TV programmes you asked to be reminded of from their page in the web player. Each reminder comes on your targets that chose Programme starting, as long before as you set under Notifications.',
+      empty: 'No reminder',
+      emptyHelp: 'On the page of a programme to come in the web player, Remind me sets one.',
+      everyAiring: (time: string) => `Every airing at about ${time}`,
+      next: 'Next ',
+      noAiring: 'No airing in the guide',
+      delete: 'Delete',
+      deleteLabel: (name: string) => `Delete the reminder of ${name}`,
+      deleted: (name: string) => `The reminder of ${name} is deleted.`,
+      settingsTitle: 'Reminders',
+      before: 'Remind me before',
+      beforeHelp: 'How long before a programme starts its reminder comes.',
+      minutes: (minutes: number) =>
+        minutes === 1 ? '1 minute' : minutes === 60 ? '1 hour' : `${minutes} minutes`,
+      onApps: 'Also show reminders on my apps',
+      onAppsHelp:
+        'Each reminder also shows on your Jellyfin apps that accept messages, such as the web player while it is open, as Send a message shows one.',
+      noTarget:
+        'None of your targets chose Programme starting, and your apps are off: your reminders would reach you nowhere.',
+      saved: 'Reminder settings saved.',
     },
     /** How often connected accounts are imported, from the server's setting, in minutes. */
     importEvery: (minutes: number) =>
@@ -295,7 +319,7 @@ const account = {
     statisticsHelp:
       'What you watched on this server: hours, titles, apps and devices, and your recent playbacks.',
     notificationsHelp:
-      'Where Polyfin tells you of new episodes of the series you follow, your recordings and playbacks, your connections that stop, your account’s blocks and its sign-ins on new devices, and sends you your weekly summary and your month and year in review.',
+      'Where Polyfin tells you of new episodes of the series you follow, your recordings and playbacks, your connections that stop, your account’s blocks and its sign-ins on new devices, reminds you of the programmes you chose, and sends you your weekly summary and your month and year in review.',
     devicesHelp:
       'The apps signed in with your account. A device you sign out asks for your password the next time it opens.',
     passwordHelp: 'Changing your password signs out all your Jellyfin devices.',

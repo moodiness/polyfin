@@ -106,6 +106,7 @@ const notifications: typeof en = {
       account_blocked: 'Compte bloqué',
       new_device: 'Connexion depuis un nouvel appareil',
       share_played: 'Lien partagé lu',
+      programme_reminder: 'Début d’une émission',
     },
     eventHelp: {
       new_episode:
@@ -139,6 +140,8 @@ const notifications: typeof en = {
         'Votre compte s’est connecté depuis une appli Jellyfin ou le client web sur un appareil qu’il n’avait jamais utilisé, avec l’appli, l’appareil et l’adresse. Le premier appareil d’un compte n’est pas signalé.',
       share_played:
         'Quelqu’un sans compte a lancé un film ou un épisode grâce à un lien de partage : au plus une fois par heure et par lien, avec le titre et qui l’a partagé. Les cibles du serveur apprennent ceux de tous les liens, les autres ceux de leurs liens.',
+      programme_reminder:
+        'Une émission de TV en direct dont vous avez demandé le rappel dans le lecteur web commence bientôt, avec l’avance choisie dans « Me prévenir avant », et un lien vers sa chaîne.',
     },
     enabled: 'Envoyer les messages à cette cible',
     create: 'Ajouter',

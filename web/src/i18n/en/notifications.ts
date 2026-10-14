@@ -102,6 +102,7 @@ const notifications = {
       account_blocked: 'Account blocked',
       new_device: 'Sign-in on a new device',
       share_played: 'Shared link played',
+      programme_reminder: 'Programme starting',
     },
     eventHelp: {
       new_episode:
@@ -132,6 +133,8 @@ const notifications = {
         'Your account signed in from a Jellyfin app or the web client on a device it never used, with the app, the device and the address. An account’s first device is not told.',
       share_played:
         'Someone without an account started a movie or an episode through a share link: at most once an hour per link, with the title and who shared it. The server’s targets hear of every link, the others of their own.',
+      programme_reminder:
+        'A Live TV programme you set a reminder for in the web player starts soon, as long before as Remind me before says, with a link to its channel.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',

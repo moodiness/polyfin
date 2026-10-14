@@ -299,6 +299,7 @@ const common: typeof en = {
       'Saisissez le jeton : 256 caractères au plus, sans espaces. Celui d’un bot Telegram ressemble à 123456:ABC-DEF.',
     invalid_user_key: 'Une clé d’utilisateur Pushover ne contient que des lettres et des chiffres.',
     invalid_events: 'Un des événements choisis n’est pas disponible pour cette cible.',
+    invalid_reminder_settings: 'Choisissez 1, 5, 10, 15, 30 ou 60 minutes.',
     too_many_targets: 'Il y a déjà 20 cibles. Supprimez-en une pour en ajouter une autre.',
     target_unreadable:
       'L’adresse ou le jeton de cette cible ne peut pas être déchiffré avec POLYFIN_SECRET_KEY. Saisissez-le de nouveau.',

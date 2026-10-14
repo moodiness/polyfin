@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Titres masqués',
       homeRows: 'Rangées d’accueil',
       sharedLinks: 'Liens partagés',
+      reminders: 'Rappels',
       import: 'Importer depuis un autre serveur',
       appImport: 'Importer depuis une appli',
       notifications: 'Notifications',
@@ -52,6 +53,29 @@ const account: typeof en = {
         video: 'Vidéo personnelle',
         replay: 'Replay',
       },
+    },
+    reminders: {
+      help: 'Les émissions de TV en direct dont vous avez demandé le rappel depuis leur page dans le lecteur web. Chaque rappel arrive sur vos cibles qui ont choisi « Début d’une émission », avec l’avance réglée sous Notifications.',
+      empty: 'Aucun rappel',
+      emptyHelp:
+        'Sur la page d’une émission à venir dans le lecteur web, « Me le rappeler » en ajoute un.',
+      everyAiring: (time: string) => `Chaque diffusion vers ${time}`,
+      next: 'Prochaine ',
+      noAiring: 'Aucune diffusion dans le guide',
+      delete: 'Supprimer',
+      deleteLabel: (name: string) => `Supprimer le rappel de ${name}`,
+      deleted: (name: string) => `Le rappel de ${name} est supprimé.`,
+      settingsTitle: 'Rappels',
+      before: 'Me prévenir avant',
+      beforeHelp: 'Combien de temps avant le début d’une émission son rappel arrive.',
+      minutes: (minutes: number) =>
+        minutes === 1 ? '1 minute' : minutes === 60 ? '1 heure' : `${minutes} minutes`,
+      onApps: 'Afficher aussi les rappels dans mes applis',
+      onAppsHelp:
+        'Chaque rappel s’affiche aussi dans vos applis Jellyfin qui acceptent les messages, comme le lecteur web tant qu’il est ouvert, à la manière d’« Envoyer un message ».',
+      noTarget:
+        'Aucune de vos cibles n’a choisi « Début d’une émission », et vos applis sont désactivées : vos rappels ne vous arriveraient nulle part.',
+      saved: 'Réglages des rappels enregistrés.',
     },
     importEvery: (minutes: number) =>
       minutes < 60
@@ -302,7 +326,7 @@ const account: typeof en = {
     statisticsHelp:
       'Ce que vous avez regardé sur ce serveur : heures, titres, applis et appareils, et vos lectures récentes.',
     notificationsHelp:
-      'Où Polyfin vous signale les nouveaux épisodes des séries que vous suivez, vos enregistrements et vos lectures, vos connexions qui s’arrêtent, les blocages de votre compte et les nouveaux appareils où il se connecte, et vous envoie le résumé de votre semaine et le bilan de votre mois et de votre année.',
+      'Où Polyfin vous signale les nouveaux épisodes des séries que vous suivez, vos enregistrements et vos lectures, vos connexions qui s’arrêtent, les blocages de votre compte et les nouveaux appareils où il se connecte, vous rappelle les émissions que vous avez choisies, et vous envoie le résumé de votre semaine et le bilan de votre mois et de votre année.',
     devicesHelp:
       'Les applications connectées à votre compte. Déconnecter un appareil lui demande votre mot de passe à la prochaine ouverture.',
     passwordHelp: 'Changer de mot de passe déconnecte tous vos appareils Jellyfin.',

@@ -1,4 +1,5 @@
 import {
+  AlarmIcon,
   ArrowSquareInIcon,
   BellIcon,
   ChartBarIcon,
@@ -17,6 +18,7 @@ import { useLocation, useSearchParams } from 'react-router'
 import {
   fetchMyDevices,
   fetchOwnAppImport,
+  fetchOwnReminders,
   fetchOwnImport,
   fetchOwnShareLinks,
   ownAppConnections,
@@ -39,6 +41,7 @@ import PasswordForm from './PasswordForm'
 import ServerImport from './ServerImport'
 import SharedLinks from './SharedLinks'
 import TrackingServices from './TrackingServices'
+import { ReminderList, ReminderSettingsForm } from './Reminders'
 import { HiddenList, HomeRowList, ResumeList } from './WatchingLists'
 
 const sectionIds = [
@@ -48,6 +51,7 @@ const sectionIds = [
   'hidden',
   'home-rows',
   'shared-links',
+  'reminders',
   'import',
   'app-import',
   'notifications',
@@ -61,9 +65,9 @@ const ownImportPollMs = 2000
 
 /**
  * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows, shared
- * links (while the user may share or has links), importing from another server and from an app
- * (unless the server turns it off), notifications, devices and password, with a list of sections
- * beside them.
+ * links (while the user may share or has links), programme reminders (with the Live TV permission),
+ * importing from another server and from an app (unless the server turns it off), notifications,
+ * devices and password, with a list of sections beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -101,12 +105,18 @@ export default function AccountRoute() {
   const sharing =
     shareLinks.data !== undefined &&
     (shareLinks.data.allowed || shareLinks.data.links.length > 0 || params.has('share'))
+  // Reminders are listed for a user with the Live TV permission.
+  const reminders = useQuery({
+    queryKey: queryKeys.ownReminders,
+    queryFn: ({ signal }) => fetchOwnReminders(signal),
+  })
+  const reminding = reminders.data?.available === true
   const { hash } = useLocation()
 
   // Sections drawn once their answer comes: a #section address scrolls once it is there.
   useEffect(() => {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
-  }, [hash, sharing])
+  }, [hash, sharing, reminding])
 
   return (
     <PageLayout
@@ -154,6 +164,16 @@ export default function AccountRoute() {
                     label: text.sections.sharedLinks,
                     icon: ShareNetworkIcon,
                     to: '#shared-links',
+                  },
+                ]
+              : []),
+            ...(reminding
+              ? [
+                  {
+                    id: 'reminders' as const,
+                    label: text.sections.reminders,
+                    icon: AlarmIcon,
+                    to: '#reminders',
                   },
                 ]
               : []),
@@ -215,6 +235,11 @@ export default function AccountRoute() {
           <SharedLinks allowed={shareLinks.data.allowed} links={shareLinks.data.links} />
         </AccountSection>
       )}
+      {reminding && (
+        <AccountSection id="reminders" title={text.sections.reminders} help={text.reminders.help}>
+          <ReminderList />
+        </AccountSection>
+      )}
       {ownImport.data !== undefined && importing && (
         <AccountSection
           id="import"
@@ -264,7 +289,10 @@ export default function AccountRoute() {
         title={text.sections.notifications}
         help={text.notificationsHelp}
       >
-        <NotificationTargets scope="own" />
+        <div className="flex flex-col gap-6">
+          <NotificationTargets scope="own" />
+          <ReminderSettingsForm />
+        </div>
       </AccountSection>
       <AccountSection id="devices" title={text.sections.devices} help={text.devicesHelp}>
         <DeviceList
