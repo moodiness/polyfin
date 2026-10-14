@@ -274,6 +274,7 @@ func (s *Store) MetricsTokenMade(ctx context.Context, administrator string) {
 var secretNames = map[string][2]string{
 	"publicMetaDbKey":   {"the PublicMetaDB key", "la clé PublicMetaDB"},
 	"theIntroDbKey":     {"the TheIntroDB key", "la clé TheIntroDB"},
+	"mdblistRatingsKey": {"the MDBList API key for ratings", "la clé d’API MDBList des notes"},
 	"traktClientSecret": {"the Trakt client secret", "le client secret Trakt"},
 	"lastFmSecret":      {"the Last.fm shared secret", "le secret partagé Last.fm"},
 	"mdblist":           {"their MDBList API key", "sa clé d’API MDBList"},

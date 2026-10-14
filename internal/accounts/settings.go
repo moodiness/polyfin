@@ -528,6 +528,37 @@ func validSegmentSources(names []string) bool {
 	return true
 }
 
+// ErrInvalidMDBListRatingsKey reports a Settings.MDBListRatingsKey that is
+// not a valid key (see ValidRatingsKey), and ErrInvalidCriticRatingShows a
+// CriticRatingShows not among CriticRatingChoices.
+var (
+	ErrInvalidMDBListRatingsKey = errors.New("invalid MDBList ratings key")
+	ErrInvalidCriticRatingShows = errors.New("invalid critic rating choice")
+)
+
+// MaxRatingsKeyBytes is the longest Settings.MDBListRatingsKey.
+const MaxRatingsKeyBytes = 256
+
+// ValidRatingsKey reports whether key may be an MDBList API key: at most
+// MaxRatingsKeyBytes of printable ASCII without spaces. Empty is valid,
+// for no key.
+func ValidRatingsKey(key string) bool {
+	if len(key) > MaxRatingsKeyBytes {
+		return false
+	}
+	for i := range len(key) {
+		if key[i] <= ' ' || key[i] > '~' {
+			return false
+		}
+	}
+	return true
+}
+
+// CriticRatingChoices are the scores CriticRating may carry (see
+// Settings.CriticRatingShows), the first by default: the critics' score
+// or the audience score.
+var CriticRatingChoices = []string{"critics", "audience"}
+
 // ErrInvalidTraktApp, ErrInvalidSimklApp and ErrInvalidLastFMApp report a
 // Settings.TraktClientID, TraktClientSecret, SimklClientID, LastFMAPIKey or
 // LastFMSecret longer than MaxTrackingAppBytes, or holding anything but
@@ -877,6 +908,15 @@ type Settings struct {
 	// SimilarTitles lists titles close to a movie or series from the
 	// addons' catalogs; off, titles have none.
 	SimilarTitles bool
+	// MDBListRatingsKey is the server's MDBList API key, which movies and
+	// series have their IMDb rating, critics' score and audience score
+	// looked up with (see package ratings); empty, MDBList is never asked
+	// about them. Users' own tracking keys are never used for this. A
+	// secret, like PublicMetaDBKey.
+	MDBListRatingsKey string
+	// CriticRatingShows is the score CriticRating carries, one of
+	// CriticRatingChoices: the critics' score or the audience score.
+	CriticRatingShows string
 	// Lyrics looks music tracks up on LRCLIB and serves their lyrics to
 	// apps, synced line by line when LRCLIB has them; off, LRCLIB is never
 	// asked and tracks have no lyrics.
@@ -1192,6 +1232,7 @@ func validWebText(text string, max int) bool {
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
 	"update_check, local_discovery, local_address, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, lyrics, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
+	"mdblist_ratings_key, critic_rating_shows, " +
 	"personal_addons, server_imports, login_attempts, inactive_device_days, known_proxies, known_proxy_names, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, sync_addon_subtitles, max_conversions, max_conversion_height, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
@@ -1223,6 +1264,7 @@ func (settings *Settings) fields() []any {
 		&settings.UpdateCheck, &settings.LocalDiscovery, &settings.LocalAddress,
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff, &settings.AudioIntros,
 		&settings.SimilarTitles, &settings.Lyrics, &settings.PlayedPercent, &settings.ResumePercent, &settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
+		&settings.MDBListRatingsKey, &settings.CriticRatingShows,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
 		&settings.KnownProxyNames, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight,
@@ -1266,6 +1308,7 @@ func (settings *Settings) secrets() []struct {
 	}{
 		{"publicMetaDbKey", &settings.PublicMetaDBKey},
 		{"theIntroDbKey", &settings.TheIntroDBKey},
+		{"mdblistRatingsKey", &settings.MDBListRatingsKey},
 		{"traktClientSecret", &settings.TraktClientSecret},
 		{"lastFmSecret", &settings.LastFMSecret},
 		{"smtpPassword", &settings.SMTPPassword},
@@ -1452,6 +1495,12 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !ValidSegmentKey(settings.TheIntroDBKey) {
 		return Settings{}, ErrInvalidTheIntroDBKey
+	}
+	if !ValidRatingsKey(settings.MDBListRatingsKey) {
+		return Settings{}, ErrInvalidMDBListRatingsKey
+	}
+	if !slices.Contains(CriticRatingChoices, settings.CriticRatingShows) {
+		return Settings{}, ErrInvalidCriticRatingShows
 	}
 	if !validSegmentOrder(settings.SegmentOrder) {
 		return Settings{}, ErrInvalidSegmentOrder
