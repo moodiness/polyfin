@@ -183,6 +183,18 @@ Jellyfin apps that look for servers on the local network list Polyfin, as they l
 - Only senders on the local network are answered: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and loopback. Jellyfin answers any sender.
 - `LocalAddress` of `/System/Info/Public` and `/System/Info` is **Address on the local network** when set, as Jellyfin gives its `PublishedServerUrl` there, and otherwise the address the request reached.
 
+### Backups
+
+The backups page of the web client's dashboard, since Jellyfin 10.11, shows the database backups of the backups folder (see [Backups](backups.md)): it lists them, makes one, and restores one. Polyfin's backups hold its database alone, whatever the options asked: Jellyfin's also hold its metadata, trickplay images and subtitles, which Polyfin does not keep on disk.
+
+**For app developers:**
+
+- Administrators only, as in Jellyfin. While backups are off, `/Backup` lists nothing, `/Backup/Create` answers 403, and `/Backup/Restore` answers 404.
+- `GET /Backup` lists the backups of the folder, newest first, as `BackupManifestDto`: `DateCreated` (when the backup was made), `Path` (the file name, such as `polyfin-20261005-040000.dump`; Jellyfin gives the archive's full path), `ServerVersion` (the Jellyfin version of `/System/Info`), `BackupEngineVersion` (`1.0.0`, Polyfin's format), and `Options` with only `Database` true. The backups made before a restore are listed too.
+- `POST /Backup/Create` runs **Back up the database** at once, sends the backup to the destinations, and answers its manifest. The options of the body are ignored.
+- `GET /Backup/Manifest?path=` answers the manifest of the backup of the folder named `path`, and 404 for any other path.
+- `POST /Backup/Restore` with `ArchiveFileName`, a file name `/Backup` lists, restores it as the admin app does, and answers 204: Polyfin backs the current database up, stops, restores it and starts again, answering 503 meanwhile. It answers 404 for a backup the folder does not have, and 400 for a file that is not a backup of Polyfin's database, a backup of a newer Polyfin, a server without `pg_restore`, a restore already under way, and a backup holding stored keys the current `POLYFIN_SECRET_KEY` cannot decrypt, as apps cannot show that warning: the admin app restores those.
+
 ## Jellyfin features Polyfin does without
 
 These dashboard features answer as a Jellyfin 12.2 on which nothing of the kind is configured:
@@ -191,18 +203,17 @@ These dashboard features answer as a Jellyfin 12.2 on which nothing of the kind 
 - browsing the server's folders;
 - library folders and metadata providers;
 - Live TV tuners and listing providers;
-- the startup wizard;
-- backups.
+- the startup wizard.
 
 Polyfin never shows the host's folders. To change the server's settings, use the [admin app](administration.md#settings) or the server configuration API.
 
 **For app developers:**
 
 - Answers go to administrators only where Jellyfin requires one.
-- `/Plugins`, `/Packages`, `/Repositories`, `/Environment/Drives`, `/Environment/DirectoryContents`, `/Library/PhysicalPaths`, `/LiveTv/Tuners/Discover`, `/LiveTv/TunerHosts/Types` and `/Backup` list nothing.
+- `/Plugins`, `/Packages`, `/Repositories`, `/Environment/Drives`, `/Environment/DirectoryContents`, `/Library/PhysicalPaths`, `/LiveTv/Tuners/Discover` and `/LiveTv/TunerHosts/Types` list nothing.
 - `/Libraries/AvailableOptions` lists no provider (Jellyfin also lists its own, its NFO reader and saver among them).
 - `/System/Configuration/MetadataOptions/Default` and `/LiveTv/ListingProviders/Default` are Jellyfin's defaults.
 - `/Startup/Configuration` and `/Startup/User` show the server name, language and earliest administrator; setup is always complete.
-- Writes are refused as Jellyfin refuses them for what does not exist (an unknown plugin or package, path, tuner, listing provider or backup).
-- Writes Jellyfin would perform answer 403: saving plugin repositories, creating a backup, and the wizard's configuration, remote access and first user. Change server settings through `/System/Configuration` instead.
+- Writes are refused as Jellyfin refuses them for what does not exist (an unknown plugin or package, path, tuner or listing provider).
+- Writes Jellyfin would perform answer 403: saving plugin repositories, and the wizard's configuration, remote access and first user. Change server settings through `/System/Configuration` instead.
 - `/Environment/ValidatePath` answers 404 for every path.

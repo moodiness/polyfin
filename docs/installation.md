@@ -78,7 +78,7 @@ Create the folder before starting, writable by the container's user (UID 65532):
 mkdir backups && sudo chown 65532:65532 backups
 ```
 
-See [Backups](backups.md) for the schedule, the number kept, and how to restore one.
+See [Backups](backups.md) for the schedule, the number kept, the destinations they are also sent to (S3-compatible storage, SFTP or WebDAV), and how to restore one from the admin app.
 
 ### Upgrade from an older Compose file
 
@@ -146,7 +146,7 @@ With `docker run`, add `--no-healthcheck`; on Unraid, add it to the container's 
 Polyfin answers two addresses, without signing in, for monitoring tools:
 
 - `/healthz` answers 200 while Polyfin's process serves, PostgreSQL reachable or not. The health check asks it.
-- `/readyz` answers 200 when PostgreSQL is reachable too, and 503 when it is not.
+- `/readyz` answers 200 when PostgreSQL is reachable too, and 503 when it is not, or while a backup is being restored.
 
 Both answer `ok` in plain text; `/readyz` answers `database unavailable` with its 503. For Prometheus, Polyfin can also expose its metrics at `/metrics`, with a token: see [Metrics](administration.md#metrics).
 

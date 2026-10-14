@@ -49,7 +49,7 @@ An administrator can stop a playback (**Stop**, which asks first), or show a mes
 **System › Schedule** lists:
 
 - the **Tasks**, with their last run, result and next run; **Run now** and **Stop** run or stop each one by hand;
-- **Database backups**, with **Back up now** (see [Backups](backups.md));
+- **Database backups**, with **Back up now**, each destination's last upload, and **Restore** (see [Backups](backups.md));
 - the **Upcoming recordings** (see [Live TV](live-tv.md));
 - the **Live TV refreshes**: when the IPTV lists and guides are fetched again (see [IPTV](iptv.md)).
 
@@ -67,7 +67,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - the **Database** and its size;
   - the **Source cache**, against **Disk space for files being read (GB)**;
   - **Disk space** for the cache, recordings and backups folders;
-  - **Backups**: the last run and its result, the last backup made, its file and size, and the next one. A failed backup, or a last backup older than two days, is a problem. See [Backups](backups.md);
+  - **Backups**: the last run and its result, the last backup made, its file and size, the next one, each destination's last upload, and the last restore. A failed backup, or a last backup older than two days, is a problem; so is a destination whose last upload failed (an error), or whose newest backup is older than two days (a warning). See [Backups](backups.md);
   - **Thumbnails**: the queue and paused sources;
   - **Polyfin**: memory, goroutines, uptime and version;
   - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error;
