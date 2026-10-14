@@ -33,6 +33,7 @@ var discordColors = map[string]int{
 	AccountBlocked:    0xf97316,
 	NewDevice:         0xf59e0b,
 	SharePlayed:       0x14b8a6,
+	ProgrammeReminder: 0x8b5cf6,
 }
 
 // discordWebhook is what a Discord webhook takes: one embed, and no
@@ -113,6 +114,7 @@ var ntfyTags = map[string][]string{
 	AccountBlocked:    {"lock"},
 	NewDevice:         {"key"},
 	SharePlayed:       {"link"},
+	ProgrammeReminder: {"alarm_clock"},
 }
 
 // ntfyMessage formats ev for topic: its title, its message, tags by its

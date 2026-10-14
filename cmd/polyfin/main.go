@@ -52,6 +52,7 @@ import (
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/reminders"
 	"github.com/moodiness/polyfin/internal/remuxdb"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/server"
@@ -536,6 +537,14 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	defer notifier.Close()
 	adminOptions.Notifications = notifier
 	registerSummaryTasks(registry, notifier)
+	// Programme reminders tell users, on their own targets and on their
+	// apps when they choose it, that a programme they chose starts soon.
+	// They are sent once the notifications read their targets.
+	programmeReminders := reminders.New(reminders.Config{DB: pool, Guide: lib, Users: store, Teller: notifier, Apps: jellyfinAPI,
+		Reaches: func(user accounts.ID) bool { return notifier.Receives(user, notifications.ProgrammeReminder) },
+		Ready:   notifier.Loaded(), Logger: logger})
+	jellyfinAPI.Reminders = programmeReminders
+	adminOptions.Reminders = programmeReminders
 	// Playbacks under way when Polyfin stops are kept in the history, as
 	// ended at their last report.
 	defer playbacks.Close()
@@ -573,6 +582,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// say.
 	go fromApps.Run(ctx)
 	go notifier.Run(ctx)
+	go programmeReminders.Run(ctx)
 	go updateCheck.Run(ctx)
 	go playbacks.Run(ctx)
 	served := make(chan error, 1)

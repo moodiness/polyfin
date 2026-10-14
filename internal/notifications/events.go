@@ -54,6 +54,8 @@ type Event struct {
 	Block      *BlockJSON      `json:"block,omitempty"`
 	// Share is the share link a share_played event tells of.
 	Share *ShareJSON `json:"share,omitempty"`
+	// Programme is the programme a programme_reminder event tells of.
+	Programme *ProgrammeJSON `json:"programme,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its

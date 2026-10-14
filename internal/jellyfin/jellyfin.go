@@ -25,6 +25,7 @@ import (
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/reminders"
 	"github.com/moodiness/polyfin/internal/remuxdb"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -127,6 +128,8 @@ type Options struct {
 	// SharePlayed is told of a guest's playback through a share link, at
 	// most once an hour per link; nil tells nothing.
 	SharePlayed func(accounts.ShareLink)
+	// Reminders keeps the users' programme reminders; nil keeps none.
+	Reminders *reminders.Service
 }
 
 // Handler serves the Jellyfin API.

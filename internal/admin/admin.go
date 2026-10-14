@@ -35,6 +35,7 @@ import (
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/reminders"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
@@ -141,6 +142,9 @@ type Options struct {
 	// Notifications keeps the server's and users' notification targets;
 	// nil offers none.
 	Notifications *notifications.Service
+	// Reminders keeps the users' programme reminders, which My account
+	// lists; nil offers none.
+	Reminders *reminders.Service
 	// Plays keeps the history of the videos played, which the statistics
 	// sum; nil offers none.
 	Plays *plays.History
@@ -210,6 +214,10 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/account/notifications/targets/{id}", h.signedIn(own.update))
 	mux.Handle("DELETE /admin/api/account/notifications/targets/{id}", h.signedIn(own.remove))
 	mux.Handle("POST /admin/api/account/notifications/targets/{id}/test", h.signedIn(own.test))
+	mux.Handle("GET /admin/api/account/reminders", h.signedIn(h.ownReminders))
+	mux.Handle("DELETE /admin/api/account/reminders/{id}", h.signedIn(h.deleteOwnReminder))
+	mux.Handle("GET /admin/api/account/reminders/settings", h.signedIn(h.ownReminderSettings))
+	mux.Handle("PUT /admin/api/account/reminders/settings", h.signedIn(h.updateOwnReminderSettings))
 	ownPlays := statisticsRoutes{h: h, scope: ownPlaybacks}
 	mux.Handle("GET /admin/api/account/statistics", h.signedIn(ownPlays.statistics))
 	mux.Handle("GET /admin/api/account/history", h.signedIn(ownPlays.history))

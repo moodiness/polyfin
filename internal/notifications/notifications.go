@@ -3,18 +3,19 @@
 // that finished or failed, a problem System › Health found or that was
 // solved, a user who joined through an invite, a new version of Polyfin, a
 // playback that started, paused, resumed or stopped, an account blocked
-// after wrong passwords, a sign-in on a device an account never used, once
-// a week a summary of the week, once a month and once a year a review of
+// after wrong passwords, a sign-in on a device an account never used, a
+// Live TV programme a user set a reminder for that starts soon, once a
+// week a summary of the week, once a month and once a year a review of
 // the month and of the year, and an app or tracking connection that
 // stopped. Messages go to targets: generic webhooks, which receive a
 // versioned JSON event (see Event); Discord webhooks, ntfy topics,
 // Telegram chats, Gotify servers and Pushover users, which receive
 // messages formatted for them; and email addresses, through the SMTP server
 // of the settings. Administrators add the server's targets, which receive
-// the events of every user but their sign-ins on new devices; each user
-// adds their own, which receive their own events, and the health, joining
-// and new version events, every account's blocks and the server's
-// summaries for administrators.
+// the events of every user but their sign-ins on new devices and their
+// programme reminders; each user adds their own, which receive their own
+// events, and the health, joining and new version events, every
+// account's blocks and the server's summaries for administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
 // sent in order in the background, tried again after network errors and
@@ -100,6 +101,10 @@ const (
 	// to the sharer's targets and the server's, at most once an hour per
 	// link (see Service.SharePlayed).
 	SharePlayed = "share_played"
+	// ProgrammeReminder tells a user that a Live TV programme they set a
+	// reminder for starts soon, to their own targets only (see
+	// reminders.go).
+	ProgrammeReminder = "programme_reminder"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 )
@@ -108,7 +113,7 @@ const (
 // shows them.
 var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined, NewVersion,
 	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary, MonthlySummary, YearlySummary, ConnectionStopped,
-	AccountBlocked, NewDevice, SharePlayed}
+	AccountBlocked, NewDevice, SharePlayed, ProgrammeReminder}
 
 // administratorsEvent reports whether event is one only the server's
 // targets and administrators' own receive: about System › Health, a user
@@ -118,9 +123,9 @@ func administratorsEvent(event string) bool {
 }
 
 // personalEvent reports whether event is one only users' own targets
-// receive: a sign-in on a new device.
+// receive: a sign-in on a new device, a programme reminder.
 func personalEvent(event string) bool {
-	return event == NewDevice
+	return event == NewDevice || event == ProgrammeReminder
 }
 
 // EventsFor lists the events the targets of owner may receive: every event
@@ -381,6 +386,8 @@ type Service struct {
 	// before.
 	episodesMu, healthMu, summaryMu sync.Mutex
 	summarySent                     map[string]time.Time
+	// loaded is closed once Run read the targets, as Loaded tells.
+	loaded chan struct{}
 }
 
 // New returns a service keeping targets in the database of options. Run
@@ -419,6 +426,7 @@ func New(options Options) *Service {
 		admins:      map[accounts.ID]bool{},
 		lanes:       map[accounts.ID]*lane{},
 		summarySent: map[string]time.Time{},
+		loaded:      make(chan struct{}),
 	}
 }
 
@@ -430,12 +438,19 @@ func (s *Service) Run(ctx context.Context) {
 	if err := s.reload(ctx); err != nil && ctx.Err() == nil {
 		s.logger.Warn("The notification targets could not be read", "error", err)
 	}
+	close(s.loaded)
 	var wg sync.WaitGroup
 	wg.Go(func() { every(ctx, s.timing.episodesFirst, s.timing.episodesEvery, s.CheckEpisodes) })
 	wg.Go(func() { every(ctx, s.timing.healthEvery, s.timing.healthEvery, s.CheckHealth) })
 	wg.Go(func() { every(ctx, s.timing.summaryFirst, s.timing.summaryEvery, s.CheckSummary) })
 	wg.Wait()
 	s.Close()
+}
+
+// Loaded is closed once Run read the targets: an event dispatched before
+// reaches none.
+func (s *Service) Loaded() <-chan struct{} {
+	return s.loaded
 }
 
 // every runs check after first, then every interval, until ctx ends.
