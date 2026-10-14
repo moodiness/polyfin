@@ -369,7 +369,8 @@ func TestTheDailyLimitHoldsRequestsUntilTheReset(t *testing.T) {
 	}
 }
 
-// A key MDBList refuses holds the lookups, and a new key asks at once.
+// A key MDBList refuses holds the lookups, and a new key asks at once, also
+// once the worker waits out the refused key's hold.
 func TestARefusedKeyHoldsLookupsUntilAnotherKey(t *testing.T) {
 	t.Parallel()
 	f := newFakeMDBList(t)
@@ -380,6 +381,8 @@ func TestARefusedKeyHoldsLookupsUntilAnotherKey(t *testing.T) {
 	s, setKey := newService(t, f, "wrong-key")
 	s.Kept(t.Context(), []Title{movie("tt0000001")})
 	eventually(t, "held", func() bool { return s.Status().Held == "refused" })
+	// The worker is past its gap after the refusal, waiting out the hour.
+	time.Sleep(20 * s.gap)
 	setKey(testKey)
 	s.Kept(t.Context(), []Title{movie("tt0000001")})
 	eventually(t, "kept", func() bool {

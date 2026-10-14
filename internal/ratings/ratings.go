@@ -278,11 +278,15 @@ func (s *Service) Enabled() bool { return s.key() != "" }
 // Kept returns the scores kept of titles, by their place in titles, nil
 // when none are kept or no key is saved. Titles without an IMDb or TMDB
 // identifier have none. Those not kept, or kept for too long, are asked
-// about in the background: Kept never waits for MDBList.
+// about in the background: Kept never waits for MDBList. Titles waiting
+// while the key changed, such as after MDBList refused the former one,
+// wake the worker too, so that it asks with the new key at once rather
+// than waiting out the hold of the former.
 func (s *Service) Kept(ctx context.Context, titles []Title) []Scores {
 	if len(titles) == 0 || !s.Enabled() || !s.load(ctx) {
 		return nil
 	}
+	apiKey := s.key()
 	now := s.now()
 	var result []Scores
 	asked := false
@@ -306,8 +310,9 @@ func (s *Service) Kept(ctx context.Context, titles []Title) []Scores {
 	if asked {
 		s.startLocked()
 	}
+	rekeyed := s.started && s.forKey != apiKey && len(s.order) > 0
 	s.mu.Unlock()
-	if asked {
+	if asked || rekeyed {
 		select {
 		case s.wake <- struct{}{}:
 		default:
