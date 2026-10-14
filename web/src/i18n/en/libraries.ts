@@ -73,17 +73,24 @@ const libraries = {
       choices: {
         none: 'None',
         automatic: 'Automatic',
+        generated: 'Generated',
         custom: 'Custom',
       },
       help: {
         none: 'Apps show this library without an image, as before.',
         automatic:
           'Polyfin takes it from the catalog: the backdrop of one of its first titles, else a poster.',
+        generated:
+          'Polyfin draws it from the posters of the catalog’s first titles, or of a collection library’s first collections, with the library’s name, once it has read them.',
         custom:
           'An image you upload, or one Polyfin downloads once from an address. Wide 16:9 images fit library tiles best. JPEG, PNG or WebP, at most 10 MB.',
       },
       parental: 'Users under parental control or blocking genres do not see it.',
-      notFound: 'Nothing found in this catalog for now, so apps show no image.',
+      notFound: {
+        automatic: 'Nothing found in this catalog for now, so apps show no image.',
+        generated:
+          'No poster read from this catalog yet, so apps show no image. Polyfin draws it once the library is opened in an app.',
+      },
       noImage: 'No image',
       upload: 'Upload an image',
       uploadAnother: 'Upload another image',
@@ -95,6 +102,8 @@ const libraries = {
       removeToNone: 'The uploaded image is deleted. Apps show this library without an image.',
       removeToAutomatic:
         'The uploaded image is deleted. Apps show the image found in the catalog instead.',
+      removeToGenerated:
+        'The uploaded image is deleted. Apps show the image Polyfin draws instead.',
       removeConfirm: 'Remove',
       saved: 'Image saved.',
       removed: 'Image removed.',

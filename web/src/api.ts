@@ -193,6 +193,8 @@ export type Settings = {
   audioIntros: boolean
   /** Whether apps get similar titles, from the addons' catalogs. */
   similarTitles: boolean
+  /** Whether addons' collections without a poster, and smart collections, get an image Polyfin draws. */
+  generateImages: boolean
   /** Whether the server's MDBList key for ratings is saved; titles then show MDBList's ratings. */
   mdblistRatingsKeySet: boolean
   /** Sent only to change the key: a new key, checked with MDBList before it is saved, or "" to remove it. */
@@ -1002,15 +1004,15 @@ export const MAX_LIBRARY_ITEMS = 20000
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'> &
   Partial<Pick<Library, 'genre' | 'maxItems' | 'hideInMenus'>>
 
-export type LibraryImageChoice = 'none' | 'automatic' | 'custom'
+export type LibraryImageChoice = 'none' | 'automatic' | 'generated' | 'custom'
 
 /**
- * Chooses the image of one enabled library: none, automatic, or custom with a picture sent in
- * base64 (`data`) or found at an address the server downloads once (`url`).
+ * Chooses the image of one enabled library: none, automatic, generated, or custom with a picture
+ * sent in base64 (`data`) or found at an address the server downloads once (`url`).
  */
 export type LibraryImageRequest = Pick<Library, 'addonId' | 'catalogType' | 'catalogId'> &
   (
-    | { image: 'none' | 'automatic' }
+    | { image: 'none' | 'automatic' | 'generated' }
     | { image: 'custom'; data: string }
     | { image: 'custom'; url: string }
   )

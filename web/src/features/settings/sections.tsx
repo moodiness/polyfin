@@ -460,6 +460,15 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
           onChange={(similarTitles) => update({ similarTitles })}
         />
       </SettingsGroup>
+      <SettingsGroup title={groups.images}>
+        <SwitchRow
+          anchor="generate-images"
+          label={s.generateImages}
+          help={s.generateImagesHelp}
+          checked={form.generateImages}
+          onChange={(generateImages) => update({ generateImages })}
+        />
+      </SettingsGroup>
       <SettingsGroup title={groups.ratings}>
         <SettingRow
           anchor="mdblist-ratings-key"

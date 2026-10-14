@@ -118,8 +118,8 @@ export function LibraryThumb({
   const { t } = useI18n()
   const text = t.libraries.image
   const state =
-    library.image === 'automatic' && library.imageTag === null
-      ? `${text.choices.automatic}, ${text.noImage.toLocaleLowerCase()}`
+    (library.image === 'automatic' || library.image === 'generated') && library.imageTag === null
+      ? `${text.choices[library.image]}, ${text.noImage.toLocaleLowerCase()}`
       : text.choices[library.image]
   return (
     <button
@@ -173,9 +173,10 @@ async function base64Of(file: File): Promise<string> {
 }
 
 /**
- * Chooses the image apps show on a library's tile: none, automatic (found in its catalog) or
- * custom (uploaded, or downloaded once from an address). Each change is saved at once, apart
- * from the libraries' save bar. It opens below the library's row, from its thumbnail.
+ * Chooses the image apps show on a library's tile: none, automatic (found in its catalog),
+ * generated (drawn from its first titles' posters) or custom (uploaded, or downloaded once from
+ * an address). Each change is saved at once, apart from the libraries' save bar. It opens below
+ * the library's row, from its thumbnail.
  */
 export function LibraryImageEditor({
   id,
@@ -207,7 +208,7 @@ export function LibraryImageEditor({
   const [address, setAddress] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
   // The choice that drops the uploaded image, waiting for confirmation.
-  const [confirming, setConfirming] = useState<'none' | 'automatic' | null>(null)
+  const [confirming, setConfirming] = useState<'none' | 'automatic' | 'generated' | null>(null)
   const key = {
     addonId: library.addonId,
     catalogType: library.catalogType,
@@ -283,9 +284,14 @@ export function LibraryImageEditor({
   const uploading = save.isPending && save.variables !== undefined && 'data' in save.variables
   const downloading = save.isPending && save.variables !== undefined && 'url' in save.variables
   const help =
-    choice === 'automatic' && scope === 'shared'
-      ? `${text.help.automatic} ${text.parental}`
+    (choice === 'automatic' || choice === 'generated') && scope === 'shared'
+      ? `${text.help[choice]} ${text.parental}`
       : text.help[choice]
+  // Music libraries have no posters to draw an image from.
+  const choices: LibraryImageChoice[] =
+    library.filterable || library.image === 'generated'
+      ? ['none', 'automatic', 'generated', 'custom']
+      : ['none', 'automatic', 'custom']
 
   return (
     <section
@@ -315,16 +321,18 @@ export function LibraryImageEditor({
                   label={text.label}
                   value={choice}
                   onChange={choose}
-                  options={(['none', 'automatic', 'custom'] as const).map((value) => ({
+                  options={choices.map((value) => ({
                     value,
                     label: text.choices[value],
                   }))}
                 />
                 <p className="mt-2 max-w-[64ch] text-small text-ink-3">{help}</p>
-                {choice === 'automatic' &&
-                  library.image === 'automatic' &&
+                {(choice === 'automatic' || choice === 'generated') &&
+                  library.image === choice &&
                   library.imageTag === null && (
-                    <p className="mt-1.5 max-w-[64ch] text-small text-warn">{text.notFound}</p>
+                    <p className="mt-1.5 max-w-[64ch] text-small text-warn">
+                      {text.notFound[choice]}
+                    </p>
                   )}
               </div>
               {choice === 'custom' && (
@@ -414,7 +422,11 @@ export function LibraryImageEditor({
         busy={save.isPending}
         error={save.isError && confirming !== null ? errorMessage(t, save.error) : undefined}
       >
-        {confirming === 'automatic' ? text.removeToAutomatic : text.removeToNone}
+        {confirming === null || confirming === 'none'
+          ? text.removeToNone
+          : confirming === 'automatic'
+            ? text.removeToAutomatic
+            : text.removeToGenerated}
       </ConfirmDialog>
     </section>
   )

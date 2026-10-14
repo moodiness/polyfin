@@ -81,19 +81,26 @@ const libraries: typeof en = {
       choices: {
         none: 'Aucune',
         automatic: 'Automatique',
+        generated: 'Générée',
         custom: 'Personnalisée',
       },
       help: {
         none: 'Les applications affichent cette bibliothèque sans image, comme avant.',
         automatic:
           'Polyfin la prend dans le catalogue : l’arrière-plan d’un de ses premiers titres, sinon une affiche.',
+        generated:
+          'Polyfin la dessine avec les affiches des premiers titres du catalogue, ou des premières collections d’une bibliothèque de collections, et le nom de la bibliothèque, une fois qu’il les a lus.',
         custom:
           'Une image que vous envoyez, ou que Polyfin télécharge une fois depuis une adresse. Les images larges en 16:9 conviennent le mieux aux vignettes des bibliothèques. JPEG, PNG ou WebP, 10 Mo au plus.',
       },
       parental:
         'Les utilisateurs sous contrôle parental ou qui bloquent des genres ne la voient pas.',
-      notFound:
-        'Rien trouvé dans ce catalogue pour l’instant : les applications n’affichent pas d’image.',
+      notFound: {
+        automatic:
+          'Rien trouvé dans ce catalogue pour l’instant : les applications n’affichent pas d’image.',
+        generated:
+          'Aucune affiche lue dans ce catalogue pour l’instant : les applications n’affichent pas d’image. Polyfin la dessine une fois la bibliothèque ouverte dans une application.',
+      },
       noImage: 'Aucune image',
       upload: 'Envoyer une image',
       uploadAnother: 'Envoyer une autre image',
@@ -106,6 +113,8 @@ const libraries: typeof en = {
         'L’image envoyée est supprimée. Les applications affichent cette bibliothèque sans image.',
       removeToAutomatic:
         'L’image envoyée est supprimée. Les applications affichent l’image trouvée dans le catalogue.',
+      removeToGenerated:
+        'L’image envoyée est supprimée. Les applications affichent l’image que Polyfin dessine.',
       removeConfirm: 'Retirer',
       saved: 'Image enregistrée.',
       removed: 'Image retirée.',

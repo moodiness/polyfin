@@ -363,6 +363,9 @@ const settings: typeof en = {
     similarTitles: 'Titres similaires',
     similarTitlesHelp:
       'La page d’un titre montre des titres proches, trouvés dans les catalogues des addons. Si cette option est désactivée, la liste est vide et les addons reçoivent moins de demandes.',
+    generateImages: 'Créer une image pour les collections qui n’en ont pas',
+    generateImagesHelp:
+      'Une collection d’un addon sans affiche, et une liste intelligente affichée comme une collection, montrent les affiches de leurs premiers titres avec leur nom, dessinées par Polyfin une fois leurs titres lus. Les utilisateurs sous contrôle parental ou qui bloquent des genres ne les voient pas. Si cette option est désactivée, elles n’ont pas d’image. Les bibliothèques réglées sur une image générée la gardent.',
     mdblistRatingsKey: 'Clé d’API MDBList des notes',
     mdblistRatingsKeyHelp:
       'Facultatif. Avec la clé d’un compte MDBList, les films et les séries affichent leur note IMDb, le score des critiques et celui du public donnés par MDBList, cherchés en arrière-plan et gardés pour tous les utilisateurs. Les clés MDBList des utilisateurs pour le suivi ne servent jamais à cela. Sans clé, MDBList n’est jamais consulté.',
@@ -526,7 +529,7 @@ const settings: typeof en = {
         'Le nom du serveur, sa langue, la connexion des applications et leur découverte du serveur, et la recherche de nouvelles versions.',
       playback: 'Comment Polyfin choisit et prépare les versions qu’il lit.',
       content:
-        'Passer l’intro, titres similaires, notes, paroles des chansons et seuils de lecture.',
+        'Passer l’intro, titres similaires, images générées, notes, paroles des chansons et seuils de lecture.',
       catalogs: 'Ce que Polyfin lit des catalogues des addons, et à quelle fréquence.',
       security:
         'Addons et importations des utilisateurs, comptes bloqués, appareils inutilisés et proxys inverses.',
@@ -539,6 +542,7 @@ const settings: typeof en = {
     groups: {
       skip: 'Passer l’intro et le générique',
       titlePages: 'Fiche des titres',
+      images: 'Images',
       ratings: 'Notes',
       music: 'Musique',
       thresholds: 'Seuils de lecture',

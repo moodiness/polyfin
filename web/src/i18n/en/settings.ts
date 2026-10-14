@@ -355,6 +355,9 @@ const settings = {
     similarTitles: 'Similar titles',
     similarTitlesHelp:
       'A title’s page lists titles close to it, found in the addons’ catalogs. When off, the list is empty and the addons get fewer requests.',
+    generateImages: 'Generate images for collections without one',
+    generateImagesHelp:
+      'An addon’s collection without a poster, and a smart list shown as a collection, show the posters of their first titles with their name, drawn by Polyfin once their titles have been read. Users under parental control or blocking genres do not see them. When off, they show no image. Libraries set to a generated image keep it.',
     mdblistRatingsKey: 'MDBList API key for ratings',
     mdblistRatingsKeyHelp:
       'Optional. With a key from an MDBList account, movies and series show their IMDb rating, critics’ score and audience score from MDBList, looked up in the background and kept for every user. Users’ own MDBList keys for tracking are never used for this. Without a key, MDBList is never asked.',
@@ -515,7 +518,8 @@ const settings = {
       general:
         'The server’s name, its language, how apps sign in and find it, and the check for new versions.',
       playback: 'How Polyfin picks and prepares the versions it plays.',
-      content: 'Skip intro buttons, similar titles, ratings, song lyrics and playback thresholds.',
+      content:
+        'Skip intro buttons, similar titles, generated images, ratings, song lyrics and playback thresholds.',
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',
       security:
         'Users’ own addons and imports, blocked accounts, unused devices and reverse proxies.',
@@ -527,6 +531,7 @@ const settings = {
     groups: {
       skip: 'Skip intro and credits',
       titlePages: 'Title pages',
+      images: 'Images',
       ratings: 'Ratings',
       music: 'Music',
       thresholds: 'Playback thresholds',

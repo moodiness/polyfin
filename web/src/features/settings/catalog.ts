@@ -433,6 +433,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'content',
+    anchor: 'generate-images',
+    label: (t) => s(t).generateImages,
+    help: (t) => s(t).generateImagesHelp,
+    keywords: ['poster', 'collection', 'smart list', 'mosaic', 'image'],
+  },
+  {
+    section: 'content',
     anchor: 'mdblist-ratings-key',
     label: (t) => s(t).mdblistRatingsKey,
     help: (t) => s(t).mdblistRatingsKeyHelp,
