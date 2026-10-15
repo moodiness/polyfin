@@ -195,6 +195,8 @@ type Handler struct {
 	// downloads are the converted downloads under way (see
 	// converteddownloads.go).
 	downloads *downloadPlays
+	// dlna are the playbacks of DLNA devices (see dlna.go).
+	dlna *dlnaPlays
 }
 
 // New returns the Jellyfin API handler.
@@ -217,6 +219,7 @@ func New(options Options) *Handler {
 		plays:          cache.New[accounts.ID, devicePlay](1000, 30*24*time.Hour),
 		guests:         newGuestPlays(),
 		downloads:      newDownloadPlays(),
+		dlna:           newDLNAPlays(),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.listings = newListings(h.listVersions)

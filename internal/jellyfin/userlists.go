@@ -233,10 +233,34 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	entries, err := h.UserData.Episodes(r.Context(), user.ID)
+	var series, within *accounts.ID
+	if oneSeries {
+		series = &seriesID
+	}
+	if hasParent {
+		within = &parent
+	}
+	items, err := h.nextUpItems(r.Context(), user, series, within, cutoff, resumable)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	page := window(items, start, limit)
+	total := len(items)
+	if !countAll {
+		total = 0
+	}
+	h.listAhead(user, page)
+	h.writeItems(w, r, user, page, start, total)
+}
+
+// nextUpItems lists Next Up for user (see nextUp): of series alone when
+// set, of the series within parent when set, of those played after cutoff
+// when set, with the episodes they started when resumable.
+func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries, parent *accounts.ID, cutoff *time.Time, resumable bool) ([]library.Item, error) {
+	entries, err := h.UserData.Episodes(ctx, user.ID)
+	if err != nil {
+		return nil, err
 	}
 	data := make(map[accounts.ID]userdata.Data, len(entries))
 	var candidates []watching
@@ -250,14 +274,13 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 			candidates = append(candidates, watching{series: e.Series, latest: e.LastPlayed})
 		}
 	}
-	if oneSeries {
+	if oneSeries != nil {
 		// A series asked for is considered whatever the user did with it.
-		candidates = []watching{{series: seriesID}}
+		candidates = []watching{{series: *oneSeries}}
 	} else {
-		hidden, err := h.Library.HiddenTitles(r.Context(), user)
+		hidden, err := h.Library.HiddenTitles(ctx, user)
 		if err != nil {
-			h.internalError(w, r, err)
-			return
+			return nil, err
 		}
 		candidates = slices.DeleteFunc(candidates, func(c watching) bool {
 			return hidden[c.series] || cutoff != nil && c.latest.Before(*cutoff)
@@ -275,13 +298,13 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 		wg.Go(func() {
 			limiter <- struct{}{}
 			defer func() { <-limiter }()
-			if hasParent {
-				series, err := h.Library.Item(r.Context(), user, candidate.series)
-				if err != nil || !h.within(r.Context(), user, series, parent) {
+			if parent != nil {
+				series, err := h.Library.Item(ctx, user, candidate.series)
+				if err != nil || !h.within(ctx, user, series, *parent) {
 					return
 				}
 			}
-			episodes, err := h.Library.Episodes(r.Context(), user, candidate.series, nil)
+			episodes, err := h.Library.Episodes(ctx, user, candidate.series, nil)
 			if err != nil {
 				return
 			}
@@ -310,13 +333,7 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	for _, e := range next {
 		items = append(items, e.episode)
 	}
-	page := window(items, start, limit)
-	total := len(items)
-	if !countAll {
-		total = 0
-	}
-	h.listAhead(user, page)
-	h.writeItems(w, r, user, page, start, total)
+	return items, nil
 }
 
 // upcoming lists the episodes airing from yesterday on, UTC, of the series

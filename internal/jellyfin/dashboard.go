@@ -51,14 +51,16 @@ type LiveSession struct {
 	Qualities []int
 }
 
-// LiveSessions lists the devices playing, the guests through share links,
-// and the converted downloads, the latest started first.
+// LiveSessions lists the devices playing, DLNA devices included, the guests
+// through share links, and the converted downloads, the latest started
+// first.
 func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 	h.endStaleGuests()
 	playing := h.sessions.All()
 	guests := h.guests.all()
 	downloads := h.downloads.all()
-	if len(playing) == 0 && len(guests) == 0 && len(downloads) == 0 {
+	dlnaPlays := h.dlna.all()
+	if len(playing) == 0 && len(guests) == 0 && len(downloads) == 0 && len(dlnaPlays) == 0 {
 		return []LiveSession{}, nil
 	}
 	encodings := map[string][]hls.Running{}
@@ -66,9 +68,10 @@ func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 		encodings[running.Key.Session] = append(encodings[running.Key.Session], running)
 	}
 	users := map[accounts.ID]accounts.User{}
-	sessions := make([]LiveSession, 0, len(playing)+len(guests)+len(downloads))
+	sessions := make([]LiveSession, 0, len(playing)+len(guests)+len(downloads)+len(dlnaPlays))
 	sessions = append(sessions, h.guestSessions(ctx, encodings)...)
 	sessions = append(sessions, h.downloadSessions(ctx, downloads, encodings)...)
+	sessions = append(sessions, h.dlnaSessions(ctx, encodings)...)
 	for deviceID := range playing {
 		now, ok := h.sessions.Playing(deviceID)
 		if !ok {

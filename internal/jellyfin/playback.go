@@ -143,6 +143,15 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 			h.describeViewing(r, user, &info, device.ID)
 			sessions = append(sessions, info)
 		}
+		// DLNA devices play for a user without signing in, and take no
+		// commands.
+		if !controlled {
+			for _, info := range h.dlnaSessionInfos(r, user) {
+				if deviceID == "" || info.DeviceId == deviceID {
+					sessions = append(sessions, info)
+				}
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, sessions)
 }

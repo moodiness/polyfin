@@ -514,8 +514,8 @@ func (h *Handler) startGuest(w http.ResponseWriter, r *http.Request) {
 }
 
 // devicesPlaying counts the devices of user playing, or making a converted
-// download, but except. A download whose device is not known counts as one
-// more.
+// download, but except, DLNA devices included. A download whose device is
+// not known counts as one more.
 func (h *Handler) devicesPlaying(ctx context.Context, user accounts.User, except accounts.ID) (int, error) {
 	devices, err := h.Accounts.Devices(ctx, user.ID)
 	if err != nil {
@@ -530,7 +530,8 @@ func (h *Handler) devicesPlaying(ctx context.Context, user accounts.User, except
 			playing++
 		}
 	}
-	return playing + h.downloads.withoutDevice(user.ID), nil
+	h.endStaleDLNA(accounts.ID{}, "")
+	return playing + h.downloads.withoutDevice(user.ID) + h.dlna.ofUser(user.ID), nil
 }
 
 // guestPlan is what a guest plays: a version, and the parameters of its
