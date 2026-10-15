@@ -295,6 +295,7 @@ const sources = {
       unreadable_name: 'Its name gives no title, or no episode number',
       disc_title: 'Another movie of the disc: link it to its title',
       disc_episode: 'A title of a show’s disc: give its episode',
+      lone_extra: 'An extra without its title beside it: link it to make it a title',
       not_found: 'The metadata addons know no title of this name',
       ambiguous: 'Several titles have this name: add the year to it, or link it',
       other_year: 'Titles of this name are of other years',

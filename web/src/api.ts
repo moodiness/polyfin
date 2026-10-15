@@ -721,6 +721,7 @@ export type UnmatchedFile = {
     | 'search_failed'
     | 'disc_title'
     | 'disc_episode'
+    | 'lone_extra'
   /**
    * The kind of disc the file is read as, its unit the disc's folder, or the image itself for a
    * disc image; null for another file.

@@ -316,6 +316,7 @@ const sources: typeof en = {
       unreadable_name: 'Son nom ne donne aucun titre, ou aucun numéro d’épisode',
       disc_title: 'Un autre film du disque : associez-le à son titre',
       disc_episode: 'Un titre du disque d’une série : indiquez son épisode',
+      lone_extra: 'Un bonus sans son titre à côté : associez-le pour en faire un titre',
       not_found: 'Les addons de métadonnées ne connaissent aucun titre de ce nom',
       ambiguous: 'Plusieurs titres portent ce nom : ajoutez-y l’année, ou associez-le',
       other_year: 'Les titres de ce nom sont d’autres années',
