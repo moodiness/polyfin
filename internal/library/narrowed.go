@@ -78,6 +78,7 @@ func (s *Service) Narrowed(ctx context.Context, user accounts.User, matches func
 		r.Parent = nil
 		items, records = append(items, item), append(records, r)
 	}
+	s.translate(ctx, v, items)
 	return page(s.overridden(items), start, total), s.save(ctx, records)
 }
 

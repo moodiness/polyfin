@@ -80,6 +80,9 @@ type Service struct {
 	// readAhead); readAhead turns reading ahead on.
 	prefetches chan struct{}
 	readAhead  bool
+	// translations holds a place for each listing whose descriptions in a
+	// user's language are read in the background (see translate).
+	translations chan struct{}
 	// iptvHosts tells the hosts of IPTV sources and of their logos (see
 	// IPTVHost).
 	iptvHosts iptvHosts
@@ -264,6 +267,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		Sized(16<<20, fetchedSize[[]stremio.Meta])
 	s.libraryImages = cache.NewLasting[pageKey, fetched[string]](1000, s.keptCatalogLife, clock)
 	s.prefetches = make(chan struct{}, prefetchLimit)
+	s.translations = make(chan struct{}, translationReaders)
 	s.readAhead = true
 	s.streamLists = cache.NewLasting[streamKey, list[stremio.Stream]](2000, s.keptListLife, clock)
 	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock)
@@ -292,11 +296,6 @@ func (s *Service) keptListLife() time.Duration {
 // time.Now.
 func (s *Service) SetClock(now func() time.Time) { s.now = now }
 
-// words returns the generated names in the current server language.
-func (s *Service) words() words {
-	return vocabularyOf(s.settings().Language)
-}
-
 // installed is an addon a user can use, with how to reach it. shared is
 // true for the server's addons, installed by an administrator.
 type installed struct {
@@ -308,9 +307,12 @@ type installed struct {
 // library is a library of a user with its catalog, the genre it is
 // narrowed to and the most items it lists (see addons.Library), how it
 // finds its image (see addons.Library.Image), and whether the web player's
-// menus leave it out (see addons.Library.HideInMenus).
+// menus leave it out (see addons.Library.HideInMenus). serverName is its
+// name in the server's language, which its generated image shows whatever
+// the user's language.
 type library struct {
 	item        Item
+	serverName  string
 	addon       installed
 	catalog     stremio.Catalog
 	genre       string
@@ -355,6 +357,14 @@ type view struct {
 	// request came (see limit).
 	catalogLimit int
 	channelLimit int
+	// language is the user's metadata language when one of the server's
+	// addons of the view has it, and translators those addons, which
+	// describe the user's titles in it (see languages.go); empty for the
+	// server's descriptions. words are the names Polyfin generates for the
+	// user.
+	language    string
+	translators []installed
+	words       words
 }
 
 // limit is how many items one read of src's catalog fetches at most: the
@@ -459,7 +469,9 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 			}
 		}
 	}
-	for i, name := range LibraryNames(visible, settings.Language) {
+	v.useLanguage(user.MetadataLanguage, settings.Language)
+	serverNames := LibraryNames(visible, settings.Language)
+	for i, name := range LibraryNames(visible, v.words.language) {
 		l := visible[i]
 		collection := collectionType(l.Catalog.Type)
 		if music := entries[i].addon.Music; music != nil && music.ContentType == eclipse.ContentAudiobook {
@@ -474,6 +486,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 				CollectionType: collection,
 				LocalFolder:    entries[i].addon.Local(),
 			},
+			serverName:  serverNames[i],
 			addon:       entries[i],
 			catalog:     l.Catalog,
 			genre:       l.Genre,
@@ -973,11 +986,19 @@ func (s *Service) KnownPages(ctx context.Context, user accounts.User, count int)
 	return pages, nil
 }
 
+// children lists a folder's children (see Children), its titles showing
+// the user's language as far as it is kept (see translate).
 func (s *Service) children(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string, first bool) (Page, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return Page{}, err
 	}
+	page, err := s.childrenIn(ctx, v, user, parent, start, count, genre, first)
+	s.translate(ctx, v, page.Items)
+	return page, err
+}
+
+func (s *Service) childrenIn(ctx context.Context, v view, user accounts.User, parent accounts.ID, start, count int, genre string, first bool) (Page, error) {
 	if l, ok := v.library(parent); ok {
 		return s.libraryChildren(ctx, v, l, start, count, genre, first)
 	}
@@ -1617,14 +1638,16 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 // set, that may describe a title, in the order they are asked: the one
 // that listed it first. A local folder comes last, whoever listed the
 // title: it describes its titles from what their files tell, for when no
-// addon does.
+// addon does. An addon given a language is none of them, even when it
+// listed the title: it describes titles in its language only, for its
+// language's users (see languages.go).
 func describers(v view, r record, shared bool) []installed {
 	if r.Meta == nil {
 		return nil
 	}
 	var candidates []installed
 	for _, candidate := range v.addons {
-		if (!shared || candidate.shared) && serves(candidate, "meta", r.Meta.Type, r.Meta.ID) {
+		if (!shared || candidate.shared) && !translator(candidate) && serves(candidate, "meta", r.Meta.Type, r.Meta.ID) {
 			candidates = append(candidates, candidate)
 		}
 	}
@@ -1693,10 +1716,10 @@ func (s *Service) TitleMeta(ctx context.Context, metaType, id string) (stremio.M
 }
 
 // serverMeta returns the description the addons of v, the server's view,
-// give of a title, as TitleMeta does.
+// give of a title, as TitleMeta does: those without a language.
 func (s *Service) serverMeta(ctx context.Context, v view, metaType, id string) (stremio.Meta, bool) {
 	for _, candidate := range v.addons {
-		if own(candidate.addon) || !candidate.addon.Manifest.Serves("meta", metaType, id) {
+		if own(candidate.addon) || translator(candidate) || !candidate.addon.Manifest.Serves("meta", metaType, id) {
 			continue
 		}
 		if kept, err := s.keptMeta(ctx, candidate, metaType, id); err == nil {
@@ -1756,6 +1779,9 @@ func (s *Service) ItemsOf(ctx context.Context, user accounts.User, ids []account
 
 // itemsOf is ItemsOf in v, without administrators' edits.
 func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds []Kind) ([]Item, error) {
+	// The items show the user's language as far as it is kept, as
+	// listings do (see shown).
+	ctx = withListing(ctx)
 	// The records are read together; libraries and identifiers without
 	// one are described one by one.
 	records, err := s.loadAll(ctx, ids)
@@ -1919,7 +1945,9 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 			return Item{}, ErrNotFound
 		}
 		item := Item{ID: id, Kind: r.Kind, ParentID: deref(r.Parent), Available: true}
-		fromMeta(&item, meta)
+		// The user's language changes what the title shows, never the facts
+		// judged above.
+		fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta))
 		item.OfficialRating = t.rating
 		if r.Kind == KindSeries && len(meta.Videos) > 0 {
 			item.Contents = contents(meta, nil, s.now())
@@ -1935,18 +1963,18 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		}
 		return item, nil
 	case KindSeason, KindEpisode:
-		series, meta, err := s.series(ctx, v, r.seriesItemID())
+		series, meta, _, err := s.series(ctx, v, r.seriesItemID())
 		if err != nil {
 			return Item{}, err
 		}
 		if r.Kind == KindSeason {
-			for _, season := range seasons(series, meta, seasonPosters(meta), s.words(), s.now()) {
+			for _, season := range seasons(series, meta, seasonPosters(meta), v.words, s.now()) {
 				if season.ID == id {
 					return season, nil
 				}
 			}
 		} else {
-			for _, episode := range episodes(series, meta, seasonPosters(meta), nil, s.words(), s.now()) {
+			for _, episode := range episodes(series, meta, seasonPosters(meta), nil, v.words, s.now()) {
 				if episode.ID == id {
 					return episode, nil
 				}
@@ -1980,22 +2008,25 @@ func deref(id *accounts.ID) accounts.ID {
 	return *id
 }
 
-// series returns a series item and its complete metadata, with videos.
-func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, stremio.Meta, error) {
+// series returns a series item and its complete metadata, with videos, as
+// the user of v sees them (see shown), and its description itself, whose
+// facts and episodes are those Polyfin records.
+func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, stremio.Meta, stremio.Meta, error) {
 	// A series' seasons and episodes need its details: they open it.
 	ctx = iptv.Opening(ctx)
 	r, err := s.load(ctx, id)
 	if err != nil || r.Kind != KindSeries {
-		return Item{}, stremio.Meta{}, ErrNotFound
+		return Item{}, stremio.Meta{}, stremio.Meta{}, ErrNotFound
 	}
 	meta, ok := s.titleMeta(ctx, v, r)
 	if !ok || !v.allows(KindSeries, s.overriddenTraits(id, describedTraits(meta))) {
-		return Item{}, stremio.Meta{}, ErrNotFound
+		return Item{}, stremio.Meta{}, stremio.Meta{}, ErrNotFound
 	}
+	shown := s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta)
 	item := Item{ID: id, Kind: KindSeries, ParentID: deref(r.Parent), Available: true}
-	fromMeta(&item, meta)
+	fromMeta(&item, shown)
 	item.Contents = contents(meta, nil, s.now())
-	return item, meta, nil
+	return item, shown, meta, nil
 }
 
 func seasonNumbers(meta stremio.Meta) []int {
@@ -2158,12 +2189,12 @@ func (s *Service) Seasons(ctx context.Context, user accounts.User, seriesID acco
 	if err != nil {
 		return nil, err
 	}
-	series, meta, err := s.series(ctx, v, seriesID)
+	series, shown, meta, err := s.series(ctx, v, seriesID)
 	if err != nil {
 		return nil, err
 	}
 	posters := seasonPosters(meta)
-	result := seasons(series, meta, posters, s.words(), s.now())
+	result := seasons(series, shown, posters, v.words, s.now())
 	records := make([]record, 0, len(result))
 	for _, season := range result {
 		records = append(records, record{ID: season.ID, Key: seasonKey(meta.ID, season.IndexNumber), Kind: KindSeason,
@@ -2178,7 +2209,7 @@ func (s *Service) Episodes(ctx context.Context, user accounts.User, seriesID acc
 	if err != nil {
 		return nil, err
 	}
-	series, meta, err := s.series(ctx, v, seriesID)
+	series, shown, meta, err := s.series(ctx, v, seriesID)
 	if err != nil {
 		return nil, err
 	}
@@ -2195,7 +2226,9 @@ func (s *Service) Episodes(ctx context.Context, user accounts.User, seriesID acc
 		}
 	}
 	posters := seasonPosters(meta)
-	result := episodes(series, meta, posters, season, s.words(), s.now())
+	// The episodes show the user's language; their records keep the
+	// description's names and images.
+	result := episodes(series, shown, posters, season, v.words, s.now())
 	records := make([]record, 0, len(result)+len(seasonNumbers(meta)))
 	for _, number := range seasonNumbers(meta) {
 		records = append(records, record{ID: itemID(seasonKey(meta.ID, number)), Key: seasonKey(meta.ID, number), Kind: KindSeason,
@@ -2266,9 +2299,15 @@ const searchLimit = 100
 // searches too.
 const peopleGrace = 300 * time.Millisecond
 
+// search looks a term up in the search catalogs of the user's addons: of
+// those given a language (see languages.go), the user's translators only,
+// whose results show the user's language.
 func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind, limit int) ([]Item, error) {
 	var sources []source
 	for _, entry := range v.addons {
+		if translator(entry) && !slices.ContainsFunc(v.translators, func(t installed) bool { return t.addon.ID == entry.addon.ID }) {
+			continue
+		}
 		for _, catalog := range entry.addon.Manifest.Catalogs {
 			if kind, ok := titleKind(catalog.Type); ok && slices.Contains(kinds, kind) && searchable(catalog) {
 				sources = append(sources, source{addon: entry, catalog: catalog, search: term, first: true})
@@ -2284,16 +2323,28 @@ func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind,
 	}
 	titles = titles[:min(len(titles), limit, searchLimit)]
 	var items []Item
-	var records []record
+	var records, translated []record
 	for _, title := range titles {
 		item, r, err := title.title(accounts.ID{})
 		if err != nil {
 			continue
 		}
 		r.Parent = nil
-		items, records = append(items, item), append(records, r)
+		items = append(items, item)
+		if translator(title.src.addon) {
+			// What a translator found is described in its language: it
+			// stands for the title only until another addon lists it, and
+			// never replaces what another addon listed.
+			preview := *r.Meta
+			preview.Videos = nil
+			r.Meta = &preview
+			translated = append(translated, r)
+		} else {
+			records = append(records, r)
+		}
 	}
-	return items, s.save(ctx, records)
+	s.translate(ctx, v, items)
+	return items, errors.Join(s.save(ctx, records), s.saveNew(ctx, translated))
 }
 
 // searched reads the first page of each search catalog, together, and

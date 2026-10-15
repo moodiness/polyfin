@@ -159,7 +159,7 @@ func (v view) rates(r record) bool {
 		return false
 	}
 	for _, entry := range v.addons {
-		if entry.shared && entry.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
+		if entry.shared && !translator(entry) && entry.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
 			return true
 		}
 	}

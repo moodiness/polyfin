@@ -710,8 +710,9 @@ func (s *Service) RemoteSearches(ctx context.Context, kind Kind) (bool, error) {
 func remoteSources(v view, kind Kind, name string) []source {
 	var sources []source
 	for _, entry := range v.addons {
-		// A local folder's titles are those this search finds.
-		if !entry.addon.Manifest.HasResource("meta") || entry.addon.Local() {
+		// A local folder's titles are those this search finds; an addon
+		// given a language describes them for its language's users only.
+		if !entry.addon.Manifest.HasResource("meta") || entry.addon.Local() || translator(entry) {
 			continue
 		}
 		for _, catalog := range entry.addon.Manifest.Catalogs {

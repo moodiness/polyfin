@@ -258,7 +258,7 @@ func (s *Service) LibraryImages(ctx context.Context, scope addons.Scope, confine
 		if !ok || !addon.Enabled {
 			continue
 		}
-		l := library{item: Item{ID: id, Kind: KindLibrary, Name: names[i]}, addon: installed{addon: addon, confined: confined, shared: scope.Owner == nil},
+		l := library{item: Item{ID: id, Kind: KindLibrary, Name: names[i]}, serverName: names[i], addon: installed{addon: addon, confined: confined, shared: scope.Owner == nil},
 			catalog: c.Catalog, genre: c.Genre, maxItems: c.MaxItems, image: c.Image}
 		group.Go(func() error {
 			var image string

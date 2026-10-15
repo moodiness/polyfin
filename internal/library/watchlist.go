@@ -32,7 +32,7 @@ func (s *Service) watchlistView(ctx context.Context, v view) (Item, error) {
 	if len(ids) == 0 {
 		return Item{}, ErrNotFound
 	}
-	return Item{ID: WatchlistViewID, Kind: KindLibrary, Name: s.words().watchlist}, nil
+	return Item{ID: WatchlistViewID, Kind: KindLibrary, Name: v.words.watchlist}, nil
 }
 
 // watchlistIDs lists the titles of the user's watchlist they have not

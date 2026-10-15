@@ -123,7 +123,7 @@ func (s *Service) replayView(ctx context.Context, v view) (Item, error) {
 	if len(archives) == 0 {
 		return Item{}, ErrNotFound
 	}
-	return Item{ID: ReplayViewID, Kind: KindLibrary, Name: s.words().replay, CollectionType: "folders"}, nil
+	return Item{ID: ReplayViewID, Kind: KindLibrary, Name: v.words.replay, CollectionType: "folders"}, nil
 }
 
 // replayChannels lists the user's channels that have an archive, in

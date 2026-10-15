@@ -33,7 +33,7 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 	}
 	for _, id := range ids {
 		for _, candidate := range v.addons {
-			if own(candidate.addon) || shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", meta.Type, id) {
+			if own(candidate.addon) || translator(candidate) || shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", meta.Type, id) {
 				continue
 			}
 			var described stremio.Meta

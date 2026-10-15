@@ -214,6 +214,11 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	}
 	var sources []source
 	for _, entry := range v.addons {
+		// A title's people are its facts: an addon given a language tells
+		// none of them (see languages.go).
+		if translator(entry) {
+			continue
+		}
 		for _, catalog := range entry.addon.Manifest.Catalogs {
 			if kind, ok := titleKind(catalog.Type); ok && slices.Contains(kinds, kind) && searchesPeople(catalog) {
 				sources = append(sources, source{addon: entry, catalog: catalog, search: r.Person.Name})
@@ -254,6 +259,7 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	if more {
 		total++
 	}
+	s.translate(ctx, v, items)
 	return Page{Items: s.overridden(items), Total: total, More: more}, s.save(ctx, records)
 }
 

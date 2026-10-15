@@ -625,6 +625,15 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		found = library.Artwork{}
 		found.URL, found.Confined, err = h.Library.ProgramArtwork(r.Context(), id, imageType)
 	}
+	// Image requests come without a user: a tag that is not the image found
+	// may be that of one in a user's metadata language (see
+	// library.TaggedArtwork).
+	if tag := query(r, "tag"); tag != "" && !uploaded && found.Generated == nil && (errors.Is(err, library.ErrNotFound) ||
+		err == nil && library.ImageTag(found.URL) != tag) {
+		if tagged, ok := h.Library.TaggedArtwork(r.Context(), id, tag); ok {
+			found, err = tagged, nil
+		}
+	}
 	if errors.Is(err, library.ErrNotFound) {
 		w.WriteHeader(http.StatusNotFound)
 		return

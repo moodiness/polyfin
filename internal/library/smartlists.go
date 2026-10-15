@@ -534,7 +534,8 @@ func (s *Service) keptDescriptions(ctx context.Context, v view, list smartlists.
 	}
 	describers := make([]accounts.ID, 0, len(v.addons))
 	for _, entry := range v.addons {
-		if !own(entry.addon) && (list.Owner != nil || entry.shared) {
+		// Smart lists judge the facts the addons without a language give.
+		if !own(entry.addon) && !translator(entry) && (list.Owner != nil || entry.shared) {
 			describers = append(describers, entry.addon.ID)
 		}
 	}

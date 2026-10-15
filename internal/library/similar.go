@@ -98,6 +98,7 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 	for _, c := range candidates {
 		items, records = append(items, c.item), append(records, c.record)
 	}
+	s.translate(ctx, v, items)
 	return s.overridden(items), s.save(ctx, records)
 }
 
@@ -136,6 +137,11 @@ func similarSourcesOf(v view, title Item) []source {
 		add(l.addon, l.catalog)
 	}
 	for _, entry := range v.addons {
+		// An addon given a language describes titles in it only: its
+		// catalogs list for its libraries.
+		if translator(entry) {
+			continue
+		}
 		for _, catalog := range entry.addon.Manifest.Catalogs {
 			add(entry, catalog)
 		}

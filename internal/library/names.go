@@ -25,6 +25,8 @@ type words struct {
 	replay string
 	// watchlist names the Watchlist view (see WatchlistViewID).
 	watchlist string
+	// language is the language of the words, "en" or "fr".
+	language string
 }
 
 var vocabulary = map[string]words{
@@ -41,10 +43,12 @@ var vocabulary = map[string]words{
 // vocabularyOf returns the words of a server language, English when the
 // language is unknown.
 func vocabularyOf(language string) words {
-	if w, ok := vocabulary[language]; ok {
-		return w
+	w, ok := vocabulary[language]
+	if !ok {
+		language, w = "en", vocabulary["en"]
 	}
-	return vocabulary["en"]
+	w.language = language
+	return w
 }
 
 // seasonName names a season as Jellyfin does.

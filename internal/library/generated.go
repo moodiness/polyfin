@@ -437,7 +437,7 @@ func (s *Service) smartListCandidates(ctx context.Context, v view, list smartlis
 // libraryChoice returns the choice of the generated image of a library set
 // to one, and whether it shows any.
 func (s *Service) libraryChoice(ctx context.Context, v view, l library) (generatedChoice, bool) {
-	return s.generatedChoiceOf(ctx, l.item.ID, s.shownName(l.item.ID, l.item.Name), func() ([]candidate, bool, bool) {
+	return s.generatedChoiceOf(ctx, l.item.ID, s.shownName(l.item.ID, l.serverName), func() ([]candidate, bool, bool) {
 		return s.libraryCandidates(ctx, v, l)
 	})
 }
