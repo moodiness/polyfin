@@ -182,6 +182,38 @@ func (s *Service) Episode(anidb int, special bool, number int) (Place, bool) {
 	return s.episodes.Load().place(anidb, special, number)
 }
 
+// Entry finds the AniDB entry that holds episode number of season of the
+// TVDB series tvdb, and its number there, the reverse of Episode:
+// absolute is the episode's number in TVDB's absolute numbering of the
+// series, 0 when unknown. An episode the mapping-list names one by one
+// comes first, then its ranges, then the entries' default season and
+// offset, then absolute numbering. Only the entries' regular episodes are
+// found, and TVDB's specials only where the mapping-list names them.
+func (s *Service) Entry(tvdb, season, number, absolute int) (anidb, episode int, ok bool) {
+	if s == nil {
+		return 0, 0, false
+	}
+	return s.episodes.Load().entry(tvdb, season, number, absolute)
+}
+
+// Absolute reports whether the episode list numbers an AniDB entry of the
+// TVDB series tvdb as TVDB's absolute numbering, which Entry then needs.
+func (s *Service) Absolute(tvdb int) bool {
+	if s == nil || tvdb <= 0 || tvdb > maxID {
+		return false
+	}
+	l := s.episodes.Load()
+	if l == nil {
+		return false
+	}
+	for _, id := range l.byTVDB[int32(tvdb)] {
+		if l.entries[id].season == absoluteSeason {
+			return true
+		}
+	}
+	return false
+}
+
 // Title is an anime entry, or one of its episodes, as Polyfin's titles
 // and the tracking services know it: a movie by its IMDb and TMDB
 // identifiers, or an episode by its series' TVDB identifier, and IMDb's

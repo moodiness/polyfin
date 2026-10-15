@@ -226,6 +226,39 @@ func TestAniDBEpisodesMapToTVDB(t *testing.T) {
 	}
 }
 
+func TestTVDBEpisodesMapBackToAniDB(t *testing.T) {
+	s := ready(t)
+	for _, c := range []struct {
+		tvdb, season, number, absolute int
+		anidb, episode                 int
+	}{
+		// The default season: of two entries, the one starting nearest
+		// before the episode.
+		{tvdb: 5000, season: 1, number: 3, anidb: 100, episode: 3},
+		{tvdb: 5000, season: 1, number: 13, anidb: 101, episode: 1},
+		// Named one by one first, then a range, then the default.
+		{tvdb: 5200, season: 2, number: 6, anidb: 103, episode: 5},
+		{tvdb: 5200, season: 3, number: 2, anidb: 103, episode: 12},
+		{tvdb: 5200, season: 2, number: 4, anidb: 103, episode: 4},
+		// Absolute numbering, given the episode's absolute number.
+		{tvdb: 5100, season: 3, number: 5, absolute: 400, anidb: 102, episode: 400},
+		{tvdb: 5100, season: 3, number: 5},
+		// Specials: neither an AniDB special, nor an entry that defaults
+		// to TVDB's specials.
+		{tvdb: 5200, season: 0, number: 3},
+		{tvdb: 5300, season: 0, number: 5},
+		{tvdb: 9999, season: 1, number: 1},
+	} {
+		anidb, episode, ok := s.Entry(c.tvdb, c.season, c.number, c.absolute)
+		if anidb != c.anidb || episode != c.episode || ok != (c.anidb != 0) {
+			t.Errorf("TVDB %d S%dE%d (absolute %d): %d %d %v, want %d %d", c.tvdb, c.season, c.number, c.absolute, anidb, episode, ok, c.anidb, c.episode)
+		}
+	}
+	if !s.Absolute(5100) || s.Absolute(5000) || s.Absolute(9999) {
+		t.Error("absolute numbering of the series")
+	}
+}
+
 func TestTitlesAreNamedAsPolyfinNamesThem(t *testing.T) {
 	s := ready(t)
 	for _, c := range []struct {

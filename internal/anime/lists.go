@@ -265,6 +265,8 @@ type Place struct {
 // are numbered on TVDB.
 type episodeList struct {
 	entries map[int32]*seriesMap
+	// byTVDB lists the AniDB entries of each TVDB series, in order.
+	byTVDB map[int32][]int32
 }
 
 // seriesMap is how the episodes of an AniDB entry are numbered on TVDB:
@@ -343,6 +345,67 @@ func (l *episodeList) place(anidb int, special bool, number int) (Place, bool) {
 		return Place{TVDB: int(m.tvdb), Number: tvdb, Absolute: true}, true
 	}
 	return Place{TVDB: int(m.tvdb), Season: int(m.season), Number: tvdb}, true
+}
+
+// entry finds the AniDB entry, and the number of its regular episode,
+// that is episode number of season of the TVDB series tvdb, or, when
+// absolute is set, the episode of that absolute number: an episode the
+// mapping-list names one by one first, then its ranges, then the entries'
+// default season and offset, then those numbered as TVDB's absolute
+// numbering. Of several entries whose default season holds the episode,
+// the one starting nearest before it wins, as a season split in parts
+// over entries is mapped.
+func (l *episodeList) entry(tvdb, season, number, absolute int) (anidb, episode int, ok bool) {
+	if l == nil || tvdb <= 0 || tvdb > maxID || season < 0 || number <= 0 {
+		return 0, 0, false
+	}
+	ids := l.byTVDB[int32(tvdb)]
+	for _, id := range ids {
+		for _, mp := range l.entries[id].mappings {
+			if mp.anidbSeason != 1 || int(mp.tvdbSeason) != season {
+				continue
+			}
+			for _, p := range mp.pairs {
+				if int(p.tvdb) == number {
+					return int(id), int(p.anidb), true
+				}
+			}
+		}
+	}
+	for _, id := range ids {
+		for _, mp := range l.entries[id].mappings {
+			if mp.anidbSeason == 1 && int(mp.tvdbSeason) == season && mp.end > 0 {
+				if n := number - int(mp.offset); int(mp.start) <= n && n <= int(mp.end) {
+					return int(id), n, true
+				}
+			}
+		}
+	}
+	// TVDB's specials are found only where the mapping-list names them:
+	// the entries whose episodes default to them hold a few each.
+	nearest := func(wanted int16, n int) (int, int, bool) {
+		var best *seriesMap
+		bestID := int32(0)
+		for _, id := range ids {
+			m := l.entries[id]
+			if m.season == wanted && n-int(m.offset) >= 1 && (best == nil || m.offset > best.offset) {
+				best, bestID = m, id
+			}
+		}
+		if best == nil {
+			return 0, 0, false
+		}
+		return int(bestID), n - int(best.offset), true
+	}
+	if season > 0 && season < 1<<15 {
+		if id, n, found := nearest(int16(season), number); found {
+			return id, n, true
+		}
+	}
+	if absolute > 0 {
+		return nearest(absoluteSeason, absolute)
+	}
+	return 0, 0, false
 }
 
 // maxID bounds the identifiers and numbers kept, which fit in 32 bits.
@@ -438,6 +501,13 @@ func readEpisodes(r io.Reader) (*episodeList, error) {
 			}
 		}
 		l.entries[int32(anidb)] = m
+	}
+	l.byTVDB = map[int32][]int32{}
+	for anidb, m := range l.entries {
+		l.byTVDB[m.tvdb] = append(l.byTVDB[m.tvdb], anidb)
+	}
+	for _, ids := range l.byTVDB {
+		slices.Sort(ids)
 	}
 	if !sawList || len(l.entries) == 0 {
 		return nil, errNoEntries
