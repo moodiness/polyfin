@@ -178,6 +178,8 @@ function sectionLede(
       return settings?.recording
         ? s.recordingsFolder(settings.recordingsFolder || settings.recordingsFolderDefault)
         : undefined
+    case 'dlna':
+      return s.dlna.description
     case 'backups':
       return settings?.backups
         ? s.backupsFolder(settings.backupFolder || settings.backupFolderDefault)

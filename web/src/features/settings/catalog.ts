@@ -873,6 +873,51 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t, r) => s(t).recordingRetentionDaysHelp(r('recordingRetentionDays')),
     codes: ['invalid_recording_retention_days'],
   },
+  // DLNA
+  {
+    section: 'dlna',
+    anchor: 'dlna',
+    label: (t) => s(t).dlna.share,
+    help: (t) => s(t).dlna.shareHelp,
+    keywords: ['DLNA', 'UPnP', 'SSDP', '1900', 'TV', 'télé', 'POLYFIN_DLNA_PORT'],
+  },
+  {
+    section: 'dlna',
+    anchor: 'dlna-name',
+    label: (t) => s(t).dlna.name,
+    help: (t) => s(t).dlna.nameHelp,
+    keywords: ['DLNA', 'UPnP', 'friendlyName'],
+    codes: ['invalid_dlna_name'],
+  },
+  {
+    section: 'dlna',
+    anchor: 'dlna-new-devices-user',
+    label: (t) => s(t).dlna.newDevicesUser,
+    help: (t) => s(t).dlna.newDevicesUserHelp,
+    keywords: ['DLNA', 'UPnP', 'user', 'utilisateur'],
+    codes: ['invalid_dlna_user'],
+  },
+  {
+    section: 'dlna',
+    anchor: 'dlna-mark-played',
+    label: (t) => s(t).dlna.markPlayed,
+    help: (t) => s(t).dlna.markPlayedHelp,
+    keywords: ['DLNA', 'played', 'vu'],
+  },
+  {
+    section: 'dlna',
+    anchor: 'dlna-devices',
+    label: (t) => s(t).dlna.devices,
+    help: (t) => s(t).dlna.devicesHelp,
+    keywords: ['DLNA', 'UPnP', 'TV', 'télé', 'renderer', 'blocked', 'bloqué'],
+  },
+  {
+    section: 'dlna',
+    anchor: 'dlna-profiles',
+    label: (t) => s(t).dlna.profiles,
+    help: (t) => s(t).dlna.profilesHelp,
+    keywords: ['DLNA', 'XML', 'Samsung', 'LG', 'Sony', 'Panasonic', 'Philips'],
+  },
   // Backups
   {
     section: 'backups',
