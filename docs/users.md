@@ -6,7 +6,7 @@ This page covers user accounts: what Polyfin keeps for each user, and the limits
 
 Polyfin has separate accounts for each user, with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points and Next Up are tracked per user, and each user can be limited to titles up to a rating.
 
-An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change, and its **Ends on** date with **Save date** (see [Ending an account](#ending-an-account)); each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives.
+An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change, and its **Ends on** date with **Save date** (see [Ending an account](#ending-an-account)); each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives. To give several accounts the same limits at once, an administrator puts them in a group (see [User groups](#user-groups)).
 
 Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin, Emby or Plex server, an administrator can bring its accounts and what each user watched over with **Import from another server**; see [Moving from Jellyfin](#moving-from-jellyfin) and [Moving from Emby and Plex](#moving-from-emby-and-plex). Users can import their own watch history too; see [Importing your own watch history](#importing-your-own-watch-history). What users watched in an app built on addons, such as Stremio or Nuvio, comes over with **Import from an app**; see [Importing from an app](#importing-from-an-app). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
 
@@ -356,6 +356,52 @@ Users who connected Trakt in Stremio can import their history from Trakt as well
 - An unmatched series whose episodes could not be read has the `reason` `episode_list`.
 - Polyfin asks for a link code with `GET https://link.stremio.com/api/v2/create?type=Create` and polls it with `GET https://link.stremio.com/api/v2/read?type=Read&code=…`, signs in with `POST https://api.strem.io/api/login` (`email`, `password`, `facebook` `false`), reads the library with `POST https://api.strem.io/api/datastoreGet` (`collection` `libraryItem`, `ids` `[]`, `all` `true`) and the addons with `POST https://api.strem.io/api/addonCollectionGet` (`update` `true`), reads the account's email with `POST https://api.strem.io/api/getUser` to stay connected, and signs out with `POST https://api.strem.io/api/logout` the keys it obtained, never a key pasted. The key goes in each body as `authKey`, never in an address.
 
+## User groups
+
+To give several accounts the same limits, such as a family's children, an administrator puts them in a group: a change to the group reaches all of them at once, rather than one page at a time.
+
+**Users › Groups** lists the groups with how many members each has, and **Create a group** asks for a **Name** and **Settings of**: a new user, as with **Create a user**, or a user whose settings the group copies when it is created. A group's page holds the sections of a user's page that set limits, each saved on its own as on a user's page:
+
+- **Access**: **Can use conversion (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles** and **Can share titles**. **Administrator**, **Show on the sign-in screen**, **Disabled** and **Ends on** stay each user's own;
+- **Playback and access**, with the **Quality group**;
+- **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**.
+
+Its page also lists its **Members**, with **Add members**, and **Delete group**.
+
+### Members
+
+- A user belongs to one group at most, chosen with **Group**, in the **Access** section of their page, or **No group**, the default. Joining a group asks first, as it replaces the user's values with the group's. Adding a user who is in another group moves them.
+- Administrators cannot join a group, as their permissions differ: making a member an administrator takes them out of it, and they keep its values as their own.
+- **Users** shows each user's group, and filters the list by group.
+- **Create a user** and **Create an invite link** can name a group: the accounts made join it and follow it (see [Invite links](#invite-links)).
+
+### Following the group
+
+**Follow the group**, in the **Access** section of a member's page, is on by default. While it is on, the sections the group holds show its values, read only, with "Set by the group Kids.", and a change to the group reaches the member at once, as saving their own page would: their apps already signed in have the new limits from their next request, downloads and allowed hours included, and a member who may no longer share titles loses their share links.
+
+Turned off, the member stays in the group, listed as **Own settings**, keeps the group's current values as their own, and their page can change them; the group's later changes pass them by. Turned on again, after asking, they take the group's values back.
+
+Leaving a group, with **No group**, or deleting it, works as turning **Follow the group** off: the members keep its values as their own. An invite link that named a deleted group creates accounts in no group.
+
+**Turn off downloads for everyone** (see [Transcoding](transcoding.md)) also turns **Can download** off on every group, so that its members keep following it.
+
+### Groups and Jellyfin apps
+
+- `GET /Users` and `GET /Users/{id}` show a member's policy with the values that apply to them, the group's while they follow it.
+- `POST /Users/{id}/Policy`, from an administrator's app, changes the fields no group holds as for any user, such as `IsAdministrator`, `IsDisabled` and `IsHidden`. A field the group holds sent with another value than the group's detaches the member, as turning **Follow the group** off would, and the activity log says so, as "sam no longer follows the group Kids: changed from Jellyfin Web": the policy is kept whole, and nothing the app sent is lost. A policy sent back as the app read it, with only `IsDisabled` changed for instance, leaves the member following. A library the group hides that the server no longer has does not count as a change, as apps cannot name it.
+- Jellyfin has no groups: apps show neither the group nor **Follow the group**.
+
+The activity log records groups created, changed, naming the sections changed, and deleted, and members added, removed, or no longer following their group (see [Activity log](administration.md#activity-log)).
+
+**For app developers:**
+
+- `GET /admin/api/groups` lists the groups, sorted by name: `id`, `name` and `memberCount`.
+- `POST /admin/api/groups` creates one from `name` and `copyFrom`, a user's `id`, or null or left out for a new user's settings; it answers 201 with the group. `GET /admin/api/groups/{id}` answers the group: `id`, `name`, `memberCount`, and the fields of a user's JSON the group holds: `transcoding`, `downloads`, `personalAddons`, `collectionManagement`, `subtitleManagement`, `canShare`, `maxPlaybacks`, `maxBitrate`, `qualityGroup`, `syncPlay`, `liveTv`, `remoteControl`, `liveTvManagement`, `parentalControl`, `hiddenLibraries`, `blockedGenres` and `accessSchedules`.
+- `PATCH /admin/api/groups/{id}` takes `name` and any of those fields, as `PATCH /admin/api/users/{id}` takes them, with the same errors, and answers the group. `DELETE /admin/api/groups/{id}` deletes it (204).
+- `GET /admin/api/groups/{id}/members` lists the members, sorted by name: `id`, `name` and `followGroup`. `POST /admin/api/groups/{id}/members` with `userIds` adds those users, all of them or none, and answers the members.
+- A user's JSON has `groupId` and `groupName`, null for none, and `followGroup`. `PATCH /admin/api/users/{id}` takes `groupId`, a group's `id` or `""` for none, and `followGroup`. A field the group holds, sent for a member who follows it without `followGroup` false in the same change, is 409 `follows_group`. `POST /admin/api/users` and `POST /admin/api/invites` take `groupId`.
+- Errors: 409 `admin_cannot_join_group` for an administrator joining, or added, or created in a group; 400 `invalid_group` for a group that does not exist; 400 `invalid_name` and 409 `name_taken` for a group's name, from 1 to 64 characters, unique without regard to case; 400 `invalid_copy_from` for a user to copy who does not exist; 404 `not_found` for a group or a user to add that does not exist.
+
 ## Ending an account
 
 An account made for a friend's weekend need not stay until someone remembers to delete it. **Ends on**, in the **Access** section of a user's page, takes a date, kept with **Save date**; **Never**, the default, clears it. From that date, in the server's time zone, the account is refused as a disabled one is: it cannot sign in, from a Jellyfin app, Quick Connect or the admin app, and its devices and admin sessions are refused. Unlike **Disabled**, an end signs nothing out: everything the account has stays, its devices included, and a later date, or **Never**, brings it back as it was.
@@ -379,8 +425,9 @@ An invite link lets the people an administrator sends it to create their own acc
 - **Expires**: after 1, 7 (the default), 30 or 90 days, or **Never**.
 - **Accounts end**: **Never**, the default, or 1, 7, 30 or 90 days after each is created. Each account the link creates is given that end date (see [Ending an account](#ending-an-account)).
 - **Settings of**: the user whose settings the new accounts copy, or a new user, as with **Create a user**.
+- **Group**: **No group**, the default, or a group the new accounts join and follow (see [User groups](#user-groups)).
 
-With a model, a new account copies everything the model's page sets except the name, the password, **Administrator** and **Ends on**: the **Access** permissions, the **Playback and access** limits with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours**, and whether it shows on the sign-in screen. The model is read when each account is created, so a change to the model reaches the accounts created after it. Without a model, a new account has the settings of a user made with **Create a user**, hidden from the sign-in screen. An invite link never makes an administrator.
+With a model, a new account copies everything the model's page sets except the name, the password, **Administrator**, **Ends on** and **Group**: the **Access** permissions, the **Playback and access** limits with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours**, and whether it shows on the sign-in screen. The model is read when each account is created, so a change to the model reaches the accounts created after it. Without a model, a new account has the settings of a user made with **Create a user**, hidden from the sign-in screen. With a group, the account then takes the group's values for the settings it holds, and follows it: a change to the group reaches the accounts already created too. An invite link never makes an administrator.
 
 The link is shown once, with **Copy link**: Polyfin keeps only a hash of it and cannot show it again. It starts with the **Public address** (**Settings › Notifications**) when one is set, and with the address the admin app is open at otherwise.
 
@@ -392,7 +439,7 @@ The link opens a page of the admin app, `/admin/invite/…`, that needs no accou
 
 A link that is used up, expired or revoked says so, and so does an address that is no link at all.
 
-Each account created through a link is written to the activity log, as "sam joined through alex's invite", and is told to the notification targets that chose **User joined** (see [Notifications](notifications.md#events)).
+Each account created through a link is written to the activity log, as "sam joined through alex's invite", followed by "sam joined the group Kids" when the link names a group, and is told to the notification targets that chose **User joined** (see [Notifications](notifications.md#events)).
 
 ### How links are kept safe
 
@@ -408,8 +455,8 @@ Each account created through a link is written to the activity log, as "sam join
 **For app developers:**
 
 - The admin API serves the links to administrators:
-  - `GET /admin/api/invites` lists them, the newest first: `id`, `maxUses`, `uses`, `expiresAt` (null for never), `createdAt`, `revokedAt`, `model` and `createdBy` (each `id` and `name`, or null; `createdBy` is null once that user is deleted), `state`: `active`, `used_up`, `expired` or `revoked`, and `accountsEndInDays` (null for never).
-  - `POST /admin/api/invites` creates one from `maxUses` (1 by default, up to 100), `expiresInDays` (7 by default, up to 365, `null` for never), `modelUserId` (null or left out for a new user's settings) and `accountsEndInDays` (up to 365, null or left out for never). It answers 201 with the link as listed, plus its `token` and its `url`, which is null without a public address: the link is then `/admin/invite/<token>` on the server's address. The token is never answered again. Errors: `invalid_invite_uses`, `invalid_invite_expiry`, `invalid_invite_model` and `invalid_invite_account_end`.
+  - `GET /admin/api/invites` lists them, the newest first: `id`, `maxUses`, `uses`, `expiresAt` (null for never), `createdAt`, `revokedAt`, `model`, `group` and `createdBy` (each `id` and `name`, or null; `createdBy` is null once that user is deleted, `group` once that group is), `state`: `active`, `used_up`, `expired` or `revoked`, and `accountsEndInDays` (null for never).
+  - `POST /admin/api/invites` creates one from `maxUses` (1 by default, up to 100), `expiresInDays` (7 by default, up to 365, `null` for never), `modelUserId` (null or left out for a new user's settings), `groupId` (null or left out for none) and `accountsEndInDays` (up to 365, null or left out for never). It answers 201 with the link as listed, plus its `token` and its `url`, which is null without a public address: the link is then `/admin/invite/<token>` on the server's address. The token is never answered again. Errors: `invalid_invite_uses`, `invalid_invite_expiry`, `invalid_invite_model`, `invalid_group` and `invalid_invite_account_end`.
   - `POST /admin/api/invites/{id}/revoke` revokes one, and answers it.
 - The guest's page uses two routes that need no session:
   - `GET /admin/api/invite/{token}` answers `serverName` while the link may create an account.
@@ -478,7 +525,7 @@ Each link made, revoked or expired, and each guest playback, is written to the a
 
 ## Parental control
 
-On a user's page under **Users**, the **Parental control** section can limit the user to titles up to a rating (**Maximum rating**). The administrator can also hide from them the movies or shows that have no rating (**Block unrated movies**, **Block unrated shows**). Administrators' Jellyfin apps can set the same limit from their user settings.
+On a user's page under **Users**, the **Parental control** section can limit the user to titles up to a rating (**Maximum rating**). The administrator can also hide from them the movies or shows that have no rating (**Block unrated movies**, **Block unrated shows**). Administrators' Jellyfin apps can set the same limit from their user settings. For a member who follows a group, the group sets it, and an app that changes it detaches them from the group (see [User groups](#user-groups)).
 
 ### How a title's rating is found
 
@@ -511,7 +558,7 @@ Addon catalogs rarely carry ratings. For a limited user, Polyfin asks the metada
 
 ## Blocked genres, visible libraries and allowed hours
 
-On a user's page under **Users**, three more sections hold three more settings, each with its own save button. Administrators' Jellyfin apps can also set them from their user pages.
+On a user's page under **Users**, three more sections hold three more settings, each with its own save button. Administrators' Jellyfin apps can also set them from their user pages. For a member who follows a group, the group sets all three, and an app that changes the visible libraries or the allowed hours detaches them from the group (see [User groups](#user-groups)).
 
 ### Visible libraries
 
@@ -558,7 +605,7 @@ A user with at least one row who is outside all of them cannot sign in (403). Th
 
 ## Playback and access limits
 
-On a user's page under **Users**, the **Playback and access** section holds five more limits, saved with **Save playback and access**. Administrators' Jellyfin apps also set them from the user's settings.
+On a user's page under **Users**, the **Playback and access** section holds five more limits, saved with **Save playback and access**. Administrators' Jellyfin apps also set them from the user's settings. For a member who follows a group, the group sets them, with the **Quality group**, and an app that changes one detaches them from the group (see [User groups](#user-groups)).
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -622,7 +669,7 @@ Creating a group takes the first choice. Listing and joining groups takes either
 
 ## Quality groups
 
-**Quality group**, on a user's page under **Users** in **Playback and access** next to the maximum quality, sets the highest resolution each user is offered.
+**Quality group**, on a user's page under **Users** in **Playback and access** next to the maximum quality, sets the highest resolution each user is offered. For a member who follows a group, the group sets it (see [User groups](#user-groups)).
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|

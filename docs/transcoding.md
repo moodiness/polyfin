@@ -34,7 +34,7 @@ On Home in the admin app, a playback's **Details** show which one limited the si
 
 The server has one switch, **Conversion (transcoding)** under **Settings › Conversion**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or remuxed into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app. Image subtitles the app cannot show are left out.
 
-On a user's page under **Users**, the **Access** section holds each user's own **Can use conversion (transcoding)** and **Can download** permissions, on by default. Conversion needs both the server's switch and the user's permission; downloads need the user's permission only. **Turn off downloads for everyone**, on the **Users** page, takes it away from every user at once, also in the apps already signed in. See [Users](users.md).
+On a user's page under **Users**, the **Access** section holds each user's own **Can use conversion (transcoding)** and **Can download** permissions, on by default. Conversion needs both the server's switch and the user's permission; downloads need the user's permission only. **Turn off downloads for everyone**, on the **Users** page, takes it away from every user and every user group at once, also in the apps already signed in. A user group can hold both permissions for its members (see [User groups](users.md#user-groups)). See [Users](users.md).
 
 **Compared with Jellyfin:**
 

@@ -245,6 +245,7 @@ The activity log records:
 - sign-ins and failed sign-ins;
 - playback start and stop;
 - users created, changed or deleted, and accounts that reach their end date (see [Ending an account](users.md#ending-an-account));
+- user groups created, changed, naming the sections changed, as "Group Kids was changed: Access, Allowed hours", or deleted, and members added, removed or no longer following their group, as "sam no longer follows the group Kids: changed from Jellyfin Web" (see [User groups](users.md#user-groups));
 - settings saved;
 - addons installed or removed;
 - share links made, revoked or expired, and each guest playback through one, as "A guest played Example Movie (2008) through the link shared by alex" (see [Share links](users.md#share-links)).
