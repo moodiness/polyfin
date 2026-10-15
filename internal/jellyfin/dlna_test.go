@@ -380,9 +380,12 @@ func TestDLNAPlaysMarkPlayedOnlyWhenTurnedOn(t *testing.T) {
 	if response, _ := fetch(t, address, map[string]string{"Range": "bytes=0-1000"}); response.StatusCode != http.StatusPartialContent || played() {
 		t.Fatalf("the start read: %d, played %v", response.StatusCode, played())
 	}
-	if response, _ := fetch(t, address, nil); response.StatusCode != http.StatusOK || !played() {
-		t.Errorf("the whole file read with the switch on: %d, played %v", response.StatusCode, played())
+	if response, _ := fetch(t, address, nil); response.StatusCode != http.StatusOK {
+		t.Fatalf("the whole file read with the switch on: %d", response.StatusCode)
 	}
+	// The mark is made once the handler has sent the file, which can come
+	// just after the client read it.
+	eventually(t, "the movie played once the whole file is read", played)
 }
 
 // bigCatalog is an addon whose catalog holds count movies, a page of 100
