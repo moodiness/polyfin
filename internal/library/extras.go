@@ -47,6 +47,20 @@ type Extra struct {
 	Season *int
 }
 
+// ownerItems lists the items of the titles, or seasons, an extra belongs
+// to.
+func (e Extra) ownerItems() []accounts.ID {
+	items := make([]accounts.ID, 0, len(e.Owners))
+	for _, owner := range e.Owners {
+		if e.Season != nil {
+			items = append(items, SeasonItemID(owner, *e.Season))
+		} else {
+			items = append(items, TitleItemID(e.Kind, owner))
+		}
+	}
+	return items
+}
+
 // ExtraItemID is the item of the extra at rel in a local folder: the same
 // at every scan, so that what users did with it stays.
 func ExtraItemID(folder accounts.ID, rel string) accounts.ID {
@@ -166,7 +180,9 @@ func (s *Service) extrasOf(ctx context.Context, v view, item Item) ([]Item, erro
 	return items, nil
 }
 
-// extraItem describes an extra of the title, or season, owner.
+// extraItem describes an extra of the title, or season, owner. It shows
+// its owner's backdrop, which Artwork serves by the extra's item too (see
+// extraArtwork).
 func extraItem(extra Extra, owner Item) Item {
 	kind := KindExtra
 	if extra.Type == ExtraThemeSong {
@@ -198,11 +214,7 @@ func (s *Service) extra(ctx context.Context, v view, id accounts.ID) (Item, erro
 	if _, ok := v.addon(extra.Folder); !ok {
 		return Item{}, ErrNotFound
 	}
-	for _, owner := range extra.Owners {
-		ownerID := TitleItemID(extra.Kind, owner)
-		if extra.Season != nil {
-			ownerID = SeasonItemID(owner, *extra.Season)
-		}
+	for _, ownerID := range extra.ownerItems() {
 		title, err := s.item(ctx, v, ownerID)
 		if errors.Is(err, ErrNotFound) {
 			continue
@@ -213,4 +225,46 @@ func (s *Service) extra(ctx context.Context, v view, id accounts.ID) (Item, erro
 		return extraItem(extra, title), nil
 	}
 	return Item{}, ErrNotFound
+}
+
+// extraArtwork is the Primary or Backdrop image of the extra of item id:
+// that of the first title, or season, it belongs to that has one, as its
+// listing shows its title's backdrop (see extraItem). False when id is no
+// extra's item, or imageType another image.
+func (s *Service) extraArtwork(ctx context.Context, id accounts.ID, imageType string) (Artwork, bool, error) {
+	if s.local == nil || !strings.EqualFold(imageType, "Primary") && !strings.EqualFold(imageType, "Backdrop") {
+		return Artwork{}, false, nil
+	}
+	extra, err := s.local.Extra(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return Artwork{}, false, nil
+	}
+	if err != nil {
+		return Artwork{}, true, err
+	}
+	for _, owner := range extra.ownerItems() {
+		found, err := s.Artwork(ctx, owner, imageType)
+		if !errors.Is(err, ErrNotFound) {
+			return found, true, err
+		}
+	}
+	return Artwork{}, true, ErrNotFound
+}
+
+// taggedExtraArtwork is TaggedArtwork for the extra of item id: the image
+// of a title, or season, it belongs to whose tag is tag.
+func (s *Service) taggedExtraArtwork(ctx context.Context, id accounts.ID, tag string) (Artwork, bool) {
+	if s.local == nil {
+		return Artwork{}, false
+	}
+	extra, err := s.local.Extra(ctx, id)
+	if err != nil {
+		return Artwork{}, false
+	}
+	for _, owner := range extra.ownerItems() {
+		if found, ok := s.TaggedArtwork(ctx, owner, tag); ok {
+			return found, true
+		}
+	}
+	return Artwork{}, false
 }

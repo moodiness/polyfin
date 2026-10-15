@@ -20,7 +20,9 @@ import (
 
 // A title listed by an addon that does not describe it, a local folder or
 // a catalog addon, shows the artwork of the addon that describes it: each
-// image its details list is served, whichever library listed it.
+// image its details list is served, whichever library listed it. An extra
+// of the local title shows the title's backdrop, served by the extra's
+// item, and its poster as its Primary image.
 func TestListedTitlesServeTheArtworkTheirDetailsList(t *testing.T) {
 	t.Parallel()
 	var folders *localfiles.Service
@@ -82,10 +84,12 @@ func TestListedTitlesServeTheArtworkTheirDetailsList(t *testing.T) {
 	}
 
 	// A local folder whose movie is linked to a title the metadata addon
-	// describes, without artwork beside it.
+	// describes, without artwork beside it, and its local trailer.
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "Shelved (2008) 1080p.mkv"), []byte("\x1a\x45\xdf\xa3 media bytes"), 0o644); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"Shelved (2008) 1080p.mkv", "Shelved (2008) 1080p-trailer.mkv"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("\x1a\x45\xdf\xa3 media bytes"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	folder, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Shelf", Path: dir, Kind: localfiles.KindMovies})
 	if err != nil {
@@ -132,5 +136,27 @@ func TestListedTitlesServeTheArtworkTheirDetailsList(t *testing.T) {
 				t.Errorf("%s: %s image %d, ETag %s for tag %s", title, imageType, response.StatusCode, response.Header.Get("ETag"), tags[imageType])
 			}
 		}
+	}
+
+	var trailers []BaseItemDto
+	s.get(t, "/Users/"+member.ID.String()+"/Items/"+listed["Shelf/Shelved"]+"/LocalTrailers", token, &trailers)
+	if len(trailers) != 1 {
+		t.Fatalf("local trailers: %+v", trailers)
+	}
+	var trailer BaseItemDto
+	s.get(t, "/Users/"+member.ID.String()+"/Items/"+trailers[0].Id, token, &trailer)
+	for _, listing := range []BaseItemDto{trailers[0], trailer} {
+		if len(listing.BackdropImageTags) != 1 {
+			t.Errorf("the trailer lists no backdrop: %v", listing.BackdropImageTags)
+			continue
+		}
+		tag := listing.BackdropImageTags[0]
+		response, body := fetchURL(t, s.url+"/Items/"+trailer.Id+"/Images/Backdrop?tag="+tag, nil)
+		if response.StatusCode != http.StatusOK || body != pictures["background"] || response.Header.Get("ETag") != `"`+tag+`"` {
+			t.Errorf("the trailer's backdrop: %d, ETag %s for tag %s", response.StatusCode, response.Header.Get("ETag"), tag)
+		}
+	}
+	if response, body := fetchURL(t, s.url+"/Items/"+trailer.Id+"/Images/Primary", nil); response.StatusCode != http.StatusOK || body != pictures["poster"] {
+		t.Errorf("the trailer's Primary image: %d", response.StatusCode)
 	}
 }

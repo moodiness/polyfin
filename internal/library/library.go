@@ -2470,7 +2470,8 @@ type Artwork struct {
 // Uploaded), else its generated image, if any. It needs no user: Jellyfin
 // apps load images without credentials, and artwork URLs carry no secret.
 // A title's image its listing lacks is the one of its description,
-// whichever addon gave it (see artworkView).
+// whichever addon gave it (see artworkView); an extra's Primary and
+// Backdrop images are its title's (see extraArtwork).
 func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string) (Artwork, error) {
 	if url, ok := s.UploadedArtwork(id, imageType); ok {
 		return Artwork{URL: url}, nil
@@ -2480,11 +2481,15 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		return Artwork{URL: url}, nil
 	}
 	r, err := s.load(ctx, id)
-	// A smart list shown as a collection has no record: its generated
-	// image, if any, is remembered apart.
 	if errors.Is(err, ErrNotFound) {
+		// A smart list shown as a collection has no record: its generated
+		// image, if any, is remembered apart.
 		if g := s.generatedArtwork(ctx, id, imageType); g != nil {
 			return g.artwork(), nil
+		}
+		// Nor has an extra: it shows its title's.
+		if found, ok, err := s.extraArtwork(ctx, id, imageType); ok {
+			return found, err
 		}
 	}
 	// An IPTV channel shows its line-up's logo at once, listed or not: the

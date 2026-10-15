@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -245,12 +246,16 @@ func translateItem(item *Item, translated stremio.Meta) {
 // languages or in the server's, but not the one Artwork finds: image
 // requests come without a user, and their tag tells which description the
 // app was given. It looks among the descriptions kept, of the title or of
-// an episode's or season's series, asking no addon.
+// an episode's or season's series, or of an extra's title, asking no
+// addon.
 func (s *Service) TaggedArtwork(ctx context.Context, id accounts.ID, tag string) (Artwork, bool) {
 	if tag == "" {
 		return Artwork{}, false
 	}
 	r, err := s.load(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return s.taggedExtraArtwork(ctx, id, tag)
+	}
 	if err != nil {
 		return Artwork{}, false
 	}
