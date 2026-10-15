@@ -130,9 +130,9 @@ func (h *Handler) attachment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, fmt.Sprintf("MediaSource %s not found", source))
 		return
 	}
-	// With the version rules or a quality group, the title's own
-	// identifier stands for the version they offer first.
-	if wanted == item && h.reordered(user) {
+	// The title's own identifier stands for the version its first media
+	// source describes (see firstWorkingVersion).
+	if wanted == item {
 		wanted = h.firstWorkingVersion(r.Context(), user, library.Item{ID: item})
 	}
 	version, err := h.Library.Version(r.Context(), user, item, wanted)

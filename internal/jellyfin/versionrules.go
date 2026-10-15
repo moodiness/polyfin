@@ -69,11 +69,9 @@ func (r versionRules) hides() bool {
 	return r.larger > 0 || len(r.hiddenCodecs) > 0 || len(r.words) > 0
 }
 
-// reordered reports whether the title's own identifier may stand for
-// another version than the addons' first that has not failed lately:
-// with the user's quality group or the version rules. Callers then find
-// it among the versions as the user is offered them (see
-// firstWorkingVersion); otherwise, the addons' first is.
+// reordered reports whether the versions a user is offered may be ordered
+// otherwise than by the addons, or some hidden: with the user's quality
+// group or the version rules (see offered).
 func (h *Handler) reordered(user accounts.User) bool {
 	rules := newVersionRules(h.Accounts.Settings())
 	return user.QualityGroup > 0 || len(rules.order) > 0 || rules.hides()

@@ -573,7 +573,8 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 // a playback, starts, looks it up, and the playback's other reports reuse
 // it: by the next playback, the same name may stand for another file, as
 // when a local file is replaced at its path, the title's own identifier
-// standing for its first version.
+// standing for the version its first media source describes (see
+// firstWorkingVersion).
 func (h *Handler) playedRuntime(ctx context.Context, user accounts.User, item library.Item, mediaSource string, starts bool) time.Duration {
 	id, ok := parseGUID(mediaSource)
 	if !ok {
@@ -584,7 +585,11 @@ func (h *Handler) playedRuntime(ctx context.Context, user accounts.User, item li
 		return runtime
 	}
 	runtime := item.Runtime
-	if version, err := h.version(ctx, user, item, id); err == nil {
+	wanted := id
+	if id == item.ID && versioned(item.Kind) {
+		wanted = h.firstWorkingVersion(ctx, user, item)
+	}
+	if version, err := h.version(ctx, user, item, wanted); err == nil {
 		if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok && analysis.Duration > 0 {
 			runtime = analysis.Duration
 		}

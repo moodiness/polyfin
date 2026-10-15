@@ -127,15 +127,15 @@ func (h *Handler) queueImages(ctx context.Context, user accounts.User, device ac
 }
 
 // startedVersion is the version of item a playback started with, named
-// by the media source it reported. With the version rules or a quality
-// group, the title's own identifier stands for the first version they
-// offer, as in PlaybackInfo.
+// by the media source it reported. The title's own identifier stands for
+// the version its first media source describes, as in PlaybackInfo (see
+// firstWorkingVersion).
 func (h *Handler) startedVersion(ctx context.Context, user accounts.User, item library.Item, mediaSource string) (library.Version, bool) {
 	id, ok := parseGUID(mediaSource)
 	if !ok {
 		return library.Version{}, false
 	}
-	if id == item.ID && h.reordered(user) {
+	if id == item.ID {
 		id = h.firstWorkingVersion(ctx, user, item)
 	}
 	version, err := h.Library.Version(ctx, user, item.ID, id)

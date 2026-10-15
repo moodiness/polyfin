@@ -189,10 +189,10 @@ func (h *Handler) findInAudio(ctx context.Context, user accounts.User, item libr
 	go func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), audioLookup)
 		defer cancel()
-		// With the version rules or a quality group, the title's own
-		// identifier stands for the first version they offer, as in
-		// PlaybackInfo.
-		if id == item.ID && h.reordered(user) {
+		// The title's own identifier stands for the version its first
+		// media source describes, as in PlaybackInfo (see
+		// firstWorkingVersion).
+		if id == item.ID {
 			id = h.firstWorkingVersion(ctx, user, item)
 		}
 		version, err := h.Library.Version(ctx, user, item.ID, id)

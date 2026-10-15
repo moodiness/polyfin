@@ -108,6 +108,158 @@ func TestLocalFilesAreVersions(t *testing.T) {
 	}
 }
 
+// goneStreamAddon serves the movie tt1000 with one stream, whose host
+// answers 404, as a link gone for good.
+func goneStreamAddon(t *testing.T) string {
+	t.Helper()
+	var server *httptest.Server
+	movie := stremio.Meta{ID: "tt1000", Type: "movie", Name: "Movie", Runtime: "2h", Year: "2008"}
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch path := r.URL.EscapedPath(); {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "gone", Name: "Gone", Version: "1",
+				Types: []string{"movie"}, IDPrefixes: []string{"tt"},
+				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}},
+				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}})
+		case strings.HasPrefix(path, "/catalog/movie/top"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{movie}})
+		case path == "/meta/movie/tt1000.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie})
+		case path == "/stream/movie/tt1000.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: "Gone 1080p", URL: server.URL + "/files/gone.mkv",
+				BehaviorHints: stremio.StreamBehavior{Filename: "Movie.1080p.mkv"}}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// A title's own identifier, as the media source of a stream, plays the
+// version PlaybackInfo and item details name after it. Beside a local
+// file, an addon version whose host answers 404 fails at the first play
+// and is left out of the answers, which then name the local file after
+// the title: the title's identifier streams the local file, not the addon
+// version, whether the addon or the local folder comes first.
+func TestTitleIdentifierStreamsTheVersionNamedAfterIt(t *testing.T) {
+	t.Parallel()
+	file, err := os.ReadFile(filepath.Join("..", "container", "testdata", "forced.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, localFirst := range map[string]bool{"addon first": false, "local first": true} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var folders *localfiles.Service
+			s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
+				folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
+					o.Accounts.Settings, nil)
+				t.Cleanup(folders.Close)
+				o.Library.UseLocal(folders)
+				folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
+			})
+			// The answers name the versions by their ETag here, which is
+			// their own identifier whatever identifier they carry.
+			s.setting(t, func(settings *accounts.Settings) { settings.NameHowVersionsPlay = false })
+			user := s.user("member", nil)
+			manifest := goneStreamAddon(t)
+			if _, err := s.addons.Install(t.Context(), addons.Shared(), manifest, false); err != nil {
+				t.Fatal(err)
+			}
+			token := s.signIn("member", "tv")
+			var views, page QueryResult
+			s.get(t, "/UserViews", token, &views)
+			s.get(t, "/Items?ParentId="+views.Items[0].Id, token, &page)
+			if len(page.Items) != 1 {
+				t.Fatalf("titles: %+v", page.Items)
+			}
+			movie := page.Items[0].Id
+
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "Movie (2008) 1080p.mkv"), file, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			folder, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Shelf", Path: dir, Kind: localfiles.KindMovies})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := folders.Scan(t.Context(), folder.ID); err != nil {
+				t.Fatal(err)
+			}
+			if err := folders.Link(t.Context(), folder.ID, "Movie (2008) 1080p.mkv", "tt1000"); err != nil {
+				t.Fatal(err)
+			}
+			if localFirst {
+				installed, err := s.addons.Addons(t.Context(), addons.Shared())
+				if err != nil {
+					t.Fatal(err)
+				}
+				order := []accounts.ID{folder.ID}
+				for _, addon := range installed {
+					if addon.ID != folder.ID {
+						order = append(order, addon.ID)
+					}
+				}
+				if err := s.addons.Reorder(t.Context(), addons.Shared(), order); err != nil {
+					t.Fatal(err)
+				}
+			}
+			movieID, _ := accounts.ParseID(movie)
+			versions, err := s.library.Versions(t.Context(), user, movieID)
+			if err != nil || len(versions) != 2 {
+				t.Fatalf("versions: %+v %v", versions, err)
+			}
+			gone := strings.TrimSuffix(manifest, "manifest.json")
+			at := slices.IndexFunc(versions, func(v library.Version) bool { return !strings.HasPrefix(v.URL, gone) })
+			if want := map[bool]int{false: 1, true: 0}[localFirst]; at != want {
+				t.Fatalf("the local file is version %d, want %d: %+v", at, want, versions)
+			}
+			local := versions[at]
+			p := playbackSetup{testServer: s, token: token, user: user, movie: movie}
+			p.analyzed(t, local, "h264-aac-mp4")
+			chrome := p.profile(t, "jellyfin-web-chrome")
+
+			// localID is the identifier an answer names the local file by.
+			localID := func(what string, sources []MediaSourceInfo) string {
+				t.Helper()
+				i := slices.IndexFunc(sources, func(s MediaSourceInfo) bool { return s.ETag == local.ID.String() })
+				if i < 0 {
+					t.Fatalf("%s: no local file among %+v", what, sources)
+				}
+				return sources[i].Id
+			}
+			// streams checks that a stream by the media source id plays the
+			// local file, as apps that build the stream URL ask for it.
+			streams := func(what, id string) {
+				t.Helper()
+				response, body := fetchURL(t, s.url+"/Videos/"+movie+"/stream.mkv?static=true&mediaSourceId="+id+"&ApiKey="+token,
+					http.Header{"Range": {"bytes=100-199"}})
+				if response.StatusCode != http.StatusPartialContent || body != string(file[100:200]) {
+					t.Errorf("%s: the stream of %s answered %d %.80q", what, id, response.StatusCode, body)
+				}
+			}
+			// The first play tries the addon version first when it comes
+			// first, which fails; the next answers leave it out.
+			for _, round := range []string{"first", "second"} {
+				what := "the " + round + " PlaybackInfo"
+				streams(what, localID(what, p.ask(t, token, movie, chrome, nil).MediaSources))
+			}
+			var details BaseItemDto
+			if s.get(t, "/Users/"+user.ID.String()+"/Items/"+movie, token, &details); details.MediaSources == nil {
+				t.Fatalf("details: %+v", details)
+			}
+			id := localID("details", *details.MediaSources)
+			if id != movie {
+				t.Errorf("details name the local file %s, want the title's identifier %s", id, movie)
+			}
+			streams("details", id)
+			// The local file's own identifier plays it too.
+			streams("its own identifier", local.ID.String())
+		})
+	}
+}
+
 // A Blu-ray disc of a local folder is one version, its largest stream,
 // named after the disc's folder rather than its stream: apps show and
 // download it under that name.

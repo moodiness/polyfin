@@ -43,6 +43,7 @@ A title's details list every stream the addons offer as a version (see [Title pa
 
 - Unreadable or unplayable versions are left out of the versions `PlaybackInfo` lists only when the app has not picked a version.
 - A `MediaSourceId` equal to the item's own identifier picks no version: `PlaybackInfo` tries the versions in order, as without one, and answers with the version chosen alone, under its own identifier unless it is the first. Any other `MediaSourceId` plays that version or nothing.
+- Elsewhere, the item's own identifier as a media source (the `mediaSourceId` of `/Videos/{id}/stream`, subtitle and attachment URLs, playback reports) stands for the version the item's details and `PlaybackInfo` list under it: the first they list, after leaving out the versions that failed lately and those the [version order](#version-order) rules or the user's quality group leave out. A version that fails thus passes the identifier to the next one, wherever its addon is in the addons' order, and the next one's own identifier keeps naming it.
 - `StartTimeTicks` in the query or the body tells where an HLS play starts, so that Polyfin reads ahead from there.
 
 ### Title pages

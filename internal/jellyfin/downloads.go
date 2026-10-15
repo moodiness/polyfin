@@ -118,7 +118,10 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 // firstWorkingVersion is the version a title's own identifier stands for:
 // its first as the user is offered them (see offered), those that failed
 // lately left out, else the title's identifier, which stands for its
-// first.
+// first. PlaybackInfo and item details name that version after the title,
+// so every request naming the title's identifier as a media source finds
+// its version here, never in the addons' order, whose first may have
+// failed and be left out of the answers.
 func (h *Handler) firstWorkingVersion(ctx context.Context, user accounts.User, item library.Item) accounts.ID {
 	versions, err := h.Library.Versions(ctx, user, item.ID)
 	if err != nil {
