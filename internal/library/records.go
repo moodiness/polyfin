@@ -66,55 +66,111 @@ func (s *Service) save(ctx context.Context, records []record) error {
 		return nil
 	}
 	unique := inLockOrder(records)
-	ids := make([]accounts.ID, 0, len(unique))
-	keys := make([]string, 0, len(unique))
-	kinds := make([]string, 0, len(unique))
-	data := make([]string, 0, len(unique))
-	for _, r := range unique {
+	for i, r := range unique {
 		if r.Meta != nil {
 			trimmed, preview := *r, *r.Meta
 			preview.Videos = nil
 			trimmed.Meta = &preview
-			r = &trimmed
+			unique[i] = &trimmed
 		}
-		encoded, err := json.Marshal(r)
-		if err != nil {
-			return err
-		}
-		ids, keys, kinds, data = append(ids, r.ID), append(keys, r.Key), append(kinds, string(r.Kind)), append(data, string(encoded))
 	}
 	// A search result has no folder: it keeps the one it was last listed in.
 	// A listing carries no rating or genres: the title keeps those learned
 	// before.
-	_, err := s.db.Exec(ctx, `INSERT INTO items (id, key, kind, data)
-		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[])
-		ON CONFLICT (id) DO UPDATE SET data = `+keptData+`, updated_at = now()
-		WHERE items.data IS DISTINCT FROM `+keptData, ids, keys, kinds, data)
-	return err
+	return s.upsert(ctx, unique, keptData)
 }
 
 // saveNew stores the records of identifiers Polyfin does not know yet,
 // leaving those it knows as they are: the albums and artists a track names
-// stand in for them only until Polyfin learns more of them.
+// stand in for them only until Polyfin learns more of them. A record is
+// known by its identifier or by its key (see upsert).
 func (s *Service) saveNew(ctx context.Context, records []record) error {
 	if len(records) == 0 {
 		return nil
 	}
-	unique := inLockOrder(records)
-	ids := make([]accounts.ID, 0, len(unique))
-	keys := make([]string, 0, len(unique))
-	kinds := make([]string, 0, len(unique))
-	data := make([]string, 0, len(unique))
-	for _, r := range unique {
+	ids, keys, kinds, data, err := columns(inLockOrder(records))
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(ctx, `INSERT INTO items (id, key, kind, data)
+		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[]) ON CONFLICT DO NOTHING`, ids, keys, kinds, data)
+	return err
+}
+
+// upsert stores records, in lock order (see inLockOrder), merging each
+// into the stored record of its identifier with merged: an expression of
+// the stored data (items.data) and the new one (excluded.data).
+//
+// An item has two unique keys, its identifier and the key the identifier
+// derives from, and an INSERT ... ON CONFLICT (id) only looks the first up
+// before inserting: requests recording the same new items at once, as
+// apps opening a person's page do, failed on the second (a duplicate
+// items_key_key) or deadlocked. So the new items are inserted first,
+// skipping those either key finds, which waits for the requests inserting
+// them; then the others are merged, by a statement that sees them.
+func (s *Service) upsert(ctx context.Context, records []*record, merged string) error {
+	ids, keys, kinds, data, err := columns(records)
+	if err != nil {
+		return err
+	}
+	rows, err := s.db.Query(ctx, `INSERT INTO items (id, key, kind, data)
+		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[]) ON CONFLICT DO NOTHING RETURNING id`, ids, keys, kinds, data)
+	if err != nil {
+		return err
+	}
+	inserted, err := pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+	if err != nil || len(inserted) == len(ids) {
+		return err
+	}
+	fresh := make(map[accounts.ID]bool, len(inserted))
+	for _, id := range inserted {
+		fresh[id] = true
+	}
+	stored := 0
+	for i, id := range ids {
+		if !fresh[id] {
+			ids[stored], keys[stored], kinds[stored], data[stored] = id, keys[i], kinds[i], data[i]
+			stored++
+		}
+	}
+	ids, keys, kinds, data = ids[:stored], keys[:stored], kinds[:stored], data[:stored]
+	// Only the items stored under their identifier are merged, in order. A
+	// record whose key is another identifier's is left out, and told: its
+	// identifier was not derived from its key.
+	rows, err = s.db.Query(ctx, `WITH saved AS (INSERT INTO items (id, key, kind, data)
+			SELECT id, key, kind, data FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[]) WITH ORDINALITY AS incoming(id, key, kind, data, n)
+			WHERE EXISTS (SELECT 1 FROM items WHERE items.id = incoming.id) ORDER BY n
+			ON CONFLICT (id) DO UPDATE SET data = `+merged+`, updated_at = now()
+			WHERE items.data IS DISTINCT FROM `+merged+`)
+		SELECT incoming.key FROM unnest($1::uuid[], $2::text[]) AS incoming(id, key)
+		WHERE EXISTS (SELECT 1 FROM items WHERE items.key = incoming.key AND items.id <> incoming.id)`, ids, keys, kinds, data)
+	if err != nil {
+		return err
+	}
+	taken, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return err
+	}
+	if len(taken) > 0 {
+		s.logger.Warn("Items were not recorded: their keys are other items'", "keys", taken)
+	}
+	return nil
+}
+
+// columns encodes records as the columns of the items table.
+func columns(records []*record) (ids []accounts.ID, keys, kinds, data []string, err error) {
+	ids = make([]accounts.ID, 0, len(records))
+	keys = make([]string, 0, len(records))
+	kinds = make([]string, 0, len(records))
+	data = make([]string, 0, len(records))
+	for _, r := range records {
 		encoded, err := json.Marshal(r)
 		if err != nil {
-			return err
+			return nil, nil, nil, nil, err
 		}
 		ids, keys, kinds, data = append(ids, r.ID), append(keys, r.Key), append(kinds, string(r.Kind)), append(data, string(encoded))
 	}
-	_, err := s.db.Exec(ctx, `INSERT INTO items (id, key, kind, data)
-		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[]) ON CONFLICT (id) DO NOTHING`, ids, keys, kinds, data)
-	return err
+	return ids, keys, kinds, data, nil
 }
 
 // inLockOrder returns the first record of each identifier, ordered by

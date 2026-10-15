@@ -2,18 +2,27 @@ package jellyfin
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -500,5 +509,258 @@ func TestPeopleResponsesMatchJellyfin(t *testing.T) {
 		for _, difference := range compareShapes(fixture, want, got, peopleShapes) {
 			t.Error(difference)
 		}
+	}
+}
+
+// lockedLog collects what a logger writes from several requests at once.
+type lockedLog struct {
+	mu   sync.Mutex
+	text strings.Builder
+}
+
+func (l *lockedLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.text.Write(p)
+}
+
+func (l *lockedLog) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.text.String()
+}
+
+// creditsAddons serves, for rounds titles, an addon that lists and
+// describes them, crediting in each the round's actor and two others, and
+// whose people search finds twenty titles of the round's actor that no
+// one listed yet; and a French addon that describes the same titles with
+// another cast: the round's actor's name in capitals, and an actor of its
+// own, first. The people search answers once it was asked together times
+// for the same name, by as many installations of the addon.
+func creditsAddons(t *testing.T, rounds, together int) (credits, french string) {
+	t.Helper()
+	listed := make([]stremio.Meta, rounds)
+	for round := range listed {
+		listed[round] = stremio.Meta{ID: fmt.Sprintf("tt5%06d", round), Type: "movie", Name: fmt.Sprintf("Movie %d", round),
+			Genres: []string{"Drama"}, ReleaseInfo: "2020", Director: stremio.Names{"Cy Dale"}, Extras: &stremio.Extras{Cast: []stremio.CastMember{
+				{Name: fmt.Sprintf("Ada Round%d", round), Character: "Lead"}, {Name: "Bo Kerr", Character: "Friend"}}}}
+	}
+	found := func(round int) []stremio.Meta {
+		metas := make([]stremio.Meta, 20)
+		for i := range metas {
+			metas[i] = stremio.Meta{ID: fmt.Sprintf("tt6%03d%03d", round, i), Type: "movie", Name: fmt.Sprintf("Found %d-%d", round, i),
+				ReleaseInfo: "2019", Extras: &stremio.Extras{Cast: []stremio.CastMember{{Name: fmt.Sprintf("Ada Round%d", round)}}}}
+		}
+		return metas
+	}
+	var mu sync.Mutex
+	searches := map[string]int{}
+	answered := map[string]chan struct{}{}
+	serve := func(handler http.HandlerFunc) string {
+		server := httptest.NewServer(handler)
+		t.Cleanup(server.Close)
+		return server.URL + "/manifest.json"
+	}
+	credits = serve(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimSuffix(r.URL.EscapedPath(), ".json")
+		switch {
+		case path == "/manifest":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "credits", Name: "Credits", Version: "1", Types: []string{"movie"},
+				IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}}, Catalogs: []stremio.Catalog{
+					{Type: "movie", ID: "top", Name: "Top"},
+					{Type: "movie", ID: "people_search.people_search_movie", Name: "People Search",
+						Extra: []stremio.Extra{{Name: "search", IsRequired: true}, {Name: "skip"}}}}})
+		case strings.HasPrefix(path, "/catalog/movie/top"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": listed})
+		case strings.HasPrefix(path, "/catalog/movie/people_search.people_search_movie/search="):
+			query := strings.TrimPrefix(path, "/catalog/movie/people_search.people_search_movie/")
+			mu.Lock()
+			searches[query]++
+			if answered[query] == nil {
+				answered[query] = make(chan struct{})
+			}
+			all := answered[query]
+			if searches[query] == together {
+				close(all)
+			}
+			mu.Unlock()
+			select {
+			case <-all:
+			case <-r.Context().Done():
+				return
+			}
+			var metas []stremio.Meta
+			name, _ := url.PathUnescape(strings.TrimPrefix(query, "search="))
+			if round, err := strconv.Atoi(strings.TrimPrefix(name, "Ada Round")); err == nil {
+				metas = found(round)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": metas})
+		case strings.HasPrefix(path, "/meta/movie/"):
+			if i := slices.IndexFunc(listed, func(m stremio.Meta) bool { return m.ID == strings.TrimPrefix(path, "/meta/movie/") }); i >= 0 {
+				_ = json.NewEncoder(w).Encode(map[string]any{"meta": listed[i]})
+				return
+			}
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	french = serve(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimSuffix(r.URL.EscapedPath(), ".json")
+		switch {
+		case path == "/manifest":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "credits-fr", Name: "Crédits", Version: "1", Types: []string{"movie"},
+				IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "meta"}}})
+		case strings.HasPrefix(path, "/meta/movie/"):
+			if i := slices.IndexFunc(listed, func(m stremio.Meta) bool { return m.ID == strings.TrimPrefix(path, "/meta/movie/") }); i >= 0 {
+				meta := listed[i]
+				meta.Name, meta.Director = fmt.Sprintf("Film %d", i), stremio.Names{"Cyrille Dale"}
+				meta.Extras = &stremio.Extras{Cast: []stremio.CastMember{{Name: "Zoé Traduite", Character: "Amie"},
+					{Name: fmt.Sprintf("ADA ROUND%d", i), Character: "Rôle"}}}
+				_ = json.NewEncoder(w).Encode(map[string]any{"meta": meta})
+				return
+			}
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	return credits, french
+}
+
+// Users whose metadata language describes titles with another cast than
+// the server's open a title, then its actor's page, at once: each finds in
+// a people search the same titles, which Polyfin records for the first
+// time, together. Every page opens, and shows the server's people.
+func TestPeoplePagesOpenedAtOnceAllOpen(t *testing.T) {
+	t.Parallel()
+	const rounds, together = 8, 6
+	var logged lockedLog
+	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, _ *pgxpool.Pool) {
+		o.Logger = slog.New(slog.NewTextHandler(&logged, nil))
+	})
+	creditsURL, frenchURL := creditsAddons(t, rounds, together)
+	french, err := s.addons.Install(t.Context(), addons.Shared(), frenchURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLanguage(t.Context(), addons.Shared(), french.ID, "fr"); err != nil {
+		t.Fatal(err)
+	}
+	// Each reader has the addon of their own, so that each people search
+	// asks it: administrators, whose own addons may reach the test's local
+	// addresses.
+	type reader struct{ id, token, movies string }
+	readers := make([]reader, together)
+	for i := range readers {
+		name := fmt.Sprintf("reader%d", i)
+		user := s.user(name, func(c *accounts.UserChanges) { c.MetadataLanguage, c.IsAdministrator = new("fr"), new(true) })
+		addon, err := s.addons.Install(t.Context(), addons.Personal(user.ID), creditsURL, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.addons.SetLibraries(t.Context(), addons.Personal(user.ID), []addons.LibraryChoice{
+			{AddonID: addon.ID, CatalogType: "movie", CatalogID: "top"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		readers[i] = reader{id: user.ID.String(), token: s.signIn(name, "tv")}
+		var views QueryResult
+		s.get(t, "/UserViews", readers[i].token, &views)
+		readers[i].movies = views.Items[0].Id
+	}
+	var listing QueryResult
+	s.get(t, "/Items?ParentId="+readers[0].movies, readers[0].token, &listing)
+	if len(listing.Items) != rounds {
+		t.Fatalf("listing: %v", itemNames(listing.Items))
+	}
+	// atOnce asks each reader's path at once.
+	atOnce := func(path func(i int, r reader) string) {
+		var wg sync.WaitGroup
+		for i, r := range readers {
+			wg.Go(func() {
+				request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, s.url+path(i, r), nil)
+				request.Header.Set("Authorization", app("tv", r.token))
+				response, err := http.DefaultClient.Do(request)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				_ = response.Body.Close()
+				if response.StatusCode != http.StatusOK {
+					t.Errorf("%s: %d", path(i, r), response.StatusCode)
+				}
+			})
+		}
+		wg.Wait()
+	}
+
+	for round := range rounds {
+		movie := listing.Items[round].Id
+		atOnce(func(_ int, r reader) string { return "/Users/" + r.id + "/Items/" + movie })
+		var title BaseItemDto
+		s.get(t, "/Users/"+readers[0].id+"/Items/"+movie, readers[0].token, &title)
+		if title.People == nil {
+			t.Fatalf("round %d, the title: %+v", round, title)
+		}
+		ada := credit(*title.People, fmt.Sprintf("Ada Round%d", round))
+		if title.Name != fmt.Sprintf("Film %d", round) || ada.Id == "" || len(*title.People) != 3 {
+			t.Fatalf("round %d, the title in French with the server's people: %q %+v", round, title.Name, *title.People)
+		}
+		// Apps open a person by either path. The requests record the titles
+		// their people searches found together: the table is held until as
+		// many of them as the database pool lets wait for it.
+		hold, err := pgx.ConnectConfig(t.Context(), s.pool.Config().ConnConfig.Copy())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := hold.Exec(t.Context(), "BEGIN; LOCK TABLE items IN SHARE MODE"); err != nil {
+			t.Fatal(err)
+		}
+		opened := make(chan struct{})
+		go func() {
+			defer close(opened)
+			atOnce(func(i int, r reader) string {
+				if i%2 == 0 {
+					return "/Items/" + ada.Id
+				}
+				return "/Users/" + r.id + "/Items/" + ada.Id
+			})
+		}()
+		deadline := time.Now().Add(10 * time.Second)
+		for count := 0; count < min(len(readers), int(s.pool.Config().MaxConns)); time.Sleep(10 * time.Millisecond) {
+			if err := hold.QueryRow(t.Context(), "SELECT count(*) FROM pg_locks WHERE relation = 'items'::regclass AND NOT granted").Scan(&count); err != nil {
+				t.Error(err)
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Errorf("round %d: %d requests wait for the table", round, count)
+				break
+			}
+		}
+		_ = hold.Close(t.Context())
+		<-opened
+		for _, r := range readers {
+			var person namedItemDto
+			if status := s.get(t, "/Users/"+r.id+"/Items/"+ada.Id, r.token, &person); status != http.StatusOK ||
+				person.Name != ada.Name || person.MovieCount != 21 {
+				t.Errorf("round %d, the person: %d %+v", round, status, person)
+			}
+		}
+	}
+	if t.Failed() {
+		t.Logf("server log:\n%s", logged.String())
+	}
+
+	// The French addon's cast is not the title's: no one knows its own
+	// actor, and the round's actor, by any spelling, is the server's.
+	if status := s.get(t, "/Persons/Zo%C3%A9%20Traduite", readers[0].token, nil); status != http.StatusNotFound {
+		t.Errorf("the French addon's actor: %d", status)
+	}
+	var page QueryResult
+	s.get(t, "/Users/"+readers[0].id+"/Items?personIds="+library.PersonID("ADA ROUND0").String()+"&recursive=true&includeItemTypes=Movie",
+		readers[0].token, &page)
+	if got := itemNames(page.Items); len(got) != 21 || !slices.Contains(got, "Film 0") {
+		t.Errorf("the first round's actor's titles: %v", got)
 	}
 }

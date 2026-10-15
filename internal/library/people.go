@@ -28,7 +28,9 @@ const mergedPerson = `excluded.data
 // saveCredits records the people a title credits, so that apps can open
 // them by identifier, and so that a person lists the titles Polyfin knows
 // them in. Credits accumulate across titles; the merge happens in the
-// upsert, so that titles described at once do not lose each other's.
+// upsert, so that titles described at once do not lose each other's. A
+// person's record takes its identifier and key from the same name,
+// whatever identifier the credit carries.
 func (s *Service) saveCredits(ctx context.Context, title accounts.ID, credits []Person, confined bool) error {
 	if len(credits) == 0 {
 		return nil
@@ -36,11 +38,12 @@ func (s *Service) saveCredits(ctx context.Context, title accounts.ID, credits []
 	byID := map[accounts.ID]*record{}
 	var people []*record
 	for _, person := range credits {
-		r, ok := byID[person.ID]
+		id := PersonID(person.Name)
+		r, ok := byID[id]
 		if !ok {
-			r = &record{ID: person.ID, Key: personKey(person.Name), Kind: KindPerson, Person: &Person{Name: person.Name},
+			r = &record{ID: id, Key: personKey(person.Name), Kind: KindPerson, Person: &Person{Name: person.Name},
 				Credits: map[string][]string{}, Confined: confined}
-			byID[person.ID] = r
+			byID[id] = r
 			people = append(people, r)
 		}
 		if r.Person.Image == "" {
@@ -54,22 +57,7 @@ func (s *Service) saveCredits(ctx context.Context, title accounts.ID, credits []
 	// people in another order, described together, must not wait on each
 	// other.
 	slices.SortFunc(people, func(a, b *record) int { return bytes.Compare(a.ID[:], b.ID[:]) })
-	ids := make([]accounts.ID, 0, len(people))
-	keys := make([]string, 0, len(people))
-	kinds := make([]string, 0, len(people))
-	data := make([]string, 0, len(people))
-	for _, r := range people {
-		encoded, err := json.Marshal(r)
-		if err != nil {
-			return err
-		}
-		ids, keys, kinds, data = append(ids, r.ID), append(keys, r.Key), append(kinds, string(r.Kind)), append(data, string(encoded))
-	}
-	_, err := s.db.Exec(ctx, `INSERT INTO items (id, key, kind, data)
-		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[])
-		ON CONFLICT (id) DO UPDATE SET data = `+mergedPerson+`, updated_at = now()
-		WHERE items.data IS DISTINCT FROM `+mergedPerson, ids, keys, kinds, data)
-	return err
+	return s.upsert(ctx, people, mergedPerson)
 }
 
 // searchable reports whether a catalog looks a term up: it takes a search
