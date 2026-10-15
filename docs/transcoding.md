@@ -166,6 +166,24 @@ Remuxes and conversions of files are cut into HLS segments on the source's own k
 - When FFmpeg still lands past the segment's start, as in a file with a keyframe every 10 seconds, it starts again further back: as much further back as it went past the time asked, so at least twice as far, until it lands before the segment or reads the file from its start. Each try costs an FFmpeg start; the frames read before the segment are decoded but not converted.
 - Polyfin keeps that distance with the file, in its database: the playback's later seeks, and those of the next playbacks of the same file, by any user and after a restart too, start as far back, and land where asked with one FFmpeg start. It knows a local file by its folder, path, size and modification time, so that a file that changed learns the distance again; an addon's file by its version, which follows the file by its name and size, else its link (see [Playback](playback.md)); an IPTV catch-up programme by its channel, whose programmes usually come from the same encoder; a recording by itself. A playback that needs to start further back keeps the larger distance; a shorter one never replaces it. Files FFmpeg lands in where asked, such as Matroska and MP4 files, never use it.
 
+### Changing the audio track
+
+Apps change the audio track of a converted video by playing it again: jellyfin-web asks `PlaybackInfo` for the new track, stops the old play session with `DELETE /Videos/ActiveEncodings`, and loads the new stream from the same position; Jellyfin Android TV, Swiftfin and Streamyfin stop the player and play again too. Off, as before, the new session converts the video again from the keyframe before the position, though the picture has not changed, and the segments already made are deleted.
+
+With **Keep the converted video when the audio track changes** under **Settings › Conversion › Performance**, off by default:
+
+- **Video and audio apart:** a converting FFmpeg makes the video alone, and a second FFmpeg the audio track played, copied or converted as before, cut at the same segment times. The audio's FFmpeg reads the file through the source cache, as the video's does, and makes no segment the video has not reached, nor further than **Seconds prepared ahead**. With [several qualities](#adaptive-quality), one audio FFmpeg serves them all.
+- **Joined as served:** each segment joins the video and the audio of the same times, copying both, in fragmented MP4 (one initialization segment holding both tracks) and in MPEG-TS (the audio's packets interleaved with the video's). Apps see the same endpoints, master playlist, `CODECS` and segment numbers as before.
+- **Kept video:** the converted video is known by its user, device, version, segment format and conversion (codec, size, bitrate, tone mapping, burned subtitle, quality), not by its play session or audio track. Once its play session stops, it is kept 30 seconds, its FFmpeg waiting where it was. A new play session asking for the same video takes it over, with the segments made: its track's FFmpeg starts at the segment the app asks for, the old track's stops, and the first segment after the change comes once its audio is made, without converting the picture again.
+- **Late stops:** jellyfin-web sends the old session's `DELETE` again once the new stream plays; it stops nothing the new session took over.
+- **Bounds:** one kept video per user, device and version: another quality or burned subtitle converts anew, and ends the video kept there. A play session that did not stop is never taken over, so two players of the same device each convert their own. Kept video counts once toward **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)). Kept video no session takes over within 30 seconds stops, and its segments are removed. Copied video (DirectStream), Live TV and [converted downloads](#converted-downloads) start again as before.
+
+**Why the audio stays inside the segments:** HLS can carry audio tracks as renditions of their own, which a player switches between without reloading the stream. Jellyfin's master playlists list subtitle renditions only, and its apps never switch audio inside a converted stream: they ask for a new one, as above. Separate audio renditions would go unused, and players that take only the main playlist's segments would play no sound. Keeping each segment whole, its audio joined as it is served, works with every app as it is.
+
+**Compared with Jellyfin:**
+
+- Jellyfin converts the video again whenever the audio track changes, as Polyfin does with the setting off.
+
 ## Conversion settings
 
 **Settings › Conversion** also tunes how video and audio are converted, for files and Live TV alike. Recordings copy the stream, and are converted like any file when played. See [Live TV](live-tv.md).
@@ -231,6 +249,7 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 |---|---|---|---|
 | **Processor threads per conversion (0 = automatic)** | **Settings › Conversion** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
 | **Seconds prepared ahead** | **Settings › Conversion** | 120 (range 30 to 600) | How many seconds of picture a remux or conversion of a file makes past the last segment the app asked for, before it waits. |
+| **Keep the converted video when the audio track changes** | **Settings › Conversion** | Off | Converts the video apart from its audio, and keeps it 30 seconds once its play session stops, for a new session asking for another audio track to take over. Off, a track change converts the video again, as before. See [Changing the audio track](#changing-the-audio-track). |
 
 **Compared with Jellyfin:**
 

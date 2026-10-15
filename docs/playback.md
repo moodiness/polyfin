@@ -242,6 +242,7 @@ How names are decided:
 - Live TV keeps its own caps on top: 4 channels per user and 16 for the server. See [Live TV](live-tv.md).
 - A playback is what a user plays of a version, from its first converted segment until the app stops it or asks for nothing for 3 minutes (1 minute for Live TV). Its next segments, its seeks, and the new play session apps open to switch tracks never count again.
 - The lower qualities of a playback with **Several qualities when converting** count with it, as one playback: an app stepping down at the cap is never refused. While an app switches, the qualities it asked for in the last 10 seconds keep converting, so that switching back does not start over: that costs more of the machine for those seconds only, never another place under the cap. See [Adaptive quality](transcoding.md#adaptive-quality).
+- With **Keep the converted video when the audio track changes**, a playback whose session stopped keeps its converted video 30 seconds for the next session to take over, and counts as one playback meanwhile, with that session once it does. See [Changing the audio track](transcoding.md#changing-the-audio-track).
 - At the cap, Polyfin plans no new video conversion, as when conversion is off. It picks the next version that plays without one, or else reports that no version is compatible.
 
 **Compared with Jellyfin:**
