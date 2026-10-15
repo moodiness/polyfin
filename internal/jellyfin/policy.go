@@ -148,7 +148,10 @@ func (h *Handler) hiddenLibraries(ctx context.Context, policy policyUpdate, enab
 // whether they may have video or audio converted, download and manage
 // subtitles, the server's libraries they see and their allowed hours. Like
 // Jellyfin, the policy replaces the stored one whole, and disabling a user
-// signs out their devices but the one that asked.
+// signs out their devices but the one that asked. For a member who follows
+// their group, a setting the group holds sent with another value than the
+// group's detaches them from it, keeping the policy whole; the policy the
+// app read back, as it is, leaves them following.
 func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	caller := callerFrom(r.Context())
 	// Jellyfin checks the caller's rights before reading the request.
@@ -220,6 +223,20 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	libraries := &hidden
+	if user.GroupID != nil && user.FollowGroup {
+		// The policy names only the server's libraries: one the group
+		// hides that is gone does not count as a change.
+		kept, err := h.hiddenLibraries(r.Context(), policyUpdate{}, nil)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		kept = slices.DeleteFunc(kept, func(id accounts.ID) bool { return !slices.Contains(user.HiddenLibraries, id) })
+		if accounts.SameLibraries(kept, hidden) {
+			libraries = nil
+		}
+	}
 	// An account that ended shows disabled to apps (see newUserDto): sent
 	// back, that is not the administrator disabling it.
 	disabled := policy.IsDisabled && (user.IsDisabled || !user.Ended(h.now()))
@@ -242,7 +259,7 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		SyncPlay:      &policy.SyncPlayAccess.access,
 		RemoteControl: &policy.EnableRemoteControlOfOtherUsers,
 		// The server's libraries the user does not see, and their hours.
-		HiddenLibraries: &hidden,
+		HiddenLibraries: libraries,
 		AccessSchedules: &schedules,
 		// The user's permission to manage collections.
 		CollectionManagement: &policy.EnableCollectionManagement,
@@ -250,6 +267,8 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		SubtitleManagement: &policy.EnableSubtitleManagement,
 		// Whether they may schedule and delete recordings.
 		LiveTvManagement: &policy.EnableLiveTvManagement,
+		// A setting the user's group holds changed detaches them from it.
+		DetachFromGroup: true,
 	}, caller.Device.ID)
 	switch {
 	case errors.Is(err, accounts.ErrLastAdministrator):
@@ -258,6 +277,18 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 	default:
 		h.Activity.UserChanged(r.Context(), updated)
+		switch {
+		case user.GroupID == nil:
+		case updated.GroupID == nil:
+			// Made an administrator, they left the group.
+			if group, err := h.Accounts.Group(r.Context(), *user.GroupID); err == nil {
+				h.Activity.GroupMemberRemoved(r.Context(), updated, group.Name)
+			}
+		case user.FollowGroup && !updated.FollowGroup:
+			if group, err := h.Accounts.Group(r.Context(), *user.GroupID); err == nil {
+				h.Activity.GroupMemberDetached(r.Context(), updated, group.Name, caller.Device.Client)
+			}
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

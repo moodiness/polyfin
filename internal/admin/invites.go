@@ -34,9 +34,10 @@ func newInviteUserJSON(user *accounts.InviteUser) *inviteUserJSON {
 // inviteJSON is an invite link as the invites list shows it: how many
 // accounts it may create and has created, when it expires (null for
 // never), the user whose settings new accounts copy (null for a new user's
-// defaults), who created it (null once deleted), its state: active,
-// used_up, expired or revoked, and how many days after its creation each
-// account it creates ends (null for never).
+// defaults), the group they join (null for none), who created it (null
+// once deleted), its state: active, used_up, expired or revoked, and how
+// many days after its creation each account it creates ends (null for
+// never).
 type inviteJSON struct {
 	ID                string          `json:"id"`
 	MaxUses           int             `json:"maxUses"`
@@ -45,6 +46,7 @@ type inviteJSON struct {
 	CreatedAt         time.Time       `json:"createdAt"`
 	RevokedAt         *time.Time      `json:"revokedAt"`
 	Model             *inviteUserJSON `json:"model"`
+	Group             *inviteUserJSON `json:"group"`
 	CreatedBy         *inviteUserJSON `json:"createdBy"`
 	State             string          `json:"state"`
 	AccountsEndInDays *int            `json:"accountsEndInDays"`
@@ -59,6 +61,7 @@ func (h *handler) newInviteJSON(invite accounts.Invite) inviteJSON {
 		CreatedAt: invite.CreatedAt,
 		RevokedAt: invite.RevokedAt,
 		Model:     newInviteUserJSON(invite.Model),
+		Group:     newInviteUserJSON(invite.Group),
 		CreatedBy: newInviteUserJSON(invite.CreatedBy),
 		State:     invite.State(h.now()),
 	}
@@ -84,15 +87,17 @@ func (h *handler) invites(w http.ResponseWriter, r *http.Request) {
 // createInvite creates an invite link. maxUses defaults to 1, and
 // expiresInDays to 7; null expiresInDays never expires. accountsEndInDays,
 // null or left out for never, ends each account the link creates that many
-// days after. The answer holds the link's token, given this once, and its
-// address when the server's public address is set (null otherwise: the
-// admin app completes it).
+// days after; groupId, null or left out for none, is the group they join.
+// The answer holds the link's token, given this once, and its address when
+// the server's public address is set (null otherwise: the admin app
+// completes it).
 func (h *handler) createInvite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		MaxUses           *int            `json:"maxUses"`
 		ExpiresInDays     json.RawMessage `json:"expiresInDays"`
 		ModelUserID       *string         `json:"modelUserId"`
 		AccountsEndInDays *int            `json:"accountsEndInDays"`
+		GroupID           *string         `json:"groupId"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -125,8 +130,16 @@ func (h *handler) createInvite(w http.ResponseWriter, r *http.Request) {
 		}
 		invite.Model = &id
 	}
+	if body.GroupID != nil && *body.GroupID != "" {
+		id, err := accounts.ParseID(*body.GroupID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_group")
+			return
+		}
+		invite.Group = &id
+	}
 	created, token, err := h.Accounts.CreateInvite(r.Context(), invite)
-	if inviteError(w, err) {
+	if inviteError(w, err) || accountError(w, err) {
 		return
 	}
 	if err != nil {
@@ -238,6 +251,9 @@ func (h *handler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	h.SignIns.Succeed(key)
 	h.Activity.UserJoined(r.Context(), user, invite, forwarded.Client(r))
+	if invite.Group != nil && user.GroupID != nil {
+		h.Activity.GroupMemberAdded(r.Context(), user, invite.Group.Name)
+	}
 	if h.Notifications != nil {
 		h.Notifications.UserJoined(r.Context(), user, invite)
 	}

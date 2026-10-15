@@ -75,7 +75,7 @@ func TestTurningDownloadsOffForEveryone(t *testing.T) {
 		t.Fatalf("before: %+v %v", user, err)
 	}
 
-	changed, err := store.TurnOffDownloads(ctx)
+	changed, _, err := store.TurnOffDownloads(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestTurningDownloadsOffForEveryone(t *testing.T) {
 		t.Errorf("signed-in app: %+v %v", user.ContentDownloading, err)
 	}
 	// Once nobody has it, nothing changes.
-	if again, err := store.TurnOffDownloads(ctx); err != nil || len(again) != 0 {
+	if again, _, err := store.TurnOffDownloads(ctx); err != nil || len(again) != 0 {
 		t.Errorf("again: %d users, %v", len(again), err)
 	}
 }

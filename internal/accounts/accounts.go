@@ -118,6 +118,11 @@ type User struct {
 	// an account, through a share link, while the server allows them
 	// (Settings.ShareLinks). Losing it revokes the user's links.
 	CanShare bool
+	// GroupID is the group the user belongs to, nil for none (see Group);
+	// while FollowGroup is set, the settings the group holds are its
+	// values, otherwise the user's own. FollowGroup is set without a group.
+	GroupID     *ID
+	FollowGroup bool
 }
 
 // NewUser describes an account to create.
@@ -126,6 +131,9 @@ type NewUser struct {
 	Password        string
 	IsAdministrator bool
 	IsHidden        bool
+	// Group is the group the account joins and follows, nil for none; an
+	// administrator cannot join one (ErrAdministratorGroup).
+	Group *ID
 }
 
 // UserChanges lists the fields to update; nil fields are kept.
@@ -167,6 +175,19 @@ type UserChanges struct {
 	EndsOn *time.Time
 	// CanShare, see User.
 	CanShare *bool
+	// Group sets the user's group, the zero ID for none. Joining a group
+	// follows it, unless FollowGroup says otherwise; leaving one keeps its
+	// values as the user's own. An administrator cannot join one
+	// (ErrAdministratorGroup), and making a member one takes them out.
+	Group *ID
+	// FollowGroup has the user follow their group, taking its values back,
+	// or keep its values as their own and stop following it.
+	FollowGroup *bool
+	// DetachFromGroup decides what a change to a setting the user's group
+	// holds does while they follow it, when it sets another value than the
+	// group's: with it, the user stops following the group and keeps the
+	// change; without it, the change is refused (ErrFollowsGroup).
+	DetachFromGroup bool
 }
 
 // Store is the accounts repository.
@@ -258,7 +279,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share"
+	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -269,7 +290,8 @@ func (user *User) fields() []any {
 		&user.PersonalAddons, &user.UseSharedAddons, &user.InvalidLoginAttempts, &user.BlockedUntil,
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
-		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare}
+		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare,
+		&user.GroupID, &user.FollowGroup}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -348,9 +370,21 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, la
 	return user, err
 }
 
-// CreateUser adds an account.
+// CreateUser adds an account, in its group if it names one.
 func (s *Store) CreateUser(ctx context.Context, user NewUser) (User, error) {
-	return createUser(ctx, s.db, user)
+	if user.Group == nil {
+		return createUser(ctx, s.db, user)
+	}
+	var created User
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var err error
+		created, err = createUserIn(ctx, tx, user)
+		return err
+	})
+	if err != nil {
+		return User{}, err
+	}
+	return created, nil
 }
 
 // UserError is why one of the accounts CreateUsers was given could not be
@@ -376,7 +410,7 @@ func (s *Store) CreateUsers(ctx context.Context, users []NewUser) ([]User, error
 	created := make([]User, 0, len(users))
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		for i, user := range users {
-			added, err := createUser(ctx, tx, user)
+			added, err := createUserIn(ctx, tx, user)
 			if err != nil {
 				return &UserError{Index: i, Err: err}
 			}
@@ -388,6 +422,20 @@ func (s *Store) CreateUsers(ctx context.Context, users []NewUser) ([]User, error
 		return nil, err
 	}
 	return created, nil
+}
+
+// createUserIn adds an account in tx, and has it join and follow its group
+// if it names one.
+func createUserIn(ctx context.Context, tx pgx.Tx, user NewUser) (User, error) {
+	if user.Group != nil && user.IsAdministrator {
+		return User{}, ErrAdministratorGroup
+	}
+	created, err := createUser(ctx, tx, user)
+	if err != nil || user.Group == nil {
+		return created, err
+	}
+	created, _, err = applyUserChanges(ctx, tx, created.ID, UserChanges{Group: user.Group}, userUpdate{}, signIn{})
+	return created, err
 }
 
 func createUser(ctx context.Context, db interface {
@@ -507,146 +555,73 @@ type signIn struct {
 	device       *ID
 }
 
-func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep signIn) (User, error) {
-	var name, hash *string
-	var parental ParentalControl
+// userUpdate is a UserChanges checked and normalized, as it is written.
+type userUpdate struct {
+	name, hash *string
+	parental   ParentalControl
+	hidden     *[]ID
+	genres     *[]string
+	schedules  *[]AccessSchedule
+}
+
+// prepare checks changes and normalizes what they set.
+func (changes UserChanges) prepare() (userUpdate, error) {
+	var u userUpdate
 	if changes.Parental != nil {
 		normalized, err := changes.Parental.normalized()
 		if err != nil {
-			return User{}, err
+			return u, err
 		}
-		parental = normalized
+		u.parental = normalized
 	}
 	if err := changes.checkAccess(); err != nil {
-		return User{}, err
+		return u, err
 	}
-	var hidden *[]ID
 	if changes.HiddenLibraries != nil {
-		hidden = new(normalizedLibraries(*changes.HiddenLibraries))
+		u.hidden = new(normalizedLibraries(*changes.HiddenLibraries))
 	}
-	var genres *[]string
 	if changes.BlockedGenres != nil {
 		normalized, err := normalizedGenres(*changes.BlockedGenres)
 		if err != nil {
-			return User{}, err
+			return u, err
 		}
-		genres = &normalized
+		u.genres = &normalized
 	}
-	var schedules *[]AccessSchedule
 	if changes.AccessSchedules != nil {
 		normalized, err := normalizedSchedules(*changes.AccessSchedules)
 		if err != nil {
-			return User{}, err
+			return u, err
 		}
-		schedules = &normalized
+		u.schedules = &normalized
 	}
 	if changes.Name != nil {
 		normalized, err := normalizeName(*changes.Name)
 		if err != nil {
-			return User{}, err
+			return u, err
 		}
-		name = &normalized
+		u.name = &normalized
 	}
 	if changes.Password != nil {
 		if err := checkPassword(*changes.Password); err != nil {
-			return User{}, err
+			return u, err
 		}
 		hashed := hashPassword(*changes.Password)
-		hash = &hashed
+		u.hash = &hashed
+	}
+	return u, nil
+}
+
+func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep signIn) (User, error) {
+	u, err := changes.prepare()
+	if err != nil {
+		return User{}, err
 	}
 	var updated User
 	var signedOut []ID
-	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
-			return err
-		}
-		current, err := scanUser(tx.QueryRow(ctx, "SELECT "+userColumns+" FROM users WHERE id = $1 FOR UPDATE", id))
-		if err != nil {
-			return err
-		}
-		staysAdministrator := current.IsAdministrator && (changes.IsAdministrator == nil || *changes.IsAdministrator)
-		staysEnabled := !current.IsDisabled && (changes.IsDisabled == nil || !*changes.IsDisabled)
-		if current.IsAdministrator && !current.IsDisabled && !(staysAdministrator && staysEnabled) {
-			if err := requireAnotherAdministrator(ctx, tx, id); err != nil {
-				return err
-			}
-		}
-		// An administrator's account never ends, so that the last one is
-		// never locked out: making a user one clears their end date.
-		endsOn := current.EndsOn
-		if changes.EndsOn != nil {
-			endsOn = endDate(*changes.EndsOn)
-		}
-		administrator := current.IsAdministrator
-		if changes.IsAdministrator != nil {
-			administrator = *changes.IsAdministrator
-		}
-		if administrator {
-			if changes.EndsOn != nil && endsOn != nil {
-				return ErrAdministratorEnds
-			}
-			endsOn = nil
-		}
-		if hash != nil {
-			// A new password starts the count of wrong ones again.
-			if _, err := tx.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL WHERE id = $1", id); err != nil {
-				return err
-			}
-		}
-		updated, err = scanUser(tx.QueryRow(ctx, `UPDATE users SET
-				name = coalesce($2, name),
-				password_hash = coalesce($3, password_hash),
-				is_administrator = coalesce($4, is_administrator),
-				is_hidden = coalesce($5, is_hidden),
-				is_disabled = coalesce($6, is_disabled),
-				max_parental_rating = CASE WHEN $7 THEN $8 ELSE max_parental_rating END,
-				max_parental_sub_rating = CASE WHEN $7 THEN $9 ELSE max_parental_sub_rating END,
-				block_unrated_items = CASE WHEN $7 THEN $10 ELSE block_unrated_items END,
-				video_transcoding = coalesce($11, video_transcoding),
-				audio_transcoding = coalesce($12, audio_transcoding),
-				content_downloading = coalesce($13, content_downloading),
-				personal_addons = coalesce($14, personal_addons),
-				max_playbacks = coalesce($15, max_playbacks),
-				max_bitrate = coalesce($16, max_bitrate),
-				live_tv = coalesce($17, live_tv),
-				sync_play = coalesce($18, sync_play),
-				remote_control = coalesce($19, remote_control),
-				hidden_libraries = coalesce($20, hidden_libraries),
-				blocked_genres = coalesce($21, blocked_genres),
-				access_schedules = coalesce($22::jsonb, access_schedules),
-				collection_management = coalesce($23, collection_management),
-				subtitle_management = coalesce($24, subtitle_management),
-				live_tv_management = coalesce($25, live_tv_management),
-				quality_group = coalesce($26, quality_group),
-				use_shared_addons = coalesce($27, use_shared_addons),
-				ends_on = $28,
-				end_recorded = end_recorded AND ends_on IS NOT DISTINCT FROM $28,
-				can_share = coalesce($29, can_share)
-			WHERE id = $1 RETURNING `+userColumns,
-			id, name, hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
-			changes.Parental != nil, parental.MaxRating, parental.MaxSubRating, parental.BlockUnrated,
-			changes.VideoTranscoding, changes.AudioTranscoding, changes.ContentDownloading,
-			changes.PersonalAddons,
-			changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
-			hidden, genres, schedules, changes.CollectionManagement,
-			changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare))
-		if uniqueViolation(err) {
-			return ErrNameTaken
-		}
-		if err != nil {
-			return err
-		}
-		if hash != nil || (updated.IsDisabled && !current.IsDisabled) {
-			signedOut, err = signOutEverywhere(ctx, tx, id, keep)
-			if err != nil {
-				return err
-			}
-		}
-		// A user who may no longer share, or is disabled, loses their links.
-		if !updated.CanShare || updated.IsDisabled {
-			return revokeShareLinks(ctx, tx, id)
-		}
-		return nil
+	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var err error
+		updated, signedOut, err = applyUserChanges(ctx, tx, id, changes, u, keep)
+		return err
 	})
 	// Whatever changed, permissions, limits or a sign-out, applies from
 	// the user's next request.
@@ -655,6 +630,117 @@ func (s *Store) updateUser(ctx context.Context, id ID, changes UserChanges, keep
 		s.notifySignOut(signedOut)
 	}
 	return updated, err
+}
+
+// applyUserChanges applies changes, prepared as u, to the account id in tx,
+// and returns it with the devices it signed out. It takes the
+// administrators' lock first, which also serializes the changes to groups.
+func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges, u userUpdate, keep signIn) (User, []ID, error) {
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
+		return User{}, nil, err
+	}
+	current, err := scanUser(tx.QueryRow(ctx, "SELECT "+userColumns+" FROM users WHERE id = $1 FOR UPDATE", id))
+	if err != nil {
+		return User{}, nil, err
+	}
+	staysAdministrator := current.IsAdministrator && (changes.IsAdministrator == nil || *changes.IsAdministrator)
+	staysEnabled := !current.IsDisabled && (changes.IsDisabled == nil || !*changes.IsDisabled)
+	if current.IsAdministrator && !current.IsDisabled && !(staysAdministrator && staysEnabled) {
+		if err := requireAnotherAdministrator(ctx, tx, id); err != nil {
+			return User{}, nil, err
+		}
+	}
+	// An administrator's account never ends, so that the last one is
+	// never locked out: making a user one clears their end date.
+	endsOn := current.EndsOn
+	if changes.EndsOn != nil {
+		endsOn = endDate(*changes.EndsOn)
+	}
+	administrator := current.IsAdministrator
+	if changes.IsAdministrator != nil {
+		administrator = *changes.IsAdministrator
+	}
+	if administrator {
+		if changes.EndsOn != nil && endsOn != nil {
+			return User{}, nil, ErrAdministratorEnds
+		}
+		endsOn = nil
+	}
+	membership, err := groupMembership(ctx, tx, current, administrator, changes, u)
+	if err != nil {
+		return User{}, nil, err
+	}
+	if u.hash != nil {
+		// A new password starts the count of wrong ones again.
+		if _, err := tx.Exec(ctx, "UPDATE users SET invalid_login_attempts = 0, blocked_until = NULL WHERE id = $1", id); err != nil {
+			return User{}, nil, err
+		}
+	}
+	updated, err := scanUser(tx.QueryRow(ctx, `UPDATE users SET
+			name = coalesce($2, name),
+			password_hash = coalesce($3, password_hash),
+			is_administrator = coalesce($4, is_administrator),
+			is_hidden = coalesce($5, is_hidden),
+			is_disabled = coalesce($6, is_disabled),
+			max_parental_rating = CASE WHEN $7 THEN $8 ELSE max_parental_rating END,
+			max_parental_sub_rating = CASE WHEN $7 THEN $9 ELSE max_parental_sub_rating END,
+			block_unrated_items = CASE WHEN $7 THEN $10 ELSE block_unrated_items END,
+			video_transcoding = coalesce($11, video_transcoding),
+			audio_transcoding = coalesce($12, audio_transcoding),
+			content_downloading = coalesce($13, content_downloading),
+			personal_addons = coalesce($14, personal_addons),
+			max_playbacks = coalesce($15, max_playbacks),
+			max_bitrate = coalesce($16, max_bitrate),
+			live_tv = coalesce($17, live_tv),
+			sync_play = coalesce($18, sync_play),
+			remote_control = coalesce($19, remote_control),
+			hidden_libraries = coalesce($20, hidden_libraries),
+			blocked_genres = coalesce($21, blocked_genres),
+			access_schedules = coalesce($22::jsonb, access_schedules),
+			collection_management = coalesce($23, collection_management),
+			subtitle_management = coalesce($24, subtitle_management),
+			live_tv_management = coalesce($25, live_tv_management),
+			quality_group = coalesce($26, quality_group),
+			use_shared_addons = coalesce($27, use_shared_addons),
+			ends_on = $28,
+			end_recorded = end_recorded AND ends_on IS NOT DISTINCT FROM $28,
+			can_share = coalesce($29, can_share),
+			group_id = $30,
+			follow_group = $31
+		WHERE id = $1 RETURNING `+userColumns,
+		id, u.name, u.hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
+		changes.Parental != nil, u.parental.MaxRating, u.parental.MaxSubRating, u.parental.BlockUnrated,
+		changes.VideoTranscoding, changes.AudioTranscoding, changes.ContentDownloading,
+		changes.PersonalAddons,
+		changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
+		u.hidden, u.genres, u.schedules, changes.CollectionManagement,
+		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
+		membership.group, membership.follow))
+	if uniqueViolation(err) {
+		return User{}, nil, ErrNameTaken
+	}
+	if err != nil {
+		return User{}, nil, err
+	}
+	if membership.takeValues {
+		if updated, err = scanUser(tx.QueryRow(ctx, "UPDATE users SET ("+groupColumns+") = (SELECT "+groupColumns+
+			" FROM user_groups WHERE id = $2) WHERE id = $1 RETURNING "+userColumns, id, membership.group)); err != nil {
+			return User{}, nil, err
+		}
+	}
+	var signedOut []ID
+	if u.hash != nil || (updated.IsDisabled && !current.IsDisabled) {
+		if signedOut, err = signOutEverywhere(ctx, tx, id, keep); err != nil {
+			return User{}, nil, err
+		}
+	}
+	// A user who may no longer share, or is disabled, loses their links.
+	if !updated.CanShare || updated.IsDisabled {
+		if err := revokeShareLinks(ctx, tx, id); err != nil {
+			return User{}, nil, err
+		}
+	}
+	return updated, signedOut, nil
 }
 
 // ChangePassword replaces the caller's own password after checking the

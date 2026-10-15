@@ -19,14 +19,42 @@ import (
 )
 
 type userJSON struct {
-	ID              string              `json:"id"`
-	Name            string              `json:"name"`
-	IsAdministrator bool                `json:"isAdministrator"`
-	IsHidden        bool                `json:"isHidden"`
-	IsDisabled      bool                `json:"isDisabled"`
-	CreatedAt       time.Time           `json:"createdAt"`
-	LastLoginAt     *time.Time          `json:"lastLoginAt"`
-	LastActivityAt  *time.Time          `json:"lastActivityAt"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	IsAdministrator bool       `json:"isAdministrator"`
+	IsHidden        bool       `json:"isHidden"`
+	IsDisabled      bool       `json:"isDisabled"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	LastLoginAt     *time.Time `json:"lastLoginAt"`
+	LastActivityAt  *time.Time `json:"lastActivityAt"`
+	// The settings a group holds; a member who follows their group has its
+	// values.
+	limitsJSON
+	// BlockedUntil is when the block of the account for wrong passwords
+	// ends, null when it is not blocked.
+	BlockedUntil *time.Time `json:"blockedUntil"`
+	// PasswordResetPin is the PIN the user asked for from a Jellyfin app's
+	// forgotten password screen, while it is valid, null otherwise: their
+	// password becomes the PIN once they enter it.
+	PasswordResetPin *passwordResetPinJSON `json:"passwordResetPin"`
+	// ImageTag identifies their profile picture, served at /UserImage,
+	// null without one.
+	ImageTag *string `json:"imageTag"`
+	// EndsOn is the date the account ends, YYYY-MM-DD in the server's time
+	// zone, null for never; Ended is set once it has come, and the account
+	// is refused as a disabled one is.
+	EndsOn *string `json:"endsOn"`
+	Ended  bool    `json:"ended"`
+	// GroupID and GroupName are the user's group, null for none;
+	// FollowGroup tells whether they follow it, set without a group.
+	GroupID     *string `json:"groupId"`
+	GroupName   *string `json:"groupName"`
+	FollowGroup bool    `json:"followGroup"`
+}
+
+// limitsJSON are the settings a group holds, as a user's JSON and a
+// group's show them.
+type limitsJSON struct {
 	ParentalControl parentalControlJSON `json:"parentalControl"`
 	// Transcoding is set when the user may have both video and audio
 	// converted; Downloads, when they may download.
@@ -34,9 +62,6 @@ type userJSON struct {
 	Downloads   bool `json:"downloads"`
 	// PersonalAddons is set when the user may add and use their own addons.
 	PersonalAddons bool `json:"personalAddons"`
-	// BlockedUntil is when the block of the account for wrong passwords
-	// ends, null when it is not blocked.
-	BlockedUntil *time.Time `json:"blockedUntil"`
 	// MaxPlaybacks is how many of the user's other devices may be playing
 	// when one more starts, 0 for no limit; MaxBitrate, the highest bitrate
 	// of their playback in bits per second, 0 for no limit. LiveTv lets them
@@ -59,15 +84,9 @@ type userJSON struct {
 	// LiveTvManagement lets the user schedule and delete Live TV
 	// recordings.
 	LiveTvManagement bool `json:"liveTvManagement"`
-	// PasswordResetPin is the PIN the user asked for from a Jellyfin app's
-	// forgotten password screen, while it is valid, null otherwise: their
-	// password becomes the PIN once they enter it.
-	PasswordResetPin *passwordResetPinJSON `json:"passwordResetPin"`
 	// SubtitleManagement lets the user add subtitle files to titles from
-	// their apps; ImageTag identifies their profile picture, served at
-	// /UserImage, null without one.
-	SubtitleManagement bool    `json:"subtitleManagement"`
-	ImageTag           *string `json:"imageTag"`
+	// their apps.
+	SubtitleManagement bool `json:"subtitleManagement"`
 	// CanShare lets the user give a movie or an episode to someone
 	// without an account, through a share link, while the server allows
 	// them.
@@ -75,11 +94,100 @@ type userJSON struct {
 	// QualityGroup is the tallest video the user is offered, in lines: 480,
 	// 720, 1080, 1440 or 2160, or 0 for Original, no limit.
 	QualityGroup int `json:"qualityGroup"`
-	// EndsOn is the date the account ends, YYYY-MM-DD in the server's time
-	// zone, null for never; Ended is set once it has come, and the account
-	// is refused as a disabled one is.
-	EndsOn *string `json:"endsOn"`
-	Ended  bool    `json:"ended"`
+}
+
+func newLimitsJSON(limits accounts.Limits) limitsJSON {
+	return limitsJSON{
+		ParentalControl: parentalControlJSON{
+			MaxRating:    limits.Parental.MaxRating,
+			MaxSubRating: limits.Parental.MaxSubRating,
+			BlockUnrated: append([]string{}, limits.Parental.BlockUnrated...),
+		},
+		Transcoding:          limits.VideoTranscoding && limits.AudioTranscoding,
+		Downloads:            limits.ContentDownloading,
+		PersonalAddons:       limits.PersonalAddons,
+		MaxPlaybacks:         limits.MaxPlaybacks,
+		MaxBitrate:           limits.MaxBitrate,
+		LiveTv:               limits.LiveTv,
+		SyncPlay:             string(limits.SyncPlay),
+		RemoteControl:        limits.RemoteControl,
+		HiddenLibraries:      idStrings(limits.HiddenLibraries),
+		BlockedGenres:        append([]string{}, limits.BlockedGenres...),
+		AccessSchedules:      schedulesJSON(limits.AccessSchedules),
+		CollectionManagement: limits.CollectionManagement,
+		LiveTvManagement:     limits.LiveTvManagement,
+		SubtitleManagement:   limits.SubtitleManagement,
+		CanShare:             limits.CanShare,
+		QualityGroup:         limits.QualityGroup,
+	}
+}
+
+// limitChanges are the settings a group holds as a change to a user or a
+// group sets them; see limitsJSON.
+type limitChanges struct {
+	ParentalControl *parentalControlJSON `json:"parentalControl"`
+	// Transcoding sets both video and audio conversion.
+	Transcoding          *bool                    `json:"transcoding"`
+	Downloads            *bool                    `json:"downloads"`
+	PersonalAddons       *bool                    `json:"personalAddons"`
+	MaxPlaybacks         *int                     `json:"maxPlaybacks"`
+	MaxBitrate           *int                     `json:"maxBitrate"`
+	LiveTv               *bool                    `json:"liveTv"`
+	SyncPlay             *accounts.SyncPlayAccess `json:"syncPlay"`
+	RemoteControl        *bool                    `json:"remoteControl"`
+	HiddenLibraries      *[]string                `json:"hiddenLibraries"`
+	BlockedGenres        *[]string                `json:"blockedGenres"`
+	AccessSchedules      *[]accessScheduleJSON    `json:"accessSchedules"`
+	CollectionManagement *bool                    `json:"collectionManagement"`
+	SubtitleManagement   *bool                    `json:"subtitleManagement"`
+	CanShare             *bool                    `json:"canShare"`
+	LiveTvManagement     *bool                    `json:"liveTvManagement"`
+	QualityGroup         *int                     `json:"qualityGroup"`
+}
+
+// changes returns what l sets, or answers the request with its error and
+// returns false.
+func (l limitChanges) changes(w http.ResponseWriter) (accounts.UserChanges, bool) {
+	changes := accounts.UserChanges{
+		VideoTranscoding:     l.Transcoding,
+		AudioTranscoding:     l.Transcoding,
+		ContentDownloading:   l.Downloads,
+		PersonalAddons:       l.PersonalAddons,
+		MaxPlaybacks:         l.MaxPlaybacks,
+		MaxBitrate:           l.MaxBitrate,
+		LiveTv:               l.LiveTv,
+		SyncPlay:             l.SyncPlay,
+		RemoteControl:        l.RemoteControl,
+		BlockedGenres:        l.BlockedGenres,
+		CollectionManagement: l.CollectionManagement,
+		SubtitleManagement:   l.SubtitleManagement,
+		LiveTvManagement:     l.LiveTvManagement,
+		QualityGroup:         l.QualityGroup,
+		CanShare:             l.CanShare,
+	}
+	if p := l.ParentalControl; p != nil {
+		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
+	}
+	if l.HiddenLibraries != nil {
+		hidden := make([]accounts.ID, 0, len(*l.HiddenLibraries))
+		for _, raw := range *l.HiddenLibraries {
+			id, err := accounts.ParseID(raw)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid_hidden_libraries")
+				return changes, false
+			}
+			hidden = append(hidden, id)
+		}
+		changes.HiddenLibraries = &hidden
+	}
+	if l.AccessSchedules != nil {
+		schedules := make([]accounts.AccessSchedule, 0, len(*l.AccessSchedules))
+		for _, s := range *l.AccessSchedules {
+			schedules = append(schedules, accounts.AccessSchedule{Day: s.Day, StartHour: s.StartHour, EndHour: s.EndHour})
+		}
+		changes.AccessSchedules = &schedules
+	}
+	return changes, true
 }
 
 type passwordResetPinJSON struct {
@@ -87,16 +195,34 @@ type passwordResetPinJSON struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
-// withPins adds to users the password reset PINs still valid.
+// withPins adds to users the password reset PINs still valid, and the
+// names of their groups.
 func (h *handler) withPins(r *http.Request, users ...userJSON) ([]userJSON, error) {
 	pins, err := h.Accounts.PasswordResetPINs(r.Context())
 	if err != nil {
 		return nil, err
 	}
+	var names map[string]string
 	for i, user := range users {
 		id, _ := accounts.ParseID(user.ID)
 		if pin, ok := pins[id]; ok {
 			users[i].PasswordResetPin = &passwordResetPinJSON{Pin: pin.PIN, ExpiresAt: pin.ExpiresAt}
+		}
+		if user.GroupID == nil {
+			continue
+		}
+		if names == nil {
+			groups, err := h.Accounts.Groups(r.Context())
+			if err != nil {
+				return nil, err
+			}
+			names = make(map[string]string, len(groups))
+			for _, group := range groups {
+				names[group.ID.String()] = group.Name
+			}
+		}
+		if name, ok := names[*user.GroupID]; ok {
+			users[i].GroupName = &name
 		}
 	}
 	return users, nil
@@ -131,7 +257,7 @@ type parentalControlJSON struct {
 }
 
 func newUserJSON(user accounts.User) userJSON {
-	return userJSON{
+	result := userJSON{
 		ID:              user.ID.String(),
 		Name:            user.Name,
 		IsAdministrator: user.IsAdministrator,
@@ -140,40 +266,18 @@ func newUserJSON(user accounts.User) userJSON {
 		CreatedAt:       user.CreatedAt,
 		LastLoginAt:     user.LastLoginAt,
 		LastActivityAt:  user.LastActivityAt,
-		ParentalControl: parentalControlJSON{
-			MaxRating:    user.Parental.MaxRating,
-			MaxSubRating: user.Parental.MaxSubRating,
-			BlockUnrated: append([]string{}, user.Parental.BlockUnrated...),
-		},
-		Transcoding: user.VideoTranscoding && user.AudioTranscoding,
-		Downloads:   user.ContentDownloading,
-		// Whether the user may have their own addons, and their block.
-		PersonalAddons: user.PersonalAddons,
-		BlockedUntil:   blockedUntil(user),
-		// The user's playback and access limits.
-		MaxPlaybacks:  user.MaxPlaybacks,
-		MaxBitrate:    user.MaxBitrate,
-		LiveTv:        user.LiveTv,
-		SyncPlay:      string(user.SyncPlay),
-		RemoteControl: user.RemoteControl,
-		// The user's content settings.
-		HiddenLibraries: idStrings(user.HiddenLibraries),
-		BlockedGenres:   append([]string{}, user.BlockedGenres...),
-		AccessSchedules: schedulesJSON(user.AccessSchedules),
-		// The user's permission to manage collections.
-		CollectionManagement: user.CollectionManagement,
-		// Subtitles and the profile picture.
-		SubtitleManagement: user.SubtitleManagement,
-		ImageTag:           imageTag(user),
-		CanShare:           user.CanShare,
-		// Whether the user may schedule and delete recordings.
-		LiveTvManagement: user.LiveTvManagement,
-		// The tallest video the user is offered.
-		QualityGroup: user.QualityGroup,
+		limitsJSON:      newLimitsJSON(user.Limits()),
+		BlockedUntil:    blockedUntil(user),
+		ImageTag:        imageTag(user),
 		// When the account ends.
-		EndsOn: endsOn(user),
-		Ended:  user.Ended(time.Now()),
+		EndsOn:      endsOn(user),
+		Ended:       user.Ended(time.Now()),
+		FollowGroup: user.FollowGroup || user.GroupID == nil,
 	}
+	if user.GroupID != nil {
+		result.GroupID = new(user.GroupID.String())
+	}
+	return result
 }
 
 // endsOn is the date user's account ends, nil for never.
@@ -799,18 +903,76 @@ func (h *handler) users(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// groupParam reads the group a request names: nil when it names none, the
+// zero ID for an empty string, No group. It answers an identifier that is
+// not one with invalid_group, and returns false.
+func groupParam(w http.ResponseWriter, raw *string) (*accounts.ID, bool) {
+	if raw == nil {
+		return nil, true
+	}
+	if *raw == "" {
+		return &accounts.ID{}, true
+	}
+	id, err := accounts.ParseID(*raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_group")
+		return nil, false
+	}
+	return &id, true
+}
+
+// groupName is the name of the group id, empty when it no longer exists.
+func (h *handler) groupName(r *http.Request, id *accounts.ID) string {
+	if id == nil {
+		return ""
+	}
+	group, err := h.Accounts.Group(r.Context(), *id)
+	if err != nil {
+		return ""
+	}
+	return group.Name
+}
+
+// recordMembership records the changes to a user's group from before to
+// after: leaving a group, joining one, or no longer following it.
+func (h *handler) recordMembership(r *http.Request, before, after accounts.User) {
+	same := func(a, b *accounts.ID) bool { return (a == nil) == (b == nil) && (a == nil || *a == *b) }
+	if !same(before.GroupID, after.GroupID) {
+		if before.GroupID != nil {
+			h.Activity.GroupMemberRemoved(r.Context(), after, h.groupName(r, before.GroupID))
+		}
+		if after.GroupID != nil {
+			h.Activity.GroupMemberAdded(r.Context(), after, h.groupName(r, after.GroupID))
+		}
+		return
+	}
+	if after.GroupID != nil && before.FollowGroup && !after.FollowGroup {
+		h.Activity.GroupMemberDetached(r.Context(), after, h.groupName(r, after.GroupID), "")
+	}
+}
+
 func (h *handler) createUser(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name            string `json:"name"`
 		Password        string `json:"password"`
 		IsAdministrator bool   `json:"isAdministrator"`
 		IsHidden        bool   `json:"isHidden"`
+		// GroupID is the group the account joins and follows, empty or
+		// left out for none.
+		GroupID *string `json:"groupId"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
+	group, ok := groupParam(w, body.GroupID)
+	if !ok {
+		return
+	}
+	if group != nil && *group == (accounts.ID{}) {
+		group = nil
+	}
 	user, err := h.Accounts.CreateUser(r.Context(), accounts.NewUser{
-		Name: body.Name, Password: body.Password, IsAdministrator: body.IsAdministrator, IsHidden: body.IsHidden,
+		Name: body.Name, Password: body.Password, IsAdministrator: body.IsAdministrator, IsHidden: body.IsHidden, Group: group,
 	})
 	if accountError(w, err) {
 		return
@@ -820,7 +982,10 @@ func (h *handler) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Activity.UserCreated(r.Context(), user)
-	writeJSON(w, http.StatusCreated, newUserJSON(user))
+	if user.GroupID != nil {
+		h.Activity.GroupMemberAdded(r.Context(), user, h.groupName(r, user.GroupID))
+	}
+	h.writeUser(w, r, http.StatusCreated, user)
 }
 
 func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
@@ -829,39 +994,20 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name            *string              `json:"name"`
-		Password        *string              `json:"password"`
-		IsAdministrator *bool                `json:"isAdministrator"`
-		IsHidden        *bool                `json:"isHidden"`
-		IsDisabled      *bool                `json:"isDisabled"`
-		ParentalControl *parentalControlJSON `json:"parentalControl"`
-		// Transcoding sets both video and audio conversion.
-		Transcoding *bool `json:"transcoding"`
-		Downloads   *bool `json:"downloads"`
-		// PersonalAddons lets the user add and use their own addons.
-		PersonalAddons *bool `json:"personalAddons"`
-		// The user's playback and access limits, see userJSON.
-		MaxPlaybacks  *int                     `json:"maxPlaybacks"`
-		MaxBitrate    *int                     `json:"maxBitrate"`
-		LiveTv        *bool                    `json:"liveTv"`
-		SyncPlay      *accounts.SyncPlayAccess `json:"syncPlay"`
-		RemoteControl *bool                    `json:"remoteControl"`
-		// The user's content settings; see userJSON.
-		HiddenLibraries *[]string             `json:"hiddenLibraries"`
-		BlockedGenres   *[]string             `json:"blockedGenres"`
-		AccessSchedules *[]accessScheduleJSON `json:"accessSchedules"`
-		// CollectionManagement lets the user manage collections.
-		CollectionManagement *bool `json:"collectionManagement"`
-		// SubtitleManagement, see userJSON.
-		SubtitleManagement *bool `json:"subtitleManagement"`
-		// CanShare, see userJSON.
-		CanShare *bool `json:"canShare"`
-		// LiveTvManagement, see userJSON.
-		LiveTvManagement *bool `json:"liveTvManagement"`
-		// QualityGroup, see userJSON.
-		QualityGroup *int `json:"qualityGroup"`
+		Name            *string `json:"name"`
+		Password        *string `json:"password"`
+		IsAdministrator *bool   `json:"isAdministrator"`
+		IsHidden        *bool   `json:"isHidden"`
+		IsDisabled      *bool   `json:"isDisabled"`
+		// The settings a group holds, see userJSON; refused while the user
+		// follows their group, unless followGroup turns that off.
+		limitChanges
 		// EndsOn, see userJSON: a date, or null for never.
 		EndsOn json.RawMessage `json:"endsOn"`
+		// GroupID is the group the user joins and follows, empty for none;
+		// FollowGroup has them follow it, or keep its values as their own.
+		GroupID     *string `json:"groupId"`
+		FollowGroup *bool   `json:"followGroup"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -871,50 +1017,18 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	if id == session.User.ID {
 		keep = session.TokenHash
 	}
-	changes := accounts.UserChanges{
-		Name:               body.Name,
-		Password:           body.Password,
-		IsAdministrator:    body.IsAdministrator,
-		IsHidden:           body.IsHidden,
-		IsDisabled:         body.IsDisabled,
-		VideoTranscoding:   body.Transcoding,
-		AudioTranscoding:   body.Transcoding,
-		ContentDownloading: body.Downloads,
-		PersonalAddons:     body.PersonalAddons,
-		MaxPlaybacks:       body.MaxPlaybacks,
-		MaxBitrate:         body.MaxBitrate,
-		LiveTv:             body.LiveTv,
-		SyncPlay:           body.SyncPlay,
-		RemoteControl:      body.RemoteControl,
-		BlockedGenres:      body.BlockedGenres,
-		// The user's permission to manage collections.
-		CollectionManagement: body.CollectionManagement,
-		SubtitleManagement:   body.SubtitleManagement,
-		LiveTvManagement:     body.LiveTvManagement,
-		QualityGroup:         body.QualityGroup,
-		CanShare:             body.CanShare,
+	changes, ok := body.changes(w)
+	if !ok {
+		return
 	}
-	if p := body.ParentalControl; p != nil {
-		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
-	}
-	if body.HiddenLibraries != nil {
-		hidden := make([]accounts.ID, 0, len(*body.HiddenLibraries))
-		for _, raw := range *body.HiddenLibraries {
-			id, err := accounts.ParseID(raw)
-			if err != nil {
-				writeError(w, http.StatusBadRequest, "invalid_hidden_libraries")
-				return
-			}
-			hidden = append(hidden, id)
-		}
-		changes.HiddenLibraries = &hidden
-	}
-	if body.AccessSchedules != nil {
-		schedules := make([]accounts.AccessSchedule, 0, len(*body.AccessSchedules))
-		for _, s := range *body.AccessSchedules {
-			schedules = append(schedules, accounts.AccessSchedule{Day: s.Day, StartHour: s.StartHour, EndHour: s.EndHour})
-		}
-		changes.AccessSchedules = &schedules
+	changes.Name = body.Name
+	changes.Password = body.Password
+	changes.IsAdministrator = body.IsAdministrator
+	changes.IsHidden = body.IsHidden
+	changes.IsDisabled = body.IsDisabled
+	changes.FollowGroup = body.FollowGroup
+	if changes.Group, ok = groupParam(w, body.GroupID); !ok {
+		return
 	}
 	if body.EndsOn != nil {
 		end, ok := endDate(body.EndsOn)
@@ -924,7 +1038,11 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		changes.EndsOn = &end
 	}
-	user, err := h.Accounts.UpdateUser(r.Context(), id, changes, keep)
+	before, err := h.Accounts.User(r.Context(), id)
+	var user accounts.User
+	if err == nil {
+		user, err = h.Accounts.UpdateUser(r.Context(), id, changes, keep)
+	}
 	if accountError(w, err) {
 		return
 	}
@@ -938,6 +1056,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	if changes != (accounts.UserChanges{Password: changes.Password}) {
 		h.Activity.UserChanged(r.Context(), user)
 	}
+	h.recordMembership(r, before, user)
 	h.writeUser(w, r, http.StatusOK, user)
 }
 
@@ -1000,13 +1119,16 @@ func (h *handler) unblockUser(w http.ResponseWriter, r *http.Request) {
 	h.writeUser(w, r, http.StatusOK, user)
 }
 
-// turnOffDownloads takes the permission to download away from every user,
-// and answers with those who had it.
+// turnOffDownloads takes the permission to download away from every user
+// and every group, and answers with the users who had it.
 func (h *handler) turnOffDownloads(w http.ResponseWriter, r *http.Request) {
-	changed, err := h.Accounts.TurnOffDownloads(r.Context())
+	changed, groups, err := h.Accounts.TurnOffDownloads(r.Context())
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	for _, group := range groups {
+		h.Activity.GroupChanged(r.Context(), group, []string{accounts.SectionAccess})
 	}
 	result := make([]userJSON, 0, len(changed))
 	for _, user := range changed {

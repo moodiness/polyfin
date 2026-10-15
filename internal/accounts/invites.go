@@ -49,14 +49,16 @@ type Invite struct {
 	CreatedAt time.Time
 	RevokedAt *time.Time
 	// Model is the user whose settings the new accounts copy, nil for the
-	// defaults of a new user; CreatedBy, the administrator who created the
-	// invite, nil once deleted.
+	// defaults of a new user; Group, the group they join and follow, nil
+	// for none; CreatedBy, the administrator who created the invite, nil
+	// once deleted.
 	Model       *InviteUser
+	Group       *InviteUser
 	CreatedBy   *InviteUser
 	AccountDays int
 }
 
-// InviteUser names a user an invite refers to.
+// InviteUser names a user, or a group, an invite refers to.
 type InviteUser struct {
 	ID   ID
 	Name string
@@ -93,12 +95,14 @@ func (i Invite) stateError(now time.Time) error {
 // NewInvite describes an invite to create: how many accounts it may create,
 // from 1 to MaxInviteUses; how many days it lasts, from 1 to MaxInviteDays,
 // 0 for no expiry; the user whose settings the accounts copy, if any; the
-// administrator creating it; and how many days after its creation each
-// account ends, from 1 to MaxInviteDays, 0 for never.
+// group they join, if any; the administrator creating it; and how many days
+// after its creation each account ends, from 1 to MaxInviteDays, 0 for
+// never.
 type NewInvite struct {
 	MaxUses     int
 	Days        int
 	Model       *ID
+	Group       *ID
 	CreatedBy   ID
 	AccountDays int
 }
@@ -106,28 +110,29 @@ type NewInvite struct {
 const (
 	// modelColumns are the settings a new account copies from an invite's
 	// model: everything an administrator sets on a user's page but the
-	// name, the password, administrator status and the disabled switch.
-	modelColumns = "is_hidden, max_parental_rating, max_parental_sub_rating, block_unrated_items, " +
-		"video_transcoding, audio_transcoding, content_downloading, personal_addons, " +
-		"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
-		"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-		"subtitle_management, live_tv_management, quality_group, can_share"
+	// name, the password, administrator status, the disabled switch and the
+	// group.
+	modelColumns  = "is_hidden, " + groupColumns
 	inviteColumns = "i.id, i.max_uses, i.uses, i.expires_at, i.created_at, i.revoked_at, " +
-		"m.id, m.name, c.id, c.name, coalesce(i.account_days, 0)"
-	inviteJoins = " FROM invites i LEFT JOIN users m ON m.id = i.model_user_id LEFT JOIN users c ON c.id = i.created_by"
+		"m.id, m.name, g.id, g.name, c.id, c.name, coalesce(i.account_days, 0)"
+	inviteJoins = " FROM invites i LEFT JOIN users m ON m.id = i.model_user_id LEFT JOIN user_groups g ON g.id = i.group_id" +
+		" LEFT JOIN users c ON c.id = i.created_by"
 )
 
 func scanInvite(row pgx.Row, more ...any) (Invite, error) {
 	var invite Invite
-	var modelID, creatorID *ID
-	var modelName, creatorName *string
+	var modelID, groupID, creatorID *ID
+	var modelName, groupName, creatorName *string
 	err := row.Scan(append([]any{&invite.ID, &invite.MaxUses, &invite.Uses, &invite.ExpiresAt, &invite.CreatedAt, &invite.RevokedAt,
-		&modelID, &modelName, &creatorID, &creatorName, &invite.AccountDays}, more...)...)
+		&modelID, &modelName, &groupID, &groupName, &creatorID, &creatorName, &invite.AccountDays}, more...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return invite, ErrNotFound
 	}
 	if modelID != nil {
 		invite.Model = &InviteUser{ID: *modelID, Name: *modelName}
+	}
+	if groupID != nil {
+		invite.Group = &InviteUser{ID: *groupID, Name: *groupName}
 	}
 	if creatorID != nil {
 		invite.CreatedBy = &InviteUser{ID: *creatorID, Name: *creatorName}
@@ -162,10 +167,19 @@ func (s *Store) CreateInvite(ctx context.Context, invite NewInvite) (Invite, str
 				return err
 			}
 		}
+		if invite.Group != nil {
+			// The group stays until the invite is saved.
+			var found bool
+			if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM user_groups WHERE id = $1 FOR KEY SHARE)", *invite.Group).Scan(&found); err != nil {
+				return err
+			} else if !found {
+				return ErrInvalidGroup
+			}
+		}
 		var id ID
-		if err := tx.QueryRow(ctx, `INSERT INTO invites (secret_hash, max_uses, expires_at, model_user_id, created_by, account_days)
-			VALUES ($1, $2, $3, $4, $5, NULLIF($6, 0)) RETURNING id`, hash[:], invite.MaxUses, expires, invite.Model, invite.CreatedBy,
-			invite.AccountDays).Scan(&id); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO invites (secret_hash, max_uses, expires_at, model_user_id, group_id, created_by, account_days)
+			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, 0)) RETURNING id`, hash[:], invite.MaxUses, expires, invite.Model, invite.Group,
+			invite.CreatedBy, invite.AccountDays).Scan(&id); err != nil {
 			return err
 		}
 		var err error
@@ -252,14 +266,20 @@ func (s *Store) InviteByToken(ctx context.Context, token string) (Invite, error)
 // invite of token, under the rules of CreateUser, and counts the use. The
 // account copies the settings of the invite's model, or takes those of a
 // new user, hidden from the sign-in screen; it is never an administrator.
-// It ends the invite's AccountDays after today, in the server's time zone.
-// The invite is locked meanwhile: two guests on its last use create one
-// account, and the other gets ErrInviteUsedUp. It returns the invite as it
-// was before this use, with InviteByToken's errors.
+// It joins and follows the invite's group, if it names one. It ends the
+// invite's AccountDays after today, in the server's time zone. The invite
+// is locked meanwhile: two guests on its last use create one account, and
+// the other gets ErrInviteUsedUp. It returns the invite as it was before
+// this use, with InviteByToken's errors.
 func (s *Store) AcceptInvite(ctx context.Context, token, name, password string) (User, Invite, error) {
 	var user User
 	var invite Invite
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		// Taken before the invite, as changes to groups and users take it
+		// before the invites they change.
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
+			return err
+		}
 		var err error
 		if invite, err = lookUpInvite(ctx, tx, token, true); err != nil {
 			return err
@@ -274,6 +294,11 @@ func (s *Store) AcceptInvite(ctx context.Context, token, name, password string) 
 			user, err = scanUser(tx.QueryRow(ctx, "UPDATE users SET ("+modelColumns+") = (SELECT "+modelColumns+
 				" FROM users WHERE id = $2) WHERE id = $1 RETURNING "+userColumns, user.ID, invite.Model.ID))
 			if err != nil {
+				return err
+			}
+		}
+		if invite.Group != nil {
+			if user, _, err = applyUserChanges(ctx, tx, user.ID, UserChanges{Group: &invite.Group.ID}, userUpdate{}, signIn{}); err != nil {
 				return err
 			}
 		}

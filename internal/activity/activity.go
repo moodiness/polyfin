@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -253,6 +254,69 @@ func (s *Store) AccountEnded(ctx context.Context, user accounts.User) {
 func (s *Store) PasswordChanged(ctx context.Context, user accounts.User) {
 	s.record(ctx, Entry{Name: s.phrase("The password of %s was changed", "Mot de passe de %s changé", user.Name),
 		Type: "UserPasswordChanged", UserID: &user.ID})
+}
+
+// sectionNames name the sections of a group's page, by the names of
+// accounts.GroupChanges.Sections, in English and French.
+var sectionNames = map[string][2]string{
+	accounts.SectionName:      {"Name", "Nom"},
+	accounts.SectionAccess:    {"Access", "Accès"},
+	accounts.SectionPlayback:  {"Playback and access", "Lecture et accès"},
+	accounts.SectionParental:  {"Parental control", "Contrôle parental"},
+	accounts.SectionLibraries: {"Visible libraries", "Bibliothèques visibles"},
+	accounts.SectionGenres:    {"Blocked genres", "Genres bloqués"},
+	accounts.SectionHours:     {"Allowed hours", "Horaires autorisés"},
+}
+
+// GroupCreated records a new user group.
+func (s *Store) GroupCreated(ctx context.Context, group accounts.Group) {
+	s.record(ctx, Entry{Name: s.phrase("Group %s was created", "Groupe %s créé", group.Name), Type: "GroupCreated"})
+}
+
+// GroupChanged records a change to a user group, naming the sections of
+// its page changed (accounts.GroupChanges.Sections).
+func (s *Store) GroupChanged(ctx context.Context, group accounts.Group, sections []string) {
+	names := make([]string, 0, len(sections))
+	for _, section := range sections {
+		name, ok := sectionNames[section]
+		if !ok {
+			name = [2]string{section, section}
+		}
+		names = append(names, s.phrase(name[0], name[1]))
+	}
+	s.record(ctx, Entry{Name: s.phrase("Group %s was changed: %s", "Groupe %s modifié : %s", group.Name, strings.Join(names, ", ")),
+		Type: "GroupChanged"})
+}
+
+// GroupDeleted records a deleted user group, whose members kept its values
+// as their own.
+func (s *Store) GroupDeleted(ctx context.Context, name string) {
+	s.record(ctx, Entry{Name: s.phrase("Group %s was deleted", "Groupe %s supprimé", name), Type: "GroupDeleted"})
+}
+
+// GroupMemberAdded records that user joined the group named group.
+func (s *Store) GroupMemberAdded(ctx context.Context, user accounts.User, group string) {
+	s.record(ctx, Entry{Name: s.phrase("%s joined the group %s", "%s a rejoint le groupe %s", user.Name, group),
+		Type: "GroupMemberAdded", UserID: &user.ID})
+}
+
+// GroupMemberRemoved records that user left the group named group, keeping
+// its values as their own.
+func (s *Store) GroupMemberRemoved(ctx context.Context, user accounts.User, group string) {
+	s.record(ctx, Entry{Name: s.phrase("%s left the group %s", "%s a quitté le groupe %s", user.Name, group),
+		Type: "GroupMemberRemoved", UserID: &user.ID})
+}
+
+// GroupMemberDetached records that user no longer follows the group named
+// group: they keep their own settings. app names the Jellyfin app a change
+// detached them from, empty when an administrator turned following off.
+func (s *Store) GroupMemberDetached(ctx context.Context, user accounts.User, group, app string) {
+	name := s.phrase("%s no longer follows the group %s", "%s ne suit plus le groupe %s", user.Name, group)
+	if app != "" {
+		name = s.phrase("%s no longer follows the group %s: changed from %s", "%s ne suit plus le groupe %s : modifié depuis %s",
+			user.Name, group, app)
+	}
+	s.record(ctx, Entry{Name: name, Type: "GroupMemberDetached", UserID: &user.ID})
 }
 
 // SettingsSaved records that administrator saved the server settings.

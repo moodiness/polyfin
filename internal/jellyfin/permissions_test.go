@@ -345,7 +345,7 @@ func TestDownloadsFollowThePermissions(t *testing.T) {
 	check("allowed again", true)
 	// Turning downloads off for everyone takes the user's permission away
 	// at once, for the apps already signed in too.
-	if _, err := p.store.TurnOffDownloads(t.Context()); err != nil {
+	if _, _, err := p.store.TurnOffDownloads(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	check("off for everyone", false)

@@ -257,6 +257,13 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/invites", h.administrator(h.invites))
 	mux.Handle("POST /admin/api/invites", h.administrator(h.createInvite))
 	mux.Handle("POST /admin/api/invites/{id}/revoke", h.administrator(h.revokeInvite))
+	mux.Handle("GET /admin/api/groups", h.administrator(h.groups))
+	mux.Handle("POST /admin/api/groups", h.administrator(h.createGroup))
+	mux.Handle("GET /admin/api/groups/{id}", h.administrator(h.group))
+	mux.Handle("PATCH /admin/api/groups/{id}", h.administrator(h.updateGroup))
+	mux.Handle("DELETE /admin/api/groups/{id}", h.administrator(h.deleteGroup))
+	mux.Handle("GET /admin/api/groups/{id}/members", h.administrator(h.groupMembers))
+	mux.Handle("POST /admin/api/groups/{id}/members", h.administrator(h.addGroupMembers))
 	mux.Handle("GET /admin/api/users/{id}/share-links", h.administrator(h.userShareLinks))
 	mux.Handle("POST /admin/api/share-links/{id}/revoke", h.administrator(h.revokeAnyShareLink))
 	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))
@@ -483,6 +490,12 @@ func accountError(w http.ResponseWriter, err error) bool {
 		code   string
 	}{
 		{accounts.ErrInvalidName, http.StatusBadRequest, "invalid_name"},
+		{accounts.ErrInvalidGroupName, http.StatusBadRequest, "invalid_name"},
+		{accounts.ErrGroupNameTaken, http.StatusConflict, "name_taken"},
+		{accounts.ErrInvalidGroup, http.StatusBadRequest, "invalid_group"},
+		{accounts.ErrInvalidGroupCopy, http.StatusBadRequest, "invalid_copy_from"},
+		{accounts.ErrAdministratorGroup, http.StatusConflict, "admin_cannot_join_group"},
+		{accounts.ErrFollowsGroup, http.StatusConflict, "follows_group"},
 		{accounts.ErrInvalidPassword, http.StatusBadRequest, "invalid_password"},
 		{accounts.ErrInvalidServerName, http.StatusBadRequest, "invalid_server_name"},
 		{accounts.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},

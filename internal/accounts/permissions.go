@@ -28,23 +28,41 @@ func (s *Store) MayDownload(user User) bool {
 }
 
 // TurnOffDownloads takes the permission to download away from every user
-// who has it, and returns them as they are now. Their apps lose it from
-// their next request.
-func (s *Store) TurnOffDownloads(ctx context.Context) ([]User, error) {
-	rows, _ := s.db.Query(ctx, "UPDATE users SET content_downloading = false WHERE content_downloading "+
-		"RETURNING "+userColumns)
-	changed, err := pgx.AppendRows([]User(nil), rows, func(row pgx.CollectableRow) (User, error) {
-		var user User
-		err := row.Scan(user.fields()...)
-		return user, err
+// who has it, and from every group that gives it, so that their members
+// who follow them keep following them. It returns the users and the groups
+// changed, as they are now. Their apps lose it from their next request.
+func (s *Store) TurnOffDownloads(ctx context.Context) ([]User, []Group, error) {
+	var changed []User
+	var groups []Group
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
+			return err
+		}
+		rows, _ := tx.Query(ctx, "UPDATE user_groups SET content_downloading = false WHERE id IN ("+
+			"SELECT id FROM user_groups WHERE content_downloading ORDER BY id FOR UPDATE) RETURNING id")
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[ID])
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			group, err := scanGroup(tx.QueryRow(ctx, groupSelect+" WHERE id = $1", id))
+			if err != nil {
+				return err
+			}
+			groups = append(groups, group)
+		}
+		rows, _ = tx.Query(ctx, "UPDATE users SET content_downloading = false WHERE id IN ("+
+			"SELECT id FROM users WHERE content_downloading ORDER BY id FOR UPDATE) RETURNING "+userColumns)
+		changed, err = pgx.AppendRows([]User(nil), rows, func(row pgx.CollectableRow) (User, error) { return scanUser(row) })
+		return err
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(changed) > 0 {
 		s.forgetSignIns()
 	}
-	return changed, nil
+	return changed, groups, nil
 }
 
 // PersonalAddonsAllowed reports whether user may add and use their own
