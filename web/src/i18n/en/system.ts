@@ -109,6 +109,8 @@ const system = {
         shareUnreachable: (name: string) => `${name}: Polyfin cannot reach this network share.`,
         shareRefused: (name: string) =>
           `${name}: the network share refuses Polyfin’s user or password.`,
+        shareHostKey: (name: string) =>
+          `${name}: the SFTP server offers another host key than the one saved, and Polyfin refuses it until it is accepted.`,
         folderWatchLimit: (name: string) =>
           `${name}: Polyfin cannot watch this local folder for changes: the system’s limit of watched folders is reached. It is still scanned on its schedule. Raise fs.inotify.max_user_watches on the host.`,
         folderInstanceLimit: (name: string) =>
@@ -194,8 +196,23 @@ const system = {
       iptvTitle: 'IPTV sources',
       guidesTitle: 'Programme guides',
       sharesTitle: 'Network shares',
-      shareKinds: { smb: 'SMB', webdav: 'WebDAV' } as Record<string, string>,
-      shareStatus: { notified: 'Notified', polled: 'Polled', unwatched: 'Not watched' },
+      shareKinds: {
+        smb: 'SMB',
+        webdav: 'WebDAV',
+        s3: 'S3',
+        sftp: 'SFTP',
+        rclone: 'rclone',
+      } as Record<string, string>,
+      shareStatus: {
+        notified: 'Notified',
+        polled: 'Polled',
+        unwatched: 'Not watched',
+        scans: 'At scans only',
+      },
+      sharePolledEvery: (share: string, minutes: number) =>
+        `${share === 's3' ? 'S3 buckets' : share === 'sftp' ? 'SFTP servers' : 'rclone remotes'} do not tell of changes: the folder’s folders are listed again every ${minutes === 1 ? 'minute' : `${minutes} minutes`}, as its settings ask.`,
+      shareScansOnly:
+        'Its settings ask to look for changes only at its scans: the folder is read on its schedule, and when scanned by hand.',
       shareNotified:
         'The server tells Polyfin of each change: the share is scanned again a few seconds after. Its folders are also listed every 10 minutes, should a change go untold.',
       sharePartial:
@@ -216,6 +233,8 @@ const system = {
         unreachable:
           'The share cannot be reached. It is scanned on its schedule, and again once it answers.',
         refused: 'The share refuses Polyfin’s user or password. Check them, and enter them again.',
+        host_key_changed:
+          'The SFTP server offers another host key than the one saved. Accept it under Edit the folder if the change is expected.',
         failed: 'Polyfin cannot watch this share. It is still scanned on its schedule.',
       } as Record<string, string>,
       sharesOff:
@@ -322,7 +341,7 @@ const system = {
       connectionOf: (service: string, user: string) => `${service} connection of ${user}`,
       targetOf: (target: string, user: string) => `notification target “${target}” of ${user}`,
       serverTargetOf: (target: string) => `server notification target “${target}”`,
-      sharePasswordOf: (folder: string) => `password of the share “${folder}”`,
+      sharePasswordOf: (folder: string) => `password or key of the share “${folder}”`,
       destinationSecretOf: (name: string) => `password or key of the backup destination “${name}”`,
       certificateKeys: 'keys of the Let’s Encrypt certificate',
       noAddonsHint: 'Add a Stremio addon under Content › Sources.',

@@ -347,7 +347,15 @@ const common: typeof en = {
     invalid_folder_path:
       'Saisissez le chemin complet du dossier dans le conteneur de Polyfin, commençant par /, autre que / lui-même.',
     invalid_share_address:
-      'Saisissez une adresse comme smb://serveur/partage/dossier ou https://serveur/dossier, sans utilisateur ni mot de passe : ils ont leurs propres champs.',
+      'Saisissez une adresse comme smb://serveur/partage/dossier, https://serveur/dossier, s3://bucket/préfixe, sftp://serveur/dossier ou rclone://serveur:port/dossier, sans utilisateur ni mot de passe : ils ont leurs propres champs.',
+    invalid_share_endpoint:
+      'Saisissez le point de terminaison sous forme d’adresse http:// ou https://, comme https://s3.example.org, et une région d’au plus 64 caractères sans espace.',
+    invalid_share_key:
+      'Collez une clé privée OpenSSH ou PEM entière, et la phrase de passe qui l’ouvre si elle en a une.',
+    invalid_rclone_remote:
+      'Saisissez le nom de l’un des remotes de rclone, sans deux-points ni barre oblique, d’au plus 128 caractères.',
+    invalid_poll_minutes:
+      'Saisissez un nombre de minutes de 0 à 1 440, 0 pour ne chercher les changements qu’aux analyses.',
     invalid_share_user:
       'Un utilisateur fait au plus 256 caractères, un mot de passe au plus 1 024.',
     invalid_folder_kind: 'Choisissez si le dossier contient des films ou des séries.',

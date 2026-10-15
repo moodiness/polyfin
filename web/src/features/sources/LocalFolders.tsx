@@ -1,4 +1,5 @@
 import {
+  CloudIcon,
   FilmSlateIcon,
   FolderIcon,
   GlobeIcon,
@@ -6,7 +7,9 @@ import {
   LinkBreakIcon,
   MagnifyingGlassIcon,
   MusicNotesIcon,
+  PlugsConnectedIcon,
   TelevisionSimpleIcon,
+  TerminalWindowIcon,
   VideoCameraIcon,
 } from '@phosphor-icons/react'
 import { Fragment, useId, useState, type FormEvent } from 'react'
@@ -14,6 +17,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   addLocalFolder,
   fetchAddons,
+  fetchRcloneRemotes,
   fetchUnmatchedFiles,
   linkLocalFile,
   queryClient,
@@ -34,6 +38,7 @@ import { useI18n, type Messages } from '@/i18n'
 import {
   Badge,
   Button,
+  Checkbox,
   ConfirmDialog,
   cx,
   Field,
@@ -41,11 +46,14 @@ import {
   IconButton,
   InlineError,
   Notice,
+  NumberInput,
   PanelSection,
   SecretField,
   Segmented,
   Skeleton,
+  SuggestInput,
   Switch,
+  Textarea,
   TextInput,
   useToast,
 } from '@/ui'
@@ -69,15 +77,109 @@ export function useFolderScanFollowed(addon: Addon) {
   })
 }
 
-/** Where an address leads: an SMB share, a WebDAV folder, or else a path in the container. */
+/**
+ * Where an address leads: an SMB share, a WebDAV folder, an S3 bucket, an SFTP folder, an rclone
+ * remote, or else a path in the container.
+ */
 export function shareOf(path: string): FolderShare {
   const address = path.trim().toLowerCase()
   if (address.startsWith('smb://')) return 'smb'
   if (address.startsWith('http://') || address.startsWith('https://')) return 'webdav'
+  if (address.startsWith('s3://')) return 's3'
+  if (address.startsWith('sftp://')) return 'sftp'
+  if (address.startsWith('rclone://')) return 'rclone'
   return ''
 }
 
-type Location = 'local' | 'smb' | 'webdav'
+type Location = 'local' | 'smb' | 'webdav' | 's3' | 'sftp' | 'rclone'
+
+/** The shares read through the source cache, which have fields of their own. */
+type RemoteShare = 's3' | 'sftp' | 'rclone'
+
+const isRemote = (share: FolderShare | null): share is RemoteShare =>
+  share === 's3' || share === 'sftp' || share === 'rclone'
+
+/** How often a kind of remote share is listed again when the form leaves it empty. */
+const defaultPollMinutes: Record<RemoteShare, number> = { s3: 30, sftp: 2, rclone: 2 }
+
+/**
+ * An rclone folder's address, rclone://host:port/path, as its form shows it: the address of the
+ * rclone instance, reached over http://, and the path in the remote.
+ */
+function rcloneParts(path: string): { instance: string; folder: string } {
+  const rest = path.trim().replace(/^rclone:\/\//i, '')
+  const slash = rest.indexOf('/')
+  const host = slash < 0 ? rest : rest.slice(0, slash)
+  return {
+    instance: host === '' ? '' : `http://${host}`,
+    folder: slash < 0 ? '' : rest.slice(slash),
+  }
+}
+
+/** The address of an rclone folder, from the rclone instance's address and the path in the remote. */
+function rcloneAddress(instance: string, folder: string): string {
+  const host = instance
+    .trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .replace(/\/.*$/, '')
+  return `rclone://${host}/${folder.trim().replace(/^\/+/, '')}`
+}
+
+/** What an S3 bucket, an SFTP folder or an rclone remote is read with beside its address. */
+type RemoteDraft = {
+  endpoint: string
+  region: string
+  /** A new private key; '' keeps the one saved, as removeKey does not ask to remove it. */
+  privateKey: string
+  removeKey: boolean
+  /** undefined keeps the stored passphrase, '' removes it. */
+  passphrase: string | undefined
+  rcloneRemote: string
+  rcloneInstance: string
+  rcloneFolder: string
+  /** null for the kind's default. */
+  pollMinutes: number | null
+}
+
+function remoteDraft(folder?: LocalFolder): RemoteDraft {
+  const { instance, folder: rcloneFolder } = rcloneParts(
+    folder?.share === 'rclone' ? folder.path : '',
+  )
+  return {
+    endpoint: folder?.endpoint ?? '',
+    region: folder?.region ?? '',
+    privateKey: '',
+    removeKey: false,
+    passphrase: undefined,
+    rcloneRemote: folder?.rcloneRemote ?? '',
+    rcloneInstance: instance,
+    rcloneFolder,
+    pollMinutes: folder?.pollMinutes ?? null,
+  }
+}
+
+/** The fields of a remote share's request: those of its kind, those changed when editing one. */
+function remoteFields(share: RemoteShare, draft: RemoteDraft, editing: boolean) {
+  const poll = draft.pollMinutes === null ? {} : { pollMinutes: draft.pollMinutes }
+  switch (share) {
+    case 's3':
+      return { endpoint: draft.endpoint.trim(), region: draft.region.trim(), ...poll }
+    case 'rclone':
+      return { rcloneRemote: draft.rcloneRemote.trim(), ...poll }
+    case 'sftp':
+      return {
+        ...(draft.privateKey.trim() !== ''
+          ? { privateKey: draft.privateKey }
+          : editing && draft.removeKey
+            ? { privateKey: '' }
+            : {}),
+        ...(draft.passphrase === undefined || (!editing && draft.passphrase === '')
+          ? {}
+          : { passphrase: draft.passphrase }),
+        ...poll,
+      }
+  }
+}
 
 /** The form adding a local folder or a network share to the server's sources. */
 export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => void }) {
@@ -91,14 +193,19 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
   const [kind, setKind] = useState<FolderKind>('movies')
   const [useArtwork, setUseArtwork] = useState(true)
   const [readExtras, setReadExtras] = useState(true)
+  const [draft, setDraft] = useState<RemoteDraft>(() => remoteDraft())
   const share = location === 'local' ? null : location
   const mutation = useMutation({
     mutationFn: () =>
       addLocalFolder({
         name: name.trim(),
-        path: path.trim(),
+        path:
+          share === 'rclone'
+            ? rcloneAddress(draft.rcloneInstance, draft.rcloneFolder)
+            : path.trim(),
         kind,
         ...(share === null ? {} : { user: user.trim(), password }),
+        ...(isRemote(share) ? remoteFields(share, draft, false) : {}),
         ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork, readExtras }),
       }),
     onSuccess: (added) => {
@@ -130,33 +237,40 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
             { value: 'local', label: text.locations.local, icon: FolderIcon },
             { value: 'smb', label: text.locations.smb, icon: HardDrivesIcon },
             { value: 'webdav', label: text.locations.webdav, icon: GlobeIcon },
+            { value: 's3', label: text.locations.s3, icon: CloudIcon },
+            { value: 'sftp', label: text.locations.sftp, icon: TerminalWindowIcon },
+            { value: 'rclone', label: text.locations.rclone, icon: PlugsConnectedIcon },
           ]}
-          className="self-start max-sm:self-stretch"
+          className="self-start flex-wrap max-sm:self-stretch"
         />
       </Field>
       <Field label={text.name} help={text.nameHint}>
         <TextInput value={name} onValue={setName} maxLength={64} required autoFocus />
       </Field>
-      <Field
-        label={share === null ? text.path : text.address}
-        help={share === null ? text.pathHint : text.addressHint[share]}
-      >
-        <TextInput
-          key={location}
-          type={share === null ? 'text' : 'url'}
-          inputMode={share === null ? undefined : 'url'}
-          value={path}
-          onValue={setPath}
-          placeholder={share === null ? text.pathPlaceholder : text.addressPlaceholder[share]}
-          autoComplete="off"
-          spellCheck={false}
-          required
-          mono
-        />
-      </Field>
+      {share !== 'rclone' && (
+        <Field
+          label={share === null ? text.path : text.address}
+          help={share === null ? text.pathHint : text.addressHint[share]}
+        >
+          <TextInput
+            key={location}
+            type={share === null ? 'text' : 'url'}
+            inputMode={share === null ? undefined : 'url'}
+            value={path}
+            onValue={setPath}
+            placeholder={share === null ? text.pathPlaceholder : text.addressPlaceholder[share]}
+            autoComplete="off"
+            spellCheck={false}
+            required
+            mono
+          />
+        </Field>
+      )}
+      {share === 's3' && <S3Endpoint draft={draft} onDraft={setDraft} />}
+      {share === 'rclone' && <RcloneInstance draft={draft} onDraft={setDraft} />}
       {share !== null && (
         <>
-          <Field label={text.user} help={text.userHint[share]}>
+          <Field label={share === 's3' ? text.accessKey : text.user} help={text.userHint[share]}>
             <TextInput
               value={user}
               onValue={setUser}
@@ -165,7 +279,10 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
               spellCheck={false}
             />
           </Field>
-          <Field label={text.password} help={text.passwordHint}>
+          <Field
+            label={share === 's3' ? text.secretKey : text.password}
+            help={share === 'sftp' ? text.sftpPasswordHint : text.passwordHint}
+          >
             <TextInput
               type="password"
               revealable
@@ -177,6 +294,11 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
           </Field>
         </>
       )}
+      {share === 'sftp' && <SFTPKey draft={draft} onDraft={setDraft} />}
+      {share === 'rclone' && (
+        <RcloneRemote draft={draft} onDraft={setDraft} user={user} password={password} />
+      )}
+      {isRemote(share) && <PollField share={share} draft={draft} onDraft={setDraft} />}
       <KindField kind={kind} onChange={setKind} />
       {kind !== 'music' && kind !== 'homevideos' && (
         <Field label={text.useArtwork} help={text.useArtworkHelp}>
@@ -225,14 +347,18 @@ export function LocalFolderEditForm({
   const [readExtras, setReadExtras] = useState(folder.readExtras)
   const [kind, setKind] = useState<FolderKind>(folder.kind)
   const [confirming, setConfirming] = useState(false)
+  const [draft, setDraft] = useState<RemoteDraft>(() => remoteDraft(folder))
   const share = shareOf(path)
   const retyped = kind !== folder.kind
+  const address =
+    share === 'rclone' ? rcloneAddress(draft.rcloneInstance, draft.rcloneFolder) : path.trim()
   const mutation = useMutation({
     mutationFn: () =>
       updateLocalFolder(addon.id, {
         name: name.trim(),
-        path: path.trim(),
+        path: address,
         ...(share === '' ? {} : { user: user.trim(), password }),
+        ...(isRemote(share) ? remoteFields(share, draft, true) : {}),
         ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork, readExtras }),
         ...(retyped ? { kind } : {}),
       }),
@@ -242,7 +368,7 @@ export function LocalFolderEditForm({
     },
     onSettled: () => invalidateScope('shared'),
   })
-  const moved = path.trim() !== folder.path
+  const moved = address !== folder.path
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -258,30 +384,34 @@ export function LocalFolderEditForm({
       <Field label={text.name} help={text.nameHint}>
         <TextInput value={name} onValue={setName} maxLength={64} required />
       </Field>
-      <Field
-        label={share === '' ? text.path : text.address}
-        help={
-          share === ''
-            ? moved
-              ? text.movedHint
-              : text.pathHint
-            : moved
-              ? text.movedShareHint
-              : text.addressHint[share]
-        }
-      >
-        <TextInput
-          value={path}
-          onValue={setPath}
-          autoComplete="off"
-          spellCheck={false}
-          required
-          mono
-        />
-      </Field>
+      {share !== 'rclone' && (
+        <Field
+          label={share === '' ? text.path : text.address}
+          help={
+            share === ''
+              ? moved
+                ? text.movedHint
+                : text.pathHint
+              : moved
+                ? text.movedShareHint
+                : text.addressHint[share]
+          }
+        >
+          <TextInput
+            value={path}
+            onValue={setPath}
+            autoComplete="off"
+            spellCheck={false}
+            required
+            mono
+          />
+        </Field>
+      )}
+      {share === 's3' && <S3Endpoint draft={draft} onDraft={setDraft} />}
+      {share === 'rclone' && <RcloneInstance draft={draft} onDraft={setDraft} moved={moved} />}
       {share !== '' && (
         <>
-          <Field label={text.user} help={text.userHint[share]}>
+          <Field label={share === 's3' ? text.accessKey : text.user} help={text.userHint[share]}>
             <TextInput
               value={user}
               onValue={setUser}
@@ -291,14 +421,27 @@ export function LocalFolderEditForm({
             />
           </Field>
           <SecretField
-            label={text.password}
-            help={text.passwordHint}
+            label={share === 's3' ? text.secretKey : text.password}
+            help={share === 'sftp' ? text.sftpPasswordHint : text.passwordHint}
             saved={folder.passwordSet}
             value={password}
             onValue={setPassword}
           />
         </>
       )}
+      {share === 'sftp' && (
+        <SFTPKey draft={draft} onDraft={setDraft} folder={folder} addonId={addon.id} />
+      )}
+      {share === 'rclone' && (
+        <RcloneRemote
+          draft={draft}
+          onDraft={setDraft}
+          user={user}
+          password={password}
+          folder={addon.id}
+        />
+      )}
+      {isRemote(share) && <PollField share={share} draft={draft} onDraft={setDraft} />}
       <KindField kind={kind} onChange={setKind} />
       {kind !== 'music' && kind !== 'homevideos' && (
         <Field label={text.useArtwork} help={text.useArtworkHelp}>
@@ -335,6 +478,257 @@ export function LocalFolderEditForm({
         <KindChange folder={folder} kind={kind} />
       </ConfirmDialog>
     </form>
+  )
+}
+
+type DraftProps = { draft: RemoteDraft; onDraft: (draft: RemoteDraft) => void }
+
+/** An S3 bucket's endpoint and region. */
+function S3Endpoint({ draft, onDraft }: DraftProps) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  return (
+    <>
+      <Field label={text.endpoint} help={text.endpointHint}>
+        <TextInput
+          type="url"
+          inputMode="url"
+          value={draft.endpoint}
+          onValue={(endpoint) => onDraft({ ...draft, endpoint })}
+          placeholder="https://s3.example.org"
+          autoComplete="off"
+          spellCheck={false}
+          required
+          mono
+        />
+      </Field>
+      <Field label={text.region} help={text.regionHint}>
+        <TextInput
+          value={draft.region}
+          onValue={(region) => onDraft({ ...draft, region })}
+          placeholder="us-east-1"
+          maxLength={64}
+          autoComplete="off"
+          spellCheck={false}
+          mono
+        />
+      </Field>
+    </>
+  )
+}
+
+/** The address of the rclone instance an rclone folder is read through, and the path in its remote. */
+function RcloneInstance({ draft, onDraft, moved }: DraftProps & { moved?: boolean }) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  return (
+    <>
+      <Field label={text.rcloneInstance} help={text.rcloneInstanceHint}>
+        <TextInput
+          type="url"
+          inputMode="url"
+          value={draft.rcloneInstance}
+          onValue={(rcloneInstance) => onDraft({ ...draft, rcloneInstance })}
+          placeholder="http://rclone:5572"
+          autoComplete="off"
+          spellCheck={false}
+          required
+          mono
+        />
+      </Field>
+      <Field label={text.rcloneFolder} help={moved ? text.movedShareHint : text.rcloneFolderHint}>
+        <TextInput
+          value={draft.rcloneFolder}
+          onValue={(rcloneFolder) => onDraft({ ...draft, rcloneFolder })}
+          placeholder="/movies"
+          autoComplete="off"
+          spellCheck={false}
+          mono
+        />
+      </Field>
+    </>
+  )
+}
+
+/**
+ * The remote of an rclone folder, typed or picked among those the rclone instance lists, asked
+ * with the user and password of the form, or those stored for the folder when editing one.
+ */
+function RcloneRemote({
+  draft,
+  onDraft,
+  user,
+  password,
+  folder,
+}: DraftProps & { user: string; password: string | undefined; folder?: string }) {
+  const { language, t } = useI18n()
+  const text = t.localFolders
+  const listing = useMutation({
+    mutationFn: () =>
+      fetchRcloneRemotes({
+        address: draft.rcloneInstance.trim(),
+        user: user.trim(),
+        ...(password === undefined ? { folder } : { password }),
+      }),
+  })
+  const remotes = listing.data?.remotes ?? []
+  const failure = listing.data?.error ?? ''
+  const help =
+    failure !== ''
+      ? text.remotesFailed[failure]
+      : listing.isSuccess
+        ? remotes.length === 0
+          ? text.noRemotes
+          : text.remotesListed(remotes.length, remotes.length.toLocaleString(language))
+        : text.rcloneRemoteHint
+  return (
+    <Field
+      label={text.rcloneRemote}
+      help={help}
+      error={listing.isError ? errorMessage(t, listing.error) : undefined}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <SuggestInput
+          value={draft.rcloneRemote}
+          onValue={(rcloneRemote) => onDraft({ ...draft, rcloneRemote })}
+          suggestions={remotes}
+          onPick={(rcloneRemote) => onDraft({ ...draft, rcloneRemote })}
+          maxLength={128}
+          autoComplete="off"
+          spellCheck={false}
+          required
+          mono
+          className="max-w-xs"
+        />
+        <Button
+          size="sm"
+          onClick={() => listing.mutate()}
+          loading={listing.isPending}
+          disabled={draft.rcloneInstance.trim() === ''}
+        >
+          {text.listRemotes}
+        </Button>
+      </div>
+    </Field>
+  )
+}
+
+/**
+ * An SFTP folder's private key and passphrase, and when editing one the host key saved, with the
+ * one its server offers instead to accept.
+ */
+function SFTPKey({
+  draft,
+  onDraft,
+  folder,
+  addonId,
+}: DraftProps & { folder?: LocalFolder; addonId?: string }) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  const saved = folder?.privateKeySet === true
+  return (
+    <>
+      <Field label={text.privateKey} help={text.privateKeyHint}>
+        <Textarea
+          value={draft.privateKey}
+          onValue={(privateKey) => onDraft({ ...draft, privateKey })}
+          placeholder={saved && !draft.removeKey ? text.privateKeySaved : undefined}
+          rows={4}
+          mono
+          spellCheck={false}
+          autoComplete="off"
+        />
+      </Field>
+      {saved && (
+        <Checkbox
+          label={text.privateKeyRemove}
+          checked={draft.removeKey}
+          onChange={(removeKey) => onDraft({ ...draft, removeKey })}
+        />
+      )}
+      {folder === undefined ? (
+        <Field label={text.passphrase} help={text.passphraseHint}>
+          <TextInput
+            type="password"
+            revealable
+            value={draft.passphrase ?? ''}
+            onValue={(passphrase) => onDraft({ ...draft, passphrase })}
+            maxLength={1024}
+            autoComplete="new-password"
+          />
+        </Field>
+      ) : (
+        <SecretField
+          label={text.passphrase}
+          help={text.passphraseHint}
+          saved={folder.passphraseSet}
+          value={draft.passphrase}
+          onValue={(passphrase) => onDraft({ ...draft, passphrase })}
+        />
+      )}
+      {folder !== undefined && addonId !== undefined && (
+        <HostKey folder={folder} addonId={addonId} />
+      )}
+    </>
+  )
+}
+
+/** The host key saved for an SFTP folder, and the one its server offers instead, to accept. */
+function HostKey({ folder, addonId }: { folder: LocalFolder; addonId: string }) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  const toast = useToast()
+  const accept = useMutation({
+    mutationFn: () => updateLocalFolder(addonId, { acceptHostKey: true }),
+    onSuccess: (updated) => {
+      replaceCachedAddon('shared', updated)
+      toast(text.hostKeyAccepted)
+    },
+    onSettled: () => invalidateScope('shared'),
+  })
+  return (
+    <Field label={text.hostKey} help={text.hostKeyHint}>
+      <div className="flex flex-col gap-3">
+        <code className="font-mono text-small break-all text-ink-2">
+          {folder.hostKey === '' ? text.hostKeyNone : folder.hostKey}
+        </code>
+        {folder.offeredHostKey !== '' && (
+          <Notice tone="danger">
+            <p>{text.hostKeyOffered(folder.offeredHostKey)}</p>
+            <div className="mt-3">
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => accept.mutate()}
+                loading={accept.isPending}
+              >
+                {text.acceptHostKey}
+              </Button>
+            </div>
+            {accept.isError && <InlineError>{errorMessage(t, accept.error)}</InlineError>}
+          </Notice>
+        )}
+      </div>
+    </Field>
+  )
+}
+
+/** How often a remote share is listed again for changes, empty for its kind's default. */
+function PollField({ share, draft, onDraft }: DraftProps & { share: RemoteShare }) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  return (
+    <Field label={text.pollMinutes} help={text.pollMinutesHint[share]}>
+      <NumberInput
+        value={draft.pollMinutes}
+        onValue={(pollMinutes) => onDraft({ ...draft, pollMinutes })}
+        placeholder={String(defaultPollMinutes[share])}
+        min={0}
+        max={1440}
+        step={1}
+        suffix="min"
+      />
+    </Field>
   )
 }
 

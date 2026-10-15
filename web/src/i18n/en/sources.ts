@@ -159,29 +159,94 @@ const sources = {
   localFolders: {
     help: 'A folder mounted in Polyfin’s container, read-only is enough. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams; a folder of music becomes a music library. Polyfin runs as user 65532, which must be able to read it.',
     location: 'Where',
-    locations: { local: 'Local folder', smb: 'SMB share', webdav: 'WebDAV folder' },
+    locations: {
+      local: 'Local folder',
+      smb: 'SMB share',
+      webdav: 'WebDAV folder',
+      s3: 'S3 bucket',
+      sftp: 'SFTP folder',
+      rclone: 'rclone remote',
+    },
     shareHelp: {
       smb: 'A folder shared over SMB (Windows file sharing) by a NAS or another computer, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams; a folder of music becomes a music library.',
       webdav:
         'A folder a server shares over WebDAV, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams; a folder of music becomes a music library.',
+      s3: 'A prefix of a bucket of S3-compatible storage, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams, read through the cache of files being read; a folder of music becomes a music library.',
+      sftp: 'A folder of a server reached over SSH, which Polyfin reads itself, without mounting it. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams, read through the cache of files being read; a folder of music becomes a music library.',
+      rclone:
+        'A folder of one of the storages rclone reaches, read through an rclone instance running rclone rcd --rc-serve, such as a container next to Polyfin. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams, read through the cache of files being read; a folder of music becomes a music library.',
     },
     address: 'Address',
     addressHint: {
       smb: 'smb:// then the server, the share, and the folder in it if any. Add :port after the server for a port other than 445.',
       webdav:
         'The folder’s WebDAV address. Prefer https://, since http:// sends the password unencrypted.',
+      s3: 's3:// then the bucket, and the prefix in it if any. Its objects are listed as folders by /.',
+      sftp: 'sftp:// then the server, and the folder’s full path on it. Add :port after the server for a port other than 22.',
+      rclone: '',
     },
     addressPlaceholder: {
       smb: 'smb://nas.local/media/movies',
       webdav: 'https://nas.local/dav/movies',
+      s3: 's3://media/movies',
+      sftp: 'sftp://nas.local/srv/media/movies',
+      rclone: '',
     },
     user: 'User',
     userHint: {
       smb: 'Empty for a share open to guests. DOMAIN\\user for a domain account.',
       webdav: 'Empty for a folder open to everyone.',
+      s3: 'Both empty for a bucket everyone may read.',
+      sftp: 'The account Polyfin signs in as.',
+      rclone: 'The user of rclone’s remote control (--rc-user), empty without one.',
     },
     password: 'Password',
     passwordHint: 'Polyfin never shows it again.',
+    sftpPasswordHint: 'Empty when the private key signs in. Polyfin never shows it again.',
+    accessKey: 'Access key',
+    secretKey: 'Secret key',
+    endpoint: 'Endpoint',
+    endpointHint:
+      'The address of the storage’s S3 service. Polyfin names the bucket in the path, as every S3-compatible storage accepts, but at Amazon’s own endpoints.',
+    region: 'Region',
+    regionHint: 'Empty for us-east-1, which most S3-compatible storages accept.',
+    privateKey: 'Private key',
+    privateKeyHint:
+      'An OpenSSH or PEM private key, in place of the password or beside it. Polyfin never shows it again.',
+    privateKeySaved: 'A key is saved. Paste another to replace it.',
+    privateKeyRemove: 'Remove the saved key',
+    passphrase: 'Passphrase',
+    passphraseHint: 'Only for a private key that has one.',
+    hostKey: 'Host key',
+    hostKeyHint:
+      'Saved at the first connection. Polyfin refuses the server when it offers another one.',
+    hostKeyNone: 'Saved at the first connection',
+    hostKeyOffered: (fingerprint: string) =>
+      `The server now offers another host key, ${fingerprint}, and Polyfin refuses it. Accept it only if the server was reinstalled or its key was changed on purpose.`,
+    acceptHostKey: 'Accept the new key',
+    hostKeyAccepted: 'The new host key is accepted. Polyfin scans the folder again.',
+    rcloneInstance: 'rclone address',
+    rcloneInstanceHint:
+      'Where rclone rcd --rc-serve answers, reached over http://, such as http://rclone:5572 for a container next to Polyfin.',
+    rcloneRemote: 'Remote',
+    rcloneRemoteHint: 'One of the remotes of rclone’s configuration.',
+    listRemotes: 'List the remotes',
+    remotesListed: (count: number, figure: string) =>
+      count === 1 ? 'rclone has one remote.' : `rclone has ${figure} remotes.`,
+    noRemotes: 'rclone has no remote in its configuration.',
+    remotesFailed: {
+      unreachable: 'rclone does not answer at this address.',
+      refused: 'rclone refuses this user or password.',
+    } as Record<string, string>,
+    rcloneFolder: 'Path in the remote',
+    rcloneFolderHint: 'The folder of the remote to read, empty for its root.',
+    pollMinutes: 'Look for changes every (minutes, 0 = only at scans)',
+    pollMinutesHint: {
+      s3: 'The bucket’s folders are listed again this often to find the files added and removed. Providers may bill each listing. 30 by default.',
+      sftp: 'The folder and its subfolders are listed again this often to find the files added and removed. 2 by default.',
+      rclone:
+        'The remote’s folders are listed again this often to find the files added and removed. 2 by default.',
+    },
     name: 'Name',
     nameHint: 'The name of its library in Jellyfin apps.',
     path: 'Path in the container',
@@ -280,6 +345,8 @@ const sources = {
       unreachable:
         'Polyfin cannot reach the share: check that the server is on, and the server and port of the address.',
       refused: 'The share refuses the user or password: check them, and enter them again.',
+      host_key_changed:
+        'The SFTP server offers another host key than the one saved at the first connection, and Polyfin refuses it. If the change is expected, accept the new key under Edit the folder.',
     } as Record<string, string>,
     keptNote: 'The files found before stay in the library until the folder can be read again.',
     unmatchedTitle: 'Unmatched files',

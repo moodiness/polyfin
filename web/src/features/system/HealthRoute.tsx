@@ -498,6 +498,7 @@ function shareState(
 ): [StatusTone, string, string] {
   const status = text.shareStatus
   if (!health.watchFolders) return ['muted', status.unwatched, text.sharesOff]
+  if (share.pollMinutes === 0) return ['muted', status.scans, text.shareScansOnly]
   if (share.unwatched !== '') {
     return [
       'warn',
@@ -511,6 +512,9 @@ function shareState(
       status.notified,
       share.polled === 'partial' ? text.sharePartial : text.shareNotified,
     ]
+  }
+  if (share.pollMinutes !== null && share.polled === share.share) {
+    return ['muted', status.polled, text.sharePolledEvery(share.share, share.pollMinutes)]
   }
   const why = text.sharePolled[share.polled || 'starting'] ?? text.sharePolled.failed
   const tone = share.polled === 'silent' || share.polled === 'failed' ? 'warn' : 'muted'

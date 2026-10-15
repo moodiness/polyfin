@@ -118,11 +118,13 @@ export function problemText(t: Messages, language: string, problem: HealthProble
     case 'folder':
       if (problem.failure === 'unreachable') return text.shareUnreachable(problem.name)
       if (problem.failure === 'refused') return text.shareRefused(problem.name)
+      if (problem.failure === 'host_key_changed') return text.shareHostKey(problem.name)
       return problem.share !== undefined ? text.share(problem.name) : text.folder(problem.name)
     case 'folder_unwatched':
       if (problem.share !== undefined) {
         if (problem.failure === 'unreachable') return text.shareUnwatchedUnreachable(problem.name)
         if (problem.failure === 'refused') return text.shareUnwatchedRefused(problem.name)
+        if (problem.failure === 'host_key_changed') return text.shareHostKey(problem.name)
         return text.shareUnwatched(problem.name)
       }
       if (problem.failure === 'watch_limit') return text.folderWatchLimit(problem.name)

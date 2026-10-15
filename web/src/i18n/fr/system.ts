@@ -115,6 +115,8 @@ const system: typeof en = {
           `${name} : Polyfin ne peut pas joindre ce partage réseau.`,
         shareRefused: (name: string) =>
           `${name} : le partage réseau refuse l’utilisateur ou le mot de passe de Polyfin.`,
+        shareHostKey: (name: string) =>
+          `${name} : le serveur SFTP présente une autre clé d’hôte que celle enregistrée, et Polyfin la refuse tant qu’elle n’est pas acceptée.`,
         folderWatchLimit: (name: string) =>
           `${name} : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite de dossiers surveillés du système est atteinte. Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_watches sur l’hôte.`,
         folderInstanceLimit: (name: string) =>
@@ -202,8 +204,17 @@ const system: typeof en = {
       iptvTitle: 'Sources IPTV',
       guidesTitle: 'Guides des programmes',
       sharesTitle: 'Partages réseau',
-      shareKinds: { smb: 'SMB', webdav: 'WebDAV' },
-      shareStatus: { notified: 'Notifié', polled: 'Scruté', unwatched: 'Non surveillé' },
+      shareKinds: { smb: 'SMB', webdav: 'WebDAV', s3: 'S3', sftp: 'SFTP', rclone: 'rclone' },
+      shareStatus: {
+        notified: 'Notifié',
+        polled: 'Scruté',
+        unwatched: 'Non surveillé',
+        scans: 'Aux analyses seulement',
+      },
+      sharePolledEvery: (share: string, minutes: number) =>
+        `${share === 's3' ? 'Les buckets S3 ne signalent' : share === 'sftp' ? 'Les serveurs SFTP ne signalent' : 'Les remotes rclone ne signalent'} pas les changements : les dossiers du dossier sont listés de nouveau ${minutes === 1 ? 'chaque minute' : `toutes les ${minutes} minutes`}, comme le demandent ses réglages.`,
+      shareScansOnly:
+        'Ses réglages demandent de ne chercher les changements qu’aux analyses : le dossier est lu selon sa planification, et quand il est analysé à la main.',
       shareNotified:
         'Le serveur signale chaque changement à Polyfin : le partage est analysé à nouveau quelques secondes après. Ses dossiers sont aussi listés toutes les 10 minutes, au cas où un changement ne serait pas signalé.',
       sharePartial:
@@ -225,6 +236,8 @@ const system: typeof en = {
           'Le partage est injoignable. Il est analysé selon sa planification, et de nouveau dès qu’il répond.',
         refused:
           'Le partage refuse l’utilisateur ou le mot de passe de Polyfin. Vérifiez-les, et saisissez-les à nouveau.',
+        host_key_changed:
+          'Le serveur SFTP présente une autre clé d’hôte que celle enregistrée. Acceptez-la sous Modifier le dossier si ce changement est attendu.',
         failed:
           'Polyfin ne peut pas surveiller ce partage. Il est toujours analysé selon sa planification.',
       },
@@ -331,7 +344,7 @@ const system: typeof en = {
       connectionOf: (service: string, user: string) => `Connexion ${service} de ${user}`,
       targetOf: (target: string, user: string) => `Cible de notification « ${target} » de ${user}`,
       serverTargetOf: (target: string) => `Cible de notification du serveur « ${target} »`,
-      sharePasswordOf: (folder: string) => `Mot de passe du partage « ${folder} »`,
+      sharePasswordOf: (folder: string) => `Mot de passe ou clé du partage « ${folder} »`,
       destinationSecretOf: (name: string) =>
         `Mot de passe ou clé de la destination des sauvegardes « ${name} »`,
       certificateKeys: 'Clés du certificat Let’s Encrypt',

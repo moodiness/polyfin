@@ -323,8 +323,16 @@ const common = {
     invalid_folder_path:
       'Enter the folder’s full path in Polyfin’s container, starting with /, other than / itself.',
     invalid_share_address:
-      'Enter an address such as smb://server/share/folder or https://server/folder, without a user or password in it: they have fields of their own.',
+      'Enter an address such as smb://server/share/folder, https://server/folder, s3://bucket/prefix, sftp://server/folder or rclone://server:port/folder, without a user or password in it: they have fields of their own.',
     invalid_share_user: 'Users are at most 256 characters long, passwords at most 1,024.',
+    invalid_share_endpoint:
+      'Enter the endpoint as an http:// or https:// address, such as https://s3.example.org, and a region of at most 64 characters without spaces.',
+    invalid_share_key:
+      'Paste a whole OpenSSH or PEM private key, and the passphrase that opens it when it has one.',
+    invalid_rclone_remote:
+      'Enter the name of one of rclone’s remotes, without a colon or a slash, at most 128 characters.',
+    invalid_poll_minutes:
+      'Enter a number of minutes from 0 to 1,440, 0 to look for changes only at scans.',
     invalid_folder_kind: 'Choose whether the folder holds movies or shows.',
     invalid_imdb_id: 'An IMDb identifier is tt followed by digits, such as tt0063350.',
     invalid_episode:

@@ -647,8 +647,11 @@ export type Addon = {
 /** What a local folder holds. */
 export type FolderKind = 'movies' | 'shows' | 'music' | 'homevideos'
 
-/** Where a folder is: '' in the container, 'smb' an SMB share, 'webdav' a WebDAV folder. */
-export type FolderShare = '' | 'smb' | 'webdav'
+/**
+ * Where a folder is: '' in the container, 'smb' an SMB share, 'webdav' a WebDAV folder, 's3' an
+ * S3 bucket, 'sftp' a folder of an SFTP server, 'rclone' a folder of an rclone remote.
+ */
+export type FolderShare = '' | 'smb' | 'webdav' | 's3' | 'sftp' | 'rclone'
 
 /** How a local file was matched to its title. */
 export type MatchMethod = 'name' | 'nfo' | 'search' | 'link'
@@ -670,7 +673,7 @@ export type LocalFolder = {
   scannedAt: string | null
   /**
    * Why the last scan could not read the folder: 'missing', 'unreadable', 'not_folder', or for a
-   * share 'unreachable', 'refused'; else empty.
+   * share 'unreachable', 'refused', and for an SFTP folder 'host_key_changed'; else empty.
    */
   error: string
   /** Whether a scan is under way. */
@@ -705,6 +708,25 @@ export type LocalFolder = {
   readExtras: boolean
   /** The extras, local trailers and theme media its last scan found. */
   extras: number
+  /** An S3 bucket's endpoint and region, '' for the default one. */
+  endpoint: string
+  region: string
+  /** An rclone folder's remote. */
+  rcloneRemote: string
+  /** Whether an SFTP folder has a private key and a passphrase stored; never sent. */
+  privateKeySet: boolean
+  passphraseSet: boolean
+  /**
+   * The SHA-256 fingerprint of the SFTP server's host key saved at the first connection, and of
+   * another one it offers since, which Polyfin refuses until it is accepted; '' for none.
+   */
+  hostKey: string
+  offeredHostKey: string
+  /**
+   * How often an S3 bucket, an SFTP folder or an rclone remote is listed again for changes, in
+   * minutes, 0 only at its scans; null for the other folders.
+   */
+  pollMinutes: number | null
 }
 
 /** The kind of a disc: a Blu-ray disc's or a DVD's folder, or a disc image. */
@@ -772,11 +794,22 @@ export type NewLocalFolder = {
   useArtwork?: boolean
   /** Whether its scans read the extras beside its titles; yes when left out. */
   readExtras?: boolean
+  /** An S3 bucket's endpoint and region; its user and password are its access and secret keys. */
+  endpoint?: string
+  region?: string
+  /** An SFTP folder's private key, OpenSSH or PEM, and its passphrase. */
+  privateKey?: string
+  passphrase?: string
+  /** An rclone folder's remote. */
+  rcloneRemote?: string
+  /** Minutes between the listings for changes, 0 only at scans; the kind's default when left out. */
+  pollMinutes?: number
 }
 
 /**
- * A change of a folder; a password left out keeps the stored one, an empty one removes it. A new
- * kind scans the folder again as that kind.
+ * A change of a folder; a password, private key or passphrase left out keeps the stored one, an
+ * empty one removes it. A new kind scans the folder again as that kind. `acceptHostKey` accepts
+ * the host key an SFTP server offers in place of the one saved.
  */
 export type LocalFolderPatch = Partial<{
   name: string
@@ -786,6 +819,13 @@ export type LocalFolderPatch = Partial<{
   useArtwork: boolean
   readExtras: boolean
   kind: FolderKind
+  endpoint: string
+  region: string
+  privateKey: string
+  passphrase: string
+  rcloneRemote: string
+  pollMinutes: number
+  acceptHostKey: boolean
 }>
 
 /** What an Eclipse addon's tracks are; its catalog rows become music or books libraries. */
@@ -2583,6 +2623,23 @@ export const addLocalFolder = (folder: NewLocalFolder) =>
 export const updateLocalFolder = (id: string, patch: LocalFolderPatch) =>
   request<Addon>('PATCH', `${scopePath('shared')}/folders/${seg(id)}`, patch)
 
+/**
+ * The remotes of the rclone instance at an address, signed in as user with password; a password
+ * left out is the one stored for the folder named. `error` tells why rclone could not list them:
+ * 'unreachable' or 'refused'.
+ */
+export const fetchRcloneRemotes = (query: {
+  address: string
+  user: string
+  password?: string
+  folder?: string
+}) =>
+  request<{ remotes: string[]; error: '' | 'unreachable' | 'refused' }>(
+    'POST',
+    `${scopePath('shared')}/folders/rclone-remotes`,
+    query,
+  )
+
 /** Starts a scan of a local folder; the answer tells the scan under way. */
 export const scanLocalFolder = (id: string) =>
   request<Addon>('POST', `${scopePath('shared')}/folders/${seg(id)}/scan`)
@@ -3118,6 +3175,8 @@ export type ShareHealth = {
   watch: '' | 'notified' | 'polled'
   polled: string
   unwatched: string
+  /** Minutes between the listings of an S3 bucket, SFTP folder or rclone remote; 0 only at scans. */
+  pollMinutes: number | null
 }
 
 export type Health = {

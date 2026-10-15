@@ -163,29 +163,94 @@ const sources: typeof en = {
   localFolders: {
     help: 'Un dossier monté dans le conteneur de Polyfin, en lecture seule suffit. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale. Polyfin tourne sous l’utilisateur 65532, qui doit pouvoir le lire.',
     location: 'Emplacement',
-    locations: { local: 'Dossier local', smb: 'Partage SMB', webdav: 'Dossier WebDAV' },
+    locations: {
+      local: 'Dossier local',
+      smb: 'Partage SMB',
+      webdav: 'Dossier WebDAV',
+      s3: 'Bucket S3',
+      sftp: 'Dossier SFTP',
+      rclone: 'Remote rclone',
+    },
     shareHelp: {
       smb: 'Un dossier partagé en SMB (partage de fichiers Windows) par un NAS ou un autre ordinateur, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale.',
       webdav:
         'Un dossier qu’un serveur partage en WebDAV, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale.',
+      s3: 'Un préfixe d’un bucket de stockage compatible S3, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons, lues à travers le cache des fichiers en cours de lecture ; un dossier de musique devient une bibliothèque musicale.',
+      sftp: 'Un dossier d’un serveur joint en SSH, que Polyfin lit lui-même, sans le monter. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons, lues à travers le cache des fichiers en cours de lecture ; un dossier de musique devient une bibliothèque musicale.',
+      rclone:
+        'Un dossier de l’un des stockages que rclone sait joindre, lu à travers une instance de rclone qui exécute rclone rcd --rc-serve, comme un conteneur à côté de Polyfin. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons, lues à travers le cache des fichiers en cours de lecture ; un dossier de musique devient une bibliothèque musicale.',
     },
     address: 'Adresse',
     addressHint: {
       smb: 'smb:// puis le serveur, le partage, et le dossier qu’il contient s’il y a lieu. Ajoutez :port après le serveur pour un autre port que 445.',
       webdav:
         'L’adresse WebDAV du dossier. Préférez https://, car http:// envoie le mot de passe sans chiffrement.',
+      s3: 's3:// puis le bucket, et le préfixe qu’il contient s’il y a lieu. Ses objets sont listés comme des dossiers par /.',
+      sftp: 'sftp:// puis le serveur, et le chemin complet du dossier sur celui-ci. Ajoutez :port après le serveur pour un autre port que 22.',
+      rclone: '',
     },
     addressPlaceholder: {
       smb: 'smb://nas.local/media/films',
       webdav: 'https://nas.local/dav/films',
+      s3: 's3://media/films',
+      sftp: 'sftp://nas.local/srv/media/films',
+      rclone: '',
     },
     user: 'Utilisateur',
     userHint: {
       smb: 'Vide pour un partage ouvert aux invités. DOMAINE\\utilisateur pour un compte de domaine.',
       webdav: 'Vide pour un dossier ouvert à tous.',
+      s3: 'Les deux vides pour un bucket que tout le monde peut lire.',
+      sftp: 'Le compte sous lequel Polyfin se connecte.',
+      rclone: 'L’utilisateur du contrôle à distance de rclone (--rc-user), vide s’il n’y en a pas.',
     },
     password: 'Mot de passe',
     passwordHint: 'Polyfin ne l’affiche plus jamais.',
+    sftpPasswordHint: 'Vide quand la clé privée suffit. Polyfin ne l’affiche plus jamais.',
+    accessKey: 'Clé d’accès',
+    secretKey: 'Clé secrète',
+    endpoint: 'Point de terminaison',
+    endpointHint:
+      'L’adresse du service S3 du stockage. Polyfin nomme le bucket dans le chemin, comme tout stockage compatible S3 l’accepte, sauf aux points de terminaison d’Amazon.',
+    region: 'Région',
+    regionHint: 'Vide pour us-east-1, que la plupart des stockages compatibles S3 acceptent.',
+    privateKey: 'Clé privée',
+    privateKeyHint:
+      'Une clé privée OpenSSH ou PEM, à la place du mot de passe ou avec lui. Polyfin ne l’affiche plus jamais.',
+    privateKeySaved: 'Une clé est enregistrée. Collez-en une autre pour la remplacer.',
+    privateKeyRemove: 'Supprimer la clé enregistrée',
+    passphrase: 'Phrase de passe',
+    passphraseHint: 'Seulement pour une clé privée qui en a une.',
+    hostKey: 'Clé d’hôte',
+    hostKeyHint:
+      'Enregistrée à la première connexion. Polyfin refuse le serveur quand il en présente une autre.',
+    hostKeyNone: 'Enregistrée à la première connexion',
+    hostKeyOffered: (fingerprint: string) =>
+      `Le serveur présente désormais une autre clé d’hôte, ${fingerprint}, et Polyfin la refuse. Acceptez-la seulement si le serveur a été réinstallé ou si sa clé a été changée volontairement.`,
+    acceptHostKey: 'Accepter la nouvelle clé',
+    hostKeyAccepted: 'La nouvelle clé d’hôte est acceptée. Polyfin analyse à nouveau le dossier.',
+    rcloneInstance: 'Adresse de rclone',
+    rcloneInstanceHint:
+      'Là où répond rclone rcd --rc-serve, jointe en http://, comme http://rclone:5572 pour un conteneur à côté de Polyfin.',
+    rcloneRemote: 'Remote',
+    rcloneRemoteHint: 'L’un des remotes de la configuration de rclone.',
+    listRemotes: 'Lister les remotes',
+    remotesListed: (count: number, figure: string) =>
+      count === 1 ? 'rclone a un remote.' : `rclone a ${figure} remotes.`,
+    noRemotes: 'rclone n’a aucun remote dans sa configuration.',
+    remotesFailed: {
+      unreachable: 'rclone ne répond pas à cette adresse.',
+      refused: 'rclone refuse cet utilisateur ou ce mot de passe.',
+    } as Record<string, string>,
+    rcloneFolder: 'Chemin dans le remote',
+    rcloneFolderHint: 'Le dossier du remote à lire, vide pour sa racine.',
+    pollMinutes: 'Chercher les changements toutes les (minutes, 0 = seulement aux analyses)',
+    pollMinutesHint: {
+      s3: 'Les dossiers du bucket sont listés à nouveau à cet intervalle pour trouver les fichiers ajoutés et supprimés. Les fournisseurs peuvent facturer chaque listage. 30 par défaut.',
+      sftp: 'Le dossier et ses sous-dossiers sont listés à nouveau à cet intervalle pour trouver les fichiers ajoutés et supprimés. 2 par défaut.',
+      rclone:
+        'Les dossiers du remote sont listés à nouveau à cet intervalle pour trouver les fichiers ajoutés et supprimés. 2 par défaut.',
+    },
     name: 'Nom',
     nameHint: 'Le nom de sa bibliothèque dans les applications Jellyfin.',
     path: 'Chemin dans le conteneur',
@@ -300,6 +365,8 @@ const sources: typeof en = {
         'Polyfin ne peut pas joindre le partage : vérifiez que le serveur est allumé, ainsi que le serveur et le port de l’adresse.',
       refused:
         'Le partage refuse l’utilisateur ou le mot de passe : vérifiez-les, et saisissez-les à nouveau.',
+      host_key_changed:
+        'Le serveur SFTP présente une autre clé d’hôte que celle enregistrée à la première connexion, et Polyfin la refuse. Si ce changement est attendu, acceptez la nouvelle clé sous Modifier le dossier.',
     } as Record<string, string>,
     keptNote:
       'Les fichiers trouvés auparavant restent dans la bibliothèque jusqu’à ce que le dossier soit à nouveau lisible.',

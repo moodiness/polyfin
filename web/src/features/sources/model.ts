@@ -1,10 +1,13 @@
 import {
   BroadcastIcon,
+  CloudIcon,
   FolderIcon,
   GlobeIcon,
   HardDrivesIcon,
   MusicNotesIcon,
+  PlugsConnectedIcon,
   PuzzlePieceIcon,
+  TerminalWindowIcon,
   type Icon,
 } from '@phosphor-icons/react'
 import { queryClient, queryKeys, type Addon, type Owner, type Scope } from '@/api'
@@ -21,6 +24,9 @@ export function kindIcon(addon: Addon): Icon {
   if (isIptv(addon)) return BroadcastIcon
   if (addon.folder?.share === 'smb') return HardDrivesIcon
   if (addon.folder?.share === 'webdav') return GlobeIcon
+  if (addon.folder?.share === 's3') return CloudIcon
+  if (addon.folder?.share === 'sftp') return TerminalWindowIcon
+  if (addon.folder?.share === 'rclone') return PlugsConnectedIcon
   if (addon.kind === 'local') return FolderIcon
   return addon.kind === 'eclipse' ? MusicNotesIcon : PuzzlePieceIcon
 }

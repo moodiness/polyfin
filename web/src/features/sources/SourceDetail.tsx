@@ -395,8 +395,20 @@ export function SourceDetail({
           >
             <span className="font-mono text-small break-all text-ink-2">{addon.manifestUrl}</span>
           </Fact>
+          {folder !== null && folder.share === 's3' && (
+            <Fact label={t.localFolders.endpoint}>
+              <span className="font-mono text-small break-all text-ink-2">{folder.endpoint}</span>
+            </Fact>
+          )}
+          {folder !== null && folder.share === 'rclone' && (
+            <Fact label={t.localFolders.rcloneRemote}>
+              <span className="font-mono text-small break-all text-ink-2">
+                {folder.rcloneRemote}
+              </span>
+            </Fact>
+          )}
           {folder !== null && folder.share !== '' && folder.user !== '' && (
-            <Fact label={t.localFolders.user}>
+            <Fact label={folder.share === 's3' ? t.localFolders.accessKey : t.localFolders.user}>
               <span className="break-all text-ink-2">{folder.user}</span>
             </Fact>
           )}
