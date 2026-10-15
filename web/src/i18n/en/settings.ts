@@ -258,6 +258,7 @@ const settings = {
         'When an app cannot play a file as it is, Polyfin converts it with FFmpeg. These settings choose how, for movies, series and Live TV alike. The defaults suit most servers.',
       groups: {
         general: 'General',
+        subtitles: 'Picture subtitles',
         gpu: 'Graphics card',
         video: 'Video',
         hdr: 'HDR',
@@ -265,6 +266,17 @@ const settings = {
         audio: 'Audio',
         performance: 'Performance',
       },
+      subtitleOcr: 'Turn picture subtitles into text',
+      subtitleOcrHelp:
+        'PGS and DVD (VobSub) subtitles are pictures, and many apps take only text: for them, Polyfin burns the track into the video, which needs a conversion. With this on, Tesseract reads each picture track once, in the background, into a text copy listed as one more track marked "(OCR)", which plays without conversion. Until a copy is ready, the track is burned in as before. The picture track stays: italics, colors and positions are lost, and stylized fonts can be misread. "When played" reads a version’s tracks the first time an app that cannot draw them plays it; "Also after library scans" also reads the tracks of new local files. Off by default.',
+      subtitleOcrChoices: {
+        off: 'Off',
+        played: 'When played',
+        scans: 'Also after library scans',
+      },
+      subtitleOcrTracks: 'Picture subtitle tracks read at once',
+      subtitleOcrTracksHelp: (r: RangeText) =>
+        `Each track is read by one Tesseract process using one processor core. From ${r.min} to ${r.max}; ${r.default} by default.`,
       hardwareAcceleration: 'Graphics card used to convert',
       hardwareAccelerationHelp:
         'A graphics card (GPU) converts video much faster than the processor. A change applies once saved, without a restart.',

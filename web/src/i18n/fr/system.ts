@@ -153,6 +153,8 @@ const system: typeof en = {
           `Let’s Encrypt n’a pas délivré le certificat HTTPS : ${error}`,
         httpsExpires: (date: string) => `Le certificat HTTPS expire le ${date}.`,
         httpsExpired: (date: string) => `Le certificat HTTPS a expiré le ${date}.`,
+        subtitleOcrLanguage: (name: string, file: string) =>
+          `Les sous-titres en images en ${name} ne sont pas lus en texte : Tesseract n’a pas de données pour cette langue. Ajoutez le fichier ${file} au dossier que nomme POLYFIN_TESSDATA_DIR.`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
         backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',
         backupDestinationFailed: (name: string) =>

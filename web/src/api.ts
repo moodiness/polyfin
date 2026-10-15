@@ -344,6 +344,13 @@ export type Settings = {
   maxConversionHeight: number
   /** Streams a title as one file, copied or converted within the user's quality, to apps saving it offline. */
   convertedDownloads: boolean
+  /**
+   * Reads picture subtitles (PGS, VobSub) into text tracks with Tesseract: never, when an app that
+   * cannot draw them plays a version, or also after the scans of local folders.
+   */
+  subtitleOcr: SubtitleOcr
+  /** Picture subtitle tracks read at once. */
+  subtitleOcrTracks: number
   /** Encoder speed against quality: auto (Polyfin's choice), then veryslow to ultrafast. */
   encoderPreset: EncoderPreset
   /** Quality factor of H.264 and HEVC conversions (CRF, CQ or QVBR's), 0 aiming for the bitrate alone. */
@@ -536,6 +543,7 @@ export type ToneMappingAlgorithm =
 export type DeinterlaceMethod = 'yadif' | 'bwdif'
 export type AdaptiveQuality = 'off' | 'remote' | 'always'
 export type DownmixAlgorithm = 'None' | 'Dave750' | 'NightmodeDialogue' | 'Rfc7845' | 'Ac4'
+export type SubtitleOcr = 'off' | 'played' | 'scans'
 
 /** A GPU conversions run on. */
 export type ConversionGPU = {
@@ -3245,6 +3253,7 @@ export type HealthProblem = {
   | { code: 'https_files'; failure: 'missing' | 'unreadable' | 'mismatch'; file: string }
   | { code: 'https_renewal'; error: string }
   | { code: 'https_expiry'; expires: string }
+  | { code: 'subtitle_ocr_language'; name: string; file: string }
   | { code: 'connection_stopped'; kind: 'app'; name: AppKind; owner: NonNullable<Owner> }
   | {
       code: 'connection_stopped'

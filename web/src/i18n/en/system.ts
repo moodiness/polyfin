@@ -146,6 +146,8 @@ const system = {
           `Let’s Encrypt did not give the HTTPS certificate: ${error}`,
         httpsExpires: (date: string) => `The HTTPS certificate expires on ${date}.`,
         httpsExpired: (date: string) => `The HTTPS certificate expired on ${date}.`,
+        subtitleOcrLanguage: (name: string, file: string) =>
+          `Picture subtitles in ${name} are not read into text: Tesseract has no data for this language. Add the file ${file} to the folder POLYFIN_TESSDATA_DIR names.`,
         backupFailed: 'The last database backup failed.',
         backupStale: 'The last database backup is more than two days old.',
         backupDestinationFailed: (name: string) =>

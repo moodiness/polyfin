@@ -250,6 +250,22 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'conversion',
+    anchor: 'subtitle-ocr',
+    label: (t) => c(t).subtitleOcr,
+    help: (t) => c(t).subtitleOcrHelp,
+    keywords: ['OCR', 'Tesseract', 'PGS', 'VobSub', 'DVD', 'subtitles', 'sous-titres'],
+    codes: ['invalid_subtitle_ocr'],
+  },
+  {
+    section: 'conversion',
+    anchor: 'subtitle-ocr-tracks',
+    label: (t) => c(t).subtitleOcrTracks,
+    help: (t, r) => c(t).subtitleOcrTracksHelp(r('subtitleOcrTracks')),
+    keywords: ['OCR', 'Tesseract'],
+    codes: ['invalid_subtitle_ocr_tracks'],
+  },
+  {
+    section: 'conversion',
     anchor: 'hardware-acceleration',
     label: (t) => c(t).hardwareAcceleration,
     help: (t) => c(t).hardwareAccelerationHelp,

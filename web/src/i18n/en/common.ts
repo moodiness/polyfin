@@ -97,6 +97,9 @@ const common = {
       'Enter at most 50 words hiding versions, one a line, each at most 100 characters.',
     invalid_max_conversions: 'Video conversions at once must be a whole number from 0 to 32.',
     invalid_max_conversion_height: 'Choose the maximum quality of converted video from the list.',
+    invalid_subtitle_ocr: 'Choose from the list when picture subtitles are turned into text.',
+    invalid_subtitle_ocr_tracks:
+      'Picture subtitle tracks read at once must be a whole number from 1 to 4.',
     invalid_encoder_preset: 'Choose an encoding speed from the list.',
     invalid_video_quality: 'Video quality must be 0, or a whole number from 1 to 51.',
     invalid_hardware_acceleration: 'Choose a graphics card from the list.',

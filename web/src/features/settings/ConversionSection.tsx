@@ -7,6 +7,7 @@ import type {
   HardwareAcceleration,
   HardwareDecodingCodec,
   Settings,
+  SubtitleOcr,
   ToneMappingAlgorithm,
 } from '@/api'
 import { useI18n } from '@/i18n'
@@ -15,10 +16,11 @@ import { FieldRow, SettingRow, SettingsGroup, SwitchRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 
 /**
- * The Conversion section: whether and how much the server converts, the graphics card and what
- * it was found to do, then video, HDR, interlaced video, audio and performance. Options the
- * hardware cannot do are disabled; the tone mapping peak and desaturation, which only the
- * processor uses, show unless an NVIDIA card tone maps every HDR video.
+ * The Conversion section: whether and how much the server converts, picture subtitles read into
+ * text, the graphics card and what it was found to do, then video, HDR, interlaced video, audio
+ * and performance. Options the hardware cannot do are disabled; the tone mapping peak and
+ * desaturation, which only the processor uses, show unless an NVIDIA card tone maps every HDR
+ * video.
  */
 export default function ConversionSection({
   form,
@@ -98,6 +100,40 @@ export default function ConversionSection({
           checked={form.convertedDownloads}
           onChange={(convertedDownloads) => update({ convertedDownloads })}
         />
+      </SettingsGroup>
+
+      <SettingsGroup title={c.groups.subtitles}>
+        <FieldRow
+          anchor="subtitle-ocr"
+          label={c.subtitleOcr}
+          help={c.subtitleOcrHelp}
+          error={error('subtitle-ocr')}
+        >
+          <Select
+            value={form.subtitleOcr}
+            options={choices<SubtitleOcr>('subtitleOcr').map((mode) => ({
+              value: mode,
+              label: c.subtitleOcrChoices[mode],
+            }))}
+            onValue={(subtitleOcr) => update({ subtitleOcr })}
+            className="max-w-xs"
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="subtitle-ocr-tracks"
+          label={c.subtitleOcrTracks}
+          help={c.subtitleOcrTracksHelp(range('subtitleOcrTracks'))}
+          error={error('subtitle-ocr-tracks')}
+        >
+          <NumberInput
+            {...limits('subtitleOcrTracks')}
+            step={1}
+            disabled={form.subtitleOcr === 'off'}
+            {...number('subtitle-ocr-tracks', form.subtitleOcrTracks, (value) =>
+              update({ subtitleOcrTracks: Math.trunc(value) }),
+            )}
+          />
+        </FieldRow>
       </SettingsGroup>
 
       <SettingsGroup title={c.groups.gpu}>

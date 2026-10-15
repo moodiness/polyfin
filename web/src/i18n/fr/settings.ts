@@ -265,6 +265,7 @@ const settings: typeof en = {
         'Quand une application ne sait pas lire un fichier tel quel, Polyfin le convertit avec FFmpeg. Ces réglages disent comment, pour les films, les séries et la TV en direct. Les valeurs par défaut conviennent à la plupart des serveurs.',
       groups: {
         general: 'Général',
+        subtitles: 'Sous-titres en images',
         gpu: 'Carte graphique',
         video: 'Image',
         hdr: 'HDR',
@@ -272,6 +273,17 @@ const settings: typeof en = {
         audio: 'Son',
         performance: 'Performances',
       },
+      subtitleOcr: 'Lire en texte les sous-titres en images',
+      subtitleOcrHelp:
+        'Les sous-titres PGS et de DVD (VobSub) sont des images, et beaucoup d’applications ne prennent que du texte : pour elles, Polyfin incruste la piste dans l’image, ce qui demande une conversion. Activé, Tesseract lit une fois chaque piste en images, en arrière-plan, pour en faire une copie en texte, listée comme une piste de plus marquée « (OCR) », qui se lit sans conversion. Tant que la copie n’est pas prête, la piste est incrustée comme avant. La piste en images reste : l’italique, les couleurs et les positions sont perdus, et des polices travaillées peuvent être mal lues. « À la lecture » lit les pistes d’une version la première fois qu’une application qui ne sait pas les afficher la lit ; « Aussi après les analyses des bibliothèques » lit aussi les pistes des nouveaux fichiers locaux. Désactivé par défaut.',
+      subtitleOcrChoices: {
+        off: 'Désactivé',
+        played: 'À la lecture',
+        scans: 'Aussi après les analyses des bibliothèques',
+      },
+      subtitleOcrTracks: 'Pistes de sous-titres en images lues en même temps',
+      subtitleOcrTracksHelp: (r: RangeText) =>
+        `Chaque piste est lue par un processus Tesseract, sur un cœur du processeur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
       hardwareAcceleration: 'Carte graphique pour convertir',
       hardwareAccelerationHelp:
         'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. Un changement s’applique dès l’enregistrement, sans redémarrer.',

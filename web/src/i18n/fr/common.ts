@@ -105,6 +105,10 @@ const common: typeof en = {
     invalid_max_conversions:
       'Le nombre de conversions vidéo en même temps doit être un nombre entier de 0 à 32.',
     invalid_max_conversion_height: 'Choisissez la qualité max des vidéos converties dans la liste.',
+    invalid_subtitle_ocr:
+      'Choisissez dans la liste quand les sous-titres en images sont lus en texte.',
+    invalid_subtitle_ocr_tracks:
+      'Le nombre de pistes de sous-titres en images lues en même temps doit être un nombre entier de 1 à 4.',
     invalid_encoder_preset: 'Choisissez une vitesse d’encodage dans la liste.',
     invalid_video_quality: 'La qualité vidéo doit être 0, ou un nombre entier de 1 à 51.',
     invalid_hardware_acceleration: 'Choisissez une carte graphique dans la liste.',
