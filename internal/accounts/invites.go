@@ -159,6 +159,11 @@ func (s *Store) CreateInvite(ctx context.Context, invite NewInvite) (Invite, str
 	secret, hash := newLinkSecret()
 	var created Invite
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		// Taken before the model and the group, as DeleteGroup takes it
+		// before locking the group and its members.
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", administratorsLock); err != nil {
+			return err
+		}
 		if invite.Model != nil {
 			// The model stays until the invite is saved.
 			if _, err := scanUser(tx.QueryRow(ctx, "SELECT "+userColumns+" FROM users WHERE id = $1 FOR SHARE", *invite.Model)); errors.Is(err, ErrNotFound) {

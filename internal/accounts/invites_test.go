@@ -188,3 +188,73 @@ func TestInvitesRefuseGuestsOnceUsedUpExpiredOrRevoked(t *testing.T) {
 		t.Errorf("%d users, want the administrator and the two guests", len(users))
 	}
 }
+
+// An invite modelled on a member of a group, and naming that group, waits
+// for the group's deletion instead of deadlocking with it: DeleteGroup
+// locks the group, then its members, and CreateInvite would otherwise lock
+// the model, then the group. The invite then names a deleted group.
+func TestAnInviteOfAMemberWaitsForTheDeletionOfTheirGroup(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	admin := mustCreate(t, store, NewUser{Name: "admin", Password: "correct horse", IsAdministrator: true})
+	member := mustCreate(t, store, NewUser{Name: "member", Password: "correct horse"})
+	group, err := store.CreateGroup(ctx, "Family", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddGroupMembers(ctx, group.ID, []ID{member.ID}); err != nil {
+		t.Fatal(err)
+	}
+	// held holds the group's row, so that both stop at it, DeleteGroup
+	// first, until it is rolled back.
+	held, err := store.db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = held.Rollback(ctx) }()
+	if _, err := held.Exec(ctx, "SELECT 1 FROM user_groups WHERE id = $1 FOR UPDATE", group.ID); err != nil {
+		t.Fatal(err)
+	}
+	waiting := func(n int) {
+		t.Helper()
+		deadline := time.Now().Add(30 * time.Second)
+		for {
+			var count int
+			if err := store.db.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'").
+				Scan(&count); err != nil {
+				t.Fatal(err)
+			}
+			if count >= n {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("%d waiting, want %d", count, n)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	deleted := make(chan error, 1)
+	go func() {
+		_, err := store.DeleteGroup(ctx, group.ID)
+		deleted <- err
+	}()
+	waiting(1)
+	created := make(chan error, 1)
+	go func() {
+		_, _, err := store.CreateInvite(ctx, NewInvite{MaxUses: 1, Model: &member.ID, Group: &group.ID, CreatedBy: admin.ID})
+		created <- err
+	}()
+	waiting(2)
+	if err := held.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-deleted; err != nil {
+		t.Errorf("DeleteGroup: %v", err)
+	}
+	if err := <-created; !errors.Is(err, ErrInvalidGroup) {
+		t.Errorf("CreateInvite: %v, want %v", err, ErrInvalidGroup)
+	}
+	if invites, err := store.Invites(ctx); err != nil || len(invites) != 0 {
+		t.Errorf("invites %+v, %v; want none", invites, err)
+	}
+}
