@@ -56,7 +56,7 @@ const users: typeof en = {
     noDownloads: 'Sans téléchargement',
     turnOffDownloads: 'Désactiver les téléchargements pour tous',
     turnOffDownloadsConfirm:
-      'Tous les utilisateurs perdent l’autorisation de télécharger, y compris dans les applications Jellyfin déjà connectées. Vous pouvez la rendre à un utilisateur depuis sa page, dans Accès.',
+      'Tous les utilisateurs et tous les groupes perdent l’autorisation de télécharger, y compris dans les applications Jellyfin déjà connectées. Vous pouvez la rendre à un utilisateur ou à un groupe depuis sa page, dans Accès.',
     turningOffDownloads: 'Désactivation…',
     downloadsTurnedOff: (count: number) =>
       count === 0
@@ -431,6 +431,94 @@ const users: typeof en = {
       'Le lien cesse aussitôt de fonctionner. Les comptes déjà créés grâce à lui sont conservés.',
     revoking: 'Révocation…',
     revoked: 'Le lien d’invitation est révoqué.',
+  },
+  groups: {
+    tabsLabel: 'Utilisateurs et groupes',
+    title: 'Groupes',
+    description:
+      'Un groupe réunit les limites de la page d’un utilisateur. Ses membres le suivent : une modification du groupe les atteint tous aussitôt.',
+    listTitle: 'Groupes',
+    empty: 'Aucun groupe pour le moment.',
+    emptyHelp:
+      'Créez un groupe pour régler en une fois les autorisations, les limites de lecture, le contrôle parental, les bibliothèques, les genres et les horaires de plusieurs comptes.',
+    create: 'Créer un groupe',
+    name: 'Nom',
+    nameTaken: 'Ce nom est déjà utilisé par un autre groupe.',
+    nameRule: 'De 1 à 64 caractères, différent du nom des autres groupes.',
+    copyFrom: 'Paramètres de',
+    copyFromHelp:
+      'Le groupe commence avec les autorisations, les limites de lecture et d’accès, le groupe de qualité, le contrôle parental, les bibliothèques visibles, les genres bloqués et les horaires autorisés de cet utilisateur.',
+    submit: 'Créer le groupe',
+    creating: 'Création…',
+    created: (name: string) => `Le groupe ${name} a été créé.`,
+    memberCount: (count: number) =>
+      count === 0 ? 'Aucun membre' : count === 1 ? '1 membre' : `${count} membres`,
+    notFound: 'Groupe introuvable',
+    notFoundHelp: 'Il a peut-être été supprimé.',
+    backToGroups: 'Retour aux groupes',
+    sectionsLabel: 'Sections du groupe',
+    pageHelp:
+      'Chaque section s’enregistre à part et atteint aussitôt les membres qui suivent le groupe.',
+    rename: 'Renommer',
+    renamed: 'Le groupe a été renommé.',
+    updated: 'Le groupe a été mis à jour.',
+    accessHelp:
+      'Les autorisations que les membres reçoivent du groupe. Leur rôle, l’écran de connexion, « Désactivé » et la date de fin restent sur leur propre page.',
+    delete: 'Supprimer le groupe',
+    deleteTitle: (name: string) => `Supprimer le groupe ${name} ?`,
+    deleteConfirm:
+      'Ses membres gardent les valeurs du groupe comme leurs propres réglages, que leur page peut ensuite modifier.',
+    deleting: 'Suppression…',
+    deleted: (name: string) => `Le groupe ${name} a été supprimé.`,
+    membersTitle: 'Membres',
+    membersHelp:
+      'Un membre qui ne suit plus le groupe garde ses valeurs comme ses propres réglages, marqués « Réglages propres ».',
+    noMembers: 'Aucun membre pour le moment.',
+    noMembersHelp:
+      'Ajoutez des membres ici, ou choisissez le groupe dans la section Accès de la page d’un utilisateur.',
+    ownSettings: 'Réglages propres',
+    followsHelp: 'Suit le groupe',
+    ownSettingsHelp: 'Garde ses propres réglages',
+    addMembers: 'Ajouter des membres',
+    addMembersTitle: (name: string) => `Ajouter des membres à ${name}`,
+    addMembersHelp:
+      'Les utilisateurs choisis suivent le groupe : ils prennent ses valeurs à la place des leurs. Les administrateurs ne peuvent pas rejoindre un groupe.',
+    noCandidates: 'Personne à ajouter.',
+    noCandidatesHelp:
+      'Tous les utilisateurs qui ne sont pas administrateurs sont déjà dans ce groupe.',
+    movesFrom: (name: string) => `Quitte le groupe ${name}`,
+    add: 'Ajouter',
+    adding: 'Ajout…',
+    membersAdded: (count: number) =>
+      count === 1 ? '1 membre a été ajouté.' : `${count} membres ont été ajoutés.`,
+    group: 'Groupe',
+    noGroup: 'Aucun groupe',
+    groupHelp:
+      'Un membre suit le groupe : ses valeurs s’appliquent, et cette page les affiche en lecture seule. Le quitter les garde comme les réglages propres de l’utilisateur.',
+    administratorNoGroup:
+      'Les administrateurs ne peuvent pas rejoindre un groupe, car leurs autorisations diffèrent.',
+    administratorLeaves: (name: string) =>
+      `Rendre cet utilisateur administrateur le retire du groupe ${name}.`,
+    newAccountGroupHelp: 'Les comptes créés rejoignent ce groupe et le suivent.',
+    newUserGroupHelp: 'L’utilisateur rejoint ce groupe et le suit.',
+    followGroup: 'Suivre le groupe',
+    followGroupHelp:
+      'Désactivé, l’utilisateur garde les valeurs actuelles du groupe comme les siennes, et cette page peut les modifier.',
+    setByGroup: (name: string) => `Réglé par le groupe ${name}.`,
+    openGroup: 'Ouvrir le groupe',
+    joinTitle: 'Rejoindre le groupe ?',
+    joinConfirm: (user: string, group: string) =>
+      `${user} rejoint ${group} et le suit : les valeurs du groupe remplacent les siennes dans Accès, Lecture et accès, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés.`,
+    join: 'Rejoindre',
+    followAgainTitle: 'Suivre de nouveau le groupe ?',
+    followAgainConfirm: (user: string, group: string) =>
+      `${user} reprend les valeurs de ${group} : ses propres réglages dans les sections du groupe sont remplacés.`,
+    followAgain: 'Suivre le groupe',
+    groupBadge: (name: string) => `Groupe ${name}`,
+    groupOwnBadge: (name: string) => `Groupe ${name}, réglages propres`,
+    filter: 'Afficher les utilisateurs de',
+    allGroups: 'Tous les groupes',
+    noneShown: 'Aucun utilisateur ici.',
   },
 }
 

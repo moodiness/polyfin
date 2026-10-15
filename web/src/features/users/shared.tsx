@@ -6,6 +6,7 @@ import {
   queryClient,
   queryKeys,
   updateUser,
+  type Group,
   type ParentalControl,
   type ParentalRating,
   type QualityGroup,
@@ -14,7 +15,22 @@ import {
 } from '@/api'
 import { useSessionUser } from '@/app/session'
 import { useI18n } from '@/i18n'
-import { Switch } from '@/ui'
+import { Switch, Tabs } from '@/ui'
+
+/** Users › Users and Users › Groups, above the two lists. */
+export function UsersTabs() {
+  const { t } = useI18n()
+  return (
+    <Tabs
+      label={t.groups.tabsLabel}
+      items={[
+        { id: 'users', label: t.users.title, to: '/users', end: true },
+        { id: 'groups', label: t.groups.title, to: '/users/groups', end: true },
+      ]}
+      className="mb-8 max-md:mb-6"
+    />
+  )
+}
 
 /** Puts a user returned by the server into the cached list. */
 export function storeUser(updated: User) {
@@ -30,20 +46,44 @@ export function refreshIfGone(error: unknown) {
   }
 }
 
+/**
+ * Keeps the caches up to date after a user is changed: the list, their devices, our own session,
+ * and the groups, whose members and counts a change of group moves.
+ */
+export function userSaved(updated: User, selfId: string) {
+  storeUser(updated)
+  void queryClient.invalidateQueries({ queryKey: queryKeys.users })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.userDevices(updated.id) })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.groups })
+  if (updated.id === selfId) void queryClient.invalidateQueries({ queryKey: queryKeys.session })
+}
+
 /** A PATCH mutation for one user that keeps the list (and our own session) up to date. */
 export function useUserPatch(user: User) {
   const self = useSessionUser()
   return useMutation({
     mutationFn: (patch: UserPatch) => updateUser(user.id, patch),
-    onSuccess: (updated) => {
-      storeUser(updated)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.users })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.userDevices(user.id) })
-      if (updated.id === self.id)
-        void queryClient.invalidateQueries({ queryKey: queryKeys.session })
-    },
+    onSuccess: (updated) => userSaved(updated, self.id),
     onError: refreshIfGone,
   })
+}
+
+/**
+ * Keeps the caches up to date after a group is changed: the group, the list, the users, as its
+ * following members took its values, and the invite links naming it.
+ */
+export function groupSaved(updated: Group) {
+  queryClient.setQueryData(queryKeys.group(updated.id), updated)
+  void queryClient.invalidateQueries({ queryKey: queryKeys.groups })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.users })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.invites })
+}
+
+/** A 404 means the group is gone: the groups are refreshed so the page shows it. */
+export function refreshGroupIfGone(error: unknown) {
+  if (error instanceof ApiError && error.status === 404) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.groups })
+  }
 }
 
 /** "14:05" in the reader's language. */

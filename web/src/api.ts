@@ -81,7 +81,45 @@ export type User = {
   endsOn: string | null
   /** Whether the end date has come: the account is refused as a disabled one is. */
   ended: boolean
+  /** The group the user belongs to; null for none. Administrators never belong to one. */
+  groupId: string | null
+  groupName: string | null
+  /**
+   * Whether the user follows their group: its values apply and their page shows them read only.
+   * False once detached (Own settings); true when the user has no group.
+   */
+  followGroup: boolean
 }
+
+/** The fields of a user a group holds, in its sections: Access, Playback and access, and the rest. */
+export type GroupLimits = Pick<
+  User,
+  | 'transcoding'
+  | 'downloads'
+  | 'personalAddons'
+  | 'collectionManagement'
+  | 'subtitleManagement'
+  | 'canShare'
+  | 'maxPlaybacks'
+  | 'maxBitrate'
+  | 'qualityGroup'
+  | 'syncPlay'
+  | 'liveTv'
+  | 'remoteControl'
+  | 'liveTvManagement'
+  | 'parentalControl'
+  | 'hiddenLibraries'
+  | 'blockedGenres'
+  | 'accessSchedules'
+>
+
+/** A group as Users › Groups lists it. */
+export type GroupSummary = { id: string; name: string; memberCount: number }
+
+/** A group, with the values its following members take. */
+export type Group = GroupSummary & GroupLimits
+
+export type GroupPatch = Partial<GroupLimits & { name: string }>
 
 /** Jellyfin's SyncPlayUserAccessType. */
 export type SyncPlayAccess = 'CreateAndJoinGroups' | 'JoinGroups' | 'None'
@@ -472,6 +510,8 @@ export type NewUser = {
   password: string
   isAdministrator: boolean
   isHidden: boolean
+  /** The group the account joins and follows; absent or null for none. */
+  groupId?: string | null
 }
 
 export type UserPatch = Partial<{
@@ -499,6 +539,10 @@ export type UserPatch = Partial<{
   qualityGroup: QualityGroup
   /** YYYY-MM-DD, or null for never. */
   endsOn: string | null
+  /** Joins this group and takes its values; '' leaves the group, keeping them as own settings. */
+  groupId: string
+  /** False detaches the member, keeping the group's values; true takes them back. */
+  followGroup: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
@@ -1700,13 +1744,34 @@ export const unblockUser = (id: string) => request<User>('POST', `/users/${seg(i
 /** Takes the permission to download away from every user; answers with those who had it. */
 export const turnOffDownloads = () => request<User[]>('POST', '/users/downloads/off')
 
+export const fetchGroups = (signal?: AbortSignal) =>
+  request<GroupSummary[]>('GET', '/groups', undefined, signal)
+
+/** A new group, with the values of a user made with Create a user, or those of `copyFrom`. */
+export const createGroup = (body: { name: string; copyFrom?: string }) =>
+  request<Group>('POST', '/groups', body)
+
+export const fetchGroup = (id: string, signal?: AbortSignal) =>
+  request<Group>('GET', `/groups/${seg(id)}`, undefined, signal)
+
+/** Changes a group; its following members take the new values at once. */
+export const updateGroup = (id: string, patch: GroupPatch) =>
+  request<Group>('PATCH', `/groups/${seg(id)}`, patch)
+
+/** Deletes a group: its members keep its values as their own settings. */
+export const deleteGroup = (id: string) => request<void>('DELETE', `/groups/${seg(id)}`)
+
+/** Puts users in a group, following it; an administrator among them refuses them all. */
+export const addGroupMembers = (id: string, userIds: string[]) =>
+  request<unknown>('POST', `/groups/${seg(id)}/members`, { userIds })
+
 export type InviteState = 'active' | 'used_up' | 'expired' | 'revoked'
 
 /**
  * An invite link: how many accounts it may create and has created, when it expires (null for
- * never), the user whose settings new accounts copy (null for a new user's), who created it
- * (null once deleted), and how many days after its creation each account it creates ends (null
- * for never).
+ * never), the user whose settings new accounts copy (null for a new user's), the group they join
+ * (null for none), who created it (null once deleted), and how many days after its creation each
+ * account it creates ends (null for never).
  */
 export type Invite = {
   id: string
@@ -1716,6 +1781,7 @@ export type Invite = {
   createdAt: string
   revokedAt: string | null
   model: { id: string; name: string } | null
+  group: { id: string; name: string } | null
   createdBy: { id: string; name: string } | null
   state: InviteState
   accountsEndInDays: number | null
@@ -1730,12 +1796,16 @@ export type NewInvite = Invite & { token: string; url: string | null }
 export const fetchInvites = (signal?: AbortSignal) =>
   request<Invite[]>('GET', '/invites', undefined, signal)
 
-/** `expiresInDays` null never expires; `accountsEndInDays` null never ends the accounts. */
+/**
+ * `expiresInDays` null never expires; `accountsEndInDays` null never ends the accounts; `groupId`
+ * null joins no group.
+ */
 export const createInvite = (body: {
   maxUses: number
   expiresInDays: number | null
   modelUserId: string | null
   accountsEndInDays: number | null
+  groupId: string | null
 }) => request<NewInvite>('POST', '/invites', body)
 
 export const revokeInvite = (id: string) => request<Invite>('POST', `/invites/${seg(id)}/revoke`)
@@ -3375,6 +3445,9 @@ export const queryKeys = {
   reminderSettings: ['account', 'reminders', 'settings'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
+  /** Prefix of every group query: invalidating it refreshes the list and each group. */
+  groups: ['groups'] as const,
+  group: (id: string) => ['groups', id] as const,
   jellyfinImport: ['jellyfin-import'] as const,
   ownImport: ['account', 'server-import'] as const,
   ownAppImport: ['account', 'app-import'] as const,

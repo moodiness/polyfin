@@ -18,6 +18,7 @@ import { useLocation, useNavigate } from 'react-router'
 import {
   ApiError,
   deleteUser,
+  fetchGroups,
   fetchUserDevices,
   fetchUserShareLinks,
   fetchUsers,
@@ -48,6 +49,7 @@ import {
   PanelSection,
   RelativeTime,
   SectionNav,
+  Select,
   Skeleton,
   SkeletonRows,
   StatusPill,
@@ -67,9 +69,13 @@ import {
 import {
   AllowedHoursForm,
   BlockedGenresForm,
+  FollowedNotice,
+  followedGroup,
   ParentalControlForm,
+  PermissionRows,
   PlaybackAccessForm,
   VisibleLibrariesForm,
+  type LimitsTarget,
 } from './UserForms'
 
 const sectionIds = [
@@ -135,6 +141,10 @@ function UserPage({ user }: { user: User }) {
   const restrictions = useRestrictions(user)
   const current = useSectionInView(sectionIds, true)
   const [deleting, setDeleting] = useState(false)
+  const target: LimitsTarget = { kind: 'user', user }
+  // The forms keep what is typed until saved. A member's own values are only changed there, while
+  // the values of a group they follow change with it: those forms are drawn again from each copy.
+  const formsKey = followedGroup(user) === null ? 'own' : `group:${JSON.stringify(user)}`
 
   // The content arrives after the first render: a #section address scrolls once it is drawn.
   useEffect(() => {
@@ -208,6 +218,13 @@ function UserPage({ user }: { user: User }) {
       ) : (
         <StatusPill tone="ok">{t.users.active}</StatusPill>
       )}
+      {user.groupName !== null && (
+        <Badge>
+          {user.followGroup
+            ? t.groups.groupBadge(user.groupName)
+            : t.groups.groupOwnBadge(user.groupName)}
+        </Badge>
+      )}
       <span className="text-ink-3">
         {t.users.lastSignInLabel}{' '}
         {user.lastLoginAt === null ? t.common.never : <RelativeTime iso={user.lastLoginAt} />}
@@ -240,11 +257,11 @@ function UserPage({ user }: { user: User }) {
       >
         <ProfilePanel user={user} />
         <AccessPanel user={user} />
-        <PlaybackAccessForm id="playback" user={user} />
-        <ParentalControlForm id="parental" user={user} />
-        <VisibleLibrariesForm id="libraries" user={user} />
-        <BlockedGenresForm id="genres" user={user} />
-        <AllowedHoursForm id="hours" user={user} />
+        <PlaybackAccessForm key={`playback:${formsKey}`} id="playback" target={target} />
+        <ParentalControlForm key={`parental:${formsKey}`} id="parental" target={target} />
+        <VisibleLibrariesForm key={`libraries:${formsKey}`} id="libraries" target={target} />
+        <BlockedGenresForm key={`genres:${formsKey}`} id="genres" target={target} />
+        <AllowedHoursForm key={`hours:${formsKey}`} id="hours" target={target} />
         <ShareLinksSection user={user} />
         <section id="devices" aria-labelledby="devices-title" className={sectionClass}>
           <h2 id="devices-title" className="mb-4 text-h3 text-ink">
@@ -414,20 +431,27 @@ function ProfilePanel({ user }: { user: User }) {
   )
 }
 
-/** What applies at once: role, sign-in screen, disabled, the end date, and the user's rights. */
+/**
+ * What applies at once: role, sign-in screen, disabled, the end date, the group, and the user's
+ * rights, which a group the user follows sets.
+ */
 function AccessPanel({ user }: { user: User }) {
   const { t } = useI18n()
   const toast = useToast()
   const access = useUserPatch(user)
+  // Joining a group and following it again replace the user's values: both are asked first.
+  const [asked, setAsked] = useState<{ groupId: string; name: string } | 'follow' | null>(null)
   // Losing the permission, or being disabled, revokes the user's share links.
   const change = (patch: Parameters<typeof access.mutate>[0]) =>
     access.mutate(patch, {
       onSuccess: () => {
+        setAsked(null)
         toast(t.users.updated)
         void queryClient.invalidateQueries({ queryKey: queryKeys.userShareLinks(user.id) })
       },
     })
   const lastAdmin = access.error instanceof ApiError && access.error.code === 'last_administrator'
+  const followed = followedGroup(user)
 
   return (
     <div id="access" className={sectionClass}>
@@ -435,7 +459,7 @@ function AccessPanel({ user }: { user: User }) {
         title={t.users.accessTitle}
         description={`${t.users.accessHelp} ${t.users.lastAdminHelp}`}
       >
-        {access.isError && (
+        {access.isError && asked === null && (
           <div className="mb-2">
             <Notice tone={lastAdmin ? 'warn' : 'danger'} live>
               {errorMessage(t, access.error)}
@@ -445,7 +469,11 @@ function AccessPanel({ user }: { user: User }) {
         <div className="-my-4">
           <SwitchRow
             title={t.users.isAdministrator}
-            help={t.users.isAdministratorHelp}
+            help={
+              user.groupName === null
+                ? t.users.isAdministratorHelp
+                : `${t.users.isAdministratorHelp} ${t.groups.administratorLeaves(user.groupName)}`
+            }
             checked={user.isAdministrator}
             disabled={access.isPending}
             onChange={(isAdministrator) => change({ isAdministrator })}
@@ -470,50 +498,124 @@ function AccessPanel({ user }: { user: User }) {
             pending={access.isPending}
             onSave={(endsOn) => change({ endsOn })}
           />
-          <SwitchRow
-            title={t.users.canTranscode}
-            help={t.users.canTranscodeHelp}
-            checked={user.transcoding}
-            disabled={access.isPending}
-            onChange={(transcoding) => change({ transcoding })}
+          <GroupRow
+            user={user}
+            pending={access.isPending}
+            onChoose={(group) => {
+              access.reset()
+              if (group === null) change({ groupId: '' })
+              else setAsked({ groupId: group.id, name: group.name })
+            }}
           />
-          <SwitchRow
-            title={t.users.canDownload}
-            help={t.users.canDownloadHelp}
-            checked={user.downloads}
-            disabled={access.isPending}
-            onChange={(downloads) => change({ downloads })}
-          />
-          <SwitchRow
-            title={t.users.canAddAddons}
-            help={t.users.canAddAddonsHelp}
-            checked={user.personalAddons}
-            disabled={access.isPending}
-            onChange={(personalAddons) => change({ personalAddons })}
-          />
-          <SwitchRow
-            title={t.users.canManageCollections}
-            help={t.users.canManageCollectionsHelp}
-            checked={user.collectionManagement}
-            disabled={access.isPending}
-            onChange={(collectionManagement) => change({ collectionManagement })}
-          />
-          <SwitchRow
-            title={t.users.canManageSubtitles}
-            help={t.users.canManageSubtitlesHelp}
-            checked={user.subtitleManagement}
-            disabled={access.isPending}
-            onChange={(subtitleManagement) => change({ subtitleManagement })}
-          />
-          <SwitchRow
-            title={t.users.canShare}
-            help={t.users.canShareHelp}
-            checked={user.canShare}
-            disabled={access.isPending}
-            onChange={(canShare) => change({ canShare })}
+          {user.groupId !== null && (
+            <SwitchRow
+              title={t.groups.followGroup}
+              help={t.groups.followGroupHelp}
+              checked={user.followGroup}
+              disabled={access.isPending}
+              onChange={(follow) => {
+                access.reset()
+                if (follow) setAsked('follow')
+                else change({ followGroup: false })
+              }}
+            />
+          )}
+          {followed !== null && (
+            <div className="border-t border-line py-4">
+              <FollowedNotice group={followed} />
+            </div>
+          )}
+          <PermissionRows
+            values={user}
+            disabled={access.isPending || followed !== null}
+            onChange={change}
           />
         </div>
       </Panel>
+      <ConfirmDialog
+        open={asked !== null}
+        onClose={() => setAsked(null)}
+        onConfirm={() =>
+          asked === 'follow'
+            ? change({ followGroup: true })
+            : asked !== null && change({ groupId: asked.groupId })
+        }
+        title={asked === 'follow' ? t.groups.followAgainTitle : t.groups.joinTitle}
+        confirmLabel={
+          access.isPending
+            ? t.common.saving
+            : asked === 'follow'
+              ? t.groups.followAgain
+              : t.groups.join
+        }
+        tone="primary"
+        busy={access.isPending}
+        error={access.isError ? errorMessage(t, access.error) : undefined}
+      >
+        {asked === 'follow'
+          ? t.groups.followAgainConfirm(user.name, user.groupName ?? '')
+          : asked !== null && t.groups.joinConfirm(user.name, asked.name)}
+      </ConfirmDialog>
+    </div>
+  )
+}
+
+/**
+ * The group the user belongs to, or No group, chosen from the list. An administrator cannot join
+ * one, as their permissions differ.
+ */
+function GroupRow({
+  user,
+  pending,
+  onChoose,
+}: {
+  user: User
+  pending: boolean
+  onChoose: (group: { id: string; name: string } | null) => void
+}) {
+  const { t } = useI18n()
+  const titleId = useId()
+  const helpId = useId()
+  const groups = useQuery({
+    queryKey: queryKeys.groups,
+    queryFn: ({ signal }) => fetchGroups(signal),
+    enabled: !user.isAdministrator,
+  })
+  const options = [
+    { value: '', label: t.groups.noGroup },
+    ...(groups.data ?? []).map((group) => ({ value: group.id, label: group.name })),
+  ]
+  // The user's group shows while the list loads.
+  if (user.groupId !== null && !options.some((option) => option.value === user.groupId)) {
+    options.push({ value: user.groupId, label: user.groupName ?? '' })
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-6 border-t border-line py-4 max-sm:flex-col max-sm:gap-3">
+      <div className="min-w-0">
+        <p id={titleId} className="text-control font-medium text-ink">
+          {t.groups.group}
+        </p>
+        <p id={helpId} className="mt-1 text-small text-ink-3">
+          {user.isAdministrator ? t.groups.administratorNoGroup : t.groups.groupHelp}
+        </p>
+        {groups.isError && (
+          <p className="mt-1 text-small text-danger">{errorMessage(t, groups.error)}</p>
+        )}
+      </div>
+      <Select
+        value={user.groupId ?? ''}
+        options={options}
+        onValue={(id) => {
+          if (id === (user.groupId ?? '')) return
+          const name = options.find((option) => option.value === id)?.label ?? ''
+          onChoose(id === '' ? null : { id, name })
+        }}
+        disabled={pending || user.isAdministrator}
+        aria-label={t.groups.group}
+        aria-describedby={helpId}
+        className="w-56 shrink-0 max-sm:w-full"
+      />
     </div>
   )
 }

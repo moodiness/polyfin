@@ -51,7 +51,7 @@ const users = {
     noDownloads: 'No downloads',
     turnOffDownloads: 'Turn off downloads for everyone',
     turnOffDownloadsConfirm:
-      'Every user loses the permission to download, also in the Jellyfin apps already signed in. You can give it back to a user on their page, under Access.',
+      'Every user and every group lose the permission to download, also in the Jellyfin apps already signed in. You can give it back to a user or a group on their page, under Access.',
     turningOffDownloads: 'Turning off…',
     downloadsTurnedOff: (count: number) =>
       count === 0
@@ -412,6 +412,90 @@ const users = {
     revokeConfirm: 'The link stops working at once. Accounts already created through it are kept.',
     revoking: 'Revoking…',
     revoked: 'The invite link is revoked.',
+  },
+  groups: {
+    tabsLabel: 'Users and groups',
+    title: 'Groups',
+    description:
+      'A group holds the limits of a user’s page. Its members follow it: a change to the group reaches every one of them at once.',
+    listTitle: 'Groups',
+    empty: 'No group yet.',
+    emptyHelp:
+      'Create a group to set the permissions, playback limits, parental control, libraries, genres and hours of several accounts at once.',
+    create: 'Create a group',
+    name: 'Name',
+    nameTaken: 'This name is already used by another group.',
+    nameRule: '1 to 64 characters, different from the other groups’ names.',
+    copyFrom: 'Settings of',
+    copyFromHelp:
+      'The group starts with this user’s permissions, playback and access limits, quality group, parental control, visible libraries, blocked genres and allowed hours.',
+    submit: 'Create group',
+    creating: 'Creating…',
+    created: (name: string) => `The group ${name} has been created.`,
+    memberCount: (count: number) =>
+      count === 0 ? 'No member' : count === 1 ? '1 member' : `${count} members`,
+    notFound: 'Group not found',
+    notFoundHelp: 'It may have been deleted.',
+    backToGroups: 'Back to groups',
+    sectionsLabel: 'Sections of the group',
+    pageHelp: 'Each section saves on its own and reaches the members who follow the group at once.',
+    rename: 'Rename',
+    renamed: 'The group has been renamed.',
+    updated: 'The group has been updated.',
+    accessHelp:
+      'The permissions members take from the group. Their role, sign-in screen, Disabled and end date stay on their own page.',
+    delete: 'Delete group',
+    deleteTitle: (name: string) => `Delete the group ${name}?`,
+    deleteConfirm:
+      'Its members keep the group’s values as their own settings, which their pages can then change.',
+    deleting: 'Deleting…',
+    deleted: (name: string) => `The group ${name} has been deleted.`,
+    membersTitle: 'Members',
+    membersHelp:
+      'A member who no longer follows the group keeps its values as their own settings, marked Own settings.',
+    noMembers: 'No member yet.',
+    noMembersHelp: 'Add members here, or choose the group in the Access section of a user’s page.',
+    ownSettings: 'Own settings',
+    followsHelp: 'Follows the group',
+    ownSettingsHelp: 'Keeps their own settings',
+    addMembers: 'Add members',
+    addMembersTitle: (name: string) => `Add members to ${name}`,
+    addMembersHelp:
+      'The users chosen follow the group: they take its values in place of their own. Administrators cannot join a group.',
+    noCandidates: 'No one to add.',
+    noCandidatesHelp: 'Every user who is not an administrator is already in this group.',
+    movesFrom: (name: string) => `Leaves the group ${name}`,
+    add: 'Add',
+    adding: 'Adding…',
+    membersAdded: (count: number) =>
+      count === 1 ? '1 member has been added.' : `${count} members have been added.`,
+    group: 'Group',
+    noGroup: 'No group',
+    groupHelp:
+      'A member follows the group: its values apply, and this page shows them read only. Leaving it keeps them as the user’s own.',
+    administratorNoGroup: 'Administrators cannot join a group, as their permissions differ.',
+    administratorLeaves: (name: string) =>
+      `Making this user an administrator takes them out of the group ${name}.`,
+    newAccountGroupHelp: 'The accounts created join this group and follow it.',
+    newUserGroupHelp: 'The user joins this group and follows it.',
+    followGroup: 'Follow the group',
+    followGroupHelp:
+      'Turned off, the user keeps the group’s current values as their own, and this page can change them.',
+    setByGroup: (name: string) => `Set by the group ${name}.`,
+    openGroup: 'Open the group',
+    joinTitle: 'Join the group?',
+    joinConfirm: (user: string, group: string) =>
+      `${user} joins ${group} and follows it: the group’s values replace theirs in Access, Playback and access, Parental control, Visible libraries, Blocked genres and Allowed hours.`,
+    join: 'Join',
+    followAgainTitle: 'Follow the group again?',
+    followAgainConfirm: (user: string, group: string) =>
+      `${user} takes the values of ${group} back: their own settings in the group’s sections are replaced.`,
+    followAgain: 'Follow the group',
+    groupBadge: (name: string) => `Group ${name}`,
+    groupOwnBadge: (name: string) => `Group ${name}, own settings`,
+    filter: 'Show the users of',
+    allGroups: 'All groups',
+    noneShown: 'No user here.',
   },
 }
 

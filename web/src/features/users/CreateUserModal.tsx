@@ -1,17 +1,28 @@
 import { useMutation } from '@tanstack/react-query'
 import { useId, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import { ApiError, createUser, queryClient, queryKeys, type User } from '@/api'
+import { ApiError, createUser, queryClient, queryKeys, type GroupSummary, type User } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { Button, Checkbox, Modal, Field, Notice, TextInput, useToast } from '@/ui'
+import { Button, Checkbox, Modal, Field, Notice, Select, TextInput, useToast } from '@/ui'
 
 /** Codes about one field, shown under it rather than above the buttons. */
 const nameCodes = ['invalid_name', 'name_taken']
 const passwordCodes = ['invalid_password']
 
-/** The form to create a user, in a floating panel over the list. */
-export default function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * The form to create a user, in a floating panel over the list. The account may join a group and
+ * follow it, unless it is an administrator's.
+ */
+export default function CreateUserModal({
+  open,
+  onClose,
+  groups,
+}: {
+  open: boolean
+  onClose: () => void
+  groups: readonly GroupSummary[]
+}) {
   const { t } = useI18n()
   const toast = useToast()
   const navigate = useNavigate()
@@ -21,6 +32,7 @@ export default function CreateUserModal({ open, onClose }: { open: boolean; onCl
   const [isAdministrator, setIsAdministrator] = useState(false)
   // Hidden by default, like Jellyfin.
   const [showOnSignIn, setShowOnSignIn] = useState(false)
+  const [groupId, setGroupId] = useState('')
 
   const mutation = useMutation({
     mutationFn: createUser,
@@ -29,9 +41,13 @@ export default function CreateUserModal({ open, onClose }: { open: boolean; onCl
       setPassword('')
       setIsAdministrator(false)
       setShowOnSignIn(false)
+      setGroupId('')
       // The new user's page needs it in the list before the refresh comes back.
       queryClient.setQueryData<User[]>(queryKeys.users, (old) => old && [...old, created])
       void queryClient.invalidateQueries({ queryKey: queryKeys.users })
+      if (created.groupId !== null) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.groups })
+      }
       toast(t.users.created(created.name))
       onClose()
       void navigate(`/users/${created.id}`)
@@ -46,7 +62,13 @@ export default function CreateUserModal({ open, onClose }: { open: boolean; onCl
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    mutation.mutate({ name: name.trim(), password, isAdministrator, isHidden: !showOnSignIn })
+    mutation.mutate({
+      name: name.trim(),
+      password,
+      isAdministrator,
+      isHidden: !showOnSignIn,
+      groupId: isAdministrator || groupId === '' ? null : groupId,
+    })
   }
 
   return (
@@ -109,6 +131,22 @@ export default function CreateUserModal({ open, onClose }: { open: boolean; onCl
           checked={showOnSignIn}
           onChange={setShowOnSignIn}
         />
+        {groups.length > 0 && (
+          <Field
+            label={t.groups.group}
+            help={isAdministrator ? t.groups.administratorNoGroup : t.groups.newUserGroupHelp}
+          >
+            <Select
+              value={isAdministrator ? '' : groupId}
+              onValue={setGroupId}
+              disabled={isAdministrator}
+              options={[
+                { value: '', label: t.groups.noGroup },
+                ...groups.map((group) => ({ value: group.id, label: group.name })),
+              ]}
+            />
+          </Field>
+        )}
         {otherError && <Notice tone="danger">{otherError}</Notice>}
       </form>
     </Modal>

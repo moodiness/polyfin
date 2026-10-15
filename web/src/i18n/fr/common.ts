@@ -66,6 +66,12 @@ const common: typeof en = {
       'Le nombre de spectateurs à la fois doit être un nombre entier de 1 à 5.',
     last_administrator:
       'C’est le dernier administrateur actif : il ne peut être ni supprimé, ni rétrogradé, ni désactivé.',
+    admin_cannot_join_group:
+      'Les administrateurs ne peuvent pas rejoindre un groupe, car leurs autorisations diffèrent. Rechargez la page pour voir qui l’est à présent.',
+    invalid_group: 'Ce groupe n’existe plus. Rechargez la page et choisissez-en un autre.',
+    follows_group:
+      'Cet utilisateur suit son groupe : modifiez le groupe, ou désactivez d’abord « Suivre le groupe ».',
+    invalid_copy_from: 'Cet utilisateur n’existe plus. Choisissez-en un autre.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',
     invalid_language: 'Choisissez la langue du serveur dans la liste.',
     invalid_catalog_limit:

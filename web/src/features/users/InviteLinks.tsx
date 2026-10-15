@@ -8,6 +8,7 @@ import {
   queryClient,
   queryKeys,
   revokeInvite,
+  type GroupSummary,
   type Invite,
   type InviteState,
   type NewInvite,
@@ -104,6 +105,7 @@ export function InviteLinks({ onCreate }: { onCreate: () => void }) {
                   {invite.model === null
                     ? text.newUserSettings
                     : text.settingsOf(invite.model.name)}
+                  {invite.group !== null && ` · ${t.groups.groupBadge(invite.group.name)}`}
                   {' · '}
                   {invite.expiresAt === null ? (
                     text.neverExpires
@@ -164,17 +166,19 @@ export function InviteLinks({ onCreate }: { onCreate: () => void }) {
 
 /**
  * The form creating an invite link, in a floating panel over the list: how many accounts it may
- * create, when it expires, when the accounts end, and whose settings they copy. Once created, it
- * shows the link, which the server gives this one time only.
+ * create, when it expires, when the accounts end, whose settings they copy, and the group they
+ * join. Once created, it shows the link, which the server gives this one time only.
  */
 export function CreateInviteModal({
   open,
   onClose,
   users,
+  groups,
 }: {
   open: boolean
   onClose: () => void
   users: readonly User[]
+  groups: readonly GroupSummary[]
 }) {
   const { t } = useI18n()
   const text = t.invites
@@ -183,6 +187,7 @@ export function CreateInviteModal({
   const [days, setDays] = useState(7)
   const [accountDays, setAccountDays] = useState(0)
   const [model, setModel] = useState('')
+  const [groupId, setGroupId] = useState('')
   const mutation = useMutation({
     mutationFn: createInvite,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.invites }),
@@ -194,6 +199,7 @@ export function CreateInviteModal({
     setDays(7)
     setAccountDays(0)
     setModel('')
+    setGroupId('')
     onClose()
   }
 
@@ -204,6 +210,7 @@ export function CreateInviteModal({
       expiresInDays: days === 0 ? null : days,
       modelUserId: model === '' ? null : model,
       accountsEndInDays: accountDays === 0 ? null : accountDays,
+      groupId: groupId === '' ? null : groupId,
     })
   }
 
@@ -277,6 +284,18 @@ export function CreateInviteModal({
             ]}
           />
         </Field>
+        {groups.length > 0 && (
+          <Field label={t.groups.group} help={t.groups.newAccountGroupHelp}>
+            <Select
+              value={groupId}
+              onValue={setGroupId}
+              options={[
+                { value: '', label: t.groups.noGroup },
+                ...groups.map((group) => ({ value: group.id, label: group.name })),
+              ]}
+            />
+          </Field>
+        )}
         {otherError && <Notice tone="danger">{otherError}</Notice>}
       </form>
     </Modal>

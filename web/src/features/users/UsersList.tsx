@@ -11,6 +11,7 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import {
+  fetchGroups,
   fetchUsers,
   queryClient,
   queryKeys,
@@ -33,6 +34,7 @@ import {
   InlineError,
   Row,
   RowList,
+  Select,
   SkeletonRows,
   StatusPill,
   RelativeTime,
@@ -40,7 +42,11 @@ import {
 } from '@/ui'
 import CreateUserModal from './CreateUserModal'
 import { CreateInviteModal, InviteLinks } from './InviteLinks'
-import { clockTime, useRestrictions } from './shared'
+import { clockTime, useRestrictions, UsersTabs } from './shared'
+
+/** The users the list shows: every one, those in no group, or the members of one group. */
+const allUsers = 'all'
+const noGroup = 'none'
 
 /**
  * `/users`: every account, each opening its page, the button to create one, the ones importing
@@ -53,11 +59,24 @@ export default function UsersList() {
   const [creating, setCreating] = useState(false)
   const [inviting, setInviting] = useState(false)
   const [stoppingDownloads, setStoppingDownloads] = useState(false)
+  const [shownGroup, setShownGroup] = useState(allUsers)
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
+  const groups = useQuery({
+    queryKey: queryKeys.groups,
+    queryFn: ({ signal }) => fetchGroups(signal),
+  })
+  const shown = (users.data ?? []).filter((user) =>
+    shownGroup === allUsers
+      ? true
+      : shownGroup === noGroup
+        ? user.groupId === null
+        : user.groupId === shownGroup,
+  )
   const downloadsOff = useMutation({
     mutationFn: turnOffDownloads,
     onSuccess: (changed) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.users })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.groups })
       setStoppingDownloads(false)
       toast(t.users.downloadsTurnedOff(changed.length), { tone: 'ok' })
     },
@@ -97,8 +116,27 @@ export default function UsersList() {
 
   return (
     <>
+      <UsersTabs />
       <PageLayout title={t.users.title} lede={t.users.description} actions={actions}>
-        <Block title={t.users.listTitle} count={users.data?.length}>
+        <Block
+          title={t.users.listTitle}
+          count={users.data === undefined ? undefined : shown.length}
+          aside={
+            (groups.data?.length ?? 0) > 0 && (
+              <Select
+                value={shownGroup}
+                onValue={setShownGroup}
+                aria-label={t.groups.filter}
+                className="w-48"
+                options={[
+                  { value: allUsers, label: t.groups.allGroups },
+                  { value: noGroup, label: t.groups.noGroup },
+                  ...(groups.data ?? []).map((group) => ({ value: group.id, label: group.name })),
+                ]}
+              />
+            )
+          }
+        >
           {users.isPending ? (
             <SkeletonRows rows={3} boxed label={t.common.loading} />
           ) : users.isError ? (
@@ -109,9 +147,11 @@ export default function UsersList() {
             <EmptyState icon={UsersIcon} title={t.users.empty} action={create}>
               {t.users.emptyHelp}
             </EmptyState>
+          ) : shown.length === 0 ? (
+            <EmptyState icon={UsersIcon} title={t.groups.noneShown} />
           ) : (
             <RowList aria-label={t.users.listTitle}>
-              {users.data.map((user) => (
+              {shown.map((user) => (
                 <UserRow key={user.id} user={user} />
               ))}
             </RowList>
@@ -120,11 +160,16 @@ export default function UsersList() {
         <InviteLinks onCreate={() => setInviting(true)} />
       </PageLayout>
       {/* Outside the layout, whose block spacing would push the panel down. */}
-      <CreateUserModal open={creating} onClose={() => setCreating(false)} />
+      <CreateUserModal
+        open={creating}
+        onClose={() => setCreating(false)}
+        groups={groups.data ?? []}
+      />
       <CreateInviteModal
         open={inviting}
         onClose={() => setInviting(false)}
         users={users.data ?? []}
+        groups={groups.data ?? []}
       />
       <ConfirmDialog
         open={stoppingDownloads}
@@ -160,6 +205,13 @@ function UserRow({ user }: { user: User }) {
           {user.id === self.id && <Badge>{t.users.you}</Badge>}
           {user.isAdministrator && <Badge tone="accent">{t.users.administrator}</Badge>}
           {user.passwordResetPin !== null && <Badge tone="warn">{t.users.pinRequested}</Badge>}
+          {user.groupName !== null && (
+            <Badge>
+              {user.followGroup
+                ? t.groups.groupBadge(user.groupName)
+                : t.groups.groupOwnBadge(user.groupName)}
+            </Badge>
+          )}
         </>
       }
       meta={

@@ -65,6 +65,12 @@ const common = {
     invalid_share_viewers: 'Viewers at once must be a whole number from 1 to 5.',
     last_administrator:
       'This is the last enabled administrator: it cannot be deleted, demoted or disabled.',
+    admin_cannot_join_group:
+      'Administrators cannot join a group, as their permissions differ. Reload the page to see who is one now.',
+    invalid_group: 'This group no longer exists. Reload the page and choose another one.',
+    follows_group:
+      'This user follows their group: change the group, or turn off Follow the group first.',
+    invalid_copy_from: 'This user no longer exists. Choose another one.',
     invalid_server_name: 'The server name must be 1 to 64 characters long.',
     invalid_language: 'Choose the server language from the list.',
     invalid_catalog_limit: 'Titles read per catalog must be a whole number from 100 to 20,000.',

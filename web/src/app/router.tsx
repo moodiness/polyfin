@@ -24,6 +24,7 @@ import HealthRoute from '@/features/system/HealthRoute'
 import LogsRoute from '@/features/system/LogsRoute'
 import ScheduleRoute from '@/features/system/ScheduleRoute'
 import AppImportRoute from '@/features/users/AppImportRoute'
+import GroupsRoute from '@/features/users/GroupsRoute'
 import JellyfinImportRoute from '@/features/users/JellyfinImport'
 import LetterboxdImportRoute from '@/features/users/LetterboxdImportRoute'
 import UsersRoute from '@/features/users/UsersRoute'
@@ -146,6 +147,7 @@ export const router = createBrowserRouter(
             { path: 'users/jellyfin-import', element: <JellyfinImportRoute /> },
             { path: 'users/app-import', element: <AppImportRoute /> },
             { path: 'users/letterboxd-import', element: <LetterboxdImportRoute /> },
+            { path: 'users/groups/:id?', element: <GroupsRoute /> },
             { path: 'users/:id?', element: <UsersRoute /> },
             {
               path: 'system',

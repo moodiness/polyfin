@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { PlusIcon, TrashIcon, XIcon } from '@phosphor-icons/react'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import {
@@ -7,12 +7,18 @@ import {
   qualityGroups,
   queryKeys,
   scheduleDays,
+  updateGroup,
+  updateUser,
   type AccessSchedule,
+  type Group,
+  type GroupLimits,
+  type GroupPatch,
   type QualityGroup,
   type ScheduleDay,
   type SyncPlayAccess,
   type User,
 } from '@/api'
+import { useSessionUser } from '@/app/session'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -29,20 +35,53 @@ import {
   Select,
   Skeleton,
   SuggestInput,
+  TextLink,
   useToast,
 } from '@/ui'
 import {
   groupRatings,
+  groupSaved,
   qualityGroupName,
+  refreshGroupIfGone,
+  refreshIfGone,
   selectedGroup,
   SwitchRow,
   useParentalRatings,
-  useUserPatch,
+  userSaved,
 } from './shared'
 
 /**
- * A section of a user's page: a panel holding one form, its error and its save button at the
- * foot. Saving shows a toast.
+ * Whose limits a section edits: a user's, or a group's, which its following members take at once.
+ */
+export type LimitsTarget = { kind: 'user'; user: User } | { kind: 'group'; group: Group }
+
+/** The group whose values a user follows, shown read only on their page; null otherwise. */
+export function followedGroup(user: User): { id: string; name: string } | null {
+  return user.groupId !== null && user.followGroup
+    ? { id: user.groupId, name: user.groupName ?? '' }
+    : null
+}
+
+/** "Set by the group Kids.", with a link to the group, above the values a member follows. */
+export function FollowedNotice({ group }: { group: { id: string; name: string } }) {
+  const { t } = useI18n()
+  return (
+    <Notice
+      action={
+        <TextLink to={`/users/groups/${group.id}`} arrow>
+          {t.groups.openGroup}
+        </TextLink>
+      }
+    >
+      {t.groups.setByGroup(group.name)}
+    </Notice>
+  )
+}
+
+/**
+ * A section of a user's or a group's page: a panel holding one form, its error and its save
+ * button at the foot. Saving shows a toast. On the page of a member following their group, the
+ * form shows the group's values, read only, without its button.
  */
 function SectionForm({
   id,
@@ -53,6 +92,7 @@ function SectionForm({
   saving,
   saveLabel,
   disabled = false,
+  target,
   children,
 }: {
   id: string
@@ -63,9 +103,11 @@ function SectionForm({
   saving: boolean
   saveLabel: string
   disabled?: boolean
+  target: LimitsTarget
   children: ReactNode
 }) {
   const { t } = useI18n()
+  const followed = target.kind === 'user' ? followedGroup(target.user) : null
   return (
     <form
       id={id}
@@ -73,22 +115,28 @@ function SectionForm({
       className="scroll-mt-[calc(var(--spacing-topbar)+32px)] max-md:scroll-mt-[calc(var(--spacing-topbar)+64px)]"
       onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
-        onSubmit()
+        if (followed === null) onSubmit()
       }}
     >
       <Panel
         title={title}
         description={description}
         footer={
-          <PanelFooter>
-            <Button variant="secondary" type="submit" loading={saving} disabled={disabled}>
-              {saving ? t.common.saving : saveLabel}
-            </Button>
-          </PanelFooter>
+          followed === null && (
+            <PanelFooter>
+              <Button variant="secondary" type="submit" loading={saving} disabled={disabled}>
+                {saving ? t.common.saving : saveLabel}
+              </Button>
+            </PanelFooter>
+          )
         }
       >
         <div className="space-y-5">
-          {children}
+          {followed !== null && <FollowedNotice group={followed} />}
+          {/* A disabled fieldset turns off every control in it, for the values a member follows. */}
+          <fieldset disabled={followed !== null} className="min-w-0 space-y-5">
+            {children}
+          </fieldset>
           {error !== null && <Notice tone="danger">{error}</Notice>}
         </div>
       </Panel>
@@ -96,17 +144,31 @@ function SectionForm({
   )
 }
 
-/** A patch for one section, with its toast and inline error. */
-function useSectionSave(user: User) {
+/** A patch for one section of a user or a group, with its toast and inline error. */
+function useSectionSave(target: LimitsTarget) {
   const { t } = useI18n()
   const toast = useToast()
-  const save = useUserPatch(user)
+  const self = useSessionUser()
+  const save = useMutation({
+    mutationFn: async (patch: GroupPatch) => {
+      if (target.kind === 'group') groupSaved(await updateGroup(target.group.id, patch))
+      else userSaved(await updateUser(target.user.id, patch), self.id)
+    },
+    onError: target.kind === 'group' ? refreshGroupIfGone : refreshIfGone,
+  })
   return {
     save,
     error: save.isError ? errorMessage(t, save.error) : null,
-    submit: (patch: Parameters<typeof save.mutate>[0]) =>
-      save.mutate(patch, { onSuccess: () => toast(t.users.updated) }),
+    submit: (patch: GroupPatch) =>
+      save.mutate(patch, {
+        onSuccess: () => toast(target.kind === 'group' ? t.groups.updated : t.users.updated),
+      }),
   }
+}
+
+/** The values a section shows: the user's own, or the group's. */
+function limitsOf(target: LimitsTarget): GroupLimits {
+  return target.kind === 'group' ? target.group : target.user
 }
 
 /** The maximum quality choices, in bits per second (0 for no limit), like jellyfin-web's. */
@@ -119,17 +181,18 @@ const bitrateChoices = [
   { value: 2_000_000, label: 'bitrate480' },
 ] as const
 
-export function PlaybackAccessForm({ user, id }: { user: User; id: string }) {
+export function PlaybackAccessForm({ target, id }: { target: LimitsTarget; id: string }) {
   const { t, language } = useI18n()
-  const { save, error, submit } = useSectionSave(user)
+  const { save, error, submit } = useSectionSave(target)
+  const limits = limitsOf(target)
   const [form, setForm] = useState({
-    maxPlaybacks: user.maxPlaybacks,
-    maxBitrate: user.maxBitrate,
-    liveTv: user.liveTv,
-    syncPlay: user.syncPlay,
-    remoteControl: user.remoteControl,
-    liveTvManagement: user.liveTvManagement,
-    qualityGroup: user.qualityGroup,
+    maxPlaybacks: limits.maxPlaybacks,
+    maxBitrate: limits.maxBitrate,
+    liveTv: limits.liveTv,
+    syncPlay: limits.syncPlay,
+    remoteControl: limits.remoteControl,
+    liveTvManagement: limits.liveTvManagement,
+    qualityGroup: limits.qualityGroup,
   })
 
   function update(change: Partial<typeof form>) {
@@ -145,6 +208,7 @@ export function PlaybackAccessForm({ user, id }: { user: User; id: string }) {
   return (
     <SectionForm
       id={id}
+      target={target}
       title={t.users.playbackAccessTitle}
       onSubmit={() => submit(form)}
       error={error}
@@ -227,11 +291,11 @@ export function PlaybackAccessForm({ user, id }: { user: User; id: string }) {
 const unratedMovie = 'Movie'
 const unratedSeries = 'Series'
 
-export function ParentalControlForm({ user, id }: { user: User; id: string }) {
+export function ParentalControlForm({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
   const ratings = useParentalRatings()
-  const { save, error, submit } = useSectionSave(user)
-  const initial = user.parentalControl
+  const { save, error, submit } = useSectionSave(target)
+  const initial = limitsOf(target).parentalControl
   const [limit, setLimit] = useState<{ maxRating: number | null; maxSubRating: number | null }>({
     maxRating: initial.maxRating,
     maxSubRating: initial.maxSubRating,
@@ -244,7 +308,7 @@ export function ParentalControlForm({ user, id }: { user: User; id: string }) {
 
   function onSubmit() {
     // Keep values set by Jellyfin apps (live TV, books...) that this form does not show.
-    const blockUnrated = user.parentalControl.blockUnrated.filter(
+    const blockUnrated = initial.blockUnrated.filter(
       (item) => item !== unratedMovie && item !== unratedSeries,
     )
     if (blockMovies) blockUnrated.push(unratedMovie)
@@ -255,6 +319,7 @@ export function ParentalControlForm({ user, id }: { user: User; id: string }) {
   return (
     <SectionForm
       id={id}
+      target={target}
       title={t.users.parentalTitle}
       onSubmit={onSubmit}
       error={error}
@@ -313,14 +378,14 @@ export function ParentalControlForm({ user, id }: { user: User; id: string }) {
   )
 }
 
-export function VisibleLibrariesForm({ user, id }: { user: User; id: string }) {
+export function VisibleLibrariesForm({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
   const choices = useQuery({
     queryKey: queryKeys.userContentChoices,
     queryFn: ({ signal }) => fetchUserContentChoices(signal),
   })
-  const { save, error, submit } = useSectionSave(user)
-  const [hidden, setHidden] = useState(user.hiddenLibraries)
+  const { save, error, submit } = useSectionSave(target)
+  const [hidden, setHidden] = useState(limitsOf(target).hiddenLibraries)
 
   function onSubmit() {
     const libraries = choices.data?.libraries ?? []
@@ -331,6 +396,7 @@ export function VisibleLibrariesForm({ user, id }: { user: User; id: string }) {
   return (
     <SectionForm
       id={id}
+      target={target}
       title={t.users.visibleLibrariesTitle}
       description={t.users.visibleLibrariesHelp}
       onSubmit={onSubmit}
@@ -372,14 +438,14 @@ export function VisibleLibrariesForm({ user, id }: { user: User; id: string }) {
   )
 }
 
-export function BlockedGenresForm({ user, id }: { user: User; id: string }) {
+export function BlockedGenresForm({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
   const choices = useQuery({
     queryKey: queryKeys.userContentChoices,
     queryFn: ({ signal }) => fetchUserContentChoices(signal),
   })
-  const { save, error, submit } = useSectionSave(user)
-  const [genres, setGenres] = useState(user.blockedGenres)
+  const { save, error, submit } = useSectionSave(target)
+  const [genres, setGenres] = useState(limitsOf(target).blockedGenres)
   const [typed, setTyped] = useState('')
 
   function add(value = typed) {
@@ -394,6 +460,7 @@ export function BlockedGenresForm({ user, id }: { user: User; id: string }) {
   return (
     <SectionForm
       id={id}
+      target={target}
       title={t.users.blockedGenresTitle}
       description={t.users.blockedGenresHelp}
       onSubmit={() => submit({ blockedGenres: genres })}
@@ -462,10 +529,10 @@ function hourLabel(hour: number) {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 }
 
-export function AllowedHoursForm({ user, id }: { user: User; id: string }) {
+export function AllowedHoursForm({ target, id }: { target: LimitsTarget; id: string }) {
   const { t } = useI18n()
-  const { save, error, submit } = useSectionSave(user)
-  const [schedules, setSchedules] = useState<AccessSchedule[]>(user.accessSchedules)
+  const { save, error, submit } = useSectionSave(target)
+  const [schedules, setSchedules] = useState<AccessSchedule[]>(limitsOf(target).accessSchedules)
   const misordered = schedules.some((s) => s.startHour >= s.endHour)
 
   function change(index: number, changed: Partial<AccessSchedule>) {
@@ -476,6 +543,7 @@ export function AllowedHoursForm({ user, id }: { user: User; id: string }) {
   return (
     <SectionForm
       id={id}
+      target={target}
       title={t.users.allowedHoursTitle}
       description={t.users.allowedHoursHelp}
       onSubmit={() => {
@@ -546,4 +614,46 @@ export function AllowedHoursForm({ user, id }: { user: User; id: string }) {
       {misordered && <Notice tone="danger">{t.users.hoursOrder}</Notice>}
     </SectionForm>
   )
+}
+
+/** The permissions of Access a group holds, each a switch saved as it changes. */
+export type Permissions = Pick<
+  GroupLimits,
+  | 'transcoding'
+  | 'downloads'
+  | 'personalAddons'
+  | 'collectionManagement'
+  | 'subtitleManagement'
+  | 'canShare'
+>
+
+/** The switches of the permissions in Access, on a user's page and on a group's. */
+export function PermissionRows({
+  values,
+  disabled,
+  onChange,
+}: {
+  values: Permissions
+  disabled: boolean
+  onChange: (patch: Partial<Permissions>) => void
+}) {
+  const { t } = useI18n()
+  const rows = [
+    ['transcoding', t.users.canTranscode, t.users.canTranscodeHelp],
+    ['downloads', t.users.canDownload, t.users.canDownloadHelp],
+    ['personalAddons', t.users.canAddAddons, t.users.canAddAddonsHelp],
+    ['collectionManagement', t.users.canManageCollections, t.users.canManageCollectionsHelp],
+    ['subtitleManagement', t.users.canManageSubtitles, t.users.canManageSubtitlesHelp],
+    ['canShare', t.users.canShare, t.users.canShareHelp],
+  ] as const
+  return rows.map(([field, title, help]) => (
+    <SwitchRow
+      key={field}
+      title={title}
+      help={help}
+      checked={values[field]}
+      disabled={disabled}
+      onChange={(checked) => onChange({ [field]: checked })}
+    />
+  ))
 }
