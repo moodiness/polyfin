@@ -130,15 +130,20 @@ type Service struct {
 
 	// converter, prober and inUse convert recordings to HEVC (see
 	// ConvertNext), within the space free gives, convertWake wakes them,
-	// and noEncoderLogged and spaceLogged keep them from logging the same
-	// wait again.
-	converter       Converter
-	prober          Prober
-	inUse           func(accounts.ID) bool
-	free            func(dir string) (int64, bool)
-	convertWake     chan struct{}
-	noEncoderLogged bool
-	spaceLogged     accounts.ID
+	// and noEncoderLogged, spaceLogged and unreadableLogged keep them from
+	// logging the same wait again. passedOver are the recordings whose
+	// file could not be opened in this pass, and missingLogged those
+	// logged so in the last pass.
+	converter        Converter
+	prober           Prober
+	inUse            func(accounts.ID) bool
+	free             func(dir string) (int64, bool)
+	convertWake      chan struct{}
+	noEncoderLogged  bool
+	spaceLogged      accounts.ID
+	unreadableLogged bool
+	passedOver       []accounts.ID
+	missingLogged    []accounts.ID
 
 	wake chan struct{}
 	wg   sync.WaitGroup

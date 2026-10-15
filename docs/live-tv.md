@@ -258,7 +258,10 @@ A recording copies the channel's stream at the channel's own bitrate. With **Con
 - A conversion starts only with free space on the recordings' disk for a copy as large as the recording, and waits for it otherwise.
 - A conversion still running at the end of the hours stops, its copy is deleted, and the recording starts over the next night, as it does when Polyfin stops.
 
-Before it replaces the recording, the copy is checked: its length is within a second of the recording's, it holds the same tracks, in the same order, its video decodes to its end, and it is smaller. Otherwise the copy is deleted, the recording kept as it was, and it is not tried again. Recordings in HEVC, AV1 or VP9 already, and those in HDR or in more than 8 bits, are kept as they are.
+Before it replaces the recording, the copy is checked: its length is within a second of the recording's, it holds the same tracks, in the same order, its video decodes to its end, and it is smaller. Otherwise the copy is deleted, the recording kept as it was, and it is not tried again. Recordings in HEVC, AV1 or VP9 already, those in HDR or in more than 8 bits, and those ffprobe cannot read, are kept as they are. A recording that cannot be read for a reason that says nothing of it is never kept, and is tried again:
+
+- With the recordings' folder missing or unreadable, as when their disk is not mounted yet, or with ffprobe missing or out of time, conversions stop, and try again a minute later.
+- A recording whose file alone cannot be opened is passed over, and the next recordings converted. Once none is left, conversions try it again a minute later.
 
 A recording someone is playing is replaced once they stop. The recording keeps its identifier, so its played state, resume points and commercials stay. Its file becomes `<identifier>.mkv`, and what playback learned of the old file is learned again.
 

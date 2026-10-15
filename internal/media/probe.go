@@ -271,6 +271,11 @@ func (p Prober) run(ctx context.Context, url string, reconnect bool, options ...
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("ffprobe: %w", ctx.Err())
 		}
+		// Only an ffprobe that ran says something of the source: one that
+		// could not start, missing, says nothing.
+		if _, ran := errors.AsType[*exec.ExitError](err); !ran {
+			return nil, fmt.Errorf("ffprobe: %w", err)
+		}
 		// ffprobe's message may quote the URL: keep only its last line, and
 		// only once the URL is removed.
 		message := strings.TrimSpace(stderr.String())

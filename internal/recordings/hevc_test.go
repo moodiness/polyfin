@@ -2,6 +2,7 @@ package recordings
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -243,6 +244,122 @@ func TestAShorterCopyIsDeletedAndTheOriginalKept(t *testing.T) {
 	f.service.ConvertNext(t.Context())
 	if state, file, _ := f.hevcState(t, large.ID); state != hevcKept || file != large.File || exists(copyPath(f.dir, large.ID)) {
 		t.Errorf("a copy as large: %q, %q", state, file)
+	}
+}
+
+// notMediaProber is fakeProber, but ffprobe cannot read the file named bad.
+type notMediaProber struct {
+	fakeProber
+	bad string
+}
+
+func (p notMediaProber) ProbeInput(ctx context.Context, in media.Input) (media.Analysis, error) {
+	if filepath.Base(in.Path) == p.bad {
+		return media.Analysis{}, fmt.Errorf("%w: ffprobe: exit status 1: Invalid data found when processing input", media.ErrNotMedia)
+	}
+	return p.fakeProber.ProbeInput(ctx, in)
+}
+
+// A recording that cannot be read for a reason that says nothing of it is
+// tried again, never kept: with the folder missing, as a disk not mounted
+// yet, or ffprobe missing, the pass stops; with its file alone missing,
+// the pass goes on with the next recordings. Only one ffprobe cannot read
+// is kept as it was.
+func TestAnUnreadableRecordingIsTriedAgain(t *testing.T) {
+	c := &fakeConverter{encoders: []string{"libx265"}, copyBytes: 10}
+	f, _ := conversionFixture(t, c, fakeProber{copyLength: 10 * time.Second})
+	var recordings []Recording
+	for range 3 {
+		recordings = append(recordings, f.finished(t, make([]byte, 100)))
+	}
+	unchanged := func(when string) {
+		t.Helper()
+		for _, r := range recordings {
+			if state, file, _ := f.hevcState(t, r.ID); state != hevcToDo || file != r.File {
+				t.Errorf("%s: recording %s: %q, %q", when, r.ID, state, file)
+			}
+		}
+		if calls := c.conversions(); len(calls) != 0 {
+			t.Errorf("%s: converted: %+v", when, calls)
+		}
+	}
+	// pass runs ConvertNext until it waits, and counts the recordings it
+	// went through.
+	pass := func(when string) int {
+		t.Helper()
+		for n := range 10 {
+			if wait := f.service.ConvertNext(t.Context()); wait != 0 {
+				if wait != maxWait {
+					t.Errorf("%s: waits %v", when, wait)
+				}
+				return n
+			}
+		}
+		t.Fatalf("%s: the pass does not end", when)
+		return 0
+	}
+	// The disk is not mounted yet: the folder is missing.
+	absent := filepath.Join(t.TempDir(), "recordings")
+	f.folder.Store(&absent)
+	if n := pass("the folder missing"); n != 0 {
+		t.Errorf("the folder missing: %d recordings tried", n)
+	}
+	unchanged("the folder missing")
+	// The mount point is there, but empty: each file is missing alone.
+	mountPoint := t.TempDir()
+	f.folder.Store(&mountPoint)
+	if n := pass("the mount point empty"); n != len(recordings) {
+		t.Errorf("the mount point empty: %d recordings tried", n)
+	}
+	unchanged("the mount point empty")
+	// The disk is back, but ffprobe is missing.
+	f.folder.Store(&f.dir)
+	f.service.prober = media.Prober{Path: filepath.Join(t.TempDir(), "ffprobe"), Timeout: time.Minute}
+	if n := pass("ffprobe missing"); n != 0 {
+		t.Errorf("ffprobe missing: %d recordings tried", n)
+	}
+	unchanged("ffprobe missing")
+	// ffprobe is back, but one recording's file is missing: the others are
+	// converted in the same pass.
+	f.service.prober = fakeProber{copyLength: 10 * time.Second}
+	missing := recordings[1]
+	aside := filepath.Join(t.TempDir(), missing.File)
+	if err := os.Rename(filepath.Join(f.dir, missing.File), aside); err != nil {
+		t.Fatal(err)
+	}
+	if n := pass("a file missing"); n != len(recordings) || len(c.conversions()) != len(recordings)-1 {
+		t.Errorf("a file missing: %d recordings tried, %d conversions", n, len(c.conversions()))
+	}
+	for _, r := range recordings {
+		want := hevcConverted
+		if r.ID == missing.ID {
+			want = hevcToDo
+		}
+		if state, _, _ := f.hevcState(t, r.ID); state != want {
+			t.Errorf("a file missing: recording %s: %q", r.ID, state)
+		}
+	}
+	// Once its file is back, it is converted.
+	if err := os.Rename(aside, filepath.Join(f.dir, missing.File)); err != nil {
+		t.Fatal(err)
+	}
+	if n := pass("the file back"); n != 1 || len(c.conversions()) != len(recordings) {
+		t.Errorf("the file back: %d recordings tried, %d conversions", n, len(c.conversions()))
+	}
+	if state, _, _ := f.hevcState(t, missing.ID); state != hevcConverted {
+		t.Errorf("the file back: %q", state)
+	}
+	// A recording ffprobe cannot read is kept, not tried again.
+	bad := f.finished(t, []byte("not a video"))
+	f.service.prober = notMediaProber{fakeProber{copyLength: 10 * time.Second}, bad.File}
+	if wait := f.service.ConvertNext(t.Context()); wait != 0 {
+		t.Errorf("not a video: waits %v", wait)
+	}
+	if state, file, _ := f.hevcState(t, bad.ID); state != hevcKept || file != bad.File {
+		t.Errorf("not a video: %q, %q", state, file)
+	}
+	if wait := f.service.ConvertNext(t.Context()); wait != maxWait || len(c.conversions()) != len(recordings) {
+		t.Errorf("not a video, tried again: waits %v, %d conversions", wait, len(c.conversions()))
 	}
 }
 

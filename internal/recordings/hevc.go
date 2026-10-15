@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -108,8 +110,19 @@ func (s *Service) RunConversions(ctx context.Context) {
 // checks pass (see checkCopy): one that fails them is deleted, and the
 // recording kept as it was, never tried again. A conversion still running
 // at the end of the hours is stopped, its copy deleted, and starts over
-// the next time.
+// the next time. A recording whose file cannot be opened, in a folder that
+// reads, is passed over until the pass ends, when ConvertNext first waits.
 func (s *Service) ConvertNext(ctx context.Context) time.Duration {
+	wait := s.convertNext(ctx)
+	if wait != 0 {
+		// The recordings passed over are tried again in the next pass, and
+		// logged again only if their file could be opened in between.
+		s.missingLogged, s.passedOver = s.passedOver, nil
+	}
+	return wait
+}
+
+func (s *Service) convertNext(ctx context.Context) time.Duration {
 	dir := s.Dir()
 	if dir == "" || s.converter == nil || s.prober == nil {
 		return maxWait
@@ -132,9 +145,14 @@ func (s *Service) ConvertNext(ctx context.Context) time.Duration {
 		return maxWait
 	}
 	s.noEncoderLogged = false
+	passedOver := s.passedOver
+	if passedOver == nil {
+		// A nil slice is NULL, which would leave out every recording.
+		passedOver = []accounts.ID{}
+	}
 	var r Recording
 	err := s.db.QueryRow(ctx, `SELECT id, file, size FROM live_recordings WHERE status = 'Completed' AND hevc = '' AND file <> ''
-		ORDER BY ended_at, id LIMIT 1`).Scan(&r.ID, &r.File, &r.Size)
+		AND NOT (id = ANY($1)) ORDER BY ended_at, id LIMIT 1`, passedOver).Scan(&r.ID, &r.File, &r.Size)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return maxWait
 	}
@@ -181,17 +199,35 @@ func (s *Service) hevcEncoder(settings accounts.Settings) (hls.VideoEncoding, bo
 // convert converts recording r of dir with encoding until end, checks its
 // copy, and replaces r with it, or marks it waiting for its playbacks to
 // stop. It reports false when the conversion did not go through and r was
-// left to be tried again: for want of free space, or stopped.
+// left to be tried again: for want of free space, stopped, or with the
+// folder unreadable or ffprobe failing to run, as when the recordings'
+// disk is not mounted yet, which says nothing of the recording itself. A
+// recording whose file alone cannot be opened is passed over for the
+// pass, and the next one tried.
 func (s *Service) convert(ctx context.Context, dir string, r Recording, encoding hls.VideoEncoding, settings accounts.Settings, end time.Time) bool {
 	source := filepath.Join(dir, r.File)
-	analysis, err := s.prober.ProbeInput(ctx, media.Input{Path: source})
-	if err != nil {
-		if ctx.Err() != nil {
-			return false
+	analysis, err := s.analyze(ctx, dir, source)
+	switch {
+	case err == nil:
+	case ctx.Err() != nil:
+		return false
+	case errors.Is(err, errFileUnreadable):
+		s.passedOver = append(s.passedOver, r.ID)
+		if !slices.Contains(s.missingLogged, r.ID) {
+			s.logger.Warn("A recording's file could not be opened to be converted to HEVC; it is tried again next time", "recording", r.ID.String(), "error", err)
 		}
+		return true
+	case errors.Is(err, media.ErrNotMedia):
 		s.keep(ctx, r.ID, "it could not be analyzed", err)
 		return true
+	default:
+		if !s.unreadableLogged {
+			s.logger.Warn("Recordings could not be read to be converted to HEVC; they are tried again", "error", err)
+			s.unreadableLogged = true
+		}
+		return false
 	}
+	s.unreadableLogged = false
 	video, reason := convertible(analysis)
 	if reason != "" {
 		s.keep(ctx, r.ID, reason, nil)
@@ -233,6 +269,39 @@ func (s *Service) convert(ctx context.Context, dir string, r Recording, encoding
 	}
 	s.replace(ctx, dir, r.ID)
 	return true
+}
+
+// errFileUnreadable is a recording's file that cannot be opened in a
+// folder that reads.
+var errFileUnreadable = errors.New("the recording's file cannot be opened")
+
+// analyze analyzes the recording at source, in dir, once it can open it.
+// Its error wraps errFileUnreadable when the file alone cannot be opened,
+// and media.ErrNotMedia only when the file opened, and ffprobe ran and
+// could not read it.
+func (s *Service) analyze(ctx context.Context, dir, source string) (media.Analysis, error) {
+	file, err := os.Open(source)
+	if err != nil {
+		if dirErr := readable(dir); dirErr != nil {
+			return media.Analysis{}, dirErr
+		}
+		return media.Analysis{}, fmt.Errorf("%w: %w", errFileUnreadable, err)
+	}
+	_ = file.Close()
+	return s.prober.ProbeInput(ctx, media.Input{Path: source})
+}
+
+// readable reports why the folder dir cannot be listed, nil when it can.
+func readable(dir string) error {
+	folder, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer folder.Close()
+	if _, err := folder.Readdirnames(1); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
 }
 
 // convertible returns the video track of a recording to convert, or why it
