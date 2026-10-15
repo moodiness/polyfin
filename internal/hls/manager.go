@@ -604,6 +604,10 @@ type Manager struct {
 	// progressives are the conversions streamed as one file (see
 	// Progressive).
 	progressives map[*progressive]struct{}
+	// files counts the file conversions running (see ConvertFile), and
+	// slotWait is slotWait, which tests shorten.
+	files    int
+	slotWait time.Duration
 	// recordings are the recordings running, by key, with the function
 	// stopping each.
 	recordings map[Key]context.CancelFunc
@@ -787,9 +791,10 @@ func (m *Manager) limit() int {
 type userVersion struct{ user, version string }
 
 // converting counts the conversions of video under way: the playbacks
-// of HLS encodings, files' and channels', and each conversion streamed as
-// one file on its own. The playback shared, which counts already, and the
-// live encoding leaving are left out. The caller holds m.mu.
+// of HLS encodings, files' and channels', each conversion streamed as
+// one file on its own, and each file converted whole (see ConvertFile).
+// The playback shared, which counts already, and the live encoding leaving
+// are left out. The caller holds m.mu.
 func (m *Manager) converting(shared *userVersion, leaving *live) int {
 	playbacks := map[userVersion]bool{}
 	count := func(k Key) {
@@ -805,7 +810,7 @@ func (m *Manager) converting(shared *userVersion, leaving *live) int {
 			count(k)
 		}
 	}
-	n := len(playbacks)
+	n := len(playbacks) + m.files
 	for p := range m.progressives {
 		if p.key.Converts {
 			n++
