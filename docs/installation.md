@@ -113,6 +113,21 @@ mkdir backups && sudo chown 65532:65532 backups
 
 See [Backups](backups.md) for the schedule, the number kept, the destinations they are also sent to (S3-compatible storage, SFTP or WebDAV), and how to restore one from the admin app.
 
+### An rclone container
+
+Polyfin reads folders from the many storages rclone reaches through an rclone instance serving its remote control interface (see [rclone remotes](local-folders.md#addresses)). Run it next to Polyfin: add a service to `compose.yaml`, with its configuration in a folder beside the file, made with `rclone config`:
+
+```yaml
+  rclone:
+    image: rclone/rclone:latest
+    command: rcd --rc-serve --rc-addr=:5572 --rc-user=polyfin --rc-pass=${RCLONE_RC_PASSWORD:?Set RCLONE_RC_PASSWORD in .env}
+    volumes:
+      - ./rclone:/config/rclone
+    restart: unless-stopped
+```
+
+Set `RCLONE_RC_PASSWORD` in `.env`. Publish no port: Polyfin reaches it on the network the services share. Then add the folder under **Sources › Add a source › Folder › rclone remote**, with `http://rclone:5572` as its rclone address, `polyfin` and that password as its user and password, and pick its remote with **List the remotes**. The storage's own credentials stay in rclone's configuration; give the remote read-only credentials where the storage offers them, since anyone with the remote control's password may write through it.
+
 ### Upgrade from an older Compose file
 
 Older Compose files set more variables, such as `POLYFIN_CACHE_SIZE` or `POLYFIN_BACKUP_DIR`. They keep working: Polyfin copies their values into the settings at its first start with a version that made them settings (see [Variables that became settings](configuration.md#variables-that-became-settings)). To move to the current file:
