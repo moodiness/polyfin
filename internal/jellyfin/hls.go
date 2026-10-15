@@ -24,7 +24,8 @@ import (
 // transcodingURL is a remux's TranscodingUrl: relative, with Jellyfin's
 // parameters in Jellyfin's order. Polyfin reads back the play session, the
 // audio track and the segment container; the rest describes the stream as
-// Jellyfin would.
+// Jellyfin would. A stream as one file is /videos/{id}/stream.{container},
+// without segments, as Jellyfin gives a progressive one.
 func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library.Version, analysis media.Analysis, streams []playback.MediaStream,
 	decision playback.Decision, limit int64, session string) string {
 	t := decision.Transcoding
@@ -70,9 +71,11 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 	if video, ok := videoStream(analysis); ok && video.AverageRate > 0 {
 		q.add("MaxFramerate", strconv.FormatFloat(math.Round(video.AverageRate*1000)/1000, 'f', -1, 64))
 	}
-	q.add("SegmentContainer", t.Container)
-	if t.MinSegments != "" {
-		q.add("MinSegments", t.MinSegments.String())
+	if !decision.Progressive {
+		q.add("SegmentContainer", t.Container)
+		if t.MinSegments != "" {
+			q.add("MinSegments", t.MinSegments.String())
+		}
 	}
 	q.add("PlaySessionId", session)
 	if token := callerFrom(r.Context()).Token; token != "" {
@@ -98,6 +101,9 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 	}
 	if decision.Audio != nil {
 		q.add("allowAudioStreamCopy", "false")
+	}
+	if decision.Progressive {
+		return "/videos/" + hyphenated(item) + "/stream." + strings.ToLower(t.Container) + "?" + q.String()
 	}
 	return "/videos/" + hyphenated(item) + "/master.m3u8?" + q.String()
 }

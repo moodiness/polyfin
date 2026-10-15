@@ -504,6 +504,7 @@ type settingsJSON struct {
 	SyncAddonSubtitles  *bool `json:"syncAddonSubtitles"`
 	MaxConversions      *int  `json:"maxConversions"`
 	MaxConversionHeight *int  `json:"maxConversionHeight"`
+	ConvertedDownloads  *bool `json:"convertedDownloads"`
 	// The settings tuning conversions keep their current values when a
 	// PUT leaves them out. ConversionHardware is what conversions run on;
 	// a PUT cannot change it.
@@ -730,6 +731,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		SyncAddonSubtitles:    &settings.SyncAddonSubtitles,
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
+		ConvertedDownloads:    &settings.ConvertedDownloads,
 
 		EncoderPreset:              &settings.EncoderPreset,
 		H264Quality:                &settings.H264Quality,
@@ -1346,6 +1348,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		SyncAddonSubtitles:    valueOr(body.SyncAddonSubtitles, current.SyncAddonSubtitles),
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
+		ConvertedDownloads:    valueOr(body.ConvertedDownloads, current.ConvertedDownloads),
 
 		EncoderPreset:              valueOr(body.EncoderPreset, current.EncoderPreset),
 		H264Quality:                valueOr(body.H264Quality, current.H264Quality),

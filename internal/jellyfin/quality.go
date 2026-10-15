@@ -81,7 +81,7 @@ func (h *Handler) limitHeight(request *playbackInfoRequest, user accounts.User) 
 // user's quality group: as it is, or copied. Above the group, only video
 // converted down to it plays.
 func aboveGroup(request playbackInfoRequest, analysis media.Analysis, decision playback.Decision) bool {
-	return request.group > 0 && videoHeight(analysis) > request.group && (!decision.HLS || decision.Video == nil)
+	return request.group > 0 && videoHeight(analysis) > request.group && (!decision.Streamed() || decision.Video == nil)
 }
 
 // describeConverted describes the video of a source taller than the

@@ -2,6 +2,7 @@ import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'reac
 import {
   ChatCircleTextIcon,
   CpuIcon,
+  DownloadSimpleIcon,
   PackageIcon,
   PauseIcon,
   PlayIcon,
@@ -164,9 +165,11 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
   const item = session.item
   const title = titleOf(session, t)
   const runtime = item?.runtime ?? 0
-  const position = session.paused
-    ? session.position
-    : Math.min(session.position + elapsed, runtime || Number.POSITIVE_INFINITY)
+  // A download's position is how far its file is made, told by the server alone.
+  const position =
+    session.paused || session.download
+      ? session.position
+      : Math.min(session.position + elapsed, runtime || Number.POSITIVE_INFINITY)
   const isChannel = item?.kind === 'channel'
   const [artFailed, setArtFailed] = useState(false)
   const art = item?.posterId && !artFailed ? item.posterId : null
@@ -237,7 +240,13 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
             aria-hidden="true"
             className="grid aspect-[2/3] w-full place-items-center rounded-field border border-line-2 bg-s2 text-ink-3"
           >
-            {isChannel ? <TelevisionSimpleIcon size={20} /> : <PlayIcon size={20} />}
+            {session.download ? (
+              <DownloadSimpleIcon size={20} />
+            ) : isChannel ? (
+              <TelevisionSimpleIcon size={20} />
+            ) : (
+              <PlayIcon size={20} />
+            )}
           </span>
         )}
 
@@ -247,7 +256,11 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
             <b className="truncate font-medium text-ink">{session.user.name}</b>
             <span aria-hidden="true" className="size-[3px] shrink-0 rounded-full bg-ink-3" />
             <span className="truncate">
-              {session.shared ? live.sharedLink : live.appOn(app, session.device.name)}
+              {session.shared
+                ? live.sharedLink
+                : session.download
+                  ? live.downloadOn(app, session.device.name)
+                  : live.appOn(app, session.device.name)}
             </span>
           </p>
           <h3 className="mt-2 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[21px] leading-tight font-semibold tracking-[-0.02em] text-ink max-sm:text-[18px]">
@@ -266,13 +279,17 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
                 variant="brand"
                 live={!session.paused}
                 value={position / runtime}
-                label={live.progress(title)}
+                label={session.download ? live.downloadProgress(title) : live.progress(title)}
                 valueText={`${formatClock(position)} / ${formatClock(runtime)}`}
               />
             )}
             <div className="mt-2 flex items-center justify-between gap-3 text-[12.5px] text-ink-2">
               <span className="figures">{formatClock(position)}</span>
-              {session.paused ? (
+              {session.download ? (
+                <StatusPill tone="muted" icon={DownloadSimpleIcon}>
+                  {live.downloading}
+                </StatusPill>
+              ) : session.paused ? (
                 <StatusPill tone="warn" icon={PauseIcon}>
                   {live.paused}
                 </StatusPill>
@@ -339,7 +356,11 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
             </>
           ) : (
             <p className="text-small text-ink-3 lg:max-w-32">
-              {session.shared ? live.sharedNotControllable : live.notControllable}
+              {session.shared
+                ? live.sharedNotControllable
+                : session.download
+                  ? live.downloadNotControllable
+                  : live.notControllable}
             </p>
           )}
         </div>

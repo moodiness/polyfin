@@ -120,7 +120,7 @@ The extras, local trailers and theme media local folders keep beside their title
 
 ### Opening streams and downloading files
 
-Sources need no opening. A title's file download serves its first working version, as the download route does, under the same permissions.
+Sources need no opening. A title's file download serves its first working version, as the download route does, under the same permissions. Apps that download through PlaybackInfo with a device profile asking for video converted progressively (`Protocol` `http`), as Streamyfin does, get a `TranscodingUrl` at `/videos/{id}/stream.mp4` when **Converted downloads** is on. See [Converted downloads](transcoding.md#converted-downloads).
 
 **Compared with Jellyfin:**
 
@@ -130,6 +130,7 @@ Sources need no opening. A title's file download serves its first working versio
 
 - `/LiveStreams/Open` answers 400, as Jellyfin does without an open token; `/LiveStreams/Close` answers 204.
 - `/Items/{id}/File` serves the first working version.
+- `/Videos/{id}/stream.mp4` and `/Videos/{id}/stream.ts` convert only for the `TranscodingUrl` of a converted download: with `static=true`, or without a play session and a `videoCodec`, or with **Converted downloads** off, they serve the version as it is, as before.
 
 ### Fallback fonts
 

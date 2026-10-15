@@ -90,6 +90,13 @@ export default function ConversionSection({
             className="max-w-xs"
           />
         </FieldRow>
+        <SwitchRow
+          anchor="converted-downloads"
+          label={s.convertedDownloads}
+          help={s.convertedDownloadsHelp}
+          checked={form.convertedDownloads}
+          onChange={(convertedDownloads) => update({ convertedDownloads })}
+        />
       </SettingsGroup>
 
       <SettingsGroup title={c.groups.gpu}>

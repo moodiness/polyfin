@@ -188,6 +188,9 @@ type Handler struct {
 	// guests are the playbacks of guests through share links (see
 	// share.go).
 	guests *guestPlays
+	// downloads are the converted downloads under way (see
+	// converteddownloads.go).
+	downloads *downloadPlays
 }
 
 // New returns the Jellyfin API handler.
@@ -208,6 +211,7 @@ func New(options Options) *Handler {
 		sizes:          cache.New[string, playback.ConversionSize](2000, 12*time.Hour),
 		plays:          cache.New[accounts.ID, devicePlay](1000, 30*24*time.Hour),
 		guests:         newGuestPlays(),
+		downloads:      newDownloadPlays(),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.listings = newListings(h.listVersions)

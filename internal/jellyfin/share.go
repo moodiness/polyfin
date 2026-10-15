@@ -513,7 +513,9 @@ func (h *Handler) startGuest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"session": play.id})
 }
 
-// devicesPlaying counts the devices of user playing, but except.
+// devicesPlaying counts the devices of user playing, or making a converted
+// download, but except. A download whose device is not known counts as one
+// more.
 func (h *Handler) devicesPlaying(ctx context.Context, user accounts.User, except accounts.ID) (int, error) {
 	devices, err := h.Accounts.Devices(ctx, user.ID)
 	if err != nil {
@@ -521,11 +523,14 @@ func (h *Handler) devicesPlaying(ctx context.Context, user accounts.User, except
 	}
 	playing := 0
 	for _, device := range devices {
-		if _, ok := h.sessions.Playing(device.ID); ok && device.ID != except {
+		if device.ID == except {
+			continue
+		}
+		if _, ok := h.sessions.Playing(device.ID); ok || h.downloads.onDevice(device.ID) {
 			playing++
 		}
 	}
-	return playing, nil
+	return playing + h.downloads.withoutDevice(user.ID), nil
 }
 
 // guestPlan is what a guest plays: a version, and the parameters of its

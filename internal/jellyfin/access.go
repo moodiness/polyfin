@@ -61,7 +61,7 @@ func limitBitrate(request *playbackInfoRequest, user accounts.User) {
 // given bitrate above the user's limit: as it is, or with its video copied.
 // Above the limit, only video converted down to it plays.
 func beyondUserLimit(request playbackInfoRequest, bitrate int64, decision playback.Decision) bool {
-	return overUserLimit(request.userLimit, bitrate) && (!decision.HLS || decision.Video == nil)
+	return overUserLimit(request.userLimit, bitrate) && (!decision.Streamed() || decision.Video == nil)
 }
 
 // overUserLimit reports whether bitrate is known and above limit, a

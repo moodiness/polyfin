@@ -243,6 +243,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'conversion',
+    anchor: 'converted-downloads',
+    label: (t) => s(t).convertedDownloads,
+    help: (t) => s(t).convertedDownloadsHelp,
+    keywords: ['download', 'offline', 'Streamyfin'],
+  },
+  {
+    section: 'conversion',
     anchor: 'hardware-acceleration',
     label: (t) => c(t).hardwareAcceleration,
     help: (t) => c(t).hardwareAccelerationHelp,

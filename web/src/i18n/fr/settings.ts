@@ -197,6 +197,9 @@ const settings: typeof en = {
       'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K ; le processeur s’arrête à 1080p, et quand il convertit du HDR en SDR, à « Qualité max du HDR converti par le processeur » (Conversion › HDR).',
     conversionHeightOriginal: 'Originale',
     conversionHeight: (height: number) => `${height}p`,
+    convertedDownloads: 'Téléchargements convertis',
+    convertedDownloadsHelp:
+      'Les applis qui le demandent, comme Streamyfin, enregistrent un titre dans la qualité choisie par l’utilisateur : Polyfin envoie une copie plus légère, faite pendant que l’appli la télécharge et jamais gardée sur le serveur. Sinon, elles enregistrent le fichier tel quel. Chaque téléchargement compte dans « Conversions vidéo en même temps » quand il convertit, et comme une des « Lectures en même temps » de l’utilisateur. L’utilisateur doit pouvoir télécharger, et utiliser la conversion (transcodage) quand l’image ou le son sont convertis. Un téléchargement interrompu recommence du début. Désactivé par défaut.',
     conversion: {
       description:
         'Quand une application ne sait pas lire un fichier tel quel, Polyfin le convertit avec FFmpeg. Ces réglages disent comment, pour les films, les séries et la TV en direct. Les valeurs par défaut conviennent à la plupart des serveurs.',

@@ -334,6 +334,8 @@ export type Settings = {
   maxConversions: number
   /** Height converted video is scaled down to at most, 0 to keep the original's. */
   maxConversionHeight: number
+  /** Streams a title as one file, copied or converted within the user's quality, to apps saving it offline. */
+  convertedDownloads: boolean
   /** Encoder speed against quality: auto (Polyfin's choice), then veryslow to ultrafast. */
   encoderPreset: EncoderPreset
   /** Quality factor of H.264 and HEVC conversions (CRF, CQ or QVBR's), 0 aiming for the bitrate alone. */
@@ -2955,6 +2957,11 @@ export type LiveSession = {
    * app, and takes no command.
    */
   shared: boolean
+  /**
+   * A converted download: its position is how far the file is made, and it takes no command. Its
+   * device is empty when the download named none.
+   */
+  download: boolean
   item: {
     id: string
     kind: 'movie' | 'episode' | 'channel' | 'recording' | string

@@ -262,6 +262,9 @@ type playbackInfoRequest struct {
 	// group is the user's quality group, 0 for none, and conversionHeight
 	// the settings' cap on the height of converted video (see limitHeight).
 	group, conversionHeight int
+	// progressive lets a version be streamed as one file, to an app whose
+	// device profile asks for it (see downloadsConverted).
+	progressive bool
 }
 
 // playbackInfo answers what an app needs to play an item: its version's
@@ -312,6 +315,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	h.rememberPlay(r.Context(), request)
 	limitBitrate(&request, user)
 	h.limitHeight(&request, user)
+	request.progressive = h.downloadsConverted(user)
 	item, err := h.played(r.Context(), user, opened)
 	if err != nil {
 		h.browseError(w, r, err)
@@ -548,8 +552,10 @@ func (h *Handler) unconverted(ctx context.Context, d decided, request playbackIn
 		return false
 	case d.decision.DirectPlay:
 		return true
-	case !d.decision.HLS || d.decision.Video != nil || d.decision.Audio != nil:
+	case !d.decision.Streamed() || d.decision.Video != nil || d.decision.Audio != nil:
 		return false
+	case d.decision.Progressive:
+		return true
 	}
 	_, err := h.Playback.Plan(ctx, d.version)
 	return err == nil
@@ -617,6 +623,7 @@ func (h *Handler) trackDecision(p playable, version library.Version, streams []p
 		ConvertVideo:        request.AllowVideoStreamCopy != nil && !*request.AllowVideoStreamCopy,
 		MaxHeight:           request.group,
 		ConversionHeight:    request.conversionHeight,
+		Progressive:         request.progressive,
 		Can:                 h.Playback.Capabilities(),
 	}
 	// Like Jellyfin, chosen tracks only count with the version they belong
@@ -659,17 +666,26 @@ func (h *Handler) trackDecision(p playable, version library.Version, streams []p
 		if method == "Encode" && allowed.Video && burnable(streams, analysis, *selected) {
 			burn := options
 			burn.ConvertVideo = true
-			if burned := playback.Decide(request.DeviceProfile, described, burn); burned.HLS && burned.Video != nil && permitted(allowed, burned) {
+			if burned := playback.Decide(request.DeviceProfile, described, burn); burned.Streamed() && burned.Video != nil && permitted(allowed, burned) {
 				decision, method = burned, ""
 			}
 		}
 		if method == "Encode" || (method == "Hls" && !decision.HLS) {
 			without := options
 			without.SubtitleStreamIndex = new(-1)
-			if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay || (retry.HLS && !decision.HLS) {
+			if retry := playback.Decide(request.DeviceProfile, described, without); retry.DirectPlay || (retry.Streamed() && !decision.Streamed()) {
 				decision = retry
 			}
 		}
+	}
+	// A stream as one file that needs a conversion the user may not have
+	// now is not planned: the app gets the answer it would without
+	// converted downloads, and saves the version as it is, if at all. It
+	// runs an FFmpeg of its own, so the user's play of the version, which
+	// convertible lets through, leaves no room for it at the limit.
+	if decision.Progressive && (!permitted(allowed, decision) || decision.Video != nil && !h.Playback.MayConvertAlone()) {
+		request.progressive = false
+		return h.trackDecision(p, version, streams, analysis, request, allowed, named)
 	}
 	return decision, options, described
 }
@@ -681,7 +697,7 @@ func (h *Handler) trackDecision(p playable, version library.Version, streams []p
 // next version is tried. PreferDirectPlay thus never takes such a version
 // for one that plays without conversion.
 func unplayable(request playbackInfoRequest, analysis media.Analysis, decision playback.Decision, allowed accounts.Conversions) bool {
-	return decision.HLS && !permitted(allowed, decision) || beyondUserLimit(request, analysis.Bitrate, decision) || aboveGroup(request, analysis, decision)
+	return decision.Streamed() && !permitted(allowed, decision) || beyondUserLimit(request, analysis.Bitrate, decision) || aboveGroup(request, analysis, decision)
 }
 
 // decidedSource describes the version an app is about to play, with the
@@ -691,9 +707,9 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 	version, id, analysis, source, decision := d.version, d.id, d.analysis, d.source, d.decision
 	streams := source.MediaStreams
 	// Streaming over HLS needs the keyframe index: a version without one
-	// is not offered for it.
-	streamed := decision.HLS
-	if streamed {
+	// is not offered for it. A stream as one file needs none.
+	streamed := decision.Streamed()
+	if decision.HLS {
 		if _, err := h.Playback.Plan(r.Context(), version); err != nil {
 			h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
 			streamed = false
@@ -712,6 +728,9 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 		source.SupportsTranscoding = true
 		source.TranscodingUrl = transcodingURL(r, p.item.ID, id, version, analysis, streams, decision, limit, session)
 		source.TranscodingSubProtocol = "hls"
+		if decision.Progressive {
+			source.TranscodingSubProtocol = "http"
+		}
 		source.TranscodingContainer = decision.Transcoding.Container
 		describeConverted(request, analysis, source.MediaStreams, decision.Video)
 	}
@@ -881,6 +900,10 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	}
 	if !strings.EqualFold(name, "stream") {
 		processingError(w, http.StatusNotFound)
+		return
+	}
+	if h.Accounts.Settings().ConvertedDownloads && convertedRequest(r, extension) {
+		h.convertedDownload(w, r, extension)
 		return
 	}
 	opened, ok := parseGUID(r.PathValue("itemId"))

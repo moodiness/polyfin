@@ -18,11 +18,14 @@ import (
 
 // LiveSession is a device playing, as the admin dashboard shows it, or a
 // guest playing through a share link: Shared then, under the sharer's name,
-// with guestApp as its app.
+// with guestApp as its app. A converted download is one too: Download
+// then, its position how far its file has been made, its device empty
+// when its request named none.
 type LiveSession struct {
-	User   accounts.User
-	Device accounts.Device
-	Shared bool
+	User     accounts.User
+	Device   accounts.Device
+	Shared   bool
+	Download bool
 	// Controllable tells whether the device's app takes commands, such as
 	// stopping or showing a message.
 	Controllable bool
@@ -45,13 +48,14 @@ type LiveSession struct {
 	Size *playback.ConversionSize
 }
 
-// LiveSessions lists the devices playing, and the guests through share
-// links, the latest started first.
+// LiveSessions lists the devices playing, the guests through share links,
+// and the converted downloads, the latest started first.
 func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 	h.endStaleGuests()
 	playing := h.sessions.All()
 	guests := h.guests.all()
-	if len(playing) == 0 && len(guests) == 0 {
+	downloads := h.downloads.all()
+	if len(playing) == 0 && len(guests) == 0 && len(downloads) == 0 {
 		return []LiveSession{}, nil
 	}
 	encodings := map[string][]hls.Running{}
@@ -59,8 +63,9 @@ func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 		encodings[running.Key.Session] = append(encodings[running.Key.Session], running)
 	}
 	users := map[accounts.ID]accounts.User{}
-	sessions := make([]LiveSession, 0, len(playing)+len(guests))
+	sessions := make([]LiveSession, 0, len(playing)+len(guests)+len(downloads))
 	sessions = append(sessions, h.guestSessions(ctx, encodings)...)
+	sessions = append(sessions, h.downloadSessions(ctx, downloads, encodings)...)
 	for deviceID := range playing {
 		now, ok := h.sessions.Playing(deviceID)
 		if !ok {

@@ -85,6 +85,13 @@ const home: typeof en = {
       startedAt: (time: string) => `Commencé ${time}`,
       appOn: (app: string, device: string) => (app ? `${app} sur ${device}` : device),
       sharedLink: 'Lien partagé',
+      /** A converted download, in place of the app and device. */
+      downloadOn: (app: string, device: string) =>
+        app ? `Téléchargement, ${app} sur ${device}` : 'Téléchargement',
+      downloading: 'Téléchargement',
+      downloadProgress: (title: string) => `Avancement du téléchargement de ${title}`,
+      downloadNotControllable:
+        'Un téléchargement converti pour être vu hors ligne. Il s’arrête si l’appli l’interrompt.',
       howItPlays: 'Comment c’est lu',
       details: 'Détails',
       delivery: {

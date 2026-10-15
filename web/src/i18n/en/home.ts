@@ -84,6 +84,13 @@ const home = {
       appOn: (app: string, device: string) => (app ? `${app} on ${device}` : device),
       /** A guest's playback through a share link, in place of its app and device. */
       sharedLink: 'Shared link',
+      /** A converted download, in place of the app and device. */
+      downloadOn: (app: string, device: string) =>
+        app ? `Download, ${app} on ${device}` : 'Download',
+      downloading: 'Downloading',
+      downloadProgress: (title: string) => `Download progress of ${title}`,
+      downloadNotControllable:
+        'A download converted for offline viewing. It stops when the app cancels it.',
       howItPlays: 'How it plays',
       details: 'Details',
       delivery: {

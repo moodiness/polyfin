@@ -28,7 +28,7 @@ A title's details list every stream the addons offer as a version (see [Title pa
 - The first versions are analyzed together, up to 3 at once, and taken in order. Once a later one is ready, Polyfin waits 3 more seconds for those before it, then plays the later one: a source that never answers delays playback by those 3 seconds rather than by the whole analysis time. The analyses still running go on in the background and are kept for the next play.
 - The title's page plays the version the app sends. Most apps (the web player, Android TV, Swiftfin) send the title's own identifier, which names the first version: Polyfin then chooses among all the versions as when the app picks none. Only a version picked in the version menu, under its own identifier, is played alone.
 - Apps can save the user's playback preferences (audio and subtitle languages, subtitle mode). These choose the default audio and subtitle tracks. See [Subtitles](subtitles.md).
-- Apps that keep titles for offline viewing can download the movies and episodes whose versions they were shown. A download is the version's file, under its file name, sent to the source or relayed as playback would be.
+- Apps that keep titles for offline viewing can download the movies and episodes whose versions they were shown. A download is the version's file, under its file name, sent to the source or relayed as playback would be. With **Converted downloads** on, apps that ask for a lower quality, such as Streamyfin, get a smaller copy instead, made as they download it. See [Converted downloads](transcoding.md#converted-downloads).
 - Active playback appears in Jellyfin apps' dashboards.
 - Apps can control one another (play, pause, seek, messages) when the controlled app keeps Jellyfin's live connection (WebSocket) open.
 - The skip intro, recap and credits buttons come from [TheIntroDB](https://theintrodb.org) and [IntroDB](https://introdb.app), community databases, from the chapters of the version played, and, for the episodes of local folders, from the intro and the credits their season's episodes share in their audio. Polyfin sends the databases only titles' IDs, episode numbers and runtimes. See [Skip segments](skip-segments.md).
@@ -238,7 +238,7 @@ How names are decided:
 
 ### Video conversions at once
 
-- The cap counts conversions of files and Live TV together, burning subtitles in included.
+- The cap counts conversions of files and Live TV together, burning subtitles in included, and [converted downloads](transcoding.md#converted-downloads) whose video is converted, from their start to their end. Each converted download counts on its own, even next to the user's playback of the same title, as it runs a conversion of its own.
 - Live TV keeps its own caps on top: 4 channels per user and 16 for the server. See [Live TV](live-tv.md).
 - A playback is what a user plays of a version, from its first converted segment until the app stops it or asks for nothing for 3 minutes (1 minute for Live TV). Its next segments, its seeks, and the new play session apps open to switch tracks never count again.
 - At the cap, Polyfin plans no new video conversion, as when conversion is off. It picks the next version that plays without one, or else reports that no version is compatible.

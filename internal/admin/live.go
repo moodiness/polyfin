@@ -43,9 +43,11 @@ type liveSessionJSON struct {
 	Device       liveDeviceJSON `json:"device"`
 	Controllable bool           `json:"controllable"`
 	// Shared is true for a guest playing through a share link of the
-	// user's.
-	Shared bool          `json:"shared"`
-	Item   *liveItemJSON `json:"item"`
+	// user's; Download, for a converted download, whose position is how
+	// far its file has been made.
+	Shared   bool          `json:"shared"`
+	Download bool          `json:"download"`
+	Item     *liveItemJSON `json:"item"`
 	// Position is in seconds.
 	Position  float64   `json:"position"`
 	Paused    bool      `json:"paused"`
@@ -163,11 +165,17 @@ func newLiveSessionJSON(s jellyfin.LiveSession) liveSessionJSON {
 		Device:       liveDeviceJSON{Name: s.Device.DeviceName, App: s.Device.Client, AppVersion: s.Device.ClientVersion, Address: s.Device.RemoteAddress},
 		Controllable: s.Controllable,
 		Shared:       s.Shared,
+		Download:     s.Download,
 		Position:     s.Playing.Position.Seconds(),
 		Paused:       s.Playing.Paused,
 		StartedAt:    s.Playing.Started,
 		PlayMethod:   s.Playing.PlayMethod,
 		Reasons:      s.Reasons,
+	}
+	// A device may download while it plays, and download several titles:
+	// each download is told apart by its version.
+	if s.Download {
+		result.ID = "download-" + result.ID + "-" + s.Playing.MediaSourceID
 	}
 	if result.Reasons == nil {
 		result.Reasons = []string{}

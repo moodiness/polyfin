@@ -179,7 +179,7 @@ const users: typeof en = {
       'Les liens que cet utilisateur a créés pour partager un film ou un épisode. « Révoquer » en arrête un tout de suite.',
     qualityGroup: 'Groupe de qualité',
     qualityGroupHelp:
-      'La meilleure définition proposée à cet utilisateur. Les versions de définition supérieure sont écartées tant qu’une autre convient ; si aucune ne convient, elles sont converties, ou refusées si cet utilisateur ne peut pas utiliser la conversion. La TV en direct est aussi convertie, et seules les versions qui conviennent peuvent être téléchargées.',
+      'La meilleure définition proposée à cet utilisateur. Les versions de définition supérieure sont écartées tant qu’une autre convient ; si aucune ne convient, elles sont converties, ou refusées si cet utilisateur ne peut pas utiliser la conversion. La TV en direct est aussi convertie. Seules les versions qui conviennent sont téléchargées telles quelles ; avec « Téléchargements convertis » (Paramètres › Conversion), les applis qui le demandent téléchargent les autres converties.',
     qualityGroupOriginal: 'D’origine (sans limite)',
     member: 'Membre',
     lastSignInLabel: 'Dernière connexion :',

@@ -95,6 +95,7 @@ func DefaultSettings() Settings {
 		SyncAddonSubtitles:  true,
 		MaxConversions:      DefaultMaxConversions,
 		MaxConversionHeight: ConversionHeights[0],
+		ConvertedDownloads:  false,
 
 		EncoderPreset:              EncoderPresets[0],
 		AllowHevcEncoding:          false,
@@ -270,6 +271,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"syncAddonSubtitles":   is(d.SyncAddonSubtitles),
 		"maxConversions":       between(MinMaxConversions, MaxMaxConversions, d.MaxConversions),
 		"maxConversionHeight":  choice(d.MaxConversionHeight, anys(ConversionHeights)),
+		"convertedDownloads":   is(d.ConvertedDownloads),
 
 		"encoderPreset":              choice(d.EncoderPreset, anys(EncoderPresets)),
 		"h264Quality":                orZero(MinVideoQuality, MaxVideoQuality, d.H264Quality),

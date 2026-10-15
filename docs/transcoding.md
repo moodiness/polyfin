@@ -48,6 +48,37 @@ On a user's page under **Users**, the **Access** section holds each user's own *
 - Administrators' Jellyfin apps set the same permissions through the user policy (`EnableVideoPlaybackTranscoding`, `EnableAudioPlaybackTranscoding`, `EnableContentDownloading`), where video and audio conversion can be allowed separately.
 - The policy shows the user's own permissions, whatever the server's switches.
 
+## Converted downloads
+
+Apps that keep titles for offline viewing download a version's file as it is, unless **Converted downloads**, under **Settings › Conversion**, is on. It is off by default.
+
+With it on, an app that asks for a smaller copy, as Streamyfin's download sheet does with the quality the user picks, gets one:
+
+- **Video:** copied when the app plays it and it fits the quality picked, else converted, within the same limits as any converted video (see [Size of converted video](#size-of-converted-video)): the quality picked, the user's **Maximum quality** and quality group, and **Maximum quality of converted video**. A version taller than the user's quality group downloads converted down to it, where its file would be refused.
+- **Audio:** copied when the app takes its codec, else converted to one it takes.
+- **Subtitles:** an image subtitle the app chose is burned into the video; text subtitles stay files the app saves beside it (see [Subtitles](subtitles.md)).
+- **Made on the fly:** FFmpeg makes the copy as the app downloads it, at the app's pace, and Polyfin keeps nothing on disk. The file's size is only known at its end, so an interrupted download starts again from the beginning.
+- **Permissions:** the user needs **Can download**, and, when the video or the audio is converted, **Can use conversion (transcoding)** with the server's **Conversion (transcoding)** switch on, as for a playback. Without them, the app downloads the file as it is, if the user may download.
+- **Cost:** while it runs, a converted download counts toward **Video conversions at once** when it converts the video, on its own even next to the user's playback of the same title, and as one of the user's **Playbacks at once** on its device (see [Playback](playback.md#video-conversions-at-once)). At either limit, no converted download is planned, as no conversion is for a playback; one that starts past the cap anyway, planned at the same time as another, is refused with a `503`.
+- **Home:** a converted download shows in the admin app's **Now playing** with a "Downloading" label, its bar telling how far the copy is made.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Converted downloads** | **Settings › Conversion** | Off | Sends apps that ask for it a copy of a title copied or converted to the quality picked, rather than its file. |
+
+**Compared with Jellyfin:**
+
+- Jellyfin gives such apps the same kind of `TranscodingUrl`, with no setting to turn it off.
+- Jellyfin does not count downloads toward a user's playbacks, and has no quality groups.
+
+**For app developers:**
+
+- A device profile whose video `TranscodingProfile` has `Protocol` `http` and `Container` `mp4` or `ts` gets, when the version does not direct play, a `TranscodingUrl` of the form `/videos/{id}/stream.mp4?…`, with `TranscodingSubProtocol` `http`, as from Jellyfin. Polyfin sends one fragmented MP4 file, or MPEG-TS for `ts`, as FFmpeg writes it, without `Content-Length` and without byte ranges: a request with a `Range` header gets the whole file (200).
+- `startTimeTicks` starts the copy later; the file then starts at zero.
+- The `TranscodingUrl` stands for the user PlaybackInfo answered, through its play session. With another user's token, it is refused (403).
+- `DELETE /Videos/ActiveEncodings?playSessionId=` stops it.
+- `/Items/{id}/Download` and `/Videos/{id}/stream?static=true` keep serving the file as it is, under the quality group rule. So does a `TranscodingUrl` kept from before the setting was turned off.
+
 ## GPUs
 
 ### Detection

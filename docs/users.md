@@ -636,7 +636,7 @@ The same section also holds **Quality group**; see [Quality groups](#quality-gro
 
 ### Playbacks at once
 
-Once that many of the user's other devices are playing, as **Sessions** lists them, one more device cannot start playing. jellyfin-web explains this as media that cannot be played at this time; Polyfin's web client script closes the generic error jellyfin-web shows over it (see [Web client](web-client.md#dashboard-links-and-single-sign-on)). A device already playing can go on to another title.
+Once that many of the user's other devices are playing, as **Sessions** lists them, one more device cannot start playing. jellyfin-web explains this as media that cannot be played at this time; Polyfin's web client script closes the generic error jellyfin-web shows over it (see [Web client](web-client.md#dashboard-links-and-single-sign-on)). A device already playing can go on to another title. A device making a [converted download](transcoding.md#converted-downloads) counts as playing while it runs.
 
 **Compared with Jellyfin:**
 
@@ -724,7 +724,8 @@ The group applies after the version order settings hide versions, and before the
 ### Live TV, recordings and downloads
 
 - Live TV channels follow the same rule once analyzed, as their height is only known then. So do recordings.
-- Only versions that fit can be downloaded, as downloads are never converted. When none fits, the download is refused (403), as without the permission.
+- A version's file downloads only when it fits. When none fits, the file is refused (403), as without the permission.
+- With **Converted downloads** on, under **Settings › Conversion**, apps that ask for a smaller copy, such as Streamyfin, download a taller version converted down to the group, when the user may have video converted. See [Converted downloads](transcoding.md#converted-downloads).
 
 **Compared with Jellyfin:**
 

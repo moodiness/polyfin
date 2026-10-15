@@ -172,7 +172,7 @@ const users = {
       'The links this user made to share a movie or an episode. Revoke stops one at once.',
     qualityGroup: 'Quality group',
     qualityGroupHelp:
-      'The highest resolution this user is offered. Higher versions are left out while one fits; if none fits, they are converted down, or refused when this user cannot use conversion. Live TV is converted down too, and only versions that fit can be downloaded.',
+      'The highest resolution this user is offered. Higher versions are left out while one fits; if none fits, they are converted down, or refused when this user cannot use conversion. Live TV is converted down too. Only versions that fit are downloaded as they are; with "Converted downloads" on (Settings › Conversion), the apps that ask for it download the others converted down.',
     qualityGroupOriginal: 'Original (no limit)',
     member: 'Member',
     lastSignInLabel: 'Last sign-in:',

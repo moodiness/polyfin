@@ -1175,6 +1175,12 @@ type Settings struct {
 	// at most, keeping its shape, one of ConversionHeights; 0 keeps the
 	// original's.
 	MaxConversionHeight int
+	// ConvertedDownloads streams a title as one file, copied or converted
+	// within the user's quality, to an app whose device profile asks for
+	// video so (Protocol http), as apps saving titles for offline viewing
+	// do, for users who may download. Off, such apps download the version
+	// as it is.
+	ConvertedDownloads bool
 	// The settings below tune the conversions of files and Live TV alike,
 	// as Jellyfin's Transcoding page does (recordings copy the stream).
 	// EncoderPreset trades encoding speed for quality, one of
@@ -1455,7 +1461,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
 	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
-	"sync_addon_subtitles, max_conversions, max_conversion_height, " +
+	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
@@ -1495,7 +1501,7 @@ func (settings *Settings) fields() []any {
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs, &settings.HiddenVersionWords,
 		&settings.NameHowVersionsPlay,
-		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight,
+		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
 		&settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
