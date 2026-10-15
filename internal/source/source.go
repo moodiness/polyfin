@@ -140,6 +140,11 @@ type Location struct {
 	// Cache.sizeTrusted).
 	Size      int64
 	Announcer string
+	// Opener, when set, sends the source's requests in place of the
+	// cache's: one that signs them for the storage, or answers them from
+	// another protocol (see FileOpener), as a folder on an S3 bucket, an
+	// SFTP server or an rclone remote is read.
+	Opener Opener
 }
 
 // Opener sends requests to sources; *stremio.Client is one.

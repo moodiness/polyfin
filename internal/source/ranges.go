@@ -359,7 +359,7 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 		header := to.header
 		header.Set("Range", ranges)
 		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
-		response, err := s.cache.opener.Open(attemptCtx, http.MethodGet, to.url, header, to.confined)
+		response, err := to.opener.Open(attemptCtx, http.MethodGet, to.url, header, to.confined)
 		if err != nil {
 			cancel()
 			if ctx.Err() != nil {

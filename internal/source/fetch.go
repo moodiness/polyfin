@@ -726,6 +726,8 @@ type target struct {
 	pinned   *pin
 	renew    Renewer
 	host     string
+	// opener sends the request: the location's, else the cache's.
+	opener Opener
 }
 
 // target is where the source's next request goes. The pinned address,
@@ -741,7 +743,10 @@ func (s *Source) target() target {
 
 // target0 is target, the source's lock held. Its header is its own.
 func (s *Source) target0() target {
-	t := target{confined: s.origin.Confined, renew: s.renew}
+	t := target{confined: s.origin.Confined, renew: s.renew, opener: s.origin.Opener}
+	if t.opener == nil {
+		t.opener = s.cache.opener
+	}
 	if s.pinned != nil {
 		t.url, t.header, t.pinned = s.pinned.url, s.pinned.header.Clone(), s.pinned
 	} else {
@@ -821,7 +826,7 @@ func (s *Source) connect(c *conn, block int64) error {
 		header.Set("Range", "bytes="+strconv.FormatInt(offset, 10)+"-")
 		ctx, cancel := context.WithCancel(c.slot.ctx)
 		timer := time.AfterFunc(timeout, cancel)
-		response, err := s.cache.opener.Open(ctx, http.MethodGet, t.url, header, t.confined)
+		response, err := t.opener.Open(ctx, http.MethodGet, t.url, header, t.confined)
 		if !timer.Stop() {
 			if err == nil {
 				response.Body.Close()
