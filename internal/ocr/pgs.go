@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"image"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/container"
@@ -40,18 +41,19 @@ type displaySet struct {
 }
 
 // PGS reads the pictures of a SUP file: each segment behind a "PG" header
-// with its presentation time in 90 kHz ticks.
-func PGS(sup []byte) ([]Picture, error) {
+// with its presentation time in 90 kHz ticks. It hands each picture to
+// emit, in order, as soon as its end is known (see decodePGS).
+func PGS(sup []byte, emit func(Picture) error) error {
 	var sets []displaySet
 	open := false
 	for len(sup) > 0 {
 		if len(sup) < 13 || sup[0] != 'P' || sup[1] != 'G' {
-			return nil, fmt.Errorf("%w: no PG header", errInvalid)
+			return fmt.Errorf("%w: no PG header", errInvalid)
 		}
 		at := ticks(binary.BigEndian.Uint32(sup[2:6]))
 		n := 13 + int(binary.BigEndian.Uint16(sup[11:13]))
 		if n > len(sup) {
-			return nil, fmt.Errorf("%w: segment past the end", errInvalid)
+			return fmt.Errorf("%w: segment past the end", errInvalid)
 		}
 		if !open {
 			sets = append(sets, displaySet{at: at})
@@ -64,12 +66,12 @@ func PGS(sup []byte) ([]Picture, error) {
 		}
 		sup = sup[n:]
 	}
-	return decodePGS(sets)
+	return decodePGS(sets, emit)
 }
 
-// PGSBlocks reads the pictures of a Matroska PGS track: each block a
-// display set, its segments without a header.
-func PGSBlocks(blocks []container.Block) ([]Picture, error) {
+// PGSBlocks reads the pictures of a Matroska PGS track, as PGS does: each
+// block a display set, its segments without a header.
+func PGSBlocks(blocks []container.Block, emit func(Picture) error) error {
 	sets := make([]displaySet, 0, len(blocks))
 	for _, block := range blocks {
 		set := displaySet{at: block.Start}
@@ -84,7 +86,7 @@ func PGSBlocks(blocks []container.Block) ([]Picture, error) {
 		}
 		sets = append(sets, set)
 	}
-	return decodePGS(sets)
+	return decodePGS(sets, emit)
 }
 
 func segmentOf(kind byte, payload []byte) []byte {
@@ -113,24 +115,28 @@ type placement struct {
 }
 
 // decodePGS turns display sets into pictures: each display set that shows
-// objects is a picture, until the next display set.
-func decodePGS(sets []displaySet) ([]Picture, error) {
+// objects is a picture, until the next display set, which it hands to
+// emit then. Only the picture showing is held: the caller decides how many
+// it keeps. An error from emit stops the decoding.
+func decodePGS(sets []displaySet, emit func(Picture) error) error {
 	palettes := map[byte]*[256]pixel{}
 	objects := map[uint16]*pgsObject{}
-	var pictures []Picture
+	var showing Picture
 	shown := false
 	for _, set := range sets {
 		var composed bool
 		var paletteID byte
+		var width, height int
 		var placed []placement
 		for _, segment := range set.segments {
 			kind, data := segment[0], segment[1:]
 			switch kind {
 			case segmentComposition:
 				if len(data) < 11 {
-					return nil, fmt.Errorf("%w: short composition", errInvalid)
+					return fmt.Errorf("%w: short composition", errInvalid)
 				}
 				composed = true
+				width, height = int(binary.BigEndian.Uint16(data[0:2])), int(binary.BigEndian.Uint16(data[2:4]))
 				if data[7]&0x80 != 0 {
 					// An epoch starts: what the last one defined is gone.
 					clear(palettes)
@@ -142,14 +148,14 @@ func decodePGS(sets []displaySet) ([]Picture, error) {
 				rest := data[11:]
 				for range n {
 					if len(rest) < 8 {
-						return nil, fmt.Errorf("%w: short composition object", errInvalid)
+						return fmt.Errorf("%w: short composition object", errInvalid)
 					}
 					p := placement{object: binary.BigEndian.Uint16(rest[0:2]), forced: rest[3]&0x40 != 0, cropped: rest[3]&0x80 != 0,
 						x: int(binary.BigEndian.Uint16(rest[4:6])), y: int(binary.BigEndian.Uint16(rest[6:8]))}
 					rest = rest[8:]
 					if p.cropped {
 						if len(rest) < 8 {
-							return nil, fmt.Errorf("%w: short cropping", errInvalid)
+							return fmt.Errorf("%w: short cropping", errInvalid)
 						}
 						p.cropX, p.cropY = int(binary.BigEndian.Uint16(rest[0:2])), int(binary.BigEndian.Uint16(rest[2:4]))
 						p.cropW, p.cropH = int(binary.BigEndian.Uint16(rest[4:6])), int(binary.BigEndian.Uint16(rest[6:8]))
@@ -159,7 +165,7 @@ func decodePGS(sets []displaySet) ([]Picture, error) {
 				}
 			case segmentPalette:
 				if len(data) < 2 {
-					return nil, fmt.Errorf("%w: short palette", errInvalid)
+					return fmt.Errorf("%w: short palette", errInvalid)
 				}
 				palette := palettes[data[0]]
 				if palette == nil {
@@ -173,12 +179,12 @@ func decodePGS(sets []displaySet) ([]Picture, error) {
 				}
 			case segmentObject:
 				if len(data) < 4 {
-					return nil, fmt.Errorf("%w: short object", errInvalid)
+					return fmt.Errorf("%w: short object", errInvalid)
 				}
 				id, flags := binary.BigEndian.Uint16(data[0:2]), data[3]
 				if flags&0x80 != 0 {
 					if len(data) < 11 {
-						return nil, fmt.Errorf("%w: short object", errInvalid)
+						return fmt.Errorf("%w: short object", errInvalid)
 					}
 					objects[id] = &pgsObject{width: int(binary.BigEndian.Uint16(data[7:9])), height: int(binary.BigEndian.Uint16(data[9:11])),
 						data: append([]byte(nil), data[11:]...)}
@@ -190,77 +196,92 @@ func decodePGS(sets []displaySet) ([]Picture, error) {
 		if !composed {
 			continue
 		}
-		if shown && pictures[len(pictures)-1].End == 0 {
-			pictures[len(pictures)-1].End = set.at
+		if shown {
+			showing.End = set.at
+			if err := emit(showing); err != nil {
+				return err
+			}
 		}
 		shown = false
 		palette := palettes[paletteID]
 		if len(placed) == 0 || palette == nil {
 			continue
 		}
-		b, forced := composePGS(placed, objects, palette)
-		if image, ok := prepare(b); ok {
-			pictures = append(pictures, Picture{Start: set.at, Forced: forced, Image: image})
+		b, forced := composePGS(placed, objects, palette, width, height)
+		if prepared, ok := prepare(b); ok {
+			showing = Picture{Start: set.at, Forced: forced, Image: prepared}
 			shown = true
 		}
 	}
 	if shown {
-		last := &pictures[len(pictures)-1]
-		last.End = last.Start + lastShown
+		showing.End = showing.Start + lastShown
+		return emit(showing)
 	}
-	return pictures, nil
+	return nil
 }
 
 // composePGS draws the objects a composition places, each decoded through
-// the palette, onto a bitmap covering them all.
-func composePGS(placed []placement, objects map[uint16]*pgsObject, palette *[256]pixel) (bitmap, bool) {
+// the palette, onto a bitmap covering them all within the screen, the
+// composition's video of width by height, at most maxWidth by maxHeight:
+// what lies outside is neither drawn nor allocated, whatever the stream
+// declares.
+func composePGS(placed []placement, objects map[uint16]*pgsObject, palette *[256]pixel, width, height int) (bitmap, bool) {
 	type drawn struct {
-		x, y int
-		b    bitmap
+		object *pgsObject
+		// part is the part of the object shown, by the object's pixels, and
+		// at where it shows on screen.
+		part, at image.Rectangle
 	}
 	var parts []drawn
 	forced := false
-	left, top, right, bottom := int(^uint(0)>>1), int(^uint(0)>>1), 0, 0
+	screen := image.Rect(0, 0, min(width, maxWidth), min(height, maxHeight))
+	var bounds image.Rectangle
 	for _, p := range placed {
 		object := objects[p.object]
-		if object == nil || object.width == 0 || object.height == 0 {
+		if object == nil {
 			continue
 		}
-		b := decodePGSObject(object, palette)
+		part := image.Rect(0, 0, object.width, object.height)
 		if p.cropped {
-			b = b.crop(p.cropX, p.cropY, p.cropW, p.cropH)
+			part = part.Intersect(image.Rect(p.cropX, p.cropY, p.cropX+p.cropW, p.cropY+p.cropH))
 		}
-		parts = append(parts, drawn{p.x, p.y, b})
+		at := part.Sub(part.Min).Add(image.Pt(p.x, p.y)).Intersect(screen)
+		if at.Empty() {
+			continue
+		}
+		part = at.Sub(image.Pt(p.x, p.y)).Add(part.Min)
+		parts = append(parts, drawn{object, part, at})
 		forced = forced || p.forced
-		left, top = min(left, p.x), min(top, p.y)
-		right, bottom = max(right, p.x+b.width), max(bottom, p.y+b.height)
+		bounds = bounds.Union(at)
 	}
 	if len(parts) == 0 {
 		return bitmap{}, false
 	}
-	canvas := newBitmap(right-left, bottom-top)
-	for _, part := range parts {
-		canvas.draw(part.b, part.x-left, part.y-top)
+	canvas := newBitmap(bounds.Dx(), bounds.Dy())
+	for _, d := range parts {
+		drawPGSObject(canvas, d.object, palette, d.part, d.at.Min.Sub(bounds.Min).Sub(d.part.Min))
 	}
 	return canvas, forced
 }
 
-// decodePGSObject decodes an object's run-length data: a byte other than 0
-// is a pixel of that color; 0 starts a run, 0 0 ends the line.
-func decodePGSObject(object *pgsObject, palette *[256]pixel) bitmap {
-	b := newBitmap(object.width, object.height)
+// drawPGSObject decodes an object's run-length data, a byte other than 0
+// a pixel of that color, 0 starting a run, 0 0 ending the line, and draws
+// the opaque pixels of its part shown onto canvas, the object's origin at
+// origin on canvas. The rest of the object is decoded no further than its
+// data, and drawn nowhere.
+func drawPGSObject(canvas bitmap, object *pgsObject, palette *[256]pixel, shown image.Rectangle, origin image.Point) {
 	data := object.data
 	x, y := 0, 0
 	put := func(color byte, n int) {
-		value := palette[color]
-		for ; n > 0 && x < b.width; n-- {
-			if y < b.height {
-				b.set(x, y, value)
+		end := min(x+n, object.width)
+		if value := palette[color]; value.alpha > 0 && y >= shown.Min.Y {
+			for col := max(x, shown.Min.X); col < min(end, shown.Max.X); col++ {
+				canvas.set(origin.X+col, origin.Y+y, value)
 			}
-			x++
 		}
+		x = end
 	}
-	for i := 0; i < len(data) && y < b.height; {
+	for i := 0; i < len(data) && y < shown.Max.Y; {
 		c := data[i]
 		i++
 		if c != 0 {
@@ -268,7 +289,7 @@ func decodePGSObject(object *pgsObject, palette *[256]pixel) bitmap {
 			continue
 		}
 		if i >= len(data) {
-			break
+			return
 		}
 		flags := data[i]
 		i++
@@ -279,23 +300,22 @@ func decodePGSObject(object *pgsObject, palette *[256]pixel) bitmap {
 			put(0, int(flags&0x3f))
 		case flags>>6 == 1:
 			if i >= len(data) {
-				return b
+				return
 			}
 			put(0, int(flags&0x3f)<<8|int(data[i]))
 			i++
 		case flags>>6 == 2:
 			if i >= len(data) {
-				return b
+				return
 			}
 			put(data[i], int(flags&0x3f))
 			i++
 		default:
 			if i+1 >= len(data) {
-				return b
+				return
 			}
 			put(data[i+1], int(flags&0x3f)<<8|int(data[i]))
 			i += 2
 		}
 	}
-	return b
 }

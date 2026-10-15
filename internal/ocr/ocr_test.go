@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/subtitles"
 	"github.com/moodiness/polyfin/internal/testsubtitles"
 )
@@ -29,6 +30,38 @@ func tesseract(t *testing.T) *Tesseract {
 		t.Skip("POLYFIN_TEST_TESSERACT is not set")
 	}
 	return &Tesseract{Path: path, DataDir: os.Getenv("POLYFIN_TEST_TESSDATA"), TempDir: t.TempDir()}
+}
+
+// pgsPictures decodes the pictures of a SUP file, keeping them all.
+func pgsPictures(sup []byte) ([]Picture, error) {
+	var pictures []Picture
+	err := PGS(sup, func(p Picture) error {
+		pictures = append(pictures, p)
+		return nil
+	})
+	return pictures, err
+}
+
+// vobsubPictures decodes the pictures of a .idx and .sub pair, keeping
+// them all.
+func vobsubPictures(idx, sub []byte) ([]Picture, error) {
+	var pictures []Picture
+	err := VobSub(idx, sub, func(p Picture) error {
+		pictures = append(pictures, p)
+		return nil
+	})
+	return pictures, err
+}
+
+// vobsubBlockPictures decodes the pictures of a Matroska VobSub track,
+// keeping them all.
+func vobsubBlockPictures(private []byte, blocks []container.Block) ([]Picture, error) {
+	var pictures []Picture
+	err := VobSubBlocks(private, blocks, func(p Picture) error {
+		pictures = append(pictures, p)
+		return nil
+	})
+	return pictures, err
 }
 
 // times are the start and end of each picture.
@@ -85,7 +118,7 @@ func wantText(t *testing.T, cues []subtitles.Cue, want []testsubtitles.Caption, 
 
 func TestPGSPicturesKeepTheirTimes(t *testing.T) {
 	sup := testsubtitles.Captions{CanvasWidth: 1920, CanvasHeight: 1080, Size: 56, Shown: captions}.PGS()
-	pictures, err := PGS(sup)
+	pictures, err := pgsPictures(sup)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +138,7 @@ func TestPGSPicturesKeepTheirTimes(t *testing.T) {
 
 func TestVobSubPicturesAreUpscaled(t *testing.T) {
 	idx, sub := testsubtitles.Captions{CanvasWidth: 720, CanvasHeight: 480, Size: 22, Shown: captions}.VobSub("en")
-	pictures, err := VobSub([]byte(idx), sub)
+	pictures, err := vobsubPictures([]byte(idx), sub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +157,7 @@ func TestVobSubPicturesAreUpscaled(t *testing.T) {
 
 func TestTesseractReadsPGS(t *testing.T) {
 	reader := tesseract(t)
-	pictures, err := PGS(testsubtitles.Captions{CanvasWidth: 1920, CanvasHeight: 1080, Size: 56, Shown: captions}.PGS())
+	pictures, err := pgsPictures(testsubtitles.Captions{CanvasWidth: 1920, CanvasHeight: 1080, Size: 56, Shown: captions}.PGS())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +171,7 @@ func TestTesseractReadsPGS(t *testing.T) {
 func TestTesseractReadsVobSub(t *testing.T) {
 	reader := tesseract(t)
 	idx, sub := testsubtitles.Captions{CanvasWidth: 720, CanvasHeight: 480, Size: 22, Shown: captions}.VobSub("en")
-	pictures, err := VobSub([]byte(idx), sub)
+	pictures, err := vobsubPictures([]byte(idx), sub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +194,7 @@ func TestTesseractReadsWithTheDataFolder(t *testing.T) {
 		t.Skip("no French data: set POLYFIN_TEST_TESSDATA to a folder holding fra.traineddata")
 	}
 	french := []testsubtitles.Caption{{Lines: []string{"Le gardien du phare attendait"}, Start: time.Second, End: 3 * time.Second}}
-	pictures, err := PGS(testsubtitles.Captions{CanvasWidth: 1920, CanvasHeight: 1080, Size: 56, Shown: french}.PGS())
+	pictures, err := pgsPictures(testsubtitles.Captions{CanvasWidth: 1920, CanvasHeight: 1080, Size: 56, Shown: french}.PGS())
 	if err != nil {
 		t.Fatal(err)
 	}

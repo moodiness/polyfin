@@ -2,6 +2,7 @@ package playback
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"log/slog"
@@ -28,9 +29,9 @@ import (
 	"github.com/moodiness/polyfin/internal/testsubtitles"
 )
 
-// fakeReader reads every picture as "line N", N its place in the track,
-// with the languages it has data for. With hold set, each read waits for
-// a value from it, having told started.
+// fakeReader reads every picture as "line N", N its place in the pictures
+// read at once, with the languages it has data for. With hold set, each
+// read waits for a value from it, having told started.
 type fakeReader struct {
 	languages []string
 	hold      chan struct{}
@@ -39,13 +40,20 @@ type fakeReader struct {
 	mu            sync.Mutex
 	reads         []string
 	running, most int
+	// held are the bytes of the pictures of each read.
+	held []int
 }
 
 func (f *fakeReader) Languages(context.Context) ([]string, error) { return f.languages, nil }
 
 func (f *fakeReader) Read(_ context.Context, pictures []ocr.Picture, language string) ([]subtitles.Cue, error) {
+	held := 0
+	for _, p := range pictures {
+		held += len(p.Image.Pix)
+	}
 	f.mu.Lock()
 	f.reads = append(f.reads, language)
+	f.held = append(f.held, held)
 	f.running++
 	f.most = max(f.most, f.running)
 	f.mu.Unlock()
@@ -437,5 +445,133 @@ func TestPictureTracksAreReadIntoText(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// opaqueSUP is a SUP file showing n times, a second apart from zero, the
+// same picture: the whole of a 1920 by 1080 video, opaque.
+func opaqueSUP(n int) []byte {
+	segment := func(kind byte, at time.Duration, payload []byte) []byte {
+		header := make([]byte, 13, 13+len(payload))
+		header[0], header[1], header[10] = 'P', 'G', kind
+		binary.BigEndian.PutUint32(header[2:6], uint32(at*90000/time.Second))
+		binary.BigEndian.PutUint16(header[11:13], uint16(len(payload)))
+		return append(header, payload...)
+	}
+	// 1920 by 1080, starting an epoch the first time, placing object 0 at
+	// 0, 0 through palette 0.
+	composition := func(epoch bool) []byte {
+		data := []byte{0x07, 0x80, 0x04, 0x38, 0x10, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0}
+		if epoch {
+			data[7] = 0x80
+		}
+		return data
+	}
+	// Object 0, first and last of its sequence, 1920 by 1080, each line a
+	// run of color 1, opaque white.
+	object := []byte{0, 0, 0, 0xc0, 0, 0, 0, 0x07, 0x80, 0x04, 0x38}
+	for range 1080 {
+		object = append(object, 0, 0xc0|1920>>8, 1920&0xff, 1, 0, 0)
+	}
+	var sup []byte
+	for i := range n {
+		at := time.Duration(i) * time.Second
+		sup = append(sup, segment(0x16, at, composition(i == 0))...)
+		if i == 0 {
+			sup = append(sup, segment(0x14, at, []byte{0, 0, 1, 235, 128, 128, 255})...)
+			sup = append(sup, segment(0x15, at, object)...)
+		}
+		sup = append(sup, segment(0x80, at, nil)...)
+	}
+	return sup
+}
+
+// A track's pictures are read by batches, each dropped once read: no more
+// than ocrBatchBytes of them are held at once, however many the track
+// shows, and the text keeps them all, in order.
+func TestPicturesAreReadByBatches(t *testing.T) {
+	t.Parallel()
+	disk := &localDisk{dir: t.TempDir(), states: map[string]string{}}
+	p := newPictureService(t, migrated.New(t), &fakeReader{languages: []string{"eng"}}, disk, "ffmpeg")
+	// 40 pictures of some 2 MB each.
+	const shown = 40
+	if err := os.WriteFile(filepath.Join(disk.dir, "sub.sup"), opaqueSUP(shown), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	disk.setState("sub.sup", "1 1")
+	files := []library.ExternalSubtitle{{URL: p.base + "sub.sup", Format: "sup", Language: "eng"}}
+	version := library.Version{ID: accounts.ID{1}, URL: p.base + "video.mkv"}
+	p.queueTracks(t.Context(), version, videoAnalysis, files, -1)
+	p.waitReads(t)
+	p.reader.mu.Lock()
+	held := slices.Clone(p.reader.held)
+	p.reader.mu.Unlock()
+	total := 0
+	for _, bytes := range held {
+		total += bytes
+		if bytes > ocrBatchBytes {
+			t.Errorf("a read of %d MB of pictures", bytes>>20)
+		}
+	}
+	if len(held) < 2 || total <= ocrBatchBytes {
+		t.Errorf("%d reads of %d MB in all", len(held), total>>20)
+	}
+	cues, ok := p.TextCopyCues(t.Context(), version, videoAnalysis, files, 2)
+	if !ok || len(cues) != shown {
+		t.Fatalf("%d cues kept, %v", len(cues), ok)
+	}
+	for i, cue := range cues {
+		if cue.Start != time.Duration(i)*time.Second {
+			t.Errorf("cue %d starts at %v", i, cue.Start)
+		}
+	}
+}
+
+// The text copy of a track inside an MPEG-TS file, as a Blu-ray's .m2ts
+// file is, starts at zero as the file's remuxes do, rather than at the
+// file's first timestamp.
+func TestTextCopiesOfTransportStreamsStartAtZero(t *testing.T) {
+	t.Parallel()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	dir := t.TempDir()
+	disk := &localDisk{dir: dir, states: map[string]string{}}
+	p := newPictureService(t, migrated.New(t), &fakeReader{languages: []string{"eng"}}, disk, ffmpeg)
+	if err := os.WriteFile(filepath.Join(dir, "captions.sup"), pgsCaptions.PGS(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Its timestamps start 600 seconds in, as a Blu-ray's do; the captions
+	// keep their times from its first frame (-copyts).
+	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-copyts", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24",
+		"-i", filepath.Join(dir, "captions.sup"), "-t", "8", "-map", "0", "-map", "1", "-c:v", "libx264", "-preset", "veryfast",
+		"-c:s", "copy", "-metadata:s:s:0", "language=eng", "-output_ts_offset", "600", "-f", "mpegts", filepath.Join(dir, "movie.m2ts")).CombinedOutput(); err != nil {
+		t.Fatalf("ffmpeg: %v: %s", err, out)
+	}
+	analysis, err := media.Prober{Path: filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), Timeout: time.Minute}.Probe(t.Context(), filepath.Join(dir, "movie.m2ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk.setState("movie.m2ts", "1 1")
+	version := library.Version{ID: accounts.ID{1}, URL: p.base + "movie.m2ts"}
+	p.queueTracks(t.Context(), version, analysis, nil, -1)
+	p.waitReads(t)
+	copies := p.TextCopies(t.Context(), version, analysis, nil)
+	if len(copies) != 1 {
+		t.Fatalf("copies: %+v", copies)
+	}
+	cues, _ := p.TextCopyCues(t.Context(), version, analysis, nil, copies[0].Index)
+	if len(cues) != len(pgsCaptions.Shown) {
+		t.Fatalf("cues: %+v", cues)
+	}
+	for i, cue := range cues {
+		want := pgsCaptions.Shown[i]
+		if d := cue.Start - want.Start; d < -100*time.Millisecond || d > 100*time.Millisecond {
+			t.Errorf("cue %d starts at %v, want %v", i, cue.Start, want.Start)
+		}
+		if d := cue.End - want.End; d < -100*time.Millisecond || d > 100*time.Millisecond {
+			t.Errorf("cue %d ends at %v, want %v", i, cue.End, want.End)
+		}
 	}
 }

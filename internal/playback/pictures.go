@@ -58,6 +58,10 @@ const (
 	// maxPictureBytes bounds a picture file read whole, or a track copied
 	// out of its file.
 	maxPictureBytes = 256 << 20
+	// ocrBatchBytes bounds the pixels of the pictures of a track held at
+	// once: they are decoded, read and dropped by batches of at most so
+	// many, a movie's in a few.
+	ocrBatchBytes = 64 << 20
 	// readyFor is how long the copies found ready for a version are
 	// remembered: a track read since shows from then on.
 	readyFor = time.Minute
@@ -105,8 +109,11 @@ type ocrJob struct {
 	// queued as it plays.
 	version  library.Version
 	analysis media.Analysis
-	// input is what FFmpeg reads a local file or disc from.
-	input media.Input
+	// input is what FFmpeg reads a local file or disc from, and zeroAt the
+	// track its timestamps are shifted to start at zero by, -1 for none
+	// (see zeroOf).
+	input  media.Input
+	zeroAt int
 	// scanned is a video a scan found, for a job queuing its tracks.
 	scanned *stremio.Stream
 }
@@ -384,9 +391,24 @@ func (s *Service) queueTracks(ctx context.Context, version library.Version, anal
 	}
 	jobs := make([]ocrJob, len(tracks))
 	for i, track := range tracks {
-		jobs[i] = ocrJob{track: track, version: version, analysis: analysis, input: input}
+		jobs[i] = ocrJob{track: track, version: version, analysis: analysis, input: input, zeroAt: s.zeroOf(version, analysis)}
 	}
 	s.enqueue(jobs...)
+}
+
+// zeroOf is the FFmpeg index of the video track by which the remuxes of a
+// version shift its timestamps to start at zero, as the text copies of its
+// tracks must: those of a disc's title, read from its input, and of an
+// MPEG-TS file, such as a Blu-ray's .m2ts file (see remuxOpener and
+// progressiveOpener). FFmpeg starts at zero the tracks it reads, the video
+// and audio for a remux: the video's start stands for theirs. -1 for a
+// version whose remuxes keep its timestamps.
+func (s *Service) zeroOf(version library.Version, analysis media.Analysis) int {
+	video, ok := videoOf(analysis)
+	if !ok || !s.ReadsInput(version) && !transportStream(analysis) {
+		return -1
+	}
+	return video.Index
 }
 
 // QueueScanned queues the reading of the picture subtitles of local
@@ -502,7 +524,8 @@ func (s *Service) scannedJobs(ctx context.Context, video stremio.Stream) []ocrJo
 		if code := in.Languages[stream.ID]; language == "" && code != "" {
 			language = code
 		}
-		jobs = append(jobs, ocrJob{track: pictureTrack{key: ocrKey{ocrLocal, name, stream.Index}, state: state, language: language}, input: in})
+		jobs = append(jobs, ocrJob{track: pictureTrack{key: ocrKey{ocrLocal, name, stream.Index}, state: state, language: language}, input: in,
+			zeroAt: s.zeroOf(version, analysis)})
 	}
 	return jobs
 }
@@ -535,11 +558,7 @@ func (s *Service) readPictures(ctx context.Context, job ocrJob) error {
 		return nil
 	}
 	started := time.Now()
-	pictures, err := s.trackPictures(ctx, job, ffmpeg, dir)
-	if err != nil {
-		return err
-	}
-	cues, err := reader.Read(ctx, pictures, language)
+	cues, pictures, err := s.readPictureTrack(ctx, job, ffmpeg, dir, reader, language)
 	if err != nil {
 		return err
 	}
@@ -556,45 +575,83 @@ func (s *Service) readPictures(ctx context.Context, job ocrJob) error {
 	s.pictures.mu.Lock()
 	s.pictures.generation++
 	s.pictures.mu.Unlock()
-	s.logger.Info("Read a picture subtitle track into text", "addon", job.version.Addon, "language", language, "pictures", len(pictures),
+	s.logger.Info("Read a picture subtitle track into text", "addon", job.version.Addon, "language", language, "pictures", pictures,
 		"cues", len(cues), "duration", time.Since(started).Round(time.Millisecond))
 	return nil
 }
 
-// trackPictures decodes a track's pictures: a picture file read whole, a
-// track of an addon's Matroska file read through its index, or a track of
-// a local file or disc that FFmpeg copies out without conversion into dir.
-func (s *Service) trackPictures(ctx context.Context, job ocrJob, ffmpeg, dir string) ([]ocr.Picture, error) {
+// readPictureTrack reads a track's pictures into text with the data of
+// language, by batches of at most ocrBatchBytes of pictures, each dropped
+// once read: a track's pictures are never all held at once. It returns
+// the cues, and how many pictures there were.
+func (s *Service) readPictureTrack(ctx context.Context, job ocrJob, ffmpeg, dir string, reader TextReader, language string) ([]subtitles.Cue, int, error) {
+	var cues []subtitles.Cue
+	var batch []ocr.Picture
+	held, pictures := 0, 0
+	readBatch := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		read, err := reader.Read(ctx, batch, language)
+		if err != nil {
+			return err
+		}
+		cues = append(cues, read...)
+		clear(batch)
+		batch, held = batch[:0], 0
+		return nil
+	}
+	err := s.trackPictures(ctx, job, ffmpeg, dir, func(picture ocr.Picture) error {
+		size := len(picture.Image.Pix)
+		if held+size > ocrBatchBytes {
+			if err := readBatch(); err != nil {
+				return err
+			}
+		}
+		batch, held, pictures = append(batch, picture), held+size, pictures+1
+		return nil
+	})
+	if err == nil {
+		err = readBatch()
+	}
+	return cues, pictures, err
+}
+
+// trackPictures decodes a track's pictures, handing each to emit: a
+// picture file read whole, a track of an addon's Matroska file read
+// through its index, or a track of a local file or disc that FFmpeg copies
+// out without conversion into dir.
+func (s *Service) trackPictures(ctx context.Context, job ocrJob, ffmpeg, dir string, emit func(ocr.Picture) error) error {
 	track := job.track
 	switch {
 	case track.file != nil:
 		key := strings.TrimPrefix(track.file.URL, s.localBase())
 		data, err := s.readLocal(ctx, key)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if track.file.Format == "sup" {
-			return ocr.PGS(data)
+			return ocr.PGS(data, emit)
 		}
 		// A VobSub pair is named by its .idx file; the same key with the
 		// .sub extension opens its .sub file.
 		sub, err := s.readLocal(ctx, strings.TrimSuffix(key, path.Ext(key))+".sub")
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return ocr.VobSub(data, sub)
+		return ocr.VobSub(data, sub, emit)
 	case track.key.kind == ocrVersion:
 		t, blocks, err := s.pictureBlocks(ctx, job.version, job.analysis, track.key.stream)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return decodePictureBlocks(t, blocks)
+		return decodePictureBlocks(t, blocks, emit)
 	default:
-		t, blocks, err := copyPictures(ctx, ffmpeg, dir, job.input, track.key.stream)
+		t, blocks, err := copyPictures(ctx, ffmpeg, dir, job.input, track.key.stream, job.zeroAt)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return decodePictureBlocks(t, blocks)
+		return decodePictureBlocks(t, blocks, emit)
 	}
 }
 
@@ -618,15 +675,16 @@ func (s *Service) readLocal(ctx context.Context, key string) ([]byte, error) {
 	return data, err
 }
 
-// decodePictureBlocks decodes the blocks of a Matroska PGS or VobSub track.
-func decodePictureBlocks(track container.Track, blocks []container.Block) ([]ocr.Picture, error) {
+// decodePictureBlocks decodes the blocks of a Matroska PGS or VobSub track,
+// handing each picture to emit.
+func decodePictureBlocks(track container.Track, blocks []container.Block, emit func(ocr.Picture) error) error {
 	switch track.CodecID {
 	case "S_HDMV/PGS":
-		return ocr.PGSBlocks(blocks)
+		return ocr.PGSBlocks(blocks, emit)
 	case "S_VOBSUB":
-		return ocr.VobSubBlocks(track.CodecPrivate, blocks)
+		return ocr.VobSubBlocks(track.CodecPrivate, blocks, emit)
 	}
-	return nil, fmt.Errorf("not a picture subtitle track: %s", track.CodecID)
+	return fmt.Errorf("not a picture subtitle track: %s", track.CodecID)
 }
 
 // pictureBlocks reads the blocks of a picture subtitle track of an addon's
@@ -665,20 +723,31 @@ func (s *Service) pictureBlocks(ctx context.Context, version library.Version, an
 	return track, blocks, err
 }
 
-// copyPictures has FFmpeg copy a track out of a local file or disc, without
-// conversion, into a Matroska file in dir, and reads its blocks.
-func copyPictures(ctx context.Context, ffmpeg, dir string, in media.Input, stream int) (container.Track, []container.Block, error) {
+// copyPictures has FFmpeg copy a track, stream, out of a local file or
+// disc, without conversion, into a Matroska file in dir, and reads its
+// blocks. With zeroAt a track, not -1, its timestamps are shifted to start
+// at zero by that track's start, as the remuxes of the file do.
+func copyPictures(ctx context.Context, ffmpeg, dir string, in media.Input, stream, zeroAt int) (container.Track, []container.Block, error) {
 	out, err := os.CreateTemp(dir, "polyfin-pictures-*.mks")
 	if err != nil {
 		return container.Track{}, nil, err
 	}
 	defer os.Remove(out.Name())
 	defer out.Close()
-	// The track keeps the source's timestamps, as remuxes do (-copyts), so
-	// that its cues are on the timeline of the track's other deliveries.
+	// The track keeps the source's timestamps as the remuxes of the file
+	// read them (-copyts, from zero for those that shift them), so that its
+	// cues are on the timeline of the track's other deliveries.
 	args := append([]string{"-nostdin", "-v", "error", "-copyts"}, in.Args()...)
+	if zeroAt >= 0 {
+		args = append(args, "-start_at_zero")
+	}
 	args = append(args, "-i", in.Path, "-map", "0:"+strconv.Itoa(stream), "-c", "copy", "-avoid_negative_ts", "disabled",
 		"-fs", strconv.Itoa(maxPictureBytes), "-f", "matroska", "-y", out.Name())
+	if zeroAt >= 0 {
+		// FFmpeg shifts by the start of the tracks it reads: the track
+		// counted from is read too, into nothing.
+		args = append(args, "-map", "0:"+strconv.Itoa(zeroAt), "-c", "copy", "-f", "null", "-")
+	}
 	cmd := exec.CommandContext(ctx, ffmpeg, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

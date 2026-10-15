@@ -24,12 +24,29 @@ import (
 const spuTick = 1024 * time.Second / 90000
 
 // vobsubIndex is what a .idx file, or a Matroska track's CodecPrivate,
-// tells: the palette, as luminances, and for a .idx file the subpictures of
-// its first track, by time and position in the .sub file. A track copied
-// from a DVD's program stream, without its IFO files, has no palette.
+// tells: the palette, as luminances, the size of the video, and for a .idx
+// file the subpictures of its first track, by time and position in the
+// .sub file. A track copied from a DVD's program stream, without its IFO
+// files, has no palette, and may have no size.
 type vobsubIndex struct {
-	palette *[16]uint8
-	entries []vobsubEntry
+	palette       *[16]uint8
+	width, height int
+	entries       []vobsubEntry
+}
+
+// dvdWidth and dvdHeight are the size of a DVD's PAL video, the largest:
+// a track's pictures may lie anywhere within it, whatever smaller size
+// its index tells.
+const dvdWidth, dvdHeight = 720, 576
+
+// screen is the part of the video a track's pictures are drawn within:
+// the size its index tells, a DVD's at least, at most maxWidth by
+// maxHeight; maxWidth by maxHeight when it tells none.
+func (index vobsubIndex) screen() (width, height int) {
+	if index.width <= 0 || index.height <= 0 {
+		return maxWidth, maxHeight
+	}
+	return min(max(index.width, dvdWidth), maxWidth), min(max(index.height, dvdHeight), maxHeight)
 }
 
 type vobsubEntry struct {
@@ -60,6 +77,10 @@ func parseIndex(data []byte) (vobsubIndex, error) {
 				palette[i] = luma(uint8(rgb>>16), uint8(rgb>>8), uint8(rgb))
 			}
 			index.palette = palette
+		case "size":
+			width, height, _ := strings.Cut(value, "x")
+			index.width, _ = strconv.Atoi(strings.TrimSpace(width))
+			index.height, _ = strconv.Atoi(strings.TrimSpace(height))
 		case "id":
 			tracks++
 		case "timestamp":
@@ -109,38 +130,39 @@ func luma(r, g, b uint8) uint8 {
 }
 
 // VobSub reads the pictures of a .idx and .sub pair: those of the first
-// track the .idx file lists.
-func VobSub(idx, sub []byte) ([]Picture, error) {
+// track the .idx file lists. It hands each picture to emit, in order, as
+// soon as its end is known (see decodeUnits).
+func VobSub(idx, sub []byte, emit func(Picture) error) error {
 	index, err := parseIndex(idx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	units := make([]timedUnit, 0, len(index.entries))
 	for _, entry := range index.entries {
 		if entry.position < 0 || entry.position >= int64(len(sub)) {
-			return nil, fmt.Errorf("%w: position past the .sub file", errInvalid)
+			return fmt.Errorf("%w: position past the .sub file", errInvalid)
 		}
 		unit, err := subpictureAt(sub, int(entry.position))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		units = append(units, timedUnit{at: entry.at, data: unit})
 	}
-	return decodeUnits(units, index.palette)
+	return decodeUnits(units, index, emit)
 }
 
 // VobSubBlocks reads the pictures of a Matroska VobSub track, from its
-// CodecPrivate and blocks.
-func VobSubBlocks(private []byte, blocks []container.Block) ([]Picture, error) {
+// CodecPrivate and blocks, as VobSub does.
+func VobSubBlocks(private []byte, blocks []container.Block, emit func(Picture) error) error {
 	index, err := parseIndex(private)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	units := make([]timedUnit, len(blocks))
 	for i, block := range blocks {
 		units[i] = timedUnit{at: block.Start, duration: block.Duration, data: block.Data}
 	}
-	return decodeUnits(units, index.palette)
+	return decodeUnits(units, index, emit)
 }
 
 // timedUnit is a subpicture unit with its time, and its block's duration
@@ -151,40 +173,49 @@ type timedUnit struct {
 }
 
 // decodeUnits decodes subpicture units: each shows from its start delay
-// to its stop delay, its block's end, or the next one.
-func decodeUnits(units []timedUnit, palette *[16]uint8) ([]Picture, error) {
-	var pictures []Picture
+// to its stop delay, its block's end, or the next one. It hands each
+// picture to emit once its end is known, holding only one that waits for
+// the next. An error from emit stops the decoding.
+func decodeUnits(units []timedUnit, index vobsubIndex, emit func(Picture) error) error {
+	width, height := index.screen()
+	var waiting Picture
 	open := false
 	for _, unit := range units {
-		spu, err := decodeSubpicture(unit.data, palette)
+		spu, err := decodeSubpicture(unit.data, index.palette, width, height)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		start := unit.at + spu.start
-		if open && pictures[len(pictures)-1].End == 0 {
-			pictures[len(pictures)-1].End = start
+		if open {
+			waiting.End = start
+			if err := emit(waiting); err != nil {
+				return err
+			}
 		}
 		open = false
-		image, ok := prepare(spu.bitmap)
+		prepared, ok := prepare(spu.bitmap)
 		if !ok {
 			continue
 		}
-		picture := Picture{Start: start, Forced: spu.forced, Image: image}
+		picture := Picture{Start: start, Forced: spu.forced, Image: prepared}
 		switch {
 		case spu.stops:
 			picture.End = unit.at + spu.stop
 		case unit.duration > 0:
 			picture.End = unit.at + unit.duration
 		default:
-			open = true
+			waiting, open = picture, true
+			continue
 		}
-		pictures = append(pictures, picture)
+		if err := emit(picture); err != nil {
+			return err
+		}
 	}
 	if open {
-		last := &pictures[len(pictures)-1]
-		last.End = last.Start + lastShown
+		waiting.End = waiting.Start + lastShown
+		return emit(waiting)
 	}
-	return pictures, nil
+	return nil
 }
 
 // subpictureAt reads the subpicture unit starting in the program stream
@@ -250,8 +281,9 @@ type subpicture struct {
 }
 
 // decodeSubpicture decodes a subpicture unit through the palette's
-// luminances.
-func decodeSubpicture(data []byte, palette *[16]uint8) (subpicture, error) {
+// luminances, on a screen of width by height: the part of its picture
+// past the screen is neither drawn nor allocated.
+func decodeSubpicture(data []byte, palette *[16]uint8, screenWidth, screenHeight int) (subpicture, error) {
 	if len(data) < 4 {
 		return subpicture{}, fmt.Errorf("%w: short subpicture", errInvalid)
 	}
@@ -308,8 +340,11 @@ func decodeSubpicture(data []byte, palette *[16]uint8) (subpicture, error) {
 		}
 		offset = next
 	}
-	width, height := x2-x1+1, y2-y1+1
-	if top < 0 || width <= 0 || height <= 0 {
+	// The lines are decoded at their width, the picture's; only the part
+	// on screen is drawn.
+	width := x2 - x1 + 1
+	shownWidth, shownHeight := min(x2+1, screenWidth)-x1, min(y2+1, screenHeight)-y1
+	if top < 0 || shownWidth <= 0 || shownHeight <= 0 {
 		return spu, nil
 	}
 	var values [4]pixel
@@ -319,12 +354,12 @@ func decodeSubpicture(data []byte, palette *[16]uint8) (subpicture, error) {
 			values[i].luma = palette[colors[i]]
 		}
 	}
-	spu.bitmap = newBitmap(width, height)
+	spu.bitmap = newBitmap(shownWidth, shownHeight)
 	fields := [2]int{top * 2, bottom * 2}
-	for y := range height {
+	for y := range shownHeight {
 		field := &fields[y%2]
 		*field = decodeSPULine(data, *field, width, func(x, n int, value uint8) {
-			for ; n > 0 && x < width; n-- {
+			for ; n > 0 && x < shownWidth; n-- {
 				spu.bitmap.set(x, y, values[value])
 				x++
 			}

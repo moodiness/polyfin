@@ -35,28 +35,6 @@ func (b bitmap) at(x, y int) pixel { return b.pixels[y*b.width+x] }
 
 func (b bitmap) set(x, y int, p pixel) { b.pixels[y*b.width+x] = p }
 
-// crop is the part of b at x, y of width w and height h, within b.
-func (b bitmap) crop(x, y, w, h int) bitmap {
-	x, y = min(max(x, 0), b.width), min(max(y, 0), b.height)
-	w, h = min(max(w, 0), b.width-x), min(max(h, 0), b.height-y)
-	c := newBitmap(w, h)
-	for row := range h {
-		copy(c.pixels[row*w:(row+1)*w], b.pixels[(y+row)*b.width+x:])
-	}
-	return c
-}
-
-// draw puts src's opaque pixels onto b at x, y.
-func (b bitmap) draw(src bitmap, x, y int) {
-	for row := range src.height {
-		for col := range src.width {
-			if p := src.at(col, row); p.alpha > 0 && x+col >= 0 && x+col < b.width && y+row >= 0 && y+row < b.height {
-				b.set(x+col, y+row, p)
-			}
-		}
-	}
-}
-
 const (
 	// visible is the opacity from which a pixel is part of the text.
 	visible = 64
@@ -69,6 +47,13 @@ const (
 	lineHeight = 40
 	// maxScale bounds the upscaling.
 	maxScale = 4
+	// maxWidth and maxHeight bound the screen a track draws on, whatever
+	// its headers declare, UHD video's: what lies past it is not drawn,
+	// so that a track allocates no more than that, whatever it declares.
+	maxWidth, maxHeight = 3840, 2160
+	// maxPrepared bounds the pixels of a picture prepared: upscaling
+	// stops short of it.
+	maxPrepared = maxWidth * maxHeight
 )
 
 // prepare turns a bitmap into what Tesseract reads best: cropped to its
@@ -132,6 +117,9 @@ func prepare(b bitmap) (*image.Gray, bool) {
 	scale := 1
 	if line := lineOf(b, left, top, right, bottom); line > 0 && line < lineHeight {
 		scale = min((lineHeight+line-1)/line, maxScale)
+	}
+	for scale > 1 && len(flat.Pix)*scale*scale > maxPrepared {
+		scale--
 	}
 	if scale == 1 {
 		return flat, true

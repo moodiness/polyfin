@@ -118,14 +118,14 @@ What is read:
 - PGS files (`.sup`) and VobSub pairs (`.idx` and `.sub`) beside local files. Of a `.idx` file listing several tracks, the first is read.
 - DVB subtitles are not read.
 
-Polyfin decodes the pictures itself. Each one is cropped to its text, made dark text on a white background, as Tesseract reads best, and enlarged when its lines are small, as those of DVDs are. The times of the lines are those of the pictures.
+Polyfin decodes the pictures itself. Each one is cropped to its text, made dark text on a white background, as Tesseract reads best, and enlarged when its lines are small, as those of DVDs are. The times of the lines are those of the pictures; for an MPEG-TS file, such as a Blu-ray's `.m2ts` file, and for a disc, they count from the start of the video, as their playbacks do. A picture is drawn only within the video the track names, a DVD's at least for VobSub, and at most 3840×2160: what a track places past it is left out. Tesseract reads a track's pictures by batches of at most 64 MB of pictures, so that a long track never holds all of them in memory at once.
 
 How apps see the copy:
 
 - It is one more subtitle track, listed after the version's tracks so that no track's index moves, with the original's language and its forced and hearing-impaired flags. Its title is the original's title or language followed by "(OCR)", such as `English (OCR) - SUBRIP - External`.
 - It reaches apps as other text subtitles do, in the format the app asks for (WebVTT, SubRip, ASS or JSON) or in the HLS playlist. It needs no video conversion, and plays with **Conversion (transcoding)** off and for users without **Can use conversion (transcoding)**.
-- The picture track stays: it is listed and served as before, and burned in when an app asks for it.
-- When the app asks for no track, the default choice treats the copy like its original, and picks the copy only for an app that would need the original burned in.
+- The picture track stays: it is listed and served as before, and burned in when an app names it, other than as the default track (see below).
+- When the app asks for no track, or names the default track it was given for the version, as jellyfin-web always does, the default choice treats the copy like its original, and picks the copy only for an app that would need the original burned in. A track the app names that is not the default stays as asked.
 
 When it runs:
 
