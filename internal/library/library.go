@@ -196,6 +196,11 @@ type Local interface {
 	// HeldVideos reports which of the home videos of the Stremio
 	// identifiers ids a file of a folder holds now.
 	HeldVideos(ctx context.Context, ids []string) (map[string]bool, error)
+	// Extras lists the extras of folders that belong to owner, and Extra
+	// describes one by its item, ErrNotFound when no folder holds it (see
+	// extras.go).
+	Extras(ctx context.Context, folders []accounts.ID, owner ExtraOwner) ([]Extra, error)
+	Extra(ctx context.Context, id accounts.ID) (Extra, error)
 }
 
 // UseLocal sets what answers for local folders; it is called before the
@@ -1869,6 +1874,9 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	}
 	r, err := s.load(ctx, id)
 	if errors.Is(err, ErrNotFound) {
+		if extra, err := s.extra(ctx, v, id); !errors.Is(err, ErrNotFound) {
+			return extra, err
+		}
 		return s.unsavedProgram(ctx, v, id)
 	}
 	if err != nil {

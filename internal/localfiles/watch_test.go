@@ -173,9 +173,28 @@ func TestWatchIgnoresOtherFiles(t *testing.T) {
 	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
 	wt.start()
 	write(t, filepath.Join(root, "notes.txt"), 10)
-	write(t, filepath.Join(root, "Extras", "Making of.mkv"), 10)
 	write(t, filepath.Join(root, ".hidden", "The General (1926).mkv"), 10)
-	write(t, filepath.Join(root, "Theme.flac"), 10)
+	write(t, filepath.Join(root, "Score.flac"), 10)
+	wt.still()
+}
+
+// The folders of extras are watched as the title's folder is: an extra
+// added in one, or a theme song beside a title, starts a scan.
+func TestWatchScansAfterExtrasChanges(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
+	write(t, filepath.Join(root, "Nosferatu (1922)", "Extras", "Restoration.mkv"), 10)
+	id := testID(1)
+	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt.start()
+	write(t, filepath.Join(root, "Nosferatu (1922)", "Extras", "Making of.mkv"), 10)
+	wt.scanned(id)
+	wt.still()
+	write(t, filepath.Join(root, "Nosferatu (1922)", "theme.mp3"), 10)
+	wt.scanned(id)
+	wt.still()
+	write(t, filepath.Join(root, "Nosferatu (1922)", "Trailers", "Teaser.mkv"), 10)
+	wt.scanned(id)
 	wt.still()
 }
 

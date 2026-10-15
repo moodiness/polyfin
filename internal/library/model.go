@@ -54,6 +54,11 @@ const (
 	// KindVideo is a home video: a title of a local home videos folder,
 	// which no metadata addon knows (see VideoType).
 	KindVideo Kind = "video"
+	// KindExtra is a video a local folder keeps beside a title, and
+	// KindThemeSong a theme song: never listed, but reached through the
+	// title (see extras.go).
+	KindExtra     Kind = "extra"
+	KindThemeSong Kind = "themesong"
 )
 
 // Home videos are the titles of local home videos folders, of their own
@@ -161,6 +166,8 @@ type Item struct {
 	// Container is a track's format, as its addon labels it, until its
 	// stream is known.
 	Container string
+	// ExtraType is an extra's, Jellyfin's (see extras.go).
+	ExtraType string
 }
 
 // Credit names an artist and the item that stands for them.

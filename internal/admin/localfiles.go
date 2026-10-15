@@ -49,6 +49,8 @@ type folderJSON struct {
 	Links       []linkJSON         `json:"links"`
 	Episodes    []givenEpisodeJSON `json:"episodes"`
 	UseArtwork  bool               `json:"useArtwork"`
+	ReadExtras  bool               `json:"readExtras"`
+	Extras      int                `json:"extras"`
 }
 
 // matchedByJSON counts the matched files by how they were matched: by an
@@ -100,7 +102,7 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Link: f.MatchedBy.Link},
 		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, Gained: f.Gained, Measured: f.Measured,
 		DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
-		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork}
+		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork, ReadExtras: f.ReadExtras, Extras: f.Extras}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -121,8 +123,9 @@ func (h *handler) folderScope(w http.ResponseWriter, r *http.Request) (addons.Sc
 // container or a share's address, what it holds, "movies", "shows",
 // "music" or "homevideos", left out on a change to keep it; a share's user
 // and password; whether its titles show the artwork beside their files,
-// yes when left out on adding. On a change, a password left out keeps the
-// one stored, and an empty one removes it.
+// and whether its scans read the extras beside them, yes when left out on
+// adding. On a change, a password left out keeps the one stored, and an
+// empty one removes it.
 type folderRequest struct {
 	Name       *string `json:"name"`
 	Path       *string `json:"path"`
@@ -130,6 +133,7 @@ type folderRequest struct {
 	User       *string `json:"user"`
 	Password   *string `json:"password"`
 	UseArtwork *bool   `json:"useArtwork"`
+	ReadExtras *bool   `json:"readExtras"`
 }
 
 // addFolder adds a local folder to the server's addons and scans it in
@@ -143,7 +147,7 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	folder := localfiles.NewFolder{Kind: body.Kind, UseArtwork: body.UseArtwork}
+	folder := localfiles.NewFolder{Kind: body.Kind, UseArtwork: body.UseArtwork, ReadExtras: body.ReadExtras}
 	for _, field := range []struct {
 		from *string
 		to   *string
@@ -162,8 +166,9 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 
 // updateFolder changes a local folder's name, path or address, a share's
 // user or password, whether its titles show the artwork beside their
-// files, or what it holds; a new path or address, a new user or password,
-// or what it holds, is scanned at once.
+// files, whether its scans read the extras beside them, or what it holds;
+// a new path or address, a new user or password, or what it holds, is
+// scanned at once.
 func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.folderScope(w, r)
 	if !ok {
@@ -177,11 +182,13 @@ func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil && body.UseArtwork == nil && body.Kind == "" {
+	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil && body.UseArtwork == nil && body.ReadExtras == nil &&
+		body.Kind == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	changes := localfiles.Changes{Name: body.Name, Path: body.Path, User: body.User, Password: body.Password, UseArtwork: body.UseArtwork}
+	changes := localfiles.Changes{Name: body.Name, Path: body.Path, User: body.User, Password: body.Password, UseArtwork: body.UseArtwork,
+		ReadExtras: body.ReadExtras}
 	if body.Kind != "" {
 		changes.Kind = &body.Kind
 	}

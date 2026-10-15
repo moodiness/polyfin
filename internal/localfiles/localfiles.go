@@ -258,8 +258,9 @@ func (s *Service) Close() {
 
 // NewFolder is a folder to add: its name, its path in the container or a
 // share's address, what it holds, KindMovies, KindShows, KindMusic or
-// KindHomeVideos, a share's user and password, and whether its titles
-// show the artwork beside their files (see Artwork), nil for yes.
+// KindHomeVideos, a share's user and password, whether its titles show
+// the artwork beside their files (see Artwork), and whether its scans read
+// the extras beside them (see extras.go), nil for yes.
 type NewFolder struct {
 	Name       string
 	Path       string
@@ -267,6 +268,7 @@ type NewFolder struct {
 	User       string
 	Password   string
 	UseArtwork *bool
+	ReadExtras *bool
 }
 
 // Folder describes a local folder: its addon, what it holds, the kind of
@@ -304,6 +306,11 @@ type Folder struct {
 	// UseArtwork tells whether the titles of a movies or shows folder
 	// show the artwork beside their files (see Artwork).
 	UseArtwork bool
+	// ReadExtras tells whether the scans of a movies or shows folder read
+	// the extras, local trailers and theme media beside its titles, and
+	// Extras counts those its last scan found (see extras.go).
+	ReadExtras bool
+	Extras     int
 	// ShareWatch tells how a share is watched: "notified" when its server
 	// tells of its changes, "polled" when its folders are listed again
 	// every few minutes; empty for a folder in the container, or a share
@@ -363,6 +370,7 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 	}
 	share := shareKind(location)
 	useArtwork := folder.UseArtwork == nil || *folder.UseArtwork
+	readExtras := folder.ReadExtras == nil || *folder.ReadExtras
 	user, password := "", ""
 	if share != "" {
 		if user, err = validCredentials(folder.User, folder.Password); err != nil {
@@ -380,8 +388,10 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 				at := s.now()
 				checked, failure = &at, readable(location)
 			}
-			_, err := tx.Exec(ctx, `INSERT INTO local_folders (addon_id, kind, checked_at, error, share_user, share_password, use_artwork)
-				VALUES ($1, $2, $3, $4, $5, $6, $7)`, addon.ID, folder.Kind, checked, failure, user, s.box.Seal(password), useArtwork)
+			_, err := tx.Exec(ctx, `INSERT INTO local_folders (addon_id, kind, checked_at, error, share_user, share_password, use_artwork,
+					read_extras)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, addon.ID, folder.Kind, checked, failure, user, s.box.Seal(password), useArtwork,
+				readExtras)
 			return err
 		})
 	if err != nil {
@@ -394,19 +404,22 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 
 // Changes are what Update changes of a folder: its name, its path or
 // address, a share's user, its password, removed when empty, whether its
-// titles show the artwork beside their files, and what it holds.
+// titles show the artwork beside their files, whether its scans read the
+// extras beside them, and what it holds.
 type Changes struct {
 	Name       *string
 	Path       *string
 	User       *string
 	Password   *string
 	UseArtwork *bool
+	ReadExtras *bool
 	Kind       *string
 }
 
 // Update changes a folder's name, path or address, a share's user or
 // password, whether its titles show the artwork beside their files, which
-// applies at once, or what it holds. A new path or address forgets the
+// applies at once, whether its scans read the extras beside them, which
+// applies at the next scan, or what it holds. A new path or address forgets the
 // files found in the former one, their links included, and is scanned at
 // once, as a share whose user or password changed is. A path in the
 // container keeps no user nor password.
@@ -467,6 +480,11 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 				return err
 			}
 		}
+		if changes.ReadExtras != nil {
+			if _, err := tx.Exec(ctx, "UPDATE local_folders SET read_extras = $2 WHERE addon_id = $1", id, *changes.ReadExtras); err != nil {
+				return err
+			}
+		}
 		if credentials {
 			if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_user = $2 WHERE addon_id = $1", id, user); err != nil {
 				return err
@@ -497,7 +515,8 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		if _, err := tx.Exec(ctx, "DELETE FROM local_side_files WHERE addon_id = $1", id); err != nil {
 			return err
 		}
-		for _, table := range []string{"local_tracks", "local_covers", "local_lyrics", "local_playlists", "local_artwork", "local_disc_episodes"} {
+		for _, table := range []string{"local_tracks", "local_covers", "local_lyrics", "local_playlists", "local_artwork", "local_disc_episodes",
+			"local_extras"} {
 			if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE addon_id = $1", id); err != nil {
 				return err
 			}
@@ -541,7 +560,8 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	}
 	f := Folder{Addon: addon, Share: shareKind(addon.ManifestURL)}
 	var password string
-	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error, share_user, share_password, use_artwork,
+	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error, share_user, share_password, use_artwork, read_extras,
+			(SELECT count(*) FROM local_extras WHERE addon_id = $1),
 			(SELECT count(*) FROM local_files WHERE addon_id = $1) + (SELECT count(*) FROM local_tracks WHERE addon_id = $1),
 			(SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL) +
 				(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = ''),
@@ -550,7 +570,7 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND (track_gain IS NOT NULL OR loudness > $2)),
 			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND loudness IS NOT NULL)
 		FROM local_folders WHERE addon_id = $1`, id, loudness.Silence).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password,
-		&f.UseArtwork, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured)
+		&f.UseArtwork, &f.ReadExtras, &f.Extras, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured)
 	f.PasswordSet = password != ""
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Folder{}, addons.ErrNotFound

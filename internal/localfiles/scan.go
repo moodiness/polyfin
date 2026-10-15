@@ -172,7 +172,8 @@ func walk(ctx context.Context, root, kind string) (listing, error) {
 func walked(kind, rel string) (file, side bool) {
 	name := path.Base(rel)
 	file, side = listed(kind, name)
-	file = file || kind != KindMusic && (imageFile(name) || dvdFile(path.Base(path.Dir(rel)), name) || playlistFile(rel))
+	file = file || kind != KindMusic && (imageFile(name) || dvdFile(path.Base(path.Dir(rel)), name) || playlistFile(rel) ||
+		kind != KindHomeVideos && themeAudio(rel))
 	return file, side
 }
 
@@ -383,6 +384,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		_, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, at, failure)
 		return err
 	}
+	extras := splitExtras(folder.Kind, folder.ReadExtras, &list)
 	if folder.Kind == KindMusic {
 		local := root
 		if folder.Share != "" {
@@ -446,6 +448,11 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		numberDiscs(entries, given)
 	}
 	places := unitNFOs(folder.Kind, entries, list.sides)
+	for rel, e := range extras {
+		if nfo := extraNFO(rel, e, list.sides); nfo != "" {
+			places[extraPlace(rel)] = nfo
+		}
+	}
 	infos, err := s.readNFOs(ctx, id, list, places)
 	if err != nil {
 		return err
@@ -504,7 +511,20 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	if err := group.Wait(); err != nil {
 		return err
 	}
-	if err := s.storeSubtitles(ctx, id, list, sidecars(folder.Kind, rootName, entries, list.sides)); err != nil {
+	owned := extraOwners(folder.Kind, extras, entries)
+	videos := entries
+	if len(owned) > 0 {
+		videos = maps.Clone(entries)
+	}
+	for rel, row := range owned {
+		row.name = extraName(rel, extras[rel], infos[places[extraPlace(rel)]])
+		owned[rel] = row
+		videos[rel] = entry{path: rel, file: row.file, unit: rel}
+	}
+	if err := s.storeExtras(ctx, id, owned, list.skipped); err != nil {
+		return err
+	}
+	if err := s.storeSubtitles(ctx, id, list, sidecars(folder.Kind, rootName, videos, list.sides)); err != nil {
 		return err
 	}
 	if err := s.storeArtwork(ctx, id, folder.Kind, root, list); err != nil {

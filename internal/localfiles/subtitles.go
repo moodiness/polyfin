@@ -166,20 +166,25 @@ func (s storedSubtitle) same(video accounts.ID, found sidecar) bool {
 // A VobSub pair whose name tells no language has its .idx file's, read
 // when the pair is new or changed (see idxLanguage).
 func (s *Service) storeSubtitles(ctx context.Context, id accounts.ID, list listing, found map[string]sidecar) error {
-	rows, err := s.db.Query(ctx, "SELECT path, id FROM local_files WHERE addon_id = $1", id)
+	// The videos are the folder's files and its extras (see extras.go).
+	rows, err := s.db.Query(ctx, `SELECT path, id, false FROM local_files WHERE addon_id = $1
+		UNION ALL SELECT path, id, true FROM local_extras WHERE addon_id = $1`, id)
 	if err != nil {
 		return err
 	}
 	videos := map[string]accounts.ID{}
+	extras := map[accounts.ID]bool{}
 	var rel string
 	var video accounts.ID
-	if _, err := pgx.ForEachRow(rows, []any{&rel, &video}, func() error {
-		videos[rel] = video
+	var extra bool
+	if _, err := pgx.ForEachRow(rows, []any{&rel, &video, &extra}, func() error {
+		videos[rel], extras[video] = video, extra
 		return nil
 	}); err != nil {
 		return err
 	}
-	rows, err = s.db.Query(ctx, `SELECT path, file_id, size, modified, format, pair, language, title, forced, hearing_impaired, is_default
+	rows, err = s.db.Query(ctx, `SELECT path, COALESCE(file_id, extra_id), size, modified, format, pair, language, title, forced,
+			hearing_impaired, is_default
 		FROM local_subtitles WHERE addon_id = $1`, id)
 	if err != nil {
 		return err
@@ -211,11 +216,17 @@ func (s *Service) storeSubtitles(ctx context.Context, id accounts.ID, list listi
 		if old, ok := stored[rel]; ok && old.same(video, f) {
 			continue
 		}
-		batch.Queue(`INSERT INTO local_subtitles (addon_id, file_id, path, size, modified, format, pair, language, title, forced,
-				hearing_impaired, is_default) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-			ON CONFLICT (addon_id, path) DO UPDATE SET file_id = $2, size = $4, modified = $5, format = $6, pair = $7, language = $8,
-				title = $9, forced = $10, hearing_impaired = $11, is_default = $12`,
-			id, video, rel, f.file.size, f.file.modified, f.format, f.pair, f.language, f.title, f.forced, f.hearingImpaired, f.isDefault)
+		var file, extra *accounts.ID
+		if extras[video] {
+			extra = &video
+		} else {
+			file = &video
+		}
+		batch.Queue(`INSERT INTO local_subtitles (addon_id, file_id, extra_id, path, size, modified, format, pair, language, title, forced,
+				hearing_impaired, is_default) VALUES ($1, $2, $13, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			ON CONFLICT (addon_id, path) DO UPDATE SET file_id = $2, extra_id = $13, size = $4, modified = $5, format = $6, pair = $7,
+				language = $8, title = $9, forced = $10, hearing_impaired = $11, is_default = $12`,
+			id, file, rel, f.file.size, f.file.modified, f.format, f.pair, f.language, f.title, f.forced, f.hearingImpaired, f.isDefault, extra)
 	}
 	var gone []string
 	for rel := range stored {
@@ -259,8 +270,9 @@ func idxLanguage(ctx context.Context, list listing, rel string) string {
 // videos are (see UseFiles). A file's identifier changes with it, so that
 // the text kept of it is read again.
 func (s *Service) fileSubtitles(ctx context.Context, videos []accounts.ID) (map[accounts.ID][]stremio.Subtitle, error) {
-	rows, err := s.db.Query(ctx, `SELECT file_id, id, size, modified, format, language, title, forced, hearing_impaired, is_default
-		FROM local_subtitles WHERE file_id = ANY($1) ORDER BY path`, videos)
+	rows, err := s.db.Query(ctx, `SELECT COALESCE(file_id, extra_id), id, size, modified, format, language, title, forced, hearing_impaired,
+			is_default
+		FROM local_subtitles WHERE file_id = ANY($1) OR extra_id = ANY($1) ORDER BY path`, videos)
 	if err != nil {
 		return nil, err
 	}

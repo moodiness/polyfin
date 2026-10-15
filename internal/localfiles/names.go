@@ -16,14 +16,10 @@ var videoExtensions = map[string]bool{
 	".webm": true, ".wmv": true, ".mpg": true, ".mpeg": true, ".flv": true, ".ogv": true,
 }
 
-// videoFile reports whether name is a video a scan lists: not a sample.
+// videoFile reports whether name is a video a scan lists, a sample's
+// included: a scan reading extras reads it as one (see splitExtras).
 func videoFile(name string) bool {
-	extension := strings.ToLower(path.Ext(name))
-	if !videoExtensions[extension] {
-		return false
-	}
-	stem := strings.ToLower(strings.TrimSuffix(name, path.Ext(name)))
-	return stem != "sample" && !strings.HasSuffix(stem, "-sample") && !strings.HasSuffix(stem, ".sample")
+	return videoExtensions[strings.ToLower(path.Ext(name))]
 }
 
 // sideExtensions are the files a scan lists beside the videos, by their
@@ -103,26 +99,24 @@ func listed(kind, name string) (file, side bool) {
 }
 
 // skippedFolder reports whether a scan leaves a folder out: hidden ones,
-// those of system files, and the extras of a title, which are not one of
-// its versions.
+// those of system files, and a "sample" folder. The folders of extras
+// are walked and watched, the scan taking their files apart (see
+// splitExtras).
 func skippedFolder(name string) bool {
-	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "@") || strings.HasPrefix(name, "#") {
-		return true
-	}
-	switch strings.ToLower(name) {
-	case "extras", "featurettes", "behind the scenes", "deleted scenes", "interviews", "scenes", "shorts", "trailers", "samples",
-		"sample", "other", "lost+found":
-		return true
-	}
-	return false
+	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "@") || strings.HasPrefix(name, "#") ||
+		strings.EqualFold(name, "lost+found") || strings.EqualFold(name, "sample")
 }
 
 // skippedIn reports whether a scan of a folder of kind leaves a folder
 // out: in a music folder, hidden folders and those of system files only,
-// as an album may be named "Other" or "Interviews".
+// as an album may be named "Other" or "Interviews"; in a home videos
+// folder, the folders of extras too, which it does not read.
 func skippedIn(kind, name string) bool {
-	if kind == KindMusic {
+	switch kind {
+	case KindMusic:
 		return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "@") || strings.HasPrefix(name, "#") || strings.EqualFold(name, "lost+found")
+	case KindHomeVideos:
+		return skippedFolder(name) || formerlySkipped[strings.ToLower(name)]
 	}
 	return skippedFolder(name)
 }

@@ -120,6 +120,14 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		return target{}, view{}, err
 	}
 	r, err := s.load(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		// An extra plays its file, as its folder streams it.
+		extra, err := s.extra(ctx, v, id)
+		if err != nil {
+			return target{}, view{}, err
+		}
+		return target{item: id, kind: extra.Kind, metaType: ExtraType, id: extra.StremioID, name: extra.Name}, v, nil
+	}
 	if err != nil {
 		return target{}, view{}, err
 	}
@@ -546,8 +554,12 @@ func streamServing(v view, t target) []installed {
 
 // serves reports whether an addon serves a resource for a title: a home
 // video's are its folder's alone, whatever other addons declare, so that
-// none of them ever hears of it.
+// none of them ever hears of it; an extra's stream is its local folder's,
+// which answers for its own extras only.
 func serves(entry installed, resource, metaType, id string) bool {
+	if metaType == ExtraType || strings.HasPrefix(id, ExtraIDPrefix) {
+		return entry.addon.Local() && resource == "stream"
+	}
 	if (metaType == VideoType || strings.HasPrefix(id, VideoIDPrefix)) && !entry.addon.Local() {
 		return false
 	}
