@@ -16,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/discovery"
+	"github.com/moodiness/polyfin/internal/dlna"
 	"github.com/moodiness/polyfin/internal/https"
 	"github.com/moodiness/polyfin/internal/secrets"
 )
@@ -33,6 +34,9 @@ type Config struct {
 	// DiscoveryPort is the UDP port local network discovery listens on,
 	// 7359, the one Jellyfin apps send to, unless tests choose another.
 	DiscoveryPort int
+	// DLNAPort is the UDP port of SSDP, which DLNA devices search for
+	// servers on, 1900, unless tests choose another.
+	DLNAPort int
 	// FFprobe and FFmpeg are the executables, paths or names looked up in
 	// PATH.
 	FFprobe string
@@ -145,6 +149,14 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("POLYFIN_DISCOVERY_PORT: %q is not a port (1-65535)", raw))
 		}
 		cfg.DiscoveryPort = int(port)
+	}
+	cfg.DLNAPort = dlna.Port
+	if raw := strings.TrimSpace(getenv("POLYFIN_DLNA_PORT")); raw != "" {
+		port, err := strconv.ParseUint(raw, 10, 16)
+		if err != nil || port == 0 {
+			errs = append(errs, fmt.Errorf("POLYFIN_DLNA_PORT: %q is not a port (1-65535)", raw))
+		}
+		cfg.DLNAPort = int(port)
 	}
 	if cfg.ACMEDirectory == "" {
 		cfg.ACMEDirectory = https.LetsEncrypt

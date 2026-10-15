@@ -50,6 +50,10 @@ func DefaultSettings() Settings {
 		UpdateCheck:         true,
 		LocalDiscovery:      true,
 		LocalAddress:        "",
+		DLNA:                false,
+		DLNAName:            "",
+		DLNANewDevicesUser:  nil,
+		DLNAMarkPlayed:      false,
 
 		SkipButtons:           true,
 		SegmentOrder:          slices.Clone(SegmentSources),
@@ -222,6 +226,10 @@ func SettingsBounds() map[string]SettingBounds {
 		"updateCheck":         is(d.UpdateCheck),
 		"localDiscovery":      is(d.LocalDiscovery),
 		"localAddress":        text(MaxLocalAddressBytes, d.LocalAddress),
+		"dlna":                is(d.DLNA),
+		"dlnaName":            text(MaxDLNANameBytes, d.DLNAName),
+		"dlnaNewDevicesUser":  is(d.DLNANewDevicesUser),
+		"dlnaMarkPlayed":      is(d.DLNAMarkPlayed),
 
 		"skipButtons":           is(d.SkipButtons),
 		"publicMetaDbKey":       text(MaxSegmentKeyBytes, d.PublicMetaDBKey),

@@ -46,6 +46,7 @@ func Variables(environ []string, cfg Config) []Variable {
 		"POLYFIN_DATABASE_URL":   databaseLocation(cfg.DatabaseURL),
 		"POLYFIN_LISTEN":         cfg.Listen,
 		"POLYFIN_DISCOVERY_PORT": strconv.Itoa(cfg.DiscoveryPort),
+		"POLYFIN_DLNA_PORT":      strconv.Itoa(cfg.DLNAPort),
 		"POLYFIN_FFPROBE":        cfg.FFprobe,
 		"POLYFIN_FFMPEG":         cfg.FFmpeg,
 		"POLYFIN_DATA_DIR":       cfg.DataDir,

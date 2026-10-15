@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A built-in profile of Polyfin, in the format of Jellyfin's DLNA plugin. -->
+<Profile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Name>Panasonic Viera</Name>
+  <Identification>
+    <Manufacturer>Panasonic</Manufacturer>
+    <Headers>
+      <HttpHeaderInfo name="User-Agent" value="Panasonic MIL DLNA" match="Substring" />
+      <HttpHeaderInfo name="X-Panasonic-DMP-Profile" value="" match="Regex" />
+    </Headers>
+  </Identification>
+  <MaxStreamingBitrate>40000000</MaxStreamingBitrate>
+  <MaxStaticBitrate>40000000</MaxStaticBitrate>
+  <MusicStreamingTranscodingBitrate>192000</MusicStreamingTranscodingBitrate>
+  <DirectPlayProfiles>
+    <DirectPlayProfile container="ts,mpegts,m2ts" audioCodec="aac,ac3,mp3,mp2" videoCodec="h264,mpeg2video" type="Video" />
+    <DirectPlayProfile container="mp4,m4v,mkv" audioCodec="aac,ac3,mp3" videoCodec="h264,mpeg4" type="Video" />
+    <DirectPlayProfile container="mp3" audioCodec="mp3" type="Audio" />
+  </DirectPlayProfiles>
+  <TranscodingProfiles>
+    <TranscodingProfile container="ts" type="Video" videoCodec="h264" audioCodec="ac3,aac" maxAudioChannels="6" context="Streaming" />
+    <TranscodingProfile container="mp3" type="Audio" audioCodec="mp3" context="Streaming" />
+  </TranscodingProfiles>
+  <CodecProfiles>
+    <CodecProfile type="Video" codec="h264">
+      <Conditions>
+        <ProfileCondition condition="LessThanEqual" property="Width" value="1920" isRequired="true" />
+        <ProfileCondition condition="LessThanEqual" property="Height" value="1080" isRequired="true" />
+        <ProfileCondition condition="LessThanEqual" property="VideoLevel" value="41" isRequired="true" />
+      </Conditions>
+      <ApplyConditions />
+    </CodecProfile>
+  </CodecProfiles>
+  <ResponseProfiles>
+    <ResponseProfile container="ts,mpegts" type="Video" mimeType="video/mpeg" />
+    <ResponseProfile container="mkv" type="Video" mimeType="video/x-matroska" />
+  </ResponseProfiles>
+  <SubtitleProfiles>
+    <SubtitleProfile format="pgssub" method="Encode" />
+    <SubtitleProfile format="dvdsub" method="Encode" />
+  </SubtitleProfiles>
+</Profile>

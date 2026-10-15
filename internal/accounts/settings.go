@@ -845,6 +845,12 @@ func ValidLocalAddress(address string) bool {
 	return address == "" || len(address) <= MaxLocalAddressBytes && ValidRemuxDBURL(address)
 }
 
+// MaxDLNANameBytes bounds Settings.DLNAName; ErrInvalidDLNAName reports
+// one longer, or holding NUL.
+const MaxDLNANameBytes = 256
+
+var ErrInvalidDLNAName = errors.New("invalid DLNA name")
+
 // The SMTP server email notifications go through: Settings.SMTPSecurity is
 // one of SMTPSecurities, the first by default, which upgrades a plain
 // connection with STARTTLS; "tls" is TLS from the start, "none" neither.
@@ -1014,6 +1020,20 @@ type Settings struct {
 	// /System/Info/Public gives it as LocalAddress. Empty, discovery
 	// announces the address of the interface that reaches the app.
 	LocalAddress string
+	// DLNA shares the libraries over DLNA with the devices of the local
+	// network (see package dlna).
+	DLNA bool
+	// DLNAName is the name DLNA devices show for the server, at most
+	// MaxDLNANameBytes; empty, they show ServerName.
+	DLNAName string
+	// DLNANewDevicesUser is the user whose libraries a DLNA device seen for
+	// the first time shows; nil, no one's, which gives it an empty server
+	// until an administrator chooses a user for it.
+	DLNANewDevicesUser *ID
+	// DLNAMarkPlayed marks played a title a DLNA device reads past
+	// PlayedPercent of: devices report no position, so the bytes or the
+	// time they ask for stand for it.
+	DLNAMarkPlayed bool
 	// Language is the language of the names Polyfin generates for Jellyfin
 	// apps, one of Languages.
 	Language string
@@ -1473,6 +1493,7 @@ func validWebText(text string, max int) bool {
 // Settings.fields.
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
 	"update_check, local_discovery, local_address, " +
+	"dlna, dlna_name, dlna_new_devices_user, dlna_mark_played, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, even_volume, measure_loudness, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"mdblist_ratings_key, critic_rating_shows, tmdb_key, " +
 	"personal_addons, server_imports, share_links, login_attempts, inactive_device_days, known_proxies, known_proxy_names, " +
@@ -1509,6 +1530,7 @@ func (settings *Settings) fields() []any {
 	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 		&settings.PrepareAhead, &settings.Transcoding, &settings.CatalogLimit, &settings.ChannelLimit,
 		&settings.UpdateCheck, &settings.LocalDiscovery, &settings.LocalAddress,
+		&settings.DLNA, &settings.DLNAName, &settings.DLNANewDevicesUser, &settings.DLNAMarkPlayed,
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff, &settings.AudioIntros,
 		&settings.SimilarTitles, &settings.GenerateImages, &settings.Lyrics, &settings.EvenVolume, &settings.MeasureLoudness, &settings.PlayedPercent, &settings.ResumePercent,
 		&settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
@@ -1935,6 +1957,10 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	settings.LocalAddress = strings.TrimRight(strings.TrimSpace(settings.LocalAddress), "/")
 	if !ValidLocalAddress(settings.LocalAddress) {
 		return Settings{}, ErrInvalidLocalAddress
+	}
+	settings.DLNAName = strings.TrimSpace(settings.DLNAName)
+	if !validWebText(settings.DLNAName, MaxDLNANameBytes) {
+		return Settings{}, ErrInvalidDLNAName
 	}
 	settings.SMTPHost, settings.SMTPFrom = strings.TrimSpace(settings.SMTPHost), strings.TrimSpace(settings.SMTPFrom)
 	settings.SMTPFromName = strings.TrimSpace(settings.SMTPFromName)

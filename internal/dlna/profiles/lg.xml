@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A built-in profile of Polyfin, in the format of Jellyfin's DLNA plugin. -->
+<Profile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Name>LG Smart TV</Name>
+  <Identification>
+    <Manufacturer>LG Electronics</Manufacturer>
+    <Headers>
+      <HttpHeaderInfo name="User-Agent" value="(LGE|webOS|NetCast)" match="Regex" />
+    </Headers>
+  </Identification>
+  <MaxStreamingBitrate>100000000</MaxStreamingBitrate>
+  <MaxStaticBitrate>100000000</MaxStaticBitrate>
+  <MusicStreamingTranscodingBitrate>192000</MusicStreamingTranscodingBitrate>
+  <DirectPlayProfiles>
+    <DirectPlayProfile container="mkv,mp4,m4v" audioCodec="aac,ac3,eac3,mp3,dts" videoCodec="h264,hevc,mpeg4" type="Video" />
+    <DirectPlayProfile container="ts,mpegts,m2ts" audioCodec="aac,ac3,eac3,mp3,mp2" videoCodec="h264,hevc,mpeg2video" type="Video" />
+    <DirectPlayProfile container="mp3" audioCodec="mp3" type="Audio" />
+    <DirectPlayProfile container="flac" audioCodec="flac" type="Audio" />
+  </DirectPlayProfiles>
+  <TranscodingProfiles>
+    <TranscodingProfile container="ts" type="Video" videoCodec="h264" audioCodec="ac3,aac" maxAudioChannels="6" context="Streaming" />
+    <TranscodingProfile container="mp3" type="Audio" audioCodec="mp3" context="Streaming" />
+  </TranscodingProfiles>
+  <CodecProfiles>
+    <CodecProfile type="Video" codec="h264">
+      <Conditions>
+        <ProfileCondition condition="LessThanEqual" property="Width" value="3840" isRequired="true" />
+        <ProfileCondition condition="LessThanEqual" property="VideoLevel" value="51" isRequired="true" />
+      </Conditions>
+      <ApplyConditions />
+    </CodecProfile>
+  </CodecProfiles>
+  <ResponseProfiles>
+    <ResponseProfile container="ts,mpegts" type="Video" mimeType="video/mpeg" />
+    <ResponseProfile container="mkv" type="Video" mimeType="video/x-matroska" />
+  </ResponseProfiles>
+  <SubtitleProfiles>
+    <SubtitleProfile format="srt" method="External" didlMode="CaptionInfoEx" />
+    <SubtitleProfile format="pgssub" method="Encode" />
+    <SubtitleProfile format="dvdsub" method="Encode" />
+  </SubtitleProfiles>
+</Profile>
