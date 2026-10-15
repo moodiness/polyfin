@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/diskspace"
+	"github.com/moodiness/polyfin/internal/https"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/tasks"
 )
@@ -54,6 +55,14 @@ const (
 	problemDiscoveryAddress  = "discovery_address"
 	problemProxyName         = "proxy_name_unresolved"
 	problemConnectionStopped = "connection_stopped"
+	// HTTPS cannot listen on its port; its certificate files are missing,
+	// unreadable or mismatched; the last attempt to obtain or renew the
+	// certificate of Let's Encrypt failed; the certificate served ends
+	// within https.ExpiresSoon.
+	problemHTTPSPort    = "https_port"
+	problemHTTPSFiles   = "https_files"
+	problemHTTPSRenewal = "https_renewal"
+	problemHTTPSExpiry  = "https_expiry"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -66,13 +75,16 @@ const (
 // share a folder is ("smb", "webdav"); Host for paused thumbnails; Address
 // for an address that sends forwarded headers without being a known
 // proxy, or for a container's address discovery announces; Port for the
-// UDP port discovery cannot listen on; Task, in the language asked, for a
-// task; Secrets for those the key cannot decrypt; Kind ("app" or
-// "tracking"), Name, the app or service as the API names it, and Owner,
-// its user, for a stopped connection. To is the admin app's page that
-// describes it, with its anchor. Transient ones are not told as health
-// problems: they come and go with the load, or, for stopped connections,
-// the connection_stopped event told them already.
+// UDP port discovery cannot listen on, or the TCP port HTTPS cannot; Task,
+// in the language asked, for a task; Secrets for those the key cannot
+// decrypt; Kind ("app" or "tracking"), Name, the app or service as the API
+// names it, and Owner, its user, for a stopped connection; Failure
+// ("missing", "unreadable", "mismatch") and File for certificate files;
+// Error, Let's Encrypt's, for a renewal that failed; Expires for a
+// certificate close to its end, an error once it ended. To is the
+// admin app's page that describes it, with its anchor. Transient ones are
+// not told as health problems: they come and go with the load, or, for
+// stopped connections, the connection_stopped event told them already.
 type healthProblemJSON struct {
 	Key       string           `json:"key"`
 	Code      string           `json:"code"`
@@ -91,6 +103,9 @@ type healthProblemJSON struct {
 	Task      string           `json:"task,omitempty"`
 	Secrets   []unreadableJSON `json:"secrets,omitempty"`
 	Kind      string           `json:"kind,omitempty"`
+	File      string           `json:"file,omitempty"`
+	Error     string           `json:"error,omitempty"`
+	Expires   *time.Time       `json:"expires,omitempty"`
 }
 
 // healthProblemsRoute answers the problems System › Health shows, errors
@@ -253,6 +268,9 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			add(healthProblemJSON{Key: "discovery:address", Code: problemDiscoveryAddress, Tone: notifications.SeverityWarning,
 				To: "/settings/general#local-address", Address: status.ContainerAddress})
 		}
+	}
+	if h.Health.HTTPS != nil {
+		problems = append(problems, httpsProblems(h.Health.HTTPS(), h.now())...)
 	}
 
 	if h.Health.Secrets != nil {
@@ -532,6 +550,31 @@ func (p healthProblemJSON) text(language string) string {
 			"Set Address on the local network under Settings › General.",
 			"Les applications Jellyfin qui cherchent des serveurs sur le réseau local reçoivent %s, une adresse du conteneur de Polyfin qu’elles ne peuvent pas joindre. "+
 				"Renseignez Adresse sur le réseau local dans Paramètres › Général.", p.Address)
+	case problemHTTPSPort:
+		return say("Polyfin cannot listen on TCP port %d, so HTTPS is not served. HTTP keeps working. "+
+			"Another program probably uses it, or it is below 1024. Choose another HTTPS port under Settings › Security.",
+			"Polyfin ne peut pas écouter sur le port TCP %d : HTTPS n’est donc pas servi. HTTP fonctionne toujours. "+
+				"Un autre programme l’utilise sans doute, ou il est inférieur à 1024. Choisissez un autre port HTTPS dans Paramètres › Sécurité.", p.Port)
+	case problemHTTPSFiles:
+		switch p.Failure {
+		case https.FilesMissing:
+			return say("The HTTPS certificate file %s does not exist. The certificate last read stays in use.",
+				"Le fichier de certificat HTTPS %s n’existe pas. Le dernier certificat lu reste utilisé.", p.File)
+		case https.FilesMismatch:
+			return say("The HTTPS private key does not belong to the certificate. The certificate last read stays in use.",
+				"La clé privée HTTPS ne correspond pas au certificat. Le dernier certificat lu reste utilisé.")
+		}
+		return say("Polyfin cannot read the HTTPS certificate file %s, or it holds no PEM certificate or key it reads. "+
+			"The certificate last read stays in use.",
+			"Polyfin ne peut pas lire le fichier de certificat HTTPS %s, ou il ne contient aucun certificat ou clé PEM qu’il sait lire. "+
+				"Le dernier certificat lu reste utilisé.", p.File)
+	case problemHTTPSRenewal:
+		return say("Let’s Encrypt did not give the HTTPS certificate: %s", "Let’s Encrypt n’a pas délivré le certificat HTTPS : %s", p.Error)
+	case problemHTTPSExpiry:
+		if p.Tone == notifications.SeverityError {
+			return say("The HTTPS certificate expired on %s.", "Le certificat HTTPS a expiré le %s.", p.Expires.Format(time.DateOnly))
+		}
+		return say("The HTTPS certificate expires on %s.", "Le certificat HTTPS expire le %s.", p.Expires.Format(time.DateOnly))
 	}
 	return ""
 }

@@ -58,6 +58,10 @@ type Options struct {
 	// a known proxy (see forwarded.Client); nil reads the connection's
 	// address alone.
 	Proxies *forwarded.Proxies
+	// HTTPS wraps every route, seeing the client Proxies resolves: it
+	// answers the ACME server's checks over HTTP, and sends HTTP to HTTPS
+	// (see https.Service.Handler); nil wraps nothing.
+	HTTPS func(http.Handler) http.Handler
 	// Metrics serves /metrics (see metrics.Handler); nil leaves it to the
 	// Jellyfin API, which answers 404.
 	Metrics http.Handler
@@ -120,6 +124,9 @@ func New(options Options) http.Handler {
 	mux.Handle("/", options.Jellyfin)
 
 	handler := countRequests(securityHeaders(compress(mux)))
+	if options.HTTPS != nil {
+		handler = options.HTTPS(handler)
+	}
 	if options.Proxies != nil {
 		handler = options.Proxies.Handler(handler)
 	}

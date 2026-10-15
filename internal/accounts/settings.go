@@ -1106,6 +1106,26 @@ type Settings struct {
 	// case, trusted at the addresses they resolve to (see
 	// forwarded.Proxies.Lookup). Empty by default.
 	KnownProxyNames []string
+	// HTTPSMode is how Polyfin serves HTTPS, one of HTTPSModes: off by
+	// default, with the certificate and private key files HTTPSCertificate
+	// and HTTPSPrivateKey name, or with a certificate it obtains from
+	// Let's Encrypt for ACMEHosts. HTTPSPort is the TCP port it listens on,
+	// HTTP keeping POLYFIN_LISTEN; HTTPSRedirect sends the requests of
+	// clients on the internet that come over HTTP to HTTPS.
+	HTTPSMode        string
+	HTTPSPort        int
+	HTTPSRedirect    bool
+	HTTPSCertificate string
+	HTTPSPrivateKey  string
+	// ACMEHosts are the public host names, in lower case, the certificate
+	// of Let's Encrypt is for; ACMEEmail the account's contact, empty for
+	// none; ACMETerms whether the administrator agreed to Let's Encrypt's
+	// terms; ACMEChallenge how Let's Encrypt checks the names, one of
+	// ACMEChallenges.
+	ACMEHosts     []string
+	ACMEEmail     string
+	ACMETerms     bool
+	ACMEChallenge string
 	// DetailedLog logs at the debug level rather than at the info level
 	// (see FollowLogLevel).
 	DetailedLog bool
@@ -1406,7 +1426,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"update_check, local_discovery, local_address, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, even_volume, measure_loudness, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"mdblist_ratings_key, critic_rating_shows, tmdb_key, " +
-	"personal_addons, server_imports, share_links, login_attempts, inactive_device_days, known_proxies, known_proxy_names, detailed_log, " +
+	"personal_addons, server_imports, share_links, login_attempts, inactive_device_days, known_proxies, known_proxy_names, " +
+	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
 	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, " +
@@ -1442,7 +1463,9 @@ func (settings *Settings) fields() []any {
 		&settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.MDBListRatingsKey, &settings.CriticRatingShows, &settings.TMDBKey,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.ShareLinks, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
-		&settings.KnownProxyNames, &settings.DetailedLog,
+		&settings.KnownProxyNames,
+		&settings.HTTPSMode, &settings.HTTPSPort, &settings.HTTPSRedirect, &settings.HTTPSCertificate, &settings.HTTPSPrivateKey,
+		&settings.ACMEHosts, &settings.ACMEEmail, &settings.ACMETerms, &settings.ACMEChallenge, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs, &settings.HiddenVersionWords,
 		&settings.NameHowVersionsPlay,
@@ -1723,6 +1746,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		return Settings{}, ErrInvalidKnownProxies
 	}
 	settings.KnownProxyNames = names
+	if err := validHTTPS(&settings); err != nil {
+		return Settings{}, err
+	}
 	if settings.AnalysisTimeout < MinAnalysisTimeout || settings.AnalysisTimeout > MaxAnalysisTimeout {
 		return Settings{}, ErrInvalidAnalysisTimeout
 	}

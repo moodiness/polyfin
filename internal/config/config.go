@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/discovery"
+	"github.com/moodiness/polyfin/internal/https"
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
@@ -48,6 +50,13 @@ type Config struct {
 	// WebDir is the folder of jellyfin-web, the web client served at
 	// /web/. A folder without its index.html leaves the web client off.
 	WebDir string
+	// ACMEDirectory is the directory of the ACME server certificates are
+	// obtained from when the settings choose Let's Encrypt: Let's
+	// Encrypt's own unless tests or a private ACME server choose another.
+	// ACMECAFile is a PEM file of the certificate authorities trusted for
+	// that server's HTTPS, besides the system's; empty for none.
+	ACMEDirectory string
+	ACMECAFile    string
 	// SecretKey is the key the keys, secrets and tokens stored in the
 	// database are sealed with, nil for none. It is a secret: never log it.
 	SecretKey []byte
@@ -98,13 +107,15 @@ func DefaultDataDir() string {
 // settings give warnings instead (see Config.Warnings).
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		DatabaseURL: strings.TrimSpace(getenv("POLYFIN_DATABASE_URL")),
-		Listen:      strings.TrimSpace(getenv("POLYFIN_LISTEN")),
-		FFprobe:     strings.TrimSpace(getenv("POLYFIN_FFPROBE")),
-		FFmpeg:      strings.TrimSpace(getenv("POLYFIN_FFMPEG")),
-		DataDir:     strings.TrimSpace(getenv("POLYFIN_DATA_DIR")),
-		FontsDir:    strings.TrimSpace(getenv("POLYFIN_FONTS_DIR")),
-		WebDir:      strings.TrimSpace(getenv("POLYFIN_WEB_DIR")),
+		DatabaseURL:   strings.TrimSpace(getenv("POLYFIN_DATABASE_URL")),
+		Listen:        strings.TrimSpace(getenv("POLYFIN_LISTEN")),
+		FFprobe:       strings.TrimSpace(getenv("POLYFIN_FFPROBE")),
+		FFmpeg:        strings.TrimSpace(getenv("POLYFIN_FFMPEG")),
+		DataDir:       strings.TrimSpace(getenv("POLYFIN_DATA_DIR")),
+		FontsDir:      strings.TrimSpace(getenv("POLYFIN_FONTS_DIR")),
+		WebDir:        strings.TrimSpace(getenv("POLYFIN_WEB_DIR")),
+		ACMEDirectory: strings.TrimSpace(getenv("POLYFIN_ACME_DIRECTORY")),
+		ACMECAFile:    strings.TrimSpace(getenv("POLYFIN_ACME_CA_FILE")),
 	}
 	if cfg.WebDir == "" {
 		cfg.WebDir = DefaultWebDir
@@ -134,6 +145,11 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("POLYFIN_DISCOVERY_PORT: %q is not a port (1-65535)", raw))
 		}
 		cfg.DiscoveryPort = int(port)
+	}
+	if cfg.ACMEDirectory == "" {
+		cfg.ACMEDirectory = https.LetsEncrypt
+	} else if address, err := url.Parse(cfg.ACMEDirectory); err != nil || address.Scheme != "https" && address.Scheme != "http" || address.Host == "" {
+		errs = append(errs, fmt.Errorf("POLYFIN_ACME_DIRECTORY: %q is not an http or https address", cfg.ACMEDirectory))
 	}
 	switch {
 	case cfg.DataDir == "":

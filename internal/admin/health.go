@@ -15,6 +15,7 @@ import (
 	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/https"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -52,6 +53,8 @@ type HealthSources struct {
 	// Discovery tells how local network discovery goes; nil tells
 	// nothing.
 	Discovery func() discovery.Status
+	// HTTPS tells how HTTPS stands; nil tells nothing.
+	HTTPS func() https.Status
 }
 
 type healthJSON struct {

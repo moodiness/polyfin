@@ -472,6 +472,18 @@ type settingsJSON struct {
 	// KnownProxies lists addresses, networks such as 172.18.0.0/16, and
 	// host names, the names after the rest.
 	KnownProxies *[]string `json:"knownProxies"`
+	// The HTTPS settings keep their current values when a PUT leaves them
+	// out. httpsMode is "off", "files" or "letsencrypt"; acmeChallenge
+	// "http-01" or "tls-alpn-01".
+	HTTPSMode        *string   `json:"httpsMode"`
+	HTTPSPort        *int      `json:"httpsPort"`
+	HTTPSRedirect    *bool     `json:"httpsRedirect"`
+	HTTPSCertificate *string   `json:"httpsCertificate"`
+	HTTPSPrivateKey  *string   `json:"httpsPrivateKey"`
+	ACMEHosts        *[]string `json:"acmeHosts"`
+	ACMEEmail        *string   `json:"acmeEmail"`
+	ACMETerms        *bool     `json:"acmeTerms"`
+	ACMEChallenge    *string   `json:"acmeChallenge"`
 	// AnalysisTimeout, VersionAttempts, PreferDirectPlay,
 	// SyncAddonSubtitles, MaxConversions and MaxConversionHeight keep their
 	// current values when a PUT leaves them out.
@@ -688,6 +700,15 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		LoginAttempts:         &settings.LoginAttempts,
 		InactiveDeviceDays:    &settings.InactiveDeviceDays,
 		KnownProxies:          new(accounts.FormatKnownProxies(settings.KnownProxies, settings.KnownProxyNames)),
+		HTTPSMode:             &settings.HTTPSMode,
+		HTTPSPort:             &settings.HTTPSPort,
+		HTTPSRedirect:         &settings.HTTPSRedirect,
+		HTTPSCertificate:      &settings.HTTPSCertificate,
+		HTTPSPrivateKey:       &settings.HTTPSPrivateKey,
+		ACMEHosts:             &settings.ACMEHosts,
+		ACMEEmail:             &settings.ACMEEmail,
+		ACMETerms:             &settings.ACMETerms,
+		ACMEChallenge:         &settings.ACMEChallenge,
 		DetailedLog:           &settings.DetailedLog,
 		AnalysisTimeout:       &settings.AnalysisTimeout,
 		VersionAttempts:       &settings.VersionAttempts,
@@ -1290,6 +1311,15 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		InactiveDeviceDays:    valueOr(body.InactiveDeviceDays, current.InactiveDeviceDays),
 		KnownProxies:          knownProxies,
 		KnownProxyNames:       knownProxyNames,
+		HTTPSMode:             valueOr(body.HTTPSMode, current.HTTPSMode),
+		HTTPSPort:             valueOr(body.HTTPSPort, current.HTTPSPort),
+		HTTPSRedirect:         valueOr(body.HTTPSRedirect, current.HTTPSRedirect),
+		HTTPSCertificate:      valueOr(body.HTTPSCertificate, current.HTTPSCertificate),
+		HTTPSPrivateKey:       valueOr(body.HTTPSPrivateKey, current.HTTPSPrivateKey),
+		ACMEHosts:             valueOr(body.ACMEHosts, current.ACMEHosts),
+		ACMEEmail:             valueOr(body.ACMEEmail, current.ACMEEmail),
+		ACMETerms:             valueOr(body.ACMETerms, current.ACMETerms),
+		ACMEChallenge:         valueOr(body.ACMEChallenge, current.ACMEChallenge),
 		DetailedLog:           valueOr(body.DetailedLog, current.DetailedLog),
 		AnalysisTimeout:       valueOr(body.AnalysisTimeout, current.AnalysisTimeout),
 		VersionAttempts:       valueOr(body.VersionAttempts, current.VersionAttempts),
@@ -1386,6 +1416,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		MetricsToken: current.MetricsToken,
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
+		writeError(w, http.StatusBadRequest, code)
+		return
+	}
+	if code := h.unreadableCertificate(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)
 		return
 	}

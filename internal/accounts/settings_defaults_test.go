@@ -68,6 +68,9 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 	try := func(name string, value any) error {
 		t.Helper()
 		changed := base
+		// Each way of serving HTTPS needs what it serves with.
+		changed.HTTPSCertificate, changed.HTTPSPrivateKey = "/certs/fullchain.pem", "/certs/privkey.pem"
+		changed.ACMEHosts, changed.ACMETerms = []string{"media.example.org"}, true
 		field, _ := boundField(&changed, name)
 		field.Set(reflect.ValueOf(value).Convert(field.Type()))
 		_, err := store.UpdateSettings(ctx, changed)
@@ -115,9 +118,9 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			switch name {
 			case "remuxDbUrl", "publicAddress", "localAddress":
 				start = "https://"
-			case "recordingsFolder", "backupFolder":
+			case "recordingsFolder", "backupFolder", "httpsCertificate", "httpsPrivateKey":
 				start = "/"
-			case "smtpFrom":
+			case "smtpFrom", "acmeEmail":
 				start = "polyfin@"
 			}
 			if err := try(name, start+strings.Repeat(letter, int(b.Max)-len(start))); err != nil {
@@ -132,12 +135,16 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 				}
 			}
 		case b.Bounded && kind == reflect.Slice:
-			// A list of addresses, or of app names, holds up to Max of them.
+			// A list of addresses, of app names or of host names holds up
+			// to Max of them.
 			var entries []any
 			for i := range int(b.Max) + 1 {
-				if field.Type().Elem().Kind() == reflect.String {
+				switch {
+				case name == "acmeHosts":
+					entries = append(entries, "host-"+strconv.Itoa(i)+".example.org")
+				case field.Type().Elem().Kind() == reflect.String:
 					entries = append(entries, "App "+strconv.Itoa(i))
-				} else {
+				default:
 					entries = append(entries, netip.PrefixFrom(netip.AddrFrom4([4]byte{10, 0, byte(i >> 8), byte(i)}), 32))
 				}
 			}

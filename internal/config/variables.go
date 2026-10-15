@@ -51,6 +51,8 @@ func Variables(environ []string, cfg Config) []Variable {
 		"POLYFIN_DATA_DIR":       cfg.DataDir,
 		"POLYFIN_FONTS_DIR":      cfg.FontsDir,
 		"POLYFIN_WEB_DIR":        cfg.WebDir,
+		"POLYFIN_ACME_DIRECTORY": cfg.ACMEDirectory,
+		"POLYFIN_ACME_CA_FILE":   cfg.ACMECAFile,
 		// A secret, never shown: secretName hides it.
 		"POLYFIN_SECRET_KEY": "",
 	}

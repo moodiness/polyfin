@@ -35,6 +35,13 @@ const (
 
 type contextKey struct{}
 
+// resolved is what Proxies.Handler tells the routes of a request that
+// comes from a known proxy: its client, the proxy itself when no header
+// names another.
+type resolved struct {
+	client netip.Addr
+}
+
 // Resolve returns the address of r's client when the proxies in known are
 // trusted. A connection from a known proxy is from the rightmost address
 // of X-Forwarded-For that is not a known proxy, read across every line of
@@ -57,14 +64,22 @@ func Resolve(r *http.Request, known []netip.Prefix) netip.Addr {
 // it, else the connection's: the address sign-ins are throttled by, that
 // devices show, and that tells the local network.
 func Client(r *http.Request) string {
-	if client, ok := r.Context().Value(contextKey{}).(netip.Addr); ok {
-		return client.String()
+	if found, ok := r.Context().Value(contextKey{}).(resolved); ok {
+		return found.client.String()
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// ViaProxy reports whether r's connection comes from a known proxy, as
+// Proxies.Handler judged it: only then do its forwarded headers, such as
+// X-Forwarded-Proto, tell anything.
+func ViaProxy(r *http.Request) bool {
+	_, ok := r.Context().Value(contextKey{}).(resolved)
+	return ok
 }
 
 // Resolver looks up the addresses of a host name, as *net.Resolver does.
@@ -136,11 +151,9 @@ func (p *Proxies) Handler(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// The request is passed on as it is when it is from the proxy
-		// itself, which Client reads from the connection.
-		if client := behind(r, peer, trust); client != peer {
-			r = r.WithContext(context.WithValue(r.Context(), contextKey{}, client))
-		}
+		// The request from the proxy itself has the proxy as its client,
+		// which Client reads from the connection as well.
+		r = r.WithContext(context.WithValue(r.Context(), contextKey{}, resolved{client: behind(r, peer, trust)}))
 		next.ServeHTTP(w, r)
 	})
 }

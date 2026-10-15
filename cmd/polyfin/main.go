@@ -241,6 +241,12 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		InContainer: discovery.InContainer(),
 		Logger:      logger,
 	})
+	// HTTPS is served next to HTTP while the settings turn it on, on a
+	// port of its own, from the start of the HTTP server on; a port it
+	// cannot listen on, certificate files it cannot read and renewals that
+	// fail are told in System › Health, and HTTP keeps working whatever
+	// happens to them.
+	secure := newHTTPS(cfg, store, pool, box, logger)
 	addonClient := stremio.NewClient(version)
 	addonStore := addons.New(pool, addonClient)
 	// Addons and libraries are answered from memory while their changes
@@ -523,6 +529,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			Updates:      updateCheck,
 			Proxies:      proxies,
 			Discovery:    localDiscovery.Status,
+			HTTPS:        secure.Status,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
 		Trackers:       tracking,
@@ -567,6 +574,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			SetupRequired: store.SetupRequired,
 			CustomJs:      func() string { return store.Settings().CustomJs },
 			Proxies:       proxies,
+			HTTPS:         secure.Handler,
 			Metrics: metrics.Handler(func() (bool, string) {
 				settings := store.Settings()
 				return settings.Metrics, settings.MetricsToken
@@ -593,6 +601,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	go playbacks.Run(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
+	secure.Start(ctx, httpServer.Handler)
 	logger.Info("Polyfin started", "version", version, "address", listener.Addr().String(), "server_id", serverID)
 
 	select {
@@ -609,6 +618,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
+	// HTTPS stops with ctx, which ended either way.
+	if err := secure.Shutdown(shutdownCtx); err != nil {
+		logger.Warn("HTTPS did not stop before the shutdown timeout", "error", err)
+	}
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("Closing connections still open after the shutdown timeout", "error", err)
 		return httpServer.Close()
