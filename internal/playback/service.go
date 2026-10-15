@@ -75,7 +75,9 @@ type Service struct {
 
 	flight   singleflight.Group
 	analyses *cache.Cache[accounts.ID, media.Analysis]
-	failures *cache.Cache[accounts.ID, error]
+	// failures are why versions could not be analyzed or reached, kept
+	// for failureTTL (see fail).
+	failures *cache.Cache[accounts.ID, versionFailure]
 	// unmastered are the versions whose first HDR frame could not be read
 	// (see LearnMasteringDisplay).
 	unmastered *cache.Cache[accounts.ID, error]
@@ -153,7 +155,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		signer:      signer,
 		logger:      logger,
 		analyses:    cache.New[accounts.ID, media.Analysis](2000, time.Hour),
-		failures:    cache.New[accounts.ID, error](2000, failureTTL),
+		failures:    cache.New[accounts.ID, versionFailure](2000, failureTTL),
 		unmastered:  cache.New[accounts.ID, error](2000, failureTTL),
 		live:        cache.New[accounts.ID, struct{}](2000, liveTTL),
 		hosts:       cache.New[string, bool](500, 5*time.Minute),
@@ -292,8 +294,8 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
 		return analysis, nil
 	}
-	if err, failed := s.failures.Get(version.ID); failed {
-		return media.Analysis{}, err
+	if failure, failed := s.failures.Get(version.ID); failed {
+		return media.Analysis{}, failure.err
 	}
 	release, err := s.Hold(ctx, version)
 	if err != nil {
@@ -346,7 +348,7 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		}
 		if err != nil {
 			if !rateLimited(src, started, err) {
-				s.failures.Put(version.ID, err)
+				s.fail(version, err)
 			}
 			return nil, err
 		}
@@ -448,6 +450,26 @@ func standIn(analysis media.Analysis, runtime time.Duration) bool {
 func (s *Service) Failed(version accounts.ID) bool {
 	_, failed := s.failures.Get(version)
 	return failed
+}
+
+// versionFailure is why a version could not be analyzed or reached, and
+// the addon that listed it.
+type versionFailure struct {
+	addon accounts.ID
+	err   error
+}
+
+// fail keeps err as why a version could not be analyzed or reached: it is
+// not tried again for failureTTL, unless its addon changes (see Retry).
+func (s *Service) fail(version library.Version, err error) {
+	s.failures.Put(version.ID, versionFailure{addon: version.Origin.Addon, err: err})
+}
+
+// Retry forgets the failures of the versions an addon listed, so that they
+// are tried again at once: those of a local folder whose address,
+// credentials or host key changed, which may have failed only for them.
+func (s *Service) Retry(addon accounts.ID) {
+	s.failures.DeleteFunc(func(_ accounts.ID, failure versionFailure) bool { return failure.addon == addon })
 }
 
 // ffprobe is the prober, an analysis bounded by the settings' timeout when
@@ -562,7 +584,7 @@ func (s *Service) check(ctx context.Context, version library.Version) (library.V
 		}
 	}
 	if err != nil {
-		s.failures.Put(version.ID, err)
+		s.fail(version, err)
 		return library.Version{}, err
 	}
 	s.live.Put(version.ID, struct{}{})

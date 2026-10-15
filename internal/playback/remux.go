@@ -164,7 +164,7 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 				// The source failed, as when an analysis meets it: the
 				// version is not offered for a while. A host asking to slow
 				// down tells nothing of the file.
-				s.failures.Put(version.ID, failure)
+				s.fail(version, failure)
 			}
 			return nil, err
 		}

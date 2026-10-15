@@ -256,7 +256,7 @@ func (s *Service) watchSource(version library.Version, src *source.Source, done 
 	case <-failed:
 		err := failureOf(src, failed)
 		if errors.Is(err, source.ErrUnavailable) && !errors.Is(err, source.ErrSlowDown) {
-			s.failures.Put(version.ID, err)
+			s.fail(version, err)
 		}
 		s.logger.Info("A version's source failed while it played", "addon", version.Addon, "answer", source.Answer(err))
 	case <-done:

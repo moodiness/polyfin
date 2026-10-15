@@ -65,8 +65,8 @@ func (s *Service) AnalyzeLive(ctx context.Context, version library.Version) (med
 		s.analyses.Put(version.ID, analysis)
 		return analysis, nil
 	}
-	if err, failed := s.failures.Get(version.ID); failed {
-		return media.Analysis{}, err
+	if failure, failed := s.failures.Get(version.ID); failed {
+		return media.Analysis{}, failure.err
 	}
 	result, err, _ := s.flight.Do("live "+version.ID.String(), func() (any, error) {
 		return s.probeLive(context.WithoutCancel(ctx), version)
@@ -121,7 +121,7 @@ func (s *Service) liveFailed(ctx context.Context, version library.Version, err e
 	s.logger.Info("A channel's stream failed", "addon", version.Addon, "failure", LiveFailure(err), "error", err)
 	s.report(ctx, version, err)
 	if kept && LiveFailure(err) != LiveRefused {
-		s.failures.Put(version.ID, err)
+		s.fail(version, err)
 	}
 }
 

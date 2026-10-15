@@ -131,8 +131,8 @@ func (s *Service) inputKeyframes(ctx context.Context, version library.Version) (
 // for a while. A disc on the server's disk stands in for nothing, whatever
 // its length (see ErrStandIn).
 func (s *Service) analyzeInput(ctx context.Context, version library.Version) (media.Analysis, error) {
-	if err, failed := s.failures.Get(version.ID); failed {
-		return media.Analysis{}, err
+	if failure, failed := s.failures.Get(version.ID); failed {
+		return media.Analysis{}, failure.err
 	}
 	result, err, _ := s.flight.Do("analyze "+version.ID.String(), func() (any, error) {
 		// Shared and kept as Analyze's are, even once the request that
@@ -145,7 +145,7 @@ func (s *Service) analyzeInput(ctx context.Context, version library.Version) (me
 			analysis, err = s.ffprobe().ProbeInput(ctx, in)
 		}
 		if err != nil {
-			s.failures.Put(version.ID, err)
+			s.fail(version, err)
 			return nil, err
 		}
 		// A disc read as one file tells its tracks' languages and its

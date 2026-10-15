@@ -369,3 +369,49 @@ func TestSessionsFollowReports(t *testing.T) {
 		t.Error("still playing after the stop report")
 	}
 }
+
+// A version that could not be analyzed is not tried again for a while,
+// unless the addon that listed it asks for it, as a local folder does once
+// an administrator accepts its server's new host key or changes its
+// credentials: it is analyzed again at once. Those of other addons keep
+// their failures.
+func TestRetryForgetsTheFailuresOfAnAddon(t *testing.T) {
+	t.Parallel()
+	s := newService(t, &fileSource{data: make([]byte, 1000)}, "ffprobe-not-installed", nil)
+	refused := errors.New("the SFTP server's host key is not the one saved")
+	var broken atomic.Bool
+	broken.Store(true)
+	var probes atomic.Int32
+	probe := func(media.Prober, context.Context, string) (media.Analysis, error) {
+		probes.Add(1)
+		if broken.Load() {
+			return media.Analysis{}, refused
+		}
+		return media.Analysis{Format: "matroska", Duration: time.Hour}, nil
+	}
+	folder, other := accounts.ID{41}, accounts.ID{42}
+	version := library.Version{ID: accounts.ID{43}, URL: "https://93.184.216.34/a.mkv", Origin: library.Origin{Addon: folder}}
+	elsewhere := library.Version{ID: accounts.ID{44}, URL: "https://93.184.216.34/b.mkv", Origin: library.Origin{Addon: other}}
+	for _, v := range []library.Version{version, elsewhere} {
+		if _, err := s.analyze(t.Context(), v, probe); !errors.Is(err, refused) {
+			t.Fatalf("version %v: %v", v.ID, err)
+		}
+	}
+	broken.Store(false)
+	if _, err := s.analyze(t.Context(), version, probe); !errors.Is(err, refused) || !s.Failed(version.ID) {
+		t.Fatalf("the failure was not kept: %v", err)
+	}
+	s.Retry(folder)
+	if s.Failed(version.ID) || !s.Failed(elsewhere.ID) {
+		t.Errorf("failed after the retry: %v, the other addon's %v", s.Failed(version.ID), s.Failed(elsewhere.ID))
+	}
+	if analysis, err := s.analyze(t.Context(), version, probe); err != nil || analysis.Duration != time.Hour {
+		t.Errorf("analyzed again: %+v %v", analysis, err)
+	}
+	if _, err := s.analyze(t.Context(), elsewhere, probe); !errors.Is(err, refused) {
+		t.Errorf("the other addon's version: %v", err)
+	}
+	if got := probes.Load(); got != 3 {
+		t.Errorf("%d analyses, want 3", got)
+	}
+}

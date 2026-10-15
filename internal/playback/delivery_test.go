@@ -70,8 +70,8 @@ func TestAnalysesStopWhenTheirSourceFails(t *testing.T) {
 	if took := time.Since(started); took > 5*time.Second {
 		t.Errorf("the analysis stopped after %v", took)
 	}
-	if kept, failed := s.failures.Get(version.ID); !failed || source.Answer(kept) != source.Answer(err) {
-		t.Errorf("kept %v", kept)
+	if kept, failed := s.failures.Get(version.ID); !failed || source.Answer(kept.err) != source.Answer(err) {
+		t.Errorf("kept %v", kept.err)
 	}
 }
 
