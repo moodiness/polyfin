@@ -111,6 +111,36 @@ RUN case "$TARGETARCH" in amd64) triplet=x86_64-linux-gnu ;; arm64) triplet=aarc
 		mkdir "/pg-dump/usr/share/doc/$package" && cp "/doc/$package/copyright" "/pg-dump/usr/share/doc/$package/"; \
 	done
 
+# Tesseract 5.5, which reads picture subtitles into text, with the data of
+# English, French, German, Spanish, Italian, Portuguese and Dutch: Debian's
+# packages of the target platform, with those of the libraries they load
+# that the final stage lacks, downloaded and unpacked natively, nothing run
+# for the target platform. Of the package of the programs, only tesseract is
+# kept: the training tools need Cairo, Pango and ICU, which it does not
+# load. The packages the slim image has are left out, as are manuals and
+# documentation but for the copyright notices.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS tesseract
+ARG TARGETARCH
+WORKDIR /debs
+# hadolint ignore=DL3008
+RUN if [ "$TARGETARCH" != "$(dpkg --print-architecture)" ]; then dpkg --add-architecture "$TARGETARCH"; fi \
+	&& apt-get update \
+	&& dpkg-query -W -f "\${Package}\n" > /installed \
+	&& mkdir -p /debs/partial /tesseract \
+	&& apt-get install -y --download-only --no-install-recommends -o Dir::Cache::Archives=/debs/ \
+		"libtesseract5:$TARGETARCH" tesseract-ocr-osd tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-deu \
+		tesseract-ocr-spa tesseract-ocr-ita tesseract-ocr-por tesseract-ocr-nld \
+	&& apt-get download "tesseract-ocr:$TARGETARCH" \
+	&& for deb in /debs/*.deb; do \
+		case "$(dpkg-deb -f "$deb" Architecture)" in "$TARGETARCH" | all) ;; *) continue ;; esac; \
+		if ! grep -qxF "$(dpkg-deb -f "$deb" Package)" /installed; then dpkg-deb -x "$deb" /tesseract; fi; \
+	done \
+	&& find /tesseract/usr/bin ! -name tesseract ! -type d -delete \
+	&& rm -rf /tesseract/usr/share/man /tesseract/usr/share/lintian /tesseract/usr/share/bug \
+	&& find /tesseract/usr/share/doc -mindepth 2 ! -name copyright ! -type d -delete \
+	&& find /tesseract/usr/share/doc -mindepth 1 -type d -empty -delete \
+	&& test -x /tesseract/usr/bin/tesseract
+
 # The same Debian on both platforms. amd64 adds libva and the VA drivers of
 # AMD and Intel GPUs, Intel's from non-free, and what NVIDIA's Vulkan driver
 # loads besides itself (the Vulkan loader, EGL, X11's extension library),
@@ -136,6 +166,7 @@ COPY --from=ffmpeg /lib/ /usr/local/lib/
 COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=fonts /usr/share/fonts/truetype/dejavu/ /usr/share/fonts/truetype/dejavu/
 COPY --from=pg-dump /pg-dump/ /
+COPY --from=tesseract /tesseract/ /
 # jellyfin-web, a separate GPL-2.0 program, unmodified, in the folder
 # POLYFIN_WEB_DIR names by default; its license, and a notice saying where
 # its source is, in the usual documentation folder.
@@ -154,8 +185,11 @@ VOLUME /data
 # NVIDIA's runtime exposes the GPUs and the video and Vulkan libraries to
 # containers that ask for it; other runtimes ignore these. Mesa would keep
 # a shader cache in a home directory the read-only image does not have.
+# Tesseract reads its own data, and the .traineddata files of other
+# languages from the folder tessdata of the volume.
 ENV POLYFIN_LISTEN=:8096 POLYFIN_DATA_DIR=/data NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,video,utility,graphics \
-	MESA_SHADER_CACHE_DISABLE=true
+	MESA_SHADER_CACHE_DISABLE=true \
+	POLYFIN_TESSERACT=/usr/bin/tesseract TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata POLYFIN_TESSDATA_DIR=/data/tessdata
 EXPOSE 8096
 USER 65532:65532
 # Whether Polyfin answers /healthz, which it does while its process serves,
