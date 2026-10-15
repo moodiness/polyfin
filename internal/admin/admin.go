@@ -218,6 +218,9 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/account/reminders/{id}", h.signedIn(h.deleteOwnReminder))
 	mux.Handle("GET /admin/api/account/reminders/settings", h.signedIn(h.ownReminderSettings))
 	mux.Handle("PUT /admin/api/account/reminders/settings", h.signedIn(h.updateOwnReminderSettings))
+	mux.Handle("GET /admin/api/account/metadata-language", h.signedIn(h.ownMetadataLanguage))
+	mux.Handle("PUT /admin/api/account/metadata-language", h.signedIn(h.setOwnMetadataLanguage))
+	mux.Handle("GET /admin/api/metadata-languages", h.signedIn(h.metadataLanguages))
 	ownPlays := statisticsRoutes{h: h, scope: ownPlaybacks}
 	mux.Handle("GET /admin/api/account/statistics", h.signedIn(ownPlays.statistics))
 	mux.Handle("GET /admin/api/account/history", h.signedIn(ownPlays.history))
@@ -579,6 +582,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidSyncPlay, http.StatusBadRequest, "invalid_sync_play"},
 		{accounts.ErrInvalidQualityGroup, http.StatusBadRequest, "invalid_quality_group"},
 		{accounts.ErrInvalidBlockedGenres, http.StatusBadRequest, "invalid_blocked_genres"},
+		{accounts.ErrInvalidMetadataLanguage, http.StatusBadRequest, "invalid_language"},
 		{accounts.ErrInvalidAccessSchedule, http.StatusBadRequest, "invalid_access_schedules"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},

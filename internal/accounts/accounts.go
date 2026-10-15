@@ -123,6 +123,11 @@ type User struct {
 	// values, otherwise the user's own. FollowGroup is set without a group.
 	GroupID     *ID
 	FollowGroup bool
+	// MetadataLanguage is the language the user's titles are described in,
+	// by the server's addons given that language (see addons.Addon.Language);
+	// empty for the server's descriptions. It also names what Polyfin
+	// generates when it is English or French.
+	MetadataLanguage string
 }
 
 // NewUser describes an account to create.
@@ -188,6 +193,10 @@ type UserChanges struct {
 	// group's: with it, the user stops following the group and keeps the
 	// change; without it, the change is refused (ErrFollowsGroup).
 	DetachFromGroup bool
+	// MetadataLanguage, see User: a language code (MetadataLanguageCode)
+	// or empty. Which languages the server's addons have is the caller's to
+	// check.
+	MetadataLanguage *string
 }
 
 // Store is the accounts repository.
@@ -279,7 +288,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group"
+	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -291,7 +300,7 @@ func (user *User) fields() []any {
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare,
-		&user.GroupID, &user.FollowGroup}
+		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -594,6 +603,9 @@ func (changes UserChanges) prepare() (userUpdate, error) {
 		}
 		u.schedules = &normalized
 	}
+	if changes.MetadataLanguage != nil && *changes.MetadataLanguage != "" && !MetadataLanguageCode(*changes.MetadataLanguage) {
+		return u, ErrInvalidMetadataLanguage
+	}
 	if changes.Name != nil {
 		normalized, err := normalizeName(*changes.Name)
 		if err != nil {
@@ -706,7 +718,8 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 			end_recorded = end_recorded AND ends_on IS NOT DISTINCT FROM $28,
 			can_share = coalesce($29, can_share),
 			group_id = $30,
-			follow_group = $31
+			follow_group = $31,
+			metadata_language = coalesce($32, metadata_language)
 		WHERE id = $1 RETURNING `+userColumns,
 		id, u.name, u.hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 		changes.Parental != nil, u.parental.MaxRating, u.parental.MaxSubRating, u.parental.BlockUnrated,
@@ -715,7 +728,7 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 		u.hidden, u.genres, u.schedules, changes.CollectionManagement,
 		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
-		membership.group, membership.follow))
+		membership.group, membership.follow, changes.MetadataLanguage))
 	if uniqueViolation(err) {
 		return User{}, nil, ErrNameTaken
 	}

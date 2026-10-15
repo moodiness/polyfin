@@ -54,6 +54,9 @@ var (
 	ErrNotStremio = errors.New("not a Stremio addon")
 	// ErrNotEclipse reports settings given to an addon that has none.
 	ErrNotEclipse = errors.New("not an Eclipse addon")
+	// ErrInvalidLanguage reports a language given to an addon that is no
+	// language code, or to one that takes none (see SetLanguage).
+	ErrInvalidLanguage = errors.New("invalid addon language")
 	// ErrKindChanged reports a new address of an addon that serves another
 	// kind of addon than it did.
 	ErrKindChanged = errors.New("the address serves another kind of addon")
@@ -106,6 +109,11 @@ type Addon struct {
 	// take their identifiers from, by catalog identifier, for the catalogs
 	// whose type changed since (see Library.KeyType).
 	LibraryKeyTypes map[string]string
+	// Language is the language of the descriptions of a server addon, as
+	// its manifest address configures it, empty for none: it describes
+	// titles for the users who chose that language only, not for others
+	// (see SetLanguage).
+	Language string
 }
 
 // Stremio reports whether the addon is a Stremio addon, whose resources
@@ -290,7 +298,7 @@ func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	var addon Addon
 	var manifest []byte
 	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt,
-		&addon.LibraryKeyTypes}, extra...)...)
+		&addon.LibraryKeyTypes, &addon.Language}, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
 	}
@@ -333,7 +341,7 @@ func localMusic(m stremio.Manifest) *eclipse.Manifest {
 	return music
 }
 
-const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, refreshed_at, library_key_types"
+const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, refreshed_at, library_key_types, language"
 
 // Addons lists the scope's addons in order. The addons, their manifests
 // and settings are shared with other callers: they must not be changed.
@@ -740,6 +748,45 @@ func (s *Store) SetEnabled(ctx context.Context, scope Scope, id accounts.ID, ena
 	defer s.changed()
 	return scanAddon(s.db.QueryRow(ctx, "UPDATE addons SET enabled = $3 WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING "+addonColumns,
 		id, scope.Owner, enabled))
+}
+
+// SetLanguage names the language of a server addon's descriptions, empty
+// for none (see Addon.Language): a language code (see
+// accounts.MetadataLanguageCode). Only the server's Stremio addons have
+// one: ErrInvalidLanguage refuses one for a user's addon or Polyfin's own
+// sources, whose descriptions are not configured by their address.
+func (s *Store) SetLanguage(ctx context.Context, scope Scope, id accounts.ID, language string) (Addon, error) {
+	if language != "" && (scope.Owner != nil || !accounts.MetadataLanguageCode(language)) {
+		return Addon{}, ErrInvalidLanguage
+	}
+	defer s.changed()
+	addon, err := scanAddon(s.db.QueryRow(ctx, `UPDATE addons SET language = $3
+		WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND (kind = $4 OR $3 = '') RETURNING `+addonColumns,
+		id, scope.Owner, language, KindStremio))
+	if errors.Is(err, ErrNotFound) && language != "" {
+		if _, findErr := s.addon(ctx, s.db, scope, id); findErr == nil {
+			return Addon{}, ErrInvalidLanguage
+		}
+	}
+	return addon, err
+}
+
+// Languages lists, sorted and each once, the languages the server's
+// addons were given (see Addon.Language): those users may choose to see
+// their titles in.
+func (s *Store) Languages(ctx context.Context) ([]string, error) {
+	list, err := s.Addons(ctx, Shared())
+	if err != nil {
+		return nil, err
+	}
+	languages := []string{}
+	for _, addon := range list {
+		if addon.Language != "" && !slices.Contains(languages, addon.Language) {
+			languages = append(languages, addon.Language)
+		}
+	}
+	slices.Sort(languages)
+	return languages, nil
 }
 
 // SetSettings replaces the values chosen for an Eclipse addon's settings,

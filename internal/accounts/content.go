@@ -19,6 +19,25 @@ var ErrInvalidBlockedGenres = errors.New("invalid blocked genres")
 // MinScheduleHour <= start < end <= MaxScheduleHour.
 var ErrInvalidAccessSchedule = errors.New("invalid access schedule")
 
+// ErrInvalidMetadataLanguage reports a metadata language that is not a
+// language code (see MetadataLanguageCode).
+var ErrInvalidMetadataLanguage = errors.New("invalid metadata language")
+
+// MetadataLanguageCode reports whether code names the language of
+// descriptions: an ISO 639 code of two or three lowercase letters, with
+// an optional region of two uppercase letters, as "fr" or "pt-BR". Server
+// addons are given one (see addons.Addon.Language), and users choose one
+// of theirs (see User.MetadataLanguage).
+func MetadataLanguageCode(code string) bool {
+	base, region, regional := strings.Cut(code, "-")
+	notLower := func(r rune) bool { return r < 'a' || r > 'z' }
+	notUpper := func(r rune) bool { return r < 'A' || r > 'Z' }
+	if len(base) < 2 || len(base) > 3 || strings.ContainsFunc(base, notLower) {
+		return false
+	}
+	return !regional || len(region) == 2 && !strings.ContainsFunc(region, notUpper)
+}
+
 // The bounds of User.BlockedGenres and User.AccessSchedules.
 const (
 	MaxBlockedGenres   = 100

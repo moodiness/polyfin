@@ -38,6 +38,9 @@ type addonJSON struct {
 	Source *sourceJSON `json:"source"`
 	Music  *musicJSON  `json:"music"`
 	Folder *folderJSON `json:"folder"`
+	// Language is the language of a server addon's descriptions, empty
+	// for none (see addons.Addon.Language).
+	Language string `json:"language"`
 }
 
 // sourceJSON describes an IPTV source: its address, redacted, as it holds
@@ -125,6 +128,7 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 		RefreshedAt:  addon.RefreshedAt,
 		Kind:         addon.Kind,
 		Music:        newMusicJSON(addon),
+		Language:     addon.Language,
 	}
 }
 
@@ -429,6 +433,7 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{addons.ErrInvalidLibraryMaxItems, http.StatusBadRequest, "invalid_library_max_items"},
 		{addons.ErrInvalidGuideURL, http.StatusBadRequest, "invalid_guide_url"},
 		{addons.ErrNotStremio, http.StatusBadRequest, "invalid_request"},
+		{addons.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},
 		{addons.ErrNotEclipse, http.StatusBadRequest, "invalid_request"},
 		{addons.ErrKindChanged, http.StatusUnprocessableEntity, "addon_kind_changed"},
 		{eclipse.ErrInvalidSettings, http.StatusBadRequest, "invalid_addon_settings"},
@@ -543,15 +548,22 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Enabled     *bool   `json:"enabled"`
 		ManifestURL *string `json:"manifestUrl"`
+		Language    *string `json:"language"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.ManifestURL == nil && body.Enabled == nil {
+	if body.ManifestURL == nil && body.Enabled == nil && body.Language == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
 	if (body.ManifestURL != nil || (body.Enabled != nil && *body.Enabled)) && h.personalAddonsRefused(w, r, scope) {
+		return
+	}
+	// A language is checked before anything changes, so that a refused one
+	// changes nothing else.
+	if body.Language != nil && *body.Language != "" && (scope.Owner != nil || !accounts.MetadataLanguageCode(*body.Language)) {
+		writeError(w, http.StatusBadRequest, "invalid_language")
 		return
 	}
 	var addon addons.Addon
@@ -561,6 +573,9 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == nil && body.Enabled != nil {
 		addon, err = h.Addons.SetEnabled(r.Context(), scope, id, *body.Enabled)
+	}
+	if err == nil && body.Language != nil {
+		addon, err = h.Addons.SetLanguage(r.Context(), scope, id, *body.Language)
 	}
 	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
 }

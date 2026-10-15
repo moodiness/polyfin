@@ -40,6 +40,10 @@ type userJSON struct {
 	// ImageTag identifies their profile picture, served at /UserImage,
 	// null without one.
 	ImageTag *string `json:"imageTag"`
+	// MetadataLanguage is the language the user's titles are described in,
+	// one of the server's addons' languages, empty for the server's
+	// descriptions.
+	MetadataLanguage string `json:"metadataLanguage"`
 	// EndsOn is the date the account ends, YYYY-MM-DD in the server's time
 	// zone, null for never; Ended is set once it has come, and the account
 	// is refused as a disabled one is.
@@ -258,17 +262,18 @@ type parentalControlJSON struct {
 
 func newUserJSON(user accounts.User) userJSON {
 	result := userJSON{
-		ID:              user.ID.String(),
-		Name:            user.Name,
-		IsAdministrator: user.IsAdministrator,
-		IsHidden:        user.IsHidden,
-		IsDisabled:      user.IsDisabled,
-		CreatedAt:       user.CreatedAt,
-		LastLoginAt:     user.LastLoginAt,
-		LastActivityAt:  user.LastActivityAt,
-		limitsJSON:      newLimitsJSON(user.Limits()),
-		BlockedUntil:    blockedUntil(user),
-		ImageTag:        imageTag(user),
+		ID:               user.ID.String(),
+		Name:             user.Name,
+		IsAdministrator:  user.IsAdministrator,
+		IsHidden:         user.IsHidden,
+		IsDisabled:       user.IsDisabled,
+		CreatedAt:        user.CreatedAt,
+		LastLoginAt:      user.LastLoginAt,
+		LastActivityAt:   user.LastActivityAt,
+		limitsJSON:       newLimitsJSON(user.Limits()),
+		BlockedUntil:     blockedUntil(user),
+		ImageTag:         imageTag(user),
+		MetadataLanguage: user.MetadataLanguage,
 		// When the account ends.
 		EndsOn:      endsOn(user),
 		Ended:       user.Ended(time.Now()),
@@ -1008,6 +1013,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		// FollowGroup has them follow it, or keep its values as their own.
 		GroupID     *string `json:"groupId"`
 		FollowGroup *bool   `json:"followGroup"`
+		// MetadataLanguage, see userJSON.
+		MetadataLanguage *string `json:"metadataLanguage"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -1019,6 +1026,10 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	changes, ok := body.changes(w)
 	if !ok {
+		return
+	}
+	changes.MetadataLanguage = body.MetadataLanguage
+	if body.MetadataLanguage != nil && !h.metadataLanguageOffered(w, r, *body.MetadataLanguage) {
 		return
 	}
 	changes.Name = body.Name
