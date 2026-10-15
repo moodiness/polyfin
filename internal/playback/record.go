@@ -90,15 +90,33 @@ func (s *Service) FileVersion(id accounts.ID, name, path string, size int64) lib
 }
 
 // ForgetFile stops serving the file of a version FileVersion described, and
-// forgets what was learned of it.
+// forgets what was learned of it: what was analyzed and indexed of it, and
+// the blocks the source cache keeps, so that a file put in its place, as a
+// recording converted to HEVC, is read anew.
 func (s *Service) ForgetFile(id accounts.ID) {
 	s.loopback.mu.Lock()
 	delete(s.loopback.files, id)
 	s.loopback.mu.Unlock()
 	s.analyses.Delete(id)
 	s.failures.Delete(id)
+	s.unmastered.Delete(id)
 	s.indexes.Delete(id)
 	s.unindexed.Delete(id)
+	s.offsets.Delete(id)
+	s.warmed.Delete(id)
+	s.extractions.Delete(id)
+	s.locations.Delete(id)
+	s.unlocated.Delete(id)
+	s.attached.Delete(id)
+	if !s.sources.Discard(id) {
+		s.logger.Warn("The cached blocks of a file still read were kept", "version", id.String())
+	}
+}
+
+// FileInUse reports whether the file of a version FileVersion described
+// is read now: through the source cache, or by an encoding of a playback.
+func (s *Service) FileInUse(id accounts.ID) bool {
+	return s.sources.Read(id) || s.segments.Uses(id.String())
 }
 
 // serveFile answers ffprobe's, FFmpeg's and the source cache's requests for

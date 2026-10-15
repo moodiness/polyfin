@@ -299,6 +299,18 @@ func (t *Tracker) endStale(device accounts.ID, p *Playback) Change {
 	return Change{Kind: Stopped, Playback: *p}
 }
 
+// Playing reports whether a device plays item now, paused or not.
+func (t *Tracker) Playing(item accounts.ID) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, p := range t.playing {
+		if p.Title.Item == item {
+			return true
+		}
+	}
+	return false
+}
+
 // Run sweeps the stale playbacks until ctx ends.
 func (t *Tracker) Run(ctx context.Context) {
 	ticker := time.NewTicker(sweepEvery)

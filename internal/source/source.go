@@ -310,6 +310,39 @@ func (c *Cache) Streamed(id accounts.ID) bool {
 	return s.attached > 0
 }
 
+// Read reports whether a reader holds the source of id now.
+func (c *Cache) Read(id accounts.ID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s := c.sources[id]
+	return s != nil && s.refs > 0
+}
+
+// Discard removes what the cache holds of the source of id, whose file
+// changed, unless a reader holds it: it reports whether nothing is left.
+func (c *Cache) Discard(id accounts.ID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s := c.sources[id]
+	if s == nil {
+		return true
+	}
+	if s.refs > 0 {
+		return false
+	}
+	for key, use := range c.chunks {
+		if key.source == id {
+			delete(c.chunks, key)
+			c.used -= use.size
+		}
+	}
+	if err := s.discard(); err != nil {
+		c.logger.Warn("A cached source could not be removed", "error", err)
+	}
+	delete(c.sources, id)
+	return true
+}
+
 // Usage tells the bytes the cache keeps on disk, the sources open, and its
 // limit (the settings' CacheSizeGB).
 func (c *Cache) Usage() (used int64, sources int, limit int64) {
