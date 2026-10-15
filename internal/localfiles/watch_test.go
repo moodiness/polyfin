@@ -333,12 +333,12 @@ func TestWatchable(t *testing.T) {
 	}
 	want := []watchFolder{{id: local.ID, root: local.ManifestURL}, {id: smb.ID, root: smb.ManifestURL}, {id: dav.ID, root: dav.ManifestURL},
 		{id: music.ID, root: music.ManifestURL, kind: KindMusic}}
-	if got := watchable(on, installed); !slices.Equal(got, want) {
+	if got := watchable(on, installed, nil); !slices.Equal(got, want) {
 		t.Errorf("watched %v, want the enabled folders and shares, the music folder as such", got)
 	}
 	off := on
 	off.WatchLocalFolders = false
-	if got := watchable(off, installed); len(got) != 0 {
+	if got := watchable(off, installed, nil); len(got) != 0 {
 		t.Errorf("watched %v with the setting off", got)
 	}
 }
@@ -352,7 +352,7 @@ func TestWatchNothingWhenOff(t *testing.T) {
 		{ID: testID(2), Kind: addons.KindLocal, ManifestURL: "smb://nas.local/media", Enabled: true},
 	}
 	var opened atomic.Int32
-	wt := newWatchTest(t, func(context.Context) ([]watchFolder, error) { return watchable(settings, installed), nil },
+	wt := newWatchTest(t, func(context.Context) ([]watchFolder, error) { return watchable(settings, installed, nil), nil },
 		func() (fileWatcher, error) {
 			opened.Add(1)
 			return openNotifyWatcher()
@@ -373,7 +373,7 @@ func TestWatchPollsShares(t *testing.T) {
 		{ID: testID(2), Kind: addons.KindLocal, ManifestURL: "http://nas.local/dav", Enabled: true},
 	}
 	var opened atomic.Int32
-	wt := newWatchTest(t, func(context.Context) ([]watchFolder, error) { return watchable(settings, installed), nil },
+	wt := newWatchTest(t, func(context.Context) ([]watchFolder, error) { return watchable(settings, installed, nil), nil },
 		func() (fileWatcher, error) {
 			opened.Add(1)
 			return newFakeWatcher(), nil

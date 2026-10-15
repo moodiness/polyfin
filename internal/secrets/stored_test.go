@@ -258,7 +258,7 @@ func TestStoredSecretsAreSealedOnceAndUnreadableOnesCountAsUnset(t *testing.T) {
 		}
 		for _, named := range []string{"setting publicMetaDbKey", "setting theIntroDbKey", "setting traktClientSecret",
 			"trakt connection of alice", "mdblist connection of alice", "notification target Family of alice", "server notification target Phone",
-			"password of the share NAS", "stremio app connection of alice"} {
+			"password or key of the share NAS", "stremio app connection of alice"} {
 			if !strings.Contains(log.String(), named) {
 				t.Errorf("%s: %q not named: %s", name, named, log)
 			}

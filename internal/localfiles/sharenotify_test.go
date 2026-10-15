@@ -254,7 +254,7 @@ func TestShareNotifyMissedDeepChange(t *testing.T) {
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).fr.srt"), 10)
 	wt.scanned(id)
 	wt.watchedAs(id, ShareNotified, notifiedPartial)
-	if wt.w.interval(&sharePoll{notify: &shareNotify{on: true, partial: true}}) != wt.w.every {
+	if wt.w.interval(&sharePoll{every: wt.w.every, notify: &shareNotify{on: true, partial: true}}) != wt.w.every {
 		t.Error("a share whose server misses changes is not listed every few minutes")
 	}
 	select {
@@ -284,7 +284,7 @@ func TestShareNotifyWebDAVAndOff(t *testing.T) {
 	wt, _, notifier := newShareNotifyTest(t, dir, func(context.Context) ([]watchFolder, error) {
 		settings := accounts.DefaultSettings()
 		settings.WatchLocalFolders = !off.Load()
-		return watchable(settings, installed), nil
+		return watchable(settings, installed, nil), nil
 	})
 	wt.start()
 	fw := notifier.armed(t)

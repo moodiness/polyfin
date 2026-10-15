@@ -83,7 +83,7 @@ func (f *fakeShares) rescan() {
 // davRemote reads a share served by serveWebDAV.
 func davRemote(t *testing.T, address, user, password string) remote {
 	t.Helper()
-	r, err := newRemote(address, user, password)
+	r, err := newRemote(shareAccess{address: address, user: user, password: password}, hostKeys{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestShareWatchOff(t *testing.T) {
 	id := testID(1)
 	wt, shares, _ := newShareWatchTest(t, dir, func(address string) func(context.Context) ([]watchFolder, error) {
 		installed := []addons.Addon{{ID: id, Kind: addons.KindLocal, ManifestURL: address, Enabled: true}}
-		return func(context.Context) ([]watchFolder, error) { return watchable(settings, installed), nil }
+		return func(context.Context) ([]watchFolder, error) { return watchable(settings, installed, nil), nil }
 	})
 	wt.start()
 	write(t, filepath.Join(dir, "movies", "The General (1926).mkv"), 10)
@@ -245,7 +245,7 @@ func TestShareWatchRoundsAreBounded(t *testing.T) {
 	shares.use(counted)
 	wt.w.lists = 3
 	wt.w.polled = make(chan sharePolled, 8)
-	p := newSharePoll(id, "")
+	p := newSharePoll(id, "", testEvery)
 
 	// The last of the seven folders changes: each round lists the root
 	// and two folders, so the fourth one lists it.
@@ -279,7 +279,7 @@ func TestShareWatchDropsStalePolls(t *testing.T) {
 	wt, shares, address := newShareWatchTest(t, dir, oneShare(id))
 	wt.w.polls[id] = &polling{address: address, cancel: func() {}}
 	wt.w.polled = make(chan sharePolled, 1)
-	p := newSharePoll(id, address)
+	p := newSharePoll(id, address, testEvery)
 	poll := func() sharePolled {
 		t.Helper()
 		wt.w.round(t.Context(), p)

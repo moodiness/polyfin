@@ -185,13 +185,23 @@ func (c *webdavShare) open(ctx context.Context, rel string) (io.ReadSeekCloser, 
 		return nil, time.Time{}, statusError(response.StatusCode)
 	}
 	modified, _ := http.ParseTime(response.Header.Get("Last-Modified"))
-	return &webdavFile{share: c, ctx: ctx, address: u, size: response.ContentLength}, modified, nil
+	return &httpFile{send: c.send, ctx: ctx, address: u, size: response.ContentLength}, modified, nil
 }
 
-// webdavFile reads a file of a WebDAV folder: from an offset on, through
-// one request until the next seek.
-type webdavFile struct {
-	share   *webdavShare
+// send sends a request without a body.
+func (c *webdavShare) send(ctx context.Context, method string, u *url.URL, header http.Header) (*http.Response, error) {
+	return c.request(ctx, method, u, header, "")
+}
+
+// sender sends a request of a share's file without a body, signed in as
+// the share asks.
+type sender func(ctx context.Context, method string, u *url.URL, header http.Header) (*http.Response, error)
+
+// httpFile reads a file of a share served over HTTP, a WebDAV folder, an
+// S3 bucket or an rclone remote: from an offset on, through one request
+// until the next seek.
+type httpFile struct {
+	send    sender
 	ctx     context.Context
 	address *url.URL
 	size    int64
@@ -202,7 +212,7 @@ type webdavFile struct {
 	left int64
 }
 
-func (f *webdavFile) Read(p []byte) (int, error) {
+func (f *httpFile) Read(p []byte) (int, error) {
 	if f.offset >= f.size {
 		return 0, io.EOF
 	}
@@ -221,8 +231,8 @@ func (f *webdavFile) Read(p []byte) (int, error) {
 }
 
 // request asks for the file from offset on.
-func (f *webdavFile) request() error {
-	response, err := f.share.request(f.ctx, http.MethodGet, f.address, http.Header{"Range": {fmt.Sprintf("bytes=%d-", f.offset)}}, "")
+func (f *httpFile) request() error {
+	response, err := f.send(f.ctx, http.MethodGet, f.address, http.Header{"Range": {fmt.Sprintf("bytes=%d-", f.offset)}})
 	if err != nil {
 		return err
 	}
@@ -242,7 +252,7 @@ func (f *webdavFile) request() error {
 	return nil
 }
 
-func (f *webdavFile) Seek(offset int64, whence int) (int64, error) {
+func (f *httpFile) Seek(offset int64, whence int) (int64, error) {
 	switch whence {
 	case io.SeekCurrent:
 		offset += f.offset
@@ -261,7 +271,7 @@ func (f *webdavFile) Seek(offset int64, whence int) (int64, error) {
 
 // release ends the request under way: its connection serves the next
 // request when little of the answer is left.
-func (f *webdavFile) release() {
+func (f *httpFile) release() {
 	if f.body == nil {
 		return
 	}
@@ -272,7 +282,7 @@ func (f *webdavFile) release() {
 	f.body = nil
 }
 
-func (f *webdavFile) Close() error {
+func (f *httpFile) Close() error {
 	f.release()
 	return nil
 }

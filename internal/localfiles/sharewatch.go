@@ -58,18 +58,19 @@ type sharePolled struct {
 	kept int
 }
 
-// polling is a share polled: its address, and the end of its poll and of
-// its watch.
+// polling is a share polled: its address, how often, and the end of its
+// poll and of its watch.
 type polling struct {
 	address string
+	every   time.Duration
 	cancel  context.CancelFunc
 }
 
 // pollShares polls the shares to watch not polled yet, those whose
-// address changed again, and stops polling the others.
-func (w *watcher) pollShares(shares map[accounts.ID]string) {
+// address or interval changed again, and stops polling the others.
+func (w *watcher) pollShares(shares map[accounts.ID]watchFolder) {
 	for id, p := range w.polls {
-		if address, ok := shares[id]; !ok || address != p.address {
+		if folder, ok := shares[id]; !ok || folder.root != p.address || folder.every != p.every {
 			p.cancel()
 			delete(w.polls, id)
 			delete(w.changed, id)
@@ -81,13 +82,13 @@ func (w *watcher) pollShares(shares map[accounts.ID]string) {
 			w.mu.Unlock()
 		}
 	}
-	for id, address := range shares {
+	for id, folder := range shares {
 		if w.polls[id] != nil {
 			continue
 		}
 		ctx, cancel := context.WithCancel(w.ctx)
-		w.polls[id] = &polling{address: address, cancel: cancel}
-		w.spawn(func() { w.poll(ctx, id, address) })
+		w.polls[id] = &polling{address: folder.root, every: folder.every, cancel: cancel}
+		w.spawn(func() { w.poll(ctx, id, folder.root, folder.every) })
 	}
 }
 
@@ -99,6 +100,7 @@ func (w *watcher) pollShares(shares map[accounts.ID]string) {
 type sharePoll struct {
 	id      accounts.ID
 	address string
+	every   time.Duration
 	after   string
 	failing bool
 	retried bool
@@ -106,8 +108,8 @@ type sharePoll struct {
 	notify  *shareNotify
 }
 
-func newSharePoll(id accounts.ID, address string) *sharePoll {
-	return &sharePoll{id: id, address: address, notify: &shareNotify{wake: make(chan struct{}, 1)}}
+func newSharePoll(id accounts.ID, address string, every time.Duration) *sharePoll {
+	return &sharePoll{id: id, address: address, every: every, notify: &shareNotify{wake: make(chan struct{}, 1)}}
 }
 
 // calmPrints are the folders of a share the rounds found as the kept-th
@@ -120,18 +122,26 @@ type calmPrints struct {
 
 // poll lists a share's folders every round until ctx ends, and has an SMB
 // share watched by its server's notifications meanwhile: a round every
-// interval. The first round waits a whole interval: the share was just
-// scanned, or is about to be.
-func (w *watcher) poll(ctx context.Context, id accounts.ID, address string) {
-	p := newSharePoll(id, address)
-	if shareKind(address) == ShareSMB {
+// interval, every for a share whose kind has a setting of it. The first
+// round waits a whole interval: the share was just scanned, or is about
+// to be.
+func (w *watcher) poll(ctx context.Context, id accounts.ID, address string, every time.Duration) {
+	if every <= 0 {
+		every = w.every
+	}
+	p := newSharePoll(id, address, every)
+	switch kind := shareKind(address); kind {
+	case ShareSMB:
 		w.setShareWatch(ctx, id, SharePolled, "")
 		w.spawn(func() { w.notify(ctx, p) })
-	} else {
+	case ShareWebDAV:
 		w.setShareWatch(ctx, id, SharePolled, polledWebDAV)
+	default:
+		// S3 buckets, SFTP folders and rclone remotes tell of no change.
+		w.setShareWatch(ctx, id, SharePolled, kind)
 	}
 	last := time.Now()
-	timer := time.NewTimer(w.every)
+	timer := time.NewTimer(p.every)
 	defer timer.Stop()
 	for {
 		select {
@@ -156,7 +166,7 @@ func (w *watcher) interval(p *sharePoll) time.Duration {
 	if mark := p.notify.mark(); mark.on && !mark.partial {
 		return w.notifiedEvery
 	}
-	return w.every
+	return p.every
 }
 
 // round compares the listings of a share's folders with those its last
@@ -275,7 +285,7 @@ func (w *watcher) unreachable(ctx context.Context, p *sharePoll, err error) {
 	}
 	reason := unwatchedFailed
 	switch failure := shareFailure(err); failure {
-	case errUnreachable, errRefused:
+	case errUnreachable, errRefused, errHostKey:
 		reason = failure
 	}
 	if !p.failing {

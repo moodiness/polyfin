@@ -167,8 +167,11 @@ type loopback struct {
 	// files are Polyfin's own files, recordings, by version (see
 	// FileVersion), served under fileKey, as the files of local folders
 	// and network shares are, which local opens (see LocalFiles).
-	files   map[accounts.ID]string
-	local   func(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error)
+	files map[accounts.ID]string
+	local func(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error)
+	// stored finds where the source cache reads the files of local
+	// folders read straight from their storage (see LocalSources).
+	stored  func(ctx context.Context, key string) (source.Location, bool)
 	fileKey string
 	// inputs finds what FFmpeg reads a version of a local folder that is
 	// not one file from (see LocalInputs).

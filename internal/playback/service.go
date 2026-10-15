@@ -189,7 +189,32 @@ func (s *Service) open(version library.Version) *source.Source {
 			return locationOf(fresh), err
 		}
 	}
+	if location, ok := s.storedLocation(version); ok {
+		return s.sources.Open(version.ID, location, nil)
+	}
 	return s.sources.Open(version.ID, locationOf(version), renew)
+}
+
+// storedLookup bounds finding where a local file is read from (see
+// LocalSources): one query, for reads that have their own deadlines.
+const storedLookup = 10 * time.Second
+
+// storedLocation is where the source cache reads a version of a local
+// folder read straight from its storage (see LocalSources).
+func (s *Service) storedLocation(version library.Version) (source.Location, bool) {
+	key, ok := strings.CutPrefix(version.URL, s.localBase())
+	if !ok || key == "" {
+		return source.Location{}, false
+	}
+	s.loopback.mu.Lock()
+	find := s.loopback.stored
+	s.loopback.mu.Unlock()
+	if find == nil {
+		return source.Location{}, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), storedLookup)
+	defer cancel()
+	return find(ctx, key)
 }
 
 // locationOf is where a version's bytes are, with the size its addon

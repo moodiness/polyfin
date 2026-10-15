@@ -19,6 +19,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -295,7 +296,7 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 		return s.openTitle(ctx, id)
 	}
 	if shareKind(root) != "" {
-		r, err := s.folderRemote(folder, root, user, sealed)
+		r, err := s.folderRemote(ctx, folder, root, user, sealed)
 		if err != nil {
 			return nil, time.Time{}, err
 		}
@@ -323,6 +324,38 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 		return nil, time.Time{}, ErrGone
 	}
 	return file, info.ModTime(), nil
+}
+
+// Source tells where the source cache reads the video key names, as
+// Streams gives it, when its folder is an S3 bucket, an SFTP folder or an
+// rclone remote: straight from the storage, by ranges, and how (see
+// source.Location.Opener). ok is false for the videos of the other
+// folders, read through the loopback (see Open), for the titles of discs,
+// and for a folder that cannot be read now, which Open then answers with
+// why.
+func (s *Service) Source(ctx context.Context, key string) (location source.Location, ok bool) {
+	raw, _, _ := strings.Cut(key, ".")
+	id, err := accounts.ParseID(raw)
+	if err != nil {
+		return source.Location{}, false
+	}
+	var folder accounts.ID
+	var root, rel, user, sealed string
+	err = s.db.QueryRow(ctx, `SELECT f.addon_id, a.manifest_url, f.path, l.share_user, l.share_password
+		FROM (SELECT addon_id, path FROM local_files WHERE id = $1 UNION ALL SELECT addon_id, path FROM local_extras WHERE id = $1) f
+		JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id`, id).Scan(&folder, &root, &rel, &user, &sealed)
+	if err != nil || !cachedKind(shareKind(root)) || shareTitle(rel) {
+		return source.Location{}, false
+	}
+	r, err := s.folderRemote(ctx, folder, root, user, sealed)
+	if err != nil {
+		return source.Location{}, false
+	}
+	cached, ok := r.(cachedRemote)
+	if !ok {
+		return source.Location{}, false
+	}
+	return cached.location(rel), true
 }
 
 // Identity tells the file of a folder a video's key names, as Streams

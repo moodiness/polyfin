@@ -12,6 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/source"
 )
 
 // Record copies a channel's live stream into the MPEG-TS file at path as it
@@ -114,6 +115,18 @@ func (s *Service) LocalFiles(open func(ctx context.Context, key string) (io.Read
 	s.loopback.local = open
 	s.loopback.mu.Unlock()
 	return s.localBase()
+}
+
+// LocalSources has the source cache read the files of local folders that
+// find names straight from their storage, by ranges, rather than through
+// the loopback: find tells where by their keys, ok false for the others
+// (see localfiles.Service.Source), the files of S3 buckets, SFTP folders
+// and rclone remotes. Their versions keep their loopback address, which
+// the apps and the version rules know them by.
+func (s *Service) LocalSources(find func(ctx context.Context, key string) (source.Location, bool)) {
+	s.loopback.mu.Lock()
+	s.loopback.stored = find
+	s.loopback.mu.Unlock()
 }
 
 // localBase is the address the keys of the files of local folders are

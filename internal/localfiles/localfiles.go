@@ -1,6 +1,7 @@
 // Package localfiles serves the files of folders as versions of the titles
 // they are: folders mounted in Polyfin's container, and network shares
-// Polyfin reads itself, SMB shares and WebDAV folders. An administrator
+// Polyfin reads itself: SMB shares, WebDAV folders, S3 buckets, SFTP
+// folders and rclone remotes. An administrator
 // declares a folder of movies or of shows; it is an addon of its own kind
 // (see addons.KindLocal), as IPTV sources are, which answers as an addon:
 // one catalog, a library apps see, of the titles its files were matched
@@ -30,7 +31,10 @@
 // own, which no metadata addon is asked about (see homevideos.go).
 //
 // A share's files are read from the share at each request, with byte
-// ranges, and never copied; its connections are kept between requests.
+// ranges; its connections are kept between requests. Those of S3 buckets,
+// SFTP folders and rclone remotes are read through the source cache,
+// straight from the storage (see Source); the others through the
+// loopback, as the files of the folders in the container are.
 package localfiles
 
 import (
@@ -227,7 +231,20 @@ func (s *Service) watchable(ctx context.Context) ([]watchFolder, error) {
 	if err != nil {
 		return nil, err
 	}
-	return watchable(settings, installed), nil
+	rows, err := s.db.Query(ctx, "SELECT addon_id, poll_minutes FROM local_folders WHERE poll_minutes IS NOT NULL")
+	if err != nil {
+		return nil, err
+	}
+	polls := map[accounts.ID]int{}
+	var id accounts.ID
+	var minutes int
+	if _, err := pgx.ForEachRow(rows, []any{&id, &minutes}, func() error {
+		polls[id] = minutes
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return watchable(settings, installed, polls), nil
 }
 
 // watchScan scans a folder that changed, once a scan of it under way
@@ -246,7 +263,7 @@ func (s *Service) shareReader(ctx context.Context, id accounts.ID, address strin
 		&sealed); err != nil {
 		return nil, "", err
 	}
-	r, err := s.folderRemote(id, address, user, sealed)
+	r, err := s.folderRemote(ctx, id, address, user, sealed)
 	return r, kind, err
 }
 
@@ -270,23 +287,36 @@ func (s *Service) Close() {
 // share's address, what it holds, KindMovies, KindShows, KindMusic or
 // KindHomeVideos, a share's user and password, whether its titles show
 // the artwork beside their files (see Artwork), and whether its scans read
-// the extras beside them (see extras.go), nil for yes.
+// the extras beside them (see extras.go), nil for yes. An S3 bucket also
+// has its endpoint and region, its user and password being its access
+// key and secret key; an SFTP folder a private key, with its passphrase
+// when it has one; an rclone remote the remote's name. PollMinutes is how
+// often such a folder is listed again for changes, 0 only at its scans,
+// nil for its kind's default (see defaultPollMinutes).
 type NewFolder struct {
-	Name       string
-	Path       string
-	Kind       string
-	User       string
-	Password   string
-	UseArtwork *bool
-	ReadExtras *bool
+	Name        string
+	Path        string
+	Kind        string
+	User        string
+	Password    string
+	UseArtwork  *bool
+	ReadExtras  *bool
+	Endpoint    string
+	Region      string
+	Remote      string
+	PrivateKey  string
+	Passphrase  string
+	PollMinutes *int
 }
 
 // Folder describes a local folder: its addon, what it holds, the kind of
-// share it is (ShareSMB, ShareWebDAV, empty for a path in the container)
-// with its user and whether a password is stored, how its last scan went
+// share it is (ShareSMB, ShareWebDAV, ShareS3, ShareSFTP, ShareRclone,
+// empty for a path in the container) with its user and whether a password
+// is stored, how its last scan went
 // (CheckedAt is the last attempt, ScannedAt the last scan that could read
 // the folder, Error the code of the last failure: "missing",
-// "unreadable", "not_folder", or for a share "unreachable" or "refused"),
+// "unreadable", "not_folder", or for a share "unreachable", "refused" or
+// "host_key_changed"),
 // whether a scan is under way, its files, those matched to a title, how,
 // and the others, the links made by hand, and the episodes given by hand
 // to the titles of shows' discs. Unwatched tells why a
@@ -294,8 +324,9 @@ type NewFolder struct {
 // "watch_limit" when the system's limit of watches is reached,
 // "instance_limit" when its limit of watchers or of open files is; for a
 // share "unreachable" when its last listing could not reach it, "refused"
-// when it refused the user or password; "failed" otherwise; empty when it
-// is watched or need not be.
+// when it refused the user or password, "host_key_changed" when an SFTP
+// server offered another host key; "failed" otherwise; empty when it is
+// watched or need not be.
 type Folder struct {
 	Addon       addons.Addon
 	Kind        string
@@ -325,7 +356,8 @@ type Folder struct {
 	// tells of its changes, "polled" when its folders are listed again
 	// every few minutes; empty for a folder in the container, or a share
 	// not watched. Polled tells why a share is: "webdav" for a WebDAV
-	// folder, "unsupported" when the SMB server does not tell of changes,
+	// folder, "s3", "sftp" or "rclone" for those kinds, which are listed
+	// every PollMinutes, "unsupported" when the SMB server does not tell of changes,
 	// "silent" when it did not tell of one a listing found, "failed" while
 	// its watch is set up again; empty while it is set up. A notified
 	// share's Polled is "partial" once its server missed a change in one of
@@ -339,6 +371,18 @@ type Folder struct {
 	// Dated counts a home videos folder's videos by where their dates
 	// come from (see homeDate); its Files are its videos, all matched.
 	Dated Dates
+	// Endpoint and Region are an S3 bucket's, Remote an rclone remote's
+	// name. PrivateKeySet and PassphraseSet tell whether an SFTP folder
+	// has a private key and a passphrase stored, never them; HostKey is
+	// the fingerprint of the host key saved at its first connection, and
+	// OfferedHostKey that of another one its server offered since, which
+	// refuses it until an administrator accepts it. PollMinutes is how
+	// often the folder is listed again for changes, 0 only at its scans,
+	// nil for a folder whose kind has no such setting.
+	Endpoint, Region, Remote     string
+	PrivateKeySet, PassphraseSet bool
+	HostKey, OfferedHostKey      string
+	PollMinutes                  *int
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
@@ -388,6 +432,11 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 		}
 		password = folder.Password
 	}
+	extra, err := validExtra(share, shareExtra{endpoint: folder.Endpoint, region: folder.Region, remote: folder.Remote,
+		privateKey: folder.PrivateKey, passphrase: folder.Passphrase, pollMinutes: folder.PollMinutes})
+	if err != nil {
+		return addons.Addon{}, err
+	}
 	addon, err := s.addons.Create(ctx, addons.Shared(), addons.KindLocal, location,
 		func(id accounts.ID) stremio.Manifest { return manifest(id, name, folder.Kind, share) },
 		func(tx pgx.Tx, addon addons.Addon) error {
@@ -399,9 +448,10 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 				checked, failure = &at, readable(location)
 			}
 			_, err := tx.Exec(ctx, `INSERT INTO local_folders (addon_id, kind, checked_at, error, share_user, share_password, use_artwork,
-					read_extras)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, addon.ID, folder.Kind, checked, failure, user, s.box.Seal(password), useArtwork,
-				readExtras)
+					read_extras, share_endpoint, share_region, share_remote, share_private_key, share_passphrase, poll_minutes)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`, addon.ID, folder.Kind, checked, failure, user,
+				s.box.Seal(password), useArtwork, readExtras, extra.endpoint, extra.region, extra.remote, s.box.Seal(extra.privateKey),
+				s.box.Seal(extra.passphrase), extra.pollMinutes)
 			return err
 		})
 	if err != nil {
@@ -416,14 +466,26 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 // address, a share's user, its password, removed when empty, whether its
 // titles show the artwork beside their files, whether its scans read the
 // extras beside them, and what it holds.
+//
+// An S3 bucket's endpoint and region, an rclone remote's name, an SFTP
+// folder's private key and passphrase, removed when empty, and how often
+// the folder is listed again for changes change too; AcceptHostKey
+// accepts the host key an SFTP server offered in place of the one saved.
 type Changes struct {
-	Name       *string
-	Path       *string
-	User       *string
-	Password   *string
-	UseArtwork *bool
-	ReadExtras *bool
-	Kind       *string
+	Name          *string
+	Path          *string
+	User          *string
+	Password      *string
+	UseArtwork    *bool
+	ReadExtras    *bool
+	Kind          *string
+	Endpoint      *string
+	Region        *string
+	Remote        *string
+	PrivateKey    *string
+	Passphrase    *string
+	PollMinutes   *int
+	AcceptHostKey bool
 }
 
 // Update changes a folder's name, path or address, a share's user or
@@ -476,9 +538,35 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 	if share == "" {
 		user, changes.Password = "", new("")
 	}
+	stored, err := s.storedExtra(ctx, s.db, id)
+	if err != nil {
+		return addons.Addon{}, err
+	}
+	extra := stored
+	for _, field := range []struct {
+		from *string
+		to   *string
+	}{{changes.Endpoint, &extra.endpoint}, {changes.Region, &extra.region}, {changes.Remote, &extra.remote},
+		{changes.PrivateKey, &extra.privateKey}, {changes.Passphrase, &extra.passphrase}} {
+		if field.from != nil {
+			*field.to = *field.from
+		}
+	}
+	if shareKind(current.Addon.ManifestURL) != share {
+		// Another kind of share starts from its own default.
+		extra.pollMinutes = nil
+	}
+	if changes.PollMinutes != nil {
+		extra.pollMinutes = changes.PollMinutes
+	}
+	if extra, err = validExtra(share, extra); err != nil {
+		return addons.Addon{}, err
+	}
 	moved := location != current.Addon.ManifestURL
 	retyped := kind != current.Kind
-	credentials := user != current.User || changes.Password != nil
+	credentials := user != current.User || changes.Password != nil || !extra.same(stored) || changes.AcceptHostKey
+	// A folder on another server forgets the host key of the former.
+	rehosted := serverOf(location) != serverOf(current.Addon.ManifestURL)
 	release := func() {}
 	if moved || retyped {
 		// A scan under way stops: what it found is forgotten.
@@ -499,10 +587,31 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 			if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_user = $2 WHERE addon_id = $1", id, user); err != nil {
 				return err
 			}
+			if _, err := tx.Exec(ctx, `UPDATE local_folders SET share_endpoint = $2, share_region = $3, share_remote = $4, poll_minutes = $5
+				WHERE addon_id = $1`, id, extra.endpoint, extra.region, extra.remote, extra.pollMinutes); err != nil {
+				return err
+			}
+			if extra.privateKey != stored.privateKey || extra.passphrase != stored.passphrase {
+				if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_private_key = $2, share_passphrase = $3 WHERE addon_id = $1", id,
+					s.box.Seal(extra.privateKey), s.box.Seal(extra.passphrase)); err != nil {
+					return err
+				}
+			}
+			if changes.AcceptHostKey {
+				if _, err := tx.Exec(ctx, `UPDATE local_folders SET share_host_key = share_offered_key, share_offered_key = ''
+					WHERE addon_id = $1 AND share_offered_key <> ''`, id); err != nil {
+					return err
+				}
+			}
 			if changes.Password != nil {
 				if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_password = $2 WHERE addon_id = $1", id, s.box.Seal(*changes.Password)); err != nil {
 					return err
 				}
+			}
+		}
+		if rehosted {
+			if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_host_key = '', share_offered_key = '' WHERE addon_id = $1", id); err != nil {
+				return err
 			}
 		}
 		if !moved && !retyped {
@@ -544,11 +653,14 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 	if err != nil {
 		return addons.Addon{}, err
 	}
+	if changes.AcceptHostKey || rehosted {
+		// The reader keeps the host key it was made with.
+		s.forgetRemote(id)
+	}
 	s.artworkChanged()
 	if moved || retyped || share != "" && credentials {
+		// The watch reads again how often a share is listed.
 		s.StartScan(id)
-	}
-	if moved || retyped {
 		s.watch.kick()
 	}
 	return addon, nil
@@ -569,8 +681,10 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 		return Folder{}, addons.ErrNotFound
 	}
 	f := Folder{Addon: addon, Share: shareKind(addon.ManifestURL)}
-	var password string
+	var password, hostKey, offeredKey string
 	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error, share_user, share_password, use_artwork, read_extras,
+			share_endpoint, share_region, share_remote, share_private_key <> '', share_passphrase <> '', share_host_key, share_offered_key,
+			poll_minutes,
 			(SELECT count(*) FROM local_extras WHERE addon_id = $1),
 			(SELECT count(*) FROM local_files WHERE addon_id = $1) + (SELECT count(*) FROM local_tracks WHERE addon_id = $1),
 			(SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL) +
@@ -580,8 +694,10 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND (track_gain IS NOT NULL OR loudness > $2)),
 			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND loudness IS NOT NULL)
 		FROM local_folders WHERE addon_id = $1`, id, loudness.Silence).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password,
-		&f.UseArtwork, &f.ReadExtras, &f.Extras, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured)
+		&f.UseArtwork, &f.ReadExtras, &f.Endpoint, &f.Region, &f.Remote, &f.PrivateKeySet, &f.PassphraseSet, &hostKey, &offeredKey,
+		&f.PollMinutes, &f.Extras, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured)
 	f.PasswordSet = password != ""
+	f.HostKey, f.OfferedHostKey = Fingerprint(hostKey), Fingerprint(offeredKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Folder{}, addons.ErrNotFound
 	}
@@ -669,6 +785,12 @@ func manifest(id accounts.ID, name, kind, share string) stremio.Manifest {
 		description = "SMB share"
 	case ShareWebDAV:
 		description = "WebDAV folder"
+	case ShareS3:
+		description = "S3 bucket"
+	case ShareSFTP:
+		description = "SFTP folder"
+	case ShareRclone:
+		description = "rclone remote"
 	}
 	if kind == KindMusic {
 		return stremio.Manifest{ID: "polyfin.local." + id.String(), Version: "1", Name: name, Description: description,

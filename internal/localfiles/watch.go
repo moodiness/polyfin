@@ -67,17 +67,21 @@ func (n notifyWatcher) Close() error                  { return n.w.Close() }
 
 // watchFolder is a folder to watch: its addon, its path in the container
 // or a share's address, and its kind, KindMusic for a music folder, else
-// empty: a watch reads the folders of movies and shows alike.
+// empty: a watch reads the folders of movies and shows alike. every is
+// how often a share is listed again, 0 for shareEvery (see sharewatch.go).
 type watchFolder struct {
-	id   accounts.ID
-	root string
-	kind string
+	id    accounts.ID
+	root  string
+	kind  string
+	every time.Duration
 }
 
 // watchable are the folders to watch among the server's addons: the
 // enabled local folders, in the container or network shares, none when
-// the setting is off.
-func watchable(settings accounts.Settings, installed []addons.Addon) []watchFolder {
+// the setting is off. polls are how often, in minutes, the shares whose
+// kind has a setting of it are listed again, by folder: those listed only
+// at their scans, 0, are not watched.
+func watchable(settings accounts.Settings, installed []addons.Addon, polls map[accounts.ID]int) []watchFolder {
 	if !settings.WatchLocalFolders {
 		return nil
 	}
@@ -87,6 +91,12 @@ func watchable(settings accounts.Settings, installed []addons.Addon) []watchFold
 			folder := watchFolder{id: addon.ID, root: addon.ManifestURL}
 			if addon.HasMusic() {
 				folder.kind = KindMusic
+			}
+			if minutes, ok := polls[addon.ID]; ok {
+				if minutes == 0 {
+					continue
+				}
+				folder.every = time.Duration(minutes) * time.Minute
 			}
 			folders = append(folders, folder)
 		}
@@ -270,10 +280,10 @@ func (w *watcher) reconcile() {
 		return
 	}
 	want := map[accounts.ID]watchFolder{}
-	shares := map[accounts.ID]string{}
+	shares := map[accounts.ID]watchFolder{}
 	for _, folder := range list {
 		if shareKind(folder.root) != "" {
-			shares[folder.id] = folder.root
+			shares[folder.id] = folder
 		} else {
 			want[folder.id] = folder
 		}

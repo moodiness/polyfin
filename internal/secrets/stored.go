@@ -19,7 +19,8 @@ import (
 // settings, named below as the admin API names them, the tokens and API
 // keys of the users' tracking connections, what the users' app connections
 // sign in with (see appimport.SignIn), the addresses, tokens and keys
-// of the notification targets, the passwords of the network shares, the
+// of the notification targets, the passwords, secret keys, private keys
+// and passphrases of the network shares, the
 // secret keys, passwords and private keys of the backup destinations, and
 // the account key and private key of the certificate of Let's Encrypt.
 // Nothing else is sealed: addon addresses, IPTV passwords and guide
@@ -40,8 +41,8 @@ var settingSecrets = []struct{ column, name string }{
 // Unreadable is a stored secret the key cannot open: a setting, by the
 // admin API's name of it, the tracking connection of a user to a service,
 // the connection of a user to an app, a notification target, by its name,
-// of a user or of the server (User empty), the password of a network
-// share, by its folder's name, a backup destination, by what it shows
+// of a user or of the server (User empty), the password, secret key,
+// private key or passphrase of a network share, by its folder's name, a backup destination, by what it shows
 // (see DestinationName), or the keys of the certificate of Let's Encrypt.
 type Unreadable struct {
 	Setting       string
@@ -62,7 +63,7 @@ func (u Unreadable) String() string {
 	case u.Destination != "":
 		return "backup destination " + u.Destination
 	case u.Folder != "":
-		return fmt.Sprintf("password of the share %s", u.Folder)
+		return fmt.Sprintf("password or key of the share %s", u.Folder)
 	case u.Target != "" && u.User == "":
 		return fmt.Sprintf("server notification target %s", u.Target)
 	case u.Target != "":
@@ -273,18 +274,26 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 	if err := targets.Err(); err != nil {
 		return Report{}, err
 	}
-	shares, err := db.Query(ctx, `SELECT a.manifest->>'name', f.share_password
+	shares, err := db.Query(ctx, `SELECT a.manifest->>'name', f.share_password, f.share_private_key, f.share_passphrase
 		FROM local_folders f JOIN addons a ON a.id = f.addon_id ORDER BY a.manifest->>'name'`)
 	if err != nil {
 		return Report{}, err
 	}
 	defer shares.Close()
 	for shares.Next() {
-		var name, password string
-		if err := shares.Scan(&name, &password); err != nil {
+		var name string
+		var secrets [3]string
+		if err := shares.Scan(&name, &secrets[0], &secrets[1], &secrets[2]); err != nil {
 			return Report{}, err
 		}
-		check(password, Unreadable{Folder: name})
+		// A share counts once, whichever of its secrets the key cannot
+		// open.
+		before := len(report.Unreadable)
+		for _, secret := range secrets {
+			if len(report.Unreadable) == before {
+				check(secret, Unreadable{Folder: name})
+			}
+		}
 	}
 	if err := shares.Err(); err != nil {
 		return Report{}, err
@@ -377,7 +386,7 @@ var sealedTables = map[string]struct {
 	"tracking_connections": {KindTracking, []string{"token", "refresh_token"}},
 	"app_connections":      {KindApp, []string{"sign_in"}},
 	"notification_targets": {KindTarget, []string{"secret"}},
-	"local_folders":        {KindShare, []string{"share_password"}},
+	"local_folders":        {KindShare, []string{"share_password", "share_private_key", "share_passphrase"}},
 	"backup_destinations":  {KindDestination, []string{"secret", "private_key"}},
 	"acme_certificate":     {KindCertificate, []string{"account_key", "private_key"}},
 }
@@ -474,30 +483,32 @@ func sealTargets(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
 	return nil
 }
 
-// sealShares seals the passwords of the network shares stored as
-// plaintext, counting them into sealed.
+// sealShares seals the passwords, private keys and passphrases of the
+// network shares stored as plaintext, counting them into sealed.
 func sealShares(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
-	rows, err := tx.Query(ctx, "SELECT addon_id, share_password FROM local_folders WHERE share_password <> '' AND share_password NOT LIKE $1 FOR UPDATE",
-		prefix+"%")
-	if err != nil {
-		return err
-	}
-	type row struct {
-		id       [16]byte
-		password string
-	}
-	plain, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
-		var f row
-		return f, r.Scan(&f.id, &f.password)
-	})
-	if err != nil {
-		return err
-	}
-	for _, f := range plain {
-		if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_password = $2 WHERE addon_id = $1", f.id, b.Seal(f.password)); err != nil {
+	for _, column := range []string{"share_password", "share_private_key", "share_passphrase"} {
+		rows, err := tx.Query(ctx, "SELECT addon_id, "+column+" FROM local_folders WHERE "+column+" <> '' AND "+column+
+			" NOT LIKE $1 ORDER BY addon_id FOR UPDATE", prefix+"%")
+		if err != nil {
 			return err
 		}
-		*sealed++
+		type row struct {
+			id     [16]byte
+			secret string
+		}
+		plain, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+			var f row
+			return f, r.Scan(&f.id, &f.secret)
+		})
+		if err != nil {
+			return err
+		}
+		for _, f := range plain {
+			if _, err := tx.Exec(ctx, "UPDATE local_folders SET "+column+" = $2 WHERE addon_id = $1", f.id, b.Seal(f.secret)); err != nil {
+				return err
+			}
+			*sealed++
+		}
 	}
 	return nil
 }

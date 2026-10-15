@@ -148,7 +148,7 @@ func (f *shareFS) close() {
 // shareDiscFS opens the file system of a disc on a share: its folder's,
 // or its image's, read by ranges. It holds what it opened until release.
 func (s *Service) shareDiscFS(ctx context.Context, d discInput) (fsys discFS, release func(), err error) {
-	r, err := s.folderRemote(d.folder, d.root, d.user, d.sealed)
+	r, err := s.folderRemote(ctx, d.folder, d.root, d.user, d.sealed)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -532,7 +532,7 @@ func (s *Service) openTitle(ctx context.Context, key accounts.ID) (io.ReadSeekCl
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	r, err := s.folderRemote(d.folder, d.root, d.user, d.sealed)
+	r, err := s.folderRemote(ctx, d.folder, d.root, d.user, d.sealed)
 	if err != nil {
 		return nil, time.Time{}, err
 	}

@@ -105,14 +105,17 @@ type proxyNameJSON struct {
 // "notified" when its server tells of them, "polled" when its folders are
 // listed again every few minutes, with why in Polled (see
 // localfiles.Folder), empty when it is not watched, with why in
-// Unwatched when it should be.
+// Unwatched when it should be. PollMinutes is how often an S3 bucket, an
+// SFTP folder or an rclone remote is listed again, 0 only at its scans,
+// null for the other shares.
 type shareHealthJSON struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Share     string `json:"share"`
-	Watch     string `json:"watch"`
-	Polled    string `json:"polled"`
-	Unwatched string `json:"unwatched"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Share       string `json:"share"`
+	Watch       string `json:"watch"`
+	Polled      string `json:"polled"`
+	Unwatched   string `json:"unwatched"`
+	PollMinutes *int   `json:"pollMinutes"`
 }
 
 // updateJSON is a new version of Polyfin, and the address of its release
@@ -356,7 +359,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 				}
 				if folder.Share != "" {
 					result.Shares = append(result.Shares, shareHealthJSON{ID: addon.ID.String(), Name: addon.Manifest.Name, Share: folder.Share,
-						Watch: folder.ShareWatch, Polled: folder.Polled, Unwatched: folder.Unwatched})
+						Watch: folder.ShareWatch, Polled: folder.Polled, Unwatched: folder.Unwatched, PollMinutes: folder.PollMinutes})
 				}
 				continue
 			}

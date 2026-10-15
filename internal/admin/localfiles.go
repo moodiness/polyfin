@@ -51,6 +51,19 @@ type folderJSON struct {
 	UseArtwork  bool               `json:"useArtwork"`
 	ReadExtras  bool               `json:"readExtras"`
 	Extras      int                `json:"extras"`
+	// An S3 bucket's endpoint and region, an rclone remote's name,
+	// whether an SFTP folder has a private key and a passphrase stored,
+	// never them, the fingerprints of the host key saved and of another
+	// its server offered since, and how often the folder is listed again,
+	// 0 only at its scans, null for the other folders.
+	Endpoint       string `json:"endpoint"`
+	Region         string `json:"region"`
+	RcloneRemote   string `json:"rcloneRemote"`
+	PrivateKeySet  bool   `json:"privateKeySet"`
+	PassphraseSet  bool   `json:"passphraseSet"`
+	HostKey        string `json:"hostKey"`
+	OfferedHostKey string `json:"offeredHostKey"`
+	PollMinutes    *int   `json:"pollMinutes"`
 }
 
 // matchedByJSON counts the matched files by how they were matched: by an
@@ -102,7 +115,9 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Link: f.MatchedBy.Link},
 		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, Gained: f.Gained, Measured: f.Measured,
 		DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
-		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork, ReadExtras: f.ReadExtras, Extras: f.Extras}
+		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork, ReadExtras: f.ReadExtras, Extras: f.Extras,
+		Endpoint: f.Endpoint, Region: f.Region, RcloneRemote: f.Remote, PrivateKeySet: f.PrivateKeySet, PassphraseSet: f.PassphraseSet,
+		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, PollMinutes: f.PollMinutes}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -125,15 +140,28 @@ func (h *handler) folderScope(w http.ResponseWriter, r *http.Request) (addons.Sc
 // and password; whether its titles show the artwork beside their files,
 // and whether its scans read the extras beside them, yes when left out on
 // adding. On a change, a password left out keeps the one stored, and an
-// empty one removes it.
+// empty one removes it. An S3 bucket also has its endpoint and region, its
+// user and password being its access key and secret key; an SFTP folder a
+// private key and its passphrase, kept and removed as the password is; an
+// rclone remote the remote's name; those three how often they are listed
+// again for changes, in minutes, 0 only at their scans, their kind's
+// default when left out on adding. acceptHostKey accepts the host key an
+// SFTP server offered in place of the one saved.
 type folderRequest struct {
-	Name       *string `json:"name"`
-	Path       *string `json:"path"`
-	Kind       string  `json:"kind"`
-	User       *string `json:"user"`
-	Password   *string `json:"password"`
-	UseArtwork *bool   `json:"useArtwork"`
-	ReadExtras *bool   `json:"readExtras"`
+	Name          *string `json:"name"`
+	Path          *string `json:"path"`
+	Kind          string  `json:"kind"`
+	User          *string `json:"user"`
+	Password      *string `json:"password"`
+	UseArtwork    *bool   `json:"useArtwork"`
+	ReadExtras    *bool   `json:"readExtras"`
+	Endpoint      *string `json:"endpoint"`
+	Region        *string `json:"region"`
+	PrivateKey    *string `json:"privateKey"`
+	Passphrase    *string `json:"passphrase"`
+	RcloneRemote  *string `json:"rcloneRemote"`
+	PollMinutes   *int    `json:"pollMinutes"`
+	AcceptHostKey bool    `json:"acceptHostKey"`
 }
 
 // addFolder adds a local folder to the server's addons and scans it in
@@ -147,11 +175,13 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	folder := localfiles.NewFolder{Kind: body.Kind, UseArtwork: body.UseArtwork, ReadExtras: body.ReadExtras}
+	folder := localfiles.NewFolder{Kind: body.Kind, UseArtwork: body.UseArtwork, ReadExtras: body.ReadExtras, PollMinutes: body.PollMinutes}
 	for _, field := range []struct {
 		from *string
 		to   *string
-	}{{body.Name, &folder.Name}, {body.Path, &folder.Path}, {body.User, &folder.User}, {body.Password, &folder.Password}} {
+	}{{body.Name, &folder.Name}, {body.Path, &folder.Path}, {body.User, &folder.User}, {body.Password, &folder.Password},
+		{body.Endpoint, &folder.Endpoint}, {body.Region, &folder.Region}, {body.PrivateKey, &folder.PrivateKey},
+		{body.Passphrase, &folder.Passphrase}, {body.RcloneRemote, &folder.Remote}} {
 		if field.from != nil {
 			*field.to = *field.from
 		}
@@ -183,17 +213,67 @@ func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil && body.UseArtwork == nil && body.ReadExtras == nil &&
-		body.Kind == "" {
+		body.Kind == "" && body.Endpoint == nil && body.Region == nil && body.PrivateKey == nil && body.Passphrase == nil &&
+		body.RcloneRemote == nil && body.PollMinutes == nil && !body.AcceptHostKey {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
 	changes := localfiles.Changes{Name: body.Name, Path: body.Path, User: body.User, Password: body.Password, UseArtwork: body.UseArtwork,
-		ReadExtras: body.ReadExtras}
+		ReadExtras: body.ReadExtras, Endpoint: body.Endpoint, Region: body.Region, PrivateKey: body.PrivateKey, Passphrase: body.Passphrase,
+		Remote: body.RcloneRemote, PollMinutes: body.PollMinutes, AcceptHostKey: body.AcceptHostKey}
 	if body.Kind != "" {
 		changes.Kind = &body.Kind
 	}
 	addon, err := h.Folders.Update(context.WithoutCancel(r.Context()), id, changes)
 	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
+}
+
+// rcloneRemotesRequest asks the rclone instance at address,
+// http://host:port, for its remotes, signed in as user with password; a
+// password left out is the one stored for the folder id names, when
+// editing one.
+type rcloneRemotesRequest struct {
+	Address  string  `json:"address"`
+	User     string  `json:"user"`
+	Password *string `json:"password"`
+	Folder   *string `json:"folder"`
+}
+
+// rcloneRemotesJSON is the remotes an rclone instance knows, by name, or
+// why it could not tell them: "unreachable" or "refused".
+type rcloneRemotesJSON struct {
+	Remotes []string `json:"remotes"`
+	Error   string   `json:"error"`
+}
+
+// rcloneRemotes lists the remotes an rclone instance knows, for the form
+// of an rclone folder.
+func (h *handler) rcloneRemotes(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.folderScope(w, r); !ok {
+		return
+	}
+	var body rcloneRemotesRequest
+	if !decode(w, r, &body) {
+		return
+	}
+	var folder *accounts.ID
+	if body.Folder != nil {
+		id, err := accounts.ParseID(*body.Folder)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "not_found")
+			return
+		}
+		folder = &id
+	}
+	remotes, failure, err := h.Folders.RcloneRemotes(r.Context(), body.Address, body.User, body.Password, folder)
+	if err != nil {
+		h.answerFailure(w, r, err)
+		return
+	}
+	if remotes == nil {
+		remotes = []string{}
+	}
+	writeJSON(w, http.StatusOK, rcloneRemotesJSON{Remotes: remotes, Error: failure})
 }
 
 // startFolderScan scans a local folder in the background; the answer tells

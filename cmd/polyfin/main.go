@@ -318,6 +318,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// as the addons' files are; FFmpeg reads their discs and disc images
 	// itself.
 	folders.UseFiles(player.LocalFiles(folders.Open), player.LocalInputs(folders))
+	player.LocalSources(folders.Source)
 	// A disc image whose UDF file system is laid out in a way Polyfin does
 	// not read, as those of rewritable and write-once media are, is read
 	// through FFmpeg to tell a Blu-ray disc's.
