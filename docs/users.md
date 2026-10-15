@@ -489,7 +489,7 @@ The form asks for:
 
 ### What the guest sees
 
-The link opens a page Polyfin serves at `/share/…`, which needs no account, in English or French as the guest's browser prefers (else the server's language). It shows the server's name, the title, its artwork and overview, when the link expires, a player, and the text subtitles of the version played, which the player's captions menu offers. It lists no library, no search and no other title. A link expired, revoked, turned off or unknown says so.
+The link opens a page Polyfin serves at `/share/…`, which needs no account, in English or French as the guest's browser prefers (else the server's language). It shows the server's name, the title, its artwork and overview, when the link expires, a player, and the text subtitles of the version played, which the player's captions menu offers. The title's name, overview and artwork are those the sharer sees, in their [metadata language](#metadata-language). It lists no library, no search and no other title. A link expired, revoked, turned off or unknown says so.
 
 The page plays HTTP Live Streaming, natively where the browser can, else with [hls.js](https://github.com/video-dev/hls.js) 1.6.16, which Polyfin serves itself: the page loads nothing from elsewhere.
 
@@ -612,6 +612,8 @@ A user with at least one row who is outside all of them cannot sign in (403). Th
 - A title that no addon in the language describes shows the server's description.
 - When the language is English or French, the names Polyfin generates follow it too (see [Language of generated names](getting-started.md#language-of-generated-names)).
 - An invite link's model user passes on their metadata language.
+- The page of a link the user shares shows the title in their language: its name, overview, poster and backdrop (see [Share links](#share-links)).
+- **Edit images** lists TMDB's images in their language first (see [Edit images](addons-and-libraries.md#edit-images)).
 
 **For app developers:**
 

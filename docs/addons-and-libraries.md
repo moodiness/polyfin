@@ -542,7 +542,7 @@ Polyfin keeps these fields: name, original title, sort name, overview, tagline, 
 - **TMDB**, while the server has a **TMDB API key**: a movie's or series' posters, backdrops and logos, an episode's stills, a season's posters and a person's photos, with their language, size and votes. A title is found by the TMDB identifier its addons give, else through TMDB's lookup of its IMDb identifier; a person by name, the most popular of that very name.
 - **Addons**: the poster, background, logo and wide poster each of the server's metadata addons gives in its description of a movie or series, shown under the addon's name. An addon that lists the title for a user is asked too.
 
-Posters are listed for Primary, backdrops for Backdrop and Thumb (with the addons' wide posters first), logos for Logo. Banner lists nothing. Unless jellyfin-web's All languages box is ticked, TMDB's images are those in the server's language and those without text; with it, every language, the server's language first, then by votes. TMDB's logos given as SVG files are left out, since they cannot be kept.
+Posters are listed for Primary, backdrops for Backdrop and Thumb (with the addons' wide posters first), logos for Logo. Banner lists nothing. TMDB's images follow the language of the user who searches: their [metadata language](users.md#metadata-language), else the server's. Unless jellyfin-web's All languages box is ticked, they are those in that language and those without text; with it, every language, that language first, then by votes. TMDB's logos given as SVG files are left out, since they cannot be kept.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
