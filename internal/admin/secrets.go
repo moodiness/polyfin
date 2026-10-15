@@ -14,13 +14,15 @@ import (
 // serverSecrets are the server's secrets an administrator can read again,
 // by the names the settings JSON gives them.
 var serverSecrets = map[string]func(accounts.Settings) string{
-	"publicMetaDbKey":   func(s accounts.Settings) string { return s.PublicMetaDBKey },
-	"theIntroDbKey":     func(s accounts.Settings) string { return s.TheIntroDBKey },
-	"mdblistRatingsKey": func(s accounts.Settings) string { return s.MDBListRatingsKey },
-	"tmdbKey":           func(s accounts.Settings) string { return s.TMDBKey },
-	"traktClientSecret": func(s accounts.Settings) string { return s.TraktClientSecret },
-	"lastFmSecret":      func(s accounts.Settings) string { return s.LastFMSecret },
-	"metricsToken":      func(s accounts.Settings) string { return s.MetricsToken },
+	"publicMetaDbKey":         func(s accounts.Settings) string { return s.PublicMetaDBKey },
+	"theIntroDbKey":           func(s accounts.Settings) string { return s.TheIntroDBKey },
+	"mdblistRatingsKey":       func(s accounts.Settings) string { return s.MDBListRatingsKey },
+	"tmdbKey":                 func(s accounts.Settings) string { return s.TMDBKey },
+	"traktClientSecret":       func(s accounts.Settings) string { return s.TraktClientSecret },
+	"lastFmSecret":            func(s accounts.Settings) string { return s.LastFMSecret },
+	"aniListClientSecret":     func(s accounts.Settings) string { return s.AniListClientSecret },
+	"myAnimeListClientSecret": func(s accounts.Settings) string { return s.MyAnimeListClientSecret },
+	"metricsToken":            func(s accounts.Settings) string { return s.MetricsToken },
 }
 
 // secretJSON is a secret revealed on demand. Answers never cache it.

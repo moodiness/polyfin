@@ -17,13 +17,14 @@ import (
 
 // The anime mapping's lists: a series AniDB splits in two entries, its
 // first and second seasons on TVDB; a long series numbered as TVDB's
-// absolute numbering; a movie.
+// absolute numbering; a movie; an entry the episode list does not place.
 const (
 	animeIDs = `[
-		{"type":"TV","anidb_id":1,"kitsu_id":11,"mal_id":21,"imdb_id":["tt0000100"],"tvdb_id":500},
-		{"type":"TV","anidb_id":2,"kitsu_id":12,"mal_id":22,"imdb_id":["tt0000100"],"tvdb_id":500},
-		{"type":"TV","anidb_id":3,"mal_id":23,"imdb_id":["tt0000300"],"tvdb_id":600},
-		{"type":"MOVIE","anidb_id":4,"kitsu_id":14,"imdb_id":["tt0000400"],"themoviedb_id":{"movie":[4000]}}
+		{"type":"TV","anidb_id":1,"kitsu_id":11,"mal_id":21,"anilist_id":31,"imdb_id":["tt0000100"],"tvdb_id":500},
+		{"type":"TV","anidb_id":2,"kitsu_id":12,"mal_id":22,"anilist_id":32,"imdb_id":["tt0000100"],"tvdb_id":500},
+		{"type":"TV","anidb_id":3,"mal_id":23,"anilist_id":33,"imdb_id":["tt0000300"],"tvdb_id":600},
+		{"type":"MOVIE","anidb_id":4,"kitsu_id":14,"mal_id":24,"anilist_id":34,"imdb_id":["tt0000400"],"themoviedb_id":{"movie":[4000]}},
+		{"type":"TV","anidb_id":5,"kitsu_id":15,"mal_id":25,"anilist_id":35}
 	]`
 	animeEpisodes = `<anime-list>
 		<anime anidbid="1" tvdbid="500" defaulttvdbseason="1"><name>First</name></anime>
@@ -201,10 +202,15 @@ func TestTitlesAnimeAddonsNameAreSentInTVDBNumbering(t *testing.T) {
 	sameJSON(t, "absolute", starts[2].body, `{"show":{"ids":{"imdb":"tt0000300","tvdb":600}},"episode":{"season":2,"number":1},"progress":0}`)
 
 	// What the mapping does not know, or names otherwise, is left to the
-	// item's own identifiers.
-	for _, id := range []string{"kitsu:98:1", "tt0000100:1:1", "kitsu:12"} {
+	// item's own identifiers; an entry it does not place keeps only the
+	// entry, which AniList and MyAnimeList take.
+	for _, id := range []string{"tt0000100:1:1", "kitsu:12"} {
 		if title, ok := h.Anime(t.Context(), itemID(53), id, false); ok {
 			t.Errorf("%s: %+v", id, title)
 		}
+	}
+	if title, ok := h.Anime(t.Context(), itemID(53), "kitsu:98:1", false); !ok || title.Identified() ||
+		*title.Anime != (AnimeID{Source: anime.Kitsu, ID: 98, Episode: 1}) {
+		t.Errorf("unplaced: %+v %v", title, ok)
 	}
 }

@@ -318,6 +318,10 @@ func (s *Service) sendTo(ctx context.Context, service, token string, settings ac
 		return s.sendLastFM(ctx, token, settings, kind, ev)
 	case ListenBrainz:
 		return s.sendListenBrainz(ctx, token, settings, kind, ev)
+	case AniList:
+		return s.sendAniList(ctx, token, kind, ev)
+	case MyAnimeList:
+		return s.sendMyAnimeList(ctx, token, kind, ev)
 	}
 	var (
 		path    string

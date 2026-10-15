@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/trackers"
 )
 
@@ -228,5 +229,19 @@ func TestUserDataUploadsReachTrackingServicesAsPlayedMarks(t *testing.T) {
 		got[1] != "POST /mdblist/sync/watched/remove "+fmt.Sprintf(episode, "") ||
 		!strings.HasPrefix(got[2], `POST /mdblist/sync/watched {"movies":[{"ids":{"imdb":"tt0000","tmdb":10}`) {
 		t.Errorf("sent:\n%s", strings.Join(got, "\n"))
+	}
+}
+
+func TestEpisodesGetTheirAbsoluteNumber(t *testing.T) {
+	t.Parallel()
+	episode := func(season, number int) library.Item {
+		return library.Item{Kind: library.KindEpisode, ParentIndexNumber: season, IndexNumber: number}
+	}
+	// Listed out of order, with a special and a duplicate.
+	episodes := []library.Item{episode(2, 1), episode(1, 2), episode(0, 1), episode(1, 1), episode(2, 2), episode(1, 2)}
+	for _, c := range []struct{ season, number, want int }{{1, 1, 1}, {1, 2, 2}, {2, 1, 3}, {2, 2, 4}, {0, 1, 0}, {3, 1, 0}} {
+		if got := absoluteNumber(episodes, c.season, c.number); got != c.want {
+			t.Errorf("S%dE%d: %d, want %d", c.season, c.number, got, c.want)
+		}
 	}
 }

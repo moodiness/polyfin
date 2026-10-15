@@ -110,9 +110,10 @@ func (s *Service) Key(ctx context.Context, user accounts.ID, service string) (st
 type Status struct {
 	Service string
 	// ByCode tells that the user connects by entering a code on the
-	// service's site, and BySignIn by signing in there and allowing
-	// Polyfin, rather than by pasting an API key.
-	ByCode, BySignIn bool
+	// service's site, BySignIn by signing in there and allowing Polyfin,
+	// and ByPaste by allowing Polyfin there and pasting back the code or
+	// address it gives, rather than by pasting an API key.
+	ByCode, BySignIn, ByPaste bool
 	// Music tells that the service is told the songs the user plays rather
 	// than the movies and episodes they watch; it has no history to import.
 	Music bool
@@ -123,6 +124,9 @@ type Status struct {
 	// Account is the account name the service gave, empty when unknown.
 	Account     string
 	ConnectedAt *time.Time
+	// ExpiresAt is when the token of a connection that cannot be
+	// refreshed (AniList) expires, which stops the connection.
+	ExpiresAt *time.Time
 	// LastSentAt is the last time the service accepted a change.
 	LastSentAt *time.Time
 	// Problem is empty, ProblemReconnect or ProblemUnreachable.
@@ -139,9 +143,12 @@ type Status struct {
 	LastImport    *ImportResult
 	NextImport    *time.Time
 	// Watchlist tells that Polyfin can import the service's watchlist
-	// (Trakt, Simkl), and ImportWatchlist that it does, with the imports
-	// of the history.
+	// (Trakt, Simkl, AniList, MyAnimeList), and ImportWatchlist that it
+	// does, with the imports of the history.
 	Watchlist, ImportWatchlist bool
+	// Ratings tells that the service can keep the user's ratings (AniList,
+	// MyAnimeList), and SyncRatings that they are sent there and imported.
+	Ratings, SyncRatings bool
 }
 
 // Code is a code waiting for a user to enter it on a service's site, or,
@@ -189,8 +196,8 @@ func (s *Service) Stopped(ctx context.Context) ([]StoppedConnection, error) {
 }
 
 func (s *Service) status(ctx context.Context, user accounts.ID, service string) (Status, error) {
-	status := Status{Service: service, ByCode: ByCode(service), BySignIn: BySignIn(service), Music: Music(service),
-		Available: Available(service, s.settings()), Watchlist: watchlists(service)}
+	status := Status{Service: service, ByCode: ByCode(service), BySignIn: BySignIn(service), ByPaste: ByPaste(service), Music: Music(service),
+		Available: Available(service, s.settings()), Watchlist: watchlists(service), Ratings: animeLists(service)}
 	c, ok, err := s.connection(ctx, user, service)
 	if err != nil {
 		return status, err
@@ -201,10 +208,16 @@ func (s *Service) status(ctx context.Context, user accounts.ID, service string) 
 		if c.account != nil {
 			status.Account = *c.account
 		}
+		if c.refresh == "" && c.expires != nil && !refreshes(service) {
+			status.ExpiresAt = c.expires
+		}
 	}
 	s.mu.Lock()
 	key := laneKey{user, service}
-	if p := s.pending[key]; p != nil {
+	if p := s.pending[key]; p != nil && ByPaste(service) && !s.now().Before(p.expiresAt) {
+		// A paste service's code is not polled: it ends when it expires.
+		delete(s.pending, key)
+	} else if p != nil {
 		status.Code = &Code{UserCode: p.userCode, VerificationURL: p.verificationURL, ExpiresAt: p.expiresAt}
 	}
 	if refused, ok := s.refusedApps[key]; ok {
@@ -269,10 +282,13 @@ type pending struct {
 	service                   string
 	deviceCode                string
 	userCode, verificationURL string
-	expiresAt                 time.Time
-	interval                  time.Duration
-	done                      chan struct{}
-	once                      sync.Once
+	// state is what MyAnimeList sends the browser back with, to tell its
+	// code is for this connection.
+	state     string
+	expiresAt time.Time
+	interval  time.Duration
+	done      chan struct{}
+	once      sync.Once
 }
 
 func (p *pending) cancel() {
@@ -292,10 +308,11 @@ type codeAnswer struct {
 
 // StartCode asks a code service for a code the user enters on its site, or
 // a sign-in service for the page where the user allows Polyfin, in place of
-// the one waiting, and waits for them in the background. Their connection,
-// if any, stays until they enter it.
+// the one waiting, and waits for them in the background; a paste service's
+// page waits for the code the user pastes back (see Exchange). Their
+// connection, if any, stays until they enter it.
 func (s *Service) StartCode(ctx context.Context, user accounts.ID, service string) (Status, error) {
-	if !ByCode(service) && !BySignIn(service) {
+	if !ByCode(service) && !BySignIn(service) && !ByPaste(service) {
 		return Status{}, ErrUnknownService
 	}
 	settings := s.settings()
@@ -307,6 +324,9 @@ func (s *Service) StartCode(ctx context.Context, user accounts.ID, service strin
 	s.mu.Lock()
 	delete(s.refusedApps, key)
 	s.mu.Unlock()
+	if ByPaste(service) {
+		return s.startPaste(ctx, key, settings)
+	}
 	if service == LastFM {
 		p, err := s.lastFMToken(ctx, user, settings)
 		if err != nil {
@@ -545,6 +565,10 @@ func appCredentials(service string, settings accounts.Settings) string {
 		return settings.TraktClientID + "\x00" + settings.TraktClientSecret
 	case LastFM:
 		return settings.LastFMAPIKey + "\x00" + settings.LastFMSecret
+	case AniList:
+		return settings.AniListClientID + "\x00" + settings.AniListClientSecret
+	case MyAnimeList:
+		return settings.MyAnimeListClientID + "\x00" + settings.MyAnimeListClientSecret
 	}
 	return settings.SimklClientID
 }
@@ -729,6 +753,14 @@ func (s *Service) fresh(ctx context.Context, key laneKey, refusedToken string) (
 		return c, errTokenRefused
 	}
 	stale := refusedToken != "" && c.token == refusedToken
+	if !refreshes(key.service) {
+		// AniList's token lasts a year, and once expired the user connects
+		// again.
+		if stale || c.expires != nil && !s.now().Before(*c.expires) {
+			return c, errTokenRefused
+		}
+		return c, nil
+	}
 	if !stale && (c.expires == nil || c.expires.Sub(s.now()) > s.timing.refreshAhead) {
 		return c, nil
 	}
@@ -737,11 +769,15 @@ func (s *Service) fresh(ctx context.Context, key laneKey, refusedToken string) (
 	}
 	settings := s.settings()
 	var r reply
-	if key.service == Trakt {
+	switch key.service {
+	case Trakt:
 		r, err = s.api(ctx, Trakt, "", settings, http.MethodPost, "/oauth/token", nil, map[string]string{
 			"refresh_token": c.refresh, "client_id": settings.TraktClientID, "client_secret": settings.TraktClientSecret,
 			"redirect_uri": traktRedirect, "grant_type": "refresh_token"})
-	} else {
+	case MyAnimeList:
+		r, err = s.oauthForm(ctx, MyAnimeList, url.Values{"grant_type": {"refresh_token"}, "client_id": {settings.MyAnimeListClientID},
+			"client_secret": {settings.MyAnimeListClientSecret}, "refresh_token": {c.refresh}})
+	default:
 		r, err = s.form(ctx, "/oauth2/token", url.Values{"grant_type": {"refresh_token"}, "client_id": {settings.SimklClientID},
 			"refresh_token": {c.refresh}})
 	}
@@ -770,10 +806,12 @@ func (s *Service) fresh(ctx context.Context, key laneKey, refusedToken string) (
 }
 
 // refreshDue refreshes the tokens that expire soon, so that a user who
-// watches nothing for a while stays connected.
+// watches nothing for a while stays connected, and stops the connections
+// whose token expired without a way to refresh it (AniList's).
 func (s *Service) refreshDue() {
 	rows, err := s.db.Query(s.ctx, `SELECT user_id, service FROM tracking_connections
-		WHERE refresh_token <> '' AND problem IS DISTINCT FROM 'reconnect' AND expires_at < $1`, s.now().Add(s.timing.refreshAhead))
+		WHERE problem IS DISTINCT FROM 'reconnect' AND (refresh_token <> '' AND expires_at < $1 OR refresh_token = '' AND expires_at <= $2)`,
+		s.now().Add(s.timing.refreshAhead), s.now())
 	if err != nil {
 		return
 	}

@@ -143,6 +143,7 @@ const (
 var connectionNames = map[string]string{
 	"nuvio": "Nuvio", "stremio": "Stremio",
 	"trakt": "Trakt", "simkl": "Simkl", "mdblist": "MDBList", "publicmetadb": "PublicMetaDB", "lastfm": "Last.fm", "listenbrainz": "ListenBrainz",
+	"anilist": "AniList", "myanimelist": "MyAnimeList",
 }
 
 // PlaybackJSON is a playback that started, paused, resumed or stopped.

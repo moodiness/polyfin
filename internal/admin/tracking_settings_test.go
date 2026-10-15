@@ -66,3 +66,63 @@ func TestTrackingSettingsKeepTheSecret(t *testing.T) {
 		t.Errorf("cleared: %d %v", status, body)
 	}
 }
+
+func TestAnimeListAppsKeepTheirSecrets(t *testing.T) {
+	t.Parallel()
+	api := newTrackingAPI(t)
+	administrator := api.signedIn("admin", true)
+	status, body, _ := administrator.call(http.MethodGet, "/settings", nil)
+	if status != http.StatusOK || body["aniListClientId"] != "" || body["aniListClientSecretSet"] != false ||
+		body["myAnimeListClientId"] != "" || body["myAnimeListClientSecretSet"] != false {
+		t.Fatalf("defaults: %d %v", status, body)
+	}
+	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en"}
+	set := maps.Clone(base)
+	set["aniListClientId"], set["aniListClientSecret"] = "12345", "anilist-secret-value"
+	set["myAnimeListClientId"], set["myAnimeListClientSecret"] = "mal-id", "mal-secret-value"
+	status, body, _ = administrator.call(http.MethodPut, "/settings", set)
+	encoded, _ := json.Marshal(body)
+	if status != http.StatusOK || body["aniListClientId"] != "12345" || body["aniListClientSecretSet"] != true ||
+		body["myAnimeListClientId"] != "mal-id" || body["myAnimeListClientSecretSet"] != true ||
+		strings.Contains(string(encoded), "anilist-secret-value") || strings.Contains(string(encoded), "mal-secret-value") {
+		t.Fatalf("saved: %d %s", status, encoded)
+	}
+	if got := api.store.Settings(); !got.AniListAvailable() || !got.MyAnimeListAvailable() {
+		t.Errorf("not available: %+v", got)
+	}
+	// The eye reads a secret again.
+	if status, body, _ := administrator.call(http.MethodPost, "/settings/secrets/aniListClientSecret/reveal", nil); status != http.StatusOK ||
+		body["value"] != "anilist-secret-value" {
+		t.Errorf("reveal: %d %v", status, body)
+	}
+	for field, code := range map[string]string{"aniListClientId": "invalid_anilist_app", "aniListClientSecret": "invalid_anilist_app",
+		"myAnimeListClientId": "invalid_myanimelist_app", "myAnimeListClientSecret": "invalid_myanimelist_app"} {
+		refused := maps.Clone(base)
+		refused[field] = "with space"
+		if status, body, _ := administrator.call(http.MethodPut, "/settings", refused); status != http.StatusBadRequest || body["error"] != code {
+			t.Errorf("%s: %d %v", field, status, body)
+		}
+	}
+	// Users are offered both, AniList by its code, MyAnimeList by the
+	// address its site sends them back to.
+	status, body, _ = administrator.call(http.MethodGet, "/account/tracking", nil)
+	services, _ := body["services"].([]any)
+	connections := map[string]any{}
+	for _, s := range services {
+		service, _ := s.(map[string]any)
+		if service["available"] == true {
+			connections[service["service"].(string)] = service["connection"]
+		}
+	}
+	if status != http.StatusOK || connections["anilist"] != "pin" || connections["myanimelist"] != "redirect" {
+		t.Errorf("tracking: %d %v", status, connections)
+	}
+	// A code for no connection started is refused.
+	if status, body, _ := administrator.call(http.MethodPost, "/account/tracking/myanimelist/code", map[string]string{"code": "x"}); status != http.StatusBadRequest ||
+		body["error"] != "invalid_code" {
+		t.Errorf("code: %d %v", status, body)
+	}
+	if status, _, _ := administrator.call(http.MethodPost, "/account/tracking/trakt/code", map[string]string{"code": "x"}); status != http.StatusNotFound {
+		t.Errorf("code for Trakt: %d", status)
+	}
+}

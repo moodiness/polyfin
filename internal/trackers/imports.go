@@ -42,6 +42,10 @@ type ImportResult struct {
 	// watchlist, and Unmapped the titles of the history and the watchlist
 	// Polyfin could not identify.
 	Played, Resumed, Watchlist, Unmapped int
+	// Rated counts the titles it gave the service's score, and
+	// RatingsSkipped the ratings of series spread over several entries it
+	// skipped, with those sent since (AniList, MyAnimeList).
+	Rated, RatingsSkipped int
 	// Problem is empty, ProblemReconnect, ProblemUnreachable or
 	// ProblemRateLimited: the history could not be read whole, and what
 	// was read was imported.
@@ -60,9 +64,9 @@ func (s *Service) importStatus(ctx context.Context, key laneKey, status *Status)
 	var last *time.Time
 	var result ImportResult
 	var problem *string
-	err := s.db.QueryRow(ctx, `SELECT enabled, watchlist, last_import_at, played, resumed, watchlisted, unmapped, problem FROM tracking_imports
-		WHERE user_id = $1 AND service = $2`, key.user, key.service).Scan(&status.ImportHistory, &status.ImportWatchlist, &last, &result.Played,
-		&result.Resumed, &result.Watchlist, &result.Unmapped, &problem)
+	err := s.db.QueryRow(ctx, `SELECT enabled, watchlist, ratings, last_import_at, played, resumed, watchlisted, unmapped, rated, ratings_skipped, problem
+		FROM tracking_imports WHERE user_id = $1 AND service = $2`, key.user, key.service).Scan(&status.ImportHistory, &status.ImportWatchlist,
+		&status.SyncRatings, &last, &result.Played, &result.Resumed, &result.Watchlist, &result.Unmapped, &result.Rated, &result.RatingsSkipped, &problem)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -75,7 +79,7 @@ func (s *Service) importStatus(ctx context.Context, key laneKey, status *Status)
 			result.Problem = *problem
 		}
 		status.LastImport = &result
-		if (status.ImportHistory || status.ImportWatchlist) && status.Available && status.Problem != ProblemReconnect {
+		if (status.ImportHistory || status.ImportWatchlist || status.SyncRatings) && status.Available && status.Problem != ProblemReconnect {
 			next := last.Add(s.settings().ImportEvery())
 			status.NextImport = &next
 		}
@@ -97,11 +101,11 @@ func (s *Service) SetImport(ctx context.Context, user accounts.ID, service strin
 }
 
 // SetWatchlistImport turns the import of user's watchlist from service on
-// or off: Trakt's watchlist, Simkl's Plan to Watch, imported with the
-// imports of the history, whether those import the history or not.
-// Turned on, it imports at once. Turned off, the titles the list alone
-// held leave the watchlist. The other services have no watchlist Polyfin
-// imports: ErrUnknownService.
+// or off: Trakt's watchlist, Simkl's, AniList's and MyAnimeList's Plan to
+// Watch, imported with the imports of the history, whether those import
+// the history or not. Turned on, it imports at once. Turned off, the
+// titles the list alone held leave the watchlist. The other services have
+// no watchlist Polyfin imports: ErrUnknownService.
 func (s *Service) SetWatchlistImport(ctx context.Context, user accounts.ID, service string, on bool) (Status, error) {
 	if !watchlists(service) {
 		return Status{}, ErrUnknownService
@@ -109,9 +113,21 @@ func (s *Service) SetWatchlistImport(ctx context.Context, user accounts.ID, serv
 	return s.setImport(ctx, user, service, "watchlist", on)
 }
 
+// SetRatingsSync turns the sync of user's ratings with service on or off:
+// the ratings they give movies and series are sent as their entries'
+// scores, and the imports give their unrated titles the entries' scores.
+// Turned on, it imports at once. Only AniList and MyAnimeList keep
+// ratings: ErrUnknownService for the others.
+func (s *Service) SetRatingsSync(ctx context.Context, user accounts.ID, service string, on bool) (Status, error) {
+	if !animeLists(service) {
+		return Status{}, ErrUnknownService
+	}
+	return s.setImport(ctx, user, service, "ratings", on)
+}
+
 // setImport turns the import of what column of tracking_imports names,
-// "enabled" for the history or "watchlist", on or off. Turned on, it
-// imports at once; the imports stop once both are off.
+// "enabled" for the history, "watchlist" or "ratings", on or off. Turned
+// on, it imports at once; the imports stop once all are off.
 func (s *Service) setImport(ctx context.Context, user accounts.ID, service, column string, on bool) (Status, error) {
 	key := laneKey{user, service}
 	if _, ok, err := s.connection(ctx, user, service); err != nil {
@@ -119,13 +135,15 @@ func (s *Service) setImport(ctx context.Context, user accounts.ID, service, colu
 	} else if !ok {
 		return Status{}, ErrNotConnected
 	}
-	var history, list bool
+	was := map[string]bool{}
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, "SELECT enabled, watchlist FROM tracking_imports WHERE user_id = $1 AND service = $2 FOR UPDATE",
-			user, service).Scan(&history, &list)
+		var history, list, ratings bool
+		err := tx.QueryRow(ctx, "SELECT enabled, watchlist, ratings FROM tracking_imports WHERE user_id = $1 AND service = $2 FOR UPDATE",
+			user, service).Scan(&history, &list, &ratings)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
+		was = map[string]bool{"enabled": history, "watchlist": list, "ratings": ratings}
 		_, err = tx.Exec(ctx, `INSERT INTO tracking_imports (user_id, service, `+column+`) VALUES ($1, $2, $3)
 			ON CONFLICT (user_id, service) DO UPDATE SET `+column+` = excluded.`+column, user, service, on)
 		return err
@@ -133,12 +151,12 @@ func (s *Service) setImport(ctx context.Context, user accounts.ID, service, colu
 	if err != nil {
 		return Status{}, err
 	}
-	was, other := history, list
-	if column == "watchlist" {
-		was, other = list, history
+	other := false
+	for name, enabled := range was {
+		other = other || name != column && enabled
 	}
 	switch {
-	case on && !was:
+	case on && !was[column]:
 		s.startImport(key)
 	case !on && (!other || column == "watchlist"):
 		// An import running may be reading the list: it stops, and the
@@ -165,7 +183,7 @@ func (s *Service) ImportNow(ctx context.Context, user accounts.ID, service strin
 		return Status{}, ErrNotConnected
 	}
 	var on bool
-	err := s.db.QueryRow(ctx, "SELECT enabled OR watchlist FROM tracking_imports WHERE user_id = $1 AND service = $2", user, service).Scan(&on)
+	err := s.db.QueryRow(ctx, "SELECT enabled OR watchlist OR ratings FROM tracking_imports WHERE user_id = $1 AND service = $2", user, service).Scan(&on)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Status{}, err
 	}
@@ -234,7 +252,7 @@ func (s *Service) importDue() {
 	settings := s.settings()
 	rows, err := s.db.Query(s.ctx, `SELECT i.user_id, i.service FROM tracking_imports i
 		JOIN tracking_connections c ON c.user_id = i.user_id AND c.service = i.service
-		WHERE (i.enabled OR i.watchlist) AND c.problem IS DISTINCT FROM 'reconnect' AND (i.last_import_at IS NULL OR i.last_import_at <= $1)`,
+		WHERE (i.enabled OR i.watchlist OR i.ratings) AND c.problem IS DISTINCT FROM 'reconnect' AND (i.last_import_at IS NULL OR i.last_import_at <= $1)`,
 		s.now().Add(-settings.ImportEvery()))
 	if err != nil {
 		s.logger.Warn("The watch history imports due could not be read", "error", err)
@@ -286,10 +304,10 @@ type watchHistory struct {
 func (s *Service) runImport(ctx context.Context, key laneKey) {
 	var cursor string
 	var cursorFor *time.Time
-	var history, list bool
-	err := s.db.QueryRow(ctx, `SELECT cursor, cursor_for, enabled, watchlist FROM tracking_imports
-		WHERE user_id = $1 AND service = $2 AND (enabled OR watchlist)`,
-		key.user, key.service).Scan(&cursor, &cursorFor, &history, &list)
+	var history, list, ratings bool
+	err := s.db.QueryRow(ctx, `SELECT cursor, cursor_for, enabled, watchlist, ratings FROM tracking_imports
+		WHERE user_id = $1 AND service = $2 AND (enabled OR watchlist OR ratings)`,
+		key.user, key.service).Scan(&cursor, &cursorFor, &history, &list, &ratings)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Warn("A watch history import could not start", "service", key.service, "error", err)
@@ -316,6 +334,10 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 	if readErr == nil && list && watchlists(key.service) {
 		listed, readErr = r.readWatchlist(ctx)
 	}
+	ratings = ratings && animeLists(key.service)
+	if readErr == nil && ratings && s.anime.Ready() {
+		_, readErr = r.animeList(ctx)
+	}
 	if ctx.Err() != nil {
 		// Turned off, disconnected, or the server stops.
 		return
@@ -329,6 +351,9 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 	err = s.merge(ctx, r, read, &result)
 	if err == nil && list && watchlists(key.service) {
 		err = s.mergeWatchlist(ctx, r, listed, &result)
+	}
+	if err == nil && ratings && readErr == nil {
+		err = s.mergeRatings(ctx, r, &result)
 	}
 	if err != nil {
 		if ctx.Err() == nil {
@@ -344,9 +369,9 @@ func (s *Service) runImport(ctx context.Context, key laneKey) {
 		problem = &result.Problem
 	}
 	if _, err := s.db.Exec(ctx, `UPDATE tracking_imports SET last_import_at = $3, played = $4, resumed = $5, unmapped = $6, problem = $7,
-			cursor = $8, cursor_for = $9, watchlisted = $10
+			cursor = $8, cursor_for = $9, watchlisted = $10, rated = $11, ratings_skipped = $12
 		WHERE user_id = $1 AND service = $2`, key.user, key.service, result.At, result.Played, result.Resumed, result.Unmapped, problem,
-		next, conn.connectedAt, result.Watchlist); err != nil && ctx.Err() == nil {
+		next, conn.connectedAt, result.Watchlist, result.Rated, result.RatingsSkipped); err != nil && ctx.Err() == nil {
 		s.logger.Warn("A watch history import could not be recorded", "service", key.service, "error", err)
 	}
 	s.logger.Debug("Imported a watch history", "user_id", key.user.String(), "service", key.service, "played", result.Played,

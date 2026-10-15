@@ -690,19 +690,23 @@ var ErrInvalidMeasureLoudness = errors.New("invalid loudness measure choice")
 // those of local music folders, or those of music addons too.
 var MeasureLoudnessChoices = []string{"off", "local", "all"}
 
-// ErrInvalidTraktApp, ErrInvalidSimklApp and ErrInvalidLastFMApp report a
-// Settings.TraktClientID, TraktClientSecret, SimklClientID, LastFMAPIKey or
-// LastFMSecret longer than MaxTrackingAppBytes, or holding anything but
-// printable ASCII without spaces, which the services' credentials are made
-// of.
+// ErrInvalidTraktApp, ErrInvalidSimklApp, ErrInvalidLastFMApp,
+// ErrInvalidAniListApp and ErrInvalidMyAnimeListApp report a
+// Settings.TraktClientID, TraktClientSecret, SimklClientID, LastFMAPIKey,
+// LastFMSecret, AniListClientID, AniListClientSecret, MyAnimeListClientID or
+// MyAnimeListClientSecret longer than MaxTrackingAppBytes, or holding
+// anything but printable ASCII without spaces, which the services'
+// credentials are made of.
 var (
-	ErrInvalidTraktApp  = errors.New("invalid Trakt app")
-	ErrInvalidSimklApp  = errors.New("invalid Simkl app")
-	ErrInvalidLastFMApp = errors.New("invalid Last.fm API account")
+	ErrInvalidTraktApp       = errors.New("invalid Trakt app")
+	ErrInvalidSimklApp       = errors.New("invalid Simkl app")
+	ErrInvalidLastFMApp      = errors.New("invalid Last.fm API account")
+	ErrInvalidAniListApp     = errors.New("invalid AniList app")
+	ErrInvalidMyAnimeListApp = errors.New("invalid MyAnimeList app")
 )
 
-// MaxTrackingAppBytes is the longest Trakt, Simkl or Last.fm credential, in
-// bytes.
+// MaxTrackingAppBytes is the longest credential of a tracking service's
+// app, in bytes.
 const MaxTrackingAppBytes = 256
 
 // ErrInvalidBackupHour reports a BackupHour outside [0, 23],
@@ -1291,6 +1295,15 @@ type Settings struct {
 	// sent there. Empty by default, which offers Last.fm to nobody.
 	LastFMAPIKey string
 	LastFMSecret string
+	// AniListClientID and AniListClientSecret identify the app an
+	// administrator registered with AniList, MyAnimeListClientID and
+	// MyAnimeListClientSecret the one registered with MyAnimeList, through
+	// which users connect their lists. Empty by default, which offers
+	// neither service.
+	AniListClientID         string
+	AniListClientSecret     string
+	MyAnimeListClientID     string
+	MyAnimeListClientSecret string
 	// BackupHour is the hour of the server's time zone, 0 to 23, the
 	// database is backed up at every day, and BackupsKept how many of the
 	// newest backups are kept, while Backups is on.
@@ -1400,9 +1413,21 @@ func (s Settings) LastFMAvailable() bool {
 	return s.LastFMAPIKey != "" && s.LastFMSecret != ""
 }
 
-// validTrackingApp reports whether credential may be a Trakt, Simkl or
-// Last.fm credential: empty, or up to MaxTrackingAppBytes of printable
-// ASCII without spaces.
+// AniListAvailable reports whether users can connect AniList: its app's ID
+// and secret are saved.
+func (s Settings) AniListAvailable() bool {
+	return s.AniListClientID != "" && s.AniListClientSecret != ""
+}
+
+// MyAnimeListAvailable reports whether users can connect MyAnimeList: its
+// app's ID and secret are saved.
+func (s Settings) MyAnimeListAvailable() bool {
+	return s.MyAnimeListClientID != "" && s.MyAnimeListClientSecret != ""
+}
+
+// validTrackingApp reports whether credential may be a tracking service's
+// app credential: empty, or up to MaxTrackingAppBytes of printable ASCII
+// without spaces.
 func validTrackingApp(credential string) bool {
 	if len(credential) > MaxTrackingAppBytes {
 		return false
@@ -1437,6 +1462,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
 	"custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
+	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, collection_library_apps, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
@@ -1480,6 +1506,7 @@ func (settings *Settings) fields() []any {
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
 		&settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
+		&settings.AniListClientID, &settings.AniListClientSecret, &settings.MyAnimeListClientID, &settings.MyAnimeListClientSecret,
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.CollectionLibraryApps, &settings.RemuxDB, &settings.RemuxDBURL,
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
 		&settings.PublicAddress,
@@ -1514,6 +1541,8 @@ func (settings *Settings) secrets() []struct {
 		{"tmdbKey", &settings.TMDBKey},
 		{"traktClientSecret", &settings.TraktClientSecret},
 		{"lastFmSecret", &settings.LastFMSecret},
+		{"aniListClientSecret", &settings.AniListClientSecret},
+		{"myAnimeListClientSecret", &settings.MyAnimeListClientSecret},
 		{"smtpPassword", &settings.SMTPPassword},
 		{"metricsToken", &settings.MetricsToken},
 	}
@@ -1833,6 +1862,12 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !validTrackingApp(settings.LastFMAPIKey) || !validTrackingApp(settings.LastFMSecret) {
 		return Settings{}, ErrInvalidLastFMApp
+	}
+	if !validTrackingApp(settings.AniListClientID) || !validTrackingApp(settings.AniListClientSecret) {
+		return Settings{}, ErrInvalidAniListApp
+	}
+	if !validTrackingApp(settings.MyAnimeListClientID) || !validTrackingApp(settings.MyAnimeListClientSecret) {
+		return Settings{}, ErrInvalidMyAnimeListApp
 	}
 	if settings.BackupHour < 0 || settings.BackupHour > 23 {
 		return Settings{}, ErrInvalidBackupHour

@@ -208,8 +208,8 @@ func (l *stopLog) of(user accounts.ID, service string) (n, all int) {
 }
 
 // newHarness is a service on a fresh database, sending to fakes with
-// Trakt's and Simkl's apps and Last.fm's API account set, at a fixed time,
-// without waiting between requests.
+// Trakt's, Simkl's, AniList's and MyAnimeList's apps and Last.fm's API
+// account set, at a fixed time, without waiting between requests.
 func newHarness(t *testing.T) harness {
 	t.Helper()
 	pool := migrated.New(t)
@@ -220,6 +220,8 @@ func newHarness(t *testing.T) harness {
 	settings := store.Settings()
 	settings.TraktClientID, settings.TraktClientSecret, settings.SimklClientID = "trakt-client", "trakt-secret", "simkl-client"
 	settings.LastFMAPIKey, settings.LastFMSecret = "lastfm-key", "lastfm-secret"
+	settings.AniListClientID, settings.AniListClientSecret = "anilist-client", "anilist-secret"
+	settings.MyAnimeListClientID, settings.MyAnimeListClientSecret = "mal-client", "mal-secret"
 	if _, err := store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +241,8 @@ func newService(pool *pgxpool.Pool, store *accounts.Store, f *fakes, log io.Writ
 	client := stremio.NewClient("test")
 	s := New(Options{DB: pool, Settings: store.Settings, Version: "1.2.3", Logger: logger,
 		URLs: map[string]string{Trakt: f.url + "/trakt", Simkl: f.url + "/simkl", MDBList: f.url + "/mdblist", PublicMetaDB: f.url + "/publicmetadb",
-			LastFM: f.url + "/lastfm/2.0/", ListenBrainz: f.url + "/listenbrainz"},
+			LastFM: f.url + "/lastfm/2.0/", ListenBrainz: f.url + "/listenbrainz", AniList: f.url + "/anilist/", MyAnimeList: f.url + "/myanimelist"},
+		AuthURLs: map[string]string{AniList: f.url + "/anilist-auth", MyAnimeList: f.url + "/myanimelist-auth"},
 		Titles:   library.New(pool, addons.New(pool, client), client, logger, store.Settings),
 		UserData: userdata.New(pool)})
 	s.now = func() time.Time { return clockStart }
@@ -262,13 +265,18 @@ func (h harness) user(t *testing.T, name string) accounts.ID {
 }
 
 // connected connects user to service with token, as after a code was
-// entered or a key checked.
+// entered or a key checked: AniList's token expires in a year, without a
+// refresh token.
 func (h harness) connected(t *testing.T, user accounts.ID, service, token string) {
 	t.Helper()
 	c := connection{token: token, connectedAt: clockStart}
-	if ByCode(service) {
+	switch {
+	case refreshes(service):
 		expires := clockStart.Add(7 * 24 * time.Hour)
 		c.refresh, c.expires = token+"-refresh", &expires
+	case service == AniList:
+		expires := clockStart.Add(365 * 24 * time.Hour)
+		c.expires = &expires
 	}
 	if err := h.connect(t.Context(), user, service, c); err != nil {
 		t.Fatal(err)

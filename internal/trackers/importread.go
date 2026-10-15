@@ -29,6 +29,9 @@ type reader struct {
 	last     time.Time
 	// refreshed is set once the token was refreshed after a refusal.
 	refreshed bool
+	// listed is the list of AniList or MyAnimeList, once listRead.
+	listed   []listItem
+	listRead bool
 }
 
 // sleep waits for d, and reports false if ctx ended first.
@@ -51,16 +54,22 @@ func sleep(ctx context.Context, d time.Duration) bool {
 // token is refreshed once; refused again, the connection waits for the
 // user to connect again.
 func (r *reader) get(ctx context.Context, path string, query url.Values) (reply, error) {
+	return r.fetch(ctx, http.MethodGet, path, query, nil)
+}
+
+// fetch sends a request as get does, with payload, when not nil, as
+// JSON.
+func (r *reader) fetch(ctx context.Context, method, path string, query url.Values, payload any) (reply, error) {
 	s := r.s
 	failures, waits := 0, 0
 	for {
 		if !sleep(ctx, time.Until(r.last.Add(s.timing.importGaps[r.key.service]))) {
 			return reply{}, ctx.Err()
 		}
-		if r.key.service == PublicMetaDB && !s.waitPace(ctx) {
+		if !s.waitPace(ctx, r.key.service) {
 			return reply{}, ctx.Err()
 		}
-		answer, err := s.api(ctx, r.key.service, r.token, r.settings, http.MethodGet, path, cloneQuery(query), nil)
+		answer, err := s.api(ctx, r.key.service, r.token, r.settings, method, path, cloneQuery(query), payload)
 		r.last = time.Now()
 		if ctx.Err() != nil {
 			return reply{}, ctx.Err()
@@ -69,7 +78,7 @@ func (r *reader) get(ctx context.Context, path string, query url.Values) (reply,
 		switch {
 		case err == nil && answer.status == http.StatusOK:
 			return answer, nil
-		case err == nil && answer.status == http.StatusUnauthorized:
+		case err == nil && (answer.status == http.StatusUnauthorized || classifyList(r.key.service, answer).outcome == reconnect):
 			if err := r.refused(ctx); err != nil {
 				return reply{}, err
 			}
@@ -83,9 +92,7 @@ func (r *reader) get(ctx context.Context, path string, query url.Values) (reply,
 			if waits++; wait > s.timing.importMaxWait || waits > 5 {
 				return reply{}, errRateLimited
 			}
-			if r.key.service == PublicMetaDB {
-				s.holdPace(wait)
-			}
+			s.holdPace(r.key.service, wait)
 		case err != nil || answer.status >= 500:
 			if failures++; failures > s.timing.importRetries {
 				return reply{}, ErrUnreachable
@@ -113,7 +120,7 @@ func cloneQuery(query url.Values) url.Values {
 // token is refreshed once, else the connection waits for the user to
 // connect again.
 func (r *reader) refused(ctx context.Context) error {
-	if ByCode(r.key.service) && !r.refreshed {
+	if refreshes(r.key.service) && !r.refreshed {
 		r.refreshed = true
 		conn, err := r.s.fresh(ctx, r.key, r.token)
 		if err == nil {
@@ -128,31 +135,40 @@ func (r *reader) refused(ctx context.Context) error {
 	return errTokenRefused
 }
 
-// waitPace waits for the turn of a request to PublicMetaDB, and reports
+// waitPace waits for the turn of a request to service, when its limit
+// counts every request of the server (see timing.sharedGaps), and reports
 // false if ctx ended first.
-func (s *Service) waitPace(ctx context.Context) bool {
-	p := s.paces[PublicMetaDB]
+func (s *Service) waitPace(ctx context.Context, service string) bool {
+	p := s.paces[service]
+	if p == nil {
+		return ctx.Err() == nil
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if !sleep(ctx, time.Until(latest(p.last.Add(s.timing.sharedGaps[PublicMetaDB]), p.notBefore))) {
+	if !sleep(ctx, time.Until(latest(p.last.Add(s.timing.sharedGaps[service]), p.notBefore))) {
 		return false
 	}
 	p.last = time.Now()
 	return true
 }
 
-// holdPace holds every request to PublicMetaDB for wait.
-func (s *Service) holdPace(wait time.Duration) {
-	p := s.paces[PublicMetaDB]
+// holdPace holds every request to service for wait, when its limit counts
+// every request of the server.
+func (s *Service) holdPace(service string, wait time.Duration) {
+	p := s.paces[service]
+	if p == nil {
+		return
+	}
 	p.mu.Lock()
 	p.notBefore = time.Now().Add(wait)
 	p.mu.Unlock()
 }
 
 // authorize refreshes a code service's token before it expires, before
-// an import reads anything; a key stays.
+// an import reads anything, and stops a connection whose token expired
+// with no way to refresh it (AniList's); a key stays.
 func (r *reader) authorize(ctx context.Context) error {
-	if !ByCode(r.key.service) {
+	if !refreshes(r.key.service) && !ByPaste(r.key.service) {
 		return nil
 	}
 	conn, err := r.s.fresh(ctx, r.key, "")
@@ -178,6 +194,8 @@ func (r *reader) read(ctx context.Context, cursor string) (h watchHistory, next 
 		return r.readSimkl(ctx, cursor)
 	case MDBList:
 		return r.readMDBList(ctx, cursor)
+	case AniList, MyAnimeList:
+		return r.readAnimeHistory(ctx)
 	}
 	return r.readPublicMetaDB(ctx)
 }

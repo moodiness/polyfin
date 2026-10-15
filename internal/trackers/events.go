@@ -3,6 +3,7 @@ package trackers
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -94,6 +95,10 @@ type event struct {
 	Song       *Song      `json:"song,omitempty"`
 	// ListenedAt is when the song scrobbled started playing.
 	ListenedAt *time.Time `json:"listenedAt,omitempty"`
+	// Entry is the entry of AniList or MyAnimeList a progress or score
+	// is for, and Score the score, from 0 to 10, nil to clear it.
+	Entry *listEntry `json:"entry,omitempty"`
+	Score *float64   `json:"score,omitempty"`
 }
 
 // complete reports whether the event names what it is about.
@@ -297,6 +302,18 @@ func (s *Service) playback(ctx context.Context, user accounts.ID, report Playbac
 	}
 
 	for _, service := range services {
+		if animeLists(service) {
+			// AniList and MyAnimeList count a title once it is played.
+			for _, c := range kept {
+				if c.kind == kindWatched {
+					s.queueProgress(ctx, user, service, c.event.Titles)
+				}
+			}
+			continue
+		}
+		if !title.Identified() {
+			continue
+		}
 		changes := kept
 		if scrobbles(service) {
 			changes = scrobbled
@@ -324,7 +341,20 @@ func (s *Service) mark(ctx context.Context, user accounts.ID, mark Mark) {
 	if mark.Date != nil {
 		at = mark.Date.UTC()
 	}
+	all := titles
+	titles = slices.DeleteFunc(slices.Clone(titles), func(t Title) bool { return !t.Identified() })
 	for _, service := range services {
+		switch {
+		case animeLists(service):
+			// Unplayed marks send nothing: the lists keep a count of
+			// episodes, not a history.
+			if mark.Played {
+				s.queueProgress(ctx, user, service, all)
+			}
+			continue
+		case len(titles) == 0:
+			continue
+		}
 		switch {
 		case scrobbles(service) && mark.Played:
 			s.queue(ctx, user, service, change{kind: kindHistoryAdd, durable: true, event: event{Titles: titles, WatchedAt: &at}})
@@ -405,8 +435,8 @@ func (s *Service) queue(ctx context.Context, user accounts.ID, service string, c
 	var id int64
 	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		title := c.event.item()
-		if c.kind == kindResume {
-			// A newer resume point replaces the one waiting.
+		if c.kind == kindResume || c.kind == kindScore {
+			// A newer resume point or score replaces the one waiting.
 			if _, err := tx.Exec(ctx, "DELETE FROM tracking_events WHERE user_id = $1 AND service = $2 AND kind = $3 AND title = $4",
 				user, service, c.kind, title); err != nil {
 				return err

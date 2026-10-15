@@ -200,6 +200,7 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/account/tracking/{service}", h.signedIn(h.disconnectTracking))
 	mux.Handle("PATCH /admin/api/account/tracking/{service}", h.signedIn(h.setTrackingImport))
 	mux.Handle("POST /admin/api/account/tracking/{service}/import", h.signedIn(h.importTracking))
+	mux.Handle("POST /admin/api/account/tracking/{service}/code", h.signedIn(h.exchangeTrackingCode))
 	mux.Handle("POST /admin/api/account/tracking/{service}/key/reveal", h.signedIn(h.revealTrackingKey))
 	mux.Handle("GET /admin/api/account/server-import", h.signedIn(h.ownImport))
 	mux.Handle("POST /admin/api/account/server-import", h.signedIn(h.startOwnImport))
@@ -570,6 +571,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidTraktApp, http.StatusBadRequest, "invalid_trakt_app"},
 		{accounts.ErrInvalidSimklApp, http.StatusBadRequest, "invalid_simkl_app"},
 		{accounts.ErrInvalidLastFMApp, http.StatusBadRequest, "invalid_lastfm_app"},
+		{accounts.ErrInvalidAniListApp, http.StatusBadRequest, "invalid_anilist_app"},
+		{accounts.ErrInvalidMyAnimeListApp, http.StatusBadRequest, "invalid_myanimelist_app"},
 		{accounts.ErrInvalidBackupHour, http.StatusBadRequest, "invalid_backup_hour"},
 		{accounts.ErrInvalidBackupsKept, http.StatusBadRequest, "invalid_backups_kept"},
 		{accounts.ErrInvalidPublicAddress, http.StatusBadRequest, "invalid_public_address"},

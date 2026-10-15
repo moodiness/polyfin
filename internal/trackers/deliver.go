@@ -247,7 +247,11 @@ func latest(a, b time.Time) time.Time {
 // send sends a change with a fresh token, refreshing it once more if the
 // service refuses it.
 func (s *Service) send(ctx context.Context, key laneKey, conn connection, settings accounts.Settings, kind string, ev event) result {
-	if !ByCode(key.service) {
+	if !refreshes(key.service) {
+		if conn.refresh == "" && conn.expires != nil && !s.now().Before(*conn.expires) {
+			// AniList's token expired: the user connects again.
+			return result{outcome: reconnect}
+		}
 		return s.sendTo(ctx, key.service, conn.token, settings, kind, ev)
 	}
 	conn, err := s.fresh(ctx, key, "")

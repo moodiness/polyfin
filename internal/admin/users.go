@@ -570,6 +570,14 @@ type settingsJSON struct {
 	LastFMAPIKey    *string `json:"lastFmApiKey"`
 	LastFMSecret    *string `json:"lastFmSecret,omitempty"`
 	LastFMSecretSet bool    `json:"lastFmSecretSet"`
+	// The AniList and MyAnimeList apps are the same: AniListClientSecretSet
+	// and MyAnimeListClientSecretSet tell whether their secrets are saved.
+	AniListClientID            *string `json:"aniListClientId"`
+	AniListClientSecret        *string `json:"aniListClientSecret,omitempty"`
+	AniListClientSecretSet     bool    `json:"aniListClientSecretSet"`
+	MyAnimeListClientID        *string `json:"myAnimeListClientId"`
+	MyAnimeListClientSecret    *string `json:"myAnimeListClientSecret,omitempty"`
+	MyAnimeListClientSecretSet bool    `json:"myAnimeListClientSecretSet"`
 	// BackupHour, BackupsKept, CollectionReadHour and CollectionLibraryApps
 	// keep their current values when a PUT leaves them out.
 	BackupHour            *int      `json:"backupHour"`
@@ -767,6 +775,11 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		SimklClientID:        &settings.SimklClientID,
 		LastFMAPIKey:         &settings.LastFMAPIKey,
 		LastFMSecretSet:      settings.LastFMSecret != "",
+
+		AniListClientID:            &settings.AniListClientID,
+		AniListClientSecretSet:     settings.AniListClientSecret != "",
+		MyAnimeListClientID:        &settings.MyAnimeListClientID,
+		MyAnimeListClientSecretSet: settings.MyAnimeListClientSecret != "",
 
 		BackupHour:            &settings.BackupHour,
 		BackupsKept:           &settings.BackupsKept,
@@ -1378,6 +1391,11 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		SimklClientID:     valueOr(body.SimklClientID, current.SimklClientID),
 		LastFMAPIKey:      valueOr(body.LastFMAPIKey, current.LastFMAPIKey),
 		LastFMSecret:      valueOr(body.LastFMSecret, current.LastFMSecret),
+
+		AniListClientID:         valueOr(body.AniListClientID, current.AniListClientID),
+		AniListClientSecret:     valueOr(body.AniListClientSecret, current.AniListClientSecret),
+		MyAnimeListClientID:     valueOr(body.MyAnimeListClientID, current.MyAnimeListClientID),
+		MyAnimeListClientSecret: valueOr(body.MyAnimeListClientSecret, current.MyAnimeListClientSecret),
 
 		BackupHour:            valueOr(body.BackupHour, current.BackupHour),
 		BackupsKept:           valueOr(body.BackupsKept, current.BackupsKept),

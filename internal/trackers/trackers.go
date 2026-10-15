@@ -1,13 +1,15 @@
 // Package trackers sends what each Polyfin user watches and listens to to
 // the tracking services they connect to their account: Trakt, Simkl and
 // MDBList, which follow playback as it happens (scrobbling) and keep a
-// watch history, and PublicMetaDB, which keeps resume points and a watch
-// history. Only movies and episodes known by an IMDb, TMDB or TVDB
-// identifier are sent to them, episodes by their series' identifiers and
-// their numbers; anime that addons name by their Kitsu, MyAnimeList or
-// AniDB identifier are sent by those the anime mapping gives (see
-// anime.go). The songs of music addons go to the music services only,
-// Last.fm and ListenBrainz (see music.go), by their artist and title.
+// watch history, PublicMetaDB, which keeps resume points and a watch
+// history, and AniList and MyAnimeList, which keep lists of anime with the
+// progress made in each (see animelists.go). Only movies and episodes
+// known by an IMDb, TMDB or TVDB identifier are sent to them, episodes by
+// their series' identifiers and their numbers; anime that addons name by
+// their Kitsu, MyAnimeList or AniDB identifier are sent by those the anime
+// mapping gives (see anime.go). The songs of music addons go to the music
+// services only, Last.fm and ListenBrainz (see music.go), by their artist
+// and title.
 //
 // Nothing is sent while a request is answered: playback reports and played
 // marks are queued and sent in the background, one user and service at a
@@ -43,12 +45,14 @@ const (
 	Simkl        = "simkl"
 	MDBList      = "mdblist"
 	PublicMetaDB = "publicmetadb"
+	AniList      = "anilist"
+	MyAnimeList  = "myanimelist"
 	LastFM       = "lastfm"
 	ListenBrainz = "listenbrainz"
 )
 
 // Services lists the services in the order the admin app shows them.
-var Services = []string{Trakt, Simkl, MDBList, PublicMetaDB, LastFM, ListenBrainz}
+var Services = []string{Trakt, Simkl, MDBList, PublicMetaDB, AniList, MyAnimeList, LastFM, ListenBrainz}
 
 // publicURLs are the base URLs of the services' APIs.
 var publicURLs = map[string]string{
@@ -56,8 +60,18 @@ var publicURLs = map[string]string{
 	Simkl:        "https://api.simkl.com",
 	MDBList:      "https://api.mdblist.com",
 	PublicMetaDB: "https://publicmetadb.com",
+	AniList:      "https://graphql.anilist.co",
+	MyAnimeList:  "https://api.myanimelist.net/v2",
 	LastFM:       "https://ws.audioscrobbler.com/2.0/",
 	ListenBrainz: "https://api.listenbrainz.org",
+}
+
+// authURLs are the base URLs of the OAuth pages and endpoints of the
+// services whose users paste a code: the page users allow Polyfin on is
+// base + "/authorize", tokens are asked of base + "/token".
+var authURLs = map[string]string{
+	AniList:     "https://anilist.co/api/v2/oauth",
+	MyAnimeList: "https://myanimelist.net/v1/oauth2",
 }
 
 // ByCode reports whether users connect service by entering a code on its
@@ -72,11 +86,30 @@ func BySignIn(service string) bool {
 	return service == LastFM
 }
 
+// ByPaste reports whether users connect service by allowing Polyfin on its
+// site, then pasting in Polyfin the code it shows (AniList) or the address
+// it sent their browser to (MyAnimeList).
+func ByPaste(service string) bool {
+	return service == AniList || service == MyAnimeList
+}
+
 // ByKey reports whether users connect service by pasting their API key or
 // user token (MDBList, PublicMetaDB, ListenBrainz), which they may read
 // again.
 func ByKey(service string) bool {
-	return known(service) && !ByCode(service) && !BySignIn(service)
+	return known(service) && !ByCode(service) && !BySignIn(service) && !ByPaste(service)
+}
+
+// animeLists reports whether service keeps lists of anime with the
+// progress made in each, rather than a history of what was watched.
+func animeLists(service string) bool {
+	return service == AniList || service == MyAnimeList
+}
+
+// refreshes reports whether service's tokens expire and are refreshed with
+// a refresh token. AniList's last a year and cannot be.
+func refreshes(service string) bool {
+	return ByCode(service) || service == MyAnimeList
 }
 
 // Music reports whether service is told the songs users play, rather than
@@ -88,7 +121,7 @@ func Music(service string) bool {
 // scrobbles reports whether service follows the playback of movies and
 // episodes as it happens.
 func scrobbles(service string) bool {
-	return service != PublicMetaDB && !Music(service)
+	return service != PublicMetaDB && !animeLists(service) && !Music(service)
 }
 
 // imports reports whether Polyfin reads the watch history of service.
@@ -97,9 +130,9 @@ func imports(service string) bool {
 }
 
 // watchlists reports whether Polyfin reads the watchlist of service: Trakt's
-// watchlist, Simkl's Plan to Watch.
+// watchlist, Simkl's, AniList's and MyAnimeList's Plan to Watch.
 func watchlists(service string) bool {
-	return service == Trakt || service == Simkl
+	return service == Trakt || service == Simkl || animeLists(service)
 }
 
 // known reports whether service is one of Services.
@@ -119,6 +152,10 @@ func Available(service string, settings accounts.Settings) bool {
 		return settings.SimklAvailable()
 	case LastFM:
 		return settings.LastFMAvailable()
+	case AniList:
+		return settings.AniListAvailable()
+	case MyAnimeList:
+		return settings.MyAnimeListAvailable()
 	}
 	return true
 }
@@ -173,12 +210,16 @@ type Options struct {
 	Titles   Titles
 	UserData *userdata.Store
 	// Anime maps anime between identifiers and numberings: Simkl's anime
-	// history, and the titles anime addons name, are found and sent by it.
-	// Nil leaves them out.
+	// history, the titles anime addons name, and what AniList and
+	// MyAnimeList list, are found and sent by it. Nil leaves them out.
 	Anime *anime.Service
 	// Stopped is told once each time a service refuses a user's token or
-	// key, as the connection moves to Connect again; nil tells no one.
+	// key, or AniList's token expires, as the connection moves to Connect
+	// again; nil tells no one.
 	Stopped func(user accounts.ID, service string)
+	// AuthURLs replaces the base URLs of the services' OAuth pages and
+	// endpoints, as URLs does their APIs'.
+	AuthURLs map[string]string
 }
 
 // timing is how long the service waits for what. Tests shorten it.
@@ -188,7 +229,8 @@ type timing struct {
 	gaps map[string]time.Duration
 	// sharedGaps space every request to a service whose limit counts the
 	// server's address rather than each user: PublicMetaDB takes 300
-	// requests every 10 seconds, Last.fm about 5 a second.
+	// requests every 10 seconds, Last.fm about 5 a second, AniList 90 a
+	// minute.
 	sharedGaps map[string]time.Duration
 	// retryFirst is the first wait after a failed send, doubling up to
 	// retryMax; giveUp is how old a change gets before it is dropped.
@@ -227,8 +269,8 @@ type timing struct {
 }
 
 var defaultTiming = timing{
-	gaps:             map[string]time.Duration{Trakt: time.Second, Simkl: time.Second, MDBList: 250 * time.Millisecond, ListenBrainz: 250 * time.Millisecond},
-	sharedGaps:       map[string]time.Duration{PublicMetaDB: 40 * time.Millisecond, LastFM: 250 * time.Millisecond},
+	gaps:             map[string]time.Duration{Trakt: time.Second, Simkl: time.Second, MDBList: 250 * time.Millisecond, ListenBrainz: 250 * time.Millisecond, MyAnimeList: time.Second},
+	sharedGaps:       map[string]time.Duration{PublicMetaDB: 40 * time.Millisecond, LastFM: 250 * time.Millisecond, AniList: time.Second},
 	retryFirst:       30 * time.Second,
 	retryMax:         30 * time.Minute,
 	giveUp:           48 * time.Hour,
@@ -243,8 +285,9 @@ var defaultTiming = timing{
 	request:          15 * time.Second,
 	importCheck:      time.Minute,
 	// Trakt reads 1,000 pages (500 per its latest docs) every 5 minutes,
-	// Simkl 10 a second, MDBList counts a daily allowance.
-	importGaps:    map[string]time.Duration{Trakt: time.Second, Simkl: 500 * time.Millisecond, MDBList: 500 * time.Millisecond},
+	// Simkl 10 a second, MDBList counts a daily allowance; AniList's
+	// requests are spaced by its shared pace.
+	importGaps:    map[string]time.Duration{Trakt: time.Second, Simkl: 500 * time.Millisecond, MDBList: 500 * time.Millisecond, MyAnimeList: time.Second},
 	importMaxWait: 15 * time.Minute,
 	importRetries: 3,
 }
@@ -261,6 +304,7 @@ type Service struct {
 	version   string
 	logger    *slog.Logger
 	urls      map[string]string
+	authURLs  map[string]string
 	client    *http.Client
 	now       func() time.Time
 	timing    timing
@@ -314,12 +358,20 @@ func New(options Options) *Service {
 			urls[service] = replaced
 		}
 	}
+	auth := make(map[string]string, len(authURLs))
+	for service, base := range authURLs {
+		auth[service] = base
+		if replaced, ok := options.AuthURLs[service]; ok {
+			auth[service] = replaced
+		}
+	}
 	return &Service{
 		db:          options.DB,
 		settings:    options.Settings,
 		box:         options.Secrets,
 		version:     options.Version,
 		logger:      options.Logger,
+		authURLs:    auth,
 		urls:        urls,
 		client:      &http.Client{},
 		now:         time.Now,
@@ -331,7 +383,7 @@ func New(options Options) *Service {
 		intakes:     map[accounts.ID]*intake{},
 		sessions:    map[sessionKey]*session{},
 		listens:     map[sessionKey]*listen{},
-		paces:       map[string]*pace{PublicMetaDB: {}, LastFM: {}},
+		paces:       map[string]*pace{PublicMetaDB: {}, LastFM: {}, AniList: {}},
 		lanes:       map[laneKey]*lane{},
 		titles:      options.Titles,
 		userData:    options.UserData,
@@ -406,20 +458,42 @@ func (s *Service) sleep(d time.Duration) bool {
 	}
 }
 
-// Title identifies a movie or an episode to the services.
+// Title identifies a movie, a series or an episode to the services.
 type Title struct {
-	// Item is the movie's or episode's identifier in Polyfin.
+	// Item is the movie's, series' or episode's identifier in Polyfin.
 	Item accounts.ID `json:"item"`
 	// IMDb ("tt…"), TMDB and TVDB identify the movie, or the series of an
-	// episode; any may be missing, but not all. Movies have no TVDB
-	// identifier.
+	// episode; any may be missing, but not all, unless Anime names the
+	// entry. Movies have no TVDB identifier.
 	IMDb string `json:"imdb,omitempty"`
 	TMDB int    `json:"tmdb,omitempty"`
 	TVDB int    `json:"tvdb,omitempty"`
-	// Episode is set for an episode, numbered Number in season Season.
-	Episode bool `json:"episode,omitempty"`
-	Season  int  `json:"season,omitempty"`
-	Number  int  `json:"number,omitempty"`
+	// Episode is set for an episode, numbered Number in season Season,
+	// and Absolute in its series' absolute numbering, 0 when unknown.
+	Episode  bool `json:"episode,omitempty"`
+	Season   int  `json:"season,omitempty"`
+	Number   int  `json:"number,omitempty"`
+	Absolute int  `json:"absolute,omitempty"`
+	// Series is set for a series, which only ratings name.
+	Series bool `json:"series,omitempty"`
+	// Anime names the entry, and its episode, an anime addon gives the
+	// title by; nil for other titles.
+	Anime *AnimeID `json:"anime,omitempty"`
+}
+
+// AnimeID is an anime entry as an anime addon names it ("kitsu:<id>:<n>"):
+// by its Kitsu, MyAnimeList or AniDB identifier, and its episode, 0 for
+// the entry.
+type AnimeID struct {
+	Source  anime.Source `json:"source"`
+	ID      int          `json:"id"`
+	Episode int          `json:"episode,omitempty"`
+}
+
+// Identified reports whether t has an identifier the services other than
+// AniList and MyAnimeList take.
+func (t Title) Identified() bool {
+	return t.IMDb != "" || t.TMDB != 0 || t.TVDB != 0
 }
 
 var imdbPattern = regexp.MustCompile(`^tt\d+$`)

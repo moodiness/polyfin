@@ -15,8 +15,10 @@ import (
 // identifier ("kitsu:<id>", "kitsu:<id>:<episode>"): by the identifiers
 // and TVDB numbering the anime mapping gives (see anime.Service.Title).
 // An episode numbered as TVDB's absolute numbering is placed among the
-// episodes Polyfin listed of its series. It reports false for other
-// identifiers, and for what the mapping does not know.
+// episodes Polyfin listed of its series. The title also keeps the entry
+// it is named by, which AniList and MyAnimeList take even when the
+// mapping does not place it on TVDB: the other services then leave it out
+// (see Title.Identified). It reports false for other identifiers.
 func (s *Service) Anime(ctx context.Context, item accounts.ID, stremioID string, movie bool) (Title, bool) {
 	if s == nil || s.anime == nil {
 		return Title{}, false
@@ -25,25 +27,56 @@ func (s *Service) Anime(ctx context.Context, item accounts.ID, stremioID string,
 	if !ok || !movie && number == 0 {
 		return Title{}, false
 	}
+	entry := &AnimeID{Source: source, ID: id, Episode: number}
+	unplaced := Title{Item: item, Episode: !movie, Number: number, Anime: entry}
 	mapped, ok := s.anime.Title(source, id, false, number, movie)
 	if !ok {
-		return Title{}, false
+		return unplaced, true
 	}
 	if mapped.Movie {
-		return Title{Item: item, IMDb: mapped.IMDb, TMDB: mapped.TMDB}, true
+		return Title{Item: item, IMDb: mapped.IMDb, TMDB: mapped.TMDB, Anime: entry}, true
 	}
-	title := Title{Item: item, IMDb: mapped.IMDb, TVDB: mapped.TVDB, Episode: true, Season: mapped.Season, Number: mapped.Number}
+	title := Title{Item: item, IMDb: mapped.IMDb, TVDB: mapped.TVDB, Episode: true, Season: mapped.Season, Number: mapped.Number, Anime: entry}
 	if mapped.Absolute {
 		if s.titles == nil {
-			return Title{}, false
+			return unplaced, true
 		}
 		found, err := s.titles.Resolve(ctx, []library.TitleRef{animeRef(mapped, "")})
 		if err != nil || len(found) == 0 || len(found[0]) == 0 {
-			return Title{}, false
+			return unplaced, true
 		}
 		title.Season, title.Number = found[0][0].SeasonNumber, found[0][0].Number
 	}
-	return title, title.Season >= 0 && title.Number > 0
+	if title.Season < 0 || title.Number <= 0 {
+		return unplaced, true
+	}
+	return title, true
+}
+
+// NeedsAbsolute reports whether the AniList and MyAnimeList entry of the
+// episode t may be found by its absolute number in its series (see
+// Title.Absolute): the anime mapping numbers an entry of its TVDB series
+// so.
+func (s *Service) NeedsAbsolute(t Title) bool {
+	return s != nil && t.Episode && t.Absolute == 0 && s.anime.Absolute(t.TVDB)
+}
+
+// AnimeSeries identifies the series item that an anime addon names by
+// stremioID ("kitsu:<id>"), for its rating: by the entry alone, which
+// AniList and MyAnimeList take. It reports false for other identifiers.
+func AnimeSeries(item accounts.ID, stremioID string) (Title, bool) {
+	source, id, number, ok := anime.StremioID(stremioID)
+	if !ok || number != 0 {
+		return Title{}, false
+	}
+	return Title{Item: item, Series: true, Anime: &AnimeID{Source: source, ID: id}}, true
+}
+
+// Series identifies the series item by its providers' identifiers (Imdb,
+// Tmdb, Tvdb), for its rating, and reports false when it has none.
+func Series(item accounts.ID, providers map[string]string) (Title, bool) {
+	title := Title{Item: item, Series: true}
+	return title, title.providerIDs(providers, true)
 }
 
 // animeRef names the title the mapping found, for the library.

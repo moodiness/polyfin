@@ -317,7 +317,8 @@ func (h *Handler) markFavorite(favorite bool) http.HandlerFunc {
 }
 
 // rate records that the user likes or dislikes an item. Posting without
-// likes, like deleting, removes the rating.
+// likes, like deleting, removes the rating. The tracking services that
+// keep ratings are told of the change.
 func (h *Handler) rate(post bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b := bindErrors{}
@@ -326,12 +327,17 @@ func (h *Handler) rate(post bool) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		h.change(w, r, user, item, []library.Item{item}, func(d *userdata.Data) {
+		var was, now *float64
+		if h.changeEach(w, r, user, item, []library.Item{item}, func(_ userdata.Item, d *userdata.Data) {
+			was = d.Rating
 			d.Rating = nil
 			if post && set {
 				d.Like(likes)
 			}
-		})
+			now = d.Rating
+		}) {
+			h.rated(user, item, was, now)
+		}
 	}
 }
 
@@ -363,7 +369,7 @@ type userDataUpdate struct {
 // updateUserData replaces what an app sends, without the rules playback
 // follows: apps use it to upload what was played offline. A title it turns
 // played or unplayed is marked so on the user's tracking services, as a
-// played mark is.
+// played mark is, and a rating it changes is sent as rate sends it.
 func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 	if !jsonContent(r.Header.Get("Content-Type")) {
 		unsupportedMediaTypeProblem(w)
@@ -388,8 +394,16 @@ func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var turned *bool
+	var was, now *float64
 	if !h.changeEach(w, r, user, item, []library.Item{item}, func(_ userdata.Item, d *userdata.Data) {
-		was := d.Played
+		was = d.Rating
+		played := d.Played
+		defer func() {
+			now = d.Rating
+			if d.Played != played {
+				turned = new(d.Played)
+			}
+		}()
 		if update.PlaybackPositionTicks != nil {
 			d.Position = time.Duration(max(*update.PlaybackPositionTicks, 0)) * 100
 			if d.Runtime <= 0 {
@@ -416,10 +430,11 @@ func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 		if update.Played != nil {
 			d.Played = *update.Played
 		}
-		if d.Played != was {
-			turned = new(d.Played)
-		}
-	}) || turned == nil || h.Trackers == nil {
+	}) {
+		return
+	}
+	h.rated(user, item, was, now)
+	if turned == nil || h.Trackers == nil {
 		return
 	}
 	var date *time.Time

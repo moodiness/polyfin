@@ -57,10 +57,20 @@ func (t titleJSON) seriesRef() library.TitleRef {
 
 // readWatchlist reads the watchlist of the connection whole.
 func (r *reader) readWatchlist(ctx context.Context) (watchlistRead, error) {
-	if r.key.service == Trakt {
+	switch r.key.service {
+	case Trakt:
 		return r.readTraktWatchlist(ctx)
+	case AniList, MyAnimeList:
+		return r.readAnimeWatchlist(ctx)
 	}
 	return r.readSimklWatchlist(ctx)
+}
+
+// asSeries makes the ref of an anime series' first episode name the
+// series.
+func asSeries(ref library.TitleRef) library.TitleRef {
+	ref.Episode, ref.Series, ref.Season, ref.Number, ref.Absolute, ref.Anime.Episode = false, true, 0, 0, false, 0
+	return ref
 }
 
 // readTraktWatchlist reads Trakt's watchlist, its movies, shows, seasons
@@ -157,7 +167,7 @@ func (r *reader) readSimklWatchlist(ctx context.Context) (watchlistRead, error) 
 				continue
 			}
 			if !movie {
-				ref.Episode, ref.Series, ref.Season, ref.Number, ref.Absolute, ref.Anime.Episode = false, true, 0, 0, false, 0
+				ref = asSeries(ref)
 			}
 			list.add(ref, date(item.AddedAt))
 		}

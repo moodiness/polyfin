@@ -31,6 +31,8 @@ var settingSecrets = []struct{ column, name string }{
 	{"tmdb_key", "tmdbKey"},
 	{"trakt_client_secret", "traktClientSecret"},
 	{"lastfm_secret", "lastFmSecret"},
+	{"anilist_client_secret", "aniListClientSecret"},
+	{"myanimelist_client_secret", "myAnimeListClientSecret"},
 	{"smtp_password", "smtpPassword"},
 	{"metrics_token", "metricsToken"},
 }
