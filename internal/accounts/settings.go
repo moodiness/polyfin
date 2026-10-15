@@ -1300,6 +1300,11 @@ type Settings struct {
 	// a file makes past the end of the last segment the app asked for
 	// before it waits.
 	AheadSeconds int
+	// KeepConvertedVideo converts the video of a playback apart from its
+	// audio, and keeps it when an app changes the audio track: the new
+	// play session takes over the video converted, and only the new track
+	// is made.
+	KeepConvertedVideo bool
 	// Trickplay makes scrubbing thumbnails of the versions played, one
 	// every TrickplayInterval seconds, TrickplayWidth pixels wide, and
 	// ChapterImages an image of each of their chapters. Both read keyframes
@@ -1529,7 +1534,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"adaptive_quality, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
-	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
+	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, keep_converted_video, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
 	"custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
@@ -1573,6 +1578,7 @@ func (settings *Settings) fields() []any {
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
 		&settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSeconds,
+		&settings.KeepConvertedVideo,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours, &settings.LocalScanHours,
 		&settings.WatchLocalFolders,

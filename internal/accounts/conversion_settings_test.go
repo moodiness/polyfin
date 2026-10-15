@@ -19,7 +19,8 @@ func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 			got.ToneMappingPeak != 0 || got.ToneMappingDesat != 0 || !got.GPUToneMapping || got.ProcessorToneMappingHeight != 0 ||
 			got.DeinterlaceMethod != "yadif" || got.DeinterlaceDoubleRate ||
 			got.DownmixAlgorithm != "None" || got.DownmixBoost != DefaultDownmixBoost || got.MaxAudioChannels != 0 ||
-			got.AudioBitratePerChannel != 0 || got.EncodingThreads != 0 || got.AheadSeconds != DefaultAheadSeconds || got.AdaptiveQuality != "off" {
+			got.AudioBitratePerChannel != 0 || got.EncodingThreads != 0 || got.AheadSeconds != DefaultAheadSeconds || got.AdaptiveQuality != "off" ||
+			got.KeepConvertedVideo {
 			t.Errorf("%s: %+v", when, got)
 		}
 	}
@@ -91,7 +92,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 			s.DeinterlaceMethod, s.DeinterlaceDoubleRate = "bwdif", true
 			s.DownmixAlgorithm, s.DownmixBoost, s.MaxAudioChannels, s.AudioBitratePerChannel = "Dave750", MinDownmixBoost, 2, MinAudioBitratePerChannel
 			s.EncodingThreads, s.AheadSeconds = MaxEncodingThreads, MinAheadSeconds
-			s.AdaptiveQuality = AdaptiveQualityRemote
+			s.AdaptiveQuality, s.KeepConvertedVideo = AdaptiveQualityRemote, true
 		},
 		func(s *Settings) {
 			s.EncoderPreset, s.HardwareAcceleration, s.HardwareDecodingCodecs = "ultrafast", "none", []string{}

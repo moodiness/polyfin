@@ -541,6 +541,7 @@ type settingsJSON struct {
 	AudioBitratePerChannel     *int                   `json:"audioBitratePerChannel"`
 	EncodingThreads            *int                   `json:"encodingThreads"`
 	AheadSeconds               *int                   `json:"aheadSeconds"`
+	KeepConvertedVideo         *bool                  `json:"keepConvertedVideo"`
 	ConversionHardware         conversionHardwareJSON `json:"conversionHardware"`
 	// The thumbnail settings keep their current values when a PUT leaves
 	// them out.
@@ -771,6 +772,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		AudioBitratePerChannel:     &settings.AudioBitratePerChannel,
 		EncodingThreads:            &settings.EncodingThreads,
 		AheadSeconds:               &settings.AheadSeconds,
+		KeepConvertedVideo:         &settings.KeepConvertedVideo,
 
 		Trickplay:          &settings.Trickplay,
 		TrickplayInterval:  &settings.TrickplayInterval,
@@ -1399,6 +1401,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		AudioBitratePerChannel:     valueOr(body.AudioBitratePerChannel, current.AudioBitratePerChannel),
 		EncodingThreads:            valueOr(body.EncodingThreads, current.EncodingThreads),
 		AheadSeconds:               valueOr(body.AheadSeconds, current.AheadSeconds),
+		KeepConvertedVideo:         valueOr(body.KeepConvertedVideo, current.KeepConvertedVideo),
 
 		Trickplay:          valueOr(body.Trickplay, current.Trickplay),
 		TrickplayInterval:  valueOr(body.TrickplayInterval, current.TrickplayInterval),
