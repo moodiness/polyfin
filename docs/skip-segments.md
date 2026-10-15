@@ -1,6 +1,6 @@
 # Skip segments
 
-This page covers the buttons that let viewers skip intros, recaps, credits and previews: where Polyfin gets them, how it finds the intros and the credits of local episodes in their audio, and how to set up the databases they come from.
+This page covers the buttons that let viewers skip intros, recaps, credits, previews and the commercials of recordings: where Polyfin gets them, how it finds the intros and the credits of local episodes in their audio and the commercial breaks of Live TV recordings, and how to set up the databases they come from.
 
 ## How skip buttons work
 
@@ -8,7 +8,7 @@ This page covers the buttons that let viewers skip intros, recaps, credits and p
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Skip intro and credits buttons** | **Settings › Content** | On | Gives apps the segments to skip. Off, apps get none, no segment database is asked and no episode's audio is read. |
+| **Skip intro and credits buttons** | **Settings › Content** | On | Gives apps the segments to skip. Off, apps get none, no segment database is asked, no episode's audio is read, and the commercials found in recordings are not given. |
 
 **Compared with Jellyfin:**
 
@@ -17,7 +17,7 @@ This page covers the buttons that let viewers skip intros, recaps, credits and p
 **For app developers:**
 
 - Turned off, `/MediaSegments/{id}` lists none.
-- Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)), or when an intro or credits were found in the audio of an episode's local file (see [Intros and credits found in local episodes' audio](#intros-and-credits-found-in-local-episodes-audio)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
+- Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)), or when an intro or credits were found in the audio of an episode's local file (see [Intros and credits found in local episodes' audio](#intros-and-credits-found-in-local-episodes-audio)). The media source of a recording says it when commercial breaks were found in it (see [Commercials of recordings](#commercials-of-recordings)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
 - `/MediaSegments/{id}` answers Jellyfin's `MediaSegmentDto` list, in ticks, filtered by `includeSegmentTypes`, repeated or comma-separated. Apps choose what to do with each type; the server has no setting per type.
 
 ## The three databases
@@ -85,6 +85,39 @@ An episode in a local folder whose file names no intro or credits in its chapter
 - An intro or credits whose music changes within a season may be missed, or found only between the episodes that share the same music.
 - Only episodes of local folders read as one file are compared, on the server's disk or on a share. Discs and disc images, which FFmpeg reads through their input, are not, nor are addons' files, whose start and end would have to be downloaded for every episode.
 - An intro that starts after the first quarter of an episode, or after its first 10 minutes, is not found. Credits are found only within an episode's last quarter and its last 10 minutes: credits that start earlier are found from there on, and credits that end earlier are not found.
+
+## Commercials of recordings
+
+A Live TV recording is the channel's stream as it aired, commercials included (see [Live TV](live-tv.md#how-a-recording-is-made)). Polyfin can find its commercial breaks, which apps then offer to skip as `Commercial` segments.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Find commercials in recordings** | **Settings › Recordings** | Off | Reads each recording once it ends to find its commercial breaks. Off, no recording is read. |
+
+**When:** a recording is read once it is finished, partial recordings included, in the background.
+
+- Recordings are read one at a time. FFmpeg reads them at the lowest priority, so that playback and recording go first.
+- **Find commercials in recordings**, a task under **System › Schedule**, reads the recordings not read yet: those that ended while the setting was off or the server stopped, and those made before it was turned on. It runs every day, and when started by hand. While the setting is off, it reads nothing.
+- A recording is read once. One where nothing was found is not read again.
+
+**How:** FFmpeg decodes the recording's video, scaled down to a small picture as soon as it is decoded, and its audio, and marks the moments that are both black (its `blackdetect` filter) and silent (its `silencedetect` filter, below -50 dB). Channels part a programme from its commercials, and the commercials from one another, with such moments.
+
+- A break is a run of pieces between such moments, each 5 to 90 seconds long, lasting 30 seconds to 8 minutes in all. A longer run is not a break.
+- The recording's start counts as such a moment: a recording that starts early, as with **Start recordings early**, may open on a break.
+- Two moments less than a second apart count as one, as a fade to black flickers.
+- A break runs from the start of the moment before it to the end of the moment after it, so that skipping it lands on the programme.
+- A black scene in silence within a programme is one moment alone: it parts no commercials, and gives none.
+
+**Served:** while **Skip intro and credits buttons** is on, `/MediaSegments/{id}` lists the breaks of a recording as `Commercial` segments, and its media source says `HasSegments: true`. Apps act on them as each user chose in their app's playback settings: jellyfin-web, for instance, skips commercials, asks first, or plays them, by its setting for that segment type. Users get the segments of the recordings they see, as for the recordings themselves.
+
+**Kept:** what was found is kept with the recording, by its identifier: it stays when the recording's file is replaced, and is deleted with the recording.
+
+**Limits:**
+
+- A recording longer than 4 hours is not read, and gets none.
+- A reading that takes longer than the recording lasts stops, and the recording gets none, as on a server too slow to decode its video.
+- A recording without video or without sound gets none.
+- On channels that do not part their commercials with moments both black and silent, breaks are missed.
 
 ## Source order
 

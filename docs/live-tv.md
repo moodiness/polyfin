@@ -214,6 +214,7 @@ Timers, series timers and recordings are kept in the database.
 | **Start recordings early (minutes)** | **Settings › Recordings** | none (0), as in Jellyfin; 0 to 60 minutes | Starts a recording this many minutes before its programme. Apps can change it per timer. |
 | **Keep recording after the end (minutes)** | **Settings › Recordings** | none (0), as in Jellyfin; 0 to 60 minutes | Goes on recording this many minutes after the programme. Apps can change it per timer. |
 | **Keep recordings for (days, 0 = forever)** | **Settings › Recordings** | 0 (forever); up to 3,650 days | Deletes older recordings once a day. |
+| **Find commercials in recordings** | **Settings › Recordings** | Off | Reads each recording once it ends, partial ones included, for its commercial breaks, which apps then offer to skip. See [Commercials of recordings](skip-segments.md#commercials-of-recordings). |
 
 ### How a recording is made
 
@@ -232,6 +233,16 @@ A recording reads its channel's stream from before FFmpeg starts until it ends, 
 - One that finds every tuner recording another channel is tried again every 30 seconds, as a stream that fails. If it recorded nothing by its programme's end, it fails, and the **Recording failed** notification says every tuner was recording another channel.
 - On an IPTV account, recordings keep the account's rule: a recording takes a connection no one uses any more, never another user's channel, and is refused when they all play.
 - The admin app's lists of timers, under **Content › Live TV**, mark with **Not enough tuners** the timers of a tuner's channel that would need more tuners than it has, counting the other timers recording at the same time.
+
+### Commercials of recordings
+
+With **Find commercials in recordings** on, a recording is read once it ends, in the background, one recording at a time and with FFmpeg at the lowest priority, for the moments that are both black and silent. The short pieces between them are its commercial breaks, which apps offer to skip while **Skip intro and credits buttons** is on, as each user chose in their app's playback settings.
+
+- A recording longer than 4 hours is not read, and one whose reading takes longer than it lasts gets none.
+- **Find commercials in recordings**, a task under **System › Schedule**, reads the recordings not read yet, such as those made before the setting was turned on. It runs every day, and when started by hand.
+- What was found stays with the recording when its file is replaced, and is deleted with it.
+
+How breaks are told apart from the programme, and how apps get them: see [Commercials of recordings](skip-segments.md#commercials-of-recordings).
 
 ### Watching recordings
 
