@@ -91,6 +91,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.unknownProxy(problem.address)
     case 'discovery_port':
       return text.discoveryPort(problem.port)
+    case 'dlna_port':
+      return text.dlnaPort(problem.port)
     case 'discovery_address':
       return text.discoveryAddress(problem.address)
     case 'proxy_name_unresolved':

@@ -302,6 +302,9 @@ const common: typeof en = {
       'L’adresse publique doit être une adresse web commençant par http:// ou https://, sans paramètres.',
     invalid_local_address:
       'L’adresse sur le réseau local doit être une adresse web commençant par http:// ou https://, comme http://192.168.1.10:8096, sans paramètres.',
+    invalid_dlna_name: 'Le nom sur le réseau ne peut pas dépasser 256 octets.',
+    invalid_dlna_user: 'Cet utilisateur n’existe plus. Choisissez-en un autre, ou « Personne ».',
+    invalid_dlna_profile: 'Ce n’est pas un profil DLNA au format XML du plugin DLNA de Jellyfin.',
     invalid_smtp_host:
       'Saisissez le nom d’hôte du serveur SMTP, comme smtp.example.org, sans espaces.',
     invalid_smtp_port: 'Le port SMTP doit être un nombre entier de 1 à 65535.',

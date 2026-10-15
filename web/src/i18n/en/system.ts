@@ -127,6 +127,8 @@ const system = {
           `${address} forwards requests (X-Forwarded-For) but is not a known proxy, so its clients all count as ${address}. If it is your reverse proxy, add it to Known proxies under Settings › Security.`,
         discoveryPort: (port: number) =>
           `Polyfin cannot listen on UDP port ${port}, so Jellyfin apps on the local network do not find it by themselves. Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.`,
+        dlnaPort: (port: number) =>
+          `Polyfin cannot listen on UDP port ${port}, so DLNA devices on the local network do not find it by themselves. Another program probably uses it, such as another DLNA server on the same host. Saving the settings tries again.`,
         discoveryAddress: (address: string) =>
           `Jellyfin apps that look for servers on the local network are given ${address}, an address of Polyfin’s container they cannot reach. Set Address on the local network under Settings › General.`,
         proxyNameUnresolved: (name: string) =>

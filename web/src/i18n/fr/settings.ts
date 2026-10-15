@@ -69,6 +69,66 @@ const settings: typeof en = {
     localAddress: 'Adresse sur le réseau local',
     localAddressHelp:
       'L’adresse à laquelle les applications du réseau local joignent Polyfin, comme http://192.168.1.10:8096. Les réponses à la découverte la donnent, et les applications Jellyfin la lisent comme l’adresse locale du serveur. Vide, les réponses donnent l’adresse de l’interface réseau qui joint l’application : c’est la bonne, sauf si Polyfin tourne dans un réseau bridge de Docker. Saisissez alors l’adresse de l’hôte et le port de Polyfin.',
+    dlna: {
+      title: 'DLNA',
+      description:
+        'Les téléviseurs, amplificateurs, consoles et lecteurs du réseau local qui n’ont pas d’application Jellyfin peuvent parcourir et lire les bibliothèques en DLNA. Un appareil ne peut pas se connecter : chacun montre les bibliothèques de l’utilisateur choisi pour lui, avec les limites de cet utilisateur.',
+      share: 'Partager les bibliothèques en DLNA',
+      shareHelp:
+        'Annonce Polyfin aux appareils du réseau local sur le port UDP 1900, et ne répond qu’à eux. S’applique tout de suite, sans redémarrage. Dans Docker, il faut le réseau de l’hôte ou un réseau qui donne au conteneur sa propre adresse : voir la documentation DLNA.',
+      name: 'Nom sur le réseau',
+      nameHelp: 'Le nom sous lequel les appareils listent Polyfin. Vide, le nom du serveur.',
+      newDevicesUser: 'Montrer aux nouveaux appareils les bibliothèques de',
+      newDevicesUserHelp:
+        'L’utilisateur dont un appareil vu pour la première fois montre les bibliothèques. Avec « Personne », un nouvel appareil voit un serveur vide jusqu’à ce que vous lui choisissiez un utilisateur ci-dessous.',
+      noOne: 'Personne',
+      markPlayed: 'Marquer comme vu ce que lisent les appareils DLNA',
+      markPlayedHelp:
+        'Les appareils ne donnent pas leur position : un titre compte comme vu une fois que l’appareil en a lu plus que « Marqué comme vu après (%) ». Les appareils lisent en avance : un titre peut donc être marqué trop tôt.',
+      devices: 'Appareils',
+      devicesEmpty: 'Aucun appareil n’a encore rien demandé.',
+      device: 'Appareil',
+      address: 'Adresse',
+      model: 'Modèle',
+      lastSeen: 'Vu pour la dernière fois',
+      showsLibrariesOf: 'Montre les bibliothèques de',
+      blocked: 'Bloqué',
+      profile: 'Profil',
+      automaticProfile: (name: string) => `Automatique (${name})`,
+      forget: 'Oublier',
+      profiles: 'Profils',
+      profilesHelp:
+        'Les profils suivent le format XML du plugin DLNA de Jellyfin. Un appareil reçoit le premier qui correspond à ce qu’il envoie, les profils ajoutés d’abord, sinon le profil générique.',
+      builtin: 'Intégré',
+      addProfile: 'Ajouter un profil',
+      replaceProfile: 'Remplacer',
+      removeProfile: 'Supprimer',
+      profileXml: 'XML du profil',
+      devicesHelp:
+        'Les appareils du réseau local qui ont demandé quelque chose à Polyfin, le dernier vu en premier, chacun reconnu à son adresse. Les changements s’appliquent tout de suite.',
+      devicesLabel: 'Appareils DLNA',
+      automatic: 'Automatique',
+      deviceSaved: (name: string) => `${name} enregistré.`,
+      forgetTitle: (name: string) => `Oublier ${name} ?`,
+      forgetBody:
+        'Polyfin oublie l’utilisateur, le blocage et le profil choisis pour lui. S’il demande à nouveau quelque chose, c’est un nouvel appareil, qui montre les bibliothèques de l’utilisateur choisi pour les nouveaux appareils.',
+      forgotten: (name: string) => `${name} oublié.`,
+      profilesLabel: 'Profils DLNA',
+      added: 'Ajouté',
+      viewXml: 'Voir le XML',
+      profileXmlHelp:
+        'Collez le XML d’un profil fait pour le plugin DLNA de Jellyfin, ou ouvrez son fichier.',
+      openFile: 'Ouvrir un fichier',
+      add: 'Ajouter',
+      adding: 'Ajout…',
+      replacing: 'Remplacement…',
+      profileAdded: (name: string) => `Profil ${name} ajouté.`,
+      profileReplaced: (name: string) => `Profil ${name} remplacé.`,
+      removeTitle: (name: string) => `Supprimer le profil ${name} ?`,
+      removeBody:
+        'Les appareils auxquels il est imposé reçoivent de nouveau un profil choisi d’après ce qu’ils envoient.',
+      profileRemoved: (name: string) => `Profil ${name} supprimé.`,
+    },
     metrics: 'Exposer les métriques',
     metricsHelp:
       'Sert les métriques de Polyfin à Prometheus à l’adresse /metrics : lectures, conversions, requêtes aux addons, imports, notifications, requêtes HTTP, analyses de dossiers, base de données, espace disque et processus. Elles ne nomment aucun utilisateur, titre, adresse ni appareil. Prometheus envoie le jeton des métriques avec chaque requête ; sans lui, /metrics répond 401, et tant que cette option est désactivée, 404.',

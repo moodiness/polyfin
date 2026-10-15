@@ -33,6 +33,7 @@ const nav = {
       tracking: 'Tracking',
       liveTv: 'Live TV',
       recordings: 'Recordings',
+      dlna: 'DLNA',
       backups: 'Backups',
       notifications: 'Notifications',
       webPlayer: 'Web player',

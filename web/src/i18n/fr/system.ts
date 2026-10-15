@@ -134,6 +134,8 @@ const system: typeof en = {
           `${address} transmet des requêtes (X-Forwarded-For) sans être un proxy connu : tous ses clients comptent donc comme ${address}. Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.`,
         discoveryPort: (port: number) =>
           `Polyfin ne peut pas écouter sur le port UDP ${port} : les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. Un autre programme l’utilise sans doute, comme un serveur Jellyfin sur le même hôte. Enregistrer les paramètres réessaie.`,
+        dlnaPort: (port: number) =>
+          `Polyfin ne peut pas écouter sur le port UDP ${port} : les appareils DLNA du réseau local ne le trouvent donc pas d’eux-mêmes. Un autre programme l’utilise sans doute, comme un autre serveur DLNA sur le même hôte. Enregistrer les paramètres réessaie.`,
         discoveryAddress: (address: string) =>
           `Les applications Jellyfin qui cherchent des serveurs sur le réseau local reçoivent ${address}, une adresse du conteneur de Polyfin qu’elles ne peuvent pas joindre. Renseignez Adresse sur le réseau local dans Paramètres › Général.`,
         proxyNameUnresolved: (name: string) =>

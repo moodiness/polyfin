@@ -33,6 +33,7 @@ const nav: typeof en = {
       tracking: 'Suivi',
       liveTv: 'TV en direct',
       recordings: 'Enregistrements',
+      dlna: 'DLNA',
       backups: 'Sauvegardes',
       notifications: 'Notifications',
       webPlayer: 'Lecteur web',

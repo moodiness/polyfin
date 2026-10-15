@@ -216,6 +216,14 @@ export type Settings = {
    * discovery announces; empty announces the address of the interface that reaches the app.
    */
   localAddress: string
+  /** Shares the libraries with the DLNA devices of the local network (SSDP on UDP port 1900). */
+  dlna: boolean
+  /** The name DLNA devices list Polyfin under; empty, the server's name. */
+  dlnaName: string
+  /** The user whose libraries a DLNA device seen for the first time shows; null for no one. */
+  dlnaNewDevicesUser: string | null
+  /** Marks played what DLNA devices read past the played percentage of. */
+  dlnaMarkPlayed: boolean
   /** Language of the names the server generates for Jellyfin apps (seasons, library suffixes). */
   language: Language
   /** Analyzes a title's version when its page opens, and the next episode near the end of one. */
@@ -3222,6 +3230,7 @@ export type HealthProblem = {
   | { code: 'unknown_proxy'; address: string }
   | { code: 'discovery_port'; port: number }
   | { code: 'discovery_address'; address: string }
+  | { code: 'dlna_port'; port: number }
   | { code: 'proxy_name_unresolved'; name: string }
   | { code: 'secrets_unreadable'; secrets: UnreadableSecret[] }
   | { code: 'secrets_plaintext' }
@@ -3410,6 +3419,78 @@ export const startRestore = (id: string, serverName: string, anyway: boolean) =>
 /** Drops a backup checked and not restored, with the file downloaded or sent for it. */
 export const discardRestore = (id: string) =>
   request<void>('POST', '/backup/restore/discard', { id })
+
+/**
+ * A device that asked Polyfin for something over DLNA, known by its address. `userId` is the user
+ * whose libraries it shows (null for no one); `profile` the profile forced for it: empty for
+ * automatic, `builtin:` and a built-in profile's name, or an added profile's ID. `matchedProfile`
+ * is the name of the profile it gets now, forced or chosen from what it last sent.
+ */
+export type DlnaDevice = {
+  id: string
+  name: string
+  manufacturer: string
+  model: string
+  address: string
+  userAgent: string
+  clientInfo: string
+  userId: string | null
+  userName?: string
+  blocked: boolean
+  profile: string
+  matchedProfile: string
+  firstSeen: string
+  lastSeen: string
+}
+
+/** What to change of a DLNA device: the fields left out keep their values. */
+export type DlnaDeviceChanges = { userId?: string | null; blocked?: boolean; profile?: string }
+
+/** A DLNA profile: a built-in one (`builtin:` and its name), or one an administrator added. */
+export type DlnaProfile = { id: string; name: string; builtin: boolean; createdAt?: string }
+
+/** The DLNA devices seen, the latest first. */
+export const fetchDlnaDevices = (signal?: AbortSignal) =>
+  request<DlnaDevice[]>('GET', '/dlna/devices', undefined, signal)
+
+export const updateDlnaDevice = (id: string, changes: DlnaDeviceChanges) =>
+  request<DlnaDevice>('PATCH', `/dlna/devices/${seg(id)}`, changes)
+
+/** Forgets a device: it is new when it asks again. */
+export const forgetDlnaDevice = (id: string) => request<void>('DELETE', `/dlna/devices/${seg(id)}`)
+
+/** The DLNA profiles, the built-in ones first. */
+export const fetchDlnaProfiles = (signal?: AbortSignal) =>
+  request<DlnaProfile[]>('GET', '/dlna/profiles', undefined, signal)
+
+/** A DLNA profile's XML. */
+export async function fetchDlnaProfileXml(id: string, signal?: AbortSignal): Promise<string> {
+  const response = await fetch(`${apiBase}/dlna/profiles/${seg(id)}`, {
+    headers: { Accept: 'application/xml' },
+    signal,
+  })
+  if (!response.ok) throw await apiError(response)
+  return response.text()
+}
+
+/**
+ * Adds a DLNA profile from the XML of Jellyfin's DLNA plugin, or replaces the added profile `id`.
+ * XML that is not a profile is refused with invalid_dlna_profile, and why in the error's detail.
+ */
+export async function saveDlnaProfile(xml: string, id?: string): Promise<DlnaProfile> {
+  const path = id === undefined ? '/dlna/profiles' : `/dlna/profiles/${seg(id)}`
+  const response = await fetch(`${apiBase}${path}`, {
+    method: id === undefined ? 'POST' : 'PUT',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/xml' },
+    body: xml,
+  })
+  if (!response.ok) throw await apiError(response)
+  return (await response.json()) as DlnaProfile
+}
+
+/** Removes an added DLNA profile: the devices forced to it get theirs chosen again. */
+export const removeDlnaProfile = (id: string) =>
+  request<void>('DELETE', `/dlna/profiles/${seg(id)}`)
 
 /** The addons, IPTV sources and XMLTV guides of the server, then of every user, with their owner. */
 export type Sources = {
@@ -3630,6 +3711,11 @@ export const queryKeys = {
   folderTitles: (id: string, query: string, year: number | null) =>
     ['folder-titles', id, query, year] as const,
   variables: ['variables'] as const,
+  /** Prefix of the DLNA devices and profiles: forcing or removing a profile changes devices. */
+  dlna: ['dlna'] as const,
+  dlnaDevices: ['dlna', 'devices'] as const,
+  dlnaProfiles: ['dlna', 'profiles'] as const,
+  dlnaProfileXml: (id: string) => ['dlna', 'profiles', id] as const,
   notifications: (scope: NotificationScope) => ['notifications', scope] as const,
   statistics: (scope: StatisticsScope, query: PlaybacksQuery) =>
     ['statistics', scope, query] as const,
