@@ -218,6 +218,10 @@ const sources: typeof en = {
     privateKeyHint:
       'Une clé privée OpenSSH ou PEM, à la place du mot de passe ou avec lui. Polyfin ne l’affiche plus jamais.',
     privateKeySaved: 'Une clé est enregistrée. Collez-en une autre pour la remplacer.',
+    privateKeyNotSent:
+      'La clé enregistrée n’est pas envoyée à un autre serveur : collez-la à nouveau, sinon elle est supprimée à l’enregistrement.',
+    secretNotSent:
+      'La valeur enregistrée n’est pas envoyée à un autre serveur : saisissez-la à nouveau, sinon elle est supprimée à l’enregistrement.',
     privateKeyRemove: 'Supprimer la clé enregistrée',
     passphrase: 'Phrase de passe',
     passphraseHint: 'Seulement pour une clé privée qui en a une.',

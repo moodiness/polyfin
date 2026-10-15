@@ -57,7 +57,7 @@ import {
   TextInput,
   useToast,
 } from '@/ui'
-import { invalidateScope, replaceCachedAddon } from './model'
+import { folderFailure, invalidateScope, replaceCachedAddon } from './model'
 import TitleSearch from './TitleSearch'
 
 /** The ways files are matched, in the order a folder's figures tell them. */
@@ -123,6 +123,17 @@ function rcloneAddress(instance: string, folder: string): string {
     .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
     .replace(/\/.*$/, '')
   return `rclone://${host}/${folder.trim().replace(/^\/+/, '')}`
+}
+
+/**
+ * Where a folder's stored secrets go, its password, private key and passphrase: its kind of share
+ * with the scheme and server of its address, or of an S3 bucket's endpoint. The server keeps them
+ * only while this stays the same, else those the form gives again.
+ */
+function secretsServer(share: FolderShare, address: string, endpoint: string): string {
+  const target = (share === 's3' ? endpoint : address).trim()
+  const server = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)/i.exec(target)
+  return `${share} ${server === null ? '' : `${server[1]}://${server[2]}`.toLowerCase()}`
 }
 
 /** What an S3 bucket, an SFTP folder or an rclone remote is read with beside its address. */
@@ -369,6 +380,11 @@ export function LocalFolderEditForm({
     onSettled: () => invalidateScope('shared'),
   })
   const moved = address !== folder.path
+  // On another server the stored secrets are dropped on save, unless given again.
+  const rekeyed =
+    share !== '' &&
+    secretsServer(share, address, draft.endpoint) !==
+      secretsServer(folder.share, folder.path, folder.endpoint)
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -423,14 +439,25 @@ export function LocalFolderEditForm({
           <SecretField
             label={share === 's3' ? text.secretKey : text.password}
             help={share === 'sftp' ? text.sftpPasswordHint : text.passwordHint}
-            saved={folder.passwordSet}
+            saved={folder.passwordSet && !rekeyed}
+            status={
+              rekeyed && folder.passwordSet && password === undefined
+                ? text.secretNotSent
+                : undefined
+            }
             value={password}
             onValue={setPassword}
           />
         </>
       )}
       {share === 'sftp' && (
-        <SFTPKey draft={draft} onDraft={setDraft} folder={folder} addonId={addon.id} />
+        <SFTPKey
+          draft={draft}
+          onDraft={setDraft}
+          folder={folder}
+          addonId={addon.id}
+          rekeyed={rekeyed}
+        />
       )}
       {share === 'rclone' && (
         <RcloneRemote
@@ -438,7 +465,7 @@ export function LocalFolderEditForm({
           onDraft={setDraft}
           user={user}
           password={password}
-          folder={addon.id}
+          folder={rekeyed ? undefined : addon.id}
         />
       )}
       {isRemote(share) && <PollField share={share} draft={draft} onDraft={setDraft} />}
@@ -615,20 +642,26 @@ function RcloneRemote({
 
 /**
  * An SFTP folder's private key and passphrase, and when editing one the host key saved, with the
- * one its server offers instead to accept.
+ * one its server offers instead to accept. Moved to another server (rekeyed), the folder keeps
+ * neither its key nor its passphrase nor its host key, unless the key and passphrase are given again.
  */
 function SFTPKey({
   draft,
   onDraft,
   folder,
   addonId,
-}: DraftProps & { folder?: LocalFolder; addonId?: string }) {
+  rekeyed = false,
+}: DraftProps & { folder?: LocalFolder; addonId?: string; rekeyed?: boolean }) {
   const { t } = useI18n()
   const text = t.localFolders
-  const saved = folder?.privateKeySet === true
+  const saved = folder?.privateKeySet === true && !rekeyed
+  const left = folder?.privateKeySet === true && rekeyed
   return (
     <>
-      <Field label={text.privateKey} help={text.privateKeyHint}>
+      <Field
+        label={text.privateKey}
+        help={left && draft.privateKey.trim() === '' ? text.privateKeyNotSent : text.privateKeyHint}
+      >
         <Textarea
           value={draft.privateKey}
           onValue={(privateKey) => onDraft({ ...draft, privateKey })}
@@ -661,12 +694,17 @@ function SFTPKey({
         <SecretField
           label={text.passphrase}
           help={text.passphraseHint}
-          saved={folder.passphraseSet}
+          saved={folder.passphraseSet && !rekeyed}
+          status={
+            rekeyed && folder.passphraseSet && draft.passphrase === undefined
+              ? text.secretNotSent
+              : undefined
+          }
           value={draft.passphrase}
           onValue={(passphrase) => onDraft({ ...draft, passphrase })}
         />
       )}
-      {folder !== undefined && addonId !== undefined && (
+      {folder !== undefined && addonId !== undefined && !rekeyed && (
         <HostKey folder={folder} addonId={addonId} />
       )}
     </>
@@ -825,6 +863,7 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
     .filter((method) => folder.matchedBy[method] > 0)
     .map((method) => text.matchMethods[method](folder.matchedBy[method].toLocaleString(language)))
   const errors = folder.share === '' ? text.errors : text.shareErrors
+  const failure = folderFailure(folder)
   // Figures wrap onto rows: only those after the first of their row are set apart.
   const columns = figures.length === 4 ? 4 : 3
   return (
@@ -850,12 +889,12 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
       {methods.length > 0 && (
         <p className="mt-4 text-small text-ink-3">{text.matchedBy(methods)}</p>
       )}
-      {folder.error !== '' && (
+      {failure !== '' && (
         <Notice tone="danger" className="mt-5">
           <strong className="font-medium">
             {folder.share === '' ? text.errorTitle : text.errorTitleShare}.
           </strong>{' '}
-          {Object.hasOwn(errors, folder.error) ? errors[folder.error] : t.errors.generic}{' '}
+          {Object.hasOwn(errors, failure) ? errors[failure] : t.errors.generic}{' '}
           {folder.files > 0 && text.keptNote}
         </Notice>
       )}

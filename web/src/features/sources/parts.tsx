@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { Addon } from '@/api'
 import { useI18n } from '@/i18n'
 import { IconTile, StatusPill } from '@/ui'
-import { kindIcon } from './model'
+import { folderFailure, kindIcon } from './model'
 
 /**
  * The source's kind icon, covered by its logo once that loads. Logos are third-party images: when
@@ -40,14 +40,15 @@ export function SourceTile({ addon, selected = false }: { addon: Addon; selected
 
 /**
  * Whether a source works: on, off, its last IPTV download failed, or its local folder cannot be
- * read or is being scanned. Always an icon and a word.
+ * read, as when its SFTP server offers another host key, or is being scanned. Always an icon and a
+ * word.
  */
 export function SourceStatus({ addon }: { addon: Addon }) {
   const { t } = useI18n()
   if (!addon.enabled) return <StatusPill tone="muted">{t.sources.off}</StatusPill>
   if (addon.source !== null && addon.source.error !== '')
     return <StatusPill tone="danger">{t.sources.failed}</StatusPill>
-  if (addon.folder !== null && addon.folder.error !== '')
+  if (addon.folder !== null && folderFailure(addon.folder) !== '')
     return <StatusPill tone="danger">{t.localFolders.unreadable}</StatusPill>
   if (addon.folder?.scanning) return <StatusPill tone="live">{t.localFolders.scanning}</StatusPill>
   return <StatusPill tone="ok">{t.sources.active}</StatusPill>

@@ -214,6 +214,10 @@ const sources = {
     privateKeyHint:
       'An OpenSSH or PEM private key, in place of the password or beside it. Polyfin never shows it again.',
     privateKeySaved: 'A key is saved. Paste another to replace it.',
+    privateKeyNotSent:
+      'The saved key is not sent to another server: paste it again, or it is removed on save.',
+    secretNotSent:
+      'The saved one is not sent to another server: type it again, or it is removed on save.',
     privateKeyRemove: 'Remove the saved key',
     passphrase: 'Passphrase',
     passphraseHint: 'Only for a private key that has one.',

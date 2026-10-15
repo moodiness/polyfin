@@ -10,7 +10,7 @@ import {
   TerminalWindowIcon,
   type Icon,
 } from '@phosphor-icons/react'
-import { queryClient, queryKeys, type Addon, type Owner, type Scope } from '@/api'
+import { queryClient, queryKeys, type Addon, type LocalFolder, type Owner, type Scope } from '@/api'
 
 /** The kinds the list filters by: IPTV gathers M3U playlists and Xtream accounts. */
 export type KindFilter = 'stremio' | 'eclipse' | 'iptv' | 'local'
@@ -69,4 +69,13 @@ export function replaceCachedAddon(scope: Scope, updated: Addon) {
 export function lastTime(addon: Addon) {
   if (addon.folder !== null) return addon.folder.scannedAt
   return addon.source === null ? addon.refreshedAt : addon.source.fetchedAt
+}
+
+/**
+ * Why a local folder cannot be read, '' when it can: its last scan's failure, or the host key its
+ * SFTP server offers in place of the one saved, which Polyfin refuses before a scan meets it.
+ */
+export function folderFailure(folder: LocalFolder): string {
+  if (folder.error !== '') return folder.error
+  return folder.offeredHostKey !== '' ? 'host_key_changed' : ''
 }
