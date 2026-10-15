@@ -140,8 +140,9 @@ func (s *Service) forgetArrivals(ctx context.Context) error {
 // titles of that genre; smart lists, music, IPTV sources and local folders
 // are left out (see the top of this file). Titles the user may not see,
 // by parental control or blocked genres, and those they hid, are left
-// out. first describes only as many titles as the window shows, as a
-// home row does; a listing describes them all to count them.
+// out. Titles show the user's language as far as it is kept (see
+// itemsOf). first describes only as many titles as the window shows, as
+// a home row does; a listing describes them all to count them.
 func (s *Service) Arrivals(ctx context.Context, user accounts.User, start, count int, first bool) (Page, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -213,6 +214,7 @@ func (s *Service) describedPage(ctx context.Context, v view, ids []accounts.ID, 
 // catalog, or one that needs a search. Its titles carry the library of
 // the catalog the user sees, if any; the titles the user may not see, by
 // parental control or blocked genres, and those they hid, are left out.
+// Titles show the user's language as far as it is kept (see translate).
 func (s *Service) CatalogTitles(ctx context.Context, user accounts.User, addon accounts.ID, catalogType, catalogID string, start, count int,
 	first bool) (Page, error) {
 	v, err := s.view(ctx, user)
@@ -258,6 +260,7 @@ func (s *Service) CatalogTitles(ctx context.Context, user accounts.User, addon a
 		}
 		items, records = append(items, item), append(records, r)
 	}
+	s.translate(ctx, v, items)
 	return page(s.overridden(items), start, totalWithinMax(total, src.max)), s.save(ctx, records)
 }
 

@@ -279,6 +279,59 @@ func TestAListingShowsTheTranslationOnceKept(t *testing.T) {
 	e.translated(e.germanUser, "Top (Movies)", 0, "Der Coup")
 }
 
+// The home rows of a catalog and of the titles new in the libraries show
+// the user's language as listings do, and the administrator the server's.
+func TestHomeRowsShowTheTranslationOnceKept(t *testing.T) {
+	t.Parallel()
+	e := newLanguageEnv(t)
+	at := &clock{now: time.Now()}
+	e.service.SetClock(at.Now)
+	// The movie comes into the catalog after its first read: it is new.
+	e.base.mu.Lock()
+	listed := e.base.catalogs["movie/top"]
+	e.base.catalogs["movie/top"] = listed[1:]
+	e.base.mu.Unlock()
+	top := e.library(e.admin, "Top (Movies)")
+	read := func() {
+		t.Helper()
+		if _, err := e.service.Children(withRefreshing(t.Context()), e.admin, top.ID, 0, 10, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read()
+	e.base.mu.Lock()
+	e.base.catalogs["movie/top"] = listed
+	e.base.mu.Unlock()
+	at.advance(2 * time.Hour)
+	read()
+	e.translated(e.member, "Top (Films)", 0, "Le Casse")
+	e.translated(e.germanUser, "Top (Movies)", 0, "Der Coup")
+
+	list, err := e.addons.Addons(t.Context(), addons.Shared())
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(list, func(a addons.Addon) bool { return a.Manifest.ID == e.base.manifest.ID })
+	if i < 0 {
+		t.Fatal("base addon not installed")
+	}
+	for _, c := range []struct {
+		user accounts.User
+		want string
+	}{{e.member, "Le Casse"}, {e.germanUser, "Der Coup"}, {e.admin, "The Heist"}} {
+		catalog, err := e.service.CatalogTitles(t.Context(), c.user, list[i].ID, "movie", "top", 0, 10, true)
+		if err != nil || len(catalog.Items) == 0 || catalog.Items[0].Name != c.want {
+			t.Errorf("catalog row for %s: %v %v, want %s first", c.user.Name, names(catalog.Items), err, c.want)
+		}
+		for _, first := range []bool{true, false} {
+			arrivals, err := e.service.Arrivals(t.Context(), c.user, 0, 10, first)
+			if err != nil || !slices.Equal(names(arrivals.Items), []string{c.want}) {
+				t.Errorf("new titles for %s (first %v): %v %v, want %s", c.user.Name, first, names(arrivals.Items), err, c.want)
+			}
+		}
+	}
+}
+
 // Genres, blocked genres, hidden titles, parental control and smart lists
 // judge the facts of the addon that listed a title, whatever the user's
 // language, and a user under parental control sees their language too.
