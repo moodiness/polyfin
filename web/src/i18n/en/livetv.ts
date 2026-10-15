@@ -84,6 +84,10 @@ const livetv = {
     tunersShortHelp:
       'More recordings on this tuner’s channels than it has tuners run at the same time: one of them may fail.',
     guidesOf: (name: string) => `Guides of ${name}`,
+    spaceSaved: (count: number, saved: string) =>
+      count === 1
+        ? `1 recording converted to HEVC: ${saved} saved.`
+        : `${count} recordings converted to HEVC: ${saved} saved.`,
   },
 }
 

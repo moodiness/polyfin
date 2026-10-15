@@ -21,7 +21,7 @@ import {
 import { settingsPath } from '@/app/navigation'
 import { PageLayout } from '@/app/PageLayout'
 import { lineupPath } from '@/features/iptv/lineup'
-import { dateTime, errorMessage } from '@/format'
+import { dateTime, errorMessage, formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Badge,
@@ -333,9 +333,12 @@ function IptvSourcePanel({ addon, source }: { addon: Addon; source: IptvSource }
   )
 }
 
-/** The recordings scheduled and under way; read once, as the Schedule page polls them. */
+/**
+ * The recordings scheduled and under way, and the space their conversion to HEVC saved; read
+ * once, as the Schedule page polls them.
+ */
 function Recordings() {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const timers = useQuery({
     queryKey: queryKeys.timers,
     queryFn: ({ signal }) => fetchTimers(signal),
@@ -370,6 +373,14 @@ function Recordings() {
             <TimerRow key={timer.id} timer={timer} />
           ))}
         </RowList>
+      )}
+      {timers.data?.converted && timers.data.converted.recordings > 0 && (
+        <p className="mt-4 text-small text-ink-2">
+          {t.livetv.spaceSaved(
+            timers.data.converted.recordings,
+            formatBytes(timers.data.converted.saved, language),
+          )}
+        </p>
       )}
     </Block>
   )

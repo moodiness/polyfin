@@ -86,6 +86,10 @@ const livetv: typeof en = {
     tunersShortHelp:
       'Plus d’enregistrements sur les chaînes de ce tuner qu’il n’a de tuners ont lieu en même temps : l’un d’eux peut échouer.',
     guidesOf: (name: string) => `Guides de ${name}`,
+    spaceSaved: (count: number, saved: string) =>
+      count === 1
+        ? `1 enregistrement converti en HEVC : ${saved} gagnés.`
+        : `${count} enregistrements convertis en HEVC : ${saved} gagnés.`,
   },
 }
 

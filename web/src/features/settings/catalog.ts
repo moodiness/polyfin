@@ -910,6 +910,31 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => s(t).recordingCommercialsHelp,
     keywords: ['commercials', 'adverts', 'ads', 'skip', 'segments'],
   },
+  {
+    section: 'recordings',
+    anchor: 'convert-recordings',
+    label: (t) => s(t).convertRecordings,
+    help: (t) => s(t).convertRecordingsHelp,
+    keywords: ['HEVC', 'H.265', 'x265'],
+  },
+  {
+    section: 'recordings',
+    anchor: 'convert-recordings-between',
+    label: (t) => s(t).convertRecordingsBetween,
+    help: (t, r) =>
+      s(t).convertRecordingsBetweenHelp(
+        r('convertRecordingsFrom').default,
+        r('convertRecordingsUntil').default,
+      ),
+    codes: ['invalid_convert_recordings_hours'],
+  },
+  {
+    section: 'recordings',
+    anchor: 'convert-recordings-on-processor',
+    label: (t) => s(t).convertRecordingsOnProcessor,
+    help: (t) => s(t).convertRecordingsOnProcessorHelp,
+    keywords: ['CPU', 'x265'],
+  },
   // DLNA
   {
     section: 'dlna',

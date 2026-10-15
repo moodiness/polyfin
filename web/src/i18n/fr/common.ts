@@ -230,6 +230,8 @@ const common: typeof en = {
       'Les minutes avant et après un enregistrement doivent être un nombre entier de 0 à 60.',
     invalid_recording_retention_days:
       'Les jours de conservation des enregistrements doivent être un nombre entier de 0 à 3 650.',
+    invalid_convert_recordings_hours:
+      'Choisissez dans les listes deux heures différentes entre lesquelles convertir les enregistrements.',
     invalid_quality_group: 'Choisissez le groupe de qualité dans la liste.',
     invalid_live_tv_refresh_hours:
       'L’intervalle d’actualisation doit être un nombre entier d’heures de 1 à 168.',

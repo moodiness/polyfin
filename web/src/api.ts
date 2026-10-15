@@ -422,6 +422,13 @@ export type Settings = {
   recordingRetentionDays: number
   /** Whether finished recordings are read for their commercial breaks, served as segments with skipButtons. */
   recordingCommercials: boolean
+  /** Whether finished recordings are converted to HEVC. */
+  convertRecordings: boolean
+  /** Hours, in the server's time zone, between which recordings are converted. */
+  convertRecordingsFrom: number
+  convertRecordingsUntil: number
+  /** Whether recordings are converted on the processor when no graphics card encodes HEVC. */
+  convertRecordingsOnProcessor: boolean
   /** Whether Live TV recording is on. */
   recording: boolean
   /** Folder recordings are written to; empty uses recordingsFolderDefault. */
@@ -3246,8 +3253,16 @@ export type Timer = {
   tunersShort: boolean
 }
 
+/** The recordings converted to HEVC, and the bytes their conversion saved. */
+export type ConvertedRecordings = { recordings: number; saved: number }
+
 export const fetchTimers = (signal?: AbortSignal) =>
-  request<{ available: boolean; timers: Timer[] }>('GET', '/timers', undefined, signal)
+  request<{ available: boolean; timers: Timer[]; converted?: ConvertedRecordings }>(
+    'GET',
+    '/timers',
+    undefined,
+    signal,
+  )
 
 /** How the requests made to one of the server's addons went since the server started. */
 /** The user whose own addon, source or guide a dashboard row is; null for the server's. */

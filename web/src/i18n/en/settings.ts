@@ -144,7 +144,7 @@ const settings = {
       'Polyfin reads the file as soon as a title’s page opens, and gets the next episode ready near the end of the current one, so playback starts right away. It also lists in advance the versions of the titles in Continue Watching and Next Up, so their pages show them at once. This sends a few more requests to your sources, also for titles that are opened but not played.',
     transcoding: 'Conversion (transcoding)',
     transcodingHelp:
-      'Re-encodes video and audio for apps that cannot play a file as it is. When off, apps play files as they are or simply repackaged without re-encoding, and a title an app cannot play that way will not start on that app.',
+      'Re-encodes video and audio for apps that cannot play a file as it is. When off, apps play files as they are or simply repackaged without re-encoding, and a title an app cannot play that way will not start on that app. This includes recordings converted to HEVC, on apps that do not play HEVC.',
     analysisTimeout: 'Maximum time to analyze a version',
     analysisTimeoutHelp: (r: RangeText) =>
       `Before a first play, Polyfin analyzes the file or the channel to know how to play it. If the source does not answer within this many seconds, Polyfin gives up on that version and moves on to the next one. A lower number moves on sooner, but may give up on slow sources that would have worked. A channel is analyzed for 8 seconds at most. From ${r.min} to ${r.max} seconds; ${r.default} by default.`,
@@ -611,6 +611,18 @@ const settings = {
     recordingCommercials: 'Find commercials in recordings',
     recordingCommercialsHelp:
       'Once a recording ends, Polyfin reads it in the background, one recording at a time, for the moments that are both black and silent, and takes the short pieces between them as commercial breaks. Apps then offer to skip them, as each user chose in their app’s playback settings, while the skip intro and credits buttons are on. Recordings longer than 4 hours are not read.',
+    convertRecordings: 'Convert finished recordings to HEVC',
+    convertRecordingsHelp:
+      'Finished recordings are converted to HEVC, one at a time, in the hours below, so that they take less space. The picture keeps its size; the audio and subtitles are copied as they are. The conversion uses the "Graphics card used to convert", with the "HEVC quality" and the "Deinterlacing method" of Conversion (transcoding), and counts as one of the "Video conversions at once": it waits while playbacks fill them. It starts only with free space for a copy as large as the recording. The copy replaces the recording only if it lasts as long, holds the same tracks, decodes to its end and is smaller; otherwise it is deleted, and the recording is kept as it is and not tried again. A recording someone is playing is replaced once they stop; its played state, resume points and commercials stay. Apps that do not play HEVC get the recording converted when they play it: with "Conversion (transcoding)" off, they cannot play it. Off by default.',
+    convertRecordingsBetween: 'Convert between',
+    convertRecordingsAnd: 'and',
+    convertRecordingsBetweenHelp: (from: string, until: string) =>
+      `In the server’s time zone. A conversion still running at the end stops, and starts over the next night. ${from} to ${until} by default.`,
+    convertRecordingsFrom: 'Start of the conversions',
+    convertRecordingsUntil: 'End of the conversions',
+    convertRecordingsOnProcessor: 'Use the processor when there is no graphics card',
+    convertRecordingsOnProcessorHelp:
+      'Without a graphics card that encodes HEVC, recordings are converted on the processor with x265, at its lowest priority. It is slow, and keeps the processor busy through the hours above. Without a graphics card and with this off, nothing is converted. Off by default.',
     liveTvRefreshHours: 'Refresh Live TV lists and guides every (hours)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `How often the IPTV channel lists and the XMLTV programme guides are downloaded again. A download that failed is tried again sooner: after 5 minutes, 15 minutes, then every hour. From ${r.min} to ${r.max}; ${r.default} by default.`,

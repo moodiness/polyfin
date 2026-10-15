@@ -210,6 +210,8 @@ const common = {
       'Minutes before and after a recording must be whole numbers from 0 to 60.',
     invalid_recording_retention_days:
       'Days to keep recordings must be a whole number from 0 to 3,650.',
+    invalid_convert_recordings_hours:
+      'Choose two different hours from the lists to convert recordings between.',
     invalid_quality_group: 'Choose the quality group from the list.',
     invalid_live_tv_refresh_hours:
       'The refresh interval must be a whole number of hours from 1 to 168.',

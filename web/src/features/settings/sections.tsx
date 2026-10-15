@@ -1,6 +1,6 @@
 import { ArrowSquareOutIcon, PlayIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
-import { useState, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import {
   fetchStatus,
   queryKeys,
@@ -1275,8 +1275,13 @@ function LiveTv({ form, update, error, number, range, limits }: SectionFormApi) 
 }
 
 function Recordings({ form, update, error, number, range, limits }: SectionFormApi) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const s = t.settings
+  const untilId = useId()
+  const hours = Array.from({ length: 24 }, (_, hour) => ({
+    value: hour,
+    label: formatHour(hour, language),
+  }))
   return (
     <>
       <SettingsGroup>
@@ -1357,6 +1362,53 @@ function Recordings({ form, update, error, number, range, limits }: SectionFormA
           help={s.recordingCommercialsHelp}
           checked={form.recordingCommercials}
           onChange={(recordingCommercials) => update({ recordingCommercials })}
+        />
+      </SettingsGroup>
+      <SettingsGroup>
+        <SwitchRow
+          anchor="convert-recordings"
+          label={s.convertRecordings}
+          help={s.convertRecordingsHelp}
+          checked={form.convertRecordings}
+          onChange={(convertRecordings) => update({ convertRecordings })}
+        />
+        <FieldRow
+          anchor="convert-recordings-between"
+          label={s.convertRecordingsBetween}
+          help={s.convertRecordingsBetweenHelp(
+            formatHour(Number(form.bounds.convertRecordingsFrom?.default), language),
+            formatHour(Number(form.bounds.convertRecordingsUntil?.default), language),
+          )}
+          error={error('convert-recordings-between')}
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <Select
+              value={form.convertRecordingsFrom}
+              options={hours}
+              onValue={(convertRecordingsFrom) => update({ convertRecordingsFrom })}
+              disabled={!form.convertRecordings}
+              aria-label={s.convertRecordingsFrom}
+              className="max-w-[10rem]"
+            />
+            <span className="text-small text-ink-2">{s.convertRecordingsAnd}</span>
+            <Select
+              id={untilId}
+              value={form.convertRecordingsUntil}
+              options={hours}
+              onValue={(convertRecordingsUntil) => update({ convertRecordingsUntil })}
+              disabled={!form.convertRecordings}
+              aria-label={s.convertRecordingsUntil}
+              className="max-w-[10rem]"
+            />
+          </div>
+        </FieldRow>
+        <SwitchRow
+          anchor="convert-recordings-on-processor"
+          label={s.convertRecordingsOnProcessor}
+          help={s.convertRecordingsOnProcessorHelp}
+          checked={form.convertRecordingsOnProcessor}
+          onChange={(convertRecordingsOnProcessor) => update({ convertRecordingsOnProcessor })}
+          disabled={!form.convertRecordings}
         />
       </SettingsGroup>
     </>

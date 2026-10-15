@@ -149,7 +149,7 @@ const settings: typeof en = {
       'Polyfin lit le fichier dès que la page d’un titre s’ouvre, et prépare l’épisode suivant vers la fin de celui en cours, pour que la lecture démarre tout de suite. Il liste aussi à l’avance les versions des titres de « Continuer de regarder » et « À suivre », pour que leur page les affiche aussitôt. En contrepartie, vos sources reçoivent un peu plus de demandes, y compris pour les titres ouverts mais pas regardés.',
     transcoding: 'Conversion (transcodage)',
     transcodingHelp:
-      'Convertit l’image et le son pour les applications qui ne savent pas lire un fichier tel quel. Si cette option est désactivée, les fichiers sont lus tels quels ou simplement présentés autrement, sans toucher à l’image ni au son. Un titre qu’une application ne peut pas lire ainsi ne démarrera pas sur cette application.',
+      'Convertit l’image et le son pour les applications qui ne savent pas lire un fichier tel quel. Si cette option est désactivée, les fichiers sont lus tels quels ou simplement présentés autrement, sans toucher à l’image ni au son. Un titre qu’une application ne peut pas lire ainsi ne démarrera pas sur cette application, comme un enregistrement converti en HEVC sur une application qui ne lit pas le HEVC.',
     analysisTimeout: 'Temps max pour analyser une version',
     analysisTimeoutHelp: (r: RangeText) =>
       `Avant une première lecture, Polyfin analyse le fichier ou la chaîne pour savoir comment le lire. Si la source ne répond pas dans ce délai, en secondes, Polyfin abandonne cette version et passe à la suivante. Un nombre plus petit passe plus vite à la suivante, mais peut abandonner des sources lentes qui auraient marché. Une chaîne est analysée 8 secondes au plus. De ${r.min} à ${r.max} secondes ; ${r.default} par défaut.`,
@@ -630,6 +630,18 @@ const settings: typeof en = {
     recordingCommercials: 'Trouver les publicités des enregistrements',
     recordingCommercialsHelp:
       'Quand un enregistrement se termine, Polyfin le lit en arrière-plan, un enregistrement à la fois, pour trouver les moments à la fois noirs et silencieux, et prend les courts passages entre eux pour des coupures publicitaires. Les applications proposent alors de les passer, selon ce que chaque utilisateur a choisi dans les réglages de lecture de son application, quand les boutons « Passer l’intro » et « Passer le générique » sont activés. Les enregistrements de plus de 4 heures ne sont pas lus.',
+    convertRecordings: 'Convertir les enregistrements terminés en HEVC',
+    convertRecordingsHelp:
+      'Les enregistrements terminés sont convertis en HEVC, un à la fois, aux heures ci-dessous, pour prendre moins de place. L’image garde sa taille ; l’audio et les sous-titres sont copiés tels quels. La conversion utilise la « Carte graphique pour convertir », avec la « Qualité HEVC » et la « Méthode de désentrelacement » de Conversion (transcodage), et compte parmi les « Conversions vidéo en même temps » : elle attend tant que des lectures les occupent toutes. Elle ne commence qu’avec la place libre pour une copie aussi grande que l’enregistrement. La copie ne remplace l’enregistrement que si elle dure aussi longtemps, contient les mêmes pistes, se décode jusqu’au bout et est plus petite ; sinon elle est supprimée, et l’enregistrement gardé tel quel et pas réessayé. Un enregistrement en cours de lecture est remplacé une fois la lecture arrêtée ; son état vu, ses points de reprise et ses publicités restent. Les applications qui ne lisent pas le HEVC reçoivent l’enregistrement converti à la lecture : avec « Conversion (transcodage) » désactivée, elles ne peuvent pas le lire. Désactivé par défaut.',
+    convertRecordingsBetween: 'Convertir entre',
+    convertRecordingsAnd: 'et',
+    convertRecordingsBetweenHelp: (from: string, until: string) =>
+      `Dans le fuseau horaire du serveur. Une conversion encore en cours à la fin s’arrête, et reprend du début la nuit suivante. De ${from} à ${until} par défaut.`,
+    convertRecordingsFrom: 'Début des conversions',
+    convertRecordingsUntil: 'Fin des conversions',
+    convertRecordingsOnProcessor: 'Utiliser le processeur sans carte graphique',
+    convertRecordingsOnProcessorHelp:
+      'Sans carte graphique qui encode le HEVC, les enregistrements sont convertis par le processeur avec x265, à sa priorité la plus basse. C’est lent, et le processeur reste occupé pendant les heures ci-dessus. Sans carte graphique et avec ce réglage désactivé, rien n’est converti. Désactivé par défaut.',
     liveTvRefreshHours: 'Actualiser les listes et les guides de TV toutes les (heures)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. Un téléchargement qui a échoué est réessayé plus tôt : après 5 minutes, 15 minutes, puis toutes les heures. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
