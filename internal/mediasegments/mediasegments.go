@@ -78,6 +78,11 @@ const (
 	Preview Type = "Preview"
 )
 
+// Commercial is a commercial break, which the databases do not know: those
+// of Live TV recordings are found in their files (see package
+// commercials).
+const Commercial Type = "Commercial"
+
 // Segment is a part of a title that apps offer to skip.
 type Segment struct {
 	Type       Type

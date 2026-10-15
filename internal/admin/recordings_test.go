@@ -12,19 +12,21 @@ func TestSettingsRecordings(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
-	recording := func(body map[string]any) [4]any {
-		return [4]any{body["recordingPrePadding"], body["recordingPostPadding"], body["recordingRetentionDays"], body["recordingsFolder"]}
+	recording := func(body map[string]any) [5]any {
+		return [5]any{body["recordingPrePadding"], body["recordingPostPadding"], body["recordingRetentionDays"], body["recordingsFolder"],
+			body["recordingCommercials"]}
 	}
-	// Recording is off by default, into the default folder.
-	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); recording(body) != [4]any{0.0, 0.0, 0.0, ""} {
+	// Recording is off by default, into the default folder, and finds no
+	// commercials.
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); recording(body) != [5]any{0.0, 0.0, 0.0, "", false} {
 		t.Errorf("default settings: %v", body)
 	}
 	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
 	settings := maps.Clone(base)
 	maps.Copy(settings, map[string]any{"recordingPrePadding": 120, "recordingPostPadding": 600, "recordingRetentionDays": 30,
-		"recordingsFolder": "/elsewhere"})
+		"recordingsFolder": "/elsewhere", "recordingCommercials": true})
 	// Recording off, the folder is not looked at.
-	saved := [4]any{120.0, 600.0, 30.0, "/elsewhere"}
+	saved := [5]any{120.0, 600.0, 30.0, "/elsewhere", true}
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK || recording(body) != saved {
 		t.Fatalf("saving the recording settings: %d %v", status, body)
 	}
@@ -32,7 +34,8 @@ func TestSettingsRecordings(t *testing.T) {
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK || recording(body) != saved {
 		t.Errorf("saving without them: %d %v", status, body)
 	}
-	if got := api.store.Settings(); got.RecordingPrePadding != 120 || got.RecordingPostPadding != 600 || got.RecordingRetentionDays != 30 {
+	if got := api.store.Settings(); got.RecordingPrePadding != 120 || got.RecordingPostPadding != 600 || got.RecordingRetentionDays != 30 ||
+		!got.RecordingCommercials {
 		t.Errorf("stored: %+v", got)
 	}
 	for _, tc := range []struct {

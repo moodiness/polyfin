@@ -562,6 +562,9 @@ type settingsJSON struct {
 	RecordingPrePadding    *int `json:"recordingPrePadding"`
 	RecordingPostPadding   *int `json:"recordingPostPadding"`
 	RecordingRetentionDays *int `json:"recordingRetentionDays"`
+	// RecordingCommercials keeps its current value when a PUT leaves it
+	// out.
+	RecordingCommercials *bool `json:"recordingCommercials"`
 	// LiveTvRefreshHours keeps its current value when a PUT leaves it out.
 	LiveTvRefreshHours *int `json:"liveTvRefreshHours"`
 	// LocalScanHours keeps its current value when a PUT leaves it out.
@@ -790,6 +793,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingPrePadding:    &settings.RecordingPrePadding,
 		RecordingPostPadding:   &settings.RecordingPostPadding,
 		RecordingRetentionDays: &settings.RecordingRetentionDays,
+		RecordingCommercials:   &settings.RecordingCommercials,
 		LiveTvRefreshHours:     &settings.LiveTvRefreshHours,
 		LocalScanHours:         &settings.LocalScanHours,
 		WatchLocalFolders:      &settings.WatchLocalFolders,
@@ -1420,6 +1424,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingPrePadding:    valueOr(body.RecordingPrePadding, current.RecordingPrePadding),
 		RecordingPostPadding:   valueOr(body.RecordingPostPadding, current.RecordingPostPadding),
 		RecordingRetentionDays: valueOr(body.RecordingRetentionDays, current.RecordingRetentionDays),
+		RecordingCommercials:   valueOr(body.RecordingCommercials, current.RecordingCommercials),
 		LiveTvRefreshHours:     valueOr(body.LiveTvRefreshHours, current.LiveTvRefreshHours),
 		LocalScanHours:         valueOr(body.LocalScanHours, current.LocalScanHours),
 		WatchLocalFolders:      valueOr(body.WatchLocalFolders, current.WatchLocalFolders),

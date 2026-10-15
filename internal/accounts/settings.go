@@ -1329,6 +1329,10 @@ type Settings struct {
 	// RecordingRetentionDays is after how many days a Live TV recording is
 	// deleted, 0 for never.
 	RecordingRetentionDays int
+	// RecordingCommercials finds the commercial breaks of finished Live TV
+	// recordings, which apps may skip while SkipButtons is on (see package
+	// commercials).
+	RecordingCommercials bool
 	// LiveTvRefreshHours is how many hours after it was fetched an XMLTV
 	// guide or an IPTV source's channel list is fetched again.
 	LiveTvRefreshHours int
@@ -1541,7 +1545,9 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, keep_converted_video, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
-	"recording_pre_padding, recording_post_padding, recording_retention_days, live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
+	"recording_pre_padding, recording_post_padding, recording_retention_days, " +
+	"recording_commercials, " +
+	"live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
 	"custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, collection_library_apps, remuxdb, remuxdb_url, " +
@@ -1586,7 +1592,9 @@ func (settings *Settings) fields() []any {
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSeconds,
 		&settings.KeepConvertedVideo,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
-		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays, &settings.LiveTvRefreshHours, &settings.LocalScanHours,
+		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays,
+		&settings.RecordingCommercials,
+		&settings.LiveTvRefreshHours, &settings.LocalScanHours,
 		&settings.WatchLocalFolders,
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
 		&settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
