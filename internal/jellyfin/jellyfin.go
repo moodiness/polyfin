@@ -31,6 +31,7 @@ import (
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
+	"github.com/moodiness/polyfin/internal/tmdb"
 	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -80,6 +81,9 @@ type Options struct {
 	RemuxDB *remuxdb.Service
 	// Lyrics finds songs' lyrics on LRCLIB; nil finds none.
 	Lyrics *lyrics.Service
+	// TMDB searches TMDB's images for Edit images while the settings hold
+	// the server's TMDB key; nil searches the addons' images only.
+	TMDB *tmdb.Client
 	// Loudness gives the gains of music addons' songs and measures them
 	// after their first play; nil gives and measures none.
 	Loudness *loudness.Service

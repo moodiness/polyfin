@@ -415,6 +415,12 @@ func (e downloadError) Error() string { return e.err.Error() }
 // server does not have (404 or 410) is not found, as an image the item
 // does not have, for apps to show their placeholder.
 func (h *Handler) fetchArtwork(ctx context.Context, target string, confined, iptv bool) (artwork, error) {
+	return h.fetchArtworkHeld(ctx, target, confined, iptv, nil)
+}
+
+// fetchArtworkHeld is fetchArtwork, the download holding what hold gives
+// besides its place among those from its host, when hold is set.
+func (h *Handler) fetchArtworkHeld(ctx context.Context, target string, confined, iptv bool, hold func(context.Context) (func(), error)) (artwork, error) {
 	if status, failed := h.images.failures.Get(target); failed {
 		return artwork{}, downloadError{status, errors.New("the last download failed")}
 	}
@@ -424,6 +430,13 @@ func (h *Handler) fetchArtwork(ctx context.Context, target string, confined, ipt
 			return artwork{}, err
 		}
 		defer release()
+		if hold != nil {
+			release, err := hold(ctx)
+			if err != nil {
+				return artwork{}, err
+			}
+			defer release()
+		}
 		body, contentType, err := h.Stremio.Image(ctx, target, confined)
 		if err != nil {
 			status := http.StatusBadGateway

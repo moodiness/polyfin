@@ -32,9 +32,10 @@ func TestMetadataEditorAnswersAsJellyfinForAdministrators(t *testing.T) {
 	}
 	matchesFixture(t, "external-id-infos", body, shapeRules{})
 	for path, want := range map[string]string{
-		"/Items/" + allowed + "/RemoteImages/Providers":                    `[]`,
-		"/Items/" + allowed + "/RemoteImages?type=Primary&limit=10":        `{"Images":[],"TotalRecordCount":0,"Providers":[]}`,
-		"/Items/" + e.ids["Show"] + "/RemoteImages/Providers":              `[]`,
+		"/Items/" + allowed + "/RemoteImages/Providers":                    `[{"Name":"Addons","SupportedImages":["Primary","Backdrop","Logo","Thumb"]}]`,
+		"/Items/" + allowed + "/RemoteImages?type=Primary&limit=10":        `{"Images":[],"TotalRecordCount":0,"Providers":["Addons"]}`,
+		"/Items/" + e.ids["Show"] + "/RemoteImages/Providers":              `[{"Name":"Addons","SupportedImages":["Primary","Backdrop","Logo","Thumb"]}]`,
+		"/Items/" + e.ids["Top"] + "/RemoteImages/Providers":               `[]`,
 		"/Items/" + e.ids["Top"] + "/MetadataEditor?unused=1":              "",
 		"/Items/" + collectionsViewID.String() + "/RemoteImages/Providers": "",
 	} {

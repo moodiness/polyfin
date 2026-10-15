@@ -87,3 +87,17 @@ func (s Signer) Link(grant, target string) string {
 func (s Signer) VerifyLink(grant, target, signature string) bool {
 	return hmac.Equal([]byte(s.Link(grant, target)), []byte(signature))
 }
+
+// Mark signs value as one Polyfin gave out for purpose, such as the
+// address of an image it listed, for VerifyMark to tell it when it comes
+// back.
+func (s Signer) Mark(purpose, value string) string {
+	h := hmac.New(sha256.New, s.secret)
+	h.Write([]byte("polyfin.mark\x00" + purpose + "\x00" + value))
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil)[:grantMAC])
+}
+
+// VerifyMark reports whether signature is Mark's for purpose and value.
+func (s Signer) VerifyMark(purpose, value, signature string) bool {
+	return hmac.Equal([]byte(s.Mark(purpose, value)), []byte(signature))
+}

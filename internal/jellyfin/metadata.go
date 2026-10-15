@@ -24,9 +24,10 @@ import (
 // jellyfin-web's Edit metadata, Edit images and Identify dialogs, for
 // administrators. Edits are kept apart from what addons say and win over
 // it for every user (see library.Overrides); people and provider
-// identifiers stay the addons'. Polyfin has no image provider, and its
-// metadata providers are the server's addons: Identify searches them, but
-// cannot bind an item to another title, since an item is the addon's title.
+// identifiers stay the addons'. Edit images searches TMDB and the server's
+// addons for images (see remoteimages.go). Polyfin's metadata providers
+// are the server's addons: Identify searches them, but cannot bind an item
+// to another title, since an item is the addon's title.
 
 // remoteSearchTypes are the item types Jellyfin's Identify searches for,
 // with the kind of title the server's addons are searched for, if any.
@@ -53,6 +54,9 @@ func (h *Handler) metadataRoutes(rt *router) {
 	administrator(http.MethodGet, "/Items/{itemId}/ExternalIdInfos", h.externalIDInfos)
 	signedIn(http.MethodGet, "/Items/{itemId}/RemoteImages", h.remoteImages)
 	signedIn(http.MethodGet, "/Items/{itemId}/RemoteImages/Providers", h.remoteImageProviders)
+	administrator(http.MethodPost, "/Items/{itemId}/RemoteImages/Download", h.downloadRemoteImage)
+	// Apps load images without credentials: the addresses are signed.
+	rt.handle(http.MethodGet, "/Items/{itemId}/RemoteImages/Image", http.HandlerFunc(h.remoteImage))
 	administrator(http.MethodPost, "/Items/{itemId}/Images/{imageType}", h.uploadItemImage)
 	administrator(http.MethodPost, "/Items/{itemId}/Images/{imageType}/{imageIndex}", h.uploadItemImage)
 	administrator(http.MethodDelete, "/Items/{itemId}/Images/{imageType}", h.deleteItemImage)
@@ -304,36 +308,6 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// RemoteImageResult is Jellyfin's list of the images providers offer.
-type RemoteImageResult struct {
-	Images           []struct{}
-	TotalRecordCount int
-	Providers        []string
-}
-
-// remoteImages lists the images image providers offer for an item, as
-// Jellyfin does without any: none.
-func (h *Handler) remoteImages(w http.ResponseWriter, r *http.Request) {
-	b := bindErrors{}
-	b.int32(r, "startIndex")
-	b.int32(r, "limit")
-	b.bool(r, "includeAllLanguages")
-	if raw, _ := queryParam(r, "type"); strings.TrimSpace(raw) != "" {
-		b.enum("type", raw, imageTypes)
-	}
-	if _, ok := h.editedItemWith(w, r, b); ok {
-		writeJSON(w, http.StatusOK, RemoteImageResult{Images: []struct{}{}, Providers: []string{}})
-	}
-}
-
-// remoteImageProviders lists the image providers of an item: Polyfin has
-// none.
-func (h *Handler) remoteImageProviders(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.editedItem(w, r); ok {
-		writeJSON(w, http.StatusOK, []struct{}{})
-	}
 }
 
 // editedItemWith is editedItem, answering the binding errors b already
