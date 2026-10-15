@@ -112,7 +112,7 @@ func (s *Service) automap(ctx context.Context, c addons.LiveCatalog, mode string
 	ids := make([]accounts.ID, len(metas))
 	for i, meta := range metas {
 		ids[i] = itemID(channelKey(meta.ID))
-		matcher.Add(meta.ID, meta.GuideID, meta.Name)
+		matcher.AddNumbered(meta.ID, meta.GuideID, meta.Name, meta.GuideNumber)
 	}
 	titles := make([]map[string]int, len(c.Guides))
 	for position, g := range c.Guides {

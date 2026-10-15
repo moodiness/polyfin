@@ -31,9 +31,9 @@ type addonJSON struct {
 	CatalogCount int       `json:"catalogCount"`
 	RefreshedAt  time.Time `json:"refreshedAt"`
 	// Kind is "stremio" for a Stremio addon, "eclipse" for an Eclipse
-	// music addon, which Music then describes, "m3u" or "xtream" for an
-	// IPTV source, which Source then describes, or "local" for a local
-	// folder, which Folder then describes.
+	// music addon, which Music then describes, "m3u", "xtream" or
+	// "hdhomerun" for an IPTV source, which Source then describes, or
+	// "local" for a local folder, which Folder then describes.
 	Kind   string      `json:"kind"`
 	Source *sourceJSON `json:"source"`
 	Music  *musicJSON  `json:"music"`
@@ -56,6 +56,25 @@ type sourceJSON struct {
 	Options   optionsJSON `json:"options"`
 	Lineup    lineupJSON  `json:"lineup"`
 	VOD       vodJSON     `json:"vod"`
+	// Tuner describes an HDHomeRun tuner, null for another source.
+	Tuner *tunerJSON `json:"tuner"`
+}
+
+// tunerJSON describes a tuner: its device identifier, model and tuner
+// count, the last failure of its streams other than its tuners being in
+// use, and its channel scan under way, null for none.
+type tunerJSON struct {
+	Device   string     `json:"device"`
+	Model    string     `json:"model"`
+	Tuners   int        `json:"tuners"`
+	Failure  string     `json:"failure"`
+	FailedAt *time.Time `json:"failedAt"`
+	Scan     *scanJSON  `json:"scan"`
+}
+
+type scanJSON struct {
+	Progress int `json:"progress"`
+	Found    int `json:"found"`
 }
 
 type optionsJSON struct {
@@ -70,6 +89,8 @@ type optionsJSON struct {
 	VODExcluded  []string `json:"vodExcluded"`
 	VODLibraries string   `json:"vodLibraries"`
 	Enrichment   bool     `json:"enrichment"`
+	// FavoritesOnly keeps only the channels a tuner marks favorite.
+	FavoritesOnly bool `json:"favoritesOnly"`
 }
 
 // vodJSON counts an IPTV source's movies and series (see iptv.VODCounts).
@@ -109,7 +130,8 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 	}
 	manifestURL := stremio.RedactManifestURL(addon.ManifestURL)
 	switch {
-	case addon.Local():
+	case addon.Local(), addon.Tuner():
+		// A folder's path and a tuner's address hold no credential.
 		manifestURL = addon.ManifestURL
 	case !addon.Stremio() && !addon.Eclipse():
 		manifestURL = iptv.Redact(addon.ManifestURL)
@@ -155,10 +177,20 @@ func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Ad
 	result.Source = &sourceJSON{Address: result.ManifestURL, Channels: source.Channels, CheckedAt: source.CheckedAt, FetchedAt: source.FetchedAt,
 		NextAt: source.NextAt, Error: source.Error,
 		Options: optionsJSON{Categories: o.Categories, Channels: o.Channels, Excluded: o.Excluded, NewChannels: o.NewChannels, Numbering: o.Numbering,
-			LiveTv: o.LiveTv, Movies: o.Movies, Series: o.Series, VODExcluded: o.VODExcluded, VODLibraries: o.VODLibraries, Enrichment: o.Enrichment},
+			LiveTv: o.LiveTv, Movies: o.Movies, Series: o.Series, VODExcluded: o.VODExcluded, VODLibraries: o.VODLibraries, Enrichment: o.Enrichment,
+			FavoritesOnly: o.FavoritesOnly},
 		Lineup: lineupJSON{Categories: n.Categories, EnabledCategories: n.EnabledCategories, Channels: n.Channels, EnabledChannels: n.EnabledChannels,
 			ShownChannels: n.ShownChannels, Mapped: n.Mapped, Unmapped: n.Unmapped, Archived: n.Archived},
 		VOD: vodJSON(vod)}
+	if t := source.Tuner; t != nil {
+		result.Source.Tuner = &tunerJSON{Device: t.Device, Model: t.Model, Failure: t.Failure, FailedAt: t.FailedAt}
+		if source.MaxConnections != nil {
+			result.Source.Tuner.Tuners = *source.MaxConnections
+		}
+		if t.Scan != nil {
+			result.Source.Tuner.Scan = &scanJSON{Progress: t.Scan.Progress, Found: t.Scan.Found}
+		}
+	}
 	return result, nil
 }
 
@@ -470,6 +502,8 @@ func addonError(w http.ResponseWriter, err error) bool {
 		// The admin app bounds labels: only a hand-made request is refused.
 		{iptv.ErrInvalidStreamLabel, http.StatusBadRequest, "invalid_request"},
 		{iptv.ErrStreamNotCustom, http.StatusBadRequest, "stream_not_custom"},
+		{iptv.ErrTunerAdded, http.StatusConflict, "tuner_added"},
+		{iptv.ErrNotTuner, http.StatusBadRequest, "invalid_request"},
 		{addons.ErrTooManyGuides, http.StatusBadRequest, "too_many_guides"},
 		{addons.ErrInvalidGuide, http.StatusBadRequest, "invalid_guide"},
 		{library.ErrInvalidMode, http.StatusBadRequest, "invalid_mode"},

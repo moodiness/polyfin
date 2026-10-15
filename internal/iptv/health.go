@@ -81,14 +81,22 @@ func addressHash(address string) string {
 }
 
 // ReportStream records how a stream of a channel (its Stremio identifier)
-// answered when it was opened: failure is one of the Failure codes, empty
-// when it played. The stream is the channel's stream at address; a
-// channel that is not one of the source's, or a stream it no longer has,
-// records nothing.
+// answered when it was opened: failure is one of the Failure codes, or
+// TunerFailureBusy, a refusal as every tuner was in use; empty when it
+// played. The stream is the channel's stream at address; a channel that is
+// not one of the source's, or a stream it no longer has, records nothing.
+// A tuner's failure other than its tuners being in use shows under
+// System › Health until a stream of it plays.
 func (s *Service) ReportStream(ctx context.Context, source accounts.ID, channel, address, failure string) error {
 	key, ok := strings.CutPrefix(channel, prefix(source))
 	if !ok || strings.HasPrefix(key, "vod:") || strings.HasPrefix(key, "ep:") || strings.HasPrefix(key, "series:") {
 		return nil
+	}
+	if err := s.reportTuner(ctx, source, failure); err != nil {
+		return err
+	}
+	if failure == TunerFailureBusy {
+		failure = FailureRefused
 	}
 	hash := addressHash(address)
 	match := `s.addon_id = $1 AND s.channel_id = $2 AND coalesce(s.custom_url,
@@ -159,14 +167,19 @@ func (s *Service) ForgetStreamHealth(ctx context.Context, scope addons.Scope, so
 	return err
 }
 
-// Connections is how many streams of a source may play at once, as its
-// Xtream server said at the last download: 0 for no limit or when it did
-// not say. An unknown source has no limit.
-func (s *Service) Connections(ctx context.Context, source accounts.ID) (int, error) {
+// Connections is how many streams of a source may play at once: as its
+// Xtream server said at the last download, 0 for no limit or when it did
+// not say; a tuner's tuner count. An unknown source has no limit.
+func (s *Service) Connections(ctx context.Context, source accounts.ID) (Limit, error) {
 	var limit *int
-	err := s.db.QueryRow(ctx, "SELECT max_connections FROM iptv_sources WHERE addon_id = $1", source).Scan(&limit)
-	if errors.Is(err, pgx.ErrNoRows) || limit == nil {
-		return 0, nil
+	var kind string
+	err := s.db.QueryRow(ctx, "SELECT i.max_connections, a.kind FROM iptv_sources i JOIN addons a ON a.id = i.addon_id WHERE i.addon_id = $1", source).
+		Scan(&limit, &kind)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && limit == nil {
+		return Limit{}, nil
 	}
-	return *limit, err
+	if err != nil {
+		return Limit{}, err
+	}
+	return Limit{Connections: *limit, Tuners: kind == addons.KindHDHomeRun}, nil
 }

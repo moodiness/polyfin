@@ -49,10 +49,12 @@ type Account struct {
 const maxAddress = 4096
 
 // address checks an account and returns the address it is stored under,
-// which embeds its credentials: the playlist address, or the Xtream
-// server's player API address with the account.
+// which embeds its credentials: the playlist address, the Xtream server's
+// player API address with the account, or a tuner's own address.
 func (a Account) address() (string, error) {
 	switch a.Kind {
+	case addons.KindHDHomeRun:
+		return tunerAddress(a.URL)
 	case addons.KindM3U:
 		address := strings.TrimSpace(a.URL)
 		if !webAddress(address) {

@@ -10,8 +10,9 @@ import (
 
 // absentRoutes registers dashboard features Polyfin does without: plugins,
 // packages and their repositories, browsing the server's file system,
-// library folders and metadata providers, Live TV tuners and listing
-// providers, and the startup wizard. Each answers as a Jellyfin 12.2
+// library folders and metadata providers, Live TV listing providers, and
+// the startup wizard; and Live TV tuners, the server's HDHomeRun tuners
+// (see tuners.go). Each absent feature answers as a Jellyfin 12.2
 // on which nothing of the kind is configured, so that apps probing them get
 // empty lists and defaults rather than 404, and writes are refused the way
 // Jellyfin refuses them for things that do not exist. No write here claims
@@ -76,14 +77,14 @@ func (h *Handler) absentRoutes(rt *router) {
 		writeJSON(w, http.StatusOK, defaultMetadataOptions())
 	})
 
-	// Live TV tuners and listing providers: Polyfin's channels come from
-	// the users' catalogs, never from a tuner or a listing provider.
-	administrator(http.MethodPost, "/LiveTv/TunerHosts", jellyfinError(http.StatusNotFound))
-	administrator(http.MethodDelete, "/LiveTv/TunerHosts", noContent)
-	// Deliberate difference: Jellyfin lists its tuner types; Polyfin has none.
-	liveTv(http.MethodGet, "/LiveTv/TunerHosts/Types", emptyList)
-	administrator(http.MethodGet, "/LiveTv/Tuners/Discover", emptyList)
-	administrator(http.MethodGet, "/LiveTv/Tuners/Discvover", emptyList)
+	// Live TV tuners are the server's HDHomeRun tuners (tuners.go); its
+	// listing providers are absent: Polyfin's guides are the catalogs'
+	// XMLTV guides, never a listing provider's.
+	administrator(http.MethodPost, "/LiveTv/TunerHosts", h.saveTunerHost)
+	administrator(http.MethodDelete, "/LiveTv/TunerHosts", h.deleteTunerHost)
+	liveTv(http.MethodGet, "/LiveTv/TunerHosts/Types", h.tunerHostTypes)
+	administrator(http.MethodGet, "/LiveTv/Tuners/Discover", h.discoverTuners)
+	administrator(http.MethodGet, "/LiveTv/Tuners/Discvover", h.discoverTuners)
 	administrator(http.MethodPost, "/LiveTv/Tuners/{tunerId}/Reset", jellyfinError(http.StatusBadRequest))
 	administrator(http.MethodPost, "/LiveTv/ListingProviders", jellyfinError(http.StatusNotFound))
 	administrator(http.MethodDelete, "/LiveTv/ListingProviders", noContent)

@@ -375,6 +375,8 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/scopes/{scope}/addons/{id}/settings", h.signedIn(h.saveAddonSettings))
 	mux.Handle("POST /admin/api/scopes/{scope}/iptv", h.signedIn(h.addSource))
 	mux.Handle("PATCH /admin/api/scopes/{scope}/iptv/{id}", h.signedIn(h.updateSource))
+	mux.Handle("POST /admin/api/scopes/{scope}/iptv/{id}/scan", h.signedIn(h.scanTuner))
+	mux.Handle("GET /admin/api/tuners", h.administrator(h.findTuners))
 	mux.Handle("POST /admin/api/scopes/{scope}/folders", h.signedIn(h.addFolder))
 	mux.Handle("POST /admin/api/scopes/{scope}/folders/rclone-remotes", h.signedIn(h.rcloneRemotes))
 	mux.Handle("PATCH /admin/api/scopes/{scope}/folders/{id}", h.signedIn(h.updateFolder))

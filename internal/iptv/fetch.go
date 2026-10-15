@@ -66,6 +66,8 @@ type downloaded struct {
 	// timezone is the zone an Xtream server writes its timeshift
 	// addresses in, as its login says; empty when it says none known.
 	timezone string
+	// tuner is what a tuner said of itself, nil for another source.
+	tuner *Tuner
 }
 
 // merge adds to d the parts of more that d lacks.
@@ -75,6 +77,9 @@ func (d *downloaded) merge(more downloaded) {
 		d.connections = more.connections
 	}
 	d.timezone = cmp.Or(d.timezone, more.timezone)
+	if d.tuner == nil {
+		d.tuner = more.tuner
+	}
 	if more.got.live && !d.got.live {
 		d.entries, d.got.live = more.entries, true
 	}
@@ -118,6 +123,8 @@ func fetch(ctx context.Context, client requester, account Account, confined bool
 		d.got = parts{live: true, movies: true, series: true}
 	case addons.KindXtream:
 		d, err = fetchXtream(ctx, client, account, confined, want)
+	case addons.KindHDHomeRun:
+		d, err = fetchTuner(ctx, client, account.URL, confined)
 	default:
 		err = ErrInvalidAddress
 	}

@@ -37,7 +37,8 @@ func (body sourceRequest) account(kind string) iptv.Account {
 }
 
 // addSource adds an IPTV source to the scope, as installing an addon does,
-// once its channel list could be read, then fetches its guide.
+// once its channel list could be read, then fetches its guide. A tuner is
+// the server's, added by an administrator (see tunerRefused).
 func (h *handler) addSource(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.scope(w, r)
 	if !ok || h.personalAddonsRefused(w, r, scope) {
@@ -51,7 +52,10 @@ func (h *handler) addSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	if body.Kind != addons.KindM3U && body.Kind != addons.KindXtream {
+	if body.Kind == addons.KindHDHomeRun && tunerRefused(w, r, scope) {
+		return
+	}
+	if body.Kind != addons.KindM3U && body.Kind != addons.KindXtream && body.Kind != addons.KindHDHomeRun {
 		writeError(w, http.StatusBadRequest, "invalid_source_address")
 		return
 	}

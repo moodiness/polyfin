@@ -86,16 +86,18 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 			preview := meta
 			items = append(items, item)
 			records = append(records, record{ID: item.ID, Key: channelKey(meta.ID), Kind: KindChannel, Addon: &addon,
-				CatalogType: src.catalog.Type, CatalogID: src.catalog.ID, Meta: &preview, Number: number, Confined: src.addon.confined})
+				CatalogType: src.catalog.Type, CatalogID: src.catalog.ID, Meta: &preview, Number: number, GuideNumber: meta.GuideNumber,
+				Confined: src.addon.confined})
 		}
 	}
 	return items, records
 }
 
 // channelItem describes a channel from its catalog entry. TV addons give a
-// channel's logo as its poster, or only as its logo.
+// channel's logo as its poster, or only as its logo. A tuner's channel
+// shows the tuner's number ("5.1").
 func channelItem(meta stremio.Meta, number int) Item {
-	item := Item{ID: itemID(channelKey(meta.ID)), Kind: KindChannel, Number: strconv.Itoa(number), Available: true}
+	item := Item{ID: itemID(channelKey(meta.ID)), Kind: KindChannel, Number: cmp.Or(meta.GuideNumber, strconv.Itoa(number)), Available: true}
 	fromMeta(&item, meta)
 	item.Images = channelImages(meta)
 	// A channel has no release, runtime or credits of its own.
@@ -126,7 +128,9 @@ func (s *Service) channel(ctx context.Context, v view, r record) (Item, error) {
 			return Item{}, err
 		}
 	}
-	return channelItem(*r.Meta, r.Number), nil
+	meta := *r.Meta
+	meta.GuideNumber = r.GuideNumber
+	return channelItem(meta, r.Number), nil
 }
 
 // Programs lists the programmes of the user's channels that overlap
@@ -276,9 +280,18 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 	return s.overridden(programs), s.save(ctx, records)
 }
 
+// comparedNumbers orders channel numbers, a tuner's "5.1" after "5" and
+// before "5.2" and "6".
 func comparedNumbers(a, b string) int {
-	x, _ := strconv.Atoi(a)
-	y, _ := strconv.Atoi(b)
+	majorA, minorA, _ := strings.Cut(a, ".")
+	majorB, minorB, _ := strings.Cut(b, ".")
+	x, _ := strconv.Atoi(majorA)
+	y, _ := strconv.Atoi(majorB)
+	if x != y {
+		return x - y
+	}
+	x, _ = strconv.Atoi(minorA)
+	y, _ = strconv.Atoi(minorB)
 	return x - y
 }
 

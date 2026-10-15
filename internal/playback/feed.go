@@ -9,10 +9,12 @@ import (
 	"mime"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -91,6 +93,9 @@ var (
 	// ErrSlotsInUse reports a source whose connections Polyfin uses all,
 	// for channels others watch.
 	ErrSlotsInUse = fmt.Errorf("%w: all the provider's connections are in use", ErrLiveRefused)
+	// ErrTunersBusy reports a tuner that answered that all its tuners are
+	// in use (HDHomeRun's error 805), by Polyfin or another app.
+	ErrTunersBusy = fmt.Errorf("%w: all the tuners are in use", ErrLiveRefused)
 	// ErrSlowReader reports a reader that fell behind what a feed keeps.
 	ErrSlowReader = errors.New("a reader fell behind the live stream")
 	// errManifest reports a stream that is an HLS playlist, which has no
@@ -127,17 +132,18 @@ type liveState struct {
 	// manifests are the streams found to be HLS playlists.
 	manifests map[accounts.ID]bool
 	// connections and health are set by LiveSources.
-	connections func(ctx context.Context, source accounts.ID) (int, error)
+	connections func(ctx context.Context, source accounts.ID) (iptv.Limit, error)
 	health      func(ctx context.Context, version library.Version, failure string)
 	// times are the times of live streams, defaultLiveTimes when unset.
 	times liveTimes
 }
 
 // LiveSources sets how many streams a source may play at once
-// (connections, 0 for no limit), and what is told how a channel's stream
-// answered when opened (health; failure is "" when it played). It is
-// called before the service is used.
-func (s *Service) LiveSources(connections func(ctx context.Context, source accounts.ID) (int, error),
+// (connections, 0 for no limit, and whether its are a tuner's), and what
+// is told how a channel's stream answered when opened (health; failure is
+// "" when it played, iptv.TunerFailureBusy when every tuner or connection
+// was in use). It is called before the service is used.
+func (s *Service) LiveSources(connections func(ctx context.Context, source accounts.ID) (iptv.Limit, error),
 	health func(ctx context.Context, version library.Version, failure string)) {
 	s.feeds.mu.Lock()
 	defer s.feeds.mu.Unlock()
@@ -153,7 +159,10 @@ func (s *Service) report(ctx context.Context, version library.Version, err error
 		return
 	}
 	failure := LiveFailure(err)
-	if err != nil && failure == "" {
+	switch {
+	case errors.Is(err, ErrSlotsInUse), errors.Is(err, ErrTunersBusy):
+		failure = iptv.TunerFailureBusy
+	case err != nil && failure == "":
 		failure = LiveDead
 	}
 	health(context.WithoutCancel(ctx), version, failure)
@@ -203,17 +212,22 @@ type feed struct {
 // feedReader reads a feed from where it joined: once placed, from the
 // stream's tables (prefix), then its latest keyframe.
 type feedReader struct {
-	f      *feed
-	user   accounts.ID
-	ctx    context.Context
-	pos    int64
-	placed bool
-	prefix []byte
+	f    *feed
+	user accounts.ID
+	// recording tells a recording's reader, whose feed a tuner keeps
+	// for it (see makeRoom).
+	recording bool
+	ctx       context.Context
+	pos       int64
+	placed    bool
+	prefix    []byte
 	// from is how much the feed had received when the reader joined.
 	from int64
 }
 
 type userKey struct{}
+
+type recordingKey struct{}
 
 // ForUser marks ctx as a request of user, whose oldest stream of a source
 // may be replaced when the source's connections are all in use.
@@ -224,6 +238,18 @@ func ForUser(ctx context.Context, user accounts.ID) context.Context {
 func userOf(ctx context.Context) accounts.ID {
 	user, _ := ctx.Value(userKey{}).(accounts.ID)
 	return user
+}
+
+// forRecording marks ctx as a recording's: on a tuner, it takes the tuner
+// of a channel only watched, and its channel's tuner is not taken for
+// another channel (see makeRoom).
+func forRecording(ctx context.Context) context.Context {
+	return context.WithValue(ctx, recordingKey{}, true)
+}
+
+func recordingOf(ctx context.Context) bool {
+	recording, _ := ctx.Value(recordingKey{}).(bool)
+	return recording
 }
 
 // openFeed returns a reader of a version's live stream, sharing its feed
@@ -248,7 +274,7 @@ func (s *Service) openFeed(ctx context.Context, version library.Version) (*feedR
 				readers: map[*feedReader]bool{}, index: newTSIndex()}
 			st.feeds[version.ID] = f
 			st.mu.Unlock()
-			go f.open(user)
+			go f.open(user, recordingOf(ctx))
 		} else {
 			st.mu.Unlock()
 		}
@@ -294,7 +320,7 @@ func (f *feed) join(ctx context.Context, user accounts.ID) *feedReader {
 	if f.done && f.received > 0 || f.evicted {
 		return nil
 	}
-	r := &feedReader{f: f, user: user, ctx: ctx, from: f.received}
+	r := &feedReader{f: f, user: user, recording: recordingOf(ctx), ctx: ctx, from: f.received}
 	f.readers[r] = true
 	if f.grace != nil {
 		f.grace.Stop()
@@ -479,8 +505,9 @@ func (f *feed) finish(err error) {
 
 // open connects to the source, within the source's connections, checks
 // that it answers with a live stream, then reads it until it ends, stalls
-// or its last reader left for liveTimes.grace.
-func (f *feed) open(user accounts.ID) {
+// or its last reader left for liveTimes.grace. recording tells a feed a
+// recording opens (see makeRoom).
+func (f *feed) open(user accounts.ID, recording bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	f.cancel = cancel
 	defer func() {
@@ -490,7 +517,7 @@ func (f *feed) open(user accounts.ID) {
 		close(f.closed)
 		st.mu.Unlock()
 	}()
-	freed, err := f.s.makeRoom(ctx, f.source, f, user)
+	freed, err := f.s.makeRoom(ctx, f.source, f, user, recording)
 	var body io.ReadCloser
 	var head []byte
 	if err == nil {
@@ -604,6 +631,9 @@ type occupant interface {
 	// onlyFor reports whether user alone uses it, and it may be ended for
 	// another of their streams.
 	onlyFor(user accounts.ID) bool
+	// recorded reports whether a recording uses it: a recording due on a
+	// tuner never takes it.
+	recorded() bool
 	// evict ends it for another stream of its source.
 	evict()
 }
@@ -620,20 +650,34 @@ func (f *feed) onlyFor(user accounts.ID) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for r := range f.readers {
-		if r.user != user {
+		if r.user != user || r.recording {
 			return false
 		}
 	}
 	return user != (accounts.ID{})
 }
 
+func (f *feed) recorded() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for r := range f.readers {
+		if r.recording {
+			return true
+		}
+	}
+	return false
+}
+
 // makeRoom keeps a source within its connections before self takes one:
 // the feeds of the source still closing are waited for, as the source
 // counts their connections until they are closed; then feeds and holds of
 // the source that no one uses are ended, then the oldest feed only user
-// reads; else it fails with ErrSlotsInUse. It reports whether it closed or
-// waited for one, which the provider may still count a moment.
-func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupant, user accounts.ID) (bool, error) {
+// reads; else it fails with ErrSlotsInUse. A recording on a tuner ends,
+// after those no one uses, the oldest feed no recording reads, whoever
+// watches it, and fails with iptv.ErrTunersRecording when every tuner
+// records. It reports whether it closed or waited for one, which the
+// provider may still count a moment.
+func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupant, user accounts.ID, recording bool) (bool, error) {
 	st := &s.feeds
 	st.mu.Lock()
 	limits := st.connections
@@ -641,7 +685,8 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 	if limits == nil || source == (accounts.ID{}) {
 		return false, nil
 	}
-	limit, err := limits(ctx, source)
+	bound, err := limits(ctx, source)
+	limit, tuner := bound.Connections, recording && bound.Tuners
 	if err != nil || limit <= 0 {
 		return false, err
 	}
@@ -677,6 +722,9 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 	slices.SortFunc(open, func(a, b occupant) int { return a.since().Compare(b.since()) })
 	idle := func(other occupant) bool { return other.unread() }
 	mine := func(other occupant) bool { return other.onlyFor(user) }
+	if tuner {
+		mine = func(other occupant) bool { return !other.recorded() }
+	}
 	for _, choose := range []func(occupant) bool{idle, mine} {
 		for _, other := range open {
 			if len(open) < limit {
@@ -691,6 +739,9 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 	}
 	if len(open) < limit {
 		return freed, nil
+	}
+	if tuner {
+		return freed, fmt.Errorf("%w: %w", ErrSlotsInUse, iptv.ErrTunersRecording)
 	}
 	return freed, ErrSlotsInUse
 }
@@ -773,11 +824,14 @@ func (c *closer) Close() error {
 	return err
 }
 
-// statusFailure classifies an answer that is not a success.
+// statusFailure classifies an answer that is not a success. An HDHomeRun
+// tuner tells its tuners all in use by its error 805.
 func statusFailure(response *http.Response) error {
 	switch status := response.StatusCode; {
 	case status >= 200 && status < 300:
 		return nil
+	case status == http.StatusServiceUnavailable && strings.HasPrefix(strings.TrimSpace(response.Header.Get("X-HDHomeRun-Error")), "805"):
+		return fmt.Errorf("%w: HTTP %d", ErrTunersBusy, status)
 	case status == http.StatusUnauthorized, status == http.StatusForbidden, status == http.StatusTooManyRequests,
 		status == 458, status == http.StatusServiceUnavailable:
 		return fmt.Errorf("%w: HTTP %d", ErrLiveRefused, status)

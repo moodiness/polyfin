@@ -14,6 +14,7 @@ import (
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/homerows"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/loudness"
@@ -61,6 +62,9 @@ type Options struct {
 	WebSocketPort int
 	// Library browses the catalogs of users' addons.
 	Library *library.Service
+	// IPTV keeps the server's HDHomeRun tuners, shown as Jellyfin's tuner
+	// hosts; nil shows none.
+	IPTV *iptv.Service
 	// Stremio downloads artwork and subtitles referenced by addons.
 	Stremio *stremio.Client
 	// Playback analyzes, decides on and serves the versions of titles.

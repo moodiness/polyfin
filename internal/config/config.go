@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/dlna"
 	"github.com/moodiness/polyfin/internal/https"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
@@ -37,6 +38,12 @@ type Config struct {
 	// DLNAPort is the UDP port of SSDP, which DLNA devices search for
 	// servers on, 1900, unless tests choose another.
 	DLNAPort int
+	// HDHomeRunPort is the UDP port Find tuners asks HDHomeRun tuners to
+	// answer on, 65001, unless tests choose another.
+	HDHomeRunPort int
+	// HDHomeRunAddresses are the addresses (host:port) Find tuners asks
+	// instead of broadcasting on the local networks; none broadcasts.
+	HDHomeRunAddresses []string
 	// FFprobe and FFmpeg are the executables, paths or names looked up in
 	// PATH.
 	FFprobe string
@@ -167,6 +174,30 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("POLYFIN_DLNA_PORT: %q is not a port (1-65535)", raw))
 		}
 		cfg.DLNAPort = int(port)
+	}
+	cfg.HDHomeRunPort = iptv.TunerPort
+	if raw := strings.TrimSpace(getenv("POLYFIN_HDHOMERUN_PORT")); raw != "" {
+		port, err := strconv.ParseUint(raw, 10, 16)
+		if err != nil || port == 0 {
+			errs = append(errs, fmt.Errorf("POLYFIN_HDHOMERUN_PORT: %q is not a port (1-65535)", raw))
+		}
+		cfg.HDHomeRunPort = int(port)
+	}
+	for raw := range strings.SplitSeq(getenv("POLYFIN_HDHOMERUN_ADDRESSES"), ",") {
+		if raw = strings.TrimSpace(raw); raw == "" {
+			continue
+		}
+		// A host alone is asked on POLYFIN_HDHOMERUN_PORT.
+		host, port, err := net.SplitHostPort(raw)
+		if err != nil {
+			host, port = raw, strconv.Itoa(cfg.HDHomeRunPort)
+		}
+		number, perr := strconv.ParseUint(port, 10, 16)
+		if host == "" || strings.ContainsAny(host, "/@ []") || strings.Contains(host, ":") && net.ParseIP(host) == nil || perr != nil || number == 0 {
+			errs = append(errs, fmt.Errorf("POLYFIN_HDHOMERUN_ADDRESSES: %q is not a host or host:port", raw))
+			continue
+		}
+		cfg.HDHomeRunAddresses = append(cfg.HDHomeRunAddresses, net.JoinHostPort(host, port))
 	}
 	if cfg.ACMEDirectory == "" {
 		cfg.ACMEDirectory = https.LetsEncrypt

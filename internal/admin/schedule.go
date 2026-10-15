@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/recordings"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -108,10 +109,48 @@ type timerJSON struct {
 	// Status is New, InProgress, Cancelled or Error.
 	Status string `json:"status"`
 	Series bool   `json:"series"`
+	// TunersShort tells a timer on a tuner's channel that would need more
+	// tuners than the tuner has, with the other timers recording then.
+	TunersShort bool `json:"tunersShort"`
+}
+
+// tunerTimer is a timer of a tuner's channel, as tunersShort counts it.
+type tunerTimer struct {
+	index       int
+	source      accounts.ID
+	channel     accounts.ID
+	tuners      int
+	from, until time.Time
+}
+
+// tunersShort marks the timers that would need more tuners than their
+// tuner has: at some time they record, more channels of the tuner are
+// recorded than it has tuners. Timers of the same channel share a tuner.
+func tunersShort(result []timerJSON, timers []tunerTimer) {
+	busy := func(source accounts.ID, at time.Time) int {
+		channels := map[accounts.ID]bool{}
+		for _, t := range timers {
+			if t.source == source && !at.Before(t.from) && at.Before(t.until) {
+				channels[t.channel] = true
+			}
+		}
+		return len(channels)
+	}
+	for _, t := range timers {
+		for _, other := range timers {
+			// The channels recorded at once change only when a timer starts:
+			// t's own start, and the starts of those within its time.
+			if other.source == t.source && !other.from.Before(t.from) && other.from.Before(t.until) && busy(t.source, other.from) > t.tuners {
+				result[t.index].TunersShort = true
+				break
+			}
+		}
+	}
 }
 
 // timers lists the Live TV recordings scheduled and under way, by start;
-// none when recording is off.
+// none when recording is off. Those that would need more tuners than
+// their tuner has are marked.
 func (h *handler) timers(w http.ResponseWriter, r *http.Request) {
 	result := []timerJSON{}
 	if h.Recordings == nil || !h.Recordings.Available() {
@@ -124,6 +163,7 @@ func (h *handler) timers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	users := map[accounts.ID]accounts.User{}
+	var tuned []tunerTimer
 	for _, t := range list {
 		if t.Status == recordings.StatusCancelled {
 			continue
@@ -142,9 +182,16 @@ func (h *handler) timers(w http.ResponseWriter, r *http.Request) {
 		if h.Library != nil && user.ID == t.User {
 			if channel, err := h.Library.Item(r.Context(), user, t.Channel); err == nil {
 				timer.Channel = channel.Name
+				if source, ok := iptv.SourceOfChannel(channel.StremioID); ok && h.IPTV != nil && (t.Status == recordings.StatusNew || t.Status == recordings.StatusInProgress) {
+					if limit, err := h.IPTV.Connections(r.Context(), source); err == nil && limit.Tuners && limit.Connections > 0 {
+						tuned = append(tuned, tunerTimer{index: len(result), source: source, channel: t.Channel, tuners: limit.Connections,
+							from: timer.From, until: timer.Until})
+					}
+				}
 			}
 		}
 		result = append(result, timer)
 	}
+	tunersShort(result, tuned)
 	writeJSON(w, http.StatusOK, map[string]any{"available": true, "timers": result})
 }

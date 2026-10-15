@@ -32,19 +32,20 @@ func randomKey() string {
 
 // optionColumns are the columns of iptv_sources that store Options, in the
 // order of Options.fields.
-const optionColumns = "category_mode, channel_mode, excluded, new_channels, numbering, live_tv, movies, series, vod_excluded, vod_libraries, enrichment"
+const optionColumns = "category_mode, channel_mode, excluded, new_channels, numbering, live_tv, movies, series, vod_excluded, vod_libraries, enrichment, " +
+	"favorites_only"
 
 // fields are pointers to the options' fields, in the order of
 // optionColumns.
 func (o *Options) fields() []any {
 	return []any{&o.Categories, &o.Channels, &o.Excluded, &o.NewChannels, &o.Numbering, &o.LiveTv, &o.Movies, &o.Series, &o.VODExcluded,
-		&o.VODLibraries, &o.Enrichment}
+		&o.VODLibraries, &o.Enrichment, &o.FavoritesOnly}
 }
 
 // values are the options' values, in the order of optionColumns.
 func (o Options) values() []any {
 	return []any{o.Categories, o.Channels, o.Excluded, o.NewChannels, o.Numbering, o.LiveTv, o.Movies, o.Series, o.VODExcluded, o.VODLibraries,
-		o.Enrichment}
+		o.Enrichment, o.FavoritesOnly}
 }
 
 // loadOptions reads a source's import options.
@@ -61,14 +62,14 @@ type queryer interface {
 
 // loadEntries reads a source's stored list in order.
 func loadEntries(ctx context.Context, db queryer, source accounts.ID) ([]storedEntry, error) {
-	rows, err := db.Query(ctx, `SELECT key, name, logo, group_title, guide_id, coalesce(number, 0), kind FROM iptv_entries
+	rows, err := db.Query(ctx, `SELECT key, name, logo, group_title, guide_id, coalesce(number, 0), kind, guide_number, favorite FROM iptv_entries
 		WHERE addon_id = $1 ORDER BY position`, source)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (storedEntry, error) {
 		var e storedEntry
-		err := row.Scan(&e.Key, &e.Name, &e.Logo, &e.Group, &e.GuideID, &e.Number, &e.Kind)
+		err := row.Scan(&e.Key, &e.Name, &e.Logo, &e.Group, &e.GuideID, &e.Number, &e.Kind, &e.GuideNumber, &e.Favorite)
 		return e, err
 	})
 }
@@ -107,10 +108,11 @@ func reconcile(ctx context.Context, tx pgx.Tx, source accounts.ID, at time.Time)
 
 // lineupEntries are the entries that become channels: live ones, and the
 // movies and episodes of an M3U playlist while their type is not imported,
-// as before movies and series; at most maxChannels.
+// as before movies and series; only those marked favorite on a tuner that
+// keeps them alone; at most maxChannels.
 func lineupEntries(entries []storedEntry, o Options) []storedEntry {
 	kept := slices.DeleteFunc(entries, func(e storedEntry) bool {
-		return e.Kind == KindMovie && o.Movies || e.Kind == KindEpisode && o.Series
+		return e.Kind == KindMovie && o.Movies || e.Kind == KindEpisode && o.Series || o.FavoritesOnly && !e.Favorite
 	})
 	return kept[:min(len(kept), maxChannels)]
 }
@@ -251,7 +253,7 @@ func reconcileLineup(ctx context.Context, tx pgx.Tx, source accounts.ID, at time
 			number = &c.number
 		}
 		lineup = append(lineup, []any{id, ChannelItemID(prefix + id), c.key, categoryIDs[c.category], c.name, c.logo, c.guideID, number,
-			float64(c.position), isNew && !options.NewChannels, Fold(shownName + "\n" + c.name + "\n" + c.guideID)})
+			c.guideNumber, float64(c.position), isNew && !options.NewChannels, Fold(shownName + "\n" + c.name + "\n" + c.guideID)})
 		for rank, stream := range c.streams {
 			label := stream.label
 			if len(label) > 32 {
@@ -261,20 +263,20 @@ func reconcileLineup(ctx context.Context, tx pgx.Tx, source accounts.ID, at time
 		}
 	}
 	if _, err := tx.Exec(ctx, `CREATE TEMP TABLE reconciled_lineup (id text, item_id uuid, key text, category_id uuid, provider_name text,
-		provider_logo text, guide_id text, provider_number int, sort double precision, disabled bool, search text) ON COMMIT DROP`); err != nil {
+		provider_logo text, guide_id text, provider_number int, provider_guide_number text, sort double precision, disabled bool, search text) ON COMMIT DROP`); err != nil {
 		return err
 	}
 	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"reconciled_lineup"}, []string{"id", "item_id", "key", "category_id", "provider_name",
-		"provider_logo", "guide_id", "provider_number", "sort", "disabled", "search"}, pgx.CopyFromRows(lineup)); err != nil {
+		"provider_logo", "guide_id", "provider_number", "provider_guide_number", "sort", "disabled", "search"}, pgx.CopyFromRows(lineup)); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO iptv_lineup (addon_id, id, item_id, key, category_id, provider_name, provider_logo, guide_id,
-			provider_number, sort, enabled, search)
-		SELECT $1, id, item_id, key, category_id, provider_name, provider_logo, guide_id, provider_number, sort, NOT disabled, search
+			provider_number, provider_guide_number, sort, enabled, search)
+		SELECT $1, id, item_id, key, category_id, provider_name, provider_logo, guide_id, provider_number, provider_guide_number, sort, NOT disabled, search
 		FROM reconciled_lineup
 		ON CONFLICT (addon_id, id) DO UPDATE SET key = excluded.key, category_id = excluded.category_id,
 			provider_name = excluded.provider_name, provider_logo = excluded.provider_logo, guide_id = excluded.guide_id,
-			provider_number = excluded.provider_number, search = excluded.search,
+			provider_number = excluded.provider_number, provider_guide_number = excluded.provider_guide_number, search = excluded.search,
 			sort = CASE WHEN iptv_lineup.sort_set THEN iptv_lineup.sort ELSE excluded.sort END`, source); err != nil {
 		return fmt.Errorf("line-up channels: %w", err)
 	}

@@ -40,6 +40,9 @@ func (h *hold) unread() bool {
 // onlyFor is false: a replay under way is not ended for another stream.
 func (h *hold) onlyFor(accounts.ID) bool { return false }
 
+// recorded is true: a replay under way is not ended for a recording.
+func (h *hold) recorded() bool { return true }
+
 func (h *hold) evict() {
 	h.st.mu.Lock()
 	defer h.st.mu.Unlock()
@@ -87,7 +90,7 @@ func (s *Service) Hold(ctx context.Context, version library.Version) (release fu
 	grace := st.timingLocked().grace
 	st.mu.Unlock()
 	if fresh {
-		_, err = s.makeRoom(ctx, h.source, h, userOf(ctx))
+		_, err = s.makeRoom(ctx, h.source, h, userOf(ctx), false)
 		st.mu.Lock()
 		if err != nil {
 			h.failed = err

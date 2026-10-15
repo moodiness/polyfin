@@ -74,17 +74,18 @@ func Shared() Scope { return Scope{} }
 func Personal(user accounts.ID) Scope { return Scope{Owner: &user} }
 
 // Kinds of addons: Stremio addons and Eclipse music addons, installed from
-// their manifest, Polyfin's own IPTV sources, an M3U playlist or an
-// Xtream Codes account, which answer as an addon with one live TV catalog
-// (see package iptv), and its local folders, which answer as an addon with
-// one catalog of the titles their files were matched to (see package
-// localfiles).
+// their manifest, Polyfin's own IPTV sources, an M3U playlist, an Xtream
+// Codes account or an HDHomeRun tuner, which answer as an addon with one
+// live TV catalog (see package iptv), and its local folders, which answer
+// as an addon with one catalog of the titles their files were matched to
+// (see package localfiles).
 const (
-	KindStremio = "stremio"
-	KindEclipse = "eclipse"
-	KindM3U     = "m3u"
-	KindXtream  = "xtream"
-	KindLocal   = "local"
+	KindStremio   = "stremio"
+	KindEclipse   = "eclipse"
+	KindM3U       = "m3u"
+	KindXtream    = "xtream"
+	KindHDHomeRun = "hdhomerun"
+	KindLocal     = "local"
 )
 
 // Addon is an installed Stremio or Eclipse addon, an IPTV source or a
@@ -121,7 +122,13 @@ type Addon struct {
 func (a Addon) Stremio() bool { return a.Kind == KindStremio }
 
 // IPTV reports whether the addon is one of Polyfin's own IPTV sources.
-func (a Addon) IPTV() bool { return a.Kind == KindM3U || a.Kind == KindXtream }
+func (a Addon) IPTV() bool {
+	return a.Kind == KindM3U || a.Kind == KindXtream || a.Kind == KindHDHomeRun
+}
+
+// Tuner reports whether the addon is an HDHomeRun tuner, an IPTV source
+// of the local network.
+func (a Addon) Tuner() bool { return a.Kind == KindHDHomeRun }
 
 // Local reports whether the addon is one of Polyfin's own local folders.
 func (a Addon) Local() bool { return a.Kind == KindLocal }

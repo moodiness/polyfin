@@ -202,7 +202,7 @@ func (s *Service) limited(ctx context.Context, version library.Version) bool {
 		return false
 	}
 	limit, err := connections(ctx, version.Origin.Addon)
-	return err != nil || limit > 0
+	return err != nil || limit.Connections > 0
 }
 
 // Manifest reports whether a live analysis is of an HLS playlist, which
@@ -506,6 +506,15 @@ func (l *loopback) registerLive(version library.Version) (string, func()) {
 	return l.registerLiveFor(version, accounts.ID{})
 }
 
+// recordingSuffix ends the loopback key of a recording's live stream.
+const recordingSuffix = "rec"
+
+// registerRecording registers a version's live stream read for a
+// recording, which keeps its tuner (see makeRoom).
+func (l *loopback) registerRecording(version library.Version) (string, func()) {
+	return l.registerKey(version, randomKey()+"."+recordingSuffix)
+}
+
 // registerLiveFor registers a version's live stream read for user, whose
 // oldest stream of the source may make room for it (see makeRoom).
 func (l *loopback) registerLiveFor(version library.Version, user accounts.ID) (string, func()) {
@@ -513,6 +522,10 @@ func (l *loopback) registerLiveFor(version library.Version, user accounts.ID) (s
 	if user != (accounts.ID{}) {
 		key += "." + user.String()
 	}
+	return l.registerKey(version, key)
+}
+
+func (l *loopback) registerKey(version library.Version, key string) (string, func()) {
 	l.mu.Lock()
 	l.feeds[key] = version
 	l.mu.Unlock()
@@ -556,8 +569,10 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 		return
 	}
 	link := func(file string) string { return l.liveURL(parts[0], file, file) }
-	if _, user, ok := strings.Cut(parts[0], "."); ok {
-		if id, err := accounts.ParseID(user); err == nil {
+	if _, rest, ok := strings.Cut(parts[0], "."); ok {
+		if rest == recordingSuffix {
+			r = r.WithContext(forRecording(r.Context()))
+		} else if id, err := accounts.ParseID(rest); err == nil {
 			r = r.WithContext(ForUser(r.Context(), id))
 		}
 	}

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -361,11 +362,11 @@ func TestSourceConnectionsAreKept(t *testing.T) {
 	source := accounts.ID{7}
 	src := &liveSource{interval: 5 * time.Millisecond}
 	s := liveService(t, src, "ffprobe-not-installed")
-	s.LiveSources(func(_ context.Context, id accounts.ID) (int, error) {
+	s.LiveSources(func(_ context.Context, id accounts.ID) (iptv.Limit, error) {
 		if id == source {
-			return 1, nil
+			return iptv.Limit{Connections: 1}, nil
 		}
-		return 0, nil
+		return iptv.Limit{}, nil
 	}, nil)
 	alice, bob := ForUser(t.Context(), accounts.ID{1}), ForUser(t.Context(), accounts.ID{2})
 	first, err := s.openFeed(alice, channelVersion(1, "1.ts", source))
@@ -402,7 +403,7 @@ func TestAStreamWaitsForAConnectionStillClosing(t *testing.T) {
 	closing := make(chan struct{})
 	src := &liveSource{interval: 5 * time.Millisecond, closing: closing}
 	s := liveService(t, src, "ffprobe-not-installed")
-	s.LiveSources(func(context.Context, accounts.ID) (int, error) { return 1, nil }, nil)
+	s.LiveSources(func(context.Context, accounts.ID) (iptv.Limit, error) { return iptv.Limit{Connections: 1}, nil }, nil)
 	first := channelVersion(1, "1.ts", source)
 	left, err := s.openFeed(ForUser(t.Context(), accounts.ID{1}), first)
 	if err != nil {
@@ -433,7 +434,7 @@ func TestAnOpenRefusedAfterARoomWasMadeIsTriedAgain(t *testing.T) {
 	source := accounts.ID{7}
 	src := &liveSource{interval: 5 * time.Millisecond}
 	s := liveService(t, src, "ffprobe-not-installed")
-	s.LiveSources(func(context.Context, accounts.ID) (int, error) { return 1, nil }, nil)
+	s.LiveSources(func(context.Context, accounts.ID) (iptv.Limit, error) { return iptv.Limit{Connections: 1}, nil }, nil)
 	ctx := ForUser(t.Context(), accounts.ID{1})
 	first, err := s.openFeed(ctx, channelVersion(1, "1.ts", source))
 	if err != nil {

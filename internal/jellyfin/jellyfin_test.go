@@ -138,6 +138,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 		SignIns:       throttle.New(failures, time.Minute),
 		WebSocketPort: 8096,
 		Library:       lib,
+		IPTV:          channels,
 		Stremio:       client,
 		Playback:      player,
 		Preferences:   preferences.New(pool),

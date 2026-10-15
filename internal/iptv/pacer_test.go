@@ -132,8 +132,8 @@ func TestAddingAnAccountStaysWithinItsRateLimit(t *testing.T) {
 	if err != nil || source.MaxConnections == nil || *source.MaxConnections != 1 {
 		t.Errorf("connections: %v %v", source.MaxConnections, err)
 	}
-	if limit, err := e.service.Connections(t.Context(), addon.ID); err != nil || limit != 1 {
-		t.Errorf("Connections: %d %v", limit, err)
+	if limit, err := e.service.Connections(t.Context(), addon.ID); err != nil || limit != (Limit{Connections: 1}) {
+		t.Errorf("Connections: %+v %v", limit, err)
 	}
 }
 

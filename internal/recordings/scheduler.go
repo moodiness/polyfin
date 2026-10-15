@@ -17,6 +17,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -93,8 +94,10 @@ type Config struct {
 }
 
 // Ended is a recording that ended: finished, with its file, partial when
-// part of its programme is missing, or failed, having recorded nothing.
-// User is the user who made its timer, nil once deleted.
+// part of its programme is missing, or failed, having recorded nothing;
+// NoTuner tells a recording that failed as every tuner of its channel's
+// tuner was recording another channel. User is the user who made its
+// timer, nil once deleted.
 type Ended struct {
 	Recording  accounts.ID
 	User       *accounts.ID
@@ -103,6 +106,7 @@ type Ended struct {
 	Start, End time.Time
 	Partial    bool
 	Failed     bool
+	NoTuner    bool
 }
 
 // Service keeps timers, series timers and recordings, and records.
@@ -350,7 +354,7 @@ func (s *Service) record(ctx context.Context, t Timer, a *active) {
 	s.logger.Info("A recording started", "recording", id.String(), "until", t.Until().Format(time.RFC3339))
 	until, cancel := context.WithDeadline(ctx, t.Until())
 	defer cancel()
-	interrupted := false
+	interrupted, noTuner := false, false
 	for n := 0; until.Err() == nil; {
 		path := partPath(a.dir, id, n)
 		s.mu.Lock()
@@ -360,6 +364,7 @@ func (s *Service) record(ctx context.Context, t Timer, a *active) {
 		if until.Err() != nil {
 			break
 		}
+		noTuner = errors.Is(err, iptv.ErrTunersRecording)
 		if size(path) > 0 {
 			n++
 		}
@@ -376,7 +381,7 @@ func (s *Service) record(ctx context.Context, t Timer, a *active) {
 		return
 	}
 	stopped := errors.Is(context.Cause(ctx), errStopped) && s.now().Before(t.Until().Add(-lateStop))
-	s.finish(context.WithoutCancel(ctx), a.dir, id, t.Until(), interrupted || stopped)
+	s.finish(context.WithoutCancel(ctx), a.dir, id, t.Until(), interrupted || stopped, noTuner)
 }
 
 // recordPart records t's channel into path with the first of its streams
@@ -415,13 +420,14 @@ func (s *Service) recordPart(ctx context.Context, t Timer, recording accounts.ID
 
 // finish joins the parts a recording wrote into dir into its file there,
 // marks it complete, and its timer with it. A recording that wrote nothing
-// is deleted, and its timer marked failed.
-func (s *Service) finish(ctx context.Context, dir string, id accounts.ID, until time.Time, partial bool) {
+// is deleted, and its timer marked failed; noTuner tells that its last try
+// found every tuner recording.
+func (s *Service) finish(ctx context.Context, dir string, id accounts.ID, until time.Time, partial, noTuner bool) {
 	parts := parts(dir, id)
 	if len(parts) == 0 {
-		s.logger.Warn("A recording wrote nothing", "recording", id.String())
+		s.logger.Warn("A recording wrote nothing", "recording", id.String(), "noTuner", noTuner)
 		var timer *accounts.ID
-		ended := Ended{Recording: id, Failed: true}
+		ended := Ended{Recording: id, Failed: true, NoTuner: noTuner}
 		if err := s.db.QueryRow(ctx, "DELETE FROM live_recordings WHERE id = $1 RETURNING timer_id, user_id, channel_id, name, start_at, end_at", id).
 			Scan(&timer, &ended.User, &ended.Channel, &ended.Name, &ended.Start, &ended.End); err != nil {
 			s.logger.Warn("An empty recording could not be deleted", "error", err)
@@ -570,7 +576,7 @@ func (s *Service) Recover(ctx context.Context) {
 		s.logger.Warn("Interrupted timers could not be scheduled again", "error", err)
 	}
 	for _, r := range interrupted {
-		s.finish(ctx, dir, r.ID, r.End, true)
+		s.finish(ctx, dir, r.ID, r.End, true, false)
 	}
 }
 

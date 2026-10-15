@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 )
@@ -64,7 +65,7 @@ func TestReplaysHoldTheirSourceConnections(t *testing.T) {
 	source := accounts.ID{7}
 	src := &liveSource{interval: 5 * time.Millisecond}
 	s := liveService(t, src, "ffprobe-not-installed")
-	s.LiveSources(func(context.Context, accounts.ID) (int, error) { return 1, nil }, nil)
+	s.LiveSources(func(context.Context, accounts.ID) (iptv.Limit, error) { return iptv.Limit{Connections: 1}, nil }, nil)
 	alice, bob := ForUser(t.Context(), accounts.ID{1}), ForUser(t.Context(), accounts.ID{2})
 	channel, err := s.openFeed(alice, channelVersion(1, "1.ts", source))
 	if err != nil {
@@ -111,12 +112,12 @@ func TestRequestsOfAReplayThatComeTogetherShareItsRefusal(t *testing.T) {
 	s := liveService(t, src, "ffprobe-not-installed")
 	entered, gate := make(chan struct{}), make(chan struct{})
 	var held atomic.Bool
-	s.LiveSources(func(context.Context, accounts.ID) (int, error) {
+	s.LiveSources(func(context.Context, accounts.ID) (iptv.Limit, error) {
 		if held.Load() {
 			entered <- struct{}{}
 			<-gate
 		}
-		return 1, nil
+		return iptv.Limit{Connections: 1}, nil
 	}, nil)
 	channel, err := s.openFeed(ForUser(t.Context(), accounts.ID{1}), channelVersion(1, "1.ts", source))
 	if err != nil {

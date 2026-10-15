@@ -142,6 +142,23 @@ func TestGuideIdentifiersMatchBeforeNames(t *testing.T) {
 		"Orbe.zz", "Orbe.zz", "ZebMax.fr", "ZebMax.fr")
 }
 
+// A tuner's channel takes the guide channel whose display name is its
+// number, alone or before its name, before any name match; "5.1" is not
+// "5.10" nor "15.1", and a channel without a number keeps the names.
+func TestTunerNumbersMatchBeforeNames(t *testing.T) {
+	m := NewMatcher("en")
+	m.AddNumbered("polyfin-iptv:1", "", "KSTL", "5.1")
+	m.AddNumbered("polyfin-iptv:2", "", "Heron Hills", "7.2")
+	m.AddNumbered("polyfin-iptv:3", "", "Heron Hills", "")
+	m.Declare(0, Channel{ID: "kstl", Names: []string{"KSTL"}})
+	m.Declare(0, Channel{ID: "five", Names: []string{"5.1"}})
+	m.Declare(0, Channel{ID: "other", Names: []string{"5.10", "15.1 KSTL"}})
+	m.Declare(0, Channel{ID: "heron", Names: []string{"7.2 Heron Hills"}})
+	m.Declare(0, Channel{ID: "named", Names: []string{"Heron Hills"}})
+	expect(t, "numbers", ids(m.Choose(func(match Match) int { return map[string]int{"kstl": 50, "named": 50}[match.ID] + 1 })),
+		"five", "heron", "named")
+}
+
 // Lists write guide identifiers in another case, or with a feed after an
 // "@": the exact identifier wins, then the same in another case, then the
 // part before the "@", exactly and then in another case, all before names;

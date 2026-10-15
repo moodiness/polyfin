@@ -283,6 +283,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
 	channels.OnChange(lib.LineupChanged)
+	// Find tuners asks the local networks for HDHomeRun tuners on their
+	// port, or only the addresses POLYFIN_HDHOMERUN_ADDRESSES gives.
+	channels.UseTunerDiscovery(cfg.HDHomeRunPort, cfg.HDHomeRunAddresses...)
 	// Movies and series show the ratings MDBList gives them while the
 	// settings hold the server's key, looked up in the background.
 	titleRatings := ratings.New(pool, ratings.MDBList, version, logger, store.Settings)
@@ -475,6 +478,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		NewDevice:      func(user accounts.User, device accounts.Device) { notifier.NewDevice(user, device) },
 		WebSocketPort:  listener.Addr().(*net.TCPAddr).Port,
 		Library:        lib,
+		IPTV:           channels,
 		Stremio:        addonClient,
 		Playback:       player,
 		Preferences:    preferences.New(pool),

@@ -47,6 +47,9 @@ const (
 	problemDestinationFailed = "backup_destination_failed"
 	problemDestinationStale  = "backup_destination_stale"
 	problemIPTV              = "iptv"
+	// A tuner does not answer, or refused a stream for another reason
+	// than its tuners being in use.
+	problemTuner             = "tuner"
 	problemFolder            = "folder"
 	problemFolderUnwatched   = "folder_unwatched"
 	problemGuide             = "guide"
@@ -213,7 +216,15 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			if err != nil {
 				return nil, err
 			}
-			if source.Error != "" {
+			switch {
+			case addon.Tuner() && (source.Error != "" || source.Tuner != nil && source.Tuner.Failure != ""):
+				failure := "unreachable"
+				if source.Error == "" {
+					failure = source.Tuner.Failure
+				}
+				sources = append(sources, healthProblemJSON{Key: "tuner:" + addon.ID.String(), Code: problemTuner,
+					Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name, Failure: failure})
+			case source.Error != "":
 				p := warning("iptv:"+addon.ID.String(), problemIPTV, "iptv")
 				p.Name, p.Owner = addon.Manifest.Name, scope.Owner
 				sources = append(sources, p)
@@ -479,6 +490,11 @@ func (p healthProblemJSON) text(language string) string {
 		return say("%s: %s", "%s : %s", name, pick(failure))
 	case problemIPTV:
 		return say("%s: the last channel list download failed.", "%s : le dernier téléchargement de la liste a échoué.", name)
+	case problemTuner:
+		if p.Failure == "unreachable" {
+			return say("%s: the tuner does not answer.", "%s : le tuner ne répond pas.", name)
+		}
+		return say("%s: the tuner failed to play a channel.", "%s : le tuner n’a pas pu lire une chaîne.", name)
 	case problemFolder:
 		switch {
 		case p.Failure == "unreachable":

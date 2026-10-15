@@ -85,6 +85,24 @@ func TestDiscoveryPortIsJellyfinsUnlessSet(t *testing.T) {
 	}
 }
 
+// Find tuners asks HDHomeRun's port unless another is set, by broadcast
+// unless addresses are given: a host alone is asked on that port.
+func TestTunerDiscoveryFollowsItsVariables(t *testing.T) {
+	cfg, err := Load(with(map[string]string{}))
+	if err != nil || cfg.HDHomeRunPort != 65001 || cfg.HDHomeRunAddresses != nil {
+		t.Errorf("defaults: %d %q %v", cfg.HDHomeRunPort, cfg.HDHomeRunAddresses, err)
+	}
+	cfg, err = Load(with(map[string]string{"POLYFIN_HDHOMERUN_PORT": "18920", "POLYFIN_HDHOMERUN_ADDRESSES": " 192.168.1.20, tuner.lan:18921,,[::1]:5 "}))
+	if err != nil || cfg.HDHomeRunPort != 18920 || !slices.Equal(cfg.HDHomeRunAddresses, []string{"192.168.1.20:18920", "tuner.lan:18921", "[::1]:5"}) {
+		t.Errorf("set: %d %q %v", cfg.HDHomeRunPort, cfg.HDHomeRunAddresses, err)
+	}
+	for variable, value := range map[string]string{"POLYFIN_HDHOMERUN_PORT": "0", "POLYFIN_HDHOMERUN_ADDRESSES": "http://192.168.1.20"} {
+		if _, err := Load(with(map[string]string{variable: value})); err == nil || !strings.Contains(err.Error(), variable) {
+			t.Errorf("%s %q: %v", variable, value, err)
+		}
+	}
+}
+
 func TestLoadReportsEveryInvalidSetting(t *testing.T) {
 	_, err := Load(env(map[string]string{
 		"POLYFIN_LISTEN":   "8096",

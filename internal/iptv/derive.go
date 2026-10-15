@@ -35,19 +35,21 @@ var ErrInvalidOptions = errors.New("invalid import options")
 // import the provider's movies and series, but for the categories
 // VODExcluded lists (movie:<name>, series:<name>), in libraries by type or
 // by category (VODLibraries); Enrichment describes titles with a provider
-// TMDB or IMDb id through the server's metadata addons.
+// TMDB or IMDb id through the server's metadata addons. FavoritesOnly
+// keeps only the channels a tuner marks favorite, off by default.
 type Options struct {
-	Categories   string
-	Channels     string
-	Excluded     []string
-	NewChannels  bool
-	Numbering    string
-	LiveTv       bool
-	Movies       bool
-	Series       bool
-	VODExcluded  []string
-	VODLibraries string
-	Enrichment   bool
+	Categories    string
+	Channels      string
+	Excluded      []string
+	NewChannels   bool
+	Numbering     string
+	LiveTv        bool
+	Movies        bool
+	Series        bool
+	VODExcluded   []string
+	VODLibraries  string
+	Enrichment    bool
+	FavoritesOnly bool
 }
 
 // DefaultOptions are today's: live channels only, in provider groups, one
@@ -99,6 +101,8 @@ type storedEntry struct {
 	Key, Name, Logo, Group, GuideID string
 	Number                          int
 	Kind                            string
+	GuideNumber                     string
+	Favorite                        bool
 }
 
 func groupKey(group string) string { return "g:" + group }
@@ -137,7 +141,9 @@ type derivedChannel struct {
 	key, category       string
 	name, logo, guideID string
 	number, position    int
-	streams             []derivedStream
+	// guideNumber is a tuner's number of the channel ("5.1").
+	guideNumber string
+	streams     []derivedStream
 	// id is the permanent identifier the channel takes when it is new.
 	id string
 }
@@ -190,7 +196,7 @@ func derive(entries []storedEntry, o Options) ([]derivedCategory, []derivedChann
 		label, rank := streamQuality(e.Name)
 		if o.Channels == ChannelsOriginal {
 			channels = append(channels, derivedChannel{key: "s:" + e.Key, id: e.Key, category: category[i], name: e.Name, logo: e.Logo,
-				guideID: e.GuideID, number: e.Number, position: i + 1, streams: []derivedStream{{entry: e.Key, label: cmp.Or(label, "Live"), rank: rank}}})
+				guideID: e.GuideID, number: e.Number, guideNumber: e.GuideNumber, position: i + 1, streams: []derivedStream{{entry: e.Key, label: cmp.Or(label, "Live"), rank: rank}}})
 			continue
 		}
 		name := mergeKey(e.Name)
@@ -205,7 +211,7 @@ func derive(entries []storedEntry, o Options) ([]derivedCategory, []derivedChann
 			index = len(channels)
 			merged[key] = index
 			channels = append(channels, derivedChannel{key: key, id: "m" + digest, category: category[i], name: cleanName(e.Name),
-				logo: e.Logo, number: e.Number, position: i + 1})
+				logo: e.Logo, number: e.Number, guideNumber: e.GuideNumber, position: i + 1})
 		}
 		c := &channels[index]
 		if c.guideID == "" {

@@ -18,8 +18,11 @@ import (
 // ("Name.fr@SD"): failing an exact match, guide channels are candidates
 // whose identifier is the channel's ignoring case, then the part before its
 // last "@", exactly and then ignoring case, each before the next, and
-// before any name. Otherwise guide channels are candidates by name (see
-// ParseName). Among candidates of the same kind, they are ranked by:
+// before any name. A tuner's channel is then a candidate of the guide
+// channels whose display name is its number ("5.1"), alone or before their
+// name ("5.1 Name"), before any name. Otherwise guide channels are
+// candidates by name (see ParseName). Among candidates of the same kind,
+// they are ranked by:
 //   - country: one of the guide channel's countries (that of its
 //     identifier, as in "Name.fr", and those of its display names'
 //     prefixes, as in "FR| Name") is the channel's own prefix country, else
@@ -45,10 +48,12 @@ type Matcher struct {
 	channels []matchChannel
 	// byID, exact and loose index the channels by Stremio ID and guide
 	// identifier, and by names; folded, base and foldedBase by their guide
-	// identifier in lower case, before its last "@", and both.
+	// identifier in lower case, before its last "@", and both; numbers by
+	// a tuner's number of them.
 	byID                     map[string][]int
 	exact, loose             map[string][]int
 	folded, base, foldedBase map[string][]int
+	numbers                  map[string][]int
 }
 
 // Match is a guide channel: the position of its guide among those
@@ -74,7 +79,7 @@ type matchChannel struct {
 func NewMatcher(language string) *Matcher {
 	return &Matcher{country: LanguageCountry(language), byID: map[string][]int{},
 		exact: map[string][]int{}, loose: map[string][]int{}, folded: map[string][]int{}, base: map[string][]int{},
-		foldedBase: map[string][]int{}}
+		foldedBase: map[string][]int{}, numbers: map[string][]int{}}
 }
 
 // index adds channel i to the channels of key in index, once.
@@ -88,7 +93,16 @@ func index(m map[string][]int, key string, i int) {
 // it has one; Choose answers in the order channels were added. Several
 // channels may share a guide identifier.
 func (m *Matcher) Add(stremioID, guideID, name string) {
+	m.AddNumbered(stremioID, guideID, name, "")
+}
+
+// AddNumbered adds the next channel of the catalog, as Add does, with a
+// tuner's number of it ("5.1"), empty for none: a guide channel whose
+// display name is that number, alone or before its name, is a candidate
+// before any name, after any identifier.
+func (m *Matcher) AddNumbered(stremioID, guideID, name, number string) {
 	i := len(m.channels)
+	index(m.numbers, strings.TrimSpace(number), i)
 	parsed := ParseName(name)
 	m.channels = append(m.channels, matchChannel{country: cmp.Or(parsed.Country, m.country)})
 	index(m.byID, stremioID, i)
@@ -114,13 +128,14 @@ func (m *Matcher) Add(stremioID, guideID, name string) {
 	}
 }
 
-// Identifier kinds of candidates, above any name (see Declare): the guide
-// identifier in another case, then before its "@", exactly and in another
-// case.
+// Identifier kinds of candidates, above any name (see Declare): a tuner's
+// number as a display name, then the guide identifier in another case,
+// then before its "@", exactly and in another case.
 const (
-	byFoldedBase = 1
-	byBase       = 2
-	byFolded     = 3
+	byNumber     = 1
+	byFoldedBase = 2
+	byBase       = 3
+	byFolded     = 4
 )
 
 // Name tiers of candidates (see Declare), and what the country adds,
@@ -147,7 +162,12 @@ func (m *Matcher) Declare(guide int, channel Channel) {
 	for _, i := range m.exact[IDName(channel.ID)] {
 		tiers[i] = byIDName
 	}
+	numbered := map[int]bool{}
 	for _, raw := range channel.Names {
+		number, _, _ := strings.Cut(strings.TrimSpace(raw), " ")
+		for _, i := range m.numbers[number] {
+			numbered[i] = true
+		}
 		name := ParseName(raw)
 		countries = append(countries, name.Country)
 		for _, i := range m.loose[name.Loose] {
@@ -165,6 +185,9 @@ func (m *Matcher) Declare(guide int, channel Channel) {
 		for _, i := range channels {
 			kinds[i] = max(kinds[i], kind)
 		}
+	}
+	for i := range numbered {
+		kinds[i] = max(kinds[i], byNumber)
 	}
 	for i := range kinds {
 		if _, ok := tiers[i]; !ok {

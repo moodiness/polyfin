@@ -51,14 +51,18 @@ func (h *Handler) systemInfo(w http.ResponseWriter, r *http.Request) {
 // any signed-in user, as Jellyfin does: encoding, which jellyfin-web reads
 // before rendering ASS subtitles, and skips them when this fails, and
 // which loads the fallback fonts when they are enabled (see
-// encodingConfiguration). Branding has its own routes (see
+// encodingConfiguration); and livetv, which lists the tuners (see
+// liveTvConfiguration). Branding has its own routes (see
 // brandingConfiguration). Any other key is unknown.
 func (h *Handler) namedConfiguration(w http.ResponseWriter, r *http.Request) {
-	if strings.EqualFold(r.PathValue("key"), "encoding") {
+	switch key := r.PathValue("key"); {
+	case strings.EqualFold(key, "encoding"):
 		writeJSON(w, http.StatusOK, h.encodingConfiguration())
-		return
+	case strings.EqualFold(key, "livetv"):
+		h.liveTvConfiguration(w, r)
+	default:
+		processingError(w, http.StatusNotFound)
 	}
-	processingError(w, http.StatusNotFound)
 }
 
 // encodingConfiguration is the encoding configuration Polyfin answers:

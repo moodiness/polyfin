@@ -2,6 +2,7 @@ package playback
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -20,24 +21,35 @@ import (
 // live playback reads it, through the loopback relay, so that the headers
 // it needs are sent and it stays within its confinement; the recording
 // counts toward the user's and the server's live encodings (see
-// hls.Manager.Record). session names the recording among them.
+// hls.Manager.Record). session names the recording among them. The
+// recording joins the stream's feed first, and holds it while it runs: on
+// a tuner, it takes the tuner of a channel only watched, and fails with
+// iptv.ErrTunersRecording when every tuner records (see makeRoom).
 func (s *Service) Record(ctx context.Context, user accounts.ID, version library.Version, session, path string) error {
 	key := hls.Key{Session: "record " + session, User: user.String(), Version: version.ID.String()}
 	return s.segments.Record(ctx, key, func(ctx context.Context) (hls.Remux, func(), error) {
+		ctx = forRecording(ctx)
+		held, err := s.openFeed(ctx, version)
+		if err != nil && !errors.Is(err, errManifest) {
+			s.liveFailed(ctx, version, err, LiveFailure(err) != LiveTimeout)
+			return hls.Remux{}, nil, err
+		}
 		analysis, err := s.AnalyzeLive(ctx, version)
 		if err != nil {
+			_ = held.Close()
 			return hls.Remux{}, nil, err
 		}
 		video, ok := LiveVideo(analysis)
 		if !ok {
+			_ = held.Close()
 			return hls.Remux{}, nil, ErrNotRemuxable
 		}
-		target, release := s.loopback.registerLive(version)
+		target, release := s.loopback.registerRecording(version)
 		r := hls.Remux{Input: target, Video: video.Index, Audio: liveAudio(analysis)}
 		if Manifest(analysis) {
 			r.InputOptions = media.LiveOptions
 		}
-		return r, release, nil
+		return r, func() { release(); _ = held.Close() }, nil
 	}, path)
 }
 

@@ -90,6 +90,14 @@ type Service struct {
 	// pacer spaces the requests to each provider host: lists and
 	// details (see Pacer).
 	pacer *Pacer
+
+	// scans are the tuners' channel scans under way, followed every
+	// scanPoll (see Scan); tunerPort and tunerAddresses are where
+	// discovery asks (see UseTunerDiscovery).
+	scans          scans
+	scanPoll       time.Duration
+	tunerPort      int
+	tunerAddresses []string
 }
 
 // listCache is how long the list a preview downloaded is kept, at most
@@ -186,6 +194,8 @@ type OptionsPatch struct {
 	VODExcluded  *[]string `json:"vodExcluded"`
 	VODLibraries *string   `json:"vodLibraries"`
 	Enrichment   *bool     `json:"enrichment"`
+	// FavoritesOnly keeps only the channels marked favorite on a tuner.
+	FavoritesOnly *bool `json:"favoritesOnly"`
 }
 
 // apply returns options with patch applied, checked.
@@ -216,6 +226,7 @@ func (o Options) apply(patch *OptionsPatch) (Options, error) {
 		turn(&o.Movies, patch.Movies)
 		turn(&o.Series, patch.Series)
 		turn(&o.Enrichment, patch.Enrichment)
+		turn(&o.FavoritesOnly, patch.FavoritesOnly)
 	}
 	if o.Excluded == nil {
 		o.Excluded = []string{}
@@ -254,16 +265,19 @@ type Source struct {
 	Options        Options
 	Lineup         LineupCounts
 	VOD            VODCounts
+	// Tuner describes a tuner, nil for another source.
+	Tuner *TunerState
 }
 
 // Add fetches an account's channel list and adds it to the scope as an
 // IPTV source, its live TV catalog enabled, with its guide and its line-up
 // made by its options. confined keeps the source on public addresses, for
 // good: a source of a user's own scope is confined unless the user is an
-// administrator.
+// administrator. A tuner named nothing takes the name it gives itself.
 func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource, confined bool) (addons.Addon, error) {
+	tuner := source.Account.Kind == addons.KindHDHomeRun
 	name, err := validName(source.Name)
-	if err != nil {
+	if err != nil && !(tuner && strings.TrimSpace(source.Name) == "") {
 		return addons.Addon{}, err
 	}
 	address, err := source.Account.address()
@@ -275,6 +289,9 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 		return addons.Addon{}, addons.ErrInvalidGuideURL
 	}
 	options, err := DefaultOptions().apply(source.Options)
+	if err == nil {
+		err = options.checkKind(source.Account.Kind)
+	}
 	if err != nil {
 		return addons.Addon{}, err
 	}
@@ -282,11 +299,19 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	if err != nil {
 		return addons.Addon{}, err
 	}
+	if tuner {
+		if name == "" {
+			name, _ = validName(cmp.Or(list.tuner.FriendlyName, list.tuner.ModelNumber, "HDHomeRun"))
+		}
+		if err := s.tunerTaken(ctx, list.tuner.DeviceID, nil); err != nil {
+			return addons.Addon{}, err
+		}
+	}
 	at := s.now()
 	addon, err := s.addons.Create(ctx, scope, source.Account.Kind, address,
 		func(id accounts.ID) stremio.Manifest { return manifest(id, source.Account.Kind, name, options, nil) },
 		func(tx pgx.Tx, addon addons.Addon) error {
-			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id, "+optionColumns+") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id, "+optionColumns+") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
 				append([]any{addon.ID}, options.values()...)...); err != nil {
 				return err
 			}
@@ -332,6 +357,9 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 		}
 	}
 	options, err := current.Options.apply(changes.Options)
+	if err == nil {
+		err = options.checkKind(addon.Kind)
+	}
 	if err != nil {
 		return err
 	}
@@ -349,6 +377,11 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 		if list, err = fetch(ctx, s.requester(), accountOf(addon.Kind, address), confined, partsOf(options)); err != nil {
 			return err
 		}
+		if list.tuner != nil {
+			if err := s.tunerTaken(ctx, list.tuner.DeviceID, &id); err != nil {
+				return err
+			}
+		}
 	} else if addon.Kind == addons.KindXtream {
 		// The parts of an Xtream account turned on are downloaded first;
 		// those of an M3U playlist were stored with it.
@@ -360,7 +393,7 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 	}
 	at := s.now()
 	_, err = s.addons.Update(ctx, scope, id, addon.Kind, address, renamed(addon.Manifest, name), func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET ("+optionColumns+") = ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) WHERE addon_id = $1",
+		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET ("+optionColumns+") = ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) WHERE addon_id = $1",
 			append([]any{id}, options.values()...)...); err != nil {
 			return err
 		}
@@ -376,6 +409,34 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 		s.lineupChanged(ctx, id)
 	}
 	s.forget(id)
+	return err
+}
+
+// checkKind checks options against the kind of source they are of: a tuner
+// has live channels only, and only a tuner keeps its favorites alone.
+func (o Options) checkKind(kind string) error {
+	tuner := kind == addons.KindHDHomeRun
+	if tuner && (o.Movies || o.Series || !o.LiveTv) || !tuner && o.FavoritesOnly {
+		return ErrInvalidOptions
+	}
+	return nil
+}
+
+// ErrTunerAdded reports a tuner that is a source already.
+var ErrTunerAdded = errors.New("the tuner is a source already")
+
+// tunerTaken reports ErrTunerAdded when another source than self is the
+// tuner of device: its tuners would be counted twice.
+func (s *Service) tunerTaken(ctx context.Context, device string, self *accounts.ID) error {
+	if device == "" {
+		return nil
+	}
+	var taken bool
+	err := s.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM iptv_sources i JOIN addons a ON a.id = i.addon_id
+		WHERE a.kind = $1 AND i.tuner_device = $2 AND a.id IS DISTINCT FROM $3)`, addons.KindHDHomeRun, device, self).Scan(&taken)
+	if err == nil && taken {
+		err = ErrTunerAdded
+	}
 	return err
 }
 
@@ -513,6 +574,11 @@ func storeDownload(ctx context.Context, tx pgx.Tx, source accounts.ID, list down
 			return err
 		}
 	}
+	if list.tuner != nil {
+		if err := storeTuner(ctx, tx, source, *list.tuner); err != nil {
+			return err
+		}
+	}
 	if !list.xtream {
 		return nil
 	}
@@ -564,11 +630,11 @@ func storeList(ctx context.Context, tx pgx.Tx, source accounts.ID, entries []Ent
 			season, episode = &e.Season, &e.Episode
 		}
 		rows = append(rows, []any{source, key, len(rows) + 1, e.Name, number, e.Logo, e.Group, e.GuideID, e.URL, headers, kind, e.Series, season, episode,
-			e.Catchup.Type, e.Catchup.Days, e.Catchup.Source})
+			e.Catchup.Type, e.Catchup.Days, e.Catchup.Source, e.GuideNumber, e.Favorite})
 	}
 	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"iptv_entries"},
 		[]string{"addon_id", "key", "position", "name", "number", "logo", "group_title", "guide_id", "url", "headers", "kind", "series_name", "season", "episode",
-			"catchup", "catchup_days", "catchup_source"},
+			"catchup", "catchup_days", "catchup_source", "guide_number", "favorite"},
 		pgx.CopyFromRows(rows)); err != nil {
 		return err
 	}
@@ -661,6 +727,12 @@ func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID
 		return Source{}, err
 	}
 	source.VOD, err = s.vodCounts(ctx, id)
+	if err == nil && source.Addon.Tuner() {
+		t := &TunerState{Scan: s.scanState(id)}
+		err = s.db.QueryRow(ctx, "SELECT tuner_device, tuner_model, tuner_failure, tuner_failed_at FROM iptv_sources WHERE addon_id = $1", id).
+			Scan(&t.Device, &t.Model, &t.Failure, &t.FailedAt)
+		source.Tuner = t
+	}
 	return source, err
 }
 
@@ -673,20 +745,23 @@ func (s *Service) forget(source accounts.ID) {
 }
 
 // channelColumns are what a channel's meta is made of, from l joined with
-// its source as i and its category as c.
+// its source as i and its category as c. A tuner's channel without a fixed
+// number shows the tuner's ("5.1") while the source keeps the provider's.
 const channelColumns = `l.id, coalesce(l.name, l.provider_name), coalesce(l.logo, l.provider_logo), l.description,
-	coalesce(c.name, c.provider_name), coalesce(l.number, CASE WHEN i.numbering = 'provider' THEN l.provider_number END, 0), l.guide_id`
+	coalesce(c.name, c.provider_name), coalesce(l.number, CASE WHEN i.numbering = 'provider' THEN l.provider_number END, 0), l.guide_id,
+	CASE WHEN l.number IS NULL AND i.numbering = 'provider' THEN l.provider_guide_number ELSE '' END`
 
 const channelJoins = `FROM iptv_lineup l JOIN iptv_sources i ON i.addon_id = l.addon_id
 	JOIN iptv_categories c ON c.id = coalesce(l.moved_to, l.category_id)`
 
 func scanMeta(source accounts.ID, row pgx.Row) (stremio.Meta, error) {
-	var id, name, logo, description, category, guide string
+	var id, name, logo, description, category, guide, guideNumber string
 	var number int
-	if err := row.Scan(&id, &name, &logo, &description, &category, &number, &guide); err != nil {
+	if err := row.Scan(&id, &name, &logo, &description, &category, &number, &guide, &guideNumber); err != nil {
 		return stremio.Meta{}, err
 	}
-	meta := stremio.Meta{ID: prefix(source) + id, Type: "tv", Name: name, Logo: logo, Description: description, ChannelNumber: number, GuideID: guide}
+	meta := stremio.Meta{ID: prefix(source) + id, Type: "tv", Name: name, Logo: logo, Description: description, ChannelNumber: number, GuideID: guide,
+		GuideNumber: guideNumber}
 	if category != "" {
 		meta.Genres = stremio.Names{category}
 	}

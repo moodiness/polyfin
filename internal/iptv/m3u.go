@@ -33,6 +33,10 @@ type Entry struct {
 	// Catchup is how the provider's archive of the channel's past
 	// programmes is reached; the zero value for none.
 	Catchup Catchup
+	// GuideNumber is a tuner's number of the channel ("5.1"), and
+	// Favorite tells a channel marked favorite on the tuner.
+	GuideNumber string
+	Favorite    bool
 }
 
 // maxLine bounds a playlist line: a line longer than that is not M3U.

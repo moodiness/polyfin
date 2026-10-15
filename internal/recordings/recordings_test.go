@@ -456,7 +456,7 @@ func TestSeriesTimersSkipEpisodesRecordedInFull(t *testing.T) {
 		if err := os.WriteFile(partPath(f.dir, recording, 0), []byte("video"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		f.service.finish(ctx, f.dir, recording, time.Now(), partial)
+		f.service.finish(ctx, f.dir, recording, time.Now(), partial, false)
 		return recording
 	}
 	recorded := record(first, false)

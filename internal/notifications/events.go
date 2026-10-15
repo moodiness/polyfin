@@ -286,6 +286,9 @@ func (s *Service) recordingEvent(ended recordings.Ended, user *accounts.User, ch
 	case ended.Failed:
 		ev.Title = s.phrase("Recording failed: %s", "Échec de l’enregistrement : %s", ended.Name)
 		ev.Message = s.phrase("Nothing could be recorded on %s, for %s.", "Rien n’a pu être enregistré sur %s, pour %s.", channel, who)
+		if ended.NoTuner {
+			ev.Message += " " + s.phrase("Every tuner was recording another channel.", "Tous les tuners enregistraient une autre chaîne.")
+		}
 	default:
 		ev.Title = s.phrase("Recording finished: %s", "Enregistrement terminé : %s", ended.Name)
 		ev.Message = s.phrase("Recorded on %s, for %s.", "Enregistré sur %s, pour %s.", channel, who)
