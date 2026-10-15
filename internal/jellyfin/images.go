@@ -600,6 +600,14 @@ func resizable(contentType string) bool {
 // generated image is drawn from the posters it shows (see
 // generatedArtwork).
 func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
+	tag := query(r, "tag")
+	h.taggedArtwork(w, r, tag, tag != "")
+}
+
+// taggedArtwork is image for the artwork whose tag is tag, if any (see
+// library.TaggedArtwork). immutable lets the client keep it for good: an
+// address that names the tag changes with the image.
+func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag string, immutable bool) {
 	id, err := accounts.ParseID(r.PathValue("itemId"))
 	if err != nil {
 		processingError(w, http.StatusBadRequest)
@@ -641,7 +649,7 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 	// Image requests come without a user: a tag that is not the image found
 	// may be that of one in a user's metadata language (see
 	// library.TaggedArtwork).
-	if tag := query(r, "tag"); tag != "" && !uploaded && found.Generated == nil && (errors.Is(err, library.ErrNotFound) ||
+	if tag != "" && !uploaded && found.Generated == nil && (errors.Is(err, library.ErrNotFound) ||
 		err == nil && library.ImageTag(found.URL) != tag) {
 		if tagged, ok := h.Library.TaggedArtwork(r.Context(), id, tag); ok {
 			found, err = tagged, nil
@@ -660,17 +668,17 @@ func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 		h.uploadedImage(w, r, owner, ownerType)
 		return
 	}
-	tag := library.ImageTag(url)
+	etag := `"` + library.ImageTag(url) + `"`
 	header := w.Header()
-	header.Set("ETag", `"`+tag+`"`)
+	header.Set("ETag", etag)
 	// Tags change with the artwork, so a tagged image never changes; an
 	// app asking by tag may keep it for good.
-	if query(r, "tag") != "" {
+	if immutable {
 		header.Set("Cache-Control", immutableImage)
 	} else {
 		header.Set("Cache-Control", taggedImage)
 	}
-	if r.Header.Get("If-None-Match") == `"`+tag+`"` {
+	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}

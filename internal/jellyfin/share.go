@@ -423,7 +423,10 @@ func (h *Handler) sharePage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// shareImage serves the title's artwork, as its image routes would.
+// shareImage serves the title's artwork, as its image routes would: the
+// one the sharer's apps get, in their metadata language as the page's
+// name and overview are. The page's address does not name it, so the
+// browser does not keep it for good.
 func (h *Handler) shareImage(w http.ResponseWriter, r *http.Request) {
 	imageType, width := "", ""
 	switch r.PathValue("kind") {
@@ -440,12 +443,16 @@ func (h *Handler) shareImage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(failed.status)
 		return
 	}
+	tag := library.ImageTag(item.Images.Primary)
+	if imageType == "Backdrop" {
+		tag = library.ImageTag(item.Images.Backdrop)
+	}
 	image := r.Clone(r.Context())
 	image.URL = &url.URL{Path: r.URL.Path, RawQuery: url.Values{"maxWidth": {width}}.Encode()}
 	image.SetPathValue("itemId", item.ID.String())
 	image.SetPathValue("imageType", imageType)
 	image.SetPathValue("imageIndex", "")
-	h.image(w, image)
+	h.taggedArtwork(w, image, tag, false)
 }
 
 // startGuest starts a guest's playback of the link's title, unless the

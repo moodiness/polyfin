@@ -58,7 +58,7 @@ var shareTexts = map[string]shareText{
 		refusals: map[string]string{
 			"unknown":           "This link does not exist. Check that it was copied whole.",
 			"expired":           "This link has expired. Ask the person who shared it for a new one.",
-			"revoked":           "This link was revoked by the person who shared it.",
+			"revoked":           "This link was revoked.",
 			"off":               "This link no longer works: sharing is turned off for it.",
 			"unavailable":       "This title cannot be played right now.",
 			"too_many_attempts": "Too many attempts from this address. Try again in a few minutes.",
@@ -82,7 +82,7 @@ var shareTexts = map[string]shareText{
 		refusals: map[string]string{
 			"unknown":           "Ce lien n’existe pas. Vérifiez qu’il a été copié en entier.",
 			"expired":           "Ce lien a expiré. Demandez-en un nouveau à la personne qui l’a partagé.",
-			"revoked":           "Ce lien a été révoqué par la personne qui l’a partagé.",
+			"revoked":           "Ce lien a été révoqué.",
 			"off":               "Ce lien ne fonctionne plus : le partage est désactivé.",
 			"unavailable":       "Ce titre ne peut pas être lu pour le moment.",
 			"too_many_attempts": "Trop de tentatives depuis cette adresse. Réessayez dans quelques minutes.",

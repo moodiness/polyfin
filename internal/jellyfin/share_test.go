@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // shareSetup is a member allowed to share, on a server that allows it,
@@ -362,5 +364,63 @@ func TestStaleGuestsEnd(t *testing.T) {
 	s.handler.endStaleGuests()
 	if status, _ := s.start(t, token); status != http.StatusOK {
 		t.Errorf("a guest after a stale one: %d", status)
+	}
+}
+
+// The page of a sharer with a metadata language shows the poster and
+// backdrop of their language, as their apps do, with its name.
+func TestASharePageShowsTheSharersArtwork(t *testing.T) {
+	t.Parallel()
+	s := sharing(t)
+	poster, backdrop := pngOf(t, 20, 30), pngOf(t, 32, 18)
+	var translator *httptest.Server
+	translator = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "streams.fr", Name: "Streams fr", Version: "1", Types: []string{"movie"},
+				Resources: []stremio.Resource{{Name: "meta", IDPrefixes: []string{"tt"}}}})
+		case "/meta/movie/tt1000.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": stremio.Meta{ID: "tt1000", Type: "movie", Name: "Le Film",
+				Description: "Une histoire.", Poster: translator.URL + "/poster-fr.png", Background: translator.URL + "/backdrop-fr.png"}})
+		case "/poster-fr.png":
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(poster)
+		case "/backdrop-fr.png":
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(backdrop)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(translator.Close)
+	installed, err := s.addons.Install(t.Context(), addons.Shared(), translator.URL+"/manifest.json", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLanguage(t.Context(), addons.Shared(), installed.ID, "fr"); err != nil {
+		t.Fatal(err)
+	}
+	french := "fr"
+	if _, err := s.store.UpdateUser(t.Context(), s.user.ID, accounts.UserChanges{MetadataLanguage: &french}, nil); err != nil {
+		t.Fatal(err)
+	}
+	token, _ := s.link(t, 1)
+	// The description in the sharer's language is read in the background.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		status, page := s.guest(t, http.MethodGet, "/share/"+token, nil)
+		if status == http.StatusOK && strings.Contains(page, "<h1>Le Film</h1>") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("page in the sharer's language: %d\n%s", status, page)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	for kind, want := range map[string][]byte{"primary": poster, "backdrop": backdrop} {
+		status, body := s.guest(t, http.MethodGet, "/share/"+token+"/image/"+kind, nil)
+		if status != http.StatusOK || body != string(want) {
+			t.Errorf("%s: %d, the sharer's image %v", kind, status, body == string(want))
+		}
 	}
 }
