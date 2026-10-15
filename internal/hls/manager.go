@@ -485,6 +485,9 @@ type Manager struct {
 	lives     map[Key]*live
 	// audios are the conversions of tracks into segments (see audio.go).
 	audios map[AudioKey]*audioEncoding
+	// progressives are the conversions streamed as one file (see
+	// Progressive).
+	progressives map[*progressive]struct{}
 	// recordings are the recordings running, by key, with the function
 	// stopping each.
 	recordings map[Key]context.CancelFunc
@@ -519,6 +522,7 @@ func (m *Manager) Close() {
 	for _, cancel := range m.recordings {
 		cancel()
 	}
+	m.stopProgressives(func(Key) bool { return true })
 	m.mu.Unlock()
 	m.measuring.Wait()
 	m.stopWhere(func(Key, *encoding) bool { return true })
@@ -528,6 +532,9 @@ func (m *Manager) Close() {
 
 // Stop stops the encodings of a play session.
 func (m *Manager) Stop(session string) {
+	m.mu.Lock()
+	m.stopProgressives(func(key Key) bool { return key.Session == session })
+	m.mu.Unlock()
 	m.stopWhere(func(key Key, _ *encoding) bool { return key.Session == session })
 	m.stopLives(func(key Key, _ *live) bool { return key.Session == session })
 	m.stopAudios(func(key AudioKey, _ *audioEncoding) bool { return key.Session == session })
@@ -609,6 +616,14 @@ func (m *Manager) MayConvert(user, version string) bool {
 	return m.admits(Key{User: user, Version: version, Converts: true}, nil)
 }
 
+// MayConvertAlone reports whether a conversion streamed as one file may
+// start now: see Progressive.
+func (m *Manager) MayConvertAlone() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.admitsAlone(Key{Converts: true})
+}
+
 // admits reports whether an encoding of key may start: it copies the
 // video, or the playbacks whose video is converted are fewer than the
 // limit. A playback is what a user plays of a version, whatever the play
@@ -617,18 +632,46 @@ func (m *Manager) MayConvert(user, version string) bool {
 // counts already, and the live encoding leaving, about to be replaced, are
 // left out. The caller holds m.mu.
 func (m *Manager) admits(key Key, leaving *live) bool {
-	if !key.Converts || m.conversions == nil {
+	if !key.Converts {
 		return true
 	}
-	limit := m.conversions()
-	if limit <= 0 {
+	limit := m.limit()
+	return limit <= 0 || m.converting(&playback{key.User, key.Version}, leaving) < limit
+}
+
+// admitsAlone reports whether a conversion streamed as one file, of key,
+// may start: it copies the video, or the conversions under way are fewer
+// than the limit. It shares no playback: it runs an FFmpeg of its own,
+// next to the user's other plays of the version. The caller holds m.mu.
+func (m *Manager) admitsAlone(key Key) bool {
+	if !key.Converts {
 		return true
 	}
-	type playback struct{ user, version string }
-	converting := map[playback]bool{}
+	limit := m.limit()
+	return limit <= 0 || m.converting(nil, nil) < limit
+}
+
+// limit is the limit on conversions at once, 0 or less for none.
+func (m *Manager) limit() int {
+	if m.conversions == nil {
+		return 0
+	}
+	return m.conversions()
+}
+
+// playback is what a user plays of a version, as the limit on
+// conversions counts it.
+type playback struct{ user, version string }
+
+// converting counts the conversions of video under way: the playbacks
+// of HLS encodings, files' and channels', and each conversion streamed as
+// one file on its own. The playback shared, which counts already, and the
+// live encoding leaving are left out. The caller holds m.mu.
+func (m *Manager) converting(shared *playback, leaving *live) int {
+	playbacks := map[playback]bool{}
 	count := func(k Key) {
-		if k.Converts && (k.User != key.User || k.Version != key.Version) {
-			converting[playback{k.User, k.Version}] = true
+		if p := (playback{k.User, k.Version}); k.Converts && (shared == nil || p != *shared) {
+			playbacks[p] = true
 		}
 	}
 	for k := range m.encodings {
@@ -639,7 +682,13 @@ func (m *Manager) admits(key Key, leaving *live) bool {
 			count(k)
 		}
 	}
-	return len(converting) < limit
+	n := len(playbacks)
+	for p := range m.progressives {
+		if p.key.Converts {
+			n++
+		}
+	}
+	return n
 }
 
 // Init opens the initialization segment of a fragmented MP4 encoding.

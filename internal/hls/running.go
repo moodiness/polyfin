@@ -1,6 +1,10 @@
 package hls
 
-import "github.com/moodiness/polyfin/internal/metrics"
+import (
+	"time"
+
+	"github.com/moodiness/polyfin/internal/metrics"
+)
 
 // Running is an encoding under way, as the admin dashboard shows it.
 type Running struct {
@@ -17,10 +21,16 @@ type Running struct {
 	AudioCodec    string
 	AudioChannels int
 	AudioBitrate  int64
+	// Progressive is set for a conversion streamed as one file (see
+	// Manager.Progressive), Position telling how far into the version it
+	// has written.
+	Progressive bool
+	Position    time.Duration
 }
 
-// Running lists the encodings under way, of files and channels; the
-// recordings are left out. It never waits for an input being opened.
+// Running lists the encodings under way, of files and channels, and the
+// conversions streamed as one file; the recordings are left out. It never
+// waits for an input being opened.
 func (m *Manager) Running() []Running {
 	m.mu.Lock()
 	encodings := make([]*encoding, 0, len(m.encodings))
@@ -31,9 +41,16 @@ func (m *Manager) Running() []Running {
 	for _, l := range m.lives {
 		lives = append(lives, l)
 	}
+	running := make([]Running, 0, len(encodings)+len(lives)+len(m.progressives))
+	for p := range m.progressives {
+		r := Running{Key: p.key, Progressive: true, Position: time.Duration(p.position.Load())}
+		if p.opened {
+			r.describe(p.remux)
+		}
+		running = append(running, r)
+	}
 	m.mu.Unlock()
 
-	running := make([]Running, 0, len(encodings)+len(lives))
 	for _, e := range encodings {
 		r := Running{Key: e.key}
 		select {
@@ -68,27 +85,12 @@ func (r *Running) describe(remux Remux) {
 	r.AudioCodec, r.AudioChannels, r.AudioBitrate = remux.AudioCodec, remux.AudioChannels, remux.AudioBitrate
 }
 
-// Conversions counts the playbacks whose video is converted now, as the
-// limit counts them (see admits), and tells the limit, 0 for none.
+// Conversions counts the conversions of video under way, as the limit
+// counts them (see converting), and tells the limit, 0 for none.
 func (m *Manager) Conversions() (running, limit int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	type playback struct{ user, version string }
-	converting := map[playback]bool{}
-	for k := range m.encodings {
-		if k.Converts {
-			converting[playback{k.User, k.Version}] = true
-		}
-	}
-	for k := range m.lives {
-		if k.Converts {
-			converting[playback{k.User, k.Version}] = true
-		}
-	}
-	if m.conversions != nil {
-		limit = max(m.conversions(), 0)
-	}
-	return len(converting), limit
+	return m.converting(nil, nil), max(m.limit(), 0)
 }
 
 // The methods an encoding makes its video by, as the metrics count them:
