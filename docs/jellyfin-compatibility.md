@@ -199,6 +199,22 @@ With **Turn picture subtitles into text** on, a PGS or VobSub track read into te
 
 API keys, devices, user management, server configuration, the activity log, logs and scheduled tasks are covered in [administration](administration.md#api-keys-and-integrations).
 
+### Signing in to apps with Quick Connect
+
+Jellyfin apps ask for a name and a password, never for a code. An account with [two-step sign-in](users.md#two-step-sign-in), and an administrator while **Require two-step sign-in for administrators** is on, signs in to them with Quick Connect:
+
+1. In the app, choose Quick Connect on the sign-in screen: it shows a 6-digit code.
+2. Sign in to the admin app, with the password and the code of your authenticator app, and enter the app's code on the **Quick Connect** page: in the top bar for members, in the account menu for administrators.
+3. The app signs in as you.
+
+Quick Connect must stay on, under **Settings › General**. Typing the password in the app is refused as a wrong password is, and counts as one toward the client's failed attempts, so that the answer never tells whether the password was right. The apps signed in before two-step sign-in was turned on stay signed in; sign them out under **My account › Devices** if needed. API keys made by administrators work as before.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no second step of its own. Polyfin keeps Jellyfin's sign-in as it is for the apps, and asks for the code in the admin app only.
+
+**For app developers:** `/Users/AuthenticateByName` answers 401 for such an account, as for a wrong password; `/Users/AuthenticateWithQuickConnect` signs it in once a request is approved.
+
 ### Client addresses behind a reverse proxy
 
 Like Jellyfin's own Known proxies setting, **Known proxies**, under **Settings › Security**, lists the reverse proxies whose forwarded headers name the client of a request. See [Known proxies](reverse-proxy.md#known-proxies).

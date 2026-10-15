@@ -69,7 +69,7 @@ On a movie's or an episode's page, it adds a **Share** button before the ⋮ but
 A user signed in to the web client, administrator or member, arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.
 
 - This opens a session in the admin app, logged as a sign-in. A member's session opens their own pages only, as when they sign in with their password.
-- It works only for the signed-in device of a user who may sign in now. It does not work for an API key, which has no user, for a disabled or blocked account, or outside the account's allowed hours.
+- It works only for the signed-in device of a user who may sign in now. It does not work for an API key, which has no user, for a disabled or blocked account, outside the account's allowed hours, or for an account with [two-step sign-in](users.md#two-step-sign-in), or an administrator required to set it up, which signs in with its password and its code.
 - An unknown token counts as a wrong password toward the client's failed attempts.
 - It is tried once each time the admin app is opened, so signing out of the admin app holds until then.
 - Without a token it may use, the admin app shows its sign-in page.

@@ -25,7 +25,7 @@ Moving from a Jellyfin, Emby or Plex server? **Import from another server**, und
 Jellyfin apps sign in with these accounts, in one of two ways:
 
 - **Password:** the account's user name and password.
-- **Quick Connect:** the app shows a 6-digit code, and a signed-in user approves it on the admin app's **Quick Connect** page.
+- **Quick Connect:** the app shows a 6-digit code, and a signed-in user approves it on the admin app's **Quick Connect** page. An account with [two-step sign-in](users.md#two-step-sign-in) signs in to apps this way only.
 
 ### Change a password
 

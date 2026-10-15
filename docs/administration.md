@@ -16,7 +16,9 @@ A bar at the top holds the sections, for administrators:
 
 The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them. On a phone, the bar keeps the logo, the search and a menu button that opens all of these.
 
-**My account** has these sections: **Statistics**, the hours you watched, your most played titles, apps and devices, and your recent playbacks, with **Export CSV** (see [Statistics](statistics.md#my-account)), **Tracking** (see [Tracking services](tracking.md)), **Continue Watching** and **Hidden titles**, **Reminders**, the programmes and series you asked to be reminded of from the web client, with **Delete**, shown with the **Live TV** permission (see [Programme reminders](live-tv.md#programme-reminders)), **Notifications** (see [Notifications](notifications.md)), with **Remind me before** and **Also show reminders on my apps** under the targets, **Devices**, the apps signed in with the account, and **Password**. Signing out a device asks first.
+**My account** has these sections: **Statistics**, the hours you watched, your most played titles, apps and devices, and your recent playbacks, with **Export CSV** (see [Statistics](statistics.md#my-account)), **Tracking** (see [Tracking services](tracking.md)), **Continue Watching** and **Hidden titles**, **Reminders**, the programmes and series you asked to be reminded of from the web client, with **Delete**, shown with the **Live TV** permission (see [Programme reminders](live-tv.md#programme-reminders)), **Notifications** (see [Notifications](notifications.md)), with **Remind me before** and **Also show reminders on my apps** under the targets, **Devices**, the apps signed in with the account, **Password**, and **Two-step sign-in**, a code from an authenticator app after the password (see [Two-step sign-in](users.md#two-step-sign-in)). Signing out a device asks first.
+
+Signing in to the admin app takes the account's name and password, then, for an account with two-step sign-in, the code of its authenticator app or a recovery code. Administrators can require it of administrators under **Settings › Security**, and turn it off for a user who lost their phone (see [For administrators](users.md#for-administrators)).
 
 **Search** (⌘K on a Mac, Ctrl K elsewhere, or `/`) finds pages, settings, users and sources by name, with or without accents. Use the arrows and Enter to open one, Escape to close it.
 
@@ -304,7 +306,8 @@ Jellyfin apps can read and save the server configuration. It answers Polyfin's s
 
 The activity log records:
 
-- sign-ins and failed sign-ins;
+- sign-ins and failed sign-ins, wrong codes of two-step sign-in included, and sign-ins with a recovery code;
+- two-step sign-in turned on or off, and by which administrator for another user;
 - playback start and stop;
 - users created, changed or deleted, and accounts that reach their end date (see [Ending an account](users.md#ending-an-account));
 - user groups created, changed, naming the sections changed, as "Group Kids was changed: Access, Allowed hours", or deleted, and members added, removed or no longer following their group, as "sam no longer follows the group Kids: changed from Jellyfin Web" (see [User groups](users.md#user-groups));
@@ -342,6 +345,6 @@ Their schedules cannot be changed.
 
 1. A user on the local network asks for a PIN from the app's sign-in screen.
 2. The PIN, valid 30 minutes, is logged and shown on the user's page under **Users**, as there is no server file to read it from.
-3. Entering it in the app makes it the user's password and signs them out everywhere.
+3. Entering it in the app makes it the user's password and signs them out everywhere. It resets the password only: an account with [two-step sign-in](users.md#two-step-sign-in) keeps it, and still signs in to apps with Quick Connect.
 
 Wrong PINs count as failed sign-ins. Asked from outside the local network, the answer is the same and no PIN is made, as in Jellyfin. Behind a reverse proxy on the local network, list it under **Known proxies**: otherwise every request counts as coming from it, and so from the local network (see [Known proxies](reverse-proxy.md#known-proxies)).

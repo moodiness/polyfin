@@ -735,9 +735,59 @@ The group applies after the version order settings hide versions, and before the
 
 - PlaybackInfo reports the conversion of a taller version as Jellyfin reports a resolution limit (`VideoResolutionNotSupported`), describing its video at the size sent.
 
+## Two-step sign-in
+
+Each user can ask for a second step after their password: a 6-digit code from an authenticator app on their phone, such as the one their phone's password manager includes. Once it is on, the password alone signs in nowhere.
+
+### Turning it on
+
+Under **My account › Two-step sign-in**, **Turn on** shows a new key, as a QR code and as text, with a link that opens an authenticator app on the same device. The QR code is drawn by Polyfin itself: the key goes to no other service. Scanning it adds the account to the app, named Polyfin. Two-step sign-in is on only once a code the app shows is entered: a key that was never confirmed signs in no one, and **Turn on** again makes a new one.
+
+Then come ten recovery codes, shown this once, written like `7k2m-q9xd-4tbh-z0ce`: 16 letters and digits in four groups, without i, l, o or u, which look like other characters. Each signs in once in place of a code from the app, should the phone be lost, typed in capitals or not, with or without its dashes, or with spaces in their place. Polyfin keeps only their hashes, and can never show them again: keep them in a password manager, or printed. The section counts the codes left. **New recovery codes** makes ten new ones, which void the former ones.
+
+**Turn off** and **New recovery codes** ask first for a code of the app, a recovery code, or the password.
+
+### Signing in with a code
+
+In the admin app, after a right password, the sign-in page asks for the code. No session exists until it is entered: the step between the two belongs to the browser that entered the password, and ends after 5 minutes, after which the password is asked again. A recovery code is entered in the same field. The activity log records each sign-in with a recovery code.
+
+- The app's code changes every 30 seconds. Polyfin accepts the codes of the 30 seconds before and after too, for a phone whose clock is a little off.
+- Each code is accepted once: entered again, even within its 30 seconds, it is refused.
+- Wrong codes count as wrong passwords do toward the client's failed attempts (429 once too many), and also toward the account's, whatever the client, with the same limit. A right password between wrong codes does not reset them. They do not count toward **Block an account after this many wrong passwords (0 = never)**.
+- The key is encrypted with `POLYFIN_SECRET_KEY`, like the other stored keys, and never shown again once set up (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
+
+Turning it on or off keeps the sessions already open, in the admin app and in Jellyfin apps: sign out the devices you no longer trust under **My account › Devices**.
+
+### Jellyfin apps
+
+Jellyfin apps, the web client included, cannot ask for a code. An account with two-step sign-in signs in to them with Quick Connect, approved on the admin app's **Quick Connect** page, which itself asked for the code (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect)). The password alone is refused there as a wrong password is. API keys made by administrators work as before. The web client does not open an admin app session for such an account: the admin app asks for the password and the code (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
+
+### For administrators
+
+**Require two-step sign-in for administrators**, under **Settings › Security**, off by default, makes the second step a must for administrators:
+
+- an administrator without it is shown the QR code right after their password, and gets a session once a code of the app confirms it, with their recovery codes;
+- their password alone signs in to no Jellyfin app, set up or not: Quick Connect does;
+- they cannot turn theirs off under **My account**;
+- sessions already open stay, until they sign out.
+
+A user who lost their phone and their recovery codes asks an administrator: **Turn off two-step sign-in**, on their page under **Users**, turns it off after a confirmation. The activity log records who turned it off for whom. They then sign in with their password alone, and set it up again from **My account**, or right after their password if it is required of them. An administrator turns their own off from **My account**.
+
+A reset of a forgotten password by PIN from a Jellyfin app changes the password only: two-step sign-in stays on (see [Forgotten password](administration.md#forgotten-password)).
+
+A database restored under another `POLYFIN_SECRET_KEY` holds keys that the current key cannot read. Their users still sign in with a recovery code, and **My account** says so; an administrator can turn theirs off, and **System › Health** names them (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
+
+**For app developers:**
+
+- `POST /admin/api/session` answers `{"user": …}` without a second step, `{"twoStep": "code"}`, or `{"twoStep": "setup", "setup": {"secret", "uri", "qr"}}` for an administrator setting it up, with an HttpOnly cookie for the step. `POST /admin/api/session/two-step` with `{"code"}` then opens the session (`invalid_code`, or 401 `two_step_expired`), with `recoveryCodes` after a setup.
+- `GET /admin/api/account/two-step` answers `on`, `recoveryCodes` (those left), `unreadable` and `required`. `POST …/two-step/setup` answers the key, its `otpauth://` address and its QR code as rows of `0` and `1`; `POST …/two-step/confirm` with `{"code"}` turns it on and answers the recovery codes. `POST …/two-step/recovery-codes` and `POST …/two-step/off` take `{"code"}` or `{"password"}`.
+- `POST /admin/api/users/{id}/two-step/off`, for administrators, answers the user, whose `twoStep` tells whether it is on.
+- The codes follow RFC 6238: HMAC-SHA-1, 30-second steps, 6 digits, a 160-bit key.
+- A recovery code holds 80 random bits, in lowercase Crockford base32. Polyfin stores its SHA-256 hash: at 80 bits, a copy of the database does not let anyone search it out.
+
 ## Security settings
 
-**Settings › Security** gathers seven settings, and **Settings › Diagnostics** an eighth. They apply at once, without a restart.
+**Settings › Security** gathers eight settings, and **Settings › Diagnostics** a ninth. They apply at once, without a restart.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -746,6 +796,7 @@ The group applies after the version order settings hide versions, and before the
 | **Allow share links** | **Settings › Security** | Off | Lets the users with **Can share titles** give a movie or an episode to someone without an account, through a link that expires (see [Share links](#share-links)). Off, every link is refused, without being deleted. |
 | **Import connected accounts every** | **Settings › Security** | 6 h (or 15 min, 30 min, 1 h, 2 h, 3 h, 12 h, 24 h) | How often the apps users stay connected to, and the watch histories they import from tracking services, are imported again (see [How often connected accounts are imported](#how-often-connected-accounts-are-imported)). |
 | **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an account for 15 minutes after that many wrong passwords in a row. |
+| **Require two-step sign-in for administrators** | **Settings › Security** | Off | Administrators must sign in with a code from an authenticator app after their password (see [Two-step sign-in](#two-step-sign-in)). |
 | **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
 | **Known proxies** | **Settings › Security** | None (up to 64 addresses, networks or host names) | The reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names the client of their requests. |
 | **Detailed log** | **Settings › Diagnostics** | Off | Logs at the `debug` level until turned off. |
