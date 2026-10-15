@@ -219,7 +219,8 @@ func (h *Handler) played(ctx context.Context, user accounts.User, opened account
 		return library.Item{}, err
 	}
 	switch item.Kind {
-	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindReplay, library.KindChannel, library.KindTrack, library.KindAudiobook:
+	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindReplay, library.KindChannel, library.KindTrack, library.KindAudiobook,
+		library.KindExtra, library.KindThemeSong:
 		return item, nil
 	}
 	return library.Item{}, library.ErrNotFound
@@ -320,7 +321,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		h.livePlaybackInfo(w, r, user, item, opened, request)
 		return
 	}
-	if library.AudioKind(item.Kind) {
+	if audioItem(item.Kind) {
 		h.audioPlaybackInfo(w, r, user, item, request)
 		return
 	}

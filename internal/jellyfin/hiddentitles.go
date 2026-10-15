@@ -88,7 +88,8 @@ func (h *Handler) removeResumeOf(ctx context.Context, user accounts.User, item l
 		if targets, err = h.markTargets(ctx, user, item); err != nil {
 			return err
 		}
-	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindRecording, library.KindReplay, library.KindAudiobook:
+	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindRecording, library.KindReplay, library.KindAudiobook,
+		library.KindExtra:
 		targets = []library.Item{item}
 	default:
 		return errNoResume

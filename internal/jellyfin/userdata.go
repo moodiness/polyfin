@@ -117,7 +117,8 @@ func (s userState) of(item library.Item) UserItemData {
 	data := s.data[item.ID]
 	result.IsFavorite, result.Rating, result.Likes = data.Favorite, data.Rating, data.Likes()
 	switch item.Kind {
-	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindRecording, library.KindReplay, library.KindTrack, library.KindAudiobook:
+	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindRecording, library.KindReplay, library.KindTrack, library.KindAudiobook,
+		library.KindExtra, library.KindThemeSong:
 		result.PlaybackPositionTicks = int64(data.Position / 100)
 		result.PlayCount = data.PlayCount
 		result.Played = data.Played
@@ -278,7 +279,8 @@ func (h *Handler) markTargets(ctx context.Context, user accounts.User, item libr
 	var episodes []library.Item
 	var err error
 	switch item.Kind {
-	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindRecording, library.KindReplay, library.KindTrack, library.KindAudiobook:
+	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindRecording, library.KindReplay, library.KindTrack, library.KindAudiobook,
+		library.KindExtra, library.KindThemeSong:
 		return []library.Item{item}, nil
 	case library.KindAlbum, library.KindMusicPlaylist:
 		// As Jellyfin marks a folder's tracks.
@@ -471,7 +473,7 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 	// find their speech, and local episodes without an intro or credits
 	// have them looked for in their season's audio; tracks prepare the next
 	// track as they start, as it comes soon.
-	audio := library.AudioKind(item.Kind)
+	audio := audioItem(item.Kind)
 	if !audio && event != playbackStopped && (positionKnown || event == playbackStarted) {
 		h.prepareNearTheEnd(user, deviceID, item, runtime, state.Position)
 	}
@@ -495,8 +497,8 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 		switch {
 		case event == playbackStarted:
 			// Songs keep no resume point; videos and audiobooks do.
-			d.Start(now, item.Kind != library.KindTrack)
-		case positionKnown && item.Kind == library.KindTrack:
+			d.Start(now, !song(item.Kind))
+		case positionKnown && song(item.Kind):
 			d.Reached(d.ReachSong(state.Position, runtime, thresholds), now)
 		case positionKnown && item.Kind == library.KindAudiobook:
 			d.Reached(d.ReachAudiobook(state.Position, runtime), now)

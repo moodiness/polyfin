@@ -258,6 +258,7 @@ func New(options Options) *Handler {
 	h.audioRoutes(rt)
 	h.personRoutes(rt)
 	h.auxiliaryRoutes(rt)
+	h.extrasRoutes(rt)
 	h.liveTvRoutes(rt)
 	h.playbackRoutes(rt)
 	h.userDataRoutes(rt)

@@ -45,11 +45,6 @@ func (h *Handler) auxiliaryRoutes(rt *router) {
 		signedIn(http.MethodGet, similar, h.similarItems)
 	}
 	signedIn(http.MethodGet, "/Items/{itemId}/Collections", h.itemCollections)
-	// Addons give trailers, which apps get as RemoteTrailers, and no other
-	// extras: no local trailers, special features or theme media.
-	signedIn(http.MethodGet, "/Items/{itemId}/SpecialFeatures", h.itemExtras)
-	signedIn(http.MethodGet, "/Items/{itemId}/LocalTrailers", h.itemExtras)
-	signedIn(http.MethodGet, "/Items/{itemId}/ThemeMedia", h.themeMedia)
 	signedIn(http.MethodGet, "/Items/{itemId}/Intros", h.intros)
 	signedIn(http.MethodGet, "/Users/{userId}/Items/{itemId}/Intros", h.intros)
 }
@@ -1119,35 +1114,9 @@ func (h *Handler) itemCollections(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, emptyResult{Items: []struct{}{}, StartIndex: startIndex})
 }
 
-func (h *Handler) itemExtras(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.itemRequest(w, r, func(bindErrors) {}); ok {
-		writeJSON(w, http.StatusOK, []struct{}{})
-	}
-}
-
 // intros lists the videos played before an item: none in Polyfin.
 func (h *Handler) intros(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.itemRequest(w, r, func(bindErrors) {}); ok {
 		writeJSON(w, http.StatusOK, emptyResult{Items: []struct{}{}})
 	}
-}
-
-type themeMediaResult struct {
-	OwnerId          string
-	Items            []struct{}
-	TotalRecordCount int
-	StartIndex       int
-}
-
-func (h *Handler) themeMedia(w http.ResponseWriter, r *http.Request) {
-	id, ok := h.itemRequest(w, r, func(errs bindErrors) { errs.bool(r, "inheritFromParent") })
-	if !ok {
-		return
-	}
-	owner := themeMediaResult{OwnerId: id.String(), Items: []struct{}{}}
-	writeJSON(w, http.StatusOK, struct {
-		ThemeVideosResult     themeMediaResult
-		ThemeSongsResult      themeMediaResult
-		SoundtrackSongsResult themeMediaResult
-	}{owner, owner, themeMediaResult{OwnerId: accounts.ID{}.String(), Items: []struct{}{}}})
 }

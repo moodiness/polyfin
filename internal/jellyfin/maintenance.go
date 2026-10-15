@@ -34,9 +34,9 @@ func (h *Handler) recordPlayback(ctx context.Context, user accounts.User, device
 		title = item.Artists[0].Name + " - " + title
 	}
 	switch {
-	case library.AudioKind(item.Kind) && event == playbackStarted:
+	case audioItem(item.Kind) && event == playbackStarted:
 		h.Activity.AudioStarted(ctx, user, title, item.ID.String(), device)
-	case library.AudioKind(item.Kind):
+	case audioItem(item.Kind):
 		h.Activity.AudioStopped(ctx, user, title, item.ID.String(), device)
 	case event == playbackStarted:
 		h.Activity.PlaybackStarted(ctx, user, title, item.ID.String(), device)

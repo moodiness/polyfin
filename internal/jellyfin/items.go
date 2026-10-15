@@ -94,6 +94,8 @@ type BaseItemDto struct {
 	ProviderIds              *map[string]string `json:",omitempty"`
 	IsFolder                 bool
 	ParentId                 string `json:",omitempty"`
+	// ExtraType is a local folder's extra's (see extras.go).
+	ExtraType                string `json:",omitempty"`
 	Type                     string
 	People                   *[]BaseItemPerson `json:",omitempty"`
 	Studios                  *[]NameGuidPair   `json:",omitempty"`
@@ -209,7 +211,7 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 		}
 		return
 	}
-	if library.AudioKind(item.Kind) {
+	if audioItem(item.Kind) {
 		h.addAudioSources(r, user, dto, item, detail)
 		return
 	}
@@ -329,6 +331,10 @@ var itemTypes = map[library.Kind]string{
 	library.KindTrack:         "Audio",
 	library.KindAudiobook:     "AudioBook",
 	library.KindMusicPlaylist: "Playlist",
+	// Jellyfin's extras are videos, and its theme songs audio, told
+	// apart by their ExtraType.
+	library.KindExtra:     "Video",
+	library.KindThemeSong: "Audio",
 }
 
 // typeAliases are the other names apps ask item types by: Jellyfin's
@@ -505,9 +511,10 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 	if detail || fields.has("Chapters") {
 		dto.Chapters = &[]ChapterInfo{}
 	}
-	if (detail || fields.has("ParentId")) && item.ParentID != (accounts.ID{}) {
+	if (detail || fields.has("ParentId") || item.ExtraType != "") && item.ParentID != (accounts.ID{}) {
 		dto.ParentId = item.ParentID.String()
 	}
+	dto.ExtraType = item.ExtraType
 	if detail {
 		dto.Etag = nameID("etag", item.ID.String())
 		dto.ExternalUrls = new(externalURLs(item.ProviderIDs, item.Kind))
@@ -593,7 +600,7 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 		dto.ImageTags["Primary"] = library.ImageTag(item.Images.Primary)
 		ratio := 2.0 / 3.0
 		switch item.Kind {
-		case library.KindEpisode, library.KindVideo, library.KindProgram, library.KindRecording, library.KindReplay:
+		case library.KindEpisode, library.KindVideo, library.KindProgram, library.KindRecording, library.KindReplay, library.KindExtra:
 			ratio = 16.0 / 9.0
 		case library.KindChannel, library.KindReplayFolder:
 			// Channel logos are square, as Jellyfin's tuners give them.
@@ -716,16 +723,31 @@ func itemTypeFilter(r *http.Request) func(library.Item) bool {
 // have none.
 func mediaType(kind library.Kind) string {
 	switch kind {
-	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindChannel, library.KindProgram, library.KindRecording, library.KindReplay:
+	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindChannel, library.KindProgram, library.KindRecording, library.KindReplay,
+		library.KindExtra:
 		return "Video"
-	case library.KindTrack, library.KindAudiobook, library.KindMusicPlaylist:
+	case library.KindTrack, library.KindAudiobook, library.KindMusicPlaylist, library.KindThemeSong:
 		return "Audio"
 	}
 	return "Unknown"
 }
 
 // versioned reports whether items of kind play the versions addons or
-// local folders list for them: movies, home videos and episodes.
+// local folders list for them: movies, home videos, episodes and the
+// videos of local folders' extras.
 func versioned(kind library.Kind) bool {
-	return kind == library.KindMovie || kind == library.KindVideo || kind == library.KindEpisode
+	return kind == library.KindMovie || kind == library.KindVideo || kind == library.KindEpisode || kind == library.KindExtra
+}
+
+// audioItem reports whether items of kind play as audio: tracks,
+// audiobooks, and the theme songs of local folders, whose one version is
+// their file (see library.Service.Versions).
+func audioItem(kind library.Kind) bool {
+	return library.AudioKind(kind) || kind == library.KindThemeSong
+}
+
+// song reports whether items of kind keep no resume point, and count as
+// played as songs do: tracks and theme songs.
+func song(kind library.Kind) bool {
+	return kind == library.KindTrack || kind == library.KindThemeSong
 }

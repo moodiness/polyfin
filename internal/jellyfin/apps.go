@@ -36,8 +36,6 @@ func (h *Handler) appRoutes(rt *router) {
 	signedIn(http.MethodPost, "/LiveStreams/Close", h.closeLiveStream)
 	// Like the download route, which it serves as: see streamAccess.
 	rt.handle(http.MethodGet, "/Items/{itemId}/File", http.HandlerFunc(h.itemFile))
-	signedIn(http.MethodGet, "/Items/{itemId}/ThemeSongs", h.themeItems)
-	signedIn(http.MethodGet, "/Items/{itemId}/ThemeVideos", h.themeItems)
 	signedIn(http.MethodGet, "/Items/{itemId}/Images", h.itemImages)
 	signedIn(http.MethodGet, "/FallbackFont/Fonts", h.fallbackFonts)
 	signedIn(http.MethodGet, "/FallbackFont/Fonts/{name}", h.fallbackFont)
@@ -459,13 +457,6 @@ func (h *Handler) closeLiveStream(w http.ResponseWriter, r *http.Request) {
 
 // themeItems lists an item's theme songs or videos: addons give none. The
 // result names the item as their owner, as Jellyfin's does.
-func (h *Handler) themeItems(w http.ResponseWriter, r *http.Request) {
-	id, ok := h.itemRequest(w, r, func(errs bindErrors) { errs.bool(r, "inheritFromParent") })
-	if ok {
-		writeJSON(w, http.StatusOK, themeMediaResult{OwnerId: id.String(), Items: []struct{}{}})
-	}
-}
-
 // ImageInfo is Jellyfin's description of one of an item's images. Path,
 // which Jellyfin gives as the file or address the image comes from, is
 // left out: Polyfin's artwork is the addons', or a local folder's, whose

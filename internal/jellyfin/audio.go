@@ -330,7 +330,7 @@ func (h *Handler) audioOf(w http.ResponseWriter, r *http.Request, converted bool
 		return audioRequest{}, false
 	}
 	item, err := h.played(r.Context(), user, opened)
-	if err != nil || !library.AudioKind(item.Kind) {
+	if err != nil || !audioItem(item.Kind) {
 		processingError(w, http.StatusNotFound)
 		return audioRequest{}, false
 	}
