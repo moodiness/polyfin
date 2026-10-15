@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Variant describes the stream a master playlist offers.
+// Variant describes a stream a master playlist offers.
 type Variant struct {
 	// Bandwidth is in bits per second.
 	Bandwidth int64
@@ -18,33 +18,43 @@ type Variant struct {
 	FrameRate     float64
 	// Range is SDR, PQ or HLG.
 	Range string
-	// Subtitles are the subtitle tracks offered with the variant.
-	Subtitles []Rendition
+	// URI is the address of its media playlist.
+	URI string
 }
 
-// WriteMaster writes a master playlist with one variant, whose media
-// playlist is at uri.
-func WriteMaster(w io.Writer, v Variant, uri string) error {
-	attributes := []string{"BANDWIDTH=" + strconv.FormatInt(v.Bandwidth, 10), "AVERAGE-BANDWIDTH=" + strconv.FormatInt(v.Bandwidth, 10)}
-	if v.Range != "" {
-		attributes = append(attributes, "VIDEO-RANGE="+v.Range)
-	}
-	if v.Codecs != "" {
-		attributes = append(attributes, `CODECS="`+v.Codecs+`"`)
-	}
-	if v.Width > 0 && v.Height > 0 {
-		attributes = append(attributes, fmt.Sprintf("RESOLUTION=%dx%d", v.Width, v.Height))
-	}
-	if v.FrameRate > 0 {
-		attributes = append(attributes, "FRAME-RATE="+strconv.FormatFloat(v.FrameRate, 'f', -1, 64))
-	}
+// WriteMaster writes a master playlist offering variants, in order, with
+// the subtitle tracks they share. Players that do not choose
+// play the first. Several variants are cut on the same plan, each segment
+// starting on a keyframe, so that a player switches between them at any
+// segment: the playlist says so with EXT-X-INDEPENDENT-SEGMENTS.
+func WriteMaster(w io.Writer, variants []Variant, subtitles []Rendition) error {
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
-	if len(v.Subtitles) > 0 {
-		writeRenditions(&b, v.Subtitles)
-		attributes = append(attributes, `SUBTITLES="subs"`)
+	if len(variants) > 1 {
+		b.WriteString("#EXT-X-INDEPENDENT-SEGMENTS\n")
 	}
-	fmt.Fprintf(&b, "#EXT-X-STREAM-INF:%s\n%s\n", strings.Join(attributes, ","), uri)
+	if len(subtitles) > 0 {
+		writeRenditions(&b, subtitles)
+	}
+	for _, v := range variants {
+		attributes := []string{"BANDWIDTH=" + strconv.FormatInt(v.Bandwidth, 10), "AVERAGE-BANDWIDTH=" + strconv.FormatInt(v.Bandwidth, 10)}
+		if v.Range != "" {
+			attributes = append(attributes, "VIDEO-RANGE="+v.Range)
+		}
+		if v.Codecs != "" {
+			attributes = append(attributes, `CODECS="`+v.Codecs+`"`)
+		}
+		if v.Width > 0 && v.Height > 0 {
+			attributes = append(attributes, fmt.Sprintf("RESOLUTION=%dx%d", v.Width, v.Height))
+		}
+		if v.FrameRate > 0 {
+			attributes = append(attributes, "FRAME-RATE="+strconv.FormatFloat(v.FrameRate, 'f', -1, 64))
+		}
+		if len(subtitles) > 0 {
+			attributes = append(attributes, `SUBTITLES="subs"`)
+		}
+		fmt.Fprintf(&b, "#EXT-X-STREAM-INF:%s\n%s\n", strings.Join(attributes, ","), v.URI)
+	}
 	_, err := io.WriteString(w, b.String())
 	return err
 }

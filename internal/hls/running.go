@@ -11,6 +11,10 @@ type Running struct {
 	Key Key
 	// Live is set for the encoding of a channel, read as it comes.
 	Live bool
+	// Current is set for the variant of its playback asked for last: the
+	// quality the player plays now. The playback's other variants run on a
+	// few seconds, and keep the segments they made.
+	Current bool
 	// Opened is set once its input is open: what follows is known then.
 	Opened bool
 	// Video is what the video is converted to, nil when it is copied.
@@ -53,6 +57,7 @@ func (m *Manager) Running() []Running {
 
 	for _, e := range encodings {
 		r := Running{Key: e.key}
+		r.Current = e.playback.playing(e)
 		select {
 		case <-e.opened:
 			if e.err == nil {

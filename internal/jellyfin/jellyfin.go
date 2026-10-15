@@ -182,6 +182,10 @@ type Handler struct {
 	// sizes remembers what set the size of the video each play session
 	// converts, for the admin dashboard.
 	sizes *cache.Cache[string, playback.ConversionSize]
+	// qualities remembers the heights of the qualities the master playlist
+	// of each play session offers, when it offers several, for the admin
+	// dashboard.
+	qualities *cache.Cache[string, []int]
 	// plays remembers each device's last PlaybackInfo profile and bitrate,
 	// which item details name versions for (see detailsNamer).
 	plays *cache.Cache[accounts.ID, devicePlay]
@@ -209,6 +213,7 @@ func New(options Options) *Handler {
 		viewing:        cache.New[accounts.ID, accounts.ID](5000, 12*time.Hour),
 		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 		sizes:          cache.New[string, playback.ConversionSize](2000, 12*time.Hour),
+		qualities:      cache.New[string, []int](2000, 12*time.Hour),
 		plays:          cache.New[accounts.ID, devicePlay](1000, 30*24*time.Hour),
 		guests:         newGuestPlays(),
 		downloads:      newDownloadPlays(),

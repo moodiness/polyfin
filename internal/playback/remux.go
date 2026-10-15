@@ -41,6 +41,11 @@ type Remux struct {
 	// converted to; nil copies them.
 	ConvertVideo *VideoConversion
 	ConvertAudio *AudioConversion
+	// Variant is the quality played of converted video: 0 for
+	// ConvertVideo, else its lower step of that number (see
+	// VideoConversion.Steps), which the master playlist offers when apps
+	// may step down.
+	Variant int
 	// Burn is the FFmpeg index of the image subtitle burned into converted
 	// video, nil for none; BurnFile, the address of an image subtitle file
 	// burned in instead, which FFmpeg reads beside the version.
@@ -241,21 +246,53 @@ func streamOf(analysis media.Analysis, index int) (media.Stream, bool) {
 	return media.Stream{}, false
 }
 
-// Variant describes a remux in a master playlist.
-func (s *Service) Variant(ctx context.Context, remux Remux) (hls.Variant, error) {
+// Variants describe a remux in a master playlist: the quality it plays,
+// then, when lower is set and it converts the video, the lower ones apps
+// may step down to (see VideoConversion.Steps), each the remux with that
+// Variant.
+func (s *Service) Variants(ctx context.Context, remux Remux, lower bool) ([]hls.Variant, error) {
 	analysis, err := s.Analyze(ctx, remux.Version)
 	if err != nil {
-		return hls.Variant{}, err
+		return nil, err
 	}
 	video, ok := videoOf(analysis)
 	if !ok {
-		return hls.Variant{}, ErrNotRemuxable
+		return nil, ErrNotRemuxable
 	}
 	bandwidth := analysis.Bitrate
 	if bandwidth <= 0 && analysis.Duration > 0 {
 		bandwidth = int64(float64(analysis.Size*8) / analysis.Duration.Seconds())
 	}
-	return variant(analysis, video, bandwidth, remux), nil
+	variants := []hls.Variant{variant(analysis, video, bandwidth, remux)}
+	if lower && remux.ConvertVideo != nil {
+		for i := range remux.ConvertVideo.Steps(video.Width, video.Height) {
+			step := remux
+			step.Variant = i + 1
+			variants = append(variants, variant(analysis, video, bandwidth, step))
+		}
+	}
+	return variants, nil
+}
+
+// conversion is what the remux converts video to, at its Variant: nil
+// when it copies it, or when the conversion has no such variant.
+func (r Remux) conversion(video media.Stream) *VideoConversion {
+	c := r.ConvertVideo
+	if c == nil || r.Variant == 0 {
+		return c
+	}
+	steps := c.Steps(video.Width, video.Height)
+	if r.Variant < 0 || r.Variant > len(steps) {
+		return nil
+	}
+	return &steps[r.Variant-1]
+}
+
+// HasVariant reports whether the remux's Variant exists: the first, or a
+// lower step of converted video, whose number the source's size leaves
+// as it is.
+func (r Remux) HasVariant() bool {
+	return r.Variant == 0 || r.conversion(media.Stream{}) != nil
 }
 
 // variant describes in a master playlist what remux makes of video, the
@@ -268,7 +305,7 @@ func variant(analysis media.Analysis, video media.Stream, bandwidth int64, remux
 		v.FrameRate = math.Round(video.FrameRate*1000) / 1000
 	}
 	codecs := []string{videoCodecString(video)}
-	if c := remux.ConvertVideo; c != nil {
+	if c := remux.conversion(video); c != nil {
 		// What the encoder writes, at most its peak rate with the audio.
 		codecs[0] = c.CodecString(v.FrameRate)
 		v.Width, v.Height, v.Range = c.Width, c.Height, "SDR"
@@ -371,11 +408,17 @@ func audioCodecString(audio media.Stream) string {
 
 // RemuxInit opens the initialization segment of a fragmented MP4 remux.
 func (s *Service) RemuxInit(ctx context.Context, remux Remux) (*os.File, error) {
+	if !remux.HasVariant() {
+		return nil, hls.ErrNotFound
+	}
 	return s.segments.Init(ctx, remux.key(), s.remuxOpener(remux))
 }
 
-// RemuxSegment opens segment n of a remux.
+// RemuxSegment opens segment n of a remux, at its Variant.
 func (s *Service) RemuxSegment(ctx context.Context, remux Remux, n int) (*os.File, error) {
+	if !remux.HasVariant() {
+		return nil, hls.ErrNotFound
+	}
 	return s.segments.Segment(ctx, remux.key(), s.remuxOpener(remux), n)
 }
 
@@ -423,7 +466,7 @@ func (s *Service) MayConvert(user, version accounts.ID) bool {
 
 func (r Remux) key() hls.Key {
 	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format, User: r.User.String(),
-		Version: r.Version.ID.String(), Converts: r.ConvertVideo != nil}
+		Version: r.Version.ID.String(), Converts: r.ConvertVideo != nil, Variant: r.Variant}
 }
 
 // remuxOpener reads the version through the source cache, which keeps
@@ -521,16 +564,16 @@ func audioOf(analysis media.Analysis, index int) int {
 }
 
 // convert sets what an encoding of video tags and converts its video and
-// audio to, tuned by t.
+// audio to, at the remux's Variant, tuned by t.
 func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 	codec := video.Codec
-	if remux.ConvertVideo != nil {
-		codec = remux.ConvertVideo.Codec
+	if c := remux.conversion(video); c != nil {
+		codec = c.Codec
 	}
 	if remux.Format == hls.FMP4 {
 		r.VideoTag = RemuxTag(codec, "mp4")
 	}
-	if c := remux.ConvertVideo; c != nil {
+	if c := remux.conversion(video); c != nil {
 		rate := video.AverageRate
 		if rate <= 0 {
 			rate = video.FrameRate

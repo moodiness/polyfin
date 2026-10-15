@@ -920,7 +920,8 @@ func (h *Handler) livePlaylist(w http.ResponseWriter, r *http.Request, remux pla
 		var variant hls.Variant
 		if variant, err = h.Playback.LiveVariant(r.Context(), remux); err == nil {
 			var b strings.Builder
-			err = hls.WriteMaster(&b, variant, "live.m3u8?"+r.URL.RawQuery)
+			variant.URI = "live.m3u8?" + r.URL.RawQuery
+			err = hls.WriteMaster(&b, []hls.Variant{variant}, nil)
 			data = []byte(b.String())
 		}
 	} else {

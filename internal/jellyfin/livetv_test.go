@@ -551,6 +551,14 @@ func TestChannelPlaysThroughFFmpeg(t *testing.T) {
 	if status != http.StatusOK || !strings.Contains(master, "live.m3u8?") {
 		t.Fatalf("master playlist: %d %s", status, master)
 	}
+	// A channel keeps one variant, converted or not, whatever Several
+	// qualities when converting says.
+	s.setting(t, func(settings *accounts.Settings) { settings.AdaptiveQuality = accounts.AdaptiveQualityAlways })
+	for _, target := range []string{source.TranscodingUrl, source.TranscodingUrl + "&allowVideoStreamCopy=false"} {
+		if status, master := get(target); status != http.StatusOK || strings.Count(master, "#EXT-X-STREAM-INF:") != 1 {
+			t.Errorf("a channel's master playlist: %d %s", status, master)
+		}
+	}
 	base := source.TranscodingUrl[:strings.Index(source.TranscodingUrl, "master.m3u8")]
 	query := source.TranscodingUrl[strings.Index(source.TranscodingUrl, "?"):]
 	status, media := get(base + "live.m3u8" + query)

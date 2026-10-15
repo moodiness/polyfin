@@ -522,11 +522,11 @@ func (h *Handler) audioPlaylist(w http.ResponseWriter, r *http.Request, master b
 	}
 	var b bytes.Buffer
 	if master {
-		variant := hls.Variant{Bandwidth: 128_000, Codecs: audioCodecString(req.target)}
+		variant := hls.Variant{Bandwidth: 128_000, Codecs: audioCodecString(req.target), URI: "main.m3u8?" + r.URL.RawQuery}
 		if req.target != nil && req.target.Bitrate > 0 {
 			variant.Bandwidth = req.target.Bitrate
 		}
-		err = hls.WriteMaster(&b, variant, "main.m3u8?"+r.URL.RawQuery)
+		err = hls.WriteMaster(&b, []hls.Variant{variant}, nil)
 	} else {
 		err = hls.WriteMedia(&b, hls.AudioPlan(remux.Duration), format, func(n int) string {
 			return "hls1/main/" + strconv.Itoa(n) + "." + format.Extension() + "?" + r.URL.RawQuery
@@ -668,12 +668,12 @@ func (h *Handler) universalAudio(w http.ResponseWriter, r *http.Request) {
 	} else {
 		values.Set("audioCodec", "copy")
 	}
-	variant := hls.Variant{Bandwidth: max(cmp.Or(limit, 128_000), 1), Codecs: audioCodecString(req.target)}
+	variant := hls.Variant{Bandwidth: max(cmp.Or(limit, 128_000), 1), Codecs: audioCodecString(req.target), URI: "main.m3u8?" + values.Encode()}
 	if req.target != nil && req.target.Bitrate > 0 {
 		variant.Bandwidth = req.target.Bitrate
 	}
 	var b bytes.Buffer
-	if err := hls.WriteMaster(&b, variant, "main.m3u8?"+values.Encode()); err != nil {
+	if err := hls.WriteMaster(&b, []hls.Variant{variant}, nil); err != nil {
 		h.internalError(w, r, err)
 		return
 	}

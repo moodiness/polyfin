@@ -48,6 +48,11 @@ const (
 	// idleTimeout stops an encoding no player asked anything of for that
 	// long, such as a paused one; it starts again on the next request.
 	idleTimeout = 3 * time.Minute
+	// variantLinger is how long the FFmpeg of a variant of a playback runs
+	// on once the player asked for another variant (see playback): an app
+	// measuring the qualities it switches between, as hls.js does, comes
+	// back to the one it left within seconds.
+	variantLinger = 10 * time.Second
 	// tolerance absorbs the rounding between the keyframe index and the
 	// timestamps in FFmpeg's output.
 	tolerance = 2 * time.Millisecond
@@ -435,11 +440,70 @@ type Key struct {
 	// being what a user plays of a version (see LimitConversions).
 	Version  string
 	Converts bool
+	// Variant is the quality of converted video a master playlist offers:
+	// 0 for the first, then each lower one. Each variant of a playback
+	// runs its own FFmpeg (see playback).
+	Variant int
 }
 
 func (k Key) name() string {
-	sum := sha256.Sum256([]byte(k.Session + "\x00" + strconv.Itoa(k.Audio) + "\x00" + k.Format.Extension()))
+	sum := sha256.Sum256([]byte(k.Session + "\x00" + strconv.Itoa(k.Audio) + "\x00" + k.Format.Extension() + "\x00" + strconv.Itoa(k.Variant)))
 	return hex.EncodeToString(sum[:12])
+}
+
+// playback is the key the variants of a playback share.
+func (k Key) playback() Key {
+	k.Variant = 0
+	return k
+}
+
+// playback is what the encodings of the variants of a playback share.
+// Each variant runs its own FFmpeg, started once its segments are asked
+// for, and a request for one never stops another's. The variant asked for
+// last plays: its FFmpeg works ahead and runs until the playback is idle,
+// as with a single variant. Another variant's FFmpeg stops once it was
+// not asked for in variantLinger (see encoding.lingered), so an app
+// switching back and forth finds the qualities it measures still running,
+// and the extra cost lasts only that long. The segments a variant made
+// stay until the playback ends. All the variants count as one playback
+// toward the conversions at once (see admits).
+//
+// Locks are taken in the order Manager.mu, encoding.mu, playback.mu, each
+// optional: playback.mu is taken last, and nothing else is taken while it
+// is held.
+type playback struct {
+	mu sync.Mutex
+	// last is the encoding asked for last, and requested the last segment
+	// asked of any variant, where a variant opened then starts; used is
+	// when a player last asked for anything.
+	last      *encoding
+	requested int
+	used      time.Time
+}
+
+// asked records a request for e, for segment n when it is not negative,
+// and returns the variant e takes over from, nil when e was asked for last
+// already. The caller holds e.mu.
+func (p *playback) asked(e *encoding, n int, at time.Time) *encoding {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.used = at
+	if n >= 0 {
+		p.requested = n
+	}
+	left := p.last
+	p.last = e
+	if left == e {
+		return nil
+	}
+	return left
+}
+
+// playing reports whether e is the variant of its playback asked for last.
+func (p *playback) playing(e *encoding) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.last == e
 }
 
 // Manager runs the encodings players ask for.
@@ -479,6 +543,8 @@ type Manager struct {
 	stall time.Duration
 	// grace is recordGrace, which tests lengthen.
 	grace time.Duration
+	// linger is variantLinger, in nanoseconds, which tests change.
+	linger atomic.Int64
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
@@ -506,6 +572,7 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 	}
 	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), stall: stallTimeout, grace: recordGrace,
 		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{}}
+	m.linger.Store(int64(variantLinger))
 	go m.stopIdle()
 	return m, nil
 }
@@ -636,7 +703,7 @@ func (m *Manager) admits(key Key, leaving *live) bool {
 		return true
 	}
 	limit := m.limit()
-	return limit <= 0 || m.converting(&playback{key.User, key.Version}, leaving) < limit
+	return limit <= 0 || m.converting(&userVersion{key.User, key.Version}, leaving) < limit
 }
 
 // admitsAlone reports whether a conversion streamed as one file, of key,
@@ -659,18 +726,19 @@ func (m *Manager) limit() int {
 	return m.conversions()
 }
 
-// playback is what a user plays of a version, as the limit on
-// conversions counts it.
-type playback struct{ user, version string }
+// userVersion is what a user plays of a version, as the limit on
+// conversions counts it: every variant of a playback, and every play
+// session of it, counts once.
+type userVersion struct{ user, version string }
 
 // converting counts the conversions of video under way: the playbacks
 // of HLS encodings, files' and channels', and each conversion streamed as
 // one file on its own. The playback shared, which counts already, and the
 // live encoding leaving are left out. The caller holds m.mu.
-func (m *Manager) converting(shared *playback, leaving *live) int {
-	playbacks := map[playback]bool{}
+func (m *Manager) converting(shared *userVersion, leaving *live) int {
+	playbacks := map[userVersion]bool{}
 	count := func(k Key) {
-		if p := (playback{k.User, k.Version}); k.Converts && (shared == nil || p != *shared) {
+		if p := (userVersion{k.User, k.Version}); k.Converts && (shared == nil || p != *shared) {
 			playbacks[p] = true
 		}
 	}
@@ -717,10 +785,17 @@ func (m *Manager) Segment(ctx context.Context, key Key, open Opener, n int) (*os
 }
 
 // Subtitles waits until the extracted subtitles of an encoding cover
-// segment n, starting or moving FFmpeg to it when needed.
+// segment n, starting or moving FFmpeg to it when needed. They come from
+// the variant of key's playback asked for last, whichever key names: every
+// variant extracts them.
 func (m *Manager) Subtitles(ctx context.Context, key Key, open Opener, n int) error {
-	e, err := m.encoding(ctx, key, open)
-	if err != nil {
+	e := m.playing(key)
+	if e == nil {
+		var err error
+		if e, err = m.encoding(ctx, key, open); err != nil {
+			return err
+		}
+	} else if err := e.waitOpen(ctx); err != nil {
 		return err
 	}
 	if n < 0 || n >= e.remux.Plan.Len() {
@@ -732,7 +807,29 @@ func (m *Manager) Subtitles(ctx context.Context, key Key, open Opener, n int) er
 	return e.awaitCovered(ctx, n)
 }
 
-// encoding returns the encoding of key, opening it on first use.
+// playing returns the encoding of key's playback asked for last, nil when
+// none was or it was stopped since.
+func (m *Manager) playing(key Key) *encoding {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for k, e := range m.encodings {
+		if k.playback() != key.playback() {
+			continue
+		}
+		e.playback.mu.Lock()
+		last := e.playback.last
+		e.playback.mu.Unlock()
+		if last != nil && m.encodings[last.key] == last {
+			return last
+		}
+		return nil
+	}
+	return nil
+}
+
+// encoding returns the encoding of key, opening it on first use. The
+// variants of a playback share its playback, and one opened later starts
+// where the player last asked.
 func (m *Manager) encoding(ctx context.Context, key Key, open Opener) (*encoding, error) {
 	m.mu.Lock()
 	if m.closed {
@@ -745,28 +842,51 @@ func (m *Manager) encoding(ctx context.Context, key Key, open Opener) (*encoding
 			m.mu.Unlock()
 			return nil, ErrBusy
 		}
+		var p *playback
+		for k, other := range m.encodings {
+			if k.playback() == key.playback() {
+				p = other.playback
+				break
+			}
+		}
+		if p == nil {
+			p = &playback{}
+		}
+		p.mu.Lock()
+		p.used = time.Now()
+		requested := p.requested
+		p.mu.Unlock()
 		e = &encoding{m: m, key: key, dir: filepath.Join(m.dir, key.name()), opened: make(chan struct{}),
-			changed: make(chan struct{}), quit: make(chan struct{}), used: time.Now()}
+			changed: make(chan struct{}), quit: make(chan struct{}), playback: p, requested: requested}
 		m.encodings[key] = e
 		m.mu.Unlock()
 		e.open(ctx, open)
 	} else {
 		m.mu.Unlock()
 	}
+	if err := e.waitOpen(ctx); err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+// waitOpen waits until the encoding is open, and forgets one that failed to
+// open, which the next request opens again.
+func (e *encoding) waitOpen(ctx context.Context) error {
 	select {
 	case <-e.opened:
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return ctx.Err()
 	}
 	if e.err != nil {
-		m.mu.Lock()
-		if m.encodings[key] == e {
-			delete(m.encodings, key)
+		e.m.mu.Lock()
+		if e.m.encodings[e.key] == e {
+			delete(e.m.encodings, e.key)
 		}
-		m.mu.Unlock()
-		return nil, e.err
+		e.m.mu.Unlock()
+		return e.err
 	}
-	return e, nil
+	return nil
 }
 
 // encoding is one remux of a version for a play session.
@@ -788,8 +908,15 @@ type encoding struct {
 	init      bool
 	job       *job
 	requested int
-	used      time.Time
-	stopped   bool
+	// playback is shared with the other variants of the playback; used is
+	// when a player last asked for this variant, and linger stops its
+	// FFmpeg once the player left it (see lingered).
+	playback *playback
+	used     time.Time
+	linger   *time.Timer
+	// runs counts the FFmpeg processes started, which tests read.
+	runs    int
+	stopped bool
 	// quit is closed once the encoding is stopped.
 	quit chan struct{}
 	// failure is why the input failed for good, nil while it did not (see
@@ -903,10 +1030,49 @@ func (e *encoding) waitProgress(ctx context.Context, since time.Time) error {
 	return nil
 }
 
+// idle reports whether no player asked anything of the encoding's
+// playback, of any variant, for idleTimeout.
 func (e *encoding) idle() bool {
+	e.playback.mu.Lock()
+	defer e.playback.mu.Unlock()
+	return time.Since(e.playback.used) > idleTimeout
+}
+
+// ask records that a player asked for segment n of the encoding, or for
+// something else when n is negative, at at. The variant it takes over
+// from is left: its FFmpeg stops once it lingered (see lingered). The
+// caller holds e.mu.
+func (e *encoding) ask(n int, at time.Time) {
+	e.used = at
+	if left := e.playback.asked(e, n, at); left != nil {
+		// Taking left.mu under e.mu could deadlock with a request for left
+		// doing the same with e.
+		go left.lingered()
+	}
+}
+
+// lingered stops the FFmpeg of a variant the player left for another of
+// its playback, once it was not asked for in m.linger, and waits for that
+// otherwise. The variant asked for last runs on, and the segments made
+// stay: a request for this variant serves them, and starts FFmpeg again
+// for the others.
+func (e *encoding) lingered() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return time.Since(e.used) > idleTimeout
+	j := e.job
+	if e.stopped || j == nil || j.done || e.playback.playing(e) {
+		return
+	}
+	if left := time.Until(e.used.Add(time.Duration(e.m.linger.Load()))); left > 0 {
+		if e.linger == nil {
+			e.linger = time.AfterFunc(left, e.lingered)
+		} else {
+			e.linger.Reset(left)
+		}
+		return
+	}
+	e.m.logger.Debug("Stopped the remux of a quality the player left", "variant", e.key.Variant, "from", j.start)
+	j.cancel()
 }
 
 func (e *encoding) path(n int) string {
@@ -923,7 +1089,7 @@ func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	since := time.Now()
-	e.used = since
+	e.ask(n, since)
 	if n >= 0 {
 		e.requested = n
 		e.prune(n)
@@ -969,7 +1135,7 @@ func (e *encoding) awaitCovered(ctx context.Context, n int) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	since := time.Now()
-	e.used = since
+	e.ask(-1, since)
 	plan := e.remux.Plan
 	for {
 		if e.failure != nil {
@@ -1028,6 +1194,9 @@ func (e *encoding) stop() {
 	close(e.quit)
 	if e.job != nil {
 		e.job.cancel()
+	}
+	if e.linger != nil {
+		e.linger.Stop()
 	}
 	e.signal()
 	e.mu.Unlock()
@@ -1113,6 +1282,9 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		e.finish(j, fmt.Errorf("start FFmpeg: %w", err))
 		return
 	}
+	e.mu.Lock()
+	e.runs++
+	e.mu.Unlock()
 	var extracting sync.WaitGroup
 	progress := readers[len(readers)-1]
 	extracting.Go(func() {
@@ -1131,7 +1303,7 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		})
 	}
 	started := time.Now()
-	e.m.logger.Debug("Started a remux", "from", j.start)
+	e.m.logger.Debug("Started a remux", "from", j.start, "variant", e.key.Variant)
 	take := func(p piece) error { return e.take(ctx, j, p) }
 	if e.remux.Format == TS {
 		err = splitTS(output, take)

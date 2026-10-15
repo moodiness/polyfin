@@ -717,6 +717,7 @@ func (h *Handler) guestSessions(ctx context.Context, encodings map[string][]hls.
 		if size, ok := h.sizes.Get(play.id); ok {
 			session.Size = &size
 		}
+		session.Qualities, _ = h.qualities.Get(play.id)
 		if analysis, ok := h.Playback.Analyzed(ctx, play.version); ok {
 			session.Source = &analysis
 		}

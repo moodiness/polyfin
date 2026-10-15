@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
@@ -132,6 +134,13 @@ type videoConversionJSON struct {
 	// user, the user's maximum quality (MaxBitrate). Else 0 and empty.
 	BitrateLimit   int64  `json:"bitrateLimit"`
 	BitrateLimitOf string `json:"bitrateLimitOf"`
+	// Qualities are the heights of the qualities the app may switch
+	// between, the one chosen then the lower ones, when it is offered
+	// several (Several qualities when converting); else empty.
+	// SteppedDownFrom is the first quality's height when the app plays a
+	// lower one, else 0.
+	Qualities       []int `json:"qualities"`
+	SteppedDownFrom int   `json:"steppedDownFrom"`
 }
 
 type audioConversionJSON struct {
@@ -195,8 +204,19 @@ func newLiveSessionJSON(s jellyfin.LiveSession) liveSessionJSON {
 	}
 	// The encoding of the play session tells best; one converting the
 	// video describes it over one copying it, as an app switching audio
-	// track runs both a moment.
-	for _, running := range s.Encodings {
+	// track runs both a moment, and of the qualities offered, the one
+	// playing now.
+	encodings := slices.Clone(s.Encodings)
+	slices.SortStableFunc(encodings, func(a, b hls.Running) int {
+		if a.Current == b.Current {
+			return 0
+		}
+		if a.Current {
+			return -1
+		}
+		return 1
+	})
+	for _, running := range encodings {
 		if !running.Opened || result.Video != nil {
 			continue
 		}
@@ -204,7 +224,13 @@ func newLiveSessionJSON(s jellyfin.LiveSession) liveSessionJSON {
 		if running.Video != nil {
 			v := running.Video
 			result.Video = &videoConversionJSON{Encoder: v.Encoder, Width: v.Width, Height: v.Height, Bitrate: v.Bitrate,
-				ToneMap: v.ToneMap, Burn: v.Burns()}
+				ToneMap: v.ToneMap, Burn: v.Burns(), Qualities: []int{}}
+			if len(s.Qualities) > 1 {
+				result.Video.Qualities = s.Qualities
+				if running.Key.Variant > 0 {
+					result.Video.SteppedDownFrom = s.Qualities[0]
+				}
+			}
 			if v.Hardware != nil {
 				result.Video.Hardware = v.Hardware.Method
 			}

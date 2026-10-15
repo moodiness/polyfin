@@ -111,7 +111,8 @@ hls1/main/2.mp4?a=b
 		t.Errorf("media playlist:\n%s", media.String())
 	}
 	var master bytes.Buffer
-	if err := WriteMaster(&master, Variant{Bandwidth: 5_000_000, Codecs: "avc1.640028,mp4a.40.2", Width: 1920, Height: 1080, FrameRate: 23.976, Range: "SDR"}, "main.m3u8?a=b"); err != nil {
+	if err := WriteMaster(&master, []Variant{{Bandwidth: 5_000_000, Codecs: "avc1.640028,mp4a.40.2", Width: 1920, Height: 1080, FrameRate: 23.976, Range: "SDR",
+		URI: "main.m3u8?a=b"}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if want := "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=5000000,AVERAGE-BANDWIDTH=5000000,VIDEO-RANGE=SDR,CODECS=\"avc1.640028,mp4a.40.2\",RESOLUTION=1920x1080,FRAME-RATE=23.976\nmain.m3u8?a=b\n"; master.String() != want {
@@ -121,12 +122,12 @@ hls1/main/2.mp4?a=b
 
 func TestSubtitleRenditionsFollowHLSRules(t *testing.T) {
 	var master bytes.Buffer
-	err := WriteMaster(&master, Variant{Bandwidth: 1_000_000, Subtitles: []Rendition{
+	err := WriteMaster(&master, []Variant{{Bandwidth: 1_000_000, URI: "main.m3u8"}}, []Rendition{
 		{Name: "French", Language: "fr", URI: "s0.m3u8"},
 		{Name: "French", Language: "fr", URI: "s1.m3u8"},
 		{Name: `Forced "signs"`, Language: "fr", Forced: true, URI: "s2.m3u8"},
 		{Name: "English", Language: "en", Default: true, URI: "s3.m3u8"},
-	}}, "main.m3u8")
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,6 +140,31 @@ func TestSubtitleRenditionsFollowHLSRules(t *testing.T) {
 #EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,URI="s3.m3u8"
 #EXT-X-STREAM-INF:BANDWIDTH=1000000,AVERAGE-BANDWIDTH=1000000,SUBTITLES="subs"
 main.m3u8
+`
+	if master.String() != want {
+		t.Errorf("master playlist:\n%s", master.String())
+	}
+}
+
+// Several variants are listed in order, the one chosen first, each with
+// its own bandwidth, size, codecs and media playlist, sharing the
+// subtitles; the playlist tells that every segment starts on a keyframe.
+func TestVariantsAreListedInOrder(t *testing.T) {
+	var master bytes.Buffer
+	err := WriteMaster(&master, []Variant{
+		{Bandwidth: 15_640_000, Codecs: "avc1.640028,mp4a.40.2", Width: 1920, Height: 1080, FrameRate: 24, Range: "SDR", URI: "main.m3u8?a=b"},
+		{Bandwidth: 8_140_000, Codecs: "avc1.64001f,mp4a.40.2", Width: 1280, Height: 720, FrameRate: 24, Range: "SDR", URI: "hls1/main1/main.m3u8?a=b"},
+	}, []Rendition{{Name: "English", Language: "en", URI: "s0.m3u8"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `#EXTM3U
+#EXT-X-INDEPENDENT-SEGMENTS
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",DEFAULT=NO,AUTOSELECT=NO,FORCED=NO,URI="s0.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=15640000,AVERAGE-BANDWIDTH=15640000,VIDEO-RANGE=SDR,CODECS="avc1.640028,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=24,SUBTITLES="subs"
+main.m3u8?a=b
+#EXT-X-STREAM-INF:BANDWIDTH=8140000,AVERAGE-BANDWIDTH=8140000,VIDEO-RANGE=SDR,CODECS="avc1.64001f,mp4a.40.2",RESOLUTION=1280x720,FRAME-RATE=24,SUBTITLES="subs"
+hls1/main1/main.m3u8?a=b
 `
 	if master.String() != want {
 		t.Errorf("master playlist:\n%s", master.String())

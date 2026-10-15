@@ -44,8 +44,11 @@ type LiveSession struct {
 	// TranscodeReasons, when known.
 	Reasons []string
 	// Size is what set the size of the video the play session converts,
-	// nil when not known.
 	Size *playback.ConversionSize
+	// Qualities are the heights of the qualities of converted video the
+	// play session's master playlist offers, the one chosen then the lower
+	// ones, when it offers several: its encodings' Key.Variant index them.
+	Qualities []int
 }
 
 // LiveSessions lists the devices playing, the guests through share links,
@@ -94,6 +97,7 @@ func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 			if size, ok := h.sizes.Get(now.PlaySessionID); ok {
 				session.Size = &size
 			}
+			session.Qualities, _ = h.qualities.Get(now.PlaySessionID)
 		}
 		if item, err := h.played(ctx, user, now.Item); err == nil {
 			session.Item, session.Found = item, true

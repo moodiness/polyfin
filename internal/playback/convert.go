@@ -340,23 +340,11 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 		size = ConversionSize{Reason: SizeSource}
 	}
 	conversion.Size = size
-	// The rung's frame is 16:9, as 1080p's 1920×1080, its width rounded up
-	// so that a 16:9 source fills it. A wider source fits its width, as in
-	// Jellyfin: a 2.40:1 picture becomes 1920×800 rather than 2586×1080,
-	// which no 1080p level holds and an NVIDIA GPU refuses to encode.
-	height, width := rung.height, (rung.height*16+8)/9
-	if video.Height != nil && video.Width != nil && *video.Height > 0 && *video.Width > 0 {
-		w, h := *video.Width, *video.Height
-		if w*height > width*h {
-			width = min(width, w)
-			height = h * width / w
-		} else {
-			height = min(height, h)
-			width = w * height / h
-		}
+	width, height := 0, 0
+	if video.Height != nil && video.Width != nil {
+		width, height = *video.Width, *video.Height
 	}
-	// Encoders take even sizes.
-	conversion.Width, conversion.Height = width/2*2, height/2*2
+	conversion.Width, conversion.Height = frame(rung.height, width, height)
 	conversion.Bitrate = rung.ceiling
 	if limits.Video > 0 {
 		conversion.Bitrate = min(conversion.Bitrate, limits.Video)
@@ -366,6 +354,64 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 	}
 	conversion.Bitrate = max(conversion.Bitrate, 300_000)
 	return conversion
+}
+
+// frame is the size of video of width by height, 0 when not known,
+// converted to a rung's height. The rung's frame is 16:9, as 1080p's
+// 1920×1080, its width rounded up so that a 16:9 source fills it. A wider
+// source fits its width, as in Jellyfin: a 2.40:1 picture becomes
+// 1920×800 rather than 2586×1080, which no 1080p level holds and an
+// NVIDIA GPU refuses to encode. Encoders take even sizes.
+func frame(rung, width, height int) (int, int) {
+	h, w := rung, (rung*16+8)/9
+	if height > 0 && width > 0 {
+		if width*h > w*height {
+			w = min(w, width)
+			h = height * w / width
+		} else {
+			h = min(h, height)
+			w = width * h / height
+		}
+	}
+	return w / 2 * 2, h / 2 * 2
+}
+
+// steps is how many lower qualities a conversion offers at most when
+// apps may step down (see Steps).
+const steps = 2
+
+// Steps are the lower qualities a conversion of video of width by height,
+// 0 when not known, offers apps to step down to, tallest first: up to two
+// rungs of the ladder below its own, each the tallest whose bitrate is at
+// most half that of the quality above, down to 360p. 1080p at 10 Mb/s
+// offers 720p at 5 Mb/s and 480p at 2 Mb/s. Each keeps the conversion's
+// codec, encoder and tone mapping, at its rung's size, framed as a
+// conversion to that rung would be, and bitrate; Size tells what set the
+// first quality's.
+func (v *VideoConversion) Steps(width, height int) []VideoConversion {
+	// The rung the conversion is at: the smallest whose frame holds it.
+	above := rungs[0].height
+	for _, r := range rungs {
+		if v.Width <= (r.height*16+8)/9 && v.Height <= r.height {
+			above = r.height
+		}
+	}
+	bitrate := v.Bitrate
+	var lower []VideoConversion
+	for _, r := range rungs {
+		if len(lower) == steps {
+			break
+		}
+		if r.height >= above || r.ceiling > bitrate/2 {
+			continue
+		}
+		step := *v
+		step.Width, step.Height = frame(r.height, width, height)
+		step.Bitrate = r.ceiling
+		lower = append(lower, step)
+		above, bitrate = r.height, r.ceiling
+	}
+	return lower
 }
 
 // levels are the codec levels a conversion may declare, lowest first, in

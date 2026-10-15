@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -193,6 +194,54 @@ func TestLiveSessionsTellHowEachPlaybackPlays(t *testing.T) {
 		if _, body, _ := admin.call(http.MethodPost, target+"/stop", nil); body["error"] != want {
 			t.Errorf("%v: %v", err, body)
 		}
+	}
+}
+
+// A playback offered several qualities is described by the one playing
+// now, its FFmpeg's, and tells when the app stepped down from the first.
+func TestLiveSessionsTellTheQualityPlayed(t *testing.T) {
+	t.Parallel()
+	sessions := &fakeSessions{}
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) { o.Sessions = sessions })
+	admin := api.signedIn("root", true)
+	encoding := func(variant, height int, bitrate int64, current bool) hls.Running {
+		return hls.Running{Key: hls.Key{Converts: true, Variant: variant}, Opened: true, Current: current,
+			Video: &hls.VideoEncoding{Encoder: "libx264", Width: height * 16 / 9, Height: height, Bitrate: bitrate}}
+	}
+	session := jellyfin.LiveSession{
+		User:    accounts.User{ID: randomID(), Name: "alice"},
+		Device:  accounts.Device{ID: randomID(), DeviceInfo: accounts.DeviceInfo{DeviceName: "Laptop", Client: "Jellyfin Web"}},
+		Playing: playback.NowPlaying{PlayState: playback.PlayState{PlayMethod: "Transcode"}},
+		Source: &media.Analysis{Bitrate: 20_000_000, Streams: []media.Stream{
+			{Type: "video", Codec: "hevc", Width: 1920, Height: 1080}, {Type: "audio", Codec: "aac"}}},
+		Encodings: []hls.Running{encoding(0, 1080, 10_000_000, false), encoding(1, 720, 5_000_000, true)},
+		Size:      &playback.ConversionSize{Reason: playback.SizeSource},
+		Qualities: []int{1080, 720, 480},
+	}
+	sessions.sessions = []jellyfin.LiveSession{session}
+	var listed []liveSessionJSON
+	if status := admin.raw(http.MethodGet, "/sessions", "", &listed); status != http.StatusOK || len(listed) != 1 {
+		t.Fatalf("sessions: %d %+v", status, listed)
+	}
+	if got := listed[0]; got.Video == nil || got.Video.Height != 720 || got.Video.SteppedDownFrom != 1080 ||
+		!slices.Equal(got.Video.Qualities, []int{1080, 720, 480}) || got.Sent == nil || got.Sent.Height != 720 {
+		t.Errorf("stepped down: %+v %+v", got.Video, got.Sent)
+	}
+	// Back up to the first quality.
+	session.Encodings = []hls.Running{encoding(0, 1080, 10_000_000, true), encoding(1, 720, 5_000_000, false)}
+	sessions.sessions = []jellyfin.LiveSession{session}
+	listed = nil
+	admin.raw(http.MethodGet, "/sessions", "", &listed)
+	if got := listed[0]; got.Video == nil || got.Video.Height != 1080 || got.Video.SteppedDownFrom != 0 || len(got.Video.Qualities) != 3 {
+		t.Errorf("the first quality: %+v", got.Video)
+	}
+	// One quality offered: none listed.
+	session.Encodings, session.Qualities = session.Encodings[:1], nil
+	sessions.sessions = []jellyfin.LiveSession{session}
+	var raw []map[string]any
+	admin.raw(http.MethodGet, "/sessions", "", &raw)
+	if video, _ := raw[0]["video"].(map[string]any); video["steppedDownFrom"] != 0.0 || fmt.Sprint(video["qualities"]) != "[]" {
+		t.Errorf("one quality: %v", raw[0]["video"])
 	}
 }
 

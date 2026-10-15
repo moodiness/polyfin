@@ -349,7 +349,10 @@ func (h *Handler) hlsPlaylist(w http.ResponseWriter, r *http.Request, name strin
 	h.servePlaylist(w, r, name, h.remuxOf)
 }
 
-// servePlaylist serves the playlist name of the remux remuxOf reads.
+// servePlaylist serves the playlist name of the remux remuxOf reads. The
+// master playlist of converted video offers lower qualities too as the
+// settings allow (see adaptiveQuality), each with its own media playlist
+// under hls1/main{variant}.
 func (h *Handler) servePlaylist(w http.ResponseWriter, r *http.Request, name string, remuxOf remuxer) {
 	req, ok := remuxOf(w, r)
 	if !ok {
@@ -369,29 +372,78 @@ func (h *Handler) servePlaylist(w http.ResponseWriter, r *http.Request, name str
 		processingError(w, http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-	w.Header().Set("Cache-Control", "no-cache")
-	var err error
 	if strings.EqualFold(name, "master") {
-		var variant hls.Variant
-		if variant, err = h.Playback.Variant(r.Context(), req.remux); err == nil {
-			if req.renditions {
-				variant.Subtitles = h.renditions(r.Context(), req, query(r, "subtitleStreamIndex"), req.uris)
-			}
-			err = hls.WriteMaster(w, variant, withQuery("main.m3u8", req.uris))
-		}
-	} else {
-		var plan hls.Plan
-		if plan, err = h.Playback.Plan(r.Context(), req.remux.Version); err == nil {
-			extension := req.remux.Format.Extension()
-			err = hls.WriteMedia(w, plan, req.remux.Format, func(n int) string {
-				return withQuery("hls1/main/"+strconv.Itoa(n)+"."+extension, req.uris)
-			})
-		}
+		h.masterPlaylist(w, r, req)
+		return
 	}
+	h.mediaPlaylist(w, r, req, "hls1/main/")
+}
+
+// masterPlaylist serves the master playlist of a remux: the quality it
+// plays, then the lower ones apps may step down to, with the subtitles
+// they share.
+func (h *Handler) masterPlaylist(w http.ResponseWriter, r *http.Request, req remuxRequest) {
+	variants, err := h.Playback.Variants(r.Context(), req.remux, h.adaptiveQuality(r))
 	if err != nil {
 		h.remuxError(w, r, req.remux, err)
+		return
 	}
+	heights := make([]int, len(variants))
+	for i := range variants {
+		heights[i] = variants[i].Height
+		if i == 0 {
+			variants[i].URI = withQuery("main.m3u8", req.uris)
+		} else {
+			variants[i].URI = withQuery("hls1/main"+strconv.Itoa(i)+"/main.m3u8", req.uris)
+		}
+	}
+	if len(variants) > 1 {
+		h.qualities.Put(req.remux.Session, heights)
+	} else {
+		h.qualities.Delete(req.remux.Session)
+	}
+	var subtitles []hls.Rendition
+	if req.renditions {
+		subtitles = h.renditions(r.Context(), req, query(r, "subtitleStreamIndex"), req.uris)
+	}
+	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+	w.Header().Set("Cache-Control", "no-cache")
+	if err := hls.WriteMaster(w, variants, subtitles); err != nil {
+		h.remuxError(w, r, req.remux, err)
+	}
+}
+
+// mediaPlaylist serves the media playlist of a remux's variant, its
+// segments at prefix and their number.
+func (h *Handler) mediaPlaylist(w http.ResponseWriter, r *http.Request, req remuxRequest, prefix string) {
+	plan, err := h.Playback.Plan(r.Context(), req.remux.Version)
+	if err != nil {
+		h.remuxError(w, r, req.remux, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+	w.Header().Set("Cache-Control", "no-cache")
+	extension := req.remux.Format.Extension()
+	if err := hls.WriteMedia(w, plan, req.remux.Format, func(n int) string {
+		return withQuery(prefix+strconv.Itoa(n)+"."+extension, req.uris)
+	}); err != nil {
+		h.remuxError(w, r, req.remux, err)
+	}
+}
+
+// adaptiveQuality reports whether the master playlist of converted video
+// offers lower qualities to the app asking: as the settings' Several
+// qualities when converting say, the local network being what it is for
+// sign-in PINs, through the known proxies.
+func (h *Handler) adaptiveQuality(r *http.Request) bool {
+	switch h.Accounts.Settings().AdaptiveQuality {
+	case accounts.AdaptiveQualityAlways:
+		return true
+	case accounts.AdaptiveQualityRemote:
+		_, inNetwork := inLocalNetwork(r)
+		return !inNetwork
+	}
+	return false
 }
 
 // renditions are the text subtitles a remux offers in HLS, the one the
@@ -417,8 +469,9 @@ func (h *Handler) renditions(ctx context.Context, req remuxRequest, selected, ra
 }
 
 // hlsSegment serves the segments of a remux under hls1/main, the
-// initialization segment as -1, and its subtitle renditions under
-// hls1/subtitles{index}.
+// initialization segment as -1, those of its lower qualities and their
+// media playlists under hls1/main{variant}, and its subtitle renditions
+// under hls1/subtitles{index}.
 func (h *Handler) hlsSegment(w http.ResponseWriter, r *http.Request) {
 	h.serveSegment(w, r, h.remuxOf)
 }
@@ -432,9 +485,27 @@ func (h *Handler) serveSegment(w http.ResponseWriter, r *http.Request, remuxOf r
 			return
 		}
 	}
+	variant, ok := playlistVariant(playlist)
+	if !ok {
+		processingError(w, http.StatusNotFound)
+		return
+	}
+	if variant > 0 && strings.EqualFold(r.PathValue("file"), "main.m3u8") {
+		req, ok := remuxOf(w, r)
+		if !ok {
+			return
+		}
+		req.remux.Variant = variant
+		if req.live || !req.remux.HasVariant() {
+			processingError(w, http.StatusNotFound)
+			return
+		}
+		h.mediaPlaylist(w, r, req, "")
+		return
+	}
 	name, extension, _ := strings.Cut(r.PathValue("file"), ".")
 	n, err := strconv.Atoi(name)
-	if playlist != "main" || err != nil || n < -1 {
+	if err != nil || n < -1 {
 		processingError(w, http.StatusNotFound)
 		return
 	}
@@ -447,6 +518,7 @@ func (h *Handler) serveSegment(w http.ResponseWriter, r *http.Request, remuxOf r
 		return
 	}
 	remux := req.remux
+	remux.Variant = variant
 	// The initialization segment of fragmented MP4 is -1.mp4.
 	if !strings.EqualFold(extension, remux.Format.Extension()) {
 		processingError(w, http.StatusNotFound)
@@ -470,6 +542,20 @@ func (h *Handler) serveSegment(w http.ResponseWriter, r *http.Request, remuxOf r
 	defer file.Close()
 	w.Header().Set("Content-Type", remux.Format.ContentType())
 	http.ServeContent(w, r, "", time.Time{}, file)
+}
+
+// playlistVariant reads the variant of a playlist's name: main is the
+// first, main1 and on the lower ones.
+func playlistVariant(playlist string) (int, bool) {
+	raw, ok := strings.CutPrefix(playlist, "main")
+	if !ok {
+		return 0, false
+	}
+	if raw == "" {
+		return 0, true
+	}
+	variant, err := strconv.Atoi(raw)
+	return variant, err == nil && variant > 0 && strconv.Itoa(variant) == raw
 }
 
 // hlsSubtitles serves the playlist and the WebVTT segments of a subtitle
