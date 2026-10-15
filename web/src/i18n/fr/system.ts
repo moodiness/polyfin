@@ -319,6 +319,8 @@ const system: typeof en = {
         tmdbKey: 'Clé d’API TMDB',
         traktClientSecret: 'Client secret Trakt',
         lastFmSecret: 'Secret partagé Last.fm',
+        aniListClientSecret: 'Client secret AniList',
+        myAnimeListClientSecret: 'Client secret MyAnimeList',
         smtpPassword: 'Mot de passe SMTP',
         metricsToken: 'Jeton des métriques',
       },

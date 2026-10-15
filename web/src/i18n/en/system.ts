@@ -310,6 +310,8 @@ const system = {
         tmdbKey: 'TMDB API key',
         traktClientSecret: 'Trakt client secret',
         lastFmSecret: 'Last.fm shared secret',
+        aniListClientSecret: 'AniList client secret',
+        myAnimeListClientSecret: 'MyAnimeList client secret',
         smtpPassword: 'SMTP password',
         metricsToken: 'Metrics token',
       },

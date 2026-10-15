@@ -10,6 +10,7 @@ import {
   ApiError,
   connectTracking,
   disconnectTracking,
+  exchangeTrackingCode,
   fetchTracking,
   importTracking,
   queryClient,
@@ -29,6 +30,7 @@ import {
   ConfirmDialog,
   cx,
   ExternalButtonLink,
+  Field,
   IconTile,
   InlineError,
   Notice,
@@ -36,6 +38,7 @@ import {
   SkeletonRows,
   StatusPill,
   Switch,
+  TextInput,
   TextLink,
   useToast,
   type StatusTone,
@@ -46,6 +49,8 @@ const serviceNames: Record<TrackingServiceName, string> = {
   simkl: 'Simkl',
   mdblist: 'MDBList',
   publicmetadb: 'PublicMetaDB',
+  anilist: 'AniList',
+  myanimelist: 'MyAnimeList',
   lastfm: 'Last.fm',
   listenbrainz: 'ListenBrainz',
 }
@@ -56,6 +61,8 @@ const monograms: Record<TrackingServiceName, string> = {
   simkl: 'Si',
   mdblist: 'M',
   publicmetadb: 'P',
+  anilist: 'AL',
+  myanimelist: 'MAL',
   lastfm: 'L',
   listenbrainz: 'LB',
 }
@@ -145,6 +152,7 @@ function connectError(t: Messages, name: string, error: unknown, music = false):
     if (error.code === 'service_unreachable') return text.serviceUnreachable(name)
     if (error.code === 'not_available') return text.notAvailable(name)
     if (error.code === 'app_refused') return text.appRefused(name)
+    if (error.code === 'invalid_code') return text.invalidCode(name)
   }
   return errorMessage(t, error)
 }
@@ -199,6 +207,15 @@ function ServiceRow({
       if (result.connected && result.problem === null) toast(text.connectedToast(name))
     },
   })
+  const exchange = useMutation({
+    mutationFn: (pasted: string) =>
+      exchangeTrackingCode(service.service as 'anilist' | 'myanimelist', pasted),
+    onSuccess: (result) => {
+      setCodeEnded(false)
+      store(result)
+      toast(text.connectedToast(name))
+    },
+  })
   const disconnect = useMutation({
     mutationFn: () => disconnectTracking(service.service),
     onSuccess: () => {
@@ -221,6 +238,8 @@ function ServiceRow({
   })
 
   const signIn = service.connection === 'signin'
+  const pin = service.connection === 'pin'
+  const paste = pin || service.connection === 'redirect'
   const waiting = code !== null && !expired
   const status: { tone: StatusTone; label: string; icon?: typeof HourglassIcon } =
     !service.available
@@ -273,10 +292,10 @@ function ServiceRow({
   )
   const ended = (expired || codeEnded) && (
     <Notice tone="warn" live>
-      {signIn ? text.signInEnded : text.codeEnded}
+      {paste ? text.pasteEnded : signIn ? text.signInEnded : text.codeEnded}
     </Notice>
   )
-  const startAgain = signIn ? text.signInAgain : text.newCode
+  const startAgain = signIn || paste ? text.signInAgain : text.newCode
   // The server's app was refused while the code waited; another attempt clears it.
   const refusedApp = service.problem === 'app_refused' && !connect.isError && (
     <Notice tone="danger" action={setUpLink || undefined}>
@@ -298,17 +317,24 @@ function ServiceRow({
     body = setUpLink || null
   } else if (waiting) {
     const host = new URL(code.verificationUrl).host
-    sub = signIn ? text.signInIntro(name) : text.codeIntro(name)
+    sub = paste
+      ? pin
+        ? text.pinIntro(name)
+        : text.redirectIntro(name)
+      : signIn
+        ? text.signInIntro(name)
+        : text.codeIntro(name)
     actions = (
       <Button variant="ghost" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>
         {t.common.cancel}
       </Button>
     )
+    // MyAnimeList sends the browser back here: it opens in this tab.
     const open = (
       <ExternalButtonLink
         variant="primary"
         href={code.verificationUrl}
-        target="_blank"
+        target={service.connection === 'redirect' ? undefined : '_blank'}
         rel="noopener noreferrer"
         iconEnd={ArrowSquareOutIcon}
       >
@@ -319,7 +345,25 @@ function ServiceRow({
     body = (
       <>
         <div className="flex flex-col gap-4 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:p-3.5">
-          {signIn ? (
+          {paste ? (
+            <>
+              <p className="text-control text-ink">
+                {pin ? text.pinStep(host) : text.redirectStep(host)}
+              </p>
+              <div className="flex flex-wrap items-center gap-3">{open}</div>
+              <PasteForm
+                label={pin ? text.codeField(name) : text.addressField}
+                help={pin ? text.codeFieldHelp(name) : text.addressFieldHelp(name)}
+                pending={exchange.isPending}
+                error={exchange.isError ? connectError(t, name, exchange.error) : undefined}
+                onChange={() => exchange.reset()}
+                onPaste={(pasted) => exchange.mutate(pasted)}
+              />
+              <p role="status" className="text-small text-ink-3">
+                {text.signInExpires(expiry)}
+              </p>
+            </>
+          ) : signIn ? (
             <>
               <p className="text-control text-ink">{text.signInStep(host)}</p>
               <div className="flex flex-wrap items-center gap-3">{open}</div>
@@ -362,6 +406,7 @@ function ServiceRow({
           text.connected
         )}
         {service.connectedAt !== null && text.connectedOn(dateTime(service.connectedAt, language))}
+        {service.expiresAt !== null && text.tokenExpires(dateTime(service.expiresAt, language))}
         {service.lastSentAt === null ? (
           text.nothingSent
         ) : (
@@ -419,11 +464,15 @@ function ServiceRow({
     sub =
       service.connection === 'code'
         ? text.codeIntro(name)
-        : signIn
-          ? text.signInIntro(name)
-          : service.music
-            ? text.tokenIntro(name)
-            : text.keyIntro(name)
+        : paste
+          ? pin
+            ? text.pinIntro(name)
+            : text.redirectIntro(name)
+          : signIn
+            ? text.signInIntro(name)
+            : service.music
+              ? text.tokenIntro(name)
+              : text.keyIntro(name)
     if (service.connection !== 'key')
       actions = codeConnect(ended ? startAgain : text.connect, 'primary')
     const notes = [refusedApp, ended, codeError, cancelError].some(Boolean)
@@ -557,6 +606,61 @@ function KeyForm({
   )
 }
 
+/** Where the user pastes the code AniList shows, or the address MyAnimeList sent the browser to. */
+function PasteForm({
+  label,
+  help,
+  pending,
+  error,
+  onChange,
+  onPaste,
+}: {
+  label: string
+  help: string
+  pending: boolean
+  error: string | undefined
+  onChange: () => void
+  onPaste: (pasted: string) => void
+}) {
+  const { t } = useI18n()
+  const text = t.account.tracking
+  const [pasted, setPasted] = useState('')
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmed = pasted.trim()
+    if (trimmed !== '') onPaste(trimmed)
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-2">
+      <Field label={label} help={help} error={error}>
+        <div className="flex flex-wrap items-center gap-2">
+          <TextInput
+            value={pasted}
+            onValue={(value) => {
+              setPasted(value)
+              onChange()
+            }}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            className="min-w-0 flex-1"
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            loading={pending}
+            disabled={!pending && pasted.trim() === ''}
+          >
+            {pending ? text.connecting : text.connect}
+          </Button>
+        </div>
+      </Field>
+    </form>
+  )
+}
+
 /**
  * Whether a connected service's watch history is imported into Polyfin, every `importEveryMinutes`,
  * Import now, and how the last import went, with when the next runs.
@@ -575,16 +679,21 @@ function HistoryImport({
   const labelId = useId()
   const helpId = useId()
   const toggle = useMutation({
-    mutationFn: (change: { importHistory?: boolean; importWatchlist?: boolean }) =>
-      setTrackingImport(service.service, change),
+    mutationFn: (change: {
+      importHistory?: boolean
+      importWatchlist?: boolean
+      syncRatings?: boolean
+    }) => setTrackingImport(service.service, change),
     onSuccess: store,
   })
   const watchlistLabelId = useId()
   const watchlistHelpId = useId()
-  const importing = service.importHistory || service.importWatchlist
+  const ratingsLabelId = useId()
+  const ratingsHelpId = useId()
+  const importing = service.importHistory || service.importWatchlist || service.syncRatings
   const list =
-    service.service === 'trakt' || service.service === 'simkl'
-      ? text.watchlist.lists[service.service]
+    service.service in text.watchlist.lists
+      ? text.watchlist.lists[service.service as keyof typeof text.watchlist.lists]
       : ''
   const now = useMutation({
     mutationFn: () => importTracking(service.service),
@@ -598,10 +707,13 @@ function HistoryImport({
       <div className="flex items-start justify-between gap-6 max-sm:gap-4">
         <div className="min-w-0">
           <p id={labelId} className="text-control font-medium text-ink">
-            {text.toggle(name)}
+            {service.ratings ? text.listsToggle(name) : text.toggle(name)}
           </p>
           <p id={helpId} className="mt-0.5 text-small text-ink-3">
-            {text.toggleHelp(name, t.account.importEvery(importEveryMinutes))}
+            {(service.ratings ? text.listsToggleHelp : text.toggleHelp)(
+              name,
+              t.account.importEvery(importEveryMinutes),
+            )}
           </p>
         </div>
         <Switch
@@ -639,6 +751,29 @@ function HistoryImport({
           />
         </div>
       )}
+      {service.ratings && (
+        <div className="mt-3 flex items-start justify-between gap-6 border-t border-line pt-3 max-sm:gap-4">
+          <div className="min-w-0">
+            <p id={ratingsLabelId} className="text-control font-medium text-ink">
+              {text.ratings.toggle}
+            </p>
+            <p id={ratingsHelpId} className="mt-0.5 text-small text-ink-3">
+              {text.ratings.toggleHelp(name)}
+            </p>
+          </div>
+          <Switch
+            checked={service.syncRatings}
+            disabled={busy}
+            labelledBy={ratingsLabelId}
+            describedById={ratingsHelpId}
+            onChange={(on) => {
+              now.reset()
+              toggle.mutate({ syncRatings: on })
+            }}
+            className="mt-0.5"
+          />
+        </div>
+      )}
       {importing && (
         <div className="mt-3 flex items-center justify-between gap-4 border-t border-line pt-3 max-sm:flex-col max-sm:items-start">
           <p role="status" className="flex min-w-0 items-start gap-2 text-control text-ink-2">
@@ -656,12 +791,19 @@ function HistoryImport({
                 <>
                   {text.lastImport} <Ago iso={last.at} />
                   {text.colon}
-                  {service.importHistory
-                    ? text.counts(last.played, last.resumed, last.unmapped)
-                    : text.watchlist.counts(last.watchlist, last.unmapped)}
-                  {service.importHistory &&
+                  {[
+                    service.importHistory &&
+                      (service.ratings
+                        ? text.listCounts(last.played, last.unmapped)
+                        : text.counts(last.played, last.resumed, last.unmapped)),
                     service.importWatchlist &&
-                    ` ${text.watchlist.added(last.watchlist)}`}
+                      (service.importHistory
+                        ? text.watchlist.added(last.watchlist)
+                        : text.watchlist.counts(last.watchlist, last.unmapped)),
+                    service.syncRatings && text.ratings.counts(last.rated, last.ratingsSkipped),
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   {service.nextImportAt !== null && (
                     <>
                       {' '}

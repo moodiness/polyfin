@@ -63,6 +63,8 @@ const serviceNames = {
   simkl: 'Simkl',
   mdblist: 'MDBList',
   publicmetadb: 'PublicMetaDB',
+  anilist: 'AniList',
+  myanimelist: 'MyAnimeList',
   lastfm: 'Last.fm',
   listenbrainz: 'ListenBrainz',
 }

@@ -42,6 +42,32 @@ import VersionOrder, { CodecOrder } from './VersionOrder'
 /** The redirect URI of a Trakt or Simkl app whose users enter a code instead of being redirected. */
 const oobRedirectUri = 'urn:ietf:wg:oauth:2.0:oob'
 
+/** The redirect URL of an AniList app whose users paste the code AniList shows them. */
+const aniListPinUri = 'https://anilist.co/api/v2/oauth/pin'
+
+/**
+ * The page of the admin app MyAnimeList sends users' browsers back to, at the server's public
+ * address, else at the address the app is used at.
+ */
+function myAnimeListRedirect(publicAddress: string): string {
+  const base = publicAddress.trim().replace(/\/+$/, '') || window.location.origin
+  return `${base}/admin/me/account/myanimelist`
+}
+
+/** An address to copy into a service's app. */
+function Address({ label, value }: { label: string; value: string }) {
+  const { t } = useI18n()
+  return (
+    <p className="mt-2 text-ink-3">
+      {label}
+      {t.common.colon}{' '}
+      <code className="rounded-check bg-s3 px-1.5 py-0.5 font-mono text-micro break-all text-ink select-all">
+        {value}
+      </code>
+    </p>
+  )
+}
+
 /** The fields of each section, drawn inside its SectionForm. */
 export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => ReactNode> = {
   general: (api) => <General {...api} />,
@@ -1107,6 +1133,73 @@ function Tracking({ form, update, error }: SectionFormApi) {
             mono
           />
         </FieldRow>
+      </SettingsGroup>
+      <SettingsGroup title="AniList">
+        <TextRow anchor="anilist-setup">
+          <p className="max-w-[60ch]">{s.aniListSetup}</p>
+          <Address label={s.redirectUri} value={aniListPinUri} />
+        </TextRow>
+        <FieldRow
+          anchor="anilist-client-id"
+          label={s.aniListClientId}
+          help={s.aniListClientIdHelp}
+          error={error('anilist-client-id')}
+        >
+          <TextInput
+            value={form.aniListClientId}
+            onValue={(aniListClientId) => update({ aniListClientId })}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+          />
+        </FieldRow>
+        <SettingRow
+          anchor="anilist-client-secret"
+          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+        >
+          <SecretField
+            label={s.aniListClientSecret}
+            help={s.aniListClientSecretHelp}
+            saved={form.aniListClientSecretSet}
+            value={form.aniListClientSecret}
+            onValue={(aniListClientSecret) => update({ aniListClientSecret })}
+            reveal={() => revealServerSecret('aniListClientSecret')}
+          />
+        </SettingRow>
+      </SettingsGroup>
+      <SettingsGroup title="MyAnimeList">
+        <TextRow anchor="myanimelist-setup">
+          <p className="max-w-[60ch]">{s.myAnimeListSetup}</p>
+          <Address label={s.redirectUri} value={myAnimeListRedirect(form.publicAddress)} />
+          <p className="mt-1 text-small text-ink-3">{s.myAnimeListRedirectHelp}</p>
+        </TextRow>
+        <FieldRow
+          anchor="myanimelist-client-id"
+          label={s.myAnimeListClientId}
+          help={s.myAnimeListClientIdHelp}
+          error={error('myanimelist-client-id')}
+        >
+          <TextInput
+            value={form.myAnimeListClientId}
+            onValue={(myAnimeListClientId) => update({ myAnimeListClientId })}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+          />
+        </FieldRow>
+        <SettingRow
+          anchor="myanimelist-client-secret"
+          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+        >
+          <SecretField
+            label={s.myAnimeListClientSecret}
+            help={s.myAnimeListClientSecretHelp}
+            saved={form.myAnimeListClientSecretSet}
+            value={form.myAnimeListClientSecret}
+            onValue={(myAnimeListClientSecret) => update({ myAnimeListClientSecret })}
+            reveal={() => revealServerSecret('myAnimeListClientSecret')}
+          />
+        </SettingRow>
       </SettingsGroup>
       <SettingsGroup title="Last.fm">
         <TextRow anchor="lastfm-setup">

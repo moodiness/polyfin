@@ -6,7 +6,7 @@ const settings = {
   settings: {
     tracking: {
       description:
-        'Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts on their My account page, and Polyfin tells those services what they watch; Last.fm and ListenBrainz hear of the songs they play. Trakt, Simkl and Last.fm first need an app of this server’s, set up here. MDBList, PublicMetaDB and ListenBrainz need nothing.',
+        'Each user can connect their own Trakt, Simkl, MDBList, PublicMetaDB, AniList and MyAnimeList accounts on their My account page, and Polyfin tells those services what they watch; Last.fm and ListenBrainz hear of the songs they play. Trakt, Simkl, AniList, MyAnimeList and Last.fm first need an app of this server’s, set up here. MDBList, PublicMetaDB and ListenBrainz need nothing.',
       traktSetup:
         'Create an app on trakt.tv, in Settings, Your API Apps, New application. Give it any name, then copy its client ID and client secret here.',
       redirectUri: 'Redirect URI to enter in the app',
@@ -26,6 +26,23 @@ const settings = {
         'Leave empty to turn Last.fm off. Users can connect once both the API key and the shared secret are saved.',
       lastFmSecret: 'Last.fm shared secret',
       lastFmSecretHelp: 'Shown on your API account’s page on last.fm, under the API key.',
+      aniListSetup:
+        'Create an app on anilist.co, in Settings, Developer, Create New Client. Give it any name, and as its redirect URL the address below, where AniList shows users the code they paste in Polyfin. Then copy its client ID and client secret here.',
+      aniListClientId: 'AniList client ID',
+      aniListClientIdHelp:
+        'Leave empty to turn AniList off. Users can connect once both the client ID and the client secret are saved.',
+      aniListClientSecret: 'AniList client secret',
+      aniListClientSecretHelp: 'Shown on the app’s page on anilist.co, under the client ID.',
+      myAnimeListSetup:
+        'Create an app on myanimelist.net, in Account Settings, API, Create ID, of the type “web”. Give it any name, and as its redirect URL the address below: MyAnimeList sends users’ browsers back there once they allow Polyfin. Only their browsers need to reach it. Then copy its client ID and client secret here.',
+      myAnimeListRedirectHelp:
+        'This server’s public address under Settings › General, else the address you use now.',
+      myAnimeListClientId: 'MyAnimeList client ID',
+      myAnimeListClientIdHelp:
+        'Leave empty to turn MyAnimeList off. Users can connect once both the client ID and the client secret are saved.',
+      myAnimeListClientSecret: 'MyAnimeList client secret',
+      myAnimeListClientSecretHelp:
+        'Shown on the app’s page on myanimelist.net, under the client ID.',
     },
     title: 'Settings',
     description: 'Options that apply to the whole server.',

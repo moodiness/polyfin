@@ -426,6 +426,18 @@ export type Settings = {
   lastFmSecretSet: boolean
   /** Sent only to change the shared secret: a new one, or "" to remove it. */
   lastFmSecret?: string
+  /** AniList app users connect through; both its client ID and secret are needed. */
+  aniListClientId: string
+  /** Whether the AniList client secret is saved. */
+  aniListClientSecretSet: boolean
+  /** Sent only to change the secret: a new secret, or "" to remove it. */
+  aniListClientSecret?: string
+  /** MyAnimeList app users connect through; both its client ID and secret are needed. */
+  myAnimeListClientId: string
+  /** Whether the MyAnimeList client secret is saved. */
+  myAnimeListClientSecretSet: boolean
+  /** Sent only to change the secret: a new secret, or "" to remove it. */
+  myAnimeListClientSecret?: string
   /** Hour of the server's time zone the database is backed up at every day, 0 to 23. */
   backupHour: number
   /** How many of the newest database backups are kept. */
@@ -1548,7 +1560,14 @@ export const updateReminderSettings = (settings: { beforeMinutes: number; onApps
 
 /** The tracking services, in the order the server lists them. */
 export type TrackingServiceName =
-  'trakt' | 'simkl' | 'mdblist' | 'publicmetadb' | 'lastfm' | 'listenbrainz'
+  | 'trakt'
+  | 'simkl'
+  | 'mdblist'
+  | 'publicmetadb'
+  | 'anilist'
+  | 'myanimelist'
+  | 'lastfm'
+  | 'listenbrainz'
 
 /** The services users connect with an API key or user token, which they can show again. */
 export type TrackingKeyServiceName = 'mdblist' | 'publicmetadb' | 'listenbrainz'
@@ -1558,9 +1577,12 @@ export type TrackingService = {
   service: TrackingServiceName
   /**
    * "code": the user enters a code on the service's site; "signin": the user signs in on the
-   * service's site and allows Polyfin; "key": the user pastes an API key or user token.
+   * service's site and allows Polyfin; "pin": the user allows Polyfin on the service's site and
+   * pastes the code it shows (AniList); "redirect": the user allows Polyfin on the service's site,
+   * which sends the browser back to the admin app, or pastes the address it sent it to
+   * (MyAnimeList); "key": the user pastes an API key or user token.
    */
-  connection: 'code' | 'signin' | 'key'
+  connection: 'code' | 'signin' | 'pin' | 'redirect' | 'key'
   /** The service is told the songs the user plays; it has no history to import. */
   music: boolean
   /** False only for a code or sign-in service whose app the server is not set up with. */
@@ -1581,6 +1603,8 @@ export type TrackingService = {
    * sign-in waits for the user to allow Polyfin on the page `verificationUrl` (`userCode` empty).
    */
   code: { userCode: string; verificationUrl: string; expiresAt: string } | null
+  /** When a token that cannot be refreshed (AniList's) expires, which stops the connection. */
+  expiresAt: string | null
   /** Whether the service's watch history is imported into Polyfin, at the server's interval. */
   importHistory: boolean
   /** An import runs now. */
@@ -1589,10 +1613,17 @@ export type TrackingService = {
   lastImport: TrackingImport | null
   /** When the next import runs; null while none is planned. */
   nextImportAt: string | null
-  /** The service has a watchlist Polyfin can import: Trakt's watchlist, Simkl's Plan to Watch. */
+  /**
+   * The service has a watchlist Polyfin can import: Trakt's watchlist, Simkl's, AniList's and
+   * MyAnimeList's Plan to Watch.
+   */
   watchlist: boolean
   /** Whether that watchlist is imported, with the history's imports, into the Watchlist view. */
   importWatchlist: boolean
+  /** The service keeps ratings (AniList, MyAnimeList). */
+  ratings: boolean
+  /** Whether the user's ratings are sent there, and its scores imported. */
+  syncRatings: boolean
 }
 
 /** How an import of a watch history, and of a watchlist, went. */
@@ -1606,6 +1637,10 @@ export type TrackingImport = {
   watchlist: number
   /** Titles of the history and the watchlist Polyfin could not identify. */
   unmapped: number
+  /** Titles it gave the service's score. */
+  rated: number
+  /** Ratings of series spread over several entries, skipped by it and by the ratings sent since. */
+  ratingsSkipped: number
   /** Why the history could not be read whole; what was read is imported all the same. */
   problem: 'reconnect' | 'unreachable' | 'rate_limited' | null
 }
@@ -1625,12 +1660,19 @@ export const connectTracking = (service: TrackingServiceName, key?: string) =>
   )
 
 /**
- * Turns the import of a connected service's watch history, or of its watchlist, on (importing at
- * once) or off.
+ * Connects AniList with the code it showed the user, or MyAnimeList with the address it sent the
+ * browser back to, or its code.
+ */
+export const exchangeTrackingCode = (service: 'anilist' | 'myanimelist', code: string) =>
+  request<TrackingService>('POST', `/account/tracking/${seg(service)}/code`, { code })
+
+/**
+ * Turns the import of a connected service's watch history, or of its watchlist, or the sync of the
+ * user's ratings with it, on (importing at once) or off.
  */
 export const setTrackingImport = (
   service: TrackingServiceName,
-  change: { importHistory?: boolean; importWatchlist?: boolean },
+  change: { importHistory?: boolean; importWatchlist?: boolean; syncRatings?: boolean },
 ) => request<TrackingService>('PATCH', `/account/tracking/${seg(service)}`, change)
 
 /** Imports a service's watch history at once. */
@@ -2472,6 +2514,8 @@ export type ServerSecretName =
   | 'tmdbKey'
   | 'traktClientSecret'
   | 'lastFmSecret'
+  | 'aniListClientSecret'
+  | 'myAnimeListClientSecret'
   | 'metricsToken'
 
 /** Reads one of the server's saved secrets again, for an administrator; never cached. */

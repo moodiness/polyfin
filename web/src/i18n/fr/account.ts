@@ -408,6 +408,25 @@ const account: typeof en = {
       signInExpires: (when: string) => `Cette demande expire ${when}.`,
       signInEnded:
         'Polyfin n’a pas été autorisé à temps, ou a été refusé. Recommencez pour réessayer.',
+      pinIntro: (name: string) =>
+        `Connectez vos listes ${name} : autorisez Polyfin sur le site de ${name}, puis collez ici le code qu’il vous montre.`,
+      redirectIntro: (name: string) =>
+        `Connectez votre liste ${name} : autorisez Polyfin sur le site de ${name}, qui vous ramène ici.`,
+      pinStep: (site: string) =>
+        `Allez sur ${site}, connectez-vous si on vous le demande, autorisez Polyfin, puis copiez ici le code affiché.`,
+      redirectStep: (site: string) =>
+        `Allez sur ${site}, connectez-vous si on vous le demande et autorisez Polyfin : vous revenez ici une fois l’autorisation donnée.`,
+      codeField: (name: string) => `Code ${name}`,
+      codeFieldHelp: (name: string) => `Le code que ${name} affiche une fois Polyfin autorisé.`,
+      addressField: 'Adresse ou code',
+      addressFieldHelp: (name: string) =>
+        `Si votre navigateur n’a pas pu ouvrir la page où ${name} l’a envoyé, copiez ici l’adresse de cette page depuis la barre d’adresse.`,
+      pasteEnded:
+        'Cette demande a expiré avant que Polyfin soit autorisé. Recommencez pour réessayer.',
+      invalidCode: (name: string) =>
+        `${name} n’a pas accepté ce code, ou il correspond à une demande précédente. Recommencez pour en obtenir un nouveau.`,
+      tokenExpires: (date: string) => `, jusqu’au ${date}`,
+      returning: (name: string) => `Connexion de votre compte ${name}…`,
       connectedAs: 'Connecté avec le compte ',
       connectedWithKey: 'Connecté avec votre clé d’API',
       connected: 'Connecté',
@@ -438,6 +457,11 @@ const account: typeof en = {
         toggle: (name: string) => `Importer mon historique ${name}`,
         toggleHelp: (name: string, every: string) =>
           `Marque comme vu dans Polyfin ce que vous avez regardé sur ${name}, et reprend là où vous vous êtes arrêté, pour que Reprendre et À suivre correspondent. Importé ${every} ; rien n’est renvoyé à ${name}.`,
+        listsToggle: (name: string) => `Importer mes listes ${name}`,
+        listsToggleHelp: (name: string, every: string) =>
+          `Marque comme vus dans Polyfin les épisodes que vos listes ${name} comptent comme vus : jusqu’à la progression de chaque entrée pour Watching, On hold et Dropped, tous pour Completed. Importé ${every} ; l’importation ne fait qu’ajouter.`,
+        listCounts: (played: number, unmapped: number) =>
+          `${played <= 1 ? `${played} titre marqué vu` : `${played} titres marqués vus`}, ${unmapped <= 1 ? `${unmapped} titre introuvable` : `${unmapped} titres introuvables`} dans Polyfin.`,
         importNow: 'Importer maintenant',
         importing: 'Importation…',
         importingStatus: 'Importation de votre historique…',
@@ -456,7 +480,12 @@ const account: typeof en = {
             `${name} a demandé à Polyfin d’attendre lors de la dernière importation. Ce qui a été lu a été importé ; la prochaine importation réessaie.`,
         },
         watchlist: {
-          lists: { trakt: 'watchlist', simkl: 'liste Plan to Watch' },
+          lists: {
+            trakt: 'watchlist',
+            simkl: 'liste Plan to Watch',
+            anilist: 'liste Plan to Watch',
+            myanimelist: 'liste Plan to Watch',
+          },
           toggle: (name: string, list: string) => `Importer ma ${list} ${name}`,
           toggleHelp: (name: string, list: string) =>
             `Place les films et séries de votre ${list} ${name} dans « À regarder » de vos applis Jellyfin, à chaque importation. Un titre en sort dès que vous le commencez, ou dès que ${name} ne le liste plus. Rien n’est renvoyé à ${name}.`,
@@ -464,6 +493,13 @@ const account: typeof en = {
             `${added <= 1 ? `${added} ajouté` : `${added} ajoutés`} à « À regarder », ${unmapped <= 1 ? `${unmapped} titre introuvable` : `${unmapped} titres introuvables`} dans Polyfin.`,
           added: (added: number) =>
             `${added <= 1 ? `${added} ajouté` : `${added} ajoutés`} à « À regarder ».`,
+        },
+        ratings: {
+          toggle: 'Synchroniser mes notes',
+          toggleHelp: (name: string) =>
+            `Envoie à ${name} les notes que vous donnez aux films et aux séries, et donne à vos titres sans note vos notes ${name} à chaque importation. Une série que ${name} découpe en plusieurs entrées est ignorée.`,
+          counts: (rated: number, skipped: number) =>
+            `${rated <= 1 ? `${rated} titre noté` : `${rated} titres notés`}, ${skipped <= 1 ? `${skipped} note ignorée` : `${skipped} notes ignorées`}.`,
         },
       },
     },

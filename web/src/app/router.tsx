@@ -6,6 +6,7 @@ import {
   type RouteObject,
 } from 'react-router'
 import AccountRoute from '@/features/account/AccountRoute'
+import MyAnimeListReturn from '@/features/account/MyAnimeListReturn'
 import InviteRoute from '@/features/auth/InviteRoute'
 import NotFoundRoute from '@/features/home/NotFoundRoute'
 import HomeRoute from '@/features/home/HomeRoute'
@@ -115,6 +116,8 @@ export const router = createBrowserRouter(
 
         // Every user's own pages.
         { path: 'me/account', element: <AccountRoute /> },
+        // Where MyAnimeList sends the browser back once the user allowed Polyfin.
+        { path: 'me/account/myanimelist', element: <MyAnimeListReturn /> },
         { path: 'me/sources', element: <MySourcesRoute /> },
         { path: 'me/sources/smart/:id', element: <SmartListRoute scope="me" /> },
         { path: 'me/sources/:id/:section?', element: <SourceRoute scope="me" /> },

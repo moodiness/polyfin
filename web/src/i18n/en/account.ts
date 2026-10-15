@@ -401,6 +401,24 @@ const account = {
       signInWaiting: 'This page updates by itself once you have allowed it.',
       signInExpires: (when: string) => `This request expires ${when}.`,
       signInEnded: 'Polyfin was not allowed in time, or was refused. Start again to try once more.',
+      pinIntro: (name: string) =>
+        `Connect your ${name} lists: allow Polyfin on the ${name} site, then paste here the code it shows you.`,
+      redirectIntro: (name: string) =>
+        `Connect your ${name} list: allow Polyfin on the ${name} site, which brings you back here.`,
+      pinStep: (site: string) =>
+        `Go to ${site}, sign in if asked, allow Polyfin, then copy the code it shows you here.`,
+      redirectStep: (site: string) =>
+        `Go to ${site}, sign in if asked, and allow Polyfin: it brings you back here once done.`,
+      codeField: (name: string) => `${name} code`,
+      codeFieldHelp: (name: string) => `The code ${name} shows once you allow Polyfin.`,
+      addressField: 'Address or code',
+      addressFieldHelp: (name: string) =>
+        `If your browser could not open the page ${name} sent it to, copy that page’s address from the address bar here.`,
+      pasteEnded: 'This request expired before Polyfin was allowed. Start again to try once more.',
+      invalidCode: (name: string) =>
+        `${name} did not accept this code, or it is for an earlier request. Start again to get a new one.`,
+      tokenExpires: (date: string) => `, until ${date}`,
+      returning: (name: string) => `Connecting your ${name} account…`,
       connectedAs: 'Connected as ',
       connectedWithKey: 'Connected with your API key',
       connected: 'Connected',
@@ -431,6 +449,11 @@ const account = {
         toggle: (name: string) => `Import my ${name} history`,
         toggleHelp: (name: string, every: string) =>
           `Marks played in Polyfin what you watched on ${name}, and picks up where you stopped, so Continue Watching and Next Up match. Imported ${every}; nothing is sent back to ${name}.`,
+        listsToggle: (name: string) => `Import my ${name} lists`,
+        listsToggleHelp: (name: string, every: string) =>
+          `Marks played in Polyfin the episodes your ${name} lists count watched: up to each entry’s progress for Watching, On hold and Dropped, all of them for Completed. Imported ${every}; it only adds.`,
+        listCounts: (played: number, unmapped: number) =>
+          `${played === 1 ? '1 title' : `${played} titles`} marked played, ${unmapped === 1 ? '1 title' : `${unmapped} titles`} not found in Polyfin.`,
         importNow: 'Import now',
         importing: 'Importing…',
         importingStatus: 'Importing your history…',
@@ -449,13 +472,25 @@ const account = {
             `${name} asked Polyfin to wait during the last import. What was read was imported; the next import tries again.`,
         },
         watchlist: {
-          lists: { trakt: 'watchlist', simkl: 'Plan to Watch list' },
+          lists: {
+            trakt: 'watchlist',
+            simkl: 'Plan to Watch list',
+            anilist: 'Plan to Watch list',
+            myanimelist: 'Plan to Watch list',
+          },
           toggle: (name: string, list: string) => `Import my ${name} ${list}`,
           toggleHelp: (name: string, list: string) =>
             `Puts the movies and series of your ${name} ${list} in the Watchlist view of your Jellyfin apps, with each import. A title leaves it once you start it, or once ${name} no longer lists it. Nothing is sent back to ${name}.`,
           counts: (added: number, unmapped: number) =>
             `${added} added to the Watchlist, ${unmapped === 1 ? '1 title' : `${unmapped} titles`} not found in Polyfin.`,
           added: (added: number) => `${added} added to the Watchlist.`,
+        },
+        ratings: {
+          toggle: 'Sync my ratings',
+          toggleHelp: (name: string) =>
+            `Sends the ratings you give movies and series to ${name} as your scores, and gives your unrated titles your ${name} scores with each import. A series ${name} splits into several entries is skipped.`,
+          counts: (rated: number, skipped: number) =>
+            `${rated === 1 ? '1 title' : `${rated} titles`} rated, ${skipped === 1 ? '1 rating' : `${skipped} ratings`} skipped.`,
         },
       },
     },

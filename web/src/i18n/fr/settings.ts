@@ -5,7 +5,7 @@ const settings: typeof en = {
   settings: {
     tracking: {
       description:
-        'Chaque utilisateur peut connecter ses propres comptes Trakt, Simkl, MDBList et PublicMetaDB depuis sa page Mon compte, et Polyfin indique à ces services ce qu’il regarde ; Last.fm et ListenBrainz reçoivent les morceaux qu’il écoute. Trakt, Simkl et Last.fm ont d’abord besoin d’une application de ce serveur, à configurer ici. MDBList, PublicMetaDB et ListenBrainz n’ont besoin de rien.',
+        'Chaque utilisateur peut connecter ses propres comptes Trakt, Simkl, MDBList, PublicMetaDB, AniList et MyAnimeList depuis sa page Mon compte, et Polyfin indique à ces services ce qu’il regarde ; Last.fm et ListenBrainz reçoivent les morceaux qu’il écoute. Trakt, Simkl, AniList, MyAnimeList et Last.fm ont d’abord besoin d’une application de ce serveur, à configurer ici. MDBList, PublicMetaDB et ListenBrainz n’ont besoin de rien.',
       traktSetup:
         'Créez une application sur trakt.tv, dans Settings, Your API Apps, New application. Donnez-lui le nom de votre choix, puis copiez ici son client ID et son client secret.',
       redirectUri: 'Adresse de redirection (redirect URI) à saisir dans l’application',
@@ -27,6 +27,24 @@ const settings: typeof en = {
         'Laissez vide pour désactiver Last.fm. Les utilisateurs peuvent se connecter une fois la clé d’API et le secret partagé enregistrés.',
       lastFmSecret: 'Secret partagé Last.fm',
       lastFmSecretHelp: 'Affiché sur la page de votre compte d’API sur last.fm, sous la clé d’API.',
+      aniListSetup:
+        'Créez une application sur anilist.co, dans Settings, Developer, Create New Client. Donnez-lui le nom de votre choix, et comme adresse de redirection l’adresse ci-dessous, où AniList montre aux utilisateurs le code qu’ils collent dans Polyfin. Copiez ensuite ici son client ID et son client secret.',
+      aniListClientId: 'Client ID AniList',
+      aniListClientIdHelp:
+        'Laissez vide pour désactiver AniList. Les utilisateurs peuvent se connecter une fois le client ID et le client secret enregistrés.',
+      aniListClientSecret: 'Client secret AniList',
+      aniListClientSecretHelp:
+        'Affiché sur la page de l’application sur anilist.co, sous le client ID.',
+      myAnimeListSetup:
+        'Créez une application sur myanimelist.net, dans Account Settings, API, Create ID, du type « web ». Donnez-lui le nom de votre choix, et comme adresse de redirection l’adresse ci-dessous : MyAnimeList y renvoie le navigateur des utilisateurs une fois Polyfin autorisé. Seul leur navigateur doit pouvoir l’atteindre. Copiez ensuite ici son client ID et son client secret.',
+      myAnimeListRedirectHelp:
+        'L’adresse publique de ce serveur, dans Paramètres › Général, sinon l’adresse que vous utilisez maintenant.',
+      myAnimeListClientId: 'Client ID MyAnimeList',
+      myAnimeListClientIdHelp:
+        'Laissez vide pour désactiver MyAnimeList. Les utilisateurs peuvent se connecter une fois le client ID et le client secret enregistrés.',
+      myAnimeListClientSecret: 'Client secret MyAnimeList',
+      myAnimeListClientSecretHelp:
+        'Affiché sur la page de l’application sur myanimelist.net, sous le client ID.',
     },
     title: 'Paramètres',
     description: 'Options qui s’appliquent à l’ensemble du serveur.',
