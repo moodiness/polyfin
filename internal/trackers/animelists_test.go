@@ -370,6 +370,56 @@ func TestListsAreImportedOnlyAdding(t *testing.T) {
 	}
 }
 
+// A switch turned on while an import runs, after it read the switches,
+// is imported once that import ends: Plan to Watch, turned on while the
+// history import reads the list, reaches the watchlist.
+func TestASwitchTurnedOnDuringAnImportIsImportedWhenItEnds(t *testing.T) {
+	h := newHarness(t)
+	h.anime = animeMapping(t)
+	lists := newFakeLists(t, h)
+	user := h.animeUser(t, "max")
+	lists.set(AniList, 33, listed{status: statusPlanned})
+	// The first read of the list waits until released.
+	h.f.mu.Lock()
+	serve := h.f.handlers["POST /anilist/"]
+	h.f.mu.Unlock()
+	reading, held := make(chan struct{}), make(chan struct{})
+	var first sync.Once
+	release := sync.OnceFunc(func() { close(held) })
+	t.Cleanup(release)
+	h.f.on("POST", "/anilist/", func(r request) answer {
+		body, _ := r.body.(map[string]any)
+		if query, _ := body["query"].(string); strings.Contains(query, "MediaListCollection") {
+			first.Do(func() {
+				close(reading)
+				<-held
+			})
+		}
+		return serve(r)
+	})
+
+	result := h.imported(t, user, AniList, func() {
+		if _, err := h.SetImport(t.Context(), user, AniList, true); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-reading:
+		case <-time.After(30 * time.Second):
+			t.Fatal("the history import never read the list")
+		}
+		if _, err := h.SetWatchlistImport(t.Context(), user, AniList, true); err != nil {
+			t.Fatal(err)
+		}
+		release()
+	})
+	if result.Watchlist != 1 || result.Problem != "" {
+		t.Errorf("import: %+v", result)
+	}
+	if list := h.watchlistOf(t, user); len(list) != 1 || list[0] != h.idOf(t, library.TitleRef{Series: true, IMDb: "tt0000300"}) {
+		t.Errorf("watchlist: %v", list)
+	}
+}
+
 func TestRatingsAreSyncedOnlyWithTheSwitch(t *testing.T) {
 	h := newHarness(t)
 	h.anime = animeMapping(t)

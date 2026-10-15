@@ -52,9 +52,11 @@ type ImportResult struct {
 	Problem string
 }
 
-// importRun is an import running.
+// importRun is an import running. again has it run once more when it
+// ends: a switch was turned on while it ran, maybe after it read them.
 type importRun struct {
 	cancel context.CancelFunc
+	again  bool
 }
 
 // importStatus completes status with the imports of its service, and when
@@ -157,7 +159,7 @@ func (s *Service) setImport(ctx context.Context, user accounts.ID, service, colu
 	}
 	switch {
 	case on && !was[column]:
-		s.startImport(key)
+		s.startImport(key, true)
 	case !on && (!other || column == "watchlist"):
 		// An import running may be reading the list: it stops, and the
 		// history, if on, is imported again when due.
@@ -190,31 +192,42 @@ func (s *Service) ImportNow(ctx context.Context, user accounts.ID, service strin
 	if !on {
 		return Status{}, ErrImportOff
 	}
-	s.startImport(laneKey{user, service})
+	s.startImport(laneKey{user, service}, false)
 	return s.status(ctx, user, service)
 }
 
 // startImport imports the history of key in the background, unless an
-// import of it runs already.
-func (s *Service) startImport(key laneKey) {
+// import of it runs already. Then, if again, that import runs once more
+// when it ends, to import what was turned on since it started.
+func (s *Service) startImport(key laneKey, again bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.titles == nil || s.userData == nil || s.importing[key] != nil {
+	if s.titles == nil || s.userData == nil {
+		return
+	}
+	if run := s.importing[key]; run != nil {
+		run.again = run.again || again
 		return
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
 	run := &importRun{cancel: cancel}
 	s.importing[key] = run
 	if !s.spawn(func() {
-		defer func() {
+		defer cancel()
+		for {
+			s.runImport(ctx, key)
 			s.mu.Lock()
-			if s.importing[key] == run {
+			current := s.importing[key] == run
+			again := current && run.again && ctx.Err() == nil
+			run.again = false
+			if current && !again {
 				delete(s.importing, key)
 			}
 			s.mu.Unlock()
-			cancel()
-		}()
-		s.runImport(ctx, key)
+			if !again {
+				return
+			}
+		}
 	}) {
 		delete(s.importing, key)
 		cancel()
@@ -268,7 +281,7 @@ func (s *Service) importDue() {
 	}
 	for _, key := range due {
 		if Available(key.service, settings) {
-			s.startImport(key)
+			s.startImport(key, false)
 		}
 	}
 }
