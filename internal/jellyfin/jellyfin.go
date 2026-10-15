@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/collections"
+	"github.com/moodiness/polyfin/internal/commercials"
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
@@ -124,6 +125,9 @@ type Options struct {
 	// Recordings schedules and keeps Live TV recordings; nil, or one
 	// without a folder, records nothing.
 	Recordings *recordings.Service
+	// Commercials gives the commercial breaks found in recordings; nil
+	// gives none.
+	Commercials *commercials.Service
 	// Backups backs the database up into the folder the settings give, and
 	// restores a backup; nil, or one while backups are off, lists none.
 	Backups *backup.Service

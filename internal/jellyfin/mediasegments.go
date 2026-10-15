@@ -42,15 +42,17 @@ var segmentTypes = map[string]string{
 }
 
 // mediaSegments answers the segments of a movie or an episode, opened by
-// its own identifier or by one of its versions'. Other items have none.
-// The segments come from community databases; one that fails only leaves
-// its segments out. They are then shaped for the version asked, the first
-// for the title's own identifier, once it is analyzed, and that version's
-// chapters may give its own (see versionSegments). A version not analyzed
-// yet is never analyzed for this. An episode's local file without an intro
-// or credits yet may have them found in its audio (see audioSegments). With
-// the skip buttons turned off in the settings, no database is asked and
-// every item has none, as on a Jellyfin server without a segment provider.
+// its own identifier or by one of its versions', and the commercial breaks
+// found in a recording (see package commercials). Other items have none.
+// The segments of titles come from community databases; one that fails
+// only leaves its segments out. They are then shaped for the version
+// asked, the first for the title's own identifier, once it is analyzed,
+// and that version's chapters may give its own (see versionSegments). A
+// version not analyzed yet is never analyzed for this. An episode's local
+// file without an intro or credits yet may have them found in its audio
+// (see audioSegments). With the skip buttons turned off in the settings,
+// no database is asked and every item has none, as on a Jellyfin server
+// without a segment provider.
 func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	opened := b.pathID(r, "itemId")
@@ -80,7 +82,9 @@ func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var segments []mediasegments.Segment
-	if h.Segments.Asks() {
+	if item.Kind == library.KindRecording {
+		segments = h.Commercials.Segments(r.Context(), item.ID)
+	} else if h.Segments.Asks() {
 		title, err := h.segmentTitle(r.Context(), user, item)
 		if err != nil {
 			h.browseError(w, r, err)

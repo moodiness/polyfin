@@ -27,6 +27,7 @@ import (
 	"github.com/moodiness/polyfin/internal/audiosegments"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/collections"
+	"github.com/moodiness/polyfin/internal/commercials"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/discovery"
@@ -363,15 +364,23 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	defer images.Close()
 	// Recording and backups follow the settings, which turn them on and
 	// choose their folders. Recordings that end are told to the
-	// notifications, made below, before any recording starts.
+	// notifications, made below, before any recording starts, and have
+	// their commercial breaks looked for in the background.
 	var notifier *notifications.Service
+	var breaks *commercials.Service
 	recorder := recordings.New(recordings.Config{DB: pool, Folder: func() string { return store.Settings().RecordingsDir(cfg.DataDir) },
 		Guide: lib, Recorder: player, Users: store, Logger: logger,
-		Ended: func(ctx context.Context, ended recordings.Ended) { notifier.RecordingEnded(ctx, ended) }})
+		Ended: func(ctx context.Context, ended recordings.Ended) {
+			notifier.RecordingEnded(ctx, ended)
+			breaks.Ended(ctx, ended)
+		}})
 	if recorder.Available() {
 		logger.Info("Live TV recording is on", "folder", recorder.Dir())
 	}
-	registerRecordingTasks(registry, recorder)
+	breaks = commercials.New(commercials.Options{DB: pool, FFmpeg: cfg.FFmpeg, FFprobe: cfg.FFprobe, Recordings: recorder,
+		Settings: store.Settings, Logger: logger})
+	defer breaks.Close()
+	registerRecordingTasks(registry, recorder, breaks)
 	// The destinations' passwords and keys are sealed as the other secrets.
 	backups := backup.New(backup.Config{Folder: func() string { return store.Settings().BackupDir(cfg.DataDir) }, DatabaseURL: cfg.DatabaseURL,
 		DB: pool, Secrets: box, Settings: store.Settings, Logger: logger})
@@ -501,6 +510,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		CacheDir:       cfg.CacheDir,
 		FontsDir:       cfg.FontsDir,
 		Recordings:     recorder,
+		Commercials:    breaks,
 		Backups:        backups,
 		Trackers:       tracking,
 		Plays:          playbacks,
@@ -823,9 +833,10 @@ func registerLocalFoldersTask(registry *tasks.Registry, folders *localfiles.Serv
 }
 
 // registerRecordingTasks registers the periodic jobs of Live TV recording,
-// which do nothing while it is off: the scheduler itself runs on its own
-// (see recordings.Service.Run).
-func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Service) {
+// which do nothing while it is off, and the reading of the recordings not
+// read yet for their commercials, which does nothing while that is off:
+// the scheduler itself runs on its own (see recordings.Service.Run).
+func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Service, breaks *commercials.Service) {
 	registry.Register(tasks.Task{
 		Key:      "DeleteOldRecordings",
 		Category: tasks.CategoryLiveTV,
@@ -847,6 +858,16 @@ func registerRecordingTasks(registry *tasks.Registry, recorder *recordings.Servi
 		Interval: recordings.SeriesRefreshInterval,
 		AtStart:  true,
 		Run:      recorder.RefreshSeriesTimers,
+	})
+	registry.Register(tasks.Task{
+		Key:      "FindCommercials",
+		Category: tasks.CategoryLiveTV,
+		Text: map[string]tasks.Text{
+			"en": {Name: "Find commercials in recordings", Description: "Reads the finished recordings not read yet for their commercial breaks, one at a time, while Find commercials in recordings is on under Settings › Recordings. Each recording is otherwise read once it ends."},
+			"fr": {Name: "Trouver les publicités des enregistrements", Description: "Lit les enregistrements terminés pas encore lus pour trouver leurs coupures publicitaires, un à la fois, quand Trouver les publicités des enregistrements est activé dans Paramètres › Enregistrements. Chaque enregistrement est sinon lu dès qu’il se termine."},
+		},
+		Interval: commercials.RunInterval,
+		Run:      breaks.Run,
 	})
 }
 

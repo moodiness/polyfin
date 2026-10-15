@@ -296,10 +296,15 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 	// buttons are on and a segment database is asked, or the version's own
 	// chapters name an intro, a recap, a preview or credits (see
 	// versionSegments), or an intro or credits were found in the audio of
-	// an episode's local file (see audioSegments).
-	source.HasSegments = (p.item.Kind == library.KindMovie || p.item.Kind == library.KindEpisode) &&
-		h.Accounts.Settings().SkipButtons && (h.Segments.Asks() || known && len(chapterSegments(analysis)) > 0 ||
-		p.item.Kind == library.KindEpisode && h.foundInAudio(r.Context(), version))
+	// an episode's local file (see audioSegments); recordings may when
+	// commercial breaks were found in them (see package commercials).
+	switch p.item.Kind {
+	case library.KindMovie, library.KindEpisode:
+		source.HasSegments = h.Accounts.Settings().SkipButtons && (h.Segments.Asks() || known && len(chapterSegments(analysis)) > 0 ||
+			p.item.Kind == library.KindEpisode && h.foundInAudio(r.Context(), version))
+	case library.KindRecording:
+		source.HasSegments = h.Commercials.Has(r.Context(), p.item.ID)
+	}
 	size, runtime := version.Size, version.Runtime
 	if known {
 		source.MediaStreams = playback.MediaStreams(analysis, p.externals(version), language)
