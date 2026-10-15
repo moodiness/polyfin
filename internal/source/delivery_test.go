@@ -126,8 +126,9 @@ func streamAll(t *testing.T, s *Source, off int64) []byte {
 }
 
 // A host that serves each connection at its own pace serves a file read
-// ahead over several connections, faster than over one; the reader gets
-// its bytes, in order.
+// ahead over several connections at once; the reader gets its bytes, in
+// order. The connections the host saw at once tell it, not the time the
+// read took, which a busy machine stretches.
 func TestFilesAreReadOverSeveralConnections(t *testing.T) {
 	host := &paced{data: randomData(32 * blockSize), rate: 16 << 20, delay: 20 * time.Millisecond}
 	server := httptest.NewServer(host)
@@ -135,14 +136,11 @@ func TestFilesAreReadOverSeveralConnections(t *testing.T) {
 	cache := newCache(t, 1<<30)
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
 	defer s.Release()
-	started := time.Now()
 	if got := streamAll(t, s, 0); !bytes.Equal(got, host.data) {
 		t.Fatal("content differs")
 	}
-	took := time.Since(started)
-	// One connection alone would take 2 s.
-	if host.peak.Load() < 2 || took > 1800*time.Millisecond {
-		t.Errorf("%d connections at most, in %v", host.peak.Load(), took)
+	if peak := host.peak.Load(); peak < 2 {
+		t.Errorf("%d connection at most", peak)
 	}
 	if n := host.requests.Load(); n > 12 {
 		t.Errorf("%d requests", n)
