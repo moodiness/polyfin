@@ -149,6 +149,17 @@ func TestBeyondItsBytesACacheEvictsTheLeastRecentlyUsed(t *testing.T) {
 	}
 }
 
+func TestDeleteFuncForgetsWhatItReports(t *testing.T) {
+	c := newClock(time.Hour).sized(100)
+	c.Put("a", "kept")
+	c.Put("b", "dropped")
+	c.Put("c", "dropped")
+	c.DeleteFunc(func(key, value string) bool { return value == "dropped" && key != "c" })
+	if got := keeps(c, "a", "b", "c"); !slices.Equal(got, []string{"a", "c"}) || c.Bytes() != 11 || c.Len() != 2 {
+		t.Errorf("%v kept, %d bytes, %d entries", got, c.Bytes(), c.Len())
+	}
+}
+
 func TestASizedCacheKeepsItsCapacity(t *testing.T) {
 	c := NewLasting[string, string](2, func() time.Duration { return time.Hour }, time.Now).Sized(100, func(value string) int { return len(value) })
 	c.Put("a", "a")

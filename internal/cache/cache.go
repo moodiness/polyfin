@@ -227,6 +227,18 @@ func (c *Cache[K, V]) Delete(key K) {
 	}
 }
 
+// DeleteFunc forgets the entries drop reports, given their key and value.
+// drop must not use the cache.
+func (c *Cache[K, V]) DeleteFunc(drop func(key K, value V) bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key, e := range c.entries {
+		if drop(key, e.value) {
+			c.remove(e)
+		}
+	}
+}
+
 // remove forgets e, with c.mu held.
 func (c *Cache[K, V]) remove(e *entry[K, V]) {
 	e.unlink(byUse)
