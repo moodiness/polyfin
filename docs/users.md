@@ -603,6 +603,21 @@ A user with at least one row who is outside all of them cannot sign in (403). Th
 - Jellyfin serves direct streams without checking who asks; Polyfin also refuses a user's media outside their hours.
 - jellyfin-web never sends hours outside 0 to 24 or ending before they start.
 
+## Metadata language
+
+**Metadata language** is the language a user reads titles in: their names, overviews and images, and their episodes'. Users set it in its own section under **My account**, and administrators in its own panel on the user's page under **Users**. **The server's**, the default, shows the descriptions of the server's addons without a language. The other choices are the languages the server's addons were given (see [Languages](addons-and-libraries.md#languages)).
+
+- A user under parental control or blocking genres gets their language too.
+- A title's genres, ratings, people, versions and subtitles are the same in every language, so parental control, blocked genres, hidden titles and smart lists judge every user alike.
+- A title that no addon in the language describes shows the server's description.
+- When the language is English or French, the names Polyfin generates follow it too (see [Language of generated names](getting-started.md#language-of-generated-names)).
+- An invite link's model user passes on their metadata language.
+
+**For app developers:**
+
+- Jellyfin sets a metadata language per library, and its apps send none per user: Polyfin reads the user's own, and the server configuration's `PreferredMetadataLanguage` stays `en`.
+- Images come without a user. An image asked for with the tag of a user's language gets that image.
+
 ## Playback and access limits
 
 On a user's page under **Users**, the **Playback and access** section holds five more limits, saved with **Save playback and access**. Administrators' Jellyfin apps also set them from the user's settings. For a member who follows a group, the group sets them, with the **Quality group**, and an app that changes one detaches them from the group (see [User groups](#user-groups)).

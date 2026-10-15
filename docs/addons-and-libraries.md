@@ -30,6 +30,26 @@ Manifest addresses usually contain your addon settings or keys. Polyfin never sh
 
 Each source has its own page, from **Open its page** on its row, with its details, an **Active** switch and its place in the order. **Remove** asks first.
 
+### Languages
+
+A title's name, overview and images are those of the addon that describes it, in the language set on that addon's configure page, which lives in its manifest address. To let users read titles in their own language, add the same metadata addon once more for each language, each configured on its configure page in that language, and name the language under **Language of its descriptions** on its page under **Content › Sources**. It is **None** by default.
+
+Each user then picks a **Metadata language** among those languages, under **My account**, or an administrator on the user's page under **Users** (see [Users](users.md#metadata-language)). **The server's** is the default.
+
+For a user with a language:
+
+- A title's page shows the description of the server's addon in that language: the name, overview, poster, backdrop and logo, and the episodes' names, overviews and images.
+- In libraries, collections, smart lists, search results and home rows, a title shows its name and poster in that language once Polyfin keeps that description. Until then it shows the catalog's, and Polyfin reads the descriptions in the background, a few at a time.
+- Search also asks the search catalogs of the addons in that language, so a title is found by its name in that language too.
+- A title that no addon in the language describes shows the server's description.
+- Users under parental control or blocking genres get their language too.
+
+What does not change: a title's genres, ratings, people, versions, subtitles and identifiers stay those of the addons without a language, starting with the one whose catalog listed it. Genre pages, blocked genres, parental control, hidden titles and smart lists judge every user alike. Library names stay the administrator's, and generated images keep them.
+
+An addon with a language describes titles for the users of that language only, never for others, even when its catalogs are libraries. An addon with a language and no library of its own describes titles only. Only the server's Stremio addons take a language.
+
+Each language costs one more request per title: the addon in that language is asked once for each title opened or shown, and its descriptions are kept and refreshed as every description is (see [Catalog pages](#catalog-pages)). Catalogs are read once, whatever the languages.
+
 ## Libraries
 
 Stremio catalogs become Jellyfin libraries. Stremio streams become versions of the same item, and addon subtitles become external subtitle tracks. An app's subtitle search lists the subtitles from the user's subtitle addons. See [Playback](playback.md) and [Subtitles](subtitles.md).
