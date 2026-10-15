@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"image"
@@ -52,10 +53,14 @@ type dlnaPlay struct {
 	method  string
 	started time.Time
 	seen    time.Time
-	// position is how far the device read, by bytes for a file, by time
-	// for a conversion; runtime the title's length, size the file's.
+	// position is how far the device read, by the bytes of the file sent
+	// for a file, by time for a conversion; runtime the title's length.
 	position time.Duration
 	runtime  time.Duration
+	// sent are the bytes of the version's file sent during the playback,
+	// wherever they are in it: devices read its end first to find its
+	// index, and read some parts again.
+	sent byteRanges
 	// requests is how many of its requests are being served.
 	requests int
 	// marked tells the title was marked played.
@@ -168,6 +173,9 @@ func (h *Handler) beginDLNA(ctx context.Context, play dlna.Play, version account
 	h.dlna.mu.Lock()
 	current.requests++
 	current.seen = h.now()
+	if current.version != version {
+		current.sent = nil
+	}
 	current.version, current.method = version, method
 	h.dlna.mu.Unlock()
 	return current, func() {
@@ -441,14 +449,14 @@ func (h *Handler) playDLNAVideo(w http.ResponseWriter, r *http.Request, play dln
 		resource.MimeType, resource.OrgPn = play.Profile.MimeType("Video", container, cmpOr(mimeTypes[container], "application/octet-stream"))
 		header.Set("ContentFeatures.DLNA.ORG", dlna.ContentFeatures(resource))
 		size := chosen.analysis.Size
-		counter := &readCounter{ResponseWriter: w, from: rangeStart(r)}
-		stop := h.reportWhile(r.Context(), current, func() time.Duration { return fraction(counter.reached(), size, runtime) })
+		counter := &sentCounter{ResponseWriter: w, plays: h.dlna, play: current}
+		stop := h.reportWhile(r.Context(), current, func() time.Duration { return fraction(h.dlna.sent(current), size, runtime) })
 		err := h.Playback.Serve(counter, r, chosen.version, playback.Delivery{Relay: true, ContentType: resource.MimeType})
 		stop()
 		if err != nil && r.Context().Err() == nil {
 			h.Logger.Warn("A DLNA device's file could not be served", "addon", chosen.version.Addon, "error", err)
 		}
-		h.reachedDLNA(r.Context(), current, fraction(counter.reached(), size, runtime))
+		h.reachedDLNA(r.Context(), current, fraction(h.dlna.sent(current), size, runtime))
 		return
 	}
 	if !chosen.decision.HLS {
@@ -530,18 +538,103 @@ func (h *Handler) reportWhile(ctx context.Context, current *dlnaPlay, position f
 	return func() { close(done) }
 }
 
-// fraction is the time of a title of runtime the byte offset reached
-// stands for in a file of size.
-func fraction(reached, size int64, runtime time.Duration) time.Duration {
+// fraction is the time of a title of runtime that sent bytes of a file of
+// size stand for.
+func fraction(sent, size int64, runtime time.Duration) time.Duration {
 	if size <= 0 || runtime <= 0 {
 		return 0
 	}
-	return time.Duration(float64(runtime) * min(float64(reached)/float64(size), 1))
+	return time.Duration(float64(runtime) * min(float64(sent)/float64(size), 1))
 }
 
-// rangeStart is the first byte a request's Range asks for, 0 for none.
-func rangeStart(r *http.Request) int64 {
-	spec, ok := strings.CutPrefix(r.Header.Get("Range"), "bytes=")
+// byteRange is the bytes [from, to) of a file.
+type byteRange struct{ from, to int64 }
+
+// byteRanges are bytes of a file, in order, none overlapping or touching
+// another.
+type byteRanges []byteRange
+
+// add returns s with the bytes [from, to).
+func (s byteRanges) add(from, to int64) byteRanges {
+	if from >= to {
+		return s
+	}
+	// s[i:j] are the ranges [from, to) overlaps or touches.
+	i, _ := slices.BinarySearchFunc(s, from, func(have byteRange, from int64) int { return cmp.Compare(have.to, from) })
+	j, _ := slices.BinarySearchFunc(s, to, func(have byteRange, to int64) int {
+		if have.from <= to {
+			return -1
+		}
+		return 1
+	})
+	if i < j {
+		from, to = min(from, s[i].from), max(to, s[j-1].to)
+	}
+	return slices.Replace(s, i, j, byteRange{from, to})
+}
+
+// total counts the bytes of s.
+func (s byteRanges) total() int64 {
+	var n int64
+	for _, have := range s {
+		n += have.to - have.from
+	}
+	return n
+}
+
+// sent counts the bytes of its file a playback sent.
+func (d *dlnaPlays) sent(play *dlnaPlay) int64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return play.sent.total()
+}
+
+// sentCounter notes in a playback the bytes of its file an answer sends:
+// from where its Content-Range starts, else from the file's start.
+type sentCounter struct {
+	http.ResponseWriter
+	plays *dlnaPlays
+	play  *dlnaPlay
+	// offset is where the next byte written is in the file, once the
+	// header is written.
+	offset      int64
+	wroteHeader bool
+}
+
+func (c *sentCounter) WriteHeader(status int) {
+	if !c.wroteHeader {
+		c.wroteHeader = true
+		if status == http.StatusPartialContent {
+			c.offset = contentRangeStart(c.Header().Get("Content-Range"))
+		}
+	}
+	c.ResponseWriter.WriteHeader(status)
+}
+
+func (c *sentCounter) Write(p []byte) (int, error) {
+	if !c.wroteHeader {
+		c.WriteHeader(http.StatusOK)
+	}
+	n, err := c.ResponseWriter.Write(p)
+	c.plays.mu.Lock()
+	c.play.sent = c.play.sent.add(c.offset, c.offset+int64(n))
+	c.plays.mu.Unlock()
+	c.offset += int64(n)
+	return n, err
+}
+
+func (c *sentCounter) Flush() {
+	if f, ok := c.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (c *sentCounter) Unwrap() http.ResponseWriter { return c.ResponseWriter }
+
+// contentRangeStart is the first byte a Content-Range tells, as in
+// bytes 100-199/1000, 0 for none.
+func contentRangeStart(header string) int64 {
+	spec, ok := strings.CutPrefix(header, "bytes ")
 	if !ok {
 		return 0
 	}
@@ -551,37 +644,6 @@ func rangeStart(r *http.Request) int64 {
 		return 0
 	}
 	return start
-}
-
-// readCounter counts the bytes sent from an offset.
-type readCounter struct {
-	http.ResponseWriter
-	mu      sync.Mutex
-	from    int64
-	written int64
-}
-
-func (c *readCounter) Write(p []byte) (int, error) {
-	n, err := c.ResponseWriter.Write(p)
-	c.mu.Lock()
-	c.written += int64(n)
-	c.mu.Unlock()
-	return n, err
-}
-
-func (c *readCounter) Flush() {
-	if f, ok := c.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
-	}
-}
-
-func (c *readCounter) Unwrap() http.ResponseWriter { return c.ResponseWriter }
-
-// reached is the offset the bytes sent reach.
-func (c *readCounter) reached() int64 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.from + c.written
 }
 
 // playDLNASong serves a song as it is when the device's profile takes it,
@@ -617,12 +679,12 @@ func (h *Handler) playDLNASong(w http.ResponseWriter, r *http.Request, play dlna
 	if asIs {
 		mime := audioMime(version.Audio.Container)
 		header.Set("ContentFeatures.DLNA.ORG", dlna.ContentFeatures(dlna.Resource{}))
-		counter := &readCounter{ResponseWriter: w, from: rangeStart(r)}
+		counter := &sentCounter{ResponseWriter: w, plays: h.dlna, play: current}
 		err := h.Playback.Serve(counter, r, version, playback.Delivery{Relay: true, ContentType: mime})
 		if err != nil && ctx.Err() == nil {
 			h.Logger.Warn("A DLNA device's song could not be served", "error", err)
 		}
-		h.reachedDLNA(ctx, current, fraction(counter.reached(), version.Size, play.Item.Runtime))
+		h.reachedDLNA(ctx, current, fraction(h.dlna.sent(current), version.Size, play.Item.Runtime))
 		return
 	}
 	header.Set("Content-Type", "audio/mpeg")
@@ -815,6 +877,7 @@ func dlnaDevice(play dlnaPlay) accounts.Device {
 // dlnaSessionInfos describes user's DLNA playbacks as /Sessions does:
 // Polyfin does not control DLNA devices.
 func (h *Handler) dlnaSessionInfos(r *http.Request, user accounts.User) []SessionInfo {
+	h.endStaleDLNA(accounts.ID{}, "")
 	var infos []SessionInfo
 	for _, play := range h.dlna.all() {
 		if play.user.ID != user.ID {
