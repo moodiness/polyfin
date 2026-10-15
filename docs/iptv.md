@@ -1,6 +1,6 @@
 # IPTV sources
 
-This page explains how to import an M3U playlist or an Xtream Codes account directly, without a Stremio addon, and how to shape its channels, movies and series. For the programme guide, recordings and how channels play, see [Live TV](live-tv.md).
+This page explains how to import an M3U playlist or an Xtream Codes account directly, without a Stremio addon, how to watch and record the channels of an HDHomeRun tuner on the local network, and how to shape their channels, movies and series. For the programme guide, recordings and how channels play, see [Live TV](live-tv.md).
 
 ## Adding a source
 
@@ -35,6 +35,36 @@ An **Xtream Codes account** source takes a **Name**, the **Server address**, a *
 - Requests to a provider's server (its lists, guide, and the details of a title) go one at a time, a second apart; a server that answers "too many requests" is asked again when it says. A list or guide that still fails says the server asked Polyfin to slow down, and is tried again after a few minutes (see [Refreshing](#refreshing)).
 - An Xtream account's connection limit, which its login tells, bounds the channels played at once (see [How a channel plays](live-tv.md#how-a-channel-plays)).
 - The archive of past programmes a list tells for a channel (catch-up) is read on every download, and its programmes play from Replay (see [Replay](#replay)).
+
+## HDHomeRun tuners
+
+An HDHomeRun tuner on the local network, with an antenna or a cable, is a source too: its free channels play and record as an IPTV source's. Only administrators add tuners, to the server's sources, as only their sources may reach the local network, and its tuners are the server's to share.
+
+**Add a source** under **Content › Sources** has an **HDHomeRun tuner** tab:
+
+- **Find tuners** asks the tuners of the local network to answer (HDHomeRun's discovery, a UDP broadcast on port 65001) and lists those that do, with their name, model and tuner count. A tuner already added says so.
+- **Add by address** takes the tuner's address, `192.168.1.20` or `http://192.168.1.20`, and reads its `discover.json`.
+
+In Docker, the broadcast reaches the local network only with host networking (see [Installation](installation.md#find-hdhomerun-tuners)): the tab says so when no tuner answers, and an address always works. `POLYFIN_HDHOMERUN_ADDRESSES` has **Find tuners** ask given addresses instead of broadcasting (see [Configuration](configuration.md)).
+
+A tuner is added under the name it gives itself, with its Live TV catalog only, and once: the same tuner (its device ID) cannot be added twice, as its tuners would be counted twice.
+
+### A tuner's channels
+
+- Channels are read from the tuner's `lineup.json`, with their number (`GuideNumber`, such as "5.1") and name. Channels the tuner marks protected (`DRM`) are left out, as it does not play them.
+- Apps show each channel's number as the tuner gives it, and order them by it: 5, 5.1, 5.2, then 6. A fixed number set under **Channels** replaces it.
+- **Only the tuner's favorite channels**, off by default, keeps the channels marked favorite on the tuner. It is in the **Tuner** panel of the source page's **Summary**, with the tuner's model and tuner count.
+- **Scan for channels** asks the tuner to scan for channels again (on its first source, such as its antenna), shows its progress, then reads its line-up.
+- The line-up is read again with **Refresh Live TV lists and guides every**, and kept as an IPTV line-up is, edits included (see [How the line-up is kept](#how-the-line-up-is-kept)).
+- XMLTV guides attach to its catalog as to any catalog. A guide channel named by the channel's number takes it (see [How channels are matched to the guide](live-tv.md#how-channels-are-matched-to-the-guide)).
+
+### Tuners in use
+
+Each channel watched or recorded takes one of the tuner's tuners, whoever reads it, as a channel's stream is read once for every viewer. With every tuner taken, opening a channel first frees one no one watches any more, then the user's own oldest, as for an account's connection limit; when other users' channels take them all, it is refused at once. A recording takes the tuner of a channel only watched, never another recording's (see [Recordings and tuners](live-tv.md#recordings-and-tuners)).
+
+Streams play as IPTV channels do: as they come when the app takes them, else converted. Terrestrial video is often MPEG-2 and interlaced: a conversion deinterlaces it with **Deinterlacing method** (see [Transcoding](transcoding.md)). The user's **Live TV** permission, quality group and limits apply.
+
+A tuner that does not answer, or refuses a stream for another reason than its tuners being in use, shows under **System › Health** until one of its streams plays. A stream refused because every tuner was in use, by Polyfin or another app, is **Refused by the provider** (see [Stream health](#stream-health)), and is no fault of the tuner's.
 
 ## What to import
 

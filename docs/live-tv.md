@@ -35,6 +35,8 @@ Each channel's stream is read through one connection to its source, whoever read
 
 An Xtream account tells, at its login, how many streams it plays at once. Polyfin keeps within it: opening a channel closes first a stream no one watches any more, then the user's own oldest one; when other users' channels take every connection, the new channel is refused at once (the app tells it could not play). A stream being closed, as when its 20 seconds end, still counts until its connection is closed: a channel opening meanwhile waits for it, a second at most. Right after closing a stream, a refusal from the provider is tried again for a few seconds, as providers count a connection a little while after it closed.
 
+An HDHomeRun tuner plays as many channels at once as it has tuners, which its `discover.json` tells: each channel watched or recorded takes one, whoever reads it, and Polyfin keeps within them the same way (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)). A tuner whose tuners another app took answers that all are in use: the channel is refused, its stream is refused by the provider for this start only, and the tuner shows no problem under **System › Health**.
+
 #### Starting a channel
 
 Before anything reads a channel's stream, Polyfin checks its first bytes. A source that answers with an error, a web page, a JSON or text answer, an empty or short body, or bytes of no video container fails within a second, and the channel's next stream is tried at once. A source that sends nothing within 3 seconds (10 for its answer, as providers that redirect to the stream can take several seconds) fails as silent. What the stream holds is then analyzed from about a second of it, within **Maximum time to analyze a version** but never more than 8 seconds, and kept: later starts of the channel, even after a restart, skip the analysis for a week, and analyze it again on the way, from the stream already read, once it is an hour old. FFmpeg then reads it with half a second of probing; if FFmpeg fails within 10 seconds, the stream is analyzed again in full.
@@ -119,9 +121,10 @@ Each channel takes one guide channel. Several channels, such as a channel and it
 
 1. **Identifier.** A guide channel whose identifier is the channel's Stremio ID, or, for a channel of an IPTV source, the channel's own guide identifier (its list's `tvg-id` or `epg_channel_id`), takes it.
 2. **Identifier, loosely.** Lists often write that identifier in another case, or with a feed after an `@` (`Name.fr@SD`). Failing an exact match, a guide channel whose identifier is the same ignoring case takes it; then one equal to the part before the last `@`, exactly and then ignoring case. This comes before any name match, with ties ranked by country and then programmes as below.
-3. **Name.** Otherwise the guide channel's display names are compared with the channel's name, once HTML entities left in them are decoded and these are set aside: case, accents, punctuation, separators such as "|", list prefixes such as "FR:", "FR|" or "KIDS|", and marker characters such as ᴴᴰ or ★. "+" reads as "plus", as identifiers write it. An exact match keeps quality tags such as HD, FHD, UHD, 4K or SD; a loose one sets them aside too, and the "+", which lists sometimes leave out ("Zeb Sport" for "Zeb+ Sport").
+3. **Number.** For a channel of an HDHomeRun tuner, a guide channel whose display name is the channel's number ("5.1"), alone or before its name ("5.1 Name"), takes it. "5.1" is neither "5.10" nor "15.1". Guides of terrestrial channels often name them so. A channel given a fixed number under **Channels** is matched by its name.
+4. **Name.** Otherwise the guide channel's display names are compared with the channel's name, once HTML entities left in them are decoded and these are set aside: case, accents, punctuation, separators such as "|", list prefixes such as "FR:", "FR|" or "KIDS|", and marker characters such as ᴴᴰ or ★. "+" reads as "plus", as identifiers write it. An exact match keeps quality tags such as HD, FHD, UHD, 4K or SD; a loose one sets them aside too, and the "+", which lists sometimes leave out ("Zeb Sport" for "Zeb+ Sport").
    - French lists write the public networks "France 2" to "France 5" as "F2" to "F5", followed by a region. On a French server, or under a French prefix, Polyfin reads them in full: "F3 Zebria" matches "France 3 Zebria". "F1" is left as it is.
-4. **Identifier as a name.** Failing a display name, a guide channel whose identifier, without its country suffix, writes the channel's name takes it: "ZebPlus1.fr" for "Zeb +1", "ZebAndCo.fr" for "Zeb & Co". Guides keep identifiers when a channel is renamed, so a list still using the old name finds it.
+5. **Identifier as a name.** Failing a display name, a guide channel whose identifier, without its country suffix, writes the channel's name takes it: "ZebPlus1.fr" for "Zeb +1", "ZebAndCo.fr" for "Zeb & Co". Guides keep identifiers when a channel is renamed, so a list still using the old name finds it.
 
 Many guides list the same channel for several countries, so the candidates are ranked:
 
@@ -220,6 +223,15 @@ Timers, series timers and recordings are kept in the database.
 - While it records, the file is written in MPEG-TS, which apps can follow live.
 - Once the programme ends, it becomes one Matroska file in the folder. It plays like a movie's version: as it is, or remuxed into HLS (see [Playback](playback.md)).
 - A recording under way when Polyfin stops is kept as a partial recording when Polyfin starts again. The rest of the programme, if it still airs, is recorded as another.
+
+### Recordings and tuners
+
+A recording reads its channel's stream from before FFmpeg starts until it ends, so the connection or tuner it takes stays its own between its analysis and FFmpeg's start.
+
+- On an HDHomeRun tuner, a recording due takes, after the tuners no one uses any more, the tuner of the oldest channel only watched, whoever watches it: that channel stops for its viewers. It never takes another recording's tuner.
+- One that finds every tuner recording another channel is tried again every 30 seconds, as a stream that fails. If it recorded nothing by its programme's end, it fails, and the **Recording failed** notification says every tuner was recording another channel.
+- On an IPTV account, recordings keep the account's rule: a recording takes a connection no one uses any more, never another user's channel, and is refused when they all play.
+- The admin app's lists of timers, under **Content › Live TV**, mark with **Not enough tuners** the timers of a tuner's channel that would need more tuners than it has, counting the other timers recording at the same time.
 
 ### Watching recordings
 

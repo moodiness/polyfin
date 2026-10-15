@@ -242,6 +242,19 @@ TVs and players that play over DLNA, without a Jellyfin app, browse and play the
 - A DLNA playback is listed in `/Sessions` under its user, with `Client` `DLNA`, `DeviceName` the device's name, `DeviceId` `dlna-` and the device's ID, `RemoteEndPoint` its address, `NowPlayingItem` and `PlayState`, until two minutes after the device last asked for anything. `SupportsRemoteControl` and `SupportsMediaControl` are false, and a listing with `controllableByUserId` leaves it out.
 - `PositionTicks` is how far the device read, as Polyfin infers it: devices report nothing. For a file sent as it is, that is the share of the file's bytes sent during the playback, wherever they are in it. A DLNA playback counts against the user's **Playbacks at once**, as an app's does.
 
+### Live TV tuners
+
+The server's HDHomeRun tuners (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)) are Jellyfin's tuner hosts of type `hdhomerun`. Their channels are listed with the others in Live TV. jellyfin-web's tuner pages open the tuner's page in the admin app, or **Add a source** on its **HDHomeRun tuner** tab for a new tuner (see [Dashboard links and single sign-on](web-client.md#dashboard-links-and-single-sign-on)).
+
+**For app developers:**
+
+- `/LiveTv/TunerHosts/Types` lists HDHomeRun (`hdhomerun`), as Jellyfin names it; M3U tuners are not offered, as IPTV sources are added in the admin app.
+- `/LiveTv/Tuners/Discover` (and Jellyfin's `/LiveTv/Tuners/Discvover`) lists the tuners that answer discovery, as Jellyfin's `TunerHostInfo`: `Type`, `Url`, `DeviceId`, `FriendlyName`, `TunerCount`, without an `Id`. With `newDevicesOnly=true`, those already added are left out. Administrators only.
+- `POST /LiveTv/TunerHosts` adds a tuner from its `Url`, with `ImportFavoritesOnly`, and answers it with its `Id`; with the `Id` of a tuner, it changes its address and `ImportFavoritesOnly`. The tuner is read first: one that does not answer is refused (500), and so is one already added (400). Another `Type` answers 404, as in Jellyfin. Administrators only.
+- `DELETE /LiveTv/TunerHosts?id=` removes the tuner, and answers 204 for an identifier that is not a tuner's, as Jellyfin does, leaving other IPTV sources be.
+- `/System/Configuration/livetv` is Jellyfin's `LiveTvOptions` with its defaults, the tuners in `TunerHosts`. A member gets no tuner there, as a tuner's address is of the server's local network. Polyfin's recording and guide settings are its own (see [Live TV](live-tv.md)).
+- Settings Polyfin's tuners do not have take Jellyfin's defaults: `AllowStreamSharing` is true, as a channel's stream is always shared between its viewers.
+
 ### Backups
 
 The backups page of the web client's dashboard, since Jellyfin 10.11, shows the database backups of the backups folder (see [Backups](backups.md)): it lists them, makes one, and restores one. Polyfin's backups hold its database alone, whatever the options asked: Jellyfin's also hold its metadata, trickplay images and subtitles, which Polyfin does not keep on disk.
@@ -261,7 +274,7 @@ These dashboard features answer as a Jellyfin 12.2 on which nothing of the kind 
 - plugins, packages and plugin repositories;
 - browsing the server's folders;
 - library folders and metadata providers;
-- Live TV tuners and listing providers;
+- Live TV listing providers;
 - the startup wizard.
 
 Polyfin never shows the host's folders. To change the server's settings, use the [admin app](administration.md#settings) or the server configuration API.
@@ -269,10 +282,10 @@ Polyfin never shows the host's folders. To change the server's settings, use the
 **For app developers:**
 
 - Answers go to administrators only where Jellyfin requires one.
-- `/Plugins`, `/Packages`, `/Repositories`, `/Environment/Drives`, `/Environment/DirectoryContents`, `/Library/PhysicalPaths`, `/LiveTv/Tuners/Discover` and `/LiveTv/TunerHosts/Types` list nothing.
+- `/Plugins`, `/Packages`, `/Repositories`, `/Environment/Drives`, `/Environment/DirectoryContents` and `/Library/PhysicalPaths` list nothing.
 - `/Libraries/AvailableOptions` lists no provider (Jellyfin also lists its own, its NFO reader and saver among them).
 - `/System/Configuration/MetadataOptions/Default` and `/LiveTv/ListingProviders/Default` are Jellyfin's defaults.
 - `/Startup/Configuration` and `/Startup/User` show the server name, language and earliest administrator; setup is always complete.
-- Writes are refused as Jellyfin refuses them for what does not exist (an unknown plugin or package, path, tuner or listing provider).
+- Writes are refused as Jellyfin refuses them for what does not exist (an unknown plugin or package, path, or listing provider).
 - Writes Jellyfin would perform answer 403: saving plugin repositories, and the wizard's configuration, remote access and first user. Change server settings through `/System/Configuration` instead.
 - `/Environment/ValidatePath` answers 404 for every path.

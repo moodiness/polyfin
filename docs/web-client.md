@@ -19,7 +19,7 @@ The Docker image includes jellyfin-web 12.2. Polyfin serves it at `/web/`, as Je
 
 ## Dashboard links and single sign-on
 
-In the web client, the **Dashboard** (from the menu or the user menu), every dashboard page, the metadata manager, plugin pages and the startup wizard open Polyfin's [admin app](administration.md) at `/admin/` instead.
+In the web client, the **Dashboard** (from the menu or the user menu), every dashboard page, the metadata manager, plugin pages and the startup wizard open Polyfin's [admin app](administration.md) at `/admin/` instead. A tuner's page under Live TV opens the tuner's source page, and the page to add a tuner opens **Add a source** on its **HDHomeRun tuner** tab (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)).
 
 Members, who don't have **Dashboard**, get a **Polyfin** entry in its place. It opens the admin app in the same tab, on their own pages: **Home**, **My sources**, **My account** and **Quick Connect**. It shows:
 

@@ -60,6 +60,12 @@ Only one program on a host's network can use port 7359: next to a Jellyfin serve
 
 TVs and players that browse DLNA servers find Polyfin the same way, once **Share libraries over DLNA** is on under **Settings › DLNA**: they search by multicast on UDP port 1900, which reaches the container only on the host's network or on a network that gives it its own address. Publishing `1900:1900/udp` on a bridge network only helps devices that search the host's address directly. Next to another DLNA server on the same host's network, Polyfin starts anyway and **System › Health** says that it cannot listen on 1900. See [DLNA](dlna.md#docker-networking).
 
+### Find HDHomeRun tuners
+
+**Find tuners**, on the **HDHomeRun tuner** tab of **Add a source**, broadcasts HDHomeRun's discovery to UDP port 65001 of the local network (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)). Like the messages of Jellyfin apps above, a broadcast crosses no bridge network: from a container on Docker Desktop or on a bridge network of Docker Engine, it never reaches the tuners. On the host's network (`compose.host.yaml`), or on a network that gives the container its own address, it does.
+
+Elsewhere, add the tuner by its address (**Add by address**), which works on any network the container reaches the tuner from, or set `POLYFIN_HDHOMERUN_ADDRESSES` to the tuners' addresses, such as `192.168.1.20`: **Find tuners** then asks each one directly instead of broadcasting (see [Configuration](configuration.md)).
+
 ### Serve HTTPS
 
 Polyfin can serve HTTPS itself, on port 8920 by default, with certificate files or a certificate from Let's Encrypt (see [HTTPS](administration.md#https)). Publish the HTTPS port next to 8096 in `compose.yaml`, then choose **Serve HTTPS** under **Settings › Security**:
