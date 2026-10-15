@@ -523,6 +523,16 @@ func TestProgrammeIsRecordedAndPlays(t *testing.T) {
 	if s.get(t, "/Items?parentId="+folders.Items[0].Id, token, &listed); len(listed.Items) != 1 || listed.Items[0].Id != recording.Id {
 		t.Errorf("the recordings folder lists: %+v", listed)
 	}
+	// Its page's play buttons are not held for versions: the web player's
+	// script holds a single source under the item's own identifier, as a
+	// recording's is, until /Polyfin/Items/{id}/Versions answers.
+	var progress VersionProgress
+	if status := s.get(t, "/Polyfin/Items/"+recording.Id+"/Versions", token, &progress); status != http.StatusOK || progress != (VersionProgress{}) {
+		t.Errorf("a recording's versions: %d %+v", status, progress)
+	}
+	if status, body := s.call(http.MethodPost, "/Polyfin/Items/"+recording.Id+"/Versions/Search", app("tv", token), nil); status != http.StatusOK {
+		t.Errorf("a recording's versions searched: %d %s", status, body)
+	}
 
 	// It plays as it is on an app that plays Matroska.
 	profile, _ := os.ReadFile(filepath.Join(playbackFixtures, "profiles", "androidtv.json"))

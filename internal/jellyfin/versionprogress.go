@@ -330,13 +330,20 @@ func (h *Handler) followedProgress(ctx context.Context, user accounts.User, id a
 	return newProgress(pending, h.offered(ctx, user, versions)), true
 }
 
-// versionedItem finds the item id names, or the title of the version it
-// names, as the user may see it, answering the error otherwise.
+// versionedItem finds the item id names, the title of the version it
+// names, or the recording it names, as the user may see it, answering the
+// error otherwise. A recording is not a library item, yet its page has
+// play buttons that web clients hold until they get an answer.
 func (h *Handler) versionedItem(w http.ResponseWriter, r *http.Request, user accounts.User, id accounts.ID) (library.Item, bool) {
 	item, err := h.Library.Item(r.Context(), user, id)
 	if errors.Is(err, library.ErrNotFound) {
 		if owner, ok := h.Library.VersionOwner(id); ok {
 			item, err = h.Library.Item(r.Context(), user, owner)
+		}
+	}
+	if errors.Is(err, library.ErrNotFound) {
+		if rec, channel, recErr := h.visibleRecording(r.Context(), user, id); recErr == nil {
+			item, err = recordingItem(rec, channel), nil
 		}
 	}
 	if err != nil {

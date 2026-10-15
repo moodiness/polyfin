@@ -38,7 +38,7 @@ Polyfin does this with one script of its own added to jellyfin-web's page, `/web
 - when every addon has answered without a version, says "No source is available for this title." under the buttons, with a **Try again** button that has Polyfin ask the addons again;
 - ends a long version, audio or subtitle name with "…" before its menu's arrow, which stream addons' detailed version names used to run under. The open menu shows whole names.
 
-Its words follow the web client's language: English or French, English for any other. It changes nothing during a video, holds the buttons again when jellyfin-web redraws the page, and gives everything back when you leave it. See [Title pages](playback.md#title-pages).
+Its words follow the web client's language: English or French, English for any other. It changes nothing during a video, holds the buttons again when jellyfin-web redraws the page, and gives everything back when you leave it. A Live TV recording's page has a single source under the recording's own identifier, as a title's page has while no version is known: Polyfin answers that it has no versions to wait for, so its buttons are given back at once. See [Title pages](playback.md#title-pages).
 
 On the home page, it has the title of a collection library's "Recently Added in" row open the library on the default screen chosen under **Settings › Home**, as its links in the header do, rather than on Suggestions (see [Collections from addons](addons-and-libraries.md#collections-from-addons)).
 
