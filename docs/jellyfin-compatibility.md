@@ -98,7 +98,15 @@ For each of the last movies the user played, recommendations give the "Because y
 
 ### Trailers, channels and theme media
 
-Trailer items, plugin channels, and theme songs and videos answer empty lists, as on a Jellyfin server without them. Addons give trailers only with their titles.
+Trailer items and plugin channels answer empty lists, as on a Jellyfin server without them. Addons give trailers only with their titles, as `RemoteTrailers`.
+
+The extras, local trailers and theme media local folders keep beside their titles are served as Jellyfin serves them (see [Extras and theme media](local-folders.md#extras-and-theme-media)): each is a `Video` item, or `Audio` for a theme song, with its `ExtraType` (`Trailer`, `BehindTheScenes`, `DeletedScene`, `Interview`, `Scene`, `Sample`, `Short`, `Featurette`, `Clip`, `Unknown`, `ThemeSong` or `ThemeVideo`) and its title, or season, as `ParentId`. No listing holds them; they play, with their own user data, as the title's local versions do.
+
+**For app developers:**
+
+- `/Items/{id}/LocalTrailers` lists a movie's, series' or season's local trailers, and `/Items/{id}/SpecialFeatures` its other extras, theme media left out, both as arrays of items; the `/Users/{userId}/Items/{id}/…` forms jellyfin-web calls answer the same.
+- `/Items/{id}/ThemeSongs` and `/Items/{id}/ThemeVideos` answer a `ThemeMediaResult`, and `/Items/{id}/ThemeMedia` both, with no soundtrack songs. With `inheritFromParent=true`, a season without any gets its series', and an episode its season's, else its series'; `OwnerId` is the item they were found on. `sortBy=Random` shuffles them.
+- An item's details give `LocalTrailerCount` and `SpecialFeatureCount`; `RemoteTrailers` stay the addons' trailers.
 
 ### Opening streams and downloading files
 

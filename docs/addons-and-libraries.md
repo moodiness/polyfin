@@ -442,7 +442,7 @@ A movie's or series' similar titles come from the first page of the catalogs of 
 - They are ranked by shared genres, directors and actors, and release year.
 - The title itself and titles you played are left out.
 
-Trailers reach apps as remote trailers. Addons give no other extras.
+Trailers reach apps as remote trailers. Addons give no other extras; local folders give the extras, local trailers and theme media beside their titles (see [Extras and theme media](local-folders.md#extras-and-theme-media)).
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
