@@ -1,0 +1,168 @@
+{
+  "Name": "1. MPV Download",
+  "MaxStaticBitrate": 999999999,
+  "MaxStreamingBitrate": 999999999,
+  "CodecProfiles": [
+    {
+      "Type": "Video",
+      "Codec": "h264,mpeg4,divx,xvid,wmv,vc1,vp8,vp9"
+    },
+    {
+      "Type": "Video",
+      "Codec": "hevc,h265",
+      "Conditions": [
+        {
+          "Condition": "LessThanEqual",
+          "Property": "VideoLevel",
+          "Value": "153",
+          "IsRequired": false
+        },
+        {
+          "Condition": "NotEquals",
+          "Property": "VideoRangeType",
+          "Value": "DOVI",
+          "IsRequired": true
+        }
+      ]
+    },
+    {
+      "Type": "Audio",
+      "Codec": "aac,ac3,eac3,mp3,flac,vorbis,opus,pcm"
+    }
+  ],
+  "DirectPlayProfiles": [
+    {
+      "Type": "Video",
+      "Container": "mp4,mkv,avi,mov,flv,ts,m2ts,webm,ogv,3gp,hls",
+      "VideoCodec": "h264,hevc,mpeg4,divx,xvid,wmv,vc1,vp8,vp9,avi,mpeg,mpeg2video",
+      "AudioCodec": "aac,mp3,flac,opus,vorbis,ac3,eac3,dts,truehd,wma"
+    },
+    {
+      "Type": "Audio",
+      "Container": "mp3,m4a,aac,ogg,flac,wav,webm,mka",
+      "AudioCodec": "mp3,aac,flac,vorbis,opus,pcm"
+    }
+  ],
+  "TranscodingProfiles": [
+    {
+      "Type": "Video",
+      "Context": "Streaming",
+      "Protocol": "http",
+      "Container": "mp4",
+      "VideoCodec": "h264,hevc",
+      "AudioCodec": "aac,mp3,ac3,eac3",
+      "MaxAudioChannels": "6",
+      "CopyTimestamps": false
+    },
+    {
+      "Type": "Audio",
+      "Context": "Streaming",
+      "Protocol": "http",
+      "Container": "mp3",
+      "AudioCodec": "mp3",
+      "MaxAudioChannels": "2"
+    }
+  ],
+  "SubtitleProfiles": [
+    {
+      "Format": "vtt",
+      "Method": "External"
+    },
+    {
+      "Format": "srt",
+      "Method": "External"
+    },
+    {
+      "Format": "subrip",
+      "Method": "External"
+    },
+    {
+      "Format": "ttml",
+      "Method": "External"
+    },
+    {
+      "Format": "ass",
+      "Method": "External"
+    },
+    {
+      "Format": "ssa",
+      "Method": "External"
+    },
+    {
+      "Format": "microdvd",
+      "Method": "External"
+    },
+    {
+      "Format": "mov_text",
+      "Method": "External"
+    },
+    {
+      "Format": "mpl2",
+      "Method": "External"
+    },
+    {
+      "Format": "pjs",
+      "Method": "External"
+    },
+    {
+      "Format": "realtext",
+      "Method": "External"
+    },
+    {
+      "Format": "scc",
+      "Method": "External"
+    },
+    {
+      "Format": "smi",
+      "Method": "External"
+    },
+    {
+      "Format": "stl",
+      "Method": "External"
+    },
+    {
+      "Format": "sub",
+      "Method": "External"
+    },
+    {
+      "Format": "subviewer",
+      "Method": "External"
+    },
+    {
+      "Format": "text",
+      "Method": "External"
+    },
+    {
+      "Format": "vplayer",
+      "Method": "External"
+    },
+    {
+      "Format": "dvdsub",
+      "Method": "Encode"
+    },
+    {
+      "Format": "idx",
+      "Method": "Encode"
+    },
+    {
+      "Format": "pgs",
+      "Method": "Encode"
+    },
+    {
+      "Format": "pgssub",
+      "Method": "Encode"
+    },
+    {
+      "Format": "teletext",
+      "Method": "Encode"
+    },
+    {
+      "Format": "vobsub",
+      "Method": "Encode"
+    },
+    {
+      "Format": "xsub",
+      "Method": "Encode"
+    }
+  ]
+}

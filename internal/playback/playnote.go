@@ -50,7 +50,7 @@ func PlayNote(decision Decision, playable bool, language string) string {
 	burned := decision.SubtitleStreamIndex >= 0 && decision.Subtitles[decision.SubtitleStreamIndex].Method == "Encode"
 	var reason string
 	switch {
-	case !playable || !decision.DirectPlay && !decision.HLS:
+	case !playable || !decision.DirectPlay && !decision.Streamed():
 		return w.cannotPlay
 	case decision.DirectPlay:
 		return w.directPlay

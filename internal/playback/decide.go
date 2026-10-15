@@ -4,6 +4,8 @@ import (
 	"math/bits"
 	"strconv"
 	"strings"
+
+	"github.com/moodiness/polyfin/internal/hls"
 )
 
 // Options are what a PlaybackInfo request chose.
@@ -38,6 +40,11 @@ type Options struct {
 	// either height that is positive: ConversionHeight, the settings' cap,
 	// caps it whatever the source.
 	MaxHeight, ConversionHeight int
+	// Progressive lets the source be streamed as one file, copied or
+	// converted, to an app whose video TranscodingProfile asks for it
+	// (Protocol http), as apps saving a title for offline viewing do: the
+	// Converted downloads setting.
+	Progressive bool
 	// Can is what the installed FFmpeg converts with.
 	Can Capabilities
 }
@@ -74,12 +81,20 @@ type Decision struct {
 	// is refused; nil when the DeviceProfile has none for video.
 	Transcoding *TranscodingProfile
 	// HLS is set when direct play is refused but Polyfin can stream the
-	// source over HLS with Transcoding. Video and Audio then tell how the
-	// video and the audio that plays reach the app: copied when nil, else
-	// converted.
-	HLS   bool
-	Video *VideoConversion
-	Audio *AudioConversion
+	// source over HLS with Transcoding; Progressive, when it can stream it
+	// as one file instead, which Options.Progressive allows. Video and
+	// Audio then tell how the video and the audio that plays reach the
+	// app: copied when nil, else converted.
+	HLS         bool
+	Progressive bool
+	Video       *VideoConversion
+	Audio       *AudioConversion
+}
+
+// Streamed reports whether Polyfin streams the source, copied or
+// converted, over HLS or as one file.
+func (d Decision) Streamed() bool {
+	return d.HLS || d.Progressive
 }
 
 // SubtitleDelivery is how a subtitle stream reaches the app.
@@ -220,7 +235,9 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 	} else {
 		decision.Container = singleContainer(source.Container, nil, profile.DirectPlayProfiles)
 		if t := decision.Transcoding; t != nil {
-			decision.HLS, decision.Video, decision.Audio = d.stream(t, options, limit, reasons&containerBitrateExceedsLimit != 0 || tall)
+			streamed, video, audio := d.stream(t, options, limit, reasons&containerBitrateExceedsLimit != 0 || tall)
+			decision.HLS, decision.Progressive = streamed && strings.EqualFold(t.Protocol, "hls"), streamed && !strings.EqualFold(t.Protocol, "hls")
+			decision.Video, decision.Audio = video, audio
 			reasons |= d.transcodeReasons(t)
 			if reasons == 0 {
 				reasons = directPlayError
@@ -451,7 +468,8 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 	return why
 }
 
-// stream decides whether Polyfin can stream the source over HLS with t,
+// stream decides whether Polyfin can stream the source with t, over HLS,
+// or as one file when options allow it and t asks for it (Protocol http),
 // and how the video and the audio that plays then reach the app. The video
 // is copied when t takes its codec, the codec profiles of its container
 // accept it with the codec tag a remux writes, and the source fits the
@@ -460,7 +478,11 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 // audio, so never a secondary track; else it is converted to a codec t
 // takes.
 func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mustConvert bool) (bool, *VideoConversion, *AudioConversion) {
-	if !strings.EqualFold(t.Protocol, "hls") || d.video == nil {
+	// Streamed as one file, the video goes out as fragmented MP4 or
+	// MPEG-TS, the containers hls.ParseFormat reads.
+	_, oneFile := hls.ParseFormat(t.Container)
+	hlsStream, progressive := strings.EqualFold(t.Protocol, "hls"), strings.EqualFold(t.Protocol, "http") && options.Progressive && oneFile
+	if !hlsStream && !progressive || d.video == nil {
 		return false, nil, nil
 	}
 	s := subject{video: d.video, codecTag: RemuxTag(d.video.Codec, t.Container)}
