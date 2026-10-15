@@ -11,6 +11,7 @@ import {
   TrashIcon,
   UserCircleDashedIcon,
   BooksIcon,
+  TranslateIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useState, type FormEvent } from 'react'
@@ -21,6 +22,7 @@ import {
   fetchGroups,
   fetchUserDevices,
   fetchUserShareLinks,
+  fetchMetadataLanguages,
   fetchUsers,
   queryClient,
   queryKeys,
@@ -33,6 +35,7 @@ import {
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { ShareLinkList } from '@/features/account/SharedLinks'
+import { MetadataLanguageSelect } from '@/features/account/MetadataLanguage'
 import { errorMessage, formatDate } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -81,6 +84,7 @@ import {
 const sectionIds = [
   'profile',
   'access',
+  'metadata-language',
   'playback',
   'parental',
   'libraries',
@@ -175,6 +179,12 @@ function UserPage({ user }: { user: User }) {
         },
         { id: 'access', label: t.users.accessTitle, icon: ShieldCheckIcon, to: '#access' },
         {
+          id: 'metadata-language',
+          label: t.users.metadataLanguageTitle,
+          icon: TranslateIcon,
+          to: '#metadata-language',
+        },
+        {
           id: 'playback',
           label: t.users.playbackAccessTitle,
           icon: PlayCircleIcon,
@@ -257,6 +267,7 @@ function UserPage({ user }: { user: User }) {
       >
         <ProfilePanel user={user} />
         <AccessPanel user={user} />
+        <MetadataLanguagePanel user={user} />
         <PlaybackAccessForm key={`playback:${formsKey}`} id="playback" target={target} />
         <ParentalControlForm key={`parental:${formsKey}`} id="parental" target={target} />
         <VisibleLibrariesForm key={`libraries:${formsKey}`} id="libraries" target={target} />
@@ -616,6 +627,58 @@ function GroupRow({
         aria-describedby={helpId}
         className="w-56 shrink-0 max-sm:w-full"
       />
+    </div>
+  )
+}
+
+/**
+ * The user's metadata language: The server's, or one the server's addons were given, saved as it
+ * changes. Without a language given to any addon it says where one is given.
+ */
+function MetadataLanguagePanel({ user }: { user: User }) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const patch = useUserPatch(user)
+  const languages = useQuery({
+    queryKey: queryKeys.metadataLanguages,
+    queryFn: ({ signal }) => fetchMetadataLanguages(signal),
+  })
+
+  let body
+  if (languages.isPending) body = <SkeletonRows rows={1} label={t.common.loading} />
+  else if (languages.isError)
+    body = (
+      <InlineError onRetry={() => void languages.refetch()} retrying={languages.isFetching}>
+        {errorMessage(t, languages.error)}
+      </InlineError>
+    )
+  else
+    body = (
+      <div className="space-y-4">
+        <Field
+          label={t.users.metadataLanguageTitle}
+          hideLabel
+          error={patch.isError ? errorMessage(t, patch.error) : undefined}
+        >
+          <MetadataLanguageSelect
+            value={user.metadataLanguage}
+            languages={languages.data}
+            onValue={(metadataLanguage) =>
+              patch.mutate({ metadataLanguage }, { onSuccess: () => toast(t.users.updated) })
+            }
+            disabled={patch.isPending}
+          />
+        </Field>
+        {languages.data.length === 0 && user.metadataLanguage === '' && (
+          <Notice>{t.users.metadataLanguageNone}</Notice>
+        )}
+      </div>
+    )
+  return (
+    <div id="metadata-language" className={sectionClass}>
+      <Panel title={t.users.metadataLanguageTitle} description={t.users.metadataLanguageHelp}>
+        {body}
+      </Panel>
     </div>
   )
 }

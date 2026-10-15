@@ -11,6 +11,7 @@ import {
   PasswordIcon,
   RowsIcon,
   ShareNetworkIcon,
+  TranslateIcon,
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useState, type ReactNode } from 'react'
@@ -42,6 +43,7 @@ import ServerImport from './ServerImport'
 import SharedLinks from './SharedLinks'
 import TrackingServices from './TrackingServices'
 import { ReminderList, ReminderSettingsForm } from './Reminders'
+import { OwnMetadataLanguage } from './MetadataLanguage'
 import { HiddenList, HomeRowList, ResumeList } from './WatchingLists'
 
 const sectionIds = [
@@ -50,6 +52,7 @@ const sectionIds = [
   'resume',
   'hidden',
   'home-rows',
+  'metadata-language',
   'shared-links',
   'reminders',
   'import',
@@ -64,10 +67,10 @@ type SectionId = (typeof sectionIds)[number]
 const ownImportPollMs = 2000
 
 /**
- * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows, shared
- * links (while the user may share or has links), programme reminders (with the Live TV permission),
- * importing from another server and from an app (unless the server turns it off), notifications,
- * devices and password, with a list of sections beside them.
+ * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows, the
+ * metadata language, shared links (while the user may share or has links), programme reminders
+ * (with the Live TV permission), importing from another server and from an app (unless the server
+ * turns it off), notifications, devices and password, with a list of sections beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -157,6 +160,12 @@ export default function AccountRoute() {
               icon: RowsIcon,
               to: '#home-rows',
             },
+            {
+              id: 'metadata-language',
+              label: text.sections.metadataLanguage,
+              icon: TranslateIcon,
+              to: '#metadata-language',
+            },
             ...(sharing
               ? [
                   {
@@ -225,6 +234,13 @@ export default function AccountRoute() {
       </AccountSection>
       <AccountSection id="home-rows" title={text.sections.homeRows} help={text.homeRows.help}>
         <HomeRowList />
+      </AccountSection>
+      <AccountSection
+        id="metadata-language"
+        title={text.sections.metadataLanguage}
+        help={text.metadataLanguage.help}
+      >
+        <OwnMetadataLanguage />
       </AccountSection>
       {sharing && (
         <AccountSection

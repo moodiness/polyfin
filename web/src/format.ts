@@ -20,6 +20,28 @@ export function stremioLabel(labels: Readonly<Record<string, string>>, value: st
   return Object.hasOwn(labels, value) ? labels[value] : value
 }
 
+/**
+ * Language codes ("de", "pt-BR") as choices named in the reader's language ("Allemand",
+ * "Portugais (Brésil)"), sorted by name, so that a language's variants follow it; a code Intl
+ * does not know is shown as sent.
+ */
+export function languageOptions(
+  codes: readonly string[],
+  language: string,
+): { value: string; label: string }[] {
+  const names = new Intl.DisplayNames([language], {
+    type: 'language',
+    languageDisplay: 'standard',
+    fallback: 'code',
+  })
+  return codes
+    .map((code) => {
+      const name = names.of(code) ?? code
+      return { value: code, label: name.charAt(0).toLocaleUpperCase(language) + name.slice(1) }
+    })
+    .sort((a, b) => a.label.localeCompare(b.label, language))
+}
+
 const units: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
   ['month', 30 * 24 * 3600],

@@ -89,6 +89,8 @@ export type User = {
    * False once detached (Own settings); true when the user has no group.
    */
   followGroup: boolean
+  /** The language the user's titles are described in; '' for the server's. */
+  metadataLanguage: string
 }
 
 /** The fields of a user a group holds, in its sections: Access, Playback and access, and the rest. */
@@ -543,6 +545,8 @@ export type UserPatch = Partial<{
   groupId: string
   /** False detaches the member, keeping the group's values; true takes them back. */
   followGroup: boolean
+  /** One of the languages the server's addons were given, or '' for the server's. */
+  metadataLanguage: string
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
@@ -570,6 +574,11 @@ export type Addon = {
   source: IptvSource | null
   music: AddonMusic | null
   folder: LocalFolder | null
+  /**
+   * The language of the descriptions of a server's metadata addon, a language code; '' for none.
+   * Users who chose that metadata language see its descriptions.
+   */
+  language: string
 }
 
 /** What a local folder holds. */
@@ -1007,7 +1016,7 @@ export type IptvSourcePatch = Partial<{
   options: Partial<IptvOptions>
 }>
 
-export type AddonPatch = Partial<{ enabled: boolean; manifestUrl: string }>
+export type AddonPatch = Partial<{ enabled: boolean; manifestUrl: string; language: string }>
 
 export type Library = {
   addonId: string
@@ -1324,6 +1333,15 @@ export const signOut = () => request<void>('DELETE', '/session')
 
 export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
   request<void>('PUT', '/account/password', body)
+
+/** The signed-in user's metadata language ('' for the server's) and the ones they may choose. */
+export type MetadataLanguage = { language: string; languages: string[] }
+
+export const fetchOwnMetadataLanguage = (signal?: AbortSignal) =>
+  request<MetadataLanguage>('GET', '/account/metadata-language', undefined, signal)
+
+export const saveOwnMetadataLanguage = (language: string) =>
+  request<MetadataLanguage>('PUT', '/account/metadata-language', { language })
 
 export const fetchMyDevices = (signal?: AbortSignal) =>
   request<Device[]>('GET', '/account/devices', undefined, signal)
@@ -2436,6 +2454,11 @@ export const newMetricsToken = () => request<Settings>('POST', '/settings/metric
 export const fetchSettingsApps = async (signal?: AbortSignal) =>
   (await request<{ apps: string[] }>('GET', '/settings/apps', undefined, signal)).apps
 
+/** The languages the server's addons were given, which users may choose as metadata language. */
+export const fetchMetadataLanguages = async (signal?: AbortSignal) =>
+  (await request<{ languages: string[] }>('GET', '/metadata-languages', undefined, signal))
+    .languages
+
 const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
 
 export const fetchAddons = (scope: Scope, signal?: AbortSignal) =>
@@ -3443,6 +3466,9 @@ export const queryKeys = {
   homeRowChoices: ['home-rows', 'choices'] as const,
   ownReminders: ['account', 'reminders'] as const,
   reminderSettings: ['account', 'reminders', 'settings'] as const,
+  ownMetadataLanguage: ['account', 'metadata-language'] as const,
+  /** The languages the server's addons were given: refreshed with the server's addons. */
+  metadataLanguages: ['scopes', 'shared', 'metadata-languages'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   /** Prefix of every group query: invalidating it refreshes the list and each group. */

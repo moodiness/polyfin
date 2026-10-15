@@ -11,6 +11,7 @@ const account: typeof en = {
       resume: 'Continuer de regarder',
       hidden: 'Titres masqués',
       homeRows: 'Rangées d’accueil',
+      metadataLanguage: 'Langue des métadonnées',
       sharedLinks: 'Liens partagés',
       reminders: 'Rappels',
       import: 'Importer depuis un autre serveur',
@@ -18,6 +19,14 @@ const account: typeof en = {
       notifications: 'Notifications',
       devices: 'Appareils',
       password: 'Mot de passe',
+    },
+    metadataLanguage: {
+      help: 'La langue des noms, des résumés et des images des titres dans vos applis, quand l’un des addons du serveur les décrit dans cette langue ; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous. Les noms que Polyfin crée lui-même, comme les saisons, la suivent quand c’est l’anglais ou le français.',
+      label: 'Langue des métadonnées',
+      server: 'Celle du serveur',
+      noLanguage:
+        'Aucun addon du serveur n’a encore de langue : les titres sont décrits dans celle du serveur. Un administrateur donne une langue aux addons dans Contenu › Sources.',
+      saved: 'Langue des métadonnées enregistrée.',
     },
     homeRows: {
       help: 'Les rangées que l’administrateur ajoute pour vous à la page d’accueil du lecteur web. Désactivez-en une pour la retirer de votre page d’accueil, et de vos bibliothèques dans les autres applis quand elle en est aussi une. Les sections propres au lecteur web restent dans ses Paramètres › Accueil.',

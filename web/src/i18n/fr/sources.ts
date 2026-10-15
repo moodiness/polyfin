@@ -87,6 +87,11 @@ const sources: typeof en = {
       'À utiliser après avoir reconfiguré l’addon sur sa page de configuration. Ses bibliothèques sont conservées.',
     replaceSubmit: 'Remplacer',
     replaced: 'L’adresse du manifeste a été remplacée.',
+    language: 'Langue de ses descriptions',
+    languageHelp:
+      'La langue choisie sur la page de configuration de l’addon, quand il en propose une. Ajoutez le même addon de métadonnées une fois par langue, chacun configuré sur sa page de configuration, et indiquez ici la langue de chacun : les utilisateurs qui choisissent cette langue des métadonnées voient les noms, les résumés et les images de cet addon. Un addon avec une langue et sans bibliothèque à lui ne fait que décrire les titres.',
+    languageNone: 'Aucune',
+    languageSaved: (name: string) => `${name} : la langue de ses descriptions a été enregistrée.`,
     edit: 'Modifier le compte',
     saved: 'Source enregistrée.',
     settings: 'Réglages',

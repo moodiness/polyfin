@@ -85,6 +85,11 @@ const sources = {
       'Use this after reconfiguring the addon on its configure page. Its libraries are kept.',
     replaceSubmit: 'Replace',
     replaced: 'The manifest address was replaced.',
+    language: 'Language of its descriptions',
+    languageHelp:
+      'The language chosen on the addon’s configure page, when it offers one. Add the same metadata addon once per language, each configured on its configure page, and name each one’s language here: users who choose that metadata language see this addon’s names, overviews and images. An addon with a language and no library of its own only describes titles.',
+    languageNone: 'None',
+    languageSaved: (name: string) => `${name}: the language of its descriptions was saved.`,
     edit: 'Edit the account',
     saved: 'Source saved.',
     settings: 'Settings',

@@ -72,7 +72,7 @@ const common = {
       'This user follows their group: change the group, or turn off Follow the group first.',
     invalid_copy_from: 'This user no longer exists. Choose another one.',
     invalid_server_name: 'The server name must be 1 to 64 characters long.',
-    invalid_language: 'Choose the server language from the list.',
+    invalid_language: 'Choose a language from the list.',
     invalid_catalog_limit: 'Titles read per catalog must be a whole number from 100 to 20,000.',
     invalid_channel_limit:
       'Channels read per Live TV catalog must be a whole number from 100 to 50,000.',

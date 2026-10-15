@@ -73,7 +73,7 @@ const common: typeof en = {
       'Cet utilisateur suit son groupe : modifiez le groupe, ou désactivez d’abord « Suivre le groupe ».',
     invalid_copy_from: 'Cet utilisateur n’existe plus. Choisissez-en un autre.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',
-    invalid_language: 'Choisissez la langue du serveur dans la liste.',
+    invalid_language: 'Choisissez une langue dans la liste.',
     invalid_catalog_limit:
       'Le nombre de titres lus par catalogue doit être un nombre entier de 100 à 20 000.',
     invalid_channel_limit:

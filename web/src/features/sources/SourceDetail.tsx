@@ -21,7 +21,7 @@ import {
   type IptvSource,
   type Scope,
 } from '@/api'
-import { errorMessage, stremioLabel } from '@/format'
+import { errorMessage, languageOptions, stremioLabel } from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Avatar,
@@ -37,6 +37,7 @@ import {
   MenuItem,
   MenuSeparator,
   Notice,
+  Select,
   Panel,
   PanelSection,
   Switch,
@@ -309,6 +310,12 @@ export function SourceDetail({
         </PanelSection>
       )}
 
+      {scope === 'shared' && (addon.kind === 'stremio' || addon.language !== '') && (
+        <PanelSection>
+          <AddonLanguage addon={addon} />
+        </PanelSection>
+      )}
+
       {scope !== null && editor === 'edit' && (
         <PanelSection
           title={folder !== null ? t.localFolders.edit : iptv ? text.edit : text.replace}
@@ -515,6 +522,49 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
       <dt className="text-ink-3">{label}</dt>
       <dd className="min-w-0 text-ink">{children}</dd>
     </>
+  )
+}
+
+/** The languages offered for a server addon's descriptions, as language codes. */
+const descriptionLanguages = (
+  'ar bg ca cs da de el en es fa fi fr he hi hr hu id it ja ko ms nb nl pl pt pt-BR ro ru sk sr sv ' +
+  'th tr uk vi zh zh-TW'
+).split(' ')
+
+/**
+ * Language of its descriptions, for a server's Stremio addon: the language it was configured in,
+ * saved as it changes. None leaves it out of the users' metadata languages.
+ */
+function AddonLanguage({ addon }: { addon: Addon }) {
+  const { language, t } = useI18n()
+  const text = t.sources
+  const toast = useToast()
+  const save = useMutation({
+    mutationFn: (chosen: string) => updateAddon('shared', addon.id, { language: chosen }),
+    onSuccess: (updated) => {
+      replaceCachedAddon('shared', updated)
+      toast(text.languageSaved(updated.name))
+    },
+    onSettled: () => invalidateScope('shared'),
+  })
+  const codes =
+    addon.language === '' || descriptionLanguages.includes(addon.language)
+      ? descriptionLanguages
+      : [...descriptionLanguages, addon.language]
+  return (
+    <Field
+      label={text.language}
+      help={text.languageHelp}
+      error={save.isError ? errorMessage(t, save.error) : undefined}
+    >
+      <Select
+        value={addon.language}
+        options={[{ value: '', label: text.languageNone }, ...languageOptions(codes, language)]}
+        onValue={(chosen) => save.mutate(chosen)}
+        disabled={save.isPending}
+        className="max-w-xs"
+      />
+    </Field>
   )
 }
 
