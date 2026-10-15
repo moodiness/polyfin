@@ -53,9 +53,10 @@ func attemptKey(config Config, directory string) string {
 }
 
 // renew serves the certificate of Let's Encrypt kept, and starts obtaining
-// one when there is none, when it is for other names or from another ACME
-// server, or once a third of its lifetime remains. The attempt runs in
-// the background, and pokes the loop when it ends.
+// one when there is none, when it is for other names, from another ACME
+// server or through another challenge, or once a third of its lifetime
+// remains. The attempt runs in the background, and pokes the loop when it
+// ends.
 func (s *Service) renew(ctx context.Context, config Config) {
 	s.loadStored(ctx, config)
 	now := s.options.now()
@@ -67,7 +68,7 @@ func (s *Service) renew(ctx context.Context, config Config) {
 		s.certificate.Store(certificate)
 	}
 	due := certificate == nil || !slices.Equal(state.stored.Hosts, config.Hosts) || state.stored.Directory != s.options.Directory ||
-		!now.Before(renewAt(certificate.Leaf))
+		state.stored.Challenge != config.Challenge || !now.Before(renewAt(certificate.Leaf))
 	key := attemptKey(config, s.options.Directory)
 	if !due || state.issuing || key == state.attempted && now.Before(state.nextAttempt) {
 		return
@@ -103,14 +104,23 @@ func (s *Service) loadStored(ctx context.Context, config Config) {
 }
 
 // issue obtains a certificate for config's host names, keeps it, and has
-// the loop serve it; a failure is kept, and told in Status.
+// the loop serve it; a failure is kept, and told in Status. The ACME
+// directory and the challenge are kept with the certificate obtained only:
+// after a failed attempt, the certificate it had is still due, and tried
+// again after retryWait. An attempt canceled by Polyfin stopping did not
+// fail: it keeps and tells nothing, and is made again at the next start.
 func (s *Service) issue(ctx context.Context, config Config, stored Stored) {
 	attemptCtx, cancel := context.WithTimeout(ctx, issueTimeout)
 	defer cancel()
 	accountKey, certificate, err := s.obtain(attemptCtx, config, stored.AccountKey)
+	if err != nil && ctx.Err() != nil {
+		s.mu.Lock()
+		s.acme.issuing = false
+		s.mu.Unlock()
+		return
+	}
 	now := s.options.now()
 	stored.AccountKey = accountKey
-	stored.Directory = s.options.Directory
 	if err != nil {
 		failure := err.Error()
 		if len(failure) > maxFailure {
@@ -119,7 +129,8 @@ func (s *Service) issue(ctx context.Context, config Config, stored Stored) {
 		stored.Failure, stored.FailedAt = failure, now
 		s.options.Logger.Warn("A certificate could not be obtained from Let's Encrypt", "hosts", config.Hosts, "error", failure)
 	} else {
-		stored.Hosts, stored.Certificate, stored.Failure, stored.FailedAt = config.Hosts, certificate, "", time.Time{}
+		stored.Directory, stored.Challenge, stored.Hosts, stored.Certificate = s.options.Directory, config.Challenge, config.Hosts, certificate
+		stored.Failure, stored.FailedAt = "", time.Time{}
 		s.options.Logger.Info("A certificate was obtained from Let's Encrypt", "hosts", config.Hosts,
 			"expires", certificate.Leaf.NotAfter.Format(time.RFC3339))
 	}

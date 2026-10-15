@@ -196,3 +196,164 @@ func TestRenewalFollowsASuccessAfterAFailure(t *testing.T) {
 		return leaf != nil && !leaf.Equal(first) && ca.issuedCount() == 2
 	})
 }
+
+// After a restart on another ACME directory, as from Let's Encrypt's
+// staging environment to its production one, a failed first attempt keeps
+// the certificate it had as coming from the old directory: the new one is
+// tried again once the hour a failure waits is over, rather than at the
+// old certificate's renewal.
+func TestNewDirectoryIsTriedAgainAfterAFailure(t *testing.T) {
+	t.Parallel()
+	clock := newTestClock()
+	box, err := secrets.New([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := migrated.New(t)
+	store := NewDatabaseStore(pool, box)
+	settings := newTestSettings(Config{Mode: ModeLetsEncrypt, Port: 0, Hosts: []string{"media.example.org"}, Challenge: ChallengeHTTP01})
+	var service atomic.Pointer[Service]
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s := service.Load(); s != nil {
+			s.Handler(tellsScheme).ServeHTTP(w, r)
+		}
+	}))
+	t.Cleanup(plain.Close)
+	closed, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nowhere := closed.Addr().String()
+	if err := closed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	staging := newTestCA(t, clock.Now, 90*24*time.Hour, func(string, string) string { return plain.Listener.Addr().String() })
+	var failing atomic.Bool
+	failing.Store(true)
+	production := newTestCA(t, clock.Now, 90*24*time.Hour, func(string, string) string {
+		if failing.Load() {
+			return nowhere
+		}
+		return plain.Listener.Addr().String()
+	})
+
+	s, stop := start(t, Options{Store: store, Directory: staging.directory(), Client: staging.server.Client(), now: clock.Now}, settings, tellsScheme)
+	service.Store(s)
+	waitFor(t, "the certificate from the first directory", func() bool { return s.Status().Serving })
+	stop()
+
+	// Restarted on another directory, whose first attempt fails.
+	s, _ = start(t, Options{Store: store, Directory: production.directory(), Client: production.server.Client(), now: clock.Now}, settings,
+		tellsScheme)
+	service.Store(s)
+	waitFor(t, "the failed attempt at the other directory", func() bool { return s.Status().Renewal != "" })
+
+	// It works again, and the hour a failure waits is over.
+	failing.Store(false)
+	clock.advance(2 * time.Hour)
+	waitFor(t, "a certificate from the other directory", func() bool { return production.issuedCount() == 1 && s.Status().Renewal == "" })
+}
+
+// An attempt canceled by Polyfin stopping is no failure: nothing is kept
+// nor told, and the next start tries again at once.
+func TestStoppingDuringAnAttemptKeepsNoFailure(t *testing.T) {
+	t.Parallel()
+	clock := newTestClock()
+	box, err := secrets.New([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := migrated.New(t)
+	store := NewDatabaseStore(pool, box)
+	settings := newTestSettings(Config{Mode: ModeLetsEncrypt, Port: 0, Hosts: []string{"media.example.org"}, Challenge: ChallengeHTTP01})
+	var service atomic.Pointer[Service]
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s := service.Load(); s != nil {
+			s.Handler(tellsScheme).ServeHTTP(w, r)
+		}
+	}))
+	t.Cleanup(plain.Close)
+	// A port that takes the ACME server's check and never answers it,
+	// holding the attempt until Polyfin stops.
+	hang, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = hang.Close() })
+	checking := make(chan net.Conn, 1)
+	go func() {
+		for {
+			conn, err := hang.Accept()
+			if err != nil {
+				return
+			}
+			select {
+			case checking <- conn:
+			default:
+				_ = conn.Close()
+			}
+		}
+	}()
+	var hanging atomic.Bool
+	hanging.Store(true)
+	ca := newTestCA(t, clock.Now, 90*24*time.Hour, func(string, string) string {
+		if hanging.Load() {
+			return hang.Addr().String()
+		}
+		return plain.Listener.Addr().String()
+	})
+	options := Options{Store: store, Directory: ca.directory(), Client: ca.server.Client(), now: clock.Now}
+	s, stop := start(t, options, settings, tellsScheme)
+	service.Store(s)
+	conn := <-checking
+	// Closed before the ACME server stops, which waits for the check.
+	t.Cleanup(func() { _ = conn.Close() })
+	stop()
+	waitFor(t, "the attempt's end", func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return !s.acme.issuing
+	})
+	var failure string
+	if err := pool.QueryRow(t.Context(), "SELECT coalesce((SELECT failure FROM acme_certificate), '')").Scan(&failure); err != nil || failure != "" {
+		t.Errorf("a failure is kept: %q, %v", failure, err)
+	}
+	if renewal := s.Status().Renewal; renewal != "" {
+		t.Errorf("a failure is told: %q", renewal)
+	}
+
+	hanging.Store(false)
+	restarted, _ := start(t, options, settings, tellsScheme)
+	service.Store(restarted)
+	waitFor(t, "a certificate after the restart", func() bool { return ca.issuedCount() == 1 && restarted.Status().Serving })
+}
+
+// Choosing another challenge obtains a new certificate at once, through it.
+func TestChangingTheChallengeObtainsANewCertificate(t *testing.T) {
+	t.Parallel()
+	clock := newTestClock()
+	settings := newTestSettings(Config{Mode: ModeLetsEncrypt, Port: 0, Hosts: []string{"media.example.org"}, Challenge: ChallengeHTTP01})
+	var service atomic.Pointer[Service]
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s := service.Load(); s != nil {
+			s.Handler(tellsScheme).ServeHTTP(w, r)
+		}
+	}))
+	t.Cleanup(plain.Close)
+	var checked sync.Map
+	ca := newTestCA(t, clock.Now, 90*24*time.Hour, func(host, challengeType string) string {
+		checked.Store(challengeType, true)
+		if challengeType == ChallengeHTTP01 {
+			return plain.Listener.Addr().String()
+		}
+		return service.Load().Status().Address
+	})
+	s, _ := start(t, Options{Directory: ca.directory(), Client: ca.server.Client(), now: clock.Now}, settings, tellsScheme)
+	service.Store(s)
+	waitFor(t, "the first certificate", func() bool { return s.Status().Serving && ca.issuedCount() == 1 })
+	settings.set(func(c *Config) { c.Challenge = ChallengeTLSALPN01 })
+	waitFor(t, "a certificate through TLS-ALPN-01", func() bool { return ca.issuedCount() == 2 })
+	if _, ok := checked.Load(ChallengeTLSALPN01); !ok {
+		t.Error("TLS-ALPN-01 was not checked")
+	}
+}

@@ -17,13 +17,14 @@ import (
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
-// Stored is what is kept of Let's Encrypt: the account key, the ACME
-// directory the account is registered at, and the certificate, for Hosts,
-// with its private key, nil for none; Failure is the last attempt's error,
-// empty once one succeeds, at FailedAt.
+// Stored is what is kept of Let's Encrypt: the account key, and the
+// certificate, for Hosts, with its private key, nil for none, obtained
+// from the ACME server of Directory through Challenge; Failure is the last
+// attempt's error, empty once one succeeds, at FailedAt.
 type Stored struct {
 	AccountKey  crypto.Signer
 	Directory   string
+	Challenge   string
 	Hosts       []string
 	Certificate *tls.Certificate
 	Failure     string
@@ -56,8 +57,8 @@ func (d *DatabaseStore) Load(ctx context.Context) (Stored, error) {
 	var accountKey, certificate, privateKey string
 	var failedAt *time.Time
 	stored := Stored{}
-	err := d.db.QueryRow(ctx, `SELECT account_key, directory, hosts, certificate, private_key, failure, failed_at FROM acme_certificate`).
-		Scan(&accountKey, &stored.Directory, &stored.Hosts, &certificate, &privateKey, &stored.Failure, &failedAt)
+	err := d.db.QueryRow(ctx, `SELECT account_key, directory, challenge, hosts, certificate, private_key, failure, failed_at FROM acme_certificate`).
+		Scan(&accountKey, &stored.Directory, &stored.Challenge, &stored.Hosts, &certificate, &privateKey, &stored.Failure, &failedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stored{}, nil
 	}
@@ -112,11 +113,12 @@ func (d *DatabaseStore) Save(ctx context.Context, stored Stored) error {
 	if !stored.FailedAt.IsZero() {
 		failedAt = &stored.FailedAt
 	}
-	_, err := d.db.Exec(ctx, `INSERT INTO acme_certificate (id, account_key, directory, hosts, certificate, private_key, failure, failed_at, updated_at)
-		VALUES (true, $1, $2, $3, $4, $5, $6, $7, now())
-		ON CONFLICT (id) DO UPDATE SET account_key = $1, directory = $2, hosts = $3, certificate = $4, private_key = $5, failure = $6,
-			failed_at = $7, updated_at = now()`,
-		accountKey, stored.Directory, hosts, certificate, privateKey, stored.Failure, failedAt)
+	_, err := d.db.Exec(ctx, `INSERT INTO acme_certificate (id, account_key, directory, challenge, hosts, certificate, private_key, failure, failed_at,
+			updated_at)
+		VALUES (true, $1, $2, $3, $4, $5, $6, $7, $8, now())
+		ON CONFLICT (id) DO UPDATE SET account_key = $1, directory = $2, challenge = $3, hosts = $4, certificate = $5, private_key = $6,
+			failure = $7, failed_at = $8, updated_at = now()`,
+		accountKey, stored.Directory, stored.Challenge, hosts, certificate, privateKey, stored.Failure, failedAt)
 	return err
 }
 
