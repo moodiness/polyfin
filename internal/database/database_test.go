@@ -67,6 +67,27 @@ func TestMigrateRefusesASchemaFromANewerBuild(t *testing.T) {
 	}
 }
 
+// A database several versions ahead names its newest version, the same at
+// every start, and the first of several changed migrations is the one
+// named.
+func TestSchemaErrorsNameTheSameVersionEachTime(t *testing.T) {
+	shipped := []migration{step(1, "a", "SELECT 1"), step(2, "b", "SELECT 2")}
+	ahead := map[int]string{1: shipped[0].checksum, 2: shipped[1].checksum}
+	for version := 3; version <= 8; version++ {
+		ahead[version] = "later"
+	}
+	changed := map[int]string{1: "edited", 2: "edited"}
+	for range 20 {
+		if err := checkApplied(ahead, shipped); !errors.Is(err, ErrNewerSchema) ||
+			!strings.Contains(err.Error(), "at version 8 but this Polyfin build only knows 2") {
+			t.Fatalf("a database at version 8: %v", err)
+		}
+		if err := checkApplied(changed, shipped); !errors.Is(err, ErrChangedMigration) || !strings.Contains(err.Error(), "0001_a") {
+			t.Fatalf("two changed migrations: %v", err)
+		}
+	}
+}
+
 func TestMigrateRollsBackAFailedMigration(t *testing.T) {
 	pool := testdb.New(t)
 	ctx := t.Context()

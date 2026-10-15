@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -190,14 +191,22 @@ func CheckApplied(applied map[int]string) error {
 	return checkApplied(applied, migrations)
 }
 
+// checkApplied checks the applied versions in order, so that its error
+// names the same version from one start to the next: the newest when the
+// database is ahead of this build, else the first changed migration.
 func checkApplied(applied map[int]string, migrations []migration) error {
 	known := len(migrations)
-	for version, checksum := range applied {
-		if version > known || version < 1 {
+	versions := slices.Sorted(maps.Keys(applied))
+	if len(versions) > 0 && versions[len(versions)-1] > known {
+		return &schemaError{ErrNewerSchema, fmt.Sprintf("the database schema is at version %d but this Polyfin build only knows %d: upgrade Polyfin",
+			versions[len(versions)-1], known)}
+	}
+	for _, version := range versions {
+		if version < 1 {
 			return &schemaError{ErrNewerSchema,
 				fmt.Sprintf("the database schema is at version %d but this Polyfin build only knows %d: upgrade Polyfin", version, known)}
 		}
-		if m := migrations[version-1]; m.checksum != checksum {
+		if m := migrations[version-1]; m.checksum != applied[version] {
 			return &schemaError{ErrChangedMigration, fmt.Sprintf("migration %04d_%s was changed after it was applied to the database", m.version, m.name)}
 		}
 	}
