@@ -668,9 +668,14 @@ func (h *Handler) trackDecision(p playable, version library.Version, streams []p
 	decision := playback.Decide(request.DeviceProfile, described, options)
 	// With no track asked, a picture subtitle the app would need burned in
 	// gives way to its text copy, when one was read; otherwise the copy
-	// counts as its original (see trackPreferences.subtitle).
-	if selected := options.SubtitleStreamIndex; !(named && request.SubtitleStreamIndex.set) && selected != nil && *selected >= 0 &&
-		decision.Subtitles[*selected].Method == "Encode" {
+	// counts as its original (see trackPreferences.subtitle). Naming the
+	// version's default track, which the item gives apps and jellyfin-web
+	// always sends back, asks for none: another track named stays.
+	asked := named && request.SubtitleStreamIndex.set
+	if given := p.tracks.subtitle(streams, p.tracks.audio(streams)); asked && given != nil && *given == *options.SubtitleStreamIndex {
+		asked = false
+	}
+	if selected := options.SubtitleStreamIndex; !asked && selected != nil && *selected >= 0 && decision.Subtitles[*selected].Method == "Encode" {
 		if copied := textCopyOf(streams, *selected); copied >= 0 {
 			options.SubtitleStreamIndex = new(copied)
 			decision = playback.Decide(request.DeviceProfile, described, options)

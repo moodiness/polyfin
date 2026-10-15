@@ -193,6 +193,17 @@ func TestPictureSubtitlesHaveTextCopies(t *testing.T) {
 		*source.DefaultSubtitleStreamIndex != 1 || source.MediaStreams[1].DeliveryMethod != "External" {
 		t.Errorf("shown on an app that draws PGS: %v", deref(source.DefaultSubtitleStreamIndex))
 	}
+	// jellyfin-web names the default track the item gave it, the PGS file
+	// here: on Chrome, the copy stands for it as when none is named. The
+	// French file, named, stays; so does the PGS file named when it is not
+	// the default, as above.
+	if source := pictureInfo(t, p, local, chrome, 1); source.DefaultSubtitleStreamIndex == nil || *source.DefaultSubtitleStreamIndex != copied.Index ||
+		strings.Contains(source.TranscodingUrl, "SubtitleMethod=Encode") {
+		t.Errorf("the default named on Chrome: %v %s", deref(source.DefaultSubtitleStreamIndex), source.TranscodingUrl)
+	}
+	if source := pictureInfo(t, p, local, chrome, 0); source.DefaultSubtitleStreamIndex == nil || *source.DefaultSubtitleStreamIndex != 0 {
+		t.Errorf("the French file named on Chrome: %v", deref(source.DefaultSubtitleStreamIndex))
+	}
 	// With the setting off, no copy is listed.
 	settings := p.store.Settings()
 	settings.SubtitleOCR = "off"

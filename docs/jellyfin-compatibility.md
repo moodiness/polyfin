@@ -178,7 +178,7 @@ With **Turn picture subtitles into text** on, a PGS or VobSub track read into te
 - `Codec` is `subrip`; `IsTextSubtitleStream`, `SupportsExternalStream` and `IsExternal` are true; `Language`, `IsForced` and `IsHearingImpaired` are the original's.
 - `Title` is the original's title or language followed by "(OCR)", and `DisplayTitle` reads like `English (OCR) - SUBRIP - External`.
 - It is served as other text subtitles are: `DeliveryMethod` `External` in the format asked (`.vtt`, `.srt`, `.ass` or `.js`), or `Hls`.
-- When `PlaybackInfo` names no subtitle track, the default choice ranks the original, and gives the copy's index for a profile that would have the original burned in (`Encode`). A track the app asks for is delivered as asked, the original still burned in when asked.
+- When `PlaybackInfo` names no subtitle track, or names the version's `DefaultSubtitleStreamIndex` as the item gives it (jellyfin-web always sends it back), the default choice ranks the original, and gives the copy's index for a profile that would have the original burned in (`Encode`). Another track the app asks for is delivered as asked, the original still burned in when asked.
 - A copy is listed from the first `PlaybackInfo` after it is read; no index of an earlier answer changes.
 
 ### Jellyfin 12.2 details
