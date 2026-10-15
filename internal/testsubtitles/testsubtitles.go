@@ -1,5 +1,6 @@
 // Package testsubtitles writes picture subtitles for tests: a red
-// rectangle, as a PGS stream (a .sup file) and as a VobSub pair.
+// rectangle, or captions of text (see Captions), as a PGS stream (a .sup
+// file) and as a VobSub pair.
 package testsubtitles
 
 import (
