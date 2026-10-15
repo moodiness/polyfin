@@ -112,6 +112,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends postgresql-client-18
           echo "POLYFIN_TEST_PG_DUMP=/usr/lib/postgresql/18/bin/pg_dump" >> "$GITHUB_ENV"
           echo "POLYFIN_TEST_PG_RESTORE=/usr/lib/postgresql/18/bin/pg_restore" >> "$GITHUB_ENV"
+      - name: Install Tesseract with English and French data for the OCR tests
+        # After the step above, which updated the package lists.
+        run: |
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra
+          echo "POLYFIN_TEST_TESSERACT=/usr/bin/tesseract" >> "$GITHUB_ENV"
       - name: Build admin app, check formatting, vet and test
         # internal/jellyfin's tests run meanwhile, in the job of their own.
         run: make web lint test-others bounds
