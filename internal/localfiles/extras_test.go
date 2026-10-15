@@ -60,7 +60,7 @@ func TestSplitExtrasWithoutExtras(t *testing.T) {
 	}
 	list.sides["Movie (2008)/Extras/Making of.srt"] = found{size: 1, modified: at}
 	list.sides["Movie (2008)/Movie (2008).srt"] = found{size: 1, modified: at}
-	if extras := splitExtras(KindMovies, false, &list); extras != nil {
+	if extras := splitExtras(KindMovies, false, nil, &list); extras != nil {
 		t.Errorf("extras without reading them: %v", extras)
 	}
 	want := []string{"Movie (2008)/Clips/One.mkv", "Movie (2008)/Movie (2008)-featurette.mkv", "Movie (2008)/Movie (2008).mkv",
@@ -73,10 +73,34 @@ func TestSplitExtrasWithoutExtras(t *testing.T) {
 	}
 }
 
+// A file linked by hand stays a title whatever its name, an extra's or
+// one an extras folder leaves out: the link an administrator made wins.
+func TestSplitExtrasKeepsLinkedFiles(t *testing.T) {
+	t.Parallel()
+	at := time.Unix(0, 0)
+	list := listing{files: map[string]found{}, sides: map[string]found{}}
+	for _, rel := range []string{"Movie (2008)/Movie (2008).mkv", "Movie (2008)/Clips/Bloopers.mkv", "Movie (2008)/backdrops/intro.mkv",
+		"Movie (2008)/Movie (2008)-trailer.mkv", "Movie (2008)/Extras/More/Lost.mkv", "Movie (2008)/Extras/More/Kept.mkv"} {
+		list.files[rel] = found{size: 1, modified: at}
+	}
+	links := map[string]string{"Movie (2008)/Clips/Bloopers.mkv": "tt0063350", "Movie (2008)/backdrops/intro.mkv": "tt0017925",
+		"Movie (2008)/Extras/More/Kept.mkv": "tt0013442"}
+	extras := splitExtras(KindMovies, true, links, &list)
+	if got := slices.Sorted(maps.Keys(extras)); !slices.Equal(got, []string{"Movie (2008)/Movie (2008)-trailer.mkv"}) {
+		t.Errorf("extras: %v", got)
+	}
+	want := []string{"Movie (2008)/Clips/Bloopers.mkv", "Movie (2008)/Extras/More/Kept.mkv", "Movie (2008)/Movie (2008).mkv",
+		"Movie (2008)/backdrops/intro.mkv"}
+	if got := slices.Sorted(maps.Keys(list.files)); !slices.Equal(got, want) {
+		t.Errorf("files: %v", got)
+	}
+}
+
 // An extra belongs to the movies directly in its folder, those its name
 // begins with when the folder holds several, and at the folder's top only
 // to the one its name begins with; a show's to its show, a season
-// folder's to the season.
+// folder's to the season. A movie's extra named with a suffix whose movie
+// is not beside it is lone.
 func TestExtraOwners(t *testing.T) {
 	t.Parallel()
 	movies := map[string]entry{}
@@ -86,11 +110,15 @@ func TestExtraOwners(t *testing.T) {
 	}
 	extras := map[string]extraFile{}
 	for _, rel := range []string{"Movie (2008)/Extras/Making of.mkv", "Movie (2008)/Movie (2008) 1080p-trailer.mkv", "Alone (2001)-trailer.mkv",
-		"trailer.mkv", "Extras/Lost.mkv", "Disc (2003)/Featurettes/Crew.mkv", "Nowhere/Extras/Lost.mkv"} {
+		"trailer.mkv", "Extras/Lost.mkv", "Disc (2003)/Featurettes/Crew.mkv", "Nowhere/Extras/Lost.mkv", "Gone (1999)-featurette.mkv",
+		"Nowhere/Gone (1999)-trailer.mkv"} {
 		e, _ := readExtra(rel)
 		extras[rel] = e
 	}
-	rows := extraOwners(KindMovies, extras, movies)
+	rows, lone := extraOwners(KindMovies, extras, movies)
+	if !slices.Equal(lone, []string{"Gone (1999)-featurette.mkv", "Nowhere/Gone (1999)-trailer.mkv"}) {
+		t.Errorf("lone: %v", lone)
+	}
 	for rel, want := range map[string][]string{
 		"Movie (2008)/Extras/Making of.mkv":           {"Movie (2008)/Movie (2008) 1080p.mkv", "Movie (2008)/Movie (2008) 2160p.mkv"},
 		"Movie (2008)/Movie (2008) 1080p-trailer.mkv": {"Movie (2008)/Movie (2008) 1080p.mkv"},
@@ -101,7 +129,7 @@ func TestExtraOwners(t *testing.T) {
 			t.Errorf("%s: %v, want %v", rel, got, want)
 		}
 	}
-	for _, rel := range []string{"trailer.mkv", "Extras/Lost.mkv", "Nowhere/Extras/Lost.mkv"} {
+	for _, rel := range []string{"trailer.mkv", "Extras/Lost.mkv", "Nowhere/Extras/Lost.mkv", "Gone (1999)-featurette.mkv", "Nowhere/Gone (1999)-trailer.mkv"} {
 		if row, ok := rows[rel]; ok {
 			t.Errorf("%s belongs to %v", rel, row.units)
 		}
@@ -117,7 +145,10 @@ func TestExtraOwners(t *testing.T) {
 		e, _ := readExtra(rel)
 		extras[rel] = e
 	}
-	rows = extraOwners(KindShows, extras, shows)
+	rows, lone = extraOwners(KindShows, extras, shows)
+	if len(lone) != 0 {
+		t.Errorf("a show's lone extras: %v", lone)
+	}
 	for rel, want := range map[string]int{"Show/theme.mp3": -1, "Show/Season 01/theme.mp3": 1, "Show/Specials/Extras/Pilot.mkv": 0} {
 		row, ok := rows[rel]
 		season := -1

@@ -41,6 +41,10 @@ const (
 	// neither an administrator nor the disc's name gives (see
 	// numberDiscs).
 	reasonDiscEpisode = "disc_episode"
+	// reasonLoneExtra: its name is an extra's, as "Movie-trailer.mkv"
+	// is, but its movie is not beside it (see extraOwners); a link makes
+	// it a title (see splitExtras).
+	reasonLoneExtra = "lone_extra"
 )
 
 // How a file was matched, its matched_by; a home video is its own title.
@@ -406,7 +410,9 @@ func (s *Service) Link(ctx context.Context, id accounts.ID, path, imdb string) e
 }
 
 // Unlink removes the link of a unit of a folder (see Link): its files are
-// matched again by their name or their NFO file.
+// matched again by their name or their NFO file. A file a scan reading
+// extras reads as one, which the link kept a title (see splitExtras), is
+// an extra again, or a lone one: the folder is scanned.
 func (s *Service) Unlink(ctx context.Context, id accounts.ID, path string) error {
 	folder, unit, err := s.unit(ctx, id, path)
 	if err != nil {
@@ -418,6 +424,9 @@ func (s *Service) Unlink(ctx context.Context, id accounts.ID, path string) error
 	}
 	if tag.RowsAffected() == 0 {
 		return addons.ErrNotFound
+	}
+	if _, how := readExtra(unit); folder.ReadExtras && how != readAsTitle {
+		return s.Scan(ctx, id)
 	}
 	return s.rematch(ctx, folder, unit, "")
 }

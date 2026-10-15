@@ -26,14 +26,17 @@ import (
 // video whose name ends with one of extraSuffixes, or is "trailer" or
 // "sample"; a theme song is an audio file named "theme", or one in a
 // "theme-music" folder; a theme video, a video in a "backdrops" folder.
-// None is a title: it is never matched, listed nor offered as a version.
+// None is a title: it is never matched, listed nor offered as a version,
+// unless a link an administrator made names its file (see splitExtras).
 // Its name is its file's without its extension or suffix, else its NFO
 // file's <title>, else its file's as written. It belongs to the titles of
 // the units beside it: the movies directly in its folder, or in a folder
 // shared by several movies, those its name begins with; or the show of
-// its folder, with the season of a season's folder (see extraOwners). The
-// library serves each as an item of its own (see library.Extra), which
-// plays its file, with the subtitle files beside it, as a version does.
+// its folder, with the season of a season's folder (see extraOwners). A
+// movie's extra named with a suffix whose movie is not beside it is listed
+// unmatched, so that it can be linked (see reasonLoneExtra). The library
+// serves each extra as an item of its own (see library.Extra), which plays
+// its file, with the subtitle files beside it, as a version does.
 
 // extraFolders are the folders whose videos are extras, by their name in
 // lower case, with their extra type: Jellyfin's.
@@ -170,11 +173,12 @@ func formerlyListed(kind, rel string) bool {
 
 // splitExtras takes the extras out of what a walk of a movies or shows
 // folder found, and returns them, by path, with the files of extras
-// folders that are no extras left out. Without extras, a home videos
-// folder's walk too, the files and side files of formerlySkipped's
-// folders and the others it did not list are left out, as before scans
-// read extras.
-func splitExtras(kind string, extras bool, list *listing) map[string]extraFile {
+// folders that are no extras left out. A file linked by hand, a unit of its
+// own among links, stays a title whatever its name: the link an
+// administrator made wins. Without extras, a home videos folder's walk
+// too, the files and side files of formerlySkipped's folders and the
+// others it did not list are left out, as before scans read extras.
+func splitExtras(kind string, extras bool, links map[string]string, list *listing) map[string]extraFile {
 	if kind == KindMusic {
 		return nil
 	}
@@ -190,14 +194,15 @@ func splitExtras(kind string, extras bool, list *listing) map[string]extraFile {
 	}
 	taken := map[string]extraFile{}
 	for rel := range list.files {
-		switch e, how := readExtra(rel); how {
-		case readAsExtra:
+		e, how := readExtra(rel)
+		if how == readAsTitle || links[rel] != "" {
+			continue
+		}
+		if how == readAsExtra {
 			e.file = list.files[rel]
 			taken[rel] = e
-			delete(list.files, rel)
-		case leftOut:
-			delete(list.files, rel)
 		}
+		delete(list.files, rel)
 	}
 	return taken
 }
@@ -219,11 +224,13 @@ type extraRow struct {
 // all of them in a folder of their own, else those the name of an extra
 // with a suffix begins with, in any case; at the folder's top, only such
 // an extra belongs to a movie. A show's extras belong to the show of
-// their folder, those of a season's folder to that season.
-func extraOwners(kind string, extras map[string]extraFile, entries map[string]entry) map[string]extraRow {
-	rows := map[string]extraRow{}
+// their folder, those of a season's folder to that season. lone lists
+// the movies' extras named with a suffix that belong to none, which a
+// scan lists as unmatched files (see reasonLoneExtra).
+func extraOwners(kind string, extras map[string]extraFile, entries map[string]entry) (rows map[string]extraRow, lone []string) {
+	rows = map[string]extraRow{}
 	if len(extras) == 0 {
-		return rows
+		return rows, nil
 	}
 	// The units directly in each folder, with their names: a movie's file
 	// or disc, or a show's folder.
@@ -279,12 +286,16 @@ func extraOwners(kind string, extras map[string]extraFile, entries map[string]en
 			row.units = []string{parts[0]}
 		}
 		if len(row.units) == 0 {
+			if kind == KindMovies && e.base != "" {
+				lone = append(lone, rel)
+			}
 			continue
 		}
 		slices.Sort(row.units)
 		rows[rel] = row
 	}
-	return rows
+	slices.Sort(lone)
+	return rows, lone
 }
 
 // seasonOf is the season a season's folder names, false for another

@@ -384,7 +384,13 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		_, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, at, failure)
 		return err
 	}
-	extras := splitExtras(folder.Kind, folder.ReadExtras, &list)
+	var links map[string]string
+	if folder.Kind == KindMovies || folder.Kind == KindShows {
+		if links, err = s.links(ctx, id); err != nil {
+			return err
+		}
+	}
+	extras := splitExtras(folder.Kind, folder.ReadExtras, links, &list)
 	if folder.Kind == KindMusic {
 		local := root
 		if folder.Share != "" {
@@ -424,17 +430,6 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	if err != nil {
 		return err
 	}
-	var gone []string
-	for rel := range known {
-		if _, ok := files[rel]; !ok && !under(rel, list.skipped) {
-			gone = append(gone, rel)
-		}
-	}
-	if len(gone) > 0 {
-		if _, err := s.db.Exec(ctx, "DELETE FROM local_files WHERE addon_id = $1 AND path = ANY($2)", id, gone); err != nil {
-			return err
-		}
-	}
 	rootName := locationName(root)
 	entries := make(map[string]entry, len(files))
 	for rel, f := range files {
@@ -447,9 +442,29 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		}
 		numberDiscs(entries, given)
 	}
+	// The titles each extra belongs to; a movie's extra named with a
+	// suffix that belongs to none is a file of its own, left unmatched.
+	owned, loneExtras := extraOwners(folder.Kind, extras, entries)
+	lone := make(map[string]bool, len(loneExtras))
+	for _, rel := range loneExtras {
+		files[rel] = extras[rel].file
+		entries[rel] = readEntry(folder.Kind, rootName, rel, files[rel])
+		lone[entries[rel].unit] = true
+	}
+	var gone []string
+	for rel := range known {
+		if _, ok := files[rel]; !ok && !under(rel, list.skipped) {
+			gone = append(gone, rel)
+		}
+	}
+	if len(gone) > 0 {
+		if _, err := s.db.Exec(ctx, "DELETE FROM local_files WHERE addon_id = $1 AND path = ANY($2)", id, gone); err != nil {
+			return err
+		}
+	}
 	places := unitNFOs(folder.Kind, entries, list.sides)
-	for rel, e := range extras {
-		if nfo := extraNFO(rel, e, list.sides); nfo != "" {
+	for rel := range owned {
+		if nfo := extraNFO(rel, extras[rel], list.sides); nfo != "" {
 			places[extraPlace(rel)] = nfo
 		}
 	}
@@ -461,25 +476,26 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	// another unit than before, as each stream of a disc was, is read
 	// again, as are the files of a unit whose NFO file gives another
 	// identifier, or none any more, and the titles of shows' discs whose
-	// episodes changed.
+	// episodes changed. A lone extra is unmatched, whatever it was before.
 	units := map[string][]entry{}
 	renewed := map[string]bool{}
 	for rel, e := range entries {
 		e.nfo = infos[places[e.unit]].id()
 		old, ok := known[rel]
+		changed := !ok || old.size != e.file.size || !old.modified.Equal(e.file.modified) || old.unit != e.unit ||
+			old.episodes != formatEpisode(e.episode)
 		switch {
+		case lone[e.unit]:
+			if !changed && old.reason == reasonLoneExtra {
+				continue
+			}
 		case ok && old.nfo != e.nfo:
 			renewed[e.unit] = true
-		case !ok || old.size != e.file.size || !old.modified.Equal(e.file.modified) || old.unit != e.unit ||
-			old.episodes != formatEpisode(e.episode):
+		case changed:
 		case old.matched || old.reason == reasonUnreadableName || old.reason == reasonDiscTitle || old.reason == reasonDiscEpisode:
 			continue
 		}
 		units[e.unit] = append(units[e.unit], e)
-	}
-	links, err := s.links(ctx, id)
-	if err != nil {
-		return err
 	}
 	if folder.Kind == KindMovies {
 		if links, err = s.moveStreamLinks(ctx, id, files, links); err != nil {
@@ -499,7 +515,10 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 			// that changed, keeps its title: its name is the same. One
 			// whose NFO file changed is matched again.
 			m, ok := matched[unit]
-			if !ok || renewed[unit] {
+			switch {
+			case lone[unit]:
+				m = match{reason: reasonLoneExtra}
+			case !ok || renewed[unit]:
 				var err error
 				if m, err = s.unitMatch(groupCtx, folder.Kind, entries[0], links[unit], searches); err != nil {
 					return err
@@ -511,7 +530,6 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	if err := group.Wait(); err != nil {
 		return err
 	}
-	owned := extraOwners(folder.Kind, extras, entries)
 	videos := entries
 	if len(owned) > 0 {
 		videos = maps.Clone(entries)
