@@ -71,9 +71,10 @@ func tunerHostInfo(source iptv.Source) TunerHostInfo {
 	return info
 }
 
-// LiveTvOptions is Jellyfin's Live TV configuration, in its order: its
-// defaults, with the server's tuners. Polyfin's recordings and guides
-// have their own settings, in the admin app.
+// LiveTvOptions is Jellyfin's Live TV configuration, in its order: the
+// recordings' paddings, the recordings folder and the server's tuners, with
+// Jellyfin's defaults for the rest. Polyfin's recordings and guides are set
+// in the admin app.
 type LiveTvOptions struct {
 	GuideDays                                *int
 	RecordingPath                            *string
@@ -92,13 +93,19 @@ type LiveTvOptions struct {
 	SaveRecordingImages                      bool
 }
 
-// liveTvConfiguration answers /System/Configuration/livetv. Its tuners are
-// listed to administrators only: a tuner's address is on the server's
-// local network, which members have no use for.
+// liveTvConfiguration answers /System/Configuration/livetv. The recordings
+// folder and the tuners are told to administrators only: they are of the
+// server's own disk and local network, which members have no use for.
 func (h *Handler) liveTvConfiguration(w http.ResponseWriter, r *http.Request) {
+	settings := h.Accounts.Settings()
 	options := LiveTvOptions{TunerHosts: []TunerHostInfo{}, ListingProviders: []struct{}{}, MediaLocationsCreated: []string{},
+		PrePaddingSeconds: settings.RecordingPrePadding, PostPaddingSeconds: settings.RecordingPostPadding,
 		RecordingPostProcessorArguments: `"{path}"`, SaveRecordingNFO: true, SaveRecordingImages: true}
-	if h.IPTV != nil && callerFrom(r.Context()).User.IsAdministrator {
+	administrator := callerFrom(r.Context()).User.IsAdministrator
+	if dir := h.Recordings.Dir(); administrator && dir != "" {
+		options.RecordingPath = &dir
+	}
+	if h.IPTV != nil && administrator {
 		tuners, err := h.IPTV.Tuners(r.Context())
 		if err != nil {
 			h.internalError(w, r, err)

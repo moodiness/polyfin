@@ -149,6 +149,35 @@ func TestRecordingRoutesWithoutAFolder(t *testing.T) {
 	}
 }
 
+// /System/Configuration/livetv tells the recordings' paddings to everyone,
+// and the recordings folder to administrators only.
+func TestLiveTvConfigurationTellsTheRecordingSettings(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	s, _ := recordingServer(t, "ffprobe-not-installed", dir)
+	s.setting(t, func(settings *accounts.Settings) {
+		settings.RecordingPrePadding, settings.RecordingPostPadding = 60, 120
+	})
+	s.user("root", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	s.user("alice", nil)
+	for _, tc := range []struct{ name, token, folder string }{
+		{"an administrator", app("dashboard", s.signIn("root", "dashboard")), dir},
+		{"a member", app("tv", s.signIn("alice", "tv")), ""},
+	} {
+		var options LiveTvOptions
+		status, body := s.call(http.MethodGet, "/System/Configuration/livetv", tc.token, nil)
+		err := json.Unmarshal(body, &options)
+		folder := ""
+		if options.RecordingPath != nil {
+			folder = *options.RecordingPath
+		}
+		if status != http.StatusOK || err != nil || options.PrePaddingSeconds != 60 || options.PostPaddingSeconds != 120 ||
+			folder != tc.folder {
+			t.Errorf("%s: %d %s", tc.name, status, body)
+		}
+	}
+}
+
 // Timers are made from the defaults Timers/Defaults gives for a programme,
 // as jellyfin-web makes them, and read, changed and cancelled as
 // Jellyfin's are.
