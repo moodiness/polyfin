@@ -174,6 +174,8 @@ type handler struct {
 	now func() time.Time
 	// checks spaces the checks of addons asked by hand.
 	checks addonChecks
+	// steps are the sign-ins waiting for their second step.
+	steps pendingSteps
 }
 
 // New returns the handler of every /admin/api/ route.
@@ -190,12 +192,18 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("POST /admin/api/setup", h.setup)
 	mux.HandleFunc("POST /admin/api/session", h.signIn)
 	mux.HandleFunc("POST /admin/api/session/jellyfin", h.signInWithJellyfin)
+	mux.HandleFunc("POST /admin/api/session/two-step", h.signInSecondStep)
 	mux.HandleFunc("GET /admin/api/invite/{token}", h.publicInvite)
 	mux.HandleFunc("POST /admin/api/invite/{token}", h.acceptInvite)
 
 	mux.Handle("GET /admin/api/session", h.signedInAnyHour(h.session))
 	mux.Handle("DELETE /admin/api/session", h.signedInAnyHour(h.signOut))
 	mux.Handle("PUT /admin/api/account/password", h.signedIn(h.changePassword))
+	mux.Handle("GET /admin/api/account/two-step", h.signedIn(h.ownTwoStep))
+	mux.Handle("POST /admin/api/account/two-step/setup", h.signedIn(h.startOwnTwoStep))
+	mux.Handle("POST /admin/api/account/two-step/confirm", h.signedIn(h.confirmOwnTwoStep))
+	mux.Handle("POST /admin/api/account/two-step/recovery-codes", h.signedIn(h.newOwnRecoveryCodes))
+	mux.Handle("POST /admin/api/account/two-step/off", h.signedIn(h.turnOffOwnTwoStep))
 	mux.Handle("GET /admin/api/account/devices", h.signedIn(h.ownDevices))
 	mux.Handle("DELETE /admin/api/account/devices/{id}", h.signedIn(h.revokeOwnDevice))
 	mux.Handle("GET /admin/api/account/tracking", h.signedIn(h.ownTracking))
@@ -285,6 +293,7 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/settings/secrets/{name}/reveal", h.administrator(h.revealServerSecret))
 	mux.Handle("POST /admin/api/settings/metrics-token", h.administrator(h.newMetricsToken))
 	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
+	mux.Handle("POST /admin/api/users/{id}/two-step/off", h.administrator(h.turnOffUserTwoStep))
 	mux.Handle("POST /admin/api/users/downloads/off", h.administrator(h.turnOffDownloads))
 	mux.Handle("GET /admin/api/jellyfin-import", h.administrator(h.jellyfinImport))
 	mux.Handle("POST /admin/api/jellyfin-import", h.administrator(h.startJellyfinImport))
@@ -617,6 +626,10 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrWrongPassword, http.StatusForbidden, "wrong_password"},
 		{accounts.ErrInvalidCredentials, http.StatusUnauthorized, "invalid_credentials"},
 		{accounts.ErrDisabled, http.StatusForbidden, "account_disabled"},
+		{accounts.ErrTwoStepOn, http.StatusConflict, "two_step_on"},
+		{accounts.ErrTwoStepOff, http.StatusConflict, "two_step_off"},
+		{accounts.ErrTwoStepNotStarted, http.StatusConflict, "two_step_not_started"},
+		{accounts.ErrInvalidCode, http.StatusBadRequest, "invalid_code"},
 	} {
 		if errors.Is(err, known.err) {
 			writeError(w, known.status, known.code)

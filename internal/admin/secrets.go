@@ -106,8 +106,9 @@ type secretsHealthJSON struct {
 // by its settings name, a user's tracking connection, a user's connection
 // to an app, a notification target, by its name, of a user, or of the
 // server (user null), a network share's password, by its folder's name,
-// a backup destination's, by what it shows, or the keys of the certificate
-// of Let's Encrypt (certificate true).
+// a backup destination's, by what it shows, the keys of the certificate
+// of Let's Encrypt (certificate true), or a user's two-step sign-in
+// (twoStep true).
 type unreadableJSON struct {
 	Setting     *string `json:"setting"`
 	Service     *string `json:"service"`
@@ -117,6 +118,7 @@ type unreadableJSON struct {
 	Folder      *string `json:"folder"`
 	Destination *string `json:"destination"`
 	Certificate bool    `json:"certificate"`
+	TwoStep     bool    `json:"twoStep"`
 }
 
 // secretsHealth reads how the stored secrets stand; nil when it cannot.
@@ -146,6 +148,8 @@ func newUnreadableJSON(u secrets.Unreadable) unreadableJSON {
 		return unreadableJSON{Setting: &u.Setting}
 	case u.Certificate:
 		return unreadableJSON{Certificate: true}
+	case u.TwoStep:
+		return unreadableJSON{TwoStep: true, User: &u.User}
 	case u.Destination != "":
 		return unreadableJSON{Destination: &u.Destination}
 	case u.Folder != "":

@@ -70,6 +70,8 @@ func DefaultSettings() Settings {
 		VersionListMinutes:    DefaultVersionListMinutes,
 		CatalogRefreshMinutes: DefaultCatalogRefreshMinutes,
 
+		TwoStepAdministrators: false,
+
 		PersonalAddons:     true,
 		ServerImports:      true,
 		ShareLinks:         false,
@@ -252,6 +254,8 @@ func SettingsBounds() map[string]SettingBounds {
 		"resumePercent":         between(MinResumePercent, MaxResumePercent, d.ResumePercent),
 		"versionListMinutes":    between(MinVersionListMinutes, MaxVersionListMinutes, d.VersionListMinutes),
 		"catalogRefreshMinutes": between(MinCatalogRefreshMinutes, MaxCatalogRefreshMinutes, d.CatalogRefreshMinutes),
+
+		"twoStepAdministrators": is(d.TwoStepAdministrators),
 
 		"personalAddons":     is(d.PersonalAddons),
 		"serverImports":      is(d.ServerImports),

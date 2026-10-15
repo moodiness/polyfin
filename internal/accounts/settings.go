@@ -1153,6 +1153,10 @@ type Settings struct {
 	// LoginAttempts is how many wrong passwords in a row block an account
 	// for LoginBlock; 0 never blocks.
 	LoginAttempts int
+	// TwoStepAdministrators requires two-step sign-in of administrators:
+	// one without it sets it up right after their password, before their
+	// session opens, and their password alone signs in to no Jellyfin app.
+	TwoStepAdministrators bool
 	// InactiveDeviceDays is after how many days unused a Jellyfin app is
 	// signed out; 0 never signs it out.
 	InactiveDeviceDays int
@@ -1527,6 +1531,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, even_volume, measure_loudness, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"mdblist_ratings_key, critic_rating_shows, tmdb_key, " +
 	"personal_addons, server_imports, share_links, login_attempts, inactive_device_days, known_proxies, known_proxy_names, " +
+	"two_step_administrators, " +
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
 	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
@@ -1567,6 +1572,7 @@ func (settings *Settings) fields() []any {
 		&settings.MDBListRatingsKey, &settings.CriticRatingShows, &settings.TMDBKey,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.ShareLinks, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
 		&settings.KnownProxyNames,
+		&settings.TwoStepAdministrators,
 		&settings.HTTPSMode, &settings.HTTPSPort, &settings.HTTPSRedirect, &settings.HTTPSCertificate, &settings.HTTPSPrivateKey,
 		&settings.ACMEHosts, &settings.ACMEEmail, &settings.ACMETerms, &settings.ACMEChallenge, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,

@@ -55,6 +55,9 @@ type userJSON struct {
 	GroupID     *string `json:"groupId"`
 	GroupName   *string `json:"groupName"`
 	FollowGroup bool    `json:"followGroup"`
+	// TwoStep tells whether the user signs in with a code from an
+	// authenticator app after their password.
+	TwoStep bool `json:"twoStep"`
 }
 
 // limitsJSON are the settings a group holds, as a user's JSON and a
@@ -279,6 +282,7 @@ func newUserJSON(user accounts.User) userJSON {
 		EndsOn:      endsOn(user),
 		Ended:       user.Ended(time.Now()),
 		FollowGroup: user.FollowGroup || user.GroupID == nil,
+		TwoStep:     user.TwoStep,
 	}
 	if user.GroupID != nil {
 		result.GroupID = new(user.GroupID.String())
@@ -475,6 +479,8 @@ type settingsJSON struct {
 	LoginAttempts      *int  `json:"loginAttempts"`
 	InactiveDeviceDays *int  `json:"inactiveDeviceDays"`
 	DetailedLog        *bool `json:"detailedLog"`
+	// TwoStepAdministrators requires two-step sign-in of administrators.
+	TwoStepAdministrators *bool `json:"twoStepAdministrators"`
 	// KnownProxies lists addresses, networks such as 172.18.0.0/16, and
 	// host names, the names after the rest.
 	KnownProxies *[]string `json:"knownProxies"`
@@ -723,6 +729,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		ServerImports:         &settings.ServerImports,
 		ShareLinks:            &settings.ShareLinks,
 		LoginAttempts:         &settings.LoginAttempts,
+		TwoStepAdministrators: &settings.TwoStepAdministrators,
 		InactiveDeviceDays:    &settings.InactiveDeviceDays,
 		KnownProxies:          new(accounts.FormatKnownProxies(settings.KnownProxies, settings.KnownProxyNames)),
 		HTTPSMode:             &settings.HTTPSMode,
@@ -1351,6 +1358,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ServerImports:         valueOr(body.ServerImports, current.ServerImports),
 		ShareLinks:            valueOr(body.ShareLinks, current.ShareLinks),
 		LoginAttempts:         valueOr(body.LoginAttempts, current.LoginAttempts),
+		TwoStepAdministrators: valueOr(body.TwoStepAdministrators, current.TwoStepAdministrators),
 		InactiveDeviceDays:    valueOr(body.InactiveDeviceDays, current.InactiveDeviceDays),
 		KnownProxies:          knownProxies,
 		KnownProxyNames:       knownProxyNames,

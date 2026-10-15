@@ -207,6 +207,12 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	if user.NeedsTwoStep(h.Accounts.Settings()) {
+		// The client's failed attempts are forgotten only once the code is
+		// right: a right password between wrong codes would forget them.
+		h.askSecondStep(w, r, user)
+		return
+	}
 	h.SignIns.Succeed(key)
 	h.Activity.SignedIn(r.Context(), user, forwarded.Client(r))
 	h.startSession(w, r, http.StatusOK, user)
@@ -221,7 +227,9 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 // URL. Only a signed-in device's token counts: API keys have no user. The
 // user must be allowed to sign in now, as with a password: not disabled
 // (their devices are then signed out), not blocked after wrong passwords,
-// within their allowed hours.
+// within their allowed hours. An account that needs two-step sign-in, or
+// to set it up, is refused, as its password is: its devices may have
+// signed in before it was turned on, or through Quick Connect.
 //
 // A token that is no device's counts as a wrong password does toward the
 // client's failed attempts; the token of someone who may not have a session
@@ -249,7 +257,8 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 	}
 	now := h.now()
 	switch {
-	case h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now):
+	case h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now),
+		user.NeedsTwoStep(h.Accounts.Settings()):
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
 		return
 	case !user.AllowedAt(now):

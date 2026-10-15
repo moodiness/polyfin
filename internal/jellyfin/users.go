@@ -88,6 +88,17 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	// An account with two-step sign-in, or an administrator while it is
+	// required of them, signs in to apps through Quick Connect, approved
+	// in the admin app: Jellyfin apps cannot ask for a code. Its password
+	// alone is refused as a wrong one is, and counts as one toward the
+	// client's attempts, so that the answer tells nothing of the password.
+	if user.NeedsTwoStep(h.Accounts.Settings()) {
+		h.SignIns.Fail(key)
+		h.Activity.SignInFailed(r.Context(), body.Username, forwarded.Client(r))
+		processingError(w, http.StatusUnauthorized)
+		return
+	}
 	h.SignIns.Succeed(key)
 	// Like Jellyfin, a user outside their allowed hours, administrators
 	// included, cannot sign in. Quick Connect, which Jellyfin does not check

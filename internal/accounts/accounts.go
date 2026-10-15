@@ -128,6 +128,9 @@ type User struct {
 	// empty for the server's descriptions. It also names what Polyfin
 	// generates when it is English or French.
 	MetadataLanguage string
+	// TwoStep is set once the user signs in with a code from an
+	// authenticator app after their password (see Store.ConfirmTwoStep).
+	TwoStep bool
 }
 
 // NewUser describes an account to create.
@@ -288,7 +291,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language"
+	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language, two_step"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -300,7 +303,7 @@ func (user *User) fields() []any {
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare,
-		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage}
+		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep}
 }
 
 func scanUser(row pgx.Row) (User, error) {

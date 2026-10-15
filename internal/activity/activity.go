@@ -256,6 +256,31 @@ func (s *Store) PasswordChanged(ctx context.Context, user accounts.User) {
 		Type: "UserPasswordChanged", UserID: &user.ID})
 }
 
+// TwoStepTurnedOn records that user turned two-step sign-in on.
+func (s *Store) TwoStepTurnedOn(ctx context.Context, user accounts.User) {
+	s.record(ctx, Entry{Name: s.phrase("%s turned two-step sign-in on", "%s a activé la connexion en deux étapes", user.Name),
+		Type: "UserTwoStepOn", UserID: &user.ID})
+}
+
+// TwoStepTurnedOff records that two-step sign-in was turned off for user,
+// by them or by the administrator named by.
+func (s *Store) TwoStepTurnedOff(ctx context.Context, user accounts.User, by string) {
+	name := s.phrase("%s turned two-step sign-in off", "%s a désactivé la connexion en deux étapes", user.Name)
+	severity := ""
+	if by != user.Name {
+		name = s.phrase("%s turned two-step sign-in off for %s", "%s a désactivé la connexion en deux étapes de %s", by, user.Name)
+		severity = Warning
+	}
+	s.record(ctx, Entry{Name: name, Type: "UserTwoStepOff", UserID: &user.ID, Severity: severity})
+}
+
+// RecoveryCodeUsed records that user signed in from address with a
+// recovery code instead of their authenticator app.
+func (s *Store) RecoveryCodeUsed(ctx context.Context, user accounts.User, address string) {
+	s.record(ctx, Entry{Name: s.phrase("%s signed in with a recovery code", "%s s’est connecté avec un code de secours", user.Name),
+		Type: "UserRecoveryCodeUsed", UserID: &user.ID, ShortOverview: s.address(address), Severity: Warning})
+}
+
 // sectionNames name the sections of a group's page, by the names of
 // accounts.GroupChanges.Sections, in English and French.
 var sectionNames = map[string][2]string{

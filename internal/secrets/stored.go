@@ -21,8 +21,9 @@ import (
 // sign in with (see appimport.SignIn), the addresses, tokens and keys
 // of the notification targets, the passwords, secret keys, private keys
 // and passphrases of the network shares, the
-// secret keys, passwords and private keys of the backup destinations, and
-// the account key and private key of the certificate of Let's Encrypt.
+// secret keys, passwords and private keys of the backup destinations, the
+// account key and private key of the certificate of Let's Encrypt, and the
+// secrets of the users' two-step sign-in.
 // Nothing else is sealed: addon addresses, IPTV passwords and guide
 // addresses are stored as they are.
 var settingSecrets = []struct{ column, name string }{
@@ -43,7 +44,8 @@ var settingSecrets = []struct{ column, name string }{
 // the connection of a user to an app, a notification target, by its name,
 // of a user or of the server (User empty), the password, secret key,
 // private key or passphrase of a network share, by its folder's name, a backup destination, by what it shows
-// (see DestinationName), or the keys of the certificate of Let's Encrypt.
+// (see DestinationName), the keys of the certificate of Let's Encrypt, or
+// the two-step sign-in of a user.
 type Unreadable struct {
 	Setting       string
 	Service, User string
@@ -52,6 +54,7 @@ type Unreadable struct {
 	Folder        string
 	Destination   string
 	Certificate   bool
+	TwoStep       bool
 }
 
 func (u Unreadable) String() string {
@@ -60,6 +63,8 @@ func (u Unreadable) String() string {
 		return "setting " + u.Setting
 	case u.Certificate:
 		return "keys of the certificate of Let's Encrypt"
+	case u.TwoStep:
+		return "two-step sign-in of " + u.User
 	case u.Destination != "":
 		return "backup destination " + u.Destination
 	case u.Folder != "":
@@ -180,7 +185,10 @@ func (b *Box) SealStored(ctx context.Context, db *pgxpool.Pool) (int, error) {
 		if err := sealDestinations(ctx, b, tx, &sealed); err != nil {
 			return err
 		}
-		return sealCertificate(ctx, b, tx, &sealed)
+		if err := sealCertificate(ctx, b, tx, &sealed); err != nil {
+			return err
+		}
+		return sealTwoStep(ctx, b, tx, &sealed)
 	})
 	return sealed, err
 }
@@ -330,6 +338,21 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 	if len(report.Unreadable) == before {
 		check(privateKey, Unreadable{Certificate: true})
 	}
+	twoSteps, err := db.Query(ctx, "SELECT name, two_step_secret FROM users WHERE two_step ORDER BY name")
+	if err != nil {
+		return Report{}, err
+	}
+	defer twoSteps.Close()
+	for twoSteps.Next() {
+		var user, secret string
+		if err := twoSteps.Scan(&user, &secret); err != nil {
+			return Report{}, err
+		}
+		check(secret, Unreadable{TwoStep: true, User: user})
+	}
+	if err := twoSteps.Err(); err != nil {
+		return Report{}, err
+	}
 	return report, nil
 }
 
@@ -374,6 +397,7 @@ const (
 	KindShare       = "shares"
 	KindDestination = "destinations"
 	KindCertificate = "certificates"
+	KindTwoStep     = "twoStep"
 )
 
 // sealedTables are the columns of the stored secrets, by table, and the
@@ -389,6 +413,7 @@ var sealedTables = map[string]struct {
 	"local_folders":        {KindShare, []string{"share_password", "share_private_key", "share_passphrase"}},
 	"backup_destinations":  {KindDestination, []string{"secret", "private_key"}},
 	"acme_certificate":     {KindCertificate, []string{"account_key", "private_key"}},
+	"users":                {KindTwoStep, []string{"two_step_secret"}},
 }
 
 func settingColumns() []string {
@@ -412,6 +437,10 @@ func (b *Box) UnreadableIn(table string, row map[string]string) (kind string, co
 	sealed, ok := sealedTables[table]
 	if !ok {
 		return "", 0
+	}
+	// A secret being set up signs in no one.
+	if table == "users" && row["two_step"] != "t" && row["two_step"] != "true" {
+		return sealed.kind, 0
 	}
 	for _, column := range sealed.columns {
 		value := row[column]
@@ -572,4 +601,33 @@ func sealCertificate(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error 
 	}
 	_, err = tx.Exec(ctx, "UPDATE acme_certificate SET account_key = $1, private_key = $2", accountKey, privateKey)
 	return err
+}
+
+// sealTwoStep seals the users' two-step sign-in secrets stored as
+// plaintext, counting them into sealed. The users are taken in the order
+// of their keys.
+func sealTwoStep(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
+	rows, err := tx.Query(ctx, "SELECT id, two_step_secret FROM users WHERE two_step_secret <> '' AND two_step_secret NOT LIKE $1 ORDER BY id FOR UPDATE",
+		prefix+"%")
+	if err != nil {
+		return err
+	}
+	type plain struct {
+		id     [16]byte
+		secret string
+	}
+	secrets, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (plain, error) {
+		var p plain
+		return p, r.Scan(&p.id, &p.secret)
+	})
+	if err != nil {
+		return err
+	}
+	for _, p := range secrets {
+		if _, err := tx.Exec(ctx, "UPDATE users SET two_step_secret = $2 WHERE id = $1", p.id, b.Seal(p.secret)); err != nil {
+			return err
+		}
+		*sealed++
+	}
+	return nil
 }
