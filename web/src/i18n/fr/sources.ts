@@ -231,6 +231,9 @@ const sources: typeof en = {
     useArtwork: 'Utiliser ses illustrations',
     useArtworkHelp:
       'Les affiches, fonds et logos à côté des fichiers, comme poster.jpg ou Film (2001)-fanart.jpg, s’affichent à la place de ceux des addons de métadonnées pour leurs titres, et les images des épisodes à la place de leurs vignettes. Désactivé, ceux des addons s’affichent.',
+    readExtras: 'Lire les bonus et les thèmes',
+    readExtrasHelp:
+      'Les bonus, bandes-annonces locales et musiques de thème à côté des titres, nommés comme pour Jellyfin, comme Extras/Making of.mkv, Film (2001)-trailer.mkv ou theme.mp3, s’affichent dans les bonus de leurs titres, se lisent avec le bouton Bande-annonce ou en fond de leurs pages. Désactivé, la prochaine analyse les ignore.',
     add: 'Ajouter le dossier',
     added: (name: string) => `${name} a été ajouté. Sa première analyse a commencé.`,
     edit: 'Modifier le dossier',
@@ -250,6 +253,7 @@ const sources: typeof en = {
     files: 'Fichiers vidéo',
     matched: 'Associés à un titre',
     unmatched: 'Non associés',
+    extras: 'Bonus',
     tracks: 'Morceaux',
     albums: 'Albums',
     artists: 'Artistes',

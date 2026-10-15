@@ -215,6 +215,9 @@ const sources = {
     useArtwork: 'Use its artwork',
     useArtworkHelp:
       'Posters, backdrops and logos beside the files, such as poster.jpg or Movie (2001)-fanart.jpg, show in place of the metadata addons’ for their titles, and episodes’ images in place of their stills. Off, the addons’ show.',
+    readExtras: 'Read extras and theme media',
+    readExtrasHelp:
+      'Extras, local trailers and theme music beside the titles, as Jellyfin names them, such as Extras/Making of.mkv, Movie (2001)-trailer.mkv or theme.mp3, show under their titles’ special features, play from the Trailer button, or play behind their pages. Off, the next scan leaves them out.',
     add: 'Add the folder',
     added: (name: string) => `${name} was added. Its first scan has started.`,
     edit: 'Edit the folder',
@@ -232,6 +235,7 @@ const sources = {
     files: 'Video files',
     matched: 'Matched to a title',
     unmatched: 'Unmatched',
+    extras: 'Extras',
     tracks: 'Tracks',
     albums: 'Albums',
     artists: 'Artists',

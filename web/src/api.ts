@@ -585,6 +585,10 @@ export type LocalFolder = {
   episodes: GivenEpisode[]
   /** Whether its titles show the artwork beside their files rather than the addons'. */
   useArtwork: boolean
+  /** Whether its scans read the extras, local trailers and theme media beside its titles. */
+  readExtras: boolean
+  /** The extras, local trailers and theme media its last scan found. */
+  extras: number
 }
 
 /** The kind of a disc: a Blu-ray disc's or a DVD's folder, or a disc image. */
@@ -649,6 +653,8 @@ export type NewLocalFolder = {
   password?: string
   /** Whether its titles show the artwork beside their files; yes when left out. */
   useArtwork?: boolean
+  /** Whether its scans read the extras beside its titles; yes when left out. */
+  readExtras?: boolean
 }
 
 /**
@@ -661,6 +667,7 @@ export type LocalFolderPatch = Partial<{
   user: string
   password: string
   useArtwork: boolean
+  readExtras: boolean
   kind: FolderKind
 }>
 

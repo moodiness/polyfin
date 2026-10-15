@@ -90,6 +90,7 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
   const [password, setPassword] = useState('')
   const [kind, setKind] = useState<FolderKind>('movies')
   const [useArtwork, setUseArtwork] = useState(true)
+  const [readExtras, setReadExtras] = useState(true)
   const share = location === 'local' ? null : location
   const mutation = useMutation({
     mutationFn: () =>
@@ -98,7 +99,7 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
         path: path.trim(),
         kind,
         ...(share === null ? {} : { user: user.trim(), password }),
-        ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork }),
+        ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork, readExtras }),
       }),
     onSuccess: (added) => {
       queryClient.setQueryData<Addon[]>(queryKeys.addons('shared'), (old) =>
@@ -182,6 +183,11 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
           <Switch checked={useArtwork} onChange={setUseArtwork} stateText />
         </Field>
       )}
+      {kind !== 'music' && kind !== 'homevideos' && (
+        <Field label={text.readExtras} help={text.readExtrasHelp}>
+          <Switch checked={readExtras} onChange={setReadExtras} stateText />
+        </Field>
+      )}
       {mutation.isError && <FieldError>{errorMessage(t, mutation.error)}</FieldError>}
       <div>
         <Button type="submit" variant="primary" loading={mutation.isPending}>
@@ -216,6 +222,7 @@ export function LocalFolderEditForm({
   // undefined keeps the stored password, '' removes it.
   const [password, setPassword] = useState<string | undefined>(undefined)
   const [useArtwork, setUseArtwork] = useState(folder.useArtwork)
+  const [readExtras, setReadExtras] = useState(folder.readExtras)
   const [kind, setKind] = useState<FolderKind>(folder.kind)
   const [confirming, setConfirming] = useState(false)
   const share = shareOf(path)
@@ -226,7 +233,7 @@ export function LocalFolderEditForm({
         name: name.trim(),
         path: path.trim(),
         ...(share === '' ? {} : { user: user.trim(), password }),
-        ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork }),
+        ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork, readExtras }),
         ...(retyped ? { kind } : {}),
       }),
     onSuccess: (updated) => {
@@ -296,6 +303,11 @@ export function LocalFolderEditForm({
       {kind !== 'music' && kind !== 'homevideos' && (
         <Field label={text.useArtwork} help={text.useArtworkHelp}>
           <Switch checked={useArtwork} onChange={setUseArtwork} stateText />
+        </Field>
+      )}
+      {kind !== 'music' && kind !== 'homevideos' && (
+        <Field label={text.readExtras} help={text.readExtrasHelp}>
+          <Switch checked={readExtras} onChange={setReadExtras} stateText />
         </Field>
       )}
       {mutation.isError && !confirming && (
@@ -411,6 +423,9 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
             { label: text.files, value: folder.files, warn: false },
             { label: text.matched, value: folder.matched, warn: false },
             { label: text.unmatched, value: folder.unmatched, warn: folder.unmatched > 0 },
+            ...(folder.readExtras || folder.extras > 0
+              ? [{ label: text.extras, value: folder.extras, warn: false }]
+              : []),
           ]
   const methods = matchMethods
     .filter((method) => folder.matchedBy[method] > 0)
