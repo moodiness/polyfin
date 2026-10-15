@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
 func (h *Handler) playbackRoutes(rt *router) {
@@ -582,6 +583,7 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 		return decided{}, false
 	}
 	source := h.baseSource(r, p, version, id, analysis, true)
+	source.MediaStreams = h.withTextCopies(r.Context(), p, version, analysis, source.MediaStreams)
 	decision, options, described := h.trackDecision(p, version, source.MediaStreams, analysis, request, allowed, named)
 	// Over HLS, a version is cut into segments: on its keyframes, or,
 	// for a file without an index such as MPEG-TS, every few seconds,
@@ -664,6 +666,16 @@ func (h *Handler) trackDecision(p playable, version library.Version, streams []p
 		return decision, options, described
 	}
 	decision := playback.Decide(request.DeviceProfile, described, options)
+	// With no track asked, a picture subtitle the app would need burned in
+	// gives way to its text copy, when one was read; otherwise the copy
+	// counts as its original (see trackPreferences.subtitle).
+	if selected := options.SubtitleStreamIndex; !(named && request.SubtitleStreamIndex.set) && selected != nil && *selected >= 0 &&
+		decision.Subtitles[*selected].Method == "Encode" {
+		if copied := textCopyOf(streams, *selected); copied >= 0 {
+			options.SubtitleStreamIndex = new(copied)
+			decision = playback.Decide(request.DeviceProfile, described, options)
+		}
+	}
 	// A subtitle the app can only take burned into the video is burned in
 	// when it is pictures, an image track inside the file or a picture file
 	// beside it, and the video can be converted, as burning it in
@@ -724,6 +736,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 			streamed = false
 		}
 	}
+	h.queueTextCopies(r.Context(), p, decision, streams, version, analysis)
 	h.deliverable(r.Context(), decision, streams, version, analysis, streamed)
 	h.prefetchSubtitle(r.Context(), decision, streams, version, analysis)
 
@@ -811,15 +824,36 @@ func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, s
 }
 
 // subtitleFiles counts a version's subtitle files, which come first among
-// its streams.
+// its streams; the text copies of its picture subtitles, last, are not.
 func subtitleFiles(streams []playback.MediaStream) int {
 	files := 0
 	for _, stream := range streams {
-		if stream.Type == "Subtitle" && stream.IsExternal {
+		if stream.Type == "Subtitle" && stream.IsExternal && stream.CopyOf == nil {
 			files++
 		}
 	}
 	return files
+}
+
+// queueTextCopies has a version's picture subtitles read into text when
+// the app plays it and cannot draw them: when the decision would burn one
+// in, or leave one out, rather than have the app draw it. The track chosen
+// is read first. Nothing waits for them: the copies are listed from the
+// next PlaybackInfo once read.
+func (h *Handler) queueTextCopies(ctx context.Context, p playable, decision playback.Decision, streams []playback.MediaStream,
+	version library.Version, analysis media.Analysis) {
+	cannot := false
+	for _, stream := range streams {
+		if stream.Type == "Subtitle" && stream.CopyOf == nil && playback.PictureSubtitle(stream.Codec) {
+			if delivery, ok := decision.Subtitles[stream.Index]; ok && delivery.Method == "Encode" {
+				cannot = true
+			}
+		}
+	}
+	if !cannot {
+		return
+	}
+	h.Playback.QueueTextCopies(ctx, version, analysis, versionFiles(p.subtitles, version), decision.SubtitleStreamIndex)
 }
 
 // prefetchSubtitle starts reading whole the embedded track the app shows
@@ -1052,10 +1086,21 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var text subtitleText
+	var copied, isCopy bool
+	if index >= len(files) {
+		text.cues, isCopy, copied = h.textCopy(r, item, files, index)
+	}
 	switch {
 	case index < 0:
 		processingError(w, http.StatusInternalServerError)
 		return
+	case isCopy:
+		// A picture subtitle's text copy, served as other text subtitles
+		// are, in the format asked.
+		if !copied {
+			processingError(w, http.StatusInternalServerError)
+			return
+		}
 	case index >= len(files) && pgsFormat(format):
 		data, found := h.pgsTrack(r, item, index-len(files))
 		if !found {
@@ -1106,6 +1151,23 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", contentType)
 	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+}
+
+// textCopy returns the cues of the text copy a subtitle URL names, of
+// Jellyfin index index past the version's files and tracks (see
+// playback.Service.TextCopies). isCopy reports an index past them, and
+// found whether its text is kept.
+func (h *Handler) textCopy(r *http.Request, item accounts.ID, files []library.ExternalSubtitle, index int) (cues []subtitles.Cue, isCopy, found bool) {
+	version, ok := h.sourceVersion(r, item)
+	if !ok {
+		return nil, false, false
+	}
+	analysis, ok := h.Playback.Analyzed(r.Context(), version.ID)
+	if !ok || !playback.IsTextCopy(analysis, files, index) {
+		return nil, false, false
+	}
+	cues, found = h.Playback.TextCopyCues(r.Context(), version, analysis, files, index)
+	return cues, true, found
 }
 
 // trackWait bounds how long a subtitle request waits for its track to be

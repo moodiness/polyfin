@@ -58,6 +58,10 @@ type HealthSources struct {
 	DLNA func() dlna.Status
 	// HTTPS tells how HTTPS stands; nil tells nothing.
 	HTTPS func() https.Status
+	// MissingLanguages lists the languages, by Tesseract's codes, of the
+	// picture subtitle tracks left unread for want of their data; nil
+	// lists none.
+	MissingLanguages func(context.Context) []string
 }
 
 type healthJSON struct {

@@ -14,6 +14,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/https"
+	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/tasks"
 )
@@ -64,6 +65,9 @@ const (
 	problemHTTPSFiles   = "https_files"
 	problemHTTPSRenewal = "https_renewal"
 	problemHTTPSExpiry  = "https_expiry"
+	// Picture subtitles in a language Tesseract has no data for are not
+	// read into text.
+	problemOCRLanguage = "subtitle_ocr_language"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -278,6 +282,12 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 	}
 	if h.Health.HTTPS != nil {
 		problems = append(problems, httpsProblems(h.Health.HTTPS(), h.now())...)
+	}
+	if h.Health.MissingLanguages != nil {
+		for _, code := range h.Health.MissingLanguages(ctx) {
+			add(healthProblemJSON{Key: "subtitle_ocr_language:" + code, Code: problemOCRLanguage, Tone: notifications.SeverityWarning,
+				To: "/settings/conversion#subtitle-ocr", Name: ocrLanguageName(code), File: code + ".traineddata"})
+		}
 	}
 
 	if h.Health.Secrets != nil {
@@ -587,8 +597,26 @@ func (p healthProblemJSON) text(language string) string {
 			return say("The HTTPS certificate expired on %s.", "Le certificat HTTPS a expiré le %s.", p.Expires.Format(time.DateOnly))
 		}
 		return say("The HTTPS certificate expires on %s.", "Le certificat HTTPS expire le %s.", p.Expires.Format(time.DateOnly))
+	case problemOCRLanguage:
+		return say("Picture subtitles in %s are not read into text: Tesseract has no data for this language. "+
+			"Add the file %s to the folder POLYFIN_TESSDATA_DIR names.",
+			"Les sous-titres en images en %s ne sont pas lus en texte : Tesseract n’a pas de données pour cette langue. "+
+				"Ajoutez le fichier %s au dossier que nomme POLYFIN_TESSDATA_DIR.", p.Name, p.File)
 	}
 	return ""
+}
+
+// ocrLanguageName names a language by its Tesseract code, in English:
+// "jpn" is Japanese. A code no language has is its own name.
+func ocrLanguageName(code string) string {
+	base, _, _ := strings.Cut(code, "_")
+	bibliographic := localization.LanguageCode(base)
+	for _, l := range localization.Languages() {
+		if l.Bibliographic == bibliographic {
+			return l.Name
+		}
+	}
+	return code
 }
 
 // gigabytes writes bytes in gigabytes with one decimal, as French or

@@ -76,4 +76,7 @@ type MediaStream struct {
 	// MasteringDisplay is the analysis's media.Stream.MasteringDisplay,
 	// which Intel's tone mapping needs: Polyfin's own, never sent.
 	MasteringDisplay *bool `json:"-"`
+	// CopyOf is, for a picture subtitle's text copy, its original's Index
+	// (see AppendTextCopies): Polyfin's own, never sent.
+	CopyOf *int `json:"-"`
 }

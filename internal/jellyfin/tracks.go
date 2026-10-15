@@ -113,12 +113,16 @@ func (t trackPreferences) audio(streams []playback.MediaStream) *int {
 // may only take an image one burned into converted video. audio is the
 // audio track that plays. The subtitle is absent when there are no
 // subtitles at all, as Jellyfin reports it.
+//
+// The text copy of a picture subtitle (see playback.TextCopy) counts as
+// its original: the original is chosen, and gives way to its copy only on
+// an app that would need it burned in (see Handler.trackDecision).
 func (t trackPreferences) subtitle(streams []playback.MediaStream, audio *int) *int {
 	audioLanguage := ""
 	var subtitles []playback.MediaStream
 	for _, stream := range streams {
 		switch {
-		case stream.Type == "Subtitle":
+		case stream.Type == "Subtitle" && stream.CopyOf == nil:
 			subtitles = append(subtitles, stream)
 		case stream.Type == "Audio" && audio != nil && stream.Index == *audio:
 			audioLanguage = stream.Language

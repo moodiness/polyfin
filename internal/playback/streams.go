@@ -3,6 +3,7 @@ package playback
 import (
 	"cmp"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -69,6 +70,63 @@ func MediaStreams(analysis media.Analysis, externals []ExternalSubtitle, languag
 // analyzed yet.
 func ExternalStreams(externals []ExternalSubtitle, language string) []MediaStream {
 	return appendExternals(make([]MediaStream, 0, len(externals)), externals, wordsFor(language))
+}
+
+// TextCopy is a picture subtitle's text copy, read with Tesseract: the
+// Index of its original among a version's streams, and its own, after
+// every track of the version (see Service.TextCopies).
+type TextCopy struct {
+	Original, Index int
+}
+
+// AppendTextCopies lists the text copies of a version's picture subtitles
+// after its streams, so that no index moves: SubRip files with their
+// original's language and its forced and hearing-impaired flags, titled
+// with its title or language followed by "(OCR)". language is the server
+// language, as for MediaStreams.
+func AppendTextCopies(streams []MediaStream, copies []TextCopy, language string) []MediaStream {
+	w := wordsFor(language)
+	for _, c := range copies {
+		i := slices.IndexFunc(streams, func(s MediaStream) bool { return s.Type == "Subtitle" && s.Index == c.Original })
+		if i < 0 {
+			continue
+		}
+		original := streams[i]
+		title := original.Title
+		if title == "" {
+			title = w.undefined
+			if original.Language != "" {
+				title = languageLabel(original.Language, original.LocalizedLanguage)
+			}
+		}
+		stream := MediaStream{
+			Codec:                  "subrip",
+			Language:               original.Language,
+			TimeBase:               "1/1000",
+			Title:                  title + " (OCR)",
+			Type:                   "Subtitle",
+			Index:                  c.Index,
+			IsExternal:             true,
+			IsForced:               original.IsForced,
+			IsHearingImpaired:      original.IsHearingImpaired,
+			IsTextSubtitleStream:   true,
+			SupportsExternalStream: true,
+			CopyOf:                 new(original.Index),
+		}
+		finishSubtitle(&stream, w)
+		streams = append(streams, stream)
+	}
+	return streams
+}
+
+// PictureSubtitle reports whether a subtitle codec, as an analysis or a
+// stream names it, is pictures Polyfin reads into text: PGS or VobSub.
+func PictureSubtitle(codec string) bool {
+	switch strings.ToLower(codec) {
+	case "hdmv_pgs_subtitle", "dvd_subtitle", "pgssub", "dvdsub":
+		return true
+	}
+	return false
 }
 
 // Container is Jellyfin's container value for a source: the probe's format

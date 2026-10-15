@@ -19,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/source"
+	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
 // transcodingURL is a remux's TranscodingUrl: relative, with Jellyfin's
@@ -251,7 +252,9 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		}
 	}
 	// A subtitle burned in is a picture file, among the files counted
-	// first, read from its address, or an image track inside the file.
+	// first, read from its address, or an image track inside the file;
+	// never a picture subtitle's text copy, listed after the tracks, which
+	// goes out as text.
 	if index, err := strconv.Atoi(query(r, "subtitleStreamIndex")); err == nil && index >= 0 && remux.ConvertVideo != nil &&
 		strings.EqualFold(query(r, "subtitleMethod"), "Encode") {
 		switch {
@@ -447,10 +450,13 @@ func (h *Handler) adaptiveQuality(r *http.Request) bool {
 }
 
 // renditions are the text subtitles a remux offers in HLS, the one the
-// app chose shown by default: the text files and the embedded tracks
-// FFmpeg extracts. The app's player can switch between them.
+// app chose shown by default: the text files, the embedded tracks FFmpeg
+// extracts, and the text copies of picture subtitles. The app's player can
+// switch between them.
 func (h *Handler) renditions(ctx context.Context, req remuxRequest, selected, rawQuery string) []hls.Rendition {
-	streams := playback.MediaStreams(req.analysis, externalStreams(req.files), h.Accounts.Settings().Language)
+	language := h.Accounts.Settings().Language
+	streams := playback.MediaStreams(req.analysis, externalStreams(req.files), language)
+	streams = playback.AppendTextCopies(streams, h.Playback.TextCopies(ctx, req.remux.Version, req.analysis, req.files), language)
 	shown, err := strconv.Atoi(selected)
 	if err != nil {
 		shown = -1
@@ -560,8 +566,8 @@ func playlistVariant(playlist string) (int, bool) {
 
 // hlsSubtitles serves the playlist and the WebVTT segments of a subtitle
 // rendition, index being the Jellyfin index of its stream. The segments of
-// an addon's file are cut from it; those of an embedded track wait for
-// FFmpeg to extract them.
+// an addon's file, or of a picture subtitle's text copy, are cut from its
+// text; those of an embedded track wait for FFmpeg to extract them.
 func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int, remuxOf remuxer) {
 	name, extension, _ := strings.Cut(r.PathValue("file"), ".")
 	req, ok := remuxOf(w, r)
@@ -573,9 +579,20 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 		return
 	}
 	stream := index - len(req.files)
-	if index >= len(req.files) && !playback.ExtractableSubtitle(req.analysis, stream) || index < len(req.files) && pictureFile(req.files[index]) {
+	copied := index >= len(req.files) && playback.IsTextCopy(req.analysis, req.files, index)
+	if !copied && (index >= len(req.files) && !playback.ExtractableSubtitle(req.analysis, stream) || index < len(req.files) && pictureFile(req.files[index])) {
 		processingError(w, http.StatusNotFound)
 		return
+	}
+	// An index past the tracks is a text copy only once it is read.
+	var copyCues []subtitles.Cue
+	if copied {
+		cues, found := h.Playback.TextCopyCues(r.Context(), req.remux.Version, req.analysis, req.files, index)
+		if !found {
+			processingError(w, http.StatusNotFound)
+			return
+		}
+		copyCues = cues
 	}
 	plan, err := h.Playback.Plan(r.Context(), req.remux.Version)
 	if err != nil {
@@ -596,12 +613,15 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 		return
 	}
 	var data []byte
-	if index < len(req.files) {
+	switch {
+	case copied:
+		data = hls.SubtitleSegment(copyCues, plan, n)
+	case index < len(req.files):
 		var text subtitleText
 		if text, err = h.subtitleFile(r.Context(), req.files[index]); err == nil {
 			data = hls.SubtitleSegment(h.syncedSubtitle(r.Context(), req.remux.Version.ID, req.files[index], text).cues, plan, n)
 		}
-	} else {
+	default:
 		ctx, cancel := context.WithTimeout(r.Context(), segmentWait)
 		defer cancel()
 		data, err = h.Playback.RemuxSubtitle(ctx, req.remux, stream, n)

@@ -105,6 +105,9 @@ type Service struct {
 	// probe tells whether FFmpeg reads an input (see UseProbe), nil until
 	// set.
 	probe func(ctx context.Context, in media.Input) bool
+	// found is told of the videos a scan of a movies or shows folder found
+	// new or changed (see UseScanned), nil until set.
+	found func(videos []stremio.Stream)
 	// ffprobe and ffmpeg read a music folder's tracks, their tags and
 	// their embedded covers, and a home videos folder's videos, their
 	// dates and frames; toneMapping tells whether ffmpeg brings HDR to SDR
@@ -199,6 +202,13 @@ func (s *Service) UseToneMapping(on bool) { s.toneMapping = on }
 // gain is measured with, as the settings ask (see measureMusic); it is
 // called before the service is used.
 func (s *Service) UseMeter(meter *loudness.Meter) { s.meter = meter }
+
+// UseScanned sets what is told, after each scan of a movies or shows
+// folder, of the videos it found new or changed, as Streams lists them,
+// with their subtitle files: picture subtitles are read into text from
+// them (see playback.Service.QueueScanned). It is called before the
+// service is used.
+func (s *Service) UseScanned(found func(videos []stremio.Stream)) { s.found = found }
 
 // Watch watches the folders for changes until Close; it is called once,
 // before the service is used.

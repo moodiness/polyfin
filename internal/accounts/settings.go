@@ -244,6 +244,27 @@ var ErrInvalidMaxConversions = errors.New("invalid maximum of conversions")
 // one of ConversionHeights.
 var ErrInvalidMaxConversionHeight = errors.New("invalid maximum height of converted video")
 
+// ErrInvalidSubtitleOCR reports a SubtitleOCR not among SubtitleOCRModes,
+// and ErrInvalidSubtitleOCRTracks a SubtitleOCRTracks outside
+// [MinSubtitleOCRTracks, MaxSubtitleOCRTracks].
+var (
+	ErrInvalidSubtitleOCR       = errors.New("invalid choice of picture subtitles read into text")
+	ErrInvalidSubtitleOCRTracks = errors.New("invalid number of picture subtitle tracks read at once")
+)
+
+// SubtitleOCRModes are the values Settings.SubtitleOCR takes, the first by
+// default: picture subtitles never read into text, read when an app that
+// cannot draw them plays a version, or also after the scans of local
+// folders.
+var SubtitleOCRModes = []string{"off", "played", "scans"}
+
+// The bounds and default of Settings.SubtitleOCRTracks.
+const (
+	MinSubtitleOCRTracks     = 1
+	MaxSubtitleOCRTracks     = 4
+	DefaultSubtitleOCRTracks = 1
+)
+
 // The bounds and defaults of Settings.AnalysisTimeout, in seconds,
 // VersionAttempts and MaxConversions. A source that does not answer within
 // 20 seconds is given up by default, which still lets a slow 2160p file be
@@ -1215,6 +1236,10 @@ type Settings struct {
 	// do, for users who may download. Off, such apps download the version
 	// as it is.
 	ConvertedDownloads bool
+	// SubtitleOCR reads picture subtitles into text with Tesseract, one of
+	// SubtitleOCRModes; SubtitleOCRTracks bounds the tracks read at once.
+	SubtitleOCR       string
+	SubtitleOCRTracks int
 	// The settings below tune the conversions of files and Live TV alike,
 	// as Jellyfin's Transcoding page does (recordings copy the stream).
 	// EncoderPreset trades encoding speed for quality, one of
@@ -1500,7 +1525,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
 	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
-	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, " +
+	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"adaptive_quality, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
@@ -1542,7 +1567,7 @@ func (settings *Settings) fields() []any {
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs, &settings.HiddenVersionWords,
 		&settings.NameHowVersionsPlay,
-		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads,
+		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads, &settings.SubtitleOCR, &settings.SubtitleOCRTracks,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.AdaptiveQuality,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
@@ -1865,6 +1890,12 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !slices.Contains(ConversionHeights, settings.MaxConversionHeight) {
 		return Settings{}, ErrInvalidMaxConversionHeight
+	}
+	if !slices.Contains(SubtitleOCRModes, settings.SubtitleOCR) {
+		return Settings{}, ErrInvalidSubtitleOCR
+	}
+	if settings.SubtitleOCRTracks < MinSubtitleOCRTracks || settings.SubtitleOCRTracks > MaxSubtitleOCRTracks {
+		return Settings{}, ErrInvalidSubtitleOCRTracks
 	}
 	codecs, err := validConversion(settings)
 	if err != nil {

@@ -46,6 +46,7 @@ import (
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/notifications"
+	"github.com/moodiness/polyfin/internal/ocr"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/plays"
@@ -97,6 +98,8 @@ Environment:
   POLYFIN_LISTEN        HTTP address (default :8096)
   POLYFIN_FFPROBE       ffprobe executable (default ffprobe, from PATH)
   POLYFIN_FFMPEG        FFmpeg executable (default ffmpeg, from PATH)
+  POLYFIN_TESSERACT     Tesseract executable picture subtitles are read into text with (default tesseract, from PATH)
+  POLYFIN_TESSDATA_DIR  folder of Tesseract .traineddata files for languages Tesseract's own data lacks (default: none)
   POLYFIN_FONTS_DIR     fallback fonts for subtitles and generated images (default /usr/share/fonts)
   POLYFIN_WEB_DIR       jellyfin-web, served at /web/ (default /usr/share/polyfin/jellyfin-web)
 
@@ -319,6 +322,19 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// not read, as those of rewritable and write-once media are, is read
 	// through FFmpeg to tell a Blu-ray disc's.
 	folders.UseProbe(player.ProbesInput)
+	// Picture subtitles are read into text with Tesseract, as the settings
+	// ask: those of the versions played, and of the videos scans find. The
+	// files written meanwhile go in the cache folder, emptied at start, as
+	// the system's temporary folder is read-only in the image's container.
+	ocrDir := filepath.Join(cfg.CacheDir, "ocr")
+	if err := errors.Join(os.RemoveAll(ocrDir), os.MkdirAll(ocrDir, 0o700)); err != nil {
+		return fmt.Errorf("prepare the OCR directory: %w", err)
+	}
+	player.UseTesseract(cfg.FFmpeg, ocrDir, &ocr.Tesseract{Path: cfg.Tesseract, DataDir: cfg.TessdataDir, TempDir: ocrDir})
+	folders.UseScanned(player.QueueScanned)
+	if _, err := exec.LookPath(cfg.Tesseract); err != nil && store.Settings().SubtitleOCR != "off" {
+		logger.Warn("Tesseract was not found: picture subtitles are not read into text", "tesseract", cfg.Tesseract)
+	}
 	registerLocalFoldersTask(registry, folders)
 	// Channel streams of IPTV sources share their account's connections,
 	// and how they answer orders them.
@@ -536,20 +552,21 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		HomeRowChoices: jellyfinAPI,
 		Sharing:        lib,
 		Health: admin.HealthSources{
-			Addons:       addonClient,
-			Cache:        sources,
-			CacheDir:     cfg.CacheDir,
-			Encoder:      segments,
-			Thumbnails:   images,
-			DatabaseSize: func(ctx context.Context) (int64, error) { return database.Size(ctx, pool) },
-			Started:      started,
-			SecretKey:    box.Enabled(),
-			Secrets:      func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
-			Updates:      updateCheck,
-			Proxies:      proxies,
-			Discovery:    localDiscovery.Status,
-			DLNA:         sharing.Status,
-			HTTPS:        secure.Status,
+			Addons:           addonClient,
+			Cache:            sources,
+			CacheDir:         cfg.CacheDir,
+			Encoder:          segments,
+			Thumbnails:       images,
+			DatabaseSize:     func(ctx context.Context) (int64, error) { return database.Size(ctx, pool) },
+			Started:          started,
+			SecretKey:        box.Enabled(),
+			Secrets:          func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, pool) },
+			Updates:          updateCheck,
+			Proxies:          proxies,
+			Discovery:        localDiscovery.Status,
+			DLNA:             sharing.Status,
+			HTTPS:            secure.Status,
+			MissingLanguages: player.MissingLanguages,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
 		Trackers:       tracking,

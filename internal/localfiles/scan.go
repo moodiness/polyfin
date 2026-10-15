@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/metrics"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // ScanCheck is how often the folders due for a scan are looked for (see
@@ -479,11 +480,15 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	// episodes changed. A lone extra is unmatched, whatever it was before.
 	units := map[string][]entry{}
 	renewed := map[string]bool{}
+	var fresh []string
 	for rel, e := range entries {
 		e.nfo = infos[places[e.unit]].id()
 		old, ok := known[rel]
 		changed := !ok || old.size != e.file.size || !old.modified.Equal(e.file.modified) || old.unit != e.unit ||
 			old.episodes != formatEpisode(e.episode)
+		if changed {
+			fresh = append(fresh, rel)
+		}
 		switch {
 		case lone[e.unit]:
 			if !changed && old.reason == reasonLoneExtra {
@@ -548,7 +553,48 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	if err := s.storeArtwork(ctx, id, folder.Kind, root, list); err != nil {
 		return err
 	}
-	return s.finish(ctx, id, at, list)
+	if err := s.finish(ctx, id, at, list); err != nil {
+		return err
+	}
+	s.tellScanned(ctx, id, fresh)
+	return nil
+}
+
+// tellScanned tells the videos of a folder a scan found new or changed, as
+// Streams lists them, to what UseScanned set. A failure to list them is
+// only logged: the scan itself went through.
+func (s *Service) tellScanned(ctx context.Context, id accounts.ID, paths []string) {
+	if s.found == nil || len(paths) == 0 || s.files == "" {
+		return
+	}
+	rows, err := s.db.Query(ctx, "SELECT id, path FROM local_files WHERE addon_id = $1 AND path = ANY($2) ORDER BY path", id, paths)
+	if err != nil {
+		s.logger.Warn("The videos a scan found could not be listed", "error", err)
+		return
+	}
+	var files []accounts.ID
+	videos, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Stream, error) {
+		var file accounts.ID
+		var rel string
+		if err := row.Scan(&file, &rel); err != nil {
+			return stremio.Stream{}, err
+		}
+		files = append(files, file)
+		return stremio.Stream{URL: s.address(file, rel)}, nil
+	})
+	if err == nil {
+		var subtitles map[accounts.ID][]stremio.Subtitle
+		if subtitles, err = s.fileSubtitles(ctx, files); err == nil {
+			for i := range videos {
+				videos[i].Subtitles = subtitles[files[i]]
+			}
+		}
+	}
+	if err != nil {
+		s.logger.Warn("The videos a scan found could not be listed", "error", err)
+		return
+	}
+	s.found(videos)
 }
 
 // finish marks a folder scanned at at, keeps the prints of a share's

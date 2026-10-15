@@ -119,6 +119,8 @@ type Service struct {
 	// speech is what is known of versions' speech, and of the subtitles
 	// synced to it (see speech.go).
 	speech speechState
+	// pictures reads picture subtitles into text (see pictures.go).
+	pictures pictureReader
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading

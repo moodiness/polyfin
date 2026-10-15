@@ -49,6 +49,8 @@ func Variables(environ []string, cfg Config) []Variable {
 		"POLYFIN_DLNA_PORT":      strconv.Itoa(cfg.DLNAPort),
 		"POLYFIN_FFPROBE":        cfg.FFprobe,
 		"POLYFIN_FFMPEG":         cfg.FFmpeg,
+		"POLYFIN_TESSERACT":      cfg.Tesseract,
+		"POLYFIN_TESSDATA_DIR":   cfg.TessdataDir,
 		"POLYFIN_DATA_DIR":       cfg.DataDir,
 		"POLYFIN_FONTS_DIR":      cfg.FontsDir,
 		"POLYFIN_WEB_DIR":        cfg.WebDir,

@@ -511,6 +511,10 @@ type settingsJSON struct {
 	MaxConversions      *int  `json:"maxConversions"`
 	MaxConversionHeight *int  `json:"maxConversionHeight"`
 	ConvertedDownloads  *bool `json:"convertedDownloads"`
+	// SubtitleOCR ("off", "played" or "scans") and SubtitleOCRTracks keep
+	// their current values when a PUT leaves them out.
+	SubtitleOCR       *string `json:"subtitleOcr"`
+	SubtitleOCRTracks *int    `json:"subtitleOcrTracks"`
 	// The settings tuning conversions keep their current values when a
 	// PUT leaves them out. ConversionHardware is what conversions run on;
 	// a PUT cannot change it.
@@ -743,6 +747,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
 		ConvertedDownloads:    &settings.ConvertedDownloads,
+		SubtitleOCR:           &settings.SubtitleOCR,
+		SubtitleOCRTracks:     &settings.SubtitleOCRTracks,
 
 		EncoderPreset:              &settings.EncoderPreset,
 		H264Quality:                &settings.H264Quality,
@@ -1369,6 +1375,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
 		ConvertedDownloads:    valueOr(body.ConvertedDownloads, current.ConvertedDownloads),
+		SubtitleOCR:           valueOr(body.SubtitleOCR, current.SubtitleOCR),
+		SubtitleOCRTracks:     valueOr(body.SubtitleOCRTracks, current.SubtitleOCRTracks),
 
 		EncoderPreset:              valueOr(body.EncoderPreset, current.EncoderPreset),
 		H264Quality:                valueOr(body.H264Quality, current.H264Quality),
