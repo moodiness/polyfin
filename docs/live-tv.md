@@ -232,7 +232,7 @@ Timers, series timers and recordings are kept in the database.
 
 A recording reads its channel's stream from before FFmpeg starts until it ends, so the connection or tuner it takes stays its own between its analysis and FFmpeg's start.
 
-- On an HDHomeRun tuner, a recording due takes, after the tuners no one uses any more, the tuner of the oldest channel only watched, whoever watches it: that channel stops for its viewers. It never takes another recording's tuner.
+- On an HDHomeRun tuner, a recording due takes, after the tuners no one uses any more, the tuner of the oldest channel only watched, whoever watches it: that channel stops for its viewers. It never takes another recording's tuner. A viewer's app that asks for the channel again gets `503` while the tuners are in use, as for a channel an IPTV account's connections refuse, and the log tells it at INFO, saying the tuners are in use.
 - One that finds every tuner recording another channel is tried again every 30 seconds, as a stream that fails. If it recorded nothing by its programme's end, it fails, and the **Recording failed** notification says every tuner was recording another channel.
 - On an IPTV account, recordings keep the account's rule: a recording takes a connection no one uses any more, never another user's channel, and is refused when they all play.
 - The admin app's lists of timers, under **Content › Live TV**, mark with **Not enough tuners** the timers of a tuner's channel that would need more tuners than it has, counting the other timers recording at the same time.

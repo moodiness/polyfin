@@ -94,6 +94,9 @@ type liveRun struct {
 	// done is closed when FFmpeg exits, err set before.
 	done chan struct{}
 	err  error
+	// refused tells a run that failed because its source refused the
+	// stream (see Remux.Refused).
+	refused bool
 }
 
 // LivePlaylist returns the media playlist of the live encoding of key,
@@ -158,7 +161,9 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 			// probe, fails at once: the next request starts it again. A
 			// first run may fail on a short probe, as when it joins a
 			// feed between keyframes.
-			if run.err != nil && !errors.Is(run.err, ErrInterrupted) && !l.played() && l.reopened() {
+			// Nor does one whose source refused it: the player hears it
+			// at once, and asks again.
+			if run.err != nil && !errors.Is(run.err, ErrInterrupted) && (run.refused || !l.played() && l.reopened()) {
 				return nil, run.err
 			}
 			select {
@@ -271,6 +276,7 @@ func (l *live) start() (*liveRun, error) {
 	run := &liveRun{started: time.Now(), cancel: cancel, done: make(chan struct{})}
 	l.run = run
 	args, method := l.remux.runArgs(l.dir, l.next, previous != nil), l.remux.Encode.method()
+	refused := l.remux.Refused
 	go func() {
 		defer cancel()
 		cmd := exec.CommandContext(ctx, l.m.ffmpeg, args...)
@@ -283,6 +289,12 @@ func (l *live) start() (*liveRun, error) {
 		case ctx.Err() != nil:
 			err = ErrStopped
 			l.m.logger.Debug("A live encoding was stopped")
+		case err != nil && refused != nil && refused() != nil:
+			// Its source refused the stream, as when a recording took its
+			// tuner: the playlist tells the player so (see LivePlaylist).
+			err = fmt.Errorf("%w: FFmpeg failed: %w", refused(), err)
+			run.refused = true
+			l.m.logger.Info("A live encoding stopped: its source refused the stream", "error", err)
 		case err != nil:
 			err = fmt.Errorf("FFmpeg failed: %w: %s", err, bytes.TrimSpace(stderr.bytes()))
 			l.m.logger.Warn("A live encoding failed", "error", err)

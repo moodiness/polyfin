@@ -118,6 +118,11 @@ type Remux struct {
 	// and the requests waiting for it get Failure's error. Nil never fails.
 	Failed  <-chan struct{}
 	Failure func() error
+	// Refused, when set, tells why the source of a live Input refused it
+	// lately, as when its connections or tuners are all in use; nil for no
+	// refusal. A live run that failed while it was refused failed for that
+	// reason, which is no fault of the encoding.
+	Refused func() error
 	// Lookback is how far before a segment's start FFmpeg starts reading
 	// a searched version from the encoding's first seek on, as an earlier
 	// encoding of the same file learned it (see encoding.lookback); zero

@@ -163,7 +163,7 @@ type loopback struct {
 	// budgets bound what FFmpeg reads of some sources (see
 	// registerWithin).
 	budgets map[string]*readBudget
-	feeds   map[string]library.Version
+	feeds   map[string]*liveTarget
 	// files are Polyfin's own files, recordings, by version (see
 	// FileVersion), served under fileKey, as the files of local folders
 	// and network shares are, which local opens (see LocalFiles).
@@ -184,7 +184,7 @@ func newLoopback() (*loopback, error) {
 		return nil, err
 	}
 	l := &loopback{listener: listener, sources: map[string]*source.Source{}, budgets: map[string]*readBudget{},
-		feeds: map[string]library.Version{}, files: map[accounts.ID]string{}, fileKey: randomKey()}
+		feeds: map[string]*liveTarget{}, files: map[accounts.ID]string{}, fileKey: randomKey()}
 	l.server = &http.Server{Handler: http.HandlerFunc(l.serve), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = l.server.Serve(listener) }()
 	return l, nil

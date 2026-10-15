@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -58,6 +60,35 @@ type testServer struct {
 	logs     *logs.Ring
 	// iptv stores the IPTV sources the library lists.
 	iptv *iptv.Service
+	// warnings are the warnings and errors the server logged.
+	warnings *warnings
+}
+
+// warnings keeps the messages of the records at WARN or above that a
+// logger handles, discarding the others.
+type warnings struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+func (w *warnings) Enabled(_ context.Context, level slog.Level) bool { return level >= slog.LevelWarn }
+
+func (w *warnings) Handle(_ context.Context, record slog.Record) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.messages = append(w.messages, record.Message)
+	return nil
+}
+
+func (w *warnings) WithAttrs([]slog.Attr) slog.Handler { return w }
+
+func (w *warnings) WithGroup(string) slog.Handler { return w }
+
+// logged returns the messages logged so far.
+func (w *warnings) logged() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return slices.Clone(w.messages)
 }
 
 func newTestServer(t *testing.T, failures int) testServer {
@@ -82,7 +113,8 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	if _, err := store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	warned := &warnings{}
+	logger := slog.New(warned)
 	client := stremio.NewClient("test")
 	addonStore := addons.New(pool, client)
 	secret, err := database.Secret(t.Context(), pool)
@@ -161,7 +193,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL, handler: handler,
-		activity: activityLog, tasks: registry, logs: ring, iptv: channels}
+		activity: activityLog, tasks: registry, logs: ring, iptv: channels, warnings: warned}
 }
 
 // setting changes the server's settings.

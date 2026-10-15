@@ -643,6 +643,13 @@ const segmentWait = 2 * time.Minute
 func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playback.Remux, err error) {
 	switch {
 	case r.Context().Err() != nil:
+	case errors.Is(err, playback.ErrLiveRefused):
+		// The source refused the stream, as when a recording took the
+		// tuner or the provider's connections are all in use: a normal
+		// event, which lasts while they are. Even once the encoding gave up
+		// after its restarts, a 503 tells the app to ask again later.
+		h.Logger.Info("A live stream was refused by its source", "addon", remux.Version.Addon, "error", err)
+		processingError(w, http.StatusServiceUnavailable)
 	case errors.Is(err, hls.ErrNotFound), errors.Is(err, hls.ErrStopped), errors.Is(err, playback.ErrNotRemuxable):
 		processingError(w, http.StatusNotFound)
 	case errors.Is(err, hls.ErrBusy):

@@ -1,10 +1,13 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -164,5 +167,98 @@ func TestTunersAreFoundAddedAndListed(t *testing.T) {
 	_, body = s.call(http.MethodGet, "/System/Configuration/livetv", admin, nil)
 	if err := json.Unmarshal(body, &options); err != nil || len(options.TunerHosts) != 1 || options.TunerHosts[0].Url != typed.URL {
 		t.Errorf("after the removal: %s", body)
+	}
+}
+
+// A recording that takes the tuner a viewer's channel played on refuses
+// the viewer's stream, a normal event: the viewer's app hears a 503, which
+// tells it to ask again later, and nothing is logged as a failure.
+func TestARecordingTakingTheViewersTunerAnswers503(t *testing.T) {
+	t.Parallel()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	ffprobe := filepath.Join(filepath.Dir(ffmpeg), "ffprobe")
+	if _, err := os.Stat(ffprobe); err != nil {
+		t.Skip("no ffprobe next to POLYFIN_TEST_FFMPEG")
+	}
+	// The tuner starts first, to stop last: after the streams read from it.
+	tuner := tunertest.Start(t, tunertest.Options{DeviceID: 0x2468ACE0, Name: "Porch Tuner", Model: "HDHR5-2US", Tuners: 1,
+		Channels: []tunertest.Channel{{Number: "5.1", Name: "KSTL"}, {Number: "7.2", Name: "HRNH"}}})
+	s := newProbingServer(t, 10, ffprobe)
+	s.handler.Playback.LiveSources(s.iptv.Connections, nil)
+	user := s.user("member", nil)
+	token := s.signIn("member", "tv")
+	if _, err := s.iptv.Add(t.Context(), addons.Shared(), iptv.NewSource{
+		Account: iptv.Account{Kind: addons.KindHDHomeRun, URL: strings.TrimPrefix(tuner.URL, "http://")}}, false); err != nil {
+		t.Fatal(err)
+	}
+	var channels QueryResult
+	s.get(t, "/LiveTv/Channels", token, &channels)
+	byNumber := map[string]string{}
+	for _, c := range channels.Items {
+		byNumber[c.Number] = c.Id
+	}
+	if len(byNumber) != 2 {
+		t.Fatalf("channels: %v", byNumber)
+	}
+
+	// The viewer watches 5.1, converted by FFmpeg.
+	profile, err := os.ReadFile(filepath.Join(playbackFixtures, "profiles", "swiftfin-native.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, body := s.call(http.MethodPost, "/Items/"+byNumber["5.1"]+"/PlaybackInfo", app("tv", token),
+		map[string]any{"DeviceProfile": json.RawMessage(profile), "IsPlayback": true, "AutoOpenLiveStream": true})
+	var info playbackInfoResponse
+	if status != http.StatusOK || json.Unmarshal(body, &info) != nil || len(info.MediaSources) != 1 || info.MediaSources[0].TranscodingUrl == "" {
+		t.Fatalf("PlaybackInfo of the channel: %d %s", status, body)
+	}
+	transcoding := info.MediaSources[0].TranscodingUrl
+	playlist := transcoding[:strings.Index(transcoding, "master.m3u8")] + "live.m3u8" + transcoding[strings.Index(transcoding, "?"):]
+	if status, body := s.call(http.MethodGet, transcoding, "", nil); status != http.StatusOK {
+		t.Fatalf("master playlist: %d %s", status, body)
+	}
+	if status, body := s.call(http.MethodGet, playlist, "", nil); status != http.StatusOK || !strings.Contains(string(body), "#EXTINF") {
+		t.Fatalf("live playlist: %d %s", status, body)
+	}
+
+	// A recording of 7.2 takes the only tuner.
+	id, _ := accounts.ParseID(byNumber["7.2"])
+	versions, err := s.library.Versions(t.Context(), user, id)
+	if err != nil || len(versions) != 1 {
+		t.Fatalf("the recorded channel's streams: %v %v", versions, err)
+	}
+	ctx, stop := context.WithCancel(t.Context())
+	recorded := make(chan error, 1)
+	go func() {
+		recorded <- s.handler.Playback.Record(ctx, user.ID, versions[0], "porch", filepath.Join(t.TempDir(), "recording.ts"))
+	}()
+	defer func() {
+		stop()
+		<-recorded
+	}()
+
+	// The viewer's app keeps asking for its playlist: once the segments
+	// FFmpeg made before are no longer listed, it hears the refusal.
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		status, body = s.call(http.MethodGet, playlist, "", nil)
+		if status != http.StatusOK || time.Now().After(deadline) {
+			break
+		}
+		select {
+		case err := <-recorded:
+			recorded <- err
+			t.Fatalf("the recording ended: %v", err)
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+	if status != http.StatusServiceUnavailable {
+		t.Errorf("the playlist once the tuner was taken: %d %s, want 503", status, body)
+	}
+	if logged := s.warnings.logged(); len(logged) > 0 {
+		t.Errorf("warnings logged for a refused stream: %q", logged)
 	}
 }

@@ -94,7 +94,7 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 	prober.Timeout = min(prober.Timeout, liveProbeCap)
 	probeCtx, cancel := context.WithTimeout(ctx, prober.Timeout)
 	defer cancel()
-	target, release := s.loopback.registerLiveFor(version, userOf(ctx))
+	target, _, release := s.loopback.registerLiveFor(version, userOf(ctx))
 	defer release()
 	analysis, err := prober.ProbeLive(probeCtx, target)
 	if err != nil {
@@ -482,8 +482,8 @@ func (s *Service) liveOpener(remux Remux) hls.Opener {
 		if !ok {
 			return hls.Remux{}, nil, ErrNotRemuxable
 		}
-		target, release := s.loopback.registerLiveFor(remux.Version, remux.User)
-		r := hls.Remux{Input: target, Video: video.Index, Audio: audioOf(analysis, remux.Audio), Format: remux.Format}
+		target, refused, release := s.loopback.registerLiveFor(remux.Version, remux.User)
+		r := hls.Remux{Input: target, Refused: refused, Video: video.Index, Audio: audioOf(analysis, remux.Audio), Format: remux.Format}
 		switch {
 		case Manifest(analysis):
 			r.InputOptions = media.LiveOptions
@@ -503,7 +503,8 @@ func (s *Service) liveOpener(remux Remux) hls.Opener {
 // interface until release is called: its playlists rewritten to name
 // their files on the loopback interface too.
 func (l *loopback) registerLive(version library.Version) (string, func()) {
-	return l.registerLiveFor(version, accounts.ID{})
+	target, _, release := l.registerLiveFor(version, accounts.ID{})
+	return target, release
 }
 
 // recordingSuffix ends the loopback key of a recording's live stream.
@@ -512,12 +513,15 @@ const recordingSuffix = "rec"
 // registerRecording registers a version's live stream read for a
 // recording, which keeps its tuner (see makeRoom).
 func (l *loopback) registerRecording(version library.Version) (string, func()) {
-	return l.registerKey(version, randomKey()+"."+recordingSuffix)
+	target, _, release := l.registerKey(version, randomKey()+"."+recordingSuffix)
+	return target, release
 }
 
 // registerLiveFor registers a version's live stream read for user, whose
 // oldest stream of the source may make room for it (see makeRoom).
-func (l *loopback) registerLiveFor(version library.Version, user accounts.ID) (string, func()) {
+// refused tells the refusal of the source (see ErrLiveRefused) the last
+// request of the stream was answered with, nil for none.
+func (l *loopback) registerLiveFor(version library.Version, user accounts.ID) (target string, refused func() error, release func()) {
 	key := randomKey()
 	if user != (accounts.ID{}) {
 		key += "." + user.String()
@@ -525,16 +529,30 @@ func (l *loopback) registerLiveFor(version library.Version, user accounts.ID) (s
 	return l.registerKey(version, key)
 }
 
-func (l *loopback) registerKey(version library.Version, key string) (string, func()) {
+// liveTarget is a live stream registered on the loopback interface.
+type liveTarget struct {
+	version library.Version
+	// refused is the refusal of the source the last request was answered
+	// with, nil for none. It is guarded by the loopback's mu.
+	refused error
+}
+
+func (l *loopback) registerKey(version library.Version, key string) (target string, refused func() error, release func()) {
+	t := &liveTarget{version: version}
 	l.mu.Lock()
-	l.feeds[key] = version
+	l.feeds[key] = t
 	l.mu.Unlock()
-	release := func() {
+	refused = func() error {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		return t.refused
+	}
+	release = func() {
 		l.mu.Lock()
 		delete(l.feeds, key)
 		l.mu.Unlock()
 	}
-	return l.liveURL(key, "", version.URL), release
+	return l.liveURL(key, "", version.URL), refused, release
 }
 
 // liveURL is the loopback address of a file of a live stream, target
@@ -556,7 +574,7 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 		return
 	}
 	l.mu.Lock()
-	version, ok := l.feeds[parts[0]]
+	live, ok := l.feeds[parts[0]]
 	l.mu.Unlock()
 	target := ""
 	if parts[1] != "-" {
@@ -576,5 +594,15 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 			r = r.WithContext(ForUser(r.Context(), id))
 		}
 	}
-	_ = l.live(w, r, version, target, link)
+	// A new request clears the refusal of the one before it.
+	l.mu.Lock()
+	live.refused = nil
+	l.mu.Unlock()
+	err := l.live(w, r, live.version, target, link)
+	if !errors.Is(err, ErrLiveRefused) {
+		err = nil
+	}
+	l.mu.Lock()
+	live.refused = err
+	l.mu.Unlock()
 }
