@@ -77,6 +77,8 @@ An address on the local network that sends `X-Forwarded-For` or `X-Real-IP` with
 
 Local network discovery has two warnings, linked to its settings (see [Local network discovery](#local-network-discovery)): its UDP port is used by another program, such as a Jellyfin server on the same host, or its answers give an address of Polyfin's container, which apps on the local network cannot reach.
 
+HTTPS has four, linked to its settings: a port it cannot listen on, certificate files that cannot be served, a failed attempt with Let's Encrypt, and a certificate that expires within 14 days, an error once it expired (see [HTTPS problems](#https-problems)).
+
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
 
 Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
@@ -119,6 +121,64 @@ Both settings apply at once, without a restart. Turned off, Polyfin frees the po
 | **Address on the local network** | **Settings › General** | Empty | The address announced, such as `http://192.168.1.10:8096`, as Jellyfin's `PublishedServerUrl`. It is also the `LocalAddress` of `/System/Info/Public`. Empty, the address of the interface that reaches the app is announced. |
 
 **For app developers:** `GET /admin/api/health/problems` lists the warning of a port it cannot listen on as `discovery_port`, with `port`, and the warning of a container's address as `discovery_address`, with `address`, the address announced. `/admin/api/settings` holds the settings as `localDiscovery` and `localAddress`; a `PUT` whose address is not an `http` or `https` URL, or has a user, query or fragment, answers 400 `invalid_local_address`. For tests, `POLYFIN_DISCOVERY_PORT` changes the UDP port, which Jellyfin apps never use.
+
+## HTTPS
+
+Polyfin can serve HTTPS itself, without a reverse proxy, on a port of its own next to HTTP. It is set under **Settings › Security**, in its **HTTPS** part, and every change applies at once, without a restart. HTTP keeps `POLYFIN_LISTEN` and keeps working whatever happens to HTTPS: a port HTTPS cannot listen on, files it cannot read and renewals that fail are told in **System › Health**, and never stop Polyfin from starting.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Serve HTTPS** | **Settings › Security** | Off | **Certificate files**: a certificate another tool obtains. **Let's Encrypt**: a certificate Polyfin obtains and renews itself. |
+| **HTTPS port** | **Settings › Security** | 8920 | The TCP port HTTPS listens on in the container, as Jellyfin's. Publish it, as 8096 is for HTTP (see [Serve HTTPS](installation.md#serve-https)). |
+| **Redirect HTTP to HTTPS** | **Settings › Security** | Off | Sends the requests of clients on the internet that come over HTTP to HTTPS (see [The redirect](#the-redirect)). |
+| **Certificate**, **Private key** | **Settings › Security**, with **Certificate files** | Empty | The paths in the container of PEM files: the certificate with its chain, such as `fullchain.pem`, and its RSA or ECDSA key, such as `privkey.pem`. |
+| **Host names** | **Settings › Security**, with **Let's Encrypt** | Empty | The public names that point at the server, one a line, such as `media.example.org`, up to 100, all in one certificate. |
+| **Email** | **Settings › Security**, with **Let's Encrypt** | Empty | Optional: Let's Encrypt may write to it about the account. |
+| **I agree to Let's Encrypt's terms of service** | **Settings › Security**, with **Let's Encrypt** | Off | Required: Let's Encrypt issues certificates only once its terms, at [letsencrypt.org/repository](https://letsencrypt.org/repository/), are agreed to. |
+| **Challenge** | **Settings › Security**, with **Let's Encrypt** | HTTP-01 | How Let's Encrypt checks that the names point at the server (see [Let's Encrypt](#let-s-encrypt)). |
+
+The container's user, UID 65532, cannot listen below 1024: to reach Polyfin on the usual ports, 443 for HTTPS and 80 for Let's Encrypt's HTTP-01, forward them to Polyfin's ports on the router, or in the container's `ports`.
+
+### Certificate files
+
+Mount the folder of the files read-only in the container, and give their paths. Saving checks that both can be read, by user 65532, and that the key belongs to the certificate: files that are missing, unreadable or mismatched are refused, and nothing is saved. Saving other settings with the same files checks nothing.
+
+Polyfin looks at the files every minute, and reads them again when they change: a certificate another tool renews, such as Certbot, acme.sh or a reverse proxy's, is served within a minute, without a restart. While a change cannot be read, missing or mismatched, for instance between the writes of the certificate and of its key, the last good certificate stays in use, and **System › Health** warns.
+
+### Let's Encrypt
+
+Polyfin obtains one certificate for every host name, with an account key of its own, and keeps the account key, the certificate and its private key in the database, the keys encrypted with `POLYFIN_SECRET_KEY` as the other [stored keys](configuration.md#stored-keys-and-tokens), so that backups hold them. It renews the certificate once a third of its lifetime remains: 30 days before the end of a 90-day certificate. Changing the host names or the challenge obtains a new one at once. A failed attempt is tried again an hour later, or at once when the host names, email or challenge change; meanwhile the certificate it had stays in use.
+
+Each name must point at the server from the internet, and one of two ports must reach Polyfin:
+
+- **HTTP-01**, the default: Let's Encrypt asks `http://<name>/.well-known/acme-challenge/` on port 80, which must reach Polyfin's HTTP port, 8096 by default. Polyfin answers it there, and never redirects it.
+- **TLS-ALPN-01**: Let's Encrypt connects to port 443, which must reach Polyfin's HTTPS port, 8920 by default.
+
+Names that resolve only on the local network, and wildcards such as `*.example.org`, need the DNS-01 challenge, which Polyfin does not answer: it would issue certificates without any open port, but needs Polyfin to create a TXT record under `_acme-challenge.<name>`, through each DNS host's own API, with credentials stored encrypted, or through RFC 2136 dynamic updates for the DNS servers that accept them. Meanwhile, obtain such a certificate with another tool that answers DNS-01, such as Certbot, acme.sh or lego, and give its files under **Certificate files**.
+
+With **Let's Encrypt**, **Public address**, under **Settings › Notifications**, offers `https://`, the first host name and the HTTPS port (left out when it is 443), while it is empty: links in notifications then use HTTPS.
+
+**For tests:** `POLYFIN_ACME_DIRECTORY` names another ACME server, such as Let's Encrypt's staging environment, a private ACME server, or a test server such as Pebble, and `POLYFIN_ACME_CA_FILE` the certificate authorities its HTTPS is trusted with (see [Configuration](configuration.md)).
+
+### The redirect
+
+While **Redirect HTTP to HTTPS** is on and HTTPS is served, a request from the internet that comes over HTTP gets a 308 to the same path and query on `https://`, the host it asked for and the HTTPS port: a 308 keeps the method and body, so sign-ins follow it too. These are never redirected:
+
+- requests from the local network: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and loopback, as [Local network discovery](#local-network-discovery) reads them, behind a known proxy the client it names;
+- Let's Encrypt's HTTP-01 checks, under `/.well-known/acme-challenge/`;
+- requests from a known proxy that sends `X-Forwarded-Proto: https`: the proxy received them over HTTPS (see [Reverse proxy](reverse-proxy.md#https-and-the-public-address)).
+
+While HTTPS is not served, its port taken or no certificate read yet, nothing is redirected.
+
+### What apps see
+
+Over HTTPS, the stream addresses Polyfin gives apps start with `https://`, and the admin app's session cookie is marked secure, as behind a proxy that sends `X-Forwarded-Proto: https`. Without **Address on the local network**, `LocalAddress` of `/System/Info/Public` and `/System/Info` stays the address the request reached, `https://` and the HTTPS port included. Discovery answers keep the HTTP address: a certificate for a public name does not match `192.168.1.10`, and HTTP is never redirected on the local network. To announce HTTPS on the local network, set **Address on the local network** to an `https://` address whose name the certificate holds (see [Finding servers on the local network](jellyfin-compatibility.md#finding-servers-on-the-local-network)).
+
+### HTTPS problems
+
+**System › Health** warns, with a link to the setting, of a port HTTPS cannot listen on, used by another program or below 1024, of certificate files that are missing, unreadable or do not belong together, of an attempt with Let's Encrypt that failed, with Let's Encrypt's error, and of a certificate that expires within 14 days; an expired certificate is an error. They reach notification targets as health problems (see [Notifications](notifications.md)).
+
+**For app developers:** `/admin/api/settings` holds the settings as `httpsMode` (`off`, `files` or `letsencrypt`), `httpsPort`, `httpsRedirect`, `httpsCertificate`, `httpsPrivateKey`, `acmeHosts`, `acmeEmail`, `acmeTerms` and `acmeChallenge` (`http-01` or `tls-alpn-01`). A `PUT` with files that cannot be served answers 400 `https_certificate_missing`, `https_private_key_missing`, `https_certificate_unreadable`, `https_private_key_unreadable` or `https_files_mismatch`; Let's Encrypt without a host name answers `invalid_acme_hosts`, and without the terms agreed to `acme_terms_required`. `GET /admin/api/health/problems` lists `https_port`, with `port`, `https_files`, with `failure` (`missing`, `unreadable` or `mismatch`) and `file`, `https_renewal`, with `error`, and `https_expiry`, with `expires`.
 
 ## Logs
 

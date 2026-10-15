@@ -4,6 +4,8 @@ This page explains how to run Polyfin behind a reverse proxy, such as Traefik, C
 
 Polyfin listens on plain HTTP, on port 8096 by default (see [Configuration](configuration.md)). The proxy terminates HTTPS and forwards each request to that port. Apps and browsers on the local network can keep connecting to port 8096 directly.
 
+Polyfin can also serve HTTPS itself, with certificate files or a certificate from Let's Encrypt, on port 8920 by default, with one port forwarded on the router and no proxy (see [HTTPS](administration.md#https)). A proxy is still the way when Polyfin shares port 443 with other services under several names, when the certificate is a wildcard or for names that resolve only on the local network and another tool should not write its files where Polyfin reads them, or when the proxy also adds authentication, rate limits or a CDN in front.
+
 ## Headers to pass
 
 | Header | What Polyfin does with it |
@@ -23,7 +25,9 @@ The admin app uses no WebSocket: it asks the server again every few seconds.
 
 ## HTTPS and the public address
 
-Get the certificate on the proxy, and have it redirect HTTP to HTTPS. Polyfin itself never serves HTTPS.
+Get the certificate on the proxy, and have it redirect HTTP to HTTPS. Leave **Serve HTTPS**, under **Settings › Security**, off: the proxy forwards to Polyfin's HTTP port.
+
+If Polyfin's own HTTPS is on behind the proxy anyway, with **Redirect HTTP to HTTPS**, a request from a known proxy that sends `X-Forwarded-Proto: https` is never redirected: the proxy received it over HTTPS. A known proxy that does not send the header has the requests of its clients on the internet redirected to `https://`, the host they asked for and Polyfin's HTTPS port, which they may not reach: have it pass `X-Forwarded-Proto`. A proxy on the local network missing from **Known proxies** makes every client look local, so nothing it forwards is redirected.
 
 Then set **Public address**, under **Settings › Notifications**, to the address people open Polyfin at, such as `https://media.example.org`, without a trailing slash. Links in notifications and invite links start with it. Polyfin does not need it for apps: stream addresses come from the headers above.
 

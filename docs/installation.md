@@ -58,6 +58,37 @@ docker run -d --name polyfin --network host -v polyfin_data:/data \
 
 Only one program on a host's network can use port 7359: next to a Jellyfin server on the same host's network, Polyfin starts anyway, logs it, and **System › Health** says that it cannot answer. When the answers would give the container's address, **System › Health** says so too. To stop answering, turn off **Answer local network discovery**, under **Settings › General**. See [Local network discovery](administration.md#local-network-discovery) for both settings.
 
+### Serve HTTPS
+
+Polyfin can serve HTTPS itself, on port 8920 by default, with certificate files or a certificate from Let's Encrypt (see [HTTPS](administration.md#https)). Publish the HTTPS port next to 8096 in `compose.yaml`, then choose **Serve HTTPS** under **Settings › Security**:
+
+```yaml
+    ports:
+      - "8096:8096"
+      - "7359:7359/udp"
+      - "8920:8920"
+```
+
+With **Certificate files**, mount the folder that holds them read-only, and give their paths in the container, such as `/certs/fullchain.pem` and `/certs/privkey.pem`. User 65532 must be able to read them:
+
+```yaml
+    volumes:
+      - polyfin_data:/data
+      - /srv/certs/media.example.org:/certs:ro
+```
+
+Certbot's `live` folders hold links into its `archive` folder, and its keys are readable by root only: have its deploy hook copy the two files into such a folder, readable by user 65532, at each renewal. Polyfin serves the new certificate within a minute.
+
+With **Let's Encrypt**, the container's user cannot listen below 1024, so the internet's port 80 or 443 must reach Polyfin's ports through the router or `ports`. For **HTTP-01**, forward port 80 to Polyfin's HTTP port; for **TLS-ALPN-01**, port 443 to its HTTPS port. On the host itself, that is one of:
+
+```yaml
+    ports:
+      - "80:8096"     # HTTP-01: Let's Encrypt's checks reach the HTTP port
+      - "443:8920"    # TLS-ALPN-01, and HTTPS on the usual port
+```
+
+Each line needs the host's own port free: forward the port on the router instead, to the host's 8096 or 8920, when another service uses it. Apps reach Polyfin at `https://media.example.org:8920`, or at `https://media.example.org` once 443 reaches the HTTPS port.
+
 ### Pin a version
 
 Replace the image's `latest` tag in `compose.yaml` with a release, such as `0.22.0`. `latest` follows stable releases.
@@ -115,6 +146,8 @@ To add the template:
 To back up the database every day, set **Backups folder** to a folder of the server, such as `/mnt/user/appdata/polyfin/backups`, then turn **Back up the database every day** on in the admin app, under **Settings › Backups**. The container's user, UID 65532, must be able to write to the folder: create it first in Unraid's terminal with `mkdir -p /mnt/user/appdata/polyfin/backups && chown 65532:65532 /mnt/user/appdata/polyfin/backups`. See [Backups](backups.md). Live TV recordings work the same way, with **Recordings folder** and **Record Live TV**, under **Settings › Recordings**. Every other option is set in the admin app, under **Settings**.
 
 For Jellyfin apps to find Polyfin on the local network by themselves, set the container's **Network Type** to `br0`, which gives it its own address on your network, or to `Host`: on the default `bridge`, their broadcasts do not reach it, even with **Discovery port** published (see [Let apps find Polyfin on the local network](#let-apps-find-polyfin-on-the-local-network)).
+
+To serve HTTPS, add the HTTPS port to the container: **Add another Path, Port, Variable, Label or Device**, of type `Port`, with `8920` as both the container's and the host's port, over TCP. Then choose **Serve HTTPS** in the admin app, under **Settings › Security** (see [HTTPS](administration.md#https)). For **Certificate files**, add a `Path` mapping the folder that holds them, read-only, such as `/mnt/user/appdata/certs` to `/certs`. For **Let's Encrypt**, Unraid's own web interface usually holds ports 80 and 443 on the server: forward the router's port 80 to the server's port 8096 for **HTTP-01**, or its port 443 to the server's 8920 for **TLS-ALPN-01**, rather than mapping them on the container.
 
 Containers made from an older template keep working: the variables they set, such as `POLYFIN_CACHE_SIZE` or `POLYFIN_BACKUP_DIR`, are copied into the settings at their first start with a version that made them settings. You can remove them from the container afterwards.
 

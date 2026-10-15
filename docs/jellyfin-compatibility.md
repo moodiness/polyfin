@@ -203,7 +203,8 @@ Jellyfin apps that look for servers on the local network list Polyfin, as they l
 - Polyfin listens on UDP port 7359, IPv4 and IPv6. A datagram that holds `who is JellyfinServer?`, in any letter case, as Jellyfin 12.2 reads it, gets one answer, sent to its sender: `{"Address":"http://192.168.1.10:8096","Id":"<server ID>","Name":"<server name>","EndpointAddress":null}`. Polyfin answers Emby's `who is EmbyServer?` the same way, which Jellyfin 12.2 leaves unanswered.
 - `Id` and `Name` are those of `/System/Info/Public`. `Address` is **Address on the local network** when set, as Jellyfin's `PublishedServerUrl`. Otherwise it is `http://`, the address of the server's interface that reaches the sender, and Polyfin's HTTP port.
 - Only senders on the local network are answered: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and loopback. Jellyfin answers any sender.
-- `LocalAddress` of `/System/Info/Public` and `/System/Info` is **Address on the local network** when set, as Jellyfin gives its `PublishedServerUrl` there, and otherwise the address the request reached.
+- `LocalAddress` of `/System/Info/Public` and `/System/Info` is **Address on the local network** when set, as Jellyfin gives its `PublishedServerUrl` there, and otherwise the address the request reached: over the HTTPS Polyfin serves itself, `https://` and the HTTPS port included (see [HTTPS](administration.md#https)).
+- While Polyfin serves HTTPS, discovery answers keep the HTTP address: a certificate for a public name does not match the server's address on the local network, and HTTP is never redirected there. Jellyfin, too, announces its HTTP address unless `PublishedServerUrl` says otherwise. To announce HTTPS, set **Address on the local network** to an `https://` address whose name the certificate holds.
 
 ### Backups
 
