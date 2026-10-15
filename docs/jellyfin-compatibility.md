@@ -223,8 +223,8 @@ TVs and players that play over DLNA, without a Jellyfin app, browse and play the
 
 **For app developers:**
 
-- A DLNA playback is listed in `/Sessions` under its user, with `Client` `DLNA`, `DeviceName` the device's name, `DeviceId` `dlna-` and the device's ID, `RemoteEndPoint` its address, `NowPlayingItem` and `PlayState`. `SupportsRemoteControl` and `SupportsMediaControl` are false, and a listing with `controllableByUserId` leaves it out.
-- `PositionTicks` is how far the device read, as Polyfin infers it: devices report nothing. A DLNA playback counts against the user's **Playbacks at once**, as an app's does.
+- A DLNA playback is listed in `/Sessions` under its user, with `Client` `DLNA`, `DeviceName` the device's name, `DeviceId` `dlna-` and the device's ID, `RemoteEndPoint` its address, `NowPlayingItem` and `PlayState`, until two minutes after the device last asked for anything. `SupportsRemoteControl` and `SupportsMediaControl` are false, and a listing with `controllableByUserId` leaves it out.
+- `PositionTicks` is how far the device read, as Polyfin infers it: devices report nothing. For a file sent as it is, that is the share of the file's bytes sent during the playback, wherever they are in it. A DLNA playback counts against the user's **Playbacks at once**, as an app's does.
 
 ### Backups
 

@@ -37,7 +37,7 @@ Without a known proxy, Polyfin takes every request to come from the address its 
 
 - failed sign-ins are counted for everyone together: 10 failures in 15 minutes, from anyone, refuse every user's sign-in for up to 15 minutes, in apps, the admin app, invite links and password reset PINs;
 - **Sessions**, the playbacks on **Home** and each user's devices show the proxy's address;
-- when the proxy is on the local network, every client counts as on it: apps are told so by `/System/Endpoint`, and a forgotten password asked from the internet makes a PIN.
+- when the proxy is on the local network, every client counts as on it: apps are told so by `/System/Endpoint`, and a forgotten password asked from the internet makes a PIN. DLNA's addresses under `/dlna/`, which serve the local network only, refuse instead any request that carries `X-Forwarded-For`, `X-Real-IP` or `Forwarded` from an address that is not a known proxy, and any request that names its client in `Forwarded` alone, even from a known proxy, since Polyfin reads only `X-Forwarded-For` and `X-Real-IP` (see [DLNA](dlna.md)).
 
 List the proxy under **Known proxies**, in **Settings › Security**, one entry per line, up to 64: an IPv4 or IPv6 address, a network such as `172.30.0.0/24`, or a host name such as `traefik` (see [Proxies by name](#proxies-by-name)). A request from a known proxy is then taken to come from the client its `X-Forwarded-For` header names: the rightmost address there that is not a known proxy, read across every line of the header. Without that header, `X-Real-IP` names the client. Requests from any other address keep their connection's address, and their forwarded headers are ignored, since anyone can send them.
 
