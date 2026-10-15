@@ -44,6 +44,7 @@ import {
 } from '@/ui'
 import { dateTime, errorMessage, formatHour, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
+import { TunersShort } from '@/features/livetv/TunersShort'
 import BackupStatus from './BackupStatus'
 import OwnerChip from './OwnerChip'
 import RestoreBackup from './RestoreBackup'
@@ -363,6 +364,7 @@ function Timers() {
                     {timer.status === 'Error' && (
                       <StatusPill tone="danger">{text.failed}</StatusPill>
                     )}
+                    {timer.tunersShort && <TunersShort text={text} />}
                   </span>
                 }
                 meta={

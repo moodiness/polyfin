@@ -1,4 +1,10 @@
-import { BroadcastIcon, FolderIcon, MusicNotesIcon, PuzzlePieceIcon } from '@phosphor-icons/react'
+import {
+  BroadcastIcon,
+  CellTowerIcon,
+  FolderIcon,
+  MusicNotesIcon,
+  PuzzlePieceIcon,
+} from '@phosphor-icons/react'
 import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { installAddon, queryClient, queryKeys, type Addon, type Scope } from '@/api'
@@ -8,31 +14,44 @@ import { Button, Modal, Field, Segmented, TextInput, useToast } from '@/ui'
 import { addedParts, IptvAddFlow } from './IptvForms'
 import { LocalFolderAddForm } from './LocalFolders'
 import { invalidateScope } from './model'
+import { TunerAddFlow } from './TunerForms'
 
-type AddKind = 'stremio' | 'music' | 'iptv' | 'local'
+export type AddKind = 'stremio' | 'music' | 'iptv' | 'tuner' | 'local'
 
 /**
  * The "Add a source" panel: a Stremio or music addon from its manifest address (the server tells
- * which it is), an IPTV source in two steps, or, for the server, a local folder. `onAdded`
- * receives the new source, to select it.
+ * which it is), an IPTV source in two steps, or, for the server, an HDHomeRun tuner or a local
+ * folder. It opens on `initialKind`. `onAdded` receives the new source, to select it.
  */
 export function AddSourceModal({
   scope,
   open,
+  initialKind = 'stremio',
   onClose,
   onAdded,
 }: {
   scope: Scope
   open: boolean
+  initialKind?: AddKind
   onClose: () => void
   onAdded: (added: Addon) => void
 }) {
   const { language, t } = useI18n()
   const toast = useToast()
   const text = t.sourceAdd
-  const [kind, setKind] = useState<AddKind>('stremio')
+  const [kind, setKind] = useState<AddKind>(initialKind)
   // A new key per opening starts the forms empty.
   const [round, setRound] = useState(0)
+
+  /** An IPTV source or a tuner added: its toast tells what it brings. */
+  function sourceAdded(source: Addon) {
+    done(
+      source,
+      source.source === null
+        ? text.installed(source.name)
+        : text.added(source.name, addedParts(t, language, source.source)),
+    )
+  }
 
   function done(added: Addon, message: string) {
     toast(message)
@@ -42,7 +61,7 @@ export function AddSourceModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={text.title} width={640}>
+    <Modal open={open} onClose={onClose} title={text.title} width={720}>
       <div key={round} className="flex flex-col gap-6 p-5">
         <Segmented<AddKind>
           label={text.kind}
@@ -52,27 +71,22 @@ export function AddSourceModal({
             { value: 'stremio', label: text.kinds.stremio, icon: PuzzlePieceIcon },
             { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
             { value: 'iptv', label: text.kinds.iptv, icon: BroadcastIcon },
-            // Local folders are the server's: a member's own sources have none.
+            // Tuners and local folders are the server's: a member's own sources have none.
             ...(scope === 'shared'
-              ? [{ value: 'local' as const, label: text.kinds.local, icon: FolderIcon }]
+              ? [
+                  { value: 'tuner' as const, label: text.kinds.tuner, icon: CellTowerIcon },
+                  { value: 'local' as const, label: text.kinds.local, icon: FolderIcon },
+                ]
               : []),
           ]}
           className="self-start max-sm:self-stretch"
         />
         {kind === 'local' ? (
           <LocalFolderAddForm onAdded={(added) => done(added, t.localFolders.added(added.name))} />
+        ) : kind === 'tuner' ? (
+          <TunerAddFlow onAdded={sourceAdded} />
         ) : kind === 'iptv' ? (
-          <IptvAddFlow
-            scope={scope}
-            onAdded={(added) =>
-              done(
-                added,
-                added.source === null
-                  ? text.installed(added.name)
-                  : text.added(added.name, addedParts(t, language, added.source)),
-              )
-            }
-          />
+          <IptvAddFlow scope={scope} onAdded={sourceAdded} />
         ) : (
           <InstallForm
             key={kind}

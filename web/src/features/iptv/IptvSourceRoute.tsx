@@ -1,5 +1,5 @@
-import { ArrowsClockwiseIcon, BroadcastIcon } from '@phosphor-icons/react'
-import { useState, type FormEvent } from 'react'
+import { ArrowsClockwiseIcon, BroadcastIcon, MagnifyingGlassIcon } from '@phosphor-icons/react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -8,10 +8,12 @@ import {
   queryClient,
   queryKeys,
   refreshAddon,
+  scanTuner,
   updateIptvSource,
   type Addon,
   type IptvOptions,
   type IptvSource,
+  type IptvTuner,
   type Scope,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
@@ -24,14 +26,17 @@ import {
   Button,
   ButtonLink,
   EmptyState,
+  FieldError,
   InlineError,
   Notice,
   Panel,
   SaveBar,
+  ProgressBar,
   Skeleton,
   SkeletonRows,
   Tabs,
   TextLink,
+  Switch,
   useToast,
   RelativeTime,
 } from '@/ui'
@@ -79,6 +84,9 @@ export default function IptvSourceRoute({ scope: fixedScope }: { scope?: Scope }
     queryKey: queryKeys.addons(scope ?? 'me'),
     queryFn: ({ signal }) => fetchAddons(scope ?? 'me', signal),
     enabled: scope !== null,
+    // A tuner's scan under way is followed until it ends.
+    refetchInterval: (query) =>
+      query.state.data?.some((item) => item.id === id && item.source?.tuner?.scan) ? 2000 : false,
   })
   const addon = addons.data?.find((item) => item.id === id && item.source !== null)
   const source = addon?.source ?? undefined
@@ -119,7 +127,15 @@ export default function IptvSourceRoute({ scope: fixedScope }: { scope?: Scope }
       back={back}
       title={addon ? addon.name : t.lineup.titleLoading}
       titleAside={
-        addon && <Badge>{addon.kind === 'xtream' ? t.iptv.kindXtream : t.iptv.kindM3u}</Badge>
+        addon && (
+          <Badge>
+            {addon.kind === 'hdhomerun'
+              ? t.iptv.kindTuner
+              : addon.kind === 'xtream'
+                ? t.iptv.kindXtream
+                : t.iptv.kindM3u}
+          </Badge>
+        )
       }
       lede={t.lineup.description}
       actions={
@@ -234,6 +250,9 @@ function Summary({ scope, addon, source }: { scope: Scope; addon: Addon; source:
       {source.error !== '' && (
         <Notice tone="danger">{t.iptv.errors[source.error] ?? t.errors.generic}</Notice>
       )}
+      {source.tuner !== null && (
+        <TunerPanel scope={scope} id={addon.id} source={source} tuner={source.tuner} />
+      )}
       {liveTv ? (
         <Block title={t.lineup.content.liveTitle}>
           <Figures
@@ -347,6 +366,144 @@ function Summary({ scope, addon, source }: { scope: Scope; addon: Addon; source:
   )
 }
 
+/**
+ * A tuner's own part of its summary: its model, device and tuner count, its last failure, the
+ * choice of its favorite channels only, and its channel scan with its progress.
+ */
+function TunerPanel({
+  scope,
+  id,
+  source,
+  tuner,
+}: {
+  scope: Scope
+  id: string
+  source: IptvSource
+  tuner: IptvTuner
+}) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const number = useNumber()
+  const text = t.lineup.tuner
+  const ids = { label: useId(), help: useId() }
+  const favorites = useMutation({
+    mutationFn: (favoritesOnly: boolean) =>
+      updateIptvSource(scope, id, { options: { favoritesOnly } }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Addon[]>(queryKeys.addons(scope), (list) =>
+        list?.map((item) => (item.id === updated.id ? updated : item)),
+      )
+      toast(text.favoritesSaved(updated.source?.options.favoritesOnly ?? false))
+    },
+    onSettled: () => invalidateLineup(scope, id),
+  })
+  const scan = useMutation({
+    mutationFn: () => scanTuner(id),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Addon[]>(queryKeys.addons(scope), (list) =>
+        list?.map((item) => (item.id === updated.id ? updated : item)),
+      )
+      toast(text.scanStarted)
+    },
+    onSettled: () => invalidateLineup(scope, id),
+  })
+  // The page follows the scan while it runs; its end is told once, and the line-up read again.
+  const scanning = tuner.scan !== null
+  const wasScanning = useRef(scanning)
+  useEffect(() => {
+    if (wasScanning.current && !scanning) {
+      toast(text.scanDone)
+      invalidateLineup(scope, id)
+    }
+    wasScanning.current = scanning
+  }, [scanning, scope, id, toast, text])
+
+  return (
+    <Panel
+      title={text.title}
+      description={text.help}
+      actions={
+        <Button
+          icon={MagnifyingGlassIcon}
+          loading={scan.isPending || scanning}
+          title={text.scanHelp}
+          onClick={() => {
+            favorites.reset()
+            scan.mutate()
+          }}
+        >
+          {scanning ? text.scanning : text.scan}
+        </Button>
+      }
+    >
+      <div className="space-y-6">
+        {tuner.failure !== '' && (
+          <Notice tone="warn">
+            {tuner.failure === 'unreachable' ? text.unreachable : text.failed}
+            {tuner.failedAt !== null && (
+              <>
+                {' '}
+                <RelativeTime iso={tuner.failedAt} />
+              </>
+            )}
+          </Notice>
+        )}
+        <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-3">
+          {[
+            { label: text.model, value: tuner.model || '–' },
+            { label: text.tuners, value: number(tuner.tuners), detail: text.tunersHelp },
+            { label: text.device, value: tuner.device },
+          ].map((item) => (
+            <div key={item.label}>
+              <dt className="text-[12.5px] text-ink-3">{item.label}</dt>
+              <dd className="figures mt-1 text-control break-all text-ink">{item.value}</dd>
+              {item.detail !== undefined && (
+                <dd className="mt-0.5 text-small text-ink-3">{item.detail}</dd>
+              )}
+            </div>
+          ))}
+        </dl>
+        {tuner.scan !== null && (
+          <div className="space-y-2">
+            <ProgressBar
+              value={tuner.scan.progress / 100}
+              label={text.scanProgress}
+              valueText={text.scanFound(number(tuner.scan.progress), number(tuner.scan.found))}
+              size="lg"
+            />
+            <p className="text-small text-ink-2" role="status">
+              {text.scanFound(number(tuner.scan.progress), number(tuner.scan.found))}
+            </p>
+          </div>
+        )}
+        <p className="text-small text-ink-3">{text.scanHelp}</p>
+        <div className="flex items-start justify-between gap-4 border-t border-line pt-5">
+          <div className="min-w-0">
+            <p id={ids.label} className="text-control font-medium text-ink">
+              {t.sourceAdd.favoritesOnly}
+            </p>
+            <p id={ids.help} className="mt-1 text-small text-ink-3">
+              {t.sourceAdd.favoritesOnlyHelp}
+            </p>
+          </div>
+          <Switch
+            checked={favorites.isPending ? favorites.variables : source.options.favoritesOnly}
+            labelledBy={ids.label}
+            describedById={ids.help}
+            disabled={favorites.isPending}
+            onChange={(on) => {
+              scan.reset()
+              favorites.mutate(on)
+            }}
+          />
+        </div>
+        {favorites.isError && <FieldError>{errorMessage(t, favorites.error)}</FieldError>}
+        {scan.isError && <FieldError>{errorMessage(t, scan.error)}</FieldError>}
+      </div>
+    </Panel>
+  )
+}
+
 function Options({ scope, id, source }: { scope: Scope; id: string; source: IptvSource }) {
   const { t } = useI18n()
   const toast = useToast()
@@ -376,6 +533,7 @@ function Options({ scope, id, source }: { scope: Scope; id: string; source: Iptv
         <SourceOptions
           value={draft}
           saved={source.options}
+          tuner={source.tuner !== null}
           onChange={(patch) => {
             save.reset()
             setDraft((current) => ({ ...current, ...patch }))

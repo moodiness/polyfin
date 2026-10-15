@@ -49,6 +49,7 @@ import {
   isIptv,
   isTvCatalog,
 } from './catalogs'
+import { TunersShort } from './TunersShort'
 
 /**
  * `/live-tv`: the server's TV catalogs with the state of their guides, the channels of its IPTV
@@ -156,7 +157,12 @@ function TvCatalogs({ libraries, addons }: { libraries: Library[]; addons: Addon
             muted={!library.enabled}
             meta={
               <span className="truncate">
-                {library.addonName} · {iptv ? t.livetv.kinds.iptv : t.livetv.kinds.stremio}
+                {library.addonName} ·{' '}
+                {addon?.kind === 'hdhomerun'
+                  ? t.livetv.kindTuner
+                  : iptv
+                    ? t.livetv.kinds.iptv
+                    : t.livetv.kinds.stremio}
               </span>
             }
             trailing={
@@ -241,8 +247,12 @@ function IptvSourcePanel({ addon, source }: { addon: Addon; source: IptvSource }
       media={<IconTile icon={BroadcastIcon} />}
       description={
         <>
-          {addon.kind === 'xtream' ? t.livetv.kindXtream : t.livetv.kindM3u} ·{' '}
-          {t.livetv.lastDownload}
+          {addon.kind === 'hdhomerun'
+            ? t.livetv.kindTuner
+            : addon.kind === 'xtream'
+              ? t.livetv.kindXtream
+              : t.livetv.kindM3u}{' '}
+          · {t.livetv.lastDownload}
           {t.common.colon}{' '}
           {source.fetchedAt === null ? t.livetv.never : <RelativeTime iso={source.fetchedAt} />}
           {source.nextAt !== null && (
@@ -372,7 +382,14 @@ function TimerRow({ timer }: { timer: Timer }) {
     <Row
       leading={RecordIcon}
       title={timer.name}
-      titleAside={timer.series ? <Badge>{t.livetv.series}</Badge> : undefined}
+      titleAside={
+        timer.series || timer.tunersShort ? (
+          <span className="flex shrink-0 gap-1">
+            {timer.series && <Badge>{t.livetv.series}</Badge>}
+            {timer.tunersShort && <TunersShort text={t.livetv} />}
+          </span>
+        ) : undefined
+      }
       meta={
         <span className="truncate">
           {timer.channel || t.livetv.unknownChannel} · {t.livetv.scheduledBy(timer.userName)}

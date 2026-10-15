@@ -48,6 +48,7 @@ const livetv = {
       'Add an M3U playlist or an Xtream Codes account under Sources: its channels are counted here.',
     kindM3u: 'M3U playlist',
     kindXtream: 'Xtream Codes account',
+    kindTuner: 'HDHomeRun tuner',
     turnedOff: 'Turned off',
     lastDownload: 'Last download',
     nextDownload: 'next',
@@ -79,6 +80,9 @@ const livetv = {
     series: 'Series',
     scheduledBy: (name: string) => `Scheduled by ${name}`,
     unknownChannel: 'Channel not found',
+    tunersShort: 'Not enough tuners',
+    tunersShortHelp:
+      'More recordings on this tuner’s channels than it has tuners run at the same time: one of them may fail.',
     guidesOf: (name: string) => `Guides of ${name}`,
   },
 }

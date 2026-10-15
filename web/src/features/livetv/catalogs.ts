@@ -8,9 +8,9 @@ export function isTvCatalog(library: Pick<Library, 'catalogType'>): boolean {
   return library.catalogType === 'tv'
 }
 
-/** Whether an addon is an IPTV source, whose TV catalog is its line-up. */
+/** Whether an addon is an IPTV source (a tuner too), whose TV catalog is its line-up. */
 export function isIptv(addon: Pick<Addon, 'kind'>): boolean {
-  return addon.kind === 'm3u' || addon.kind === 'xtream'
+  return addon.kind === 'm3u' || addon.kind === 'xtream' || addon.kind === 'hdhomerun'
 }
 
 /**

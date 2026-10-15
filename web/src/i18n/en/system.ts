@@ -62,6 +62,9 @@ const system = {
       series: 'Series',
       scheduledBy: (name: string) => `Scheduled by ${name}`,
       unknownChannel: 'Channel not found',
+      tunersShort: 'Not enough tuners',
+      tunersShortHelp:
+        'More recordings on this tuner’s channels than it has tuners run at the same time: one of them may fail.',
       refreshesTitle: 'Live TV refreshes',
       refreshesHelp: (hours: number) =>
         `IPTV channel lists and programme guides, the server’s and users’ own, are downloaded again every ${hours} h (Settings › Live TV), by the “Refresh Live TV guides” task.`,
@@ -102,6 +105,8 @@ const system = {
           `Little space left for the ${folder}: ${free} free.`,
         addon: (name: string, failure: string) => `${name}: ${failure}`,
         iptv: (name: string) => `${name}: the last channel list download failed.`,
+        tuner: (name: string) => `${name}: the tuner failed to play a channel.`,
+        tunerUnreachable: (name: string) => `${name}: the tuner does not answer.`,
         folder: (name: string) =>
           `${name}: Polyfin cannot read this local folder. Check that it is mounted and readable by user 65532.`,
         share: (name: string) =>

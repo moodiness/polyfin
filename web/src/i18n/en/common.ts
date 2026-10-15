@@ -328,6 +328,7 @@ const common = {
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
       'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',
+    tuner_added: 'This tuner is already a source of the server.',
     invalid_folder_name: 'Folder names must be 1 to 64 characters long.',
     invalid_folder_path:
       'Enter the folder’s full path in Polyfin’s container, starting with /, other than / itself.',

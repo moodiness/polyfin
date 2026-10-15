@@ -31,7 +31,7 @@ type Patch = (patch: Partial<IptvOptions>) => void
 /**
  * Everything a source imports and how, in the order an administrator decides it: what to import,
  * then the Live TV options and the movies and series options of what is on. `load` reads a preview.
- * Used by the source page and by the add-a-source flow.
+ * Used by the source page and by the add-a-source flow. A tuner has live channels only.
  */
 export function SourceOptions({
   value,
@@ -39,6 +39,7 @@ export function SourceOptions({
   queryKey,
   load,
   saved,
+  tuner = false,
 }: {
   value: IptvOptions
   onChange: Patch
@@ -46,6 +47,7 @@ export function SourceOptions({
   load: (by: PreviewBy, signal: AbortSignal) => Promise<Preview>
   /** The options saved, for a source already added: warns before Live TV is turned off. */
   saved?: IptvOptions
+  tuner?: boolean
 }) {
   const { t } = useI18n()
   const text = t.lineup.content
@@ -54,7 +56,7 @@ export function SourceOptions({
   )
   return (
     <div className="space-y-10">
-      <ContentFields value={value} onChange={onChange} />
+      {!tuner && <ContentFields value={value} onChange={onChange} />}
       {saved?.liveTv && !value.liveTv && <Notice tone="danger">{text.liveOffWarning}</Notice>}
       {value.liveTv && (
         <section className="space-y-7 border-t border-line pt-8">

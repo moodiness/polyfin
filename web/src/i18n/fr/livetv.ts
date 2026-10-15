@@ -50,6 +50,7 @@ const livetv: typeof en = {
       'Ajoutez une playlist M3U ou un compte Xtream Codes dans Sources : ses chaînes sont comptées ici.',
     kindM3u: 'Playlist M3U',
     kindXtream: 'Compte Xtream Codes',
+    kindTuner: 'Tuner HDHomeRun',
     turnedOff: 'Désactivée',
     lastDownload: 'Dernier téléchargement',
     nextDownload: 'prochain',
@@ -81,6 +82,9 @@ const livetv: typeof en = {
     series: 'Série',
     scheduledBy: (name: string) => `Prévu par ${name}`,
     unknownChannel: 'Chaîne introuvable',
+    tunersShort: 'Pas assez de tuners',
+    tunersShortHelp:
+      'Plus d’enregistrements sur les chaînes de ce tuner qu’il n’a de tuners ont lieu en même temps : l’un d’eux peut échouer.',
     guidesOf: (name: string) => `Guides de ${name}`,
   },
 }

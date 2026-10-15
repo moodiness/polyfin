@@ -24,12 +24,20 @@ const sources: typeof en = {
       'Ajoutez un addon Stremio, un addon Eclipse ou une source IPTV : il ne servira qu’à vous, après ceux du serveur.',
     noMatchTitle: 'Aucune source ne correspond',
     noMatch: 'Changez le type, le propriétaire ou la recherche.',
-    tag: { stremio: 'Stremio', eclipse: 'Eclipse', m3u: 'M3U', xtream: 'Xtream', local: 'Dossier' },
+    tag: {
+      stremio: 'Stremio',
+      eclipse: 'Eclipse',
+      m3u: 'M3U',
+      xtream: 'Xtream',
+      hdhomerun: 'HDHomeRun',
+      local: 'Dossier',
+    },
     kindName: {
       stremio: 'Addon Stremio',
       eclipse: 'Addon Eclipse',
       m3u: 'Playlist M3U',
       xtream: 'Compte Xtream Codes',
+      hdhomerun: 'Tuner HDHomeRun',
       local: 'Dossier local',
     },
     ownedBy: (name: string) => `Source de ${name}`,
@@ -116,6 +124,7 @@ const sources: typeof en = {
       stremio: 'Addon Stremio',
       music: 'Addon Eclipse',
       iptv: 'Source IPTV',
+      tuner: 'Tuner HDHomeRun',
       local: 'Dossier',
     },
     stremioHelp:
@@ -159,6 +168,32 @@ const sources: typeof en = {
     channels: (count: string) => `${count} chaînes`,
     movies: (count: string) => `${count} films`,
     series: (count: string) => `${count} séries`,
+    tunerHelp:
+      'Un tuner HDHomeRun de votre réseau apporte les chaînes qu’il reçoit par antenne ou par câble. Elles apparaissent dans la TV en direct comme celles d’une source IPTV, et le tuner lit autant de chaînes à la fois qu’il a de tuners.',
+    findTuners: 'Chercher les tuners',
+    findTunersHelp:
+      'Demande au réseau local quels tuners s’y trouvent ; cela prend quelques secondes.',
+    finding: 'Recherche sur le réseau local…',
+    foundTitle: 'Tuners du réseau',
+    tunerCount: (count: number, formatted: string) =>
+      count === 1 ? '1 tuner' : `${formatted} tuners`,
+    addTuner: 'Ajouter',
+    addTunerLabel: (name: string) => `Ajouter ${name}`,
+    tunerAdded: 'Ajouté',
+    openTuner: (name: string) => `Ouvrir ${name}`,
+    noTuners: 'Aucun tuner n’a répondu.',
+    noTunersHelp:
+      'Sous Docker, Polyfin n’entend les tuners qu’en réseau hôte (network_mode: host). Vous pouvez aussi ajouter un tuner par son adresse.',
+    byAddress: 'Ajouter par adresse',
+    tunerAddress: 'Adresse du tuner',
+    tunerAddressHint: 'Son adresse IP, comme 192.168.1.20, ou son adresse http://.',
+    tunerAddressInvalid:
+      'Saisissez l’adresse IP du tuner, comme 192.168.1.20, ou son adresse http://.',
+    tunerName: 'Nom (facultatif)',
+    tunerNameHint: 'Laissé vide, le nom que le tuner se donne.',
+    favoritesOnly: 'Seulement les chaînes favorites du tuner',
+    favoritesOnlyHelp:
+      'Garde les chaînes marquées favorites sur le tuner, dans son application ou sa page web, et laisse de côté les autres.',
   },
   localFolders: {
     help: 'Un dossier monté dans le conteneur de Polyfin, en lecture seule suffit. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale. Polyfin tourne sous l’utilisateur 65532, qui doit pouvoir le lire.',

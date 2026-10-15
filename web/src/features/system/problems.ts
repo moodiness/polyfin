@@ -114,6 +114,10 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.backupDestinationStale(problem.name)
     case 'iptv':
       return text.iptv(ownedName(t, problem.name, problem.owner ?? null))
+    case 'tuner':
+      return problem.failure === 'unreachable'
+        ? text.tunerUnreachable(problem.name)
+        : text.tuner(problem.name)
     case 'guide':
       return text.guide(ownedName(t, problem.name, problem.owner ?? null))
     case 'folder':

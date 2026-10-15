@@ -5,6 +5,7 @@ const iptv = {
     kind: 'Kind',
     kindM3u: 'M3U playlist',
     kindXtream: 'Xtream Codes account',
+    kindTuner: 'HDHomeRun tuner',
     server: 'Server address',
     address: 'Address',
     channels: 'Channels',
@@ -103,6 +104,27 @@ const iptv = {
       vodShort: (movies: string, series: string) =>
         `${movies} movies and ${series} series imported`,
       lastAttempt: 'Last attempt',
+    },
+    tuner: {
+      title: 'Tuner',
+      help: 'The tuner plays as many channels at once as it has tuners. Several viewers of one channel share a tuner; a recording takes the tuner of a channel only watched.',
+      model: 'Model',
+      device: 'Device ID',
+      tuners: 'Tuners',
+      tunersHelp: 'Channels played at once',
+      favoritesSaved: (on: boolean): string =>
+        on ? 'Only the tuner’s favorite channels are kept.' : 'All the tuner’s channels are kept.',
+      scan: 'Scan for channels',
+      scanHelp:
+        'The tuner searches its frequencies for channels again, which takes a few minutes and keeps its tuners busy; its channels are read again once the scan ends.',
+      scanning: 'Scanning…',
+      scanStarted: 'The tuner started scanning for channels.',
+      scanDone: 'The scan ended and the tuner’s channels were read again.',
+      scanProgress: 'Scan progress',
+      scanFound: (progress: string, found: string) =>
+        `${progress}% scanned, ${found} channels found`,
+      unreachable: 'The tuner did not answer when a channel was opened.',
+      failed: 'The tuner failed to play a channel.',
     },
     options: {
       title: 'Import options',

@@ -639,10 +639,10 @@ export type Addon = {
   refreshedAt: string
   /**
    * 'stremio' for a Stremio addon; 'eclipse' for an Eclipse music addon, which `music` describes;
-   * 'm3u' or 'xtream' for an IPTV source, which `source` describes; 'local' for a local folder,
-   * which `folder` describes.
+   * 'm3u', 'xtream' or 'hdhomerun' (an HDHomeRun tuner, the server's only) for an IPTV source,
+   * which `source` describes; 'local' for a local folder, which `folder` describes.
    */
-  kind: 'stremio' | 'eclipse' | 'm3u' | 'xtream' | 'local'
+  kind: 'stremio' | 'eclipse' | 'm3u' | 'xtream' | 'hdhomerun' | 'local'
   source: IptvSource | null
   music: AddonMusic | null
   folder: LocalFolder | null
@@ -878,6 +878,35 @@ export type IptvSource = {
   nextAt: string | null
   /** Code of the last failure; empty after a success. */
   error: string
+  /** An HDHomeRun tuner; null for another source. */
+  tuner: IptvTuner | null
+}
+
+/** An HDHomeRun tuner, as a source of the server. */
+export type IptvTuner = {
+  /** Its device identifier. */
+  device: string
+  model: string
+  /** How many channels it plays at once. */
+  tuners: number
+  /**
+   * Why its last stream failed, other than its tuners being in use: 'unreachable', or a stream
+   * failure code; empty once a stream plays.
+   */
+  failure: string
+  failedAt: string | null
+  /** Its channel scan under way: its progress in percent and the channels found; null for none. */
+  scan: { progress: number; found: number } | null
+}
+
+/** A tuner that answered on the local network, with the source it is already, null for none. */
+export type FoundTuner = {
+  deviceId: string
+  name: string
+  model: string
+  tuners: number
+  address: string
+  source: string | null
 }
 
 /** How a source's list becomes its line-up. */
@@ -902,6 +931,8 @@ export type IptvOptions = {
   vodLibraries: 'type' | 'category'
   /** Whether titles with a TMDB or IMDb id are described by the server's metadata addons. */
   enrichment: boolean
+  /** A tuner only: whether only the channels it marks favorite are kept. */
+  favoritesOnly: boolean
 }
 
 export type VodCounts = {
@@ -929,6 +960,7 @@ export const defaultIptvOptions: IptvOptions = {
   vodExcluded: [],
   vodLibraries: 'type',
   enrichment: true,
+  favoritesOnly: false,
 }
 
 /** The limits the server accepts for IptvOptions.excluded. */
@@ -1105,10 +1137,10 @@ export type MappingItem = {
   mapping: GuideMapping | null
 }
 
-/** An IPTV source to add. */
+/** An IPTV source to add; a tuner named nothing takes the name it gives itself. */
 export type NewIptvSource = {
   name: string
-  kind: 'm3u' | 'xtream'
+  kind: 'm3u' | 'xtream' | 'hdhomerun'
   url?: string
   server?: string
   username?: string
@@ -2679,6 +2711,14 @@ export const addIptvSource = (scope: Scope, source: NewIptvSource) =>
 export const updateIptvSource = (scope: Scope, id: string, patch: IptvSourcePatch) =>
   request<Addon>('PATCH', `${scopePath(scope)}/iptv/${seg(id)}`, patch)
 
+/** Asks the local network for HDHomeRun tuners; administrators only. Takes a few seconds. */
+export const findTuners = (signal?: AbortSignal) =>
+  request<{ items: FoundTuner[] }>('GET', '/tuners', undefined, signal)
+
+/** Has a tuner of the server scan for channels; its line-up is read again once the scan ends. */
+export const scanTuner = (id: string) =>
+  request<Addon>('POST', `${scopePath('shared')}/iptv/${seg(id)}/scan`)
+
 /** Adds a local folder to the server's sources; it is scanned at once, in the background. */
 export const addLocalFolder = (folder: NewLocalFolder) =>
   request<Addon>('POST', `${scopePath('shared')}/folders`, folder)
@@ -3200,6 +3240,8 @@ export type Timer = {
   until: string
   status: 'New' | 'InProgress' | 'Error' | string
   series: boolean
+  /** A tuner's channel: the timers recording at the same time need more tuners than it has. */
+  tunersShort: boolean
 }
 
 export const fetchTimers = (signal?: AbortSignal) =>
@@ -3370,6 +3412,8 @@ export type HealthProblem = {
   | { code: 'backup_stale' }
   | { code: 'backup_destination_failed' | 'backup_destination_stale'; name: string }
   | { code: 'iptv' | 'guide'; name: string; owner?: NonNullable<Owner> }
+  /** A tuner of the server: 'unreachable' when it does not answer, else a stream failure code. */
+  | { code: 'tuner'; name: string; failure: string }
   | { code: 'folder'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'folder_unwatched'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'task'; task: string }

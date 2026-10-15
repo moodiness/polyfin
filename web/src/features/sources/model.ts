@@ -1,5 +1,6 @@
 import {
   BroadcastIcon,
+  CellTowerIcon,
   CloudIcon,
   FolderIcon,
   GlobeIcon,
@@ -12,15 +13,17 @@ import {
 } from '@phosphor-icons/react'
 import { queryClient, queryKeys, type Addon, type LocalFolder, type Owner, type Scope } from '@/api'
 
-/** The kinds the list filters by: IPTV gathers M3U playlists and Xtream accounts. */
+/** The kinds the list filters by: IPTV gathers M3U playlists, Xtream accounts and tuners. */
 export type KindFilter = 'stremio' | 'eclipse' | 'iptv' | 'local'
 
-export const isIptv = (addon: Addon) => addon.kind === 'm3u' || addon.kind === 'xtream'
+export const isIptv = (addon: Addon) =>
+  addon.kind === 'm3u' || addon.kind === 'xtream' || addon.kind === 'hdhomerun'
 
 export const kindOf = (addon: Addon): KindFilter =>
   (isIptv(addon) ? 'iptv' : addon.kind) as KindFilter
 
 export function kindIcon(addon: Addon): Icon {
+  if (addon.kind === 'hdhomerun') return CellTowerIcon
   if (isIptv(addon)) return BroadcastIcon
   if (addon.folder?.share === 'smb') return HardDrivesIcon
   if (addon.folder?.share === 'webdav') return GlobeIcon

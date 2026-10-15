@@ -6,6 +6,7 @@ const iptv: typeof en = {
     kind: 'Type',
     kindM3u: 'Playlist M3U',
     kindXtream: 'Compte Xtream Codes',
+    kindTuner: 'Tuner HDHomeRun',
     server: 'Adresse du serveur',
     address: 'Adresse',
     channels: 'Chaînes',
@@ -105,6 +106,29 @@ const iptv: typeof en = {
       episodesHelp: 'Xtream : lus à l’ouverture',
       vodShort: (movies: string, series: string) => `${movies} films et ${series} séries importés`,
       lastAttempt: 'Dernière tentative',
+    },
+    tuner: {
+      title: 'Tuner',
+      help: 'Le tuner lit autant de chaînes à la fois qu’il a de tuners. Plusieurs spectateurs d’une même chaîne partagent un tuner ; un enregistrement prend le tuner d’une chaîne seulement regardée.',
+      model: 'Modèle',
+      device: 'Identifiant de l’appareil',
+      tuners: 'Tuners',
+      tunersHelp: 'Chaînes lues à la fois',
+      favoritesSaved: (on: boolean) =>
+        on
+          ? 'Seules les chaînes favorites du tuner sont gardées.'
+          : 'Toutes les chaînes du tuner sont gardées.',
+      scan: 'Rechercher les chaînes',
+      scanHelp:
+        'Le tuner parcourt à nouveau ses fréquences, ce qui prend quelques minutes et occupe ses tuners ; ses chaînes sont relues à la fin de la recherche.',
+      scanning: 'Recherche…',
+      scanStarted: 'Le tuner a commencé à rechercher les chaînes.',
+      scanDone: 'La recherche est finie et les chaînes du tuner ont été relues.',
+      scanProgress: 'Avancement de la recherche',
+      scanFound: (progress: string, found: string) =>
+        `${progress} % parcourus, ${found} chaînes trouvées`,
+      unreachable: 'Le tuner n’a pas répondu à l’ouverture d’une chaîne.',
+      failed: 'Le tuner n’a pas pu lire une chaîne.',
     },
     options: {
       title: 'Options d’import',

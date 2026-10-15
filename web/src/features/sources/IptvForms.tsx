@@ -288,7 +288,10 @@ export function IptvAddFlow({ scope, onAdded }: { scope: Scope; onAdded: (added:
   )
 }
 
-/** Changes a source's name and account; its categories and channels are on its own page. */
+/**
+ * Changes a source's name and account, or a tuner's name and address; its categories and channels
+ * are on its own page.
+ */
 export function IptvEditForm({
   scope,
   addon,
@@ -301,7 +304,7 @@ export function IptvEditForm({
   onCancel: () => void
 }) {
   const { t } = useI18n()
-  const kind = addon.kind as Kind
+  const kind = addon.kind as Kind | 'hdhomerun'
   const [name, setName] = useState(addon.name)
   const [account, setAccount] = useState(emptyAccount)
   const mutation = useMutation({
@@ -313,7 +316,9 @@ export function IptvEditForm({
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const patch: IptvSourcePatch = { name: name.trim() }
-    if (kind === 'm3u' && account.url.trim() !== '') patch.url = account.url.trim()
+    if ((kind === 'm3u' || kind === 'hdhomerun') && account.url.trim() !== '') {
+      patch.url = account.url.trim()
+    }
     if (
       kind === 'xtream' &&
       (account.server.trim() !== '' || account.username !== '' || account.password !== '')
@@ -339,12 +344,26 @@ export function IptvEditForm({
           autoFocus
         />
       </Field>
-      <AccountFields
-        kind={kind}
-        values={account}
-        onChange={(patch) => setAccount((current) => ({ ...current, ...patch }))}
-        editing
-      />
+      {kind === 'hdhomerun' ? (
+        <Field label={t.sourceAdd.tunerAddress} help={t.sourceAdd.keepHint}>
+          <TextInput
+            inputMode="url"
+            value={account.url}
+            onValue={(url) => setAccount((current) => ({ ...current, url }))}
+            placeholder="192.168.1.20"
+            autoComplete="off"
+            spellCheck={false}
+            mono
+          />
+        </Field>
+      ) : (
+        <AccountFields
+          kind={kind}
+          values={account}
+          onChange={(patch) => setAccount((current) => ({ ...current, ...patch }))}
+          editing
+        />
+      )}
       <p className="text-small text-ink-3">{t.sources.iptvHint}</p>
       {mutation.isError && <FieldError>{errorMessage(t, mutation.error)}</FieldError>}
       <div className="flex flex-wrap gap-2">
