@@ -30,6 +30,27 @@ When two limits are equal, the user's quality group is named first, then **Maxim
 
 On Home in the admin app, a playback's **Details** show which one limited the size, in the **Smaller than the source** row: for instance "720p at most: HDR converted by the processor", "Quality group: 720p" or "Bitrate allowed by the app: 5.6 Mbps". The row does not show when the video keeps the source's size.
 
+## Adaptive quality
+
+With **Several qualities when converting** under **Settings › Conversion**, converted video offers apps lower qualities to step down to when their connection slows, instead of stopping to load. It is **Off** by default: one quality, the one Polyfin picks (see [Size of converted video](#size-of-converted-video)). **Outside the local network** offers lower qualities only to apps outside the local network, judged as for password reset PINs: loopback, private and link-local addresses, through **Known proxies** (see [Reverse proxy](reverse-proxy.md#known-proxies)). **Always** offers them to every app.
+
+- **Qualities:** the first is the one Polyfin picks. After it come up to two lower steps of the ladder (2160p, 1440p, 1080p, 720p, 540p, 480p, 360p), each the tallest whose bitrate is at most half that of the quality above. 1080p at 10 Mb/s adds 720p at 5 Mb/s and 480p at 2 Mb/s; 720p at 5 Mb/s adds 480p and 360p. Nothing goes below 360p, so a 360p conversion keeps one quality. Each keeps the first's codec, encoder, tone mapping, frame rate, audio and subtitles, at its own size and bitrate.
+- **Only converted video:** video copied without conversion keeps one quality. A converted quality beside a copy would turn a playback that costs nothing into a conversion when the network is at its worst, which **Video conversions at once** could refuse mid-play, and would mix codecs, and HDR with SDR, in one playlist. Live TV and music keep one quality too.
+- **Cost:** a lower quality is converted only once the app asks for one of its segments, by an FFmpeg of its own, from that segment; the quality the app asks for last runs as with one quality, preparing **Seconds prepared ahead**. While an app switches, as jellyfin-web's player does when it measures each quality, the qualities it asked for in the last 10 seconds keep converting, each with one FFmpeg, so that switching back does not start over. Another quality the app has not asked for in 10 seconds stops: the extra cost of switching lasts only that long. The segments already made stay until the playback ends. All the qualities count as one playback toward **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)).
+- **Home:** a playback's **Details** show the **Quality played** among those offered, and the **Smaller than the source** row says when the app stepped down from the first.
+
+Apps that do not switch play the first quality, as with the setting off. jellyfin-web plays HLS through hls.js, which picks among the qualities itself; Safari and iOS use their own HLS player, which does too, and Jellyfin Android TV's player adapts to the bandwidth.
+
+**Compared with Jellyfin:**
+
+- Jellyfin adds two lower-bitrate qualities only when the app asks with `EnableAdaptiveBitrateStreaming`, off by default, and never on the local network. Polyfin ignores that parameter and follows the setting.
+
+**For app developers:**
+
+- The master playlist lists the first quality first, then the lower ones, each with its own `BANDWIDTH`, `RESOLUTION` and `CODECS`, and says `#EXT-X-INDEPENDENT-SEGMENTS`. Every quality is cut on the same plan, with a keyframe forced at each segment's start, so segment n covers the same time in each, and an app may switch at any segment.
+- The first quality's media playlist is `main.m3u8`, its segments under `hls1/main/`, as before. The lower ones' are `hls1/main1/main.m3u8` and `hls1/main2/main.m3u8`, their segments beside them under `hls1/main1/` and `hls1/main2/`, in the same play session and with the same query.
+- Asking for one quality never stops another: an app may ask for the same segment of two qualities at once, and gets both.
+
 ## Turning conversion and downloads on or off
 
 The server has one switch, **Conversion (transcoding)** under **Settings › Conversion**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or remuxed into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app. Image subtitles the app cannot show are left out.
@@ -171,6 +192,7 @@ Every default but **Seconds prepared ahead**, **Tone map HDR on the graphics car
 | **Encoding speed** | **Settings › Conversion** | **Automatic** | **Automatic** keeps Polyfin's speeds: `veryfast` for x264 and x265, `p4` for NVENC, the driver's for VAAPI. **Very slow (best picture)** to **Ultra fast (lightest work)** are x264's presets, mapped to NVENC's `p7` to `p1` and VAAPI's compression levels 1 to 7. |
 | **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion** | 0 (range 1 to 51) | 0 aims for the bitrate alone, as before. A number is a quality factor that the bitrate caps: CRF for x264 and x265, CQ for NVENC, and QVBR's quality for the VAAPI drivers that have it; other drivers ignore it. |
 | **Allow converting to HEVC** | **Settings › Conversion** | Off | On: apps that list HEVC before H.264 get HEVC. Off: H.264 comes first, and only apps that take no H.264 get HEVC, as before. |
+| **Several qualities when converting** | **Settings › Conversion** | Off | **Off**, **Outside the local network** or **Always**: converted video also offers up to two lower qualities that apps step down to on a slow connection. See [Adaptive quality](#adaptive-quality). |
 | **Deinterlacing method** | **Settings › Conversion** | Yadif | Yadif or Bwdif, on the NVIDIA card too when it keeps the frames. An AMD or Intel card keeping the frames uses its own deinterlacer whatever the method. |
 | **Double the frame rate** | **Settings › Conversion** | — | Makes a frame of each field of video up to 30 frames a second. |
 
