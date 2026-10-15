@@ -279,6 +279,14 @@ const settings: typeof en = {
       allowHevcEncodingHelp:
         'HEVC demande moins de données que H.264 pour la même image, mais plus de puissance pour le créer. Si cette option est activée, les applications qui citent HEVC en premier le reçoivent. Sinon, seules les applications qui ne lisent pas H.264 reçoivent du HEVC.',
       noHevcEncoder: 'FFmpeg ne sait pas créer de HEVC sur ce serveur.',
+      adaptiveQuality: 'Plusieurs qualités lors de la conversion',
+      adaptiveQualityHelp:
+        'Les vidéos converties proposent aussi jusqu’à deux qualités inférieures, comme 720p et 480p sous 1080p. Les applications qui savent changer de qualité y passent quand leur connexion ralentit, au lieu de s’arrêter pour charger. Une qualité que l’application quitte reste convertie 10 secondes, pour qu’y revenir ne reparte pas de zéro, et toutes comptent pour une seule conversion. Les vidéos copiées, la TV en direct et la musique gardent une seule qualité. Le « réseau local » est celui des codes PIN de réinitialisation du mot de passe, à travers les proxys connus. Désactivé par défaut.',
+      adaptiveQualities: {
+        off: 'Désactivé',
+        remote: 'En dehors du réseau local',
+        always: 'Toujours',
+      },
       toneMapping: 'Convertir le HDR en SDR (tone mapping)',
       toneMappingHelp:
         'Garde les bonnes couleurs et la bonne luminosité des vidéos HDR sur les écrans qui n’affichent que le SDR. Si cette option est désactivée, les vidéos HDR converties paraissent ternes, et les vidéos Dolby Vision sans couche HDR10 ne sont pas converties.',

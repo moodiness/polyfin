@@ -343,6 +343,8 @@ export type Settings = {
   hevcQuality: number
   /** Converts to HEVC for the apps that list it before H.264. */
   allowHevcEncoding: boolean
+  /** Whether converted video offers lower qualities apps step down to: off, outside the local network, or always. */
+  adaptiveQuality: AdaptiveQuality
   /** GPU conversions run on. */
   hardwareAcceleration: HardwareAcceleration
   /** VAAPI render node conversions run on; empty tries each in turn. */
@@ -524,6 +526,7 @@ export type VersionCodec = 'av1' | 'hevc' | 'vp9' | 'h264' | 'vc1' | 'mpeg4' | '
 export type ToneMappingAlgorithm =
   'auto' | 'bt2390' | 'hable' | 'reinhard' | 'mobius' | 'clip' | 'linear'
 export type DeinterlaceMethod = 'yadif' | 'bwdif'
+export type AdaptiveQuality = 'off' | 'remote' | 'always'
 export type DownmixAlgorithm = 'None' | 'Dave750' | 'NightmodeDialogue' | 'Rfc7845' | 'Ac4'
 
 /** A GPU conversions run on. */
@@ -3000,6 +3003,10 @@ export type LiveSession = {
     /** For `bitrate`: the limit in bits per second, and whose it is. */
     bitrateLimit: number
     bitrateLimitOf: 'app' | 'user' | ''
+    /** Heights of the qualities the app may switch between, first the one chosen; empty for one. */
+    qualities: number[]
+    /** The first quality's height when the app stepped down to a lower one, else 0. */
+    steppedDownFrom: number
   } | null
   audio: { codec: string; channels: number; bitrate: number } | null
 }

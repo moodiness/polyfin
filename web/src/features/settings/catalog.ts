@@ -303,6 +303,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'conversion',
+    anchor: 'adaptive-quality',
+    label: (t) => c(t).adaptiveQuality,
+    help: (t) => c(t).adaptiveQualityHelp,
+    keywords: ['abr', 'adaptive', 'bitrate'],
+    codes: ['invalid_adaptive_quality'],
+  },
+  {
+    section: 'conversion',
     anchor: 'tone-mapping',
     label: (t) => c(t).toneMapping,
     help: (t) => c(t).toneMappingHelp,

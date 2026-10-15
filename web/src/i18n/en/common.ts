@@ -102,6 +102,7 @@ const common = {
     invalid_hardware_acceleration: 'Choose a graphics card from the list.',
     invalid_hardware_decoding_codecs:
       'This list of formats read on the graphics card is not supported. Reload the page.',
+    invalid_adaptive_quality: 'Choose when to offer several qualities from the list.',
     invalid_tone_mapping_algorithm: 'Choose a tone mapping method from the list.',
     invalid_tone_mapping_peak:
       'Peak brightness must be 0, or a whole number of nits from 100 to 10,000.',

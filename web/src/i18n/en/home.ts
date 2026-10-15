@@ -118,7 +118,11 @@ const home = {
       qualityGroup: 'Quality group',
       original: 'Original',
       sizeLimit: 'Smaller than the source',
+      /** Shown when the app may switch between several qualities of converted video. */
+      qualityPlayed: 'Quality played',
+      qualityAmong: (played: string, offered: string) => `${played}, among ${offered}`,
       sizeLimits: {
+        steppedDown: (height: string) => `The app stepped down from ${height}`,
         gpu: (height: string) => `${height} at most: converted by the graphics card`,
         processor: (height: string) => `${height} at most: converted by the processor`,
         toneMapping: (height: string) => `${height} at most: HDR converted by the processor`,

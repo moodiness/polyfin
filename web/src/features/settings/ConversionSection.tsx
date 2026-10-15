@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type {
+  AdaptiveQuality,
   DeinterlaceMethod,
   DownmixAlgorithm,
   EncoderPreset,
@@ -280,6 +281,22 @@ export default function ConversionSection({
           disabled={!encodesHevc && !form.allowHevcEncoding}
           onChange={(allowHevcEncoding) => update({ allowHevcEncoding })}
         />
+        <FieldRow
+          anchor="adaptive-quality"
+          label={c.adaptiveQuality}
+          help={c.adaptiveQualityHelp}
+          error={error('adaptive-quality')}
+        >
+          <Select
+            value={form.adaptiveQuality}
+            options={choices<AdaptiveQuality>('adaptiveQuality').map((choice) => ({
+              value: choice,
+              label: c.adaptiveQualities[choice],
+            }))}
+            onValue={(adaptiveQuality) => update({ adaptiveQuality })}
+            className="max-w-xs"
+          />
+        </FieldRow>
       </SettingsGroup>
 
       <SettingsGroup title={c.groups.hdr}>

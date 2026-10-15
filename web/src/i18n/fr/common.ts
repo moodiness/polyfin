@@ -110,6 +110,7 @@ const common: typeof en = {
     invalid_hardware_acceleration: 'Choisissez une carte graphique dans la liste.',
     invalid_hardware_decoding_codecs:
       'Cette liste de formats lus par la carte graphique n’est pas prise en charge. Rechargez la page.',
+    invalid_adaptive_quality: 'Choisissez quand proposer plusieurs qualités dans la liste.',
     invalid_tone_mapping_algorithm: 'Choisissez une méthode de conversion HDR dans la liste.',
     invalid_tone_mapping_peak:
       'La luminosité max doit être 0, ou un nombre entier de nits de 100 à 10 000.',

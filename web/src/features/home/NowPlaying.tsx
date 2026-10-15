@@ -413,7 +413,15 @@ function streamText(stream: StreamInfo | null, language: string, unknown: string
   return parts.length > 0 ? parts.join(' · ') : unknown
 }
 
-/** Why the sent video is smaller than the source, null when it is not or when that is not known. */
+/** A height as the dashboard names it: 4K, or 1080p. */
+function heightName(height: number): string {
+  return height === 2160 ? '4K' : `${height}p`
+}
+
+/**
+ * Why the sent video is smaller than the source, null when it is not or when that is not known:
+ * what set the size of the first quality, and that the app stepped down from it.
+ */
 function sizeLimitText(
   session: LiveSession,
   language: string,
@@ -421,17 +429,24 @@ function sizeLimitText(
 ): string | null {
   const { video, source, sent } = session
   if (video === null || source === null || sent === null) return null
-  if (video.limitedBy === '' || video.limitedBy === 'source') return null
-  if (sent.width >= source.width && sent.height >= source.height) return null
-  const height = video.maxHeight === 2160 ? '4K' : `${video.maxHeight}p`
+  const stepped =
+    video.steppedDownFrom > 0 ? limits.steppedDown(heightName(video.steppedDownFrom)) : null
+  let reason: string | null = null
   switch (video.limitedBy) {
+    case '':
+    case 'source':
+      break
     case 'bitrate': {
       const rate = formatBitrate(video.bitrateLimit, language)
-      return video.bitrateLimitOf === 'user' ? limits.userBitrate(rate) : limits.appBitrate(rate)
+      reason = video.bitrateLimitOf === 'user' ? limits.userBitrate(rate) : limits.appBitrate(rate)
+      break
     }
     default:
-      return limits[video.limitedBy](height)
+      reason = limits[video.limitedBy](heightName(video.maxHeight))
   }
+  if (stepped !== null) return reason === null ? stepped : `${reason} · ${stepped}`
+  if (sent.width >= source.width && sent.height >= source.height) return null
+  return reason
 }
 
 /** Everything about how the file reaches the app: source, what is sent, encoder, reasons. */
@@ -448,11 +463,17 @@ function HowItPlays({ session }: { session: LiveSession }) {
           video.toneMap ? ` · ${live.toneMapped}` : ''
         }${video.burnSubtitles ? ` · ${live.burned}` : ''}`
   const sizeLimit = sizeLimitText(session, language, live.sizeLimits)
+  /** The quality played now among those offered, when the app may switch between several. */
+  const quality =
+    video !== null && video.qualities.length > 1
+      ? live.qualityAmong(heightName(video.height), video.qualities.map(heightName).join(' · '))
+      : null
   const rows = [
     { label: live.source, value: streamText(session.source, language, live.unknown) },
     ...(session.delivery === 'directPlay'
       ? []
       : [{ label: live.sent, value: streamText(session.sent, language, live.unknown) }]),
+    ...(quality === null ? [] : [{ label: live.qualityPlayed, value: quality }]),
     ...(sizeLimit === null ? [] : [{ label: live.sizeLimit, value: sizeLimit }]),
     ...(encoder === null ? [] : [{ label: live.encoder, value: encoder }]),
     {

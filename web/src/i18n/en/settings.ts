@@ -272,6 +272,10 @@ const settings = {
       allowHevcEncodingHelp:
         'HEVC needs less data than H.264 for the same picture, but takes more power to make. When on, apps that list HEVC first get it. When off, only apps that cannot play H.264 get HEVC.',
       noHevcEncoder: 'FFmpeg cannot make HEVC on this server.',
+      adaptiveQuality: 'Several qualities when converting',
+      adaptiveQualityHelp:
+        'Converted videos also offer up to two lower qualities, such as 720p and 480p below 1080p. Apps that can switch step down to them when their connection slows, instead of stopping to load. A quality the app leaves keeps converting for 10 seconds, so that switching back does not start over, and all of them count as one conversion. Copied videos, Live TV and music keep one quality. “Local network” means what it means for password reset PINs, through the known proxies. Off by default.',
+      adaptiveQualities: { off: 'Off', remote: 'Outside the local network', always: 'Always' },
       toneMapping: 'Convert HDR to SDR (tone mapping)',
       toneMappingHelp:
         'Keeps the colors and brightness of HDR videos right on screens that only show SDR. When off, converted HDR videos look pale, and Dolby Vision videos without an HDR10 layer are not converted.',
