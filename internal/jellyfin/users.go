@@ -10,6 +10,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/throttle"
 )
 
 // maxBody bounds JSON request bodies.
@@ -49,6 +50,18 @@ func (h *Handler) publicUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, visible)
 }
 
+// reserve counts an attempt of the client before it is checked (see
+// throttle.Failures.Reserve), or answers 429 when the client exhausted its
+// failed attempts, and then returns nil.
+func (h *Handler) reserve(w http.ResponseWriter, key string) *throttle.Attempt {
+	attempt, wait := h.SignIns.Reserve(key)
+	if attempt == nil {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		processingError(w, http.StatusTooManyRequests)
+	}
+	return attempt
+}
+
 func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 	c := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
 	var body struct {
@@ -60,11 +73,11 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := forwarded.Client(r)
-	if allowed, wait := h.SignIns.Allowed(key); !allowed {
-		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-		processingError(w, http.StatusTooManyRequests)
+	attempt := h.reserve(w, key)
+	if attempt == nil {
 		return
 	}
+	defer attempt.Cancel()
 	user, err := h.Accounts.Authenticate(r.Context(), body.Username, body.Pw)
 	var blocked *accounts.BlockError
 	if errors.As(err, &blocked) && h.AccountBlocked != nil {
@@ -76,7 +89,7 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 	// does, the right password included. Jellyfin, which disables such an
 	// account instead, answers 403 to its right password.
 	case errors.Is(err, accounts.ErrInvalidCredentials):
-		h.SignIns.Fail(key)
+		attempt.Fail()
 		h.Activity.SignInFailed(r.Context(), body.Username, forwarded.Client(r))
 		processingError(w, http.StatusUnauthorized)
 		return
@@ -94,12 +107,12 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 	// alone is refused as a wrong one is, and counts as one toward the
 	// client's attempts, so that the answer tells nothing of the password.
 	if user.NeedsTwoStep(h.Accounts.Settings()) {
-		h.SignIns.Fail(key)
+		attempt.Fail()
 		h.Activity.SignInFailed(r.Context(), body.Username, forwarded.Client(r))
 		processingError(w, http.StatusUnauthorized)
 		return
 	}
-	h.SignIns.Succeed(key)
+	attempt.Succeed()
 	// Like Jellyfin, a user outside their allowed hours, administrators
 	// included, cannot sign in. Quick Connect, which Jellyfin does not check
 	// here, signs them in, and their requests are then refused.

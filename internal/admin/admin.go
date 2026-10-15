@@ -642,15 +642,16 @@ func accountError(w http.ResponseWriter, err error) bool {
 	return false
 }
 
-// throttled answers 429 when the client exhausted its failed attempts.
-func (h *handler) throttled(w http.ResponseWriter, key string) bool {
-	allowed, wait := h.SignIns.Allowed(key)
-	if allowed {
-		return false
+// reserve counts an attempt of the keys before it is checked (see
+// throttle.Failures.Reserve), or answers 429 when one of them exhausted its
+// failed attempts, and then returns nil.
+func (h *handler) reserve(w http.ResponseWriter, keys ...string) *throttle.Attempt {
+	attempt, wait := h.SignIns.Reserve(keys...)
+	if attempt == nil {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		writeError(w, http.StatusTooManyRequests, "too_many_attempts")
 	}
-	w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-	writeError(w, http.StatusTooManyRequests, "too_many_attempts")
-	return true
+	return attempt
 }
 
 func setupCodeMatches(expected, given string) bool {

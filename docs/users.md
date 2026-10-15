@@ -754,6 +754,7 @@ In the admin app, after a right password, the sign-in page asks for the code. No
 - The app's code changes every 30 seconds. Polyfin accepts the codes of the 30 seconds before and after too, for a phone whose clock is a little off.
 - Each code is accepted once: entered again, even within its 30 seconds, it is refused.
 - Wrong codes count as wrong passwords do toward the client's failed attempts (429 once too many), and also toward the account's, whatever the client, with the same limit. A right password between wrong codes does not reset them. They do not count toward **Block an account after this many wrong passwords (0 = never)**.
+- Each code counts toward the limit as soon as it arrives, before it is checked, as passwords, PINs and tokens do: of codes sent at once, those past the limit are refused without being checked.
 - The key is encrypted with `POLYFIN_SECRET_KEY`, like the other stored keys, and never shown again once set up (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
 
 Turning it on or off keeps the sessions already open, in the admin app and in Jellyfin apps: sign out the devices you no longer trust under **My account › Devices**.

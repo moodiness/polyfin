@@ -203,13 +203,14 @@ func inviteError(w http.ResponseWriter, err error) bool {
 // session. A token that is no invite's counts as a wrong password does
 // toward the client's failed attempts.
 func (h *handler) publicInvite(w http.ResponseWriter, r *http.Request) {
-	key := forwarded.Client(r)
-	if h.throttled(w, key) {
+	attempt := h.reserve(w, forwarded.Client(r))
+	if attempt == nil {
 		return
 	}
+	defer attempt.Cancel()
 	_, err := h.Accounts.InviteByToken(r.Context(), r.PathValue("token"))
 	if errors.Is(err, accounts.ErrInviteUnknown) {
-		h.SignIns.Fail(key)
+		attempt.Fail()
 	}
 	if inviteError(w, err) {
 		return
@@ -234,13 +235,14 @@ func (h *handler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	key := forwarded.Client(r)
-	if h.throttled(w, key) {
+	attempt := h.reserve(w, forwarded.Client(r))
+	if attempt == nil {
 		return
 	}
+	defer attempt.Cancel()
 	user, invite, err := h.Accounts.AcceptInvite(r.Context(), r.PathValue("token"), body.Name, body.Password)
 	if errors.Is(err, accounts.ErrInviteUnknown) {
-		h.SignIns.Fail(key)
+		attempt.Fail()
 	}
 	if inviteError(w, err) || accountError(w, err) {
 		return
@@ -249,7 +251,7 @@ func (h *handler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	h.SignIns.Succeed(key)
+	attempt.Succeed()
 	h.Activity.UserJoined(r.Context(), user, invite, forwarded.Client(r))
 	if invite.Group != nil && user.GroupID != nil {
 		h.Activity.GroupMemberAdded(r.Context(), user, invite.Group.Name)

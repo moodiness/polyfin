@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
-	"strconv"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -359,15 +358,14 @@ func (h *Handler) redeemPasswordPin(w http.ResponseWriter, r *http.Request) {
 		validationProblem(w, errs)
 		return
 	}
-	key := forwarded.Client(r)
-	if allowed, wait := h.SignIns.Allowed(key); !allowed {
-		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-		processingError(w, http.StatusTooManyRequests)
+	attempt := h.reserve(w, forwarded.Client(r))
+	if attempt == nil {
 		return
 	}
+	defer attempt.Cancel()
 	users, err := h.Accounts.RedeemPasswordResetPIN(r.Context(), pin)
 	if errors.Is(err, accounts.ErrNotFound) {
-		h.SignIns.Fail(key)
+		attempt.Fail()
 		processingError(w, http.StatusNotFound)
 		return
 	}
@@ -375,7 +373,7 @@ func (h *Handler) redeemPasswordPin(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	h.SignIns.Succeed(key)
+	attempt.Succeed()
 	result := PinRedeemResult{Success: true, UsersReset: make([]string, 0, len(users))}
 	for _, user := range users {
 		result.UsersReset = append(result.UsersReset, user.Name)

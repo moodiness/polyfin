@@ -155,10 +155,6 @@ func (h *handler) signInSecondStep(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	key := forwarded.Client(r)
-	if h.throttled(w, key) {
-		return
-	}
 	cookie, err := r.Cookie(stepCookieName)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "two_step_expired")
@@ -170,10 +166,14 @@ func (h *handler) signInSecondStep(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "two_step_expired")
 		return
 	}
-	userKey := twoStepKey(step.user)
-	if h.throttled(w, userKey) {
+	// The code counts before it is checked, toward the client's attempts
+	// and the user's, so that codes sent at once cannot all be checked.
+	key := forwarded.Client(r)
+	attempt := h.reserve(w, key, twoStepKey(step.user))
+	if attempt == nil {
 		return
 	}
+	defer attempt.Cancel()
 	user, err := h.Accounts.User(r.Context(), step.user)
 	if errors.Is(err, accounts.ErrNotFound) {
 		h.steps.remove(cookie.Value)
@@ -204,8 +204,7 @@ func (h *handler) signInSecondStep(w http.ResponseWriter, r *http.Request) {
 		recovery, err = h.Accounts.VerifyTwoStep(r.Context(), user.ID, body.Code)
 	}
 	if errors.Is(err, accounts.ErrInvalidCode) {
-		h.SignIns.Fail(key)
-		h.SignIns.Fail(userKey)
+		attempt.Fail()
 		h.Activity.SignInFailed(r.Context(), user.Name, key)
 	}
 	if errors.Is(err, accounts.ErrTwoStepOn) || errors.Is(err, accounts.ErrTwoStepOff) || errors.Is(err, accounts.ErrTwoStepNotStarted) {
@@ -225,8 +224,7 @@ func (h *handler) signInSecondStep(w http.ResponseWriter, r *http.Request) {
 	}
 	h.steps.remove(cookie.Value)
 	clearStepCookie(w)
-	h.SignIns.Succeed(key)
-	h.SignIns.Succeed(userKey)
+	attempt.Succeed()
 	if step.setup {
 		user.TwoStep = true
 		h.Activity.TwoStepTurnedOn(r.Context(), user)
@@ -325,10 +323,12 @@ func (h *handler) confirmIdentity(w http.ResponseWriter, r *http.Request, user a
 	if !decode(w, r, &body) {
 		return false
 	}
-	key, userKey := forwarded.Client(r), twoStepKey(user.ID)
-	if h.throttled(w, key) || h.throttled(w, userKey) {
+	attempt := h.reserve(w, forwarded.Client(r), twoStepKey(user.ID))
+	if attempt == nil {
 		return false
 	}
+	// A right one takes back only its own attempt: it signs nobody in.
+	defer attempt.Cancel()
 	var err error
 	if body.Code != "" {
 		_, err = h.Accounts.VerifyTwoStep(r.Context(), user.ID, body.Code)
@@ -340,8 +340,7 @@ func (h *handler) confirmIdentity(w http.ResponseWriter, r *http.Request, user a
 		}
 	}
 	if errors.Is(err, accounts.ErrInvalidCode) || errors.Is(err, accounts.ErrWrongPassword) {
-		h.SignIns.Fail(key)
-		h.SignIns.Fail(userKey)
+		attempt.Fail()
 	}
 	if accountError(w, err) {
 		return false

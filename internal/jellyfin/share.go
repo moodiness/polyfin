@@ -306,14 +306,17 @@ type shareError struct {
 // sign-ins is refused first; a token that is no link's counts as a failed
 // sign-in of the client.
 func (h *Handler) openShare(r *http.Request) (accounts.ShareLink, accounts.User, *shareError) {
-	key := forwarded.Client(r)
-	if allowed, _ := h.SignIns.Allowed(key); !allowed {
+	attempt, _ := h.SignIns.Reserve(forwarded.Client(r))
+	if attempt == nil {
 		return accounts.ShareLink{}, accounts.User{}, &shareError{http.StatusTooManyRequests, "too_many_attempts"}
 	}
+	// A link that opens its title takes back its attempt only: it signs
+	// nobody in.
+	defer attempt.Cancel()
 	link, user, err := h.Accounts.ShareLinkByToken(r.Context(), r.PathValue("token"))
 	switch {
 	case errors.Is(err, accounts.ErrShareLinkUnknown):
-		h.SignIns.Fail(key)
+		attempt.Fail()
 		return link, user, &shareError{http.StatusNotFound, "unknown"}
 	case errors.Is(err, accounts.ErrShareLinkExpired):
 		return link, user, &shareError{http.StatusGone, "expired"}

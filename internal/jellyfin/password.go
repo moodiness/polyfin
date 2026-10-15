@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/forwarded"
@@ -88,20 +87,19 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	// Unlike Jellyfin, an administrator changing their own password must
 	// also give the current one, so that a token left on a shared device
 	// cannot take the account over.
-	key := forwarded.Client(r)
-	if allowed, wait := h.SignIns.Allowed(key); !allowed {
-		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-		processingError(w, http.StatusTooManyRequests)
+	attempt := h.reserve(w, forwarded.Client(r))
+	if attempt == nil {
 		return
 	}
+	defer attempt.Cancel()
 	err = h.Accounts.ChangePasswordFromDevice(r.Context(), id, body.CurrentPw, body.NewPw, caller.Device.ID)
 	if errors.Is(err, accounts.ErrWrongPassword) {
-		h.SignIns.Fail(key)
+		attempt.Fail()
 		writeJSON(w, http.StatusForbidden, wrongCurrentPassword)
 		return
 	}
 	// The current password was right, even when the new one is refused.
-	h.SignIns.Succeed(key)
+	attempt.Succeed()
 	h.passwordChanged(w, r, id, err)
 }
 

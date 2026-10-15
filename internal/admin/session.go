@@ -143,10 +143,11 @@ func (h *handler) setup(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	key := forwarded.Client(r)
-	if h.throttled(w, key) {
+	attempt := h.reserve(w, forwarded.Client(r))
+	if attempt == nil {
 		return
 	}
+	defer attempt.Cancel()
 	if required, err := h.Accounts.SetupRequired(r.Context()); err != nil {
 		h.internalError(w, r, err)
 		return
@@ -155,7 +156,7 @@ func (h *handler) setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !setupCodeMatches(h.SetupCode, body.SetupCode) {
-		h.SignIns.Fail(key)
+		attempt.Fail()
 		writeError(w, http.StatusBadRequest, "invalid_setup_code")
 		return
 	}
@@ -167,7 +168,7 @@ func (h *handler) setup(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	h.SignIns.Succeed(key)
+	attempt.Succeed()
 	h.Logger.Info("First administrator created", "user", user.Name)
 	h.startSession(w, r, http.StatusCreated, user)
 }
@@ -181,12 +182,14 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := forwarded.Client(r)
-	if h.throttled(w, key) {
+	attempt := h.reserve(w, key)
+	if attempt == nil {
 		return
 	}
+	defer attempt.Cancel()
 	user, err := h.Accounts.Authenticate(r.Context(), body.Name, body.Password)
 	if errors.Is(err, accounts.ErrInvalidCredentials) {
-		h.SignIns.Fail(key)
+		attempt.Fail()
 	}
 	var blocked *accounts.BlockError
 	if errors.As(err, &blocked) && h.Notifications != nil {
@@ -213,7 +216,7 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 		h.askSecondStep(w, r, user)
 		return
 	}
-	h.SignIns.Succeed(key)
+	attempt.Succeed()
 	h.Activity.SignedIn(r.Context(), user, forwarded.Client(r))
 	h.startSession(w, r, http.StatusOK, user)
 }
@@ -236,10 +239,11 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 // now is no wrong guess and counts toward nothing. Neither is written to
 // the activity log, as the admin app tries the token of whoever opens it.
 func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
-	key := forwarded.Client(r)
-	if h.throttled(w, key) {
+	attempt := h.reserve(w, forwarded.Client(r))
+	if attempt == nil {
 		return
 	}
+	defer attempt.Cancel()
 	token := mediaBrowserToken(r.Header.Get("Authorization"))
 	if token == "" {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
@@ -247,7 +251,7 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 	}
 	_, user, err := h.Accounts.DeviceByToken(r.Context(), token, forwarded.Client(r))
 	if errors.Is(err, accounts.ErrNotFound) {
-		h.SignIns.Fail(key)
+		attempt.Fail()
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
 		return
 	}
@@ -265,7 +269,7 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "outside_allowed_hours")
 		return
 	}
-	h.SignIns.Succeed(key)
+	attempt.Succeed()
 	h.Activity.SignedIn(r.Context(), user, forwarded.Client(r))
 	h.startSession(w, r, http.StatusOK, user)
 }
