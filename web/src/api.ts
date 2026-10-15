@@ -393,6 +393,8 @@ export type Settings = {
   encodingThreads: number
   /** Seconds of picture made ahead of the end of what the app asked for. */
   aheadSeconds: number
+  /** Converts video apart from its audio, and keeps it when an app changes the audio track. */
+  keepConvertedVideo: boolean
   /** What conversions run on (read-only). */
   conversionHardware: ConversionHardware
   /** Makes scrubbing thumbnails of the versions played, from their keyframes, in the background. */

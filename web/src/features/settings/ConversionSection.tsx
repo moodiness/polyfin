@@ -566,6 +566,13 @@ export default function ConversionSection({
             )}
           />
         </FieldRow>
+        <SwitchRow
+          anchor="keep-converted-video"
+          label={c.keepConvertedVideo}
+          help={c.keepConvertedVideoHelp}
+          checked={form.keepConvertedVideo}
+          onChange={(keepConvertedVideo) => update({ keepConvertedVideo })}
+        />
       </SettingsGroup>
     </>
   )

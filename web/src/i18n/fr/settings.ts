@@ -435,6 +435,9 @@ const settings: typeof en = {
       aheadSeconds: 'Secondes préparées à l’avance',
       aheadSecondsHelp: (r: RangeText) =>
         `Polyfin prépare une vidéo au plus ce nombre de secondes au-delà de la partie demandée par l’application, puis attend. Plus aide avec les sources lentes et garde leur connexion occupée, mais utilise plus de puissance et de disque quand on arrête de regarder tôt. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+      keepConvertedVideo: 'Garder la vidéo convertie quand la piste audio change',
+      keepConvertedVideoHelp:
+        'Convertit l’image et le son à part : choisir une autre piste audio dans le lecteur ne prépare que le nouveau son, l’image déjà convertie continue, et la nouvelle piste démarre plus vite. L’image est gardée 30 secondes après l’arrêt du lecteur, et compte pendant ce temps pour une conversion.',
     },
     catalogsTitle: 'Catalogues',
     catalogLimit: 'Titres lus par catalogue de films et séries',

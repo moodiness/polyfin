@@ -419,6 +419,13 @@ export const settingEntries: readonly SettingEntry[] = [
     keywords: ['throttle'],
     codes: ['invalid_ahead_seconds'],
   },
+  {
+    section: 'conversion',
+    anchor: 'keep-converted-video',
+    label: (t) => c(t).keepConvertedVideo,
+    help: (t) => c(t).keepConvertedVideoHelp,
+    keywords: ['audio track', 'language'],
+  },
   // Content
   {
     section: 'content',

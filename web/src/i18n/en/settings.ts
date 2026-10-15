@@ -422,6 +422,9 @@ const settings = {
       aheadSeconds: 'Seconds prepared ahead',
       aheadSecondsHelp: (r: RangeText) =>
         `Polyfin prepares a video at most this many seconds past the part the app asked for, then waits. More helps with slow sources and keeps their connection busy, but uses more power and disk space when people stop watching early. From ${r.min} to ${r.max}; ${r.default} by default.`,
+      keepConvertedVideo: 'Keep the converted video when the audio track changes',
+      keepConvertedVideoHelp:
+        'Converts the picture and the sound apart, so that choosing another audio track in the player only prepares the new sound: the picture already converted plays on, and the new track starts sooner. The picture is kept 30 seconds after a player stops it, and counts as one conversion meanwhile.',
     },
     catalogsTitle: 'Catalogs',
     catalogLimit: 'Titles read per movie and series catalog',
