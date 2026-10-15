@@ -96,6 +96,16 @@ For each of the last movies the user played, recommendations give the "Because y
 - `/Items/{id}/Images` lists a title's artwork.
 - `/Sessions/Viewing` records the item an app shows, which **Sessions** gives as `NowViewingItem`.
 
+### Remote images
+
+jellyfin-web's **Edit images** searches TMDB, while the server has a **TMDB API key**, and the server's metadata addons for an item's images, and keeps the one an administrator downloads as an upload. See [Edit images](addons-and-libraries.md#edit-images).
+
+**For app developers:**
+
+- `/Items/{id}/RemoteImages/Providers` lists `TMDB` and `Addons` with their `SupportedImages`: both for movies and series, `TMDB` alone (Primary) for seasons, episodes and people, none for other items or without a key.
+- `/Items/{id}/RemoteImages` answers a `RemoteImageResult` for `type` (every type when left out), `providerName`, `includeAllLanguages`, `startIndex` and `limit`. An addon's image has its addon's name as `ProviderName`. `Url` and `ThumbnailUrl` are Polyfin addresses, signed for the item, which apps load without credentials.
+- `POST /Items/{id}/RemoteImages/Download?type=&imageUrl=` is for administrators (403 otherwise). `imageUrl` must be a `Url` Polyfin listed for the item and type (400 otherwise); `providerName` is ignored.
+
 ### Trailers, channels and theme media
 
 Trailer items and plugin channels answer empty lists, as on a Jellyfin server without them. Addons give trailers only with their titles, as `RemoteTrailers`.
