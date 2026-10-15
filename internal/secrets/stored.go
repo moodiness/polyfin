@@ -26,6 +26,7 @@ var settingSecrets = []struct{ column, name string }{
 	{"publicmetadb_key", "publicMetaDbKey"},
 	{"theintrodb_key", "theIntroDbKey"},
 	{"mdblist_ratings_key", "mdblistRatingsKey"},
+	{"tmdb_key", "tmdbKey"},
 	{"trakt_client_secret", "traktClientSecret"},
 	{"lastfm_secret", "lastFmSecret"},
 	{"smtp_password", "smtpPassword"},

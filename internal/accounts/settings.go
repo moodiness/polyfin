@@ -658,6 +658,29 @@ func ValidRatingsKey(key string) bool {
 // or the audience score.
 var CriticRatingChoices = []string{"critics", "audience"}
 
+// ErrInvalidTMDBKey reports a Settings.TMDBKey that is not a valid key
+// (see ValidTMDBKey).
+var ErrInvalidTMDBKey = errors.New("invalid TMDB key")
+
+// MaxTMDBKeyBytes is the longest Settings.TMDBKey: a read access token is
+// much longer than an API key.
+const MaxTMDBKeyBytes = 512
+
+// ValidTMDBKey reports whether key may be a TMDB API key or read access
+// token: at most MaxTMDBKeyBytes of printable ASCII without spaces. Empty
+// is valid, for no key.
+func ValidTMDBKey(key string) bool {
+	if len(key) > MaxTMDBKeyBytes {
+		return false
+	}
+	for i := range len(key) {
+		if key[i] <= ' ' || key[i] > '~' {
+			return false
+		}
+	}
+	return true
+}
+
 // ErrInvalidMeasureLoudness reports a Settings.MeasureLoudness not among
 // MeasureLoudnessChoices.
 var ErrInvalidMeasureLoudness = errors.New("invalid loudness measure choice")
@@ -1030,6 +1053,11 @@ type Settings struct {
 	// CriticRatingShows is the score CriticRating carries, one of
 	// CriticRatingChoices: the critics' score or the audience score.
 	CriticRatingShows string
+	// TMDBKey is the server's TMDB API key or read access token, which
+	// Edit images searches TMDB's images with (see package tmdb); empty,
+	// only the addons' images are listed and TMDB is never asked. A
+	// secret, like PublicMetaDBKey.
+	TMDBKey string
 	// Lyrics looks music tracks up on LRCLIB and serves their lyrics to
 	// apps, synced line by line when LRCLIB has them; off, LRCLIB is never
 	// asked and tracks have no lyrics.
@@ -1377,7 +1405,7 @@ func validWebText(text string, max int) bool {
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
 	"update_check, local_discovery, local_address, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, even_volume, measure_loudness, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
-	"mdblist_ratings_key, critic_rating_shows, " +
+	"mdblist_ratings_key, critic_rating_shows, tmdb_key, " +
 	"personal_addons, server_imports, share_links, login_attempts, inactive_device_days, known_proxies, known_proxy_names, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
 	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
@@ -1412,7 +1440,7 @@ func (settings *Settings) fields() []any {
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff, &settings.AudioIntros,
 		&settings.SimilarTitles, &settings.GenerateImages, &settings.Lyrics, &settings.EvenVolume, &settings.MeasureLoudness, &settings.PlayedPercent, &settings.ResumePercent,
 		&settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
-		&settings.MDBListRatingsKey, &settings.CriticRatingShows,
+		&settings.MDBListRatingsKey, &settings.CriticRatingShows, &settings.TMDBKey,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.ShareLinks, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
 		&settings.KnownProxyNames, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
@@ -1460,6 +1488,7 @@ func (settings *Settings) secrets() []struct {
 		{"publicMetaDbKey", &settings.PublicMetaDBKey},
 		{"theIntroDbKey", &settings.TheIntroDBKey},
 		{"mdblistRatingsKey", &settings.MDBListRatingsKey},
+		{"tmdbKey", &settings.TMDBKey},
 		{"traktClientSecret", &settings.TraktClientSecret},
 		{"lastFmSecret", &settings.LastFMSecret},
 		{"smtpPassword", &settings.SMTPPassword},
@@ -1649,6 +1678,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !ValidRatingsKey(settings.MDBListRatingsKey) {
 		return Settings{}, ErrInvalidMDBListRatingsKey
+	}
+	if !ValidTMDBKey(settings.TMDBKey) {
+		return Settings{}, ErrInvalidTMDBKey
 	}
 	if !slices.Contains(CriticRatingChoices, settings.CriticRatingShows) {
 		return Settings{}, ErrInvalidCriticRatingShows
