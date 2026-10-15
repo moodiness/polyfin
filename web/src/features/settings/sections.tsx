@@ -882,11 +882,16 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
   )
 }
 
-/** The address Let's Encrypt serves HTTPS at, the first host name and the HTTPS port. */
-function letsEncryptAddress(form: Settings): string | undefined {
+/**
+ * The addresses Let's Encrypt serves HTTPS at, with the first host name: without a port, as the
+ * internet reaches it once the router forwards 443 to the HTTPS port, then with the HTTPS port.
+ */
+function letsEncryptAddresses(form: Settings): string[] {
   const host = form.acmeHosts[0]
-  if (form.httpsMode !== 'letsencrypt' || host === undefined) return undefined
-  return form.httpsPort === 443 ? `https://${host}` : `https://${host}:${form.httpsPort}`
+  if (form.httpsMode !== 'letsencrypt' || host === undefined) return []
+  return form.httpsPort === 443
+    ? [`https://${host}`]
+    : [`https://${host}`, `https://${host}:${form.httpsPort}`]
 }
 
 /** Settings › Security › HTTPS: how Polyfin serves HTTPS itself, next to HTTP. */
@@ -1513,8 +1518,8 @@ function DiagnosticsFields({ form, update }: SectionFormApi) {
 function Notifications({ form, update, error, number, limits }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
-  // With Let's Encrypt, the address it serves HTTPS at is offered while none is set.
-  const offered = letsEncryptAddress(form)
+  // With Let's Encrypt, the addresses it serves HTTPS at are offered while none is set.
+  const offered = letsEncryptAddresses(form)
   const text = t.notifications
   // Sunday 7 January 2024 is day 0, as the server counts days; the week starts on Monday.
   const weekday = (day: number) =>
@@ -1533,18 +1538,20 @@ function Notifications({ form, update, error, number, limits }: SectionFormApi) 
           <TextInput
             value={form.publicAddress}
             onValue={(publicAddress) => update({ publicAddress })}
-            placeholder={offered ?? 'https://media.example.org'}
+            placeholder={offered[0] ?? 'https://media.example.org'}
             maxLength={limits('publicAddress').max}
             autoComplete="off"
             spellCheck={false}
             mono
             className="max-w-md"
           />
-          {offered !== undefined && form.publicAddress === '' && (
+          {offered.length > 0 && form.publicAddress === '' && (
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <Button size="sm" onClick={() => update({ publicAddress: offered })}>
-                {s.https.useAddress(offered)}
-              </Button>
+              {offered.map((address) => (
+                <Button key={address} size="sm" onClick={() => update({ publicAddress: address })}>
+                  {s.https.useAddress(address)}
+                </Button>
+              ))}
               <span className="text-small text-ink-3">{s.https.offeredAddress}</span>
             </div>
           )}

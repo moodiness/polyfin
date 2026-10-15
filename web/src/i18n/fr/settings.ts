@@ -160,7 +160,7 @@ const settings: typeof en = {
       `Les lectures plus anciennes sont supprimées. La vérification a lieu chaque jour. De ${r.min} à ${r.max}, ${r.default} par défaut.`,
     publicAddress: 'Adresse publique',
     publicAddressHelp:
-      'L’adresse à laquelle on ouvre Polyfin, comme https://media.example.org. Les liens des notifications commencent par elle ; vide, les messages n’ont pas de lien.',
+      'L’adresse à laquelle on ouvre Polyfin, comme https://media.example.org. Les liens des notifications commencent par elle ; vide, les messages n’ont pas de lien. Quand elle commence par https://, « Rediriger HTTP vers HTTPS », dans Paramètres › Sécurité, mène à son port, 443 quand elle n’en indique pas.',
     email: 'E-mail',
     emailHelp:
       'Les cibles e-mail passent par ce serveur SMTP. On peut les ajouter une fois un serveur et une adresse d’expéditeur enregistrés.',
@@ -467,10 +467,10 @@ const settings: typeof en = {
       modes: { off: 'Désactivé', files: 'Fichiers de certificat', letsencrypt: 'Let’s Encrypt' },
       port: 'Port HTTPS',
       portHelp: (r: RangeText) =>
-        `Le port TCP sur lequel HTTPS écoute dans le conteneur : publiez-le, comme 8096 l’est pour HTTP. L’utilisateur du conteneur ne peut pas écouter sous 1024 : pour joindre Polyfin sur 443, redirigez 443 vers ce port sur le routeur ou dans les ports du conteneur. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme Jellyfin.`,
+        `Le port TCP sur lequel HTTPS écoute dans le conteneur : publiez-le, comme 8096 l’est pour HTTP. L’utilisateur du conteneur ne peut pas écouter sous 1024 : pour joindre Polyfin sur 443, redirigez 443 vers ce port sur le routeur ou dans les ports du conteneur, et réglez l’adresse publique, dans Paramètres › Notifications, sur https:// et le nom d’hôte, sans port. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme Jellyfin.`,
       redirect: 'Rediriger HTTP vers HTTPS',
       redirectHelp:
-        'Les requêtes venues d’internet en HTTP reçoivent une redirection permanente (308) vers la même adresse en HTTPS, sur le port HTTPS. Le réseau local, les vérifications de Let’s Encrypt, et les requêtes qu’un proxy connu a reçues en HTTPS restent en HTTP. Ne s’applique que tant que HTTPS est servi. Désactivé par défaut.',
+        'Les requêtes venues d’internet en HTTP reçoivent une redirection permanente (308) vers la même adresse en HTTPS, sur le port par lequel internet joint HTTPS : le port de l’adresse publique, dans Paramètres › Notifications, quand elle commence par https://, 443 quand elle n’en indique pas, sinon le port HTTPS. Le réseau local, les vérifications de Let’s Encrypt, et les requêtes qu’un proxy connu a reçues en HTTPS restent en HTTP. Ne s’applique que tant que HTTPS est servi. Désactivé par défaut.',
       certificate: 'Certificat',
       certificateHelp:
         'Le chemin dans le conteneur du fichier PEM du certificat avec sa chaîne, comme /certs/fullchain.pem. L’enregistrement vérifie qu’il peut être lu. Polyfin le relit dans la minute qui suit un changement, et garde le dernier bon certificat tant qu’un changement ne peut pas être lu.',
@@ -493,7 +493,8 @@ const settings: typeof en = {
         'tls-alpn-01': 'TLS-ALPN-01 (port 443 vers le port HTTPS)',
       },
       useAddress: (address: string) => `Utiliser ${address}`,
-      offeredAddress: 'L’adresse à laquelle Let’s Encrypt sert HTTPS, dans Paramètres › Sécurité.',
+      offeredAddress:
+        'Les adresses auxquelles Let’s Encrypt sert HTTPS, dans Paramètres › Sécurité : sans port une fois que le routeur redirige 443 vers le port HTTPS. « Rediriger HTTP vers HTTPS » mène au port de l’adresse choisie.',
     },
     detailedLog: 'Journal détaillé (pour diagnostiquer un problème)',
     detailedLogHelp:

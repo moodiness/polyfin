@@ -61,8 +61,11 @@ type Config struct {
 	// Port is the TCP port HTTPS listens on.
 	Port int
 	// Redirect sends the requests of clients on the internet that come
-	// over HTTP to HTTPS (see Service.Handler).
-	Redirect bool
+	// over HTTP to HTTPS (see Service.Handler), on the port of
+	// PublicAddress, the address people open Polyfin at, when it is an
+	// https:// one.
+	Redirect      bool
+	PublicAddress string
 	// Certificate and PrivateKey are the paths of the PEM files served
 	// with ModeFiles: the certificate with its chain, and its RSA or ECDSA
 	// key.

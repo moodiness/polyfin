@@ -30,7 +30,7 @@ func newHTTPS(cfg config.Config, store *accounts.Store, pool *pgxpool.Pool, box 
 		Settings: func() https.Config {
 			settings := store.Settings()
 			return https.Config{Mode: settings.HTTPSMode, Port: settings.HTTPSPort, Redirect: settings.HTTPSRedirect,
-				Certificate: settings.HTTPSCertificate, PrivateKey: settings.HTTPSPrivateKey,
+				PublicAddress: settings.PublicAddress, Certificate: settings.HTTPSCertificate, PrivateKey: settings.HTTPSPrivateKey,
 				Hosts: settings.ACMEHosts, Email: settings.ACMEEmail, Challenge: settings.ACMEChallenge}
 		},
 		Changed:           store.SettingsChanged,

@@ -137,7 +137,7 @@ Polyfin can serve HTTPS itself, without a reverse proxy, on a port of its own ne
 | **I agree to Let's Encrypt's terms of service** | **Settings › Security**, with **Let's Encrypt** | Off | Required: Let's Encrypt issues certificates only once its terms, at [letsencrypt.org/repository](https://letsencrypt.org/repository/), are agreed to. |
 | **Challenge** | **Settings › Security**, with **Let's Encrypt** | HTTP-01 | How Let's Encrypt checks that the names point at the server (see [Let's Encrypt](#let-s-encrypt)). |
 
-The container's user, UID 65532, cannot listen below 1024: to reach Polyfin on the usual ports, 443 for HTTPS and 80 for Let's Encrypt's HTTP-01, forward them to Polyfin's ports on the router, or in the container's `ports`.
+The container's user, UID 65532, cannot listen below 1024: to reach Polyfin on the usual ports, 443 for HTTPS and 80 for Let's Encrypt's HTTP-01, forward them to Polyfin's ports on the router, or in the container's `ports`. When 443 reaches the HTTPS port, set **Public address**, under **Settings › Notifications**, to `https://your-host`, without a port: [the redirect](#the-redirect) then goes to 443 rather than to the HTTPS port.
 
 ### Certificate files
 
@@ -147,7 +147,7 @@ Polyfin looks at the files every minute, and reads them again when they change: 
 
 ### Let's Encrypt
 
-Polyfin obtains one certificate for every host name, with an account key of its own, and keeps the account key, the certificate and its private key in the database, the keys encrypted with `POLYFIN_SECRET_KEY` as the other [stored keys](configuration.md#stored-keys-and-tokens), so that backups hold them. It renews the certificate once a third of its lifetime remains: 30 days before the end of a 90-day certificate. Changing the host names or the challenge obtains a new one at once. A failed attempt is tried again an hour later, or at once when the host names, email or challenge change; meanwhile the certificate it had stays in use.
+Polyfin obtains one certificate for every host name, with an account key of its own, and keeps the account key, the certificate and its private key in the database, the keys encrypted with `POLYFIN_SECRET_KEY` as the other [stored keys](configuration.md#stored-keys-and-tokens), so that backups hold them, with the challenge and the ACME server it came from. It renews the certificate once a third of its lifetime remains: 30 days before the end of a 90-day certificate. Changing the host names or the challenge, or starting with another `POLYFIN_ACME_DIRECTORY`, obtains a new one at once. A failed attempt is tried again an hour later, or at once when the host names, email or challenge change; meanwhile the certificate it had stays in use. An attempt that Polyfin stopping interrupts is no failure: it is made again at the next start.
 
 Each name must point at the server from the internet, and one of two ports must reach Polyfin:
 
@@ -156,13 +156,13 @@ Each name must point at the server from the internet, and one of two ports must 
 
 Names that resolve only on the local network, and wildcards such as `*.example.org`, need the DNS-01 challenge, which Polyfin does not answer: it would issue certificates without any open port, but needs Polyfin to create a TXT record under `_acme-challenge.<name>`, through each DNS host's own API, with credentials stored encrypted, or through RFC 2136 dynamic updates for the DNS servers that accept them. Meanwhile, obtain such a certificate with another tool that answers DNS-01, such as Certbot, acme.sh or lego, and give its files under **Certificate files**.
 
-With **Let's Encrypt**, **Public address**, under **Settings › Notifications**, offers `https://`, the first host name and the HTTPS port (left out when it is 443), while it is empty: links in notifications then use HTTPS.
+With **Let's Encrypt**, while **Public address**, under **Settings › Notifications**, is empty, it offers `https://` and the first host name: without a port, as the internet reaches it once 443 is forwarded to the HTTPS port, and with the HTTPS port when it is not 443. Links in notifications then use HTTPS, and the redirect goes to the port of the address chosen.
 
 **For tests:** `POLYFIN_ACME_DIRECTORY` names another ACME server, such as Let's Encrypt's staging environment, a private ACME server, or a test server such as Pebble, and `POLYFIN_ACME_CA_FILE` the certificate authorities its HTTPS is trusted with (see [Configuration](configuration.md)).
 
 ### The redirect
 
-While **Redirect HTTP to HTTPS** is on and HTTPS is served, a request from the internet that comes over HTTP gets a 308 to the same path and query on `https://`, the host it asked for and the HTTPS port: a 308 keeps the method and body, so sign-ins follow it too. These are never redirected:
+While **Redirect HTTP to HTTPS** is on and HTTPS is served, a request from the internet that comes over HTTP gets a 308 to the same path and query on `https://`, the host it asked for and the port the internet reaches HTTPS at: a 308 keeps the method and body, so sign-ins follow it too. That port is the one of **Public address**, under **Settings › Notifications**, when it starts with `https://`, 443 when it names none, such as `https://media.example.org`; otherwise it is the HTTPS port. With the router's 443 forwarded to the HTTPS port, 8920, set **Public address** to `https://your-host`: without it, clients would be sent to port 8920, which the router does not open. These are never redirected:
 
 - requests from the local network: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and loopback, as [Local network discovery](#local-network-discovery) reads them, behind a known proxy the client it names;
 - Let's Encrypt's HTTP-01 checks, under `/.well-known/acme-challenge/`;

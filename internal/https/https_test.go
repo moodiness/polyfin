@@ -465,3 +465,31 @@ func TestDiscoveryAnnouncesHTTPWhileHTTPSIsServed(t *testing.T) {
 		t.Errorf("announced %s, %v", buffer[:n], err)
 	}
 }
+
+// With an https:// Public address, the redirect goes to its port, or 443
+// when it names none: the port the internet reaches HTTPS at, which a
+// router forwarding 443 to the HTTPS port hides. Any other Public address
+// leaves the HTTPS port.
+func TestRedirectGoesToThePortOfThePublicAddress(t *testing.T) {
+	t.Parallel()
+	s := New(Options{})
+	handler := forwarded.New(func() []netip.Prefix { return nil }, nil).Handler(s.Handler(tellsScheme))
+	for _, c := range []struct{ publicAddress, location string }{
+		{"https://media.example.org", "https://media.example.org/web/?x=1"},
+		{"https://media.example.org/polyfin", "https://media.example.org/web/?x=1"},
+		{"https://media.example.org:8443", "https://media.example.org:8443/web/?x=1"},
+		{"https://media.example.org:443", "https://media.example.org/web/?x=1"},
+		{"http://media.example.org:8096", "https://media.example.org:8920/web/?x=1"},
+		{"", "https://media.example.org:8920/web/?x=1"},
+	} {
+		s.serving.Store(&Config{Mode: ModeLetsEncrypt, Port: 8920, Redirect: true, PublicAddress: c.publicAddress})
+		r := httptest.NewRequest(http.MethodGet, "/web/?x=1", nil)
+		r.Host = "media.example.org:8096"
+		r.RemoteAddr = "203.0.113.7:51000"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != http.StatusPermanentRedirect || w.Header().Get("Location") != c.location {
+			t.Errorf("public address %q: %d %q, want 308 to %s", c.publicAddress, w.Code, w.Header().Get("Location"), c.location)
+		}
+	}
+}

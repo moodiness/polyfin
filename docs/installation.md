@@ -87,7 +87,7 @@ With **Let's Encrypt**, the container's user cannot listen below 1024, so the in
       - "443:8920"    # TLS-ALPN-01, and HTTPS on the usual port
 ```
 
-Each line needs the host's own port free: forward the port on the router instead, to the host's 8096 or 8920, when another service uses it. Apps reach Polyfin at `https://media.example.org:8920`, or at `https://media.example.org` once 443 reaches the HTTPS port.
+Each line needs the host's own port free: forward the port on the router instead, to the host's 8096 or 8920, when another service uses it. Apps reach Polyfin at `https://media.example.org:8920`, or at `https://media.example.org` once 443 reaches the HTTPS port. In that case, set **Public address**, under **Settings › Notifications**, to `https://media.example.org`, without a port: **Redirect HTTP to HTTPS** sends clients to the port of an `https://` public address, 443 when it names none, and without one to the HTTPS port, 8920, which the internet may not reach (see [The redirect](administration.md#the-redirect)).
 
 ### Pin a version
 
@@ -147,7 +147,7 @@ To back up the database every day, set **Backups folder** to a folder of the ser
 
 For Jellyfin apps to find Polyfin on the local network by themselves, set the container's **Network Type** to `br0`, which gives it its own address on your network, or to `Host`: on the default `bridge`, their broadcasts do not reach it, even with **Discovery port** published (see [Let apps find Polyfin on the local network](#let-apps-find-polyfin-on-the-local-network)).
 
-To serve HTTPS, add the HTTPS port to the container: **Add another Path, Port, Variable, Label or Device**, of type `Port`, with `8920` as both the container's and the host's port, over TCP. Then choose **Serve HTTPS** in the admin app, under **Settings › Security** (see [HTTPS](administration.md#https)). For **Certificate files**, add a `Path` mapping the folder that holds them, read-only, such as `/mnt/user/appdata/certs` to `/certs`. For **Let's Encrypt**, Unraid's own web interface usually holds ports 80 and 443 on the server: forward the router's port 80 to the server's port 8096 for **HTTP-01**, or its port 443 to the server's 8920 for **TLS-ALPN-01**, rather than mapping them on the container.
+To serve HTTPS, add the HTTPS port to the container: **Add another Path, Port, Variable, Label or Device**, of type `Port`, with `8920` as both the container's and the host's port, over TCP. Then choose **Serve HTTPS** in the admin app, under **Settings › Security** (see [HTTPS](administration.md#https)). For **Certificate files**, add a `Path` mapping the folder that holds them, read-only, such as `/mnt/user/appdata/certs` to `/certs`. For **Let's Encrypt**, Unraid's own web interface usually holds ports 80 and 443 on the server: forward the router's port 80 to the server's port 8096 for **HTTP-01**, or its port 443 to the server's 8920 for **TLS-ALPN-01**, rather than mapping them on the container. When the router forwards 443 to 8920, set **Public address**, under **Settings › Notifications**, to `https://your-host`, so that **Redirect HTTP to HTTPS** sends clients to 443.
 
 Containers made from an older template keep working: the variables they set, such as `POLYFIN_CACHE_SIZE` or `POLYFIN_BACKUP_DIR`, are copied into the settings at their first start with a version that made them settings. You can remove them from the container afterwards.
 
