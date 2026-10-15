@@ -28,6 +28,7 @@ import {
   queryKeys,
   revokeShareLink,
   signOutUserDevice,
+  turnOffUserTwoStep,
   unblockUser,
   userImageUrl,
   type User,
@@ -301,12 +302,17 @@ function UserPage({ user }: { user: User }) {
   )
 }
 
-/** Name, password, the reset PIN asked for from an app, and the block for wrong passwords. */
+/**
+ * Name, password, the reset PIN asked for from an app, the block for wrong passwords, and two-step
+ * sign-in, which an administrator turns off for a user who lost their device.
+ */
 function ProfilePanel({ user }: { user: User }) {
   const { t, language } = useI18n()
   const toast = useToast()
+  const self = useSessionUser()
   const [name, setName] = useState(user.name)
   const [password, setPassword] = useState('')
+  const [askingTwoStep, setAskingTwoStep] = useState(false)
   const rename = useUserPatch(user)
   const resetPassword = useUserPatch(user)
   const unblock = useMutation({
@@ -314,6 +320,15 @@ function ProfilePanel({ user }: { user: User }) {
     onSuccess: (updated) => {
       storeUser(updated)
       toast(t.users.unblocked)
+    },
+    onError: refreshIfGone,
+  })
+  const twoStepOff = useMutation({
+    mutationFn: () => turnOffUserTwoStep(user.id),
+    onSuccess: (updated) => {
+      storeUser(updated)
+      setAskingTwoStep(false)
+      toast(t.users.twoStepTurnedOff)
     },
     onError: refreshIfGone,
   })
@@ -325,7 +340,7 @@ function ProfilePanel({ user }: { user: User }) {
   return (
     <div id="profile" className={sectionClass}>
       <Panel title={t.users.profileTitle} flush>
-        {(pin !== null || user.blockedUntil !== null) && (
+        {(pin !== null || user.blockedUntil !== null || user.twoStep) && (
           <PanelSection>
             <div className="space-y-3">
               {pin !== null && (
@@ -356,6 +371,20 @@ function ProfilePanel({ user }: { user: User }) {
                 </Notice>
               )}
               {unblock.isError && <Notice tone="danger">{errorMessage(t, unblock.error)}</Notice>}
+              {user.twoStep && (
+                <Notice
+                  action={
+                    self.id !== user.id && (
+                      <Button size="sm" onClick={() => setAskingTwoStep(true)}>
+                        {t.users.turnOffTwoStep}
+                      </Button>
+                    )
+                  }
+                >
+                  <p className="text-ink">{t.users.twoStepOn}</p>
+                  {self.id !== user.id && <p className="mt-1 text-ink-2">{t.users.twoStepHelp}</p>}
+                </Notice>
+              )}
             </div>
           </PanelSection>
         )}
@@ -438,6 +467,20 @@ function ProfilePanel({ user }: { user: User }) {
           </form>
         </PanelSection>
       </Panel>
+      <ConfirmDialog
+        open={askingTwoStep}
+        onClose={() => {
+          setAskingTwoStep(false)
+          twoStepOff.reset()
+        }}
+        onConfirm={() => twoStepOff.mutate()}
+        title={t.users.turnOffTwoStepTitle(user.name)}
+        confirmLabel={twoStepOff.isPending ? t.users.turningOffTwoStep : t.users.turnOffTwoStep}
+        busy={twoStepOff.isPending}
+        error={twoStepOff.isError ? errorMessage(t, twoStepOff.error) : undefined}
+      >
+        {t.users.turnOffTwoStepConfirm(user.name)}
+      </ConfirmDialog>
     </div>
   )
 }

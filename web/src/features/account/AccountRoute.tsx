@@ -11,6 +11,7 @@ import {
   PasswordIcon,
   RowsIcon,
   ShareNetworkIcon,
+  ShieldCheckIcon,
   TranslateIcon,
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
@@ -45,6 +46,7 @@ import TrackingServices from './TrackingServices'
 import { ReminderList, ReminderSettingsForm } from './Reminders'
 import { OwnMetadataLanguage } from './MetadataLanguage'
 import { HiddenList, HomeRowList, ResumeList } from './WatchingLists'
+import TwoStep from './TwoStep'
 
 const sectionIds = [
   'statistics',
@@ -60,6 +62,7 @@ const sectionIds = [
   'notifications',
   'devices',
   'password',
+  'two-step',
 ] as const
 type SectionId = (typeof sectionIds)[number]
 
@@ -70,7 +73,8 @@ const ownImportPollMs = 2000
  * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows, the
  * metadata language, shared links (while the user may share or has links), programme reminders
  * (with the Live TV permission), importing from another server and from an app (unless the server
- * turns it off), notifications, devices and password, with a list of sections beside them.
+ * turns it off), notifications, devices, password and two-step sign-in, with a list of sections
+ * beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -214,6 +218,12 @@ export default function AccountRoute() {
             },
             { id: 'devices', label: text.sections.devices, icon: DevicesIcon, to: '#devices' },
             { id: 'password', label: text.sections.password, icon: PasswordIcon, to: '#password' },
+            {
+              id: 'two-step',
+              label: text.sections.twoStep,
+              icon: ShieldCheckIcon,
+              to: '#two-step',
+            },
           ]}
         />
       }
@@ -319,6 +329,9 @@ export default function AccountRoute() {
       </AccountSection>
       <AccountSection id="password" title={text.sections.password} help={text.passwordHelp}>
         <PasswordForm />
+      </AccountSection>
+      <AccountSection id="two-step" title={text.sections.twoStep} help={text.twoStep.help}>
+        <TwoStep />
       </AccountSection>
     </PageLayout>
   )

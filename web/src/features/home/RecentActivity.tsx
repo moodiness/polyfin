@@ -11,6 +11,8 @@ import {
   PuzzlePieceIcon,
   RecordIcon,
   ShareNetworkIcon,
+  ShieldCheckIcon,
+  ShieldSlashIcon,
   SignInIcon,
   StopIcon,
   UserIcon,
@@ -42,7 +44,9 @@ const pageSize = 25
 const filters = {
   all: {},
   problems: { severities: ['Warning', 'Error'] },
-  signIns: { types: ['AuthenticationSucceeded', 'AuthenticationFailed'] },
+  signIns: {
+    types: ['AuthenticationSucceeded', 'AuthenticationFailed', 'UserRecoveryCodeUsed'],
+  },
   playback: { types: ['VideoPlayback', 'VideoPlaybackStopped', 'SharedLinkPlayback'] },
   users: {
     types: [
@@ -50,6 +54,8 @@ const filters = {
       'UserDeleted',
       'UserPolicyUpdated',
       'UserPasswordChanged',
+      'UserTwoStepOn',
+      'UserTwoStepOff',
       'UserEnded',
       'ShareLinkCreated',
       'ShareLinkRevoked',
@@ -80,6 +86,9 @@ const typeIcons: Record<string, Icon> = {
   UserPolicyUpdated: UserIcon,
   UserEnded: UserIcon,
   UserPasswordChanged: PasswordIcon,
+  UserTwoStepOn: ShieldCheckIcon,
+  UserTwoStepOff: ShieldSlashIcon,
+  UserRecoveryCodeUsed: SignInIcon,
   GroupCreated: UsersThreeIcon,
   GroupChanged: UsersThreeIcon,
   GroupDeleted: UsersThreeIcon,

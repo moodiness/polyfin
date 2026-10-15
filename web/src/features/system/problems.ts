@@ -37,13 +37,14 @@ export function ownedName(t: Messages, name: string, owner: Owner): string {
 
 /**
  * The name of a stored secret the key cannot decrypt: a server setting, the keys of the
- * certificate of Let's Encrypt, a network share's password, a user's tracking or app connection,
- * or a notification target of a user or of the server.
+ * certificate of Let's Encrypt, a user's two-step sign-in, a network share's password, a user's
+ * tracking or app connection, or a notification target of a user or of the server.
  */
 export function unreadableName(t: Messages, secret: UnreadableSecret): string {
   const text = t.system.health
   if (secret.setting !== null) return text.secretNames[secret.setting]
   if (secret.certificate) return text.certificateKeys
+  if (secret.twoStep) return text.twoStepOf(secret.user ?? '')
   if (secret.folder !== null) return text.sharePasswordOf(secret.folder)
   if (secret.destination !== null) return text.destinationSecretOf(secret.destination)
   if (secret.target !== null) {

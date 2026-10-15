@@ -22,6 +22,19 @@ const auth: typeof en = {
     password: 'Mot de passe',
     submit: 'Se connecter',
     submitting: 'Connexion…',
+    codeTitle: 'Connexion en deux étapes',
+    codeDescription:
+      'Saisissez le code à 6 chiffres que votre application d’authentification affiche pour Polyfin.',
+    code: 'Code',
+    codeHelp: 'Téléphone perdu ? Saisissez plutôt l’un de vos codes de secours.',
+    verify: 'Vérifier',
+    verifying: 'Vérification…',
+    restart: 'Se connecter avec un autre compte',
+    setupTitle: 'Configurer la connexion en deux étapes',
+    setupDescription:
+      'Les administrateurs doivent utiliser la connexion en deux étapes sur ce serveur. Ajoutez votre compte à une application d’authentification sur votre téléphone, puis saisissez le code qu’elle affiche.',
+    recoveryTitle: 'Gardez vos codes de secours',
+    continue: 'Continuer',
   },
   invite: {
     title: (server: string) => `Rejoindre ${server}`,

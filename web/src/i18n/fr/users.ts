@@ -96,6 +96,15 @@ const users: typeof en = {
     unblock: 'Débloquer',
     unblocking: 'Déblocage…',
     unblocked: 'Le compte est débloqué.',
+    twoStepOn: 'La connexion en deux étapes est activée.',
+    twoStepHelp:
+      'Si cet utilisateur a perdu le téléphone de son application d’authentification et n’a plus de code de secours, désactivez-la : il se connecte avec son mot de passe seul, puis la configure de nouveau depuis Mon compte.',
+    turnOffTwoStep: 'Désactiver la connexion en deux étapes',
+    turningOffTwoStep: 'Désactivation…',
+    turnOffTwoStepTitle: (name: string) => `Désactiver la connexion en deux étapes de ${name} ?`,
+    turnOffTwoStepConfirm: (name: string) =>
+      `${name} se connecte alors avec son mot de passe seul. Le journal d’activité indique que vous l’avez désactivée.`,
+    twoStepTurnedOff: 'La connexion en deux étapes est désactivée pour cet utilisateur.',
     playbackAccessTitle: 'Lecture et accès',
     maxPlaybacks: 'Lectures en même temps (0 = pas de limite)',
     maxPlaybacksHelp:

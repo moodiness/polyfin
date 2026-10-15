@@ -348,6 +348,7 @@ const system: typeof en = {
       destinationSecretOf: (name: string) =>
         `Mot de passe ou clé de la destination des sauvegardes « ${name} »`,
       certificateKeys: 'Clés du certificat Let’s Encrypt',
+      twoStepOf: (user: string) => `Clé de la connexion en deux étapes de ${user}`,
       noAddonsHint: 'Ajoutez un addon Stremio dans Contenu › Sources.',
       noIptvHint: 'Ajoutez un compte IPTV dans Contenu › Sources.',
       noGuides: 'Aucun guide des programmes.',

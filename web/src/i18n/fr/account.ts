@@ -19,6 +19,7 @@ const account: typeof en = {
       notifications: 'Notifications',
       devices: 'Appareils',
       password: 'Mot de passe',
+      twoStep: 'Connexion en deux étapes',
     },
     metadataLanguage: {
       help: 'La langue des noms, des résumés et des images des titres dans vos applis, quand l’un des addons du serveur les décrit dans cette langue ; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous. Les noms que Polyfin crée lui-même, comme les saisons, la suivent quand c’est l’anglais ou le français.',
@@ -355,6 +356,55 @@ const account: typeof en = {
     changePassword: 'Changer le mot de passe',
     changingPassword: 'Modification…',
     passwordChanged: 'Votre mot de passe a été modifié.',
+    twoStep: {
+      help: 'Après votre mot de passe, cette appli d’administration demande un code d’une application d’authentification sur votre téléphone. Les applis Jellyfin ne peuvent pas en demander : une fois activée, elles se connectent avec Quick Connect, que vous approuvez ici, et votre mot de passe seul ne les connecte plus. Les applis et navigateurs déjà connectés le restent.',
+      off: 'Désactivée',
+      on: 'Activée',
+      offText: 'Votre mot de passe seul vous connecte.',
+      onText:
+        'Vous vous connectez avec votre mot de passe, puis un code de votre application d’authentification.',
+      required:
+        'Les administrateurs doivent utiliser la connexion en deux étapes sur ce serveur. Activez-la maintenant, ou elle vous sera demandée à votre prochaine connexion.',
+      requiredOn:
+        'Les administrateurs doivent utiliser la connexion en deux étapes sur ce serveur : elle reste activée.',
+      unreadable:
+        'POLYFIN_SECRET_KEY ne peut plus lire la clé de votre application d’authentification, comme après une restauration sous une autre clé : seuls vos codes de secours vous connectent. Désactivez la connexion en deux étapes avec votre mot de passe, puis réactivez-la.',
+      turnOn: 'Activer',
+      starting: 'Préparation…',
+      scan: 'Scannez ce code QR avec votre application d’authentification, ou saisissez la clé à la main. Polyfin a créé le code lui-même : la clé ne part nulle part ailleurs.',
+      qrLabel: 'Code QR de la clé, pour votre application d’authentification',
+      key: 'Clé',
+      openInApp: 'Ouvrir dans une application d’authentification de cet appareil',
+      code: 'Code de l’application',
+      codeHelp:
+        'Le code à 6 chiffres que l’application affiche pour Polyfin. Il change toutes les 30 secondes.',
+      confirm: 'Activer',
+      confirming: 'Vérification…',
+      turnedOn: 'La connexion en deux étapes est activée.',
+      recoveryTitle: 'Vos codes de secours',
+      recoveryHelp:
+        'Chaque code vous connecte une fois, à la place d’un code de votre application, si vous perdez votre téléphone. Gardez-les en lieu sûr, par exemple dans un gestionnaire de mots de passe : ils ne sont affichés que maintenant.',
+      copy: 'Copier les codes',
+      copied: 'Les codes sont copiés.',
+      copyFailed: 'Les codes n’ont pas pu être copiés : sélectionnez-les et copiez-les à la main.',
+      saved: 'Je les ai enregistrés',
+      codesLeft: (n: number) =>
+        n === 1 ? '1 code de secours restant' : `${n} codes de secours restants`,
+      newCodes: 'Nouveaux codes de secours',
+      newCodesTitle: 'Créer de nouveaux codes de secours ?',
+      newCodesText: 'Les nouveaux codes annulent les précédents.',
+      making: 'Création…',
+      turnOff: 'Désactiver',
+      turnOffTitle: 'Désactiver la connexion en deux étapes ?',
+      turnOffText: 'Votre mot de passe seul vous connecte alors, ici et dans les applis Jellyfin.',
+      turningOff: 'Désactivation…',
+      turnedOff: 'La connexion en deux étapes est désactivée.',
+      confirmWith: 'Confirmer avec',
+      withCode: 'Un code',
+      withPassword: 'Mon mot de passe',
+      codeOrRecovery: 'Code de l’application, ou code de secours',
+      password: 'Mot de passe',
+    },
     tracking: {
       title: 'Suivi',
       description:

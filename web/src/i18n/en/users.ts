@@ -90,6 +90,15 @@ const users = {
     unblock: 'Unblock',
     unblocking: 'Unblocking…',
     unblocked: 'The account is unblocked.',
+    twoStepOn: 'Two-step sign-in is on.',
+    twoStepHelp:
+      'If this user lost the phone with their authenticator app and has no recovery code left, turn it off: they sign in with their password alone, then set it up again from My account.',
+    turnOffTwoStep: 'Turn off two-step sign-in',
+    turningOffTwoStep: 'Turning off…',
+    turnOffTwoStepTitle: (name: string) => `Turn off the two-step sign-in of ${name}?`,
+    turnOffTwoStepConfirm: (name: string) =>
+      `${name} then signs in with their password alone. The activity log records that you turned it off.`,
+    twoStepTurnedOff: 'Two-step sign-in is off for this user.',
     playbackAccessTitle: 'Playback and access',
     maxPlaybacks: 'Playbacks at once (0 = no limit)',
     maxPlaybacksHelp:

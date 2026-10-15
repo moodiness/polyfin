@@ -518,6 +518,9 @@ const settings = {
     loginAttempts: 'Block an account after this many wrong passwords (0 = never)',
     loginAttemptsHelp: (r: RangeText) =>
       `After this many wrong passwords in a row, the account cannot sign in for 15 minutes, even with the right password. An administrator can unblock it sooner on the Users page. 0, or from ${r.min} to ${r.max}.`,
+    twoStepAdministrators: 'Require two-step sign-in for administrators',
+    twoStepAdministratorsHelp:
+      'Administrators sign in to this admin app with a code from an authenticator app after their password. One who has not set it up does so right after their password, before getting a session. Their password alone then signs in to no Jellyfin app: they use Quick Connect, approved here. The sessions and devices signed in already stay signed in. Off by default.',
     inactiveDeviceDays: 'Sign out devices unused for (days, 0 = never)',
     inactiveDeviceDaysHelp: (r: RangeText) =>
       `Jellyfin apps not used for this many days are signed out and must sign in again. This is checked every hour. Signing in to this admin page is not affected. From ${r.min} to ${r.max}.`,

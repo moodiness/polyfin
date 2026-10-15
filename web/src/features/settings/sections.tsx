@@ -858,6 +858,13 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
           )}
         />
       </FieldRow>
+      <SwitchRow
+        anchor="two-step-administrators"
+        label={s.twoStepAdministrators}
+        help={s.twoStepAdministratorsHelp}
+        checked={form.twoStepAdministrators}
+        onChange={(twoStepAdministrators) => update({ twoStepAdministrators })}
+      />
       <FieldRow
         anchor="inactive-device-days"
         label={s.inactiveDeviceDays}

@@ -129,6 +129,8 @@ const backups = {
           n === 1
             ? '1 key of the Let’s Encrypt certificate'
             : `${n} keys of the Let’s Encrypt certificate`,
+        twoStep: (n: number) =>
+          n === 1 ? '1 key of a two-step sign-in' : `${n} keys of two-step sign-ins`,
       },
       serverName: (name: string) => `Type the server’s name, ${name}, to confirm`,
       confirm: 'Restore',

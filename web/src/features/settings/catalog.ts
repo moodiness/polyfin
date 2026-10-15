@@ -676,6 +676,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'security',
+    anchor: 'two-step-administrators',
+    label: (t) => s(t).twoStepAdministrators,
+    help: (t) => s(t).twoStepAdministratorsHelp,
+    keywords: ['2FA', 'MFA', 'TOTP', 'authenticator', 'two-factor', 'authentification'],
+  },
+  {
+    section: 'security',
     anchor: 'inactive-device-days',
     label: (t) => s(t).inactiveDeviceDays,
     help: (t, r) => s(t).inactiveDeviceDaysHelp(r('inactiveDeviceDays')),

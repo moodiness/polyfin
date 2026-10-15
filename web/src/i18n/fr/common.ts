@@ -43,6 +43,17 @@ const common: typeof en = {
     invalid_credentials: 'Nom ou mot de passe incorrect.',
     account_disabled: 'Ce compte est désactivé. Demandez à un administrateur de le réactiver.',
     wrong_password: 'Votre mot de passe actuel est incorrect.',
+    invalid_code:
+      'Ce code n’est pas valide. Saisissez le code à 6 chiffres que votre application affiche maintenant, ou l’un de vos codes de secours.',
+    two_step_expired:
+      'La connexion a pris trop de temps. Saisissez de nouveau votre nom et votre mot de passe.',
+    two_step_on: 'La connexion en deux étapes est déjà activée.',
+    two_step_off: 'La connexion en deux étapes est désactivée pour ce compte.',
+    two_step_not_started:
+      'Recommencez : activez la connexion en deux étapes pour obtenir une nouvelle clé.',
+    two_step_required:
+      'Les administrateurs doivent utiliser la connexion en deux étapes sur ce serveur : elle ne peut pas être désactivée.',
+    two_step_own: 'Désactivez votre propre connexion en deux étapes depuis Mon compte.',
     not_found: 'Cet élément n’existe plus. La liste a été actualisée.',
     not_set:
       'Aucune valeur enregistrée : elle a été supprimée, ou ne peut pas être déchiffrée avec POLYFIN_SECRET_KEY. Rechargez la page.',

@@ -91,6 +91,8 @@ export type User = {
   followGroup: boolean
   /** The language the user's titles are described in; '' for the server's. */
   metadataLanguage: string
+  /** Whether the user signs in with a code from an authenticator app after their password. */
+  twoStep: boolean
 }
 
 /** The fields of a user a group holds, in its sections: Access, Playback and access, and the rest. */
@@ -286,6 +288,11 @@ export type Settings = {
   shareLinks: boolean
   /** Wrong passwords in a row that block an account for 15 minutes; 0 never blocks. */
   loginAttempts: number
+  /**
+   * Whether administrators must use two-step sign-in: one without it sets it up right after their
+   * password, and their password alone signs in to no Jellyfin app.
+   */
+  twoStepAdministrators: boolean
   /** Days unused after which a Jellyfin app is signed out; 0 never signs it out. */
   inactiveDeviceDays: number
   /**
@@ -1403,8 +1410,58 @@ export const setup = async (body: {
   language: Language
 }) => (await request<{ user: SessionUser }>('POST', '/setup', body)).user
 
-export const signIn = async (body: { name: string; password: string }) =>
-  (await request<{ user: SessionUser }>('POST', '/session', body)).user
+/**
+ * What an authenticator app reads: the key, the otpauth:// address that holds it, and that address
+ * as a QR code, a row a line, '1' for a dark module.
+ */
+export type TwoStepSetup = { secret: string; uri: string; qr: string[] }
+
+/**
+ * The answer to a right password: the session, or, without one yet, the second step it needs: a
+ * code, or, for an administrator required to use two-step sign-in, its setup.
+ */
+export type SignInAnswer =
+  | { user: SessionUser; twoStep?: undefined }
+  | { twoStep: 'code' }
+  | { twoStep: 'setup'; setup: TwoStepSetup }
+
+export const signIn = (body: { name: string; password: string }) =>
+  request<SignInAnswer>('POST', '/session', body)
+
+/**
+ * Completes a sign-in with a code of the app or a recovery code; after a setup, the answer holds
+ * the recovery codes, shown this once.
+ */
+export const signInSecondStep = (code: string) =>
+  request<{ user: SessionUser; recoveryCodes?: string[] }>('POST', '/session/two-step', { code })
+
+/** How the signed-in user's two-step sign-in stands. */
+export type TwoStepState = {
+  on: boolean
+  /** Recovery codes left. */
+  recoveryCodes: number
+  /** POLYFIN_SECRET_KEY can no longer read the key: only recovery codes sign in. */
+  unreadable: boolean
+  /** The server requires it of this user, an administrator. */
+  required: boolean
+}
+
+/** A change to two-step sign-in is confirmed with a code or the password. */
+export type TwoStepConfirmation = { code: string } | { password: string }
+
+export const fetchOwnTwoStep = (signal?: AbortSignal) =>
+  request<TwoStepState>('GET', '/account/two-step', undefined, signal)
+
+export const startOwnTwoStep = () => request<TwoStepSetup>('POST', '/account/two-step/setup')
+
+export const confirmOwnTwoStep = (code: string) =>
+  request<{ recoveryCodes: string[] }>('POST', '/account/two-step/confirm', { code })
+
+export const newOwnRecoveryCodes = (confirmation: TwoStepConfirmation) =>
+  request<{ recoveryCodes: string[] }>('POST', '/account/two-step/recovery-codes', confirmation)
+
+export const turnOffOwnTwoStep = (confirmation: TwoStepConfirmation) =>
+  request<void>('POST', '/account/two-step/off', confirmation)
 
 /**
  * Returns the signed-in user, or null when there is no valid session. Without one, the web client's
@@ -1894,6 +1951,10 @@ export const signOutUserDevice = (id: string, deviceId: string) =>
 
 /** Ends the block of a user's account for wrong passwords. */
 export const unblockUser = (id: string) => request<User>('POST', `/users/${seg(id)}/unblock`)
+
+/** Turns off the two-step sign-in of a user who lost their device; the activity log records it. */
+export const turnOffUserTwoStep = (id: string) =>
+  request<User>('POST', `/users/${seg(id)}/two-step/off`)
 
 /** Takes the permission to download away from every user; answers with those who had it. */
 export const turnOffDownloads = () => request<User[]>('POST', '/users/downloads/off')
@@ -3276,6 +3337,8 @@ export type UnreadableSecret = {
   destination: string | null
   /** The account key or private key of the certificate of Let's Encrypt. */
   certificate: boolean
+  /** The two-step sign-in of `user`. */
+  twoStep: boolean
 }
 
 /**
@@ -3460,7 +3523,8 @@ export type RestorePlan = {
       | 'notifications'
       | 'shares'
       | 'destinations'
-      | 'certificates',
+      | 'certificates'
+      | 'twoStep',
       number
     >
   >
@@ -3715,6 +3779,7 @@ export const queryKeys = {
   status: ['status'] as const,
   session: ['session'] as const,
   myDevices: ['account', 'devices'] as const,
+  ownTwoStep: ['account', 'two-step'] as const,
   ownResume: ['account', 'resume'] as const,
   ownHidden: ['account', 'hidden'] as const,
   ownHomeRows: ['account', 'home-rows'] as const,

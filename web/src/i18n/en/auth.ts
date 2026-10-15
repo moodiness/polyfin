@@ -21,6 +21,19 @@ const auth = {
     password: 'Password',
     submit: 'Sign in',
     submitting: 'Signing in…',
+    /** The second step, after a right password. */
+    codeTitle: 'Two-step sign-in',
+    codeDescription: 'Enter the 6-digit code your authenticator app shows for Polyfin.',
+    code: 'Code',
+    codeHelp: 'Lost your phone? Enter one of your recovery codes instead.',
+    verify: 'Verify',
+    verifying: 'Verifying…',
+    restart: 'Sign in as someone else',
+    setupTitle: 'Set up two-step sign-in',
+    setupDescription:
+      'Administrators must use two-step sign-in on this server. Add your account to an authenticator app on your phone, then enter the code it shows.',
+    recoveryTitle: 'Keep your recovery codes',
+    continue: 'Continue',
   },
   invite: {
     title: (server: string) => `Join ${server}`,

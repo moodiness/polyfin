@@ -44,6 +44,15 @@ const common = {
     invalid_credentials: 'Incorrect name or password.',
     account_disabled: 'This account is disabled. Ask an administrator to enable it.',
     wrong_password: 'Your current password is incorrect.',
+    invalid_code:
+      'This code is not valid. Enter the 6-digit code your app shows now, or one of your recovery codes.',
+    two_step_expired: 'The sign-in took too long. Enter your name and password again.',
+    two_step_on: 'Two-step sign-in is already on.',
+    two_step_off: 'Two-step sign-in is off for this account.',
+    two_step_not_started: 'Start again: turn two-step sign-in on to get a new key.',
+    two_step_required:
+      'Administrators must use two-step sign-in on this server: it cannot be turned off.',
+    two_step_own: 'Turn your own two-step sign-in off from My account.',
     not_found: 'This item no longer exists. The list has been refreshed.',
     not_set:
       'Nothing is saved: it was removed, or it cannot be decrypted with POLYFIN_SECRET_KEY. Reload the page.',
