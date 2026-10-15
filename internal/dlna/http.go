@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
@@ -19,8 +20,10 @@ const (
 	// Prefix is where the routes of DLNA live on the HTTP port.
 	Prefix          = "/dlna/"
 	descriptionPath = Prefix + "description.xml"
-	// maxControl bounds the body of a SOAP request.
-	maxControl = 64 << 10
+	// maxControl bounds the body of a SOAP request, and controlTimeout the
+	// time it takes to arrive: devices send it at once.
+	maxControl     = 64 << 10
+	controlTimeout = 10 * time.Second
 	// artWidth is the width posters are sent at.
 	artWidth = 320
 )
@@ -28,7 +31,8 @@ const (
 // Handler serves the routes under /dlna/: the description, the services'
 // descriptions, their control, the events devices subscribe to, and the
 // media. They answer 404 while sharing is off, and 403 to any address
-// outside the local network and to a blocked device.
+// outside the local network, to a request forwarded by a proxy missing
+// from Known proxies, and to a blocked device.
 func (s *Service) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+descriptionPath, s.description)
@@ -146,9 +150,10 @@ var (
 	errActionFailed  = upnpError{501, "Action Failed"}
 )
 
-// readAction reads a SOAP request's action and arguments.
+// readAction reads a SOAP request's action and arguments, reading r to
+// its end.
 func readAction(r io.Reader) (soapAction, error) {
-	decoder := xml.NewDecoder(io.LimitReader(r, maxControl))
+	decoder := xml.NewDecoder(r)
 	action := soapAction{args: map[string]string{}}
 	depth, inBody := 0, false
 	var current string
@@ -194,10 +199,21 @@ func readAction(r io.Reader) (soapAction, error) {
 	return action, nil
 }
 
-// control answers a service's SOAP requests with handle.
+// control answers a service's SOAP requests with handle. The body is read
+// whole, up to maxControl and within controlTimeout, so that a device
+// that stops sending it does not hold the request: past either, it gets a
+// fault.
 func (s *Service) control(handle func(r *http.Request, action soapAction) ([][2]string, *upnpError)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		action, err := readAction(r.Body)
+		// A writer that takes no deadline, as in tests, reads without one.
+		connection := http.NewResponseController(w)
+		_ = connection.SetReadDeadline(s.now().Add(controlTimeout))
+		action, err := readAction(http.MaxBytesReader(w, r.Body, maxControl))
+		if err == nil {
+			// Past the body, the deadline would end the request's
+			// context, the server reading on to see the device leave.
+			_ = connection.SetReadDeadline(time.Time{})
+		}
 		w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 		w.Header().Set("Ext", "")
 		if err != nil {
@@ -319,16 +335,27 @@ func (s *Service) captions(w http.ResponseWriter, r *http.Request) {
 }
 
 // art serves an item's poster as a JPEG, to a device that shows a user's
-// libraries.
+// libraries, for an item that user may see, as browsing finds it.
 func (s *Service) art(w http.ResponseWriter, r *http.Request) {
 	c := clientFrom(r.Context())
 	name, ok := strings.CutSuffix(r.PathValue("file"), ".jpg")
-	id, err := accounts.ParseID(name)
-	if !ok || err != nil || !c.hasUser {
+	if !ok || !c.hasUser {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	s.options.Player.Art(w, r, id, artWidth)
+	item, err := s.item(r.Context(), c.user, name)
+	switch {
+	case errors.Is(err, library.ErrNotFound):
+		w.WriteHeader(http.StatusNotFound)
+		return
+	case err != nil:
+		if r.Context().Err() == nil {
+			s.options.Logger.Warn("A DLNA device's poster could not be read", "item", name, "error", err)
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	s.options.Player.Art(w, r, item.ID, artWidth)
 }
 
 // parseTimeSeek reads the start of a TimeSeekRange.dlna.org header, as in

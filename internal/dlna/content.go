@@ -56,6 +56,11 @@ const (
 // devices that ask for all of a catalog are given it page by page.
 const maxPage = 200
 
+// maxStart is the furthest StartingIndex a request is read from: past
+// any container or search, and far from the largest integer, so that the
+// end of a page is too.
+const maxStart = 1 << 20
+
 // object is a container or an item of the ContentDirectory.
 type object struct {
 	id, parent string
@@ -320,7 +325,7 @@ func (s *Service) contentDirectoryAction(r *http.Request, action soapAction) ([]
 }
 
 // paging reads StartingIndex and RequestedCount: 0 asks for every child,
-// given up to maxPage at a time.
+// given up to maxPage at a time, from maxStart at most.
 func paging(action soapAction) (start, count int, ok bool) {
 	start, err := strconv.Atoi(strings.TrimSpace(action.args["StartingIndex"]))
 	if err != nil || start < 0 {
@@ -333,7 +338,7 @@ func paging(action soapAction) (start, count int, ok bool) {
 	if count == 0 || count > maxPage {
 		count = maxPage
 	}
-	return start, count, true
+	return min(start, maxStart), count, true
 }
 
 // browse answers Browse: an object's children, a page at a time, or the

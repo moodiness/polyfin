@@ -37,6 +37,11 @@ const (
 	announceEvery  = 10 * time.Minute
 	maxDatagram    = 4096
 	descriptionMax = 64 << 10
+	// describeEvery is how long a device's description, once read or
+	// tried, is not read again, whatever it announces meanwhile.
+	describeEvery = 10 * time.Minute
+	// maxDescribed bounds the devices whose descriptions are kept.
+	maxDescribed = 256
 )
 
 // ssdp answers the searches of devices on the local network and announces
@@ -54,9 +59,18 @@ type ssdp struct {
 	failure error
 	// stopAnnouncing ends the announcements of the listening.
 	stopAnnouncing context.CancelFunc
-	// announced are the names devices announced at their addresses, which
-	// their first request takes.
-	announced map[netip.Addr]Sighting
+	// described are the names devices announced at their addresses, which
+	// their first request takes, and the reads of their descriptions.
+	described map[netip.Addr]*described
+}
+
+// described is what a device's description gave, read at, unless it is
+// being read.
+type described struct {
+	sighting Sighting
+	ok       bool
+	reading  bool
+	at       time.Time
 }
 
 // apply listens while sharing is on, and frees the port while it is off.
@@ -265,30 +279,47 @@ func (d *ssdp) notify(packet *ipv4.PacketConn, kind string, port int) {
 }
 
 // heard notes what a device announces of itself: the names its
-// description gives, read from its own address only.
+// description gives, read from its own address only, once at a time, and
+// not again for describeEvery.
 func (d *ssdp) heard(message []byte, from netip.Addr) {
 	location, ok := d.s.renderer(message, from)
 	if !ok {
 		return
 	}
+	now := d.s.now()
 	d.mu.Lock()
-	_, known := d.announced[from]
-	d.mu.Unlock()
-	if known {
+	entry, known := d.described[from]
+	if known && (entry.reading || now.Sub(entry.at) < describeEvery) {
+		d.mu.Unlock()
 		return
 	}
+	if !known {
+		if len(d.described) >= maxDescribed {
+			d.forgetDescribed()
+		}
+		entry = &described{}
+		d.described[from] = entry
+	}
+	entry.reading = true
+	d.mu.Unlock()
 	go func() {
 		sighting, err := describe(location, from)
-		if err != nil {
-			return
-		}
 		d.mu.Lock()
 		defer d.mu.Unlock()
-		if len(d.announced) >= 256 {
-			clear(d.announced)
+		entry.reading, entry.at = false, d.s.now()
+		if err == nil {
+			entry.sighting, entry.ok = sighting, true
 		}
-		d.announced[from] = sighting
 	}()
+}
+
+// forgetDescribed forgets the descriptions read, but those being read.
+func (d *ssdp) forgetDescribed() {
+	for address, entry := range d.described {
+		if !entry.reading {
+			delete(d.described, address)
+		}
+	}
 }
 
 // renderer returns the description's address of a device's announcement:
@@ -353,8 +384,10 @@ func describe(location string, from netip.Addr) (Sighting, error) {
 func (d *ssdp) announcedAt(address netip.Addr) (Sighting, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	sighting, ok := d.announced[address]
-	return sighting, ok
+	if entry, ok := d.described[address]; ok && entry.ok {
+		return entry.sighting, true
+	}
+	return Sighting{}, false
 }
 
 // multicastInterfaces lists the interfaces that are up and take multicast.

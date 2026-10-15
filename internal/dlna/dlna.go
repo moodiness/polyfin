@@ -161,7 +161,7 @@ func Start(ctx context.Context, options Options) *Service {
 		options.now = time.Now
 	}
 	s := &Service{options: options, store: newStore(options.DB)}
-	s.ssdp = &ssdp{s: s, port: options.Port, announced: map[netip.Addr]Sighting{}}
+	s.ssdp = &ssdp{s: s, port: options.Port, described: map[netip.Addr]*described{}}
 	changed := options.Changed()
 	s.ssdp.apply(ctx)
 	go func() {
@@ -219,11 +219,21 @@ type client struct {
 }
 
 // errRefused reports a request answered 403: from outside the local
-// network, or from a blocked device.
+// network, forwarded by a proxy missing from Known proxies or naming its
+// client in Forwarded only, or from a blocked device.
 var errRefused = errors.New("refused")
 
-// clientOf finds who sends r, recording the device when it is new.
+// clientOf finds who sends r, recording the device when it is new. A
+// request with forwarded headers that does not come from a known proxy is
+// refused: devices never send them, so it comes through a reverse proxy
+// missing from Known proxies, whose own local address would stand for
+// every client on the internet behind it. So is one that names its client
+// in Forwarded alone, which Polyfin does not read, whatever proxy sends it.
 func (s *Service) clientOf(r *http.Request) (client, error) {
+	named := r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("X-Real-IP") != ""
+	if r.Header.Get("Forwarded") != "" && !named || named && !forwarded.ViaProxy(r) {
+		return client{}, errRefused
+	}
 	address, err := netip.ParseAddr(forwarded.Client(r))
 	if err != nil || !onLocalNetwork(address.Unmap()) {
 		return client{}, errRefused

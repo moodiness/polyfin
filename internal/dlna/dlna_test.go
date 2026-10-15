@@ -1,17 +1,25 @@
 package dlna
 
 import (
+	"bufio"
+	"context"
+	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/library"
 )
 
 const serverID = "0123456789abcdef0123456789abcdef"
@@ -49,12 +57,18 @@ func (f *fakeSettings) set(change func(*accounts.Settings)) {
 // applied. It reads no database.
 func start(t *testing.T, port int) (*Service, *fakeSettings, chan struct{}) {
 	t.Helper()
+	return startAt(t, port, nil)
+}
+
+// startAt starts as start does, with now as the clock, time.Now for nil.
+func startAt(t *testing.T, port int, now func() time.Time) (*Service, *fakeSettings, chan struct{}) {
+	t.Helper()
 	settings := &fakeSettings{settings: accounts.Settings{ServerName: "Polyfin", DLNA: true}, changed: make(chan struct{})}
 	applied := make(chan struct{}, 1)
 	s := Start(t.Context(), Options{Port: port, HTTP: &net.TCPAddr{Port: 8096}, ServerID: serverID, Settings: settings.get,
 		Changed: settings.next, Version: "test", Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		route:   func(netip.Addr) (netip.Addr, error) { return netip.MustParseAddr("192.168.1.10"), nil },
-		applied: func() { applied <- struct{}{} }})
+		applied: func() { applied <- struct{}{} }, now: now})
 	t.Cleanup(func() {
 		s.ssdp.mu.Lock()
 		s.ssdp.stop()
@@ -246,5 +260,144 @@ func TestOwnAnnouncementsAreNotDevices(t *testing.T) {
 	}
 	if _, ok := s.renderer(tv, netip.MustParseAddr("203.0.113.5")); ok {
 		t.Error("a public address's announcement was taken")
+	}
+}
+
+// pagingLibrary records the start and count of the pages, and the limit
+// of the searches, asked of the library.
+type pagingLibrary struct {
+	Library
+	asked chan [2]int
+}
+
+func (l pagingLibrary) Search(_ context.Context, _ accounts.User, _ string, _ []library.Kind, limit int) ([]library.Item, error) {
+	l.asked <- [2]int{0, limit}
+	return nil, nil
+}
+
+func (l pagingLibrary) Children(_ context.Context, _ accounts.User, _ accounts.ID, start, count int, _ string) (library.Page, error) {
+	l.asked <- [2]int{start, count}
+	return library.Page{}, nil
+}
+
+// A StartingIndex as large as integers go reads past any container or
+// search: the end of the page asked of the library does not overflow.
+func TestHugeStartingIndexesAreClamped(t *testing.T) {
+	s, _, _ := start(t, 0)
+	asked := make(chan [2]int, 1)
+	s.options.Library = pagingLibrary{asked: asked}
+	r := httptest.NewRequest(http.MethodPost, "/dlna/control/ContentDirectory", nil)
+	r = r.WithContext(withClient(r.Context(), client{hasUser: true, user: accounts.User{Name: "member"}}))
+	huge := strconv.Itoa(math.MaxInt)
+	if _, failure := s.search(r, soapAction{name: "Search", args: map[string]string{"StartingIndex": huge, "RequestedCount": "10",
+		"SearchCriteria": `dc:title contains "a"`}}); failure != nil {
+		t.Fatalf("search: %+v", failure)
+	}
+	if limit := (<-asked)[1]; limit < 10 {
+		t.Errorf("a search from the largest index asked the library for %d titles", limit)
+	}
+	folder := folderPrefix + "6f1c2c1e-1d2a-4f3b-9a1b-2c3d4e5f6a7b"
+	if _, failure := s.browse(r, soapAction{name: "Browse", args: map[string]string{"ObjectID": folder, "BrowseFlag": "BrowseDirectChildren",
+		"StartingIndex": huge, "RequestedCount": "10"}}); failure != nil {
+		t.Fatalf("browse: %+v", failure)
+	}
+	if page := <-asked; page[0] < 0 || page[1] != 10 || page[0]+page[1] < page[0] {
+		t.Errorf("a page from the largest index: start %d, count %d", page[0], page[1])
+	}
+}
+
+// A SOAP body that stops coming is given up at the deadline: the device
+// gets a fault and the request ends. The clock is an hour behind, so that
+// the deadline has passed when the body is read.
+func TestSOAPBodiesAreReadWithinADeadline(t *testing.T) {
+	s, _, _ := startAt(t, 0, func() time.Time { return time.Now().Add(-time.Hour) })
+	returned := make(chan struct{})
+	handler := s.control(s.connectionManagerAction)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(returned)
+		handler(w, r)
+	}))
+	defer server.Close()
+	conn, err := net.Dial("tcp", server.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := fmt.Fprintf(conn, "POST /dlna/control/ConnectionManager HTTP/1.1\r\nHost: x\r\nContent-Length: 1000\r\n\r\n<s:Envelope"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-returned:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the request still waits for the rest of its body")
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	response, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if body, _ := io.ReadAll(response.Body); response.StatusCode != http.StatusInternalServerError || !strings.Contains(string(body), "<errorCode>401</errorCode>") {
+		t.Errorf("answer: %d %s", response.StatusCode, body)
+	}
+}
+
+// A device's description is read once at a time, whatever it announces
+// meanwhile, and not again for a while once read.
+func TestDeviceDescriptionsAreReadOnceAtATime(t *testing.T) {
+	var clock atomic.Pointer[time.Time]
+	now := time.Now()
+	clock.Store(&now)
+	s, _, _ := startAt(t, 0, func() time.Time { return *clock.Load() })
+	var name atomic.Value
+	var reads atomic.Int32
+	arrived := make(chan int32, 16)
+	release, stop := make(chan struct{}), make(chan struct{})
+	description := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		arrived <- reads.Add(1)
+		select {
+		case <-release:
+		case <-stop:
+			return
+		}
+		_, _ = fmt.Fprintf(w, `<root><device><friendlyName>%s</friendlyName></device></root>`, name.Load())
+	}))
+	defer description.Close()
+	defer close(stop)
+	notify := []byte(fmt.Sprintf("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nNT: urn:schemas-upnp-org:device:MediaRenderer:1\r\n"+
+		"NTS: ssdp:alive\r\nUSN: uuid:renderer::urn:schemas-upnp-org:device:MediaRenderer:1\r\nLOCATION: %s/desc.xml\r\n\r\n", description.URL))
+	from := netip.MustParseAddr("127.0.0.1")
+	read := func(want string) {
+		t.Helper()
+		select {
+		case <-arrived:
+		case <-time.After(30 * time.Second):
+			t.Fatal("the description was not read")
+		}
+		name.Store(want)
+		release <- struct{}{}
+		for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+			if sighting, ok := s.ssdp.announcedAt(from); ok && sighting.Name == want {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("the device is not named %s", want)
+			}
+		}
+	}
+	// Announcements while the description is read, and right after.
+	for range 5 {
+		s.ssdp.heard(notify, from)
+	}
+	read("TV")
+	for range 5 {
+		s.ssdp.heard(notify, from)
+	}
+	later := now.Add(24 * time.Hour)
+	clock.Store(&later)
+	s.ssdp.heard(notify, from)
+	read("Renamed TV")
+	if n := reads.Load(); n != 2 {
+		t.Errorf("the description was read %d times, want 2", n)
 	}
 }
