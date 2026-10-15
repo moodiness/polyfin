@@ -346,6 +346,29 @@ func TestRemoteImagesSearchTMDBWithAKey(t *testing.T) {
 	}
 }
 
+// A user with a metadata language sees TMDB's images in it first, and
+// without All languages only those and the ones without a language; the
+// others see the server's language first.
+func TestRemoteImagesFollowTheUsersMetadataLanguage(t *testing.T) {
+	t.Parallel()
+	s := newImageSearch(t)
+	s.setting(t, func(settings *accounts.Settings) { settings.TMDBKey, settings.Language = "k3y", "fr" })
+	s.user("reader", func(c *accounts.UserChanges) { c.MetadataLanguage = new("de-AT") })
+	reader := s.signIn("reader", "tv")
+	if got := names(s.remote(t, reader, s.movie, "type=Primary&providerName=TMDB&includeAllLanguages=false").Images); strings.Join(got, ",") !=
+		"TMDB Primary de,TMDB Primary " {
+		t.Errorf("a German reader's posters: %v", got)
+	}
+	if got := names(s.remote(t, reader, s.movie, "type=Primary&providerName=TMDB&includeAllLanguages=true").Images); strings.Join(got, ",") !=
+		"TMDB Primary de,TMDB Primary ,TMDB Primary fr,TMDB Primary en" {
+		t.Errorf("a German reader's posters in all languages: %v", got)
+	}
+	if got := names(s.remote(t, s.member, s.movie, "type=Primary&providerName=TMDB&includeAllLanguages=false").Images); strings.Join(got, ",") !=
+		"TMDB Primary fr,TMDB Primary " {
+		t.Errorf("the server's language for a member without one: %v", got)
+	}
+}
+
 func TestDownloadedRemoteImageReplacesTheAddonsUntilDeleted(t *testing.T) {
 	t.Parallel()
 	s := newImageSearch(t)

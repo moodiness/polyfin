@@ -117,9 +117,10 @@ func (h *Handler) remoteImageProviders(w http.ResponseWriter, r *http.Request) {
 
 // remoteImages lists the images of a type the image providers offer for
 // an item, of every type when none is asked for, of one provider when
-// providerName names it: TMDB's in the server's language and without
-// one, in every language with includeAllLanguages, the server's language
-// first, then by votes; then the addons', by addon name.
+// providerName names it: TMDB's in the user's language and without one,
+// in every language with includeAllLanguages, the user's language first,
+// then by votes; then the addons', by addon name. The user's language is
+// their metadata language, else the server's.
 func (h *Handler) remoteImages(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, 0)
@@ -218,7 +219,7 @@ func (h *Handler) tmdbImages(r *http.Request, item accounts.ID, sources library.
 		}
 		return nil
 	}
-	language, _, _ := strings.Cut(strings.ToLower(h.Accounts.Settings().Language), "-")
+	language, _, _ := strings.Cut(strings.ToLower(cmp.Or(callerFrom(r.Context()).User.MetadataLanguage, h.Accounts.Settings().Language)), "-")
 	rank := func(i tmdb.Image) int {
 		switch i.Language {
 		case language:
