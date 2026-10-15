@@ -43,7 +43,7 @@ func (h *hold) onlyFor(accounts.ID) bool { return false }
 // recorded is true: a replay under way is not ended for a recording.
 func (h *hold) recorded() bool { return true }
 
-func (h *hold) evict() {
+func (h *hold) evict(error) {
 	h.st.mu.Lock()
 	defer h.st.mu.Unlock()
 	h.dropLocked()

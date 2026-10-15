@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestTwoUsersOnOneChannelTakeOneTuner(t *testing.T) {
 	if err := reads(second); err != nil {
 		t.Errorf("the second viewer: %v", err)
 	}
-	if _, err := s.openFeed(bob, channelVersion(2, "2.ts", source)); !errors.Is(err, ErrSlotsInUse) || LiveFailure(err) != LiveRefused {
+	if _, err := s.openFeed(bob, channelVersion(2, "2.ts", source)); !errors.Is(err, ErrTunersInUse) || !errors.Is(err, ErrSlotsInUse) || LiveFailure(err) != LiveRefused {
 		t.Errorf("a channel past the tuner count: %v, want refused", err)
 	}
 	if _, _, most := src.counts(); most != 1 {
@@ -79,7 +80,7 @@ func TestARecordingTakesAWatchedChannelsTuner(t *testing.T) {
 		t.Fatalf("a recording with every tuner watched: %v", err)
 	}
 	defer recorded.Close()
-	if err := reads(watched); !errors.Is(err, ErrSlotsInUse) {
+	if err := reads(watched); !errors.Is(err, ErrTunersInUse) || !strings.Contains(err.Error(), "tuners are in use") {
 		t.Errorf("the oldest channel watched: %v, want its tuner taken", err)
 	}
 	if err := reads(other); err != nil {

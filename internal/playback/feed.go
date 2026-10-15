@@ -96,12 +96,26 @@ var (
 	// ErrTunersBusy reports a tuner that answered that all its tuners are
 	// in use (HDHomeRun's error 805), by Polyfin or another app.
 	ErrTunersBusy = fmt.Errorf("%w: all the tuners are in use", ErrLiveRefused)
+	// ErrTunersInUse is ErrSlotsInUse for a tuner, whose connections are
+	// its tuners: it says so to users and in the log.
+	ErrTunersInUse error = tunersInUse{}
 	// ErrSlowReader reports a reader that fell behind what a feed keeps.
 	ErrSlowReader = errors.New("a reader fell behind the live stream")
 	// errManifest reports a stream that is an HLS playlist, which has no
 	// feed: its files are relayed one by one.
 	errManifest = errors.New("the stream is an HLS playlist")
 )
+
+// tunersInUse is ErrTunersInUse: an ErrSlotsInUse, and an ErrLiveRefused.
+type tunersInUse struct{}
+
+func (tunersInUse) Error() string {
+	return ErrLiveRefused.Error() + ": all the tuners are in use by Polyfin"
+}
+
+func (tunersInUse) Is(target error) bool { return target == ErrSlotsInUse }
+
+func (tunersInUse) Unwrap() error { return ErrLiveRefused }
 
 // LiveFailure classifies an error of a live stream: LiveDead, LiveRefused,
 // LiveTimeout, or "" for none of these.
@@ -204,7 +218,9 @@ type feed struct {
 	end     error
 	readers map[*feedReader]bool
 	grace   *time.Timer
-	evicted bool
+	// evicted is why the feed was ended for another stream of its source
+	// (see evict), nil while it was not.
+	evicted error
 	// index finds the stream's keyframes and tables as it arrives.
 	index tsIndex
 }
@@ -317,7 +333,7 @@ func (f *feed) finished() bool {
 func (f *feed) join(ctx context.Context, user accounts.ID) *feedReader {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.done && f.received > 0 || f.evicted {
+	if f.done && f.received > 0 || f.evicted != nil {
 		return nil
 	}
 	r := &feedReader{f: f, user: user, recording: recordingOf(ctx), ctx: ctx, from: f.received}
@@ -365,8 +381,8 @@ func (r *feedReader) Read(p []byte) (int, error) {
 		if !f.readers[r] {
 			evicted := f.evicted
 			f.mu.Unlock()
-			if evicted {
-				return 0, ErrSlotsInUse
+			if evicted != nil {
+				return 0, evicted
 			}
 			return 0, ErrSlowReader
 		}
@@ -440,7 +456,7 @@ func (r *feedReader) Close() error {
 // is closed (see makeRoom).
 func (f *feed) close() {
 	f.mu.Lock()
-	if len(f.readers) > 0 && !f.evicted {
+	if len(f.readers) > 0 && f.evicted == nil {
 		f.mu.Unlock()
 		return
 	}
@@ -465,11 +481,12 @@ func (f *feed) close() {
 	f.finish(nil)
 }
 
-// evict closes a feed for another channel's stream: its readers end. It
-// returns once the connection is closed, a second at most.
-func (f *feed) evict() {
+// evict closes a feed for another channel's stream: its readers end with
+// cause, ErrSlotsInUse or ErrTunersInUse. It returns once the connection
+// is closed, a second at most.
+func (f *feed) evict(cause error) {
 	f.mu.Lock()
-	f.evicted = true
+	f.evicted = cause
 	for r := range f.readers {
 		delete(f.readers, r)
 	}
@@ -563,8 +580,8 @@ func (f *feed) open(user accounts.ID, recording bool) {
 		}
 		if err != nil {
 			switch {
-			case ctx.Err() != nil && f.isEvicted():
-				err = ErrSlotsInUse
+			case ctx.Err() != nil && f.evictedBy() != nil:
+				err = f.evictedBy()
 			case ctx.Err() != nil:
 				err = fmt.Errorf("%w: nothing for %s", ErrLiveTimeout, f.times.stall)
 			case errors.Is(err, io.EOF):
@@ -577,7 +594,8 @@ func (f *feed) open(user accounts.ID, recording bool) {
 	}
 }
 
-func (f *feed) isEvicted() bool {
+// evictedBy is why the feed was evicted, nil if it was not.
+func (f *feed) evictedBy() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.evicted
@@ -615,7 +633,7 @@ func (s *Service) closeIdle(f *feed) bool {
 	}
 	st.mu.Unlock()
 	for _, other := range idle {
-		other.evict()
+		other.evict(ErrSlotsInUse)
 	}
 	return len(idle) > 0
 }
@@ -634,8 +652,9 @@ type occupant interface {
 	// recorded reports whether a recording uses it: a recording due on a
 	// tuner never takes it.
 	recorded() bool
-	// evict ends it for another stream of its source.
-	evict()
+	// evict ends it for another stream of its source, its readers failing
+	// with cause.
+	evict(cause error)
 }
 
 func (f *feed) since() time.Time { return f.opened }
@@ -672,9 +691,9 @@ func (f *feed) recorded() bool {
 // the feeds of the source still closing are waited for, as the source
 // counts their connections until they are closed; then feeds and holds of
 // the source that no one uses are ended, then the oldest feed only user
-// reads; else it fails with ErrSlotsInUse. A recording on a tuner ends,
-// after those no one uses, the oldest feed no recording reads, whoever
-// watches it, and fails with iptv.ErrTunersRecording when every tuner
+// reads; else it fails with ErrSlotsInUse, ErrTunersInUse for a tuner. A
+// recording on a tuner ends, after those no one uses, the oldest feed no
+// recording reads, whoever watches it, and fails with iptv.ErrTunersRecording when every tuner
 // records. It reports whether it closed or waited for one, which the
 // provider may still count a moment.
 func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupant, user accounts.ID, recording bool) (bool, error) {
@@ -689,6 +708,10 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 	limit, tuner := bound.Connections, recording && bound.Tuners
 	if err != nil || limit <= 0 {
 		return false, err
+	}
+	inUse := ErrSlotsInUse
+	if bound.Tuners {
+		inUse = ErrTunersInUse
 	}
 	st.mu.Lock()
 	var open []occupant
@@ -731,7 +754,7 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 				return freed, nil
 			}
 			if choose(other) {
-				other.evict()
+				other.evict(inUse)
 				open = slices.DeleteFunc(open, func(o occupant) bool { return o == other })
 				freed = true
 			}
@@ -741,9 +764,9 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 		return freed, nil
 	}
 	if tuner {
-		return freed, fmt.Errorf("%w: %w", ErrSlotsInUse, iptv.ErrTunersRecording)
+		return freed, fmt.Errorf("%w: %w", inUse, iptv.ErrTunersRecording)
 	}
-	return freed, ErrSlotsInUse
+	return freed, inUse
 }
 
 // sniff opens a live stream and checks it is one before anything reads
@@ -956,7 +979,7 @@ func (s *Service) closeIdleFeed(version accounts.ID) {
 	idle := len(f.readers) == 0
 	f.mu.Unlock()
 	if idle {
-		f.evict()
+		f.evict(ErrSlotsInUse)
 	}
 }
 
