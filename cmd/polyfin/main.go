@@ -352,6 +352,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			logger.Warn("A channel's stream health could not be saved", "error", err)
 		}
 	})
+	// A channel whose streams an administrator asks to try again has those
+	// that failed to play tried again at once.
+	channels.UseRetry(player.RetryItem)
 	images := thumbnails.New(thumbnails.Options{
 		DB:          pool,
 		FFmpeg:      cfg.FFmpeg,

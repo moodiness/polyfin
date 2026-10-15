@@ -144,7 +144,7 @@ Each stream shows how it last answered when its channel was opened:
 - **Nothing came**: left out for 10 minutes when it never played at its address, or after nothing came twice in a row. A stream that played and was silent once, as when its provider was slow, is tried again at the next start, after the channel's other streams.
 - **Refused by the provider**: the provider would not serve it then (connections in use, too many requests). It is tried again at the next start.
 
-Streams that failed come after the others in their channel. A stream that plays, or that the list gives a new address, is healthy again. **Try every stream again** forgets it all for the channel.
+Streams that failed come after the others in their channel. A stream that plays, or that the list gives a new address, is healthy again. **Try every stream again** forgets it all for the channel: its next start tries every stream at once, those that failed within the last 15 minutes included.
 
 Edits work one by one or in bulk, by selection, category or keyword, with a count of what would change first. Lists are paged and searched by the server, so line-ups of tens of thousands of channels stay quick. An added stream's address follows the source's rule for local network addresses and is never shown in full.
 

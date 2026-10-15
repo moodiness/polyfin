@@ -148,14 +148,18 @@ func streamHealth(address, checked string, h health, now time.Time) StreamHealth
 
 // ForgetStreamHealth clears what is known of the health of the streams of
 // a channel of the scope's source, by its item identifier, so that they are
-// all tried at its next start: the admin app's "try again".
+// all tried at its next start: the admin app's "try again". Playback is
+// told too (see UseRetry), which tries again at once those it left out.
 func (s *Service) ForgetStreamHealth(ctx context.Context, scope addons.Scope, source, item accounts.ID) error {
 	if err := s.owned(ctx, scope, source); err != nil {
 		return err
 	}
 	tag, err := s.db.Exec(ctx, `UPDATE iptv_streams s SET health_url = NULL, ok_at = NULL, failure = NULL, failed_at = NULL, failures = 0
 		FROM iptv_lineup l WHERE l.addon_id = $1 AND l.item_id = $2 AND s.addon_id = l.addon_id AND s.channel_id = l.id`, source, item)
-	if err == nil && tag.RowsAffected() == 0 {
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
 		var exists bool
 		if err := s.db.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM iptv_lineup WHERE addon_id = $1 AND item_id = $2)", source, item).Scan(&exists); err != nil {
 			return err
@@ -164,7 +168,10 @@ func (s *Service) ForgetStreamHealth(ctx context.Context, scope addons.Scope, so
 			return addons.ErrNotFound
 		}
 	}
-	return err
+	if s.retry != nil {
+		s.retry(source, item)
+	}
+	return nil
 }
 
 // Connections is how many streams of a source may play at once: as its

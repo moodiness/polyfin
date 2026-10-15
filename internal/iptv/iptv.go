@@ -74,6 +74,9 @@ type Service struct {
 	flight   singleflight.Group
 	// changed is told when a source's line-up changed (see OnChange).
 	changed func(ctx context.Context, source accounts.ID)
+	// retry is told of a channel whose streams an administrator asked to
+	// try again (see UseRetry), nil until set.
+	retry func(source, channel accounts.ID)
 
 	mu sync.Mutex
 	// shown holds the channels each source shows, until its line-up
@@ -170,6 +173,13 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 func (s *Service) OnChange(changed func(ctx context.Context, source accounts.ID)) {
 	s.changed = changed
 }
+
+// UseRetry sets what is told of a channel of a source, by its item
+// identifier, whose streams an administrator asked to try again (see
+// ForgetStreamHealth), so that those that failed to play are tried again
+// at once (see playback.Service.RetryItem). It is called before the
+// service is used.
+func (s *Service) UseRetry(retry func(source, channel accounts.ID)) { s.retry = retry }
 
 // NewSource is an IPTV source to add: its name, its account, the XMLTV
 // guide of its catalog (empty for none), and its import options (nil for

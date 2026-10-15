@@ -378,6 +378,13 @@ func liveAnalysis(t *testing.T, s testServer, user accounts.User, channel string
 	if err != nil || len(versions) != 1 {
 		t.Fatalf("channel streams: %v %v", versions, err)
 	}
+	seedLiveAnalysis(t, s, versions[0].ID)
+}
+
+// seedLiveAnalysis seeds the analysis of a channel's HLS stream by its
+// version (see liveAnalysis).
+func seedLiveAnalysis(t *testing.T, s testServer, version accounts.ID) {
+	t.Helper()
 	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -388,7 +395,7 @@ func liveAnalysis(t *testing.T, s testServer, user accounts.User, channel string
 	}
 	analysis.Format, analysis.Duration, analysis.Remote = "hls", 0, true
 	data, _ := json.Marshal(analysis)
-	if _, err := s.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", versions[0].ID, data); err != nil {
+	if _, err := s.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", version, data); err != nil {
 		t.Fatal(err)
 	}
 }

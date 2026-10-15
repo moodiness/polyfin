@@ -116,6 +116,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = player.Close() })
+	channels.UseRetry(player.RetryItem)
 	activityLog := activity.New(pool, store.Settings, logger)
 	registry := tasks.New(logger)
 	ring := logs.NewRing(logs.Capacity)

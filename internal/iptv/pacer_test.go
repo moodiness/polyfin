@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 )
 
@@ -300,12 +301,21 @@ func TestStreamHealthOrdersAndHidesStreams(t *testing.T) {
 	if got := addresses(); !slices.Equal(got, []string{"fhd.ts", "sd2.ts"}) {
 		t.Errorf("after a stream that played at its old address only was silent at its new one: %q", got)
 	}
-	// The administrator's "try again" clears it all.
+	// The administrator's "try again" clears it all, and has playback try
+	// the channel's streams again at once.
+	var retried [][2]accounts.ID
+	e.service.UseRetry(func(source, item accounts.ID) { retried = append(retried, [2]accounts.ID{source, item}) })
 	_ = e.service.ReportStream(t.Context(), addon.ID, channel, base+"fhd.ts", FailureDead)
 	if err := e.service.ForgetStreamHealth(t.Context(), addons.Shared(), addon.ID, channels[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	if got := addresses(); !slices.Equal(got, []string{"fhd.ts", "hd2.ts", "sd2.ts"}) {
 		t.Errorf("after trying again: %q", got)
+	}
+	if err := e.service.ForgetStreamHealth(t.Context(), addons.Shared(), addon.ID, accounts.ID{1}); !errors.Is(err, addons.ErrNotFound) {
+		t.Errorf("trying again a channel of no line-up: %v", err)
+	}
+	if !slices.Equal(retried, [][2]accounts.ID{{addon.ID, channels[0].ID}}) {
+		t.Errorf("playback told to try again %v", retried)
 	}
 }

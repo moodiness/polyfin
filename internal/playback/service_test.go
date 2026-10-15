@@ -415,3 +415,27 @@ func TestRetryForgetsTheFailuresOfAnAddon(t *testing.T) {
 		t.Errorf("%d analyses, want 3", got)
 	}
 }
+
+// A channel whose streams an administrator tries again forgets their
+// failures, not those of the source's other channels, nor those another
+// addon listed for it.
+func TestRetryItemForgetsTheFailuresOfAChannel(t *testing.T) {
+	t.Parallel()
+	s := newService(t, &fileSource{data: make([]byte, 1000)}, "ffprobe-not-installed", nil)
+	source, other, channel, elsewhere := accounts.ID{51}, accounts.ID{52}, accounts.ID{53}, accounts.ID{54}
+	versions := []library.Version{
+		{ID: accounts.ID{55}, Item: channel, Origin: library.Origin{Addon: source}},
+		{ID: accounts.ID{56}, Item: channel, Origin: library.Origin{Addon: source}},
+		{ID: accounts.ID{57}, Item: elsewhere, Origin: library.Origin{Addon: source}},
+		{ID: accounts.ID{58}, Item: channel, Origin: library.Origin{Addon: other}},
+	}
+	for _, v := range versions {
+		s.fail(v, ErrLiveDead)
+	}
+	s.RetryItem(source, channel)
+	for i, want := range []bool{false, false, true, true} {
+		if s.Failed(versions[i].ID) != want {
+			t.Errorf("version %d: failed %v, want %v", i, !want, want)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/library"
 )
 
 // iptvProvider serves an M3U playlist of two channels, the first of which
@@ -170,5 +172,80 @@ func TestIPTVSourcesFollowScopesAndLiveTv(t *testing.T) {
 	token := s.signIn("nolive", "tv")
 	if status, body := s.call(http.MethodGet, "/LiveTv/Channels", app("tv", token), nil); status == http.StatusOK && strings.Contains(string(body), "Orbe") {
 		t.Errorf("channels of a user without Live TV: %d %s", status, body)
+	}
+}
+
+// A channel whose streams failed to play is left out until they are tried
+// again: an administrator's "Try every stream again" has the next
+// PlaybackInfo try them at once, while the source's other channels whose
+// streams failed stay left out.
+func TestTryingAChannelAgainPlaysItsFailedStreams(t *testing.T) {
+	t.Parallel()
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/get.php" {
+			_, _ = fmt.Fprintf(w, "#EXTM3U\r\n#EXTINF:-1,Zeb One\r\n%[1]s/live/one.m3u8\r\n#EXTINF:-1,Orbe Junior\r\n%[1]s/live/two.m3u8\r\n", server.URL)
+			return
+		}
+		// The streams are dead: an error that is not a refusal.
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+	s := newTestServer(t, 10)
+	user := s.user("member", nil)
+	token := s.signIn("member", "tv")
+	// How the streams answer is their health, as the server sets it.
+	s.handler.Playback.LiveSources(s.iptv.Connections, func(ctx context.Context, v library.Version, failure string) {
+		_ = s.iptv.ReportStream(ctx, v.Origin.Addon, v.Origin.ID, v.URL, failure)
+	})
+	addon, err := s.iptv.Add(t.Context(), addons.Shared(), iptv.NewSource{Name: "Provider",
+		Account: iptv.Account{Kind: addons.KindM3U, URL: server.URL + "/get.php"}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var channels QueryResult
+	s.get(t, "/LiveTv/Channels", token, &channels)
+	if len(channels.Items) != 2 {
+		t.Fatalf("channels: %+v", channels.Items)
+	}
+	var versions []library.Version
+	for _, channel := range channels.Items {
+		id, _ := accounts.ParseID(channel.Id)
+		listed, err := s.library.Versions(t.Context(), user, id)
+		if err != nil || len(listed) != 1 {
+			t.Fatalf("streams of %s: %v %v", channel.Name, listed, err)
+		}
+		versions = append(versions, listed[0])
+	}
+	unplayable := func(channel string) bool {
+		t.Helper()
+		status, body := s.call(http.MethodPost, "/Items/"+channel+"/PlaybackInfo", app("tv", token), map[string]any{"IsPlayback": true})
+		return status == http.StatusOK && strings.Contains(string(body), `"ErrorCode":"NoCompatibleStream"`)
+	}
+	for i, channel := range channels.Items {
+		if !unplayable(channel.Id) || !s.handler.Playback.Failed(versions[i].ID) {
+			t.Fatalf("%s with a dead stream was played", channel.Name)
+		}
+	}
+
+	// The streams play again, as ffprobe would find them.
+	for _, version := range versions {
+		seedLiveAnalysis(t, s, version.ID)
+	}
+	for _, channel := range channels.Items {
+		if !unplayable(channel.Id) {
+			t.Fatalf("%s is tried again before its failure is forgotten", channel.Name)
+		}
+	}
+	zeb, orbe := channels.Items[0], channels.Items[1]
+	item, _ := accounts.ParseID(zeb.Id)
+	if err := s.iptv.ForgetStreamHealth(t.Context(), addons.Shared(), addon.ID, item); err != nil {
+		t.Fatal(err)
+	}
+	if source := livePlaybackInfo(t, s, token, zeb.Id, "jellyfin-web-chrome"); source.ETag != versions[0].ID.String() {
+		t.Errorf("the channel tried again: %+v", source)
+	}
+	if !unplayable(orbe.Id) || !s.handler.Playback.Failed(versions[1].ID) {
+		t.Errorf("%s, not tried again, was played", orbe.Name)
 	}
 }

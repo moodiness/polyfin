@@ -452,17 +452,18 @@ func (s *Service) Failed(version accounts.ID) bool {
 	return failed
 }
 
-// versionFailure is why a version could not be analyzed or reached, and
-// the addon that listed it.
+// versionFailure is why a version could not be analyzed or reached, the
+// addon that listed it and its item.
 type versionFailure struct {
-	addon accounts.ID
-	err   error
+	addon, item accounts.ID
+	err         error
 }
 
 // fail keeps err as why a version could not be analyzed or reached: it is
-// not tried again for failureTTL, unless its addon changes (see Retry).
+// not tried again for failureTTL, unless its addon changes or its item is
+// tried again (see Retry and RetryItem).
 func (s *Service) fail(version library.Version, err error) {
-	s.failures.Put(version.ID, versionFailure{addon: version.Origin.Addon, err: err})
+	s.failures.Put(version.ID, versionFailure{addon: version.Origin.Addon, item: version.Item, err: err})
 }
 
 // Retry forgets the failures of the versions an addon listed, so that they
@@ -470,6 +471,15 @@ func (s *Service) fail(version library.Version, err error) {
 // credentials or host key changed, which may have failed only for them.
 func (s *Service) Retry(addon accounts.ID) {
 	s.failures.DeleteFunc(func(_ accounts.ID, failure versionFailure) bool { return failure.addon == addon })
+}
+
+// RetryItem forgets the failures of the versions an addon listed for an
+// item, so that they are tried again at once: those of a channel of an
+// IPTV source whose streams an administrator asked to try again.
+func (s *Service) RetryItem(addon, item accounts.ID) {
+	s.failures.DeleteFunc(func(_ accounts.ID, failure versionFailure) bool {
+		return failure.addon == addon && failure.item == item
+	})
 }
 
 // ffprobe is the prober, an analysis bounded by the settings' timeout when
