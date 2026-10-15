@@ -426,6 +426,44 @@ const settings = {
     knownProxies: 'Known proxies',
     knownProxiesHelp: (r: RangeText) =>
       `The reverse proxies in front of Polyfin, one a line: an IP address, a network such as 172.18.0.0/16, or a host name such as a container’s name on a Docker network (traefik), up to ${r.max}. A name is looked up every minute and each address it resolves to is trusted, so list only names your own network resolves. A request from one of them comes from the client its X-Forwarded-For or X-Real-IP header names: that address limits failed sign-ins, shows on devices and tells the local network. Forwarded headers from any other address are ignored. Leave it empty when nothing stands in front of Polyfin.`,
+    https: {
+      title: 'HTTPS',
+      intro:
+        'Polyfin can serve HTTPS itself, on a port of its own, without a reverse proxy in front of it. HTTP keeps working on its port whatever happens to HTTPS: a port that cannot be opened, or a certificate that cannot be read or renewed, shows on System › Health. Changes apply at once, without a restart.',
+      mode: 'Serve HTTPS',
+      modeHelp:
+        'Certificate files: a certificate another tool obtains, read again when it changes. Let’s Encrypt: a certificate Polyfin obtains and renews itself, for public host names that point at this server. Off by default.',
+      modes: { off: 'Off', files: 'Certificate files', letsencrypt: 'Let’s Encrypt' },
+      port: 'HTTPS port',
+      portHelp: (r: RangeText) =>
+        `The TCP port HTTPS listens on in the container: publish it, as 8096 is for HTTP. The container’s user cannot listen below 1024: to reach Polyfin on 443, forward 443 to this port on the router or in the container’s ports. From ${r.min} to ${r.max}; ${r.default} by default, as Jellyfin.`,
+      redirect: 'Redirect HTTP to HTTPS',
+      redirectHelp:
+        'Requests from the internet that come over HTTP get a permanent redirect (308) to the same address over HTTPS, on the HTTPS port. The local network, Let’s Encrypt’s checks, and requests a known proxy received over HTTPS stay on HTTP. It applies only while HTTPS is served. Off by default.',
+      certificate: 'Certificate',
+      certificateHelp:
+        'The path in the container of the PEM file of the certificate with its chain, such as /certs/fullchain.pem. Saving checks that it can be read. Polyfin reads it again within a minute of a change, and keeps the last good certificate while a change cannot be read.',
+      privateKey: 'Private key',
+      privateKeyHelp:
+        'The path in the container of the certificate’s RSA or ECDSA private key, as a PEM file, such as /certs/privkey.pem. Saving checks that it belongs to the certificate.',
+      hosts: 'Host names',
+      hostsHelp: (r: RangeText) =>
+        `The public names that point at this server, one a line, such as media.example.org, up to ${r.max}. One certificate holds them all. Names that resolve only on the local network, and wildcards, need the DNS-01 challenge, which Polyfin does not answer: use certificate files from another tool for them.`,
+      email: 'Email',
+      emailHelp: 'Optional. Let’s Encrypt may write to this address about the account.',
+      terms: 'I agree to Let’s Encrypt’s terms of service',
+      termsHelp:
+        'Let’s Encrypt issues certificates only once its terms of service, at letsencrypt.org/repository, are agreed to.',
+      challenge: 'Challenge',
+      challengeHelp:
+        'How Let’s Encrypt checks that the names point at this server. HTTP-01: Polyfin answers on its HTTP port, which the internet’s port 80 must reach. TLS-ALPN-01: Polyfin answers on its HTTPS port, which the internet’s port 443 must reach. The certificate, its key and the account’s key are kept in the database, the keys encrypted with POLYFIN_SECRET_KEY, and the certificate is renewed once a third of its lifetime remains.',
+      challenges: {
+        'http-01': 'HTTP-01 (port 80 to the HTTP port)',
+        'tls-alpn-01': 'TLS-ALPN-01 (port 443 to the HTTPS port)',
+      },
+      useAddress: (address: string) => `Use ${address}`,
+      offeredAddress: 'The address Let’s Encrypt serves HTTPS at, under Settings › Security.',
+    },
     detailedLog: 'Detailed log (to diagnose a problem)',
     detailedLogHelp:
       'Polyfin writes much more to its log, at once and without a restart. Turn it off once the problem is found.',

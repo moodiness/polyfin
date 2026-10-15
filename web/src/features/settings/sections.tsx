@@ -5,6 +5,9 @@ import {
   fetchStatus,
   queryKeys,
   revealServerSecret,
+  type AcmeChallenge,
+  type HttpsMode,
+  type Settings,
   type VersionCodec,
   type VersionCriterion,
 } from '@/api'
@@ -12,6 +15,7 @@ import type { SettingsSectionId } from '@/app/navigation'
 import { formatHour } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
 import {
+  Button,
   Checkbox,
   ExternalButtonLink,
   FieldError,
@@ -46,7 +50,12 @@ export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => R
   content: (api) => <Content {...api} />,
   catalogs: (api) => <Catalogs {...api} />,
   thumbnails: (api) => <Thumbnails {...api} />,
-  security: (api) => <Security {...api} />,
+  security: (api) => (
+    <>
+      <Security {...api} />
+      <Https {...api} />
+    </>
+  ),
   tracking: (api) => <Tracking {...api} />,
   'live-tv': (api) => <LiveTv {...api} />,
   recordings: (api) => <Recordings {...api} />,
@@ -847,6 +856,159 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
   )
 }
 
+/** The address Let's Encrypt serves HTTPS at, the first host name and the HTTPS port. */
+function letsEncryptAddress(form: Settings): string | undefined {
+  const host = form.acmeHosts[0]
+  if (form.httpsMode !== 'letsencrypt' || host === undefined) return undefined
+  return form.httpsPort === 443 ? `https://${host}` : `https://${host}:${form.httpsPort}`
+}
+
+/** Settings › Security › HTTPS: how Polyfin serves HTTPS itself, next to HTTP. */
+function Https({ form, update, error, number, range, limits }: SectionFormApi) {
+  const { t } = useI18n()
+  const s = t.settings.https
+  const modes: HttpsMode[] = ['off', 'files', 'letsencrypt']
+  const challenges: AcmeChallenge[] = ['http-01', 'tls-alpn-01']
+  return (
+    <SettingsGroup title={s.title}>
+      <FieldRow
+        anchor="https"
+        label={s.mode}
+        help={`${s.intro} ${s.modeHelp}`}
+        error={error('https')}
+      >
+        <Select
+          value={form.httpsMode}
+          options={modes.map((mode) => ({ value: mode, label: s.modes[mode] }))}
+          onValue={(httpsMode: HttpsMode) => update({ httpsMode })}
+          className="max-w-xs"
+        />
+      </FieldRow>
+      {form.httpsMode !== 'off' && (
+        <>
+          <FieldRow
+            anchor="https-port"
+            label={s.port}
+            help={s.portHelp(range('httpsPort'))}
+            error={error('https-port')}
+          >
+            <NumberInput
+              {...limits('httpsPort')}
+              step={1}
+              {...number('https-port', form.httpsPort, (value) =>
+                update({ httpsPort: Math.trunc(value) }),
+              )}
+            />
+          </FieldRow>
+          <SwitchRow
+            anchor="https-redirect"
+            label={s.redirect}
+            help={s.redirectHelp}
+            checked={form.httpsRedirect}
+            onChange={(httpsRedirect) => update({ httpsRedirect })}
+          />
+        </>
+      )}
+      {form.httpsMode === 'files' && (
+        <>
+          <FieldRow
+            anchor="https-certificate"
+            label={s.certificate}
+            help={s.certificateHelp}
+            error={error('https-certificate')}
+          >
+            <TextInput
+              value={form.httpsCertificate}
+              onValue={(httpsCertificate) => update({ httpsCertificate })}
+              placeholder="/certs/fullchain.pem"
+              maxLength={limits('httpsCertificate').max}
+              autoComplete="off"
+              spellCheck={false}
+              mono
+              className="max-w-md"
+            />
+          </FieldRow>
+          <FieldRow
+            anchor="https-private-key"
+            label={s.privateKey}
+            help={s.privateKeyHelp}
+            error={error('https-private-key')}
+          >
+            <TextInput
+              value={form.httpsPrivateKey}
+              onValue={(httpsPrivateKey) => update({ httpsPrivateKey })}
+              placeholder="/certs/privkey.pem"
+              maxLength={limits('httpsPrivateKey').max}
+              autoComplete="off"
+              spellCheck={false}
+              mono
+              className="max-w-md"
+            />
+          </FieldRow>
+        </>
+      )}
+      {form.httpsMode === 'letsencrypt' && (
+        <>
+          <FieldRow
+            anchor="acme-hosts"
+            label={s.hosts}
+            help={s.hostsHelp(range('acmeHosts'))}
+            error={error('acme-hosts')}
+          >
+            <ProxyList
+              value={form.acmeHosts}
+              onValue={(acmeHosts) => update({ acmeHosts })}
+              placeholder="media.example.org"
+            />
+          </FieldRow>
+          <FieldRow
+            anchor="acme-email"
+            label={s.email}
+            help={s.emailHelp}
+            error={error('acme-email')}
+          >
+            <TextInput
+              type="email"
+              value={form.acmeEmail}
+              onValue={(acmeEmail) => update({ acmeEmail })}
+              placeholder="admin@example.org"
+              maxLength={limits('acmeEmail').max}
+              autoComplete="off"
+              spellCheck={false}
+              className="max-w-md"
+            />
+          </FieldRow>
+          <SwitchRow
+            anchor="acme-terms"
+            label={s.terms}
+            help={s.termsHelp}
+            checked={form.acmeTerms}
+            onChange={(acmeTerms) => update({ acmeTerms })}
+          >
+            {error('acme-terms') && <FieldError>{error('acme-terms')}</FieldError>}
+          </SwitchRow>
+          <FieldRow
+            anchor="acme-challenge"
+            label={s.challenge}
+            help={s.challengeHelp}
+            error={error('acme-challenge')}
+          >
+            <Select
+              value={form.acmeChallenge}
+              options={challenges.map((challenge) => ({
+                value: challenge,
+                label: s.challenges[challenge],
+              }))}
+              onValue={(acmeChallenge: AcmeChallenge) => update({ acmeChallenge })}
+              className="max-w-sm"
+            />
+          </FieldRow>
+        </>
+      )}
+    </SettingsGroup>
+  )
+}
+
 /** What separates the entries of a list of addresses: line breaks, spaces or commas. */
 const proxySeparators = /[\s,]+/
 
@@ -854,7 +1016,15 @@ const proxySeparators = /[\s,]+/
  * Known proxies, one address, network or host name a line. The text stays as typed while it lists
  * the same entries, so that a new line can be started; discarding or saving writes it anew.
  */
-function ProxyList({ value, onValue }: { value: string[]; onValue: (value: string[]) => void }) {
+function ProxyList({
+  value,
+  onValue,
+  placeholder = '172.18.0.0/16',
+}: {
+  value: string[]
+  onValue: (value: string[]) => void
+  placeholder?: string
+}) {
   const [text, setText] = useState(() => value.join('\n'))
   if (text.split(proxySeparators).filter(Boolean).join('\n') !== value.join('\n')) {
     setText(value.join('\n'))
@@ -864,7 +1034,7 @@ function ProxyList({ value, onValue }: { value: string[]; onValue: (value: strin
       mono
       rows={3}
       value={text}
-      placeholder="172.18.0.0/16"
+      placeholder={placeholder}
       autoComplete="off"
       spellCheck={false}
       onValue={(next) => {
@@ -1250,6 +1420,8 @@ function DiagnosticsFields({ form, update }: SectionFormApi) {
 function Notifications({ form, update, error, number, limits }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
+  // With Let's Encrypt, the address it serves HTTPS at is offered while none is set.
+  const offered = letsEncryptAddress(form)
   const text = t.notifications
   // Sunday 7 January 2024 is day 0, as the server counts days; the week starts on Monday.
   const weekday = (day: number) =>
@@ -1268,13 +1440,21 @@ function Notifications({ form, update, error, number, limits }: SectionFormApi) 
           <TextInput
             value={form.publicAddress}
             onValue={(publicAddress) => update({ publicAddress })}
-            placeholder="https://media.example.org"
+            placeholder={offered ?? 'https://media.example.org'}
             maxLength={limits('publicAddress').max}
             autoComplete="off"
             spellCheck={false}
             mono
             className="max-w-md"
           />
+          {offered !== undefined && form.publicAddress === '' && (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button size="sm" onClick={() => update({ publicAddress: offered })}>
+                {s.https.useAddress(offered)}
+              </Button>
+              <span className="text-small text-ink-3">{s.https.offeredAddress}</span>
+            </div>
+          )}
         </FieldRow>
       </SettingsGroup>
       <SettingsGroup title={s.weeklySummary}>

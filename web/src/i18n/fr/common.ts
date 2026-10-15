@@ -171,6 +171,25 @@ const common: typeof en = {
       'Le nombre de mots de passe faux avant blocage doit être 0, ou un nombre entier de 3 à 20.',
     invalid_inactive_device_days:
       'Le nombre de jours avant de déconnecter les appareils inutilisés doit être un nombre entier de 0 à 365.',
+    invalid_https_mode:
+      'Servir HTTPS doit valoir Désactivé, Fichiers de certificat ou Let’s Encrypt.',
+    invalid_https_port: 'Le port HTTPS doit être un nombre entier de 1 à 65535.',
+    invalid_https_certificate:
+      'Le certificat doit être un chemin absolu dans le conteneur, comme /certs/fullchain.pem.',
+    invalid_https_private_key:
+      'La clé privée doit être un chemin absolu dans le conteneur, comme /certs/privkey.pem.',
+    https_certificate_missing: 'Aucun fichier de certificat à ce chemin dans le conteneur.',
+    https_private_key_missing: 'Aucun fichier de clé privée à ce chemin dans le conteneur.',
+    https_certificate_unreadable:
+      'Polyfin ne peut pas lire ce fichier de certificat, ou il ne contient aucun certificat PEM. Vérifiez que l’utilisateur 65532 peut le lire.',
+    https_private_key_unreadable:
+      'Polyfin ne peut pas lire ce fichier de clé privée, ou il ne contient aucune clé RSA ou ECDSA en PEM. Vérifiez que l’utilisateur 65532 peut le lire.',
+    https_files_mismatch: 'La clé privée ne correspond pas au certificat.',
+    invalid_acme_hosts:
+      'Les noms d’hôte doivent être des noms publics comme media.example.org, un par ligne, sans joker ni adresse IP, 100 au plus, et au moins un pour Let’s Encrypt.',
+    invalid_acme_email: 'L’e-mail doit être une adresse e-mail, ou rester vide.',
+    acme_terms_required: 'Acceptez les conditions d’utilisation de Let’s Encrypt pour l’utiliser.',
+    invalid_acme_challenge: 'Le défi doit être HTTP-01 ou TLS-ALPN-01.',
     invalid_known_proxies:
       'Les proxys connus doivent être des adresses IP, des réseaux comme 172.18.0.0/16 ou des noms d’hôte comme traefik, un par ligne, 64 au plus.',
     personal_addons_disabled:

@@ -132,6 +132,18 @@ const system = {
         proxyNameUnresolved: (name: string) =>
           `The known proxy ${name} resolves to no address, so no request is trusted to come from it. Check its name under Settings › Security, and that Polyfin shares a network with it.`,
         task: (name: string) => `The task “${name}” failed.`,
+        httpsPort: (port: number) =>
+          `Polyfin cannot listen on TCP port ${port}, so HTTPS is not served. HTTP keeps working. Another program probably uses it, or it is below 1024. Choose another HTTPS port under Settings › Security.`,
+        httpsFileMissing: (file: string) =>
+          `The HTTPS certificate file ${file} does not exist. The certificate last read stays in use.`,
+        httpsFilesMismatch:
+          'The HTTPS private key does not belong to the certificate. The certificate last read stays in use.',
+        httpsFileUnreadable: (file: string) =>
+          `Polyfin cannot read the HTTPS certificate file ${file}, or it holds no PEM certificate or key it reads. The certificate last read stays in use.`,
+        httpsRenewal: (error: string) =>
+          `Let’s Encrypt did not give the HTTPS certificate: ${error}`,
+        httpsExpires: (date: string) => `The HTTPS certificate expires on ${date}.`,
+        httpsExpired: (date: string) => `The HTTPS certificate expired on ${date}.`,
         backupFailed: 'The last database backup failed.',
         backupStale: 'The last database backup is more than two days old.',
         backupDestinationFailed: (name: string) =>
@@ -306,6 +318,7 @@ const system = {
       serverTargetOf: (target: string) => `server notification target “${target}”`,
       sharePasswordOf: (folder: string) => `password of the share “${folder}”`,
       destinationSecretOf: (name: string) => `password or key of the backup destination “${name}”`,
+      certificateKeys: 'keys of the Let’s Encrypt certificate',
       noAddonsHint: 'Add a Stremio addon under Content › Sources.',
       noIptvHint: 'Add an IPTV account under Content › Sources.',
       noGuides: 'No programme guide.',

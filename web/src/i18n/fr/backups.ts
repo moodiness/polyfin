@@ -131,6 +131,8 @@ const backups: typeof en = {
           n === 1 ? '1 mot de passe de partage' : `${n} mots de passe de partage`,
         destinations: (n: number) =>
           n === 1 ? '1 destination des sauvegardes' : `${n} destinations des sauvegardes`,
+        certificates: (n: number) =>
+          n === 1 ? '1 clé du certificat Let’s Encrypt' : `${n} clés du certificat Let’s Encrypt`,
       },
       serverName: (name: string) => `Saisissez le nom du serveur, ${name}, pour confirmer`,
       confirm: 'Restaurer',

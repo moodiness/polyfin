@@ -7,7 +7,7 @@ import {
   type Owner,
   type UnreadableSecret,
 } from '@/api'
-import { formatBytes } from '@/format'
+import { dateTime, formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
 
@@ -36,13 +36,14 @@ export function ownedName(t: Messages, name: string, owner: Owner): string {
 }
 
 /**
- * The name of a stored secret the key cannot decrypt: a server setting, a network share's
- * password, a user's tracking or app connection, or a notification target of a user or of the
- * server.
+ * The name of a stored secret the key cannot decrypt: a server setting, the keys of the
+ * certificate of Let's Encrypt, a network share's password, a user's tracking or app connection,
+ * or a notification target of a user or of the server.
  */
 export function unreadableName(t: Messages, secret: UnreadableSecret): string {
   const text = t.system.health
   if (secret.setting !== null) return text.secretNames[secret.setting]
+  if (secret.certificate) return text.certificateKeys
   if (secret.folder !== null) return text.sharePasswordOf(secret.folder)
   if (secret.destination !== null) return text.destinationSecretOf(secret.destination)
   if (secret.target !== null) {
@@ -125,6 +126,18 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.folderUnwatched(problem.name)
     case 'task':
       return text.task(problem.task)
+    case 'https_port':
+      return text.httpsPort(problem.port)
+    case 'https_files':
+      if (problem.failure === 'missing') return text.httpsFileMissing(problem.file)
+      if (problem.failure === 'mismatch') return text.httpsFilesMismatch
+      return text.httpsFileUnreadable(problem.file)
+    case 'https_renewal':
+      return text.httpsRenewal(problem.error)
+    case 'https_expiry':
+      return problem.tone === 'error'
+        ? text.httpsExpired(dateTime(problem.expires, language))
+        : text.httpsExpires(dateTime(problem.expires, language))
     case 'connection_stopped':
       return problem.kind === 'app'
         ? text.appStopped(t.account.appImport.apps[problem.name], problem.owner.name)

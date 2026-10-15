@@ -157,6 +157,24 @@ const common = {
       'Wrong passwords before an account is blocked must be 0, or a whole number from 3 to 20.',
     invalid_inactive_device_days:
       'Days before unused devices are signed out must be a whole number from 0 to 365.',
+    invalid_https_mode: 'Serve HTTPS must be Off, Certificate files or Let’s Encrypt.',
+    invalid_https_port: 'The HTTPS port must be a whole number from 1 to 65535.',
+    invalid_https_certificate:
+      'The certificate must be an absolute path in the container, such as /certs/fullchain.pem.',
+    invalid_https_private_key:
+      'The private key must be an absolute path in the container, such as /certs/privkey.pem.',
+    https_certificate_missing: 'There is no certificate file at this path in the container.',
+    https_private_key_missing: 'There is no private key file at this path in the container.',
+    https_certificate_unreadable:
+      'Polyfin cannot read this certificate file, or it holds no PEM certificate. Check that user 65532 may read it.',
+    https_private_key_unreadable:
+      'Polyfin cannot read this private key file, or it holds no RSA or ECDSA key in PEM. Check that user 65532 may read it.',
+    https_files_mismatch: 'The private key does not belong to the certificate.',
+    invalid_acme_hosts:
+      'Host names must be public names such as media.example.org, one a line, without wildcards or IP addresses, 100 at most, and at least one for Let’s Encrypt.',
+    invalid_acme_email: 'The email must be an email address, or empty.',
+    acme_terms_required: 'Agree to Let’s Encrypt’s terms of service to use it.',
+    invalid_acme_challenge: 'The challenge must be HTTP-01 or TLS-ALPN-01.',
     invalid_known_proxies:
       'Known proxies must be IP addresses, networks such as 172.18.0.0/16 or host names such as traefik, one a line, 64 at most.',
     personal_addons_disabled:

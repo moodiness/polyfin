@@ -197,6 +197,12 @@ export type SettingBounds = {
   choices?: unknown[]
 }
 
+/** How Polyfin serves HTTPS (see Settings.httpsMode). */
+export type HttpsMode = 'off' | 'files' | 'letsencrypt'
+
+/** The challenges Let's Encrypt checks host names with (see Settings.acmeChallenge). */
+export type AcmeChallenge = 'http-01' | 'tls-alpn-01'
+
 export type Settings = {
   serverName: string
   quickConnectEnabled: boolean
@@ -279,6 +285,26 @@ export type Settings = {
    * such as 172.18.0.0/16; empty trusts no forwarded header.
    */
   knownProxies: string[]
+  /**
+   * How Polyfin serves HTTPS itself, next to HTTP: not at all, with certificate files, or with a
+   * certificate it obtains from Let's Encrypt.
+   */
+  httpsMode: HttpsMode
+  /** The TCP port HTTPS listens on; HTTP keeps POLYFIN_LISTEN. 8920 by default, as Jellyfin. */
+  httpsPort: number
+  /** Sends the requests of clients on the internet that come over HTTP to HTTPS (308). */
+  httpsRedirect: boolean
+  /** The certificate file, with its chain, and its RSA or ECDSA key file: PEM paths in the container. */
+  httpsCertificate: string
+  httpsPrivateKey: string
+  /** The public host names the certificate of Let's Encrypt is for. */
+  acmeHosts: string[]
+  /** The Let's Encrypt account's contact; empty for none. */
+  acmeEmail: string
+  /** Whether the administrator agreed to Let's Encrypt's terms of service. */
+  acmeTerms: boolean
+  /** How Let's Encrypt checks the host names: on the HTTP port, or on the HTTPS port. */
+  acmeChallenge: AcmeChallenge
   /** Logs in detail (debug level), to diagnose a problem. */
   detailedLog: boolean
   /** Seconds one analysis of a version or a channel's stream may take before it is given up. */
@@ -3112,6 +3138,8 @@ export type UnreadableSecret = {
   folder: string | null
   /** A backup destination's password or key, by what the destination shows. */
   destination: string | null
+  /** The account key or private key of the certificate of Let's Encrypt. */
+  certificate: boolean
 }
 
 /**
@@ -3145,6 +3173,10 @@ export type HealthProblem = {
   | { code: 'folder'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'folder_unwatched'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'task'; task: string }
+  | { code: 'https_port'; port: number }
+  | { code: 'https_files'; failure: 'missing' | 'unreadable' | 'mismatch'; file: string }
+  | { code: 'https_renewal'; error: string }
+  | { code: 'https_expiry'; expires: string }
   | { code: 'connection_stopped'; kind: 'app'; name: AppKind; owner: NonNullable<Owner> }
   | {
       code: 'connection_stopped'
@@ -3283,7 +3315,16 @@ export type RestorePlan = {
   madeAt: string | null
   size: number
   unreadable: Partial<
-    Record<'settings' | 'tracking' | 'apps' | 'notifications' | 'shares' | 'destinations', number>
+    Record<
+      | 'settings'
+      | 'tracking'
+      | 'apps'
+      | 'notifications'
+      | 'shares'
+      | 'destinations'
+      | 'certificates',
+      number
+    >
   >
   serverName: string
 }

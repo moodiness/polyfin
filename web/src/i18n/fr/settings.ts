@@ -439,6 +439,44 @@ const settings: typeof en = {
     knownProxies: 'Proxys connus',
     knownProxiesHelp: (r: RangeText) =>
       `Les proxys inverses placés devant Polyfin, un par ligne : une adresse IP, un réseau comme 172.18.0.0/16, ou un nom d’hôte comme le nom d’un conteneur sur un réseau Docker (traefik), jusqu’à ${r.max}. Un nom est résolu chaque minute et chaque adresse à laquelle il correspond est reconnue : ne listez que des noms que votre propre réseau résout. Une requête de l’un d’eux vient du client que nomme son en-tête X-Forwarded-For ou X-Real-IP : c’est cette adresse qui limite les connexions échouées, qui s’affiche pour les appareils et qui indique le réseau local. Les en-têtes de transfert venant de toute autre adresse sont ignorés. Laissez vide si rien ne se trouve devant Polyfin.`,
+    https: {
+      title: 'HTTPS',
+      intro:
+        'Polyfin peut servir HTTPS lui-même, sur un port à part, sans proxy inverse devant lui. HTTP continue de fonctionner sur son port quoi qu’il arrive à HTTPS : un port impossible à ouvrir, ou un certificat impossible à lire ou à renouveler, s’affiche dans Système › Santé. Les changements s’appliquent tout de suite, sans redémarrage.',
+      mode: 'Servir HTTPS',
+      modeHelp:
+        'Fichiers de certificat : un certificat qu’obtient un autre outil, relu quand il change. Let’s Encrypt : un certificat que Polyfin obtient et renouvelle lui-même, pour des noms d’hôte publics qui pointent vers ce serveur. Désactivé par défaut.',
+      modes: { off: 'Désactivé', files: 'Fichiers de certificat', letsencrypt: 'Let’s Encrypt' },
+      port: 'Port HTTPS',
+      portHelp: (r: RangeText) =>
+        `Le port TCP sur lequel HTTPS écoute dans le conteneur : publiez-le, comme 8096 l’est pour HTTP. L’utilisateur du conteneur ne peut pas écouter sous 1024 : pour joindre Polyfin sur 443, redirigez 443 vers ce port sur le routeur ou dans les ports du conteneur. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme Jellyfin.`,
+      redirect: 'Rediriger HTTP vers HTTPS',
+      redirectHelp:
+        'Les requêtes venues d’internet en HTTP reçoivent une redirection permanente (308) vers la même adresse en HTTPS, sur le port HTTPS. Le réseau local, les vérifications de Let’s Encrypt, et les requêtes qu’un proxy connu a reçues en HTTPS restent en HTTP. Ne s’applique que tant que HTTPS est servi. Désactivé par défaut.',
+      certificate: 'Certificat',
+      certificateHelp:
+        'Le chemin dans le conteneur du fichier PEM du certificat avec sa chaîne, comme /certs/fullchain.pem. L’enregistrement vérifie qu’il peut être lu. Polyfin le relit dans la minute qui suit un changement, et garde le dernier bon certificat tant qu’un changement ne peut pas être lu.',
+      privateKey: 'Clé privée',
+      privateKeyHelp:
+        'Le chemin dans le conteneur de la clé privée RSA ou ECDSA du certificat, en fichier PEM, comme /certs/privkey.pem. L’enregistrement vérifie qu’elle correspond au certificat.',
+      hosts: 'Noms d’hôte',
+      hostsHelp: (r: RangeText) =>
+        `Les noms publics qui pointent vers ce serveur, un par ligne, comme media.example.org, jusqu’à ${r.max}. Un seul certificat les contient tous. Les noms résolus seulement sur le réseau local, et les jokers, demandent le défi DNS-01, auquel Polyfin ne répond pas : utilisez pour eux des fichiers de certificat obtenus par un autre outil.`,
+      email: 'E-mail',
+      emailHelp: 'Facultatif. Let’s Encrypt peut écrire à cette adresse au sujet du compte.',
+      terms: 'J’accepte les conditions d’utilisation de Let’s Encrypt',
+      termsHelp:
+        'Let’s Encrypt ne délivre de certificats qu’une fois ses conditions d’utilisation, sur letsencrypt.org/repository, acceptées.',
+      challenge: 'Défi',
+      challengeHelp:
+        'La façon dont Let’s Encrypt vérifie que les noms pointent vers ce serveur. HTTP-01 : Polyfin répond sur son port HTTP, que le port 80 d’internet doit joindre. TLS-ALPN-01 : Polyfin répond sur son port HTTPS, que le port 443 d’internet doit joindre. Le certificat, sa clé et la clé du compte sont gardés dans la base de données, les clés chiffrées avec POLYFIN_SECRET_KEY, et le certificat est renouvelé quand il lui reste un tiers de sa durée.',
+      challenges: {
+        'http-01': 'HTTP-01 (port 80 vers le port HTTP)',
+        'tls-alpn-01': 'TLS-ALPN-01 (port 443 vers le port HTTPS)',
+      },
+      useAddress: (address: string) => `Utiliser ${address}`,
+      offeredAddress: 'L’adresse à laquelle Let’s Encrypt sert HTTPS, dans Paramètres › Sécurité.',
+    },
     detailedLog: 'Journal détaillé (pour diagnostiquer un problème)',
     detailedLogHelp:
       'Polyfin écrit beaucoup plus de détails dans son journal, tout de suite et sans redémarrage. Désactivez cette option une fois le problème trouvé.',

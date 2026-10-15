@@ -31,6 +31,7 @@ export type SettingEntry = {
 const s = (text: SettingsText) => text.settings
 const c = (text: SettingsText) => text.settings.conversion
 const tr = (text: SettingsText) => text.settings.tracking
+const h = (text: SettingsText) => text.settings.https
 
 /** Every setting, in the order of the sections and of their pages. */
 export const settingEntries: readonly SettingEntry[] = [
@@ -661,6 +662,86 @@ export const settingEntries: readonly SettingEntry[] = [
       'nom d’hôte',
     ],
     codes: ['invalid_known_proxies'],
+  },
+  {
+    section: 'security',
+    anchor: 'https',
+    label: (t) => h(t).mode,
+    help: (t) => `${h(t).intro} ${h(t).modeHelp}`,
+    keywords: ['HTTPS', 'TLS', 'SSL', 'certificate', 'certificat', 'Let’s Encrypt', '8920'],
+    codes: ['invalid_https_mode'],
+  },
+  {
+    section: 'security',
+    anchor: 'https-port',
+    label: (t) => h(t).port,
+    help: (t, r) => h(t).portHelp(r('httpsPort')),
+    keywords: ['HTTPS', '8920', '443'],
+    codes: ['invalid_https_port'],
+  },
+  {
+    section: 'security',
+    anchor: 'https-redirect',
+    label: (t) => h(t).redirect,
+    help: (t) => h(t).redirectHelp,
+    keywords: ['HTTPS', '308', 'redirect', 'redirection'],
+  },
+  {
+    section: 'security',
+    anchor: 'https-certificate',
+    label: (t) => h(t).certificate,
+    help: (t) => h(t).certificateHelp,
+    keywords: ['HTTPS', 'PEM', 'fullchain.pem', 'certificat'],
+    codes: [
+      'invalid_https_certificate',
+      'https_certificate_missing',
+      'https_certificate_unreadable',
+      'https_files_mismatch',
+    ],
+  },
+  {
+    section: 'security',
+    anchor: 'https-private-key',
+    label: (t) => h(t).privateKey,
+    help: (t) => h(t).privateKeyHelp,
+    keywords: ['HTTPS', 'PEM', 'privkey.pem', 'RSA', 'ECDSA'],
+    codes: [
+      'invalid_https_private_key',
+      'https_private_key_missing',
+      'https_private_key_unreadable',
+    ],
+  },
+  {
+    section: 'security',
+    anchor: 'acme-hosts',
+    label: (t) => h(t).hosts,
+    help: (t, r) => h(t).hostsHelp(r('acmeHosts')),
+    keywords: ['Let’s Encrypt', 'ACME', 'domain', 'domaine', 'DNS-01'],
+    codes: ['invalid_acme_hosts'],
+  },
+  {
+    section: 'security',
+    anchor: 'acme-email',
+    label: (t) => h(t).email,
+    help: (t) => h(t).emailHelp,
+    keywords: ['Let’s Encrypt', 'ACME'],
+    codes: ['invalid_acme_email'],
+  },
+  {
+    section: 'security',
+    anchor: 'acme-terms',
+    label: (t) => h(t).terms,
+    help: (t) => h(t).termsHelp,
+    keywords: ['Let’s Encrypt', 'ACME'],
+    codes: ['acme_terms_required'],
+  },
+  {
+    section: 'security',
+    anchor: 'acme-challenge',
+    label: (t) => h(t).challenge,
+    help: (t) => h(t).challengeHelp,
+    keywords: ['Let’s Encrypt', 'ACME', 'HTTP-01', 'TLS-ALPN-01', '80', '443'],
+    codes: ['invalid_acme_challenge'],
   },
   // Tracking
   {

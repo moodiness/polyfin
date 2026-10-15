@@ -125,6 +125,10 @@ const backups = {
         shares: (n: number) => (n === 1 ? '1 share password' : `${n} share passwords`),
         destinations: (n: number) =>
           n === 1 ? '1 backup destination' : `${n} backup destinations`,
+        certificates: (n: number) =>
+          n === 1
+            ? '1 key of the Let’s Encrypt certificate'
+            : `${n} keys of the Let’s Encrypt certificate`,
       },
       serverName: (name: string) => `Type the server’s name, ${name}, to confirm`,
       confirm: 'Restore',

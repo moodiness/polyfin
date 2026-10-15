@@ -139,6 +139,18 @@ const system: typeof en = {
         proxyNameUnresolved: (name: string) =>
           `Le proxy connu ${name} ne correspond à aucune adresse : aucune requête n’est donc reconnue comme venant de lui. Vérifiez son nom dans Paramètres › Sécurité, et que Polyfin partage un réseau avec lui.`,
         task: (name: string) => `La tâche « ${name} » a échoué.`,
+        httpsPort: (port: number) =>
+          `Polyfin ne peut pas écouter sur le port TCP ${port} : HTTPS n’est donc pas servi. HTTP fonctionne toujours. Un autre programme l’utilise sans doute, ou il est inférieur à 1024. Choisissez un autre port HTTPS dans Paramètres › Sécurité.`,
+        httpsFileMissing: (file: string) =>
+          `Le fichier de certificat HTTPS ${file} n’existe pas. Le dernier certificat lu reste utilisé.`,
+        httpsFilesMismatch:
+          'La clé privée HTTPS ne correspond pas au certificat. Le dernier certificat lu reste utilisé.',
+        httpsFileUnreadable: (file: string) =>
+          `Polyfin ne peut pas lire le fichier de certificat HTTPS ${file}, ou il ne contient aucun certificat ou clé PEM qu’il sait lire. Le dernier certificat lu reste utilisé.`,
+        httpsRenewal: (error: string) =>
+          `Let’s Encrypt n’a pas délivré le certificat HTTPS : ${error}`,
+        httpsExpires: (date: string) => `Le certificat HTTPS expire le ${date}.`,
+        httpsExpired: (date: string) => `Le certificat HTTPS a expiré le ${date}.`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
         backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',
         backupDestinationFailed: (name: string) =>
@@ -316,6 +328,7 @@ const system: typeof en = {
       sharePasswordOf: (folder: string) => `Mot de passe du partage « ${folder} »`,
       destinationSecretOf: (name: string) =>
         `Mot de passe ou clé de la destination des sauvegardes « ${name} »`,
+      certificateKeys: 'Clés du certificat Let’s Encrypt',
       noAddonsHint: 'Ajoutez un addon Stremio dans Contenu › Sources.',
       noIptvHint: 'Ajoutez un compte IPTV dans Contenu › Sources.',
       noGuides: 'Aucun guide des programmes.',
