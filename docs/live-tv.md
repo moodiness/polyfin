@@ -215,6 +215,9 @@ Timers, series timers and recordings are kept in the database.
 | **Keep recording after the end (minutes)** | **Settings › Recordings** | none (0), as in Jellyfin; 0 to 60 minutes | Goes on recording this many minutes after the programme. Apps can change it per timer. |
 | **Keep recordings for (days, 0 = forever)** | **Settings › Recordings** | 0 (forever); up to 3,650 days | Deletes older recordings once a day. |
 | **Find commercials in recordings** | **Settings › Recordings** | Off | Reads each recording once it ends, partial ones included, for its commercial breaks, which apps then offer to skip. See [Commercials of recordings](skip-segments.md#commercials-of-recordings). |
+| **Convert finished recordings to HEVC** | **Settings › Recordings** | off | Converts finished recordings to HEVC at night, so that they take less space (see [Smaller recordings](#smaller-recordings)). |
+| **Convert between** | **Settings › Recordings** | 1:00 to 6:00, in the server's time zone | The hours conversions run. A conversion still running at the end stops, and starts over the next night. |
+| **Use the processor when there is no graphics card** | **Settings › Recordings** | off | Converts on the processor, with x265, when no graphics card encodes HEVC. Without a graphics card and with it off, nothing is converted. |
 
 ### How a recording is made
 
@@ -243,6 +246,25 @@ With **Find commercials in recordings** on, a recording is read once it ends, in
 - What was found stays with the recording when its file is replaced, and is deleted with it.
 
 How breaks are told apart from the programme, and how apps get them: see [Commercials of recordings](skip-segments.md#commercials-of-recordings).
+
+### Smaller recordings
+
+A recording copies the channel's stream at the channel's own bitrate. With **Convert finished recordings to HEVC** on, Polyfin converts finished recordings, partial ones included, to HEVC, which takes about half the space of H.264 and less still of MPEG-2:
+
+- One recording at a time, the one that finished first, between the hours of **Convert between**.
+- On the card **Graphics card used to convert** chooses, with the **HEVC quality** and the **Deinterlacing method** of the conversion settings (see [Transcoding](transcoding.md#conversion-settings)). With **HEVC quality** at 0, recordings use 28, Jellyfin's. Without a graphics card that encodes HEVC, recordings are converted on the processor with x265, at its lowest priority, only if **Use the processor when there is no graphics card** is on.
+- The picture keeps its size, deinterlaced when it is interlaced, in 8 bits. The audio and subtitles are copied as they are. The copy's bitrate never goes above the recording's.
+- A conversion counts as one of the **Video conversions at once**, and waits while playbacks fill them. Playbacks started meanwhile count it too.
+- A conversion starts only with free space on the recordings' disk for a copy as large as the recording, and waits for it otherwise.
+- A conversion still running at the end of the hours stops, its copy is deleted, and the recording starts over the next night, as it does when Polyfin stops.
+
+Before it replaces the recording, the copy is checked: its length is within a second of the recording's, it holds the same tracks, in the same order, its video decodes to its end, and it is smaller. Otherwise the copy is deleted, the recording kept as it was, and it is not tried again. Recordings in HEVC, AV1 or VP9 already, and those in HDR or in more than 8 bits, are kept as they are.
+
+A recording someone is playing is replaced once they stop. The recording keeps its identifier, so its played state, resume points and commercials stay. Its file becomes `<identifier>.mkv`, and what playback learned of the old file is learned again.
+
+**Content › Live TV**, under **Recordings**, shows how many recordings were converted and the space saved.
+
+Apps that do not decode HEVC get a converted recording converted when they play it, as any HEVC video (see [Transcoding](transcoding.md#when-polyfin-converts)). With **Conversion (transcoding)** off, they cannot play it.
 
 ### Watching recordings
 
