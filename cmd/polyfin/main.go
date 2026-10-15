@@ -30,6 +30,7 @@ import (
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/discovery"
+	"github.com/moodiness/polyfin/internal/dlna"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/homerows"
@@ -483,6 +484,24 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// notifications, made below.
 		SharePlayed: func(link accounts.ShareLink) { notifier.SharePlayed(link) },
 	})
+	// DLNA devices on the local network browse and play the libraries of
+	// the user chosen for each, while the settings share them; a port
+	// another server uses is told in System › Health, and never stops the
+	// start.
+	sharing := dlna.Start(ctx, dlna.Options{
+		Port:     cfg.DLNAPort,
+		HTTP:     listener.Addr().(*net.TCPAddr),
+		ServerID: serverID,
+		DB:       pool,
+		Settings: store.Settings,
+		Changed:  store.SettingsChanged,
+		User:     store.User,
+		Signer:   playback.NewSigner(secret),
+		Library:  lib,
+		Player:   jellyfinAPI,
+		Version:  version,
+		Logger:   logger,
+	})
 	adminOptions := admin.Options{
 		Version:       version,
 		ServerID:      serverID,
@@ -529,6 +548,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			Updates:      updateCheck,
 			Proxies:      proxies,
 			Discovery:    localDiscovery.Status,
+			DLNA:         sharing.Status,
 			HTTPS:        secure.Status,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
@@ -540,6 +560,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Nuvio:          fromNuvio,
 		Stremio:        fromStremio,
 		Plays:          history,
+		DLNA:           sharing,
 	}
 	// Notifications tell of new episodes, ended recordings, the problems
 	// System › Health finds, and once a week, a month and a year what
@@ -570,6 +591,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			AdminAPI:      admin.New(adminOptions),
 			Jellyfin:      jellyfinAPI,
 			Share:         jellyfinAPI.Share(),
+			DLNA:          sharing.Handler(),
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,
 			CustomJs:      func() string { return store.Settings().CustomJs },

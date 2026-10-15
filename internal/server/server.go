@@ -45,6 +45,10 @@ type Options struct {
 	// Share serves the share links' page and its playback, under /share/;
 	// nil leaves /share/ to the Jellyfin API, which answers 404.
 	Share http.Handler
+	// DLNA serves the routes of DLNA devices, under /dlna/ (see
+	// dlna.Service.Handler); nil leaves /dlna/ to the Jellyfin API, which
+	// answers 404.
+	DLNA http.Handler
 	// Web holds the files of jellyfin-web, the web client served at /web/;
 	// nil serves none.
 	Web fs.FS
@@ -106,6 +110,9 @@ func New(options Options) http.Handler {
 	mux.Handle("/admin", rootOnly(http.RedirectHandler(adminPrefix, http.StatusMovedPermanently), options.Jellyfin))
 	if options.Share != nil {
 		mux.Handle("/share/", rootOnly(options.Share, options.Jellyfin))
+	}
+	if options.DLNA != nil {
+		mux.Handle("/dlna/", rootOnly(options.DLNA, options.Jellyfin))
 	}
 	if options.Web != nil {
 		mux.Handle(webPrefix, webClient(options.Web, func(ctx context.Context) bool {

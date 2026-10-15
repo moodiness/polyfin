@@ -53,6 +53,7 @@ const (
 	problemUnknownProxy      = "unknown_proxy"
 	problemDiscoveryPort     = "discovery_port"
 	problemDiscoveryAddress  = "discovery_address"
+	problemDLNAPort          = "dlna_port"
 	problemProxyName         = "proxy_name_unresolved"
 	problemConnectionStopped = "connection_stopped"
 	// HTTPS cannot listen on its port; its certificate files are missing,
@@ -267,6 +268,12 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		if status.ContainerAddress != "" {
 			add(healthProblemJSON{Key: "discovery:address", Code: problemDiscoveryAddress, Tone: notifications.SeverityWarning,
 				To: "/settings/general#local-address", Address: status.ContainerAddress})
+		}
+	}
+	if h.Health.DLNA != nil {
+		if status := h.Health.DLNA(); status.Unavailable {
+			add(healthProblemJSON{Key: "dlna:port", Code: problemDLNAPort, Tone: notifications.SeverityWarning,
+				To: "/settings/dlna#dlna", Port: status.Port})
 		}
 	}
 	if h.Health.HTTPS != nil {
@@ -545,6 +552,11 @@ func (p healthProblemJSON) text(language string) string {
 			"Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.",
 			"Polyfin ne peut pas écouter sur le port UDP %d : les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. "+
 				"Un autre programme l’utilise sans doute, comme un serveur Jellyfin sur le même hôte. Enregistrer les paramètres réessaie.", p.Port)
+	case problemDLNAPort:
+		return say("Polyfin cannot listen on UDP port %d, so DLNA devices on the local network do not find it by themselves. "+
+			"Another program probably uses it, such as another DLNA server on the same host. Saving the settings tries again.",
+			"Polyfin ne peut pas écouter sur le port UDP %d : les appareils DLNA du réseau local ne le trouvent donc pas d’eux-mêmes. "+
+				"Un autre programme l’utilise sans doute, comme un autre serveur DLNA sur le même hôte. Enregistrer les paramètres réessaie.", p.Port)
 	case problemDiscoveryAddress:
 		return say("Jellyfin apps that look for servers on the local network are given %s, an address of Polyfin’s container they cannot reach. "+
 			"Set Address on the local network under Settings › General.",

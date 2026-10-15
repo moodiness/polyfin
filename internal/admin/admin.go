@@ -152,6 +152,9 @@ type Options struct {
 	// Plays keeps the history of the videos played, which the statistics
 	// sum; nil offers none.
 	Plays *plays.History
+	// DLNA manages the devices and profiles of the sharing over DLNA; nil
+	// lists none.
+	DLNA DLNA
 	// SmartLists keeps the smart lists, which SmartPreviews judges before
 	// they are saved.
 	SmartLists    *smartlists.Store
@@ -276,6 +279,7 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/share-links/{id}/revoke", h.administrator(h.revokeAnyShareLink))
 	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
+	h.dlnaRoutes(mux)
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
 	mux.Handle("GET /admin/api/settings/apps", h.administrator(h.settingsApps))
 	mux.Handle("POST /admin/api/settings/secrets/{name}/reveal", h.administrator(h.revealServerSecret))
@@ -578,6 +582,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidBackupsKept, http.StatusBadRequest, "invalid_backups_kept"},
 		{accounts.ErrInvalidPublicAddress, http.StatusBadRequest, "invalid_public_address"},
 		{accounts.ErrInvalidLocalAddress, http.StatusBadRequest, "invalid_local_address"},
+		{accounts.ErrInvalidDLNAName, http.StatusBadRequest, "invalid_dlna_name"},
 		{accounts.ErrInvalidSMTPHost, http.StatusBadRequest, "invalid_smtp_host"},
 		{accounts.ErrInvalidSMTPPort, http.StatusBadRequest, "invalid_smtp_port"},
 		{accounts.ErrInvalidSMTPSecurity, http.StatusBadRequest, "invalid_smtp_security"},

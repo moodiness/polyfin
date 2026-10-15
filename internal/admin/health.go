@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/diskspace"
+	"github.com/moodiness/polyfin/internal/dlna"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/https"
@@ -53,6 +54,8 @@ type HealthSources struct {
 	// Discovery tells how local network discovery goes; nil tells
 	// nothing.
 	Discovery func() discovery.Status
+	// DLNA tells how the sharing over DLNA goes; nil tells nothing.
+	DLNA func() dlna.Status
 	// HTTPS tells how HTTPS stands; nil tells nothing.
 	HTTPS func() https.Status
 }

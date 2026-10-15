@@ -421,6 +421,12 @@ type settingsJSON struct {
 	// PUT leaves them out; an empty address announces the interface's.
 	LocalDiscovery *bool   `json:"localDiscovery"`
 	LocalAddress   *string `json:"localAddress"`
+	// The DLNA settings keep their current values too when a PUT leaves
+	// them out. DLNANewDevicesUser is a user's ID, or null for no one.
+	DLNA               *bool           `json:"dlna"`
+	DLNAName           *string         `json:"dlnaName"`
+	DLNANewDevicesUser json.RawMessage `json:"dlnaNewDevicesUser"`
+	DLNAMarkPlayed     *bool           `json:"dlnaMarkPlayed"`
 	// The content settings keep their current values too when a PUT
 	// leaves them out.
 	SkipButtons *bool `json:"skipButtons"`
@@ -685,6 +691,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		UpdateCheck:         &settings.UpdateCheck,
 		LocalDiscovery:      &settings.LocalDiscovery,
 		LocalAddress:        &settings.LocalAddress,
+		DLNA:                &settings.DLNA,
+		DLNAName:            &settings.DLNAName,
+		DLNANewDevicesUser:  dlnaUserJSON(settings.DLNANewDevicesUser),
+		DLNAMarkPlayed:      &settings.DLNAMarkPlayed,
 
 		SkipButtons:           &settings.SkipButtons,
 		PublicMetaDBKeySet:    settings.PublicMetaDBKey != "",
@@ -1264,6 +1274,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	dlnaUser, ok := h.dlnaNewDevicesUser(w, r, body.DLNANewDevicesUser, current.DLNANewDevicesUser)
+	if !ok {
+		return
+	}
 	theIntroDBKey, ok := h.segmentKey(w, r, mediasegments.TheIntroDB, body.TheIntroDBKey, current.TheIntroDBKey)
 	if !ok {
 		return
@@ -1302,6 +1316,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		UpdateCheck:         valueOr(body.UpdateCheck, current.UpdateCheck),
 		LocalDiscovery:      valueOr(body.LocalDiscovery, current.LocalDiscovery),
 		LocalAddress:        valueOr(body.LocalAddress, current.LocalAddress),
+		DLNA:                valueOr(body.DLNA, current.DLNA),
+		DLNAName:            valueOr(body.DLNAName, current.DLNAName),
+		DLNANewDevicesUser:  dlnaUser,
+		DLNAMarkPlayed:      valueOr(body.DLNAMarkPlayed, current.DLNAMarkPlayed),
 
 		SkipButtons:           valueOr(body.SkipButtons, current.SkipButtons),
 		PublicMetaDBKey:       publicMetaDBKey,
