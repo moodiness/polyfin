@@ -512,6 +512,7 @@ type settingsJSON struct {
 	H264Quality            *int      `json:"h264Quality"`
 	HevcQuality            *int      `json:"hevcQuality"`
 	AllowHevcEncoding      *bool     `json:"allowHevcEncoding"`
+	AdaptiveQuality        *string   `json:"adaptiveQuality"`
 	HardwareAcceleration   *string   `json:"hardwareAcceleration"`
 	HardwareDecodingCodecs *[]string `json:"hardwareDecodingCodecs"`
 	ToneMapping            *bool     `json:"toneMapping"`
@@ -737,6 +738,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		H264Quality:                &settings.H264Quality,
 		HevcQuality:                &settings.HevcQuality,
 		AllowHevcEncoding:          &settings.AllowHevcEncoding,
+		AdaptiveQuality:            &settings.AdaptiveQuality,
 		HardwareAcceleration:       &settings.HardwareAcceleration,
 		HardwareDecodingCodecs:     &settings.HardwareDecodingCodecs,
 		ToneMapping:                &settings.ToneMapping,
@@ -1354,6 +1356,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		H264Quality:                valueOr(body.H264Quality, current.H264Quality),
 		HevcQuality:                valueOr(body.HevcQuality, current.HevcQuality),
 		AllowHevcEncoding:          valueOr(body.AllowHevcEncoding, current.AllowHevcEncoding),
+		AdaptiveQuality:            valueOr(body.AdaptiveQuality, current.AdaptiveQuality),
 		HardwareAcceleration:       valueOr(body.HardwareAcceleration, current.HardwareAcceleration),
 		HardwareDecodingCodecs:     valueOr(body.HardwareDecodingCodecs, current.HardwareDecodingCodecs),
 		ToneMapping:                valueOr(body.ToneMapping, current.ToneMapping),

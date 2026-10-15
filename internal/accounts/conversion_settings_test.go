@@ -19,7 +19,7 @@ func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 			got.ToneMappingPeak != 0 || got.ToneMappingDesat != 0 || !got.GPUToneMapping || got.ProcessorToneMappingHeight != 0 ||
 			got.DeinterlaceMethod != "yadif" || got.DeinterlaceDoubleRate ||
 			got.DownmixAlgorithm != "None" || got.DownmixBoost != DefaultDownmixBoost || got.MaxAudioChannels != 0 ||
-			got.AudioBitratePerChannel != 0 || got.EncodingThreads != 0 || got.AheadSeconds != DefaultAheadSeconds {
+			got.AudioBitratePerChannel != 0 || got.EncodingThreads != 0 || got.AheadSeconds != DefaultAheadSeconds || got.AdaptiveQuality != "off" {
 			t.Errorf("%s: %+v", when, got)
 		}
 	}
@@ -46,6 +46,8 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 		{"a negative H.264 quality", func(s *Settings) { s.H264Quality = -1 }, ErrInvalidVideoQuality},
 		{"an HEVC quality above 51", func(s *Settings) { s.HevcQuality = MaxVideoQuality + 1 }, ErrInvalidVideoQuality},
 		{"an unknown GPU", func(s *Settings) { s.HardwareAcceleration = "qsv" }, ErrInvalidHardwareAcceleration},
+		{"an unknown adaptive quality", func(s *Settings) { s.AdaptiveQuality = "local" }, ErrInvalidAdaptiveQuality},
+		{"no adaptive quality", func(s *Settings) { s.AdaptiveQuality = "" }, ErrInvalidAdaptiveQuality},
 		{"no GPU choice, which followed POLYFIN_HWACCEL", func(s *Settings) { s.HardwareAcceleration = "" }, ErrInvalidHardwareAcceleration},
 		{"an unknown decoded codec", func(s *Settings) { s.HardwareDecodingCodecs = []string{"h264", "vp8"} }, ErrInvalidHardwareDecodingCodecs},
 		{"a decoded codec twice", func(s *Settings) { s.HardwareDecodingCodecs = []string{"h264", "h264"} }, ErrInvalidHardwareDecodingCodecs},
@@ -89,6 +91,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 			s.DeinterlaceMethod, s.DeinterlaceDoubleRate = "bwdif", true
 			s.DownmixAlgorithm, s.DownmixBoost, s.MaxAudioChannels, s.AudioBitratePerChannel = "Dave750", MinDownmixBoost, 2, MinAudioBitratePerChannel
 			s.EncodingThreads, s.AheadSeconds = MaxEncodingThreads, MinAheadSeconds
+			s.AdaptiveQuality = AdaptiveQualityRemote
 		},
 		func(s *Settings) {
 			s.EncoderPreset, s.HardwareAcceleration, s.HardwareDecodingCodecs = "ultrafast", "none", []string{}
@@ -96,6 +99,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 			s.ProcessorToneMappingHeight = 2160
 			s.DownmixAlgorithm, s.DownmixBoost, s.MaxAudioChannels, s.AudioBitratePerChannel = "Ac4", MaxDownmixBoost, 6, MaxAudioBitratePerChannel
 			s.EncodingThreads, s.AheadSeconds = 0, MaxAheadSeconds
+			s.AdaptiveQuality = AdaptiveQualityAlways
 		},
 	} {
 		changed := store.Settings()
@@ -120,7 +124,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 		"hardware_decoding_codecs = '{vp8}'", "tone_mapping_algorithm = 'gamma'", "tone_mapping_peak = 99", "tone_mapping_desat = 11",
 		"processor_tone_mapping_height = 480", "processor_tone_mapping_height = -1",
 		"deinterlace_method = 'w3fdif'", "downmix_algorithm = 'dave750'", "downmix_boost = 0.4", "max_audio_channels = 8",
-		"audio_bitrate_per_channel = 16", "encoding_threads = 65", "ahead_seconds = 29", "ahead_seconds = 601"} {
+		"audio_bitrate_per_channel = 16", "encoding_threads = 65", "ahead_seconds = 29", "ahead_seconds = 601", "adaptive_quality = 'local'"} {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
 			t.Errorf("the database took %s", column)
 		}

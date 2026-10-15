@@ -99,6 +99,7 @@ func DefaultSettings() Settings {
 
 		EncoderPreset:              EncoderPresets[0],
 		AllowHevcEncoding:          false,
+		AdaptiveQuality:            AdaptiveQualityOff,
 		HardwareAcceleration:       HardwareAccelerations[0],
 		HardwareDecodingCodecs:     slices.Clone(HardwareDecodingCodecs),
 		ToneMapping:                true,
@@ -277,6 +278,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"h264Quality":                orZero(MinVideoQuality, MaxVideoQuality, d.H264Quality),
 		"hevcQuality":                orZero(MinVideoQuality, MaxVideoQuality, d.HevcQuality),
 		"allowHevcEncoding":          is(d.AllowHevcEncoding),
+		"adaptiveQuality":            choice(d.AdaptiveQuality, anys(AdaptiveQualities)),
 		"hardwareAcceleration":       choice(d.HardwareAcceleration, anys(HardwareAccelerations)),
 		"hardwareDecodingCodecs":     choice(d.HardwareDecodingCodecs, anys(HardwareDecodingCodecs)),
 		"toneMapping":                is(d.ToneMapping),

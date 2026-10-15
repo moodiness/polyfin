@@ -546,6 +546,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidVideoQuality, http.StatusBadRequest, "invalid_video_quality"},
 		{accounts.ErrInvalidHardwareAcceleration, http.StatusBadRequest, "invalid_hardware_acceleration"},
 		{accounts.ErrInvalidHardwareDecodingCodecs, http.StatusBadRequest, "invalid_hardware_decoding_codecs"},
+		{accounts.ErrInvalidAdaptiveQuality, http.StatusBadRequest, "invalid_adaptive_quality"},
 		{accounts.ErrInvalidToneMappingAlgorithm, http.StatusBadRequest, "invalid_tone_mapping_algorithm"},
 		{accounts.ErrInvalidToneMappingPeak, http.StatusBadRequest, "invalid_tone_mapping_peak"},
 		{accounts.ErrInvalidToneMappingDesat, http.StatusBadRequest, "invalid_tone_mapping_desat"},

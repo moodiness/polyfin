@@ -382,6 +382,7 @@ var (
 	ErrInvalidAudioBitrate           = errors.New("invalid audio bitrate")
 	ErrInvalidEncodingThreads        = errors.New("invalid encoding threads")
 	ErrInvalidAheadSeconds           = errors.New("invalid seconds ahead")
+	ErrInvalidAdaptiveQuality        = errors.New("invalid adaptive quality")
 )
 
 // The choices of the settings tuning conversions, named as Jellyfin's
@@ -413,6 +414,19 @@ var (
 	// Settings.ProcessorToneMappingHeight: 0, Automatic, is what a timing
 	// at startup chose, then heights of usual video.
 	ToneMappingHeights = []int{0, 720, 1080, 1440, 2160}
+	// AdaptiveQualities are the values of Settings.AdaptiveQuality.
+	AdaptiveQualities = []string{AdaptiveQualityOff, AdaptiveQualityRemote, AdaptiveQualityAlways}
+)
+
+// The values of Settings.AdaptiveQuality.
+const (
+	// AdaptiveQualityOff offers one quality, the one chosen.
+	AdaptiveQualityOff = "off"
+	// AdaptiveQualityRemote offers lower ones to apps outside the local
+	// network, as sign-in PINs judge it.
+	AdaptiveQualityRemote = "remote"
+	// AdaptiveQualityAlways offers lower ones to every app.
+	AdaptiveQualityAlways = "always"
 )
 
 // The bounds and defaults of the numbers tuning conversions. The defaults
@@ -1194,6 +1208,10 @@ type Settings struct {
 	// before H.264; off, HEVC is only for apps taking no H.264, as with
 	// Jellyfin's option of the same name.
 	AllowHevcEncoding bool
+	// AdaptiveQuality has the master playlist of converted video offer up
+	// to two lower qualities, which apps step down to on a weak
+	// connection: one of AdaptiveQualities.
+	AdaptiveQuality string
 	// HardwareAcceleration chooses the GPU, one of HardwareAccelerations,
 	// from POLYFIN_HWACCEL at the first start. HardwareDecodingCodecs are the
 	// codecs, of HardwareDecodingCodecs, the GPU decodes; the others are
@@ -1463,6 +1481,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
+	"adaptive_quality, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
@@ -1503,6 +1522,7 @@ func (settings *Settings) fields() []any {
 		&settings.NameHowVersionsPlay,
 		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
+		&settings.AdaptiveQuality,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
 		&settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSeconds,
@@ -2010,6 +2030,8 @@ func validConversion(settings Settings) ([]string, error) {
 		return nil, ErrInvalidVideoQuality
 	case !slices.Contains(HardwareAccelerations, settings.HardwareAcceleration):
 		return nil, ErrInvalidHardwareAcceleration
+	case !slices.Contains(AdaptiveQualities, settings.AdaptiveQuality):
+		return nil, ErrInvalidAdaptiveQuality
 	case !slices.Contains(ToneMappingAlgorithms, settings.ToneMappingAlgorithm):
 		return nil, ErrInvalidToneMappingAlgorithm
 	case settings.ToneMappingPeak != 0 && (settings.ToneMappingPeak < MinToneMappingPeak || settings.ToneMappingPeak > MaxToneMappingPeak):
