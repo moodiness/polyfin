@@ -121,6 +121,12 @@ func children(data []byte, visit func(kind string, content []byte)) {
 // videoTrack finds the video track of a moov's content: its id and the
 // timescale of its media.
 func videoTrack(moov []byte) (uint32, uint64, error) {
+	return mediaTrack(moov, "vide")
+}
+
+// mediaTrack finds the first track of a moov's content whose handler is
+// handler, vide or soun: its id and the timescale of its media.
+func mediaTrack(moov []byte, handler string) (uint32, uint64, error) {
 	var id uint32
 	var timescale uint64
 	children(moov, func(kind string, trak []byte) {
@@ -129,7 +135,7 @@ func videoTrack(moov []byte) (uint32, uint64, error) {
 		}
 		var trackID uint32
 		var scale uint64
-		var isVideo bool
+		var handled bool
 		children(trak, func(kind string, content []byte) {
 			switch kind {
 			case "tkhd":
@@ -149,16 +155,19 @@ func videoTrack(moov []byte) (uint32, uint64, error) {
 							scale = uint64(binary.BigEndian.Uint32(content[12:]))
 						}
 					case "hdlr":
-						isVideo = len(content) >= 12 && string(content[8:12]) == "vide"
+						handled = len(content) >= 12 && string(content[8:12]) == handler
 					}
 				})
 			}
 		})
-		if isVideo && scale > 0 {
+		if handled && scale > 0 {
 			id, timescale = trackID, scale
 		}
 	})
 	if timescale == 0 {
+		if handler == "soun" {
+			return 0, 0, errors.New("the output has no audio track")
+		}
 		return 0, 0, errors.New("the output has no video track")
 	}
 	return id, timescale, nil

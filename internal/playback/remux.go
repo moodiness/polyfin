@@ -2,7 +2,9 @@ package playback
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -30,8 +32,10 @@ var ErrNotRemuxable = errors.New("the version cannot be remuxed")
 type Remux struct {
 	// Session is the play session it belongs to.
 	Session string
-	// User is who plays it.
+	// User is who plays it, and Device the app's device, as its URL tells
+	// it.
 	User    accounts.ID
+	Device  string
 	Version library.Version
 	// Audio is the audio track, as an index among the version's streams
 	// (ffprobe's); -1 plays none.
@@ -465,8 +469,26 @@ func (s *Service) MayConvert(user, version accounts.ID) bool {
 }
 
 func (r Remux) key() hls.Key {
-	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format, User: r.User.String(),
-		Version: r.Version.ID.String(), Converts: r.ConvertVideo != nil, Variant: r.Variant}
+	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format, User: r.User.String(), Device: r.Device,
+		Version: r.Version.ID.String(), Converts: r.ConvertVideo != nil, Video: r.videoConversion(), Variant: r.Variant}
+}
+
+// videoConversion describes what the remux converts the video to, as
+// hls.Key.Video tells it: the conversion of its first variant, which sets
+// the others', and the subtitle burned in, hashed, as a subtitle file's
+// address may hold a token. Empty when the video is copied.
+func (r Remux) videoConversion() string {
+	c := r.ConvertVideo
+	if c == nil {
+		return ""
+	}
+	burn := r.BurnFile
+	if r.Burn != nil {
+		burn = "stream " + strconv.Itoa(*r.Burn)
+	}
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%dx%d\x00%d\x00%t\x00%t\x00%t\x00%s", c.Codec, c.Encoder, c.Width, c.Height, c.Bitrate,
+		c.ToneMap, c.ToneMapOnCPU, c.Deinterlace, burn)))
+	return hex.EncodeToString(sum[:12])
 }
 
 // remuxOpener reads the version through the source cache, which keeps

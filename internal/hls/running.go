@@ -41,6 +41,10 @@ func (m *Manager) Running() []Running {
 	for _, e := range m.encodings {
 		encodings = append(encodings, e)
 	}
+	kept := make(map[Key]*keeping, len(m.kept))
+	for key, k := range m.kept {
+		kept[key] = k
+	}
 	lives := make([]*live, 0, len(m.lives))
 	for _, l := range m.lives {
 		lives = append(lives, l)
@@ -64,6 +68,17 @@ func (m *Manager) Running() []Running {
 				r.describe(e.remux)
 			}
 		default:
+		}
+		// Kept video plays for the session that took it last, with the
+		// audio of its track.
+		if k := kept[e.key.playback()]; k != nil {
+			k.mu.Lock()
+			r.Key.Session = k.session
+			if t := k.track; t != nil {
+				r.Key.Audio = t.audio
+				r.AudioCodec, r.AudioChannels, r.AudioBitrate = t.remux.AudioCodec, t.remux.AudioChannels, t.remux.AudioBitrate
+			}
+			k.mu.Unlock()
 		}
 		running = append(running, r)
 	}

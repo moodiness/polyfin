@@ -227,7 +227,10 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false
 	}
-	remux := playback.Remux{Session: session, User: user.ID, Version: version, Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
+	// The device, which the URL tells as PlaybackInfo's does, sets apart
+	// the converted video kept for a new session of the same playback.
+	remux := playback.Remux{Session: session, User: user.ID, Device: query(r, "deviceId"), Version: version,
+		Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
 	// The conversions PlaybackInfo chose follow from the URL, as they
 	// would for Jellyfin, through the same functions. Converted video is
 	// scaled down to the user's quality group and to the height the

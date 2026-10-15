@@ -129,7 +129,9 @@ type Service struct {
 // settings, read as they apply: the analysis timeout as each analysis
 // starts, the tuning of conversions as each encoding opens, and, which it
 // sets on segments, the limit of the playbacks converting video, whenever
-// one more would start, and the segments made ahead of the player.
+// one more would start, the segments made ahead of the player, and whether
+// converted video is kept when the audio track changes, as each request
+// comes.
 func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Signer, sources *source.Cache, segments *hls.Manager, renew Renewer, logger *slog.Logger,
 	settings func() accounts.Settings) (*Service, error) {
 	server, err := newLoopback()
@@ -138,6 +140,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 	}
 	segments.LimitConversions(func() int { return settings().MaxConversions })
 	segments.LimitAhead(func() time.Duration { return time.Duration(settings().AheadSeconds) * time.Second })
+	segments.KeepVideo(func() bool { return settings().KeepConvertedVideo })
 	s := &Service{
 		db:          db,
 		opener:      opener,

@@ -435,11 +435,19 @@ type Key struct {
 	Format  Format
 	// User is who plays, which bounds the live encodings each user runs.
 	User string
+	// Device is the app's device, which with the user, the version, the
+	// format, Video and Variant tells apart a playback's converted video
+	// when it is kept (see KeepVideo).
+	Device string
 	// Version is the version played, and Converts marks an encoding that
 	// converts the video: the playbacks doing so may be bounded, a playback
 	// being what a user plays of a version (see LimitConversions).
 	Version  string
 	Converts bool
+	// Video describes what the video is converted to: codec, size,
+	// bitrate, tone mapping and burned subtitle, empty when it is copied or
+	// not told. Only video it describes is kept (see KeepVideo).
+	Video string
 	// Variant is the quality of converted video a master playlist offers:
 	// 0 for the first, then each lower one. Each variant of a playback
 	// runs its own FFmpeg (see playback).
@@ -447,7 +455,8 @@ type Key struct {
 }
 
 func (k Key) name() string {
-	sum := sha256.Sum256([]byte(k.Session + "\x00" + strconv.Itoa(k.Audio) + "\x00" + k.Format.Extension() + "\x00" + strconv.Itoa(k.Variant)))
+	sum := sha256.Sum256([]byte(strings.Join([]string{k.Session, strconv.Itoa(k.Audio), k.Format.Extension(), strconv.Itoa(k.Variant),
+		k.User, k.Device, k.Version, k.Video}, "\x00")))
 	return hex.EncodeToString(sum[:12])
 }
 
@@ -479,6 +488,39 @@ type playback struct {
 	last      *encoding
 	requested int
 	used      time.Time
+	// video is the segment the variant asked for last began last, and
+	// track the audio of a kept video, told of it (see track.advance).
+	video int
+	track *track
+}
+
+// began records that e began segment n, which the audio of a kept video
+// may then make when e is the variant asked for last.
+func (p *playback) began(e *encoding, n int) {
+	p.mu.Lock()
+	if p.last != nil && p.last != e {
+		p.mu.Unlock()
+		return
+	}
+	p.video = n
+	t := p.track
+	p.mu.Unlock()
+	if t != nil {
+		t.advance(n)
+	}
+}
+
+// follow has t told of the segments the video begins, from the last one,
+// and of the last segment a player asked for, where its first job starts
+// when the initialization segment is asked for first.
+func (p *playback) follow(t *track) {
+	p.mu.Lock()
+	p.track = t
+	n, requested := p.video, p.requested
+	p.mu.Unlock()
+	if t != nil {
+		t.follow(n, requested)
+	}
 }
 
 // asked records a request for e, for segment n when it is not negative,
@@ -545,12 +587,20 @@ type Manager struct {
 	grace time.Duration
 	// linger is variantLinger, in nanoseconds, which tests change.
 	linger atomic.Int64
+	// keepVideo returns whether converted video is kept apart from its
+	// audio (see KeepVideo); keepFor is keepFor, in nanoseconds, which
+	// tests change.
+	keepVideo atomic.Pointer[func() bool]
+	keepFor   atomic.Int64
 
 	mu        sync.Mutex
 	encodings map[Key]*encoding
 	lives     map[Key]*live
 	// audios are the conversions of tracks into segments (see audio.go).
 	audios map[AudioKey]*audioEncoding
+	// kept are the playbacks whose video is kept, by the key of their
+	// first variant (see KeepVideo).
+	kept map[Key]*keeping
 	// progressives are the conversions streamed as one file (see
 	// Progressive).
 	progressives map[*progressive]struct{}
@@ -571,8 +621,10 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), stall: stallTimeout, grace: recordGrace,
-		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{}}
+		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{},
+		kept: map[Key]*keeping{}}
 	m.linger.Store(int64(variantLinger))
+	m.keepFor.Store(int64(keepFor))
 	go m.stopIdle()
 	return m, nil
 }
@@ -597,7 +649,8 @@ func (m *Manager) Close() {
 	m.stopAudios(func(AudioKey, *audioEncoding) bool { return true })
 }
 
-// Stop stops the encodings of a play session.
+// Stop stops the encodings of a play session. Its kept video is kept for
+// another session to take over (see KeepVideo).
 func (m *Manager) Stop(session string) {
 	m.mu.Lock()
 	m.stopProgressives(func(key Key) bool { return key.Session == session })
@@ -605,6 +658,7 @@ func (m *Manager) Stop(session string) {
 	m.stopWhere(func(key Key, _ *encoding) bool { return key.Session == session })
 	m.stopLives(func(key Key, _ *live) bool { return key.Session == session })
 	m.stopAudios(func(key AudioKey, _ *audioEncoding) bool { return key.Session == session })
+	m.release(session)
 }
 
 func (m *Manager) stopWhere(match func(Key, *encoding) bool) {
@@ -620,6 +674,7 @@ func (m *Manager) stopWhere(match func(Key, *encoding) bool) {
 	for _, e := range stopping {
 		e.stop()
 	}
+	m.sweepKept()
 }
 
 func (m *Manager) stopIdle() {
@@ -761,6 +816,9 @@ func (m *Manager) converting(shared *userVersion, leaving *live) int {
 
 // Init opens the initialization segment of a fragmented MP4 encoding.
 func (m *Manager) Init(ctx context.Context, key Key, open Opener) (*os.File, error) {
+	if m.keeps(key) {
+		return m.keptFile(ctx, key, open, -1)
+	}
 	e, err := m.encoding(ctx, key, open)
 	if err != nil {
 		return nil, err
@@ -774,11 +832,17 @@ func (m *Manager) Init(ctx context.Context, key Key, open Opener) (*os.File, err
 // Segment opens segment n of an encoding, starting or moving FFmpeg to it
 // when needed.
 func (m *Manager) Segment(ctx context.Context, key Key, open Opener, n int) (*os.File, error) {
+	if n < 0 {
+		return nil, ErrNotFound
+	}
+	if m.keeps(key) {
+		return m.keptFile(ctx, key, open, n)
+	}
 	e, err := m.encoding(ctx, key, open)
 	if err != nil {
 		return nil, err
 	}
-	if n < 0 || n >= e.remux.Plan.Len() {
+	if n >= e.remux.Plan.Len() {
 		return nil, ErrNotFound
 	}
 	return e.await(ctx, n)
@@ -787,8 +851,11 @@ func (m *Manager) Segment(ctx context.Context, key Key, open Opener, n int) (*os
 // Subtitles waits until the extracted subtitles of an encoding cover
 // segment n, starting or moving FFmpeg to it when needed. They come from
 // the variant of key's playback asked for last, whichever key names: every
-// variant extracts them.
+// variant extracts them. Kept video extracts them, not its audio.
 func (m *Manager) Subtitles(ctx context.Context, key Key, open Opener, n int) error {
+	if m.keeps(key) {
+		key, open = key.keptVideo(), videoAlone(open)
+	}
 	e := m.playing(key)
 	if e == nil {
 		var err error
@@ -859,7 +926,11 @@ func (m *Manager) encoding(ctx context.Context, key Key, open Opener) (*encoding
 		e = &encoding{m: m, key: key, dir: filepath.Join(m.dir, key.name()), opened: make(chan struct{}),
 			changed: make(chan struct{}), quit: make(chan struct{}), playback: p, requested: requested}
 		m.encodings[key] = e
+		stale := m.keepPlayback(key)
 		m.mu.Unlock()
+		for _, k := range stale {
+			m.expire(k)
+		}
 		e.open(ctx, open)
 	} else {
 		m.mu.Unlock()
@@ -884,6 +955,7 @@ func (e *encoding) waitOpen(ctx context.Context) error {
 			delete(e.m.encodings, e.key)
 		}
 		e.m.mu.Unlock()
+		e.m.sweepKept()
 		return e.err
 	}
 	return nil
@@ -973,6 +1045,7 @@ func (e *encoding) watchInput() {
 	}
 	e.m.mu.Unlock()
 	e.stop()
+	e.m.sweepKept()
 }
 
 // inputFailed reports whether the input failed for good.
@@ -1404,6 +1477,7 @@ func (e *encoding) begin(j *job, data []byte) error {
 		return err
 	}
 	j.file = file
+	e.playback.began(e, j.next)
 	_, err = file.Write(data)
 	return err
 }
@@ -1521,24 +1595,8 @@ func writeFile(path string, data []byte) error {
 // burnGraph).
 func (r Remux) args(n int, lookback time.Duration) []string {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:" + strconv.Itoa(3+len(r.Subtitles))}
-	var from time.Duration
-	if n > 0 {
-		from = r.Plan.seekTime(n, lookback)
-	}
-	if from > 0 {
-		// Converted audio starts where the demuxer does, on the keyframe,
-		// as copied streams do, instead of at the time asked.
-		args = append(args, "-noaccurate_seek", "-ss", strconv.FormatFloat(from.Seconds(), 'f', 6, 64))
-		// The version was analyzed already: FFmpeg probes the head of the
-		// file again before it seeks, and 2 MB of it, which the analysis
-		// left in the source cache, describe the streams it copies or
-		// decodes. 0 would be FFmpeg's 5 s, not none. A burned image
-		// track may need more to know its size, and an MPEG-TS file or
-		// disc to find every stream: both probe as usual.
-		if (r.Encode == nil || r.Encode.Burn == nil) && !r.Plan.Grid() && !r.Plan.searched {
-			args = append(args, "-probesize", "2M", "-analyzeduration", "1M")
-		}
-	}
+	seek, from := r.seekArgs(n, lookback)
+	args = append(args, seek...)
 	if r.Encode != nil {
 		args = append(args, r.Encode.inputs()...)
 	}
@@ -1565,13 +1623,7 @@ func (r Remux) args(n int, lookback time.Duration) []string {
 	}
 	args = append(args, r.audioArgs()...)
 	if r.Audio >= 0 {
-		// Audio before zero, such as encoder priming, is not played. AAC
-		// copied from MPEG-TS is reframed as MP4 stores it.
-		filters := `noise=drop=lt(pts\,0)`
-		if r.ADTS && r.AudioCodec == "" && r.Format == FMP4 {
-			filters = "aac_adtstoasc," + filters
-		}
-		args = append(args, "-bsf:a", filters)
+		args = append(args, "-bsf:a", r.audioFilters())
 	}
 	args = append(args, r.threadArgs()...)
 	args = append(args, "-avoid_negative_ts", "disabled", "-output_ts_offset", strconv.FormatFloat(timestampOffset.Seconds(), 'f', -1, 64))
@@ -1590,6 +1642,43 @@ func (r Remux) args(n int, lookback time.Duration) []string {
 		args = append(args, "-map", "0:"+strconv.Itoa(stream), "-c:s", "webvtt", "-flush_packets", "1", "-f", "webvtt", "pipe:"+strconv.Itoa(3+i))
 	}
 	return args
+}
+
+// seekArgs are FFmpeg's options reading the input from segment n, lookback
+// before it in a searched version, and the time it reads from, zero for
+// the start.
+func (r Remux) seekArgs(n int, lookback time.Duration) ([]string, time.Duration) {
+	var from time.Duration
+	if n > 0 {
+		from = r.Plan.seekTime(n, lookback)
+	}
+	if from <= 0 {
+		return nil, 0
+	}
+	// Converted audio starts where the demuxer does, on the keyframe, as
+	// copied streams do, instead of at the time asked.
+	args := []string{"-noaccurate_seek", "-ss", strconv.FormatFloat(from.Seconds(), 'f', 6, 64)}
+	// The version was analyzed already: FFmpeg probes the head of the file
+	// again before it seeks, and 2 MB of it, which the analysis left in the
+	// source cache, describe the streams it copies or decodes. 0 would be
+	// FFmpeg's 5 s, not none. A burned image track may need more to know
+	// its size, and an MPEG-TS file or disc to find every stream: both
+	// probe as usual.
+	if (r.Encode == nil || r.Encode.Burn == nil) && !r.Plan.Grid() && !r.Plan.searched {
+		args = append(args, "-probesize", "2M", "-analyzeduration", "1M")
+	}
+	return args, from
+}
+
+// audioFilters are the bitstream filters of the audio: audio before zero,
+// such as encoder priming, is not played, and AAC copied from MPEG-TS is
+// reframed as MP4 stores it.
+func (r Remux) audioFilters() string {
+	filters := `noise=drop=lt(pts\,0)`
+	if r.ADTS && r.AudioCodec == "" && r.Format == FMP4 {
+		filters = "aac_adtstoasc," + filters
+	}
+	return filters
 }
 
 // tail keeps the end of what a process writes.
