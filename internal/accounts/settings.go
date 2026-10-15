@@ -526,6 +526,17 @@ const (
 	DefaultRecordingRetentionDays = 0
 )
 
+// ErrInvalidConvertRecordingsHours reports a ConvertRecordingsFrom or
+// ConvertRecordingsUntil outside [0, 23], or both the same hour.
+var ErrInvalidConvertRecordingsHours = errors.New("invalid hours of the conversion of recordings")
+
+// The defaults of Settings.ConvertRecordingsFrom and ConvertRecordingsUntil:
+// from 1:00 to 6:00, in the server's time zone.
+const (
+	DefaultConvertRecordingsFrom  = 1
+	DefaultConvertRecordingsUntil = 6
+)
+
 // ErrInvalidPlaybackHistoryDays reports a PlaybackHistoryDays outside [1,
 // MaxPlaybackHistoryDays].
 var ErrInvalidPlaybackHistoryDays = errors.New("invalid playback history days")
@@ -1333,6 +1344,15 @@ type Settings struct {
 	// recordings, which apps may skip while SkipButtons is on (see package
 	// commercials).
 	RecordingCommercials bool
+	// ConvertRecordings converts finished recordings to HEVC, one at a
+	// time, from the hour ConvertRecordingsFrom to the hour
+	// ConvertRecordingsUntil, in the server's time zone, on the GPU
+	// conversions use, or on the processor when there is none and
+	// ConvertRecordingsOnProcessor is set.
+	ConvertRecordings            bool
+	ConvertRecordingsFrom        int
+	ConvertRecordingsUntil       int
+	ConvertRecordingsOnProcessor bool
 	// LiveTvRefreshHours is how many hours after it was fetched an XMLTV
 	// guide or an IPTV source's channel list is fetched again.
 	LiveTvRefreshHours int
@@ -1548,6 +1568,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"recording_pre_padding, recording_post_padding, recording_retention_days, " +
 	"recording_commercials, " +
 	"live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
+	"convert_recordings, convert_recordings_from, convert_recordings_until, convert_recordings_on_processor, " +
 	"custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, collection_library_apps, remuxdb, remuxdb_url, " +
@@ -1596,6 +1617,7 @@ func (settings *Settings) fields() []any {
 		&settings.RecordingCommercials,
 		&settings.LiveTvRefreshHours, &settings.LocalScanHours,
 		&settings.WatchLocalFolders,
+		&settings.ConvertRecordings, &settings.ConvertRecordingsFrom, &settings.ConvertRecordingsUntil, &settings.ConvertRecordingsOnProcessor,
 		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
 		&settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
@@ -1937,6 +1959,10 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.RecordingRetentionDays < 0 || settings.RecordingRetentionDays > MaxRecordingRetentionDays {
 		return Settings{}, ErrInvalidRecordingRetentionDays
+	}
+	if settings.ConvertRecordingsFrom < 0 || settings.ConvertRecordingsFrom > 23 || settings.ConvertRecordingsUntil < 0 ||
+		settings.ConvertRecordingsUntil > 23 || settings.ConvertRecordingsFrom == settings.ConvertRecordingsUntil {
+		return Settings{}, ErrInvalidConvertRecordingsHours
 	}
 	if settings.LiveTvRefreshHours < MinLiveTvRefreshHours || settings.LiveTvRefreshHours > MaxLiveTvRefreshHours {
 		return Settings{}, ErrInvalidLiveTvRefreshHours

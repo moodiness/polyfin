@@ -73,3 +73,34 @@ func TestAdministratorsLetUsersRecord(t *testing.T) {
 		t.Errorf("a change without it: %d %v", status, updated)
 	}
 }
+
+func TestSettingsRecordingConversion(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	conversion := func(body map[string]any) [4]any {
+		return [4]any{body["convertRecordings"], body["convertRecordingsFrom"], body["convertRecordingsUntil"], body["convertRecordingsOnProcessor"]}
+	}
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); conversion(body) != [4]any{false, 1.0, 6.0, false} {
+		t.Errorf("default settings: %v", body)
+	}
+	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
+	settings := maps.Clone(base)
+	maps.Copy(settings, map[string]any{"convertRecordings": true, "convertRecordingsFrom": 22, "convertRecordingsUntil": 5,
+		"convertRecordingsOnProcessor": true})
+	saved := [4]any{true, 22.0, 5.0, true}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK || conversion(body) != saved {
+		t.Fatalf("saving: %d %v", status, body)
+	}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK || conversion(body) != saved {
+		t.Errorf("saving without them: %d %v", status, body)
+	}
+	for _, refused := range []map[string]any{{"convertRecordingsFrom": 24}, {"convertRecordingsUntil": 22}} {
+		body := maps.Clone(base)
+		maps.Copy(body, refused)
+		if status, answer, _ := administrator.call(http.MethodPut, "/settings", body); status != http.StatusBadRequest ||
+			answer["error"] != "invalid_convert_recordings_hours" {
+			t.Errorf("%v: %d %v", refused, status, answer)
+		}
+	}
+}

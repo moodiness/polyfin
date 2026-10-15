@@ -136,6 +136,11 @@ func DefaultSettings() Settings {
 		LocalScanHours:         DefaultLocalScanHours,
 		WatchLocalFolders:      true,
 
+		ConvertRecordings:            false,
+		ConvertRecordingsFrom:        DefaultConvertRecordingsFrom,
+		ConvertRecordingsUntil:       DefaultConvertRecordingsUntil,
+		ConvertRecordingsOnProcessor: false,
+
 		CustomCss:             DefaultCustomCss,
 		CustomJs:              DefaultCustomJs,
 		AddVersionsToOpenPage: true,
@@ -328,6 +333,11 @@ func SettingsBounds() map[string]SettingBounds {
 		"liveTvRefreshHours":     between(MinLiveTvRefreshHours, MaxLiveTvRefreshHours, d.LiveTvRefreshHours),
 		"localScanHours":         between(0, MaxLocalScanHours, d.LocalScanHours),
 		"watchLocalFolders":      is(d.WatchLocalFolders),
+
+		"convertRecordings":            is(d.ConvertRecordings),
+		"convertRecordingsFrom":        between(0, 23, d.ConvertRecordingsFrom),
+		"convertRecordingsUntil":       between(0, 23, d.ConvertRecordingsUntil),
+		"convertRecordingsOnProcessor": is(d.ConvertRecordingsOnProcessor),
 
 		"customCss":               text(MaxCustomCodeBytes, d.CustomCss),
 		"customJs":                text(MaxCustomCodeBytes, d.CustomJs),

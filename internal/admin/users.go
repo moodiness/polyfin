@@ -571,6 +571,13 @@ type settingsJSON struct {
 	LocalScanHours *int `json:"localScanHours"`
 	// WatchLocalFolders keeps its current value when a PUT leaves it out.
 	WatchLocalFolders *bool `json:"watchLocalFolders"`
+	// ConvertRecordings, ConvertRecordingsFrom, ConvertRecordingsUntil and
+	// ConvertRecordingsOnProcessor keep their current values when a PUT
+	// leaves them out.
+	ConvertRecordings            *bool `json:"convertRecordings"`
+	ConvertRecordingsFrom        *int  `json:"convertRecordingsFrom"`
+	ConvertRecordingsUntil       *int  `json:"convertRecordingsUntil"`
+	ConvertRecordingsOnProcessor *bool `json:"convertRecordingsOnProcessor"`
 	// CustomCss, CustomJs and LoginDisclaimer, for jellyfin-web, keep their
 	// current values when a PUT leaves them out; empty clears them.
 	CustomCss       *string `json:"customCss"`
@@ -797,6 +804,11 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		LiveTvRefreshHours:     &settings.LiveTvRefreshHours,
 		LocalScanHours:         &settings.LocalScanHours,
 		WatchLocalFolders:      &settings.WatchLocalFolders,
+
+		ConvertRecordings:            &settings.ConvertRecordings,
+		ConvertRecordingsFrom:        &settings.ConvertRecordingsFrom,
+		ConvertRecordingsUntil:       &settings.ConvertRecordingsUntil,
+		ConvertRecordingsOnProcessor: &settings.ConvertRecordingsOnProcessor,
 
 		CustomCss:             &settings.CustomCss,
 		CustomJs:              &settings.CustomJs,
@@ -1428,6 +1440,11 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		LiveTvRefreshHours:     valueOr(body.LiveTvRefreshHours, current.LiveTvRefreshHours),
 		LocalScanHours:         valueOr(body.LocalScanHours, current.LocalScanHours),
 		WatchLocalFolders:      valueOr(body.WatchLocalFolders, current.WatchLocalFolders),
+
+		ConvertRecordings:            valueOr(body.ConvertRecordings, current.ConvertRecordings),
+		ConvertRecordingsFrom:        valueOr(body.ConvertRecordingsFrom, current.ConvertRecordingsFrom),
+		ConvertRecordingsUntil:       valueOr(body.ConvertRecordingsUntil, current.ConvertRecordingsUntil),
+		ConvertRecordingsOnProcessor: valueOr(body.ConvertRecordingsOnProcessor, current.ConvertRecordingsOnProcessor),
 
 		CustomCss:             valueOr(body.CustomCss, current.CustomCss),
 		CustomJs:              valueOr(body.CustomJs, current.CustomJs),

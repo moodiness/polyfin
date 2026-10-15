@@ -581,6 +581,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidThumbnailStorage, http.StatusBadRequest, "invalid_thumbnail_storage_gb"},
 		{accounts.ErrInvalidRecordingPadding, http.StatusBadRequest, "invalid_recording_padding"},
 		{accounts.ErrInvalidRecordingRetentionDays, http.StatusBadRequest, "invalid_recording_retention_days"},
+		{accounts.ErrInvalidConvertRecordingsHours, http.StatusBadRequest, "invalid_convert_recordings_hours"},
 		{accounts.ErrInvalidPlaybackHistoryDays, http.StatusBadRequest, "invalid_playback_history_days"},
 		{accounts.ErrInvalidLiveTvRefreshHours, http.StatusBadRequest, "invalid_live_tv_refresh_hours"},
 		{accounts.ErrInvalidLocalScanHours, http.StatusBadRequest, "invalid_local_scan_hours"},

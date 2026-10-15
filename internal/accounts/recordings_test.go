@@ -73,3 +73,40 @@ func TestOnlyAdministratorsRecordByDefault(t *testing.T) {
 		t.Errorf("after another change: %v %+v", err, updated)
 	}
 }
+
+// Recordings are not converted to HEVC by default, nor on the processor;
+// when they are, it is from 1:00 to 6:00, between two different hours.
+func TestRecordingConversionSettings(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	got := store.Settings()
+	if got.ConvertRecordings || got.ConvertRecordingsOnProcessor || got.ConvertRecordingsFrom != 1 || got.ConvertRecordingsUntil != 6 {
+		t.Errorf("defaults: %+v", got)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*Settings)
+	}{
+		{"a negative hour", func(s *Settings) { s.ConvertRecordingsFrom = -1 }},
+		{"an hour past 23", func(s *Settings) { s.ConvertRecordingsUntil = 24 }},
+		{"the same hour", func(s *Settings) { s.ConvertRecordingsFrom, s.ConvertRecordingsUntil = 3, 3 }},
+	} {
+		changed := store.Settings()
+		tc.change(&changed)
+		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, ErrInvalidConvertRecordingsHours) {
+			t.Errorf("%s: got %v", tc.name, err)
+		}
+	}
+	changed := store.Settings()
+	changed.ConvertRecordings, changed.ConvertRecordingsOnProcessor, changed.ConvertRecordingsFrom, changed.ConvertRecordingsUntil = true, true, 23, 0
+	if _, err := store.UpdateSettings(ctx, changed); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, store.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Settings(); !reflect.DeepEqual(got, changed) {
+		t.Errorf("after reopening: %+v, want %+v", got, changed)
+	}
+}
