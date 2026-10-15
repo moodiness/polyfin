@@ -91,6 +91,13 @@ type Config struct {
 	// Ended is told of each recording that ended, finished or failed; nil
 	// tells no one. It must not block.
 	Ended func(context.Context, Ended)
+	// Converter and Prober convert finished recordings to HEVC as the
+	// settings ask (see RunConversions); nil converts none. InUse reports
+	// whether someone plays a recording now, which waits to be replaced
+	// by its copy; nil, no one.
+	Converter Converter
+	Prober    Prober
+	InUse     func(accounts.ID) bool
 }
 
 // Ended is a recording that ended: finished, with its file, partial when
@@ -120,6 +127,18 @@ type Service struct {
 	retry    time.Duration
 	now      func() time.Time
 	ended    func(context.Context, Ended)
+
+	// converter, prober and inUse convert recordings to HEVC (see
+	// ConvertNext), within the space free gives, convertWake wakes them,
+	// and noEncoderLogged and spaceLogged keep them from logging the same
+	// wait again.
+	converter       Converter
+	prober          Prober
+	inUse           func(accounts.ID) bool
+	free            func(dir string) (int64, bool)
+	convertWake     chan struct{}
+	noEncoderLogged bool
+	spaceLogged     accounts.ID
 
 	wake chan struct{}
 	wg   sync.WaitGroup
@@ -152,7 +171,8 @@ var errStopped = errors.New("the recording was stopped")
 // New returns the recordings service.
 func New(c Config) *Service {
 	s := &Service{db: c.DB, folder: c.Folder, guide: c.Guide, recorder: c.Recorder, users: c.Users, logger: c.Logger,
-		retry: retryDelay, now: time.Now, ended: c.Ended, wake: make(chan struct{}, 1), active: map[accounts.ID]*active{}, skipped: map[accounts.ID]bool{}}
+		retry: retryDelay, now: time.Now, ended: c.Ended, wake: make(chan struct{}, 1), active: map[accounts.ID]*active{}, skipped: map[accounts.ID]bool{},
+		converter: c.Converter, prober: c.Prober, inUse: c.InUse, free: freeSpace, convertWake: make(chan struct{}, 1)}
 	if s.folder == nil {
 		s.folder = func() string { return "" }
 	}
@@ -485,6 +505,7 @@ func (s *Service) finish(ctx context.Context, dir string, id accounts.ID, until 
 		s.keepUpTo(ctx, *series)
 	}
 	s.tell(ctx, ended)
+	s.WakeConversions()
 }
 
 // tell tells Config.Ended, if any, that a recording ended.
@@ -753,8 +774,8 @@ func timeOfDay(t time.Time) time.Duration {
 	return t.Sub(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC))
 }
 
-// removeFiles deletes a recording's file and parts from the current
-// recordings folder; while recording is off, they are left there.
+// removeFiles deletes a recording's file, parts and HEVC copy from the
+// current recordings folder; while recording is off, they are left there.
 func (s *Service) removeFiles(r Recording) {
 	dir := s.Dir()
 	if dir == "" {
@@ -764,6 +785,9 @@ func (s *Service) removeFiles(r Recording) {
 		if err := os.Remove(filepath.Join(dir, r.File)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			s.logger.Warn("A recording's file could not be deleted", "error", err)
 		}
+	}
+	if err := os.Remove(copyPath(dir, r.ID)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		s.logger.Warn("A recording's HEVC copy could not be deleted", "error", err)
 	}
 	for n := 0; ; n++ {
 		if err := os.Remove(partPath(dir, r.ID, n)); err != nil {

@@ -44,6 +44,7 @@ import (
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/loudness"
 	"github.com/moodiness/polyfin/internal/lyrics"
+	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/notifications"
@@ -365,15 +366,21 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// Recording and backups follow the settings, which turn them on and
 	// choose their folders. Recordings that end are told to the
 	// notifications, made below, before any recording starts, and have
-	// their commercial breaks looked for in the background.
+	// their commercial breaks looked for in the background. Finished
+	// recordings are converted to HEVC as the settings ask, on the GPU
+	// conversions use, a recording being played replaced once the
+	// playbacks followed below and its encodings stop.
 	var notifier *notifications.Service
 	var breaks *commercials.Service
+	var playbacks *plays.Tracker
 	recorder := recordings.New(recordings.Config{DB: pool, Folder: func() string { return store.Settings().RecordingsDir(cfg.DataDir) },
 		Guide: lib, Recorder: player, Users: store, Logger: logger,
 		Ended: func(ctx context.Context, ended recordings.Ended) {
 			notifier.RecordingEnded(ctx, ended)
 			breaks.Ended(ctx, ended)
-		}})
+		},
+		Converter: segments, Prober: media.Prober{Path: cfg.FFprobe, Timeout: time.Minute},
+		InUse: func(id accounts.ID) bool { return player.FileInUse(id) || playbacks.Playing(id) }})
 	if recorder.Available() {
 		logger.Info("Live TV recording is on", "folder", recorder.Dir())
 	}
@@ -462,7 +469,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// that stop, and the notifications, made below, tell every change.
 	history := plays.NewHistory(pool, store.Settings, logger)
 	registerPlaybackHistoryTask(registry, history, logger)
-	playbacks := plays.NewTracker(func(c plays.Change) {
+	playbacks = plays.NewTracker(func(c plays.Change) {
 		history.Record(context.Background(), c)
 		notifier.Playback(c)
 	})
@@ -647,6 +654,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// Recordings in progress when ctx ends are finished, as partial, when
 	// Polyfin starts again.
 	go recorder.Run(ctx)
+	go recorder.RunConversions(ctx)
 	// What was left to send to tracking services is sent again.
 	go tracking.Run(ctx)
 	// The app connections due are imported, then as often as the settings

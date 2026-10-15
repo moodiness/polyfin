@@ -150,7 +150,8 @@ func tunersShort(result []timerJSON, timers []tunerTimer) {
 
 // timers lists the Live TV recordings scheduled and under way, by start;
 // none when recording is off. Those that would need more tuners than
-// their tuner has are marked.
+// their tuner has are marked. Converted tells the recordings converted to
+// HEVC, and the bytes their conversion saved.
 func (h *handler) timers(w http.ResponseWriter, r *http.Request) {
 	result := []timerJSON{}
 	if h.Recordings == nil || !h.Recordings.Available() {
@@ -193,5 +194,11 @@ func (h *handler) timers(w http.ResponseWriter, r *http.Request) {
 		result = append(result, timer)
 	}
 	tunersShort(result, tuned)
-	writeJSON(w, http.StatusOK, map[string]any{"available": true, "timers": result})
+	converted, saved, err := h.Recordings.SpaceSaved(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"available": true, "timers": result,
+		"converted": map[string]any{"recordings": converted, "saved": saved}})
 }

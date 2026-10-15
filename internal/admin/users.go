@@ -1528,6 +1528,12 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if settings.RecordingsDir(h.DataDir) != current.RecordingsDir(h.DataDir) {
 		h.Recordings.Wake()
 	}
+	// The conversion of recordings applies its settings at once.
+	if settings.ConvertRecordings != current.ConvertRecordings || settings.ConvertRecordingsFrom != current.ConvertRecordingsFrom ||
+		settings.ConvertRecordingsUntil != current.ConvertRecordingsUntil ||
+		settings.ConvertRecordingsOnProcessor != current.ConvertRecordingsOnProcessor {
+		h.Recordings.WakeConversions()
+	}
 	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
 }
 
