@@ -6,6 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -465,4 +467,194 @@ func newPollTest(t *testing.T, r remote, folders func(context.Context) ([]watchF
 		wg.Wait()
 	})
 	return &watchTest{t: t, w: w, wg: wg, scans: scans}, shares
+}
+
+// basicCatcher is an HTTP server keeping the passwords of the Basic
+// authorizations it is sent, refusing them all.
+type basicCatcher struct {
+	*httptest.Server
+	mu        sync.Mutex
+	passwords []string
+}
+
+func catchBasic(t *testing.T) *basicCatcher {
+	t.Helper()
+	c := &basicCatcher{}
+	c.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, password, ok := r.BasicAuth(); ok {
+			c.mu.Lock()
+			c.passwords = append(c.passwords, password)
+			c.mu.Unlock()
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(c.Close)
+	return c
+}
+
+func (c *basicCatcher) got(password string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Contains(c.passwords, password)
+}
+
+// A folder's stored secrets go only to the server they were given for.
+// The rclone remotes are listed with a folder's stored password only at
+// its own rclone instance's address. A folder moved to another server or
+// kind of share, or a bucket to another endpoint, keeps none of its
+// secrets but those given again, which its form asks for; within the
+// same server it keeps them.
+func TestStoredSecretsStayWithTheirServer(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.service.box = box
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
+	_, s3Server := serveS3(t, dir, "media", "AKIDTEST", "the bucket's secret key")
+	_, rcloneServer := serveRclone(t, "media", dir, "rc", "the rclone password")
+	rcloneHost, _ := url.Parse(rcloneServer.URL)
+	_, otherS3 := serveS3(t, dir, "media", "AKIDTEST", "the bucket's secret key")
+	elsewhere := catchBasic(t)
+	elsewhereHost, _ := url.Parse(elsewhere.URL)
+	add := func(folder NewFolder) accounts.ID {
+		t.Helper()
+		addon, err := e.service.Add(t.Context(), folder)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.idle(addon.ID)
+		return addon.ID
+	}
+	update := func(id accounts.ID, changes Changes) Folder {
+		t.Helper()
+		if _, err := e.service.Update(t.Context(), id, changes); err != nil {
+			t.Fatal(err)
+		}
+		e.idle(id)
+		folder, err := e.service.Folder(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return folder
+	}
+	newBucket := func() accounts.ID {
+		return add(NewFolder{Name: "Bucket", Path: "s3://media/movies", Kind: KindMovies, Endpoint: s3Server.URL, User: "AKIDTEST",
+			Password: "the bucket's secret key"})
+	}
+	bucket := newBucket()
+	remote := add(NewFolder{Name: "Remote", Path: "rclone://" + rcloneHost.Host + "/movies", Kind: KindMovies, Remote: "media", User: "rc",
+		Password: "the rclone password"})
+
+	if remotes, failure, err := e.service.RcloneRemotes(t.Context(), rcloneServer.URL, "rc", nil, &remote); err != nil || failure != "" ||
+		!slices.Equal(remotes, []string{"media"}) {
+		t.Errorf("the folder's own instance: %v %q %v", remotes, failure, err)
+	}
+	for name, id := range map[string]accounts.ID{"an rclone folder's": remote, "a bucket's": bucket} {
+		if _, failure, err := e.service.RcloneRemotes(t.Context(), elsewhere.URL, "rc", nil, &id); err != nil || failure != errRefused {
+			t.Errorf("%s elsewhere: %q %v", name, failure, err)
+		}
+	}
+	if elsewhere.got("the rclone password") || elsewhere.got("the bucket's secret key") {
+		t.Error("listing the remotes elsewhere sent a folder's stored secret")
+	}
+
+	// Within the same server, the secrets stay.
+	if folder := update(bucket, Changes{Path: new("s3://other/movies")}); !folder.PasswordSet {
+		t.Error("another bucket at the same endpoint lost its secret key")
+	}
+	if folder := update(remote, Changes{Path: new("rclone://" + rcloneHost.Host + "/elsewhere")}); !folder.PasswordSet {
+		t.Error("another folder of the same rclone instance lost its password")
+	}
+	// Another endpoint, another server or another kind of share does not
+	// get them.
+	if folder := update(bucket, Changes{Endpoint: new(otherS3.URL)}); folder.PasswordSet || folder.User != "AKIDTEST" {
+		t.Errorf("a bucket at another endpoint: %+v", folder)
+	}
+	moved := newBucket()
+	if folder := update(moved, Changes{Path: new("rclone://" + elsewhereHost.Host + "/movies"), Remote: new("media")}); folder.PasswordSet ||
+		folder.Share != ShareRclone {
+		t.Errorf("a bucket become an rclone remote elsewhere: %+v", folder)
+	}
+	if folder := update(remote, Changes{Path: new("rclone://" + elsewhereHost.Host + "/remote")}); folder.PasswordSet {
+		t.Errorf("an rclone folder moved to another instance: %+v", folder)
+	}
+	if elsewhere.got("the rclone password") || elsewhere.got("the bucket's secret key") {
+		t.Error("a folder moved elsewhere sent its stored secret there")
+	}
+	// Secrets given with the move go there.
+	given := newBucket()
+	if folder := update(given, Changes{Path: new("rclone://" + elsewhereHost.Host + "/given"), Remote: new("media"),
+		Password: new("a new password")}); !folder.PasswordSet ||
+		!elsewhere.got("a new password") {
+		t.Errorf("a password given with the move: %+v", folder)
+	}
+
+	// An SFTP folder's private key and passphrase stay on its server.
+	signer, private := newSigner(t)
+	server := serveSFTP(t, "reader", "", signer.PublicKey())
+	other := serveSFTP(t, "reader", "", signer.PublicKey())
+	key := openSSHKey(t, private, "pass phrase")
+	sftpFolder := add(NewFolder{Name: "Server", Path: "sftp://" + server.addr + filepath.ToSlash(filepath.Join(dir, "movies")), Kind: KindMovies,
+		User: "reader", PrivateKey: key, Passphrase: "pass phrase"})
+	if folder := update(sftpFolder, Changes{Path: new("sftp://" + server.addr + filepath.ToSlash(dir))}); !folder.PrivateKeySet ||
+		!folder.PassphraseSet || folder.Error != "" {
+		t.Errorf("another folder of the same server: %+v", folder)
+	}
+	address := "sftp://" + other.addr + filepath.ToSlash(filepath.Join(dir, "movies"))
+	if folder := update(sftpFolder, Changes{Path: &address}); folder.PrivateKeySet || folder.PassphraseSet {
+		t.Errorf("a folder moved to another server: %+v", folder)
+	}
+	if folder := update(sftpFolder, Changes{PrivateKey: &key, Passphrase: new("pass phrase")}); !folder.PrivateKeySet || folder.Error != "" ||
+		folder.Files != 1 {
+		t.Errorf("the key given again: %+v", folder)
+	}
+}
+
+// The versions of a folder whose host key, credentials or address an
+// administrator changed are tried again at once, as they may have failed
+// for what changed; a change of its name or options leaves them be.
+func TestFolderChangesRetryItsVersions(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
+	server := serveSFTP(t, "reader", "pass phrase", nil)
+	// Update tells of the change before it returns.
+	var retried []accounts.ID
+	e.service.UseRetry(func(folder accounts.ID) { retried = append(retried, folder) })
+	addon, err := e.service.Add(t.Context(), NewFolder{Name: "Server", Path: "sftp://" + server.addr + filepath.ToSlash(filepath.Join(dir, "movies")),
+		Kind: KindMovies, User: "reader", Password: "pass phrase"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.idle(addon.ID)
+	server.rekey(t)
+	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name    string
+		changes Changes
+		retried bool
+	}{
+		{"a name", Changes{Name: new("Other server")}, false},
+		{"its artwork", Changes{UseArtwork: new(false)}, false},
+		{"the host key accepted", Changes{AcceptHostKey: true}, true},
+		{"a password", Changes{Password: new("pass phrase")}, true},
+		{"another user", Changes{User: new("other")}, true},
+		{"an address", Changes{Path: new("sftp://" + server.addr + filepath.ToSlash(dir))}, true},
+	} {
+		retried = nil
+		if _, err := e.service.Update(t.Context(), addon.ID, c.changes); err != nil {
+			t.Fatal(err)
+		}
+		e.idle(addon.ID)
+		if want := []accounts.ID{addon.ID}; c.retried != slices.Equal(retried, want) || !c.retried && retried != nil {
+			t.Errorf("%s: retried %v", c.name, retried)
+		}
+	}
 }

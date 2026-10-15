@@ -302,6 +302,17 @@ func serverOf(address string) string {
 	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host)
 }
 
+// secretsServer is where a folder's stored secrets go, its password,
+// private key and passphrase, with its kind of share: the server of its
+// address, or an S3 bucket's endpoint's.
+func secretsServer(address, endpoint string) string {
+	kind := shareKind(address)
+	if kind == ShareS3 {
+		address = strings.TrimSpace(endpoint)
+	}
+	return kind + " " + serverOf(address)
+}
+
 // remoteEntry is an entry of a share's folder: a folder, or a file with
 // its size and modification time.
 type remoteEntry struct {

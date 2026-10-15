@@ -112,6 +112,9 @@ type Service struct {
 	// found is told of the videos a scan of a movies or shows folder found
 	// new or changed (see UseScanned), nil until set.
 	found func(videos []stremio.Stream)
+	// retry is told of a folder whose address, credentials or host key
+	// changed (see UseRetry), nil until set.
+	retry func(folder accounts.ID)
 	// ffprobe and ffmpeg read a music folder's tracks, their tags and
 	// their embedded covers, and a home videos folder's videos, their
 	// dates and frames; toneMapping tells whether ffmpeg brings HDR to SDR
@@ -213,6 +216,12 @@ func (s *Service) UseMeter(meter *loudness.Meter) { s.meter = meter }
 // them (see playback.Service.QueueScanned). It is called before the
 // service is used.
 func (s *Service) UseScanned(found func(videos []stremio.Stream)) { s.found = found }
+
+// UseRetry sets what is told of a folder whose address, credentials or
+// host key an administrator changed, so that its versions that could not
+// be read before are tried again at once (see playback.Service.Retry). It
+// is called before the service is used.
+func (s *Service) UseRetry(retry func(folder accounts.ID)) { s.retry = retry }
 
 // Watch watches the folders for changes until Close; it is called once,
 // before the service is used.
@@ -494,7 +503,10 @@ type Changes struct {
 // applies at the next scan, or what it holds. A new path or address forgets the
 // files found in the former one, their links included, and is scanned at
 // once, as a share whose user or password changed is. A path in the
-// container keeps no user nor password.
+// container keeps no user nor password. A share moved to another server,
+// port or kind of share, or an S3 bucket to another endpoint, keeps none
+// of its stored password, private key and passphrase but those the changes
+// give again: they go only to the server they were given for.
 //
 // What a folder holds changes as a new path does, its addon and library
 // kept with their identifiers (see addons.Store.Update): the links made by
@@ -550,6 +562,20 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		{changes.PrivateKey, &extra.privateKey}, {changes.Passphrase, &extra.passphrase}} {
 		if field.from != nil {
 			*field.to = *field.from
+		}
+	}
+	if secretsServer(location, extra.endpoint) != secretsServer(current.Addon.ManifestURL, stored.endpoint) {
+		// Stored secrets go only to the server they were given for: on
+		// another server, port or kind of share, the folder keeps only
+		// those the changes give again.
+		if changes.Password == nil {
+			changes.Password = new("")
+		}
+		if changes.PrivateKey == nil {
+			extra.privateKey = ""
+		}
+		if changes.Passphrase == nil {
+			extra.passphrase = ""
 		}
 	}
 	if shareKind(current.Addon.ManifestURL) != share {
@@ -656,6 +682,10 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 	if changes.AcceptHostKey || rehosted {
 		// The reader keeps the host key it was made with.
 		s.forgetRemote(id)
+	}
+	if (moved || credentials) && s.retry != nil {
+		// What failed to be read may have failed for what changed.
+		s.retry(id)
 	}
 	s.artworkChanged()
 	if moved || retyped || share != "" && credentials {

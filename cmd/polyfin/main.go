@@ -323,6 +323,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// not read, as those of rewritable and write-once media are, is read
 	// through FFmpeg to tell a Blu-ray disc's.
 	folders.UseProbe(player.ProbesInput)
+	// A folder whose address, credentials or host key changed has its
+	// versions that could not be read tried again at once.
+	folders.UseRetry(player.Retry)
 	// Picture subtitles are read into text with Tesseract, as the settings
 	// ask: those of the versions played, and of the videos scans find. The
 	// files written meanwhile go in the cache folder, emptied at start, as

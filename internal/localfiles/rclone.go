@@ -135,10 +135,12 @@ func (c *rcloneShare) call(ctx context.Context, method string, input, output any
 // RcloneRemotes lists the remotes the rclone instance at address knows,
 // http://host:port or an rclone folder's address, signed in as user with
 // password; a password left out is the one stored for the folder, when
-// one is given, as a folder's form lists them again. failure tells why
-// the instance could not list them, "unreachable" or "refused", as a
-// folder's Error; the error is the request's, ErrInvalidAddress for an
-// address without a host.
+// one is given, as a folder's form lists them again, but only toward the
+// instance the folder is read through: at another address, or for a
+// folder of another kind, the instance is asked without a password.
+// failure tells why the instance could not list them, "unreachable" or
+// "refused", as a folder's Error; the error is the request's,
+// ErrInvalidAddress for an address without a host.
 func (s *Service) RcloneRemotes(ctx context.Context, address, user string, password *string, folder *accounts.ID) (remotes []string,
 	failure string, err error) {
 	u, err := url.Parse(strings.TrimSpace(address))
@@ -153,13 +155,19 @@ func (s *Service) RcloneRemotes(ctx context.Context, address, user string, passw
 	case password != nil:
 		secret = *password
 	case folder != nil:
-		var sealed string
-		err := s.db.QueryRow(ctx, "SELECT share_password FROM local_folders WHERE addon_id = $1", *folder).Scan(&sealed)
+		var location, sealed string
+		err := s.db.QueryRow(ctx, `SELECT a.manifest_url, f.share_password FROM local_folders f JOIN addons a ON a.id = f.addon_id
+			WHERE f.addon_id = $1`, *folder).Scan(&location, &sealed)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, "", addons.ErrNotFound
 		}
 		if err != nil {
 			return nil, "", err
+		}
+		if own, err := url.Parse(location); err != nil || shareKind(location) != ShareRclone || !strings.EqualFold(own.Host, u.Host) {
+			// The stored password is the folder's instance's, sent nowhere
+			// else.
+			break
 		}
 		if secret, err = s.box.Open(sealed); err != nil {
 			return nil, errRefused, nil
