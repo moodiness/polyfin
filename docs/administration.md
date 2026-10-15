@@ -79,6 +79,8 @@ Local network discovery has two warnings, linked to its settings (see [Local net
 
 HTTPS has four, linked to its settings: a port it cannot listen on, certificate files that cannot be served, a failed attempt with Let's Encrypt, and a certificate that expires within 14 days, an error once it expired (see [HTTPS problems](#https-problems)).
 
+A picture subtitle track that could not be read into text, its language having no Tesseract data, is a warning, one per language, naming the language and the `.traineddata` file to put in the folder `POLYFIN_TESSDATA_DIR` names, with a link to **Turn picture subtitles into text**. It goes away once the file is there (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
+
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
 
 Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).

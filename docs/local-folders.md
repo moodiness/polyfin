@@ -223,7 +223,7 @@ The words after the video's name, separated by dots, are read in any order and l
 - `default`: the subtitles shown by default;
 - any other word is the subtitles' title, such as `Movie (2001).en.Commentary.srt`.
 
-When videos of the same folder begin alike, such as `Movie (2001).mkv` and `Movie (2001) - 1080p.mkv`, a subtitle file belongs to the longest name it begins with. A Blu-ray disc's subtitle files sit in its disc folder, beside `BDMV`, named after the disc folder: `Nosferatu (1922)/Nosferatu (1922).fr.srt`. A VobSub pair is named by its `.idx` file; an `.idx` file without its `.sub` file is left out, and a `.sub` file alone is not read. When the name of a VobSub pair tells no language, the language of the first track its `.idx` file lists is used, and only that first track is offered. See [Subtitles](subtitles.md#subtitle-files-beside-local-files) for how they reach apps.
+When videos of the same folder begin alike, such as `Movie (2001).mkv` and `Movie (2001) - 1080p.mkv`, a subtitle file belongs to the longest name it begins with. A Blu-ray disc's subtitle files sit in its disc folder, beside `BDMV`, named after the disc folder: `Nosferatu (1922)/Nosferatu (1922).fr.srt`. A VobSub pair is named by its `.idx` file; an `.idx` file without its `.sub` file is left out, and a `.sub` file alone is not read. When the name of a VobSub pair tells no language, the language of the first track its `.idx` file lists is used, and only that first track is offered. See [Subtitles](subtitles.md#subtitle-files-beside-local-files) for how they reach apps. With **Turn picture subtitles into text** on, PGS files and VobSub pairs are also read into text copies, read again when the file changes (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
 
 ## Blu-ray discs
 
@@ -302,7 +302,7 @@ Limits:
 
 - On a network share, a DVD's title is read as one MPEG program stream of its cells (see [Discs on shares](#discs-on-shares)) rather than through FFmpeg's DVD reader: it has no chapters, and its cells' timestamps are read as they are, without the corrections FFmpeg's DVD reader makes where they restart.
 - There is no direct play, and no download.
-- A DVD's subtitles are pictures (VobSub). They are not offered as files, so an app that draws subtitles itself gets none; an app that cannot show them gets them burned into the video.
+- A DVD's subtitles are pictures (VobSub). They are not offered as files, so an app that draws subtitles itself gets none; an app that cannot show them gets them burned into the video. With **Turn picture subtitles into text** on, their text copies are offered as files once read, to every app (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
 - No thumbnails or chapter images are made for a DVD.
 - A DVD's MPEG-2 video is converted even for an app that takes it: the IFO files' time maps tell where each second starts, not where each keyframe does, and FFmpeg's DVD reader starts a seek's timestamps at the time asked rather than at the keyframe it lands on, so copied segments would not join.
 - The DVD must not be encrypted: Polyfin reads DVDs copied without their copy protection.

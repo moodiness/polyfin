@@ -1,14 +1,15 @@
 # Subtitles
 
-This page explains where Polyfin's subtitles come from and how they reach each Jellyfin app: addon subtitles and how they are synced to the version played, subtitle files beside local files, text tracks inside files, ASS styles and fonts, and image subtitles.
+This page explains where Polyfin's subtitles come from and how they reach each Jellyfin app: addon subtitles and how they are synced to the version played, subtitle files beside local files, text tracks inside files, ASS styles and fonts, and image subtitles, which Polyfin can read into text.
 
 ## Where subtitles come from
 
-Apps get three kinds of subtitles:
+Apps get four kinds of subtitles:
 
 - subtitles from the addons;
 - the subtitle files beside a local file, for that file's version;
-- the text tracks inside a version's file.
+- the text tracks inside a version's file;
+- the text copies of picture subtitles, with **Turn picture subtitles into text** on (see [Picture subtitles read into text](#picture-subtitles-read-into-text)).
 
 All reach each app in the format it takes. Apps can save the user's subtitle language and subtitle mode, which choose the default subtitle track (see [Playback](playback.md#versions-and-analysis)).
 
@@ -63,7 +64,7 @@ A video of a [local folder](local-folders.md) offers the SubRip, ASS, SSA and We
 - Each app gets them in the format it asks for, as it gets the addons' subtitles: WebVTT, SubRip, ASS or JSON. An ASS file asked as ASS keeps its styles and positions.
 - Files in UTF-8 (with or without a byte order mark) and UTF-16 are read as they are. A file that is not valid UTF-8 is read as Windows-1252, the usual encoding of older subtitles, so that accents survive.
 - Polyfin reads them from the folder or the network share when an app asks for them, and keeps their text for a while. A file that changes is read again after the next scan.
-- Picture subtitle files are listed with the codec Jellyfin gives them, `PGSSUB` or `DVDSUB`. They are never converted to text. An app that draws PGS, such as jellyfin-web, gets the `.sup` file as it is, read by byte ranges. A VobSub pair is not one file: like Jellyfin 12.2, which gives VobSub as a file only extracted as Matroska, Polyfin burns it into the video, and so it does a PGS file for an app that does not draw PGS (see [Image subtitles](#image-subtitles)).
+- Picture subtitle files are listed with the codec Jellyfin gives them, `PGSSUB` or `DVDSUB`. An app that draws PGS, such as jellyfin-web, gets the `.sup` file as it is, read by byte ranges. A VobSub pair is not one file: like Jellyfin 12.2, which gives VobSub as a file only extracted as Matroska, Polyfin burns it into the video, and so it does a PGS file for an app that does not draw PGS (see [Image subtitles](#image-subtitles)). With **Turn picture subtitles into text** on, both are also read into text copies, which play without conversion (see [Picture subtitles read into text](#picture-subtitles-read-into-text)).
 
 ## Text tracks inside files
 
@@ -96,3 +97,48 @@ Fallback fonts, which apps load when a subtitle's own fonts are missing, come fr
 ## Image subtitles
 
 When an app cannot show image subtitles, Polyfin burns them into the video: an image track inside the file, or a picture subtitle file beside a local file, which FFmpeg reads beside the video. This is a video conversion: it counts toward **Video conversions at once** (see [Playback](playback.md#video-conversions-at-once)) and is described in [Transcoding](transcoding.md). A subtitle file burned in is read from its start; after a seek, a picture shown more than 10 seconds before the seek point and still on screen is not drawn until the next one.
+
+With **Turn picture subtitles into text** on, a text copy of the track spares that conversion once it is ready.
+
+### Picture subtitles read into text
+
+PGS and DVD (VobSub) subtitles are pictures, and many apps take only text: jellyfin-web in Chrome (unless set to draw PGS) and Findroid list text formats alone, and Swiftfin's native player asks PGS and VobSub burned in. Polyfin can read these pictures into text with Tesseract, so that these apps get a text track instead of a conversion.
+
+Under **Settings › Conversion**, in **Picture subtitles**:
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Turn picture subtitles into text** | **Off** | **When played** reads a version's picture tracks the first time an app that cannot draw them plays it, the chosen track first. **Also after library scans** also reads the tracks of the new or changed videos that scans of local folders find. |
+| **Picture subtitle tracks read at once** | 1 (range 1 to 4) | How many tracks Tesseract reads at the same time, each in one process using one processor thread. |
+
+What is read:
+
+- PGS and VobSub tracks inside an addon's Matroska file, read through the file's index as text tracks are, within the same request limits (see [Text tracks inside files](#text-tracks-inside-files)).
+- The tracks of local files and discs, which FFmpeg copies out without conversion.
+- PGS files (`.sup`) and VobSub pairs (`.idx` and `.sub`) beside local files. Of a `.idx` file listing several tracks, the first is read.
+- DVB subtitles are not read.
+
+Polyfin decodes the pictures itself. Each one is cropped to its text, made dark text on a white background, as Tesseract reads best, and enlarged when its lines are small, as those of DVDs are. The times of the lines are those of the pictures.
+
+How apps see the copy:
+
+- It is one more subtitle track, listed after the version's tracks so that no track's index moves, with the original's language and its forced and hearing-impaired flags. Its title is the original's title or language followed by "(OCR)", such as `English (OCR) - SUBRIP - External`.
+- It reaches apps as other text subtitles do, in the format the app asks for (WebVTT, SubRip, ASS or JSON) or in the HLS playlist. It needs no video conversion, and plays with **Conversion (transcoding)** off and for users without **Can use conversion (transcoding)**.
+- The picture track stays: it is listed and served as before, and burned in when an app asks for it.
+- When the app asks for no track, the default choice treats the copy like its original, and picks the copy only for an app that would need the original burned in.
+
+When it runs:
+
+- Reading runs in the background and never delays a playback. Until a copy is ready, the track is burned in as before. The copy is listed from the next time the app asks how to play the version, which most apps do as each playback starts.
+- Each track is read once. Its text is kept in the database, not in the `cache` folder that is emptied at startup, and survives restarts. A track inside a local file is known by the file's folder, path, size and modification time, a track of an addon's file by its version and stream, and a subtitle file beside a local file by its path, size and modification time. A file that changes is read again.
+- A track that could not be read is tried again after 6 hours. A track in which Tesseract finds no text gets no copy.
+
+Languages:
+
+- Tesseract reads each track with its language's data: `fre` and `fra` both use `fra`. A track with no stated language uses the server's language.
+- The Docker image comes with the data of English, French, German, Spanish, Italian, Portuguese and Dutch. Data for other languages, `.traineddata` files, goes in the folder `POLYFIN_TESSDATA_DIR` names, `/data/tessdata` in the image (see [Configuration](configuration.md)).
+- A track whose language has no data is not read, and **System › Health** names the language and the file to add (see [Health](administration.md#health)).
+
+Known limits: italics, colors and positions are lost, and the copy shows plain lines at the bottom. Stylized fonts and small DVD pictures can give misread letters. This is why the original stays, and the copy is marked.
+
+**Compared with Jellyfin:** Jellyfin never reads picture subtitles into text.
