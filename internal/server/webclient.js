@@ -299,13 +299,19 @@
     ['apikeys', 'system/api-keys'],
   ]
   // The admin page for a route: "" (home) unless it is a dashboard page with a match. A user's
-  // dashboard pages name the user with ?userId=, which opens that user.
+  // dashboard pages name the user with ?userId=, which opens that user. A tuner's page names it
+  // with ?id=, the identifier of its source among the server's, which opens that source; without
+  // one, the page adds a tuner, which opens Add a source on its HDHomeRun tuner tab.
   function target(hash) {
     if (!/^#!?\/dashboard(?:[/?#]|$)/i.test(hash)) return ''
     var path = hash.replace(/^#!?\/dashboard\/?/i, '').split(/[?#]/)[0].toLowerCase()
     var user = /[?&]userId=([0-9a-f-]+)/i.exec(hash)
     // The admin app names users by 32 lowercase hexadecimal digits.
     if (user && /^users(\/|$)/.test(path)) return 'users/' + user[1].replace(/-/g, '').toLowerCase()
+    if (/^livetv\/tuner(\/|$)/.test(path)) {
+      var tuner = /[?&]id=([0-9a-f]{32})(?:[&#]|$)/i.exec(hash)
+      return tuner ? 'sources/shared/' + tuner[1].toLowerCase() : 'sources?add=hdhomerun'
+    }
     for (var i = 0; i < pages.length; i++) {
       var prefix = pages[i][0]
       if (path === prefix || path.indexOf(prefix + '/') === 0) return pages[i][1]
