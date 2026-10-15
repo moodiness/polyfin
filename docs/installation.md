@@ -58,6 +58,8 @@ docker run -d --name polyfin --network host -v polyfin_data:/data \
 
 Only one program on a host's network can use port 7359: next to a Jellyfin server on the same host's network, Polyfin starts anyway, logs it, and **System › Health** says that it cannot answer. When the answers would give the container's address, **System › Health** says so too. To stop answering, turn off **Answer local network discovery**, under **Settings › General**. See [Local network discovery](administration.md#local-network-discovery) for both settings.
 
+TVs and players that browse DLNA servers find Polyfin the same way, once **Share libraries over DLNA** is on under **Settings › DLNA**: they search by multicast on UDP port 1900, which reaches the container only on the host's network or on a network that gives it its own address. Publishing `1900:1900/udp` on a bridge network only helps devices that search the host's address directly. Next to another DLNA server on the same host's network, Polyfin starts anyway and **System › Health** says that it cannot listen on 1900. See [DLNA](dlna.md#docker-networking).
+
 ### Serve HTTPS
 
 Polyfin can serve HTTPS itself, on port 8920 by default, with certificate files or a certificate from Let's Encrypt (see [HTTPS](administration.md#https)). Publish the HTTPS port next to 8096 in `compose.yaml`, then choose **Serve HTTPS** under **Settings › Security**:

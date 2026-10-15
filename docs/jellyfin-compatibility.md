@@ -207,6 +207,15 @@ Jellyfin apps that look for servers on the local network list Polyfin, as they l
 - `LocalAddress` of `/System/Info/Public` and `/System/Info` is **Address on the local network** when set, as Jellyfin gives its `PublishedServerUrl` there, and otherwise the address the request reached: over the HTTPS Polyfin serves itself, `https://` and the HTTPS port included (see [HTTPS](administration.md#https)).
 - While Polyfin serves HTTPS, discovery answers keep the HTTP address: a certificate for a public name does not match the server's address on the local network, and HTTP is never redirected there. Jellyfin, too, announces its HTTP address unless `PublishedServerUrl` says otherwise. To announce HTTPS, set **Address on the local network** to an `https://` address whose name the certificate holds.
 
+### DLNA devices
+
+TVs and players that play over DLNA, without a Jellyfin app, browse and play the libraries of the user an administrator chose for each (see [DLNA](dlna.md)). Their playbacks show in the web client's dashboard and in `/Sessions` like an app's, with the app named `DLNA` and the device's name; Polyfin cannot control them.
+
+**For app developers:**
+
+- A DLNA playback is listed in `/Sessions` under its user, with `Client` `DLNA`, `DeviceName` the device's name, `DeviceId` `dlna-` and the device's ID, `RemoteEndPoint` its address, `NowPlayingItem` and `PlayState`. `SupportsRemoteControl` and `SupportsMediaControl` are false, and a listing with `controllableByUserId` leaves it out.
+- `PositionTicks` is how far the device read, as Polyfin infers it: devices report nothing. A DLNA playback counts against the user's **Playbacks at once**, as an app's does.
+
 ### Backups
 
 The backups page of the web client's dashboard, since Jellyfin 10.11, shows the database backups of the backups folder (see [Backups](backups.md)): it lists them, makes one, and restores one. Polyfin's backups hold its database alone, whatever the options asked: Jellyfin's also hold its metadata, trickplay images and subtitles, which Polyfin does not keep on disk.

@@ -636,7 +636,7 @@ The same section also holds **Quality group**; see [Quality groups](#quality-gro
 
 ### Playbacks at once
 
-Once that many of the user's other devices are playing, as **Sessions** lists them, one more device cannot start playing. jellyfin-web explains this as media that cannot be played at this time; Polyfin's web client script closes the generic error jellyfin-web shows over it (see [Web client](web-client.md#dashboard-links-and-single-sign-on)). A device already playing can go on to another title. A device making a [converted download](transcoding.md#converted-downloads) counts as playing while it runs.
+Once that many of the user's other devices are playing, as **Sessions** lists them, DLNA devices showing the user's libraries included, one more device cannot start playing. jellyfin-web explains this as media that cannot be played at this time; Polyfin's web client script closes the generic error jellyfin-web shows over it (see [Web client](web-client.md#dashboard-links-and-single-sign-on)). A device already playing can go on to another title. A device making a [converted download](transcoding.md#converted-downloads) counts as playing while it runs.
 
 **Compared with Jellyfin:**
 
@@ -810,3 +810,9 @@ Behind a reverse proxy, every request reaches Polyfin from the proxy's address. 
 ### Detailed log
 
 With **Detailed log** on, Polyfin logs at the `debug` level until it is turned off again, and at the `info` level otherwise. See [Configuration](configuration.md).
+
+## DLNA devices
+
+TVs and players that play over DLNA cannot sign in: each shows the libraries of the user an administrator chose for it under **Settings › DLNA**, or of **No one** until then (see [DLNA](dlna.md#devices-and-users)). **Show new devices the libraries of** chooses the user of the devices seen for the first time, **No one** by default.
+
+A device browses and plays as its user: their visible libraries, blocked genres, parental control, hidden titles, allowed hours, **Playbacks at once**, **Maximum quality**, quality group and **Can use conversion** apply. Its playbacks show under the user in **Sessions**, and count in their statistics. Deleting the user leaves the device showing **No one**'s libraries; blocking it with **Blocked** gives it nothing at all.
