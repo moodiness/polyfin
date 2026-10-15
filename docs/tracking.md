@@ -1,6 +1,6 @@
 # Tracking services
 
-Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts, which hear of the movies and episodes the user watches and marks played, and their own Last.fm and ListenBrainz accounts, which hear of the songs they play. This page covers what is sent, how users connect, and what an administrator sets up.
+Each user can connect their own Trakt, Simkl, MDBList and PublicMetaDB accounts, which hear of the movies and episodes the user watches and marks played, their own AniList and MyAnimeList accounts, whose anime lists follow what they watch, and their own Last.fm and ListenBrainz accounts, which hear of the songs they play. This page covers what is sent, how users connect, and what an administrator sets up.
 
 ## What gets sent
 
@@ -33,10 +33,11 @@ Each user connects their accounts under **My account › Tracking** in the admin
 - **MDBList** takes the user's API key (**MDBList API key**), from MDBList's preferences. It is used for that user's tracking only: titles' ratings come from the server's own key, apart (see [Ratings](addons-and-libraries.md#ratings)).
 - **PublicMetaDB** takes the user's API key (**PublicMetaDB API key**), from **Settings → API** on its site.
 - For ListenBrainz, the user pastes their token in **ListenBrainz user token**, from the settings of its site.
+- **AniList** opens its site after **Connect**: allow Polyfin there, copy the code AniList shows, and paste it in Polyfin (**AniList code**). **MyAnimeList** opens its site in the same tab: once you allow Polyfin, MyAnimeList sends your browser back to Polyfin, which connects. See [AniList and MyAnimeList](#anilist-and-myanimelist).
 
 Polyfin checks an API key or user token with the service before saving it.
 
-Trakt, Simkl and Last.fm are offered only once an administrator has set them up; see [Setting up Trakt, Simkl and Last.fm](#setting-up-trakt-simkl-and-last-fm-administrators).
+Trakt, Simkl, Last.fm, AniList and MyAnimeList are offered only once an administrator has set them up; see [Setting up Trakt, Simkl and Last.fm](#setting-up-trakt-simkl-and-last-fm-administrators).
 
 ## Importing your watch history
 
@@ -110,6 +111,55 @@ An anime the lists do not know and no anime catalog listed, an episode they map 
 
 Polyfin downloads both lists from GitHub when it first starts, keeps them in `anime` in its data folder, and reads that copy at each start, downloading nothing while it is less than a day old. It checks each list again once a day, with a conditional request, so that a list downloads only when it changed. When a download fails, or brings something that is not the list, the copy in use stays, and Polyfin tries again after 10 minutes, then less often, up to every 6 hours. Nothing waits for a download: until the first one ends, anime is not mapped.
 
+## AniList and MyAnimeList
+
+AniList and MyAnimeList keep a list of anime for each user: each entry, split as AniDB splits series into seasons and parts, has a status (Watching, Completed, On hold, Dropped, Plan to Watch, which AniList calls Planning) and a count of the episodes watched. Polyfin raises that count as you watch, and can import the lists back. Both are offered once an administrator has set up their apps (see [AniList](#anilist) and [MyAnimeList](#myanimelist)).
+
+### Connecting
+
+- **AniList**: **Connect** opens AniList. Allow Polyfin, copy the code AniList shows, and paste it in **AniList code**. Nothing has to reach the server, as for Last.fm. AniList tokens last a year and cannot be refreshed: the status line shows when yours expires. Once it has, the connection stops and shows **Connect again**.
+- **MyAnimeList**: **Connect** opens MyAnimeList, with PKCE (MyAnimeList takes its `plain` method only). Once you allow Polyfin, MyAnimeList sends your browser back to the address the administrator registered, a page of the admin app. Only your browser has to reach it. When the browser lands on an address it cannot open, such as the server's public address from the local network, copy that address from the address bar into **Address or code**: Polyfin reads its code. A request expires after 15 minutes. Tokens are refreshed before they expire.
+
+### Finding the entry
+
+Polyfin goes from a title to its entry through the [anime mapping](#anime), the other way from how it reads Simkl's anime:
+
+- A title an anime addon names by `kitsu:`, `mal:` or `anidb:` goes to that entry, with the addon's episode number (`kitsu:<id>:<episode>`), even when the mapping places it nowhere on TVDB.
+- A title named by IMDb or TVDB goes to the AniDB entry whose mapping covers its TVDB season and episode: an episode the list maps one by one first, then a range, then the entry's season and offset (of two entries sharing a season, the one starting nearest before the episode), then absolute numbering, from the episode's place among the regular episodes Polyfin lists of its series. The entry's own episode number is sent.
+- Movies go by their IMDb or TMDB identifier, when one entry has it.
+- Specials go only where the list names them, and never as an episode of the series' entry.
+- Nothing is sent for a title the mapping does not place, nor for live TV, recordings or songs.
+
+### Progress
+
+Neither service follows playback: a title counts once Polyfin marks it played (**Marked played after (%)**), or once you mark it played, as for PublicMetaDB.
+
+- The entry's progress is raised to that episode, and never lowered: an earlier episode sends nothing.
+- An entry not yet on your list, or on **Plan to Watch**, becomes **Watching**. It becomes **Completed** at its last episode, or for a movie. An entry you are watching again keeps its status.
+- Unplayed marks send nothing: the services keep a count of episodes, not a history.
+
+### Importing the lists
+
+**Import my AniList lists** and **Import my MyAnimeList lists** are off by default, and run on the schedule of the other imports (see [How often connected accounts are imported](users.md#how-often-connected-accounts-are-imported)), with **Import now**. Each import reads your whole list.
+
+- Watching, On hold and Dropped: episodes 1 to the entry's progress are marked played.
+- **Completed**: all its episodes, dated with the entry's completion date when it has one. An entry being watched again counts as completed, undated.
+- Episodes are placed on TVDB through the mapping, as Simkl's anime are, and on the titles anime catalogs list under the entry. Until the mapping is read, nothing of the list is imported.
+- **Import my AniList Plan to Watch list** and **Import my MyAnimeList Plan to Watch list**, also off, send Plan to Watch (AniList's Planning) to your Watchlist, under its usual rules (see [The watchlist](#the-watchlist)).
+- Imports only add, as for the other services (see [How the history merges with Polyfin's](#how-the-history-merges-with-polyfin-s)), and write nothing to the services.
+
+### Ratings
+
+**Sync my ratings**, off by default, keeps your ratings and the services' scores together. Polyfin keeps each user's rating from 0 to 10 (a like is 10, a dislike 1).
+
+- A rating you give in a Jellyfin app, on a movie or on a series that maps to one entry, is sent as the entry's score: AniList's raw score (rating × 10), MyAnimeList's score (rounded, 1 to 10). Clearing a rating clears the score. Only an entry already on your list gets a score: a rating never adds a title to the list.
+- Each import gives your unrated titles the service's score. Ratings Polyfin already has stay.
+- A series spread over several entries, such as one whose seasons are entries of their own, is neither sent nor imported: the status line counts it as skipped, from the last import and the ratings sent since.
+
+### Disconnecting
+
+**Disconnect** forgets the tokens and stops the imports; what they imported stays. Neither AniList nor MyAnimeList lets an app revoke a token: to cut Polyfin off entirely, also remove the app from your account on the service, in AniList's settings (Apps) or MyAnimeList's account settings (API).
+
 ## Music: Last.fm and ListenBrainz
 
 The songs users play from music addons go to Last.fm and ListenBrainz: what is playing now, and a scrobble once a song has played long enough. Podcast episodes, which Polyfin serves as songs, go too. Audiobooks do not.
@@ -139,7 +189,7 @@ A connected ListenBrainz token shows as dots, and its owner can show it with its
 
 ## Setting up Trakt, Simkl and Last.fm (administrators)
 
-MDBList, PublicMetaDB and ListenBrainz need nothing from the administrator. Trakt, Simkl and Last.fm are offered once an administrator has registered an app with them and pasted its credentials under **Settings › Tracking**.
+MDBList, PublicMetaDB and ListenBrainz need nothing from the administrator. Trakt, Simkl, Last.fm, AniList and MyAnimeList are offered once an administrator has registered an app with them and pasted its credentials under **Settings › Tracking**.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -148,6 +198,10 @@ MDBList, PublicMetaDB and ListenBrainz need nothing from the administrator. Trak
 | **Simkl client ID** | **Settings › Tracking** | Empty | Client ID of your Simkl app. |
 | **Last.fm API key** | **Settings › Tracking** | Empty | API key of your Last.fm API account. |
 | **Last.fm shared secret** | **Settings › Tracking** | Empty | Shared secret of your Last.fm API account. Shown as dots once saved; administrators can show it again with its eye. |
+| **AniList client ID** | **Settings › Tracking** | Empty | Client ID of your AniList app. |
+| **AniList client secret** | **Settings › Tracking** | Empty | Client secret of your AniList app. Shown as dots once saved; administrators can show it again with its eye. |
+| **MyAnimeList client ID** | **Settings › Tracking** | Empty | Client ID of your MyAnimeList app. |
+| **MyAnimeList client secret** | **Settings › Tracking** | Empty | Client secret of your MyAnimeList app. Shown as dots once saved; administrators can show it again with its eye. |
 
 ### Trakt
 
@@ -172,6 +226,18 @@ The shared secret is kept as the Trakt client secret is: never sent back with th
 
 Users connect through Last.fm's desktop authentication: they allow Polyfin on Last.fm's page, then Polyfin asks Last.fm for their session itself. Nothing comes back to Polyfin through the browser, so no callback address has to reach the server. Connecting works the same behind a reverse proxy, at any address, and on a server only reachable on the local network. Last.fm's web authentication would send the browser back to an address of Polyfin's, which the server cannot know for sure behind a proxy.
 
+### AniList
+
+1. Create a client in your [AniList developer settings](https://anilist.co/settings/developer), with the redirect URL `https://anilist.co/api/v2/oauth/pin`: AniList then shows users a code to paste in Polyfin.
+2. Paste its client ID and secret in **AniList client ID** and **AniList client secret**.
+
+### MyAnimeList
+
+1. Create an app in your [MyAnimeList API settings](https://myanimelist.net/apiconfig), of the **web** type, with as its redirect URL the address **Settings › Tracking** shows under MyAnimeList: the admin app's `/admin/me/account/myanimelist` page at the server's public address (**Settings › General**), or at the address you use the admin app at when there is none. Only users' browsers have to reach it.
+2. Paste its client ID and secret in **MyAnimeList client ID** and **MyAnimeList client secret**.
+
+Both secrets are kept as the Trakt client secret is: never sent back with the settings, shown as dots once saved, and shown again on demand with their eye.
+
 ### When the server's app is refused
 
 When Trakt, Simkl or Last.fm refuses the server's app (a wrong client ID, client secret, API key or shared secret), users connecting are told that an administrator has to check it under **Settings › Tracking**, rather than that the service is down.
@@ -180,7 +246,8 @@ When Trakt, Simkl or Last.fm refuses the server's app (a wrong client ID, client
 
 Nothing waits for the services: reports and marks are sent in the background.
 
-- They are sent at the pace each service allows: one change a second per user for Trakt and Simkl, four a second per user for MDBList and ListenBrainz, and the limits per server address of PublicMetaDB and Last.fm (four requests a second for Last.fm, shared by all users).
+- They are sent at the pace each service allows: one change a second per user for Trakt, Simkl and MyAnimeList, four a second per user for MDBList and ListenBrainz, and the limits per server address of PublicMetaDB, Last.fm and AniList (four requests a second for Last.fm, one a second for AniList, shared by all users).
+- AniList and MyAnimeList get the progress and scores of entries: each change is sent after reading the entry, so that progress is never lowered, and kept and retried for two days as the history's changes are.
 - When a service answers that it gets too many requests, Polyfin waits as long as it asks.
 - Changes to the history and resume points, and scrobbles, are kept in the database and sent again, with longer waits each time, for up to two days, restarts included. A scrobble sent again keeps the time the song started, and is sent once the service takes it, never twice.
 - Starts, pauses and what is playing now are sent once.
@@ -194,7 +261,7 @@ Nothing waits for the services: reports and marks are sent in the background.
 
 ### Tokens and keys
 
-- Trakt and Simkl tokens are refreshed before they expire, and revoked when the user disconnects. Last.fm session keys do not expire; disconnecting forgets the key, and removing Polyfin from the applications of the Last.fm account revokes it.
+- Trakt, Simkl and MyAnimeList tokens are refreshed before they expire; Trakt's and Simkl's are revoked when the user disconnects, MyAnimeList's only forgotten, as it offers no way to revoke them. AniList tokens last a year and cannot be refreshed: an expired one stops the connection, told once as **Connection stopped** like a refused one. Last.fm session keys do not expire; disconnecting forgets the key, and removing Polyfin from the applications of the Last.fm account revokes it.
 - Deleting a user deletes their connections and what waited to be sent, and revokes their Trakt and Simkl tokens in the background, as disconnecting does; their other keys are only forgotten. The deletion never waits for a service, and does not fail when one does not answer: a token Polyfin could not revoke is logged, without the token. See [Deleting a user](users.md#deleting-a-user).
-- Tokens and keys are never written to the log, nor sent back by the admin app's answers. On **My account › Tracking**, a connected MDBList or PublicMetaDB key or ListenBrainz token shows as dots, and its owner can show it with its eye; Trakt and Simkl tokens and Last.fm session keys are never shown. See [Showing a saved key](administration.md#showing-a-saved-key).
+- Tokens and keys are never written to the log, nor sent back by the admin app's answers. On **My account › Tracking**, a connected MDBList or PublicMetaDB key or ListenBrainz token shows as dots, and its owner can show it with its eye; Trakt, Simkl, AniList and MyAnimeList tokens and Last.fm session keys are never shown. See [Showing a saved key](administration.md#showing-a-saved-key).
 - With `POLYFIN_SECRET_KEY` set, tokens and keys are stored encrypted. A connection whose tokens cannot be decrypted with it counts as not connected until the user connects again or the right key is set; nothing is sent with it meanwhile. See [Stored keys and tokens](configuration.md#stored-keys-and-tokens).

@@ -181,7 +181,7 @@ An app connection (see [Staying connected](users.md#staying-connected)) stops wh
 
 A connection that stops is told once, as it stops: the title is "Connection stopped: Stremio", and the message names the app or service and the user and says what to do, such as "Stremio refused the sign-in Polyfin kept for sam: nothing is imported from it until sam signs in again under My account › Import from an app, with Stay connected ticked." or, for a tracking service, "until sam presses Connect again under My account › Tracking.". With a public address, the message opens that page of the admin app. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
 
-- Only refusals are told. An app or service that does not answer, fails or asks to wait is tried again, and nothing is told.
+- Only refusals are told. An app or service that does not answer, fails or asks to wait is tried again, and nothing is told. An AniList token that expires, after a year, stops the connection as a refusal does, and is told the same way, with the service `anilist`; MyAnimeList's is `myanimelist` (see [AniList and MyAnimeList](tracking.md#anilist-and-myanimelist)).
 - What stopped is kept in the database: a restart does not tell it again, nor does a later refusal of the same connection. A connection made again, then refused again, is told again.
 - **System › Health** lists the connections stopped, by user and app or service, each opening the user's page. They are not told as health problems: this event already told them.
 
@@ -256,7 +256,7 @@ A user who joined through an invite link:
 | `release` | object | For `new_version`: `version`, the new version, `url`, its release notes, and `current`, the version the server runs. |
 | `playback` | object | For playbacks; see below. `user` is the user who plays, and `at` when the change happened. |
 | `summary` | object | For `weekly_summary`, `monthly_summary` and `yearly_summary`; see [The weekly summary event](#the-weekly-summary-event) and [The month and year in review events](#the-month-and-year-in-review-events). |
-| `connection` | object | For `connection_stopped`: `kind`, `app` for an app connection or `tracking` for a tracking service; `service`, the app or service as the API names it (`nuvio`, `stremio`, `trakt`, `simkl`, `mdblist`, `publicmetadb`, `lastfm`, `listenbrainz`); and `name`, as people name it. |
+| `connection` | object | For `connection_stopped`: `kind`, `app` for an app connection or `tracking` for a tracking service; `service`, the app or service as the API names it (`nuvio`, `stremio`, `trakt`, `simkl`, `mdblist`, `publicmetadb`, `anilist`, `myanimelist`, `lastfm`, `listenbrainz`); and `name`, as people name it. |
 | `signIn`, `block` | object | For `account_blocked` and `new_device`; see [The sign-in events](#the-sign-in-events). |
 | `programme` | object | For `programme_reminder`: `id`, the programme's item as Jellyfin apps know it, `name`, `channelId`, `channelName`, and its `start` and `end`, RFC 3339 in UTC. `programme_reminder` was added within version 1, with this object; no other field changed. |
 
