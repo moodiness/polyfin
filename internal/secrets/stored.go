@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -18,8 +19,9 @@ import (
 // settings, named below as the admin API names them, the tokens and API
 // keys of the users' tracking connections, what the users' app connections
 // sign in with (see appimport.SignIn), the addresses, tokens and keys
-// of the notification targets, the passwords of the network shares, and
-// the secret keys, passwords and private keys of the backup destinations.
+// of the notification targets, the passwords of the network shares, the
+// secret keys, passwords and private keys of the backup destinations, and
+// the account key and private key of the certificate of Let's Encrypt.
 // Nothing else is sealed: addon addresses, IPTV passwords and guide
 // addresses are stored as they are.
 var settingSecrets = []struct{ column, name string }{
@@ -37,8 +39,8 @@ var settingSecrets = []struct{ column, name string }{
 // admin API's name of it, the tracking connection of a user to a service,
 // the connection of a user to an app, a notification target, by its name,
 // of a user or of the server (User empty), the password of a network
-// share, by its folder's name, or a backup destination, by what it shows
-// (see DestinationName).
+// share, by its folder's name, a backup destination, by what it shows
+// (see DestinationName), or the keys of the certificate of Let's Encrypt.
 type Unreadable struct {
 	Setting       string
 	Service, User string
@@ -46,12 +48,15 @@ type Unreadable struct {
 	Target        string
 	Folder        string
 	Destination   string
+	Certificate   bool
 }
 
 func (u Unreadable) String() string {
 	switch {
 	case u.Setting != "":
 		return "setting " + u.Setting
+	case u.Certificate:
+		return "keys of the certificate of Let's Encrypt"
 	case u.Destination != "":
 		return "backup destination " + u.Destination
 	case u.Folder != "":
@@ -169,7 +174,10 @@ func (b *Box) SealStored(ctx context.Context, db *pgxpool.Pool) (int, error) {
 		if err := sealShares(ctx, b, tx, &sealed); err != nil {
 			return err
 		}
-		return sealDestinations(ctx, b, tx, &sealed)
+		if err := sealDestinations(ctx, b, tx, &sealed); err != nil {
+			return err
+		}
+		return sealCertificate(ctx, b, tx, &sealed)
 	})
 	return sealed, err
 }
@@ -298,7 +306,20 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 			check(privateKey, unreadable)
 		}
 	}
-	return report, destinations.Err()
+	if err := destinations.Err(); err != nil {
+		return Report{}, err
+	}
+	var accountKey, privateKey string
+	err = db.QueryRow(ctx, "SELECT account_key, private_key FROM acme_certificate").Scan(&accountKey, &privateKey)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Report{}, err
+	}
+	before := len(report.Unreadable)
+	check(accountKey, Unreadable{Certificate: true})
+	if len(report.Unreadable) == before {
+		check(privateKey, Unreadable{Certificate: true})
+	}
+	return report, nil
 }
 
 // DestinationName is what a backup destination shows: an S3 bucket and its
@@ -341,6 +362,7 @@ const (
 	KindTarget      = "notifications"
 	KindShare       = "shares"
 	KindDestination = "destinations"
+	KindCertificate = "certificates"
 )
 
 // sealedTables are the columns of the stored secrets, by table, and the
@@ -355,6 +377,7 @@ var sealedTables = map[string]struct {
 	"notification_targets": {KindTarget, []string{"secret"}},
 	"local_folders":        {KindShare, []string{"share_password"}},
 	"backup_destinations":  {KindDestination, []string{"secret", "private_key"}},
+	"acme_certificate":     {KindCertificate, []string{"account_key", "private_key"}},
 }
 
 func settingColumns() []string {
@@ -509,4 +532,31 @@ func sealDestinations(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error
 		}
 	}
 	return nil
+}
+
+// sealCertificate seals the account key and private key of the
+// certificate of Let's Encrypt stored as plaintext, counting them into
+// sealed.
+func sealCertificate(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
+	var accountKey, privateKey string
+	err := tx.QueryRow(ctx, "SELECT account_key, private_key FROM acme_certificate FOR UPDATE").Scan(&accountKey, &privateKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	changed := false
+	for _, value := range []*string{&accountKey, &privateKey} {
+		if *value != "" && !Sealed(*value) {
+			*value = b.Seal(*value)
+			*sealed++
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	_, err = tx.Exec(ctx, "UPDATE acme_certificate SET account_key = $1, private_key = $2", accountKey, privateKey)
+	return err
 }
