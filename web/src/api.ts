@@ -420,6 +420,8 @@ export type Settings = {
   recordingPostPadding: number
   /** Days after which recordings are deleted; 0 keeps them forever. */
   recordingRetentionDays: number
+  /** Whether finished recordings are read for their commercial breaks, served as segments with skipButtons. */
+  recordingCommercials: boolean
   /** Whether Live TV recording is on. */
   recording: boolean
   /** Folder recordings are written to; empty uses recordingsFolderDefault. */

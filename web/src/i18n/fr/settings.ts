@@ -627,6 +627,9 @@ const settings: typeof en = {
     recordingRetentionDays: 'Garder les enregistrements (jours, 0 = toujours)',
     recordingRetentionDaysHelp: (r: RangeText) =>
       `Les enregistrements plus anciens sont supprimés. La vérification a lieu chaque jour. De ${r.min} à ${r.max}.`,
+    recordingCommercials: 'Trouver les publicités des enregistrements',
+    recordingCommercialsHelp:
+      'Quand un enregistrement se termine, Polyfin le lit en arrière-plan, un enregistrement à la fois, pour trouver les moments à la fois noirs et silencieux, et prend les courts passages entre eux pour des coupures publicitaires. Les applications proposent alors de les passer, selon ce que chaque utilisateur a choisi dans les réglages de lecture de son application, quand les boutons « Passer l’intro » et « Passer le générique » sont activés. Les enregistrements de plus de 4 heures ne sont pas lus.',
     liveTvRefreshHours: 'Actualiser les listes et les guides de TV toutes les (heures)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. Un téléchargement qui a échoué est réessayé plus tôt : après 5 minutes, 15 minutes, puis toutes les heures. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,

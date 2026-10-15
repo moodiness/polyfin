@@ -608,6 +608,9 @@ const settings = {
     recordingRetentionDays: 'Keep recordings for (days, 0 = forever)',
     recordingRetentionDaysHelp: (r: RangeText) =>
       `Recordings older than this are deleted. This is checked every day. From ${r.min} to ${r.max}.`,
+    recordingCommercials: 'Find commercials in recordings',
+    recordingCommercialsHelp:
+      'Once a recording ends, Polyfin reads it in the background, one recording at a time, for the moments that are both black and silent, and takes the short pieces between them as commercial breaks. Apps then offer to skip them, as each user chose in their app’s playback settings, while the skip intro and credits buttons are on. Recordings longer than 4 hours are not read.',
     liveTvRefreshHours: 'Refresh Live TV lists and guides every (hours)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `How often the IPTV channel lists and the XMLTV programme guides are downloaded again. A download that failed is tried again sooner: after 5 minutes, 15 minutes, then every hour. From ${r.min} to ${r.max}; ${r.default} by default.`,

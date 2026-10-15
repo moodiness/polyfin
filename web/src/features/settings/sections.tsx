@@ -1351,6 +1351,13 @@ function Recordings({ form, update, error, number, range, limits }: SectionFormA
             )}
           />
         </FieldRow>
+        <SwitchRow
+          anchor="recording-commercials"
+          label={s.recordingCommercials}
+          help={s.recordingCommercialsHelp}
+          checked={form.recordingCommercials}
+          onChange={(recordingCommercials) => update({ recordingCommercials })}
+        />
       </SettingsGroup>
     </>
   )

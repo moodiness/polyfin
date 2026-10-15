@@ -903,6 +903,13 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t, r) => s(t).recordingRetentionDaysHelp(r('recordingRetentionDays')),
     codes: ['invalid_recording_retention_days'],
   },
+  {
+    section: 'recordings',
+    anchor: 'recording-commercials',
+    label: (t) => s(t).recordingCommercials,
+    help: (t) => s(t).recordingCommercialsHelp,
+    keywords: ['commercials', 'adverts', 'ads', 'skip', 'segments'],
+  },
   // DLNA
   {
     section: 'dlna',
