@@ -304,6 +304,7 @@ const system: typeof en = {
         publicMetaDbKey: 'Clé PublicMetaDB',
         theIntroDbKey: 'Clé TheIntroDB',
         mdblistRatingsKey: 'Clé d’API MDBList des notes',
+        tmdbKey: 'Clé d’API TMDB',
         traktClientSecret: 'Client secret Trakt',
         lastFmSecret: 'Secret partagé Last.fm',
         smtpPassword: 'Mot de passe SMTP',

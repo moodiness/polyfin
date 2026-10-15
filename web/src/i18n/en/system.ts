@@ -295,6 +295,7 @@ const system = {
         publicMetaDbKey: 'PublicMetaDB key',
         theIntroDbKey: 'TheIntroDB key',
         mdblistRatingsKey: 'MDBList API key for ratings',
+        tmdbKey: 'TMDB API key',
         traktClientSecret: 'Trakt client secret',
         lastFmSecret: 'Last.fm shared secret',
         smtpPassword: 'SMTP password',

@@ -469,6 +469,20 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
           checked={form.generateImages}
           onChange={(generateImages) => update({ generateImages })}
         />
+        <SettingRow
+          anchor="tmdb-key"
+          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+        >
+          <SecretField
+            label={s.tmdbKey}
+            help={s.tmdbKeyHelp}
+            saved={form.tmdbKeySet}
+            value={form.tmdbKey}
+            onValue={(tmdbKey) => update({ tmdbKey })}
+            error={error('tmdb-key')}
+            reveal={() => revealServerSecret('tmdbKey')}
+          />
+        </SettingRow>
       </SettingsGroup>
       <SettingsGroup title={groups.ratings}>
         <SettingRow

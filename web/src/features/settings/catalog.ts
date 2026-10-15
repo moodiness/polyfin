@@ -440,6 +440,23 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'content',
+    anchor: 'tmdb-key',
+    label: (t) => s(t).tmdbKey,
+    help: (t) => s(t).tmdbKeyHelp,
+    keywords: [
+      'TMDB',
+      'api key',
+      'read access token',
+      'Edit images',
+      'poster',
+      'backdrop',
+      'logo',
+      'image',
+    ],
+    codes: ['invalid_tmdb_key', 'tmdb_unreachable'],
+  },
+  {
+    section: 'content',
     anchor: 'mdblist-ratings-key',
     label: (t) => s(t).mdblistRatingsKey,
     help: (t) => s(t).mdblistRatingsKeyHelp,

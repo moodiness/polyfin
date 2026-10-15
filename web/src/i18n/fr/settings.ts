@@ -366,6 +366,9 @@ const settings: typeof en = {
     generateImages: 'Créer une image pour les collections qui n’en ont pas',
     generateImagesHelp:
       'Une collection d’un addon sans affiche, et une liste intelligente affichée comme une collection, montrent les affiches de leurs premiers titres avec leur nom, dessinées par Polyfin une fois leurs titres lus. Les utilisateurs sous contrôle parental ou qui bloquent des genres ne les voient pas. Si cette option est désactivée, elles n’ont pas d’image. Les bibliothèques réglées sur une image générée la gardent.',
+    tmdbKey: 'Clé d’API TMDB',
+    tmdbKeyHelp:
+      'Facultatif. Avec une clé d’API ou un jeton d’accès en lecture d’un compte TMDB, « Modifier les images » de jellyfin-web cherche aussi sur TMDB les affiches, fonds et logos d’un titre, les images d’un épisode, les affiches d’une saison et les photos d’une personne, que Polyfin relaie. Sans clé, « Modifier les images » ne montre que les images des addons et TMDB n’est jamais consulté.',
     mdblistRatingsKey: 'Clé d’API MDBList des notes',
     mdblistRatingsKeyHelp:
       'Facultatif. Avec la clé d’un compte MDBList, les films et les séries affichent leur note IMDb, le score des critiques et celui du public donnés par MDBList, cherchés en arrière-plan et gardés pour tous les utilisateurs. Les clés MDBList des utilisateurs pour le suivi ne servent jamais à cela. Sans clé, MDBList n’est jamais consulté.',

@@ -198,6 +198,10 @@ const common = {
       'MDBList did not accept this key. Copy it again from your MDBList account. Nothing was saved.',
     mdblist_unreachable:
       'MDBList could not be reached to check the key. Nothing was saved: try again later.',
+    invalid_tmdb_key:
+      'TMDB did not accept this key. Copy the API key or the read access token again from your TMDB account. Nothing was saved.',
+    tmdb_unreachable:
+      'TMDB could not be reached to check the key. Nothing was saved: try again later.',
     invalid_critic_rating_shows: 'Choose from the list which score the critic rating shows.',
     invalid_measure_loudness: 'Choose from the list which songs have their loudness measured.',
     invalid_segment_order:

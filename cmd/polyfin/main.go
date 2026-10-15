@@ -62,6 +62,7 @@ import (
 	"github.com/moodiness/polyfin/internal/tasks"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
+	"github.com/moodiness/polyfin/internal/tmdb"
 	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -277,6 +278,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	titleRatings := ratings.New(pool, ratings.MDBList, version, logger, store.Settings)
 	defer titleRatings.Close()
 	lib.UseRatings(titleRatings)
+	// Edit images searches TMDB's images while the settings hold the
+	// server's TMDB key.
+	imageSearch := tmdb.New(tmdb.API, tmdb.Images, version, store.Settings)
 	// Local folders match their files through the library's searches of
 	// the metadata addons.
 	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings, box)
@@ -452,6 +456,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		AudioSegments:  audioSegments,
 		RemuxDB:        remuxdb.New(serverID, version, logger, store.Settings),
 		Lyrics:         lyrics.New(pool, lyrics.LRCLIB, version, logger, store.Settings),
+		TMDB:           imageSearch,
 		Loudness:       songLoudness,
 		Playlists:      playlists.New(pool),
 		Collections:    collections.New(pool),
@@ -487,6 +492,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Folders:       folders,
 		Segments:      skipSegments,
 		Ratings:       titleRatings,
+		TMDB:          imageSearch,
 		Activity:      activityLog,
 		DataDir:       cfg.DataDir,
 		WebClient:     webClient != nil,

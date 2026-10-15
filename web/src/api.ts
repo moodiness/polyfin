@@ -246,6 +246,10 @@ export type Settings = {
   mdblistRatingsKey?: string
   /** The score CriticRating carries: the critics' score or the audience score. */
   criticRatingShows: 'critics' | 'audience'
+  /** Whether the server's TMDB key is saved; Edit images then searches TMDB's images too. */
+  tmdbKeySet: boolean
+  /** Sent only to change the key: a new key, checked with TMDB before it is saved, or "" to remove it. */
+  tmdbKey?: string
   /** Whether songs get lyrics from LRCLIB, which is sent their artist, title, album and length. */
   lyrics: boolean
   /** Whether apps get the gains of songs and albums known, which even the volume between songs. */
@@ -2439,6 +2443,7 @@ export type ServerSecretName =
   | 'publicMetaDbKey'
   | 'theIntroDbKey'
   | 'mdblistRatingsKey'
+  | 'tmdbKey'
   | 'traktClientSecret'
   | 'lastFmSecret'
   | 'metricsToken'

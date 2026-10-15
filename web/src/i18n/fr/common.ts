@@ -215,6 +215,10 @@ const common: typeof en = {
       'MDBList n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte MDBList. Rien n’a été enregistré.',
     mdblist_unreachable:
       'MDBList n’a pas pu être joint pour vérifier la clé. Rien n’a été enregistré : réessayez plus tard.',
+    invalid_tmdb_key:
+      'TMDB n’a pas accepté cette clé. Copiez de nouveau la clé d’API ou le jeton d’accès en lecture depuis votre compte TMDB. Rien n’a été enregistré.',
+    tmdb_unreachable:
+      'TMDB n’a pas pu être joint pour vérifier la clé. Rien n’a été enregistré : réessayez plus tard.',
     invalid_critic_rating_shows: 'Choisissez dans la liste le score qu’affiche la note critique.',
     invalid_measure_loudness: 'Choisissez dans la liste les chansons dont le volume est mesuré.',
     invalid_segment_order:

@@ -16,6 +16,7 @@ import (
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
+	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
 type userJSON struct {
@@ -456,6 +457,10 @@ type settingsJSON struct {
 	MDBListRatingsKeySet bool    `json:"mdblistRatingsKeySet"`
 	MDBListRatingsKey    *string `json:"mdblistRatingsKey,omitempty"`
 	CriticRatingShows    *string `json:"criticRatingShows"`
+	// TMDBKeySet and TMDBKey are the same for the server's TMDB key, which
+	// TMDB checks too.
+	TMDBKeySet bool    `json:"tmdbKeySet"`
+	TMDBKey    *string `json:"tmdbKey,omitempty"`
 	// The security settings keep their current values when a PUT leaves
 	// them out, too.
 	PersonalAddons     *bool `json:"personalAddons"`
@@ -669,6 +674,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		GenerateImages:        &settings.GenerateImages,
 		MDBListRatingsKeySet:  settings.MDBListRatingsKey != "",
 		CriticRatingShows:     &settings.CriticRatingShows,
+		TMDBKeySet:            settings.TMDBKey != "",
 		Lyrics:                &settings.Lyrics,
 		EvenVolume:            &settings.EvenVolume,
 		MeasureLoudness:       &settings.MeasureLoudness,
@@ -1228,6 +1234,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	tmdbKey, ok := h.tmdbKey(w, r, body.TMDBKey, current.TMDBKey)
+	if !ok {
+		return
+	}
 	// An empty order is what older pages sent to follow POLYFIN_SEGMENTS,
 	// which the settings now hold: it keeps the saved one.
 	segmentOrder := current.SegmentOrder
@@ -1265,6 +1275,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		GenerateImages:        valueOr(body.GenerateImages, current.GenerateImages),
 		MDBListRatingsKey:     ratingsKey,
 		CriticRatingShows:     valueOr(body.CriticRatingShows, current.CriticRatingShows),
+		TMDBKey:               tmdbKey,
 		Lyrics:                valueOr(body.Lyrics, current.Lyrics),
 		EvenVolume:            valueOr(body.EvenVolume, current.EvenVolume),
 		MeasureLoudness:       valueOr(body.MeasureLoudness, current.MeasureLoudness),
@@ -1514,6 +1525,38 @@ func (h *handler) ratingsKey(w http.ResponseWriter, r *http.Request, sent *strin
 	case err != nil:
 		h.Logger.Warn("MDBList could not check the key for ratings", "error", err)
 		writeError(w, http.StatusBadGateway, "mdblist_unreachable")
+		return "", false
+	}
+	return key, true
+}
+
+// tmdbKey is the TMDB key a settings PUT saves, as ratingsKey tells the
+// MDBList key: one TMDB refuses, or that is malformed, is answered 400
+// invalid_tmdb_key, and one TMDB could not be asked about 502
+// tmdb_unreachable.
+func (h *handler) tmdbKey(w http.ResponseWriter, r *http.Request, sent *string, current string) (key string, ok bool) {
+	if sent == nil {
+		return current, true
+	}
+	key = strings.TrimSpace(*sent)
+	if *sent == "" || key == current {
+		return key, true
+	}
+	if key == "" || !accounts.ValidTMDBKey(key) {
+		writeError(w, http.StatusBadRequest, "invalid_tmdb_key")
+		return "", false
+	}
+	if h.TMDB == nil {
+		writeError(w, http.StatusBadGateway, "tmdb_unreachable")
+		return "", false
+	}
+	switch err := h.TMDB.CheckKey(r.Context(), key); {
+	case errors.Is(err, tmdb.ErrKeyRefused):
+		writeError(w, http.StatusBadRequest, "invalid_tmdb_key")
+		return "", false
+	case err != nil:
+		h.Logger.Warn("TMDB could not check the key", "error", err)
+		writeError(w, http.StatusBadGateway, "tmdb_unreachable")
 		return "", false
 	}
 	return key, true
