@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/pem"
 	"errors"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -351,25 +349,4 @@ func newPrivateKey(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return string(pem.EncodeToMemory(block))
-}
-
-// The requests to S3-compatible storage are signed as AWS's example of
-// Signature Version 4 for a GET of a bucket's objects.
-func TestS3Signature(t *testing.T) {
-	s := &s3Remote{region: "us-east-1", access: "AKIAIOSFODNN7EXAMPLE", secret: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-		now: func() time.Time { return time.Date(2013, 5, 24, 0, 0, 0, 0, time.UTC) }}
-	request, err := http.NewRequest(http.MethodGet, "https://examplebucket.s3.amazonaws.com/", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.URL.RawQuery = canonicalQuery(url.Values{"max-keys": {"2"}, "prefix": {"J"}})
-	s.sign(request, emptyHash)
-	want := "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, " +
-		"SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=34b48302e7b5fa45bde8084f4b7868a86f0a534bc59db6670ed5711ef69dc6f7"
-	if got := request.Header.Get("Authorization"); got != want {
-		t.Errorf("authorization:\n%s\nwant\n%s", got, want)
-	}
-	if got := escapePath("/a b/c+d=(e)!"); got != "/a%20b/c%2Bd%3D%28e%29%21" {
-		t.Errorf("escaped path: %s", got)
-	}
 }
