@@ -713,12 +713,18 @@ func (h *Handler) program(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dtos[0])
 }
 
-// webApp reports whether the app is jellyfin-web, which plays HLS in the
-// browser: a browser reads another site's playlist only with that site's
-// consent, which live sources rarely give, so their playlists are relayed
-// to it.
+// webApp reports whether the app is jellyfin-web (see webClient), which
+// plays HLS in the browser: a browser reads another site's playlist only
+// with that site's consent, which live sources rarely give, so their
+// playlists are relayed to it.
 func webApp(r *http.Request) bool {
-	return strings.EqualFold(callerFrom(r.Context()).Device.Client, "Jellyfin Web")
+	return webClient(callerFrom(r.Context()).Device.Client)
+}
+
+// webClient reports whether client, the app a device signed in with, is
+// jellyfin-web.
+func webClient(client string) bool {
+	return strings.EqualFold(client, "Jellyfin Web")
 }
 
 // livePlaybackInfo answers PlaybackInfo for a channel: its stream as a

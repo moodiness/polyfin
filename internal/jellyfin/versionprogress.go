@@ -22,7 +22,8 @@ import (
 // them are versions, the placeholder left out. Polyfin's jellyfin-web
 // script follows it to add versions to the title page as they come, and to
 // hold its play buttons until one is known: it is pushed on the user's
-// sockets as it changes (see versionsChanged), and answered when asked.
+// jellyfin-web sockets as it changes (see versionsChanged), and answered
+// when asked.
 type VersionProgress struct {
 	Pending int
 	Count   int
@@ -180,9 +181,9 @@ func (h *Handler) versionsChanged(title accounts.ID) {
 }
 
 // pushVersions tells the pages that watch a title their progress, on their
-// users' sockets, and, with playback prepared ahead, prepares the versions
-// a play would now read first (see prepareOpened): an addon that answered
-// after the details may have put another version first.
+// users' jellyfin-web sockets, and, with playback prepared ahead, prepares
+// the versions a play would now read first (see prepareOpened): an addon
+// that answered after the details may have put another version first.
 func (h *Handler) pushVersions(title accounts.ID) {
 	w := h.watched
 	now := time.Now()
@@ -217,7 +218,7 @@ func (h *Handler) pushVersions(title accounts.ID) {
 			continue
 		}
 		offered := h.offered(ctx, p.user, versions)
-		conns := h.userSockets(p.user.ID)
+		conns := h.webSockets(p.user.ID)
 		for _, opened := range p.opened {
 			progress := newProgress(pending, offered)
 			payload := socketPayload(versionsMessage, versionsPush{ItemId: opened.String(), Pending: progress.Pending, Count: progress.Count, Known: progress.Known,
@@ -232,14 +233,19 @@ func (h *Handler) pushVersions(title accounts.ID) {
 	}
 }
 
-// userSockets lists the sockets a user's apps keep open.
-func (h *Handler) userSockets(user accounts.ID) []*websocket.Conn {
+// webSockets lists the sockets a user's jellyfin-web keeps open. Only
+// Polyfin's script in jellyfin-web knows PolyfinVersions: the Jellyfin SDKs
+// other apps are built on fail on a message type they do not know, which
+// takes some of these apps down.
+func (h *Handler) webSockets(user accounts.ID) []*websocket.Conn {
 	s := h.sockets
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	conns := make([]*websocket.Conn, 0, len(s.open[user]))
-	for conn := range s.open[user] {
-		conns = append(conns, conn)
+	var conns []*websocket.Conn
+	for conn, web := range s.open[user] {
+		if web {
+			conns = append(conns, conn)
+		}
 	}
 	return conns
 }

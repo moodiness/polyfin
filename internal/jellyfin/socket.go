@@ -58,7 +58,9 @@ func socketPayload(kind string, data any) []byte {
 // device that opened them, in the order they opened, for the commands one
 // app sends another.
 type sockets struct {
-	mu      sync.Mutex
+	mu sync.Mutex
+	// open holds each user's sockets, true for those of jellyfin-web (see
+	// webSockets).
 	open    map[accounts.ID]map[*websocket.Conn]bool
 	devices map[accounts.ID][]*websocket.Conn
 	pending map[accounts.ID]*changedData
@@ -72,13 +74,14 @@ func newSockets() *sockets {
 	}
 }
 
-func (s *sockets) add(user, device accounts.ID, conn *websocket.Conn) {
+// add records a socket a user's device opened, web for jellyfin-web's.
+func (s *sockets) add(user, device accounts.ID, conn *websocket.Conn, web bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.open[user] == nil {
 		s.open[user] = map[*websocket.Conn]bool{}
 	}
-	s.open[user][conn] = true
+	s.open[user][conn] = web
 	s.devices[device] = append(s.devices[device], conn)
 }
 
@@ -165,9 +168,11 @@ func isSocket(r *http.Request) bool {
 // long a silent socket lasts, its keep-alives are answered, a socket left
 // silent that long is dropped, the user's data is pushed to it as it
 // changes, and the commands other apps send its device reach it (see
-// remote.go), as do the messages of its SyncPlay group. Other messages,
-// which ask for what Polyfin does not offer, such as the sessions of the
-// server for its dashboard, are left unanswered.
+// remote.go), as do the messages of its SyncPlay group. Only jellyfin-web's
+// sockets are also told of the versions of the titles their user opened
+// (see pushVersions): other apps get Jellyfin's message types alone. The
+// app's other messages, which ask for what Polyfin does not offer, such as
+// the sessions of the server for its dashboard, are left unanswered.
 func (h *Handler) socket(w http.ResponseWriter, r *http.Request) {
 	c, ok, err := h.signedInCaller(r)
 	switch {
@@ -191,7 +196,7 @@ func (h *Handler) socket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	h.sockets.add(c.User.ID, c.Device.ID, conn)
+	h.sockets.add(c.User.ID, c.Device.ID, conn, webClient(c.Device.Client))
 	defer func() {
 		// The socket closes first, so that no message still on its way to
 		// it waits on it. Like Jellyfin, a session whose last socket

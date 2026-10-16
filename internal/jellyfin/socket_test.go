@@ -49,6 +49,25 @@ func (srv testServer) openSocket(t *testing.T, token string) (*appSocket, *http.
 	return s, response, nil
 }
 
+// openWebSocket signs name in as jellyfin-web, then opens that token's
+// socket with a request naming another app: a socket's app is the one its
+// token signed in with.
+func (srv testServer) openWebSocket(t *testing.T, name string) *appSocket {
+	t.Helper()
+	status, body := srv.call(http.MethodPost, "/Users/AuthenticateByName",
+		`MediaBrowser Client="Jellyfin Web", Device="Firefox", DeviceId="web-id", Version="10.11.0"`,
+		map[string]string{"Username": name, "Pw": "correct horse"})
+	var signedIn AuthenticationResult
+	if status != http.StatusOK || json.Unmarshal(body, &signedIn) != nil || signedIn.AccessToken == "" {
+		t.Fatalf("jellyfin-web's sign-in: %d %s", status, body)
+	}
+	socket, _, err := srv.openSocket(t, signedIn.AccessToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return socket
+}
+
 // next is the next message within a few seconds.
 func (s *appSocket) next(t *testing.T) socketMessage {
 	t.Helper()

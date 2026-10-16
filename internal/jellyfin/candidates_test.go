@@ -219,16 +219,13 @@ func TestPlaybackInfoWaitsForSubtitlesASecondAtMost(t *testing.T) {
 	})
 }
 
-// A title page is told of its versions on the user's sockets as the addons
-// answer, without asking.
+// A title page is told of its versions on the user's jellyfin-web sockets as
+// the addons answer, without asking.
 func TestVersionsArePushedToTheTitlePage(t *testing.T) {
 	t.Parallel()
 	addon := newHeldAddon(t, "Alpha", false)
 	h := heldOn(t, newTestServer(t, 10), addon.url)
-	socket, _, err := h.openSocket(t, h.token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	socket := h.openWebSocket(t, "member")
 	h.sources(t)
 	addon.answer()
 	deadline := time.After(5 * time.Second)
@@ -258,16 +255,49 @@ func TestVersionsArePushedToTheTitlePage(t *testing.T) {
 	}
 }
 
+// The versions are pushed to jellyfin-web alone: the Jellyfin SDKs other
+// apps are built on fail on a message type they do not know, and some of
+// these apps crash on it. The user's data, changed once jellyfin-web had
+// the versions, then reaches both: the other app got none before it.
+func TestVersionsArePushedToTheWebPlayerOnly(t *testing.T) {
+	t.Parallel()
+	addon := newHeldAddon(t, "Alpha", false)
+	h := heldOn(t, newTestServer(t, 10), addon.url)
+	other, _, err := h.openSocket(t, h.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	web := h.openWebSocket(t, "member")
+	// The other app opens the title's page.
+	h.sources(t)
+	addon.answer()
+	for deadline, pushed := time.After(5*time.Second), false; !pushed; {
+		select {
+		case message := <-web.messages:
+			data, _ := message.Data.(map[string]any)
+			pushed = message.MessageType == versionsMessage && data["Count"] == float64(2)
+		case <-deadline:
+			t.Fatal("no push of the versions to jellyfin-web")
+		}
+	}
+	if status, body := h.call(http.MethodPost, "/UserPlayedItems/"+h.movie, app("tv", h.token), nil); status != http.StatusOK {
+		t.Fatalf("marked played: %d %s", status, body)
+	}
+	for kind := ""; kind != "UserDataChanged"; {
+		message := other.next(t)
+		if kind = message.MessageType; kind == versionsMessage {
+			t.Fatalf("the other app was told %+v", message.Data)
+		}
+	}
+}
+
 // A title's progress, asked, asked again or pushed, tells whether the web
 // player adds the versions that come to an open page, as the setting says.
 func TestVersionsTellWhetherTheWebPlayerAddsThem(t *testing.T) {
 	t.Parallel()
 	addon := newHeldAddon(t, "Alpha", false)
 	h := heldOn(t, newTestServer(t, 10), addon.url)
-	socket, _, err := h.openSocket(t, h.token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	socket := h.openWebSocket(t, "member")
 	adds := func() any {
 		var answer map[string]any
 		if status := h.get(t, "/Polyfin/Items/"+h.movie+"/Versions", h.token, &answer); status != http.StatusOK {
