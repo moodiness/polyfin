@@ -230,8 +230,8 @@ func TestDataFolder(t *testing.T) {
 	if want := filepath.Join(os.TempDir(), "polyfin"); err != nil || cfg.DataDir != want || cfg.CacheDir != filepath.Join(want, "cache") {
 		t.Errorf("default: %q %q %v", cfg.DataDir, cfg.CacheDir, err)
 	}
-	cfg, err = Load(with(map[string]string{"POLYFIN_DATA_DIR": " /data/ "}))
-	if err != nil || cfg.DataDir != "/data" || cfg.CacheDir != "/data/cache" {
+	cfg, err = Load(with(map[string]string{"POLYFIN_DATA_DIR": " " + systemPath("/data/") + " "}))
+	if err != nil || cfg.DataDir != systemPath("/data") || cfg.CacheDir != systemPath("/data/cache") {
 		t.Errorf("set: %q %q %v", cfg.DataDir, cfg.CacheDir, err)
 	}
 	for _, relative := range []string{"data", "./data"} {

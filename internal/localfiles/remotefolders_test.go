@@ -70,7 +70,7 @@ func remoteCases(t *testing.T, dir string) []remoteCase {
 		},
 		{
 			name: "sftp", kind: ShareSFTP,
-			wrong: NewFolder{Name: "Server", Path: "sftp://" + sftpServer.addr + filepath.ToSlash(filepath.Join(dir, "movies")),
+			wrong: NewFolder{Name: "Server", Path: "sftp://" + sftpServer.addr + sftpPath(filepath.Join(dir, "movies")),
 				Kind: KindMovies, User: "reader", PrivateKey: openSSHKey(t, otherPrivate, "pass phrase"), Passphrase: "pass phrase"},
 			right: Changes{PrivateKey: new(openSSHKey(t, private, "other phrase")), Passphrase: new("other phrase")}, stop: sftpServer.stop,
 			secrets: []string{"share_private_key", "share_passphrase"},
@@ -290,7 +290,7 @@ func TestSFTPHostKeys(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
 	server := serveSFTP(t, "reader", "pass phrase", nil)
-	address := "sftp://" + server.addr + filepath.ToSlash(filepath.Join(dir, "movies"))
+	address := "sftp://" + server.addr + sftpPath(filepath.Join(dir, "movies"))
 	addon, err := e.service.Add(t.Context(), NewFolder{Name: "Server", Path: address, Kind: KindMovies, User: "reader", Password: "pass phrase"})
 	if err != nil {
 		t.Fatal(err)
@@ -355,7 +355,7 @@ func TestRemoteFoldersArePolled(t *testing.T) {
 	rcloneHost, _ := url.Parse(rcloneServer.URL)
 	for i, access := range []shareAccess{
 		{address: "s3://media/movies", endpoint: s3Server.URL, region: "eu-test-1", user: "AKIDTEST", password: "secret"},
-		{address: "sftp://" + sftpServer.addr + filepath.ToSlash(filepath.Join(dir, "movies")), user: "reader", password: "pass phrase"},
+		{address: "sftp://" + sftpServer.addr + sftpPath(filepath.Join(dir, "movies")), user: "reader", password: "pass phrase"},
 		{address: "rclone://" + rcloneHost.Host + "/movies", remote: "media", user: "rc", password: "secret"},
 	} {
 		kind := shareKind(access.address)
@@ -598,13 +598,13 @@ func TestStoredSecretsStayWithTheirServer(t *testing.T) {
 	server := serveSFTP(t, "reader", "", signer.PublicKey())
 	other := serveSFTP(t, "reader", "", signer.PublicKey())
 	key := openSSHKey(t, private, "pass phrase")
-	sftpFolder := add(NewFolder{Name: "Server", Path: "sftp://" + server.addr + filepath.ToSlash(filepath.Join(dir, "movies")), Kind: KindMovies,
+	sftpFolder := add(NewFolder{Name: "Server", Path: "sftp://" + server.addr + sftpPath(filepath.Join(dir, "movies")), Kind: KindMovies,
 		User: "reader", PrivateKey: key, Passphrase: "pass phrase"})
-	if folder := update(sftpFolder, Changes{Path: new("sftp://" + server.addr + filepath.ToSlash(dir))}); !folder.PrivateKeySet ||
+	if folder := update(sftpFolder, Changes{Path: new("sftp://" + server.addr + sftpPath(dir))}); !folder.PrivateKeySet ||
 		!folder.PassphraseSet || folder.Error != "" {
 		t.Errorf("another folder of the same server: %+v", folder)
 	}
-	address := "sftp://" + other.addr + filepath.ToSlash(filepath.Join(dir, "movies"))
+	address := "sftp://" + other.addr + sftpPath(filepath.Join(dir, "movies"))
 	if folder := update(sftpFolder, Changes{Path: &address}); folder.PrivateKeySet || folder.PassphraseSet {
 		t.Errorf("a folder moved to another server: %+v", folder)
 	}
@@ -626,7 +626,7 @@ func TestFolderChangesRetryItsVersions(t *testing.T) {
 	// Update tells of the change before it returns.
 	var retried []accounts.ID
 	e.service.UseRetry(func(folder accounts.ID) { retried = append(retried, folder) })
-	addon, err := e.service.Add(t.Context(), NewFolder{Name: "Server", Path: "sftp://" + server.addr + filepath.ToSlash(filepath.Join(dir, "movies")),
+	addon, err := e.service.Add(t.Context(), NewFolder{Name: "Server", Path: "sftp://" + server.addr + sftpPath(filepath.Join(dir, "movies")),
 		Kind: KindMovies, User: "reader", Password: "pass phrase"})
 	if err != nil {
 		t.Fatal(err)
@@ -646,7 +646,7 @@ func TestFolderChangesRetryItsVersions(t *testing.T) {
 		{"the host key accepted", Changes{AcceptHostKey: true}, true},
 		{"a password", Changes{Password: new("pass phrase")}, true},
 		{"another user", Changes{User: new("other")}, true},
-		{"an address", Changes{Path: new("sftp://" + server.addr + filepath.ToSlash(dir))}, true},
+		{"an address", Changes{Path: new("sftp://" + server.addr + sftpPath(dir))}, true},
 	} {
 		retried = nil
 		if _, err := e.service.Update(t.Context(), addon.ID, c.changes); err != nil {

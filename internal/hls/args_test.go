@@ -3,6 +3,7 @@ package hls
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
@@ -100,8 +101,17 @@ func TestDefaultSettingsKeepTheArguments(t *testing.T) {
 	if len(cases) != len(want) {
 		t.Errorf("%d cases, %d recorded", len(cases), len(want))
 	}
+	// The live cases write to /tmp/live, joined by the system's separator:
+	// the recording has slashes.
+	live := filepath.FromSlash("/tmp/live/")
 	for _, c := range cases {
-		if got := c.args(); !reflect.DeepEqual(got, want[c.name]) {
+		got := c.args()
+		for i, arg := range got {
+			if strings.HasPrefix(arg, live) {
+				got[i] = filepath.ToSlash(arg)
+			}
+		}
+		if !reflect.DeepEqual(got, want[c.name]) {
 			t.Errorf("%s:\n got %q\nwant %q", c.name, got, want[c.name])
 		}
 	}

@@ -452,3 +452,14 @@ func (f *fakeRclone) readRanges() []string {
 	defer f.mu.Unlock()
 	return slices.Clone(f.ranges)
 }
+
+// sftpPath is the path in an SFTP address of a local folder the fake SFTP
+// server serves: the folder with slashes, and on Windows a slash before its
+// drive, /C:/Users/…, which the server reads as C:\Users\….
+func sftpPath(dir string) string {
+	dir = filepath.ToSlash(dir)
+	if !strings.HasPrefix(dir, "/") {
+		dir = "/" + dir
+	}
+	return dir
+}

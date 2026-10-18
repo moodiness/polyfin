@@ -16,7 +16,7 @@ func TestRecordingsAndBackupFoldersAreCopied(t *testing.T) {
 			if cfg, err := Load(with(nil)); err != nil || folder(cfg) != "" {
 				t.Fatalf("without a folder: %q %v", folder(cfg), err)
 			}
-			if cfg, err := Load(with(map[string]string{variable: " /missing/folder/ "})); err != nil || folder(cfg) != "/missing/folder" || len(cfg.Warnings) != 0 {
+			if cfg, err := Load(with(map[string]string{variable: " " + systemPath("/missing/folder/") + " "})); err != nil || folder(cfg) != systemPath("/missing/folder") || len(cfg.Warnings) != 0 {
 				t.Errorf("with a folder: %q %v %v", folder(cfg), err, cfg.Warnings)
 			}
 			if cfg, err := Load(with(map[string]string{variable: "relative"})); err != nil || folder(cfg) != "" || len(cfg.Warnings) != 1 {

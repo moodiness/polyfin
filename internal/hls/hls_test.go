@@ -359,14 +359,14 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 				if c.convert != "" {
 					// MPEG-TS lists its streams twice, in its program too.
 					out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_name,channels", "-of", "csv=p=0", all).Output()
-					if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); got != c.convert+",2" {
+					if got, _, _ := firstLine(out); got != c.convert+",2" {
 						t.Errorf("converted audio: %q", got)
 					}
 				}
 				if c.encode {
 					out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_name,width,height,pix_fmt", "-of", "csv=p=0", all).Output()
 					want := "h264," + strconv.Itoa(encoding.Width) + "," + strconv.Itoa(encoding.Height) + ",yuv420p"
-					if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); got != want {
+					if got, _, _ := firstLine(out); got != want {
 						t.Errorf("converted video: %q, want %q", got, want)
 					}
 				}
@@ -428,7 +428,7 @@ func TestHDRIsConvertedToSDR(t *testing.T) {
 			defer f.Close()
 			out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_name,pix_fmt,color_transfer,color_primaries",
 				"-of", "csv=p=0", f.Name()).Output()
-			if got, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n"); !strings.HasSuffix(got, ",yuv420p,bt709,bt709") {
+			if got, _, _ := firstLine(out); !strings.HasSuffix(got, ",yuv420p,bt709,bt709") {
 				t.Errorf("converted video: %q", got)
 			}
 		})
@@ -454,4 +454,11 @@ func TestARemuxThatFailsReportsItsError(t *testing.T) {
 	if err == nil || ctx.Err() != nil || !strings.Contains(err.Error(), "no video track") {
 		t.Errorf("segment of a failing remux: %v", err)
 	}
+}
+
+// firstLine is the first line ffprobe printed, without the carriage return
+// it ends lines with on Windows.
+func firstLine(out []byte) (first, rest string, found bool) {
+	first, rest, found = strings.Cut(strings.TrimSpace(string(out)), "\n")
+	return strings.TrimSuffix(first, "\r"), rest, found
 }
