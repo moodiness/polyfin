@@ -11,7 +11,7 @@ Polyfin picks the lightest way an app can play a file:
 - **Audio conversion:** when the app cannot take the audio, Polyfin converts the audio.
 - **Video conversion:** when the app cannot take the video, or must have image subtitles (PGS, VobSub, DVB) burned in, Polyfin converts the video, HDR to SDR included. A text copy of a PGS or VobSub track, with **Turn picture subtitles into text** on, spares that conversion once it is ready. See [Subtitles](subtitles.md).
 
-Video converts on an NVIDIA GPU through NVENC, or on an AMD or Intel GPU through VAAPI, when one is available. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. For how apps choose between versions of a title, see [Playback](playback.md).
+Video converts on a GPU when one is available, with the methods of the system Polyfin runs on (see [GPU methods per system](#gpu-methods-per-system)): an NVIDIA GPU through NVENC, or an AMD or Intel GPU through VAAPI, on Linux. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. For how apps choose between versions of a title, see [Playback](playback.md).
 
 With **Say in version names how they play** on, the default, apps see in each version's name which of these ways it takes: "(direct play)", "(direct stream)" when its tracks are copied into HLS, "(converted: reason)", or "(cannot play here)" when it needs a conversion the server or the user may not have. See [Version names](playback.md#version-names).
 
@@ -102,9 +102,23 @@ With it on, an app that asks for a smaller copy, as Streamyfin's download sheet 
 
 ## GPUs
 
+### GPU methods per system
+
+Each system offers only its own GPU methods, under **Graphics card used to convert** and in `POLYFIN_HWACCEL`, in the order **Automatic** tries them:
+
+| System | Methods | Decoding | Encoders |
+| --- | --- | --- | --- |
+| Linux | NVIDIA (`nvenc`), then AMD or Intel (`vaapi`) | CUDA; VAAPI | `h264_nvenc`, `hevc_nvenc`; `h264_vaapi`, `hevc_vaapi` |
+| macOS | VideoToolbox (`videotoolbox`) | VideoToolbox | `h264_videotoolbox`, `hevc_videotoolbox` |
+| Windows | NVIDIA (`nvenc`), then Intel (`qsv`), then AMD (`amf`) | CUDA; Direct3D 11 (D3D11VA) for Intel and AMD | `h264_nvenc`, `hevc_nvenc`; `h264_qsv`, `hevc_qsv`; `h264_amf`, `hevc_amf` |
+
+On Windows, Intel and AMD GPUs are opened through the Direct3D 11 adapter of their vendor, so a computer with two graphics cards uses the right one for each method. A system without a GPU that encodes, such as a Windows computer without a graphics card, converts on the processor, as on Linux.
+
+A backup restored on another system keeps its choice of method; when the new system does not offer it, it reads as **Automatic**.
+
 ### Detection
 
-At startup Polyfin encodes a few frames on each GPU it can reach, NVIDIA first, then AMD or Intel, and logs the one it converts video on. It skips this when **Settings › Conversion** chooses a GPU. For AMD and Intel, it tries each render node of `/dev/dri` in turn, unless **Graphics card for VAAPI** names one.
+At startup Polyfin encodes a few frames with each encoder of the system's methods, in the order above, and logs the one it converts video on. It skips this when **Settings › Conversion** chooses a GPU. For VAAPI, it tries each render node of `/dev/dri` in turn, unless **Graphics card for VAAPI** names one.
 
 It then measures, in the background, which way converts faster on that GPU (see [Frames on the GPU](#frames-on-the-gpu)), in a few seconds.
 
@@ -112,13 +126,13 @@ It then measures, in the background, which way converts faster on that GPU (see 
 
 A GPU's decoded frames can stay in its memory until it encodes them, or come back to memory for the filters and go to the GPU again. Depending on the card and its driver, either may be faster, so Polyfin measures both ways at startup and uses the faster one for each kind of conversion:
 
-- **SDR video:** kept on the GPU, it is scaled there (`scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel), and deinterlaced there when FFmpeg has the matching filter (`yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`).
+- **SDR video:** kept on the GPU, it is scaled there (`scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel through VAAPI, `scale_vt` with VideoToolbox, `scale_qsv` on Intel through QSV, `vpp_amf` on AMD through AMF), and deinterlaced there with the matching filter (`yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`, `yadif_videotoolbox`, or `vpp_qsv`'s deinterlacer; AMF has none). A deinterlacer is used only once it deinterlaced a short sample on the GPU at startup: one that fails there, or makes FFmpeg crash, leaves interlaced video to the processor. On Windows, Intel and AMD GPUs decode into Direct3D 11 frames, which QSV maps to its own.
 - **HDR video on NVIDIA:** kept on the GPU, it is decoded into Vulkan frames, which libplacebo tone maps where they are. FFmpeg cannot hand Vulkan frames back to NVENC, so the converted picture, at its final size, goes to the encoder through memory.
-- **HDR video on Intel:** always kept on the GPU, which deinterlaces it with `deinterlace_vaapi`, scales it in 10 bits with `scale_vaapi` and tone maps it with `tonemap_vaapi`, then encodes it. Burned-in subtitles are laid on in memory after the tone mapping. This is not measured: there is no other way on the GPU.
+- **HDR video on Intel and VideoToolbox:** always kept on the GPU, which deinterlaces it, scales it and tone maps it there, with `scale_vaapi` and `tonemap_vaapi` through VAAPI, `vpp_qsv` through QSV, `scale_vt` with VideoToolbox, then encodes it. Burned-in subtitles are laid on in memory after the tone mapping. This is not measured: there is no other way on the GPU.
 
 Each measurement converts 2 seconds of generated 4K video to 1080p both ways. The log shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). Conversions that start before the measurement ends go through memory. The processor's tone mapping is measured next (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 
-Frames always go through memory for burned-in subtitles (except on Intel when it tone maps), for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the way through its memory failed.
+Frames always go through memory for burned-in subtitles (except on Intel and VideoToolbox when they tone map), for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the way through its memory failed.
 
 ### Giving the container an NVIDIA GPU
 
@@ -139,14 +153,15 @@ The container runs as user 65532. When the render nodes in `/dev/dri` are not op
 When HDR video is converted to SDR, Polyfin tone maps it:
 
 - **On an NVIDIA GPU:** with libplacebo, up to 4K, Dolby Vision profile 5 included, decoded straight into the frames libplacebo tone maps when that is faster (see [Frames on the GPU](#frames-on-the-gpu)).
-- **On an Intel GPU, through VAAPI:** with `tonemap_vaapi`, up to 4K, without Dolby Vision profile 5. It takes only HDR10 videos whose frames carry their mastering display information (SMPTE ST 2086), which `tonemap_vaapi` needs: HLG, and HDR10 files without that information, go to the processor.
+- **On an Intel GPU, through VAAPI on Linux or QSV on Windows:** with `tonemap_vaapi` or `vpp_qsv`, up to 4K, without Dolby Vision profile 5. It takes only HDR10 videos whose frames carry their mastering display information (SMPTE ST 2086), which both filters need: HLG, and HDR10 files without that information, go to the processor.
+- **With VideoToolbox, on macOS:** with `scale_vt`, which converts the colors to BT.709 through the system's own tone mapping, up to 4K: HDR10 and HLG, without Dolby Vision profile 5.
 - **Elsewhere:** on the processor, up to **Maximum quality of HDR converted by the processor**, without Dolby Vision profile 5. With **Automatic**, Polyfin measures the processor at startup, in the background: it converts 2 seconds of generated 4K HDR10 to 1080p the way conversions run on the server, decoded and encoded on the GPU when there is one. 1080p when that runs at 1.5 times real time or faster, else 720p, which also applies until the measurement ends or when it fails. The log shows the speed and the height chosen (`Timed the processor's HDR tone mapping`).
 
-AMD GPUs never tone map. Their Linux driver failed each way Polyfin tried to do it on the GPU with FFmpeg: frames handed to libplacebo from memory crashed the driver, VAAPI frames cannot be passed to Vulkan, and Vulkan's HEVC decoding froze the card's video decoder until the kernel reset it. Their HDR is tone mapped on the processor.
+AMD GPUs never tone map. Their Linux driver failed each way Polyfin tried to do it on the GPU with FFmpeg: frames handed to libplacebo from memory crashed the driver, VAAPI frames cannot be passed to Vulkan, and Vulkan's HEVC decoding froze the card's video decoder until the kernel reset it. On Windows, FFmpeg's AMF filter converts colors but does not tone map. Their HDR is tone mapped on the processor.
 
-An Intel GPU tone maps only once a short HDR10 sample converted on it at startup; the check needs FFmpeg's x265 encoder to make that sample. Whether an HDR10 file carries its mastering display information comes from its container when Polyfin analyzes it. Otherwise, the first time an Intel GPU would tone map the file, Polyfin reads its first frame once and keeps the answer. Other GPUs and the processor never need it.
+An Intel GPU, or VideoToolbox, tone maps only once a short HDR10 sample converted on it at startup; the check needs FFmpeg's x265 encoder to make that sample. Whether an HDR10 file carries its mastering display information comes from its container when Polyfin analyzes it. Otherwise, the first time an Intel GPU would tone map the file, Polyfin reads its first frame once and keeps the answer. Other GPUs and the processor never need it.
 
-If HDR looks wrong on the graphics card, turn off **Tone map HDR on the graphics card**: the processor then tone maps it, on NVIDIA and Intel alike. You can also turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).
+If HDR looks wrong on the graphics card, turn off **Tone map HDR on the graphics card**: the processor then tone maps it, on every GPU alike. You can also turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).
 
 ## HLS segments
 
@@ -205,8 +220,8 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Graphics card used to convert** | **Settings › Conversion** | `POLYFIN_HWACCEL` at the first start, else **Automatic** | **Automatic**, **NVIDIA (NVENC)**, **AMD or Intel (VAAPI)** or **None**, applied once saved. |
-| **Graphics card for VAAPI** | **Settings › Conversion** | **Each in turn** | With **Automatic** or **AMD or Intel (VAAPI)**, the render node VAAPI converts video on when several graphics cards could: **Each in turn**, the first that works, or one of those found in `/dev/dri`. Applied once saved. |
+| **Graphics card used to convert** | **Settings › Conversion** | `POLYFIN_HWACCEL` at the first start, else **Automatic** | **Automatic** (the first that works, in the order of [GPU methods per system](#gpu-methods-per-system)), the system's methods, or **None**, applied once saved: **NVIDIA (NVENC)** and **AMD or Intel (VAAPI)** on Linux, **VideoToolbox** on macOS, **NVIDIA (NVENC)**, **Intel (QSV)** and **AMD (AMF)** on Windows. |
+| **Graphics card for VAAPI** | **Settings › Conversion** | **Each in turn** | On Linux, with **Automatic** or **AMD or Intel (VAAPI)**, the render node VAAPI converts video on when several graphics cards could: **Each in turn**, the first that works, or one of those found in `/dev/dri`. Applied once saved. |
 | **Detected on this server** | **Settings › Conversion** | Read only | Shows the card chosen with its device, its encoders, whether it tone maps HDR and, for VAAPI, whether it takes a quality number. Also shows the processor's encoders and tone mapping, with the height it tone maps up to. |
 | **Read these formats on the graphics card** | **Settings › Conversion** | All checked | H.264, HEVC, HEVC 10-bit (needs HEVC), VP9, AV1, MPEG-2 and VC-1. An unchecked format is decoded by the processor, for conversions and thumbnails. |
 
@@ -218,11 +233,11 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Encoding speed** | **Settings › Conversion** | **Automatic** | **Automatic** keeps Polyfin's speeds: `veryfast` for x264 and x265, `p4` for NVENC, the driver's for VAAPI. **Very slow (best picture)** to **Ultra fast (lightest work)** are x264's presets, mapped to NVENC's `p7` to `p1` and VAAPI's compression levels 1 to 7. |
-| **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion** | 0 (range 1 to 51) | 0 aims for the bitrate alone, as before. A number is a quality factor that the bitrate caps: CRF for x264 and x265, CQ for NVENC, and QVBR's quality for the VAAPI drivers that have it; other drivers ignore it. |
+| **Encoding speed** | **Settings › Conversion** | **Automatic** | **Automatic** keeps Polyfin's speeds: `veryfast` for x264 and x265, `p4` for NVENC, the encoder's own for VAAPI, VideoToolbox, QSV and AMF. **Very slow (best picture)** to **Ultra fast (lightest work)** are x264's presets, mapped to NVENC's `p7` to `p1`, VAAPI's compression levels 1 to 7, QSV's presets of the same names (`veryfast` for the two fastest), AMF's `quality`, `balanced` and `speed`, and VideoToolbox's speed priority (off from **Slow** down, on from **Fast** up). |
+| **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion** | 0 (range 1 to 51) | 0 aims for the bitrate alone, as before. A number is a quality factor that the bitrate caps: CRF for x264 and x265, CQ for NVENC, QVBR's quality for the VAAPI drivers that have it, and VideoToolbox's quality, from 1 to 100, as 100 minus twice the number. Other VAAPI drivers, QSV and AMF ignore it: their quality modes leave the maximum bitrate out. Recordings converted to HEVC use it with every encoder. |
 | **Allow converting to HEVC** | **Settings › Conversion** | Off | On: apps that list HEVC before H.264 get HEVC. Off: H.264 comes first, and only apps that take no H.264 get HEVC, as before. |
 | **Several qualities when converting** | **Settings › Conversion** | Off | **Off**, **Outside the local network** or **Always**: converted video also offers up to two lower qualities that apps step down to on a slow connection. See [Adaptive quality](#adaptive-quality). |
-| **Deinterlacing method** | **Settings › Conversion** | Yadif | Yadif or Bwdif, on the NVIDIA card too when it keeps the frames. An AMD or Intel card keeping the frames uses its own deinterlacer whatever the method. |
+| **Deinterlacing method** | **Settings › Conversion** | Yadif | Yadif or Bwdif, on the NVIDIA card too when it keeps the frames, and Yadif with VideoToolbox (Bwdif goes through the processor there). An AMD or Intel card keeping the frames uses its own deinterlacer whatever the method; AMF has none, and its interlaced video is deinterlaced on the processor. |
 | **Double the frame rate** | **Settings › Conversion** | — | Makes a frame of each field of video up to 30 frames a second. |
 
 ### HDR
@@ -230,8 +245,8 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Convert HDR to SDR (tone mapping)** | **Settings › Conversion** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's cap, and Dolby Vision without an HDR10 layer is not converted. |
-| **Tone mapping method** | **Settings › Conversion** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA cards only: the processor's filter has none and uses Hable. Intel cards use their own curve and ignore the method. |
-| **Tone map HDR on the graphics card** | **Settings › Conversion** | On | NVIDIA cards, and Intel cards through VAAPI, tone map HDR themselves, up to 4K. Off: the processor tone maps it on every card, a way out when a card's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
+| **Tone mapping method** | **Settings › Conversion** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA cards only: the processor's filter has none and uses Hable. Intel cards and VideoToolbox use their own curve and ignore the method. |
+| **Tone map HDR on the graphics card** | **Settings › Conversion** | On | NVIDIA cards, Intel cards through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K. Off: the processor tone maps it on every card, a way out when a card's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
 | **Maximum quality of HDR converted by the processor** | **Settings › Conversion** | **Automatic (measured at startup)** | **Automatic** (1080p or 720p, as measured at startup, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
 | **Peak brightness in nits (0 = from the video)** | **Settings › Conversion** | 0 (the video's), or 100 to 10,000 nits | Processor only; the cards do not take it, so it is hidden when an NVIDIA card tone maps. |
 | **Highlight desaturation (0 = off)** | **Settings › Conversion** | 0 to 10 | Processor only, shown as the peak is. |

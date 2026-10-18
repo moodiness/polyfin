@@ -208,7 +208,7 @@ The metrics name no user, title, address, device or token. Their labels take a f
 | Metric | Type | Labels | What it counts |
 |---|---|---|---|
 | `polyfin_playbacks` | gauge | `kind`: `video`, `live_tv`, `music`, `audiobook`; `delivery`: `direct_play`, `remux`, `conversion` | Playbacks under way, as **Home** shows them. |
-| `polyfin_conversions` | gauge | `method`: `nvidia`, `vaapi`, `processor` | Conversions under way, of files and channels: those that convert the video. |
+| `polyfin_conversions` | gauge | `method`: `nvidia`, `vaapi`, `videotoolbox`, `qsv`, `amf`, `processor` | Conversions under way, of files and channels: those that convert the video. |
 | `polyfin_encoding_failures_total` | counter | `method`: as above, or `copy` for a remux | Remuxes and conversions FFmpeg failed. |
 | `polyfin_segments_total` | counter | `method`: as above | HLS segments made of files. |
 | `polyfin_addon_request_duration_seconds` | histogram | `addon`; `resource`: `manifest`, `catalog`, `meta`, `stream`, `subtitles`, `other`; `outcome`: `success`, `failure` | Requests to addons and how long their answers took. An answer, even "not found", is a success, as on **System › Health**. |
