@@ -269,6 +269,9 @@ const common: typeof en = {
     invalid_backup_hour: 'Choisissez l’heure des sauvegardes dans la liste.',
     invalid_backups_kept:
       'Le nombre de sauvegardes conservées doit être un nombre entier de 1 à 90.',
+    invalid_torrent_route:
+      'Les flux torrent demandent une seule route : un nom d’interface réseau (Linux seulement), ou un proxy SOCKS5 sous la forme hôte:port, pas les deux.',
+    invalid_torrent_limit: 'Les limites doivent être des nombres entiers de Mbit/s, de 0 à 10000.',
     invalid_cache_size: 'L’espace disque doit être un nombre entier de Go, de 1 à 2000.',
     invalid_vaapi_device: 'Choisissez la carte graphique dans la liste.',
     invalid_recordings_folder:

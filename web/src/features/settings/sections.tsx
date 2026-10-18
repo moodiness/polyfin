@@ -34,6 +34,7 @@ import HomeRows from './HomeRows'
 import ConversionSection from './ConversionSection'
 import { LastBackup, Variables } from './Diagnostics'
 import DlnaSection from './DlnaSection'
+import TorrentsSection from './TorrentsSection'
 import MetricsToken from './MetricsToken'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
@@ -87,6 +88,7 @@ export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => R
   'live-tv': (api) => <LiveTv {...api} />,
   recordings: (api) => <Recordings {...api} />,
   dlna: (api) => <DlnaSection {...api} />,
+  torrents: (api) => <TorrentsSection {...api} />,
   backups: (api) => <Backups {...api} />,
   notifications: (api) => <Notifications {...api} />,
   'web-player': (api) => <WebPlayer {...api} />,

@@ -34,6 +34,7 @@ const nav: typeof en = {
       liveTv: 'TV en direct',
       recordings: 'Enregistrements',
       dlna: 'DLNA',
+      torrents: 'Torrents',
       backups: 'Sauvegardes',
       notifications: 'Notifications',
       webPlayer: 'Lecteur web',

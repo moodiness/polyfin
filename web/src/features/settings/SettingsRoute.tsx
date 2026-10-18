@@ -180,6 +180,8 @@ function sectionLede(
         : undefined
     case 'dlna':
       return s.dlna.description
+    case 'torrents':
+      return s.torrents.description
     case 'backups':
       return settings?.backups
         ? s.backupsFolder(settings.backupFolder || settings.backupFolderDefault)

@@ -47,6 +47,9 @@ const users = {
       'Lets the server re-encode video and audio when this user’s app cannot play a file as it is. Without it, files play as they are or simply repackaged.',
     canDownload: 'Can download',
     canDownloadHelp: 'Lets this user save titles in Jellyfin apps to watch offline.',
+    canPlayTorrents: 'Can play torrent streams',
+    canPlayTorrentsHelp:
+      'Offers this user the torrents addons list, while Settings › Torrents plays them. Off for everyone, administrators included, until given.',
     noTranscoding: 'No conversion',
     noDownloads: 'No downloads',
     turnOffDownloads: 'Turn off downloads for everyone',

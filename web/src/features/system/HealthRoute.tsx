@@ -99,6 +99,7 @@ export default function HealthRoute() {
               <Transcoder health={health.data} />
               <Database health={health.data} />
               <Cache health={health.data} />
+              <Torrents health={health.data} />
               <Disks health={health.data} />
               <Backups health={health.data} />
               <Thumbnails health={health.data} />
@@ -666,7 +667,46 @@ function Cache({ health }: { health: Health }) {
             {text.sourcesOpen}
             {t.common.colon} <span className="text-ink">{cache.sources}</span>
           </p>
+          {health.torrents !== null && (
+            <p className="text-small text-ink-3 tabular-nums">
+              {text.torrentPieces}
+              {t.common.colon}{' '}
+              <span className="text-ink">{formatBytes(cache.torrents, language)}</span>
+            </p>
+          )}
         </div>
+      </Panel>
+    </Anchor>
+  )
+}
+
+/** How torrent streams play: their route, the torrents playing, their peers, what was shared. */
+function Torrents({ health }: { health: Health }) {
+  const { language, t } = useI18n()
+  const text = t.system.health
+  const torrents = health.torrents
+  if (torrents === null) return null
+  const rows = [
+    [text.torrentRoute[torrents.route], torrents.name],
+    [text.torrentsPlaying, String(torrents.playing)],
+    [text.torrentPeers, String(torrents.peers)],
+    [text.torrentsShared, formatBytes(torrents.uploaded, language)],
+  ] as const
+  return (
+    <Anchor id="torrents">
+      <Panel title={text.torrentsTitle} titleAs="h3" description={text.torrentsHelp}>
+        <ul className="space-y-1.5">
+          {rows.map(([label, value]) => (
+            <li key={label} className="text-small text-ink-3 tabular-nums">
+              {label}
+              {value !== '' && (
+                <>
+                  {t.common.colon} <span className="text-ink">{value}</span>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
       </Panel>
     </Anchor>
   )

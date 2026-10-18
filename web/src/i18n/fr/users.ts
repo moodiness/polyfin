@@ -52,6 +52,9 @@ const users: typeof en = {
     canDownload: 'Peut télécharger',
     canDownloadHelp:
       'Permet à cet utilisateur d’enregistrer des titres dans les applications Jellyfin pour les regarder hors connexion.',
+    canPlayTorrents: 'Peut lire les flux torrent',
+    canPlayTorrentsHelp:
+      'Propose à cet utilisateur les torrents que listent les addons, quand Paramètres › Torrents les lit. Désactivé pour tous, administrateurs compris, jusqu’à ce qu’on le donne.',
     noTranscoding: 'Sans conversion',
     noDownloads: 'Sans téléchargement',
     turnOffDownloads: 'Désactiver les téléchargements pour tous',

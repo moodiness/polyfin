@@ -69,6 +69,34 @@ const settings: typeof en = {
     localAddress: 'Adresse sur le réseau local',
     localAddressHelp:
       'L’adresse à laquelle les applications du réseau local joignent Polyfin, comme http://192.168.1.10:8096. Les réponses à la découverte la donnent, et les applications Jellyfin la lisent comme l’adresse locale du serveur. Vide, les réponses donnent l’adresse de l’interface réseau qui joint l’application : c’est la bonne, sauf si Polyfin tourne dans un réseau bridge de Docker. Saisissez alors l’adresse de l’hôte et le port de Polyfin.',
+    torrents: {
+      description:
+        'Certains addons listent des torrents plutôt que des liens. Polyfin peut les lire : il ne rejoint l’essaim d’un torrent que pendant qu’une lecture le lit, et garde tout son trafic sur une seule route, une interface réseau comme celle d’un VPN, ou un proxy SOCKS5. Rien n’est jamais envoyé par un autre chemin. Les morceaux sont gardés dans l’Espace disque des fichiers en lecture, dans Paramètres › Lecture.',
+      play: 'Lire les flux torrent',
+      playHelp:
+        'Désactivé par défaut. Lire un torrent le télécharge auprès d’autres pairs, et partage ce qui a été téléchargé tant que la limite d’envoi le permet : vous répondez de ce que ce serveur télécharge et partage. Les utilisateurs ont aussi besoin de Peut lire les flux torrent, sur leur page dans Utilisateurs. Demande une route.',
+      route: 'Route',
+      routeHelp:
+        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Quand elle ne fonctionne pas, les versions torrent sont ignorées, y compris pendant une lecture, et Système › Santé dit pourquoi.',
+      routeHelpProxyOnly:
+        'Ce système ne lie aucun socket à une interface réseau, ce que seul Linux fait, comme Polyfin Desktop sous Windows et macOS : les torrents ne passent que par un proxy SOCKS5. Quand il ne répond pas, les versions torrent sont ignorées et Système › Santé dit pourquoi.',
+      routes: { interface: 'Interface réseau', proxy: 'Proxy SOCKS5' },
+      interface: 'Interface réseau des torrents',
+      interfaceHelp:
+        'Son nom, comme wg0. Chaque socket des torrents y est lié, et les noms des trackers sont résolus par elle. Linux seulement. Sous Docker, le conteneur doit voir l’interface : voir la documentation des torrents.',
+      proxy: 'Proxy SOCKS5 des torrents',
+      proxyHelp:
+        'Son adresse et son port, comme 10.0.0.2:1080. Les pairs et les trackers HTTP passent par son CONNECT. Les trackers UDP et le DHT ont besoin de son UDP ASSOCIATE, et restent désactivés sans lui. À travers un proxy, aucun pair ne peut se connecter à Polyfin.',
+      proxyUser: 'Utilisateur du proxy',
+      proxyUserHelp: 'Vide quand le proxy n’en demande pas.',
+      proxyPassword: 'Mot de passe du proxy',
+      proxyPasswordHelp: 'Stocké chiffré quand POLYFIN_SECRET_KEY est définie.',
+      downloadLimit: 'Limite de téléchargement (Mbit/s, 0 = aucune)',
+      downloadLimitHelp: (r: RangeText) => `De 0 à ${r.max} ; ${r.default} par défaut.`,
+      uploadLimit: 'Limite d’envoi (Mbit/s, 0 = aucun partage)',
+      uploadLimitHelp: (r: RangeText) =>
+        `Les pairs favorisent ceux qui partagent en retour : le démarrage peut être plus lent à 0. Le partage s’arrête à la fin de la lecture. De 0 à ${r.max} ; ${r.default} par défaut.`,
+    },
     dlna: {
       title: 'DLNA',
       description:

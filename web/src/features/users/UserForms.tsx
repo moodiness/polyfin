@@ -625,6 +625,7 @@ export type Permissions = Pick<
   | 'collectionManagement'
   | 'subtitleManagement'
   | 'canShare'
+  | 'torrentStreams'
 >
 
 /** The switches of the permissions in Access, on a user's page and on a group's. */
@@ -641,6 +642,7 @@ export function PermissionRows({
   const rows = [
     ['transcoding', t.users.canTranscode, t.users.canTranscodeHelp],
     ['downloads', t.users.canDownload, t.users.canDownloadHelp],
+    ['torrentStreams', t.users.canPlayTorrents, t.users.canPlayTorrentsHelp],
     ['personalAddons', t.users.canAddAddons, t.users.canAddAddonsHelp],
     ['collectionManagement', t.users.canManageCollections, t.users.canManageCollectionsHelp],
     ['subtitleManagement', t.users.canManageSubtitles, t.users.canManageSubtitlesHelp],

@@ -65,6 +65,34 @@ const settings = {
     localAddress: 'Address on the local network',
     localAddressHelp:
       'The address apps on the local network reach Polyfin at, such as http://192.168.1.10:8096. Discovery answers give it, and Jellyfin apps read it as the server’s local address. Empty, the answers give the address of the network interface that reaches the app, which is right unless Polyfin runs in a Docker bridge network: there, enter the host’s address and Polyfin’s port.',
+    torrents: {
+      description:
+        'Some addons list torrents rather than links. Polyfin can play them: it joins a torrent’s swarm only while a playback reads it, and keeps all of its traffic to one route, a network interface such as a VPN’s, or a SOCKS5 proxy. Nothing is ever sent another way. The pieces are kept within Disk space for files being read, under Settings › Playback.',
+      play: 'Play torrent streams',
+      playHelp:
+        'Off by default. Playing a torrent downloads it from other peers, and shares what was downloaded while the upload limit allows: you answer for what this server downloads and shares. Users also need Can play torrent streams, on their page under Users. Needs a route.',
+      route: 'Route',
+      routeHelp:
+        'Every torrent socket, for peers, trackers and the DHT, goes this way alone. When it is down, torrent versions are skipped, also during a playback, and System › Health says why.',
+      routeHelpProxyOnly:
+        'This system binds no socket to a network interface, which only Linux does, as on Polyfin Desktop for Windows and macOS: torrents go through a SOCKS5 proxy alone. When it does not answer, torrent versions are skipped and System › Health says why.',
+      routes: { interface: 'Network interface', proxy: 'SOCKS5 proxy' },
+      interface: 'Network interface for torrents',
+      interfaceHelp:
+        'Its name, such as wg0. Every torrent socket is bound to it, and tracker names are looked up over it. Linux only. In Docker, the container must see the interface: see the torrents docs.',
+      proxy: 'SOCKS5 proxy for torrents',
+      proxyHelp:
+        'Its address and port, such as 10.0.0.2:1080. Peers and HTTP trackers go through its CONNECT. UDP trackers and the DHT need its UDP ASSOCIATE, and stay off without it. Through a proxy, no peer can connect in.',
+      proxyUser: 'Proxy user',
+      proxyUserHelp: 'Empty when the proxy asks for none.',
+      proxyPassword: 'Proxy password',
+      proxyPasswordHelp: 'Stored encrypted when POLYFIN_SECRET_KEY is set.',
+      downloadLimit: 'Download limit (Mbps, 0 = none)',
+      downloadLimitHelp: (r: RangeText) => `From 0 to ${r.max}; ${r.default} by default.`,
+      uploadLimit: 'Upload limit (Mbps, 0 = no sharing)',
+      uploadLimitHelp: (r: RangeText) =>
+        `Peers favour those that share back, so a start may be slower at 0. Sharing stops when the playback ends. From 0 to ${r.max}; ${r.default} by default.`,
+    },
     dlna: {
       title: 'DLNA',
       description:

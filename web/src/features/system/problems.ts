@@ -94,6 +94,10 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.discoveryPort(problem.port)
     case 'dlna_port':
       return text.dlnaPort(problem.port)
+    case 'torrent_route':
+      return text.torrentRoute(text.torrentWhy[problem.failure](problem.name ?? ''))
+    case 'torrent_udp':
+      return text.torrentUdp(problem.name)
     case 'discovery_address':
       return text.discoveryAddress(problem.address)
     case 'proxy_name_unresolved':

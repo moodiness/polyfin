@@ -141,6 +141,20 @@ const system: typeof en = {
           `${address} transmet des requêtes (X-Forwarded-For) sans être un proxy connu : tous ses clients comptent donc comme ${address}. Si c’est votre proxy inverse, ajoutez-le aux Proxys connus dans Paramètres › Sécurité.`,
         discoveryPort: (port: number) =>
           `Polyfin ne peut pas écouter sur le port UDP ${port} : les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. Un autre programme l’utilise sans doute, comme un serveur Jellyfin sur le même hôte. Enregistrer les paramètres réessaie.`,
+        torrentRoute: (why: string) =>
+          `Les flux torrent ne sont pas lus : ${why}. Rien n’est envoyé par un autre chemin ; vérifiez la route dans Paramètres › Torrents.`,
+        torrentWhy: {
+          interface_missing: (name: string) => `l’interface réseau ${name} est absente`,
+          interface_down: (name: string) => `l’interface réseau ${name} est désactivée`,
+          interface_no_address: (name: string) => `l’interface réseau ${name} n’a pas d’adresse`,
+          interface_unsupported: () => 'une interface réseau ne fonctionne que sous Linux',
+          proxy_unreachable: (name: string) => `le proxy SOCKS5 ${name} ne répond pas`,
+          proxy_refused: (name: string) =>
+            `le proxy SOCKS5 ${name} a refusé l’utilisateur et le mot de passe`,
+          no_route: () => 'aucune route n’est définie',
+        },
+        torrentUdp: (name: string) =>
+          `Le proxy SOCKS5 ${name} ne propose pas UDP ASSOCIATE : les torrents sont lus en TCP, sans trackers UDP ni DHT.`,
         dlnaPort: (port: number) =>
           `Polyfin ne peut pas écouter sur le port UDP ${port} : les appareils DLNA du réseau local ne le trouvent donc pas d’eux-mêmes. Un autre programme l’utilise sans doute, comme un autre serveur DLNA sur le même hôte. Enregistrer les paramètres réessaie.`,
         discoveryAddress: (address: string) =>
@@ -267,6 +281,14 @@ const system: typeof en = {
         'Des morceaux des fichiers en lecture, gardés sur le disque dans la limite réglée dans Paramètres › Lecture. Un cache plein est normal : les morceaux les plus anciens laissent la place.',
       cacheUse: (used: string, limit: string) => `${used} sur ${limit}`,
       sourcesOpen: 'Fichiers ouverts',
+      torrentPieces: 'Dont morceaux de torrents',
+      torrentsTitle: 'Torrents',
+      torrentsHelp:
+        'Les torrents que la lecture lit en ce moment, par leur seule route. Un torrent s’arrête à la fin de sa lecture : plus de pairs, plus de partage.',
+      torrentRoute: { interface: 'Interface réseau', proxy: 'Proxy SOCKS5', '': 'Aucune route' },
+      torrentsPlaying: 'Torrents en lecture',
+      torrentPeers: 'Pairs',
+      torrentsShared: 'Partagé depuis le démarrage',
       disksTitle: 'Espace disque',
       folders: { cache: 'du cache', recordings: 'des enregistrements', backups: 'des sauvegardes' },
       folderTitle: {
@@ -343,6 +365,7 @@ const system: typeof en = {
         lastFmSecret: 'Secret partagé Last.fm',
         aniListClientSecret: 'Client secret AniList',
         myAnimeListClientSecret: 'Client secret MyAnimeList',
+        torrentProxyPassword: 'Mot de passe du proxy SOCKS5 des torrents',
         smtpPassword: 'Mot de passe SMTP',
         metricsToken: 'Jeton des métriques',
       },

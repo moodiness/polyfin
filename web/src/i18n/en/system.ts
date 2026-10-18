@@ -134,6 +134,19 @@ const system = {
           `${address} forwards requests (X-Forwarded-For) but is not a known proxy, so its clients all count as ${address}. If it is your reverse proxy, add it to Known proxies under Settings › Security.`,
         discoveryPort: (port: number) =>
           `Polyfin cannot listen on UDP port ${port}, so Jellyfin apps on the local network do not find it by themselves. Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.`,
+        torrentRoute: (why: string) =>
+          `Torrent streams do not play: ${why}. Nothing is sent another way; check the route under Settings › Torrents.`,
+        torrentWhy: {
+          interface_missing: (name: string) => `the network interface ${name} is missing`,
+          interface_down: (name: string) => `the network interface ${name} is down`,
+          interface_no_address: (name: string) => `the network interface ${name} has no address`,
+          interface_unsupported: () => 'a network interface works on Linux only',
+          proxy_unreachable: (name: string) => `the SOCKS5 proxy ${name} does not answer`,
+          proxy_refused: (name: string) => `the SOCKS5 proxy ${name} refused the user and password`,
+          no_route: () => 'no route is set',
+        },
+        torrentUdp: (name: string) =>
+          `The SOCKS5 proxy ${name} does not offer UDP ASSOCIATE: torrents play over TCP, with UDP trackers and the DHT off.`,
         dlnaPort: (port: number) =>
           `Polyfin cannot listen on UDP port ${port}, so DLNA devices on the local network do not find it by themselves. Another program probably uses it, such as another DLNA server on the same host. Saving the settings tries again.`,
         discoveryAddress: (address: string) =>
@@ -263,6 +276,14 @@ const system = {
         'Parts of the files being played, kept on disk up to the size set under Settings › Playback. A full cache is normal: the oldest parts make room.',
       cacheUse: (used: string, limit: string) => `${used} of ${limit}`,
       sourcesOpen: 'Files open',
+      torrentPieces: 'Of which torrent pieces',
+      torrentsTitle: 'Torrents',
+      torrentsHelp:
+        'The torrents playback reads now, over their route alone. A torrent stops when its playback ends: no more peers, no more sharing.',
+      torrentRoute: { interface: 'Network interface', proxy: 'SOCKS5 proxy', '': 'No route' },
+      torrentsPlaying: 'Torrents playing',
+      torrentPeers: 'Peers',
+      torrentsShared: 'Shared since the start',
       disksTitle: 'Disk space',
       folders: { cache: 'cache', recordings: 'recordings', backups: 'backups' } as Record<
         string,
@@ -341,6 +362,7 @@ const system = {
         aniListClientSecret: 'AniList client secret',
         myAnimeListClientSecret: 'MyAnimeList client secret',
         smtpPassword: 'SMTP password',
+        torrentProxyPassword: 'Torrents’ SOCKS5 proxy password',
         metricsToken: 'Metrics token',
       },
       connectionOf: (service: string, user: string) => `${service} connection of ${user}`,

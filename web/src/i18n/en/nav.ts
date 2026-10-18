@@ -34,6 +34,7 @@ const nav = {
       liveTv: 'Live TV',
       recordings: 'Recordings',
       dlna: 'DLNA',
+      torrents: 'Torrents',
       backups: 'Backups',
       notifications: 'Notifications',
       webPlayer: 'Web player',

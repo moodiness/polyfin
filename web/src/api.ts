@@ -73,6 +73,11 @@ export type User = {
    * link, while the server allows share links (Settings.shareLinks).
    */
   canShare: boolean
+  /**
+   * Whether the user is offered the torrent streams addons list, while the server plays them
+   * (Settings.torrentStreams). Off for every user, administrators included, until given.
+   */
+  torrentStreams: boolean
   /** Identifies the user's profile picture, served at /UserImage; null without one. */
   imageTag: string | null
   /** The tallest video the user is offered, in lines (480 to 2160); 0 for Original, no limit. */
@@ -104,6 +109,7 @@ export type GroupLimits = Pick<
   | 'collectionManagement'
   | 'subtitleManagement'
   | 'canShare'
+  | 'torrentStreams'
   | 'maxPlaybacks'
   | 'maxBitrate'
   | 'qualityGroup'
@@ -534,6 +540,23 @@ export type Settings = {
   metrics: boolean
   /** Whether Polyfin made the metrics token (read-only): never sent, revealed on demand. */
   metricsTokenSet: boolean
+  /**
+   * Whether torrent streams play, over one route alone: the network interface every torrent
+   * socket is bound to (Linux only), or a SOCKS5 proxy, host:port; '' for none.
+   */
+  torrentStreams: boolean
+  torrentInterface: string
+  torrentProxy: string
+  torrentProxyUser: string
+  /** Whether the proxy's password is saved. */
+  torrentProxyPasswordSet: boolean
+  /** Sent only to change the proxy's password: a new one, or "" to remove it. */
+  torrentProxyPassword?: string
+  /** Download limit in Mbps, 0 for none; upload limit, 0 for no sharing. */
+  torrentDownloadMbps: number
+  torrentUploadMbps: number
+  /** Whether this system binds sockets to a network interface, Linux alone (read-only). */
+  interfaceRoutes: boolean
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
@@ -631,6 +654,7 @@ export type UserPatch = Partial<{
   collectionManagement: boolean
   subtitleManagement: boolean
   canShare: boolean
+  torrentStreams: boolean
   qualityGroup: QualityGroup
   /** YYYY-MM-DD, or null for never. */
   endsOn: string | null
@@ -3324,7 +3348,19 @@ export type Health = {
     goroutines: number
   }
   database: { reachable: boolean; size: number | null }
-  cache: { used: number; limit: number; sources: number } | null
+  /** `torrents` is the part of `used` the pieces of torrents being played take. */
+  cache: { used: number; limit: number; sources: number; torrents: number } | null
+  /**
+   * How torrent streams play, null while they are off: their route ('' for none) and its name,
+   * the torrents playing, their peers, and the bytes shared since the server started.
+   */
+  torrents: {
+    route: 'interface' | 'proxy' | ''
+    name: string
+    playing: number
+    peers: number
+    uploaded: number
+  } | null
   disks: {
     folder: 'cache' | 'recordings' | 'backups'
     path: string
@@ -3397,7 +3433,7 @@ export type Health = {
  * notification target, by its name, of a user or of the server (`user` null).
  */
 export type UnreadableSecret = {
-  setting: ServerSecretName | 'smtpPassword' | null
+  setting: ServerSecretName | 'smtpPassword' | 'torrentProxyPassword' | null
   service: TrackingServiceName | null
   app: AppKind | null
   target: string | null
@@ -3434,6 +3470,23 @@ export type HealthProblem = {
   | { code: 'discovery_port'; port: number }
   | { code: 'discovery_address'; address: string }
   | { code: 'dlna_port'; port: number }
+  /**
+   * Torrent streams do not play: their route cannot carry them, `failure` tells why, `name` names
+   * the interface or the proxy; or the proxy offers no UDP ASSOCIATE.
+   */
+  | {
+      code: 'torrent_route'
+      failure:
+        | 'interface_missing'
+        | 'interface_down'
+        | 'interface_no_address'
+        | 'interface_unsupported'
+        | 'proxy_unreachable'
+        | 'proxy_refused'
+        | 'no_route'
+      name?: string
+    }
+  | { code: 'torrent_udp'; name: string }
   | { code: 'proxy_name_unresolved'; name: string }
   | { code: 'secrets_unreadable'; secrets: UnreadableSecret[] }
   | { code: 'secrets_plaintext' }
