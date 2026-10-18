@@ -389,7 +389,7 @@ export type Settings = {
   toneMappingAlgorithm: ToneMappingAlgorithm
   toneMappingPeak: number
   toneMappingDesat: number
-  /** Tone maps HDR on a GPU that can (NVIDIA, Intel through VAAPI); off, the processor does. */
+  /** Tone maps HDR on a GPU that can (NVIDIA, Intel through VAAPI or QSV, VideoToolbox); off, the processor does. */
   gpuToneMapping: boolean
   /** Most height of HDR the processor tone maps: 720 to 2160, 0 for Automatic (measured at startup). */
   processorToneMappingHeight: number
@@ -550,7 +550,9 @@ export type EncoderPreset =
   | 'veryfast'
   | 'superfast'
   | 'ultrafast'
-export type HardwareAcceleration = 'auto' | 'nvenc' | 'vaapi' | 'none'
+/** Each system offers its own GPU methods (the settings' bounds list them). */
+export type HardwareAcceleration =
+  'auto' | 'nvenc' | 'vaapi' | 'videotoolbox' | 'qsv' | 'amf' | 'none'
 export type HardwareDecodingCodec =
   'h264' | 'hevc' | 'hevc_10bit' | 'vp9' | 'av1' | 'mpeg2video' | 'vc1'
 export type VersionCriterion =
@@ -575,7 +577,7 @@ export type SubtitleOcr = 'off' | 'played' | 'scans'
 
 /** A GPU conversions run on. */
 export type ConversionGPU = {
-  /** cuda for NVIDIA, vaapi for AMD and Intel. */
+  /** cuda for NVIDIA, vaapi for AMD and Intel on Linux, videotoolbox on macOS, qsv for Intel and amf for AMD on Windows. */
   method: string
   device: string
   encoders: string[]
@@ -3184,7 +3186,7 @@ export type LiveSession = {
   sent: StreamInfo | null
   video: {
     encoder: string
-    /** GPU method (cuda, vaapi); empty for the CPU. */
+    /** GPU method (cuda, vaapi, videotoolbox, qsv, amf); empty for the CPU. */
     hardware: string
     width: number
     height: number

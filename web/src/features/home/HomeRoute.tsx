@@ -220,7 +220,7 @@ function ServerFigures() {
                 (data.transcoder?.hardware ? (
                   <>
                     <dd className="mt-2 text-[24px] leading-tight font-medium tracking-[-0.02em] text-ink">
-                      {data.transcoder.hardware.method === 'cuda' ? 'NVIDIA' : 'VAAPI'}
+                      {t.dashboard.live.gpuMethod(data.transcoder.hardware.method)}
                     </dd>
                     <dd className="mt-1.5 text-[13px] text-ink-2">
                       {[

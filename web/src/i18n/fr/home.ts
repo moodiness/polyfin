@@ -1,5 +1,14 @@
 import type en from '../en/home'
 
+/** The GPU methods, as the server names them. */
+const gpuMethodNames: Record<string, string> = {
+  cuda: 'NVIDIA',
+  vaapi: 'VAAPI',
+  videotoolbox: 'VideoToolbox',
+  qsv: 'QSV',
+  amf: 'AMF',
+}
+
 const home: typeof en = {
   quickConnect: {
     title: 'Quick Connect',
@@ -111,7 +120,8 @@ const home: typeof en = {
       source: 'Source',
       sent: 'Envoyé',
       encoder: 'Encodeur',
-      gpu: (method: string) => `GPU (${method === 'cuda' ? 'NVIDIA' : 'VAAPI'})`,
+      gpu: (method: string) => `GPU (${gpuMethodNames[method] ?? method})`,
+      gpuMethod: (method: string) => gpuMethodNames[method] ?? method,
       cpu: 'Processeur',
       copied: 'Copié',
       toneMapped: 'HDR vers SDR',

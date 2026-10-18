@@ -152,27 +152,28 @@ export default function ConversionSection({
             onValue={(hardwareAcceleration) => update({ hardwareAcceleration })}
           />
         </FieldRow>
-        {(form.hardwareAcceleration === 'auto' || form.hardwareAcceleration === 'vaapi') && (
-          <FieldRow
-            anchor="vaapi-device"
-            label={c.vaapiDevice}
-            help={c.vaapiDeviceHelp}
-            error={error('vaapi-device')}
-          >
-            <Select
-              value={form.vaapiDevice}
-              options={[
-                { value: '', label: c.vaapiDeviceEach },
-                ...form.renderNodes.map((node) => ({ value: node, label: node })),
-                ...(form.vaapiDevice !== '' && !form.renderNodes.includes(form.vaapiDevice)
-                  ? [{ value: form.vaapiDevice, label: c.vaapiDeviceMissing(form.vaapiDevice) }]
-                  : []),
-              ]}
-              onValue={(vaapiDevice) => update({ vaapiDevice })}
-              className="max-w-xs"
-            />
-          </FieldRow>
-        )}
+        {choices<HardwareAcceleration>('hardwareAcceleration').includes('vaapi') &&
+          (form.hardwareAcceleration === 'auto' || form.hardwareAcceleration === 'vaapi') && (
+            <FieldRow
+              anchor="vaapi-device"
+              label={c.vaapiDevice}
+              help={c.vaapiDeviceHelp}
+              error={error('vaapi-device')}
+            >
+              <Select
+                value={form.vaapiDevice}
+                options={[
+                  { value: '', label: c.vaapiDeviceEach },
+                  ...form.renderNodes.map((node) => ({ value: node, label: node })),
+                  ...(form.vaapiDevice !== '' && !form.renderNodes.includes(form.vaapiDevice)
+                    ? [{ value: form.vaapiDevice, label: c.vaapiDeviceMissing(form.vaapiDevice) }]
+                    : []),
+                ]}
+                onValue={(vaapiDevice) => update({ vaapiDevice })}
+                className="max-w-xs"
+              />
+            </FieldRow>
+          )}
         <SettingRow anchor="detected-hardware">
           <h4 className="text-[15px] font-medium tracking-[-0.01em] text-ink">{c.detected}</h4>
           <dl className="mt-3 rounded-row border border-line-2 bg-s1 text-small">
@@ -181,7 +182,7 @@ export default function ConversionSection({
             ) : (
               <>
                 <Detail term={c.gpu}>
-                  <span className="text-ink">{c.gpuNames[gpu.method as 'cuda'] ?? gpu.method}</span>
+                  <span className="text-ink">{c.gpuNames[gpu.method] ?? gpu.method}</span>
                   {gpu.device !== '' && (
                     <code className="font-mono text-micro text-ink-3">{gpu.device}</code>
                   )}
@@ -300,7 +301,10 @@ export default function ConversionSection({
           <p className="mt-2 max-w-[60ch] text-small text-ink-3">
             {c.qualityHelp(range('h264Quality'))}
           </p>
-          {gpu?.method === 'vaapi' && !gpu.qvbr && (
+          {/* QSV and AMF aim for the bitrate, as VAAPI without QVBR does. */}
+          {((gpu?.method === 'vaapi' && !gpu.qvbr) ||
+            gpu?.method === 'qsv' ||
+            gpu?.method === 'amf') && (
             <p className="mt-1 text-small text-warn">{c.qualityIgnored}</p>
           )}
           {error('video-quality') && (

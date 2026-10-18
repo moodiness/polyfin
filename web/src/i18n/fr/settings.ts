@@ -293,22 +293,31 @@ const settings: typeof en = {
         `Chaque piste est lue par un processus Tesseract, sur un cœur du processeur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
       hardwareAcceleration: 'Carte graphique pour convertir',
       hardwareAccelerationHelp:
-        'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. Un changement s’applique dès l’enregistrement, sans redémarrer.',
+        'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. Chaque système propose les siennes : NVIDIA et VAAPI sous Linux, VideoToolbox sous macOS, NVIDIA, Intel et AMD sous Windows. Sans carte qui fonctionne, le processeur convertit. Un changement s’applique dès l’enregistrement, sans redémarrer.',
       vaapiDevice: 'Carte graphique pour VAAPI',
       vaapiDeviceHelp:
         'Le nœud de rendu sur lequel VAAPI convertit la vidéo, quand plusieurs cartes graphiques le pourraient. Chacune à son tour par défaut, la première qui fonctionne.',
       vaapiDeviceEach: 'Chacune à son tour',
       vaapiDeviceMissing: (path: string) => `${path} (introuvable)`,
       hardware: {
-        auto: 'Automatique : NVIDIA, sinon AMD ou Intel',
+        auto: 'Automatique : la première qui fonctionne, dans l’ordre ci-dessous',
         nvenc: 'NVIDIA (NVENC)',
         vaapi: 'AMD ou Intel (VAAPI)',
+        videotoolbox: 'VideoToolbox',
+        qsv: 'Intel (QSV)',
+        amf: 'AMD (AMF)',
         none: 'Aucune : le processeur seul',
       },
       detected: 'Trouvé sur ce serveur',
       noGpu: 'Aucune carte graphique n’est utilisée : le processeur convertit la vidéo.',
       gpu: 'Carte graphique',
-      gpuNames: { cuda: 'NVIDIA', vaapi: 'AMD ou Intel (VAAPI)' },
+      gpuNames: {
+        cuda: 'NVIDIA',
+        vaapi: 'AMD ou Intel (VAAPI)',
+        videotoolbox: 'VideoToolbox',
+        qsv: 'Intel (QSV)',
+        amf: 'AMD (AMF)',
+      } as Record<string, string>,
       encoders: 'Encodeurs de la carte',
       gpuToneMapping: 'HDR vers SDR sur la carte',
       processorToneMappingHint:
@@ -335,7 +344,7 @@ const settings: typeof en = {
       },
       encoderPreset: 'Vitesse d’encodage',
       encoderPresetHelp:
-        'Plus lent donne une meilleure image pour la même taille, mais demande plus de puissance. Si les vidéos converties saccadent, choisissez plus rapide. Automatique garde le choix de Polyfin : très rapide sur le processeur, moyen sur les cartes NVIDIA, celui du pilote sur les cartes AMD et Intel.',
+        'Plus lent donne une meilleure image pour la même taille, mais demande plus de puissance. Si les vidéos converties saccadent, choisissez plus rapide. Automatique garde le choix de Polyfin : très rapide sur le processeur, moyen sur les cartes NVIDIA, celui de la carte sur les autres.',
       presets: {
         auto: 'Automatique',
         veryslow: 'Très lent (meilleure image)',
@@ -373,7 +382,7 @@ const settings: typeof en = {
         'Ni la carte graphique ni FFmpeg ne savent le faire sur ce serveur : les vidéos HDR ne sont converties que si cette option est désactivée.',
       toneMappingAlgorithm: 'Méthode de conversion HDR',
       toneMappingAlgorithmHelp:
-        'La façon de ramener les parties claires au SDR. Automatique utilise BT.2390 sur les cartes NVIDIA et Hable sur le processeur. Les cartes Intel ont leur propre méthode et ignorent ce choix.',
+        'La façon de ramener les parties claires au SDR. Automatique utilise BT.2390 sur les cartes NVIDIA et Hable sur le processeur. Les cartes Intel et VideoToolbox ont leur propre méthode et ignorent ce choix.',
       algorithms: {
         auto: 'Automatique',
         bt2390: 'BT.2390 (cartes NVIDIA seulement)',
@@ -385,7 +394,7 @@ const settings: typeof en = {
       },
       gpuToneMappingSetting: 'Convertir le HDR sur la carte graphique',
       gpuToneMappingSettingHelp:
-        'Les cartes NVIDIA, et les cartes Intel par VAAPI, convertissent elles-mêmes le HDR en SDR, jusqu’en 4K. Désactivez cette option si leurs couleurs semblent fausses : le processeur s’en charge alors, en qualité moindre. Les cartes Intel ne prennent que les vidéos HDR10 qui portent les informations de leur écran de mastering ; le processeur convertit les autres, et le Dolby Vision sans couche HDR10 n’est converti que sur les cartes NVIDIA. Les cartes AMD ne le font jamais : leur pilote Linux a échoué ou s’est bloqué à chaque façon essayée par Polyfin.',
+        'Les cartes NVIDIA, les cartes Intel (par VAAPI sous Linux, QSV sous Windows) et VideoToolbox sous macOS convertissent elles-mêmes le HDR en SDR, jusqu’en 4K. Désactivez cette option si leurs couleurs semblent fausses : le processeur s’en charge alors, en qualité moindre. Les cartes Intel ne prennent que les vidéos HDR10 qui portent les informations de leur écran de mastering, et VideoToolbox le HDR10 et le HLG ; le processeur convertit les autres, et le Dolby Vision sans couche HDR10 n’est converti que sur les cartes NVIDIA. Les cartes AMD ne le font jamais : leur pilote Linux a échoué ou s’est bloqué à chaque façon essayée par Polyfin, et le filtre AMF de FFmpeg sous Windows ne convertit pas le HDR.',
       gpuToneMappingUnavailable:
         'La carte graphique de ce serveur ne sait pas le faire : le processeur convertit le HDR en SDR.',
       processorToneMappingHeight: 'Qualité max du HDR converti par le processeur',

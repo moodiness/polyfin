@@ -286,22 +286,31 @@ const settings = {
         `Each track is read by one Tesseract process using one processor core. From ${r.min} to ${r.max}; ${r.default} by default.`,
       hardwareAcceleration: 'Graphics card used to convert',
       hardwareAccelerationHelp:
-        'A graphics card (GPU) converts video much faster than the processor. A change applies once saved, without a restart.',
+        'A graphics card (GPU) converts video much faster than the processor. Each system offers its own: NVIDIA and VAAPI on Linux, VideoToolbox on macOS, NVIDIA, Intel and AMD on Windows. Without a card that works, the processor converts. A change applies once saved, without a restart.',
       vaapiDevice: 'Graphics card for VAAPI',
       vaapiDeviceHelp:
         'The render node VAAPI converts video on, when several graphics cards could. Each in turn by default, the first that works.',
       vaapiDeviceEach: 'Each in turn',
       vaapiDeviceMissing: (path: string) => `${path} (not found)`,
       hardware: {
-        auto: 'Automatic: NVIDIA, else AMD or Intel',
+        auto: 'Automatic: the first that works, in the order below',
         nvenc: 'NVIDIA (NVENC)',
         vaapi: 'AMD or Intel (VAAPI)',
+        videotoolbox: 'VideoToolbox',
+        qsv: 'Intel (QSV)',
+        amf: 'AMD (AMF)',
         none: 'None: the processor only',
       },
       detected: 'Detected on this server',
       noGpu: 'No graphics card is used: the processor converts video.',
       gpu: 'Graphics card',
-      gpuNames: { cuda: 'NVIDIA', vaapi: 'AMD or Intel (VAAPI)' },
+      gpuNames: {
+        cuda: 'NVIDIA',
+        vaapi: 'AMD or Intel (VAAPI)',
+        videotoolbox: 'VideoToolbox',
+        qsv: 'Intel (QSV)',
+        amf: 'AMD (AMF)',
+      } as Record<string, string>,
       encoders: 'Encoders on the card',
       gpuToneMapping: 'HDR to SDR on the card',
       processorToneMappingHint:
@@ -327,7 +336,7 @@ const settings = {
       },
       encoderPreset: 'Encoding speed',
       encoderPresetHelp:
-        'Slower gives a better picture at the same size, but needs more power. If converted videos stutter, choose a faster one. Automatic keeps Polyfin’s choice: very fast on the processor, medium on NVIDIA cards, the driver’s on AMD and Intel cards.',
+        'Slower gives a better picture at the same size, but needs more power. If converted videos stutter, choose a faster one. Automatic keeps Polyfin’s choice: very fast on the processor, medium on NVIDIA cards, the card’s own on the others.',
       presets: {
         auto: 'Automatic',
         veryslow: 'Very slow (best picture)',
@@ -361,7 +370,7 @@ const settings = {
         'Neither the graphics card nor FFmpeg can do it on this server: HDR videos are only converted when this is off.',
       toneMappingAlgorithm: 'Tone mapping method',
       toneMappingAlgorithmHelp:
-        'How bright parts are brought down to SDR. Automatic uses BT.2390 on NVIDIA cards and Hable on the processor. Intel cards use their own method and ignore this choice.',
+        'How bright parts are brought down to SDR. Automatic uses BT.2390 on NVIDIA cards and Hable on the processor. Intel cards and VideoToolbox use their own method and ignore this choice.',
       algorithms: {
         auto: 'Automatic',
         bt2390: 'BT.2390 (NVIDIA cards only)',
@@ -373,7 +382,7 @@ const settings = {
       },
       gpuToneMappingSetting: 'Tone map HDR on the graphics card',
       gpuToneMappingSettingHelp:
-        'NVIDIA cards, and Intel cards through VAAPI, convert HDR to SDR themselves, up to 4K. Turn this off if their colors look wrong: the processor then does it, at a lower quality. Intel cards only take HDR10 videos that carry their mastering display information; the processor converts the others, and Dolby Vision without an HDR10 layer is only converted on NVIDIA cards. AMD cards never do it: their Linux driver failed or froze each way Polyfin tried.',
+        'NVIDIA cards, Intel cards (through VAAPI on Linux, QSV on Windows) and VideoToolbox on macOS convert HDR to SDR themselves, up to 4K. Turn this off if their colors look wrong: the processor then does it, at a lower quality. Intel cards only take HDR10 videos that carry their mastering display information, and VideoToolbox HDR10 and HLG; the processor converts the others, and Dolby Vision without an HDR10 layer is only converted on NVIDIA cards. AMD cards never do it: their Linux driver failed or froze each way Polyfin tried, and FFmpeg’s AMF filter on Windows does not tone map.',
       gpuToneMappingUnavailable:
         'The graphics card on this server cannot do it: the processor converts HDR to SDR.',
       processorToneMappingHeight: 'Maximum quality of HDR converted by the processor',

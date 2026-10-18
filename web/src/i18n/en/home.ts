@@ -1,3 +1,12 @@
+/** The GPU methods, as the server names them. */
+const gpuMethodNames: Record<string, string> = {
+  cuda: 'NVIDIA',
+  vaapi: 'VAAPI',
+  videotoolbox: 'VideoToolbox',
+  qsv: 'QSV',
+  amf: 'AMF',
+}
+
 /** Home: the administrator overview, now playing and recent activity, plus Quick Connect and the page not found. */
 const home = {
   quickConnect: {
@@ -110,7 +119,8 @@ const home = {
       source: 'Source',
       sent: 'Sent',
       encoder: 'Encoder',
-      gpu: (method: string) => `GPU (${method === 'cuda' ? 'NVIDIA' : 'VAAPI'})`,
+      gpu: (method: string) => `GPU (${gpuMethodNames[method] ?? method})`,
+      gpuMethod: (method: string) => gpuMethodNames[method] ?? method,
       cpu: 'CPU',
       copied: 'Copied',
       toneMapped: 'HDR to SDR',

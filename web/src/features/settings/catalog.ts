@@ -286,7 +286,17 @@ export const settingEntries: readonly SettingEntry[] = [
     anchor: 'hardware-acceleration',
     label: (t) => c(t).hardwareAcceleration,
     help: (t) => c(t).hardwareAccelerationHelp,
-    keywords: ['gpu', 'nvidia', 'vaapi', 'POLYFIN_HWACCEL'],
+    keywords: [
+      'gpu',
+      'nvidia',
+      'vaapi',
+      'videotoolbox',
+      'qsv',
+      'amf',
+      'intel',
+      'amd',
+      'POLYFIN_HWACCEL',
+    ],
     codes: ['invalid_hardware_acceleration'],
   },
   {
@@ -361,7 +371,7 @@ export const settingEntries: readonly SettingEntry[] = [
     anchor: 'gpu-tone-mapping',
     label: (t) => c(t).gpuToneMappingSetting,
     help: (t) => c(t).gpuToneMappingSettingHelp,
-    keywords: ['hdr', 'sdr', 'gpu', 'nvidia', 'intel', 'vaapi'],
+    keywords: ['hdr', 'sdr', 'gpu', 'nvidia', 'intel', 'vaapi', 'qsv', 'videotoolbox'],
   },
   {
     section: 'conversion',
