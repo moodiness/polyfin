@@ -106,7 +106,7 @@ func (s *Service) FollowedProgress(ctx context.Context, user accounts.User, id a
 	}
 	pending = s.pendingOf(user.ID, page.t, page.serving)
 	versions, _ = s.listVersions(ctx, page.t, page.serving, knownOnly)
-	return pending, versions, true
+	return pending, s.withoutTorrents(user, versions), true
 }
 
 // streamListOf returns, as listOf does, the stream list an addon gave for

@@ -53,6 +53,39 @@ func torrentAddon(t *testing.T, tor *torrenttest.Torrent, tracker string) string
 	return server.URL + "/manifest.json"
 }
 
+// The progress of a title's versions, asked or pushed to its page, counts
+// only the versions its user is offered: with torrents off, the link
+// alone, so that the web player's play buttons follow what plays.
+func TestVersionProgressLeavesOutTorrentsTheUserIsNotOffered(t *testing.T) {
+	t.Parallel()
+	tor := torrenttest.Build("A Movie", 32<<10, torrenttest.File{Name: "sample.mkv", Data: torrenttest.Bytes(40 << 10)})
+	s := newTestServer(t, 10)
+	user := s.user("member", nil)
+	if _, err := s.addons.Install(t.Context(), addons.Shared(), torrentAddon(t, tor, "127.0.0.1:1"), false); err != nil {
+		t.Fatal(err)
+	}
+	token := s.signIn("member", "tv")
+	var views, page QueryResult
+	s.get(t, "/UserViews", token, &views)
+	s.get(t, "/Items?ParentId="+views.Items[0].Id, token, &page)
+	movie := page.Items[0].Id
+	// The details open the title's page, whose progress is then followed.
+	var details BaseItemDto
+	if status := s.get(t, "/Users/"+user.ID.String()+"/Items/"+movie, token, &details); status != http.StatusOK {
+		t.Fatalf("details: %d", status)
+	}
+	var progress VersionProgress
+	eventually(t, "the addon to answer", func() bool {
+		if status := s.get(t, "/Polyfin/Items/"+movie+"/Versions", token, &progress); status != http.StatusOK {
+			t.Fatalf("progress: %d", status)
+		}
+		return progress.Pending == 0 && progress.Known > 0
+	})
+	if progress != (VersionProgress{Pending: 0, Count: 1, Known: 1}) {
+		t.Errorf("progress with torrents off: %+v, want the link alone", progress)
+	}
+}
+
 // Torrent versions are listed only with the switch and the user's
 // permission, play from their file through the route, and never download.
 func TestTorrentVersions(t *testing.T) {
