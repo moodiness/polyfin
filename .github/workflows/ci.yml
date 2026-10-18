@@ -164,6 +164,97 @@ jobs:
       - name: Test internal/jellyfin
         run: make test-jellyfin
 
+  windows:
+    # polyfin serve on Windows, as the desktop version runs it: the per-system
+    # code (disk space, folder watching, process control, FFmpeg's outputs)
+    # and local folders with Windows paths, against a PostgreSQL 18 and the
+    # image's FFmpeg built for Windows. The rest of the suite fakes its tools
+    # with shell scripts, which Windows cannot run.
+    name: Windows build and system tests
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      POLYFIN_TEST_DATABASE_URL: postgresql://polyfin:polyfin@127.0.0.1:5432/polyfin
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - *checkout
+      - *setup-go
+      - name: Start PostgreSQL 18 and install the image's FFmpeg, for Windows
+        run: |
+          # PostgreSQL's Windows binaries, from EnterpriseDB as postgresql.org
+          # links them, and BtbN's FFmpeg build of the Dockerfile's release
+          # for Windows: each checked against its checksum.
+          temp="$(cygpath -u "$RUNNER_TEMP")"
+          curl -fsSLo "$temp/postgresql.zip" https://get.enterprisedb.com/postgresql/postgresql-18.6-2-windows-x64-binaries.zip
+          echo "41bb1496f60666d3745ae8a855753b877d14fa9e34667f266867635b790fc323  $temp/postgresql.zip" | sha256sum -c -
+          curl -fsSLo "$temp/ffmpeg.zip" https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0.zip
+          echo "3da6c7b60bb9ccd73ec5b5e815ba804a0879eb362ba0e3beebce50174c022696  $temp/ffmpeg.zip" | sha256sum -c -
+          unzip -q "$temp/postgresql.zip" -d "$temp"
+          unzip -q "$temp/ffmpeg.zip" -d "$temp"
+          mv "$temp"/ffmpeg-n9.0.2-17-g2a571b6068-win64-gpl-shared-9.0 "$temp/ffmpeg"
+          # pg_ctl drops the runner's administrator rights, which the
+          # server refuses to run with.
+          bin="$temp/pgsql/bin"
+          printf polyfin > "$temp/password"
+          "$bin/initdb" -D "$temp/pgdata" -U polyfin --pwfile="$temp/password" -A scram-sha-256 -E UTF8 --locale=C
+          "$bin/pg_ctl" -D "$temp/pgdata" -l "$temp/postgresql.log" -o "-p 5432" -w start
+          PGPASSWORD=polyfin "$bin/createdb" -h 127.0.0.1 -U polyfin polyfin
+          # Windows paths with slashes, which Go takes as they are.
+          windows="$(cygpath -m "$RUNNER_TEMP")"
+          {
+            echo "POLYFIN_TEST_FFMPEG=$windows/ffmpeg/bin/ffmpeg.exe"
+            echo "POLYFIN_TEST_PG_DUMP=$windows/pgsql/bin/pg_dump.exe"
+            echo "POLYFIN_TEST_PG_RESTORE=$windows/pgsql/bin/pg_restore.exe"
+          } >> "$GITHUB_ENV"
+          # The tests of the GPU methods look FFmpeg up in PATH.
+          echo "$windows/ffmpeg/bin" >> "$GITHUB_PATH"
+      - name: Build and vet
+        run: |
+          go build ./...
+          go vet ./...
+      - name: Test the per-system code and local folders
+        run: |
+          go test -p 2 ./cmd/polyfin ./internal/process ./internal/diskspace ./internal/media ./internal/localfiles \
+            ./internal/hls ./internal/thumbnails ./internal/accounts ./internal/config ./internal/playback
+          go test ./internal/admin -run '^(TestStatusTellsTheSystem|TestUnwatchedFolderText)$'
+          go test ./internal/database -run '^TestMigrationsEndTheirLinesWithLF$'
+
+  macos:
+    # polyfin serve on an Apple silicon Mac, as the desktop version runs it:
+    # the whole suite, against a PostgreSQL 18 from Homebrew. The FFmpeg
+    # tests skip, Homebrew's FFmpeg not being the image's.
+    name: macOS build and tests
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      POLYFIN_TEST_DATABASE_URL: postgresql://polyfin:polyfin@127.0.0.1:5432/polyfin
+    steps:
+      - *checkout
+      - *setup-go
+      - name: Start PostgreSQL 18
+        run: |
+          brew install postgresql@18
+          bin="$(brew --prefix postgresql@18)/bin"
+          printf polyfin > "$RUNNER_TEMP/password"
+          "$bin/initdb" -D "$RUNNER_TEMP/pgdata" -U polyfin --pwfile="$RUNNER_TEMP/password" -A scram-sha-256 -E UTF8 --locale=C
+          "$bin/pg_ctl" -D "$RUNNER_TEMP/pgdata" -l "$RUNNER_TEMP/postgresql.log" -o "-p 5432 -k $RUNNER_TEMP" -w start
+          PGPASSWORD=polyfin "$bin/createdb" -h 127.0.0.1 -U polyfin polyfin
+          {
+            echo "POLYFIN_TEST_PG_DUMP=$bin/pg_dump"
+            echo "POLYFIN_TEST_PG_RESTORE=$bin/pg_restore"
+          } >> "$GITHUB_ENV"
+      - name: Build and vet
+        run: |
+          go build ./...
+          go vet ./...
+      - name: Test
+        # TestLargeLineupsStayFast times IPTV listings against bounds set for
+        # the Linux runner, which the check job holds; a macOS runner is
+        # slower at them without anything being wrong.
+        run: go test -p 2 -skip '^TestLargeLineupsStayFast$' ./...
+
   image:
     name: Build and smoke test the image without publishing
     needs: [check, jellyfin]
