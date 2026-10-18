@@ -53,6 +53,7 @@ import (
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/preferences"
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/recordings"
@@ -177,6 +178,11 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	}
 	for _, retired := range cfg.Retired {
 		logger.Info(retired.Name+" is no longer read: its value is a setting, under "+retired.Section, "variable", retired.Name)
+	}
+	// The programs Polyfin runs, FFmpeg above all, end with it even when it
+	// is killed (see process.KillChildrenOnExit).
+	if err := process.KillChildrenOnExit(); err != nil {
+		logger.Warn("The programs Polyfin runs may outlive it if it is killed", "error", err)
 	}
 	adminApp, err := webui.Assets()
 	if err != nil {
@@ -577,6 +583,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Activity:      activityLog,
 		DataDir:       cfg.DataDir,
 		WebClient:     webClient != nil,
+		InContainer:   discovery.InContainer(),
 		Sessions:      jellyfinAPI,
 		Watching:      jellyfinAPI,
 		Tasks:         registry,

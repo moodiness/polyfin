@@ -2,14 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
 	"strings"
-	"syscall"
 
 	"github.com/moodiness/polyfin/internal/backup"
 )
@@ -61,18 +58,4 @@ func restoringHandler() http.Handler {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = io.WriteString(w, "Polyfin is restoring a backup of its database: try again in a moment.\n")
 	})
-}
-
-// startAgain replaces this process with a new Polyfin, started as this
-// one was, which reads the restored database: it only returns on failure,
-// and Polyfin then exits for its supervisor, such as Docker, to start it.
-func startAgain() error {
-	executable, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	if err := syscall.Exec(executable, os.Args, os.Environ()); err != nil {
-		return errors.Join(errors.New("cannot start Polyfin again"), err)
-	}
-	return nil
 }
