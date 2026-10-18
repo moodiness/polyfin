@@ -196,7 +196,12 @@ const sources: typeof en = {
       'Garde les chaînes marquées favorites sur le tuner, dans son application ou sa page web, et laisse de côté les autres.',
   },
   localFolders: {
-    help: 'Un dossier monté dans le conteneur de Polyfin, en lecture seule suffit. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale. Polyfin tourne sous l’utilisateur 65532, qui doit pouvoir le lire.',
+    help: {
+      container:
+        'Un dossier monté dans le conteneur de Polyfin, en lecture seule suffit. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale. Polyfin tourne sous l’utilisateur 65532, qui doit pouvoir le lire.',
+      computer:
+        'Un dossier de l’ordinateur où tourne Polyfin, ou d’un disque ou d’un partage qu’il atteint, en lecture seule suffit. Ses vidéos sont associées à des titres d’après leur nom et se lisent comme des versions de ces titres, à côté des flux des addons ; un dossier de musique devient une bibliothèque musicale. Le compte sous lequel tourne Polyfin doit pouvoir le lire.',
+    },
     location: 'Emplacement',
     locations: {
       local: 'Dossier local',
@@ -292,10 +297,22 @@ const sources: typeof en = {
     },
     name: 'Nom',
     nameHint: 'Le nom de sa bibliothèque dans les applications Jellyfin.',
-    path: 'Chemin dans le conteneur',
-    pathHint:
-      'L’endroit où le dossier est monté dans le conteneur de Polyfin, pas son chemin sur l’hôte.',
-    pathPlaceholder: '/media/films',
+    path: { container: 'Chemin dans le conteneur', computer: 'Chemin' },
+    pathHint: {
+      container:
+        'L’endroit où le dossier est monté dans le conteneur de Polyfin, pas son chemin sur l’hôte.',
+      linux: 'Le chemin complet du dossier sur l’ordinateur où tourne Polyfin.',
+      macos:
+        'Le chemin complet du dossier sur le Mac où tourne Polyfin ; les dossiers d’un disque externe sont sous /Volumes.',
+      windows:
+        'Le chemin complet du dossier sur le PC où tourne Polyfin : sur un lecteur, comme D:\\Films, ou sur un partage, comme \\\\nas\\media\\Films.',
+    },
+    pathPlaceholder: {
+      container: '/media/films',
+      linux: '/srv/media/films',
+      macos: '/Users/moi/Films',
+      windows: 'D:\\Films',
+    },
     kind: 'Il contient',
     kinds: {
       movies: 'Films',
@@ -390,9 +407,9 @@ const sources: typeof en = {
     errorTitleShare: 'Polyfin ne peut pas lire ce partage',
     errors: {
       missing:
-        'Ce chemin n’existe pas dans le conteneur : vérifiez que le dossier, ou le partage où il se trouve, y est bien monté.',
+        'Ce chemin n’existe pas là où tourne Polyfin : vérifiez que le dossier, ou le disque ou le partage où il se trouve, est bien là, et sous Docker qu’il est monté dans le conteneur.',
       unreadable:
-        'Le dossier existe mais Polyfin ne peut pas le lister : donnez à l’utilisateur 65532 le droit de le lire et d’ouvrir ses dossiers.',
+        'Le dossier existe mais Polyfin ne peut pas le lister : donnez au compte sous lequel il tourne, l’utilisateur 65532 sous Docker, le droit de le lire et d’ouvrir ses dossiers.',
       not_folder: 'Ce chemin est un fichier, pas un dossier.',
     } as Record<string, string>,
     shareErrors: {

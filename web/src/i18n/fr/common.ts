@@ -364,7 +364,7 @@ const common: typeof en = {
     tuner_added: 'Ce tuner est déjà une source du serveur.',
     invalid_folder_name: 'Le nom d’un dossier doit faire de 1 à 64 caractères.',
     invalid_folder_path:
-      'Saisissez le chemin complet du dossier dans le conteneur de Polyfin, commençant par /, autre que / lui-même.',
+      'Saisissez le chemin complet du dossier là où tourne Polyfin, autre que la racine du système : dans son conteneur, commençant par / ; sous Windows, avec son lecteur, comme D:\\Films, ou son partage, comme \\\\nas\\media\\Films.',
     invalid_share_address:
       'Saisissez une adresse comme smb://serveur/partage/dossier, https://serveur/dossier, s3://bucket/préfixe, sftp://serveur/dossier ou rclone://serveur:port/dossier, sans utilisateur ni mot de passe : ils ont leurs propres champs.',
     invalid_share_endpoint:

@@ -338,7 +338,7 @@ const common = {
     tuner_added: 'This tuner is already a source of the server.',
     invalid_folder_name: 'Folder names must be 1 to 64 characters long.',
     invalid_folder_path:
-      'Enter the folder’s full path in Polyfin’s container, starting with /, other than / itself.',
+      'Enter the folder’s full path where Polyfin runs, other than the system’s root: in its container, starting with /; on Windows, with its drive, such as D:\\Movies, or its share, such as \\\\nas\\media\\Movies.',
     invalid_share_address:
       'Enter an address such as smb://server/share/folder, https://server/folder, s3://bucket/prefix, sftp://server/folder or rclone://server:port/folder, without a user or password in it: they have fields of their own.',
     invalid_share_user: 'Users are at most 256 characters long, passwords at most 1,024.',

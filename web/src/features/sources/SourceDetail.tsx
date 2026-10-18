@@ -48,10 +48,12 @@ import {
 import { AddonSettings, MusicBadge } from './AddonSettings'
 import { IptvEditForm } from './IptvForms'
 import {
+  computer,
   LocalFolderEditForm,
   LocalFolderFigures,
   UnmatchedFiles,
   useFolderScanFollowed,
+  useServerSystem,
 } from './LocalFolders'
 import {
   invalidateScope,
@@ -117,6 +119,7 @@ export function SourceDetail({
   const iptv = isIptv(addon)
   const folder = addon.folder
   useFolderScanFollowed(addon)
+  const system = useServerSystem()
   const [editor, setEditor] = useState<Editor>('none')
   const [confirming, setConfirming] = useState(false)
   const editorId = useId()
@@ -386,7 +389,7 @@ export function SourceDetail({
             label={
               folder !== null
                 ? folder.share === ''
-                  ? t.localFolders.path
+                  ? t.localFolders.path[computer(system)]
                   : t.localFolders.address
                 : iptv
                   ? text.address

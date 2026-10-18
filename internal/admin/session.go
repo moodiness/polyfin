@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -118,7 +119,23 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request) {
 		"database":      database,
 		"setupRequired": setupRequired,
 		"webClient":     h.WebClient,
+		"system":        system(h.InContainer),
 	})
+}
+
+// system is where Polyfin runs, which tells the admin app how to name a
+// local folder: "container" in a container, else its system, "linux",
+// "macos" or "windows".
+func system(inContainer bool) string {
+	switch {
+	case inContainer:
+		return "container"
+	case runtime.GOOS == "darwin":
+		return "macos"
+	case runtime.GOOS == "windows":
+		return "windows"
+	}
+	return "linux"
 }
 
 func (h *handler) startSession(w http.ResponseWriter, r *http.Request, status int, user accounts.User) {

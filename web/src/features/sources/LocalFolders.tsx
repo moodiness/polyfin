@@ -18,6 +18,7 @@ import {
   addLocalFolder,
   fetchAddons,
   fetchRcloneRemotes,
+  fetchStatus,
   fetchUnmatchedFiles,
   linkLocalFile,
   queryClient,
@@ -31,6 +32,7 @@ import {
   type FolderShare,
   type LocalFolder,
   type MatchMethod,
+  type ServerSystem,
   type UnmatchedFile,
 } from '@/api'
 import { errorMessage, formatBytes } from '@/format'
@@ -90,6 +92,19 @@ export function shareOf(path: string): FolderShare {
   if (address.startsWith('rclone://')) return 'rclone'
   return ''
 }
+
+/** Where the server runs, which names its local folders: in its container until it tells. */
+export function useServerSystem(): ServerSystem {
+  const status = useQuery({
+    queryKey: queryKeys.status,
+    queryFn: ({ signal }) => fetchStatus(signal),
+  })
+  return status.data?.system ?? 'container'
+}
+
+/** Which texts name a local folder: the container's, or a computer's. */
+export const computer = (system: ServerSystem) =>
+  system === 'container' ? 'container' : 'computer'
 
 type Location = 'local' | 'smb' | 'webdav' | 's3' | 'sftp' | 'rclone'
 
@@ -206,6 +221,7 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
   const [readExtras, setReadExtras] = useState(true)
   const [draft, setDraft] = useState<RemoteDraft>(() => remoteDraft())
   const share = location === 'local' ? null : location
+  const system = useServerSystem()
   const mutation = useMutation({
     mutationFn: () =>
       addLocalFolder({
@@ -235,7 +251,10 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-5">
-      <Field label={text.location} help={share === null ? text.help : text.shareHelp[share]}>
+      <Field
+        label={text.location}
+        help={share === null ? text.help[computer(system)] : text.shareHelp[share]}
+      >
         <Segmented<Location>
           label={text.location}
           value={location}
@@ -260,8 +279,8 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
       </Field>
       {share !== 'rclone' && (
         <Field
-          label={share === null ? text.path : text.address}
-          help={share === null ? text.pathHint : text.addressHint[share]}
+          label={share === null ? text.path[computer(system)] : text.address}
+          help={share === null ? text.pathHint[system] : text.addressHint[share]}
         >
           <TextInput
             key={location}
@@ -269,7 +288,9 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
             inputMode={share === null ? undefined : 'url'}
             value={path}
             onValue={setPath}
-            placeholder={share === null ? text.pathPlaceholder : text.addressPlaceholder[share]}
+            placeholder={
+              share === null ? text.pathPlaceholder[system] : text.addressPlaceholder[share]
+            }
             autoComplete="off"
             spellCheck={false}
             required
@@ -380,6 +401,7 @@ export function LocalFolderEditForm({
     onSettled: () => invalidateScope('shared'),
   })
   const moved = address !== folder.path
+  const system = useServerSystem()
   // On another server the stored secrets are dropped on save, unless given again.
   const rekeyed =
     share !== '' &&
@@ -402,12 +424,12 @@ export function LocalFolderEditForm({
       </Field>
       {share !== 'rclone' && (
         <Field
-          label={share === '' ? text.path : text.address}
+          label={share === '' ? text.path[computer(system)] : text.address}
           help={
             share === ''
               ? moved
                 ? text.movedHint
-                : text.pathHint
+                : text.pathHint[system]
               : moved
                 ? text.movedShareHint
                 : text.addressHint[share]

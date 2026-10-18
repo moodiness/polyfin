@@ -10,7 +10,12 @@ export type Status = {
   setupRequired: boolean
   /** Whether the server serves the web player at /web/; absent from servers without it. */
   webClient?: boolean
+  /** Where the server runs, which names its local folders; absent from servers without it. */
+  system?: ServerSystem
 }
+
+/** Where the server runs: in a container, as the Docker image does, else on its computer's system. */
+export type ServerSystem = 'container' | 'linux' | 'macos' | 'windows'
 
 export type SessionUser = {
   id: string

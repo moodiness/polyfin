@@ -102,6 +102,9 @@ type Options struct {
 	TMDB *tmdb.Client
 	// WebClient tells whether Polyfin serves jellyfin-web at /web/.
 	WebClient bool
+	// InContainer tells whether Polyfin runs in a container, as the Docker
+	// image does: the status tells the admin app where local folders are.
+	InContainer bool
 	// Sessions are the playbacks under way, which the dashboard shows and
 	// stops; nil shows none.
 	Sessions Sessions

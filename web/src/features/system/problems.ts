@@ -138,6 +138,7 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       }
       if (problem.failure === 'watch_limit') return text.folderWatchLimit(problem.name)
       if (problem.failure === 'instance_limit') return text.folderInstanceLimit(problem.name)
+      if (problem.failure === 'open_files_limit') return text.folderOpenFilesLimit(problem.name)
       return text.folderUnwatched(problem.name)
     case 'task':
       return text.task(problem.task)

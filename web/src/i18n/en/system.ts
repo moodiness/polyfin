@@ -120,6 +120,8 @@ const system = {
           `${name}: Polyfin cannot watch this local folder for changes: the system’s limit of watched folders is reached. It is still scanned on its schedule. Raise fs.inotify.max_user_watches on the host.`,
         folderInstanceLimit: (name: string) =>
           `${name}: Polyfin cannot watch this local folder for changes: the system’s limit of watchers or of open files is reached. It is still scanned on its schedule. Raise fs.inotify.max_user_instances on the host, or the container’s limit of open files.`,
+        folderOpenFilesLimit: (name: string) =>
+          `${name}: Polyfin cannot watch this local folder for changes: the system’s limit of open files is reached, as macOS watches each folder and file through one. It is still scanned on its schedule. Raise kern.maxfilesperproc and kern.maxfiles with sysctl.`,
         folderUnwatched: (name: string) =>
           `${name}: Polyfin cannot watch this local folder for changes. It is still scanned on its schedule.`,
         shareUnwatchedUnreachable: (name: string) =>

@@ -191,7 +191,12 @@ const sources = {
       'Keeps the channels marked favorite on the tuner, in its app or its web page, and leaves out the others.',
   },
   localFolders: {
-    help: 'A folder mounted in Polyfin’s container, read-only is enough. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams; a folder of music becomes a music library. Polyfin runs as user 65532, which must be able to read it.',
+    help: {
+      container:
+        'A folder mounted in Polyfin’s container, read-only is enough. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams; a folder of music becomes a music library. Polyfin runs as user 65532, which must be able to read it.',
+      computer:
+        'A folder of the computer Polyfin runs on, or of a disk or share it reaches, read-only is enough. Its videos are matched to titles by their names and play as versions of those titles, beside the addons’ streams; a folder of music becomes a music library. The account Polyfin runs as must be able to read it.',
+    },
     location: 'Where',
     locations: {
       local: 'Local folder',
@@ -287,9 +292,21 @@ const sources = {
     },
     name: 'Name',
     nameHint: 'The name of its library in Jellyfin apps.',
-    path: 'Path in the container',
-    pathHint: 'Where the folder is mounted in Polyfin’s container, not its path on the host.',
-    pathPlaceholder: '/media/movies',
+    path: { container: 'Path in the container', computer: 'Path' },
+    pathHint: {
+      container: 'Where the folder is mounted in Polyfin’s container, not its path on the host.',
+      linux: 'The full path of the folder on the computer Polyfin runs on.',
+      macos:
+        'The full path of the folder on the Mac Polyfin runs on; an external disk’s folders are under /Volumes.',
+      windows:
+        'The full path of the folder on the PC Polyfin runs on: on a drive, such as D:\\Movies, or on a share, such as \\\\nas\\media\\Movies.',
+    },
+    pathPlaceholder: {
+      container: '/media/movies',
+      linux: '/srv/media/movies',
+      macos: '/Users/me/Movies',
+      windows: 'D:\\Movies',
+    },
     kind: 'It holds',
     kinds: { movies: 'Movies', shows: 'Shows', music: 'Music', homevideos: 'Home videos' },
     kindHelp: {
@@ -371,9 +388,9 @@ const sources = {
     errorTitleShare: 'Polyfin cannot read this share',
     errors: {
       missing:
-        'The path does not exist in the container: check that the folder, or the share it is on, is mounted there.',
+        'The path does not exist where Polyfin runs: check that the folder, or the disk or share it is on, is there, and in Docker that it is mounted in the container.',
       unreadable:
-        'The folder exists but Polyfin cannot list it: give user 65532 the right to read it and to open its folders.',
+        'The folder exists but Polyfin cannot list it: give the account it runs as, user 65532 in Docker, the right to read it and to open its folders.',
       not_folder: 'This path is a file, not a folder.',
     } as Record<string, string>,
     shareErrors: {
