@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -505,12 +506,17 @@ type settingsJSON struct {
 	// The version rules keep their current values when a PUT leaves them
 	// out: VersionOrder holds up to four criteria (see
 	// accounts.VersionCriteria), VersionCodecOrder every video codec once,
-	// and HiddenVersionWords the words, one per entry.
-	VersionOrder         *[]string `json:"versionOrder"`
-	VersionCodecOrder    *[]string `json:"versionCodecOrder"`
-	HideVersionsLargerGB *int      `json:"hideVersionsLargerGb"`
-	HiddenVersionCodecs  *[]string `json:"hiddenVersionCodecs"`
-	HiddenVersionWords   *[]string `json:"hiddenVersionWords"`
+	// VersionSourceOrder the IDs of some of VersionSources, each once, and
+	// HiddenVersionWords the words, one per entry. VersionSources are the
+	// server's sources listing versions of movies and episodes, in the
+	// order of Content › Sources; a PUT ignores them.
+	VersionOrder         *[]string           `json:"versionOrder"`
+	VersionCodecOrder    *[]string           `json:"versionCodecOrder"`
+	VersionSourceOrder   *[]string           `json:"versionSourceOrder"`
+	VersionSources       []versionSourceJSON `json:"versionSources"`
+	HideVersionsLargerGB *int                `json:"hideVersionsLargerGb"`
+	HiddenVersionCodecs  *[]string           `json:"hiddenVersionCodecs"`
+	HiddenVersionWords   *[]string           `json:"hiddenVersionWords"`
 	// NameHowVersionsPlay keeps its current value when a PUT leaves it out.
 	NameHowVersionsPlay *bool `json:"nameHowVersionsPlay"`
 	SyncAddonSubtitles  *bool `json:"syncAddonSubtitles"`
@@ -1238,8 +1244,13 @@ func (h *handler) turnOffDownloads(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (h *handler) settings(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, h.settingsJSON(h.Accounts.Settings()))
+func (h *handler) settings(w http.ResponseWriter, r *http.Request) {
+	body, err := h.settingsJSON(r.Context(), h.Accounts.Settings())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // settingsApps answers the apps an administrator may choose among in the
@@ -1254,9 +1265,20 @@ func (h *handler) settingsApps(w http.ResponseWriter, r *http.Request) {
 }
 
 // settingsJSON describes settings with the default folders, the render
-// nodes, what conversions run on, and the bounds of each setting.
-func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
+// nodes, what conversions run on, the bounds of each setting, and the
+// server's sources listing versions, Order of sources without those
+// removed since.
+func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) (settingsJSON, error) {
 	body := newSettingsJSON(settings)
+	sources, err := h.versionSources(ctx)
+	if err != nil {
+		return settingsJSON{}, err
+	}
+	body.VersionSourceOrder = new(sourceIDs(placedSources(settings.VersionSourceOrder, sources)))
+	body.VersionSources = make([]versionSourceJSON, len(sources))
+	for i, source := range sources {
+		body.VersionSources[i] = versionSourceJSON{ID: source.ID.String(), Name: source.Manifest.Name}
+	}
 	body.Bounds = settingsBounds
 	body.RecordingsFolderDefault = accounts.DefaultRecordingsFolder(h.DataDir)
 	body.BackupFolderDefault = accounts.DefaultBackupFolder(h.DataDir)
@@ -1277,7 +1299,7 @@ func (h *handler) settingsJSON(settings accounts.Settings) settingsJSON {
 		}
 		body.ConversionHardware.Bwdif = encoder.HasFilters("bwdif")
 	}
-	return body
+	return body, nil
 }
 
 // conversionHardwareJSON is what conversions run on: the GPU chosen, null
@@ -1307,6 +1329,16 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	dlnaUser, ok := h.dlnaNewDevicesUser(w, r, body.DLNANewDevicesUser, current.DLNANewDevicesUser)
 	if !ok {
+		return
+	}
+	sources, err := h.versionSources(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	sourceOrder, ok := versionSourceOrder(body.VersionSourceOrder, current.VersionSourceOrder, sources)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_version_source_order")
 		return
 	}
 	theIntroDBKey, ok := h.segmentKey(w, r, mediasegments.TheIntroDB, body.TheIntroDBKey, current.TheIntroDBKey)
@@ -1393,6 +1425,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		PreferDirectPlay:      valueOr(body.PreferDirectPlay, current.PreferDirectPlay),
 		VersionOrder:          valueOr(body.VersionOrder, current.VersionOrder),
 		VersionCodecOrder:     valueOr(body.VersionCodecOrder, current.VersionCodecOrder),
+		VersionSourceOrder:    sourceOrder,
 		HideVersionsLargerGB:  valueOr(body.HideVersionsLargerGB, current.HideVersionsLargerGB),
 		HiddenVersionCodecs:   valueOr(body.HiddenVersionCodecs, current.HiddenVersionCodecs),
 		HiddenVersionWords:    valueOr(body.HiddenVersionWords, current.HiddenVersionWords),
@@ -1534,7 +1567,12 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		settings.ConvertRecordingsOnProcessor != current.ConvertRecordingsOnProcessor {
 		h.Recordings.WakeConversions()
 	}
-	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
+	answer, err := h.settingsJSON(r.Context(), settings)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, answer)
 }
 
 // renderNodesPattern matches the render nodes VAAPI may open.

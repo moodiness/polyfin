@@ -553,6 +553,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidVersionAttempts, http.StatusBadRequest, "invalid_version_attempts"},
 		{accounts.ErrInvalidVersionOrder, http.StatusBadRequest, "invalid_version_order"},
 		{accounts.ErrInvalidVersionCodecOrder, http.StatusBadRequest, "invalid_version_codec_order"},
+		{accounts.ErrInvalidVersionSourceOrder, http.StatusBadRequest, "invalid_version_source_order"},
 		{accounts.ErrInvalidHideVersionsLarger, http.StatusBadRequest, "invalid_hide_versions_larger"},
 		{accounts.ErrInvalidHiddenVersionCodecs, http.StatusBadRequest, "invalid_hidden_version_codecs"},
 		{accounts.ErrInvalidHiddenVersionWords, http.StatusBadRequest, "invalid_hidden_version_words"},

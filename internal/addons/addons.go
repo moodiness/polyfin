@@ -140,6 +140,12 @@ func (a Addon) Eclipse() bool { return a.Kind == KindEclipse && a.Music != nil }
 // Eclipse addon, or a local music folder.
 func (a Addon) HasMusic() bool { return a.Music != nil }
 
+// ListsVersions reports whether the addon lists streams of movies or
+// episodes: versions of titles, which the version rules order.
+func (a Addon) ListsVersions() bool {
+	return a.Manifest.ServesType("stream", "movie") || a.Manifest.ServesType("stream", "series")
+}
+
 // Library is a catalog of an addon of the scope, shown as a library when
 // Enabled.
 type Library struct {

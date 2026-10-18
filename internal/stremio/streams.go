@@ -116,6 +116,18 @@ func (m Manifest) Serves(resource, contentType, id string) bool {
 	return false
 }
 
+// ServesType reports whether the addon serves a resource for content of
+// this type, whichever identifiers it serves it for.
+func (m Manifest) ServesType(resource, contentType string) bool {
+	return slices.ContainsFunc(m.Resources, func(r Resource) bool {
+		types := r.Types
+		if len(types) == 0 {
+			types = m.Types
+		}
+		return r.Name == resource && slices.Contains(types, contentType)
+	})
+}
+
 // Streams lists the streams an addon offers for a title, or for an episode
 // by its video identifier.
 func (c *Client) Streams(ctx context.Context, manifestURL, streamType, id string, confined bool) ([]Stream, error) {

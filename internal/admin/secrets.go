@@ -60,7 +60,12 @@ func (h *handler) newMetricsToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Activity.MetricsTokenMade(r.Context(), sessionFrom(r.Context()).User.Name)
-	writeJSON(w, http.StatusOK, h.settingsJSON(settings))
+	answer, err := h.settingsJSON(r.Context(), settings)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, answer)
 }
 
 // revealTrackingKey answers the API key or user token the signed-in user
