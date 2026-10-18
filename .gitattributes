@@ -1,0 +1,6 @@
+# Files are checked out as they are committed, on every system: Git for
+# Windows would otherwise turn line ends into CR LF, which changes the
+# checksums of the migrations Polyfin embeds (a backup would then not
+# restore between a server built on Windows and the Docker image), the
+# defaults they set, and the test data read byte for byte.
+* -text
