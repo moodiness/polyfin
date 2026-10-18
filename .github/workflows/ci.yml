@@ -120,6 +120,16 @@ jobs:
       - name: Build admin app, check formatting, vet and test
         # internal/jellyfin's tests run meanwhile, in the job of their own.
         run: make web lint test-others bounds
+      - name: Test the torrents' network interface route
+        # A dummy interface with an address, which the tests set down and
+        # up (NET_ADMIN, so as root); the build cache of root's run is its
+        # own, so that the steps after it keep writing theirs.
+        run: |
+          sudo ip link add pf0 type dummy
+          sudo ip addr add 10.99.0.1/24 dev pf0
+          sudo ip link set pf0 up
+          sudo -E env "PATH=$PATH" GOCACHE="$RUNNER_TEMP/root-go-build" POLYFIN_TEST_TORRENT_INTERFACE=pf0 \
+            go test -count=1 -run 'Interface|Missing' ./internal/torrent
       - name: Build production binary and verify its version
         env:
           VERSION: ${{ steps.version.outputs.version }}
