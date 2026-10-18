@@ -97,7 +97,7 @@ const sources: typeof en = {
     replaced: 'L’adresse du manifeste a été remplacée.',
     language: 'Langue de ses descriptions',
     languageHelp:
-      'La langue choisie sur la page de configuration de l’addon, quand il en propose une. Ajoutez le même addon de métadonnées une fois par langue, chacun configuré sur sa page de configuration, et indiquez ici la langue de chacun : les utilisateurs qui choisissent cette langue des métadonnées voient les noms, les résumés et les images de cet addon. Un addon avec une langue et sans bibliothèque à lui ne fait que décrire les titres.',
+      'Laissez Aucune sur le seul addon de métadonnées du serveur, quelle que soit la langue réglée sur sa page de configuration : un addon avec une langue ne décrit les titres que pour les utilisateurs qui ont choisi cette langue, sauf si aucun addon laissé sur Aucune ne les décrit. Pour que les utilisateurs lisent les titres dans d’autres langues, ajoutez le même addon de métadonnées une fois de plus par langue, configuré dans cette langue sur sa page de configuration, et indiquez ici la langue sur ces copies supplémentaires seulement : les utilisateurs qui choisissent cette langue des métadonnées voient ses noms, ses résumés et ses images. Un addon avec une langue et sans bibliothèque à lui ne fait que décrire les titres.',
     languageNone: 'Aucune',
     languageSaved: (name: string) => `${name} : la langue de ses descriptions a été enregistrée.`,
     edit: 'Modifier le compte',

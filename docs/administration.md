@@ -84,6 +84,8 @@ HTTPS has four, linked to its settings: a port it cannot listen on, certificate 
 
 A picture subtitle track that could not be read into text, its language having no Tesseract data, is a warning, one per language, naming the language and the `.traineddata` file to put in the folder `POLYFIN_TESSDATA_DIR` names, with a link to **Turn picture subtitles into text**. It goes away once the file is there (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
 
+When every metadata addon of the server has a language, a warning names the first one, with a link to its page: they then describe titles in their language for every user, whatever the user's metadata language. Keep **Language of its descriptions** at **None** on that addon, or on one more metadata addon (see [Languages](addons-and-libraries.md#languages)).
+
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
 
 Torrent streams that cannot play are an error, naming why: the network interface missing, down or without an address, or the SOCKS5 proxy not answering or refusing its user. A proxy without `UDP ASSOCIATE` is a warning: torrents play over TCP, with UDP trackers and the DHT off. Both link to **Settings › Torrents** (see [Kill switch](torrents.md#kill-switch)).

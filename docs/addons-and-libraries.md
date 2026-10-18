@@ -49,6 +49,8 @@ To order versions by their source without moving an addon for the rest, choose *
 
 A title's name, overview and images are those of the addon that describes it, in the language set on that addon's configure page, which lives in its manifest address. To let users read titles in their own language, add the same metadata addon once more for each language, each configured on its configure page in that language, and name the language under **Language of its descriptions** on its page under **Content › Sources**. It is **None** by default.
 
+Leave **Language of its descriptions** at **None** on the server's only metadata addon, whatever language its configure page sets, even when it is not the server's: name a language only on the extra copies added for other languages. The addons left at **None** give every user the titles' facts and episodes.
+
 Each user then picks a **Metadata language** among those languages, under **My account**, or an administrator on the user's page under **Users** (see [Users](users.md#metadata-language)). **The server's** is the default.
 
 For a user with a language:
@@ -61,7 +63,9 @@ For a user with a language:
 
 What does not change: a title's genres, ratings, people, versions, subtitles and identifiers stay those of the addons without a language, starting with the one whose catalog listed it. Genre pages, blocked genres, parental control, hidden titles and smart lists judge every user alike. Library names stay the administrator's, and generated images keep them.
 
-An addon with a language describes titles for the users of that language only, never for others, even when its catalogs are libraries. An addon with a language and no library of its own describes titles only. Only the server's Stremio addons take a language.
+An addon with a language describes titles for the users of that language only, even when its catalogs are libraries, unless no addon without a language describes them. An addon with a language and no library of its own describes titles only. Only the server's Stremio addons take a language.
+
+When no addon without a language describes a title, the addons with a language describe it for every user, facts and episodes included: those in the user's language first, else in the order of the sources. So do search, people search and similar titles: when no addon without a language offers the search or the catalogs they need, those of the addons with a language serve every user. A server whose metadata addons all have a language thus works as if they had none, and **System › Health** warns about it (see [Health](administration.md#health)). Where an addon without a language describes the title, nothing of this applies.
 
 Each language costs one more request per title: the addon in that language is asked once for each title opened or shown, and its descriptions are kept and refreshed as every description is (see [Catalog pages](#catalog-pages)). Catalogs are read once, whatever the languages.
 

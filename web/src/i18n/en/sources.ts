@@ -95,7 +95,7 @@ const sources = {
     replaced: 'The manifest address was replaced.',
     language: 'Language of its descriptions',
     languageHelp:
-      'The language chosen on the addon’s configure page, when it offers one. Add the same metadata addon once per language, each configured on its configure page, and name each one’s language here: users who choose that metadata language see this addon’s names, overviews and images. An addon with a language and no library of its own only describes titles.',
+      'Leave it at None on the server’s only metadata addon, whatever language its configure page sets: an addon with a language describes titles for the users who chose that language only, unless no addon left at None describes them. To let users read titles in other languages, add the same metadata addon once more for each language, configured in that language on its configure page, and name the language here on each of these extra copies only: users who choose that metadata language see its names, overviews and images. An addon with a language and no library of its own only describes titles.',
     languageNone: 'None',
     languageSaved: (name: string) => `${name}: the language of its descriptions was saved.`,
     edit: 'Edit the account',
