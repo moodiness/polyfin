@@ -30,6 +30,17 @@ Manifest addresses usually contain your addon settings or keys. Polyfin never sh
 
 Each source has its own page, from **Open its page** on its row, with its details, an **Active** switch and its place in the order. **Remove** asks first.
 
+### The order of sources
+
+The order of **Content › Sources**, then each user's own order under **My sources** for their addons, which come after the server's, decides:
+
+- which addon describes a title, the first that knows it;
+- the order of the addons' subtitles;
+- the order of search results;
+- the order of a title's versions, addon after addon, while **Settings › Playback › Order versions by** has no criterion, and among the versions its criteria tie on.
+
+To order versions by their source without moving an addon for the rest, choose **Source, in the order below** and order the sources under **Order of sources**, in **Settings › Playback** (see [Version order](playback.md#version-order)). That list changes the order of versions only.
+
 ### Languages
 
 A title's name, overview and images are those of the addon that describes it, in the language set on that addon's configure page, which lives in its manifest address. To let users read titles in their own language, add the same metadata addon once more for each language, each configured on its configure page in that language, and name the language under **Language of its descriptions** on its page under **Content › Sources**. It is **None** by default.

@@ -22,7 +22,7 @@ Whether a version plays directly or is converted decides how much bandwidth the 
 
 A title's details list every stream the addons offer as a version (see [Title pages](#title-pages) for when). The first time a version is played, Polyfin analyzes it with ffprobe, which takes a few seconds, and keeps the result. It then tells the app whether the app can play the version as it is, as a Jellyfin server would.
 
-- Versions keep the addons' order, addon after addon, unless the [version order](#version-order) settings order them or hide some. Picking or playing one never moves it.
+- Versions keep the addons' order, addon after addon: the server's sources in the order of **Content › Sources**, folders included, then the user's own addons in theirs. The [version order](#version-order) settings may order them otherwise, by their source too, or hide some. Picking or playing one never moves it.
 - When the app has not picked a version, a version that cannot be read, or does not play on the app, is skipped in favor of the next one. It is also left out of the versions Polyfin lists, which keep their order starting from the one chosen, for apps that let the user pick at that point.
 - A version that would play over HLS but whose keyframe index cannot be read is skipped the same way, as nothing could stream it.
 - The first versions are analyzed together, up to 3 at once, and taken in order. Once a later one is ready, Polyfin waits 3 more seconds for those before it, then plays the later one: a source that never answers delays playback by those 3 seconds rather than by the whole analysis time. The analyses still running go on in the background and are kept for the next play.
@@ -181,8 +181,9 @@ The **Version order** group of **Settings › Playback** orders a movie's or an 
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Order versions by** | **Settings › Playback** | None | Up to four criteria, each grouping the versions and the next sorting within them: **Preferred audio language**; **Resolution, highest first** or **Resolution, lowest first**; **File size, largest first** or **File size, smallest first**; **Video codec, in the order below**; **HDR and Dolby Vision first** or **HDR and Dolby Vision last**. Versions that tie keep the addons' order. |
+| **Order versions by** | **Settings › Playback** | None | Up to four criteria, each grouping the versions and the next sorting within them: **Preferred audio language**; **Resolution, highest first** or **Resolution, lowest first**; **File size, largest first** or **File size, smallest first**; **Video codec, in the order below**; **HDR and Dolby Vision first** or **HDR and Dolby Vision last**; **Source, in the order below**. Versions that tie keep the addons' order. |
 | **Order of video codecs** | **Settings › Playback** | AV1, HEVC, VP9, H.264, VC-1, MPEG-4 Part 2, MPEG-2 | The order the video codec criterion puts versions in. |
+| **Order of sources** | **Settings › Playback** | The order of **Content › Sources** | The order the source criterion puts versions in: the server's addons and folders that give versions of movies and episodes, moved by drag or with the arrows. |
 | **Hide versions larger than (GB, 0 = no limit)** | **Settings › Playback** | 0 (up to 1,000) | Hides the versions known to be larger. |
 | **Hide these video codecs** | **Settings › Playback** | None | Hides the versions known to be in these codecs. |
 | **Hide versions whose labels contain** | **Settings › Playback** | None (up to 50 lines) | Hides the versions whose name, description or file name holds one of these words, one a line, in any letter case: for addons that say in their labels that a file is not ready to play yet. |
@@ -199,6 +200,8 @@ A version a criterion knows nothing of comes after those it knows, and a hide ru
 
 **Preferred audio language** is each user's own, the audio language they set in their app. Versions known to carry it come first, then those that say MULTI or DUAL without naming it, then those of unknown language, then the others. For a user without a preferred language, it changes nothing.
 
+**Source, in the order below** groups a title's versions by the addon or folder that gives them, the next criteria sorting each source's versions; placed after other criteria, it orders the versions they tie on. The sources **Order of sources** lists come first, in its order, then the others in the addons' order: a source added since the list was saved comes after those it lists, until it is moved there, and a user's own addons come after the server's sources. A source removed leaves the list. The list orders versions only: which addon describes a title, the order of the addons' subtitles and that of search results keep the order of **Content › Sources**, as versions do while the criterion is not chosen (see [Addons and libraries](addons-and-libraries.md)). It is how local files come first, whatever the other criteria (see [Local folders](local-folders.md#versions)).
+
 **In what order things happen:**
 
 1. The versions that failed lately are left out (see [Sources that fail](#sources-that-fail)).
@@ -208,7 +211,7 @@ A version a criterion knows nothing of comes after those it knows, and a hide ru
 
 - Item details and `PlaybackInfo` list the versions in that order, so version menus show it. The first, named after the title, is the one Play starts first and **Prepare playback in advance** analyzes. **Versions tried when one does not work** and **Prefer versions the app plays without conversion** take the versions in that order.
 - Hidden versions are listed nowhere: not in details, `PlaybackInfo`, downloads or trickplay. A version an app asks for by its own identifier, one it was shown before a rule hid it, is refused as if it were gone.
-- While a title's page is open, and Polyfin follows it (see [Title pages](#title-pages)), the versions it shows keep their places, even when an analysis tells more of them; versions that come later take their places by the rules. A page opened again lists them in the rules' order.
+- While a title's page is open, and Polyfin follows it (see [Title pages](#title-pages)), the versions it shows keep their places as long as the rules stay the same, the order of sources included, even when an analysis tells more of them; versions that come later take their places by the rules. A page opened again, or listed again once the rules changed, lists them in the rules' order.
 - Merged Live TV channels keep their own order (see [IPTV](iptv.md)).
 
 ### Version names

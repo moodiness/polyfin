@@ -445,6 +445,10 @@ A matched file is one more version of its title, or of each of its episodes, nam
 
 An episode whose file has no intro or credits in its chapters, of a series or a season the segment databases do not know, gets the intro and the credits the episodes of its season share in their audio, once one of them was played (see [Intros and credits found in local episodes' audio](skip-segments.md#intros-and-credits-found-in-local-episodes-audio)).
 
+### Listing local files first
+
+A folder's versions take its place among the sources: moving it up under **Content › Sources** puts its files before the addons' streams while no criterion orders versions. With criteria, such as **Preferred audio language**, a local file often ranks low: a scan does not analyze the files, so a file's audio languages are known only once it was played, or from its name or RemuxDB's description, and it counts as of unknown language until then. To list a folder's files first whatever the other criteria, choose **Source, in the order below** first under **Settings › Playback › Order versions by**, and move the folder to the top of **Order of sources**; the next criteria then sort each source's versions. Placed after the language, the criterion only orders the versions the language ties on. See [Version order](playback.md#version-order).
+
 ## Artwork
 
 Folders organized by Jellyfin or a media manager often hold posters, backdrops and logos beside their files, chosen by hand. Polyfin reads them as Jellyfin does, as `.jpg`, `.jpeg`, `.png` or `.webp` files, names compared in any letter case, and shows them in place of the metadata addons' artwork of the same type; the types a folder has no image of still come from the addons.
