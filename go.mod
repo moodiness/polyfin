@@ -3,6 +3,7 @@ module github.com/moodiness/polyfin
 go 1.27.1
 
 require (
+	fyne.io/systray v1.12.2
 	github.com/cloudsoda/go-smb2 v0.0.0-20260918041005-0c5d69b69701
 	github.com/coder/websocket v1.8.15
 	github.com/fsnotify/fsnotify v1.10.1
@@ -10,6 +11,8 @@ require (
 	github.com/pkg/sftp v1.13.11
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
+	github.com/ulikunitz/xz v0.5.17
+	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/crypto v0.58.0
 	golang.org/x/image v0.46.0
 	golang.org/x/net v0.60.0
@@ -22,7 +25,9 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudsoda/sddl v0.0.0-20250224235906-926454e91efc // indirect
+	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
