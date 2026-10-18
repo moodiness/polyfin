@@ -118,6 +118,10 @@ type User struct {
 	// an account, through a share link, while the server allows them
 	// (Settings.ShareLinks). Losing it revokes the user's links.
 	CanShare bool
+	// TorrentStreams offers the user the torrents' files addons list,
+	// while the server plays them (see Settings.TorrentsAllowed). Off for
+	// every user, administrators included, until given.
+	TorrentStreams bool
 	// GroupID is the group the user belongs to, nil for none (see Group);
 	// while FollowGroup is set, the settings the group holds are its
 	// values, otherwise the user's own. FollowGroup is set without a group.
@@ -183,6 +187,8 @@ type UserChanges struct {
 	EndsOn *time.Time
 	// CanShare, see User.
 	CanShare *bool
+	// TorrentStreams, see User.
+	TorrentStreams *bool
 	// Group sets the user's group, the zero ID for none. Joining a group
 	// follows it, unless FollowGroup says otherwise; leaving one keeps its
 	// values as the user's own. An administrator cannot join one
@@ -291,7 +297,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language, two_step"
+	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language, two_step, torrent_streams"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -303,7 +309,7 @@ func (user *User) fields() []any {
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare,
-		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep}
+		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -722,7 +728,8 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 			can_share = coalesce($29, can_share),
 			group_id = $30,
 			follow_group = $31,
-			metadata_language = coalesce($32, metadata_language)
+			metadata_language = coalesce($32, metadata_language),
+			torrent_streams = coalesce($33, torrent_streams)
 		WHERE id = $1 RETURNING `+userColumns,
 		id, u.name, u.hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 		changes.Parental != nil, u.parental.MaxRating, u.parental.MaxSubRating, u.parental.BlockUnrated,
@@ -731,7 +738,7 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 		u.hidden, u.genres, u.schedules, changes.CollectionManagement,
 		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
-		membership.group, membership.follow, changes.MetadataLanguage))
+		membership.group, membership.follow, changes.MetadataLanguage, changes.TorrentStreams))
 	if uniqueViolation(err) {
 		return User{}, nil, ErrNameTaken
 	}

@@ -67,7 +67,7 @@ type listKind[T any] struct {
 }
 
 var (
-	streamKind   = listKind[stremio.Stream]{listStreams, stremio.Stream.Playable, streamIdentity, carryIdentities}
+	streamKind   = listKind[stremio.Stream]{listStreams, listable, streamIdentity, carryIdentities}
 	subtitleKind = listKind[stremio.Subtitle]{listSubtitles, stremio.Subtitle.Valid, subtitleIdentity, nil}
 )
 

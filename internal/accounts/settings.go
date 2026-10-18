@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"errors"
+	"net"
 	"net/mail"
 	"net/netip"
 	"net/url"
@@ -1527,6 +1528,94 @@ type Settings struct {
 	// PublicMetaDBKey.
 	Metrics      bool
 	MetricsToken string
+	// TorrentStreams plays the torrents addons list, to the users allowed
+	// to (see TorrentsAllowed), over one route alone: TorrentInterface, the
+	// network interface every torrent socket is bound to (Linux only), or
+	// else TorrentProxy, a SOCKS5 proxy (host:port) with TorrentProxyUser
+	// and TorrentProxyPassword when it asks for them. TorrentProxyPassword
+	// is a secret, like PublicMetaDBKey. TorrentDownloadMbps bounds the
+	// download, 0 for no limit; TorrentUploadMbps the upload, 0 for no
+	// sharing.
+	TorrentStreams       bool
+	TorrentInterface     string
+	TorrentProxy         string
+	TorrentProxyUser     string
+	TorrentProxyPassword string
+	TorrentDownloadMbps  int
+	TorrentUploadMbps    int
+}
+
+// TorrentsAllowed reports whether user is offered torrents' files: the
+// server plays them and the user may, administrators included.
+func (s Settings) TorrentsAllowed(user User) bool {
+	return s.TorrentStreams && user.TorrentStreams
+}
+
+// InterfaceRoutes tells whether this system can bind sockets to a network
+// interface, which only Linux does: elsewhere, torrents use a proxy alone.
+const InterfaceRoutes = runtime.GOOS == "linux"
+
+// The bounds of Settings.TorrentDownloadMbps and TorrentUploadMbps, and
+// of the fields of the torrents' route.
+const (
+	MaxTorrentMbps          = 10000
+	MaxTorrentInterfaceName = 15
+	MaxTorrentProxyBytes    = 255
+)
+
+// ErrInvalidTorrentRoute reports torrent settings without a route while
+// torrents play, with both, with an interface name or a proxy address not
+// valid, or with an interface on a system other than Linux; and
+// ErrInvalidTorrentLimit a limit outside [0, MaxTorrentMbps].
+var (
+	ErrInvalidTorrentRoute = errors.New("invalid route for torrents")
+	ErrInvalidTorrentLimit = errors.New("invalid limit for torrents")
+)
+
+// validTorrentRoute checks the torrent settings' route.
+func validTorrentRoute(s Settings) bool {
+	if s.TorrentInterface != "" && s.TorrentProxy != "" {
+		return false
+	}
+	if s.TorrentInterface != "" && (!InterfaceRoutes || !ValidInterfaceName(s.TorrentInterface)) {
+		return false
+	}
+	if s.TorrentProxy != "" && !validProxyAddress(s.TorrentProxy) {
+		return false
+	}
+	if len(s.TorrentProxyUser) > MaxTorrentProxyBytes || len(s.TorrentProxyPassword) > MaxTorrentProxyBytes ||
+		strings.ContainsRune(s.TorrentProxyUser, 0) || strings.ContainsRune(s.TorrentProxyPassword, 0) {
+		return false
+	}
+	return !s.TorrentStreams || s.TorrentInterface != "" || s.TorrentProxy != ""
+}
+
+// ValidInterfaceName reports whether name may name a Linux network
+// interface: 1 to 15 bytes, none of them a slash, a colon or a space.
+func ValidInterfaceName(name string) bool {
+	if name == "" || len(name) > MaxTorrentInterfaceName || name == "." || name == ".." {
+		return false
+	}
+	for i := range len(name) {
+		if c := name[i]; c <= ' ' || c > '~' || c == '/' || c == ':' {
+			return false
+		}
+	}
+	return true
+}
+
+// validProxyAddress reports whether address is a host and a port.
+func validProxyAddress(address string) bool {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || host == "" || len(address) > MaxTorrentProxyBytes {
+		return false
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return false
+	}
+	_, err = netip.ParseAddr(host)
+	return err == nil || validHostName(host)
 }
 
 // SMTPAvailable reports whether email notifications can be sent: an SMTP
@@ -1619,7 +1708,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
-	"metrics, metrics_token"
+	"metrics, metrics_token, " +
+	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_download_mbps, torrent_upload_mbps"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1672,7 +1762,9 @@ func (settings *Settings) fields() []any {
 		&settings.PublicAddress,
 		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName,
 		&settings.PlaybackHistory, &settings.PlaybackHistoryDays, &settings.WeeklySummaryDay, &settings.WeeklySummaryHour,
-		&settings.ImportEveryMinutes, &settings.Metrics, &settings.MetricsToken}
+		&settings.ImportEveryMinutes, &settings.Metrics, &settings.MetricsToken,
+		&settings.TorrentStreams, &settings.TorrentInterface, &settings.TorrentProxy, &settings.TorrentProxyUser, &settings.TorrentProxyPassword,
+		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -1710,6 +1802,7 @@ func (settings *Settings) secrets() []struct {
 		{"myAnimeListClientSecret", &settings.MyAnimeListClientSecret},
 		{"smtpPassword", &settings.SMTPPassword},
 		{"metricsToken", &settings.MetricsToken},
+		{"torrentProxyPassword", &settings.TorrentProxyPassword},
 	}
 }
 
@@ -2132,6 +2225,15 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		if unblocked.RowsAffected() > 0 {
 			s.forgetSignIns()
 		}
+	}
+	settings.TorrentInterface = strings.TrimSpace(settings.TorrentInterface)
+	settings.TorrentProxy = strings.TrimSpace(settings.TorrentProxy)
+	if !validTorrentRoute(settings) {
+		return Settings{}, ErrInvalidTorrentRoute
+	}
+	if settings.TorrentDownloadMbps < 0 || settings.TorrentDownloadMbps > MaxTorrentMbps ||
+		settings.TorrentUploadMbps < 0 || settings.TorrentUploadMbps > MaxTorrentMbps {
+		return Settings{}, ErrInvalidTorrentLimit
 	}
 	// Metrics turned on with no token, the first time or when the key
 	// cannot read the one stored, get one.

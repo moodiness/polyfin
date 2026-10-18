@@ -2,6 +2,7 @@ package stremio
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -17,11 +18,15 @@ type Stream struct {
 	Description string `json:"description,omitempty"`
 	Title       string `json:"title,omitempty"`
 	URL         string `json:"url,omitempty"`
-	// ExternalURL, YouTubeID and InfoHash are streams Polyfin does not play:
-	// a web page, a YouTube video and a torrent.
+	// ExternalURL and YouTubeID are streams Polyfin does not play: a web
+	// page and a YouTube video. InfoHash is a torrent's, played when the
+	// server plays torrents (see Torrent): FileIdx is its file to play,
+	// the largest without, and Sources its trackers and DHT nodes.
 	ExternalURL   string         `json:"externalUrl,omitempty"`
 	YouTubeID     string         `json:"ytId,omitempty"`
 	InfoHash      string         `json:"infoHash,omitempty"`
+	FileIdx       *int           `json:"fileIdx,omitempty"`
+	Sources       []string       `json:"sources,omitempty"`
 	Subtitles     []Subtitle     `json:"subtitles,omitempty"`
 	BehaviorHints StreamBehavior `json:"behaviorHints,omitzero"`
 	// Identity is Polyfin's, never an addon's: the file an earlier answer
@@ -50,9 +55,16 @@ type ProxyHeaders struct {
 	Response map[string]string `json:"response,omitempty"`
 }
 
-// Playable reports whether the stream is a direct link to a video, the only
-// kind Polyfin plays.
+// Playable reports whether the stream is a direct link to a video.
 func (s Stream) Playable() bool { return webURL(s.URL) }
+
+// Torrent reports whether the stream is a torrent's file, with no link: an
+// info hash of 40 hexadecimal digits, and a file index, when given, that
+// is not negative.
+func (s Stream) Torrent() bool {
+	raw, err := hex.DecodeString(s.InfoHash)
+	return s.URL == "" && err == nil && len(raw) == 20 && (s.FileIdx == nil || *s.FileIdx >= 0)
+}
 
 // Details returns the description, from whichever field the addon used.
 func (s Stream) Details() string {

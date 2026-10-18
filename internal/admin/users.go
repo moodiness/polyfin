@@ -100,6 +100,9 @@ type limitsJSON struct {
 	// without an account, through a share link, while the server allows
 	// them.
 	CanShare bool `json:"canShare"`
+	// TorrentStreams offers the user the torrents' files addons list,
+	// while the server plays them.
+	TorrentStreams bool `json:"torrentStreams"`
 	// QualityGroup is the tallest video the user is offered, in lines: 480,
 	// 720, 1080, 1440 or 2160, or 0 for Original, no limit.
 	QualityGroup int `json:"qualityGroup"`
@@ -127,6 +130,7 @@ func newLimitsJSON(limits accounts.Limits) limitsJSON {
 		LiveTvManagement:     limits.LiveTvManagement,
 		SubtitleManagement:   limits.SubtitleManagement,
 		CanShare:             limits.CanShare,
+		TorrentStreams:       limits.TorrentStreams,
 		QualityGroup:         limits.QualityGroup,
 	}
 }
@@ -150,6 +154,7 @@ type limitChanges struct {
 	CollectionManagement *bool                    `json:"collectionManagement"`
 	SubtitleManagement   *bool                    `json:"subtitleManagement"`
 	CanShare             *bool                    `json:"canShare"`
+	TorrentStreams       *bool                    `json:"torrentStreams"`
 	LiveTvManagement     *bool                    `json:"liveTvManagement"`
 	QualityGroup         *int                     `json:"qualityGroup"`
 }
@@ -173,6 +178,7 @@ func (l limitChanges) changes(w http.ResponseWriter) (accounts.UserChanges, bool
 		LiveTvManagement:     l.LiveTvManagement,
 		QualityGroup:         l.QualityGroup,
 		CanShare:             l.CanShare,
+		TorrentStreams:       l.TorrentStreams,
 	}
 	if p := l.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
@@ -675,6 +681,22 @@ type settingsJSON struct {
 	// newMetricsToken).
 	Metrics         *bool `json:"metrics"`
 	MetricsTokenSet bool  `json:"metricsTokenSet"`
+	// TorrentStreams, TorrentInterface, TorrentProxy, TorrentProxyUser,
+	// TorrentDownloadMbps and TorrentUploadMbps keep their current values
+	// when a PUT leaves them out. The proxy's password is never sent back:
+	// TorrentProxyPasswordSet tells whether one is saved; a PUT leaving it
+	// out keeps it, and empty removes it. InterfaceRoutes tells whether
+	// this system binds sockets to an interface, Linux alone; a PUT
+	// ignores it.
+	TorrentStreams          *bool   `json:"torrentStreams"`
+	TorrentInterface        *string `json:"torrentInterface"`
+	TorrentProxy            *string `json:"torrentProxy"`
+	TorrentProxyUser        *string `json:"torrentProxyUser"`
+	TorrentProxyPassword    *string `json:"torrentProxyPassword,omitempty"`
+	TorrentProxyPasswordSet bool    `json:"torrentProxyPasswordSet"`
+	TorrentDownloadMbps     *int    `json:"torrentDownloadMbps"`
+	TorrentUploadMbps       *int    `json:"torrentUploadMbps"`
+	InterfaceRoutes         bool    `json:"interfaceRoutes"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -867,6 +889,15 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 
 		Metrics:         &settings.Metrics,
 		MetricsTokenSet: settings.MetricsToken != "",
+
+		TorrentStreams:          &settings.TorrentStreams,
+		TorrentInterface:        &settings.TorrentInterface,
+		TorrentProxy:            &settings.TorrentProxy,
+		TorrentProxyUser:        &settings.TorrentProxyUser,
+		TorrentProxyPasswordSet: settings.TorrentProxyPassword != "",
+		TorrentDownloadMbps:     &settings.TorrentDownloadMbps,
+		TorrentUploadMbps:       &settings.TorrentUploadMbps,
+		InterfaceRoutes:         accounts.InterfaceRoutes,
 	}
 }
 
@@ -1530,6 +1561,14 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 
 		Metrics:      valueOr(body.Metrics, current.Metrics),
 		MetricsToken: current.MetricsToken,
+
+		TorrentStreams:       valueOr(body.TorrentStreams, current.TorrentStreams),
+		TorrentInterface:     valueOr(body.TorrentInterface, current.TorrentInterface),
+		TorrentProxy:         valueOr(body.TorrentProxy, current.TorrentProxy),
+		TorrentProxyUser:     valueOr(body.TorrentProxyUser, current.TorrentProxyUser),
+		TorrentProxyPassword: valueOr(body.TorrentProxyPassword, current.TorrentProxyPassword),
+		TorrentDownloadMbps:  valueOr(body.TorrentDownloadMbps, current.TorrentDownloadMbps),
+		TorrentUploadMbps:    valueOr(body.TorrentUploadMbps, current.TorrentUploadMbps),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/netip"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -114,7 +115,7 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			// An address is a URL: its scheme starts it, letters fill the
 			// rest. A folder is an absolute path, and a sender an email
 			// address.
-			letter, start := "a", ""
+			letter, start, end := "a", "", ""
 			switch name {
 			case "remuxDbUrl", "publicAddress", "localAddress":
 				start = "https://"
@@ -122,11 +123,32 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 				start = "/"
 			case "smtpFrom", "acmeEmail":
 				start = "polyfin@"
+			case "torrentProxy":
+				// A proxy is a host and a port.
+				end = ":1080"
+			case "torrentInterface":
+				// Only Linux binds sockets to an interface.
+				if !InterfaceRoutes {
+					if err := try(name, "wg0"); err == nil {
+						t.Errorf("%s: accepted on %s", name, runtime.GOOS)
+					}
+					continue
+				}
 			}
-			if err := try(name, start+strings.Repeat(letter, int(b.Max)-len(start))); err != nil {
+			long := func(n int) string {
+				text := []byte(start + strings.Repeat(letter, n-len(start)-len(end)) + end)
+				if name == "torrentProxy" {
+					// A host name's labels hold 63 bytes at most.
+					for i := 50; i < len(text)-len(end); i += 51 {
+						text[i] = '.'
+					}
+				}
+				return string(text)
+			}
+			if err := try(name, long(int(b.Max))); err != nil {
 				t.Errorf("%s: %v long refused: %v", name, b.Max, err)
 			}
-			if err := try(name, start+strings.Repeat(letter, int(b.Max)+1-len(start))); err == nil {
+			if err := try(name, long(int(b.Max)+1)); err == nil {
 				t.Errorf("%s: %v long accepted", name, b.Max+1)
 			}
 			if b.Min > 0 {

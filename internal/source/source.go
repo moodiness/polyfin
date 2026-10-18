@@ -145,6 +145,10 @@ type Location struct {
 	// another protocol (see FileOpener), as a folder on an S3 bucket, an
 	// SFTP server or an rclone remote is read.
 	Opener Opener
+	// Playing, when set, is called as a playback starts reading the source
+	// (see Source.Urge), and what it returns as that playback stops: a
+	// torrent's swarm is joined only meanwhile.
+	Playing func() (stop func())
 }
 
 // Opener sends requests to sources; *stremio.Client is one.
@@ -196,6 +200,9 @@ type Cache struct {
 	sources map[accounts.ID]*Source
 	chunks  map[chunkKey]*chunkUse
 	used    int64
+	// others gives the bytes kept beside the cache within its limit, as
+	// the pieces of torrents (see Share); nil for none.
+	others func() int64
 
 	// hosts and sizes are what the cache learned of hosts and of the sizes
 	// addons announce, under their own lock, taken with a source's or
@@ -348,7 +355,25 @@ func (c *Cache) Discard(id accounts.ID) bool {
 func (c *Cache) Usage() (used int64, sources int, limit int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.used, len(c.sources), c.limit()
+	return c.used + c.othersUsed(), len(c.sources), c.limit()
+}
+
+// Share has the cache count, within its limit and in its usage, the bytes
+// used gives, kept beside it by what keeps them within part of the limit,
+// as the pieces of torrents being played: the cache evicts its own chunks
+// to leave them room. used must not take the cache's lock.
+func (c *Cache) Share(used func() int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.others = used
+}
+
+// othersUsed is what Share counts. The cache's lock is held.
+func (c *Cache) othersUsed() int64 {
+	if c.others == nil {
+		return 0
+	}
+	return c.others()
 }
 
 // Close stops reading every source and removes their blocks.
@@ -388,7 +413,7 @@ func (c *Cache) stored(key chunkKey, size int64) {
 	use.touched = c.now()
 	c.used += size
 	protected := c.now().Add(-protectedFor)
-	for limit := c.limit(); c.used > limit; {
+	for limit := c.limit() - c.othersUsed(); c.used > limit; {
 		var oldest chunkKey
 		var found *chunkUse
 		for key, use := range c.chunks {
@@ -501,19 +526,25 @@ type Source struct {
 // Urge has the source read for a playback until done is called, as a
 // remux, a relay, or the analysis of the version a play chose: its first
 // connection never waits for its host's other connections, and those of
-// background reads give way to it (see slots.go). Without, the source is
-// read in the background.
+// background reads give way to it (see slots.go), and its location's
+// Playing runs meanwhile. Without, the source is read in the background.
 func (s *Source) Urge() (done func()) {
 	s.mu.Lock()
 	s.urged++
 	s.nudgeConns()
+	playing := s.origin.Playing
 	s.mu.Unlock()
+	stop := func() {}
+	if playing != nil {
+		stop = playing()
+	}
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			s.mu.Lock()
 			s.urged--
 			s.mu.Unlock()
+			stop()
 		})
 	}
 }
@@ -863,6 +894,17 @@ func (s *Source) Failed() <-chan struct{} {
 	defer s.mu.Unlock()
 	s.coolingLocked()
 	return s.failed
+}
+
+// Retry forgets the failure reported to readers, so that the next read
+// tries the source again at once, as when what it failed for, such as a
+// torrent's route, is back.
+func (s *Source) Retry() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failure != nil {
+		s.failure, s.failed = nil, make(chan struct{})
+	}
 }
 
 // Failure is why the source failed, while that is reported to readers;

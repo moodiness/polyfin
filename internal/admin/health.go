@@ -21,6 +21,7 @@ import (
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/thumbnails"
+	"github.com/moodiness/polyfin/internal/torrent"
 	"github.com/moodiness/polyfin/internal/updates"
 )
 
@@ -62,13 +63,17 @@ type HealthSources struct {
 	// picture subtitle tracks left unread for want of their data; nil
 	// lists none.
 	MissingLanguages func(context.Context) []string
+	// Torrents plays the torrent streams; nil tells nothing.
+	Torrents *torrent.Engine
 }
 
 type healthJSON struct {
-	CheckedAt  time.Time            `json:"checkedAt"`
-	Process    processJSON          `json:"process"`
-	Database   databaseJSON         `json:"database"`
-	Cache      *cacheJSON           `json:"cache"`
+	CheckedAt time.Time    `json:"checkedAt"`
+	Process   processJSON  `json:"process"`
+	Database  databaseJSON `json:"database"`
+	Cache     *cacheJSON   `json:"cache"`
+	// Torrents is how torrent streams play, null while they are off.
+	Torrents   *torrentHealthJSON   `json:"torrents"`
 	Disks      []diskJSON           `json:"disks"`
 	Transcoder *transcoderJSON      `json:"transcoder"`
 	Thumbnails *thumbnailHealthJSON `json:"thumbnails"`
@@ -182,6 +187,20 @@ type cacheJSON struct {
 	Used    int64 `json:"used"`
 	Limit   int64 `json:"limit"`
 	Sources int   `json:"sources"`
+	// Torrents is the part of Used the pieces of torrents take.
+	Torrents int64 `json:"torrents"`
+}
+
+// torrentHealthJSON is how torrent streams play: their route, "interface"
+// or "proxy", empty for none, Name the network interface's name or the
+// SOCKS5 proxy's address, the torrents playing, their peers, and the bytes
+// shared since the server started.
+type torrentHealthJSON struct {
+	Route    string `json:"route"`
+	Name     string `json:"name"`
+	Playing  int    `json:"playing"`
+	Peers    int    `json:"peers"`
+	Uploaded int64  `json:"uploaded"`
 }
 
 // diskJSON is the disk one of the server's folders is on: Folder is
@@ -285,6 +304,20 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	if h.Health.Cache != nil {
 		used, sources, limit := h.Health.Cache.Usage()
 		result.Cache = &cacheJSON{Used: used, Limit: limit, Sources: sources}
+		if h.Health.Torrents != nil {
+			result.Cache.Torrents = h.Health.Torrents.Usage()
+		}
+	}
+	if h.Health.Torrents != nil {
+		if status := h.Health.Torrents.Status(ctx); status.Enabled {
+			result.Torrents = &torrentHealthJSON{Playing: status.Playing, Peers: status.Peers, Uploaded: h.Health.Torrents.Uploaded()}
+			switch settings := h.Accounts.Settings(); {
+			case settings.TorrentInterface != "":
+				result.Torrents.Route, result.Torrents.Name = "interface", settings.TorrentInterface
+			case settings.TorrentProxy != "":
+				result.Torrents.Route, result.Torrents.Name = "proxy", settings.TorrentProxy
+			}
+		}
 	}
 	for _, folder := range []struct{ name, path string }{{"cache", h.Health.CacheDir}, {"recordings", h.Recordings.Dir()}, {"backups", h.Backups.Dir()}} {
 		if folder.path == "" {

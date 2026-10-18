@@ -124,6 +124,9 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 	if err, failed := s.unindexed.Get(version.ID); failed {
 		return nil, err
 	}
+	if s.idleTorrent(ctx, version) {
+		return nil, ErrTorrentIdle
+	}
 	if !background(ctx) {
 		src := s.open(version)
 		defer src.Release()

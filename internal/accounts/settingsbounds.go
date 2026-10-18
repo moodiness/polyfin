@@ -189,6 +189,14 @@ func DefaultSettings() Settings {
 
 		Metrics:      false,
 		MetricsToken: "",
+
+		TorrentStreams:       false,
+		TorrentInterface:     "",
+		TorrentProxy:         "",
+		TorrentProxyUser:     "",
+		TorrentProxyPassword: "",
+		TorrentDownloadMbps:  0,
+		TorrentUploadMbps:    0,
 	}
 }
 
@@ -391,6 +399,14 @@ func SettingsBounds() map[string]SettingBounds {
 
 		"metrics":      is(d.Metrics),
 		"metricsToken": text(MaxMetricsTokenBytes, d.MetricsToken),
+
+		"torrentStreams":       is(d.TorrentStreams),
+		"torrentInterface":     text(MaxTorrentInterfaceName, d.TorrentInterface),
+		"torrentProxy":         text(MaxTorrentProxyBytes, d.TorrentProxy),
+		"torrentProxyUser":     text(MaxTorrentProxyBytes, d.TorrentProxyUser),
+		"torrentProxyPassword": text(MaxTorrentProxyBytes, d.TorrentProxyPassword),
+		"torrentDownloadMbps":  between(0, MaxTorrentMbps, d.TorrentDownloadMbps),
+		"torrentUploadMbps":    between(0, MaxTorrentMbps, d.TorrentUploadMbps),
 	}
 }
 

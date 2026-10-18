@@ -31,6 +31,7 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/subtitles"
+	"github.com/moodiness/polyfin/internal/torrent"
 )
 
 const (
@@ -123,6 +124,9 @@ type Service struct {
 	speech speechState
 	// pictures reads picture subtitles into text (see pictures.go).
 	pictures pictureReader
+	// torrents plays the versions that are torrents' files, nil when
+	// Polyfin plays none (see Torrents).
+	torrents *torrent.Engine
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading
@@ -187,6 +191,15 @@ func (s *Service) Close() error {
 // open opens a version's source in the cache, renewing its link when it
 // expires. The caller releases it.
 func (s *Service) open(version library.Version) *source.Source {
+	if version.Torrent != nil {
+		src := s.sources.Open(version.ID, s.torrentLocation(version), nil)
+		// A torrent that failed for its route is tried again as soon as the
+		// route is back, not after the source's cooldown.
+		if failure := src.Failure(); failure != nil && torrent.RouteFailure(failure) && s.torrentReady() == nil {
+			src.Retry()
+		}
+		return src
+	}
 	var renew source.Renewer
 	if s.renew != nil {
 		renew = func(ctx context.Context) (source.Location, error) {
@@ -230,6 +243,78 @@ func locationOf(version library.Version) source.Location {
 		Announcer: version.Addon}
 }
 
+// Torrents has the source cache read the versions that are torrents'
+// files from engine.
+func (s *Service) Torrents(engine *torrent.Engine) {
+	s.torrents = engine
+}
+
+// TorrentSettings are the torrent engine's settings among the server's.
+func TorrentSettings(s accounts.Settings) torrent.Settings {
+	return torrent.Settings{Enabled: s.TorrentStreams, Interface: s.TorrentInterface, Proxy: s.TorrentProxy,
+		ProxyUser: s.TorrentProxyUser, ProxyPassword: s.TorrentProxyPassword,
+		DownloadMbps: s.TorrentDownloadMbps, UploadMbps: s.TorrentUploadMbps}
+}
+
+// errNoTorrents reports a torrent's file read without an engine.
+var errNoTorrents = errors.New("this server plays no torrent")
+
+// torrentLocation is where the source cache reads a torrent's file: from
+// its swarm, which the playbacks reading it join (see source.Location's
+// Playing) and nothing else.
+func (s *Service) torrentLocation(version library.Version) source.Location {
+	spec, err := torrent.NewSpec(version.Torrent.InfoHash, version.Torrent.FileIdx, version.Torrent.Sources)
+	if err == nil && s.torrents == nil {
+		err = errNoTorrents
+	}
+	engine := s.torrents
+	location := source.Location{URL: version.URL, Size: version.Size, Announcer: version.Addon,
+		Opener: source.FileOpener(func(ctx context.Context, _ string) (source.RandomFile, int64, error) {
+			if err != nil {
+				return nil, 0, err
+			}
+			r, err := engine.Open(ctx, spec)
+			if err != nil {
+				return nil, 0, err
+			}
+			return r, r.Size(), nil
+		})}
+	if err == nil {
+		location.Playing = func() func() { return engine.Play(spec) }
+	}
+	return location
+}
+
+// routeCheck bounds the check of the torrents' route before a read.
+const routeCheck = 10 * time.Second
+
+// torrentReady reports why torrents cannot play now, nil when they can:
+// a torrent version is skipped meanwhile, as one that cannot be read,
+// without that counting as its failure.
+func (s *Service) torrentReady() error {
+	if s.torrents == nil {
+		return errNoTorrents
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), routeCheck)
+	defer cancel()
+	return s.torrents.Ready(ctx)
+}
+
+// ErrTorrentIdle reports background work on a torrent's file no playback
+// reads now: only a playback joins a torrent's swarm, so the version is
+// read once played. It is not the version's failure.
+var ErrTorrentIdle = errors.New("a torrent's file is read only while it plays")
+
+// idleTorrent reports background work on a torrent's file whose swarm no
+// playback joined.
+func (s *Service) idleTorrent(ctx context.Context, version library.Version) bool {
+	if version.Torrent == nil || !background(ctx) {
+		return false
+	}
+	hash, err := torrent.ParseHash(version.Torrent.InfoHash)
+	return err != nil || s.torrents == nil || !s.torrents.Running(hash)
+}
+
 // OpenSource opens a version's source as playback reads it, through the
 // shared cache, renewing its link when it expires. The caller releases it.
 func (s *Service) OpenSource(version library.Version) *source.Source {
@@ -271,6 +356,13 @@ func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Anal
 // one started in the background. A version read from its input is
 // analyzed there (see LocalInputs).
 func (s *Service) Analyze(ctx context.Context, version library.Version) (media.Analysis, error) {
+	if version.Torrent != nil {
+		// Over a route that cannot carry it, a torrent's file is not read:
+		// it plays again once the route is back.
+		if err := s.torrentReady(); err != nil {
+			return media.Analysis{}, err
+		}
+	}
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
 		return analysis, nil
 	}
@@ -296,6 +388,9 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 	}
 	if failure, failed := s.failures.Get(version.ID); failed {
 		return media.Analysis{}, failure.err
+	}
+	if s.idleTorrent(ctx, version) {
+		return media.Analysis{}, ErrTorrentIdle
 	}
 	release, err := s.Hold(ctx, version)
 	if err != nil {
@@ -463,6 +558,11 @@ type versionFailure struct {
 // not tried again for failureTTL, unless its addon changes or its item is
 // tried again (see Retry and RetryItem).
 func (s *Service) fail(version library.Version, err error) {
+	if torrent.RouteFailure(err) {
+		// The torrents' route failed, not the file: it plays once the
+		// route is back.
+		return
+	}
 	s.failures.Put(version.ID, versionFailure{addon: version.Origin.Addon, item: version.Item, err: err})
 }
 
@@ -515,7 +615,7 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.
 		http.Error(w, "not one file", http.StatusNotFound)
 		return ErrNoFile
 	}
-	if !delivery.Relay && !version.HoldsConnection && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
+	if !delivery.Relay && !version.HoldsConnection && version.Torrent == nil && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
 		current, err := s.check(r.Context(), version)
 		if err != nil {
 			http.Error(w, "source unavailable", http.StatusBadGateway)

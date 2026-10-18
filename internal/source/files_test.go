@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 )
@@ -89,5 +90,58 @@ func TestFileOpenerAnswersRanges(t *testing.T) {
 	read(100)
 	if after := opens.Load(); before != 2 || after != before {
 		t.Errorf("opens: %d then %d", before, after)
+	}
+}
+
+// The bytes kept beside the cache, as the pieces of torrents, count in
+// its usage and within its limit: its own chunks make room for them. A
+// playback's urge runs its location's Playing until it stops.
+func TestSharedBytesCountWithinTheLimit(t *testing.T) {
+	data := bytes.Repeat([]byte{7}, 7*blockSize)
+	var reads atomic.Int32
+	opener := FileOpener(func(context.Context, string) (RandomFile, int64, error) {
+		return memoryFile{bytes.NewReader(data), &reads}, int64(len(data)), nil
+	})
+	c := newCache(t, 8*blockSize)
+	c.chunkBlocks = 1
+	clock := time.Now()
+	c.now = func() time.Time { return clock }
+	var shared atomic.Int64
+	c.Share(shared.Load)
+	var playing atomic.Int32
+	s := c.Open(accounts.ID{2}, Location{URL: "torrent:1", Opener: opener, Playing: func() func() {
+		playing.Add(1)
+		return func() { playing.Add(-1) }
+	}}, nil)
+	defer s.Release()
+	done := s.Urge()
+	if playing.Load() != 1 {
+		t.Fatal("Playing did not run while the source is urged")
+	}
+	got := make([]byte, blockSize)
+	for block := range int64(6) {
+		if _, err := s.ReadAt(t.Context(), got, block*blockSize); err != nil {
+			t.Fatal(err)
+		}
+	}
+	done()
+	if playing.Load() != 0 {
+		t.Fatal("Playing did not stop with the urge")
+	}
+	shared.Store(5 * blockSize)
+	if used, _, _ := c.Usage(); used < 5*blockSize {
+		t.Fatalf("usage %d leaves out the shared bytes", used)
+	}
+	// Past the protection of chunks read lately, the next block stored
+	// evicts the cache's own chunks down to what the shared bytes leave.
+	clock = clock.Add(time.Hour)
+	if _, err := s.ReadAt(t.Context(), got, 6*blockSize); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	own := c.used
+	c.mu.Unlock()
+	if own+shared.Load() > 8*blockSize {
+		t.Fatalf("the cache keeps %d bytes beside %d shared, over its limit of %d", own, shared.Load(), 8*blockSize)
 	}
 }

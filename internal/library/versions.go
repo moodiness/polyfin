@@ -63,6 +63,45 @@ type Version struct {
 	// Subtitles are the version's own subtitle files, those beside a local
 	// file, which the version offers after its title's.
 	Subtitles []ExternalSubtitle
+	// Torrent is the torrent whose file the version is, nil for a link:
+	// URL is then the torrent's magnet link (see torrentLink), which
+	// identifies it, and to which no app is sent.
+	Torrent *Torrent
+}
+
+// Torrent is a torrent's file as an addon lists it: its info hash, the
+// file's index, nil for the largest, and the stream's sources, its
+// trackers and DHT nodes.
+type Torrent struct {
+	InfoHash string
+	FileIdx  *int
+	Sources  []string
+}
+
+// listable reports whether a stream is one Polyfin may play: a link, or a
+// torrent's file, listed to the users who may play torrents (see
+// accounts.Settings.TorrentsAllowed).
+func listable(stream stremio.Stream) bool {
+	return stream.Playable() || stream.Torrent()
+}
+
+// torrentLink is the magnet link of a torrent stream's file, its index as
+// BEP 53 selects it.
+func torrentLink(stream stremio.Stream) string {
+	link := "magnet:?xt=urn:btih:" + strings.ToLower(stream.InfoHash)
+	if stream.FileIdx != nil {
+		link += "&so=" + strconv.Itoa(*stream.FileIdx)
+	}
+	return link
+}
+
+// withoutTorrents leaves out of versions the torrents' files, unless the
+// server plays them and user may.
+func (s *Service) withoutTorrents(user accounts.User, versions []Version) []Version {
+	if s.settings().TorrentsAllowed(user) {
+		return versions
+	}
+	return slices.DeleteFunc(versions, func(v Version) bool { return v.Torrent != nil })
 }
 
 // Origin is the addon that listed a stream and what it listed it for.
@@ -251,7 +290,7 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 	if mode == askLater || mode == staleNow {
 		s.askStreams(ctx, user, t, unknown)
 	}
-	return versions, len(unknown) == 0, nil
+	return s.withoutTorrents(user, versions), len(unknown) == 0, nil
 }
 
 // listVersions lists the versions serving list for t, as far as mode goes,
@@ -300,7 +339,7 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 	seen := map[accounts.ID]bool{}
 	for i, streams := range lists {
 		for _, stream := range streams {
-			if !stream.Playable() {
+			if !listable(stream) {
 				continue
 			}
 			version := newVersion(t, serving[i], stream)
@@ -321,6 +360,9 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 // the item.
 func (s *Service) Version(ctx context.Context, user accounts.User, item, id accounts.ID) (Version, error) {
 	if version, ok := s.versions.Get(id); ok && version.Item == item && version.fresh(s.now()) {
+		if version.Torrent != nil && !s.settings().TorrentsAllowed(user) {
+			return Version{}, ErrNotFound
+		}
 		// A version remembered from another user's listing is no way around
 		// the user's parental control or blocked genres.
 		if user.Restricted() {
@@ -443,7 +485,7 @@ func (s *Service) renewedFromAnswer(t target, entry installed, key streamKey, ol
 // title's name, which a renewal does not load.
 func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, old Version) (Version, bool) {
 	for _, stream := range streams {
-		if !stream.Playable() {
+		if !listable(stream) {
 			continue
 		}
 		if version := newVersion(t, entry, stream); version.ID == old.ID {
@@ -472,6 +514,10 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		Labels:   ReadLabels(t.name, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
 		// A replay holds one of its provider's connections, as a channel does.
 		HoldsConnection: t.kind == KindReplay,
+	}
+	if stream.Torrent() {
+		version.URL = torrentLink(stream)
+		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources)}
 	}
 	version.ID = versionID(t.item, streamIdentity(stream))
 	// A local file's subtitle files are its own. Those addons list with a
@@ -627,7 +673,11 @@ func streamIdentity(stream stremio.Stream) string {
 	if stream.Identity != "" {
 		return stream.Identity
 	}
-	return fileIdentity(stream.URL, stream.BehaviorHints.Filename, int64(stream.BehaviorHints.VideoSize))
+	link := stream.URL
+	if stream.Torrent() {
+		link = torrentLink(stream)
+	}
+	return fileIdentity(link, stream.BehaviorHints.Filename, int64(stream.BehaviorHints.VideoSize))
 }
 
 // fileIdentity tells a file by its name and size when the addon names it,
@@ -657,7 +707,7 @@ func carryIdentities(answer, before []stremio.Stream) []stremio.Stream {
 	var gone []stremio.Stream
 	for _, stream := range before {
 		identity := streamIdentity(stream)
-		if !known[identity] && !listed[identity] && stream.Playable() {
+		if !known[identity] && !listed[identity] && listable(stream) {
 			gone = append(gone, stream)
 		}
 		known[identity] = true
@@ -672,7 +722,7 @@ func carryIdentities(answer, before []stremio.Stream) []stremio.Stream {
 	claims := make([]int, len(gone))
 	for i, stream := range answer {
 		match[i] = -1
-		if !stream.Playable() || known[streamIdentity(stream)] {
+		if !listable(stream) || known[streamIdentity(stream)] {
 			continue
 		}
 		several := false
@@ -716,6 +766,10 @@ func sameFile(a, b stremio.Stream) bool {
 	ha, hb := a.BehaviorHints, b.BehaviorHints
 	if ha.Filename != "" && hb.Filename != "" && ha.Filename != hb.Filename || ha.VideoSize > 0 && hb.VideoSize > 0 && ha.VideoSize != hb.VideoSize {
 		return false
+	}
+	if a.Torrent() || b.Torrent() {
+		// A torrent's file is the same one at the same magnet link alone.
+		return a.Torrent() && b.Torrent() && torrentLink(a) == torrentLink(b)
 	}
 	if a.URL == b.URL || ha.Filename != "" && ha.Filename == hb.Filename {
 		return true

@@ -185,7 +185,7 @@ func (s *Service) findQueuedSpeech() {
 // before. A version whose speech cannot be found for now is not tried
 // again for a while.
 func (s *Service) findSpeech(ctx context.Context, version library.Version) {
-	if _, found := s.storedSpeech(ctx, version.ID); found {
+	if _, found := s.storedSpeech(ctx, version.ID); found || s.idleTorrent(ctx, version) {
 		return
 	}
 	started := time.Now()

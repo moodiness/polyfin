@@ -3,6 +3,7 @@ package admin
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/tasks"
+	"github.com/moodiness/polyfin/internal/torrent"
 )
 
 // Below this much free space, or this share of the disk, a folder's disk is
@@ -71,6 +73,12 @@ const (
 	// Picture subtitles in a language Tesseract has no data for are not
 	// read into text.
 	problemOCRLanguage = "subtitle_ocr_language"
+	// Torrent streams do not play: their route cannot carry them, Failure
+	// tells why (a torrent.RouteError's kind, or "no_route") and Name the
+	// interface or the proxy; or their proxy offers no UDP ASSOCIATE, so
+	// UDP trackers and the DHT are off.
+	problemTorrentRoute = "torrent_route"
+	problemTorrentUDP   = "torrent_udp"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -136,8 +144,9 @@ func (h *handler) healthProblemsRoute(w http.ResponseWriter, r *http.Request) {
 
 // healthProblems finds the problems System › Health shows, errors first,
 // from what the server's parts record: nothing is requested outside the
-// server. With the database down, that alone is told: the rest is read from
-// it.
+// server, but for the SOCKS5 proxy of torrents, checked as their kill
+// switch checks it. With the database down, that alone is told: the rest
+// is read from it.
 func (h *handler) healthProblems(ctx context.Context, language string) ([]healthProblemJSON, error) {
 	problems := []healthProblemJSON{}
 	add := func(p healthProblemJSON) { problems = append(problems, p) }
@@ -293,6 +302,22 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 	}
 	if h.Health.HTTPS != nil {
 		problems = append(problems, httpsProblems(h.Health.HTTPS(), h.now())...)
+	}
+	if h.Health.Torrents != nil {
+		if status := h.Health.Torrents.Status(ctx); status.Enabled {
+			if status.RouteError != nil {
+				p := healthProblemJSON{Key: "torrents:route", Code: problemTorrentRoute, Tone: notifications.SeverityError,
+					To: "/settings/torrents#torrent-route", Failure: "no_route"}
+				var routeErr *torrent.RouteError
+				if errors.As(status.RouteError, &routeErr) {
+					p.Failure, p.Name = routeErr.Kind, routeErr.Route
+				}
+				add(p)
+			} else if status.NoUDP {
+				add(healthProblemJSON{Key: "torrents:udp", Code: problemTorrentUDP, Tone: notifications.SeverityWarning,
+					To: "/settings/torrents#torrent-route", Name: h.Accounts.Settings().TorrentProxy})
+			}
+		}
 	}
 	if h.Health.MissingLanguages != nil {
 		for _, code := range h.Health.MissingLanguages(ctx) {
@@ -578,6 +603,29 @@ func (p healthProblemJSON) text(language string) string {
 			"Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.",
 			"Polyfin ne peut pas écouter sur le port UDP %d : les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. "+
 				"Un autre programme l’utilise sans doute, comme un serveur Jellyfin sur le même hôte. Enregistrer les paramètres réessaie.", p.Port)
+	case problemTorrentRoute:
+		var why [2]string
+		switch p.Failure {
+		case torrent.InterfaceMissing:
+			why = [2]string{"the network interface " + p.Name + " is missing", "l’interface réseau " + p.Name + " est absente"}
+		case torrent.InterfaceDown:
+			why = [2]string{"the network interface " + p.Name + " is down", "l’interface réseau " + p.Name + " est désactivée"}
+		case torrent.InterfaceNoAddress:
+			why = [2]string{"the network interface " + p.Name + " has no address", "l’interface réseau " + p.Name + " n’a pas d’adresse"}
+		case torrent.InterfaceUnsupported:
+			why = [2]string{"a network interface works on Linux only", "une interface réseau ne fonctionne que sous Linux"}
+		case torrent.ProxyUnreachable:
+			why = [2]string{"the SOCKS5 proxy " + p.Name + " does not answer", "le proxy SOCKS5 " + p.Name + " ne répond pas"}
+		case torrent.ProxyRefused:
+			why = [2]string{"the SOCKS5 proxy " + p.Name + " refused the user and password", "le proxy SOCKS5 " + p.Name + " a refusé l’utilisateur et le mot de passe"}
+		default:
+			why = [2]string{"no route is set", "aucune route n’est définie"}
+		}
+		return say("Torrent streams do not play: %s. Nothing is sent another way; check the route under Settings › Torrents.",
+			"Les flux torrent ne sont pas lus : %s. Rien n’est envoyé par un autre chemin ; vérifiez la route dans Paramètres › Torrents.", pick(why))
+	case problemTorrentUDP:
+		return say("The SOCKS5 proxy %s does not offer UDP ASSOCIATE: torrents play over TCP, with UDP trackers and the DHT off.",
+			"Le proxy SOCKS5 %s ne propose pas UDP ASSOCIATE : les torrents sont lus en TCP, sans trackers UDP ni DHT.", p.Name)
 	case problemDLNAPort:
 		return say("Polyfin cannot listen on UDP port %d, so DLNA devices on the local network do not find it by themselves. "+
 			"Another program probably uses it, such as another DLNA server on the same host. Saving the settings tries again.",

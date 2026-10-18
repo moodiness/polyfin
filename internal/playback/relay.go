@@ -46,7 +46,8 @@ func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.
 		return err
 	}
 	defer release()
-	if s.cacheable(r.Context(), version) {
+	if s.cacheable(r.Context(), version) || version.Torrent != nil {
+		// A torrent's file is read from its swarm alone, through the cache.
 		return s.relayCached(w, r, version, delivery)
 	}
 	response, err := s.openForPlayer(r, version)

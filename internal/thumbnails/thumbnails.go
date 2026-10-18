@@ -155,10 +155,11 @@ func (s *Service) Close() {
 // are made once the playback of device has stopped, and while nobody
 // plays from the version's host. A version recently failed, already
 // waiting, or of a paused host, is not queued; neither is one when the
-// queue is full.
+// queue is full. A torrent's file is never: only a playback joins its
+// swarm.
 func (s *Service) Queue(version library.Version, device accounts.ID) {
 	settings := s.Settings()
-	if !settings.Trickplay && !settings.ChapterImages {
+	if !settings.Trickplay && !settings.ChapterImages || version.Torrent != nil {
 		return
 	}
 	if _, failed := s.failed.Get(version.ID); failed {

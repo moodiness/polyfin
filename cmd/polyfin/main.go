@@ -67,6 +67,7 @@ import (
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 	"github.com/moodiness/polyfin/internal/tmdb"
+	"github.com/moodiness/polyfin/internal/torrent"
 	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -324,6 +325,17 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// itself.
 	folders.UseFiles(player.LocalFiles(folders.Open), player.LocalInputs(folders))
 	player.LocalSources(folders.Source)
+	// Torrent streams are read from their swarms while they play, over the
+	// route the settings set alone, their pieces within a quarter of the
+	// source cache's space, which counts them.
+	torrents, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(store.Settings()) },
+		Dir: filepath.Join(cfg.CacheDir, "torrents"), Budget: func() int64 { return cacheLimit() / 4 }, Logger: logger})
+	if err != nil {
+		return fmt.Errorf("prepare the torrent directory: %w", err)
+	}
+	defer torrents.Close()
+	sources.Share(torrents.Usage)
+	player.Torrents(torrents)
 	// A disc image whose UDF file system is laid out in a way Polyfin does
 	// not read, as those of rewritable and write-once media are, is read
 	// through FFmpeg to tell a Blu-ray disc's.
@@ -595,6 +607,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			DLNA:             sharing.Status,
 			HTTPS:            secure.Status,
 			MissingLanguages: player.MissingLanguages,
+			Torrents:         torrents,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
 		Trackers:       tracking,

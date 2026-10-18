@@ -84,10 +84,11 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		}
 	}
 	version, err := h.Library.Version(r.Context(), user, item.ID, wanted)
-	if err != nil || h.Playback.ReadsInput(version) || h.hiddenVersion(r.Context(), user, version) {
+	if err != nil || h.Playback.ReadsInput(version) || version.Torrent != nil || h.hiddenVersion(r.Context(), user, version) {
 		// Jellyfin refuses to download what has no file, a series or a
 		// season, as a request it cannot process; a version that is not one
-		// file, a DVD, is refused the same way, as is one the version rules
+		// file, a DVD, is refused the same way, as is a torrent's file,
+		// whose swarm only a playback joins, and one the version rules
 		// hide, which is listed nowhere.
 		processingError(w, http.StatusBadRequest)
 		return
@@ -143,7 +144,7 @@ func (h *Handler) setDownload(r *http.Request, user accounts.User, dto *BaseItem
 		return
 	}
 	fits := slices.ContainsFunc(versions, func(v library.Version) bool {
-		return !h.Playback.ReadsInput(v) && user.FitsGroup(h.versionHeight(r.Context(), v))
+		return !h.Playback.ReadsInput(v) && v.Torrent == nil && user.FitsGroup(h.versionHeight(r.Context(), v))
 	})
 	if dto.CanDownload != nil && h.Accounts.MayDownload(user) && fits {
 		dto.CanDownload = new(true)
