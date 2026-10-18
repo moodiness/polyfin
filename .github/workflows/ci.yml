@@ -385,3 +385,128 @@ jobs:
             --title "Polyfin ${VERSION}" \
             --notes "Image: \`${IMAGE}:${VERSION}\` (linux/amd64, linux/arm64), digest \`${DIGEST}\`. It includes jellyfin-web, unmodified, under the GPL-2.0: its complete source is attached." \
             "${flags[@]}" "$RUNNER_TEMP"/jellyfin-web-source/*.tar.gz
+
+  desktop:
+    # Polyfin Desktop on each system it is packaged for: its tests against a
+    # PostgreSQL 18 of its own, then the app started without its icon, on a
+    # data folder of its own, behind a local proxy that refuses every
+    # request for outside, and quit, twice, leaving no process behind.
+    name: Polyfin Desktop on ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-24.04
+          - name: Windows
+            os: windows-latest
+          - name: macOS on Apple silicon
+            os: macos-15
+          - name: macOS on Intel
+            os: macos-15-intel
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - *checkout
+      - *setup-go
+      - name: Fetch PostgreSQL 18's server programs, into an install folder
+        run: |
+          # The install folder as the packages lay it out: postgresql/bin,
+          # lib and share, and the server, built below. Each download is
+          # checked against its checksum.
+          if [ "$RUNNER_OS" = Windows ]; then temp="$(cygpath -u "$RUNNER_TEMP")"; else temp="$RUNNER_TEMP"; fi
+          mkdir -p "$temp/install"
+          case "$RUNNER_OS" in
+            Linux)
+              # PostgreSQL's own packages, signed with the key checked here,
+              # without the cluster Debian's packaging would make.
+              curl -fsSLo "$temp/pgdg.asc" https://www.postgresql.org/media/keys/ACCC4CF8.asc
+              echo "0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76  $temp/pgdg.asc" | sha256sum -c -
+              sudo install -d /usr/share/postgresql-common/pgdg /etc/postgresql-common/createcluster.d
+              sudo cp "$temp/pgdg.asc" /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+              echo "create_main_cluster = false" | sudo tee /etc/postgresql-common/createcluster.d/polyfin.conf
+              echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+                | sudo tee /etc/apt/sources.list.d/pgdg.list
+              sudo apt-get update
+              sudo apt-get install -y --no-install-recommends postgresql-18
+              ln -s /usr/lib/postgresql/18 "$temp/install/postgresql"
+              ;;
+            Windows)
+              # EnterpriseDB's binaries, as postgresql.org links them.
+              curl -fsSLo "$temp/postgresql.zip" https://get.enterprisedb.com/postgresql/postgresql-18.6-2-windows-x64-binaries.zip
+              echo "41bb1496f60666d3745ae8a855753b877d14fa9e34667f266867635b790fc323  $temp/postgresql.zip" | sha256sum -c -
+              ;;
+            macOS)
+              # EnterpriseDB's binaries, for Apple silicon and Intel alike.
+              curl -fsSLo "$temp/postgresql.zip" https://get.enterprisedb.com/postgresql/postgresql-18.6-2-osx-binaries.zip
+              echo "21c0432b3cb45ab763aab2b4efe9edfa91f658c3be09cddf272c7b52eb2aa3fc  $temp/postgresql.zip" | shasum -a 256 -c -
+              ;;
+          esac
+          if [ "$RUNNER_OS" != Linux ]; then
+            # The whole archive, then its bin, lib and share: the unzip of
+            # Git for Windows takes a * of a pattern for one folder level
+            # only, which would leave out share's subfolders.
+            unzip -q "$temp/postgresql.zip" -d "$temp/edb"
+            mkdir "$temp/install/postgresql"
+            mv "$temp/edb/pgsql/bin" "$temp/edb/pgsql/lib" "$temp/edb/pgsql/share" "$temp/install/postgresql/"
+            rm -rf "$temp/edb" "$temp/postgresql.zip"
+          fi
+          bin="$temp/install/postgresql/bin"
+          "$bin/postgres" --version
+          # A database for the test that reads the server's check for new
+          # versions; pg_ctl drops administrator rights on Windows.
+          printf polyfin > "$temp/password"
+          "$bin/initdb" -D "$temp/testdb" -U polyfin --pwfile="$temp/password" -A scram-sha-256 -E UTF8 --locale=C
+          if [ "$RUNNER_OS" = Windows ]; then options="-p 55432"; else options="-p 55432 -k $temp"; fi
+          "$bin/pg_ctl" -D "$temp/testdb" -l "$temp/testdb.log" -o "$options" -w start
+          PGPASSWORD=polyfin "$bin/createdb" -h 127.0.0.1 -p 55432 -U polyfin polyfin
+          # Paths with slashes on Windows, which Go takes as they are.
+          if [ "$RUNNER_OS" = Windows ]; then go_temp="$(cygpath -m "$RUNNER_TEMP")"; else go_temp="$temp"; fi
+          {
+            echo "DESKTOP_TEMP=$temp"
+            echo "POLYFIN_TEST_POSTGRES_BIN=$go_temp/install/postgresql/bin"
+            echo "POLYFIN_TEST_DATABASE_URL=postgresql://polyfin:polyfin@127.0.0.1:55432/polyfin"
+          } >> "$GITHUB_ENV"
+      - name: Vet and build
+        run: |
+          go vet ./internal/desktop/... ./cmd/polyfin-desktop
+          if [ "$RUNNER_OS" = Windows ]; then exe=.exe; else exe=; fi
+          CGO_ENABLED=0 go build -o "$DESKTOP_TEMP/install/polyfin$exe" ./cmd/polyfin
+          go build -o "$DESKTOP_TEMP/polyfin-desktop$exe" ./cmd/polyfin-desktop
+          case "$RUNNER_OS" in
+            # The packages' build, without a console; the smoke runs the
+            # console build, which an interrupt reaches.
+            Windows) go build -ldflags -H=windowsgui -o "$DESKTOP_TEMP/polyfin-desktop-gui.exe" ./cmd/polyfin-desktop ;;
+            # The tray needs no cgo on Linux.
+            Linux) CGO_ENABLED=0 go build -o /dev/null ./cmd/polyfin-desktop ;;
+          esac
+      - name: Test
+        run: go test -count=1 ./internal/desktop/... ./cmd/polyfin-desktop
+      - name: Stop the test database before the smoke
+        # It runs from the install folder, which the smoke checks is left
+        # with no process.
+        run: '"$DESKTOP_TEMP/install/postgresql/bin/pg_ctl" -D "$DESKTOP_TEMP/testdb" -m fast -w stop'
+      - name: Start the app without its icon, twice, and quit it
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            python scripts/desktop-smoke.py "$(cygpath -w "$DESKTOP_TEMP/polyfin-desktop.exe")" \
+              "$(cygpath -w "$DESKTOP_TEMP/install")" "$(cygpath -w "$DESKTOP_TEMP/smoke")"
+          else
+            python3 scripts/desktop-smoke.py "$DESKTOP_TEMP/polyfin-desktop" "$DESKTOP_TEMP/install" "$DESKTOP_TEMP/smoke"
+          fi
+      - name: Show the app's logs
+        if: failure()
+        run: |
+          for log in "$DESKTOP_TEMP"/smoke/data/log/*.log "$DESKTOP_TEMP/testdb.log"; do
+            if [ -f "$log" ]; then echo "== $log"; tail -n 100 "$log"; fi
+          done
+      - name: Stop the test database, if a failure left it running
+        if: always()
+        run: |
+          bin="$DESKTOP_TEMP/install/postgresql/bin"
+          if [ -d "$DESKTOP_TEMP/testdb" ] && "$bin/pg_ctl" -D "$DESKTOP_TEMP/testdb" status > /dev/null; then
+            "$bin/pg_ctl" -D "$DESKTOP_TEMP/testdb" -m fast -w stop
+          fi
