@@ -112,6 +112,12 @@ func compareIdentifier(a, b string) int {
 	return strings.Compare(a, b)
 }
 
+// Newer reports whether version comes after current, as the check orders
+// releases: Polyfin Desktop offers a release the server found with it.
+func Newer(version, current string) bool {
+	return newer(version, current)
+}
+
 // newer reports whether version comes after current, both versions
 // parseVersion reads; anything else is never newer.
 func newer(version, current string) bool {
