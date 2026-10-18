@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Polyfin
+GenericName=Media server
+Comment=Run Polyfin, your media server, from the tray
+Comment[fr]=Lancer Polyfin, votre serveur multimédia, depuis la zone de notification
+Exec=polyfin-desktop
+Icon=polyfin-desktop
+Terminal=false
+Categories=AudioVideo;Video;
+Keywords=media;server;movies;series;
+StartupNotify=false

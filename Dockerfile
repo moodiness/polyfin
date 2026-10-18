@@ -84,6 +84,16 @@ FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b197847
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends fonts-dejavu-core
 
+# What Polyfin Desktop's packages take from the image, for
+# scripts/packaging/files.sh: jellyfin-web, unmodified, with its license
+# and notice, and the fallback fonts as the image lays them out under
+# /usr/share/fonts, with their copyright notice. No image build reads it.
+FROM scratch AS desktop-files
+COPY --from=jellyfin-web /jellyfin/jellyfin-web/ /jellyfin-web/
+COPY third_party/jellyfin-web/LICENSE third_party/jellyfin-web/NOTICE /licenses/jellyfin-web/
+COPY --from=fonts /usr/share/fonts/truetype/dejavu/ /fonts/truetype/dejavu/
+COPY --from=fonts /usr/share/doc/fonts-dejavu-core/copyright /licenses/fonts-dejavu/
+
 # pg_dump of PostgreSQL 18, which backs the database up, and pg_restore,
 # which restores a backup from the admin app: Debian's are 17's, which
 # refuse an 18 server and its backups. They are taken, with their libpq and
