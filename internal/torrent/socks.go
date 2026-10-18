@@ -322,22 +322,32 @@ func (c *socksPacketConn) ReadFrom(p []byte) (int, netip.AddrPort, error) {
 		if err != nil {
 			return 0, netip.AddrPort{}, err
 		}
-		if netip.AddrPortFrom(from.Addr().Unmap(), from.Port()) != c.relay || n < 4 || buffer[2] != 0 {
-			// Not the relay's, or a fragment, which Polyfin does not
-			// reassemble.
+		if netip.AddrPortFrom(from.Addr().Unmap(), from.Port()) != c.relay {
 			continue
 		}
-		reader := &sliceReader{data: buffer[3:n]}
-		source, err := readSocksAddress(reader)
-		if err != nil {
-			continue
+		if n, source, ok := readSocksDatagram(buffer[:n], p); ok {
+			return n, source, nil
 		}
-		ap, err := netip.ParseAddrPort(source)
-		if err != nil {
-			continue
-		}
-		return copy(p, reader.data), netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()), nil
 	}
+}
+
+// readSocksDatagram reads a datagram of the proxy's UDP relay: it copies
+// its payload into p, and tells where it came from. A fragment, which
+// Polyfin does not reassemble, or a malformed header is not read.
+func readSocksDatagram(datagram, p []byte) (int, netip.AddrPort, bool) {
+	if len(datagram) < 4 || datagram[2] != 0 {
+		return 0, netip.AddrPort{}, false
+	}
+	reader := &sliceReader{data: datagram[3:]}
+	source, err := readSocksAddress(reader)
+	if err != nil {
+		return 0, netip.AddrPort{}, false
+	}
+	ap, err := netip.ParseAddrPort(source)
+	if err != nil {
+		return 0, netip.AddrPort{}, false
+	}
+	return copy(p, reader.data), netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()), true
 }
 
 func (c *socksPacketConn) SetReadDeadline(t time.Time) error { return c.udp.SetReadDeadline(t) }

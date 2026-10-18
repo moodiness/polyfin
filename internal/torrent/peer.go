@@ -39,6 +39,12 @@ const (
 	// maxMessage bounds a peer's message: a block and its header, or a
 	// bitfield of a torrent of many pieces.
 	maxMessage = 1 << 21
+	// maxOutbox bounds the bytes queued for a peer: what Polyfin answers
+	// is queued as the peer asks, and a peer that asks without reading
+	// would have it grow without end. Pieces and metadata are answered
+	// while fewer than pipeline messages wait, so a peer that reads stays
+	// near 1 MiB; one past maxOutbox is disconnected.
+	maxOutbox = 4 << 20
 	// handshakeTimeout bounds the handshake; idleTimeout how long a peer
 	// may send nothing, keep-alives being sent every keepAlive.
 	handshakeTimeout = 20 * time.Second
@@ -102,9 +108,11 @@ type peer struct {
 
 	outMu  sync.Mutex
 	outbox [][]byte
-	wake   chan struct{}
-	closed chan struct{}
-	once   sync.Once
+	// outBytes are the bytes of the outbox.
+	outBytes int
+	wake     chan struct{}
+	closed   chan struct{}
+	once     sync.Once
 }
 
 // block is a piece's block, by its offset in the piece.
@@ -119,11 +127,18 @@ func newPeer(t *torrent, conn net.Conn, address netip.AddrPort) *peer {
 		wake: make(chan struct{}, 1), closed: make(chan struct{})}
 }
 
-// send queues a message, written by the peer's writer.
+// send queues a message, written by the peer's writer. A peer that lets
+// more than maxOutbox bytes wait is disconnected: it does not read.
 func (p *peer) send(id byte, payload ...[]byte) {
 	length := 1
 	for _, part := range payload {
 		length += len(part)
+	}
+	p.outMu.Lock()
+	if p.outBytes+4+length > maxOutbox {
+		p.outMu.Unlock()
+		p.close()
+		return
 	}
 	message := make([]byte, 4, 4+length)
 	binary.BigEndian.PutUint32(message, uint32(length))
@@ -131,13 +146,20 @@ func (p *peer) send(id byte, payload ...[]byte) {
 	for _, part := range payload {
 		message = append(message, part...)
 	}
-	p.outMu.Lock()
 	p.outbox = append(p.outbox, message)
+	p.outBytes += len(message)
 	p.outMu.Unlock()
 	select {
 	case p.wake <- struct{}{}:
 	default:
 	}
+}
+
+// queued counts the messages waiting for the peer.
+func (p *peer) queued() int {
+	p.outMu.Lock()
+	defer p.outMu.Unlock()
+	return len(p.outbox)
 }
 
 func (p *peer) close() {
@@ -147,8 +169,11 @@ func (p *peer) close() {
 	})
 }
 
-// write sends the outbox, and keep-alives while it is empty.
+// write sends the outbox, and keep-alives while it is empty. Its end, a
+// panic included, closes the connection.
 func (p *peer) write() {
+	defer p.t.recovered("peer connection", nil)
+	defer p.close()
 	w := bufio.NewWriterSize(p.conn, 64<<10)
 	ticker := time.NewTicker(keepAlive)
 	defer ticker.Stop()
@@ -164,25 +189,22 @@ func (p *peer) write() {
 		}
 		p.outMu.Lock()
 		messages := p.outbox
-		p.outbox = nil
+		p.outbox, p.outBytes = nil, 0
 		p.outMu.Unlock()
 		for _, message := range messages {
 			if message[4] == msgPiece && len(message) > 13 {
 				// Shared bytes wait for the upload limit.
 				if err := p.t.engine.up.wait(p.t.ctx, int64(len(message)-13)); err != nil {
-					p.close()
 					return
 				}
 				p.t.uploaded(int64(len(message) - 13))
 			}
 			_ = p.conn.SetWriteDeadline(time.Now().Add(idleTimeout))
 			if _, err := w.Write(message); err != nil {
-				p.close()
 				return
 			}
 		}
 		if err := w.Flush(); err != nil {
-			p.close()
 			return
 		}
 	}

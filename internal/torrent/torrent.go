@@ -5,8 +5,10 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"net/netip"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"time"
@@ -161,9 +163,31 @@ func (t *torrent) fail(err error) {
 	}
 }
 
+// recovered is deferred at the top of each goroutine that handles one
+// peer connection, tracker announce or DHT lookup, and the route's checks:
+// the parsers check what other programs send, and recovered is the last
+// line of defence beside them. A panic ends only that goroutine, logged
+// once with its stack, then, when set, tells then why; the server and the
+// torrent's other exchanges go on.
+func (t *torrent) recovered(what string, then func(error)) {
+	v := recover()
+	if v == nil {
+		return
+	}
+	t.engine.config.Logger.Error("A torrent's "+what+" ended on a panic", "panic", fmt.Sprint(v), "stack", string(debug.Stack()))
+	if then != nil {
+		then(fmt.Errorf("the torrent's %s ended on a panic: %v", what, v))
+	}
+}
+
 // watch stops the torrent as soon as its route cannot carry it, or is no
-// longer the one set: nothing falls back to another route.
+// longer the one set: nothing falls back to another route. A panic stops
+// the torrent too.
 func (t *torrent) watch() {
+	defer t.recovered("route check", func(err error) {
+		t.engine.failed(err)
+		t.engine.remove(t, err)
+	})
 	ticker := time.NewTicker(t.engine.checkEvery)
 	defer ticker.Stop()
 	chokes := time.NewTicker(chokeEvery)
@@ -227,20 +251,45 @@ func (t *torrent) connect() {
 	}
 }
 
+// dial connects to a peer, and reads it until the connection ends.
 func (t *torrent) dial(address netip.AddrPort) {
+	defer t.recovered("peer connection", nil)
+	p := t.join(address)
+	if p == nil {
+		return
+	}
+	defer t.leave(p)
+	go p.write()
+	_ = p.read()
+}
+
+// join dials a peer counted in dialing, and adds it to the torrent's
+// peers; nil when it does not answer, or is no longer needed. The dial is
+// uncounted as it ends, by a panic too.
+func (t *torrent) join(address netip.AddrPort) *peer {
 	t.mu.Lock()
 	dht := t.dht && t.udp
 	t.mu.Unlock()
+	dialed := false
+	defer func() {
+		if !dialed {
+			t.mu.Lock()
+			t.dialing--
+			t.signal()
+			t.mu.Unlock()
+		}
+	}()
 	conn, extensions, err := dialPeer(t.ctx, t.route, address, t.hash, t.engine.peerID, dht)
+	dialed = true
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.dialing--
 	t.signal()
 	if err != nil || t.err != nil || t.peers[address] != nil {
-		t.mu.Unlock()
 		if conn != nil {
 			conn.Close()
 		}
-		return
+		return nil
 	}
 	p := newPeer(t, conn, address)
 	t.peers[address] = p
@@ -252,17 +301,19 @@ func (t *torrent) dial(address netip.AddrPort) {
 		p.sendExtendedHandshake(size)
 	}
 	t.sendBitfield(p)
-	t.mu.Unlock()
-	go p.write()
-	err = p.read()
+	return p
+}
+
+// leave closes a peer's connection, and gives the blocks asked of it to
+// the other peers.
+func (t *torrent) leave(p *peer) {
 	p.close()
 	t.mu.Lock()
-	delete(t.peers, address)
+	defer t.mu.Unlock()
+	delete(t.peers, p.address)
 	t.release(p)
 	t.chooseUnchoked()
 	t.signal()
-	t.mu.Unlock()
-	_ = err
 }
 
 // sendBitfield tells a peer the pieces Polyfin has, while it shares them.
@@ -294,6 +345,7 @@ func (t *torrent) release(p *peer) {
 // announce asks a tracker for peers until the torrent stops, then tells it
 // the torrent stopped.
 func (t *torrent) announce(tracker string) {
+	defer t.recovered("tracker announce", nil)
 	event := "started"
 	failures := 0
 	for {
@@ -345,19 +397,14 @@ func (t *torrent) announced(event string) announce {
 // lookup looks the torrent's peers up on the DHT while it runs, when its
 // sources ask for it and the route carries UDP.
 func (t *torrent) lookup() {
+	defer t.recovered("DHT lookup", nil)
 	for {
 		t.mu.Lock()
 		on, starts := t.dht && t.udp, slices.Clone(t.nodes)
 		t.mu.Unlock()
 		wait := 15 * time.Second
-		if on && len(starts) > 0 {
-			if conn, err := t.route.ListenPacket(t.ctx); err == nil {
-				ctx, cancel := context.WithTimeout(t.ctx, 2*time.Minute)
-				err = lookupPeers(ctx, conn, t.hash, starts, t.addPeers)
-				cancel()
-				conn.Close()
-				wait = dhtEvery
-			}
+		if on && len(starts) > 0 && t.lookupOnce(starts) {
+			wait = dhtEvery
 		}
 		timer := time.NewTimer(wait)
 		select {
@@ -369,36 +416,54 @@ func (t *torrent) lookup() {
 	}
 }
 
-// handle reads a peer's message.
+// lookupOnce looks the torrent's peers up on the DHT from starts, over a
+// socket of the route; false when the route opens none.
+func (t *torrent) lookupOnce(starts []string) bool {
+	conn, err := t.route.ListenPacket(t.ctx)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(t.ctx, 2*time.Minute)
+	defer cancel()
+	_ = lookupPeers(ctx, conn, t.hash, starts, t.addPeers)
+	return true
+}
+
+// handle reads a peer's message. Its locks are released by defer, so that
+// a panic, which recovered turns into the connection's end, leaves the
+// torrent's lock free for its other peers.
 func (t *torrent) handle(p *peer, id byte, payload []byte) error {
 	switch id {
 	case msgChoke:
 		t.mu.Lock()
+		defer t.mu.Unlock()
 		p.choked = true
 		t.release(p)
 		t.signal()
-		t.mu.Unlock()
 	case msgUnchoke:
 		t.mu.Lock()
+		defer t.mu.Unlock()
 		p.choked = false
 		t.fill(p)
-		t.mu.Unlock()
 	case msgInterested, msgNotInterested:
 		t.mu.Lock()
+		defer t.mu.Unlock()
 		p.peerInterested = id == msgInterested
 		t.chooseUnchoked()
-		t.mu.Unlock()
 	case msgHave:
 		if len(payload) != 4 {
 			return errors.New("a malformed have")
 		}
-		index := int(binary.BigEndian.Uint32(payload))
+		index := binary.BigEndian.Uint32(payload)
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		if t.info != nil && index >= len(t.info.Pieces) || index > 1<<20 {
+		// A torrent has maxPieces pieces at most, which bounds what a
+		// peer is known to have before the torrent's info is.
+		if index >= maxPieces || t.info != nil && int(index) >= len(t.info.Pieces) {
 			return errors.New("a have past the torrent's pieces")
 		}
-		for len(p.has) <= index {
+		for len(p.has) <= int(index) {
 			p.has = append(p.has, false)
 		}
 		p.has[index] = true
@@ -406,6 +471,15 @@ func (t *torrent) handle(p *peer, id byte, payload []byte) error {
 	case msgBitfield:
 		t.mu.Lock()
 		defer t.mu.Unlock()
+		// A bit a piece: the torrent's pieces once its info is known,
+		// maxPieces at most before.
+		pieces := maxPieces
+		if t.info != nil {
+			pieces = len(t.info.Pieces)
+		}
+		if len(payload) > (pieces+7)/8 {
+			return errors.New("a bitfield past the torrent's pieces")
+		}
 		p.has = make([]bool, len(payload)*8)
 		for i := range p.has {
 			p.has[i] = payload[i/8]&(0x80>>(i%8)) != 0
@@ -449,21 +523,12 @@ func (t *torrent) learnNode(p *peer, port uint16) {
 }
 
 // serve answers a peer's request for a block, while Polyfin shares and
-// unchokes it.
+// unchokes it, and fewer than pipeline messages wait for the peer.
 func (t *torrent) serve(p *peer, b block) {
-	t.mu.Lock()
-	ok := p.unchoked && t.info != nil && b.piece < len(t.have) && t.have[b.piece] && b.length > 0 && b.length <= 2*blockSize &&
-		b.offset+b.length <= t.info.pieceSize(b.piece)
-	t.mu.Unlock()
-	if !ok || !t.engine.up.allows() {
+	if !t.shares(p, b) || !t.engine.up.allows() || p.queued() > pipeline {
 		return
 	}
-	p.outMu.Lock()
-	queued := len(p.outbox)
-	p.outMu.Unlock()
-	if queued > pipeline {
-		return
-	}
+	// The block is 2*blockSize at most.
 	data := make([]byte, b.length)
 	if found, err := t.engine.store.read(pieceKey{t.hash, b.piece}, data, b.offset); !found || err != nil {
 		return
@@ -472,6 +537,15 @@ func (t *torrent) serve(p *peer, b block) {
 	binary.BigEndian.PutUint32(header, uint32(b.piece))
 	binary.BigEndian.PutUint32(header[4:], uint32(b.offset))
 	p.send(msgPiece, header, data)
+}
+
+// shares reports whether a peer may have a block: Polyfin unchokes it,
+// and has the piece, of which the block is 2*blockSize at most.
+func (t *torrent) shares(p *peer, b block) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return p.unchoked && t.info != nil && b.piece >= 0 && b.piece < len(t.have) && t.have[b.piece] && b.length > 0 &&
+		b.length <= 2*blockSize && b.offset+b.length <= t.info.pieceSize(b.piece)
 }
 
 // uploaded counts bytes shared.
@@ -595,14 +669,36 @@ func (t *torrent) fill(p *peer) {
 // received keeps a block a peer sent, and the piece once it is whole and
 // matches its hash.
 func (t *torrent) received(p *peer, index int, offset int64, data []byte) {
+	in, expected, whole := t.keepBlock(p, index, offset, data)
+	if !whole {
+		return
+	}
+	if sha1.Sum(in.data) != expected {
+		t.engine.config.Logger.Debug("A torrent's piece did not match its hash")
+		t.refill(p)
+		return
+	}
+	if err := t.engine.store.put(pieceKey{t.hash, index}, in.data); errors.Is(err, errClosed) {
+		return
+	} else if err != nil {
+		t.engine.config.Logger.Warn("A torrent's piece could not be kept", "error", err)
+		t.refill(p)
+		return
+	}
+	t.completed(index)
+}
+
+// keepBlock copies a block into its piece, and returns the piece and its
+// hash once it is whole; until then, it asks the peer for more.
+func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inflightPiece, Hash, bool) {
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	in := t.inflight[index]
 	b := block{piece: index, offset: offset, length: int64(len(data))}
 	delete(p.requests, b)
 	if in == nil || offset%blockSize != 0 || offset+int64(len(data)) > int64(len(in.data)) || in.got[offset/blockSize] {
 		t.fill(p)
-		t.mu.Unlock()
-		return
+		return nil, Hash{}, false
 	}
 	copy(in.data[offset:], data)
 	in.got[offset/blockSize] = true
@@ -610,28 +706,22 @@ func (t *torrent) received(p *peer, index int, offset int64, data []byte) {
 	t.downBytes += int64(len(data))
 	if in.left > 0 {
 		t.fill(p)
-		t.mu.Unlock()
-		return
+		return nil, Hash{}, false
 	}
 	delete(t.inflight, index)
-	expected := t.info.Pieces[index]
-	t.mu.Unlock()
-	if sha1.Sum(in.data) != expected {
-		t.engine.config.Logger.Debug("A torrent's piece did not match its hash")
-		t.mu.Lock()
-		t.fill(p)
-		t.mu.Unlock()
-		return
-	}
-	if err := t.engine.store.put(pieceKey{t.hash, index}, in.data); errors.Is(err, errClosed) {
-		return
-	} else if err != nil {
-		t.engine.config.Logger.Warn("A torrent's piece could not be kept", "error", err)
-		t.mu.Lock()
-		t.fill(p)
-		t.mu.Unlock()
-		return
-	}
+	return in, t.info.Pieces[index], true
+}
+
+// refill asks a peer for the blocks Polyfin lacks.
+func (t *torrent) refill(p *peer) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.fill(p)
+}
+
+// completed records a piece kept, tells the peers while Polyfin shares,
+// and asks them for more.
+func (t *torrent) completed(index int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.err != nil {
@@ -687,16 +777,21 @@ func (t *torrent) extended(p *peer, id byte, payload []byte) error {
 		if p.metadataID == 0 {
 			return nil
 		}
-		start := piece * metadataBlock
-		if !t.engine.up.allows() || t.infoData == nil || piece < 0 || start >= int64(len(t.infoData)) {
+		// The piece is checked against the info dictionary's pieces of
+		// metadataBlock before it is multiplied, which a large one would
+		// overflow. Like blocks, metadata is answered while fewer than
+		// pipeline messages wait for the peer.
+		pieces := int64(len(t.infoData)+metadataBlock-1) / metadataBlock
+		if !t.engine.up.allows() || piece < 0 || piece >= pieces || p.queued() > pipeline {
 			p.send(msgExtended, []byte{byte(p.metadataID)}, encode(map[string]any{"msg_type": 2, "piece": piece}))
 			return nil
 		}
+		start := piece * metadataBlock
 		end := min(start+metadataBlock, int64(len(t.infoData)))
 		p.send(msgExtended, []byte{byte(p.metadataID)},
 			encode(map[string]any{"msg_type": 1, "piece": piece, "total_size": len(t.infoData)}), t.infoData[start:end])
 	case 1:
-		t.receivedMetadata(int(piece), rest)
+		t.receivedMetadata(piece, rest)
 	}
 	return nil
 }
@@ -720,10 +815,11 @@ func (t *torrent) askMetadata(p *peer) {
 
 // receivedMetadata keeps a piece of the info dictionary, and reads it once
 // whole. The lock is held.
-func (t *torrent) receivedMetadata(piece int, data []byte) {
-	if t.info != nil || piece < 0 || piece >= len(t.metadataGot) {
+func (t *torrent) receivedMetadata(index int64, data []byte) {
+	if t.info != nil || index < 0 || index >= int64(len(t.metadataGot)) {
 		return
 	}
+	piece := int(index)
 	start := piece * metadataBlock
 	if len(data) != min(metadataBlock, len(t.metadata)-start) {
 		return

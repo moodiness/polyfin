@@ -44,6 +44,7 @@ With the interface missing, down or without an address, or the proxy not answeri
 - The file played is `fileIdx`, or the largest one when the addon names none, as Stremio does. The trackers of `sources` (`tracker:<url>`, HTTP, HTTPS or UDP) are announced to, and its DHT entries (`dht:<info hash>` or `dht:<host>:<port>`) have the torrent looked up on the DHT. Polyfin names no DHT bootstrap node: a lookup starts from the nodes the addon names and those the peers tell.
 - Pieces at the read position come first, then the start and the end of the file, for its index. They are kept on disk within a quarter of **Disk space for files being read (GB)** (**Settings › Playback**), and count in Health's **Source cache**.
 - uTP is off: peers are reached over TCP.
+- What peers, trackers, DHT nodes and the proxy send is checked against bounds before Polyfin keeps it: a malformed message ends only its own connection, announce or lookup, and the torrent goes on with the others. A peer that keeps asking without reading the answers is disconnected once 4 MiB wait for it.
 
 ## Only while playing
 

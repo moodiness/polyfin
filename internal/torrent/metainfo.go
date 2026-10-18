@@ -47,10 +47,12 @@ type Info struct {
 }
 
 // maxPieceLength and maxInfoSize bound what a torrent may claim, so that
-// a hostile peer's metadata cannot ask for unbounded memory.
+// a hostile peer's metadata cannot ask for unbounded memory; maxPieces is
+// the most pieces such an info dictionary lists, 20 bytes of hash each.
 const (
 	maxPieceLength = 64 << 20
 	maxInfoSize    = 16 << 20
+	maxPieces      = maxInfoSize / 20
 )
 
 // errInfo reports an info dictionary that does not describe a torrent.
@@ -76,8 +78,12 @@ func parseInfo(data []byte) (Info, error) {
 	for i := range info.Pieces {
 		copy(info.Pieces[i][:], pieces[i*20:])
 	}
+	// The files lie within the pieces, which a sum of lengths that
+	// overflows would not tell: a length is checked against the bytes the
+	// pieces leave, at most maxPieces*maxPieceLength, before it is added.
+	room := int64(len(info.Pieces)) * pieceLength
 	if length, ok := num(d, "length"); ok {
-		if length < 0 {
+		if length < 0 || length > room {
 			return Info{}, errInfo
 		}
 		info.Files = []File{{Path: info.Name, Length: length}}
@@ -89,7 +95,7 @@ func parseInfo(data []byte) (Info, error) {
 				return Info{}, errInfo
 			}
 			length, ok := num(f, "length")
-			if !ok || length < 0 {
+			if !ok || length < 0 || length > room-info.Length {
 				return Info{}, errInfo
 			}
 			parts := []string{info.Name}

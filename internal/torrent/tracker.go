@@ -102,10 +102,25 @@ func announceHTTP(ctx context.Context, route Route, u *url.URL, a announce) (tra
 	if response.StatusCode != http.StatusOK {
 		return trackerAnswer{}, fmt.Errorf("the tracker answered HTTP %d", response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxTrackerAnswer))
 	if err != nil {
 		return trackerAnswer{}, err
 	}
+	return parseHTTPAnswer(body)
+}
+
+// maxTrackerAnswer bounds what an HTTP tracker's answer is read of: 50
+// peers take 300 bytes compact and a few kilobytes as dictionaries, and a
+// longer answer is cut, then refused as malformed bencode.
+const maxTrackerAnswer = 1 << 20
+
+// maxTrackerInterval bounds the interval a tracker asks for, in seconds,
+// before it is a time.Duration, which a larger one would overflow; the
+// announces wait 30 minutes at most anyway.
+const maxTrackerInterval = 24 * 60 * 60
+
+// parseHTTPAnswer reads an HTTP tracker's bencoded answer.
+func parseHTTPAnswer(body []byte) (trackerAnswer, error) {
 	d, _, err := decodeDict(body)
 	if err != nil {
 		return trackerAnswer{}, err
@@ -115,7 +130,7 @@ func announceHTTP(ctx context.Context, route Route, u *url.URL, a announce) (tra
 	}
 	answer := trackerAnswer{interval: 30 * time.Minute}
 	if interval, ok := num(d, "interval"); ok && interval > 0 {
-		answer.interval = time.Duration(interval) * time.Second
+		answer.interval = time.Duration(min(interval, maxTrackerInterval)) * time.Second
 	}
 	switch peers := d["peers"].(type) {
 	case string:
