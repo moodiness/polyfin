@@ -534,8 +534,9 @@ func (s *Service) keptDescriptions(ctx context.Context, v view, list smartlists.
 	}
 	describers := make([]accounts.ID, 0, len(v.addons))
 	for _, entry := range v.addons {
-		// Smart lists judge the facts the addons without a language give.
-		if !own(entry.addon) && !translator(entry) && (list.Owner != nil || entry.shared) {
+		// Smart lists judge the facts the addons without a language give,
+		// else those given one that stand in for them (see standIn).
+		if !own(entry.addon) && (list.Owner != nil || entry.shared) {
 			describers = append(describers, entry.addon.ID)
 		}
 	}
@@ -560,7 +561,7 @@ func (s *Service) keptDescriptions(ctx context.Context, v view, list smartlists.
 			return nil, err
 		}
 		entry, ok := v.addon(addon)
-		if !ok || configOf(entry.addon) != config {
+		if !ok || configOf(entry.addon) != config || !v.factual(entry, metaType, metaID, list.Owner == nil) {
 			continue
 		}
 		var meta stremio.Meta

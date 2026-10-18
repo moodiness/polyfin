@@ -1640,14 +1640,17 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 // title: it describes its titles from what their files tell, for when no
 // addon does. An addon given a language is none of them, even when it
 // listed the title: it describes titles in its language only, for its
-// language's users (see languages.go).
+// language's users, unless no addon without a language describes the
+// title; then those given a language are, the user's language's first
+// (see languages.go).
 func describers(v view, r record, shared bool) []installed {
 	if r.Meta == nil {
 		return nil
 	}
+	standIn := v.standIn(r.Meta.Type, r.Meta.ID, shared)
 	var candidates []installed
 	for _, candidate := range v.addons {
-		if (!shared || candidate.shared) && !translator(candidate) && serves(candidate, "meta", r.Meta.Type, r.Meta.ID) {
+		if (!shared || candidate.shared) && (standIn || !translator(candidate)) && serves(candidate, "meta", r.Meta.Type, r.Meta.ID) {
 			candidates = append(candidates, candidate)
 		}
 	}
@@ -1661,6 +1664,9 @@ func describers(v view, r record, shared bool) []installed {
 			}
 			return 0
 		})
+	}
+	if standIn {
+		v.inLanguageOrder(candidates)
 	}
 	slices.SortStableFunc(candidates, func(a, b installed) int {
 		switch {
@@ -1716,10 +1722,11 @@ func (s *Service) TitleMeta(ctx context.Context, metaType, id string) (stremio.M
 }
 
 // serverMeta returns the description the addons of v, the server's view,
-// give of a title, as TitleMeta does: those without a language.
+// give of a title, as TitleMeta does: those without a language, else
+// those given one (see standIn).
 func (s *Service) serverMeta(ctx context.Context, v view, metaType, id string) (stremio.Meta, bool) {
 	for _, candidate := range v.addons {
-		if own(candidate.addon) || translator(candidate) || !candidate.addon.Manifest.Serves("meta", metaType, id) {
+		if own(candidate.addon) || !v.factual(candidate, metaType, id, false) || !candidate.addon.Manifest.Serves("meta", metaType, id) {
 			continue
 		}
 		if kept, err := s.keptMeta(ctx, candidate, metaType, id); err == nil {
@@ -2301,19 +2308,13 @@ const peopleGrace = 300 * time.Millisecond
 
 // search looks a term up in the search catalogs of the user's addons: of
 // those given a language (see languages.go), the user's translators only,
-// whose results show the user's language.
+// whose results show the user's language, unless no addon without a
+// language searches titles of a kind: then every translator searches
+// them, for every user.
 func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind, limit int) ([]Item, error) {
-	var sources []source
-	for _, entry := range v.addons {
-		if translator(entry) && !slices.ContainsFunc(v.translators, func(t installed) bool { return t.addon.ID == entry.addon.ID }) {
-			continue
-		}
-		for _, catalog := range entry.addon.Manifest.Catalogs {
-			if kind, ok := titleKind(catalog.Type); ok && slices.Contains(kinds, kind) && searchable(catalog) {
-				sources = append(sources, source{addon: entry, catalog: catalog, search: term, first: true})
-			}
-		}
-	}
+	sources := standInCatalogs(v, kinds, true, func(entry installed, catalog stremio.Catalog) (source, bool) {
+		return source{addon: entry, catalog: catalog, search: term, first: true}, searchable(catalog)
+	})
 	if len(sources) == 0 {
 		return nil, nil
 	}
@@ -2331,7 +2332,7 @@ func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind,
 		}
 		r.Parent = nil
 		items = append(items, item)
-		if translator(title.src.addon) {
+		if translator(title.src.addon) && !v.standIn(r.Meta.Type, r.Meta.ID, false) {
 			// What a translator found is described in its language: it
 			// stands for the title only until another addon lists it, and
 			// never replaces what another addon listed.

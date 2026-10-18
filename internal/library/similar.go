@@ -107,10 +107,14 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 // user input and offer one of its genres, each narrowed to the first of
 // its genres it offers. The catalogs of the user's libraries come first;
 // the other catalogs of the user's addons follow, which also covers those
-// that collection libraries group, without reading the collections.
+// that collection libraries group, without reading the collections. An
+// addon given a language describes titles in it only: its catalogs list
+// for its libraries, unless no addon without a language offers such a
+// catalog (see languages.go).
 func similarSourcesOf(v view, title Item) []source {
 	var sources []source
 	seen := map[catalogKey]bool{}
+	plain := false
 	add := func(addon installed, catalog stremio.Catalog) {
 		key := catalogKey{addon.addon.ID, catalog.Type, catalog.ID, ""}
 		if kind, _ := titleKind(catalog.Type); kind != title.Kind || seen[key] || !catalog.Browsable() || len(sources) >= similarSources {
@@ -127,6 +131,7 @@ func similarSourcesOf(v view, title Item) []source {
 				})
 				if i >= 0 {
 					sources = append(sources, source{addon: addon, catalog: catalog, genre: extra.Options[i]})
+					plain = plain || !translator(addon)
 					return
 				}
 			}
@@ -137,13 +142,19 @@ func similarSourcesOf(v view, title Item) []source {
 		add(l.addon, l.catalog)
 	}
 	for _, entry := range v.addons {
-		// An addon given a language describes titles in it only: its
-		// catalogs list for its libraries.
-		if translator(entry) {
-			continue
+		if !translator(entry) {
+			for _, catalog := range entry.addon.Manifest.Catalogs {
+				add(entry, catalog)
+			}
 		}
-		for _, catalog := range entry.addon.Manifest.Catalogs {
-			add(entry, catalog)
+	}
+	if !plain {
+		for _, entry := range v.addons {
+			if translator(entry) {
+				for _, catalog := range entry.addon.Manifest.Catalogs {
+					add(entry, catalog)
+				}
+			}
 		}
 	}
 	return sources

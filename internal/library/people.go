@@ -200,19 +200,12 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	if err != nil {
 		return Page{}, err
 	}
-	var sources []source
-	for _, entry := range v.addons {
-		// A title's people are its facts: an addon given a language tells
-		// none of them (see languages.go).
-		if translator(entry) {
-			continue
-		}
-		for _, catalog := range entry.addon.Manifest.Catalogs {
-			if kind, ok := titleKind(catalog.Type); ok && slices.Contains(kinds, kind) && searchesPeople(catalog) {
-				sources = append(sources, source{addon: entry, catalog: catalog, search: r.Person.Name})
-			}
-		}
-	}
+	// A title's people are its facts: an addon given a language tells
+	// none of them, unless no addon without a language searches people
+	// (see languages.go).
+	sources := standInCatalogs(v, kinds, false, func(entry installed, catalog stremio.Catalog) (source, bool) {
+		return source{addon: entry, catalog: catalog, search: r.Person.Name}, searchesPeople(catalog)
+	})
 	var items []Item
 	var records []record
 	seen := map[accounts.ID]bool{}

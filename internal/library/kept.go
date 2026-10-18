@@ -400,8 +400,9 @@ func (s *Service) fetchKeptMeta(ctx context.Context, addon installed, key metaKe
 		s.logger.Debug("A description could not be kept", "addon", addon.addon.Manifest.Name, "error", err)
 	}
 	// A translator's people are not the title's: its facts are those of
-	// the addons without a language (see languages.go).
-	if kind, ok := titleKind(key.metaType); ok && (kind == KindMovie || kind == KindSeries) && !translator(addon) {
+	// the addons without a language, unless it stands in for them for
+	// every user (see languages.go).
+	if kind, ok := titleKind(key.metaType); ok && (kind == KindMovie || kind == KindSeries) && (!translator(addon) || s.standsInForAll(ctx, key.metaType, key.id)) {
 		if err := s.saveCredits(ctx, itemID(titleKey(kind, key.id)), people(meta), addon.confined); err != nil {
 			s.logger.Debug("The people of a title could not be recorded", "addon", addon.addon.Manifest.Name, "error", err)
 		}

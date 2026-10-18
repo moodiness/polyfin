@@ -153,13 +153,14 @@ func (v view) sharedAddon(id *accounts.ID) bool {
 }
 
 // rates reports whether one of the server's addons the user reaches can
-// describe a title, which gives its rating and genres.
+// describe a title, which gives its rating and genres: one without a
+// language, else one given a language (see standIn).
 func (v view) rates(r record) bool {
 	if r.Meta == nil {
 		return false
 	}
 	for _, entry := range v.addons {
-		if entry.shared && !translator(entry) && entry.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) {
+		if entry.shared && entry.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) && v.factual(entry, r.Meta.Type, r.Meta.ID, true) {
 			return true
 		}
 	}

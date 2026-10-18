@@ -480,3 +480,90 @@ func TestSearchAsksTheTranslatorsOfTheUsersLanguage(t *testing.T) {
 		t.Errorf("artwork after the French search: %q %v", art.URL, err)
 	}
 }
+
+// A server whose only metadata addon was given a language works as if it
+// had none, for every user: the translator stands in for the addons
+// without a language, facts and episodes included, and search asks its
+// catalogs. Once an addon without a language describes the title, the
+// translator is one again.
+func TestATranslatorDescribesTitlesNoOtherAddonDescribes(t *testing.T) {
+	t.Parallel()
+	e := languageEnv{env: newEnv(t), base: describedAddon()}
+	e.installIn(e.base, "fr")
+	// The administrator keeps the server's descriptions, the member reads
+	// a language no addon has, french the translator's.
+	e.member = e.speaking(e.member, "de")
+	french, err := e.users.CreateUser(t.Context(), accounts.NewUser{Name: "french", Password: "correct horse"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	french = e.speaking(french, "fr")
+	movies := e.titleIDs("Top (Movies)")
+	shows := e.titleIDs("Top (Shows)")
+
+	for _, user := range []accounts.User{e.admin, e.member, french} {
+		item, err := e.service.Item(t.Context(), user, movies["The Heist"])
+		if err != nil || item.Overview != "A crew plans a heist." || !slices.Equal(item.Genres, []string{"Drama"}) || item.OfficialRating != "PG" ||
+			len(item.People) != 1 || item.People[0].Name != "Ana Actor" {
+			t.Fatalf("%s: the movie %q %v %q %+v %v", user.Name, item.Overview, item.Genres, item.OfficialRating, item.People, err)
+		}
+		seasons, err := e.service.Seasons(t.Context(), user, shows["The Show"])
+		if err != nil || len(seasons) != 1 {
+			t.Fatalf("%s: seasons %v %v", user.Name, names(seasons), err)
+		}
+		episodes, err := e.service.Episodes(t.Context(), user, shows["The Show"], nil)
+		if err != nil || len(episodes) != 2 || episodes[0].Name != "Pilot" {
+			t.Fatalf("%s: episodes %v %v", user.Name, names(episodes), err)
+		}
+		if show, err := e.service.Item(t.Context(), user, shows["The Show"]); err != nil || show.OfficialRating != "TV-PG" {
+			t.Errorf("%s: the series %q %v", user.Name, show.OfficialRating, err)
+		}
+	}
+
+	// The title's people open, with the titles they are credited in.
+	item, _ := e.service.Item(t.Context(), e.admin, movies["The Heist"])
+	page, err := e.service.PersonTitles(t.Context(), e.admin, item.People[0].ID, []Kind{KindMovie}, 10)
+	if err != nil || !slices.Equal(names(page.Items), []string{"The Heist"}) {
+		t.Errorf("the actor's titles: %v %v", names(page.Items), err)
+	}
+
+	// Parental control and blocked genres judge the translator's facts.
+	child := e.restrict("child", accounts.ParentalControl{MaxRating: new(13)})
+	if item, err := e.service.Item(t.Context(), child, movies["The Heist"]); err != nil || item.OfficialRating != "PG" {
+		t.Errorf("the child's page: %q %v", item.OfficialRating, err)
+	}
+	blocking := e.restrict("blocking", accounts.ParentalControl{})
+	blocking, err = e.users.UpdateUser(t.Context(), blocking.ID, accounts.UserChanges{BlockedGenres: &[]string{"Drama"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(e.children(blocking, "Top (Movies)", 0, 10).Items); !slices.Equal(got, []string{"Plain"}) {
+		t.Errorf("blocking drama: %v", got)
+	}
+
+	// Search asks the translator's search catalog for every user.
+	for _, user := range []accounts.User{e.admin, e.member} {
+		found, err := e.service.Search(t.Context(), user, "heist", []Kind{KindMovie}, 10)
+		if err != nil || !slices.Equal(names(found), []string{"The Heist"}) || found[0].ID != movies["The Heist"] {
+			t.Errorf("%s: search %v %v", user.Name, names(found), err)
+		}
+	}
+	if !slices.ContainsFunc(e.base.catalogRequests(), func(request string) bool { return strings.Contains(request, "search") }) {
+		t.Errorf("search did not ask the translator: %v", e.base.catalogRequests())
+	}
+
+	// An addon without a language that describes the movie describes it
+	// again: the translator only translates it, for its language's users.
+	e.install(addons.Shared(), &fakeAddon{
+		manifest: stremio.Manifest{ID: "plain", Name: "Plain", Version: "1", Types: []string{"movie"},
+			Resources: []stremio.Resource{{Name: "meta", IDPrefixes: []string{"tt"}}}},
+		metas: map[string]stremio.Meta{"movie/tt1": {ID: "tt1", Type: "movie", Name: "The Heist", Description: "Plain overview.",
+			Genres: stremio.Names{"Thriller"}}},
+	})
+	for user, want := range map[*accounts.User]string{&e.admin: "Plain overview.", &e.member: "Plain overview.", &french: "A crew plans a heist."} {
+		if item, err := e.service.Item(t.Context(), *user, movies["The Heist"]); err != nil || item.Overview != want ||
+			!slices.Equal(item.Genres, []string{"Thriller"}) {
+			t.Errorf("%s with an addon without a language: %q %v %v", user.Name, item.Overview, item.Genres, err)
+		}
+	}
+}

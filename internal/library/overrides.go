@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // Administrators' edits.
@@ -706,20 +707,13 @@ func (s *Service) RemoteSearches(ctx context.Context, kind Kind) (bool, error) {
 }
 
 // remoteSources are the search catalogs of titles of kind of the addons of
-// v that describe titles, searching name.
+// v that describe titles, searching name: of those given a language, which
+// describe titles for their language's users only, none, unless no addon
+// without a language offers such a catalog (see standInCatalogs). A local
+// folder's titles are those this search finds.
 func remoteSources(v view, kind Kind, name string) []source {
-	var sources []source
-	for _, entry := range v.addons {
-		// A local folder's titles are those this search finds; an addon
-		// given a language describes them for its language's users only.
-		if !entry.addon.Manifest.HasResource("meta") || entry.addon.Local() || translator(entry) {
-			continue
-		}
-		for _, catalog := range entry.addon.Manifest.Catalogs {
-			if catalogKind, ok := titleKind(catalog.Type); ok && catalogKind == kind && searchable(catalog) {
-				sources = append(sources, source{addon: entry, catalog: catalog, search: name})
-			}
-		}
-	}
-	return sources
+	return standInCatalogs(v, []Kind{kind}, false, func(entry installed, catalog stremio.Catalog) (source, bool) {
+		return source{addon: entry, catalog: catalog, search: name},
+			entry.addon.Manifest.HasResource("meta") && !entry.addon.Local() && searchable(catalog)
+	})
 }

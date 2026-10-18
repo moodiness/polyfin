@@ -10,7 +10,8 @@ import (
 
 // enrich completes the description of an IPTV source's movie or series
 // with that of the first of the user's other addons (the server's only
-// when shared is set) that describes its IMDb or TMDB identifier, when the
+// when shared is set) that describes its IMDb or TMDB identifier, those
+// given a language only when they stand in (see standIn), when the
 // source's options ask for it: its artwork, overview, cast, ratings and
 // age rating, the source's own description filling what it lacks. The
 // title's identifiers, name, category and episodes stay the source's,
@@ -33,7 +34,7 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 	}
 	for _, id := range ids {
 		for _, candidate := range v.addons {
-			if own(candidate.addon) || translator(candidate) || shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", meta.Type, id) {
+			if own(candidate.addon) || !v.factual(candidate, meta.Type, id, shared) || shared && !candidate.shared || !candidate.addon.Manifest.Serves("meta", meta.Type, id) {
 				continue
 			}
 			var described stremio.Meta

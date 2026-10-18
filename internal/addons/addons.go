@@ -396,6 +396,19 @@ func (s *Store) Find(ctx context.Context, id accounts.ID) (Addon, error) {
 	return addon, nil
 }
 
+// All returns every addon installed, by anyone, in no order.
+func (s *Store) All(ctx context.Context) ([]Addon, error) {
+	snap, err := s.current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]Addon, 0, len(snap.addons))
+	for _, addon := range snap.addons {
+		list = append(list, addon)
+	}
+	return list, nil
+}
+
 // Names maps the key of each addon installed, by anyone, to the name it is
 // listed under: its base address (see stremio.BaseURL), by which the
 // metrics count its requests, never shown.

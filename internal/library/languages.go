@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -11,14 +12,22 @@ import (
 
 // A server addon given a language (see addons.Addon.Language) describes
 // titles in it for the users who chose that language as their metadata
-// language, and for no one else: it is never one of describers, so a
-// title's facts, its genres, ratings, people and identifiers, are those
-// the addons without a language give, whatever the user's language, and
+// language, and for no one else: it is none of describers, so a title's
+// facts, its genres, ratings, people and identifiers, are those the
+// addons without a language give, whatever the user's language, and
 // parental control, blocked genres, hidden titles and smart lists judge
 // every user alike. What a translator gives is a title's name, overview,
 // poster, backdrop and logo, and its episodes' names, overviews and
 // images (see translation). Its descriptions are kept as any addon's,
 // by addon: one language's are never another's.
+//
+// Translators stand in for the addons without a language where none of
+// those describes a title (see standIn): they then describe it for every
+// user, facts and episodes included, the user's language's first, else in
+// the order of the sources. So a server whose metadata addons all have a
+// language works as if they had none. Search, people search and similar
+// titles likewise ask the translators' catalogs, for every user, when no
+// addon without a language offers the catalogs they need.
 
 // translationReaders bounds the listings whose descriptions in a user's
 // language are read in the background at once, each one title at a time
@@ -71,6 +80,93 @@ func (v view) translatorsOf(metaType, id string) []installed {
 		}
 	}
 	return result
+}
+
+// standIn reports whether the translators of v describe titles of a type
+// and identifier for every user: none of the addons of v without a
+// language, Polyfin's own sources aside, the server's only when shared is
+// set, describes them.
+func (v view) standIn(metaType, id string, shared bool) bool {
+	for _, entry := range v.addons {
+		if !translator(entry) && !own(entry.addon) && (!shared || entry.shared) && serves(entry, "meta", metaType, id) {
+			return false
+		}
+	}
+	return true
+}
+
+// factual reports whether an addon of v gives the facts of titles of a
+// type and identifier: it has no language, or translators stand in for
+// those titles (see standIn), the server's addons only when shared is set.
+func (v view) factual(entry installed, metaType, id string, shared bool) bool {
+	return !translator(entry) || v.standIn(metaType, id, shared)
+}
+
+// standsInForAll reports whether translators stand in for every user for
+// titles of a type and identifier (see standIn): no enabled addon without
+// a language, the server's or a user's own, describes them. Only then are
+// a translator's people the title's: they are recorded for everyone.
+func (s *Service) standsInForAll(ctx context.Context, metaType, id string) bool {
+	list, err := s.addons.All(ctx)
+	if err != nil {
+		return false
+	}
+	var v view
+	for _, addon := range list {
+		if addon.Enabled {
+			v.addons = append(v.addons, installed{addon: addon})
+		}
+	}
+	return v.standIn(metaType, id, false)
+}
+
+// inLanguageOrder orders addons of v the user's language's first, keeping
+// the order of the others.
+func (v view) inLanguageOrder(entries []installed) {
+	if v.language == "" {
+		return
+	}
+	slices.SortStableFunc(entries, func(a, b installed) int {
+		switch {
+		case (a.addon.Language == v.language) == (b.addon.Language == v.language):
+			return 0
+		case a.addon.Language == v.language:
+			return -1
+		}
+		return 1
+	})
+}
+
+// standInCatalogs returns, as sources in the order of the sources, the
+// catalogs of the addons of v that a feature asks: offers picks those it
+// needs, among the catalogs of kinds. Of the translators' catalogs, those
+// of the user's translators are asked when mine is set, and all of them,
+// for every user, for the kinds no addon without a language offers a
+// catalog of.
+func standInCatalogs(v view, kinds []Kind, mine bool, offers func(installed, stremio.Catalog) (source, bool)) []source {
+	var found []source
+	covered := map[Kind]bool{}
+	for _, entry := range v.addons {
+		for _, catalog := range entry.addon.Manifest.Catalogs {
+			kind, ok := titleKind(catalog.Type)
+			if !ok || !slices.Contains(kinds, kind) {
+				continue
+			}
+			if src, ok := offers(entry, catalog); ok {
+				found = append(found, src)
+				covered[kind] = covered[kind] || !translator(entry)
+			}
+		}
+	}
+	return slices.DeleteFunc(found, func(src source) bool {
+		kind, _ := titleKind(src.catalog.Type)
+		return translator(src.addon) && covered[kind] && !(mine && v.translates(src.addon))
+	})
+}
+
+// translates reports whether an addon is one of the user's translators.
+func (v view) translates(entry installed) bool {
+	return slices.ContainsFunc(v.translators, func(t installed) bool { return t.addon.ID == entry.addon.ID })
 }
 
 // listingKey marks the context of a listing of many titles described one
