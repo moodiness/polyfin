@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 const (
@@ -104,11 +106,15 @@ func (m *Manager) Record(ctx context.Context, key Key, open Opener, path string)
 	}
 	defer release()
 	cmd := exec.CommandContext(ctx, m.ffmpeg, remux.recordArgs(path)...)
+	interrupt, err := process.Interruptible(cmd)
+	if err != nil {
+		return err
+	}
 	var again *time.Timer
 	cmd.Cancel = func() error {
-		err := cmd.Process.Signal(os.Interrupt)
+		err := interrupt()
 		if err == nil {
-			again = time.AfterFunc(m.grace, func() { _ = cmd.Process.Signal(os.Interrupt) })
+			again = time.AfterFunc(m.grace, func() { _ = interrupt() })
 		}
 		return err
 	}

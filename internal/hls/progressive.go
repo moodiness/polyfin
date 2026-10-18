@@ -6,12 +6,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // progressiveKeyframes is how often converted video streamed as one file
@@ -99,17 +100,16 @@ func (m *Manager) Progressive(ctx context.Context, key Key, open Opener, start t
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
 	cmd.Stdout = w
-	// FFmpeg's progress comes on file descriptor 3 (see progressiveArgs).
-	progress, written, err := os.Pipe()
+	// FFmpeg's progress comes on pipe:3 (see progressiveArgs).
+	outputs, err := process.NewOutputs(cmd, 1)
 	if err != nil {
 		return err
 	}
-	cmd.ExtraFiles = []*os.File{written}
+	progress := outputs.Readers[0]
 	p.position.Store(int64(start))
 	err = cmd.Start()
-	_ = written.Close()
+	outputs.Started(cmd, err)
 	if err != nil {
-		_ = progress.Close()
 		return fmt.Errorf("start FFmpeg: %w", err)
 	}
 	watched := make(chan struct{})

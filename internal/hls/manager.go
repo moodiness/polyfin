@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/metrics"
+	"github.com/moodiness/polyfin/internal/process"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
@@ -1436,32 +1437,21 @@ func (e *encoding) run(ctx context.Context, j *job) {
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
 	output, err := cmd.StdoutPipe()
-	// Each extracted subtitle stream comes on a pipe of its own, from file
-	// descriptor 3 on, then FFmpeg's progress (see Remux.args).
-	var readers []*os.File
-	for range len(e.remux.Subtitles) + 1 {
-		if err != nil {
-			break
-		}
-		var r, w *os.File
-		if r, w, err = os.Pipe(); err == nil {
-			readers = append(readers, r)
-			cmd.ExtraFiles = append(cmd.ExtraFiles, w)
-		}
+	// Each extracted subtitle stream comes on an output of its own, pipe:3
+	// on, then FFmpeg's progress (see Remux.args).
+	var outputs *process.Outputs
+	if err == nil {
+		outputs, err = process.NewOutputs(cmd, len(e.remux.Subtitles)+1)
 	}
 	if err == nil {
 		err = cmd.Start()
-	}
-	for _, w := range cmd.ExtraFiles {
-		_ = w.Close()
+		outputs.Started(cmd, err)
 	}
 	if err != nil {
-		for _, r := range readers {
-			_ = r.Close()
-		}
 		e.finish(j, fmt.Errorf("start FFmpeg: %w", err))
 		return
 	}
+	readers := outputs.Readers
 	e.mu.Lock()
 	e.runs++
 	e.mu.Unlock()

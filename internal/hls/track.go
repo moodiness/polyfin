@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // track is the audio a kept video plays (see KeepVideo): one track of the
@@ -247,25 +249,20 @@ func (t *track) run(ctx context.Context, j *trackJob) {
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
 	output, err := cmd.StdoutPipe()
-	var progress, w *os.File
+	// FFmpeg's progress comes on pipe:3 (see trackArgs).
+	var outputs *process.Outputs
 	if err == nil {
-		if progress, w, err = os.Pipe(); err == nil {
-			cmd.ExtraFiles = []*os.File{w}
-		}
+		outputs, err = process.NewOutputs(cmd, 1)
 	}
 	if err == nil {
 		err = cmd.Start()
-	}
-	if w != nil {
-		_ = w.Close()
+		outputs.Started(cmd, err)
 	}
 	if err != nil {
-		if progress != nil {
-			_ = progress.Close()
-		}
 		t.finish(j, fmt.Errorf("start FFmpeg: %w", err))
 		return
 	}
+	progress := outputs.Readers[0]
 	t.mu.Lock()
 	t.runs++
 	t.mu.Unlock()

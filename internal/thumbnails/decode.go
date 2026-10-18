@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"os"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/process"
 )
 
 // Keyframes are decoded by FFmpeg, each alone, as soon as it is read:
@@ -54,7 +54,7 @@ func decodeKeyframe(ctx context.Context, ffmpeg string, hw *hls.Hardware, video 
 		args = append(args, "-filter_complex", graph)
 		for i := range filters {
 			// The first output goes to the standard output, the others to
-			// the descriptors after the standard error.
+			// pipe:3 on (see process.Outputs).
 			fd := 1
 			if i > 0 {
 				fd = 2 + i
@@ -66,37 +66,24 @@ func decodeKeyframe(ctx context.Context, ffmpeg string, hw *hls.Hardware, video 
 	cmd.Stdin = bytes.NewReader(append(streamHead(video), cluster(0, frame)...))
 	stderr := &bytes.Buffer{}
 	cmd.Stderr = &limitedBuffer{b: stderr, limit: 4 << 10}
-	outputs := make([]io.ReadCloser, len(filters))
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
-	outputs[0] = stdout
-	var writers []*os.File
-	defer func() {
-		for _, w := range writers {
-			_ = w.Close()
-		}
-	}()
-	for i := 1; i < len(filters); i++ {
-		r, w, err := os.Pipe()
-		if err != nil {
-			return nil, err
-		}
-		outputs[i] = r
-		defer r.Close()
-		writers = append(writers, w)
-		cmd.ExtraFiles = append(cmd.ExtraFiles, w)
+	// The other outputs come on pipe:3 on.
+	extra, err := process.NewOutputs(cmd, len(filters)-1)
+	if err != nil {
+		return nil, err
 	}
-	if err := cmd.Start(); err != nil {
+	outputs := append([]io.ReadCloser{stdout}, extra.Readers...)
+	for _, r := range extra.Readers {
+		defer r.Close()
+	}
+	err = cmd.Start()
+	extra.Started(cmd, err)
+	if err != nil {
 		return nil, fmt.Errorf("start FFmpeg: %w", err)
 	}
-	// FFmpeg holds the write ends now: those here are closed, so that a
-	// read ends with FFmpeg.
-	for _, w := range writers {
-		_ = w.Close()
-	}
-	writers = nil
 	images := make([]*image.YCbCr, len(filters))
 	errs := make([]error, len(filters))
 	var wg sync.WaitGroup

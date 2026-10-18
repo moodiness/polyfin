@@ -14,6 +14,7 @@ require (
 	golang.org/x/image v0.46.0
 	golang.org/x/net v0.60.0
 	golang.org/x/sync v0.24.0
+	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0
 )
 
@@ -36,7 +37,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
