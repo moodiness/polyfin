@@ -6,20 +6,25 @@ It runs the very server of the Docker image, `polyfin serve`, with the same admi
 
 ## Install
 
-Each release has a package per system:
+Each release has a package per system, among the files of its GitHub release:
 
 | System | Package |
 | --- | --- |
 | Windows, x64 | `Polyfin-Desktop-<version>-windows-x64-setup.exe`, an installer |
-| macOS, Apple silicon | `Polyfin-Desktop-<version>-macos-arm64.dmg` |
-| macOS, Intel | `Polyfin-Desktop-<version>-macos-x64.dmg` |
+| macOS 13 or later, Apple silicon | `Polyfin-Desktop-<version>-macos-arm64.dmg` |
+| macOS 13 or later, Intel | `Polyfin-Desktop-<version>-macos-x64.dmg` |
 | Linux, x64 or arm64 | `polyfin-desktop_<version>_amd64.deb` or `_arm64.deb`, and `Polyfin-Desktop-<version>-linux-x86_64.AppImage` or `-aarch64.AppImage` |
 
-The packages are not signed yet, so the systems warn before opening them the first time:
+Each holds the app, `polyfin-desktop`, beside what it runs: the server, `polyfin`, the very one of the Docker image; PostgreSQL 18's programs; jellyfin-web, unmodified; the fallback fonts; and their licenses, in the folder `licenses`. FFmpeg is downloaded at the first start (see [First start](#first-start)).
+
+- **Windows:** the installer installs Polyfin for you alone, without administrator rights, in `%LOCALAPPDATA%\Programs\Polyfin`, adds it to the Start menu, and offers to start it at the end. To remove it, uninstall Polyfin under Settings › Apps › Installed apps: its programs, its Start menu entry and Start with the computer go, and the data folder stays (see [Folders](#folders)).
+- **macOS:** open the disk image and drag Polyfin to Applications. To remove it, move it from Applications to the Bin.
+- **Linux:** install the `.deb` with `sudo apt install ./polyfin-desktop_<version>_amd64.deb`, then start Polyfin from the applications menu. It goes in `/opt/polyfin`, with the command `polyfin-desktop`; `sudo apt remove polyfin-desktop` removes it. An AppImage needs no installation: make it executable with `chmod +x`, then run it. Both need glibc 2.35 or later, as in Ubuntu 22.04 or Debian 12, and later releases. A system without FUSE runs an AppImage with `--appimage-extract-and-run` after its name.
+
+The packages are not signed yet, so Windows and macOS warn before opening them the first time:
 
 - **Windows:** SmartScreen says that it protected your computer. Choose More info, then Run anyway.
-- **macOS:** drag Polyfin to Applications, then open it with a right click on it and Open, and Open again in the dialog. On recent versions of macOS, open System Settings › Privacy & Security instead, and choose Open Anyway beside the line about Polyfin.
-- **Linux:** install the `.deb` with `sudo apt install ./polyfin-desktop_<version>_amd64.deb`, then start Polyfin from the applications menu. An AppImage needs no installation: make it executable with `chmod +x`, then run it.
+- **macOS:** once Polyfin is in Applications, open it with a right click on it and Open, and Open again in the dialog. On recent versions of macOS, which offer no Open there, try to open it once, then open System Settings › Privacy & Security, and choose Open Anyway beside the line about Polyfin.
 
 ## First start
 
@@ -140,3 +145,17 @@ For development and tests, these variables of the app change where it runs from.
 | `POLYFIN_DESKTOP_TOOLS` | JSON file of the FFmpeg downloads, instead of the pinned ones: a local server's, for tests |
 
 `polyfin-desktop -headless` runs the app without the icon, the browser and the login item, logging to the terminal too, until it is interrupted. `scripts/desktop-smoke.py` starts it so twice, on a data folder of its own, with a local server for FFmpeg and a proxy that refuses every request for outside, and checks that quitting leaves no process: CI runs it on Linux, Windows and macOS. The other variables, such as `POLYFIN_LISTEN`, reach the server as they are. See [Development](development.md) to build the server and the admin app; the app itself builds with `go build ./cmd/polyfin-desktop`, which needs cgo on macOS, for the menu bar.
+
+### Building the packages
+
+The scripts of `scripts/packaging` build the packages into `dist/packages`, as CI does, for the version in `VERSION` (`dev` otherwise). Each needs Go, Node.js for the admin app, Python 3, and Docker:
+
+| Script | Builds | Where |
+| --- | --- | --- |
+| `macos.sh arm64`, `macos.sh x64` | The `.dmg` of Apple silicon or Intel | On a Mac |
+| `windows.sh` | The Windows installer, with NSIS | On Linux or macOS |
+| `linux.sh amd64`, `linux.sh arm64` | The `.deb` and the AppImage | On Linux or macOS |
+
+Each takes PostgreSQL 18 from a pinned build: EnterpriseDB's binaries for Windows and macOS, which postgresql.org links, and for Linux a build from PostgreSQL's source made by `postgresql-linux.Dockerfile`, on Ubuntu 22.04 with ICU, which runs from any folder. jellyfin-web and the fonts come from the Docker image's stages, through `files.sh`; a Mac without Docker is given the folder it made with `POLYFIN_DESKTOP_FILES`. Every download is checked against its checksum, and kept in `~/.cache/polyfin-packaging`.
+
+`scripts/packaging/test.sh <package>` installs or opens a package on the system it is for, checks what it holds, runs `desktop-smoke.py --installed` on the installed app, which then finds its programs itself, and removes it: CI runs it on Windows, macOS and Linux runners for every package, before a release gets them. It changes the system it runs on: run it on a throwaway machine or container.

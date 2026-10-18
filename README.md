@@ -63,7 +63,7 @@ docker compose up -d
 2. Enter the one-time setup code from the log (`docker compose logs polyfin`) to create the administrator.
 3. Continue with [Getting started](docs/getting-started.md).
 
-Without Docker, [Polyfin Desktop](docs/desktop.md) runs Polyfin on Windows, macOS or Linux, with its own database, from an icon in the tray.
+Without Docker, [Polyfin Desktop](docs/desktop.md) runs Polyfin on Windows, macOS or Linux, with its own database, from an icon in the tray: each release has an installer for Windows, a disk image for macOS, and a `.deb` and an AppImage for Linux.
 
 [Installation](docs/installation.md) covers:
 - pinning a version;
