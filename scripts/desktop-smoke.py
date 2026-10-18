@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke test of Polyfin Desktop, run by CI on each system.
 
-Usage: desktop-smoke.py <polyfin-desktop executable> <install folder> <work folder>
+Usage: desktop-smoke.py [--installed] <polyfin-desktop executable> <install folder> <work folder>
 
 The install folder holds polyfin (polyfin.exe) and postgresql/{bin,lib,share},
 as the packages lay them out. The app runs with -headless, on a data folder
@@ -10,6 +10,11 @@ fake FFmpeg from a local server and starts the server, whose admin app must
 answer; the app is then interrupted, and none of its processes may remain.
 The second start must reuse the cluster. Every request for outside goes
 through a local proxy that refuses it, and is listed.
+
+With --installed, the app is that of an installed package, which finds its
+install folder itself: POLYFIN_DESKTOP_INSTALL_DIR is not set, and the
+folder the app logs must be the one given, or any with "auto", such as an
+AppImage's, which is mounted where the system chooses.
 
 Python's standard library only: it runs on Linux, macOS and Windows runners.
 """
@@ -137,9 +142,21 @@ def wait_ready(listen, timeout):
     return None
 
 
+def same_folder(a, b):
+    return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
+def logged_install(log):
+    """The install folder the app's last start logged."""
+    found = re.findall(r'msg="Polyfin Desktop starts".*? install=("(?:[^"\\]|\\.)*"|\S+)', log)
+    if not found:
+        return None
+    return json.loads(found[-1]) if found[-1].startswith('"') else found[-1]
+
+
 def run_app(app, env, data, install, listen):
     """Starts the app, waits for the admin app, interrupts the app, and
-    returns the PIDs it ran."""
+    returns the PIDs it ran. install is None when any folder will do."""
     flags = subprocess.CREATE_NEW_PROCESS_GROUP if WINDOWS else 0
     process = subprocess.Popen([app, "-headless"], env=env, creationflags=flags)
     status = wait_ready(listen, 300)
@@ -148,6 +165,12 @@ def run_app(app, env, data, install, listen):
         process.kill()
         sys.exit("the admin app never answered with its database ready:\n" + log)
     print("status:", json.dumps(status))
+    started = logged_install(log)
+    if started is None or (install is not None and not same_folder(started, install)):
+        process.kill()
+        sys.exit("the app runs from %r, not from %r" % (started, install))
+    install = started
+    print("install folder:", install)
     servers = [int(p) for p in re.findall(r'msg="The server started" pid=(\d+)', log)]
     with open(os.path.join(data, "postgresql", "postmaster.pid")) as f:
         postmaster = int(f.readline())
@@ -176,7 +199,14 @@ def run_app(app, env, data, install, listen):
 
 
 def main():
-    app, install, work = (os.path.abspath(a) for a in sys.argv[1:4])
+    args = sys.argv[1:]
+    installed = args[:1] == ["--installed"]
+    if installed:
+        args = args[1:]
+    if len(args) != 3:
+        sys.exit(__doc__)
+    app, work = os.path.abspath(args[0]), os.path.abspath(args[2])
+    install = None if installed and args[1] == "auto" else os.path.abspath(args[1])
     data = os.path.join(work, "data")
     os.makedirs(work, exist_ok=True)
 
@@ -199,8 +229,10 @@ def main():
     listen = "127.0.0.1:%d" % free_port()
     proxy = "http://127.0.0.1:%d" % fake_port
     env = dict(os.environ)
+    env.pop("POLYFIN_DESKTOP_INSTALL_DIR", None)
+    if not installed:
+        env["POLYFIN_DESKTOP_INSTALL_DIR"] = install
     env.update({
-        "POLYFIN_DESKTOP_INSTALL_DIR": install,
         "POLYFIN_DESKTOP_DATA_DIR": data,
         "POLYFIN_DESKTOP_TOOLS": manifest,
         "POLYFIN_DESKTOP_DATABASE_PORT": str(free_port()),
@@ -215,7 +247,7 @@ def main():
     # The check after quitting counts every process of the two folders:
     # nothing else may run from them, such as a test cluster started from
     # the same install folder.
-    running = processes_of(data) + processes_of(install)
+    running = processes_of(data) + (processes_of(install) if install else [])
     if running:
         sys.exit("processes of the data or install folder run before the smoke starts:\n" + "\n".join(running))
 
