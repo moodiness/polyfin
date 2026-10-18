@@ -178,6 +178,8 @@ const system: typeof en = {
         httpsExpired: (date: string) => `Le certificat HTTPS a expiré le ${date}.`,
         subtitleOcrLanguage: (name: string, file: string) =>
           `Les sous-titres en images en ${name} ne sont pas lus en texte : Tesseract n’a pas de données pour cette langue. Ajoutez le fichier ${file} au dossier que nomme POLYFIN_TESSDATA_DIR.`,
+        metadataLanguages: (name: string) =>
+          `${name} : chaque addon de métadonnées du serveur a une langue : ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
         backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',
         backupDestinationFailed: (name: string) =>

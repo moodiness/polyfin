@@ -3509,6 +3509,8 @@ export type HealthProblem = {
   | { code: 'https_renewal'; error: string }
   | { code: 'https_expiry'; expires: string }
   | { code: 'subtitle_ocr_language'; name: string; file: string }
+  /** Every metadata addon of the server has a language: `name` is the first one's. */
+  | { code: 'metadata_languages'; name: string }
   | { code: 'connection_stopped'; kind: 'app'; name: AppKind; owner: NonNullable<Owner> }
   | {
       code: 'connection_stopped'

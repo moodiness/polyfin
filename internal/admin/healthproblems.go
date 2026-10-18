@@ -79,6 +79,9 @@ const (
 	// UDP trackers and the DHT are off.
 	problemTorrentRoute = "torrent_route"
 	problemTorrentUDP   = "torrent_udp"
+	// Every metadata addon of the server has a language: Name and To are
+	// the first one's, whose Language of its descriptions should be None.
+	problemMetadataLanguages = "metadata_languages"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -86,7 +89,8 @@ const (
 // with the fields it fills: Folder and Free (bytes) for a disk; Name and
 // Owner (nil for the server's) for an addon, IPTV source, local folder or
 // guide, Name alone for a host name of Known proxies that resolves to
-// nothing, with Failure, the failure's code, for an addon or a local folder,
+// nothing or for the server's metadata addon whose language should be
+// None, with Failure, the failure's code, for an addon or a local folder,
 // or why a local folder is not watched, and Share, the kind of network
 // share a folder is ("smb", "webdav"); Host for paused thumbnails; Address
 // for an address that sends forwarded headers without being a known
@@ -183,6 +187,11 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		list, err := h.Addons.Addons(ctx, scope.Scope)
 		if err != nil {
 			return nil, err
+		}
+		if scope.Owner == nil {
+			if p, ok := metadataLanguagesProblem(list); ok {
+				add(p)
+			}
 		}
 		for _, addon := range list {
 			if !addon.Enabled {
@@ -403,6 +412,30 @@ func toneRank(tone string) int {
 		return 0
 	}
 	return 1
+}
+
+// metadataLanguagesProblem tells, from the server's addons, when every
+// enabled metadata addon among them has a language: they then describe
+// titles in their language for every user, whatever the user's (see
+// library's languages.go). It opens the first one's page.
+func metadataLanguagesProblem(list []addons.Addon) (healthProblemJSON, bool) {
+	var first *addons.Addon
+	for i, addon := range list {
+		if !addon.Enabled || !addon.Stremio() || !addon.Manifest.HasResource("meta") {
+			continue
+		}
+		if addon.Language == "" {
+			return healthProblemJSON{}, false
+		}
+		if first == nil {
+			first = &list[i]
+		}
+	}
+	if first == nil {
+		return healthProblemJSON{}, false
+	}
+	return healthProblemJSON{Key: "metadata_languages", Code: problemMetadataLanguages, Tone: notifications.SeverityWarning,
+		To: "/sources/shared/" + first.ID.String(), Name: first.Manifest.Name}, true
 }
 
 // stoppedConnections lists the app connections and tracking services that
@@ -671,6 +704,11 @@ func (p healthProblemJSON) text(language string) string {
 			"Add the file %s to the folder POLYFIN_TESSDATA_DIR names.",
 			"Les sous-titres en images en %s ne sont pas lus en texte : Tesseract n’a pas de données pour cette langue. "+
 				"Ajoutez le fichier %s au dossier que nomme POLYFIN_TESSDATA_DIR.", p.Name, p.File)
+	case problemMetadataLanguages:
+		return say("%s: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. "+
+			"Keep Language of its descriptions at None on this addon, or on one more metadata addon.",
+			"%s : chaque addon de métadonnées du serveur a une langue : ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. "+
+				"Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.", p.Name)
 	}
 	return ""
 }

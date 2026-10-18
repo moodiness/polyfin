@@ -170,6 +170,8 @@ const system = {
         httpsExpired: (date: string) => `The HTTPS certificate expired on ${date}.`,
         subtitleOcrLanguage: (name: string, file: string) =>
           `Picture subtitles in ${name} are not read into text: Tesseract has no data for this language. Add the file ${file} to the folder POLYFIN_TESSDATA_DIR names.`,
+        metadataLanguages: (name: string) =>
+          `${name}: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. Keep Language of its descriptions at None on this addon, or on one more metadata addon.`,
         backupFailed: 'The last database backup failed.',
         backupStale: 'The last database backup is more than two days old.',
         backupDestinationFailed: (name: string) =>
