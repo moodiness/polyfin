@@ -94,22 +94,56 @@ func TestFileOpenerAnswersRanges(t *testing.T) {
 }
 
 // The bytes kept beside the cache, as the pieces of torrents, count in
-// its usage and within its limit: its own chunks make room for them. A
-// playback's urge runs its location's Playing until it stops.
+// its usage and within its limit: its own chunks make room for them. The
+// blocks are stored as a connection stores them, on the test's goroutine:
+// no connection runs, so none stores or touches a chunk after the clock
+// moves, and the clock is read by this goroutine alone.
 func TestSharedBytesCountWithinTheLimit(t *testing.T) {
-	data := bytes.Repeat([]byte{7}, 7*blockSize)
-	var reads atomic.Int32
-	opener := FileOpener(func(context.Context, string) (RandomFile, int64, error) {
-		return memoryFile{bytes.NewReader(data), &reads}, int64(len(data)), nil
-	})
 	c := newCache(t, 8*blockSize)
 	c.chunkBlocks = 1
 	clock := time.Now()
 	c.now = func() time.Time { return clock }
 	var shared atomic.Int64
 	c.Share(shared.Load)
+	s := c.Open(accounts.ID{2}, Location{URL: "torrent:1"}, nil)
+	defer s.Release()
+	block := bytes.Repeat([]byte{7}, blockSize)
+	for index := range int64(6) {
+		// A second apart, so that the oldest is told apart.
+		clock = clock.Add(time.Second)
+		if err := s.store(index, block, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shared.Store(5 * blockSize)
+	if used, _, _ := c.Usage(); used != 11*blockSize {
+		t.Fatalf("usage %d, want the cache's 6 blocks and the 5 shared", used)
+	}
+	// Past the protection of chunks read lately, the next block stored
+	// evicts the cache's own chunks down to what the shared bytes leave,
+	// the oldest first.
+	clock = clock.Add(time.Hour)
+	if err := s.store(6, block, false); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	own := c.used
+	c.mu.Unlock()
+	if own+shared.Load() > 8*blockSize {
+		t.Fatalf("the cache keeps %d bytes beside %d shared, over its limit of %d", own, shared.Load(), 8*blockSize)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.has(6) || s.has(0) {
+		t.Fatalf("kept the blocks %b: the newest must stay, the oldest go", s.present)
+	}
+}
+
+// A playback's urge runs its source location's Playing until it stops.
+func TestUrgeRunsPlaying(t *testing.T) {
+	c := newCache(t, 8*blockSize)
 	var playing atomic.Int32
-	s := c.Open(accounts.ID{2}, Location{URL: "torrent:1", Opener: opener, Playing: func() func() {
+	s := c.Open(accounts.ID{3}, Location{URL: "torrent:2", Playing: func() func() {
 		playing.Add(1)
 		return func() { playing.Add(-1) }
 	}}, nil)
@@ -118,30 +152,9 @@ func TestSharedBytesCountWithinTheLimit(t *testing.T) {
 	if playing.Load() != 1 {
 		t.Fatal("Playing did not run while the source is urged")
 	}
-	got := make([]byte, blockSize)
-	for block := range int64(6) {
-		if _, err := s.ReadAt(t.Context(), got, block*blockSize); err != nil {
-			t.Fatal(err)
-		}
-	}
+	done()
 	done()
 	if playing.Load() != 0 {
-		t.Fatal("Playing did not stop with the urge")
-	}
-	shared.Store(5 * blockSize)
-	if used, _, _ := c.Usage(); used < 5*blockSize {
-		t.Fatalf("usage %d leaves out the shared bytes", used)
-	}
-	// Past the protection of chunks read lately, the next block stored
-	// evicts the cache's own chunks down to what the shared bytes leave.
-	clock = clock.Add(time.Hour)
-	if _, err := s.ReadAt(t.Context(), got, 6*blockSize); err != nil {
-		t.Fatal(err)
-	}
-	c.mu.Lock()
-	own := c.used
-	c.mu.Unlock()
-	if own+shared.Load() > 8*blockSize {
-		t.Fatalf("the cache keeps %d bytes beside %d shared, over its limit of %d", own, shared.Load(), 8*blockSize)
+		t.Fatal("Playing did not stop once with the urge")
 	}
 }
