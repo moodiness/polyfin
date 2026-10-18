@@ -16,8 +16,9 @@ import (
 // and the credits of a season are looked for in (see package
 // audiosegments).
 type EpisodeFile struct {
-	// Path is where the file is: its folder's path in the container, or
-	// its share's address, joined with its path in the folder.
+	// Path names the file in the audio tables: its folder's path or its
+	// share's address, joined with its path in the folder by a slash, on
+	// every system, as audioKept joins them. It is a key, never opened.
 	Path     string
 	Size     int64
 	Modified time.Time

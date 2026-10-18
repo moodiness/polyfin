@@ -370,6 +370,27 @@ func TestM3UPlaylistsAreRead(t *testing.T) {
 	}
 }
 
+// On Windows, the folder's path has a drive or a share's name, which a
+// playlist's absolute lines give in any letter case, with backslashes or
+// slashes, as paths or file: addresses.
+func TestM3UPlaylistsOfAWindowsFolder(t *testing.T) {
+	text := "D:\\Music\\Ann\\Debut\\Morning.flac\nd:/music/Ann/Debut/Noon.flac\nfile:///D:/Music/Ann/Debut/Dusk%20Song.flac\n" +
+		"\\\\nas\\media\\Music\\Ann\\Live\\Encore.flac\nfile://nas/media/Music/Ann/Live/Bis.flac\nE:\\Music\\Ann\\Song.flac\nD:Ann\\Song.flac\n" +
+		"D:\\Music\\..\\Other\\Song.flac\nEvening.flac\n"
+	for _, roots := range [][]string{{"D:/Music", "//nas/media/Music"}, {"D:/Music/", "//NAS/Media/Music/"}} {
+		_, entries := readM3U("Ann/Debut/Mix.m3u8", text, roots)
+		want := []string{"Ann/Debut/Morning.flac", "Ann/Debut/Noon.flac", "Ann/Debut/Dusk Song.flac", "Ann/Live/Encore.flac", "Ann/Live/Bis.flac",
+			"Ann/Debut/Evening.flac"}
+		if !slices.Equal(entries, want) {
+			t.Errorf("roots %q: %q", roots, entries)
+		}
+	}
+	// A Linux folder's path is compared in its letter case.
+	if _, entries := readM3U("Mix.m3u", "/Media/Music/Ann/x.flac\n/media/music/Ann/y.flac\n", []string{"/media/music"}); !slices.Equal(entries, []string{"Ann/y.flac"}) {
+		t.Errorf("a Linux folder's playlist: %q", entries)
+	}
+}
+
 // An artist's folder holds the folders of their albums, and of no album
 // of another artist or of several.
 func TestArtistFolders(t *testing.T) {

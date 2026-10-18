@@ -2,6 +2,22 @@ package localfiles
 
 import "testing"
 
+// The folders of system files are left out of every kind of folder: those
+// of a NAS, Linux's, and those Windows makes at a drive's root, which a
+// drive of movies added whole holds.
+func TestSystemFoldersAreSkipped(t *testing.T) {
+	for _, kind := range []string{KindMovies, KindShows, KindMusic, KindHomeVideos} {
+		for _, name := range []string{".hidden", "@eaDir", "#recycle", "lost+found", "$RECYCLE.BIN", "$Recycle.Bin", "System Volume Information"} {
+			if !skippedIn(kind, name) {
+				t.Errorf("%s: %q is read", kind, name)
+			}
+		}
+		if skippedIn(kind, "Recycle") || skippedIn(kind, "Volume") {
+			t.Errorf("%s: a folder named like a system one is skipped", kind)
+		}
+	}
+}
+
 // Movie files are read the usual ways, a folder per movie completing a
 // file's name, and the identifiers written in names are kept.
 func TestMovieNamesAreRead(t *testing.T) {

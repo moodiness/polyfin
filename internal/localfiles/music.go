@@ -698,21 +698,29 @@ func m3uEntry(dir, line string, roots []string) string {
 			return ""
 		}
 		line = u.Path
+		switch {
+		case u.Host != "" && !strings.EqualFold(u.Host, "localhost"):
+			// A Windows share's file, file://server/share/song.flac.
+			line = "//" + u.Host + u.Path
+		case len(line) > 1 && driveAbsolute(line[1:]):
+			// A Windows drive's file, file:///C:/Music/song.flac.
+			line = line[1:]
+		}
 	} else if strings.Contains(line, "://") {
 		return ""
 	}
 	line = strings.ReplaceAll(line, `\`, "/")
-	if path.IsAbs(line) {
+	if path.IsAbs(line) || driveAbsolute(line) {
 		line = path.Clean(line)
 		for _, root := range roots {
-			if rest, ok := strings.CutPrefix(line, strings.TrimSuffix(root, "/")+"/"); ok {
+			if rest, ok := cutRoot(line, root); ok {
 				return rest
 			}
 		}
 		return ""
 	}
 	if len(line) > 1 && line[1] == ':' {
-		// A Windows drive's path, out of the folder.
+		// A path relative to a Windows drive's current folder.
 		return ""
 	}
 	entry := path.Join(dir, line)
@@ -720,6 +728,25 @@ func m3uEntry(dir, line string, roots []string) string {
 		return ""
 	}
 	return entry
+}
+
+// driveAbsolute reports whether a playlist's line, with slashes, is a path
+// on a Windows drive, such as C:/Music/song.flac.
+func driveAbsolute(line string) bool {
+	return len(line) > 2 && line[1] == ':' && line[2] == '/' && ('a' <= line[0]|0x20 && line[0]|0x20 <= 'z')
+}
+
+// cutRoot is the path in root of a playlist's absolute line, both with
+// slashes, ok when it is in root. The paths of Windows, on a drive (C:/) or
+// a share (//server/share), are compared in any letter case, as Windows
+// does.
+func cutRoot(line, root string) (string, bool) {
+	windows := driveAbsolute(root+"/") || strings.HasPrefix(root, "//")
+	prefix := strings.TrimSuffix(path.Clean(root), "/") + "/"
+	if windows {
+		return cutPrefixFold(line, prefix)
+	}
+	return strings.CutPrefix(line, prefix)
 }
 
 // coverSource is where an album's artwork or an artist's picture comes

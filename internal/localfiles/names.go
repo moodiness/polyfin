@@ -103,8 +103,15 @@ func listed(kind, name string) (file, side bool) {
 // are walked and watched, the scan taking their files apart (see
 // splitExtras).
 func skippedFolder(name string) bool {
+	return systemFolder(name) || strings.EqualFold(name, "sample")
+}
+
+// systemFolder reports whether a folder is hidden, or one of system files:
+// a NAS's (@eaDir, #recycle), Linux's lost+found, and those Windows makes
+// at a drive's root ($RECYCLE.BIN, System Volume Information).
+func systemFolder(name string) bool {
 	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "@") || strings.HasPrefix(name, "#") ||
-		strings.EqualFold(name, "lost+found") || strings.EqualFold(name, "sample")
+		strings.EqualFold(name, "lost+found") || strings.EqualFold(name, "$RECYCLE.BIN") || strings.EqualFold(name, "System Volume Information")
 }
 
 // skippedIn reports whether a scan of a folder of kind leaves a folder
@@ -114,7 +121,7 @@ func skippedFolder(name string) bool {
 func skippedIn(kind, name string) bool {
 	switch kind {
 	case KindMusic:
-		return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "@") || strings.HasPrefix(name, "#") || strings.EqualFold(name, "lost+found")
+		return systemFolder(name)
 	case KindHomeVideos:
 		return skippedFolder(name) || formerlySkipped[strings.ToLower(name)]
 	}

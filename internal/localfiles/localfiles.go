@@ -41,7 +41,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -76,7 +78,7 @@ const catalogID = "local"
 
 var (
 	ErrInvalidName = errors.New("folder names are 1 to 64 printable characters")
-	ErrInvalidPath = errors.New("a folder is an absolute path in the container, other than /")
+	ErrInvalidPath = errors.New("a folder is an absolute path, other than the system's root")
 	ErrInvalidKind = errors.New("a folder holds movies, shows, music or home videos")
 	ErrInvalidIMDb = errors.New("an IMDb identifier is tt followed by digits")
 	// ErrSearchFailed wraps the error of a search of the metadata addons
@@ -329,13 +331,14 @@ type NewFolder struct {
 // whether a scan is under way, its files, those matched to a title, how,
 // and the others, the links made by hand, and the episodes given by hand
 // to the titles of shows' discs. Unwatched tells why a
-// folder Polyfin should watch is not: for a folder in the container
+// folder Polyfin should watch is not: for a local folder on Linux
 // "watch_limit" when the system's limit of watches is reached,
-// "instance_limit" when its limit of watchers or of open files is; for a
-// share "unreachable" when its last listing could not reach it, "refused"
-// when it refused the user or password, "host_key_changed" when an SFTP
-// server offered another host key; "failed" otherwise; empty when it is
-// watched or need not be.
+// "instance_limit" when its limit of watchers or of open files is, on
+// macOS "open_files_limit" when its limit of open files is; for a share
+// "unreachable" when its last listing could not reach it, "refused" when
+// it refused the user or password, "host_key_changed" when an SFTP server
+// offered another host key; "failed" otherwise; empty when it is watched
+// or need not be.
 type Folder struct {
 	Addon       addons.Addon
 	Kind        string
@@ -854,15 +857,27 @@ func validName(name string) (string, error) {
 }
 
 // validPath cleans a folder's path, which must be absolute, other than the
-// root, and printable.
+// system's root, and printable. On Windows, it is a drive's folder, such as
+// D:\Movies, or a share's, \\server\share\Movies; a drive's root, such as
+// E:\ for a disk of movies, is one, but the system's drive, C:\, is not.
 func validPath(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if !filepath.IsAbs(path) || len(path) > 4096 || strings.ContainsFunc(path, func(r rune) bool { return !unicode.IsPrint(r) }) {
 		return "", ErrInvalidPath
 	}
 	path = filepath.Clean(path)
-	if path == string(filepath.Separator) {
+	if systemRoot(path) {
 		return "", ErrInvalidPath
 	}
 	return path, nil
+}
+
+// systemRoot reports whether path, clean, is the system's root: / or, on
+// Windows, the root of its drive, %SystemDrive%\.
+func systemRoot(path string) bool {
+	if path == string(filepath.Separator) {
+		return true
+	}
+	drive := os.Getenv("SystemDrive")
+	return runtime.GOOS == "windows" && drive != "" && strings.EqualFold(path, drive+`\`)
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -142,6 +143,9 @@ func TestReplayGainTagsAreRead(t *testing.T) {
 // countedFFmpeg is an FFmpeg that runs ffmpeg and counts its runs.
 func countedFFmpeg(t *testing.T, ffmpeg string) (string, func() int) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the counting FFmpeg is a shell script")
+	}
 	dir := t.TempDir()
 	runs := filepath.Join(dir, "runs")
 	script := filepath.Join(dir, "ffmpeg")

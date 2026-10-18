@@ -4,6 +4,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -197,7 +198,9 @@ func TestUnreadableFoldersAreReported(t *testing.T) {
 	if err := os.Rename(moved, dir); err != nil {
 		t.Fatal(err)
 	}
-	if os.Geteuid() != 0 {
+	// Root reads any folder, and Windows takes no permission away through
+	// a mode.
+	if os.Geteuid() != 0 && runtime.GOOS != "windows" {
 		if err := os.Chmod(dir, 0); err != nil {
 			t.Fatal(err)
 		}

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -28,18 +27,23 @@ const (
 	watchRetry = ScanCheck
 )
 
-// Why a folder to watch is not, its Unwatched: the system's limit of
-// watches is reached (ENOSPC on Linux, fs.inotify.max_user_watches), its
-// limit of watchers or of open files (EMFILE, fs.inotify.max_user_instances
-// on Linux), or another failure.
+// Why a folder to watch is not, its Unwatched: on Linux, the system's
+// limit of watches is reached (ENOSPC, fs.inotify.max_user_watches), or its
+// limit of watchers or of open files (EMFILE, fs.inotify.max_user_instances);
+// on macOS, which watches each folder and file through a file of its own,
+// its limit of open files (EMFILE, kern.maxfilesperproc); or another
+// failure, the only one on Windows, which has no such limits (see
+// unwatchedReason).
 const (
-	unwatchedWatchLimit    = "watch_limit"
-	unwatchedInstanceLimit = "instance_limit"
-	unwatchedFailed        = "failed"
+	unwatchedWatchLimit     = "watch_limit"
+	unwatchedInstanceLimit  = "instance_limit"
+	unwatchedOpenFilesLimit = "open_files_limit"
+	unwatchedFailed         = "failed"
 )
 
-// fileWatcher watches folders for changes: fsnotify's watcher, inotify on
-// Linux, which tests replace.
+// fileWatcher watches folders for changes: fsnotify's watcher, which tests
+// replace. fsnotify watches through inotify on Linux, kqueue on macOS and
+// ReadDirectoryChangesW on Windows.
 type fileWatcher interface {
 	Add(path string) error
 	Remove(path string) error
@@ -382,13 +386,7 @@ func (w *watcher) fail(id accounts.ID, err error) {
 	w.unwatch(id)
 	state := w.watched[id]
 	state.on, state.failedAt = false, time.Now()
-	reason := unwatchedFailed
-	switch {
-	case errors.Is(err, syscall.ENOSPC):
-		reason = unwatchedWatchLimit
-	case errors.Is(err, syscall.EMFILE), errors.Is(err, syscall.ENFILE):
-		reason = unwatchedInstanceLimit
-	}
+	reason := unwatchedReason(err)
 	w.setReason(id, reason)
 	w.logger.Warn("A local folder cannot be watched for changes; it is scanned on its schedule", "path", state.root, "reason", reason,
 		"error", err)

@@ -561,6 +561,11 @@ func (p healthProblemJSON) text(language string) string {
 				"It is still scanned on its schedule. Raise fs.inotify.max_user_instances on the host, or the container’s limit of open files.",
 				"%s : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite d’observateurs ou de fichiers ouverts du système est atteinte. "+
 					"Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_instances sur l’hôte, ou la limite de fichiers ouverts du conteneur.", name)
+		case "open_files_limit":
+			return say("%s: Polyfin cannot watch this local folder for changes: the system’s limit of open files is reached, as macOS watches each folder and file through one. "+
+				"It is still scanned on its schedule. Raise kern.maxfilesperproc and kern.maxfiles with sysctl.",
+				"%s : Polyfin ne peut pas surveiller les changements de ce dossier local : la limite de fichiers ouverts du système est atteinte, macOS surveillant chaque dossier et fichier par l’un d’eux. "+
+					"Il est toujours analysé selon sa planification. Augmentez kern.maxfilesperproc et kern.maxfiles avec sysctl.", name)
 		}
 		return say("%s: Polyfin cannot watch this local folder for changes. It is still scanned on its schedule.",
 			"%s : Polyfin ne peut pas surveiller les changements de ce dossier local. Il est toujours analysé selon sa planification.", name)

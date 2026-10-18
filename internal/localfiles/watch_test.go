@@ -10,7 +10,6 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -403,8 +402,8 @@ func TestWatchLimit(t *testing.T) {
 	wt.w.retry = time.Hour
 
 	wt.w.reconcile()
-	if got := wt.w.reason(id); got != unwatchedWatchLimit {
-		t.Fatalf("unwatched %q, want %q", got, unwatchedWatchLimit)
+	if got := wt.w.reason(id); got != limitReason {
+		t.Fatalf("unwatched %q, want %q", got, limitReason)
 	}
 	if len(fake.watched()) != 0 || len(wt.w.dirs) != 0 {
 		t.Errorf("watches %v kept for a folder not watched", fake.watched())
@@ -429,14 +428,7 @@ func TestWatchLimit(t *testing.T) {
 func TestWatchFailureReasons(t *testing.T) {
 	root := t.TempDir()
 	id := testID(1)
-	for _, c := range []struct {
-		err  error
-		want string
-	}{
-		{syscall.ENOSPC, unwatchedWatchLimit},
-		{syscall.EMFILE, unwatchedInstanceLimit},
-		{syscall.EACCES, unwatchedFailed},
-	} {
+	for _, c := range failureReasons {
 		wt := newWatchTest(t, one(id, root), func() (fileWatcher, error) { return nil, c.err })
 		wt.w.reconcile()
 		if got := wt.w.reason(id); got != c.want {
@@ -459,8 +451,8 @@ func TestWatchLimitKeepsSchedule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if folder.Unwatched != unwatchedWatchLimit {
-		t.Fatalf("Unwatched %q, want %q", folder.Unwatched, unwatchedWatchLimit)
+	if folder.Unwatched != limitReason {
+		t.Fatalf("Unwatched %q, want %q", folder.Unwatched, limitReason)
 	}
 
 	// The schedule still scans the folder.
@@ -495,7 +487,7 @@ func TestWatchFindsNewFile(t *testing.T) {
 }
 
 // fakeWatcher is a fileWatcher whose events a test sends; past limit
-// watches, it fails as inotify does.
+// watches, it fails as the system's watcher does (see limitError).
 type fakeWatcher struct {
 	events chan fsnotify.Event
 	errors chan error
@@ -513,7 +505,7 @@ func (f *fakeWatcher) Add(path string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.limit > 0 && len(f.added) >= f.limit {
-		return syscall.ENOSPC
+		return limitError
 	}
 	f.added[path] = true
 	return nil
