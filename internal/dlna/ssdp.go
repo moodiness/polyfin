@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -127,6 +128,11 @@ func (d *ssdp) stop() {
 	d.failure = nil
 }
 
+// ssdpWriteWait is how long an SSDP datagram may wait to be sent: a write
+// to the multicast group can block on macOS, which must not hold the
+// answers or the stop of DLNA.
+const ssdpWriteWait = 2 * time.Second
+
 // serve answers the searches conn receives until it is closed, and notes
 // what devices announce.
 func (d *ssdp) serve(conn *net.UDPConn) {
@@ -145,6 +151,8 @@ func (d *ssdp) serve(conn *net.UDPConn) {
 			continue
 		}
 		for _, answer := range d.s.answer(message, sender) {
+			// An answer the system holds gives up after ssdpWriteWait.
+			_ = conn.SetWriteDeadline(time.Now().Add(ssdpWriteWait))
 			if _, err := conn.WriteToUDPAddrPort(answer, sender); err != nil {
 				d.s.options.Logger.Debug("An SSDP answer could not be sent", "to", sender, "error", err)
 			}
@@ -270,10 +278,16 @@ func (d *ssdp) notify(packet *ipv4.PacketConn, kind string, port int) {
 			local = listened.Unmap()
 		}
 		location := "http://" + netip.AddrPortFrom(local, uint16(s.options.HTTP.Port)).String() + descriptionPath
+		// A write the system holds, as macOS may hold one to the multicast
+		// group, gives up after ssdpWriteWait: the rest of the interface's
+		// announcements too, so that stopping DLNA never waits on them.
 		for _, target := range s.targets() {
 			message := fmt.Sprintf("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:%d\r\nCACHE-CONTROL: max-age=%d\r\nLOCATION: %s\r\n"+
 				"NT: %s\r\nNTS: %s\r\nSERVER: %s\r\nUSN: %s\r\n\r\n", port, maxAge, location, target, kind, s.serverHeader(), s.usn(target))
-			_, _ = packet.WriteTo([]byte(message), nil, destination)
+			_ = packet.SetWriteDeadline(time.Now().Add(ssdpWriteWait))
+			if _, err := packet.WriteTo([]byte(message), nil, destination); errors.Is(err, os.ErrDeadlineExceeded) {
+				break
+			}
 		}
 	}
 }
