@@ -129,7 +129,7 @@ func TestCopiedVariablesOnlyWarn(t *testing.T) {
 	invalid := map[string]string{
 		"POLYFIN_LOG_LEVEL":      "verbose",
 		"POLYFIN_CACHE_SIZE":     "lots",
-		"POLYFIN_HWACCEL":        "qsv",
+		"POLYFIN_HWACCEL":        "opencl",
 		"POLYFIN_SEGMENTS":       "theintrodb,other",
 		"POLYFIN_VAAPI_DEVICE":   "/dev/dri/card0",
 		"POLYFIN_RECORDINGS_DIR": "recordings",
