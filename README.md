@@ -63,6 +63,8 @@ docker compose up -d
 2. Enter the one-time setup code from the log (`docker compose logs polyfin`) to create the administrator.
 3. Continue with [Getting started](docs/getting-started.md).
 
+Without Docker, [Polyfin Desktop](docs/desktop.md) runs Polyfin on Windows, macOS or Linux, with its own database, from an icon in the tray.
+
 [Installation](docs/installation.md) covers:
 - pinning a version;
 - building the image from source;
@@ -75,7 +77,7 @@ docker compose up -d
 
 The full documentation is in [`docs/`](docs/README.md), and on the [website](https://moodiness.github.io/polyfin/docs/):
 
-- **Set up:** [Installation](docs/installation.md), [Getting started](docs/getting-started.md), [Configuration](docs/configuration.md), [Reverse proxy](docs/reverse-proxy.md), [Backups](docs/backups.md)
+- **Set up:** [Installation](docs/installation.md), [Desktop version](docs/desktop.md), [Getting started](docs/getting-started.md), [Configuration](docs/configuration.md), [Reverse proxy](docs/reverse-proxy.md), [Backups](docs/backups.md)
 - **Content:** [Addons and libraries](docs/addons-and-libraries.md), [Live TV](docs/live-tv.md), [IPTV](docs/iptv.md)
 - **Watching:** [Playback](docs/playback.md), [Transcoding](docs/transcoding.md), [Subtitles](docs/subtitles.md), [Skip segments](docs/skip-segments.md), [Tracking](docs/tracking.md)
 - **Users and administration:** [Users](docs/users.md), [Administration](docs/administration.md), [Web client](docs/web-client.md), [Jellyfin compatibility](docs/jellyfin-compatibility.md)

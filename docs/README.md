@@ -6,7 +6,8 @@ These pages explain how to run Polyfin and what it does for the people who use i
 
 | Page | What it covers |
 |---|---|
-| [Installation](installation.md) | Docker Compose, Unraid, the health check and monitoring, and giving the container a GPU |
+| [Installation](installation.md) | Choosing between Docker and the desktop version, Docker Compose, Unraid, the health check and monitoring, and giving the container a GPU |
+| [Desktop version](desktop.md) | Polyfin Desktop on Windows, macOS and Linux: installing it, the menu, starting with the computer, its folders, the secret key, updates, and moving to Docker and back |
 | [Getting started](getting-started.md) | The first run, the administrator, users, Quick Connect, and the language of generated names |
 | [Configuration](configuration.md) | Environment variables and the Compose `.env` file |
 | [Reverse proxy](reverse-proxy.md) | Serving Polyfin over HTTPS behind a proxy: the headers to pass, WebSockets, known proxies, and an example with Traefik |

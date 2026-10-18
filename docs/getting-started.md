@@ -12,7 +12,7 @@ Until an administrator exists, Polyfin prints a one-time setup code in its log. 
 docker compose logs polyfin
 ```
 
-Enter the code on the setup page to create the administrator.
+Enter the code on the setup page to create the administrator. On the [desktop version](desktop.md#first-start), the menu shows the code until then.
 
 ### Create users
 

@@ -27,6 +27,10 @@ With the Compose file, `POSTGRES_PASSWORD` in `.env` is the only value to set: C
 
 Polyfin logs at the `info` level, and at the `debug` level while **Detailed log**, under **Settings › Diagnostics**, is on. At the `info` level, it logs each Jellyfin endpoint an app calls that it does not serve, with the app's name and version, at most once an hour per endpoint, without the request's identifiers, query or token.
 
+### Polyfin Desktop
+
+[Polyfin Desktop](desktop.md) sets the variables of the server itself, from its own folders: `POLYFIN_DATABASE_URL` names its own database, on `127.0.0.1`; `POLYFIN_DATA_DIR` is its data folder, such as `~/Library/Application Support/Polyfin` on macOS (see [Folders](desktop.md#folders)); `POLYFIN_FFMPEG` and `POLYFIN_FFPROBE` are the FFmpeg and ffprobe it downloads into it; `POLYFIN_WEB_DIR` and `POLYFIN_FONTS_DIR` are the jellyfin-web and fonts of its package; and `POLYFIN_SECRET_KEY` is the key it keeps in the system's key store (see [The secret key](desktop.md#the-secret-key)). `PATH` starts with its PostgreSQL programs, where backups find `pg_dump` and `pg_restore`. Values of these in the environment it starts from are left out; the others, such as `POLYFIN_LISTEN`, reach the server as they are.
+
 ### On Windows and macOS
 
 `polyfin serve` runs on Windows and macOS as on Linux, outside Docker; the desktop version runs it so. What differs:
