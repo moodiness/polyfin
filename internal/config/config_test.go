@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 func env(values map[string]string) func(string) string {
@@ -25,16 +27,19 @@ func with(values map[string]string) func(string) string {
 }
 
 func TestLoadAcceptsExplicitSettings(t *testing.T) {
+	// The first GPU method of this system, nvenc on Linux and Windows,
+	// videotoolbox on macOS.
+	method := accounts.HardwareAccelerations[1]
 	cfg, err := Load(with(map[string]string{
 		"POLYFIN_LISTEN":       "[::1]:9000",
 		"POLYFIN_LOG_LEVEL":    "DEBUG",
-		"POLYFIN_HWACCEL":      " VAAPI ",
+		"POLYFIN_HWACCEL":      " " + strings.ToUpper(method) + " ",
 		"POLYFIN_VAAPI_DEVICE": "/dev/dri/renderD129",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Listen != "[::1]:9000" || !cfg.Environment.DetailedLog || cfg.Environment.Hardware != "vaapi" ||
+	if cfg.Listen != "[::1]:9000" || !cfg.Environment.DetailedLog || cfg.Environment.Hardware != method ||
 		cfg.Environment.VAAPIDevice != "/dev/dri/renderD129" || len(cfg.Warnings) != 0 {
 		t.Fatalf("unexpected config: %+v", cfg)
 	}

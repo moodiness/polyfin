@@ -95,7 +95,7 @@ func TestSettingsConversion(t *testing.T) {
 		{"encoderPreset", "placebo", "invalid_encoder_preset"},
 		{"h264Quality", 52, "invalid_video_quality"},
 		{"hevcQuality", -1, "invalid_video_quality"},
-		{"hardwareAcceleration", "qsv", "invalid_hardware_acceleration"},
+		{"hardwareAcceleration", "opencl", "invalid_hardware_acceleration"},
 		{"hardwareAcceleration", "", "invalid_hardware_acceleration"},
 		{"adaptiveQuality", "local", "invalid_adaptive_quality"},
 		{"hardwareDecodingCodecs", []string{"vp8"}, "invalid_hardware_decoding_codecs"},

@@ -36,7 +36,12 @@ func TestSettingsAnswerTheirBounds(t *testing.T) {
 	if got := entry("loginAttempts"); got["zero"] != true || got["min"] != float64(accounts.MinLoginAttempts) || got["default"] != float64(0) {
 		t.Errorf("loginAttempts: %v", got)
 	}
-	if got := entry("hardwareAcceleration"); !reflect.DeepEqual(got["choices"], []any{"auto", "nvenc", "vaapi", "none"}) || got["default"] != "auto" {
+	// Each system offers its own GPU methods.
+	choices := []any{}
+	for _, choice := range accounts.HardwareAccelerations {
+		choices = append(choices, choice)
+	}
+	if got := entry("hardwareAcceleration"); !reflect.DeepEqual(got["choices"], choices) || got["default"] != "auto" {
 		t.Errorf("hardwareAcceleration: %v", got)
 	}
 	if got := entry("prepareAhead"); !reflect.DeepEqual(got, map[string]any{"default": true}) {

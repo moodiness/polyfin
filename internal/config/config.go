@@ -235,7 +235,7 @@ func (cfg *Config) readEnvironment(getenv func(string) string) {
 	case slices.Contains(accounts.HardwareAccelerations, hardware):
 		env.Hardware = hardware
 	default:
-		warn("POLYFIN_HWACCEL", fmt.Errorf("%q is not one of auto, nvenc, vaapi, none", hardware))
+		warn("POLYFIN_HWACCEL", fmt.Errorf("%q is not one of %s", hardware, strings.Join(accounts.HardwareAccelerations, ", ")))
 	}
 	if segments, err := parseSegments(getenv("POLYFIN_SEGMENTS")); err != nil {
 		warn("POLYFIN_SEGMENTS", err)

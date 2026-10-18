@@ -46,7 +46,8 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 		{"an empty preset", func(s *Settings) { s.EncoderPreset = "" }, ErrInvalidEncoderPreset},
 		{"a negative H.264 quality", func(s *Settings) { s.H264Quality = -1 }, ErrInvalidVideoQuality},
 		{"an HEVC quality above 51", func(s *Settings) { s.HevcQuality = MaxVideoQuality + 1 }, ErrInvalidVideoQuality},
-		{"an unknown GPU", func(s *Settings) { s.HardwareAcceleration = "qsv" }, ErrInvalidHardwareAcceleration},
+		{"an unknown GPU", func(s *Settings) { s.HardwareAcceleration = "opencl" }, ErrInvalidHardwareAcceleration},
+		{"another system's GPU", func(s *Settings) { s.HardwareAcceleration = otherSystemsMethod() }, ErrInvalidHardwareAcceleration},
 		{"an unknown adaptive quality", func(s *Settings) { s.AdaptiveQuality = "local" }, ErrInvalidAdaptiveQuality},
 		{"no adaptive quality", func(s *Settings) { s.AdaptiveQuality = "" }, ErrInvalidAdaptiveQuality},
 		{"no GPU choice, which followed POLYFIN_HWACCEL", func(s *Settings) { s.HardwareAcceleration = "" }, ErrInvalidHardwareAcceleration},
@@ -85,7 +86,7 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 	// the GPU come back in their usual order.
 	for _, change := range []func(*Settings){
 		func(s *Settings) {
-			s.EncoderPreset, s.H264Quality, s.HevcQuality, s.AllowHevcEncoding, s.HardwareAcceleration = "veryslow", MinVideoQuality, MaxVideoQuality, true, "vaapi"
+			s.EncoderPreset, s.H264Quality, s.HevcQuality, s.AllowHevcEncoding, s.HardwareAcceleration = "veryslow", MinVideoQuality, MaxVideoQuality, true, HardwareAccelerations[1]
 			s.HardwareDecodingCodecs = []string{"vc1", "h264"}
 			s.ToneMapping, s.ToneMappingAlgorithm, s.ToneMappingPeak, s.ToneMappingDesat = false, "mobius", MinToneMappingPeak, 0.5
 			s.GPUToneMapping, s.ProcessorToneMappingHeight = false, 720
@@ -120,8 +121,9 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 			t.Errorf("after reopening: %+v, saved %+v, want %+v", got, saved, changed)
 		}
 	}
-	// The database refuses what the store refuses, whoever writes it.
-	for _, column := range []string{"encoder_preset = 'placebo'", "h264_quality = 52", "hevc_quality = -1", "hardware_acceleration = 'qsv'", "hardware_acceleration = ''",
+	// The database refuses what the store refuses, whoever writes it, but
+	// for the GPU methods of other systems, which a restored backup keeps.
+	for _, column := range []string{"encoder_preset = 'placebo'", "h264_quality = 52", "hevc_quality = -1", "hardware_acceleration = 'opencl'", "hardware_acceleration = ''",
 		"hardware_decoding_codecs = '{vp8}'", "tone_mapping_algorithm = 'gamma'", "tone_mapping_peak = 99", "tone_mapping_desat = 11",
 		"processor_tone_mapping_height = 480", "processor_tone_mapping_height = -1",
 		"deinterlace_method = 'w3fdif'", "downmix_algorithm = 'dave750'", "downmix_boost = 0.4", "max_audio_channels = 8",
@@ -129,5 +131,56 @@ func TestConversionSettingsRoundTripAndStayInRange(t *testing.T) {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
 			t.Errorf("the database took %s", column)
 		}
+	}
+}
+
+// otherSystemsMethod is a GPU method this system does not offer:
+// VideoToolbox elsewhere than on macOS, VAAPI on macOS.
+func otherSystemsMethod() string {
+	if slices.Contains(HardwareAccelerations, "videotoolbox") {
+		return "vaapi"
+	}
+	return "videotoolbox"
+}
+
+// Each system offers only its own GPU methods, by preference, between
+// auto and none: NVIDIA and VAAPI on Linux, VideoToolbox on macOS, and
+// NVIDIA, Intel's QSV and AMD's AMF on Windows.
+func TestEachSystemOffersItsGPUMethods(t *testing.T) {
+	for system, want := range map[string][]string{
+		"linux":   {"auto", "nvenc", "vaapi", "none"},
+		"darwin":  {"auto", "videotoolbox", "none"},
+		"windows": {"auto", "nvenc", "qsv", "amf", "none"},
+		"freebsd": {"auto", "nvenc", "vaapi", "none"},
+	} {
+		if got := HardwareAccelerationsOn(system); !slices.Equal(got, want) {
+			t.Errorf("%s: %v, want %v", system, got, want)
+		}
+	}
+}
+
+// A GPU method of another system, as a backup restored from it keeps,
+// reads as auto, which tries this system's, and saving the settings then
+// keeps auto.
+func TestAnotherSystemsGPUMethodReadsAsAuto(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+	if _, err := store.db.Exec(ctx, "UPDATE settings SET hardware_acceleration = $1", otherSystemsMethod()); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, store.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := reopened.Settings()
+	if settings.HardwareAcceleration != "auto" {
+		t.Fatalf("read as %q", settings.HardwareAcceleration)
+	}
+	if _, err := reopened.UpdateSettings(ctx, settings); err != nil {
+		t.Fatal(err)
+	}
+	var saved string
+	if err := store.db.QueryRow(ctx, "SELECT hardware_acceleration FROM settings").Scan(&saved); err != nil || saved != "auto" {
+		t.Errorf("saved %q, %v", saved, err)
 	}
 }

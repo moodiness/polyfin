@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -435,9 +436,10 @@ var (
 	// EncoderPresets are the values of Settings.EncoderPreset: auto lets
 	// Polyfin choose each encoder's, then from the slowest to the fastest.
 	EncoderPresets = []string{"auto", "veryslow", "slower", "slow", "medium", "fast", "faster", "veryfast", "superfast", "ultrafast"}
-	// HardwareAccelerations are the values of Settings.HardwareAcceleration,
-	// those POLYFIN_HWACCEL takes: auto tries NVIDIA, then VAAPI.
-	HardwareAccelerations = []string{"auto", "nvenc", "vaapi", "none"}
+	// HardwareAccelerations are the values of Settings.HardwareAcceleration
+	// on this system, those POLYFIN_HWACCEL takes (see
+	// HardwareAccelerationsOn).
+	HardwareAccelerations = HardwareAccelerationsOn(runtime.GOOS)
 	// HardwareDecodingCodecs are the values Settings.HardwareDecodingCodecs
 	// holds, all by default: FFmpeg's codec names, and hevc_10bit for HEVC
 	// in 10 bits, which HEVC needs too.
@@ -460,6 +462,21 @@ var (
 	// AdaptiveQualities are the values of Settings.AdaptiveQuality.
 	AdaptiveQualities = []string{AdaptiveQualityOff, AdaptiveQualityRemote, AdaptiveQualityAlways}
 )
+
+// HardwareAccelerationsOn are the GPU choices of system, a GOOS: auto
+// tries the system's GPU methods by preference, NVIDIA (nvenc) then VAAPI
+// on Linux, NVIDIA then Intel (qsv) then AMD (amf) on Windows, and
+// VideoToolbox on macOS; none converts on the processor. Other systems
+// offer Linux's.
+func HardwareAccelerationsOn(system string) []string {
+	switch system {
+	case "darwin":
+		return []string{"auto", "videotoolbox", "none"}
+	case "windows":
+		return []string{"auto", "nvenc", "qsv", "amf", "none"}
+	}
+	return []string{"auto", "nvenc", "vaapi", "none"}
+}
 
 // The values of Settings.AdaptiveQuality.
 const (
@@ -1663,6 +1680,11 @@ func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
 	err := s.db.QueryRow(ctx, "SELECT "+settingsColumns+" FROM settings").Scan(settings.fields()...)
 	if err != nil {
 		return settings, err
+	}
+	// A backup of a server on another system may name a GPU method this
+	// one does not offer: it reads as auto, which tries this system's.
+	if !slices.Contains(HardwareAccelerations, settings.HardwareAcceleration) {
+		settings.HardwareAcceleration = HardwareAccelerations[0]
 	}
 	s.openSecrets(&settings)
 	return settings, nil

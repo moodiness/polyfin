@@ -193,7 +193,8 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 func TestEnvironmentIsAdoptedOnce(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
-	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "nvenc", Segments: []string{"introdb", "theintrodb"}}); err != nil {
+	method := HardwareAccelerations[1]
+	if err := store.AdoptEnvironment(ctx, Environment{Hardware: method, Segments: []string{"introdb", "theintrodb"}}); err != nil {
 		t.Fatal(err)
 	}
 	check := func(when string, s *Store, hardware string, order, off []string) {
@@ -215,12 +216,12 @@ func TestEnvironmentIsAdoptedOnce(t *testing.T) {
 	// The databases POLYFIN_SEGMENTS names come first, in its order, the
 	// others after them, turned off.
 	adopted := []string{"introdb", "theintrodb", "publicmetadb"}
-	check("the first start", store, "nvenc", adopted, []string{"publicmetadb"})
+	check("the first start", store, method, adopted, []string{"publicmetadb"})
 	// A start with other values changes nothing.
-	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "vaapi", Segments: []string{"publicmetadb"}}); err != nil {
+	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "none", Segments: []string{"publicmetadb"}}); err != nil {
 		t.Fatal(err)
 	}
-	check("a start with other values", store, "nvenc", adopted, []string{"publicmetadb"})
+	check("a start with other values", store, method, adopted, []string{"publicmetadb"})
 	// An administrator's choice stays chosen.
 	chosen := store.Settings()
 	chosen.HardwareAcceleration, chosen.SegmentOrder, chosen.SegmentSourcesOff = "none", []string{"publicmetadb", "theintrodb", "introdb"}, []string{}
@@ -232,8 +233,10 @@ func TestEnvironmentIsAdoptedOnce(t *testing.T) {
 	}
 	check("after the administrator's choice", store, "none", chosen.SegmentOrder, []string{})
 	// Wrong values are refused, and change nothing.
-	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "qsv"}); !errors.Is(err, ErrInvalidHardwareAcceleration) {
-		t.Errorf("an unknown GPU: %v", err)
+	for _, unknown := range []string{"opencl", otherSystemsMethod()} {
+		if err := store.AdoptEnvironment(ctx, Environment{Hardware: unknown}); !errors.Is(err, ErrInvalidHardwareAcceleration) {
+			t.Errorf("an unknown GPU, %s: %v", unknown, err)
+		}
 	}
 	if err := store.AdoptEnvironment(ctx, Environment{Segments: []string{"introdb", "introdb"}}); !errors.Is(err, ErrInvalidSegmentSourcesOff) {
 		t.Errorf("a database twice: %v", err)
@@ -246,15 +249,15 @@ func TestEnvironmentIsAdoptedOnce(t *testing.T) {
 func TestEnvironmentFillsOnlyWhatFollowedIt(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
-	if _, err := store.db.Exec(ctx, "UPDATE settings SET hardware_acceleration = 'vaapi', "+
+	if _, err := store.db.Exec(ctx, "UPDATE settings SET hardware_acceleration = 'none', "+
 		"segment_order = '{publicmetadb,introdb,theintrodb}', environment_pending = '{segment_sources_off}'"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "nvenc", Segments: []string{}}); err != nil {
+	if err := store.AdoptEnvironment(ctx, Environment{Hardware: HardwareAccelerations[1], Segments: []string{}}); err != nil {
 		t.Fatal(err)
 	}
 	got := store.Settings()
-	if got.HardwareAcceleration != "vaapi" || !slices.Equal(got.SegmentOrder, []string{"publicmetadb", "introdb", "theintrodb"}) ||
+	if got.HardwareAcceleration != "none" || !slices.Equal(got.SegmentOrder, []string{"publicmetadb", "introdb", "theintrodb"}) ||
 		!slices.Equal(got.SegmentSourcesOff, SegmentSources) {
 		t.Errorf("adopted: %+v", got)
 	}
