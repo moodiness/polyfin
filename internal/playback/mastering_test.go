@@ -16,6 +16,7 @@ import (
 // fakeFrameProbe is an ffprobe script answering a first frame with the
 // mastering display, or failing, and counting its runs in a file.
 func fakeFrameProbe(t *testing.T, fails bool) (path string, runs func() int) {
+	skipWithoutShell(t)
 	t.Helper()
 	dir := t.TempDir()
 	count := filepath.Join(dir, "runs")
@@ -87,6 +88,7 @@ func TestTheMasteringDisplayIsLearnedOnceForIntel(t *testing.T) {
 // A version read from its input has ffprobe read the input itself for its
 // first frame, as for its analysis (see LocalInputs).
 func TestTheMasteringDisplayOfAnInput(t *testing.T) {
+	skipWithoutShell(t)
 	intel := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true}
 	conversion := &VideoConversion{Codec: "h264", Encoder: "h264_vaapi", ToneMap: true, ToneMapOnCPU: true, Hardware: intel}
 	old := media.Analysis{Format: "mpegts", Streams: []media.Stream{{Index: 0, Type: "video", Codec: "hevc", ColorTransfer: "smpte2084"}}}

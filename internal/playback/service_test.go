@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -214,6 +215,7 @@ func TestExpiredLinksAreRenewedBeforeServing(t *testing.T) {
 // fakeProbe writes an ffprobe stand-in that prints output and counts its
 // runs, or fails.
 func fakeProbe(t *testing.T, output string, fail bool) (string, func() int) {
+	skipWithoutShell(t)
 	t.Helper()
 	dir := t.TempDir()
 	runs := filepath.Join(dir, "runs")
@@ -437,5 +439,15 @@ func TestRetryItemForgetsTheFailuresOfAChannel(t *testing.T) {
 		if s.Failed(versions[i].ID) != want {
 			t.Errorf("version %d: failed %v, want %v", i, !want, want)
 		}
+	}
+}
+
+// skipWithoutShell skips a test whose fake ffprobe is a shell script, which
+// Windows cannot run; internal/process tests how Polyfin runs and stops
+// programs there.
+func skipWithoutShell(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake ffprobe is a shell script")
 	}
 }

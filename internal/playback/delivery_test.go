@@ -46,6 +46,7 @@ func (c *changingSource) Open(ctx context.Context, method, target string, header
 // rather than at the settings' timeout: the version's failure, kept, is
 // what its host answered.
 func TestAnalysesStopWhenTheirSourceFails(t *testing.T) {
+	skipWithoutShell(t)
 	path := filepath.Join(t.TempDir(), "ffprobe")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)
@@ -78,6 +79,7 @@ func TestAnalysesStopWhenTheirSourceFails(t *testing.T) {
 // The keyframe index of a Matroska file is read while it is analyzed, not
 // after: an HLS play finds it read.
 func TestMatroskaIndexesAreReadDuringTheAnalysis(t *testing.T) {
+	skipWithoutShell(t)
 	data, err := os.ReadFile(filepath.Join("testdata", "codecs.mkv"))
 	if err != nil {
 		t.Fatal(err)
@@ -361,6 +363,7 @@ func (busyHost) Open(ctx context.Context, method, target string, _ http.Header, 
 // before a player is sent to it keep it as failed, so that it is offered
 // again at the next play rather than hidden for 15 minutes.
 func TestVersionsAreNeverHiddenForARateLimit(t *testing.T) {
+	skipWithoutShell(t)
 	path := filepath.Join(t.TempDir(), "ffprobe")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)

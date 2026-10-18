@@ -19,6 +19,7 @@ import (
 // An analysis that outlasts the settings' timeout is given up, of a file
 // as of a live stream, and the version is not tried again for a while.
 func TestAnalysesStopAtTheSettingsTimeout(t *testing.T) {
+	skipWithoutShell(t)
 	path := filepath.Join(t.TempDir(), "ffprobe")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)

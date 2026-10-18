@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -123,6 +124,9 @@ func TestProbeFindsChapters(t *testing.T) {
 // A live analysis reads about a second and never reconnects: a stream that
 // ends while it is read fails at once; a file's analysis reconnects.
 func TestLiveAnalysesNeverReconnect(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake ffprobe is a shell script")
+	}
 	dir := t.TempDir()
 	args := filepath.Join(dir, "args")
 	path := filepath.Join(dir, "ffprobe")

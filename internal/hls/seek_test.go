@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -140,6 +141,9 @@ func TestSeeksStartWithTheLookbackLearned(t *testing.T) {
 	input, video, audio := unindexedSource(t, ffmpeg, ffprobe, "long.ts", "-c:v", "libx264", "-preset", "veryfast", "-bf", "3", "-g", "240",
 		"-keyint_min", "240", "-sc_threshold", "0", "-c:a", "aac")
 	// FFmpeg, through a script that writes down each command line.
+	if runtime.GOOS == "windows" {
+		t.Skip("the wrapper is a shell script")
+	}
 	dir := t.TempDir()
 	runs, wrapper := filepath.Join(dir, "runs"), filepath.Join(dir, "ffmpeg")
 	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\necho \"$*\" >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o700); err != nil {

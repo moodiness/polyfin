@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -64,6 +65,9 @@ func TestLiveEncodingsAreCapped(t *testing.T) {
 // in runs (those of live runs only are returned), then exits cleanly as when its input ends.
 func fakeLiveFFmpeg(t *testing.T) (string, func() []string) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake FFmpeg is a shell script")
+	}
 	dir := t.TempDir()
 	runs := filepath.Join(dir, "runs")
 	script := `#!/bin/sh
