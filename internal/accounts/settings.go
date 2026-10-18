@@ -290,8 +290,10 @@ var ConversionHeights = []int{0, 480, 720, 1080, 1440, 2160}
 // at most and one of each kind: the user's preferred audio language, the
 // height of the video, highest or lowest first, the size, largest or
 // smallest first, the video codec, in the order of
-// Settings.VersionCodecOrder, and HDR or Dolby Vision, first or last.
-var VersionCriteria = []string{"language", "resolution-high", "resolution-low", "size-large", "size-small", "codec", "hdr-first", "hdr-last"}
+// Settings.VersionCodecOrder, HDR or Dolby Vision, first or last, and the
+// source, in the order of Settings.VersionSourceOrder.
+var VersionCriteria = []string{"language", "resolution-high", "resolution-low", "size-large", "size-small", "codec", "hdr-first", "hdr-last",
+	"source"}
 
 // VersionCodecs are the video codecs the version rules know, by FFmpeg's
 // names, in the default order of Settings.VersionCodecOrder: the most
@@ -299,11 +301,13 @@ var VersionCriteria = []string{"language", "resolution-high", "resolution-low", 
 var VersionCodecs = []string{"av1", "hevc", "vp9", "h264", "vc1", "mpeg4", "mpeg2video"}
 
 // The bounds of the version rules: MaxVersionCriteria criteria order the
-// versions at most, versions are hidden above MaxHideVersionsLargerGB at
-// most, and MaxHiddenVersionWords words, of MaxHiddenVersionWordLength
-// characters at most, hide versions.
+// versions at most, MaxVersionSources sources are placed at most, versions
+// are hidden above MaxHideVersionsLargerGB at most, and
+// MaxHiddenVersionWords words, of MaxHiddenVersionWordLength characters at
+// most, hide versions.
 const (
 	MaxVersionCriteria         = 4
+	MaxVersionSources          = 500
 	MaxHideVersionsLargerGB    = 1000
 	MaxHiddenVersionWords      = 50
 	MaxHiddenVersionWordLength = 100
@@ -313,8 +317,11 @@ const (
 // Settings.VersionOrder with a value that is not one of VersionCriteria,
 // two of one kind, or more than MaxVersionCriteria;
 // ErrInvalidVersionCodecOrder a VersionCodecOrder that is not every one of
-// VersionCodecs once; ErrInvalidHideVersionsLarger a HideVersionsLargerGB
-// outside [0, MaxHideVersionsLargerGB]; ErrInvalidHiddenVersionCodecs a
+// VersionCodecs once; ErrInvalidVersionSourceOrder a VersionSourceOrder
+// holding a source twice, or more than MaxVersionSources, and, from the
+// admin API, a source the server does not have;
+// ErrInvalidHideVersionsLarger a HideVersionsLargerGB outside [0,
+// MaxHideVersionsLargerGB]; ErrInvalidHiddenVersionCodecs a
 // HiddenVersionCodecs holding another codec, or one twice; and
 // ErrInvalidHiddenVersionWords a HiddenVersionWords with more than
 // MaxHiddenVersionWords words, or one longer than
@@ -322,6 +329,7 @@ const (
 var (
 	ErrInvalidVersionOrder        = errors.New("invalid version order")
 	ErrInvalidVersionCodecOrder   = errors.New("invalid version codec order")
+	ErrInvalidVersionSourceOrder  = errors.New("invalid version source order")
 	ErrInvalidHideVersionsLarger  = errors.New("invalid size above which versions are hidden")
 	ErrInvalidHiddenVersionCodecs = errors.New("invalid hidden video codecs")
 	ErrInvalidHiddenVersionWords  = errors.New("invalid words hiding versions")
@@ -355,6 +363,20 @@ func validVersionOrder(order []string) bool {
 func validVersionCodecs(codecs []string) bool {
 	for i, codec := range codecs {
 		if !slices.Contains(VersionCodecs, codec) || slices.Contains(codecs[:i], codec) {
+			return false
+		}
+	}
+	return true
+}
+
+// validVersionSources reports whether sources hold each source once,
+// MaxVersionSources at most.
+func validVersionSources(sources []ID) bool {
+	if len(sources) > MaxVersionSources {
+		return false
+	}
+	for i, source := range sources {
+		if slices.Contains(sources[:i], source) {
 			return false
 		}
 	}
@@ -1219,9 +1241,14 @@ type Settings struct {
 	// VersionCriteria, each grouping them and the next sorting within
 	// them; ties keep the addons' order, as does none, the default.
 	// VersionCodecOrder is the order of the video codecs for the codec
-	// criterion, every one of VersionCodecs once.
-	VersionOrder      []string
-	VersionCodecOrder []string
+	// criterion, every one of VersionCodecs once. VersionSourceOrder is
+	// the order of the server's sources, addons and folders, for the
+	// source criterion: the sources it lists first, in its order, then the
+	// others in the addons' order. It may still hold a source removed
+	// since, which no version comes from; empty by default.
+	VersionOrder       []string
+	VersionCodecOrder  []string
+	VersionSourceOrder []ID
 	// HideVersionsLargerGB hides the versions known to be larger, in
 	// gigabytes (10^9 bytes), 0 for no limit; HiddenVersionCodecs, those
 	// known to be in these video codecs, of VersionCodecs; and
@@ -1558,7 +1585,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"two_step_administrators, " +
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
-	"version_order, version_codec_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
+	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"adaptive_quality, " +
@@ -1603,7 +1630,8 @@ func (settings *Settings) fields() []any {
 		&settings.HTTPSMode, &settings.HTTPSPort, &settings.HTTPSRedirect, &settings.HTTPSCertificate, &settings.HTTPSPrivateKey,
 		&settings.ACMEHosts, &settings.ACMEEmail, &settings.ACMETerms, &settings.ACMEChallenge, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
-		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs, &settings.HiddenVersionWords,
+		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.VersionSourceOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs,
+		&settings.HiddenVersionWords,
 		&settings.NameHowVersionsPlay,
 		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads, &settings.SubtitleOCR, &settings.SubtitleOCRTracks,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
@@ -1905,6 +1933,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if len(settings.VersionCodecOrder) != len(VersionCodecs) || !validVersionCodecs(settings.VersionCodecOrder) {
 		return Settings{}, ErrInvalidVersionCodecOrder
 	}
+	if !validVersionSources(settings.VersionSourceOrder) {
+		return Settings{}, ErrInvalidVersionSourceOrder
+	}
 	if settings.HideVersionsLargerGB < 0 || settings.HideVersionsLargerGB > MaxHideVersionsLargerGB {
 		return Settings{}, ErrInvalidHideVersionsLarger
 	}
@@ -1920,6 +1951,7 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	// order of VersionCodecs.
 	settings.VersionOrder = append([]string{}, settings.VersionOrder...)
 	settings.VersionCodecOrder = slices.Clone(settings.VersionCodecOrder)
+	settings.VersionSourceOrder = append([]ID{}, settings.VersionSourceOrder...)
 	hidden := []string{}
 	for _, codec := range VersionCodecs {
 		if slices.Contains(settings.HiddenVersionCodecs, codec) {

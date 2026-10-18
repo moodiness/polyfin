@@ -95,6 +95,7 @@ func DefaultSettings() Settings {
 		PreferDirectPlay:    false,
 		VersionOrder:        []string{},
 		VersionCodecOrder:   slices.Clone(VersionCodecs),
+		VersionSourceOrder:  []ID{},
 		HiddenVersionCodecs: []string{},
 		HiddenVersionWords:  []string{},
 		NameHowVersionsPlay: true,
@@ -284,8 +285,10 @@ func SettingsBounds() map[string]SettingBounds {
 		"versionAttempts":  between(MinVersionAttempts, MaxVersionAttempts, d.VersionAttempts),
 		"preferDirectPlay": is(d.PreferDirectPlay),
 		// Up to MaxVersionCriteria of them, one of each kind.
-		"versionOrder":         choice(d.VersionOrder, anys(VersionCriteria)),
-		"versionCodecOrder":    choice(d.VersionCodecOrder, anys(VersionCodecs)),
+		"versionOrder":      choice(d.VersionOrder, anys(VersionCriteria)),
+		"versionCodecOrder": choice(d.VersionCodecOrder, anys(VersionCodecs)),
+		// The server's sources, each once.
+		"versionSourceOrder":   between(0, MaxVersionSources, d.VersionSourceOrder),
 		"hideVersionsLargerGb": orZero(1, MaxHideVersionsLargerGB, d.HideVersionsLargerGB),
 		"hiddenVersionCodecs":  choice(d.HiddenVersionCodecs, anys(VersionCodecs)),
 		"hiddenVersionWords":   between(0, MaxHiddenVersionWords, d.HiddenVersionWords),

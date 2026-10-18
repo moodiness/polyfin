@@ -134,19 +134,21 @@ func TestRemuxDBSettings(t *testing.T) {
 }
 
 // The version rules start empty, the addons' order kept and nothing
-// hidden. Up to four criteria order versions, one of each kind; the codec
-// order lists every codec once; the words are kept trimmed, each once
+// hidden. Up to four criteria order versions, one of each kind, the source
+// a kind of its own; the codec order lists every codec once; the sources
+// are each placed once at most; the words are kept trimmed, each once
 // whatever its case, empty lines left out; and the database refuses what
 // the store refuses.
 func TestVersionRulesSettings(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
 	got := store.Settings()
-	if len(got.VersionOrder) != 0 || !slices.Equal(got.VersionCodecOrder, VersionCodecs) || got.HideVersionsLargerGB != 0 ||
-		len(got.HiddenVersionCodecs) != 0 || len(got.HiddenVersionWords) != 0 {
-		t.Errorf("defaults: %v %v %d %v %v", got.VersionOrder, got.VersionCodecOrder, got.HideVersionsLargerGB, got.HiddenVersionCodecs,
-			got.HiddenVersionWords)
+	if len(got.VersionOrder) != 0 || !slices.Equal(got.VersionCodecOrder, VersionCodecs) || got.VersionSourceOrder == nil ||
+		len(got.VersionSourceOrder) != 0 || got.HideVersionsLargerGB != 0 || len(got.HiddenVersionCodecs) != 0 || len(got.HiddenVersionWords) != 0 {
+		t.Errorf("defaults: %v %v %v %d %v %v", got.VersionOrder, got.VersionCodecOrder, got.VersionSourceOrder, got.HideVersionsLargerGB,
+			got.HiddenVersionCodecs, got.HiddenVersionWords)
 	}
+	one, two := ID{0x51}, ID{0x52}
 	for _, tc := range []struct {
 		name   string
 		change func(*Settings)
@@ -161,6 +163,14 @@ func TestVersionRulesSettings(t *testing.T) {
 		{"a codec twice in the order", func(s *Settings) {
 			s.VersionCodecOrder = append([]string{"hevc"}, VersionCodecs[:len(VersionCodecs)-1]...)
 		}, ErrInvalidVersionCodecOrder},
+		{"two sources", func(s *Settings) { s.VersionOrder = []string{"source", "source"} }, ErrInvalidVersionOrder},
+		{"a source twice in the order", func(s *Settings) { s.VersionSourceOrder = []ID{one, two, one} }, ErrInvalidVersionSourceOrder},
+		{"too many sources", func(s *Settings) {
+			s.VersionSourceOrder = make([]ID, MaxVersionSources+1)
+			for i := range s.VersionSourceOrder {
+				s.VersionSourceOrder[i] = ID{byte(i >> 8), byte(i), 2}
+			}
+		}, ErrInvalidVersionSourceOrder},
 		{"a negative size", func(s *Settings) { s.HideVersionsLargerGB = -1 }, ErrInvalidHideVersionsLarger},
 		{"a size too large", func(s *Settings) { s.HideVersionsLargerGB = MaxHideVersionsLargerGB + 1 }, ErrInvalidHideVersionsLarger},
 		{"an unknown hidden codec", func(s *Settings) { s.HiddenVersionCodecs = []string{"theora"} }, ErrInvalidHiddenVersionCodecs},
@@ -175,8 +185,9 @@ func TestVersionRulesSettings(t *testing.T) {
 		}
 	}
 	changed := store.Settings()
-	changed.VersionOrder = []string{"language", "resolution-low", "codec", "hdr-last"}
+	changed.VersionOrder = []string{"source", "language", "resolution-low", "codec"}
 	changed.VersionCodecOrder = []string{"h264", "hevc", "av1", "vp9", "vc1", "mpeg4", "mpeg2video"}
+	changed.VersionSourceOrder = []ID{two, one}
 	changed.HideVersionsLargerGB = 40
 	changed.HiddenVersionCodecs = []string{"mpeg4", "av1"}
 	changed.HiddenVersionWords = []string{" Downloading ", "", "downloading", "⏳ queued"}
@@ -184,8 +195,9 @@ func TestVersionRulesSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(saved.HiddenVersionCodecs, []string{"av1", "mpeg4"}) || !slices.Equal(saved.HiddenVersionWords, []string{"Downloading", "⏳ queued"}) {
-		t.Errorf("saved: %v %v", saved.HiddenVersionCodecs, saved.HiddenVersionWords)
+	if !slices.Equal(saved.HiddenVersionCodecs, []string{"av1", "mpeg4"}) || !slices.Equal(saved.HiddenVersionWords, []string{"Downloading", "⏳ queued"}) ||
+		!slices.Equal(saved.VersionSourceOrder, []ID{two, one}) {
+		t.Errorf("saved: %v %v %v", saved.HiddenVersionCodecs, saved.HiddenVersionWords, saved.VersionSourceOrder)
 	}
 	reopened, err := Open(ctx, store.db)
 	if err != nil {
@@ -195,7 +207,9 @@ func TestVersionRulesSettings(t *testing.T) {
 		t.Errorf("after reopening: %+v, want %+v", got, saved)
 	}
 	for _, column := range []string{"version_order = '{bitrate}'", "version_order = '{language,codec,size-large,hdr-first,resolution-high}'",
-		"version_codec_order = '{theora}'", "hide_versions_larger_gb = 1001", "hidden_version_codecs = '{theora}'"} {
+		"version_order = '{source,language,codec,size-large,hdr-first}'", "version_codec_order = '{theora}'",
+		"version_source_order = array_fill('00000000-0000-0000-0000-000000000001'::uuid, ARRAY[501])", "hide_versions_larger_gb = 1001",
+		"hidden_version_codecs = '{theora}'"} {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
 			t.Errorf("the database took %s", column)
 		}
