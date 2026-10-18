@@ -184,10 +184,8 @@ func conversionEnd(now time.Time, from, until int) (time.Time, bool) {
 // HEVC encoder, else libx265 when the settings allow the processor.
 func (s *Service) hevcEncoder(settings accounts.Settings) (hls.VideoEncoding, bool) {
 	if hw := s.converter.Hardware(); hw != nil {
-		for _, encoder := range []string{"hevc_nvenc", "hevc_vaapi"} {
-			if slices.Contains(hw.Encoders, encoder) {
-				return hls.VideoEncoding{Encoder: encoder, Hardware: hw}, true
-			}
+		if i := slices.IndexFunc(hw.Encoders, func(e string) bool { return strings.HasPrefix(e, "hevc_") }); i >= 0 {
+			return hls.VideoEncoding{Encoder: hw.Encoders[i], Hardware: hw}, true
 		}
 	}
 	if settings.ConvertRecordingsOnProcessor && slices.Contains(s.converter.Encoders(), "libx265") {

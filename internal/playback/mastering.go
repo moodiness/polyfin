@@ -11,8 +11,9 @@ import (
 
 // LearnMasteringDisplay learns whether the PQ video of a version carries
 // its mastering display (see media.Stream.MasteringDisplay), when only
-// that kept conversion, the video's planned conversion, from Intel's tone
-// mapping: an analysis made before Polyfin recorded it. ffprobe reads the
+// that kept conversion, the video's planned conversion, from the tone
+// mapping of Intel's GPUs, through VAAPI or QSV: an analysis made before
+// Polyfin recorded it. ffprobe reads the
 // first frame of such a track once, and the answer is kept with the
 // analysis; it reports true with the analysis then known, after which the
 // conversion is planned again. A frame that cannot be read leaves the
@@ -20,7 +21,7 @@ import (
 // and video Intel would not tone map anyway, read nothing. A version read
 // from its input (see LocalInputs) has ffprobe read the input itself.
 func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Version, analysis media.Analysis, conversion *VideoConversion) (media.Analysis, bool) {
-	if conversion == nil || !conversion.ToneMapOnCPU || conversion.Hardware.Method != "vaapi" || !s.settings().GPUToneMapping ||
+	if conversion == nil || !conversion.ToneMapOnCPU || !conversion.Hardware.NeedsMasteringDisplay() || !s.settings().GPUToneMapping ||
 		version.HoldsConnection || !slices.ContainsFunc(analysis.Streams, media.NeedsMasteringProbe) {
 		return analysis, false
 	}

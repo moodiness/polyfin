@@ -114,14 +114,22 @@ func (m *Manager) Conversions() (running, limit int) {
 }
 
 // The methods an encoding makes its video by, as the metrics count them:
-// converted on an NVIDIA GPU, on a GPU through VAAPI, or on the
-// processor, or copied.
+// converted on an NVIDIA GPU, on a GPU through VAAPI, through
+// VideoToolbox, on an Intel GPU through QSV, on an AMD GPU through AMF, or
+// on the processor, or copied.
 const (
-	MethodNVIDIA    = "nvidia"
-	MethodVAAPI     = "vaapi"
-	MethodProcessor = "processor"
-	MethodCopy      = "copy"
+	MethodNVIDIA       = "nvidia"
+	MethodVAAPI        = "vaapi"
+	MethodVideoToolbox = "videotoolbox"
+	MethodQSV          = "qsv"
+	MethodAMF          = "amf"
+	MethodProcessor    = "processor"
+	MethodCopy         = "copy"
 )
+
+// conversionMethods are the methods converting video, as the metrics
+// list them.
+var conversionMethods = []string{MethodNVIDIA, MethodVAAPI, MethodVideoToolbox, MethodQSV, MethodAMF, MethodProcessor}
 
 // method is how an encoding converting its video to v makes it, copy for
 // nil.
@@ -134,8 +142,8 @@ func (v *VideoEncoding) method() string {
 	case v.Hardware.Method == "cuda":
 		return MethodNVIDIA
 	}
-	// The only other GPU method.
-	return MethodVAAPI
+	// The other GPU methods are named as the metrics name them.
+	return v.Hardware.Method
 }
 
 // ConversionsByMethod counts the encodings under way that convert their
@@ -147,8 +155,8 @@ func (m *Manager) ConversionsByMethod() []metrics.Sample {
 			counts[r.Video.method()]++
 		}
 	}
-	samples := make([]metrics.Sample, 0, 3)
-	for _, method := range []string{MethodNVIDIA, MethodVAAPI, MethodProcessor} {
+	samples := make([]metrics.Sample, 0, len(conversionMethods))
+	for _, method := range conversionMethods {
 		samples = append(samples, metrics.Sample{Labels: []string{method}, Value: counts[method]})
 	}
 	return samples

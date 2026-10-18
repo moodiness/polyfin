@@ -238,7 +238,8 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 		codec, convert string
 		encode         bool
 		gpu            string
-	}{{"aac", "", false, ""}, {"eac3", "", false, ""}, {"eac3", "aac", false, ""}, {"aac", "", true, ""}, {"aac", "", true, "nvenc"}, {"aac", "", true, "vaapi"}} {
+	}{{"aac", "", false, ""}, {"eac3", "", false, ""}, {"eac3", "aac", false, ""}, {"aac", "", true, ""}, {"aac", "", true, "nvenc"}, {"aac", "", true, "vaapi"},
+		{"aac", "", true, "videotoolbox"}} {
 		input, keyframes := source(t, ffmpeg, ffprobe, c.codec)
 		for _, format := range []Format{FMP4, TS} {
 			name := c.codec + " in " + format.Extension()
@@ -393,9 +394,9 @@ func TestHDRIsConvertedToSDR(t *testing.T) {
 		t.Fatalf("make the source: %v: %s", err, out)
 	}
 	plan := NewPlan(seconds(0, 6), 8*time.Second)
-	// On the processor, then on an NVIDIA GPU that tone maps, if there is
-	// one.
-	for _, gpu := range []string{"", "nvenc"} {
+	// On the processor, then on an NVIDIA GPU or VideoToolbox that tone
+	// maps, if there is one.
+	for _, gpu := range []string{"", "nvenc", "videotoolbox"} {
 		name := gpu
 		if name == "" {
 			name = "processor"

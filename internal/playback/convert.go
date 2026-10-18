@@ -224,18 +224,25 @@ func sizeClass(video MediaStream) int {
 
 // toneMapsOnGPU reports whether gpu, the GPU encoding the video, tone maps
 // it as the tuning allows. NVIDIA's tone maps any HDR, Dolby Vision with
-// no base layer other players read (profile 5) included. Intel's, through
-// VAAPI, takes only PQ (HDR10) frames carrying their mastering display,
-// without which FFmpeg's tonemap_vaapi fails: HLG, Dolby Vision profile 5
-// and a video whose mastering display is not known go to the processor.
+// no base layer other players read (profile 5) included. VideoToolbox
+// tone maps HDR10 and HLG, whose colors scale_vt converts, but not Dolby
+// Vision profile 5. Intel's, through VAAPI or QSV, takes only PQ (HDR10)
+// frames carrying their mastering display, without which FFmpeg's
+// tonemap_vaapi fails and vpp_qsv does not tone map: HLG, Dolby Vision
+// profile 5 and a video whose mastering display is not known go to the
+// processor.
 func toneMapsOnGPU(gpu *hls.Hardware, video MediaStream, t Tuning) bool {
 	switch {
 	case gpu == nil || !gpu.ToneMapping || t.CPUToneMapping:
 		return false
 	case gpu.Method == "cuda":
 		return true
+	case video.VideoRangeType == "DOVI":
+		return false
+	case gpu.Method == "videotoolbox":
+		return video.ColorTransfer == "smpte2084" || video.ColorTransfer == "arib-std-b67"
 	}
-	return video.ColorTransfer == "smpte2084" && video.VideoRangeType != "DOVI" && video.MasteringDisplay != nil && *video.MasteringDisplay
+	return video.ColorTransfer == "smpte2084" && video.MasteringDisplay != nil && *video.MasteringDisplay
 }
 
 // fits reports whether the 16:9 frame of a height holds the whole source,

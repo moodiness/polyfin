@@ -32,7 +32,7 @@ func registerMetrics(installed *addons.Store, playing *jellyfin.Handler, segment
 				samples, _ := playing.PlaybackCounts(ctx)
 				return samples
 			}),
-		metrics.NewGauges("polyfin_conversions", "Conversions under way, of files and channels, by method: nvidia, vaapi or processor.",
+		metrics.NewGauges("polyfin_conversions", "Conversions under way, of files and channels, by method: nvidia, vaapi, videotoolbox, qsv, amf or processor.",
 			[]string{"method"}, func(context.Context) []metrics.Sample { return segments.ConversionsByMethod() }),
 		metrics.NewGauges("polyfin_database_connections", "Connections to PostgreSQL, by state: in_use, idle, or max, the most the pool opens.",
 			[]string{"state"}, func(context.Context) []metrics.Sample {

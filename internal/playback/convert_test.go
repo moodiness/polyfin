@@ -122,14 +122,17 @@ func TestTheToneMappedCapFollowsTheCapability(t *testing.T) {
 	}
 }
 
-// An Intel GPU tone maps only HDR10 whose frames carry their mastering
-// display; HLG, Dolby Vision profile 5 and a mastering display unknown or
-// missing go to the processor, profile 5 then not at all. With tone
-// mapping on the graphics card turned off, NVIDIA's and Intel's GPUs both
-// leave HDR to the processor, and profile 5 is refused.
+// An Intel GPU, through VAAPI or QSV, tone maps only HDR10 whose frames
+// carry their mastering display; HLG, Dolby Vision profile 5 and a
+// mastering display unknown or missing go to the processor, profile 5
+// then not at all. VideoToolbox tone maps HDR10 and HLG, but not profile
+// 5. With tone mapping on the graphics card turned off,
+// every GPU leaves HDR to the processor, and profile 5 is refused.
 func TestWhereHDRIsToneMapped(t *testing.T) {
 	nvidia := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
 	intel := &hls.Hardware{Method: "vaapi", Device: "/dev/dri/renderD128", Encoders: []string{"h264_vaapi"}, ToneMapping: true}
+	qsv := &hls.Hardware{Method: "qsv", Encoders: []string{"h264_qsv"}, ToneMapping: true}
+	videoToolbox := &hls.Hardware{Method: "videotoolbox", Encoders: []string{"h264_videotoolbox"}, ToneMapping: true}
 	hdr10 := func(mastering *bool) MediaStream {
 		return MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", ColorTransfer: "smpte2084", Width: new(3840), Height: new(2160),
 			MasteringDisplay: mastering}
@@ -156,6 +159,13 @@ func TestWhereHDRIsToneMapped(t *testing.T) {
 		{"Intel, turned off", intel, true, hdr10(new(true)), cpu},
 		{"NVIDIA, turned off", nvidia, true, hdr10(nil), cpu},
 		{"NVIDIA, turned off, Dolby Vision profile 5", nvidia, true, profile5, refused},
+		{"QSV, HDR10 mastered", qsv, false, hdr10(new(true)), gpu},
+		{"QSV, HDR10 not probed yet", qsv, false, hdr10(nil), cpu},
+		{"QSV, HLG", qsv, false, hlg, cpu},
+		{"VideoToolbox, HDR10 not probed", videoToolbox, false, hdr10(nil), gpu},
+		{"VideoToolbox, HLG", videoToolbox, false, hlg, gpu},
+		{"VideoToolbox, Dolby Vision profile 5", videoToolbox, false, profile5, refused},
+		{"VideoToolbox, turned off", videoToolbox, true, hdr10(nil), cpu},
 	} {
 		can := Capabilities{Encoders: []string{"libx264"}, ToneMapping: true, Hardware: test.hw, Tuning: Tuning{CPUToneMapping: test.off}}
 		got := ConvertVideo("h264", Limits{}, test.video, can)

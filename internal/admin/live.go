@@ -112,7 +112,8 @@ type streamJSON struct {
 
 type videoConversionJSON struct {
 	Encoder string `json:"encoder"`
-	// Hardware is the GPU method, cuda or vaapi; empty for the CPU.
+	// Hardware is the GPU method, cuda, vaapi, videotoolbox, qsv or amf;
+	// empty for the CPU.
 	Hardware string `json:"hardware"`
 	Width    int    `json:"width"`
 	Height   int    `json:"height"`

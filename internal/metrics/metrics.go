@@ -47,11 +47,11 @@ var (
 	}, []string{"api", "status"})
 	segments = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "polyfin_segments_total",
-		Help: "HLS segments made of files, by method: nvidia, vaapi or processor when the video is converted, copy when it is copied.",
+		Help: "HLS segments made of files, by method: nvidia, vaapi, videotoolbox, qsv, amf or processor when the video is converted, copy when it is copied.",
 	}, []string{"method"})
 	encodingFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "polyfin_encoding_failures_total",
-		Help: "Remuxes and conversions FFmpeg failed, of files and channels, by method: nvidia, vaapi, processor or copy.",
+		Help: "Remuxes and conversions FFmpeg failed, of files and channels, by method: nvidia, vaapi, videotoolbox, qsv, amf, processor or copy.",
 	}, []string{"method"})
 	imports = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "polyfin_imports_total",

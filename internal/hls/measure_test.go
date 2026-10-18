@@ -13,10 +13,12 @@ import (
 
 // chainTimes are the injected durations of the timed conversions, by kind
 // and chain; a missing one fails. checkFails fails the Vulkan decoding
-// check, sampleFails the making of the samples.
+// check, sampleFails the making of the samples, and brokenDeinterlacers
+// the check of those deinterlacers.
 type chainTimes struct {
 	sdrMemory, sdrGPU, hdrMemory, hdrGPU time.Duration
 	checkFails, sampleFails              bool
+	brokenDeinterlacers                  []string
 }
 
 // fakeRunner stands in for FFmpeg: it answers each command line by what it
@@ -54,6 +56,14 @@ func (f *fakeRunner) run(_ context.Context, args []string) (time.Duration, error
 			return 0, failed
 		}
 		return time.Second, nil
+	case strings.HasPrefix(vf, "format=nv12,hwupload,") && strings.HasSuffix(vf, ",hwdownload,format=nv12"):
+		filters := strings.Split(vf, ",")
+		name, _, _ := strings.Cut(filters[len(filters)-3], "=")
+		f.runs["deinterlacer "+name] = args
+		if slices.Contains(f.times.brokenDeinterlacers, name) {
+			return 0, failed
+		}
+		return time.Second, nil
 	case vf == "hwdownload,format=p010le":
 		f.runs["check"] = args
 		if f.times.checkFails {
@@ -64,7 +74,8 @@ func (f *fakeRunner) run(_ context.Context, args []string) (time.Duration, error
 		return answer("hdr gpu", f.times.hdrGPU)
 	case strings.Contains(vf, "libplacebo"):
 		return answer("hdr memory", f.times.hdrMemory)
-	case strings.Contains(vf, "scale_cuda") || strings.Contains(vf, "scale_vaapi"):
+	case strings.Contains(vf, "scale_cuda") || strings.Contains(vf, "scale_vaapi") || strings.Contains(vf, "scale_vt") ||
+		strings.Contains(vf, "scale_qsv") || strings.Contains(vf, "vpp_amf"):
 		return answer("sdr gpu", f.times.sdrGPU)
 	case strings.HasPrefix(vf, "scale=w=1920:h=1080"):
 		return answer("sdr memory", f.times.sdrMemory)

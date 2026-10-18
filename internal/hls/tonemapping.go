@@ -111,11 +111,16 @@ var errNoHDREncoder = errors.New("no encoder writes HEVC in 10 bits")
 func (m *Manager) makeHDRSample(ctx context.Context, hw *Hardware, path string) error {
 	pattern := []string{"-f", "lavfi", "-i", "testsrc2=size=3840x2160:rate=24", "-t", strconv.FormatFloat(sampleLength.Seconds(), 'f', -1, 64)}
 	var encodes [][]string
-	if hw != nil && slices.Contains(hw.Encoders, "hevc_nvenc") {
-		encodes = append(encodes, slices.Concat(pattern, []string{"-vf", "format=p010le," + hdrTags, "-c:v", "hevc_nvenc", "-profile:v", "main10"}))
+	i := -1
+	if hw != nil {
+		i = slices.IndexFunc(hw.Encoders, func(e string) bool { return strings.HasPrefix(e, "hevc_") })
 	}
-	if hw != nil && slices.Contains(hw.Encoders, "hevc_vaapi") {
-		encodes = append(encodes, slices.Concat(hw.devices(), pattern, []string{"-vf", "format=p010le," + hdrTags + ",hwupload", "-c:v", "hevc_vaapi", "-profile:v", "main10"}))
+	if i >= 0 {
+		if hw.Method == "vaapi" {
+			encodes = append(encodes, slices.Concat(hw.devices(), pattern, []string{"-vf", "format=p010le," + hdrTags + ",hwupload", "-c:v", hw.Encoders[i], "-profile:v", "main10"}))
+		} else {
+			encodes = append(encodes, slices.Concat(pattern, []string{"-vf", "format=p010le," + hdrTags, "-c:v", hw.Encoders[i], "-profile:v", "main10"}))
+		}
 	}
 	if slices.Contains(m.can.encoders, "libx265") {
 		encodes = append(encodes, slices.Concat(pattern, []string{"-vf", "format=yuv420p10le," + hdrTags, "-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=error"}))

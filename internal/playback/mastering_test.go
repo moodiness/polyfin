@@ -54,7 +54,8 @@ func TestTheMasteringDisplayIsLearnedOnceForIntel(t *testing.T) {
 	if _, err := s.db.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", version.ID, data); err != nil {
 		t.Fatal(err)
 	}
-	for _, conversion := range []*VideoConversion{nil, onCPU(nvidia), {Codec: "h264", Encoder: "h264_vaapi", ToneMap: true, Hardware: intel}} {
+	videoToolbox := &hls.Hardware{Method: "videotoolbox", Encoders: []string{"h264_videotoolbox"}, ToneMapping: true}
+	for _, conversion := range []*VideoConversion{nil, onCPU(nvidia), onCPU(videoToolbox), {Codec: "h264", Encoder: "h264_vaapi", ToneMap: true, Hardware: intel}} {
 		if _, ok := s.LearnMasteringDisplay(t.Context(), version, old, conversion); ok || runs() != 0 {
 			t.Errorf("%+v: learned %v after %d runs", conversion, ok, runs())
 		}

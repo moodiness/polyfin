@@ -28,7 +28,9 @@ const slotWait = 15 * time.Second
 // are made smaller. Video fills in the encoder, a GPU's or libx265, with
 // the video's Width, Height and FrameRate, the deinterlacing, and the
 // settings' Preset and Quality; Bitrate is the source's, which caps the
-// copy's, 0 when unknown.
+// copy's, 0 when unknown. The quality factor is on x265's scale, which
+// QSV's and AMF's share, and VideoToolbox's is drawn from (see
+// videoToolboxQuality).
 type FileConversion struct {
 	Input, Output string
 	Video         VideoEncoding
@@ -45,11 +47,27 @@ func (c FileConversion) args() []string {
 	args = append(args, v.inputs()...)
 	args = append(args, "-i", c.Input, "-map", "0", "-c", "copy", "-c:v", v.Encoder, "-vf", v.filters())
 	quality := cmp.Or(v.Quality, HEVCQuality)
-	switch v.Encoder {
-	case "libx265":
+	switch encoderFamily(v.Encoder) {
+	case familySoftware:
 		args = append(args, "-preset", cmp.Or(v.Preset, "veryfast"), "-crf", strconv.Itoa(quality), "-x265-params", "log-level=error")
-	case "hevc_nvenc":
+	case familyNVENC:
 		args = append(args, "-preset", cmp.Or(nvencPresets[v.Preset], "p4"), "-rc", "vbr", "-cq", strconv.Itoa(quality), "-b:v", "0")
+	case familyVideoToolbox:
+		args = append(args, "-global_quality", strconv.Itoa(videoToolboxQuality(quality)))
+		if speed := videoToolboxSpeed[v.Preset]; speed != "" {
+			args = append(args, "-prio_speed", speed)
+		}
+	case familyQSV:
+		// Intelligent constant quality, on the same scale as x265's.
+		args = append(args, "-global_quality", strconv.Itoa(quality))
+		if preset := qsvPresets[v.Preset]; preset != "" {
+			args = append(args, "-preset", preset)
+		}
+	case familyAMF:
+		args = append(args, "-rc", "cqp", "-qp_i", strconv.Itoa(quality), "-qp_p", strconv.Itoa(quality))
+		if preset := amfQualities[v.Preset]; preset != "" {
+			args = append(args, "-quality", preset)
+		}
 	default:
 		if v.Hardware != nil && v.Hardware.QVBR && v.Bitrate > 0 {
 			args = append(args, "-rc_mode", "QVBR", "-global_quality", strconv.Itoa(quality), "-b:v", strconv.FormatInt(v.Bitrate/2, 10))

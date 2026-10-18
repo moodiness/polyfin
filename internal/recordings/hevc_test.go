@@ -532,3 +532,20 @@ func (r *forgettingRecorder) forgotten() []accounts.ID {
 	defer r.mu.Unlock()
 	return slices.Clone(r.files)
 }
+
+// Recordings are converted by the HEVC encoder of whichever GPU method
+// the system offers: VideoToolbox on macOS, QSV or AMF on Windows.
+func TestEachGPUMethodsHEVCEncoderConvertsRecordings(t *testing.T) {
+	c := &fakeConverter{encoders: []string{"libx265"}, copyBytes: 10}
+	f, _ := conversionFixture(t, c, fakeProber{copyLength: 10 * time.Second})
+	for method, encoders := range map[string][]string{
+		"videotoolbox": {"h264_videotoolbox", "hevc_videotoolbox"},
+		"qsv":          {"h264_qsv", "hevc_qsv"},
+		"amf":          {"h264_amf", "hevc_amf"},
+	} {
+		c.hardware = &hls.Hardware{Method: method, Encoders: encoders}
+		if encoding, ok := f.service.hevcEncoder(accounts.Settings{}); !ok || encoding.Encoder != encoders[1] || encoding.Hardware != c.hardware {
+			t.Errorf("%s: %+v, %v", method, encoding, ok)
+		}
+	}
+}

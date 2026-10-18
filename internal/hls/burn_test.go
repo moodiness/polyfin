@@ -33,12 +33,14 @@ func TestImageSubtitlesAreBurnedIn(t *testing.T) {
 		t.Fatalf("add the subtitles: %v: %s", err, out)
 	}
 	// In software, then on each GPU found, which takes larger pictures, and
-	// on an NVIDIA GPU that tone maps, the subtitles laid over the frames
-	// libplacebo returns.
+	// on an NVIDIA GPU or VideoToolbox that tone maps, the subtitles laid
+	// over the frames libplacebo returns, or scale_vt brought down to
+	// memory.
 	for _, variant := range []struct {
 		name, gpu string
 		toneMap   bool
-	}{{"software", "", false}, {"nvenc", "nvenc", false}, {"vaapi", "vaapi", false}, {"nvenc tone mapped", "nvenc", true}} {
+	}{{"software", "", false}, {"nvenc", "nvenc", false}, {"vaapi", "vaapi", false}, {"videotoolbox", "videotoolbox", false},
+		{"nvenc tone mapped", "nvenc", true}, {"videotoolbox tone mapped", "videotoolbox", true}} {
 		t.Run(variant.name, func(t *testing.T) {
 			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
 			if err != nil {

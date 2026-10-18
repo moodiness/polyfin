@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -163,12 +164,15 @@ type VideoEncoding struct {
 	Hardware *Hardware
 	// Preset trades the encoder's speed for quality: one of x264's preset
 	// names, from veryslow to ultrafast, which the other encoders' follow
-	// (see nvencPresets and vaapiCompression). Empty keeps Polyfin's:
-	// veryfast in software, p4 on NVIDIA GPUs, the driver's on VAAPI.
+	// (see nvencPresets, vaapiCompression, qsvPresets, amfQualities and
+	// videoToolboxSpeed). Empty keeps Polyfin's: veryfast in software, p4
+	// on NVIDIA GPUs, the encoder's own on the others.
 	Preset string
 	// Quality is the encoder's quality factor, Bitrate then being a cap:
-	// CRF in software, CQ on NVIDIA GPUs and QVBR's on VAAPI drivers that
-	// have it (see Hardware.QVBR). 0 aims for Bitrate.
+	// CRF in software, CQ on NVIDIA GPUs, QVBR's on VAAPI drivers that
+	// have it (see Hardware.QVBR), and VideoToolbox's (see
+	// videoToolboxQuality); QSV and AMF aim for Bitrate. 0 aims for
+	// Bitrate.
 	Quality int
 	// ToneMapCurve is the curve HDR is tone mapped with: bt2390, hable,
 	// reinhard, mobius, clip or linear. Empty is BT.2390 on the GPU and
@@ -193,8 +197,8 @@ func (v *VideoEncoding) filters() string {
 	switch v.pipeline() {
 	case onGPU:
 		return v.gpuFilters()
-	case throughVAAPI:
-		return v.vaapiToneMapping()
+	case throughDevice:
+		return v.deviceToneMapping()
 	}
 	return v.convert() + "," + v.Hardware.output()
 }
@@ -203,8 +207,9 @@ func (v *VideoEncoding) filters() string {
 // SDR, before the pixel format the encoder takes, in memory. On NVIDIA's
 // GPU, libplacebo scales and tone maps in one pass, applying the Dolby
 // Vision metadata FFmpeg's decoder exports, and with the BT.2390 curve,
-// which keeps midtones brighter than the processor's Hable. Intel's tone
-// mapping keeps the frames on the GPU (see vaapiToneMapping).
+// which keeps midtones brighter than the processor's Hable. The tone
+// mapping of Intel's GPUs and of VideoToolbox keeps the frames on the GPU
+// (see deviceToneMapping).
 func (v *VideoEncoding) convert() string {
 	var filters []string
 	if v.Deinterlace {
@@ -275,8 +280,8 @@ const burnLead = 10 * time.Second
 // converted video keeping its shape, and laid at the bottom: a
 // video cropped since keeps the subtitles near its bottom edge. It is laid
 // after the conversion to SDR, which would dim its colors, and in memory,
-// before a GPU encoder takes the frames: Intel's tone mapped frames come
-// down to memory for it.
+// before a GPU encoder takes the frames: the frames Intel's GPUs and
+// VideoToolbox tone mapped come down to memory for it.
 //
 // FFmpeg repeats the canvas of a stream of the source for every packet
 // read from the source, which is over a thousand a second with TrueHD
@@ -287,8 +292,8 @@ const burnLead = 10 * time.Second
 // start but those of its last burnLead are left out before scaling.
 func (v *VideoEncoding) burnGraph(video int, from time.Duration, skip string) string {
 	converted := v.convert() + ",format=yuv420p"
-	if v.pipeline() == throughVAAPI {
-		converted = v.vaapiToneMapping() + ",hwdownload,format=nv12"
+	if v.pipeline() == throughDevice {
+		converted = v.deviceToneMapping() + ",hwdownload,format=nv12"
 	}
 	var subtitle string
 	switch {
@@ -377,19 +382,83 @@ var nvencPresets = map[string]string{"veryslow": "p7", "slower": "p6", "slow": "
 var vaapiCompression = map[string]string{"veryslow": "1", "slower": "2", "slow": "3", "medium": "4", "fast": "5", "faster": "6",
 	"veryfast": "7", "superfast": "7", "ultrafast": "7"}
 
+// qsvPresets are QSV's presets for x264's names: QSV's go from veryslow
+// to veryfast.
+var qsvPresets = map[string]string{"veryslow": "veryslow", "slower": "slower", "slow": "slow", "medium": "medium", "fast": "fast",
+	"faster": "faster", "veryfast": "veryfast", "superfast": "veryfast", "ultrafast": "veryfast"}
+
+// amfQualities are AMF's quality presets for x264's names.
+var amfQualities = map[string]string{"veryslow": "quality", "slower": "quality", "slow": "quality", "medium": "balanced", "fast": "balanced",
+	"faster": "speed", "veryfast": "speed", "superfast": "speed", "ultrafast": "speed"}
+
+// videoToolboxSpeed tells VideoToolbox whether to put speed before quality
+// for x264's names: medium and auto leave it to VideoToolbox.
+var videoToolboxSpeed = map[string]string{"veryslow": "0", "slower": "0", "slow": "0", "fast": "1", "faster": "1", "veryfast": "1",
+	"superfast": "1", "ultrafast": "1"}
+
+// The families of FFmpeg's encoders Polyfin converts video with, each
+// taking its own options.
+const (
+	familySoftware     = "software"
+	familyNVENC        = "nvenc"
+	familyVAAPI        = "vaapi"
+	familyVideoToolbox = "videotoolbox"
+	familyQSV          = "qsv"
+	familyAMF          = "amf"
+)
+
+// encoderFamily is the family of an encoder, by its name: libx264 and
+// libx265, or a GPU's, such as h264_qsv.
+func encoderFamily(encoder string) string {
+	switch {
+	case encoder == "libx264" || encoder == "libx265":
+		return familySoftware
+	case strings.HasSuffix(encoder, "_nvenc"):
+		return familyNVENC
+	case strings.HasSuffix(encoder, "_videotoolbox"):
+		return familyVideoToolbox
+	case strings.HasSuffix(encoder, "_qsv"):
+		return familyQSV
+	case strings.HasSuffix(encoder, "_amf"):
+		return familyAMF
+	}
+	return familyVAAPI
+}
+
+// videoToolboxQuality is VideoToolbox's quality, from 1 to 100, the best,
+// for a quality factor on x264's scale, where 0 is the best and 51 the
+// worst: 28 is 44.
+func videoToolboxQuality(factor int) int {
+	return min(max(100-2*factor, 1), 100)
+}
+
+// amfLevel is a codec level as AMF's encoders name it: "5.0" for "5".
+func amfLevel(level string) string {
+	if level != "" && !strings.Contains(level, ".") {
+		return level + ".0"
+	}
+	return level
+}
+
 // encoderArgs are FFmpeg's encoder options, with keyframes forced as
 // -force_key_frames takes them, and the frames going through skip before
-// the video's filters (see skip).
+// the video's filters (see skip). A quality factor is taken in software,
+// by NVENC, by VAAPI drivers with QVBR and by VideoToolbox, within the
+// maximum rate; QSV's and AMF's encoders aim for the bitrate, as their
+// quality modes leave the maximum rate out.
 func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
-	nvenc := v.Encoder == "h264_nvenc" || v.Encoder == "hevc_nvenc"
-	software := v.Encoder == "libx264" || v.Encoder == "libx265"
-	qvbr := v.Quality > 0 && !software && !nvenc && v.Hardware != nil && v.Hardware.QVBR
+	family := encoderFamily(v.Encoder)
+	software, nvenc := family == familySoftware, family == familyNVENC
+	qvbr := v.Quality > 0 && family == familyVAAPI && v.Hardware != nil && v.Hardware.QVBR
+	quality := v.Quality > 0 && (software || nvenc || family == familyVideoToolbox)
 	args := []string{"-c:v", v.Encoder}
 	switch {
-	case v.Quality > 0 && software:
+	case quality && software:
 		// The quality factor rules, within the maximum rate.
-	case v.Quality > 0 && nvenc:
+	case quality && nvenc:
 		args = append(args, "-b:v", "0")
+	case quality:
+		// VideoToolbox's quality replaces its average bitrate.
 	default:
 		args = append(args, "-b:v", strconv.FormatInt(v.Bitrate, 10))
 	}
@@ -410,20 +479,44 @@ func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 	case nvenc:
 		// A forced keyframe is an IDR frame, as a segment's first must be.
 		args = append(args, "-preset", cmp.Or(nvencPresets[v.Preset], "p4"), "-rc", "vbr", "-forced-idr", "1", "-profile:v", profile, "-level:v", v.Level)
+	case family == familyVideoToolbox:
+		// VideoToolbox makes a forced keyframe an IDR frame. Its H.264
+		// encoder names levels up to 5.2, and picks one itself above;
+		// its HEVC encoder takes none.
+		args = append(args, "-profile:v", profile)
+		if profile == "high" && v.Level <= "5.2" {
+			args = append(args, "-level:v", v.Level)
+		}
+		if speed := videoToolboxSpeed[v.Preset]; speed != "" {
+			args = append(args, "-prio_speed", speed)
+		}
+	case family == familyQSV:
+		// QSV takes levels as numbers of its own, and picks one itself.
+		args = append(args, "-forced_idr", "1", "-profile:v", profile)
+		if preset := qsvPresets[v.Preset]; preset != "" {
+			args = append(args, "-preset", preset)
+		}
+	case family == familyAMF:
+		args = append(args, "-rc", "vbr_peak", "-forced_idr", "1", "-profile:v", profile, "-level:v", amfLevel(v.Level))
+		if preset := amfQualities[v.Preset]; preset != "" {
+			args = append(args, "-quality", preset)
+		}
 	case qvbr:
 		args = append(args, "-rc_mode", "QVBR", "-profile:v", profile, "-level:v", v.Level)
 	default:
 		args = append(args, "-rc_mode", "VBR", "-profile:v", profile, "-level:v", v.Level)
 	}
 	switch {
-	case v.Quality > 0 && software:
+	case quality && software:
 		args = append(args, "-crf", strconv.Itoa(v.Quality))
-	case v.Quality > 0 && nvenc:
+	case quality && nvenc:
 		args = append(args, "-cq", strconv.Itoa(v.Quality))
+	case quality:
+		args = append(args, "-global_quality", strconv.Itoa(videoToolboxQuality(v.Quality)))
 	case qvbr:
 		args = append(args, "-global_quality", strconv.Itoa(v.Quality))
 	}
-	if level := vaapiCompression[v.Preset]; level != "" && !software && !nvenc {
+	if level := vaapiCompression[v.Preset]; level != "" && family == familyVAAPI {
 		args = append(args, "-compression_level", level)
 	}
 	return args
@@ -579,6 +672,9 @@ type Manager struct {
 	// vendor, when set, tells the PCI vendor of a render node in place of
 	// Linux, for tests.
 	vendor func(node string) string
+	// system is the GOOS whose GPU methods detection tries (see methods):
+	// runtime.GOOS.
+	system string
 	// conversions returns how many playbacks may have their video
 	// converted at once, 0 or less for no limit; nil sets no limit.
 	conversions func() int
@@ -629,7 +725,8 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), stall: stallTimeout, grace: recordGrace,
+	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), system: runtime.GOOS, stall: stallTimeout,
+		grace:    recordGrace,
 		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{},
 		kept: map[Key]*keeping{}}
 	m.linger.Store(int64(variantLinger))

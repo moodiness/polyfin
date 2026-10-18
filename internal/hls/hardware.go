@@ -14,14 +14,18 @@ import (
 // Hardware is a GPU FFmpeg decodes and encodes video on. Decoded frames
 // either stay in the GPU's memory until they are encoded, scaled there in
 // SDR (see Resident) and tone mapped there from Vulkan frames (see
-// VulkanDecoding) or by Intel's video processing, or come back to memory
-// for the filters and go to the GPU again to be encoded: Polyfin times
-// both at startup and keeps the faster for each kind of conversion. Burned
-// subtitles, tone mapping on the processor and decoding left to the
-// processor go through memory. A GPU that cannot decode a codec leaves it
-// to FFmpeg's own decoder, and the conversion looks the same either way.
+// VulkanDecoding) or by the GPU's own video processing (see
+// deviceToneMapping), or come back to memory for the filters and go to
+// the GPU again to be encoded: Polyfin times both at startup and keeps the
+// faster for each kind of conversion. Burned subtitles, tone mapping on
+// the processor and decoding left to the processor go through memory. A
+// GPU that cannot decode a codec leaves it to FFmpeg's own decoder, and
+// the conversion looks the same either way.
 type Hardware struct {
-	// Method is cuda, for NVIDIA GPUs, or vaapi, for AMD and Intel ones.
+	// Method is the GPU method: cuda for NVIDIA GPUs, on Linux and
+	// Windows; vaapi for AMD and Intel ones on Linux; videotoolbox on
+	// macOS; qsv for Intel GPUs and amf for AMD ones on Windows, which
+	// both decode through D3D11VA.
 	Method string
 	// Device is the render node VAAPI opens.
 	Device string
@@ -30,22 +34,26 @@ type Hardware struct {
 	// ToneMapping is set when the GPU also scales video and tone maps HDR
 	// to SDR, which a short HDR10 sample proved at startup. NVIDIA's do it
 	// through libplacebo on their Vulkan driver, which applies Dolby
-	// Vision's metadata. Intel's do it through VAAPI's video processing
-	// (tonemap_vaapi), for HDR10 whose frames carry their mastering
-	// display. AMD's never do: on AMD GPUs, the frames libplacebo imports
-	// from memory set off a fault in the Linux driver, mapping VAAPI frames
-	// into Vulkan fails, and Vulkan's HEVC decoder hung the GPU.
+	// Vision's metadata. Intel's do it through their video processing,
+	// tonemap_vaapi on Linux and vpp_qsv on Windows, for HDR10 whose
+	// frames carry their mastering display. VideoToolbox does it through
+	// scale_vt, for HDR10 and HLG. AMD's never do: on Linux, the frames
+	// libplacebo imports from memory set off a fault in the driver,
+	// mapping VAAPI frames into Vulkan fails, and Vulkan's HEVC decoder
+	// hung the GPU; on Windows, FFmpeg's AMF filter converts colors but
+	// does not tone map.
 	ToneMapping bool
 	// QVBR is set when a VAAPI driver takes a quality factor within a
 	// maximum rate, which a quality set in the settings needs there: AMD's
 	// drivers often lack it.
 	QVBR bool
 	// Resident is set when SDR frames the GPU decoded stay in its memory to
-	// be scaled, by scale_cuda or scale_vaapi, and encoded, which worked and
-	// was faster than going through memory at startup. Deinterlacers are
-	// the deinterlacing filters FFmpeg has for such frames, and for those
-	// an Intel GPU tone maps: yadif_cuda and bwdif_cuda, or
-	// deinterlace_vaapi.
+	// be scaled, by scale_cuda, scale_vaapi, scale_vt, scale_qsv or
+	// vpp_amf, and encoded, which worked and was faster than going through
+	// memory at startup. Deinterlacers are the deinterlacing filters that
+	// deinterlaced such frames at startup, and those a GPU tone maps:
+	// yadif_cuda and bwdif_cuda, deinterlace_vaapi, yadif_videotoolbox,
+	// or vpp_qsv.
 	Resident      bool
 	Deinterlacers []string
 	// VulkanDecoding is set when the GPU of ToneMapping also decodes HEVC
@@ -58,29 +66,56 @@ type Hardware struct {
 }
 
 // gpuMethod is a GPU method, named as POLYFIN_HWACCEL names it, with the
-// encoders Polyfin uses, the filter scaling frames in the GPU's memory and
-// the deinterlacers taking them.
+// systems offering it, the encoders Polyfin uses, the filters frames kept
+// in the GPU's memory need, and the deinterlacers taking them.
 type gpuMethod struct {
 	name, method  string
+	systems       []string
 	encoders      []string
-	scaler        string
+	filters       []string
 	deinterlacers []string
 }
 
-// hardwareMethods are the GPU methods by preference.
+// hardwareMethods are the GPU methods by preference. Each system offers
+// its own, as accounts.HardwareAccelerationsOn lists them: NVIDIA and
+// VAAPI on Linux, VideoToolbox on macOS, NVIDIA, Intel's QSV and AMD's
+// AMF on Windows.
 var hardwareMethods = []gpuMethod{
-	{"nvenc", "cuda", []string{"h264_nvenc", "hevc_nvenc"}, "scale_cuda", []string{"yadif_cuda", "bwdif_cuda"}},
-	{"vaapi", "vaapi", []string{"h264_vaapi", "hevc_vaapi"}, "scale_vaapi", []string{"deinterlace_vaapi"}},
+	{"nvenc", "cuda", []string{"linux", "windows"}, []string{"h264_nvenc", "hevc_nvenc"}, []string{"hwupload", "scale_cuda"},
+		[]string{"yadif_cuda", "bwdif_cuda"}},
+	{"vaapi", "vaapi", []string{"linux"}, []string{"h264_vaapi", "hevc_vaapi"}, []string{"hwupload", "scale_vaapi"}, []string{"deinterlace_vaapi"}},
+	{"videotoolbox", "videotoolbox", []string{"darwin"}, []string{"h264_videotoolbox", "hevc_videotoolbox"}, []string{"hwupload", "scale_vt"},
+		[]string{"yadif_videotoolbox"}},
+	{"qsv", "qsv", []string{"windows"}, []string{"h264_qsv", "hevc_qsv"}, []string{"hwupload", "hwmap", "scale_qsv"}, []string{"vpp_qsv"}},
+	{"amf", "amf", []string{"windows"}, []string{"h264_amf", "hevc_amf"}, []string{"hwupload", "vpp_amf"}, nil},
+}
+
+// methods are the GPU methods detection tries: those of m.system, every
+// one when it is empty, as tests leave it.
+func (m *Manager) methods() []gpuMethod {
+	if m.system == "" {
+		return hardwareMethods
+	}
+	var methods []gpuMethod
+	for _, method := range hardwareMethods {
+		if slices.Contains(method.systems, m.system) {
+			methods = append(methods, method)
+		}
+	}
+	return methods
 }
 
 // DetectHardware chooses the GPU video is converted on, by encoding a few
-// frames with each encoder: with want auto, the first of NVIDIA and VAAPI
-// that encodes, VAAPI on device or else on each render node in turn; with
-// nvenc or vaapi, that one only; with none, none. Each want is detected
-// once: choosing it again switches to what was found, encodings already
-// running going on as they started. It reports false when no GPU encodes.
-// The GPU's conversion chains are then timed in the background (see
-// measure): conversions starting before that ends go through memory.
+// frames with each encoder of the methods this system offers: with want
+// auto, the first that encodes, by preference (NVIDIA then VAAPI on
+// Linux, NVIDIA then QSV then AMF on Windows, VideoToolbox on macOS),
+// VAAPI on device or else on each render node in turn; with a method's
+// name, that one only; with none, none. Each want is detected once:
+// choosing it again switches to what was found, encodings already running
+// going on as they started. It reports false when no GPU encodes, and
+// conversions then run on the processor. The GPU's conversion chains are
+// then timed in the background (see measure): conversions starting before
+// that ends go through memory.
 func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 	m.detecting.Lock()
 	defer m.detecting.Unlock()
@@ -117,7 +152,7 @@ func (m *Manager) SelectHardware(want, device string) {
 
 // detect finds the GPU want asks for (see DetectHardware), nil for none.
 func (m *Manager) detect(want, device string) *Hardware {
-	for _, candidate := range hardwareMethods {
+	for _, candidate := range m.methods() {
 		if want != "auto" && want != candidate.name {
 			continue
 		}
@@ -143,14 +178,20 @@ func (m *Manager) detect(want, device string) *Hardware {
 }
 
 // toneMaps reports whether hw tone maps HDR to SDR, as conversions would:
-// NVIDIA's GPU with libplacebo, and Intel's with tonemap_vaapi. AMD's are
-// never tried (see Hardware.ToneMapping).
+// NVIDIA's GPU with libplacebo, Intel's with tonemap_vaapi or vpp_qsv,
+// and VideoToolbox with scale_vt. AMD's are never tried (see
+// Hardware.ToneMapping).
 func (m *Manager) toneMaps(hw Hardware) bool {
+	x265 := slices.Contains(m.can.encoders, "libx265")
 	switch {
 	case hw.Method == "cuda":
 		return m.HasFilters("libplacebo") && m.placeboToneMaps(hw)
 	case hw.Method == "vaapi" && m.vendorOf(hw.Device) == intelVendor:
-		return m.HasFilters("hwupload", "scale_vaapi", "tonemap_vaapi") && slices.Contains(m.can.encoders, "libx265") && m.vaapiToneMaps(hw)
+		return m.HasFilters("hwupload", "scale_vaapi", "tonemap_vaapi") && x265 && m.deviceToneMaps(hw)
+	case hw.Method == "videotoolbox":
+		return m.HasFilters("hwupload", "scale_vt") && x265 && m.deviceToneMaps(hw)
+	case hw.Method == "qsv":
+		return m.HasFilters("hwupload", "hwmap", "vpp_qsv") && x265 && m.deviceToneMaps(hw)
 	}
 	return false
 }
@@ -168,12 +209,13 @@ func (m *Manager) placeboToneMaps(hw Hardware) bool {
 	return m.succeeds(args...)
 }
 
-// vaapiToneMaps reports whether hw, an Intel GPU, tone maps a quarter of a
-// second of HDR10 through the chain conversions use, decoded by VAAPI.
-// tonemap_vaapi takes no frame without the mastering display of HDR10,
-// which no filter adds: the sample is HEVC from x265, which writes it,
-// and FFmpeg's decoder passes it on to the frames.
-func (m *Manager) vaapiToneMaps(hw Hardware) bool {
+// deviceToneMaps reports whether hw, Intel's GPU or VideoToolbox, tone
+// maps a quarter of a second of HDR10 through the chain conversions use,
+// decoded on the GPU (see deviceToneMapping). tonemap_vaapi and vpp_qsv
+// take no frame without the mastering display of HDR10, which no filter
+// adds: the sample is HEVC from x265, which writes it, and FFmpeg's
+// decoder passes it on to the frames.
+func (m *Manager) deviceToneMaps(hw Hardware) bool {
 	dir, err := os.MkdirTemp(m.dir, "tone-mapping-")
 	if err != nil {
 		return false
@@ -193,8 +235,12 @@ func (m *Manager) vaapiToneMaps(hw Hardware) bool {
 // BT.2020 display mastered at 1000 nits, and content up to 1000 nits.
 const hdr10Params = "log-level=error:hdr10=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400"
 
-// intelVendor is Intel's PCI vendor ID, as Linux names a render node's.
-const intelVendor = "0x8086"
+// The PCI vendor IDs of Intel and AMD, as Linux names a render node's and
+// Direct3D 11 an adapter's.
+const (
+	intelVendor = "0x8086"
+	amdVendor   = "0x1002"
+)
 
 // vendorOf is the PCI vendor ID of the GPU behind a render node, such as
 // 0x8086 for Intel and 0x1002 for AMD, empty when unknown, through
@@ -272,10 +318,12 @@ func speed(d time.Duration, err error) string {
 
 // measure converts a sample through memory and on the GPU, for each kind
 // of conversion hw may keep there, and keeps the faster: SDR H.264 scaled
-// by scale_cuda or scale_vaapi (Resident), and on a GPU that tone maps,
-// HDR10 HEVC in 10 bits decoded into Vulkan frames for libplacebo
-// (VulkanDecoding), once Vulkan proved to decode it. Every failure leaves
-// frames going through memory. It logs what it timed.
+// on the GPU (Resident), and on a GPU that tone maps, HDR10 HEVC in 10
+// bits decoded into Vulkan frames for libplacebo (VulkanDecoding), once
+// Vulkan proved to decode it. Every failure leaves frames going through
+// memory. The deinterlacers of frames kept on the GPU are those that
+// deinterlaced a quarter of a second there: a filter FFmpeg lists may
+// still fail, or crash, on a GPU. It logs what it timed.
 func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 	i := slices.IndexFunc(hardwareMethods, func(c gpuMethod) bool { return c.method == hw.Method })
 	if i < 0 || len(hw.Encoders) == 0 {
@@ -297,7 +345,7 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 			encoder = e
 		}
 	}
-	if m.HasFilters(method.scaler, "hwupload") {
+	if m.HasFilters(method.filters...) {
 		sdr := filepath.Join(dir, "sdr.mkv")
 		var encode []string
 		switch {
@@ -318,9 +366,9 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 			}
 		}
 	}
-	if hw.Resident || hw.ToneMapping && hw.Method == "vaapi" {
+	if hw.Resident || hw.ToneMapping && hw.Method != "cuda" {
 		for _, name := range method.deinterlacers {
-			if m.HasFilters(name) {
+			if m.HasFilters(name) && m.deinterlaces(ctx, hw, name) {
 				hw.Deinterlacers = append(hw.Deinterlacers, name)
 			}
 		}
@@ -445,12 +493,34 @@ func (m *Manager) encodes(hw Hardware, encoder string, options ...string) bool {
 	return m.succeeds(args...)
 }
 
+// deinterlaces reports whether the deinterlacer name deinterlaces a
+// quarter of a second of test pattern uploaded to hw, as frames kept on
+// the GPU are.
+func (m *Manager) deinterlaces(ctx context.Context, hw Hardware, name string) bool {
+	hw.Deinterlacers = []string{name}
+	// yadif_cuda is yadif's counterpart, and so on (see gpuDeinterlacer).
+	deinterlacer, _, _ := strings.Cut(name, "_")
+	v := VideoEncoding{Deinterlace: true, Deinterlacer: deinterlacer, Hardware: &hw}
+	filters := slices.Concat([]string{"format=nv12", "hwupload"}, hw.mapping(), []string{v.gpuDeinterlacer(), "hwdownload", "format=nv12"})
+	_, err := m.timed(ctx, slices.Concat(probeStart, hw.residentDevices(), []string{"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-t", "0.25",
+		"-vf", strings.Join(filters, ","), "-f", "null", "-"}))
+	return err == nil
+}
+
 // devices are FFmpeg's options opening the GPU for filters: VAAPI's
-// render node, which the upload before the encoder needs. NVENC opens
-// the NVIDIA GPU itself.
+// render node, which the upload before the encoder needs, VideoToolbox,
+// or the Direct3D 11 adapter of Intel or AMD, which QSV and AMF derive
+// their devices from. NVENC opens the NVIDIA GPU itself.
 func (hw Hardware) devices() []string {
-	if hw.Method == "vaapi" {
+	switch hw.Method {
+	case "vaapi":
 		return []string{"-init_hw_device", "vaapi=va:" + hw.Device, "-filter_hw_device", "va"}
+	case "videotoolbox":
+		return []string{"-init_hw_device", "videotoolbox=vt", "-filter_hw_device", "vt"}
+	case "qsv":
+		return []string{"-init_hw_device", "d3d11va=dx:,vendor_id=" + intelVendor, "-filter_hw_device", "dx"}
+	case "amf":
+		return []string{"-init_hw_device", "d3d11va=dx:,vendor_id=" + amdVendor, "-filter_hw_device", "dx"}
 	}
 	return nil
 }
@@ -459,10 +529,41 @@ func (hw Hardware) devices() []string {
 // its memory: the decoder and the upload of frames it left in memory use
 // it.
 func (hw Hardware) residentDevices() []string {
-	if hw.Method == "vaapi" {
-		return hw.devices()
+	if hw.Method == "cuda" {
+		return []string{"-init_hw_device", "cuda=cu", "-filter_hw_device", "cu"}
 	}
-	return []string{"-init_hw_device", "cuda=cu", "-filter_hw_device", "cu"}
+	return hw.devices()
+}
+
+// decoder is how FFmpeg names the GPU's decoding, the device it decodes
+// on (see residentDevices) and the frames it decodes into: Intel's and
+// AMD's GPUs decode through Direct3D 11 on Windows.
+func (hw *Hardware) decoder() (hwaccel, device, frames string) {
+	switch hw.Method {
+	case "vaapi":
+		return "vaapi", "va", "vaapi"
+	case "videotoolbox":
+		return "videotoolbox", "vt", "videotoolbox_vld"
+	case "qsv", "amf":
+		return "d3d11va", "dx", "d3d11"
+	}
+	return "cuda", "cu", "cuda"
+}
+
+// residentInputs are FFmpeg's input options decoding into the GPU's
+// memory, for the filters there.
+func (hw *Hardware) residentInputs() []string {
+	hwaccel, device, frames := hw.decoder()
+	return append(hw.residentDevices(), "-hwaccel", hwaccel, "-hwaccel_device", device, "-hwaccel_output_format", frames)
+}
+
+// mapping are the filters taking frames uploaded to Direct3D 11 to QSV,
+// whose filters take only its own: none for other methods.
+func (hw *Hardware) mapping() []string {
+	if hw.Method == "qsv" {
+		return []string{"hwmap=derive_device=qsv", "format=qsv"}
+	}
+	return nil
 }
 
 // pipeline is the way a conversion's frames go from the decoder to the
@@ -479,23 +580,24 @@ const (
 	// throughVulkan decodes into Vulkan frames, which libplacebo scales
 	// and tone maps as they are, into memory for the encoder.
 	throughVulkan
-	// throughVAAPI keeps HDR frames in an Intel GPU's memory, which
-	// deinterlaces, scales and tone maps them there (see vaapiToneMapping).
-	throughVAAPI
+	// throughDevice keeps HDR frames in the memory of Intel's GPU or of
+	// VideoToolbox, which deinterlaces, scales and tone maps them there
+	// (see deviceToneMapping).
+	throughDevice
 )
 
 // pipeline is the way the conversion's frames go: kept on the GPU when it
 // can do every filter the conversion needs, through memory for burned
 // subtitles, for decoding left to the processor, and for tone mapping on
-// the processor. Intel's tone mapping keeps them on the GPU whatever else
-// the conversion needs.
+// the processor. The tone mapping of Intel's GPUs and of VideoToolbox
+// keeps them on the GPU whatever else the conversion needs.
 func (v *VideoEncoding) pipeline() pipeline {
 	hw := v.Hardware
 	switch {
 	case hw == nil:
 		return throughMemory
-	case v.toneMapsOnGPU() && hw.Method == "vaapi":
-		return throughVAAPI
+	case v.toneMapsOnGPU() && hw.Method != "cuda":
+		return throughDevice
 	case v.DecodeOnCPU || v.Burns():
 		return throughMemory
 	case v.toneMapsOnGPU():
@@ -517,53 +619,52 @@ func (v *VideoEncoding) inputs() []string {
 	hw := v.Hardware
 	switch v.pipeline() {
 	case onGPU:
-		name := map[string]string{"cuda": "cu", "vaapi": "va"}[hw.Method]
-		return append(hw.residentDevices(), "-hwaccel", hw.Method, "-hwaccel_device", name, "-hwaccel_output_format", hw.Method)
+		return hw.residentInputs()
 	case throughVulkan:
 		return append(slices.Clone(toneMappingDevices), "-hwaccel", "vulkan", "-hwaccel_device", "vk", "-hwaccel_output_format", "vulkan")
-	case throughVAAPI:
+	case throughDevice:
 		switch {
 		case v.DecodeOnCPU:
 			return hw.devices()
-		case v.vaapiFramesOnGPU():
-			return append(hw.devices(), "-hwaccel", "vaapi", "-hwaccel_device", "va", "-hwaccel_output_format", "vaapi")
+		case v.deviceFramesOnGPU():
+			return hw.residentInputs()
 		}
-		return append(hw.devices(), "-hwaccel", "vaapi", "-hwaccel_device", "va")
+		hwaccel, device, _ := hw.decoder()
+		return append(hw.devices(), "-hwaccel", hwaccel, "-hwaccel_device", device)
 	}
-	var devices []string
-	switch {
-	case hw == nil:
+	if hw == nil {
 		return nil
-	case hw.Method == "vaapi":
-		devices = hw.devices()
-	case v.toneMapsOnGPU():
-		devices = slices.Clone(toneMappingDevices)
-	}
-	if v.DecodeOnCPU {
-		return devices
 	}
 	switch {
-	case hw.Method == "vaapi":
-		return append(devices, "-hwaccel", "vaapi", "-hwaccel_device", "va")
-	case v.toneMapsOnGPU():
-		return append(devices, "-hwaccel", "cuda", "-hwaccel_device", "cu")
+	case hw.Method == "cuda" && v.toneMapsOnGPU() && v.DecodeOnCPU:
+		return slices.Clone(toneMappingDevices)
+	case hw.Method == "cuda" && v.toneMapsOnGPU():
+		return append(slices.Clone(toneMappingDevices), "-hwaccel", "cuda", "-hwaccel_device", "cu")
+	case hw.Method == "vaapi" && v.DecodeOnCPU:
+		// The upload before the encoder opens the render node.
+		return hw.devices()
+	case v.DecodeOnCPU:
+		return nil
 	}
-	return []string{"-hwaccel", "cuda"}
+	return hw.DecodeInputs()
 }
 
-// vaapiToneMapping is the filter chain of HDR tone mapped by an Intel GPU's
-// video processing, as Jellyfin's: frames VAAPI decoded go through hwupload
-// as they are, as would those FFmpeg's own decoder takes over for a codec
-// the GPU does not decode, while frames decoded on the processor, or
-// deinterlaced there when FFmpeg has no deinterlace_vaapi, are uploaded in
-// 10 bits. They are then deinterlaced, scaled to the size asked in 10
-// bits, and tone mapped to 8-bit BT.709 there, for the encoder to take as
-// they are. tonemap_vaapi reads the HDR10 mastering display the frames
-// carry, and fails without it.
-func (v *VideoEncoding) vaapiToneMapping() string {
+// deviceToneMapping is the filter chain of HDR tone mapped by the video
+// processing of Intel's GPU or of VideoToolbox, as Jellyfin's on Intel's:
+// frames the GPU decoded go through hwupload as they are, as would those
+// FFmpeg's own decoder takes over for a codec the GPU does not decode,
+// while frames decoded on the processor, or deinterlaced there when FFmpeg
+// has no deinterlacer on the GPU, are uploaded in 10 bits. They are then
+// deinterlaced, scaled to the size asked, and tone mapped to BT.709 there,
+// by scale_vaapi and tonemap_vaapi, vpp_qsv, or scale_vt, for the encoder
+// to take as they are. tonemap_vaapi and vpp_qsv read the HDR10 mastering
+// display the frames carry: tonemap_vaapi fails without it, and vpp_qsv
+// would not tone map.
+func (v *VideoEncoding) deviceToneMapping() string {
 	var filters []string
-	if v.vaapiFramesOnGPU() {
+	if v.deviceFramesOnGPU() {
 		filters = append(filters, "hwupload")
+		filters = append(filters, v.Hardware.mapping()...)
 		if v.Deinterlace {
 			filters = append(filters, v.gpuDeinterlacer())
 		}
@@ -572,59 +673,95 @@ func (v *VideoEncoding) vaapiToneMapping() string {
 			filters = append(filters, v.deinterlacer())
 		}
 		filters = append(filters, "format=p010le", "hwupload")
+		filters = append(filters, v.Hardware.mapping()...)
 	}
-	return strings.Join(append(filters, "scale_vaapi=w="+strconv.Itoa(v.Width)+":h="+strconv.Itoa(v.Height)+":format=p010",
-		"tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709"), ",")
+	size := "w=" + strconv.Itoa(v.Width) + ":h=" + strconv.Itoa(v.Height)
+	switch v.Hardware.Method {
+	case "videotoolbox":
+		filters = append(filters, "scale_vt="+size+":color_matrix=bt709:color_primaries=bt709:color_transfer=bt709")
+	case "qsv":
+		filters = append(filters, "vpp_qsv="+size+":format=nv12:tonemap=1:out_color_matrix=bt709:out_color_primaries=bt709:out_color_transfer=bt709")
+	default:
+		filters = append(filters, "scale_vaapi="+size+":format=p010", "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709")
+	}
+	return strings.Join(filters, ",")
 }
 
-// vaapiFramesOnGPU reports whether the frames Intel's GPU tone maps come
-// from its decoder in its memory: not when the processor decodes, nor
-// when it deinterlaces for want of deinterlace_vaapi.
-func (v *VideoEncoding) vaapiFramesOnGPU() bool {
+// deviceFramesOnGPU reports whether the frames the GPU tone maps (see
+// deviceToneMapping) come from its decoder in its memory: not when the
+// processor decodes, nor when it deinterlaces for want of a deinterlacer
+// on the GPU.
+func (v *VideoEncoding) deviceFramesOnGPU() bool {
 	return !v.DecodeOnCPU && (!v.Deinterlace || v.gpuDeinterlacer() != "")
 }
 
 // gpuFilters is the filter chain of video kept in the GPU's memory: frames
 // the decoder left in memory, for a codec the GPU does not decode, are
-// uploaded, those in the GPU's memory go through as they are; then
-// deinterlaced and scaled to 8-bit 4:2:0 there.
+// uploaded, those in the GPU's memory go through as they are, and with
+// QSV are mapped to its frames; then deinterlaced and scaled to 8-bit
+// 4:2:0 there. VideoToolbox's encoders take frames in 10 bits as well.
 func (v *VideoEncoding) gpuFilters() string {
-	filters := []string{"hwupload"}
+	filters := append([]string{"hwupload"}, v.Hardware.mapping()...)
 	if v.Deinterlace {
 		filters = append(filters, v.gpuDeinterlacer())
 	}
 	size := "w=" + strconv.Itoa(v.Width) + ":h=" + strconv.Itoa(v.Height)
-	if v.Hardware.Method == "vaapi" {
+	switch v.Hardware.Method {
+	case "vaapi":
 		filters = append(filters, "scale_vaapi="+size+":format=nv12")
-	} else {
+	case "videotoolbox":
+		filters = append(filters, "scale_vt="+size)
+	case "qsv":
+		filters = append(filters, "scale_qsv="+size+":format=nv12")
+	case "amf":
+		filters = append(filters, "vpp_amf="+size+":format=nv12")
+	default:
 		// Bicubic, as FFmpeg's scale filter in memory.
 		filters = append(filters, "scale_cuda="+size+":interp_algo=bicubic:format=nv12")
 	}
 	return strings.Join(filters, ",")
 }
 
+// qsvDeinterlacer is QSV's motion adaptive deinterlacer, making a frame of
+// each frame; with rate=field, one of each field.
+const qsvDeinterlacer = "vpp_qsv=deinterlace=advanced"
+
 // gpuDeinterlacer is the deinterlacing filter of frames kept in the GPU's
-// memory, empty when FFmpeg has none: the CUDA counterpart of the chosen
-// one, or VAAPI's own, which picks its best method.
+// memory, empty when FFmpeg has none: the CUDA or VideoToolbox counterpart
+// of the chosen one, or VAAPI's or QSV's own, which picks its best method.
+// AMF has none.
 func (v *VideoEncoding) gpuDeinterlacer() string {
 	hw := v.Hardware
-	if hw.Method == "vaapi" {
-		if !slices.Contains(hw.Deinterlacers, "deinterlace_vaapi") {
+	switch hw.Method {
+	case "vaapi", "qsv":
+		name, filter := "deinterlace_vaapi", "deinterlace_vaapi"
+		if hw.Method == "qsv" {
+			name, filter = "vpp_qsv", qsvDeinterlacer
+		}
+		switch {
+		case !slices.Contains(hw.Deinterlacers, name):
 			return ""
+		case v.DoubleRate && hw.Method == "qsv":
+			return filter + ":rate=field"
+		case v.DoubleRate:
+			return filter + "=rate=field"
 		}
-		if v.DoubleRate {
-			return "deinterlace_vaapi=rate=field"
-		}
-		return "deinterlace_vaapi"
+		return filter
+	case "amf":
+		return ""
+	}
+	suffix := "_cuda"
+	if hw.Method == "videotoolbox" {
+		suffix = "_videotoolbox"
 	}
 	name, options, _ := strings.Cut(v.deinterlacer(), "=")
-	if !slices.Contains(hw.Deinterlacers, name+"_cuda") {
+	if !slices.Contains(hw.Deinterlacers, name+suffix) {
 		return ""
 	}
 	if options != "" {
-		return name + "_cuda=" + options
+		return name + suffix + "=" + options
 	}
-	return name + "_cuda"
+	return name + suffix
 }
 
 // toneMapsOnGPU reports whether the conversion tone maps HDR on its GPU.
@@ -633,24 +770,39 @@ func (v *VideoEncoding) toneMapsOnGPU() bool {
 }
 
 // output ends a filter chain in memory: frames as the encoder takes them,
-// uploaded to the GPU for VAAPI; NVENC and the software encoders take
-// them from memory.
+// uploaded to the GPU for VAAPI, in NV12 for QSV and AMF, which upload
+// them themselves; NVENC, VideoToolbox and the software encoders take
+// them from memory in 4:2:0.
 func (hw *Hardware) output() string {
-	if hw != nil && hw.Method == "vaapi" {
+	switch {
+	case hw == nil:
+	case hw.Method == "vaapi":
 		return "format=nv12,hwupload"
+	case hw.Method == "qsv" || hw.Method == "amf":
+		return "format=nv12"
 	}
 	return "format=yuv420p"
 }
 
 // DecodeInputs are FFmpeg's input options decoding on hw, nil for none,
 // into memory, for work that only decodes, such as thumbnails: a codec the
-// GPU cannot decode is left to FFmpeg's own decoder.
+// GPU cannot decode is left to FFmpeg's own decoder. VAAPI and Direct3D
+// 11 decode on the device devices opens.
 func (hw *Hardware) DecodeInputs() []string {
-	switch {
-	case hw == nil:
+	if hw == nil {
 		return nil
-	case hw.Method == "vaapi":
-		return append(hw.devices(), "-hwaccel", "vaapi", "-hwaccel_device", "va")
 	}
-	return []string{"-hwaccel", "cuda"}
+	hwaccel, device, _ := hw.decoder()
+	switch hw.Method {
+	case "vaapi", "qsv", "amf":
+		return append(hw.devices(), "-hwaccel", hwaccel, "-hwaccel_device", device)
+	}
+	return []string{"-hwaccel", hwaccel}
+}
+
+// NeedsMasteringDisplay reports whether hw tone maps only HDR10 whose
+// frames carry their mastering display: Intel's GPUs (see
+// deviceToneMapping).
+func (hw *Hardware) NeedsMasteringDisplay() bool {
+	return hw != nil && (hw.Method == "vaapi" || hw.Method == "qsv")
 }
