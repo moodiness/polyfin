@@ -99,6 +99,8 @@ const common = {
       'Choose at most four criteria to order versions, one of each kind. Reload the page.',
     invalid_version_codec_order:
       'The order of the video codecs must list each codec once. Reload the page.',
+    invalid_version_source_order:
+      'The order of sources must list sources of the server, each once. Reload the page.',
     invalid_hide_versions_larger:
       'The size above which versions are hidden must be 0, or a whole number of GB from 1 to 1,000.',
     invalid_hidden_version_codecs: 'This list of hidden codecs is not supported. Reload the page.',

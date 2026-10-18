@@ -107,6 +107,8 @@ const common: typeof en = {
       'Choisissez au plus quatre critères pour trier les versions, un de chaque sorte. Rechargez la page.',
     invalid_version_codec_order:
       'L’ordre des codecs vidéo doit citer chaque codec une fois. Rechargez la page.',
+    invalid_version_source_order:
+      'L’ordre des sources doit citer des sources du serveur, chacune une fois. Rechargez la page.',
     invalid_hide_versions_larger:
       'La taille au-delà de laquelle les versions sont masquées doit être 0, ou un nombre entier de Go de 1 à 1 000.',
     invalid_hidden_version_codecs:

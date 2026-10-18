@@ -335,6 +335,13 @@ export type Settings = {
   versionOrder: VersionCriterion[]
   /** The order of the video codecs for the codec criterion, every codec once. */
   versionCodecOrder: VersionCodec[]
+  /**
+   * The IDs of the server's sources the source criterion puts first, in order, some of
+   * `versionSources`; the others come after them, in the order of Content › Sources.
+   */
+  versionSourceOrder: string[]
+  /** The server's sources listing versions of movies and episodes, folders included (read-only). */
+  versionSources: VersionSource[]
   /** Hides the versions known to be larger, in GB; 0 hides none. */
   hideVersionsLargerGb: number
   /** Hides the versions known to be in these video codecs. */
@@ -555,7 +562,10 @@ export type VersionCriterion =
   | 'codec'
   | 'hdr-first'
   | 'hdr-last'
+  | 'source'
 export type VersionCodec = 'av1' | 'hevc' | 'vp9' | 'h264' | 'vc1' | 'mpeg4' | 'mpeg2video'
+/** A source of the server listing versions of movies and episodes, in Content › Sources order. */
+export type VersionSource = { id: string; name: string }
 export type ToneMappingAlgorithm =
   'auto' | 'bt2390' | 'hable' | 'reinhard' | 'mobius' | 'clip' | 'linear'
 export type DeinterlaceMethod = 'yadif' | 'bwdif'

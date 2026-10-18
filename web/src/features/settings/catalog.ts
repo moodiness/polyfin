@@ -174,7 +174,16 @@ export const settingEntries: readonly SettingEntry[] = [
     anchor: 'version-order',
     label: (t) => s(t).versionOrder.label,
     help: (t) => s(t).versionOrder.help,
-    keywords: ['language', 'langue', 'resolution', 'résolution', 'HDR', 'Dolby Vision', 'codec'],
+    keywords: [
+      'language',
+      'langue',
+      'resolution',
+      'résolution',
+      'HDR',
+      'Dolby Vision',
+      'codec',
+      'source',
+    ],
     codes: ['invalid_version_order'],
   },
   {
@@ -184,6 +193,14 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => s(t).versionCodecOrder.help,
     keywords: ['AV1', 'HEVC', 'H.264'],
     codes: ['invalid_version_codec_order'],
+  },
+  {
+    section: 'playback',
+    anchor: 'version-source-order',
+    label: (t) => s(t).versionSourceOrder.label,
+    help: (t) => s(t).versionSourceOrder.help,
+    keywords: ['addon', 'folder', 'dossier', 'local'],
+    codes: ['invalid_version_source_order'],
   },
   {
     section: 'playback',

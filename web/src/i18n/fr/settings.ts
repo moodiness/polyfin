@@ -179,11 +179,18 @@ const settings: typeof en = {
         codec: 'Codec vidéo, dans l’ordre ci-dessous',
         'hdr-first': 'HDR et Dolby Vision d’abord',
         'hdr-last': 'HDR et Dolby Vision en dernier',
+        source: 'Source, dans l’ordre ci-dessous',
       },
     },
     versionCodecOrder: {
       label: 'Ordre des codecs vidéo',
       help: 'L’ordre dans lequel le critère « Codec vidéo » range les versions.',
+    },
+    versionSourceOrder: {
+      label: 'Ordre des sources',
+      help: 'L’ordre dans lequel le critère « Source » range les versions : les addons et dossiers du serveur qui donnent des versions de films et d’épisodes. Une source ajoutée plus tard passe en dernier tant que vous ne la déplacez pas, et les addons propres aux utilisateurs viennent après les sources du serveur. Cela ne change que l’ordre des versions : les descriptions, les sous-titres et les résultats de recherche suivent l’ordre de Contenu › Sources.',
+      none: 'Aucune source du serveur ne donne encore de versions de films ou d’épisodes.',
+      dragHandle: (name: string) => `Déplacer ${name}`,
     },
     versionCodecs: {
       av1: 'AV1',

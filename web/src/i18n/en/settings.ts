@@ -174,11 +174,18 @@ const settings = {
         codec: 'Video codec, in the order below',
         'hdr-first': 'HDR and Dolby Vision first',
         'hdr-last': 'HDR and Dolby Vision last',
+        source: 'Source, in the order below',
       },
     },
     versionCodecOrder: {
       label: 'Order of video codecs',
       help: 'The order the Video codec criterion puts versions in.',
+    },
+    versionSourceOrder: {
+      label: 'Order of sources',
+      help: 'The order the Source criterion puts versions in: the server’s addons and folders that give versions of movies and episodes. A source added later comes last until you move it, and users’ own addons come after the server’s sources. This changes nothing but the order of versions: descriptions, subtitles and search results follow the order of Content › Sources.',
+      none: 'No source of the server gives versions of movies or episodes yet.',
+      dragHandle: (name: string) => `Drag ${name}`,
     },
     versionCodecs: {
       av1: 'AV1',

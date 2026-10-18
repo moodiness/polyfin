@@ -38,7 +38,7 @@ import MetricsToken from './MetricsToken'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
-import VersionOrder, { CodecOrder } from './VersionOrder'
+import VersionOrder, { CodecOrder, SourceOrder } from './VersionOrder'
 
 /** The redirect URI of a Trakt or Simkl app whose users enter a code instead of being redirected. */
 const oobRedirectUri = 'urn:ietf:wg:oauth:2.0:oob'
@@ -306,6 +306,14 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
             order={form.versionCodecOrder}
             onChange={(versionCodecOrder) => update({ versionCodecOrder })}
             error={error('version-codec-order')}
+          />
+        </SettingRow>
+        <SettingRow anchor="version-source-order">
+          <SourceOrder
+            order={form.versionSourceOrder}
+            sources={form.versionSources}
+            onChange={(versionSourceOrder) => update({ versionSourceOrder })}
+            error={error('version-source-order')}
           />
         </SettingRow>
         <FieldRow
