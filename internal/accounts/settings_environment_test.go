@@ -14,19 +14,19 @@ func TestEnvironmentSettingsDefaults(t *testing.T) {
 	if got.CacheSizeGB != 10 || got.VAAPIDevice != "" || got.Recording || got.RecordingsFolder != "" || got.Backups || got.BackupFolder != "" {
 		t.Errorf("defaults: %+v", got)
 	}
-	if dir := got.RecordingsDir("/data"); dir != "" {
+	if dir := got.RecordingsDir(systemPath("/data")); dir != "" {
 		t.Errorf("recordings folder while off: %q", dir)
 	}
-	if dir := got.BackupDir("/data"); dir != "" {
+	if dir := got.BackupDir(systemPath("/data")); dir != "" {
 		t.Errorf("backup folder while off: %q", dir)
 	}
 	got.Recording, got.Backups = true, true
-	if got.RecordingsDir("/data") != "/data/recordings" || got.BackupDir("/data") != "/data/backups" {
-		t.Errorf("default folders: %q %q", got.RecordingsDir("/data"), got.BackupDir("/data"))
+	if got.RecordingsDir(systemPath("/data")) != systemPath("/data/recordings") || got.BackupDir(systemPath("/data")) != systemPath("/data/backups") {
+		t.Errorf("default folders: %q %q", got.RecordingsDir(systemPath("/data")), got.BackupDir(systemPath("/data")))
 	}
-	got.RecordingsFolder, got.BackupFolder = "/media/recordings", "/media/backups"
-	if got.RecordingsDir("/data") != "/media/recordings" || got.BackupDir("/data") != "/media/backups" {
-		t.Errorf("chosen folders: %q %q", got.RecordingsDir("/data"), got.BackupDir("/data"))
+	got.RecordingsFolder, got.BackupFolder = systemPath("/media/recordings"), systemPath("/media/backups")
+	if got.RecordingsDir(systemPath("/data")) != systemPath("/media/recordings") || got.BackupDir(systemPath("/data")) != systemPath("/media/backups") {
+		t.Errorf("chosen folders: %q %q", got.RecordingsDir(systemPath("/data")), got.BackupDir(systemPath("/data")))
 	}
 }
 
@@ -65,10 +65,10 @@ func TestEnvironmentSettingsAreChecked(t *testing.T) {
 	// Folders are saved cleaned, and kept after a restart.
 	changed := base
 	changed.CacheSizeGB, changed.VAAPIDevice = 25, "/dev/dri/renderD129"
-	changed.Recording, changed.RecordingsFolder = true, "/a/../b"
-	changed.Backups, changed.BackupFolder = true, "/backups/"
+	changed.Recording, changed.RecordingsFolder = true, systemPath("/a/../b")
+	changed.Backups, changed.BackupFolder = true, systemPath("/backups/")
 	saved, err := store.UpdateSettings(ctx, changed)
-	if err != nil || saved.RecordingsFolder != "/b" || saved.BackupFolder != "/backups" {
+	if err != nil || saved.RecordingsFolder != systemPath("/b") || saved.BackupFolder != systemPath("/backups") {
 		t.Fatalf("saved: %+v %v", saved, err)
 	}
 	reopened, err := Open(ctx, store.db)
@@ -76,8 +76,8 @@ func TestEnvironmentSettingsAreChecked(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := reopened.Settings()
-	if got.CacheSizeGB != 25 || got.VAAPIDevice != "/dev/dri/renderD129" || !got.Recording || got.RecordingsFolder != "/b" ||
-		!got.Backups || got.BackupFolder != "/backups" {
+	if got.CacheSizeGB != 25 || got.VAAPIDevice != "/dev/dri/renderD129" || !got.Recording || got.RecordingsFolder != systemPath("/b") ||
+		!got.Backups || got.BackupFolder != systemPath("/backups") {
 		t.Errorf("after reopening: %+v", got)
 	}
 }
@@ -86,7 +86,7 @@ func TestEnvironmentSettingsAreChecked(t *testing.T) {
 func TestEnvironmentSettingsDatabaseChecks(t *testing.T) {
 	store := newStore(t)
 	for _, change := range []string{"cache_size_gb = 0", "cache_size_gb = 2001", "vaapi_device = '/dev/dri/card0'",
-		"recordings_folder = 'relative'", "recordings_folder = '/a' || chr(10)", "recordings_folder = '/' || repeat('a', 512)",
+		"recordings_folder = 'relative'", "recordings_folder = 'D:relative'", "backup_folder = '\\relative'", "recordings_folder = '/a' || chr(10)", "recordings_folder = '/' || repeat('a', 512)",
 		"backup_folder = 'relative'", "backup_folder = '/a' || chr(9)", "backup_folder = '/' || repeat('a', 512)",
 		"environment_pending = '{language}'"} {
 		if _, err := store.db.Exec(t.Context(), "UPDATE settings SET "+change); err == nil {
@@ -94,6 +94,8 @@ func TestEnvironmentSettingsDatabaseChecks(t *testing.T) {
 		}
 	}
 	for _, change := range []string{"cache_size_gb = 2000", "vaapi_device = '/dev/dri/renderD128'", "recordings_folder = '/media'",
+		// Windows folders: a drive's, with either separator, and a share's.
+		`recordings_folder = 'D:\Recordings'`, "backup_folder = 'd:/Backups'", `backup_folder = '\\nas\media\Backups'`,
 		"environment_pending = '{cache_size_gb,vaapi_device,recording,backups,detailed_log}'"} {
 		if _, err := store.db.Exec(t.Context(), "UPDATE settings SET "+change); err != nil {
 			t.Errorf("the database refused %s: %v", change, err)
@@ -107,7 +109,7 @@ func TestEnvironmentSettingsAreAdoptedOnce(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
 	env := Environment{CacheSizeGB: 20, DetailedLog: true, VAAPIDevice: "/dev/dri/renderD129",
-		RecordingsFolder: "/media/recordings/", BackupFolder: "/media/backups"}
+		RecordingsFolder: systemPath("/media/recordings/"), BackupFolder: systemPath("/media/backups")}
 	if err := store.AdoptEnvironment(ctx, env); err != nil {
 		t.Fatal(err)
 	}
@@ -119,14 +121,14 @@ func TestEnvironmentSettingsAreAdoptedOnce(t *testing.T) {
 		}
 		for _, got := range []Settings{store.Settings(), reopened.Settings()} {
 			if got.CacheSizeGB != 20 || !got.DetailedLog || got.VAAPIDevice != "/dev/dri/renderD129" ||
-				!got.Recording || got.RecordingsFolder != "/media/recordings" || !got.Backups || got.BackupFolder != "/media/backups" {
+				!got.Recording || got.RecordingsFolder != systemPath("/media/recordings") || !got.Backups || got.BackupFolder != systemPath("/media/backups") {
 				t.Errorf("%s: %+v", when, got)
 			}
 		}
 	}
 	check("the first start")
 	// A second start with other values changes nothing.
-	if err := store.AdoptEnvironment(ctx, Environment{CacheSizeGB: 5, VAAPIDevice: "/dev/dri/renderD130", RecordingsFolder: "/other"}); err != nil {
+	if err := store.AdoptEnvironment(ctx, Environment{CacheSizeGB: 5, VAAPIDevice: "/dev/dri/renderD130", RecordingsFolder: systemPath("/other")}); err != nil {
 		t.Fatal(err)
 	}
 	check("a second start")

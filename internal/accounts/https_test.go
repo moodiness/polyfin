@@ -38,9 +38,9 @@ func TestHTTPSSettings(t *testing.T) {
 		t.Errorf("read again: %+v", got)
 	}
 	saved, err = try(func(s *Settings) {
-		s.HTTPSMode, s.HTTPSCertificate, s.HTTPSPrivateKey = HTTPSFiles, " /certs/live/../live/fullchain.pem", "/certs/live/privkey.pem"
+		s.HTTPSMode, s.HTTPSCertificate, s.HTTPSPrivateKey = HTTPSFiles, " "+systemPath("/certs/live/../live/fullchain.pem"), systemPath("/certs/live/privkey.pem")
 	})
-	if err != nil || saved.HTTPSCertificate != "/certs/live/fullchain.pem" {
+	if err != nil || saved.HTTPSCertificate != systemPath("/certs/live/fullchain.pem") {
 		t.Errorf("files: %q %v", saved.HTTPSCertificate, err)
 	}
 	for name, c := range map[string]struct {
@@ -49,7 +49,7 @@ func TestHTTPSSettings(t *testing.T) {
 	}{
 		"unknown mode":           {func(s *Settings) { s.HTTPSMode = "on" }, ErrInvalidHTTPSMode},
 		"port 0":                 {func(s *Settings) { s.HTTPSPort = 0 }, ErrInvalidHTTPSPort},
-		"files without a key":    {func(s *Settings) { s.HTTPSMode, s.HTTPSCertificate = HTTPSFiles, "/certs/fullchain.pem" }, ErrInvalidHTTPSPrivateKey},
+		"files without a key":    {func(s *Settings) { s.HTTPSMode, s.HTTPSCertificate = HTTPSFiles, systemPath("/certs/fullchain.pem") }, ErrInvalidHTTPSPrivateKey},
 		"a relative certificate": {func(s *Settings) { s.HTTPSCertificate = "certs/fullchain.pem" }, ErrInvalidHTTPSCertificate},
 		"no host names":          {func(s *Settings) { s.HTTPSMode, s.ACMETerms = HTTPSLetsEncrypt, true }, ErrInvalidACMEHosts},
 		"terms not agreed":       {func(s *Settings) { s.HTTPSMode, s.ACMEHosts = HTTPSLetsEncrypt, []string{"media.example.org"} }, ErrACMETermsRequired},

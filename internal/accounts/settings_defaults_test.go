@@ -70,7 +70,7 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 		t.Helper()
 		changed := base
 		// Each way of serving HTTPS needs what it serves with.
-		changed.HTTPSCertificate, changed.HTTPSPrivateKey = "/certs/fullchain.pem", "/certs/privkey.pem"
+		changed.HTTPSCertificate, changed.HTTPSPrivateKey = systemPath("/certs/fullchain.pem"), systemPath("/certs/privkey.pem")
 		changed.ACMEHosts, changed.ACMETerms = []string{"media.example.org"}, true
 		field, _ := boundField(&changed, name)
 		field.Set(reflect.ValueOf(value).Convert(field.Type()))
@@ -120,7 +120,7 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			case "remuxDbUrl", "publicAddress", "localAddress":
 				start = "https://"
 			case "recordingsFolder", "backupFolder", "httpsCertificate", "httpsPrivateKey":
-				start = "/"
+				start = systemPath("/")
 			case "smtpFrom", "acmeEmail":
 				start = "polyfin@"
 			case "torrentProxy":
