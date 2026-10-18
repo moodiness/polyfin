@@ -50,7 +50,8 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-      - name: Set up Node
+      - &setup-node
+        name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "24"
@@ -510,3 +511,184 @@ jobs:
           if [ -d "$DESKTOP_TEMP/testdb" ] && "$bin/pg_ctl" -D "$DESKTOP_TEMP/testdb" status > /dev/null; then
             "$bin/pg_ctl" -D "$DESKTOP_TEMP/testdb" -m fast -w stop
           fi
+
+  desktop-files:
+    # What every package of Polyfin Desktop takes from the Docker image:
+    # jellyfin-web and the fonts, through the Dockerfile's desktop-files
+    # stage, once, for the Macs, which have no Docker.
+    name: Polyfin Desktop's files from the image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - *checkout
+      - *setup-buildx
+      - name: Take jellyfin-web and the fonts from the image's stages
+        run: scripts/packaging/files.sh "$RUNNER_TEMP/files"
+      - name: Keep them for the packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-files
+          path: ${{ runner.temp }}/files
+          if-no-files-found: error
+          retention-days: 1
+
+  desktop-package:
+    # The packages of Polyfin Desktop, built by scripts/packaging as anyone
+    # builds them, kept as the run's artifacts. The Windows installer is
+    # made on Linux, with NSIS, and installed on Windows below.
+    name: Package Polyfin Desktop for ${{ matrix.name }}
+    needs: [check, desktop-files]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS on Apple silicon
+            id: macos-arm64
+            os: macos-15
+            script: macos.sh arm64
+          - name: macOS on Intel
+            id: macos-x64
+            os: macos-15-intel
+            script: macos.sh x64
+          - name: Windows x64
+            id: windows-x64
+            os: ubuntu-24.04
+            script: windows.sh
+          - name: Linux x64
+            id: linux-amd64
+            os: ubuntu-24.04
+            script: linux.sh amd64
+          - name: Linux arm64
+            id: linux-arm64
+            os: ubuntu-24.04-arm
+            script: linux.sh arm64
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      POLYFIN_DESKTOP_FILES: ${{ github.workspace }}/dist/packaging/files
+      # Debian's image, for the packaging tools, as the Dockerfile's.
+      DOCKER_HUB_MIRROR: mirror.gcr.io
+    steps:
+      - *checkout
+      - *setup-go
+      - *setup-node
+      - name: Set up Buildx
+        if: runner.os == 'Linux'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          # PostgreSQL's build image through Google's mirror of Docker Hub,
+          # as in the check job.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+      - name: Fetch the files from the image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: desktop-files
+          path: dist/packaging/files
+      - name: Build the package
+        env:
+          SCRIPT: ${{ matrix.script }}
+          POLYFIN_PACKAGING_CACHE: ${{ runner.temp }}/downloads
+        run: |
+          read -r script arch <<< "$SCRIPT"
+          "scripts/packaging/$script" ${arch:+"$arch"}
+      - name: Keep the package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-package-${{ matrix.id }}
+          path: dist/packages/*
+          if-no-files-found: error
+          # Already compressed.
+          compression-level: 0
+
+  desktop-package-test:
+    # Each package installed or opened on its system, its layout checked,
+    # and the installed app smoked as the desktop job smokes its build:
+    # headless, behind a proxy that refuses every request for outside, and
+    # quit leaving no process. Then it is uninstalled. A package whose
+    # build failed fails alone.
+    name: Install and smoke Polyfin Desktop on ${{ matrix.name }}
+    needs: [check, desktop-package]
+    if: ${{ !cancelled() && needs.check.result == 'success' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS on Apple silicon
+            id: macos-arm64
+            os: macos-15
+          - name: macOS on Intel
+            id: macos-x64
+            os: macos-15-intel
+          - name: Windows x64
+            id: windows-x64
+            os: windows-latest
+          - name: Linux x64
+            id: linux-amd64
+            os: ubuntu-24.04
+          - name: Linux arm64
+            id: linux-arm64
+            os: ubuntu-24.04-arm
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - *checkout
+      # Windows smokes a console build of the app, which an interrupt
+      # reaches, from the install folder.
+      - *setup-go
+      - name: Fetch the package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: desktop-package-${{ matrix.id }}
+          path: dist/packages
+      - name: Install the tools the Linux checks use
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils squashfs-tools fuse3
+      - name: Install, smoke and remove each package
+        run: |
+          for package in dist/packages/*; do
+            echo "== $package"
+            scripts/packaging/test.sh "$package" "$RUNNER_TEMP/test-$(basename "$package")"
+          done
+      - name: Show the app's logs
+        if: failure()
+        run: |
+          for log in "$RUNNER_TEMP"/test-*/smoke/data/log/*.log; do
+            if [ -f "$log" ]; then echo "== $log"; tail -n 100 "$log"; fi
+          done
+
+  desktop-release:
+    # The packages go with the release the release job creates; GitHub
+    # gives each its SHA-256, which the app checks an update against.
+    name: Attach Polyfin Desktop's packages to the release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [release, desktop-package-test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Fetch the packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: desktop-package-*
+          merge-multiple: true
+          path: packages
+      - name: Upload them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l packages
+          test "$(find packages -type f | wc -l)" -eq 7
+          gh release upload "$TAG" packages/*
