@@ -67,7 +67,8 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 - Under **Server**:
   - the **Transcoder**: GPU, encoders, and conversions against the limit (see [transcoding](transcoding.md));
   - the **Database** and its size;
-  - the **Source cache**, against **Disk space for files being read (GB)**;
+  - the **Source cache**, against **Disk space for files being read (GB)**, with the part torrent pieces take;
+  - **Torrents**, while they are on: the route, the torrents playing, their peers and what was shared (see [Torrents](torrents.md));
   - **Disk space** for the cache, recordings and backups folders;
   - **Backups**: the last run and its result, the last backup made, its file and size, the next one, each destination's last upload, and the last restore. A failed backup, or a last backup older than two days, is a problem; so is a destination whose last upload failed (an error), or whose newest backup is older than two days (a warning). See [Backups](backups.md);
   - **Thumbnails**: the queue and paused sources;
@@ -85,7 +86,9 @@ A picture subtitle track that could not be read into text, its language having n
 
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
 
-Health sends no request outside the server. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
+Torrent streams that cannot play are an error, naming why: the network interface missing, down or without an address, or the SOCKS5 proxy not answering or refusing its user. A proxy without `UDP ASSOCIATE` is a warning: torrents play over TCP, with UDP trackers and the DHT off. Both link to **Settings › Torrents** (see [Kill switch](torrents.md#kill-switch)).
+
+Health sends no request outside the server, but for the SOCKS5 proxy of torrents, checked as their kill switch checks it. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
 
 ## New versions
 

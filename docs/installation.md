@@ -97,6 +97,10 @@ With **Let's Encrypt**, the container's user cannot listen below 1024, so the in
 
 Each line needs the host's own port free: forward the port on the router instead, to the host's 8096 or 8920, when another service uses it. Apps reach Polyfin at `https://media.example.org:8920`, or at `https://media.example.org` once 443 reaches the HTTPS port. In that case, set **Public address**, under **Settings › Notifications**, to `https://media.example.org`, without a port: **Redirect HTTP to HTTPS** sends clients to the port of an `https://` public address, 443 when it names none, and without one to the HTTPS port, 8920, which the internet may not reach (see [The redirect](administration.md#the-redirect)).
 
+### Keep torrents to a VPN
+
+Torrent streams, off by default, go through one route alone (see [Torrents](torrents.md)). A SOCKS5 proxy needs nothing more. A network interface must be seen by the container: use `compose.host.yaml` with WireGuard on the host, or share the network of a WireGuard container that has `NET_ADMIN` (`network_mode: service:<name>`), publishing Polyfin's ports on that container. On Linux 5.7 or later, Polyfin's own container needs no added capability.
+
 ### Pin a version
 
 Replace the image's `latest` tag in `compose.yaml` with a release, such as `0.22.0`. `latest` follows stable releases.

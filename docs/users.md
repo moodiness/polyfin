@@ -362,7 +362,7 @@ To give several accounts the same limits, such as a family's children, an admini
 
 **Users › Groups** lists the groups with how many members each has, and **Create a group** asks for a **Name** and **Settings of**: a new user, as with **Create a user**, or a user whose settings the group copies when it is created. A group's page holds the sections of a user's page that set limits, each saved on its own as on a user's page:
 
-- **Access**: **Can use conversion (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles** and **Can share titles**. **Administrator**, **Show on the sign-in screen**, **Disabled** and **Ends on** stay each user's own;
+- **Access**: **Can use conversion (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles**, **Can share titles** and **Can play torrent streams**. **Administrator**, **Show on the sign-in screen**, **Disabled** and **Ends on** stay each user's own;
 - **Playback and access**, with the **Quality group**;
 - **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**.
 
@@ -675,6 +675,10 @@ With **Live TV** off, the Live TV view leaves the user's apps, and channels and 
 - not watch together at all, in which case jellyfin-web hides its button.
 
 Creating a group takes the first choice. Listing and joining groups takes either of the first two. Other SyncPlay requests answer 403 unless the user is in a group.
+
+### Playing torrent streams
+
+**Can play torrent streams**, in **Access** next to **Can download**, offers the user the torrents addons list, while **Play torrent streams** is on under **Settings › Torrents** (see [Torrents](torrents.md)). It is off for every user, administrators included, and in every group, until given. Without it, the user's versions hold no torrent, from the server's addons or their own, and a torrent version listed to another user is not found for them. Torrent versions never download, whatever **Can download** says.
 
 ### Can control other users' apps
 

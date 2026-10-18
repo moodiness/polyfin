@@ -24,6 +24,10 @@ Only administrators can install addons hosted on a local network address.
 
 Each user can add their own addons and libraries under **My sources**. Users can also turn the server's sources off for themselves with **Use the server's sources**.
 
+### Which streams play
+
+A stream an addon lists plays when it is a link to a video, over `http` or `https`. A torrent's stream, an `infoHash` with its `fileIdx` and `sources`, plays only while **Play torrent streams** is on under **Settings › Torrents**, for the users with **Can play torrent streams**; otherwise it is left out of the versions, and a title whose addons list only torrents has none. See [Torrents](torrents.md). Web pages (`externalUrl`) and YouTube videos (`ytId`) never play.
+
 ### Manifest addresses
 
 Manifest addresses usually contain your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu.
