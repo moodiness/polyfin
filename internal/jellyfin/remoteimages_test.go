@@ -255,7 +255,13 @@ func TestRemoteImagesWithoutTMDBKeyListTheAddonsOnly(t *testing.T) {
 	if status, _, width := s.width(t, primary.Images[0].ThumbnailUrl); status != http.StatusOK || width != remoteThumbnailWidth {
 		t.Errorf("Alpha's thumbnail: %d %d", status, width)
 	}
-	if status, _, _ := s.width(t, primary.Images[0].Url[:len(primary.Images[0].Url)-2]+"AA"); status != http.StatusNotFound {
+	// The address's signature ends it: changing its last character, to one
+	// it does not hold, always forges it.
+	forged, last := primary.Images[0].Url, "A"
+	if strings.HasSuffix(forged, last) {
+		last = "B"
+	}
+	if status, _, _ := s.width(t, forged[:len(forged)-1]+last); status != http.StatusNotFound {
 		t.Errorf("a forged address: %d", status)
 	}
 	if status, _, _ := s.width(t, strings.Replace(primary.Images[0].Url, s.movie, s.show, 1)); status != http.StatusNotFound {
