@@ -27,6 +27,18 @@ With the Compose file, `POSTGRES_PASSWORD` in `.env` is the only value to set: C
 
 Polyfin logs at the `info` level, and at the `debug` level while **Detailed log**, under **Settings › Diagnostics**, is on. At the `info` level, it logs each Jellyfin endpoint an app calls that it does not serve, with the app's name and version, at most once an hour per endpoint, without the request's identifiers, query or token.
 
+### On Windows and macOS
+
+`polyfin serve` runs on Windows and macOS as on Linux, outside Docker; the desktop version runs it so. What differs:
+
+- Paths are the system's, absolute as on Linux: `C:\Users\me\AppData\Local\Polyfin` or `/Users/me/Library/Application Support/Polyfin` for `POLYFIN_DATA_DIR`, and the same for the executables and folders of the other variables. The defaults of `POLYFIN_FONTS_DIR` and `POLYFIN_WEB_DIR`, under `/usr/share`, are the Docker image's and exist on neither system: set them, or apps get no fallback fonts and the web client stays off. Local folders take Windows paths too, `D:\Movies` or `\\nas\media\Movies` (see [Local folders on Windows and macOS](local-folders.md#on-windows-and-macos)).
+- **Stopping:** Polyfin stops cleanly on SIGTERM or SIGINT on macOS, as on Linux. Windows has no signals: Polyfin stops cleanly on Ctrl-C or Ctrl-Break in its console, and when its console closes or the session ends. The programs it runs there, FFmpeg, ffprobe, pg_dump, end with it even when it is killed, as they belong to a job object of Polyfin's. A recording is stopped by FFmpeg's `q` key, sent on its standard input, rather than by an interrupt.
+- **Restoring a backup:** on Linux and macOS Polyfin replaces its process with a new Polyfin once the restore is done. Windows cannot: Polyfin starts a new one, as it was started itself, waits for it and exits as it does, so that whatever watches its process, such as the desktop app, still does.
+- **FFmpeg's outputs:** FFmpeg tells its progress, and gives the subtitles it extracts, on outputs of their own besides its standard output. Windows passes a program no such outputs, so FFmpeg writes them to connections on the loopback, `tcp://127.0.0.1` on a port Polyfin picks for each, which it accepts once.
+- **Disk space:** **System › Health** measures the disks of the data folder, the recordings and the backups on each system: through `statfs` on Linux and macOS, and on Windows through the volume each folder is on, a drive such as `C:\` or a folder a volume is mounted in.
+- **Priority:** FFmpeg reading in the background, to measure loudness or find commercials, runs at the lowest priority on each system: `nice` 19 on Linux and macOS, the idle priority class on Windows.
+- Watching folders for changes goes through inotify on Linux, kqueue on macOS, which keeps a file open for each folder and file watched, and ReadDirectoryChangesW on Windows, which has no limit to raise (see [Watching for changes](local-folders.md#watching-for-changes)).
+
 ### Variables that became settings
 
 These variables are no longer read at every start: they are settings of the admin app. At its first start with a version that made them settings, Polyfin copies the value of those still set into their setting, once, and never reads them again. Until they are removed, it logs at each start that it no longer reads them. A value it cannot use is not copied, and the log says so: it never stops Polyfin from starting.
