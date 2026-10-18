@@ -26,8 +26,10 @@ import (
 // prefers, which the language criterion reads.
 type versionRules struct {
 	order []string
-	// codecs is the order of the codec criterion.
-	codecs []string
+	// codecs is the order of the codec criterion, sources that of the
+	// source criterion.
+	codecs  []string
+	sources []accounts.ID
 	// larger hides the versions larger than so many bytes, 0 none.
 	larger       int64
 	hiddenCodecs []string
@@ -39,8 +41,8 @@ type versionRules struct {
 // newVersionRules returns the rules settings set, without the user's
 // preferred audio language.
 func newVersionRules(settings accounts.Settings) versionRules {
-	rules := versionRules{order: settings.VersionOrder, codecs: settings.VersionCodecOrder, larger: int64(settings.HideVersionsLargerGB) * 1e9,
-		hiddenCodecs: settings.HiddenVersionCodecs}
+	rules := versionRules{order: settings.VersionOrder, codecs: settings.VersionCodecOrder, sources: settings.VersionSourceOrder,
+		larger: int64(settings.HideVersionsLargerGB) * 1e9, hiddenCodecs: settings.HiddenVersionCodecs}
 	for _, word := range settings.HiddenVersionWords {
 		rules.words = append(rules.words, strings.ToLower(word))
 	}
@@ -58,10 +60,15 @@ func (h *Handler) rulesFor(ctx context.Context, user accounts.User) versionRules
 }
 
 // key names what orders versions under the rules: the criteria, the
-// order of the codecs and the language the user prefers. A page keeps the
-// versions it lists in place only while it stays the same.
+// order of the codecs, that of the sources and the language the user
+// prefers. A page keeps the versions it lists in place only while it
+// stays the same.
 func (r versionRules) key() string {
-	return strings.Join(r.order, ",") + "|" + strings.Join(r.codecs, ",") + "|" + r.language
+	sources := make([]string, len(r.sources))
+	for i, source := range r.sources {
+		sources[i] = source.String()
+	}
+	return strings.Join(r.order, ",") + "|" + strings.Join(r.codecs, ",") + "|" + strings.Join(sources, ",") + "|" + r.language
 }
 
 // hides reports whether a rule may hide versions.
@@ -98,7 +105,8 @@ func (h *Handler) hiddenVersion(ctx context.Context, user accounts.User, version
 // versionFacts are what the rules know of a version: its height, size and
 // video codec, 0 or empty when unknown, its range, its audio languages,
 // by ISO 639-2/B code, and multi when its labels say it has several
-// without naming them all.
+// without naming them all; and source, the rank of its source for the
+// source criterion (see sourceRanks).
 type versionFacts struct {
 	height    int
 	size      int64
@@ -106,6 +114,7 @@ type versionFacts struct {
 	hdr       library.DynamicRange
 	languages []string
 	multi     bool
+	source    int
 }
 
 // versionFacts finds what is known of a version without reading it: each
@@ -217,6 +226,8 @@ func (r versionRules) criterion(criterion string, a, b versionFacts) int {
 		return cmp.Compare(rangeRank(a.hdr, library.HighRange), rangeRank(b.hdr, library.HighRange))
 	case "hdr-last":
 		return cmp.Compare(rangeRank(a.hdr, library.StandardRange), rangeRank(b.hdr, library.StandardRange))
+	case "source":
+		return cmp.Compare(a.source, b.source)
 	}
 	return 0
 }
@@ -263,6 +274,27 @@ func (r versionRules) codecRank(codec string) int {
 	return len(r.codecs)
 }
 
+// sourceRanks ranks the sources of a title's versions, listed in the
+// addons' order, for the source criterion: the sources the rules list
+// first, in their order, then the others in the order their versions come
+// in, by the first place of their versions. A source installed since the
+// list was saved, and a user's own addon, which come after the server's,
+// thus come after the sources listed.
+func (r versionRules) sourceRanks(versions []library.Version) map[accounts.ID]int {
+	ranks := make(map[accounts.ID]int, len(r.sources))
+	for i, source := range r.sources {
+		ranks[source] = i
+	}
+	next := len(r.sources)
+	for _, version := range versions {
+		if _, ok := ranks[version.Origin.Addon]; !ok {
+			ranks[version.Origin.Addon] = next
+			next++
+		}
+	}
+	return ranks
+}
+
 // rangeRank ranks a range: first first, then the other known, unknown
 // last.
 func rangeRank(hdr, first library.DynamicRange) int {
@@ -285,9 +317,15 @@ func rangeRank(hdr, first library.DynamicRange) int {
 // (see keptInPlace).
 func (h *Handler) ordered(ctx context.Context, user accounts.User, versions []library.Version) []library.Version {
 	rules := h.rulesFor(ctx, user)
+	var sources map[accounts.ID]int
+	if slices.Contains(rules.order, "source") {
+		sources = rules.sourceRanks(versions)
+	}
 	facts := make(map[accounts.ID]versionFacts, len(versions))
 	for _, version := range versions {
-		facts[version.ID] = h.versionFacts(ctx, version)
+		known := h.versionFacts(ctx, version)
+		known.source = sources[version.Origin.Addon]
+		facts[version.ID] = known
 	}
 	kept := versions
 	if rules.hides() {
