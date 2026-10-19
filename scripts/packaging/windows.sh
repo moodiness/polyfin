@@ -3,10 +3,11 @@
 #
 # Builds dist/packages/Polyfin-Desktop-<version>-windows-<arch>-setup.exe,
 # for x64 (the default) or arm64, the installer of polyfin.nsi: the
-# programs built with Go (polyfin-desktop.exe without a console),
-# PostgreSQL 18's bin, lib and share, with the Visual C++ runtime they load
-# beside them, jellyfin-web, the fonts and the licenses. Needs Go, Node.js
-# (for the admin app) and Python 3, and:
+# programs built with Go (polyfin-desktop.exe without a console), with
+# Polyfin's icon and their version info, PostgreSQL 18's bin, lib and
+# share, with the Visual C++ runtime they load beside them, jellyfin-web,
+# the fonts and the licenses. Needs Go, Node.js (for the admin app) and
+# Python 3, and:
 #   x64    Linux or macOS, with Docker, whose Debian container unpacks
 #          EnterpriseDB's build of PostgreSQL and the runtime's
 #          redistributable, and runs NSIS;
@@ -34,9 +35,12 @@ rm -rf "$stage"
 mkdir -p "$install"
 
 build_web
+"$PYTHON" "$PACKAGING/icons.py" ico "$install/polyfin.ico"
+trap remove_windows_resources EXIT
+windows_resources "$goarch" "$install/polyfin.ico"
 build_server windows "$goarch" "$install/polyfin.exe"
 build_desktop windows "$goarch" "$install/polyfin-desktop.exe" 0 "-H windowsgui"
-"$PYTHON" "$PACKAGING/icons.py" ico "$install/polyfin.ico"
+remove_windows_resources
 install_shared "$install"
 setup="Polyfin-Desktop-$VERSION-windows-$arch-setup.exe"
 

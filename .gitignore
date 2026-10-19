@@ -12,3 +12,6 @@ dist/
 /docs/.vitepress/cache/
 *.tsbuildinfo
 .DS_Store
+
+# Windows resources windows.sh makes for its builds only
+/cmd/*/rsrc_windows_*.syso

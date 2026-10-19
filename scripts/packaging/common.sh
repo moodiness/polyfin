@@ -59,6 +59,9 @@ APPIMAGE_RUNTIME_AARCH64_SHA256=00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0
 # such as mirror.gcr.io, pulls it from a mirror of Docker Hub, by the same
 # digest.
 DEBIAN_IMAGE="${DOCKER_HUB_MIRROR:-docker.io}/library/debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a"
+# go-winres, which makes the Windows programs' icon and version info: run
+# with go run at this version, which Go's checksum database checks.
+GO_WINRES=github.com/tc-hib/go-winres@v0.3.3
 
 log() { printf '== %s\n' "$*" >&2; }
 
@@ -108,6 +111,29 @@ build_desktop() {
 	log "Building polyfin-desktop for $1/$2"
 	(cd "$ROOT" && CGO_ENABLED="${4:-0}" GOOS="$1" GOARCH="$2" go build -trimpath \
 		-ldflags "-s -w -X main.version=$VERSION ${5:-}" -o "$3" ./cmd/polyfin-desktop)
+}
+
+# windows_resources GOARCH ICON: polyfin.exe's and polyfin-desktop.exe's
+# icon, ICON, and version info, as a .syso file in the folder of each
+# package, which go build links into the Windows programs of GOARCH. They
+# are made for the build and removed by remove_windows_resources, which
+# windows.sh runs on exit too: nothing stays in the source tree. No
+# manifest: the programs keep Windows' defaults.
+windows_resources() {
+	local program description
+	for program in polyfin polyfin-desktop; do
+		case "$program" in
+		polyfin) description=Polyfin ;;
+		*) description="Polyfin Desktop" ;;
+		esac
+		(cd "$ROOT" && go run "$GO_WINRES" simply --arch "$1" --out "cmd/$program/rsrc" --manifest none \
+			--icon "$2" --product-name Polyfin --file-description "$description" --original-filename "$program.exe" \
+			--product-version "$VERSION" --file-version "$(numeric_version)")
+	done
+}
+
+remove_windows_resources() {
+	rm -f "$ROOT"/cmd/polyfin/rsrc_windows_*.syso "$ROOT"/cmd/polyfin-desktop/rsrc_windows_*.syso
 }
 
 # shared_files: the folder of jellyfin-web, the fonts and their licenses,
