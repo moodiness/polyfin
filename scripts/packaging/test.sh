@@ -6,8 +6,10 @@
 # app (headless, on a data folder of the work folder, behind a proxy that
 # refuses every request for outside, leaving no process), then removes it:
 #   .dmg        mounted read-only, the app run from the disk image;
-#   -setup.exe  installed for the current user, silently, then uninstalled:
-#               the data folder, %LOCALAPPDATA%\Polyfin, must stay;
+#   -setup.exe  installed for the current user, silently, its programs and
+#               libraries checked to be the package's architecture (x64 or
+#               arm64), then uninstalled: the data folder,
+#               %LOCALAPPDATA%\Polyfin, must stay;
 #   .deb        installed with apt (sudo), then removed;
 #   .AppImage   run as it is when FUSE is there, else from its files
 #               extracted.
@@ -64,8 +66,40 @@ test_dmg() {
 	security delete-generic-password -s Polyfin -a "Secret key of $work/smoke/data" > /dev/null 2>&1 || true
 }
 
+# check_machine DIR MACHINE: every program and library of DIR, a Windows
+# install folder, is built for MACHINE, the PE header's: 0xAA64 for ARM64,
+# 0x8664 for x64. A package that took another architecture's programs
+# would still run, under Windows' emulation. The uninstaller NSIS writes is
+# its x86 stub on every system, and is left out.
+check_machine() {
+	"$PYTHON" -c 'import os, struct, sys
+root, want = sys.argv[1], int(sys.argv[2], 16)
+wrong = []
+for folder, _, files in os.walk(root):
+    for name in files:
+        path = os.path.join(folder, name)
+        if not name.lower().endswith((".exe", ".dll")) or os.path.relpath(path, root) == "Uninstall.exe":
+            continue
+        with open(path, "rb") as f:
+            head = f.read(4096)
+        machine = None
+        if head[:2] == b"MZ" and len(head) >= 0x40:
+            offset, = struct.unpack_from("<I", head, 0x3C)
+            if head[offset:offset + 4] == b"PE\0\0":
+                machine, = struct.unpack_from("<H", head, offset + 4)
+        if machine != want:
+            wrong.append("%s: %s" % (os.path.relpath(path, root), "not a PE file" if machine is None else hex(machine)))
+if wrong:
+    sys.exit("built for another machine than %s:\n%s" % (hex(want), "\n".join(sorted(wrong))))' "$(cygpath -w "$1")" "$2"
+}
+
 test_windows() {
-	local local_data install programs marker run_key uninstall_key
+	local local_data install programs marker run_key uninstall_key goarch machine
+	case "$package" in
+	*-windows-arm64-setup.exe) goarch=arm64 machine=0xAA64 ;;
+	*-windows-x64-setup.exe) goarch=amd64 machine=0x8664 ;;
+	*) echo "not a Windows installer of Polyfin Desktop: $package" >&2; exit 2 ;;
+	esac
 	local_data="$(cygpath -u "$LOCALAPPDATA")"
 	install="$local_data/Programs/Polyfin"
 	programs="$(cygpath -u "$APPDATA")/Microsoft/Windows/Start Menu/Programs"
@@ -75,6 +109,7 @@ test_windows() {
 	# MSYS_NO_PATHCONV, rather than taking them for paths.
 	MSYS_NO_PATHCONV=1 "$package" /S
 	check_install "$install" .exe
+	check_machine "$install" "$machine"
 	test -f "$install/polyfin-desktop.exe"
 	test -f "$install/postgresql/bin/vcruntime140.dll"
 	test -f "$programs/Polyfin.lnk"
@@ -83,7 +118,8 @@ test_windows() {
 	# The package's app has no console, which the smoke interrupts to quit
 	# it: a console build of the same app runs from the install folder in
 	# its place, and finds it the same way.
-	(cd "$ROOT" && CGO_ENABLED=0 go build -trimpath -ldflags "-X main.version=$VERSION" -o "$install/polyfin-desktop-smoke.exe" ./cmd/polyfin-desktop)
+	(cd "$ROOT" && CGO_ENABLED=0 GOARCH="$goarch" go build -trimpath -ldflags "-X main.version=$VERSION" \
+		-o "$install/polyfin-desktop-smoke.exe" ./cmd/polyfin-desktop)
 	smoke "$(cygpath -w "$install/polyfin-desktop-smoke.exe")" "$(cygpath -w "$install")" "$(cygpath -w "$work/smoke")"
 	rm "$install/polyfin-desktop-smoke.exe"
 
