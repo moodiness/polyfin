@@ -8,8 +8,8 @@
 #   .dmg        mounted read-only, the app run from the disk image;
 #   -setup.exe  installed for the current user, silently, its programs and
 #               libraries checked to be the package's architecture (x64 or
-#               arm64), then uninstalled: the data folder,
-#               %LOCALAPPDATA%\Polyfin, must stay;
+#               arm64) and to find every DLL they import, then uninstalled:
+#               the data folder, %LOCALAPPDATA%\Polyfin, must stay;
 #   .deb        installed with apt (sudo), then removed;
 #   .AppImage   run as it is when FUSE is there, else from its files
 #               extracted.
@@ -66,31 +66,86 @@ test_dmg() {
 	security delete-generic-password -s Polyfin -a "Secret key of $work/smoke/data" > /dev/null 2>&1 || true
 }
 
-# check_machine DIR MACHINE: every program and library of DIR, a Windows
+# check_programs DIR MACHINE: every program and library of DIR, a Windows
 # install folder, is built for MACHINE, the PE header's: 0xAA64 for ARM64,
-# 0x8664 for x64. A package that took another architecture's programs
-# would still run, under Windows' emulation. The uninstaller NSIS writes is
+# 0x8664 for x64; a package that took another architecture's programs
+# would still run, under Windows' emulation. And each finds the DLLs it
+# imports, delay-loaded ones too, where its process loads them from:
+# postgresql/bin for PostgreSQL's (lib's modules are loaded by postgres),
+# DIR for the others; else among API sets, or in System32, but for the
+# Visual C++ runtime, which a fresh Windows lacks while runners have it
+# (msvcrt.dll, the system's own C runtime, is Windows'). It prints the
+# DLLs taken from System32. The uninstaller NSIS writes is
 # its x86 stub on every system, and is left out.
-check_machine() {
-	"$PYTHON" -c 'import os, struct, sys
+check_programs() {
+	"$PYTHON" -c 'import os, re, struct, sys
 root, want = sys.argv[1], int(sys.argv[2], 16)
-wrong = []
+system = sys.argv[3] if len(sys.argv) > 3 else os.path.join(os.environ["SYSTEMROOT"], "System32")
+runtime = re.compile(r"msvcp|vcruntime|concrt|vccorlib|msvcr\d|ucrtbased")
+listings = {}
+def listing(folder):
+    if folder not in listings:
+        listings[folder] = {name.lower() for name in os.listdir(folder)}
+    return listings[folder]
+def pe(data):
+    """The machine and the imported DLLs, the delay-loaded ones too."""
+    if data[:2] != b"MZ" or len(data) < 0x40:
+        return None, []
+    header, = struct.unpack_from("<I", data, 0x3C)
+    if data[header:header + 4] != b"PE\0\0":
+        return None, []
+    machine, count = struct.unpack_from("<HH", data, header + 4)
+    optional = header + 24
+    plus = struct.unpack_from("<H", data, optional)[0] == 0x20B
+    base, = struct.unpack_from("<Q" if plus else "<I", data, optional + (24 if plus else 28))
+    directories, = struct.unpack_from("<I", data, optional + (108 if plus else 92))
+    table = optional + struct.unpack_from("<H", data, header + 20)[0]
+    sections = [struct.unpack_from("<IIII", data, table + 40 * i + 8) for i in range(count)]
+    def offset(rva):
+        for size, address, raw_size, raw in sections:
+            if address <= rva < address + max(size, raw_size):
+                return raw + rva - address
+        raise ValueError("RVA %#x is in no section" % rva)
+    found = []
+    # The import table (1): 20-byte entries, the name at 12; the delay-load
+    # one (13): 32-byte entries, the name at 4, a VA unless attribute 1.
+    for index, size, at in ((1, 20, 12), (13, 32, 4)):
+        rva = struct.unpack_from("<I", data, optional + (112 if plus else 96) + 8 * index)[0] if index < directories else 0
+        entry = offset(rva) if rva else None
+        while entry is not None:
+            name, = struct.unpack_from("<I", data, entry + at)
+            if not name:
+                break
+            if index == 13 and not data[entry] & 1:
+                name -= base
+            start = offset(name)
+            found.append(data[start:data.index(b"\0", start)].decode("ascii"))
+            entry += size
+    return machine, found
+problems, from_system = [], set()
 for folder, _, files in os.walk(root):
     for name in files:
         path = os.path.join(folder, name)
-        if not name.lower().endswith((".exe", ".dll")) or os.path.relpath(path, root) == "Uninstall.exe":
+        program = os.path.relpath(path, root)
+        if not name.lower().endswith((".exe", ".dll")) or program == "Uninstall.exe":
             continue
         with open(path, "rb") as f:
-            head = f.read(4096)
-        machine = None
-        if head[:2] == b"MZ" and len(head) >= 0x40:
-            offset, = struct.unpack_from("<I", head, 0x3C)
-            if head[offset:offset + 4] == b"PE\0\0":
-                machine, = struct.unpack_from("<H", head, offset + 4)
+            machine, imports = pe(f.read())
         if machine != want:
-            wrong.append("%s: %s" % (os.path.relpath(path, root), "not a PE file" if machine is None else hex(machine)))
-if wrong:
-    sys.exit("built for another machine than %s:\n%s" % (hex(want), "\n".join(sorted(wrong))))' "$(cygpath -w "$1")" "$2"
+            problems.append("%s: built for %s, not %#x" % (program, "no machine" if machine is None else "%#x" % machine, want))
+            continue
+        beside = os.path.join(root, "postgresql", "bin") if program.split(os.sep)[0] == "postgresql" else root
+        for dll in imports:
+            lower = dll.lower()
+            if lower in listing(beside) or lower.startswith(("api-ms-win-", "ext-ms-win-")):
+                continue
+            if not runtime.match(lower) and lower in listing(system):
+                from_system.add(lower)
+                continue
+            problems.append("%s: imports %s, which is neither beside it nor in %s" % (program, dll, system))
+if problems:
+    sys.exit("\n".join(sorted(problems)))
+print("DLLs from %s: %s" % (system, ", ".join(sorted(from_system))))' "$(cygpath -w "$1")" "$2"
 }
 
 test_windows() {
@@ -109,7 +164,7 @@ test_windows() {
 	# MSYS_NO_PATHCONV, rather than taking them for paths.
 	MSYS_NO_PATHCONV=1 "$package" /S
 	check_install "$install" .exe
-	check_machine "$install" "$machine"
+	check_programs "$install" "$machine"
 	test -f "$install/polyfin-desktop.exe"
 	test -f "$install/postgresql/bin/vcruntime140.dll"
 	test -f "$programs/Polyfin.lnk"
