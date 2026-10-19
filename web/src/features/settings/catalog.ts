@@ -32,6 +32,9 @@ const s = (text: SettingsText) => text.settings
 const c = (text: SettingsText) => text.settings.conversion
 const tr = (text: SettingsText) => text.settings.tracking
 const h = (text: SettingsText) => text.settings.https
+/** Both texts of a help that names folders of the container or of a computer: search finds either. */
+const anyServer = (help: { container: string; computer: string }) =>
+  `${help.container} ${help.computer}`
 
 /** Every setting, in the order of the sections and of their pages. */
 export const settingEntries: readonly SettingEntry[] = [
@@ -629,7 +632,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'catalogs',
     anchor: 'watch-local-folders',
     label: (t) => s(t).watchLocalFolders,
-    help: (t) => s(t).watchLocalFoldersHelp,
+    help: (t) => `${anyServer(s(t).watchLocalFoldersHelp)} ${s(t).watchSharesHelp}`,
     keywords: ['folder', 'scan', 'inotify', 'share', 'SMB', 'WebDAV', 'S3', 'SFTP', 'rclone'],
   },
   // Thumbnails
@@ -905,7 +908,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'recordings',
     anchor: 'recordings-folder',
     label: (t) => s(t).recordingsFolderLabel,
-    help: (t) => s(t).recordingsFolderHelp,
+    help: (t) => anyServer(s(t).recordingsFolderHelp),
     keywords: ['POLYFIN_RECORDINGS_DIR'],
     codes: ['invalid_recordings_folder'],
   },
@@ -1079,7 +1082,7 @@ export const settingEntries: readonly SettingEntry[] = [
     section: 'backups',
     anchor: 'backup-folder',
     label: (t) => s(t).backupFolderLabel,
-    help: (t) => s(t).backupFolderHelp,
+    help: (t) => anyServer(s(t).backupFolderHelp),
     keywords: ['POLYFIN_BACKUP_DIR'],
     codes: ['invalid_backup_folder'],
   },

@@ -27,6 +27,7 @@ import {
   TextInput,
 } from '@/ui'
 import NotificationTargets from '@/features/notifications/NotificationTargets'
+import { computer, useServerSystem } from '@/features/sources/LocalFolders'
 import CodeEditor from './CodeEditor'
 import CollectionLibraryApps from './CollectionLibraryApps'
 import BackupDestinations from './BackupDestinations'
@@ -638,6 +639,7 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
 function Catalogs({ form, update, error, number, range, limits }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
+  const host = computer(useServerSystem())
   return (
     <SettingsGroup>
       <FieldRow
@@ -737,7 +739,7 @@ function Catalogs({ form, update, error, number, range, limits }: SectionFormApi
       <SwitchRow
         anchor="watch-local-folders"
         label={s.watchLocalFolders}
-        help={s.watchLocalFoldersHelp}
+        help={`${s.watchLocalFoldersHelp[host]} ${s.watchSharesHelp}`}
         checked={form.watchLocalFolders}
         onChange={(watchLocalFolders) => update({ watchLocalFolders })}
       />
@@ -1287,6 +1289,7 @@ function LiveTv({ form, update, error, number, range, limits }: SectionFormApi) 
 function Recordings({ form, update, error, number, range, limits }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
+  const host = computer(useServerSystem())
   const untilId = useId()
   const hours = Array.from({ length: 24 }, (_, hour) => ({
     value: hour,
@@ -1305,7 +1308,7 @@ function Recordings({ form, update, error, number, range, limits }: SectionFormA
         <FieldRow
           anchor="recordings-folder"
           label={s.recordingsFolderLabel}
-          help={s.recordingsFolderHelp}
+          help={s.recordingsFolderHelp[host]}
           error={error('recordings-folder')}
         >
           <TextInput
@@ -1428,6 +1431,7 @@ function Recordings({ form, update, error, number, range, limits }: SectionFormA
 function Backups({ form, update, error, number, range, limits }: SectionFormApi) {
   const { language, t } = useI18n()
   const s = t.settings
+  const host = computer(useServerSystem())
   return (
     <>
       <SettingsGroup>
@@ -1441,7 +1445,7 @@ function Backups({ form, update, error, number, range, limits }: SectionFormApi)
         <FieldRow
           anchor="backup-folder"
           label={s.backupFolderLabel}
-          help={s.backupFolderHelp}
+          help={s.backupFolderHelp[host]}
           error={error('backup-folder')}
         >
           <TextInput

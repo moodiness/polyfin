@@ -544,8 +544,14 @@ const settings = {
     localScanHoursHelp: (r: RangeText) =>
       `How often each local folder is scanned again for files added, changed or removed. Folders are also scanned at startup, when you ask, and when watched ones change. 0 turns the schedule off. From ${r.min} to ${r.max}; ${r.default} by default.`,
     watchLocalFolders: 'Watch folders and shares for changes',
-    watchLocalFoldersHelp:
-      'Scans a folder in the container again a few seconds after its files stop changing, so that files added, renamed or removed show within a minute. An SMB share is scanned again a few seconds after its server tells of a change. WebDAV folders are listed again every 2 minutes, S3 buckets, SFTP folders and rclone remotes as often as each folder asks, a share of many folders over several rounds, and scanned again when a listing changed. System › Health tells how each share is watched, and which folders or shares cannot be, and why.',
+    watchLocalFoldersHelp: {
+      container:
+        'Scans a folder in the container again a few seconds after its files stop changing, so that files added, renamed or removed show within a minute.',
+      computer:
+        'Scans a folder of the computer Polyfin runs on again a few seconds after its files stop changing, so that files added, renamed or removed show within a minute.',
+    },
+    watchSharesHelp:
+      'An SMB share is scanned again a few seconds after its server tells of a change. WebDAV folders are listed again every 2 minutes, S3 buckets, SFTP folders and rclone remotes as often as each folder asks, a share of many folders over several rounds, and scanned again when a listing changed. System › Health tells how each share is watched, and which folders or shares cannot be, and why.',
     personalAddons: 'Allow users’ own addons',
     personalAddonsHelp:
       'Lets users add Stremio addons of their own, besides the server’s. When off, their addons are kept but not used, and their Jellyfin apps show the server’s addons only.',
@@ -641,8 +647,12 @@ const settings = {
     recordingHelp:
       'Lets users schedule recordings of Live TV programmes and series, written to the folder below.',
     recordingsFolderLabel: 'Recordings folder',
-    recordingsFolderHelp:
-      'A folder of Polyfin’s container, the one shown when empty, in its data volume. To keep recordings on another disk, mount it there, or elsewhere and enter its path here. Polyfin must be able to write to it. Changing it does not move the recordings already made.',
+    recordingsFolderHelp: {
+      container:
+        'A folder of Polyfin’s container, the one shown when empty, in its data volume. To keep recordings on another disk, mount it there, or elsewhere and enter its path here. Polyfin must be able to write to it. Changing it does not move the recordings already made.',
+      computer:
+        'A folder of the computer Polyfin runs on, the one shown when empty, in its data folder. To keep recordings on another disk, enter a folder of that disk here. Polyfin must be able to write to it. Changing it does not move the recordings already made.',
+    },
     recordingPrePadding: 'Start recordings early (minutes)',
     recordingPrePaddingHelp: (r: RangeText) =>
       `How many minutes before the programme a recording starts. From ${r.min} to ${r.max}; ${r.default} by default.`,
@@ -675,8 +685,12 @@ const settings = {
     backupsHelp:
       'Writes a copy of the database to the folder below each day, at the hour chosen, and deletes the oldest past the number kept.',
     backupFolderLabel: 'Backups folder',
-    backupFolderHelp:
-      'A folder of Polyfin’s container, the one shown when empty, in its data volume. Backups are safer on another disk than the database’s: mount one there, or elsewhere and enter its path here. Polyfin must be able to write to it.',
+    backupFolderHelp: {
+      container:
+        'A folder of Polyfin’s container, the one shown when empty, in its data volume. Backups are safer on another disk than the database’s: mount one there, or elsewhere and enter its path here. Polyfin must be able to write to it.',
+      computer:
+        'A folder of the computer Polyfin runs on, the one shown when empty, in its data folder. Backups are safer on another disk than the database’s: enter a folder of one here. Polyfin must be able to write to it.',
+    },
     backupHour: 'Back up every day at',
     backupHourHelp: (hour: string) => `In the server’s time zone. ${hour} by default.`,
     backupsKept: 'Backups to keep',

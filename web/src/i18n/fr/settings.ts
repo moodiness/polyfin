@@ -562,8 +562,14 @@ const settings: typeof en = {
     localScanHoursHelp: (r: RangeText) =>
       `À quelle fréquence chaque dossier local est analysé à nouveau pour trouver les fichiers ajoutés, modifiés ou supprimés. Les dossiers sont aussi analysés au démarrage, à la demande, et quand ceux qui sont surveillés changent. 0 désactive cette planification. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     watchLocalFolders: 'Surveiller les changements des dossiers et des partages',
-    watchLocalFoldersHelp:
-      'Analyse à nouveau un dossier du conteneur quelques secondes après que ses fichiers ont cessé de changer, pour que les fichiers ajoutés, renommés ou supprimés apparaissent en moins d’une minute. Un partage SMB est analysé à nouveau quelques secondes après que son serveur a signalé un changement. Les dossiers WebDAV sont listés de nouveau toutes les 2 minutes, les buckets S3, dossiers SFTP et remotes rclone aussi souvent que chaque dossier le demande, en plusieurs fois pour un partage de nombreux dossiers, et analysés à nouveau quand une liste a changé. Système › Santé indique comment chaque partage est surveillé, et quels dossiers ou partages ne peuvent pas l’être, et pourquoi.',
+    watchLocalFoldersHelp: {
+      container:
+        'Analyse à nouveau un dossier du conteneur quelques secondes après que ses fichiers ont cessé de changer, pour que les fichiers ajoutés, renommés ou supprimés apparaissent en moins d’une minute.',
+      computer:
+        'Analyse à nouveau un dossier de l’ordinateur où tourne Polyfin quelques secondes après que ses fichiers ont cessé de changer, pour que les fichiers ajoutés, renommés ou supprimés apparaissent en moins d’une minute.',
+    },
+    watchSharesHelp:
+      'Un partage SMB est analysé à nouveau quelques secondes après que son serveur a signalé un changement. Les dossiers WebDAV sont listés de nouveau toutes les 2 minutes, les buckets S3, dossiers SFTP et remotes rclone aussi souvent que chaque dossier le demande, en plusieurs fois pour un partage de nombreux dossiers, et analysés à nouveau quand une liste a changé. Système › Santé indique comment chaque partage est surveillé, et quels dossiers ou partages ne peuvent pas l’être, et pourquoi.',
     personalAddons: 'Autoriser les addons personnels des utilisateurs',
     personalAddonsHelp:
       'Les utilisateurs peuvent ajouter leurs propres addons Stremio, en plus de ceux du serveur. Sinon, leurs addons sont conservés mais pas utilisés, et leurs applications Jellyfin n’affichent que les addons du serveur.',
@@ -660,8 +666,12 @@ const settings: typeof en = {
     recordingHelp:
       'Permet aux utilisateurs de programmer des enregistrements de la TV en direct, écrits dans le dossier ci-dessous.',
     recordingsFolderLabel: 'Dossier des enregistrements',
-    recordingsFolderHelp:
-      'Un dossier du conteneur de Polyfin, celui indiqué s’il est vide, dans son volume de données. Pour garder les enregistrements sur un autre disque, montez-le à cet endroit, ou ailleurs et indiquez ici son chemin. Polyfin doit pouvoir y écrire. Le changer ne déplace pas les enregistrements déjà faits.',
+    recordingsFolderHelp: {
+      container:
+        'Un dossier du conteneur de Polyfin, celui indiqué s’il est vide, dans son volume de données. Pour garder les enregistrements sur un autre disque, montez-le à cet endroit, ou ailleurs et indiquez ici son chemin. Polyfin doit pouvoir y écrire. Le changer ne déplace pas les enregistrements déjà faits.',
+      computer:
+        'Un dossier de l’ordinateur où tourne Polyfin, celui indiqué s’il est vide, dans son dossier de données. Pour garder les enregistrements sur un autre disque, indiquez ici un dossier de ce disque. Polyfin doit pouvoir y écrire. Le changer ne déplace pas les enregistrements déjà faits.',
+    },
     recordingPrePadding: 'Commencer les enregistrements avant (minutes)',
     recordingPrePaddingHelp: (r: RangeText) =>
       `Combien de minutes avant l’émission un enregistrement commence. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
@@ -695,8 +705,12 @@ const settings: typeof en = {
     backupsHelp:
       'Écrit chaque jour une copie de la base de données dans le dossier ci-dessous, à l’heure choisie, et supprime les plus anciennes au-delà du nombre conservé.',
     backupFolderLabel: 'Dossier des sauvegardes',
-    backupFolderHelp:
-      'Un dossier du conteneur de Polyfin, celui indiqué s’il est vide, dans son volume de données. Les sauvegardes sont plus sûres sur un autre disque que celui de la base : montez-en un à cet endroit, ou ailleurs et indiquez ici son chemin. Polyfin doit pouvoir y écrire.',
+    backupFolderHelp: {
+      container:
+        'Un dossier du conteneur de Polyfin, celui indiqué s’il est vide, dans son volume de données. Les sauvegardes sont plus sûres sur un autre disque que celui de la base : montez-en un à cet endroit, ou ailleurs et indiquez ici son chemin. Polyfin doit pouvoir y écrire.',
+      computer:
+        'Un dossier de l’ordinateur où tourne Polyfin, celui indiqué s’il est vide, dans son dossier de données. Les sauvegardes sont plus sûres sur un autre disque que celui de la base : indiquez ici un dossier d’un tel disque. Polyfin doit pouvoir y écrire.',
+    },
     backupHour: 'Sauvegarder chaque jour à',
     backupHourHelp: (hour: string) => `Dans le fuseau horaire du serveur. ${hour} par défaut.`,
     backupsKept: 'Sauvegardes à conserver',
