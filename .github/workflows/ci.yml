@@ -403,6 +403,11 @@ jobs:
             os: ubuntu-24.04
           - name: Windows
             os: windows-latest
+          # Its tests run against EnterpriseDB's x64 build, under Windows'
+          # emulation; the arm64 package's own build is tested by
+          # desktop-package-test.
+          - name: Windows on Arm
+            os: windows-11-arm
           - name: macOS on Apple silicon
             os: macos-15
           - name: macOS on Intel
@@ -436,7 +441,8 @@ jobs:
               ln -s /usr/lib/postgresql/18 "$temp/install/postgresql"
               ;;
             Windows)
-              # EnterpriseDB's binaries, as postgresql.org links them.
+              # EnterpriseDB's binaries, as postgresql.org links them; x64,
+              # which Windows on Arm emulates.
               curl -fsSLo "$temp/postgresql.zip" https://get.enterprisedb.com/postgresql/postgresql-18.6-2-windows-x64-binaries.zip
               echo "41bb1496f60666d3745ae8a855753b877d14fa9e34667f266867635b790fc323  $temp/postgresql.zip" | sha256sum -c -
               ;;
@@ -534,12 +540,13 @@ jobs:
 
   desktop-package:
     # The packages of Polyfin Desktop, built by scripts/packaging as anyone
-    # builds them, kept as the run's artifacts. The Windows installer is
-    # made on Linux, with NSIS, and installed on Windows below.
+    # builds them, kept as the run's artifacts. The Windows x64 installer is
+    # made on Linux, with NSIS, and installed on Windows below; the arm64
+    # one on Windows on Arm, which builds its PostgreSQL from source.
     name: Package Polyfin Desktop for ${{ matrix.name }}
     needs: [check, desktop-files]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -555,7 +562,11 @@ jobs:
           - name: Windows x64
             id: windows-x64
             os: ubuntu-24.04
-            script: windows.sh
+            script: windows.sh x64
+          - name: Windows arm64
+            id: windows-arm64
+            os: windows-11-arm
+            script: windows.sh arm64
           - name: Linux x64
             id: linux-amd64
             os: ubuntu-24.04
@@ -564,6 +575,9 @@ jobs:
             id: linux-arm64
             os: ubuntu-24.04-arm
             script: linux.sh arm64
+    defaults:
+      run:
+        shell: bash
     env:
       VERSION: ${{ needs.check.outputs.version }}
       POLYFIN_DESKTOP_FILES: ${{ github.workspace }}/dist/packaging/files
@@ -587,6 +601,14 @@ jobs:
         with:
           name: desktop-files
           path: dist/packaging/files
+      - name: Restore PostgreSQL's build for Windows on Arm
+        # postgresql-windows.sh's, kept while the script and the patch it
+        # applies, which pin its inputs, stay the same.
+        if: matrix.id == 'windows-arm64'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dist/packaging/postgresql-windows-arm64
+          key: postgresql-windows-arm64-${{ hashFiles('scripts/packaging/postgresql-windows.sh', 'scripts/packaging/postgresql-msvc-arm64.patch') }}
       - name: Build the package
         env:
           SCRIPT: ${{ matrix.script }}
@@ -627,6 +649,9 @@ jobs:
           - name: Windows x64
             id: windows-x64
             os: windows-latest
+          - name: Windows arm64
+            id: windows-arm64
+            os: windows-11-arm
           - name: Linux x64
             id: linux-amd64
             os: ubuntu-24.04
@@ -690,5 +715,5 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           ls -l packages
-          test "$(find packages -type f | wc -l)" -eq 7
+          test "$(find packages -type f | wc -l)" -eq 8
           gh release upload "$TAG" packages/*
