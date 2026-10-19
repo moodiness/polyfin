@@ -3,6 +3,7 @@ import { UserPlusIcon } from '@phosphor-icons/react'
 import { useMutation } from '@tanstack/react-query'
 import { queryClient, queryKeys, setup, type Status } from '@/api'
 import { errorMessage } from '@/format'
+import { computer, useServerSystem } from '@/features/sources/LocalFolders'
 import { useI18n } from '@/i18n'
 import { Button, Field, Notice, TextInput } from '@/ui'
 import { AuthFrame } from './AuthFrame'
@@ -10,6 +11,7 @@ import { AuthFrame } from './AuthFrame'
 /** The first administrator, shown by the session gate at any address until one exists. */
 export default function SetupRoute() {
   const { t, language } = useI18n()
+  const host = computer(useServerSystem())
   const [setupCode, setSetupCode] = useState('')
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
@@ -39,7 +41,7 @@ export default function SetupRoute() {
 
   return (
     <AuthFrame title={t.setup.title} lede={t.setup.description} wide>
-      <Notice className="mb-6">{t.setup.codeHelp}</Notice>
+      <Notice className="mb-6">{t.setup.codeHelp[host]}</Notice>
       <form onSubmit={submit} noValidate className="flex flex-col gap-5">
         <Field label={t.setup.setupCode} help={t.setup.setupCodeHint}>
           <TextInput

@@ -4,8 +4,12 @@ const auth = {
     title: 'Welcome to Polyfin',
     description:
       'No administrator exists yet. Create the first account to manage this server and sign in from Jellyfin apps.',
-    codeHelp:
-      'For security, Polyfin printed a one-time setup code in its log when it started. Run docker logs <container> (on Unraid, open the container log) and look for the line with the setup code.',
+    codeHelp: {
+      container:
+        'For security, Polyfin printed a one-time setup code in its log when it started. Run docker logs <container> (on Unraid, open the container log) and look for the line with the setup code.',
+      computer:
+        'For security, Polyfin printed a one-time setup code in its log when it started. With Polyfin Desktop, choose Setup code in its menu to copy it; otherwise, look for the line with the setup code in Polyfin’s log.',
+    },
     setupCode: 'Setup code',
     setupCodeHint: 'Format XXXX-XXXX. Case and dash do not matter.',
     name: 'Administrator name',

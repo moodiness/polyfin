@@ -5,8 +5,12 @@ const auth: typeof en = {
     title: 'Bienvenue dans Polyfin',
     description:
       'Aucun administrateur n’existe encore. Créez le premier compte pour gérer ce serveur et vous connecter depuis les applications Jellyfin.',
-    codeHelp:
-      'Par sécurité, Polyfin a inscrit un code d’installation à usage unique dans son journal au démarrage. Lancez docker logs <conteneur> (sur Unraid, ouvrez le journal du conteneur) et repérez la ligne contenant le code d’installation.',
+    codeHelp: {
+      container:
+        'Par sécurité, Polyfin a inscrit un code d’installation à usage unique dans son journal au démarrage. Lancez docker logs <conteneur> (sur Unraid, ouvrez le journal du conteneur) et repérez la ligne contenant le code d’installation.',
+      computer:
+        'Par sécurité, Polyfin a inscrit un code d’installation à usage unique dans son journal au démarrage. Avec Polyfin Desktop, choisissez Code d’installation dans son menu pour le copier ; sinon, repérez la ligne contenant le code d’installation dans le journal de Polyfin.',
+    },
     setupCode: 'Code d’installation',
     setupCodeHint: 'Format XXXX-XXXX. Majuscules et tiret facultatifs.',
     name: 'Nom de l’administrateur',
