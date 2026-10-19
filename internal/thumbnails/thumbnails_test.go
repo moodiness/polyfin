@@ -275,11 +275,7 @@ func TestGenerateFromMatroska(t *testing.T) {
 		}
 	}
 	// Paced: never two requests closer than the interval.
-	for i := 1; i < len(requests); i++ {
-		if gap := requests[i].at.Sub(requests[i-1].at); gap < 19*time.Millisecond {
-			t.Errorf("requests %d and %d %v apart", i-1, i, gap)
-		}
-	}
+	checkPaced(t, ts.gate, hostOf(testVersion.URL), len(requests), 20*time.Millisecond)
 	if !ts.source.released {
 		t.Error("the source was not released")
 	}

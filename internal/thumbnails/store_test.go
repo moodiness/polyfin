@@ -12,6 +12,34 @@ import (
 	"github.com/moodiness/polyfin/internal/container"
 )
 
+// releases are the instants the gate let host's requests go, in order. A
+// request reaches its source a moment later, a moment the scheduler may
+// stretch, so that two requests the gate spaced may arrive closer: pacing
+// is checked where the gate decides it.
+func (g *gate) releases(host string) []time.Time {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if h := g.hosts[host]; h != nil {
+		return slices.Clone(h.recent)
+	}
+	return nil
+}
+
+// checkPaced fails unless the gate let count requests of host go, each at
+// least interval after the one before.
+func checkPaced(t *testing.T, g *gate, host string, count int, interval time.Duration) {
+	t.Helper()
+	releases := g.releases(host)
+	if len(releases) != count {
+		t.Errorf("the gate let %d requests go, not %d", len(releases), count)
+	}
+	for i := 1; i < len(releases); i++ {
+		if gap := releases[i].Sub(releases[i-1]); gap < interval {
+			t.Errorf("requests %d and %d let go %v apart", i-1, i, gap)
+		}
+	}
+}
+
 func saveThumbnails(t *testing.T, ts *testService, version, item accounts.ID, width int) Info {
 	t.Helper()
 	info := Info{Width: width, Height: width / 2, TileWidth: 10, TileHeight: 10, ThumbnailCount: 120, Interval: 10000, Bandwidth: 900}
@@ -200,12 +228,7 @@ func TestPacedReads(t *testing.T) {
 	if !errors.Is(err, errBudget) || len(read) < 4 || p.requests != 6 || len(src.count()) != 6 || head != 1 {
 		t.Errorf("%v: read %v, %d requests, %d for the index", err, read, len(src.count()), head)
 	}
-	requests := src.count()
-	for i := 1; i < len(requests); i++ {
-		if gap := requests[i].at.Sub(requests[i-1].at); gap < 14*time.Millisecond {
-			t.Errorf("requests %d and %d %v apart", i-1, i, gap)
-		}
-	}
+	checkPaced(t, g, "host.example", len(src.count()), 15*time.Millisecond)
 	// A playback reading the host holds the next request back.
 	busy.Store(true)
 	q := &paced{src: src, host: "host.example", gate: g, busy: p.busy, left: 1}
