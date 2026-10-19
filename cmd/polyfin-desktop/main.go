@@ -45,11 +45,23 @@ const DatabasePortVariable = "POLYFIN_DESKTOP_DATABASE_PORT"
 // quits.
 const quitWait = 3 * time.Minute
 
+// quitCommandWait bounds the wait of -quit: the app's stop, and a minute
+// more for the app to take the request and end.
+const quitCommandWait = quitWait + time.Minute
+
+// The exit codes of -quit, besides 0 once the app has quit, 1 for an
+// error and 2 for wrong arguments.
+const (
+	exitNotRunning   = 3
+	exitStillRunning = 4
+)
+
 func main() {
 	headless := flag.Bool("headless", false, "run without the tray icon, the browser and the login item, until interrupted")
 	background := flag.Bool(strings.TrimPrefix(loginitem.Arg, "--"), false, "started with the computer: open no browser")
 	showVersion := flag.Bool("version", false, "print the version")
 	importKey := flag.String("import-secret-key", "", "store the secret key of the file, another server's, in place of this data folder's, then exit")
+	quitRunning := flag.Bool("quit", false, "ask the app running on the data folder to quit, as Quit Polyfin does, and wait until it has: exit code 0 once it has quit, 3 when none runs, 4 when it still runs after 4 minutes")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println(version)
@@ -61,6 +73,9 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+	if *quitRunning {
+		os.Exit(requestQuit())
 	}
 	if err := run(*headless, *background); err != nil {
 		fmt.Fprintln(os.Stderr, "polyfin-desktop:", err)
@@ -91,6 +106,7 @@ func run(headless, background bool) error {
 		out = io.MultiWriter(logFile, os.Stderr)
 	}
 	logger := slog.New(slog.NewTextHandler(out, nil))
+	logLibraries(logger)
 
 	release, err := app.Lock(folders.Lock())
 	if errors.Is(err, app.ErrRunning) {
@@ -105,6 +121,12 @@ func run(headless, background bool) error {
 		return err
 	}
 	defer release()
+	// polyfin-desktop -quit asks this app to quit.
+	quitRequested, stopListening, err := app.ListenQuit(folders)
+	if err != nil {
+		return err
+	}
+	defer stopListening()
 
 	manifest, err := toolsManifest()
 	if err != nil {
@@ -132,9 +154,10 @@ func run(headless, background bool) error {
 	}
 	logger.Info("Polyfin Desktop starts", "version", version, "data", folders.Data, "install", install.Dir)
 	if headless {
-		return runHeadless(options, logger)
+		return runHeadless(options, logger, quitRequested)
 	}
-	relaunch := runTray(options, logger)
+	relaunch := runTray(options, logger, quitRequested)
+	stopListening()
 	release()
 	if relaunch != nil {
 		return startAfterQuit(relaunch)
@@ -184,8 +207,9 @@ func toolsManifest() (tools.Manifest, error) {
 	return manifest, nil
 }
 
-// runHeadless runs until an interrupt, then stops everything.
-func runHeadless(options app.Options, logger *slog.Logger) error {
+// runHeadless runs until an interrupt, or a request to quit, then stops
+// everything.
+func runHeadless(options app.Options, logger *slog.Logger, quitRequested <-chan struct{}) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var mu sync.Mutex
@@ -200,11 +224,23 @@ func runHeadless(options app.Options, logger *slog.Logger) error {
 	}
 	a := app.New(options)
 	a.Start()
-	<-ctx.Done()
-	logger.Info("Quitting")
+	select {
+	case <-ctx.Done():
+		logger.Info("Quitting")
+	case <-quitRequested:
+		logger.Info("Quitting, as polyfin-desktop -quit asked")
+	}
 	quit(a)
 	logger.Info("Polyfin Desktop quit")
 	return nil
+}
+
+// logLibraries sends what libraries write with the standard log package,
+// such as the tray's errors, to the app's log as warnings: an app without
+// a console has nowhere else to show them.
+func logLibraries(logger *slog.Logger) {
+	slog.SetDefault(logger)
+	slog.SetLogLoggerLevel(slog.LevelWarn)
 }
 
 // quit stops the server and the database, waiting for them.
@@ -212,6 +248,32 @@ func quit(a *app.App) {
 	ctx, cancel := context.WithTimeout(context.Background(), quitWait)
 	defer cancel()
 	a.Stop(ctx)
+}
+
+// requestQuit asks the app running on the data folder to quit, and waits
+// until it has, returning the exit code of -quit.
+func requestQuit() int {
+	folders, err := desktop.FindFolders()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "polyfin-desktop:", err)
+		return 1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), quitCommandWait)
+	defer cancel()
+	err = app.RequestQuit(ctx, folders)
+	switch {
+	case err == nil:
+		fmt.Println("Polyfin Desktop has quit.")
+		return 0
+	case errors.Is(err, app.ErrNotRunning):
+		fmt.Fprintln(os.Stderr, "polyfin-desktop:", err)
+		return exitNotRunning
+	case errors.Is(err, app.ErrStillRunning):
+		fmt.Fprintln(os.Stderr, "polyfin-desktop:", err)
+		return exitStillRunning
+	}
+	fmt.Fprintln(os.Stderr, "polyfin-desktop:", err)
+	return 1
 }
 
 // startAfterQuit starts the new app, or the installer, once this one

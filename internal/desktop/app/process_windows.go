@@ -97,3 +97,14 @@ func kill(process *os.Process) error {
 func alive(int) bool { return false }
 
 func startTime(int) (int64, bool) { return 0, false }
+
+// running tells whether pid has not ended yet.
+func running(pid int) bool {
+	handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		return false
+	}
+	defer windows.CloseHandle(handle)
+	event, err := windows.WaitForSingleObject(handle, 0)
+	return err == nil && event == uint32(windows.WAIT_TIMEOUT)
+}

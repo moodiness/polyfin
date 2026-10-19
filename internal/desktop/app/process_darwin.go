@@ -18,3 +18,13 @@ func startTime(pid int) (int64, bool) {
 	}
 	return info.Proc.P_starttime.Sec*1_000_000 + int64(info.Proc.P_starttime.Usec), true
 }
+
+// running tells whether pid runs: a zombie, which its parent has not
+// waited for yet, has ended.
+func running(pid int) bool {
+	info, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
+	return err == nil && int(info.Proc.P_pid) == pid && info.Proc.P_stat != szomb
+}
+
+// szomb is the state of a zombie, SZOMB of sys/proc.h.
+const szomb = 5

@@ -147,6 +147,14 @@ func (f Folders) Lock() string { return filepath.Join(f.Data, "desktop.lock") }
 // to stop one a crash of the app left running.
 func (f Folders) ServerPID() string { return filepath.Join(f.Data, "polyfin.pid") }
 
+// Instance is the file that names the app running on the data folder,
+// while it runs: its PID and the token a request to quit must carry.
+func (f Folders) Instance() string { return filepath.Join(f.Data, "desktop.pid") }
+
+// QuitRequest is the file polyfin-desktop -quit writes to ask the
+// running app to quit.
+func (f Folders) QuitRequest() string { return filepath.Join(f.Data, "desktop.quit") }
+
 // Make creates the data folder and the log folder, readable by the user
 // only.
 func (f Folders) Make() error {

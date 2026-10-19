@@ -17,3 +17,8 @@ func lockFile(file *os.File) error {
 	}
 	return err
 }
+
+// unlockFile releases file's lock.
+func unlockFile(file *os.File) error {
+	return windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, new(windows.Overlapped))
+}

@@ -32,3 +32,20 @@ func startTime(pid int) (int64, bool) {
 	start, err := strconv.ParseInt(fields[19], 10, 64)
 	return start, err == nil
 }
+
+// running tells whether pid runs: a zombie, which its parent has not
+// waited for yet, has ended. Its state is the first field of its stat
+// after the name in parentheses.
+func running(pid int) bool {
+	data, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return false
+	}
+	text := string(data)
+	end := strings.LastIndexByte(text, ')')
+	if end < 0 {
+		return false
+	}
+	fields := strings.Fields(text[end+1:])
+	return len(fields) > 0 && fields[0] != "Z"
+}

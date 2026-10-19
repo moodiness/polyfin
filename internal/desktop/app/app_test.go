@@ -27,10 +27,15 @@ import (
 // FAKE_POLYFIN_SERVER is set: it answers the admin app's status on
 // POLYFIN_LISTEN, logs a setup code as the server does, records its
 // environment, and stops on SIGTERM or Ctrl-Break. FAKE_POLYFIN_EXIT makes
-// its first run end by itself.
+// its first run end by itself. With FAKE_DESKTOP_APP set, it is an app
+// holding a data folder instead (see quit_test.go).
 func TestMain(m *testing.M) {
 	if os.Getenv("FAKE_POLYFIN_SERVER") != "" {
 		fakeServer()
+		return
+	}
+	if os.Getenv("FAKE_DESKTOP_APP") != "" {
+		fakeApp()
 		return
 	}
 	os.Exit(m.Run())
@@ -231,7 +236,13 @@ func TestAppRunsAndStopsEverything(t *testing.T) {
 	if s := a.Status(); s.Phase != Stopped {
 		t.Errorf("phase after Stop = %s", s.Phase)
 	}
+	// pg_ctl stop returns once the postmaster removed its lock file, just
+	// before it ends: each process gets a few seconds to be gone.
 	for name, pid := range map[string]int{"server": serverPID, "cluster": clusterPID} {
+		deadline := time.Now().Add(10 * time.Second)
+		for pid != 0 && alive(pid) && time.Now().Before(deadline) {
+			time.Sleep(100 * time.Millisecond)
+		}
 		if pid != 0 && alive(pid) {
 			t.Errorf("the %s, process %d, still runs", name, pid)
 		}

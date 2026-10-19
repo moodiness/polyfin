@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"image/png"
+	"log"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -58,5 +60,23 @@ func TestTexts(t *testing.T) {
 	}
 	if strings.Contains(strings.Join([]string{french.failed, french.stopping, french.keyCopied, french.keyHint}, ""), "'") {
 		t.Error("French uses a straight apostrophe")
+	}
+}
+
+// What libraries write with the standard log package, such as the tray's
+// errors, goes to the app's log as a warning.
+func TestLogLibraries(t *testing.T) {
+	previous, writer, flags := slog.Default(), log.Writer(), log.Flags()
+	defer func() {
+		slog.SetDefault(previous)
+		slog.SetLogLoggerLevel(slog.LevelInfo)
+		log.SetOutput(writer)
+		log.SetFlags(flags)
+	}()
+	var out bytes.Buffer
+	logLibraries(slog.New(slog.NewTextHandler(&out, nil)))
+	log.Printf("systray error: unable to init instance: %s\n", "no taskbar")
+	if got := out.String(); !strings.Contains(got, `level=WARN msg="systray error: unable to init instance: no taskbar"`) {
+		t.Errorf("log = %q", got)
 	}
 }

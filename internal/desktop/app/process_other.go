@@ -7,3 +7,5 @@ import "syscall"
 func parentDeath(*syscall.SysProcAttr) {}
 
 func startTime(int) (int64, bool) { return 0, false }
+
+func running(pid int) bool { return alive(pid) }

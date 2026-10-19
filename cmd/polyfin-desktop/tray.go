@@ -23,10 +23,17 @@ import (
 // high, 44 pixels on a Retina display.
 const iconSize = 44
 
-// runTray shows the icon and its menu until Quit Polyfin, starting
-// Polyfin at once. It returns what to start once the app has quit, after
-// an update.
-func runTray(options app.Options, logger *slog.Logger) *exec.Cmd {
+// trayWait is how long the icon may take to show before the app says it
+// runs without it: the library shows it as Run starts, or never.
+const trayWait = 30 * time.Second
+
+// runTray shows the icon and its menu until Quit Polyfin, an interrupt or
+// a request of polyfin-desktop -quit, starting Polyfin at once. It
+// returns what to start once the app has quit, after an update. Polyfin
+// starts and quits without waiting for the icon: when the system shows
+// none, such as a session without Windows' taskbar, the app logs an error
+// and runs on without it, until an interrupt or polyfin-desktop -quit.
+func runTray(options app.Options, logger *slog.Logger, quitRequested <-chan struct{}) *exec.Cmd {
 	text := textsFor(desktop.Language())
 	changes := make(chan app.Status, 1)
 	options.Changed = func(s app.Status) {
@@ -42,6 +49,21 @@ func runTray(options app.Options, logger *slog.Logger) *exec.Cmd {
 	var relaunch *exec.Cmd
 	var quitOnce sync.Once
 	quitting := make(chan struct{})
+	// shown is closed once the icon and its menu are there.
+	shown := make(chan struct{})
+	quitApp := func() {
+		quitOnce.Do(func() {
+			close(quitting)
+			systray.Quit()
+			select {
+			case <-shown:
+			default:
+				// Without the icon, the library may have no window to
+				// close: its loop is ended directly.
+				endTrayLoop()
+			}
+		})
+	}
 	onReady := func() {
 		setIcon(false)
 		systray.SetTooltip("Polyfin")
@@ -111,15 +133,8 @@ func runTray(options app.Options, logger *slog.Logger) *exec.Cmd {
 			}
 		}
 		show(a.Status())
-		a.Start()
-
-		quitApp := func() { quitOnce.Do(func() { close(quitting); systray.Quit() }) }
-		go func() {
-			signals := make(chan os.Signal, 1)
-			signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-			<-signals
-			quitApp()
-		}()
+		close(shown)
+		logger.Info("The tray icon is shown")
 		go func() {
 			for {
 				select {
@@ -174,6 +189,19 @@ func runTray(options app.Options, logger *slog.Logger) *exec.Cmd {
 			}
 		}()
 	}
+	trayThread()
+	a.Start()
+	go func() {
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+		select {
+		case <-signals:
+		case <-quitRequested:
+			logger.Info("Quitting, as polyfin-desktop -quit asked")
+		}
+		quitApp()
+	}()
+	go awaitTray(shown, quitting, time.After(trayWait), logger)
 	// macOS calls onExit as it terminates the app, at logout: Polyfin
 	// stops before it returns. Quit Polyfin ends Run without it.
 	onExit := func() {
@@ -222,5 +250,20 @@ func setIcon(faded bool) {
 func open(logger *slog.Logger, target string) {
 	if err := desktop.Open(target); err != nil {
 		logger.Warn("Could not open", "target", target, "error", err)
+	}
+}
+
+// awaitTray waits for the icon, and logs an error when timeout comes
+// first: the app then runs on without it. It tells whether the icon
+// showed.
+func awaitTray(shown, quitting <-chan struct{}, timeout <-chan time.Time, logger *slog.Logger) bool {
+	select {
+	case <-shown:
+		return true
+	case <-quitting:
+		return false
+	case <-timeout:
+		logger.Error("The tray icon could not be shown: Polyfin runs without it, and polyfin-desktop -quit quits it")
+		return false
 	}
 }
