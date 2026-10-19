@@ -20,12 +20,9 @@ package="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 work="${2:-$WORK/test}"
 rm -rf "$work"
 mkdir -p "$work"
-# Windows runners name Python python; python3 may be the Store's stub there.
-python=python3
-if [ "${OS:-}" = Windows_NT ]; then python=python; fi
 
 smoke() {
-	"$python" "$ROOT/scripts/desktop-smoke.py" --installed "$@"
+	"$PYTHON" "$ROOT/scripts/desktop-smoke.py" --installed "$@"
 }
 
 check_version() {
@@ -146,7 +143,7 @@ test_appimage() {
 	# without running the runtime, which an emulator may refuse to run.
 	if command -v unsquashfs > /dev/null; then
 		local offset
-		offset="$("$python" -c 'import struct, sys
+		offset="$("$PYTHON" -c 'import struct, sys
 head = open(sys.argv[1], "rb").read(64)
 shoff, = struct.unpack_from("<Q", head, 0x28)
 size, count = struct.unpack_from("<HH", head, 0x3A)

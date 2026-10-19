@@ -1,0 +1,180 @@
+From a516b3f00d7469cbd1885a2c5903fbd62430a2ac Mon Sep 17 00:00:00 2001
+From: Nathan Bossart <nathan@postgresql.org>
+Date: Wed, 7 Jan 2026 13:42:57 -0600
+Subject: [PATCH] MSVC: Support building for AArch64.
+
+This commit does the following to get tests passing for
+MSVC/AArch64:
+
+* Implements spin_delay() with an ISB instruction (like we do for
+gcc/clang on AArch64).
+
+* Sets USE_ARMV8_CRC32C unconditionally.  Vendor-supported versions
+of Windows for AArch64 require at least ARMv8.1, which is where CRC
+extension support became mandatory.
+
+* Implements S_UNLOCK() with _InterlockedExchange().  The existing
+implementation for MSVC uses _ReadWriteBarrier() (a compiler
+barrier), which is insufficient for this purpose on non-TSO
+architectures.
+
+There are likely other changes required to take full advantage of
+the hardware (e.g., atomics/arch-arm.h, simd.h,
+pg_popcount_aarch64.c), but those can be dealt with later.
+
+Author: Niyas Sait <niyas.sait@linaro.org>
+Co-authored-by: Greg Burd <greg@burd.me>
+Co-authored-by: Dave Cramer <davecramer@gmail.com>
+Reviewed-by: Michael Paquier <michael@paquier.xyz>
+Reviewed-by: John Naylor <johncnaylorls@gmail.com>
+Reviewed-by: Peter Eisentraut <peter@eisentraut.org>
+Reviewed-by: Andres Freund <andres@anarazel.de>
+Reviewed-by: Thomas Munro <thomas.munro@gmail.com>
+Tested-by: Andrew Dunstan <andrew@dunslane.net>
+Discussion: https://postgr.es/m/A6152C7C-F5E3-4958-8F8E-7692D259FF2F%40greg.burd.me
+Discussion: https://postgr.es/m/CAFPTBD-74%2BAEuN9n7caJ0YUnW5A0r-KBX8rYoEJWqFPgLKpzdg%40mail.gmail.com
+---
+ doc/src/sgml/installation.sgml |  3 ++-
+ meson.build                    |  6 +++++-
+ src/include/storage/s_lock.h   | 30 +++++++++++++++++++++++++-----
+ src/port/pg_crc32c_armv8.c     |  4 ++++
+ src/tools/msvc_gendef.pl       |  8 ++++----
+ 5 files changed, 40 insertions(+), 11 deletions(-)
+
+diff --git a/doc/src/sgml/installation.sgml b/doc/src/sgml/installation.sgml
+index fe8d73e1f8c01..c903ccff9888e 100644
+--- a/doc/src/sgml/installation.sgml
++++ b/doc/src/sgml/installation.sgml
+@@ -3967,7 +3967,8 @@ configure ... LDFLAGS="-R /usr/sfw/lib:/opt/sfw/lib:/usr/local/lib"
+    <sect3 id="install-windows-full-64-bit">
+     <title>Special Considerations for 64-Bit Windows</title>
+     <para>
+-     PostgreSQL will only build for the x64 architecture on 64-bit Windows.
++     PostgreSQL will only build for the x64 and AArch64 architectures on 64-bit
++     Windows.
+     </para>
+     <para>
+      Mixing 32- and 64-bit versions in the same build tree is not supported.
+diff --git a/meson.build b/meson.build
+index c3834a9dc8fa3..35eb47468db6b 100644
+--- a/meson.build
++++ b/meson.build
+@@ -2523,7 +2523,11 @@ int main(void)
+ }
+ '''
+ 
+-  if cc.links(prog, name: '__crc32cb, __crc32ch, __crc32cw, and __crc32cd without -march=armv8-a+crc',
++  # Vendor-supported versions of Windows for AArch64 require at least ARMv8.1,
++  # which is where CRC extension support became mandatory.  Thus, use it
++  # unconditionally on MSVC/AArch64.
++  if (host_cpu == 'aarch64' and cc.get_id() == 'msvc') or \
++        cc.links(prog, name: '__crc32cb, __crc32ch, __crc32cw, and __crc32cd without -march=armv8-a+crc',
+       args: test_c_args)
+     # Use ARM CRC Extension unconditionally
+     cdata.set('USE_ARMV8_CRC32C', 1)
+diff --git a/src/include/storage/s_lock.h b/src/include/storage/s_lock.h
+index c4e429cb16a41..2522cae0c310e 100644
+--- a/src/include/storage/s_lock.h
++++ b/src/include/storage/s_lock.h
+@@ -602,13 +602,24 @@ typedef LONG slock_t;
+ 
+ #define SPIN_DELAY() spin_delay()
+ 
+-/* If using Visual C++ on Win64, inline assembly is unavailable.
+- * Use a _mm_pause intrinsic instead of rep nop.
+- */
+-#if defined(_WIN64)
++#ifdef _M_ARM64
++static __forceinline void
++spin_delay(void)
++{
++	/*
++	 * Research indicates ISB is better than __yield() on AArch64.  See
++	 * https://postgr.es/m/1c2a29b8-5b1e-44f7-a871-71ec5fefc120%40app.fastmail.com.
++	 */
++	__isb(_ARM64_BARRIER_SY);
++}
++#elif defined(_WIN64)
+ static __forceinline void
+ spin_delay(void)
+ {
++	/*
++	 * If using Visual C++ on Win64, inline assembly is unavailable.
++	 * Use a _mm_pause intrinsic instead of rep nop.
++	 */
+ 	_mm_pause();
+ }
+ #else
+@@ -621,12 +632,21 @@ spin_delay(void)
+ #endif
+ 
+ #include <intrin.h>
+-#pragma intrinsic(_ReadWriteBarrier)
+ 
++#ifdef _M_ARM64
++
++/* _ReadWriteBarrier() is insufficient on non-TSO architectures. */
++#pragma intrinsic(_InterlockedExchange)
++#define S_UNLOCK(lock) _InterlockedExchange(lock, 0)
++
++#else
++
++#pragma intrinsic(_ReadWriteBarrier)
+ #define S_UNLOCK(lock)	\
+ 	do { _ReadWriteBarrier(); (*(lock)) = 0; } while (0)
+ 
+ #endif
++#endif
+ 
+ 
+ #endif	/* !defined(HAS_TEST_AND_SET) */
+diff --git a/src/port/pg_crc32c_armv8.c b/src/port/pg_crc32c_armv8.c
+index 2b669276a147f..039986c7b33fc 100644
+--- a/src/port/pg_crc32c_armv8.c
++++ b/src/port/pg_crc32c_armv8.c
+@@ -14,7 +14,11 @@
+  */
+ #include "c.h"
+ 
++#ifdef _MSC_VER
++#include <intrin.h>
++#else
+ #include <arm_acle.h>
++#endif
+ 
+ #include "port/pg_crc32c.h"
+ 
+diff --git a/src/tools/msvc_gendef.pl b/src/tools/msvc_gendef.pl
+index b933b5b95e31a..1a37fe9594705 100644
+--- a/src/tools/msvc_gendef.pl
++++ b/src/tools/msvc_gendef.pl
+@@ -118,9 +118,9 @@ sub writedef
+ 	{
+ 		my $isdata = $def->{$f} eq 'data';
+ 
+-		# Strip the leading underscore for win32, but not x64
++		# Strip the leading underscore for win32, but not x64 and aarch64
+ 		$f =~ s/^_//
+-		  unless ($arch eq "x86_64");
++		  unless ($arch eq "x86_64" || $arch eq "aarch64");
+ 
+ 		# Emit just the name if it's a function symbol, or emit the name
+ 		# decorated with the DATA option for variables.
+@@ -141,7 +141,7 @@ sub writedef
+ sub usage
+ {
+ 	die("Usage: msvc_gendef.pl --arch <arch> --deffile <deffile> --tempdir <tempdir> files-or-directories\n"
+-		  . "    arch: x86 | x86_64\n"
++		  . "    arch: x86 | x86_64 | aarch64\n"
+ 		  . "    deffile: path of the generated file\n"
+ 		  . "    tempdir: directory for temporary files\n"
+ 		  . "    files or directories: object files or directory containing object files\n"
+@@ -158,7 +158,7 @@ sub usage
+ 	'tempdir:s' => \$tempdir,) or usage();
+ 
+ usage("arch: $arch")
+-  unless ($arch eq 'x86' || $arch eq 'x86_64');
++  unless ($arch eq 'x86' || $arch eq 'x86_64' || $arch eq 'aarch64');
+ 
+ my @files;
+ 

@@ -23,13 +23,24 @@ VERSION="${VERSION:-dev}"
 CACHE="${POLYFIN_PACKAGING_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/polyfin-packaging}"
 OUT="$ROOT/dist/packages"
 WORK="$ROOT/dist/packaging"
+
+# Windows names Python python; python3 may be the Store's stub there. The
+# folders CI names there become Git Bash paths, which tar takes: it reads
+# D:\a\file as a file on a host named D.
+PYTHON=python3
+if [ "${OS:-}" = Windows_NT ]; then
+	PYTHON=python
+	CACHE="$(cygpath -u "$CACHE")"
+	if [ -n "${POLYFIN_DESKTOP_FILES:-}" ]; then POLYFIN_DESKTOP_FILES="$(cygpath -u "$POLYFIN_DESKTOP_FILES")"; fi
+fi
 mkdir -p "$CACHE" "$OUT" "$WORK"
 
 # Pinned inputs, each checked against its SHA-256 once downloaded.
 #
-# PostgreSQL 18's server programs for Windows and macOS: EnterpriseDB's
+# PostgreSQL 18's server programs for Windows x64 and macOS: EnterpriseDB's
 # binaries, which postgresql.org links, as CI's desktop job tests them. The
 # macOS build is universal (Apple silicon and Intel). Both carry ICU.
+# Windows on Arm's is built from source by postgresql-windows.sh.
 EDB_WINDOWS_URL=https://get.enterprisedb.com/postgresql/postgresql-18.6-2-windows-x64-binaries.zip
 EDB_WINDOWS_SHA256=41bb1496f60666d3745ae8a855753b877d14fa9e34667f266867635b790fc323
 EDB_MACOS_URL=https://get.enterprisedb.com/postgresql/postgresql-18.6-2-osx-binaries.zip
