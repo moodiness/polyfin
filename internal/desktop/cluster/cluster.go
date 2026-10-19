@@ -3,7 +3,8 @@
 // only the user can read, listening on 127.0.0.1 alone, started before the
 // server and stopped after it. A cluster a crash of the app left running is
 // stopped, and the lock file of one that crashed is cleared, before it
-// starts again.
+// starts again. The indexes of a database whose collation version changed
+// with an update are rebuilt as it starts.
 package cluster
 
 import (
@@ -72,6 +73,10 @@ type Cluster struct {
 	// start while it is free, else chooses another free one.
 	Port   int
 	Logger *slog.Logger
+	// Rebuilding, when set, is called with true before the start rebuilds
+	// the indexes of databases whose collation version changed, and with
+	// false once it is done.
+	Rebuilding func(on bool)
 
 	password string
 	port     int
@@ -173,8 +178,9 @@ func newPassword() (string, error) {
 }
 
 // Start starts the cluster, after stopping one a crash of the app left
-// running or clearing the lock file of one that crashed, and creates the
-// server's database when it has none. Prepare must have run.
+// running or clearing the lock file of one that crashed, rebuilds the
+// indexes of the databases whose collation version changed, and creates
+// the server's database when it has none. Prepare must have run.
 func (c *Cluster) Start(ctx context.Context) error {
 	if err := c.recover(ctx); err != nil {
 		return err
@@ -192,6 +198,9 @@ func (c *Cluster) Start(ctx context.Context) error {
 		"-o", "-p "+strconv.Itoa(port))
 	if err != nil {
 		return fmt.Errorf("start the database (see %s): %w", c.Log, err)
+	}
+	if err := c.refreshCollations(ctx); err != nil {
+		return err
 	}
 	if err := c.createDatabase(ctx); err != nil {
 		return err
