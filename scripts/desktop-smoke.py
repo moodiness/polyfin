@@ -4,12 +4,22 @@
 Usage: desktop-smoke.py [--installed] <polyfin-desktop executable> <install folder> <work folder>
 
 The install folder holds polyfin (polyfin.exe) and postgresql/{bin,lib,share},
-as the packages lay them out. The app runs with -headless, on a data folder
-of the work folder, twice: the first start creates the cluster, downloads a
-fake FFmpeg from a local server and starts the server, whose admin app must
-answer; the app is then interrupted, and none of its processes may remain.
-The second start must reuse the cluster. Every request for outside goes
-through a local proxy that refuses it, and is listed.
+as the packages lay them out. The app runs on a data folder of the work
+folder, twice: the first start creates the cluster, downloads a fake FFmpeg
+from a local server and starts the server, whose admin app must answer; the
+app is then quit, and none of its processes may remain. The second start must
+reuse the cluster. Every request for outside goes through a local proxy that
+refuses it, and is listed.
+
+The app runs with -headless, but for the second start on Windows, where it
+runs with its icon, as started with the computer (--background): the icon
+must show when explorer.exe, which holds the notification area, runs in the
+smoke's session; else the app must log that it runs without it, and still
+serve. DESKTOP_SMOKE_NO_TRAY=1 expects the latter whatever runs, for a
+session whose notification area refuses icons. On Linux and macOS, the first
+start is quit with an interrupt; else polyfin-desktop -quit quits it, which
+works for the packages' Windows app, which has no console: it must answer 0,
+then 3 once no app runs.
 
 With --installed, the app is that of an installed package, which finds its
 install folder itself: POLYFIN_DESKTOP_INSTALL_DIR is not set, and the
@@ -154,11 +164,54 @@ def logged_install(log):
     return json.loads(found[-1]) if found[-1].startswith('"') else found[-1]
 
 
-def run_app(app, env, data, install, listen):
-    """Starts the app, waits for the admin app, interrupts the app, and
-    returns the PIDs it ran. install is None when any folder will do."""
-    flags = subprocess.CREATE_NEW_PROCESS_GROUP if WINDOWS else 0
-    process = subprocess.Popen([app, "-headless"], env=env, creationflags=flags)
+def shell_sessions():
+    """This process's session, and those explorer.exe runs in."""
+    session = ctypes.c_ulong()
+    ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(session))
+    out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                          "Get-Process explorer -ErrorAction SilentlyContinue | ForEach-Object { $_.SessionId }"],
+                         capture_output=True, text=True).stdout
+    return session.value, sorted({int(s) for s in out.split()})
+
+
+def check_icon(process, data, listen):
+    """The icon showed if the session has a notification area, unless
+    DESKTOP_SMOKE_NO_TRAY says it refuses icons; else the app logged that it
+    runs without it, and still serves."""
+    own, explorers = shell_sessions()
+    print("session %d; explorer.exe runs in sessions %s" % (own, explorers or "none"))
+    expect_icon = own in explorers and os.environ.get("DESKTOP_SMOKE_NO_TRAY") != "1"
+    path = os.path.join(data, "log", "desktop.log")
+    deadline = time.time() + 120
+    while True:
+        log = open(path, encoding="utf-8").read()
+        log = log[log.rindex('msg="Polyfin Desktop starts"'):]
+        shown = 'msg="The tray icon is shown"' in log
+        without = "level=ERROR" in log and "The tray icon could not be shown" in log
+        if shown or without or time.time() > deadline:
+            break
+        time.sleep(1)
+    for line in log.splitlines():
+        if "systray" in line or "tray icon" in line:
+            print("app:", line)
+    if expect_icon and not shown:
+        process.kill()
+        sys.exit("explorer.exe runs in the session, but the icon did not show:\n" + log)
+    if not expect_icon and not without:
+        process.kill()
+        sys.exit("the app did not say it runs without its icon:\n" + log)
+    if without and wait_ready(listen, 60) is None:
+        process.kill()
+        sys.exit("the app without its icon no longer serves:\n" + log)
+    print("the icon showed" if shown else "the app runs without its icon, and serves")
+
+
+def run_app(app, env, data, install, listen, tray=False, command=False):
+    """Starts the app, waits for the admin app, quits the app, with
+    polyfin-desktop -quit when command is true, and returns the PIDs it ran.
+    install is None when any folder will do. With tray, the app runs with
+    its icon."""
+    process = subprocess.Popen([app, "--background" if tray else "-headless"], env=env)
     status = wait_ready(listen, 300)
     log = open(os.path.join(data, "log", "desktop.log"), encoding="utf-8").read()
     if status is None:
@@ -176,16 +229,26 @@ def run_app(app, env, data, install, listen):
         postmaster = int(f.readline())
     pids = {"app": process.pid, "server": servers[-1], "postmaster": postmaster}
     print("processes:", pids)
-    if WINDOWS:
-        process.send_signal(signal.CTRL_BREAK_EVENT)
+    if tray and WINDOWS:
+        check_icon(process, data, listen)
+    if command:
+        quitting = subprocess.run([app, "-quit"], env=env, timeout=300)
+        if quitting.returncode != 0:
+            process.kill()
+            sys.exit("polyfin-desktop -quit answered %d, not 0" % quitting.returncode)
     else:
         process.send_signal(signal.SIGTERM)
     try:
-        code = process.wait(timeout=240)
+        # -quit returns once the app has ended.
+        code = process.wait(timeout=30 if command else 240)
     except subprocess.TimeoutExpired:
         process.kill()
-        sys.exit("the app did not quit within 4 minutes")
+        sys.exit("the app did not quit in time")
     print("the app quit with", code)
+    if command:
+        again = subprocess.run([app, "-quit"], env=env, timeout=60)
+        if again.returncode != 3:
+            sys.exit("polyfin-desktop -quit with no app running answered %d, not 3" % again.returncode)
     time.sleep(2)
     left = {name: pid for name, pid in pids.items() if alive(pid)}
     if left:
@@ -252,7 +315,7 @@ def main():
         sys.exit("processes of the data or install folder run before the smoke starts:\n" + "\n".join(running))
 
     print("== first start")
-    status, log = run_app(app, env, data, install, listen)
+    status, log = run_app(app, env, data, install, listen, command=WINDOWS)
     if not status.get("setupRequired"):
         sys.exit("the first start has an administrator already")
     if "Creating the database cluster" not in log or "FFmpeg and ffprobe are ready" not in log:
@@ -262,7 +325,7 @@ def main():
     first = log
 
     print("== second start")
-    _, log = run_app(app, env, data, install, listen)
+    _, log = run_app(app, env, data, install, listen, tray=WINDOWS, command=True)
     second = log[len(first):]
     if "Creating the database cluster" in second or "Downloading FFmpeg" in second:
         sys.exit("the second start did not reuse the cluster and the tools:\n" + second)

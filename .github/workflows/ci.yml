@@ -389,9 +389,9 @@ jobs:
 
   desktop:
     # Polyfin Desktop on each system it is packaged for: its tests against a
-    # PostgreSQL 18 of its own, then the app started without its icon, on a
-    # data folder of its own, behind a local proxy that refuses every
-    # request for outside, and quit, twice, leaving no process behind.
+    # PostgreSQL 18 of its own, then the app started on a data folder of its
+    # own, behind a local proxy that refuses every request for outside, and
+    # quit, twice, leaving no process behind.
     name: Polyfin Desktop on ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
@@ -408,6 +408,13 @@ jobs:
           # desktop-package-test.
           - name: Windows on Arm
             os: windows-11-arm
+            # The runner's notification area refuses icons: there,
+            # Shell_NotifyIconW(NIM_ADD) fails with E_FAIL for arm64 and
+            # emulated x64 programs alike, every 2 s for a minute, though
+            # explorer.exe runs in the session, while it succeeds on
+            # windows-latest (CI run 39293223088). The smoke expects the
+            # app to run without its icon there.
+            no-tray: true
           - name: macOS on Apple silicon
             os: macos-15
           - name: macOS on Intel
@@ -482,21 +489,33 @@ jobs:
           go vet ./internal/desktop/... ./cmd/polyfin-desktop
           if [ "$RUNNER_OS" = Windows ]; then exe=.exe; else exe=; fi
           CGO_ENABLED=0 go build -o "$DESKTOP_TEMP/install/polyfin$exe" ./cmd/polyfin
-          go build -o "$DESKTOP_TEMP/polyfin-desktop$exe" ./cmd/polyfin-desktop
           case "$RUNNER_OS" in
-            # The packages' build, without a console; the smoke runs the
-            # console build, which an interrupt reaches.
-            Windows) go build -ldflags -H=windowsgui -o "$DESKTOP_TEMP/polyfin-desktop-gui.exe" ./cmd/polyfin-desktop ;;
-            # The tray needs no cgo on Linux.
-            Linux) CGO_ENABLED=0 go build -o /dev/null ./cmd/polyfin-desktop ;;
+            # The packages' build, without a console, which polyfin-desktop
+            # -quit quits.
+            Windows) go build -ldflags -H=windowsgui -o "$DESKTOP_TEMP/polyfin-desktop.exe" ./cmd/polyfin-desktop ;;
+            *) go build -o "$DESKTOP_TEMP/polyfin-desktop" ./cmd/polyfin-desktop ;;
           esac
+          # The tray needs no cgo on Linux.
+          if [ "$RUNNER_OS" = Linux ]; then CGO_ENABLED=0 go build -o /dev/null ./cmd/polyfin-desktop; fi
       - name: Test
         run: go test -count=1 ./internal/desktop/... ./cmd/polyfin-desktop
       - name: Stop the test database before the smoke
         # It runs from the install folder, which the smoke checks is left
         # with no process.
         run: '"$DESKTOP_TEMP/install/postgresql/bin/pg_ctl" -D "$DESKTOP_TEMP/testdb" -m fast -w stop'
-      - name: Start the app without its icon, twice, and quit it
+      - &windows-session
+        name: Show whether the session has a notification area
+        # The app's icon needs explorer.exe in its session; the smoke expects
+        # the icon, or the app saying it runs without it, accordingly.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "This session: $([System.Diagnostics.Process]::GetCurrentProcess().SessionId), interactive: $([Environment]::UserInteractive)"
+          $explorer = Get-Process explorer -ErrorAction SilentlyContinue
+          if ($explorer) { $explorer | Format-Table Id, SessionId, StartTime } else { "explorer.exe does not run" }
+      - name: Start the app twice, and quit it
+        env:
+          DESKTOP_SMOKE_NO_TRAY: ${{ matrix.no-tray && '1' || '' }}
         run: |
           if [ "$RUNNER_OS" = Windows ]; then
             python scripts/desktop-smoke.py "$(cygpath -w "$DESKTOP_TEMP/polyfin-desktop.exe")" \
@@ -628,9 +647,9 @@ jobs:
   desktop-package-test:
     # Each package installed or opened on its system, its layout checked,
     # and the installed app smoked as the desktop job smokes its build:
-    # headless, behind a proxy that refuses every request for outside, and
-    # quit leaving no process. Then it is uninstalled. A package whose
-    # build failed fails alone.
+    # behind a proxy that refuses every request for outside, and quit
+    # leaving no process. Then it is uninstalled. A package whose build
+    # failed fails alone.
     name: Install and smoke Polyfin Desktop on ${{ matrix.name }}
     needs: [check, desktop-package]
     if: ${{ !cancelled() && needs.check.result == 'success' }}
@@ -652,6 +671,8 @@ jobs:
           - name: Windows arm64
             id: windows-arm64
             os: windows-11-arm
+            # The runner refuses notification icons: see the desktop job.
+            no-tray: true
           - name: Linux x64
             id: linux-amd64
             os: ubuntu-24.04
@@ -663,11 +684,9 @@ jobs:
         shell: bash
     env:
       VERSION: ${{ needs.check.outputs.version }}
+      DESKTOP_SMOKE_NO_TRAY: ${{ matrix.no-tray && '1' || '' }}
     steps:
       - *checkout
-      # Windows smokes a console build of the app, which an interrupt
-      # reaches, from the install folder.
-      - *setup-go
       - name: Fetch the package
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -678,6 +697,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends desktop-file-utils squashfs-tools fuse3
+      - *windows-session
       - name: Install, smoke and remove each package
         run: |
           for package in dist/packages/*; do

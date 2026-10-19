@@ -3,13 +3,15 @@
 #
 # Installs or opens a package of Polyfin Desktop on the system it is for,
 # checks the install layout, runs scripts/desktop-smoke.py on the installed
-# app (headless, on a data folder of the work folder, behind a proxy that
-# refuses every request for outside, leaving no process), then removes it:
+# app (on a data folder of the work folder, behind a proxy that refuses
+# every request for outside, leaving no process), then removes it:
 #   .dmg        mounted read-only, the app run from the disk image;
 #   -setup.exe  installed for the current user, silently, its programs and
 #               libraries checked to be the package's architecture (x64 or
-#               arm64) and to find every DLL they import, then uninstalled:
-#               the data folder, %LOCALAPPDATA%\Polyfin, must stay;
+#               arm64) and to find every DLL they import, the version info
+#               of polyfin.exe and polyfin-desktop.exe to be the package's,
+#               then uninstalled: the data folder, %LOCALAPPDATA%\Polyfin,
+#               must stay;
 #   .deb        installed with apt (sudo), then removed;
 #   .AppImage   run as it is when FUSE is there, else from its files
 #               extracted.
@@ -148,13 +150,35 @@ if problems:
 print("DLLs from %s: %s" % (system, ", ".join(sorted(from_system))))' "$(cygpath -w "$1")" "$2"
 }
 
+# check_version_info EXE DESCRIPTION VERSION: the version info of EXE, a
+# Windows program, as Windows reads it: the product Polyfin, the
+# description DESCRIPTION, the product version VERSION and the file
+# version its numbers.
+check_version_info() {
+	local got want
+	# PowerShell's variables, which bash leaves as they are.
+	# shellcheck disable=SC2016
+	got="$(EXE="$(cygpath -w "$1")" powershell -NoProfile -Command \
+		'$i = (Get-Item -LiteralPath $env:EXE).VersionInfo; "$($i.ProductName)|$($i.FileDescription)|$($i.ProductVersion)|$($i.FileVersion)"' |
+		tr -d '\r')"
+	want="Polyfin|$2|$3|$(VERSION="$3" numeric_version)"
+	if [ "$got" != "$want" ]; then
+		echo "the version info of $1 is $got, not $want" >&2
+		exit 1
+	fi
+}
+
 test_windows() {
-	local local_data install programs marker run_key uninstall_key goarch machine
+	local local_data install programs marker run_key uninstall_key machine package_version
 	case "$package" in
-	*-windows-arm64-setup.exe) goarch=arm64 machine=0xAA64 ;;
-	*-windows-x64-setup.exe) goarch=amd64 machine=0x8664 ;;
+	*-windows-arm64-setup.exe) machine=0xAA64 ;;
+	*-windows-x64-setup.exe) machine=0x8664 ;;
 	*) echo "not a Windows installer of Polyfin Desktop: $package" >&2; exit 2 ;;
 	esac
+	# The version the package is named after.
+	package_version="$(basename "$package")"
+	package_version="${package_version#Polyfin-Desktop-}"
+	package_version="${package_version%-windows-*-setup.exe}"
 	local_data="$(cygpath -u "$LOCALAPPDATA")"
 	install="$local_data/Programs/Polyfin"
 	programs="$(cygpath -u "$APPDATA")/Microsoft/Windows/Start Menu/Programs"
@@ -170,13 +194,11 @@ test_windows() {
 	test -f "$programs/Polyfin.lnk"
 	MSYS_NO_PATHCONV=1 reg query "$uninstall_key" /v UninstallString
 	check_version "$install/polyfin-desktop.exe"
-	# The package's app has no console, which the smoke interrupts to quit
-	# it: a console build of the same app runs from the install folder in
-	# its place, and finds it the same way.
-	(cd "$ROOT" && CGO_ENABLED=0 GOARCH="$goarch" go build -trimpath -ldflags "-X main.version=$VERSION" \
-		-o "$install/polyfin-desktop-smoke.exe" ./cmd/polyfin-desktop)
-	smoke "$(cygpath -w "$install/polyfin-desktop-smoke.exe")" "$(cygpath -w "$install")" "$(cygpath -w "$work/smoke")"
-	rm "$install/polyfin-desktop-smoke.exe"
+	check_version_info "$install/polyfin-desktop.exe" "Polyfin Desktop" "$package_version"
+	check_version_info "$install/polyfin.exe" Polyfin "$package_version"
+	# The package's app itself, which has no console: polyfin-desktop -quit
+	# quits it.
+	smoke "$(cygpath -w "$install/polyfin-desktop.exe")" "$(cygpath -w "$install")" "$(cygpath -w "$work/smoke")"
 
 	# Uninstalling leaves the data folder, and removes the login item.
 	marker=
