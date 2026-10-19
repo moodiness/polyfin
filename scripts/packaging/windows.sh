@@ -76,9 +76,12 @@ unzip -q /downloads/postgresql.zip "pgsql/bin/*" "pgsql/lib/*" "pgsql/share/*" "
 mkdir -p $install/postgresql $install/licenses/postgresql
 mv /tmp/edb/pgsql/bin /tmp/edb/pgsql/lib /tmp/edb/pgsql/share $install/postgresql/
 mv /tmp/edb/pgsql/server_license.txt /tmp/edb/pgsql/commandlinetools_3rd_party_licenses.txt $install/licenses/postgresql/
-# What only builds against PostgreSQL goes.
+# What only builds against PostgreSQL goes, and the Perl, Python and Tcl
+# languages with their transforms: they load perl542.dll, python313.dll or
+# tcl86t.dll, which EnterpriseDB leaves to install, and Polyfin uses none.
 rm -rf $install/postgresql/lib/pgxs $install/postgresql/lib/pkgconfig $install/postgresql/share/doc
 rm -f $install/postgresql/lib/*.lib $install/postgresql/lib/*.a
+rm -f $install/postgresql/lib/*pl{perl,python3,tcl}.dll $install/postgresql/share/extension/*pl{perl,python,tcl}*
 
 # The redistributable holds cabinets, one of which has the DLLs, named
 # after their architecture.
