@@ -126,7 +126,13 @@ func TestGuessedInviteTokensAreThrottled(t *testing.T) {
 	administrator := api.signedIn("administrator", true)
 	_, token := createInvite(t, administrator, map[string]any{})
 	guest := api.browser()
-	for _, guess := range []string{"nothing", token[:len(token)-2] + "AA"} {
+	// The invite's ID with another secret: the token's last character
+	// changed, so that the guess never is the token itself.
+	wrong := token[:len(token)-1] + "A"
+	if token[len(token)-1] == 'A' {
+		wrong = token[:len(token)-1] + "B"
+	}
+	for _, guess := range []string{"nothing", wrong} {
 		if status, body, _ := guest.call(http.MethodGet, "/invite/"+guess, nil); status != http.StatusNotFound || body["error"] != "invite_unknown" {
 			t.Errorf("guess %d: %d %v", len(guess), status, body)
 		}
