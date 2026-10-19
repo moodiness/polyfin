@@ -17,7 +17,7 @@ Each release has a package per system, among the files of its GitHub release:
 
 Each holds the app, `polyfin-desktop`, beside what it runs: the server, `polyfin`, the very one of the Docker image; PostgreSQL 18's programs; jellyfin-web, unmodified; the fallback fonts; and their licenses, in the folder `licenses`. FFmpeg is downloaded at the first start (see [First start](#first-start)).
 
-- **Windows:** the installer installs Polyfin for you alone, without administrator rights, in `%LOCALAPPDATA%\Programs\Polyfin`, adds it to the Start menu, and offers to start it at the end. To remove it, uninstall Polyfin under Settings › Apps › Installed apps: its programs, its Start menu entry and Start with the computer go, and the data folder stays (see [Folders](#folders)).
+- **Windows:** the installer installs Polyfin for you alone, without administrator rights, in `%LOCALAPPDATA%\Programs\Polyfin`, adds it to the Start menu, and offers to start it at the end. To remove it, uninstall Polyfin under Settings › Apps › Installed apps: its programs, its Start menu entry and Start with the computer go, and the data folder stays (see [Folders](#folders)). On Windows on Arm, an install of the x64 package moves to the arm64 one with a backup (see [Moving to the arm64 package on Windows on Arm](#moving-to-the-arm64-package-on-windows-on-arm)).
 - **macOS:** open the disk image and drag Polyfin to Applications. To remove it, move it from Applications to the Bin.
 - **Linux:** install the `.deb` with `sudo apt install ./polyfin-desktop_<version>_amd64.deb`, then start Polyfin from the applications menu. It goes in `/opt/polyfin`, with the command `polyfin-desktop`; `sudo apt remove polyfin-desktop` removes it. An AppImage needs no installation: make it executable with `chmod +x`, then run it. Both need glibc 2.35 or later, as in Ubuntu 22.04 or Debian 12, and later releases. A system without FUSE runs an AppImage with `--appimage-extract-and-run` after its name.
 
@@ -125,13 +125,25 @@ The data folder stays as it is: the new version upgrades the database's tables a
 
 The database is a PostgreSQL 18 database like the Docker image's, and a backup made on the desktop restores into a Docker server, and back, from the admin app (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)):
 
-1. On the source, make a backup with **Run now** beside Back up the database under **System › Tasks**, or wait for the daily one, and copy it from the `backups` folder.
+1. On the source, make a backup with **Back up now** in the **Database backups** panel of **System › Schedule**, or wait for the daily one, and copy it from the `backups` folder.
 2. Give the destination the source's secret key, so that it reads the backup's keys and tokens:
    - to Docker, set `POLYFIN_SECRET_KEY` in `.env` to the desktop's key (see [The secret key](#the-secret-key)), then start the container again;
    - to the desktop, write Docker's `POLYFIN_SECRET_KEY` in a file, quit Polyfin Desktop, then run `polyfin-desktop -import-secret-key <file>`, which keeps it in the key store in place of the desktop's own, and start the app again. On macOS the program is `/Applications/Polyfin.app/Contents/MacOS/polyfin-desktop`.
-3. On the destination, restore the backup under **Settings › Backups**. Before restoring, the admin app counts the keys and tokens the destination's key cannot read, and asks before going ahead.
+3. On the destination, restore the backup with **Restore**, in the **Database backups** panel of **System › Schedule**. Before restoring, the admin app counts the keys and tokens the destination's key cannot read, and asks before going ahead.
 
 Paths do not move with the backup: local folders, the recordings folder and the backups folder name folders of the source. Change them on the destination, under **Sources** and **Settings**.
+
+## Moving to the arm64 package on Windows on Arm
+
+Before 0.42.1, Polyfin Desktop ran on Windows on Arm from the x64 package, under Windows' emulation. That install keeps working, but stays x64: its updates are the x64 package's. Its data folder cannot go to the arm64 package as it is: the x64 package's PostgreSQL sorts text with ICU 77, and the arm64 package's with ICU 78, under which a database made with ICU 77 warns of a collation version mismatch at each connection, and its text indexes may not follow the new order. The database moves with a backup instead, into a new data folder, as in [Moving to Docker and back](#moving-to-docker-and-back), but on the same computer: the secret key and the paths stay the same, and nothing needs to be imported or changed.
+
+1. In the admin app, turn **Back up the database every day** on under **Settings › Backups** if it is off, then press **Back up now** in the **Database backups** panel of **System › Schedule**.
+2. Quit Polyfin from its menu, then uninstall it under Settings › Apps › Installed apps. The data folder stays.
+3. Rename the data folder, `%LOCALAPPDATA%\Polyfin`, such as to `Polyfin-x64`.
+4. Install the arm64 package. Polyfin makes a new data folder and database, and finds the secret key it kept in Windows Credential Manager for the data folder's path. Create an administrator with the setup code (see [First start](#first-start)), and turn **Back up the database every day** on under **Settings › Backups**, which a restore needs.
+5. Restore the backup with **Restore**, in the **Database backups** panel of **System › Schedule**, sending the file from `Polyfin-x64\backups` (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)). The backup brings back its users, settings and libraries.
+
+Then move the `recordings` folder from `Polyfin-x64` into the new data folder if Live TV recorded there, and the older backups of its `backups` folder if you want to keep them: the restored settings name the same folders as before. Nothing else is needed: the arm64 FFmpeg is downloaded at the first start, and the rest is made again. Start with the computer turns on again once the administrator exists: uncheck it in the menu if you had turned it off. Once Polyfin runs as before, remove `Polyfin-x64`.
 
 ## Development
 
