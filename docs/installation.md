@@ -5,7 +5,7 @@ This page explains how to install Polyfin with Docker Compose or on Unraid. Afte
 ## Docker or the desktop version
 
 - Docker, below, runs Polyfin as a server, on a NAS or a computer that stays on, beside a PostgreSQL container: the way for a household that watches from TVs and phones at any hour, and for GPUs given to the container.
-- The desktop version, [Polyfin Desktop](desktop.md), runs it on the computer you have, Windows, macOS or Linux, with no Docker and nothing else to install: its package brings its own database, and downloads FFmpeg at its first start. Each release has an installer for Windows, a disk image for macOS, and a `.deb` and an AppImage for Linux (see [Install](desktop.md#install)). An icon in the tray, or the menu bar, starts and stops it, and it runs while the computer is on and you are signed in.
+- The desktop version, [Polyfin Desktop](desktop.md), runs it on the computer you have, Windows, macOS or Linux, with no Docker and nothing else to install: its package brings its own database, and downloads FFmpeg at its first start. Each release has an installer for Windows, x64 or arm64, a disk image for macOS, and a `.deb` and an AppImage for Linux (see [Install](desktop.md#install)). An icon in the tray, or the menu bar, starts and stops it, and it runs while the computer is on and you are signed in.
 
 Both run the same server, with the same admin app and apps, and a backup moves from one to the other (see [Moving to Docker and back](desktop.md#moving-to-docker-and-back)).
 
