@@ -63,7 +63,7 @@ The icon shows whether Polyfin runs: faded while it starts or is stopped. Its me
 | Install Polyfin `<version>` | Shown when a new version is out (see [Updates](#updates)) |
 | Quit Polyfin | Stops Polyfin, then its database, and quits: no process is left |
 
-Opening the app while it runs opens the admin app. The menu speaks French when the system does, and English otherwise.
+Opening the app while it runs opens the admin app. The menu speaks French when the system does, and English otherwise. When the system shows no icon, such as a Windows session without its taskbar, Polyfin starts all the same: after 30 seconds without its icon, the app writes an error to `desktop.log` (see [Folders](#folders)) and runs on without it, until `polyfin-desktop -quit` quits it (see [Quitting from a terminal](#quitting-from-a-terminal)).
 
 Polyfin stops by itself only when you stop it. When the server ends by itself, the app starts it again, a few seconds later. When the database stops by itself, it is started again too. After a crash of the app, or of the computer, the next start stops the server and the database that were left running, or clears the lock file of a database that crashed, which recovers its data as it starts.
 
@@ -74,6 +74,19 @@ Once the administrator exists, Start with the computer turns on by itself, unles
 - **Windows:** a value named `io.github.moodiness.polyfin-desktop` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`, which Task Manager lists under Startup apps.
 - **macOS:** a launch agent, `~/Library/LaunchAgents/io.github.moodiness.polyfin-desktop.plist`, which System Settings › General › Login Items lists under Allow in the Background.
 - **Linux:** an autostart entry, `~/.config/autostart/polyfin-desktop.desktop`, which the desktop's startup applications list.
+
+### Quitting from a terminal
+
+`polyfin-desktop -quit` quits the app as Quit Polyfin does: it stops Polyfin, then its database, and waits until the app has ended, for up to 4 minutes. On Windows the program is `%LOCALAPPDATA%\Programs\Polyfin\polyfin-desktop.exe`, on macOS `/Applications/Polyfin.app/Contents/MacOS/polyfin-desktop`. Its exit code tells what happened:
+
+| Code | Meaning |
+| --- | --- |
+| 0 | The app has quit |
+| 1 | An error, which it prints |
+| 3 | No app runs on the data folder |
+| 4 | The app still runs after 4 minutes |
+
+It quits the app that uses the same data folder (see [Folders](#folders)), through two files of that folder, which is yours alone: `desktop.pid`, which the app writes as it starts, with its process number and a random token, and `desktop.quit`, the request, which must carry that token. Other users of the computer cannot quit your app, and a request a crash left behind does not quit the next start.
 
 ## Folders
 
@@ -156,7 +169,7 @@ For development and tests, these variables of the app change where it runs from.
 | `POLYFIN_DESKTOP_DATABASE_PORT` | Port of the database, instead of a free one |
 | `POLYFIN_DESKTOP_TOOLS` | JSON file of the FFmpeg downloads, instead of the pinned ones: a local server's, for tests |
 
-`polyfin-desktop -headless` runs the app without the icon, the browser and the login item, logging to the terminal too, until it is interrupted. `scripts/desktop-smoke.py` starts it so twice, on a data folder of its own, with a local server for FFmpeg and a proxy that refuses every request for outside, and checks that quitting leaves no process: CI runs it on Linux, Windows and macOS. The other variables, such as `POLYFIN_LISTEN`, reach the server as they are. See [Development](development.md) to build the server and the admin app; the app itself builds with `go build ./cmd/polyfin-desktop`, which needs cgo on macOS, for the menu bar.
+`polyfin-desktop -headless` runs the app without the icon, the browser and the login item, logging to the terminal too, until it is interrupted or `-quit` quits it. `scripts/desktop-smoke.py` starts it twice, on a data folder of its own, with a local server for FFmpeg and a proxy that refuses every request for outside, and checks that quitting leaves no process: CI runs it on Linux, Windows and macOS. It quits the app with `-quit`, but for the first start on Linux and macOS, which it interrupts; on Windows, it runs the build without a console, as the packages do, the second time with its icon, which must show when explorer.exe runs in the session, and else the app must log that it runs without it. `DESKTOP_SMOKE_NO_TRAY=1` expects the latter even with explorer.exe: CI sets it on Windows on Arm, whose runners' sessions refuse every notification icon, x64 programs' included. The other variables, such as `POLYFIN_LISTEN`, reach the server as they are. See [Development](development.md) to build the server and the admin app; the app itself builds with `go build ./cmd/polyfin-desktop`, which needs cgo on macOS, for the menu bar.
 
 ### Building the packages
 
@@ -171,4 +184,4 @@ The scripts of `scripts/packaging` build the packages into `dist/packages`, as C
 
 Each takes PostgreSQL 18 from a pinned build: EnterpriseDB's binaries for Windows x64 and macOS, which postgresql.org links, and for Linux a build from PostgreSQL's source made by `postgresql-linux.Dockerfile`, on Ubuntu 22.04 with ICU, which runs from any folder. EnterpriseDB makes none for Windows on Arm: `postgresql-windows.sh` builds it from the same source, with PostgreSQL's upstream change for Visual Studio on Arm applied (`postgresql-msvc-arm64.patch`), using Meson and Visual Studio 2022's ARM64 build tools, with ICU's own ARM64 build and zlib, and puts Visual Studio's runtime beside the programs. It then makes a cluster with ICU, and restores a backup made with `pg_dump`. `windows.sh arm64` runs it, and keeps the build in `dist/packaging/postgresql-windows-arm64` while its inputs stay the same: it needs Visual Studio 2022 with the ARM64 build tools, a native Perl such as Strawberry Perl, Ninja and NSIS, as GitHub's `windows-11-arm` runners have them, and Docker only when `POLYFIN_DESKTOP_FILES` names no folder made by `files.sh`. jellyfin-web and the fonts come from the Docker image's stages, through `files.sh`; a Mac without Docker is given the folder it made with `POLYFIN_DESKTOP_FILES`. Every download is checked against its checksum, and kept in `~/.cache/polyfin-packaging`.
 
-`scripts/packaging/test.sh <package>` installs or opens a package on the system it is for, checks what it holds, runs `desktop-smoke.py --installed` on the installed app, which then finds its programs itself, and removes it: CI runs it on Windows, macOS and Linux runners for every package, before a release gets them. It changes the system it runs on: run it on a throwaway machine or container.
+`scripts/packaging/test.sh <package>` installs or opens a package on the system it is for, checks what it holds, runs `desktop-smoke.py --installed` on the installed app, which then finds its programs itself, and removes it: CI runs it on Windows, macOS and Linux runners for every package, before a release gets them. On Windows it checks too that the version info of `polyfin.exe` and `polyfin-desktop.exe`, which `windows.sh` adds with Polyfin's icon using go-winres, is the package's. It changes the system it runs on: run it on a throwaway machine or container.
