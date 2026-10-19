@@ -93,7 +93,7 @@ func TestConfinedRequestsStayOffLocalNetworks(t *testing.T) {
 	}
 }
 
-// Addons type some fields loosely, AIOMetadata sending a title's directors
+// Addons type some fields loosely, some sending a title's directors
 // as one string for one: such a field must not cost the title, or the
 // catalog page it is on.
 func TestLooselyTypedTitles(t *testing.T) {

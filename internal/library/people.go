@@ -76,8 +76,8 @@ func searchable(catalog stremio.Catalog) bool {
 
 // searchesPeople reports whether a catalog looks titles up by the name of
 // someone credited in them. The Stremio protocol has no word for this:
-// metadata addons name such catalogs after people, as AIOMetadata's
-// "People Search" catalogs (people_search.people_search_movie and
+// metadata addons name such catalogs after people, such as "People Search"
+// catalogs (people_search.people_search_movie and
 // people_search.people_search_series).
 func searchesPeople(catalog stremio.Catalog) bool {
 	if !searchable(catalog) {

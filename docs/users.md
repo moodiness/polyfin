@@ -529,7 +529,7 @@ On a user's page under **Users**, the **Parental control** section can limit the
 
 ### How a title's rating is found
 
-- A title's rating is the certification the server's metadata addon gives: the US one for AIOMetadata, or the local one when there is no US one.
+- A title's rating is the certification the server's metadata addon gives, usually the US one, or its local one when it gives no other.
 - Polyfin also reads the French, German and British ratings, and plain ages ("12", "16+").
 - A rating Polyfin does not know counts as none.
 - Users' own addons never rate titles.

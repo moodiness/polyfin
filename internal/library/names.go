@@ -111,9 +111,9 @@ func (w words) contentType(catalogType string) string {
 //  2. Libraries that still collide under their own name, mostly custom
 //     names given twice, get their content type the same way.
 //  3. Libraries that still collide with their content type, the same type
-//     from two addons, get their addon's name too: "Popular (Movies, Cinemeta)".
+//     from two addons, get their addon's name too: "Popular (Movies, Alpha)".
 //  4. Every remaining duplicate after the first gets a counter, skipping
-//     names in use: "Popular (Movies, Cinemeta) (2)".
+//     names in use: "Popular (Movies, Alpha) (2)".
 //
 // Names depend only on the libraries and their order. Only names change:
 // item identifiers come from catalog keys.

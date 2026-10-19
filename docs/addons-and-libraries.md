@@ -6,9 +6,9 @@ This page explains how Polyfin turns Stremio addons and Eclipse music addons int
 
 Polyfin gets its content from Stremio addons. Each addon has a role:
 
-- AIOMetadata provides catalogs and metadata.
-- AIOStreams provides streams and subtitles.
-- Any other addon that speaks the standard Stremio protocol also works.
+- Metadata addons provide catalogs and metadata.
+- Stream addons provide streams and subtitles.
+- Any addon that speaks the standard Stremio protocol works.
 
 ### Server addons
 
@@ -374,7 +374,7 @@ Every change to these settings applies at once, to what is already kept too.
 
 ### Collections from addons
 
-An addon's collection catalogs (such as AIOMetadata's) become collection libraries. Each collection gathers the catalogs it groups, movies and series together.
+An addon's collection catalogs become collection libraries. Each collection gathers the catalogs it groups, movies and series together.
 
 A collection may also group other collections: a genre's movies and series, or a franchise's movies in several sagas. Opening it shows the titles of every collection within it together, up to three levels deep, as a collection of catalogs does, never those collections as folders. When the app reads them all at once, as jellyfin-web's collection page does, they come by release date once Polyfin has read them all, as Jellyfin orders a collection. Until then, and in pages, they come one of each catalog in turn. A collection that groups only catalogs keeps their order, such as their titles' popularity.
 
@@ -467,7 +467,7 @@ The actors, directors and writers a title credits open as people, with the photo
 
 A person's titles are:
 
-- those your addons' people-search catalogs (such as AIOMetadata's People Search) find for their name; plus
+- those your addons' people-search catalogs (such as a catalog named People Search) find for their name; plus
 - the titles of your addons that Polyfin already knows them in.
 
 Without a people-search catalog, only the second kind show.

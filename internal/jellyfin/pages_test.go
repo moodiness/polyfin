@@ -219,9 +219,9 @@ func TestListsByGenreStudioAndYear(t *testing.T) {
 	}
 }
 
-// collectionsAddon serves, as AIOMetadata does, collections whose catalogs
-// are only reachable through them: one fixed to the Drama option of a
-// movie catalog, and one that groups a catalog without genres and a
+// collectionsAddon serves, as some metadata addons do, collections whose
+// catalogs are only reachable through them: one fixed to the Drama option
+// of a movie catalog, and one that groups a catalog without genres and a
 // nested collection of a series catalog.
 func collectionsAddon(t *testing.T) string {
 	t.Helper()

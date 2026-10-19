@@ -718,8 +718,8 @@ func SyncCatalogs(ctx context.Context, tx pgx.Tx, id accounts.ID, manifest strem
 }
 
 // enableDefaults makes libraries of a new addon's catalogs. An addon that
-// groups its catalogs into collections (such as AIOMetadata) already says how
-// to organize them: its browsable collection catalogs become the libraries.
+// groups its catalogs into collections already says how to organize them:
+// its browsable collection catalogs become the libraries.
 // Otherwise its browsable movie, series and live TV catalogs do, or an
 // Eclipse addon's catalog rows, else, for one declaring none, its
 // eclipse.MyMusic, until the scope has DefaultLibraries.

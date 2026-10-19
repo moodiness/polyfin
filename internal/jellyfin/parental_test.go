@@ -20,7 +20,7 @@ import (
 
 // ratingsAddon serves movies rated as the fixture titles were (Restricted R,
 // Allowed PG, Unrated none) and a TV-MA series, with streams. Its catalog
-// rows carry no rating, as AIOMetadata's do. Ann Lee plays in Allowed and
+// rows carry no rating, as some addons' do. Ann Lee plays in Allowed and
 // Restricted, both dramas, Rex Only in Restricted alone; a people search
 // finds Ann Lee's. Restricted and Show are also crime titles.
 func ratingsAddon(t *testing.T) string {

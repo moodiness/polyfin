@@ -195,7 +195,7 @@ type Extras struct {
 	Cast                 []CastMember      `json:"cast,omitempty"`
 	SeasonPosterByNumber map[string]string `json:"seasonPosterByNumber,omitempty"`
 	SeasonPosters        Posters           `json:"seasonPosters,omitempty"`
-	// Certification is a title's age rating, the US one for AIOMetadata;
+	// Certification is a title's age rating, often the US one;
 	// CertificationLocal is that of the country of the addon's language,
 	// or the US one again when that country has none.
 	Certification      string `json:"certification,omitempty"`

@@ -28,7 +28,7 @@ See it on the [website](https://moodiness.github.io/polyfin/): the ad above, a s
 ## How it works
 
 ```text
-Jellyfin client ──Jellyfin API──> Polyfin ──Stremio protocol──> AIOMetadata / AIOStreams / other addons
+Jellyfin client ──Jellyfin API──> Polyfin ──Stremio protocol──> metadata and stream addons
       │                              │
       │ direct play: 302 ────────────┼──────────────> debrid / provider URL
       │                              │

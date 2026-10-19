@@ -14,8 +14,8 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// ratedAddon serves a movie catalog whose rows carry no rating, as
-// AIOMetadata's, and complete descriptions that do, plus two series.
+// ratedAddon serves a movie catalog whose rows carry no rating, as some
+// addons' do, and complete descriptions that do, plus two series.
 func ratedAddon() *fakeAddon {
 	movie := func(id, name, rating string) (stremio.Meta, stremio.Meta) {
 		row := stremio.Meta{ID: id, Type: "movie", Name: name}

@@ -26,7 +26,7 @@ type Rating struct {
 // Ratings returns the ratings apps offer as a user's limit, as Jellyfin
 // lists those of its default metadata country: the US movie ratings of the
 // Motion Picture Association and the TV Parental Guidelines, which are the
-// ratings addons give (AIOMetadata's certification is always the US one),
+// ratings addons give (some addons' certification is always the US one),
 // then the ages and grades every system shares past them. The unrated
 // entry comes first, then by score and subscore; ratings of one score and
 // subscore keep the order of their system. Ratings of the other systems
