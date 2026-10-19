@@ -41,11 +41,14 @@ type Phase string
 const (
 	Starting    Phase = "starting"
 	Downloading Phase = "downloading"
-	Running     Phase = "running"
-	Updating    Phase = "updating"
-	Stopping    Phase = "stopping"
-	Stopped     Phase = "stopped"
-	Failed      Phase = "failed"
+	// Rebuilding: the database rebuilds its indexes as it starts, after an
+	// update changed its collation version.
+	Rebuilding Phase = "rebuilding"
+	Running    Phase = "running"
+	Updating   Phase = "updating"
+	Stopping   Phase = "stopping"
+	Stopped    Phase = "stopped"
+	Failed     Phase = "failed"
 )
 
 // Problem is something the tray tells about while Polyfin runs, or why
@@ -244,7 +247,8 @@ func WebURL() string   { _, open := Listen(); return "http://" + open + "/web/" 
 // run starts everything, watches it until ctx ends, then stops it.
 func (a *App) run(ctx context.Context) {
 	db := &cluster.Cluster{Bin: a.o.Install.PostgresBin(), Dir: a.o.Folders.Cluster(),
-		Log: filepath.Join(a.o.Folders.Log(), "postgresql.log"), Port: a.o.DatabasePort, Logger: a.logger}
+		Log: filepath.Join(a.o.Folders.Log(), "postgresql.log"), Port: a.o.DatabasePort, Logger: a.logger,
+		Rebuilding: a.rebuilding}
 	server, err := a.prepare(ctx, db)
 	defer func() {
 		a.update(func(s *Status) { s.Phase = Stopping })
@@ -344,6 +348,19 @@ func (a *App) ensureTools(ctx context.Context) tools.Paths {
 	}
 	a.logger.Info("FFmpeg and ffprobe are ready", "ffmpeg", paths.FFmpeg)
 	return paths
+}
+
+// rebuilding shows the database's rebuild of its indexes while it starts,
+// which may take a while on a large library.
+func (a *App) rebuilding(on bool) {
+	a.update(func(s *Status) {
+		switch {
+		case on && s.Phase == Starting:
+			s.Phase = Rebuilding
+		case !on && s.Phase == Rebuilding:
+			s.Phase = Starting
+		}
+	})
 }
 
 // serverEnvironment is the app's environment, without what would point

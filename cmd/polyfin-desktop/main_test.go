@@ -48,10 +48,13 @@ func TestTexts(t *testing.T) {
 	if english.copyKey != "Copy the secret key" || french.copyKey != "Copier la clé secrète" || !strings.Contains(french.keyCopied, "sauvegardes") {
 		t.Error("the secret key's lines")
 	}
-	for _, phase := range []app.Phase{app.Starting, app.Running, app.Stopping, app.Stopped, app.Failed, app.Updating} {
+	for _, phase := range []app.Phase{app.Starting, app.Running, app.Stopping, app.Stopped, app.Failed, app.Updating, app.Rebuilding} {
 		if english.phase(app.Status{Phase: phase}) == "" || french.phase(app.Status{Phase: phase}) == "" {
 			t.Errorf("no line for %s", phase)
 		}
+	}
+	if english.phase(app.Status{Phase: app.Rebuilding}) != "Rebuilding the database's indexes" || french.phase(app.Status{Phase: app.Rebuilding}) != "Reconstruction des index de la base de données" {
+		t.Error("the rebuilding line")
 	}
 	if strings.Contains(strings.Join([]string{french.failed, french.stopping, french.keyCopied, french.keyHint}, ""), "'") {
 		t.Error("French uses a straight apostrophe")

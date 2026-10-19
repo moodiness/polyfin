@@ -52,7 +52,7 @@ The icon shows whether Polyfin runs: faded while it starts or is stopped. Its me
 
 | Item | What it does |
 | --- | --- |
-| The first line | What Polyfin is doing: starting, downloading FFmpeg, running, stopping, or stopped. A second line tells about a problem, and opens the log folder: the key store that could not be read, FFmpeg that could not be downloaded, or an update that could not be installed |
+| The first line | What Polyfin is doing: starting, downloading FFmpeg, rebuilding the database's indexes (see [Updates](#updates)), running, stopping, or stopped. A second line tells about a problem, and opens the log folder: the key store that could not be read, FFmpeg that could not be downloaded, or an update that could not be installed |
 | Setup code | Shown until the administrator exists: copies the code and opens the admin app |
 | Open the admin app | Opens `http://localhost:8096/admin/` in the browser |
 | Open the web client | Opens jellyfin-web, at `http://localhost:8096/web/` (see [Web client](web-client.md)) |
@@ -119,7 +119,7 @@ While **Check for new versions** is on, under **Settings › General**, Polyfin 
 - **macOS:** replaces the app with the one of the disk image, and starts it;
 - **Linux:** replaces the AppImage with the new one, and starts it, or opens the `.deb` in the system's package installer.
 
-The data folder stays as it is: the new version upgrades the database's tables as it starts, as in Docker. A development build offers no update.
+The data folder stays as it is: the new version upgrades the database's tables as it starts, as in Docker. When the new version's PostgreSQL sorts text with another ICU version, it first rebuilds the database's indexes, which follow the order of text, and records the new collation version, so that PostgreSQL stops warning of a mismatch: the menu's first line says so meanwhile, for seconds or a few minutes on a large library, and the log tells what was rebuilt. A development build offers no update.
 
 ## Moving to Docker and back
 
@@ -135,7 +135,7 @@ Paths do not move with the backup: local folders, the recordings folder and the 
 
 ## Moving to the arm64 package on Windows on Arm
 
-Before 0.42.1, Polyfin Desktop ran on Windows on Arm from the x64 package, under Windows' emulation. That install keeps working, but stays x64: its updates are the x64 package's. Its data folder cannot go to the arm64 package as it is: the x64 package's PostgreSQL sorts text with ICU 77, and the arm64 package's with ICU 78, under which a database made with ICU 77 warns of a collation version mismatch at each connection, and its text indexes may not follow the new order. The database moves with a backup instead, into a new data folder, as in [Moving to Docker and back](#moving-to-docker-and-back), but on the same computer: the secret key and the paths stay the same, and nothing needs to be imported or changed.
+Before 0.42.1, Polyfin Desktop ran on Windows on Arm from the x64 package, under Windows' emulation. That install keeps working, but stays x64: its updates are the x64 package's. Its data folder should not go to the arm64 package as it is: its database was made by the x64 package's PostgreSQL, another build with another ICU. The database moves with a backup instead, into a new data folder, as in [Moving to Docker and back](#moving-to-docker-and-back), but on the same computer: the secret key and the paths stay the same, and nothing needs to be imported or changed.
 
 1. In the admin app, turn **Back up the database every day** on under **Settings › Backups** if it is off, then press **Back up now** in the **Database backups** panel of **System › Schedule**.
 2. Quit Polyfin from its menu, then uninstall it under Settings › Apps › Installed apps. The data folder stays.

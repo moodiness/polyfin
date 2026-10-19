@@ -9,7 +9,7 @@ import (
 // texts is the tray's text in one language.
 type texts struct {
 	starting, running, stopping, stopped, failed string
-	downloading, updating                        string
+	downloading, updating, rebuilding            string
 	keyStore, tools, updateFailed                string
 	setupCode                                    string
 	openAdmin, openWeb, openLogs                 string
@@ -26,6 +26,7 @@ var english = texts{
 	failed:            "Polyfin could not start: see the log folder",
 	downloading:       "Downloading FFmpeg: %d%%",
 	updating:          "Downloading the update: %d%%",
+	rebuilding:        "Rebuilding the database's indexes",
 	keyStore:          "The system's key store could not be read",
 	tools:             "FFmpeg could not be downloaded",
 	updateFailed:      "The update could not be installed",
@@ -51,6 +52,7 @@ var french = texts{
 	failed:            "Polyfin n’a pas pu démarrer : voir le dossier des journaux",
 	downloading:       "Téléchargement de FFmpeg : %d %%",
 	updating:          "Téléchargement de la mise à jour : %d %%",
+	rebuilding:        "Reconstruction des index de la base de données",
 	keyStore:          "Le trousseau du système n’a pas pu être lu",
 	tools:             "FFmpeg n’a pas pu être téléchargé",
 	updateFailed:      "La mise à jour n’a pas pu être installée",
@@ -87,6 +89,8 @@ func (c texts) phase(s app.Status) string {
 		return fmt.Sprintf(c.downloading, s.Percent)
 	case app.Updating:
 		return fmt.Sprintf(c.updating, s.Percent)
+	case app.Rebuilding:
+		return c.rebuilding
 	case app.Running:
 		return c.running
 	case app.Stopping:

@@ -302,6 +302,27 @@ func TestSetupCode(t *testing.T) {
 	}
 }
 
+// The rebuild of the database's indexes shows while Polyfin starts, and
+// changes no other phase.
+func TestRebuildingPhase(t *testing.T) {
+	a := New(Options{Folders: desktop.Folders{Data: t.TempDir()}})
+	a.update(func(s *Status) { s.Phase = Starting })
+	a.rebuilding(true)
+	if got := a.Status().Phase; got != Rebuilding {
+		t.Fatalf("phase while rebuilding = %s", got)
+	}
+	a.rebuilding(false)
+	if got := a.Status().Phase; got != Starting {
+		t.Fatalf("phase once rebuilt = %s", got)
+	}
+	a.update(func(s *Status) { s.Phase = Stopping })
+	a.rebuilding(true)
+	a.rebuilding(false)
+	if got := a.Status().Phase; got != Stopping {
+		t.Errorf("phase while stopping = %s", got)
+	}
+}
+
 // Start with the computer turns on once set up, unless chosen before, and
 // the choice is kept.
 func TestStartWithComputer(t *testing.T) {
