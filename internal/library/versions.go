@@ -556,9 +556,24 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 // followed up; until the follow-ups end, it is listed with the items it
 // lacks of the stale list it replaced (see followUpList). An answer of
 // notices alone, nothing to play, is not stored over a list that has
-// streams to play: it is errOnlyNotices, an addon failing.
+// streams to play: it is errOnlyNotices, an addon failing. A refresh of
+// the title while the addon is asked leaves its answer out: the addon is
+// asked again, for the callers waiting too (see forgetLists).
 func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
+	for {
+		streams, err := s.askStreamsOf(ctx, entry, key)
+		if !errors.Is(err, errForgotten) {
+			return streams, err
+		}
+	}
+}
+
+// askStreamsOf asks an addon for its streams for a title once, as
+// streamAnswer does.
+func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
 	return shared(ctx, s, streamsFlight(key), func(ctx context.Context) ([]stremio.Stream, error) {
+		asked, done := s.ask(followKey{listStreams, key})
+		defer done()
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
 		if err != nil {
 			return nil, err
@@ -568,7 +583,7 @@ func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamK
 				return nil, errOnlyNotices
 			}
 		}
-		return s.followStreams(ctx, entry, key, streams), nil
+		return s.followStreams(ctx, entry, key, asked, streams)
 	})
 }
 
@@ -894,18 +909,33 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 // while fresh, else its answer, which every caller asking meanwhile shares.
 // An answer stored is followed up; until the follow-ups end, it is listed
 // with the items it lacks of the stale list it replaced (see followUpList).
+// A refresh of the title while the addon is asked leaves its answer out:
+// the addon is asked again (see forgetLists).
 func (s *Service) subtitleList(ctx context.Context, entry installed, t target) ([]stremio.Subtitle, error) {
 	key := streamKey{entry.addon.ID, t.metaType, t.id}
 	if l, fresh, _ := listOf(s, s.subtitleLists, key); fresh {
 		return l.items, nil
 	}
-	return shared(ctx, s, "subtitles "+key.addon.String()+" "+t.metaType+" "+t.id, func(ctx context.Context) ([]stremio.Subtitle, error) {
-		subtitles, err := s.fetchSubtitles(ctx, entry, t.metaType, t.id)
-		if err != nil {
-			return nil, err
+	for {
+		subtitles, err := shared(ctx, s, subtitlesFlight(key), func(ctx context.Context) ([]stremio.Subtitle, error) {
+			asked, done := s.ask(followKey{listSubtitles, key})
+			defer done()
+			subtitles, err := s.fetchSubtitles(ctx, entry, t.metaType, t.id)
+			if err != nil {
+				return nil, err
+			}
+			return s.followSubtitles(ctx, entry, key, asked, subtitles)
+		})
+		if !errors.Is(err, errForgotten) {
+			return subtitles, err
 		}
-		return s.followSubtitles(ctx, entry, key, subtitles), nil
-	})
+	}
+}
+
+// subtitlesFlight names the request asking an addon for its subtitles for
+// a title, which callers share (see subtitleList).
+func subtitlesFlight(key streamKey) string {
+	return "subtitles " + key.addon.String() + " " + key.contentType + " " + key.id
 }
 
 // subtitleID identifies a subtitle of an addon, without revealing either.

@@ -191,7 +191,7 @@ With **Turn picture subtitles into text** on, a PGS or VobSub track read into te
 
 ### Refresh metadata
 
-**Refresh metadata** (administrators only) makes Polyfin forget the title's description, version and subtitle lists, expired ones included, the rating it looked up and its ratings from MDBList, and stop asking addons again for those lists. It then asks the addons for the description again at once.
+**Refresh metadata** (administrators only) makes Polyfin forget the title's description, version and subtitle lists, expired ones included, the rating it looked up and its ratings from MDBList, and stop asking addons again for those lists. It then asks the addons for the description again at once. An addon still asked for one of those lists when the title is refreshed is asked again once it answers: its answer, asked for before the refresh, is not kept.
 
 **For app developers:** `POST /Items/{id}/Refresh`.
 

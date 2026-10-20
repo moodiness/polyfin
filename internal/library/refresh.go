@@ -77,9 +77,11 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 	}
 	for _, entry := range v.addons {
 		for _, video := range lists {
-			// Their follow-ups stop first: one answering meanwhile
-			// replaces no list, and none is brought back afterwards,
-			// not even by a restart.
+			// Their follow-ups stop first, and the answers to the
+			// requests under way are left out: one answering meanwhile
+			// replaces no list, and none is brought back afterwards, not
+			// even by a restart. Those requests ask the addon again
+			// (see streamAnswer).
 			s.forgetLists(ctx, streamKey{entry.addon.ID, title.Meta.Type, video})
 		}
 	}
