@@ -126,8 +126,9 @@ func TestRefreshDropsWhatPolyfinKeepsOfTheTitle(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
 	var metas, streams atomic.Int32
-	var certification atomic.Value
+	var certification, quality atomic.Value
 	certification.Store("PG")
+	quality.Store("1080p")
 	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		movie := stremio.Meta{ID: "tt5000", Type: "movie", Name: "Heist", Genres: []string{"Drama"},
 			Extras: &stremio.Extras{Certification: certification.Load().(string)}}
@@ -143,7 +144,7 @@ func TestRefreshDropsWhatPolyfinKeepsOfTheTitle(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie})
 		case path == "/stream/movie/tt5000.json":
 			streams.Add(1)
-			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: "1080p", URL: "https://example.com/heist.mkv"}}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: quality.Load().(string), URL: "https://example.com/heist.mkv"}}})
 		default:
 			http.NotFound(w, r)
 		}
@@ -163,12 +164,18 @@ func TestRefreshDropsWhatPolyfinKeepsOfTheTitle(t *testing.T) {
 	s.get(t, "/UserViews", token, &views)
 	s.get(t, "/Items?ParentId="+views.Items[0].Id, token, &page)
 	movie := page.Items[0].Id
+	// Item details ask the addon for the versions in the background: the
+	// addon is counted once they no longer ask it.
 	open := func() BaseItemDto {
 		t.Helper()
 		var item BaseItemDto
 		if status := s.get(t, "/Items/"+movie+"?fields=MediaSources", token, &item); status != http.StatusOK {
 			t.Fatalf("item: %d", status)
 		}
+		eventually(t, "the addon to be asked", func() bool {
+			var progress VersionProgress
+			return s.get(t, "/Polyfin/Items/"+movie+"/Versions", token, &progress) == http.StatusOK && progress.Pending == 0
+		})
 		return item
 	}
 	open()
@@ -177,6 +184,7 @@ func TestRefreshDropsWhatPolyfinKeepsOfTheTitle(t *testing.T) {
 		t.Fatalf("before refreshing, the addon was asked %d descriptions and %d version lists", metas.Load(), streams.Load())
 	}
 	certification.Store("R")
+	quality.Store("2160p")
 	if status, _ := s.call(http.MethodPost, "/Items/"+movie+"/Refresh", app("tv", token), nil); status != http.StatusForbidden {
 		t.Errorf("member refreshing: %d", status)
 	}
@@ -193,6 +201,16 @@ func TestRefreshDropsWhatPolyfinKeepsOfTheTitle(t *testing.T) {
 	}
 	if item := open(); item.OfficialRating != "R" || streams.Load() != 2 {
 		t.Errorf("after refreshing: rating %q, %d version lists", item.OfficialRating, streams.Load())
+	}
+	// The version list kept is the one asked for after the refresh.
+	var names []string
+	if item := open(); item.MediaSources != nil {
+		for _, source := range *item.MediaSources {
+			names = append(names, source.Name)
+		}
+	}
+	if got := strings.Join(names, ", "); got != "2160p" || streams.Load() != 2 {
+		t.Errorf("listed after refreshing: %q, %d version lists", got, streams.Load())
 	}
 	for path, want := range map[string]int{
 		"/Items/" + strings.Repeat("ab", 16) + "/Refresh":             http.StatusNotFound,
