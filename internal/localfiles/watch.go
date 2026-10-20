@@ -139,6 +139,9 @@ type watcher struct {
 	spawn func(func())
 
 	quiet, check, retry time.Duration
+	// rewatch has the folders created in a tree watched again as its scan
+	// begins: rewatchCreated, which tests set.
+	rewatch bool
 	// every, notifiedEvery, rearm, gap and lists pace the polls and the
 	// watches of the shares (see shareEvery).
 	every, notifiedEvery, rearm, gap time.Duration
@@ -160,12 +163,15 @@ type watcher struct {
 
 	// What follows belongs to the loop. files is nil while nothing is
 	// watched; dirs are the folders watched, by path, with their folder;
-	// changed the last change of the folders waiting for their scan;
-	// scanning the folders a scan of the watch is under way for, again
-	// those that changed meanwhile; polls the shares polled.
+	// created the folders created in a folder's tree since its last scan
+	// began, when they are watched again (see rewatch); changed the last
+	// change of the folders waiting for their scan; scanning the folders a
+	// scan of the watch is under way for, again those that changed
+	// meanwhile; polls the shares polled.
 	files    fileWatcher
 	watched  map[accounts.ID]*watching
 	dirs     map[string]accounts.ID
+	created  map[accounts.ID][]string
 	changed  map[accounts.ID]time.Time
 	scanning map[accounts.ID]bool
 	again    map[accounts.ID]bool
@@ -175,12 +181,12 @@ type watcher struct {
 func newWatcher(ctx context.Context, logger *slog.Logger, folders func(context.Context) ([]watchFolder, error), scan func(context.Context, accounts.ID),
 	open func() (fileWatcher, error), shares shareSource, spawn func(func())) *watcher {
 	return &watcher{ctx: ctx, logger: logger, folders: folders, scan: scan, open: open, shares: shares, spawn: spawn,
-		quiet: watchQuiet, check: watchCheck, retry: watchRetry, every: shareEvery, notifiedEvery: shareNotifiedEvery, rearm: shareRearm,
-		gap: shareGap, lists: shareLists,
+		quiet: watchQuiet, check: watchCheck, retry: watchRetry, rewatch: rewatchCreated, every: shareEvery, notifiedEvery: shareNotifiedEvery,
+		rearm: shareRearm, gap: shareGap, lists: shareLists,
 		kicks: make(chan struct{}, 1), due: make(chan accounts.ID), done: make(chan accounts.ID), polled: make(chan sharePolled),
 		notified: make(chan accounts.ID), unwatched: map[accounts.ID]string{}, shareWatches: map[accounts.ID]shareWatchState{},
-		watched: map[accounts.ID]*watching{}, dirs: map[string]accounts.ID{}, changed: map[accounts.ID]time.Time{},
-		scanning: map[accounts.ID]bool{}, again: map[accounts.ID]bool{}, polls: map[accounts.ID]*polling{}}
+		watched: map[accounts.ID]*watching{}, dirs: map[string]accounts.ID{}, created: map[accounts.ID][]string{},
+		changed: map[accounts.ID]time.Time{}, scanning: map[accounts.ID]bool{}, again: map[accounts.ID]bool{}, polls: map[accounts.ID]*polling{}}
 }
 
 // run watches the folders until the watch ends.
@@ -298,6 +304,7 @@ func (w *watcher) reconcile() {
 			w.unwatch(id)
 			delete(w.watched, id)
 			delete(w.changed, id)
+			delete(w.created, id)
 			w.setReason(id, "")
 		}
 	}
@@ -457,6 +464,9 @@ func (w *watcher) event(event fsnotify.Event) {
 	if event.Has(fsnotify.Create) {
 		if info, err := os.Lstat(name); err == nil && info.IsDir() {
 			if !skippedIn(kind, base) && w.addTree(id, name) {
+				if w.rewatch {
+					w.created[id] = append(w.created[id], name)
+				}
 				w.change(id)
 			}
 			return
@@ -528,12 +538,14 @@ func (w *watcher) settle(id accounts.ID) {
 }
 
 // startScan scans a folder in the background, or once the scan under way
-// ends.
+// ends. The folders created in its tree are watched again first (see
+// rewatchCreated): the scan then lists what was written before.
 func (w *watcher) startScan(id accounts.ID) {
 	if w.scanning[id] {
 		w.again[id] = true
 		return
 	}
+	w.rewatchCreatedIn(id)
 	w.scanning[id] = true
 	w.spawn(func() {
 		w.scan(w.ctx, id)
@@ -542,4 +554,16 @@ func (w *watcher) startScan(id accounts.ID) {
 		case <-w.ctx.Done():
 		}
 	})
+}
+
+// rewatchCreatedIn watches again the folders created in a folder's tree
+// since its last scan began, those still watched.
+func (w *watcher) rewatchCreatedIn(id accounts.ID) {
+	created := w.created[id]
+	delete(w.created, id)
+	for _, dir := range created {
+		if owner, ok := w.dirs[dir]; ok && owner == id && !w.addTree(id, dir) {
+			return
+		}
+	}
 }

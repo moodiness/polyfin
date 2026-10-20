@@ -18,3 +18,7 @@ func unwatchedReason(err error) string {
 	}
 	return unwatchedFailed
 }
+
+// rewatchCreated: inotify keeps the watch of a folder created as added
+// (see watchlimit_kqueue.go).
+const rewatchCreated = false

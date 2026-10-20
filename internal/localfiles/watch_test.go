@@ -110,6 +110,37 @@ func TestWatchScansAfterFilesAdded(t *testing.T) {
 	wt.still()
 }
 
+// A folder created is watched again as its scan begins: on macOS, fsnotify
+// may register its own watch of the folder over the one just added, which
+// the fake's Remove stands for (see rewatchCreated).
+func TestWatchRewatchesCreatedFolders(t *testing.T) {
+	root := t.TempDir()
+	id := testID(1)
+	fake := newFakeWatcher()
+	wt := newWatchTest(t, one(id, root), func() (fileWatcher, error) { return fake, nil })
+	wt.w.rewatch = true
+	wt.start()
+	real, _ := filepath.EvalSymlinks(root)
+	dir := filepath.Join(real, "Nosferatu (1922)")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fake.events <- fsnotify.Event{Name: dir, Op: fsnotify.Create}
+	// The loop takes this event once done with the first.
+	fake.events <- fsnotify.Event{Name: real, Op: fsnotify.Chmod}
+	if !slices.Contains(fake.watched(), dir) {
+		t.Fatalf("watched %v, want %s among them", fake.watched(), dir)
+	}
+	if err := fake.Remove(dir); err != nil {
+		t.Fatal(err)
+	}
+	wt.scanned(id)
+	if !slices.Contains(fake.watched(), dir) {
+		t.Fatalf("watched %v as the scan began, want %s among them", fake.watched(), dir)
+	}
+	wt.still()
+}
+
 func TestWatchScansOnceAfterBurst(t *testing.T) {
 	root := t.TempDir()
 	id := testID(1)
