@@ -43,7 +43,7 @@ type origin struct {
 	// rangeless ignores ranges and hides the size; rate paces the bytes
 	// served, so many a second, none when zero; the range gated is served
 	// a block at a time, each once gate gives a turn. ranges holds the
-	// ranges asked, and times when.
+	// ranges asked.
 	mu         sync.Mutex
 	expired    map[string]bool
 	busy       int
@@ -56,7 +56,6 @@ type origin struct {
 	gated      string
 	gate       chan struct{}
 	ranges     []string
-	times      []time.Time
 }
 
 func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
@@ -74,7 +73,6 @@ func newOrigin(t *testing.T, size int) (*origin, *httptest.Server) {
 		refusing := !busy && !failing && o.refusing > 0
 		whole := !busy && !failing && !refusing && o.whole > 0
 		o.ranges = append(o.ranges, r.Header.Get("Range"))
-		o.times = append(o.times, time.Now())
 		switch {
 		case busy:
 			o.busy--
@@ -620,10 +618,20 @@ func TestFetchRetriesFailingSources(t *testing.T) {
 	}
 }
 
+// The pacing is checked at the instants it lets the requests go: a
+// request reaches the origin a moment later, a moment a busy machine may
+// stretch, so that two requests let go apart may arrive closer.
 func TestFetchesArePaced(t *testing.T) {
 	o, server := newOrigin(t, blockSize)
 	cache := newCache(t, 1<<30)
 	cache.fetchInterval = 40 * time.Millisecond
+	var mu sync.Mutex
+	var released []time.Time
+	cache.paced = func(at time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		released = append(released, at)
+	}
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
 	defer s.Release()
 	var wg sync.WaitGroup
@@ -639,16 +647,15 @@ func TestFetchesArePaced(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	o.mu.Lock()
-	times := slices.Clone(o.times)
-	o.mu.Unlock()
-	slices.SortFunc(times, func(a, b time.Time) int { return a.Compare(b) })
-	if len(times) != 10 || times[9].Sub(times[0]) < 9*cache.fetchInterval*8/10 {
-		t.Fatalf("%d requests in %v", len(times), times[len(times)-1].Sub(times[0]))
+	mu.Lock()
+	defer mu.Unlock()
+	// Each request was let go by the pacing, once.
+	if o.requests.Load() != 10 || len(released) != 10 {
+		t.Fatalf("%d requests, %d let go", o.requests.Load(), len(released))
 	}
-	for i := 1; i < len(times); i++ {
-		if gap := times[i].Sub(times[i-1]); gap < cache.fetchInterval/2 {
-			t.Errorf("requests %v apart", gap)
+	for i := 1; i < len(released); i++ {
+		if gap := released[i].Sub(released[i-1]); gap < cache.fetchInterval {
+			t.Errorf("requests %d and %d let go %v apart", i-1, i, gap)
 		}
 	}
 }

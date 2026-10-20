@@ -184,6 +184,10 @@ type Cache struct {
 	now                    func() time.Time
 	fetchInterval          time.Duration
 	attemptTime            time.Duration
+	// paced, when set, is told each instant the pacing of Fetch and
+	// FetchRanges lets a request go, as it does: tests check the pacing
+	// there, not where a host receives the request, a moment later.
+	paced func(time.Time)
 	// headerTimeout bounds the wait for a source's headers, stallTimeout
 	// the time a connection read may go without a byte, recoveryTimeout
 	// the wait for the headers of the connection replacing a stalled one,

@@ -493,17 +493,31 @@ func (s *Source) unsatisfiable(response *http.Response, off int64) error {
 }
 
 // pace waits for the next time the source may be sent a request of Fetch
-// or FetchRanges, and takes it.
+// or FetchRanges, and takes it: fetchInterval after the last request it
+// let go, past a hold-off. A request waiting asks again once woken, rather
+// than keeping a turn taken before it waited: woken late, it would go
+// close to the next one, and it would go during a hold-off asked since.
 func (s *Source) pace(ctx context.Context) error {
-	s.mu.Lock()
-	now := time.Now()
-	at := s.nextFetch
-	if at.Before(now) {
-		at = now
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		s.mu.Lock()
+		now := time.Now()
+		if at := s.nextFetch; at.After(now) {
+			s.mu.Unlock()
+			if err := pause(ctx, at.Sub(now)); err != nil {
+				return err
+			}
+			continue
+		}
+		s.nextFetch = now.Add(s.cache.fetchInterval)
+		if s.cache.paced != nil {
+			s.cache.paced(now)
+		}
+		s.mu.Unlock()
+		return nil
 	}
-	s.nextFetch = at.Add(s.cache.fetchInterval)
-	s.mu.Unlock()
-	return pause(ctx, at.Sub(now))
 }
 
 // holdOff sends the source no request of Fetch or FetchRanges for d: a
