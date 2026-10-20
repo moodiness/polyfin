@@ -405,6 +405,69 @@ func TestRecordingFollowsTheSettingsFolder(t *testing.T) {
 	}
 }
 
+// A recording shows under way together with its timer marked so and the
+// file it writes: held while it marks its timer, as a busy runner may
+// pause it between its writes, it is not seen yet; once seen, its timer
+// is active and its file can be streamed.
+func TestRecordingStartsWithItsTimer(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	airing := program(t, "01000000000000000000000000000000", "Airing", id(t, channelX), time.Now().Add(-10*time.Minute))
+	timer, err := f.service.CreateTimer(ctx, f.user.ID, ProgrammeOf(airing), Options{KeepUntil: KeepUntil[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The timer's row is locked as an update of its status needs, not as
+	// the recording's reference to it does: the recorder waits on it once
+	// it marks the timer under way.
+	hold, err := f.service.db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hold.Exec(ctx, "SELECT FROM live_timers WHERE id = $1 FOR NO KEY UPDATE", timer.ID); err != nil {
+		t.Fatal(err)
+	}
+	defer f.service.stopAndWait(timer.ID)
+	defer func() { _ = hold.Rollback(context.WithoutCancel(ctx)) }()
+	f.service.start(ctx, timer, f.dir)
+	for deadline, waiting := time.Now().Add(30*time.Second), 0; waiting == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the recorder never waited on its timer")
+		}
+		if err := f.service.db.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity
+			WHERE datname = current_database() AND wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if seen, err := f.service.Recordings(ctx); err != nil || len(seen) != 0 {
+		t.Errorf("a recording seen before its timer is under way: %+v %v", seen, err)
+	}
+
+	if err := hold.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var seen []Recording
+	for deadline := time.Now().Add(30 * time.Second); len(seen) == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("no recording started")
+		}
+		if seen, err = f.service.Recordings(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(seen) != 1 || !seen[0].InProgress() || seen[0].Timer == nil || *seen[0].Timer != timer.ID {
+		t.Fatalf("the recording under way: %+v", seen)
+	}
+	if marked, err := f.service.Timer(ctx, timer.ID); err != nil || marked.Status != StatusInProgress {
+		t.Errorf("its timer: %s %v", marked.Status, err)
+	}
+	for _, id := range []accounts.ID{timer.ID, seen[0].ID} {
+		if part, _, ok := f.service.Active(id); !ok || part != partPath(f.dir, seen[0].ID, 0) {
+			t.Errorf("the file it writes, by %s: %q %v", id, part, ok)
+		}
+	}
+}
+
 // A series timer recording new episodes only remembers those it recorded
 // in full, past their recordings, and drops their other airings; an
 // episode recorded in part is recorded again.
