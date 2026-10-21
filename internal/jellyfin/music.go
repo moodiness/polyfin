@@ -34,7 +34,23 @@ func (h *Handler) musicRoutes(rt *router) {
 	// on a Jellyfin server whose music has no genre tags.
 	signedIn(http.MethodGet, "/MusicGenres", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/Audio/{itemId}/Lyrics", h.lyrics)
-	signedIn(http.MethodGet, "/Audio/{itemId}/RemoteSearch/Lyrics", h.remoteLyrics)
+	// Jellyfin keeps the lyrics search, its downloads and the removal of
+	// lyrics to users who may manage lyrics, and to API keys. Polyfin,
+	// without that permission, keeps them to administrators, API keys
+	// among them, to whom jellyfin-web shows its lyrics editor; others get
+	// an empty 403 before anything is read, as on Jellyfin.
+	lyricsManager := func(method, pattern string, handler http.HandlerFunc) {
+		signedIn(method, pattern, func(w http.ResponseWriter, r *http.Request) {
+			if !callerFrom(r.Context()).User.IsAdministrator {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			handler(w, r)
+		})
+	}
+	lyricsManager(http.MethodGet, "/Audio/{itemId}/RemoteSearch/Lyrics", h.remoteLyrics)
+	lyricsManager(http.MethodPost, "/Audio/{itemId}/RemoteSearch/Lyrics/{lyricId}", h.downloadRemoteLyrics)
+	lyricsManager(http.MethodDelete, "/Audio/{itemId}/Lyrics", h.deleteLyrics)
 }
 
 // credits names artists as Jellyfin lists them with their items.
@@ -517,72 +533,165 @@ func (h *Handler) lookUpLyrics(item library.Item) {
 
 // lyrics answers a track's lyrics as Jellyfin answers those of a track
 // with an LRC or text file: synced line by line when they are, plain
-// otherwise. A track of a local music folder has those of its lyrics file,
-// else of its lyrics tag (see library.Service.TrackLyrics), whether lyrics
-// from LRCLIB are on or not; other tracks those of LRCLIB (see
-// lyrics.Service). A track without lyrics, an instrumental, one LRCLIB
-// does not know, and every track without its own while lyrics are turned
-// off, answers as Jellyfin does without lyrics. A track never looked up is
-// looked up now, waited for lyricsWait at most.
+// otherwise. Lyrics an administrator chose in a lyrics search come first
+// while lyrics from LRCLIB are on (see downloadRemoteLyrics). Then a track
+// of a local music folder has those of its lyrics file, else of its lyrics
+// tag (see library.Service.TrackLyrics), whether lyrics from LRCLIB are on
+// or not; other tracks those of LRCLIB (see lyrics.Service). A track
+// without lyrics, an instrumental, one LRCLIB does not know, one whose
+// lyrics an administrator removed (see deleteLyrics), and every track
+// without its own while lyrics are turned off, answers as Jellyfin does
+// without lyrics. A track never looked up is looked up now, waited for
+// lyricsWait at most.
 func (h *Handler) lyrics(w http.ResponseWriter, r *http.Request) {
-	b := bindErrors{}
-	id := b.pathID(r, "itemId")
-	user, ok := h.viewer(w, r, b, notFoundProblem)
+	user, item, track, ok := h.lyricsItem(w, r)
 	if !ok {
 		return
 	}
-	item, err := h.Library.Item(r.Context(), user, id)
-	if err != nil {
-		h.browseError(w, r, err)
-		return
-	}
-	track, ok := lyricsTrack(item)
-	if !ok {
-		notFoundProblem(w)
-		return
-	}
-	own, err := h.Library.TrackLyrics(r.Context(), user, id)
+	own, err := h.Library.TrackLyrics(r.Context(), user, item.ID)
 	if err != nil {
 		h.browseError(w, r, err)
 		return
 	}
 	found, ok := lyrics.Parse(own)
-	if !ok {
+	if ok {
+		// Lyrics chosen in a lyrics search replace the track's own.
+		if chosen, picked := h.Lyrics.Chosen(r.Context(), item.ID); picked {
+			found = chosen
+		}
+	} else {
 		found, ok = h.Lyrics.Lyrics(r.Context(), track, lyricsWait)
 	}
 	if !ok {
 		notFoundProblem(w)
 		return
 	}
+	writeJSON(w, http.StatusOK, lyricDto(item, track, found))
+}
+
+// lyricsItem reads the track a lyrics request names, as the user the
+// request is for sees it, and what LRCLIB is asked about it. A track the
+// user cannot see, and an item that is no song, answer 404, as on
+// Jellyfin.
+func (h *Handler) lyricsItem(w http.ResponseWriter, r *http.Request) (accounts.User, library.Item, lyrics.Track, bool) {
+	b := bindErrors{}
+	id := b.pathID(r, "itemId")
+	user, ok := h.viewer(w, r, b, notFoundProblem)
+	if !ok {
+		return accounts.User{}, library.Item{}, lyrics.Track{}, false
+	}
+	item, err := h.Library.Item(r.Context(), user, id)
+	if err != nil {
+		h.browseError(w, r, err)
+		return accounts.User{}, library.Item{}, lyrics.Track{}, false
+	}
+	track, ok := lyricsTrack(item)
+	if !ok {
+		notFoundProblem(w)
+		return accounts.User{}, library.Item{}, lyrics.Track{}, false
+	}
+	return user, item, track, true
+}
+
+// lyricDto is a track's lyrics as Jellyfin answers them, described by the
+// track.
+func lyricDto(item library.Item, track lyrics.Track, found lyrics.Lyrics) LyricDto {
 	dto := LyricDto{
 		Metadata: LyricMetadata{Artist: track.Artist, Album: track.Album, Title: track.Title, IsSynced: new(found.Synced)},
-		Lyrics:   make([]LyricLine, 0, len(found.Lines)),
+		Lyrics:   lyricLines(found),
 	}
 	if item.Runtime > 0 {
 		dto.Metadata.Length = new(int64(item.Runtime / 100))
 	}
+	return dto
+}
+
+// lyricLines are lyrics line by line, each with its start, in ticks, when
+// they are synced.
+func lyricLines(found lyrics.Lyrics) []LyricLine {
+	lines := make([]LyricLine, 0, len(found.Lines))
 	for _, line := range found.Lines {
 		l := LyricLine{Text: line.Text}
 		if found.Synced {
 			l.Start, l.Cues = new(int64(line.Start/100)), &[]LyricCue{}
 		}
-		dto.Lyrics = append(dto.Lyrics, l)
+		lines = append(lines, l)
 	}
-	writeJSON(w, http.StatusOK, dto)
+	return lines
 }
 
-// remoteLyrics answers a lyrics search, which lists none: Polyfin serves
-// the lyrics LRCLIB has without a search to choose them from.
+// RemoteLyricInfoDto is lyrics a lyrics search found: their identifier,
+// the provider that has them, and the lyrics, described by the track the
+// provider has them for.
+type RemoteLyricInfoDto struct {
+	Id           string
+	ProviderName string
+	Lyrics       LyricDto
+}
+
+// remoteLyrics answers the lyrics search of jellyfin-web's lyrics editor,
+// as a Jellyfin server with an LRCLIB lyrics provider does: LRCLIB's
+// lyrics for the song's title, artist and album, those of the closest
+// length first, synced before plain (see lyrics.Service.Search), each
+// with all its lines, which the editor previews. It lists none while
+// lyrics from LRCLIB are turned off, as a server without a lyrics
+// provider, or when LRCLIB cannot be asked.
 func (h *Handler) remoteLyrics(w http.ResponseWriter, r *http.Request) {
-	b := bindErrors{}
-	id := b.pathID(r, "itemId")
-	user, ok := h.viewer(w, r, b, notFoundProblem)
+	_, _, track, ok := h.lyricsItem(w, r)
 	if !ok {
 		return
 	}
-	if _, err := h.Library.Item(r.Context(), user, id); err != nil {
-		h.browseError(w, r, err)
+	found := h.Lyrics.Search(r.Context(), track)
+	results := make([]RemoteLyricInfoDto, 0, len(found))
+	for _, result := range found {
+		metadata := LyricMetadata{Artist: result.Artist, Album: result.Album, Title: result.Title, IsSynced: new(result.Lyrics.Synced)}
+		if result.Duration > 0 {
+			metadata.Length = new(int64(result.Duration / 100))
+		}
+		results = append(results, RemoteLyricInfoDto{Id: result.ID, ProviderName: lyrics.ProviderName,
+			Lyrics: LyricDto{Metadata: metadata, Lyrics: lyricLines(result.Lyrics)}})
+	}
+	writeJSON(w, http.StatusOK, results)
+}
+
+// downloadRemoteLyrics makes the lyrics of a search result the song's, as
+// Jellyfin saves those a provider downloads beside the song: they are kept
+// as the lyrics LRCLIB answered are, and no look-up replaces them (see
+// lyrics.Service.Choose). It answers them as the song's lyrics, or 404, as
+// Jellyfin, for an identifier none of LRCLIB's results has, lyrics LRCLIB
+// no longer has or could not give, and while lyrics from LRCLIB are
+// turned off.
+func (h *Handler) downloadRemoteLyrics(w http.ResponseWriter, r *http.Request) {
+	_, item, track, ok := h.lyricsItem(w, r)
+	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, []struct{}{})
+	found, err := h.Lyrics.Choose(r.Context(), item.ID, r.PathValue("lyricId"))
+	if errors.Is(err, lyrics.ErrNotFound) {
+		notFoundProblem(w)
+		return
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, lyricDto(item, track, found))
+}
+
+// deleteLyrics is the lyrics editor's removal of a song's lyrics, which
+// Jellyfin answers 204 whether it deleted a lyrics file or found none.
+// Polyfin removes the lyrics it keeps for the song, chosen or found, and
+// keeps the removal as the administrator's choice: no look-up gives the
+// song lyrics again, until others are chosen (see lyrics.Service.Remove).
+// A local song's own lyrics file is never touched, and shows again.
+func (h *Handler) deleteLyrics(w http.ResponseWriter, r *http.Request) {
+	_, item, _, ok := h.lyricsItem(w, r)
+	if !ok {
+		return
+	}
+	if err := h.Lyrics.Remove(r.Context(), item.ID); err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

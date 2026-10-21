@@ -252,6 +252,7 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			EnableContentDeletionFromFolders: []string{},
 			EnableContentDownloading:         user.ContentDownloading,
 			EnableSubtitleManagement:         user.SubtitleManagement,
+			EnableLyricManagement:            user.IsAdministrator, // see musicRoutes
 			EnableSyncTranscoding:            true,
 			EnableMediaConversion:            true,
 			EnabledDevices:                   []string{},

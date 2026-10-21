@@ -128,7 +128,8 @@ func TestLocalMusicFoldersPlayInJellyfinApps(t *testing.T) {
 // tracks in order; a song lists under each of its artists, the picture of
 // an artist's folder is theirs; a song's lyrics are those of its lyrics
 // file, else of its lyrics tag, before LRCLIB's, which is never asked
-// about it, and served with LRCLIB's lyrics turned off too.
+// about it, and served with LRCLIB's lyrics turned off too; lyrics an
+// administrator chooses replace them until they are removed.
 func TestLocalMusicPlaylistsArtistsAndLyrics(t *testing.T) {
 	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
@@ -139,6 +140,11 @@ func TestLocalMusicPlaylistsArtistsAndLyrics(t *testing.T) {
 	var mu sync.Mutex
 	asked := map[string]int{}
 	lrclib := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The search result an administrator chooses.
+		if r.URL.Path == "/api/get/7" {
+			_, _ = io.WriteString(w, `{"id": 7, "instrumental": false, "plainLyrics": "Chosen words", "syncedLyrics": null}`)
+			return
+		}
 		name := r.URL.Query().Get("track_name")
 		mu.Lock()
 		asked[name]++
@@ -281,4 +287,30 @@ func TestLocalMusicPlaylistsArtistsAndLyrics(t *testing.T) {
 	if status, _ := lines(songs.Items[2]); status != http.StatusNotFound {
 		t.Errorf("Online with LRCLIB off: %d", status)
 	}
+
+	// Lyrics an administrator chooses replace the song's own; removing
+	// them leaves its lyrics file as it is, and shows it again.
+	s.setting(t, func(settings *accounts.Settings) { settings.Lyrics = true })
+	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	admin := app("web", s.signIn("admin", "web"))
+	if status, body := s.call(http.MethodPost, "/Audio/"+filed.Id+"/RemoteSearch/Lyrics/5ef86bcecd71e4b91c950b94ebc1556e_7_plain", admin, nil); status != http.StatusOK {
+		t.Fatalf("choice: %d %s", status, body)
+	}
+	if status, got := lines(filed); status != http.StatusOK || len(got) != 1 || got[0].Text != "Chosen words" {
+		t.Errorf("Filed with lyrics chosen: %d %+v", status, got)
+	}
+	if status, body := s.call(http.MethodDelete, "/Audio/"+filed.Id+"/Lyrics", admin, nil); status != http.StatusNoContent {
+		t.Fatalf("removal: %d %s", status, body)
+	}
+	if status, got := lines(filed); status != http.StatusOK || len(got) != 2 || got[0].Text != "From the file" {
+		t.Errorf("Filed once the lyrics chosen are removed: %d %+v", status, got)
+	}
+	if content, err := os.ReadFile(filepath.Join(dir, "Tone Quartet/Sines/01 Filed.lrc")); err != nil || !bytes.Contains(content, []byte("From the file")) {
+		t.Errorf("the lyrics file: %v %q", err, content)
+	}
+	mu.Lock()
+	if asked["Filed"] != 0 {
+		t.Errorf("LRCLIB was asked about Filed: %v", asked)
+	}
+	mu.Unlock()
 }

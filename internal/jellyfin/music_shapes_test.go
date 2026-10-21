@@ -154,7 +154,8 @@ func TestMusicResponsesMatchJellyfin(t *testing.T) {
 	if status != http.StatusNotFound || !jsonHas(body, "title", "Not Found") {
 		t.Errorf("lyrics: %d %s", status, body)
 	}
-	if status, body := s.call(http.MethodGet, "/Audio/"+song+"/RemoteSearch/Lyrics", app("web", token), nil); status != http.StatusOK || string(body) != "[]\n" && string(body) != "[]" {
+	// The lyrics search is an administrator's (see TestLyricsSearch).
+	if status, body := s.call(http.MethodGet, "/Audio/"+song+"/RemoteSearch/Lyrics", app("web", token), nil); status != http.StatusForbidden || len(body) != 0 {
 		t.Errorf("remote lyrics: %d %s", status, body)
 	}
 
