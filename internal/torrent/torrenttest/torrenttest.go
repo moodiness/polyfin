@@ -158,11 +158,37 @@ type Peer struct {
 	delay       time.Duration
 	requests    int
 	cancels     int
+
+	// eager has the peer unchoke at once, before any INTERESTED; strict
+	// has it drop a REQUEST received before INTERESTED, as a strict
+	// client does. messages are the IDs of the messages received, in
+	// order.
+	eager, strict bool
+	messages      []byte
 }
 
 // Seed starts a seeder of t listening on host ("127.0.0.1" for most tests).
 func Seed(tb testing.TB, t *Torrent, host string) *Peer {
 	return start(tb, t, host, true)
+}
+
+// SeedUnchoked starts a seeder of t that unchokes whoever connects at once,
+// before any INTERESTED, as many clients do; strict, it drops the REQUESTs
+// received before INTERESTED, as a strict client does.
+func SeedUnchoked(tb testing.TB, t *Torrent, host string, strict bool) *Peer {
+	p := start(tb, t, host, true)
+	p.mu.Lock()
+	p.eager, p.strict = true, strict
+	p.mu.Unlock()
+	return p
+}
+
+// Messages lists the IDs of the messages the peer received, in order,
+// keep-alives aside.
+func (p *Peer) Messages() []byte {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.messages)
 }
 
 // Leech starts a leecher of t: it asks for every piece of whoever connects.
@@ -354,8 +380,12 @@ func (p *Peer) serve(conn net.Conn) {
 	}
 	_ = send(5, bits)
 	p.mu.Lock()
-	dhtPort := p.dhtPort
+	dhtPort, eager, strict := p.dhtPort, p.eager, p.strict
 	p.mu.Unlock()
+	if eager {
+		_ = send(1)
+	}
+	interested := false
 	if dhtPort != 0 {
 		_ = send(9, binary.BigEndian.AppendUint16(nil, dhtPort))
 	}
@@ -458,6 +488,9 @@ func (p *Peer) serve(conn net.Conn) {
 			return
 		}
 		payload := message[1:]
+		p.mu.Lock()
+		p.messages = append(p.messages, message[0])
+		p.mu.Unlock()
 		switch message[0] {
 		case 1:
 			unchoked = true
@@ -465,7 +498,10 @@ func (p *Peer) serve(conn net.Conn) {
 		case 0:
 			unchoked = false
 			clear(asked)
+		case 3:
+			interested = false
 		case 2:
+			interested = true
 			if p.seed {
 				_ = send(1)
 			}
@@ -480,7 +516,7 @@ func (p *Peer) serve(conn net.Conn) {
 			}
 			request()
 		case 6:
-			if !p.seed || len(payload) != 12 {
+			if !p.seed || len(payload) != 12 || strict && !interested {
 				continue
 			}
 			p.mu.Lock()

@@ -771,13 +771,28 @@ func (t *torrent) fill(p *peer) {
 		return
 	}
 	now := time.Now()
+	// The peer is told Polyfin is interested before it is asked anything,
+	// endgame duplicates included: a peer that unchoked first may drop a
+	// REQUEST from a peer that did not say it is interested. The endgame's
+	// pieces are among those wanted.
+	wanted := t.wanted()
+	wants := slices.ContainsFunc(wanted, func(index int) bool { return index < len(p.has) && p.has[index] })
+	if wants != p.interested {
+		p.interested = wants
+		if wants {
+			p.send(msgInterested)
+		} else {
+			p.send(msgNotInterested)
+		}
+	}
+	if !wants {
+		return
+	}
 	t.endgame(p, now)
-	wants := false
-	for _, index := range t.wanted() {
+	for _, index := range wanted {
 		if index >= len(p.has) || !p.has[index] {
 			continue
 		}
-		wants = true
 		if p.choked || len(p.requests) >= pipeline {
 			break
 		}
@@ -798,14 +813,6 @@ func (t *torrent) fill(p *peer) {
 				continue
 			}
 			t.ask(p, in, i, b, now)
-		}
-	}
-	if wants != p.interested {
-		p.interested = wants
-		if wants {
-			p.send(msgInterested)
-		} else {
-			p.send(msgNotInterested)
 		}
 	}
 }
