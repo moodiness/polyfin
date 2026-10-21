@@ -98,6 +98,13 @@ func newMetaAddon(t *testing.T) string {
 
 func newEnv(t *testing.T) env {
 	t.Helper()
+	return newEnvWith(t, newMetaAddon(t))
+}
+
+// newEnvWith is an environment whose server addons are those of
+// manifests, installed in their order.
+func newEnvWith(t *testing.T, manifests ...string) env {
+	t.Helper()
 	pool := migrated.New(t)
 	users, err := accounts.Open(t.Context(), pool)
 	if err != nil {
@@ -107,8 +114,10 @@ func newEnv(t *testing.T) env {
 	client := stremio.NewClient("test")
 	store := addons.New(pool, client)
 	lib := library.New(pool, store, client, logger, users.Settings)
-	if _, err := store.Install(t.Context(), addons.Shared(), newMetaAddon(t), false); err != nil {
-		t.Fatal(err)
+	for _, manifest := range manifests {
+		if _, err := store.Install(t.Context(), addons.Shared(), manifest, false); err != nil {
+			t.Fatal(err)
+		}
 	}
 	titles := &countedTitles{Service: lib}
 	service := New(pool, store, titles, logger, users.Settings, nil)

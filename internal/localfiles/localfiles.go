@@ -395,6 +395,15 @@ type Folder struct {
 	PrivateKeySet, PassphraseSet bool
 	HostKey, OfferedHostKey      string
 	PollMinutes                  *int
+	// SearchFailed counts the files left unmatched as their titles'
+	// searches failed, SearchAddon and SearchFailure telling the addon
+	// that failed most of them and why (see library.SearchFailure).
+	// SearchRetryAt is when the folder is scanned again to search them
+	// again, after SearchRetries failures in a row (see searchRetry).
+	SearchFailed               int
+	SearchAddon, SearchFailure string
+	SearchRetryAt              *time.Time
+	SearchRetries              int
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
@@ -717,7 +726,7 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	var password, hostKey, offeredKey string
 	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error, share_user, share_password, use_artwork, read_extras,
 			share_endpoint, share_region, share_remote, share_private_key <> '', share_passphrase <> '', share_host_key, share_offered_key,
-			poll_minutes,
+			poll_minutes, search_retry_at, search_retries,
 			(SELECT count(*) FROM local_extras WHERE addon_id = $1),
 			(SELECT count(*) FROM local_files WHERE addon_id = $1) + (SELECT count(*) FROM local_tracks WHERE addon_id = $1),
 			(SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL) +
@@ -728,7 +737,7 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND loudness IS NOT NULL)
 		FROM local_folders WHERE addon_id = $1`, id, loudness.Silence).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password,
 		&f.UseArtwork, &f.ReadExtras, &f.Endpoint, &f.Region, &f.Remote, &f.PrivateKeySet, &f.PassphraseSet, &hostKey, &offeredKey,
-		&f.PollMinutes, &f.Extras, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured)
+		&f.PollMinutes, &f.SearchRetryAt, &f.SearchRetries, &f.Extras, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured)
 	f.PasswordSet = password != ""
 	f.HostKey, f.OfferedHostKey = Fingerprint(hostKey), Fingerprint(offeredKey)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -755,6 +764,23 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 		case byLink:
 			f.MatchedBy.Link = count
 		}
+		return nil
+	})
+	if err != nil {
+		return Folder{}, err
+	}
+	// The addon that failed the most searches tells why.
+	rows, err = s.db.Query(ctx, `SELECT search_addon, search_failure, count(*) FROM local_files
+		WHERE addon_id = $1 AND reason = $2 GROUP BY 1, 2 ORDER BY 3 DESC, 1, 2`, id, reasonSearchFailed)
+	if err != nil {
+		return Folder{}, err
+	}
+	var failedAddon, failure string
+	_, err = pgx.ForEachRow(rows, []any{&failedAddon, &failure, &count}, func() error {
+		if f.SearchFailed == 0 {
+			f.SearchAddon, f.SearchFailure = failedAddon, failure
+		}
+		f.SearchFailed += count
 		return nil
 	})
 	if err != nil {

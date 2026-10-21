@@ -538,6 +538,9 @@ func (s *Service) SetEpisodes(ctx context.Context, id accounts.ID, changes []Epi
 		if err := s.store(ctx, id, folder.Kind, entries, m); err != nil {
 			return err
 		}
+		if err := s.retryLater(ctx, id, m); err != nil {
+			return err
+		}
 	}
 	return nil
 }

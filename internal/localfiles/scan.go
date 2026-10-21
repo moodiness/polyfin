@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -24,6 +25,22 @@ import (
 // ScanCheck is how often the folders due for a scan are looked for (see
 // ScanDue).
 const ScanCheck = 10 * time.Minute
+
+// searchRetry is how long after its scan a folder some of whose titles'
+// searches failed n times in a row before is scanned again, to search them
+// again: firstSearchRetry, doubled after each failure, at most
+// maxSearchRetry. The scans due look for it every ScanCheck.
+func searchRetry(n int) time.Duration {
+	if n >= 7 {
+		return maxSearchRetry
+	}
+	return min(firstSearchRetry<<n, maxSearchRetry)
+}
+
+const (
+	firstSearchRetry = 5 * time.Minute
+	maxSearchRetry   = 6 * time.Hour
+)
 
 // The failures of a folder's scan, its Error.
 const (
@@ -284,9 +301,10 @@ func (s *Service) Scan(ctx context.Context, id accounts.ID) error {
 }
 
 // ScanDue scans, one after the other, the enabled folders not scanned
-// since the server started, and those whose last scan is LocalScanHours
-// old; all scans every folder. A folder that cannot be read is no failure
-// of the run: it is reported on the folder.
+// since the server started, those whose last scan is LocalScanHours old,
+// and those whose titles' searches failed once their retry is due (see
+// searchRetry); all scans every folder. A folder that cannot be read is
+// no failure of the run: it is reported on the folder.
 func (s *Service) ScanDue(ctx context.Context, all bool) error {
 	installed, err := s.addons.Addons(ctx, addons.Shared())
 	if err != nil {
@@ -312,17 +330,18 @@ func (s *Service) ScanDue(ctx context.Context, all bool) error {
 		scanned := s.scanned[addon.ID]
 		s.mu.Unlock()
 		if !all && scanned {
-			if hours == 0 {
-				continue
-			}
-			var checked *time.Time
-			if err := s.db.QueryRow(ctx, "SELECT checked_at FROM local_folders WHERE addon_id = $1", addon.ID).Scan(&checked); err != nil {
+			var checked, retry *time.Time
+			if err := s.db.QueryRow(ctx, "SELECT checked_at, search_retry_at FROM local_folders WHERE addon_id = $1", addon.ID).
+				Scan(&checked, &retry); err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
 					continue
 				}
 				return err
 			}
-			if checked != nil && s.now().Sub(*checked) < time.Duration(hours)*time.Hour {
+			now := s.now()
+			retrying := retry != nil && !now.Before(*retry)
+			stale := hours > 0 && (checked == nil || now.Sub(*checked) >= time.Duration(hours)*time.Hour)
+			if !retrying && !stale {
 				continue
 			}
 		}
@@ -334,6 +353,39 @@ func (s *Service) ScanDue(ctx context.Context, all bool) error {
 		}
 	}
 	return nil
+}
+
+// searchesDone tells, once a scan matched a folder's units, how their
+// searches went: when files were left unmatched as their searches failed,
+// the log tells it once, and the folder is scanned again after
+// searchRetry, or after the longest wait an addon asked for when longer;
+// else it is not any more.
+func (s *Service) searchesDone(ctx context.Context, folder Folder, done *searches, files int) error {
+	if done.failed == 0 {
+		if folder.SearchRetryAt == nil && folder.SearchRetries == 0 {
+			return nil
+		}
+		_, err := s.db.Exec(ctx, "UPDATE local_folders SET search_retry_at = NULL, search_retries = 0 WHERE addon_id = $1", folder.Addon.ID)
+		return err
+	}
+	retry := s.now().Add(max(searchRetry(folder.SearchRetries), done.wait))
+	s.logger.Warn("The metadata addons could not search the titles of a local folder's files", "folder", folder.Addon.Manifest.Name,
+		"files", files, "addon", done.first.Addon, "failure", done.first.Failure, "error", done.first.Err, "retry", retry)
+	_, err := s.db.Exec(ctx, "UPDATE local_folders SET search_retry_at = $2, search_retries = search_retries + 1 WHERE addon_id = $1",
+		folder.Addon.ID, retry)
+	return err
+}
+
+// retryLater has a folder scanned again after searchRetry, unless it is
+// already to be: m is the match of one of its units outside a scan (see
+// rematch), whose search failed.
+func (s *Service) retryLater(ctx context.Context, id accounts.ID, m match) error {
+	if m.reason != reasonSearchFailed {
+		return nil
+	}
+	_, err := s.db.Exec(ctx, `UPDATE local_folders SET search_retry_at = $2, search_retries = 1
+		WHERE addon_id = $1 AND search_retry_at IS NULL`, id, s.now().Add(searchRetry(0)))
+	return err
 }
 
 // stored is a file a scan found before, the identifier its unit's NFO
@@ -514,6 +566,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(s.workers)
 	searches := newSearches()
+	var failedFiles atomic.Int64
 	for unit, entries := range units {
 		group.Go(func() error {
 			// A unit matched already, a show gaining an episode or a file
@@ -529,10 +582,16 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 					return err
 				}
 			}
+			if m.reason == reasonSearchFailed {
+				failedFiles.Add(int64(len(entries)))
+			}
 			return s.store(groupCtx, id, folder.Kind, entries, m)
 		})
 	}
 	if err := group.Wait(); err != nil {
+		return err
+	}
+	if err := s.searchesDone(ctx, folder, searches, int(failedFiles.Load())); err != nil {
 		return err
 	}
 	videos := entries
@@ -822,13 +881,13 @@ func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entrie
 			heightValue = &height
 		}
 		batch.Queue(`INSERT INTO local_files (addon_id, path, size, modified, unit, title, year, season, episode, last_episode, height,
-				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason, nfo_id, length)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason, nfo_id, length, search_addon, search_failure)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
 			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, unit = $5, title = $6, year = $7, season = $8, episode = $9,
 				last_episode = $10, height = $11, stremio_id = $12, imdb_id = $13, tmdb_id = $14, name = $15, poster = $16, title_year = $17,
-				matched_by = $18, reason = $19, nfo_id = $20, length = $21`,
+				matched_by = $18, reason = $19, nfo_id = $20, length = $21, search_addon = $22, search_failure = $23`,
 			id, e.path, e.file.size, e.file.modified, e.unit, e.title.title, year, season, episode, last, heightValue,
-			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason, e.nfo, length)
+			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason, e.nfo, length, f.searchAddon, f.searchFailure)
 	}
 	return s.db.SendBatch(ctx, batch).Close()
 }

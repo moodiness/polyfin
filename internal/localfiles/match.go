@@ -32,7 +32,8 @@ const (
 	reasonAmbiguous = "ambiguous"
 	// reasonOtherYear: they know titles of its name, of other years.
 	reasonOtherYear = "other_year"
-	// reasonSearchFailed: the search failed.
+	// reasonSearchFailed: the search failed, at least that of the addon
+	// the file tells (see match), and found no title of its name.
 	reasonSearchFailed = "search_failed"
 	// reasonDiscTitle: it is a disc's title other than its main one, which
 	// the disc folder's name does not tell (see titleUnit).
@@ -68,20 +69,33 @@ var imdbPattern = regexp.MustCompile(`^tt\d{1,12}$`)
 
 // match is the title a unit was matched to: its Stremio identifier, its
 // IMDb and TMDB identifiers, name, poster and year, and how it was found;
-// or, without identifier, why none was.
+// or, without identifier, why none was, and for a failed search the addon
+// that failed it and why, as library.SearchFailure tells it.
 type match struct {
-	stremioID, imdb, tmdb string
-	name, poster          string
-	year                  int
-	by                    string
-	reason                string
+	stremioID, imdb, tmdb      string
+	name, poster               string
+	year                       int
+	by                         string
+	reason                     string
+	searchAddon, searchFailure string
 }
 
 // searches keeps a scan's searches, so that files of the same name ask
-// once.
+// once, and what failed (see fail). A search an addon answered "too many
+// requests" waits, with every search of the scan, as long as the addon
+// asks, at most maxRateWait, or rateWait doubled at each try when it does
+// not say, and is tried again, rateTries times at most.
 type searches struct {
 	mu      sync.Mutex
 	results map[string]*search
+	// resume is when the scan's searches may ask again.
+	resume time.Time
+	// failed counts the units whose search failed, first tells the first
+	// failure, and wait is the longest wait an addon asked for, which the
+	// next try of the folder waits at least (see searchRetry).
+	failed int
+	first  library.SearchFailure
+	wait   time.Duration
 }
 
 type search struct {
@@ -90,10 +104,18 @@ type search struct {
 	err     error
 }
 
+// How a scan's searches wait out the addons' rate limits (see searches).
+const (
+	rateTries   = 3
+	rateWait    = time.Second
+	maxRateWait = time.Minute
+)
+
 func newSearches() *searches { return &searches{results: map[string]*search{}} }
 
 // find searches the metadata addons for titles of kind named title, once
-// per scan.
+// per scan. Like library.RemoteSearch, it may answer the titles some
+// addons found with the *library.SearchError of the others.
 func (c *searches) find(ctx context.Context, titles Titles, kind library.Kind, title string) ([]library.RemoteResult, error) {
 	key := string(kind) + "|" + fold(title)
 	c.mu.Lock()
@@ -104,7 +126,7 @@ func (c *searches) find(ctx context.Context, titles Titles, kind library.Kind, t
 	}
 	c.mu.Unlock()
 	if !ok {
-		found.results, found.err = titles.RemoteSearch(ctx, kind, title, searchLimit)
+		found.results, found.err = c.search(ctx, titles, kind, title)
 		close(found.done)
 	}
 	select {
@@ -113,6 +135,75 @@ func (c *searches) find(ctx context.Context, titles Titles, kind library.Kind, t
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// search searches titles, waiting out the addons' rate limits.
+func (c *searches) search(ctx context.Context, titles Titles, kind library.Kind, title string) ([]library.RemoteResult, error) {
+	for try := 0; ; try++ {
+		c.mu.Lock()
+		resume := c.resume
+		c.mu.Unlock()
+		if wait := time.Until(resume); wait > 0 {
+			timer := time.NewTimer(wait)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			}
+		}
+		results, err := titles.RemoteSearch(ctx, kind, title, searchLimit)
+		wait, limited := rateLimited(err)
+		c.mu.Lock()
+		c.wait = max(c.wait, wait)
+		c.mu.Unlock()
+		if !limited || try == rateTries || wait > maxRateWait {
+			return results, err
+		}
+		if wait == 0 {
+			wait = rateWait << try
+		}
+		c.mu.Lock()
+		if until := time.Now().Add(wait); until.After(c.resume) {
+			c.resume = until
+		}
+		c.mu.Unlock()
+	}
+}
+
+// rateLimited reports whether an addon answered a search "too many
+// requests", with the longest wait those that did asked for, 0 when none
+// said.
+func rateLimited(err error) (wait time.Duration, limited bool) {
+	failed, ok := errors.AsType[*library.SearchError](err)
+	if !ok {
+		return 0, false
+	}
+	for _, f := range failed.Failures {
+		if f.Failure == stremio.FailureRateLimited {
+			limited = true
+			if asked, ok := stremio.RetryAfter(f.Err); ok {
+				wait = max(wait, asked)
+			}
+		}
+	}
+	return wait, limited
+}
+
+// fail counts a unit whose search failed with err, and returns its match:
+// unmatched, telling the first addon that failed and why.
+func (c *searches) fail(err error) match {
+	f := library.SearchFailure{Failure: library.SearchFailed, Err: err}
+	if failed, ok := errors.AsType[*library.SearchError](err); ok && len(failed.Failures) > 0 {
+		f = failed.Failures[0]
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.failed++
+	if c.failed == 1 {
+		c.first = f
+	}
+	return match{reason: reasonSearchFailed, searchAddon: f.Addon, searchFailure: f.Failure}
 }
 
 // titleKind is the library kind of a folder's titles.
@@ -152,14 +243,16 @@ func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link stri
 		return match{reason: reasonUnreadableName}, nil
 	}
 	results, err := cache.find(ctx, s.titles, titleKind(kind), n.title)
-	if err != nil {
-		if ctx.Err() != nil {
-			return match{}, ctx.Err()
-		}
-		s.logger.Debug("The metadata addons could not search a local file's title", "title", n.title, "error", err)
-		return match{reason: reasonSearchFailed}, nil
+	if err != nil && ctx.Err() != nil {
+		return match{}, ctx.Err()
 	}
-	return chooseResult(kind, n, results), nil
+	// A title none of the addons that answered knows may be one an addon
+	// that failed knows.
+	m := chooseResult(kind, n, results)
+	if err != nil && (m.reason == reasonNotFound || m.reason == reasonOtherYear) {
+		return cache.fail(err), nil
+	}
+	return m, nil
 }
 
 // chooseResult keeps the one title of results of the name and kind of n,
@@ -357,8 +450,10 @@ func (s *Service) unitFiles(ctx context.Context, folder Folder, unit string) ([]
 // kind, as a scan looks a file's name up, for an administrator to link one
 // of its units to (see Link). It answers the titles a link can name, those
 // with an IMDb identifier, each once, those of year first when year is
-// given, at most maxCandidates. A home videos folder, whose titles are its
-// own, asks no metadata addon: it answers addons.ErrNotFound.
+// given, at most maxCandidates: those the addons that answered found when
+// others failed, ErrSearchFailed when none found any. A home videos
+// folder, whose titles are its own, asks no metadata addon: it answers
+// addons.ErrNotFound.
 func (s *Service) Search(ctx context.Context, id accounts.ID, query string, year int) ([]library.Item, error) {
 	folder, err := s.Folder(ctx, id)
 	if err != nil {
@@ -369,7 +464,7 @@ func (s *Service) Search(ctx context.Context, id accounts.ID, query string, year
 	}
 	kind := titleKind(folder.Kind)
 	results, err := s.titles.RemoteSearch(ctx, kind, query, searchLimit)
-	if err != nil {
+	if err != nil && len(results) == 0 {
 		return nil, fmt.Errorf("%w: %w", ErrSearchFailed, err)
 	}
 	items := []library.Item{}
@@ -461,27 +556,33 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 		return err
 	}
 	defer s.artworkChanged()
-	return s.store(ctx, folder.Addon.ID, folder.Kind, entries, m)
+	if err := s.store(ctx, folder.Addon.ID, folder.Kind, entries, m); err != nil {
+		return err
+	}
+	return s.retryLater(ctx, folder.Addon.ID, m)
 }
 
 // Unmatched is a file of a folder no title was matched to: its path, the
-// unit a link would link (see Link), what its name tells, and why. Disc
-// is the kind of the disc whose entry the file is (DiscBluRay, DiscDVD),
-// its unit the disc's folder, or one of its titles' (see titleUnit), or
-// of the disc image it is (DiscDVDImage, DiscBluRayImage); empty for any
-// other file. A title of a show's disc has the kind of its disc, its unit
-// its show's folder, and DiscTitle telling which it is. In a music folder,
-// it is a track whose tags and names give no title ("no_title") or no
-// album ("no_album"), which no link links.
+// unit a link would link (see Link), what its name tells, and why, with,
+// for a failed search, the addon that failed it and why (see
+// library.SearchFailure). Disc is the kind of the disc whose entry the
+// file is (DiscBluRay, DiscDVD), its unit the disc's folder, or one of its
+// titles' (see titleUnit), or of the disc image it is (DiscDVDImage,
+// DiscBluRayImage); empty for any other file. A title of a show's disc has
+// the kind of its disc, its unit its show's folder, and DiscTitle telling
+// which it is. In a music folder, it is a track whose tags and names give
+// no title ("no_title") or no album ("no_album"), which no link links.
 type Unmatched struct {
-	Path      string
-	Unit      string
-	Title     string
-	Year      int
-	Size      int64
-	Reason    string
-	Disc      string
-	DiscTitle *DiscTitle
+	Path          string
+	Unit          string
+	Title         string
+	Year          int
+	Size          int64
+	Reason        string
+	SearchAddon   string
+	SearchFailure string
+	Disc          string
+	DiscTitle     *DiscTitle
 }
 
 // maxUnmatched bounds the unmatched files listed at once.
@@ -495,11 +596,12 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 	if err != nil {
 		return nil, 0, err
 	}
-	query := `SELECT f.path, f.unit, f.title, coalesce(f.year, 0), f.size, f.reason, coalesce(i.kind, '') AS image FROM local_files f
+	query := `SELECT f.path, f.unit, f.title, coalesce(f.year, 0), f.size, f.reason, f.search_addon, f.search_failure,
+			coalesce(i.kind, '') AS image FROM local_files f
 		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = regexp_replace(f.path, '#[0-9]+$', '')
 		WHERE f.addon_id = $1 AND f.stremio_id IS NULL`
 	if folder.Kind == KindMusic {
-		query = `SELECT path, path, title, year, size, reason, '' AS image FROM local_tracks WHERE addon_id = $1 AND reason <> ''`
+		query = `SELECT path, path, title, year, size, reason, '', '', '' AS image FROM local_tracks WHERE addon_id = $1 AND reason <> ''`
 	}
 	var total int
 	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM ("+query+") u", id).Scan(&total); err != nil {
@@ -512,7 +614,7 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Unmatched, error) {
 		var u Unmatched
 		var image string
-		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason, &image)
+		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason, &u.SearchAddon, &u.SearchFailure, &image)
 		u.Disc = imageKind(image)
 		if kind, disc, ok := discEntry(u.Path); ok && folder.Kind == KindMovies {
 			_, number, playlist := discPlaylist(u.Path)
