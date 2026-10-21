@@ -128,12 +128,14 @@ type lookup struct {
 
 // answer is what LRCLIB said of a track, as kept: the kind of answer, the
 // lyrics of synced and plain answers (LRC text for synced ones), when
-// LRCLIB was asked, and whether an administrator chose them (see Choose).
+// LRCLIB was asked, whether an administrator chose them (see Choose), and
+// whether they were uploaded rather than found on LRCLIB (see Upload).
 type answer struct {
-	kind   string
-	lyrics string
-	at     time.Time
-	chosen bool
+	kind     string
+	lyrics   string
+	at       time.Time
+	chosen   bool
+	uploaded bool
 }
 
 // New returns a service asking LRCLIB at base, and keeping its answers in
@@ -164,12 +166,18 @@ func (s *Service) on() bool {
 // comes later is kept for the next request. A track without lyrics, an
 // instrumental, one LRCLIB does not know or could not be asked about, or
 // one without an artist or title, has none, as do all tracks while the
-// settings turn lyrics off.
+// settings turn lyrics off, but those whose lyrics were uploaded.
 func (s *Service) Lyrics(ctx context.Context, track Track, wait time.Duration) (Lyrics, bool) {
-	if !s.on() {
+	if s == nil {
 		return Lyrics{}, false
 	}
 	kept, ok := s.load(ctx, track.ID)
+	if !s.on() {
+		if !ok || !kept.uploaded {
+			return Lyrics{}, false
+		}
+		return kept.parse()
+	}
 	if !ok || s.due(kept) {
 		if l := s.ask(track); l != nil && wait > 0 {
 			timer := time.NewTimer(wait)
@@ -205,13 +213,14 @@ func (s *Service) LookUp(track Track) {
 }
 
 // Known reports which of the tracks ids have lyrics, as LRCLIB gave them
-// when it was asked about them; none while the settings turn lyrics off.
-// It never asks LRCLIB.
+// when it was asked about them, or as they were uploaded; only uploaded
+// ones while the settings turn lyrics off. It never asks LRCLIB.
 func (s *Service) Known(ctx context.Context, ids []accounts.ID) map[accounts.ID]bool {
-	if !s.on() || len(ids) == 0 {
+	if s == nil || len(ids) == 0 {
 		return nil
 	}
-	rows, err := s.db.Query(ctx, "SELECT item_id FROM track_lyrics WHERE item_id = ANY($1) AND kind IN ('synced', 'plain')", ids)
+	rows, err := s.db.Query(ctx, "SELECT item_id FROM track_lyrics WHERE item_id = ANY($1) AND kind IN ('synced', 'plain') AND (uploaded OR $2)",
+		ids, s.on())
 	if err == nil {
 		var found []accounts.ID
 		if found, err = pgx.CollectRows(rows, pgx.RowTo[accounts.ID]); err == nil {
@@ -232,8 +241,8 @@ func (s *Service) Known(ctx context.Context, ids []accounts.ID) map[accounts.ID]
 // when it was not, or the database cannot be read.
 func (s *Service) load(ctx context.Context, id accounts.ID) (answer, bool) {
 	var kept answer
-	err := s.db.QueryRow(ctx, "SELECT kind, lyrics, looked_up_at, chosen FROM track_lyrics WHERE item_id = $1", id).
-		Scan(&kept.kind, &kept.lyrics, &kept.at, &kept.chosen)
+	err := s.db.QueryRow(ctx, "SELECT kind, lyrics, looked_up_at, chosen, uploaded FROM track_lyrics WHERE item_id = $1", id).
+		Scan(&kept.kind, &kept.lyrics, &kept.at, &kept.chosen, &kept.uploaded)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Warn("Reading a track's lyrics failed", "error", err)

@@ -224,42 +224,48 @@ func (s *Service) Choose(ctx context.Context, track accounts.ID, id string) (Lyr
 		return Lyrics{}, ErrNotFound
 	}
 	lyrics, _ := kept.parse()
-	_, err = s.db.Exec(ctx, `INSERT INTO track_lyrics (item_id, kind, lyrics, looked_up_at, chosen) VALUES ($1, $2, $3, $4, true)
-		ON CONFLICT (item_id) DO UPDATE SET kind = excluded.kind, lyrics = excluded.lyrics, looked_up_at = excluded.looked_up_at, chosen = true`,
-		track, kept.kind, kept.lyrics, s.now())
-	if err != nil {
+	if err := s.keep(ctx, track, kept.kind, kept.lyrics, false); err != nil {
 		return Lyrics{}, fmt.Errorf("save the lyrics chosen: %w", err)
 	}
 	s.logger.Info("Lyrics were chosen for a track", "track", track, "synced", synced)
 	return lyrics, nil
 }
 
+// keep keeps lyrics of kind as an administrator's choice for a track,
+// uploaded or chosen among LRCLIB's results, in place of what was kept.
+func (s *Service) keep(ctx context.Context, track accounts.ID, kind, text string, uploaded bool) error {
+	_, err := s.db.Exec(ctx, `INSERT INTO track_lyrics (item_id, kind, lyrics, looked_up_at, chosen, uploaded) VALUES ($1, $2, $3, $4, true, $5)
+		ON CONFLICT (item_id) DO UPDATE SET kind = excluded.kind, lyrics = excluded.lyrics, looked_up_at = excluded.looked_up_at,
+		chosen = true, uploaded = excluded.uploaded`,
+		track, kind, text, s.now(), uploaded)
+	return err
+}
+
 // Chosen returns the lyrics an administrator chose for a track, while the
-// settings turn lyrics on. It never asks LRCLIB.
+// settings turn lyrics on, or uploaded for it, whatever they say. It never
+// asks LRCLIB.
 func (s *Service) Chosen(ctx context.Context, track accounts.ID) (Lyrics, bool) {
-	if !s.on() {
+	if s == nil {
 		return Lyrics{}, false
 	}
 	kept, ok := s.load(ctx, track)
-	if !ok || !kept.chosen {
+	if !ok || !kept.chosen || !kept.uploaded && !s.on() {
 		return Lyrics{}, false
 	}
 	return kept.parse()
 }
 
-// Remove forgets the lyrics kept for a track, chosen or found, and keeps
-// their removal as an administrator's choice: no look-up gives the track
-// lyrics again, until lyrics are chosen for it (see Choose). Its own
-// lyrics, those of a local music folder, are not Polyfin's to remove. It
-// never asks LRCLIB, and removes whether lyrics are turned on or not.
+// Remove forgets the lyrics kept for a track, chosen, uploaded or found,
+// and keeps their removal as an administrator's choice: no look-up gives
+// the track lyrics again, until lyrics are chosen or uploaded for it (see
+// Choose and Upload). Its own lyrics, those of a local music folder, are
+// not Polyfin's to remove. It never asks LRCLIB, and removes whether
+// lyrics are turned on or not.
 func (s *Service) Remove(ctx context.Context, track accounts.ID) error {
 	if s == nil {
 		return nil
 	}
-	_, err := s.db.Exec(ctx, `INSERT INTO track_lyrics (item_id, kind, lyrics, looked_up_at, chosen) VALUES ($1, $2, '', $3, true)
-		ON CONFLICT (item_id) DO UPDATE SET kind = excluded.kind, lyrics = '', looked_up_at = excluded.looked_up_at, chosen = true`,
-		track, kindRemoved, s.now())
-	if err != nil {
+	if err := s.keep(ctx, track, kindRemoved, "", false); err != nil {
 		return fmt.Errorf("remove a track's lyrics: %w", err)
 	}
 	s.logger.Info("Lyrics were removed from a track", "track", track)
