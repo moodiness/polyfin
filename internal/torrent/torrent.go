@@ -97,6 +97,8 @@ type torrent struct {
 	// tells whether it is private, dialed once it is not.
 	flags      map[netip.AddrPort]byte
 	pexWaiting []netip.AddrPort
+	// stopLookup stops the DHT lookup running, nil when none runs.
+	stopLookup context.CancelFunc
 }
 
 // inflightPiece is a piece being downloaded: its bytes, the blocks
@@ -464,13 +466,18 @@ func (t *torrent) announced(event string) announce {
 
 // lookup looks the torrent's peers up on the DHT while it runs, when the
 // route carries UDP and its sources ask for it or name no tracker, from
-// the nodes they name and the engine's bootstrap nodes.
+// the nodes they name and the engine's bootstrap nodes. It ends once the
+// torrent's info tells it is private (BEP 27).
 func (t *torrent) lookup() {
 	defer t.recovered("DHT lookup", nil)
 	for {
 		t.mu.Lock()
+		private := t.private()
 		on, starts := t.usesDHT(), slices.Concat(t.nodes, t.engine.config.Bootstrap)
 		t.mu.Unlock()
+		if private {
+			return
+		}
 		wait := dhtAgain
 		if on && len(starts) > 0 && t.lookupOnce(starts) {
 			wait = dhtEvery
@@ -489,7 +496,8 @@ func (t *torrent) lookup() {
 // socket of the route; false when the route opens none, or the lookup
 // found no peer: a node's answer lost or later than dhtWait, as a
 // datagram may be, would otherwise keep the torrent off the DHT for
-// dhtEvery, past the wait for its start.
+// dhtEvery, past the wait for its start. The lookup stops as soon as the
+// torrent's info tells it is private.
 func (t *torrent) lookupOnce(starts []string) bool {
 	conn, err := t.route.ListenPacket(t.ctx)
 	if err != nil {
@@ -499,8 +507,18 @@ func (t *torrent) lookupOnce(starts []string) bool {
 	ctx, cancel := context.WithTimeout(t.ctx, 2*time.Minute)
 	defer cancel()
 	t.mu.Lock()
+	if !t.usesDHT() {
+		t.mu.Unlock()
+		return true
+	}
 	t.looked = true
+	t.stopLookup = cancel
 	t.mu.Unlock()
+	defer func() {
+		t.mu.Lock()
+		t.stopLookup = nil
+		t.mu.Unlock()
+	}()
 	found := false
 	_ = lookupPeers(ctx, conn, t.hash, starts, func(peers []netip.AddrPort) {
 		found = true
@@ -511,9 +529,16 @@ func (t *torrent) lookupOnce(starts []string) bool {
 
 // usesDHT reports whether the torrent is looked up on the DHT: its route
 // carries UDP, and its sources ask for it or name no tracker, the DHT
-// being then the only way to its peers. The lock is held.
+// being then the only way to its peers, and it is not private. The lock
+// is held.
 func (t *torrent) usesDHT() bool {
-	return t.udp && (t.dht || len(t.trackers) == 0)
+	return t.udp && (t.dht || len(t.trackers) == 0) && !t.private()
+}
+
+// private reports whether the torrent's info is known and tells it is
+// private (BEP 27): no DHT, no peer exchange. The lock is held.
+func (t *torrent) private() bool {
+	return t.info != nil && t.info.Private
 }
 
 // handle reads a peer's message. Its locks are released by defer, so that
@@ -1024,6 +1049,10 @@ func (t *torrent) receivedMetadata(index int64, data []byte) {
 		t.fill(p)
 	}
 	t.queuePEX()
+	if info.Private && t.stopLookup != nil {
+		// A private torrent is not looked up on the DHT.
+		t.stopLookup()
+	}
 	t.signal()
 }
 

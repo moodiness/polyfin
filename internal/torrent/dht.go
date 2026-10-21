@@ -33,7 +33,8 @@ type dhtNode struct {
 }
 
 // lookupPeers looks hash up on the DHT from the nodes starts, and sends the
-// peers found to found until the lookup ends or ctx is done.
+// peers found to found until the lookup ends or ctx is done: then no query
+// is sent, and the answer awaited is given up at once.
 func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []string, found func([]netip.AddrPort)) error {
 	if len(starts) == 0 {
 		return errors.New("no DHT node to start from")
@@ -49,6 +50,8 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 			nodes = append(nodes, &dhtNode{address: address})
 		}
 	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.SetReadDeadline(time.Now()) })
+	defer stop()
 	pending := map[string]*dhtNode{}
 	sent := 0
 	var txid uint16
@@ -65,6 +68,9 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 			}
 			if next == nil {
 				break
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
 			next.asked = true
 			txid++
@@ -85,6 +91,10 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 			deadline = d
 		}
 		_ = conn.SetReadDeadline(deadline)
+		// Checked once the deadline is set: a ctx done later sets it to now.
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		n, from, err := conn.ReadFrom(buffer)
 		if ctx.Err() != nil {
 			return ctx.Err()

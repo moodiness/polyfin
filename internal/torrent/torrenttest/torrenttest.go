@@ -716,6 +716,11 @@ type DHTNode struct {
 	mu      sync.Mutex
 	queries int
 	drop    int
+	// released, once Hold is called, holds the answers until it is
+	// closed; nodes are the nodes the answers tell.
+	released    chan struct{}
+	releaseOnce sync.Once
+	nodes       []netip.AddrPort
 }
 
 // StartDHTNode starts a DHT node listing peers for any info hash.
@@ -749,6 +754,7 @@ func StartDHTNode(tb testing.TB, peers ...netip.AddrPort) *DHTNode {
 			if dropped {
 				d.drop--
 			}
+			released, nodes := d.released, d.nodes
 			d.mu.Unlock()
 			if dropped {
 				continue
@@ -757,12 +763,49 @@ func StartDHTNode(tb testing.TB, peers ...netip.AddrPort) *DHTNode {
 			for _, peer := range d.peers {
 				values = append(values, string(binary.BigEndian.AppendUint16(peer.Addr().AsSlice(), peer.Port())))
 			}
+			var compactNodes []byte
+			for k, node := range nodes {
+				id := bytes.Repeat([]byte{byte(k + 1)}, 20)
+				compactNodes = binary.BigEndian.AppendUint16(append(append(compactNodes, id...), node.Addr().AsSlice()...), node.Port())
+			}
 			reply := encode(map[string]any{"t": txid, "y": "r", "r": map[string]any{"id": string(make([]byte, 20)), "token": "tk",
-				"values": values}})
-			_, _ = conn.WriteToUDPAddrPort(reply, from)
+				"values": values, "nodes": compactNodes}})
+			if released == nil {
+				_, _ = conn.WriteToUDPAddrPort(reply, from)
+				continue
+			}
+			go func() {
+				<-released
+				_, _ = conn.WriteToUDPAddrPort(reply, from)
+			}()
 		}
 	}()
+	tb.Cleanup(d.Release)
 	return d
+}
+
+// Hold has the node hold its answers until Release.
+func (d *DHTNode) Hold() {
+	d.mu.Lock()
+	d.released = make(chan struct{})
+	d.mu.Unlock()
+}
+
+// Release sends the answers held, and those asked next at once.
+func (d *DHTNode) Release() {
+	d.mu.Lock()
+	released := d.released
+	d.mu.Unlock()
+	if released != nil {
+		d.releaseOnce.Do(func() { close(released) })
+	}
+}
+
+// TellNodes has the node's answers tell nodes, which a lookup asks next.
+func (d *DHTNode) TellNodes(nodes ...netip.AddrPort) {
+	d.mu.Lock()
+	d.nodes = slices.Clone(nodes)
+	d.mu.Unlock()
 }
 
 // Address is the node's address.
