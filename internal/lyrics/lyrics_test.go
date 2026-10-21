@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -26,7 +27,8 @@ const syncedLRC = "[ar:Tone Quartet]\n[00:01.50] First line\n[00:03.05]Second li
 // plain lyrics, plain lyrics only, an instrumental, an unknown track, a
 // track it fails on while failing is set (or limits with a Retry-After
 // while limiting is set), and one it answers once release is closed. It
-// counts the requests for each track and keeps the last query and
+// answers its search and its tracks by identifier too (see answerSearch).
+// It counts the requests for each track and keeps the last query and
 // User-Agent.
 type fakeLRCLIB struct {
 	server    *httptest.Server
@@ -43,7 +45,14 @@ func newFakeLRCLIB(t *testing.T) *fakeLRCLIB {
 	t.Helper()
 	f := &fakeLRCLIB{asked: map[string]int{}, release: make(chan struct{})}
 	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/get" {
+		switch {
+		case r.URL.Path == "/api/search":
+			f.answerSearch(w, r)
+			return
+		case strings.HasPrefix(r.URL.Path, "/api/get/"):
+			f.answerID(w, r)
+			return
+		case r.URL.Path != "/api/get":
 			http.NotFound(w, r)
 			return
 		}
