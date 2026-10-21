@@ -3,8 +3,10 @@ package jellyfin
 import (
 	"cmp"
 	"errors"
+	"io"
 	"math/rand/v2"
 	"net/http"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -34,11 +36,11 @@ func (h *Handler) musicRoutes(rt *router) {
 	// on a Jellyfin server whose music has no genre tags.
 	signedIn(http.MethodGet, "/MusicGenres", h.emptyQueryResult)
 	signedIn(http.MethodGet, "/Audio/{itemId}/Lyrics", h.lyrics)
-	// Jellyfin keeps the lyrics search, its downloads and the removal of
-	// lyrics to users who may manage lyrics, and to API keys. Polyfin,
-	// without that permission, keeps them to administrators, API keys
-	// among them, to whom jellyfin-web shows its lyrics editor; others get
-	// an empty 403 before anything is read, as on Jellyfin.
+	// Jellyfin keeps the lyrics search, its downloads, and the upload and
+	// removal of lyrics to users who may manage lyrics, and to API keys.
+	// Polyfin, without that permission, keeps them to administrators, API
+	// keys among them, to whom jellyfin-web shows its lyrics editor; others
+	// get an empty 403 before anything is read, as on Jellyfin.
 	lyricsManager := func(method, pattern string, handler http.HandlerFunc) {
 		signedIn(method, pattern, func(w http.ResponseWriter, r *http.Request) {
 			if !callerFrom(r.Context()).User.IsAdministrator {
@@ -51,6 +53,7 @@ func (h *Handler) musicRoutes(rt *router) {
 	lyricsManager(http.MethodGet, "/Audio/{itemId}/RemoteSearch/Lyrics", h.remoteLyrics)
 	lyricsManager(http.MethodPost, "/Audio/{itemId}/RemoteSearch/Lyrics/{lyricId}", h.downloadRemoteLyrics)
 	lyricsManager(http.MethodDelete, "/Audio/{itemId}/Lyrics", h.deleteLyrics)
+	lyricsManager(http.MethodPost, "/Audio/{itemId}/Lyrics", h.uploadLyrics)
 }
 
 // credits names artists as Jellyfin lists them with their items.
@@ -533,16 +536,16 @@ func (h *Handler) lookUpLyrics(item library.Item) {
 
 // lyrics answers a track's lyrics as Jellyfin answers those of a track
 // with an LRC or text file: synced line by line when they are, plain
-// otherwise. Lyrics an administrator chose in a lyrics search come first
-// while lyrics from LRCLIB are on (see downloadRemoteLyrics). Then a track
-// of a local music folder has those of its lyrics file, else of its lyrics
-// tag (see library.Service.TrackLyrics), whether lyrics from LRCLIB are on
-// or not; other tracks those of LRCLIB (see lyrics.Service). A track
-// without lyrics, an instrumental, one LRCLIB does not know, one whose
-// lyrics an administrator removed (see deleteLyrics), and every track
-// without its own while lyrics are turned off, answers as Jellyfin does
-// without lyrics. A track never looked up is looked up now, waited for
-// lyricsWait at most.
+// otherwise. Lyrics an administrator uploaded come first, and those chosen
+// in a lyrics search while lyrics from LRCLIB are on (see uploadLyrics and
+// downloadRemoteLyrics). Then a track of a local music folder has those of
+// its lyrics file, else of its lyrics tag (see library.Service.TrackLyrics),
+// whether lyrics from LRCLIB are on or not; other tracks those of LRCLIB
+// (see lyrics.Service). A track without lyrics, an instrumental, one LRCLIB
+// does not know, one whose lyrics an administrator removed (see
+// deleteLyrics), and every track without its own or uploaded lyrics while
+// lyrics are turned off, answers as Jellyfin does without lyrics. A track
+// never looked up is looked up now, waited for lyricsWait at most.
 func (h *Handler) lyrics(w http.ResponseWriter, r *http.Request) {
 	user, item, track, ok := h.lyricsItem(w, r)
 	if !ok {
@@ -555,7 +558,7 @@ func (h *Handler) lyrics(w http.ResponseWriter, r *http.Request) {
 	}
 	found, ok := lyrics.Parse(own)
 	if ok {
-		// Lyrics chosen in a lyrics search replace the track's own.
+		// Lyrics uploaded or chosen in a lyrics search replace the track's own.
 		if chosen, picked := h.Lyrics.Chosen(r.Context(), item.ID); picked {
 			found = chosen
 		}
@@ -694,4 +697,62 @@ func (h *Handler) deleteLyrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// uploadLyrics is the lyrics editor's upload of a lyrics file, which
+// jellyfin-web sends as text, named by the fileName query parameter. Like
+// Jellyfin, it answers 400 without a file name, without a body, or for a
+// name without an extension, then the song's lyrics read from the file.
+// They are read as a local song's lyrics file is (see lyrics.ParseUpload):
+// a file that is not an LRC or text file, not text, or without a line of
+// text answers 400, as a file Jellyfin cannot parse; one over
+// lyrics.MaxUpload answers 413, as one over Jellyfin's bound on request
+// bodies does. Polyfin keeps them as an administrator's choice, served
+// whatever Song lyrics from LRCLIB says (see lyrics.Service.Upload); the
+// song's files, those of a local music folder, are never touched.
+func (h *Handler) uploadLyrics(w http.ResponseWriter, r *http.Request) {
+	name, _ := queryParam(r, "fileName")
+	if strings.TrimSpace(name) == "" {
+		validationProblem(w, map[string][]string{"fileName": {"The fileName field is required."}})
+		return
+	}
+	_, item, track, ok := h.lyricsItem(w, r)
+	if !ok {
+		return
+	}
+	if r.ContentLength == 0 {
+		writeJSON(w, http.StatusBadRequest, "No lyrics uploaded")
+		return
+	}
+	if extension := path.Ext(strings.ReplaceAll(name, `\`, "/")); extension == "" || extension == "." {
+		writeJSON(w, http.StatusBadRequest, "Extension is required on filename")
+		return
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, lyrics.MaxUpload))
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			processingError(w, http.StatusRequestEntityTooLarge)
+			return
+		}
+		h.internalError(w, r, err)
+		return
+	}
+	if len(body) == 0 {
+		writeJSON(w, http.StatusBadRequest, "No lyrics uploaded")
+		return
+	}
+	found, err := h.Lyrics.Upload(r.Context(), item.ID, name, body)
+	switch {
+	case errors.Is(err, lyrics.ErrNoExtension), errors.Is(err, lyrics.ErrNotLyrics):
+		badRequestProblem(w)
+		return
+	case errors.Is(err, lyrics.ErrNotFound):
+		notFoundProblem(w)
+		return
+	case err != nil:
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, lyricDto(item, track, found))
 }

@@ -585,7 +585,7 @@ The `.m3u` and `.m3u8` files of the folder are the playlists of its library: its
 
 ### Lyrics
 
-A song's lyrics are those of the `.lrc` file of the same name beside it, else those of its lyrics tag, synced line by line when timed, plain otherwise. They come before LRCLIB's: Polyfin never looks up a song with lyrics of its own on LRCLIB, and serves them with **Song lyrics from LRCLIB** off too. Other songs have LRCLIB's (see [Lyrics](addons-and-libraries.md#lyrics)). Lyrics an administrator chooses in the web player's lyrics editor replace a song's own while that setting is on, until they are deleted there: the file and the tag are never changed (see [Choosing lyrics](addons-and-libraries.md#choosing-lyrics)).
+A song's lyrics are those of the `.lrc` file of the same name beside it, else those of its lyrics tag, synced line by line when timed, plain otherwise. They come before LRCLIB's: Polyfin never looks up a song with lyrics of its own on LRCLIB, and serves them with **Song lyrics from LRCLIB** off too. Other songs have LRCLIB's (see [Lyrics](addons-and-libraries.md#lyrics)). Lyrics an administrator chooses in the web player's lyrics editor while that setting is on, or uploads there whatever it says, replace a song's own until they are deleted there: the file and the tag are never changed (see [Choosing lyrics](addons-and-libraries.md#choosing-lyrics)).
 
 ### Playback
 

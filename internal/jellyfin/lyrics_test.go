@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -508,5 +509,127 @@ func TestLyricsRemoval(t *testing.T) {
 		if status, body := remove(admin, id); status != http.StatusNotFound {
 			t.Errorf("%s: %d %s", name, status, body)
 		}
+	}
+}
+
+// uploadLyrics uploads a lyrics file for a song as jellyfin-web's lyrics
+// editor does: its text as the body, named by fileName.
+func (l *lyricsServer) uploadLyrics(t *testing.T, token, id, fileName string, body []byte) (int, []byte) {
+	t.Helper()
+	path := "/Audio/" + id + "/Lyrics"
+	if fileName != "" {
+		path += "?" + url.Values{"fileName": {fileName}}.Encode()
+	}
+	request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, l.url+path, bytes.NewReader(body))
+	request.Header.Set("Authorization", app("web", token))
+	request.Header.Set("Content-Type", "text/plain")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	answer, _ := io.ReadAll(response.Body)
+	return response.StatusCode, answer
+}
+
+func TestLyricsUpload(t *testing.T) {
+	t.Parallel()
+	l := newLyricsServer(t)
+	l.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	admin := l.signIn("admin", "web")
+	first, second := l.songs["First Light"], l.songs["Second Wind"]
+	lrc := []byte("[ti:First Light]\n[00:01.00] Uploaded line\n[00:02.50]Second uploaded line\n")
+
+	// Only administrators upload, refused before anything is read.
+	if status, body := l.uploadLyrics(t, l.token, first, "first.lrc", lrc); status != http.StatusForbidden || len(body) != 0 {
+		t.Errorf("a listener's upload: %d %s", status, body)
+	}
+
+	// An LRC file is the song's lyrics, synced, answered as Jellyfin
+	// answers an upload, and served to every user.
+	status, body := l.uploadLyrics(t, admin, first, "first.lrc", lrc)
+	var dto LyricDto
+	if status != http.StatusOK || json.Unmarshal(body, &dto) != nil || dto.Metadata.IsSynced == nil || !*dto.Metadata.IsSynced ||
+		!slices.Equal(texts(dto.Lyrics), []string{"10000000 Uploaded line", "25000000 Second uploaded line"}) || dto.Metadata.Title != "First Light" {
+		t.Fatalf("LRC upload: %d %s", status, body)
+	}
+	if status, metadata, lines := l.lyricLines(t, "First Light"); status != http.StatusOK || len(lines) != 2 || lines[0]["Text"] != "Uploaded line" ||
+		lines[0]["Start"] != float64(10_000_000) || metadata["IsSynced"] != true {
+		t.Errorf("lyrics uploaded: %d %v %v", status, metadata, lines)
+	}
+	// A look-up a month later keeps them: LRCLIB is not asked.
+	if _, err := l.pool.Exec(t.Context(), "UPDATE track_lyrics SET looked_up_at = now() - interval '31 days' WHERE item_id = $1", first); err != nil {
+		t.Fatal(err)
+	}
+	if status, _, lines := l.lyricLines(t, "First Light"); status != http.StatusOK || lines[0]["Text"] != "Uploaded line" || l.count("First Light") != 0 {
+		t.Errorf("a month later: %d %v, asked %d times", status, lines, l.count("First Light"))
+	}
+
+	// Turned off, uploads still work and are served, plain text plain,
+	// listed with lyrics; LRCLIB is never asked.
+	l.setting(t, func(s *accounts.Settings) { s.Lyrics = false })
+	if status, body := l.uploadLyrics(t, admin, second, "second.txt", []byte("\xef\xbb\xbfTyped words\r\n\r\nMore words")); status != http.StatusOK {
+		t.Fatalf("text upload turned off: %d %s", status, body)
+	}
+	if status, metadata, lines := l.lyricLines(t, "Second Wind"); status != http.StatusOK || len(lines) != 3 || lines[0]["Text"] != "Typed words" ||
+		metadata["IsSynced"] != false || lines[0]["Start"] != nil {
+		t.Errorf("plain lyrics uploaded turned off: %d %v %v", status, metadata, lines)
+	}
+	if status, _, lines := l.lyricLines(t, "First Light"); status != http.StatusOK || lines[0]["Text"] != "Uploaded line" {
+		t.Errorf("synced lyrics uploaded turned off: %d %v", status, lines)
+	}
+	if has := l.hasLyrics(t, "First Light"); !has["First Light"] || !has["Second Wind"] {
+		t.Errorf("listed turned off: %v", has)
+	}
+	if n := l.total(); n != 0 {
+		t.Errorf("LRCLIB was asked %d times", n)
+	}
+
+	// What is not a lyrics file is refused, and keeps the lyrics there.
+	for name, tc := range map[string]struct {
+		fileName string
+		body     []byte
+		status   int
+	}{
+		"no file name":      {"", lrc, http.StatusBadRequest},
+		"no body":           {"first.lrc", nil, http.StatusBadRequest},
+		"no extension":      {"first", lrc, http.StatusBadRequest},
+		"another extension": {"first.mp3", lrc, http.StatusBadRequest},
+		"binary":            {"first.lrc", []byte("[00:01.00]\x00\x01\x02"), http.StatusBadRequest},
+		"not UTF-8":         {"first.txt", []byte("caf\xe9"), http.StatusBadRequest},
+		"blank":             {"first.txt", []byte(" \n \n"), http.StatusBadRequest},
+		"too large":         {"first.txt", bytes.Repeat([]byte("la "), lyrics.MaxUpload/3+1), http.StatusRequestEntityTooLarge},
+	} {
+		if status, body := l.uploadLyrics(t, admin, first, tc.fileName, tc.body); status != tc.status {
+			t.Errorf("%s: %d %s", name, status, body)
+		}
+	}
+	if status, _, lines := l.lyricLines(t, "First Light"); status != http.StatusOK || lines[0]["Text"] != "Uploaded line" {
+		t.Errorf("lyrics after refused uploads: %d %v", status, lines)
+	}
+	var details BaseItemDto
+	l.get(t, "/Items/"+first, l.token, &details)
+	for name, id := range map[string]string{"an album": details.AlbumId, "an unknown song": strings.Repeat("0", 32)} {
+		if status, body := l.uploadLyrics(t, admin, id, "first.lrc", lrc); status != http.StatusNotFound {
+			t.Errorf("%s: %d %s", name, status, body)
+		}
+	}
+
+	// Delete removes an upload; another upload brings lyrics back.
+	if status, _ := l.call(http.MethodDelete, "/Audio/"+first+"/Lyrics", app("web", admin), nil); status != http.StatusNoContent {
+		t.Fatalf("removal: %d", status)
+	}
+	if status, _, _ := l.lyricLines(t, "First Light"); status != http.StatusNotFound {
+		t.Errorf("lyrics after the removal: %d", status)
+	}
+	l.setting(t, func(s *accounts.Settings) { s.Lyrics = true })
+	if status, _, _ := l.lyricLines(t, "First Light"); status != http.StatusNotFound || l.count("First Light") != 0 {
+		t.Errorf("removed, turned on: %d, asked %d times", status, l.count("First Light"))
+	}
+	if status, _ := l.uploadLyrics(t, admin, first, "first.lrc", lrc); status != http.StatusOK {
+		t.Fatalf("upload after the removal: %d", status)
+	}
+	if status, _, lines := l.lyricLines(t, "First Light"); status != http.StatusOK || lines[0]["Text"] != "Uploaded line" {
+		t.Errorf("lyrics uploaded after the removal: %d %v", status, lines)
 	}
 }

@@ -307,18 +307,22 @@ When the lyrics found are another song's, or LRCLIB found none under the song's 
 2. Below them, choose the search button. Polyfin searches LRCLIB for the song's title, artist and album, and lists what it found under the name LRCLIB: the lyrics of the songs whose length is closest first, synced before plain. Each result tells whether it is synced, and its preview button shows all its lines.
 3. Choose the download button of the lyrics you want. They are the song's lyrics at once, for every user, synced or plain as listed.
 
-- Lyrics chosen are kept in Polyfin's database as those found are, and replace them: no automatic look-up replaces them later. Choosing other lyrics replaces them again.
+An administrator can also upload a lyrics file of their own, whether **Song lyrics from LRCLIB** is on or not: in the editor, choose the add button beside the search button, pick an `.lrc` or `.txt` file, and upload it. Its lyrics are the song's at once, for every user.
+
+- The file is read as a local song's `.lrc` file is (see [local music folders](local-folders.md#lyrics)): synced line by line when its lines start with a time, plain text otherwise, a `.txt` file too. The word timing of enhanced LRC is left out.
+- A file over 1 MiB, one that is not UTF-8 text, or one without a line of text is refused, and the song keeps its lyrics. 1 MiB holds any song's lyrics many times over.
+- Lyrics chosen and lyrics uploaded are kept in Polyfin's database as those found are, and replace them: no automatic look-up replaces them later. Choosing or uploading other lyrics replaces them again.
 - They replace a local song's own lyrics too, from its `.lrc` file or lyrics tag.
-- The editor's delete button, once confirmed, removes the lyrics Polyfin keeps for the song, chosen or found, and the song has none. The removal is kept as a choice too: no automatic look-up gives the song lyrics again, until lyrics are chosen for it. A local song's own lyrics are never deleted: its `.lrc` file and its tag stay as they are, and its lyrics show again.
-- With **Song lyrics from LRCLIB** off, the search finds nothing and LRCLIB is not asked. Lyrics chosen are kept, and shown again once it is back on. The delete button still removes them.
-- Searches and choices are asked of LRCLIB as look-ups are: they name Polyfin in the same way and count among its 4 requests at a time. While LRCLIB is left alone after a failure, or when it fails, the search finds nothing.
-- Only administrators see **Edit lyrics**. Polyfin refuses others' searches, choices and removals.
+- The editor's delete button, once confirmed, removes the lyrics Polyfin keeps for the song, chosen, uploaded or found, and the song has none. The removal is kept as a choice too: no automatic look-up gives the song lyrics again, until lyrics are chosen or uploaded for it. A local song's own lyrics are never deleted: its `.lrc` file and its tag stay as they are, and its lyrics show again.
+- With **Song lyrics from LRCLIB** off, the search finds nothing and LRCLIB is not asked. Lyrics chosen are kept, and shown again once it is back on. Lyrics uploaded are not LRCLIB's: they are shown whatever the setting. The delete button removes either.
+- Searches and choices are asked of LRCLIB as look-ups are: they name Polyfin in the same way and count among its 4 requests at a time. While LRCLIB is left alone after a failure, or when it fails, the search finds nothing. Uploads never ask LRCLIB.
+- Only administrators see **Edit lyrics**. Polyfin refuses others' searches, choices, uploads and removals.
 
 **Compared with Jellyfin:**
 
 - Jellyfin reads lyrics from the `.lrc` and `.txt` files next to the songs, or downloads them with a lyrics plugin. Polyfin reads the `.lrc` files and lyrics tags of local music folders, and asks LRCLIB itself, without a plugin.
-- Jellyfin saves the lyrics chosen in the lyrics editor as a file next to the song, and its delete button deletes the song's lyrics files. Polyfin keeps the lyrics chosen in its database and removes only those: the song's files are left as they are.
-- The lyrics editor's button to upload lyrics does nothing.
+- Jellyfin saves the lyrics chosen or uploaded in the lyrics editor as a file next to the song, and its delete button deletes the song's lyrics files. Polyfin keeps them in its database and removes only those: the song's files are left as they are.
+- Jellyfin reads an uploaded `.txt` file as plain text. Polyfin reads it as an `.lrc` file, synced when its lines start with a time.
 - Lines are synced, not words: the word timing of enhanced LRC is left out.
 
 **For app developers:**
@@ -328,7 +332,8 @@ When the lyrics found are another song's, or LRCLIB found none under the song's 
 - Songs carry `HasLyrics`, `true` once their lyrics are known, in listings as in details.
 - `GET /Audio/{itemId}/RemoteSearch/Lyrics` answers Jellyfin's `RemoteLyricInfoDto` list: each result's `Id`, `ProviderName` (`LRCLIB`) and `Lyrics`, a `LyricDto` whose `Metadata` describes the song LRCLIB has them for. `POST /Audio/{itemId}/RemoteSearch/Lyrics/{lyricId}` chooses a result and answers the song's new `LyricDto`; an identifier that is no result, and lyrics LRCLIB no longer has, answer `404`.
 - `DELETE /Audio/{itemId}/Lyrics` removes the lyrics Polyfin keeps for the song and answers `204`, whether it had lyrics or not, as Jellyfin answers whether it deleted a lyrics file or found none.
-- These three answer `403` to users other than administrators and API keys, as Jellyfin answers users without the permission to manage lyrics, and `404` for an item that is no song the user sees. Users' `Policy.EnableLyricManagement` is `true` for administrators.
+- `POST /Audio/{itemId}/Lyrics?fileName={name}` uploads a lyrics file, as jellyfin-web sends it: its text as the body, `text/plain`. Files named `.lrc`, `.elrc` or `.txt` are taken, and the answer is the song's new `LyricDto`. Like Jellyfin, it answers `400` without `fileName`, without a body, for a name without an extension, and for a file it cannot read: another extension, text that is not UTF-8 or holds control characters other than tabs and line breaks, or no line of text. A body over 1 MiB answers `413`.
+- These four answer `403` to users other than administrators and API keys, as Jellyfin answers users without the permission to manage lyrics, and `404` for an item that is no song the user sees. Users' `Policy.EnableLyricManagement` is `true` for administrators.
 
 ### Music playback
 

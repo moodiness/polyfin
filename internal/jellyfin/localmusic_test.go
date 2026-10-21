@@ -308,6 +308,34 @@ func TestLocalMusicPlaylistsArtistsAndLyrics(t *testing.T) {
 	if content, err := os.ReadFile(filepath.Join(dir, "Tone Quartet/Sines/01 Filed.lrc")); err != nil || !bytes.Contains(content, []byte("From the file")) {
 		t.Errorf("the lyrics file: %v %q", err, content)
 	}
+
+	// An upload replaces a song's own lyrics with LRCLIB's lyrics off too;
+	// removing it shows the song's own again, its files untouched.
+	s.setting(t, func(settings *accounts.Settings) { settings.Lyrics = false })
+	request, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, s.url+"/Audio/"+filed.Id+"/Lyrics?fileName=mine.lrc",
+		bytes.NewReader([]byte("[00:00.50]Uploaded words\n")))
+	request.Header.Set("Authorization", admin)
+	request.Header.Set("Content-Type", "text/plain")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("upload: %d", response.StatusCode)
+	}
+	if status, got := lines(filed); status != http.StatusOK || len(got) != 1 || got[0].Text != "Uploaded words" || got[0].Start == nil {
+		t.Errorf("Filed with lyrics uploaded: %d %+v", status, got)
+	}
+	if status, body := s.call(http.MethodDelete, "/Audio/"+filed.Id+"/Lyrics", admin, nil); status != http.StatusNoContent {
+		t.Fatalf("removal of the upload: %d %s", status, body)
+	}
+	if status, got := lines(filed); status != http.StatusOK || len(got) != 2 || got[0].Text != "From the file" {
+		t.Errorf("Filed once the upload is removed: %d %+v", status, got)
+	}
+	if content, err := os.ReadFile(filepath.Join(dir, "Tone Quartet/Sines/01 Filed.lrc")); err != nil || bytes.Contains(content, []byte("Uploaded")) {
+		t.Errorf("the lyrics file after the upload: %v %q", err, content)
+	}
 	mu.Lock()
 	if asked["Filed"] != 0 {
 		t.Errorf("LRCLIB was asked about Filed: %v", asked)
