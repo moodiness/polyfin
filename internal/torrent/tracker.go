@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -75,7 +76,7 @@ func announceHTTP(ctx context.Context, route Route, u *url.URL, a announce) (tra
 	if query != "" {
 		query += "&"
 	}
-	query += "info_hash=" + url.QueryEscape(string(a.hash[:])) + "&peer_id=" + url.QueryEscape(string(a.peerID[:])) +
+	query += "info_hash=" + escapeBytes(a.hash[:]) + "&peer_id=" + escapeBytes(a.peerID[:]) +
 		"&port=" + strconv.Itoa(int(a.port)) + "&uploaded=" + strconv.FormatInt(a.uploaded, 10) +
 		"&downloaded=" + strconv.FormatInt(a.downloaded, 10) + "&left=" + strconv.FormatInt(a.left, 10) +
 		"&compact=1&numwant=50"
@@ -126,7 +127,7 @@ func parseHTTPAnswer(body []byte) (trackerAnswer, error) {
 		return trackerAnswer{}, err
 	}
 	if reason := str(d, "failure reason"); reason != "" {
-		return trackerAnswer{}, errors.New("the tracker refused the announce")
+		return trackerAnswer{}, &refusedError{reason: printable([]byte(reason))}
 	}
 	answer := trackerAnswer{interval: 30 * time.Minute}
 	if interval, ok := num(d, "interval"); ok && interval > 0 {
@@ -245,7 +246,7 @@ func udpRoundTrip(ctx context.Context, conn PacketConn, hostport string, request
 			}
 			switch got := binary.BigEndian.Uint32(buffer); {
 			case got == udpActionError:
-				return nil, errors.New("the tracker refused the announce")
+				return nil, &refusedError{reason: printable(buffer[8:n])}
 			case got != action || n < size:
 				continue
 			}
@@ -253,4 +254,75 @@ func udpRoundTrip(ctx context.Context, conn PacketConn, hostport string, request
 		}
 	}
 	return nil, errors.New("the tracker did not answer")
+}
+
+// refusedError reports a tracker that refused an announce, with the reason
+// it gave (BEP 3's failure reason, BEP 15's error message), as it gave it.
+type refusedError struct {
+	reason string
+}
+
+func (e *refusedError) Error() string {
+	if e.reason == "" {
+		return "the tracker refused the announce"
+	}
+	return "the tracker refused the announce: " + e.reason
+}
+
+// maxReason bounds what a tracker's reason for a refusal is kept of.
+const maxReason = 200
+
+// printable is a tracker's message as it can be logged: its printable
+// ASCII, maxReason bytes at most.
+func printable(message []byte) string {
+	var b strings.Builder
+	for _, c := range message {
+		if b.Len() >= maxReason {
+			break
+		}
+		if c >= ' ' && c <= '~' {
+			b.WriteByte(c)
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// escapeBytes percent-encodes the bytes of an info hash or a peer ID for
+// an announce's query, every byte but the unreserved characters of RFC
+// 3986, as BEP 3's clients do. url.QueryEscape writes a space as "+",
+// which trackers that read the query as raw bytes take for itself: the
+// hash or the ID is then the wrong one, and the announce is refused.
+func escapeBytes(raw []byte) string {
+	const hex = "0123456789ABCDEF"
+	var b strings.Builder
+	for _, c := range raw {
+		switch {
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9', c == '-', c == '.', c == '_', c == '~':
+			b.WriteByte(c)
+		default:
+			b.WriteByte('%')
+			b.WriteByte(hex[c>>4])
+			b.WriteByte(hex[c&15])
+		}
+	}
+	return b.String()
+}
+
+// announcePort is the port told to trackers. Polyfin connects out only,
+// as no peer can reach it through a proxy, but trackers want a port all
+// the same: 0 is refused as invalid, and many refuse the 6881 to 6889 of
+// the first clients, which networks used to throttle. A port of the
+// dynamic range (RFC 6335), drawn from the peer ID's random part, is what
+// clients with a random port send, and stays the same for the run.
+func announcePort(peerID [20]byte) uint16 {
+	return 49152 + binary.BigEndian.Uint16(peerID[18:])%16384
+}
+
+// trackerHost is a tracker's host, as logs name it: its URL's path and
+// query may hold a passkey.
+func trackerHost(raw string) string {
+	if u, err := url.Parse(raw); err == nil {
+		return u.Host
+	}
+	return ""
 }

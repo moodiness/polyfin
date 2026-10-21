@@ -5,7 +5,11 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +18,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/torrent"
@@ -239,6 +244,11 @@ func TestATorrentVersionPlaysAgainOnceItsRouteIsBack(t *testing.T) {
 	if offered() {
 		t.Fatal("the torrent version was offered with its route down")
 	}
+	// The app is told the title cannot be played now, not that it suits
+	// no app.
+	if answer := s.playbackInfo(t, "tv", token, p.movie, map[string]any{"MediaSourceId": version.ID.String()}); answer.ErrorCode != "RateLimitExceeded" {
+		t.Errorf("with the route down, PlaybackInfo answered %q", answer.ErrorCode)
+	}
 	response, _ := fetchURL(t, s.url+"/Videos/"+p.movie+"/stream?static=true&mediaSourceId="+version.ID.String()+"&ApiKey="+token, nil)
 	if response.StatusCode == http.StatusOK {
 		t.Fatal("the torrent version played with its route down")
@@ -265,5 +275,260 @@ func TestATorrentVersionPlaysAgainOnceItsRouteIsBack(t *testing.T) {
 	response, body := fetchURL(t, s.url+"/Videos/"+p.movie+"/stream?static=true&mediaSourceId="+version.ID.String()+"&ApiKey="+token, nil)
 	if response.StatusCode != http.StatusOK || body != string(large) {
 		t.Fatalf("once the route is back: HTTP %d, %d bytes", response.StatusCode, len(body))
+	}
+}
+
+// mediaTorrentAddon serves one movie whose versions are torrents alone,
+// each the file of one of tors announced to its tracker.
+func mediaTorrentAddon(t *testing.T, tors []*torrenttest.Torrent, trackers []string) string {
+	t.Helper()
+	movie := stremio.Meta{ID: "tt5001", Type: "movie", Name: "Movie", Year: "2009"}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch path := r.URL.EscapedPath(); {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "torrents", Name: "Torrents", Version: "1",
+				Types: []string{"movie"}, IDPrefixes: []string{"tt"},
+				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}},
+				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}})
+		case strings.HasPrefix(path, "/catalog/movie/top"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{movie}})
+		case path == "/meta/movie/tt5001.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie})
+		case path == "/stream/movie/tt5001.json":
+			var streams []stremio.Stream
+			for i, tor := range tors {
+				streams = append(streams, stremio.Stream{Name: "Torrent " + strconv.Itoa(i+1), InfoHash: tor.HashHex(),
+					Sources: []string{"tracker:" + trackers[i]}})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// torrentMovie makes a torrent of name holding twenty seconds of MPEG-4
+// Part 2 video and AAC in Matroska, a video a browser plays converted
+// only, with the FFmpeg of POLYFIN_TEST_FFMPEG, skipping the test without
+// one.
+func torrentMovie(t *testing.T, name string) (string, *torrenttest.Torrent) {
+	t.Helper()
+	ffmpeg, file := vodFile(t, "a-movie.mkv", "-c:v", "mpeg4")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ffmpeg, torrenttest.Build(name, 64<<10, torrenttest.File{Name: "a-movie.mkv", Data: data})
+}
+
+// torrentPlay is a server playing torrents through a local proxy, and a
+// user allowed torrents, signed in as jellyfin-web.
+type torrentPlay struct {
+	testServer
+	engine   *torrent.Engine
+	proxy    *torrenttest.Proxy
+	user     accounts.User
+	token    string
+	movie    string
+	versions []library.Version
+}
+
+// newTorrentPlay starts a server whose analyses run ffprobe, and whose
+// addon lists tors, each announced to its tracker. A torrent's start is
+// waited for start, 0 for the engine's default.
+func newTorrentPlay(t *testing.T, ffprobe string, start time.Duration, tors []*torrenttest.Torrent, trackers []string) torrentPlay {
+	t.Helper()
+	p := torrentPlay{proxy: torrenttest.StartProxy(t, true, "", "")}
+	p.testServer = newProbingServer(t, 10, ffprobe, func(options *Options, _ *pgxpool.Pool) {
+		var err error
+		p.engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(options.Accounts.Settings()) },
+			Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, StartTimeout: start, Logger: slog.New(slog.DiscardHandler)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(p.engine.Close)
+		options.Playback.Torrents(p.engine)
+	})
+	p.user = p.testServer.user("allowed", func(c *accounts.UserChanges) { c.TorrentStreams = new(true) })
+	if _, err := p.addons.Install(t.Context(), addons.Shared(), mediaTorrentAddon(t, tors, trackers), false); err != nil {
+		t.Fatal(err)
+	}
+	p.setting(t, func(settings *accounts.Settings) {
+		settings.TorrentStreams = true
+		settings.TorrentProxy = p.proxy.Address()
+	})
+	p.token = p.signIn("allowed", "web")
+	var views, page QueryResult
+	p.get(t, "/UserViews", p.token, &views)
+	p.get(t, "/Items?ParentId="+views.Items[0].Id, p.token, &page)
+	p.movie = page.Items[0].Id
+	movie, _ := accounts.ParseID(p.movie)
+	versions, err := p.library.Versions(t.Context(), p.user, movie)
+	if err != nil || len(versions) != len(tors) {
+		t.Fatalf("versions: %+v %v", versions, err)
+	}
+	p.versions = versions
+	return p
+}
+
+// details opens the title's page, as jellyfin-web does before Play, and
+// returns the identifier of the version it picks, the first.
+func (p torrentPlay) details(t *testing.T) string {
+	t.Helper()
+	var details BaseItemDto
+	if status := p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+p.movie, p.token, &details); status != http.StatusOK ||
+		details.MediaSources == nil || len(*details.MediaSources) == 0 {
+		t.Fatalf("details: %d %+v", status, details.MediaSources)
+	}
+	return (*details.MediaSources)[0].Id
+}
+
+// play asks PlaybackInfo as jellyfin-web does when Play is pressed on the
+// title's page: the version picked there, if any, the browser's device
+// profile, IsPlayback and AutoOpenLiveStream in the query. It returns the
+// answer and its ErrorCode, empty for one that plays.
+func (p torrentPlay) play(t *testing.T, mediaSourceID string) (playbackInfoResponse, string) {
+	t.Helper()
+	query := url.Values{"UserId": {p.user.ID.String()}, "StartTimeTicks": {"0"}, "IsPlayback": {"true"}, "AutoOpenLiveStream": {"true"},
+		"MaxStreamingBitrate": {"120000000"}}
+	if mediaSourceID != "" {
+		query.Set("MediaSourceId", mediaSourceID)
+	}
+	status, body := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo?"+query.Encode(), app("web", p.token),
+		map[string]any{"DeviceProfile": deviceProfile(t, "jellyfin-web-chrome")})
+	var info playbackInfoResponse
+	var failed noCompatibleStream
+	if status != http.StatusOK || json.Unmarshal(body, &info) != nil || json.Unmarshal(body, &failed) != nil {
+		t.Fatalf("PlaybackInfo: %d %s", status, body)
+	}
+	return info, failed.ErrorCode
+}
+
+// converted checks that a PlaybackInfo answer offers the browser a
+// version converted, the one of id, and that its segments are served.
+func (p torrentPlay) converted(t *testing.T, info playbackInfoResponse, id accounts.ID) {
+	t.Helper()
+	for _, source := range info.MediaSources {
+		if source.TranscodingUrl == "" {
+			continue
+		}
+		if source.Id != id.String() && source.Id != p.movie {
+			t.Fatalf("the browser was offered %s, not %s", source.Id, id)
+		}
+		fetchSegments(t, p.testServer, source.TranscodingUrl, 0, 1)
+		return
+	}
+	t.Fatalf("the browser was offered no way to play the torrent: %+v", info.MediaSources)
+}
+
+// reached reports whether the proxy was asked to reach a peer.
+func (p torrentPlay) reached(peer *torrenttest.Peer) bool {
+	return slices.Contains(p.proxy.Targets(), "tcp "+peer.Address().String())
+}
+
+// A torrent version never analyzed plays from the first press of Play in
+// jellyfin-web, with playback prepared ahead, as by default: opening the
+// title's page leaves the torrent alone, Play joins its swarm, its
+// analysis runs inside that playback, and PlaybackInfo answers a source
+// the browser plays, here converted.
+func TestATorrentVersionNeverAnalyzedPlaysFromItsFirstPlay(t *testing.T) {
+	t.Parallel()
+	ffmpeg, tor := torrentMovie(t, "A Movie")
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 0, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	p.setting(t, func(s *accounts.Settings) { s.PrepareAhead = true })
+	t.Cleanup(func() { p.settle(t) })
+
+	picked := p.details(t)
+	p.settle(t)
+	// The user reads the page for a while: long enough for a read of the
+	// torrent in the background, had one started, to fail the version's
+	// source past the cache's tries.
+	src := p.handler.Playback.OpenSource(p.versions[0])
+	defer src.Release()
+	for deadline := time.Now().Add(8 * time.Second); src.Failure() == nil && time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(tracker.Remotes()) != 0 {
+		t.Fatal("opening the title's page joined the torrent's swarm")
+	}
+
+	info, code := p.play(t, picked)
+	if code != "" {
+		t.Fatalf("PlaybackInfo answered %s", code)
+	}
+	p.converted(t, info, p.versions[0].ID)
+	if hash, _ := torrent.ParseHash(tor.HashHex()); !p.engine.Running(hash) {
+		t.Fatal("the playback's torrent does not run")
+	}
+	if !p.reached(seeder) {
+		t.Fatal("the seeder was not reached through the proxy")
+	}
+}
+
+// A torrent whose route is slow to carry it, as a remote proxy granting
+// UDP late, is read once its playback joined the swarm, however long that
+// takes: nothing reads it before and fails it meanwhile, such as the
+// keyframe index read ahead.
+func TestATorrentSlowToJoinIsReadOnceJoined(t *testing.T) {
+	t.Parallel()
+	ffmpeg, tor := torrentMovie(t, "A Movie")
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 0, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	picked := p.details(t)
+	// Longer than the source cache tries a file that does not open.
+	p.proxy.DelayUDP(6 * time.Second)
+	info, code := p.play(t, picked)
+	if code != "" {
+		t.Fatalf("PlaybackInfo answered %s", code)
+	}
+	p.converted(t, info, p.versions[0].ID)
+}
+
+// Among a title's torrent versions, those after the first are tried as
+// the play's too, joining their swarms: the first, whose swarm has no
+// peer, does not start, and the second plays.
+func TestATorrentVersionAfterTheFirstPlaysWhenTheFirstCannotStart(t *testing.T) {
+	t.Parallel()
+	ffmpeg, live := torrentMovie(t, "A Movie")
+	dead := torrenttest.Build("Another Movie", 64<<10, torrenttest.File{Name: "another.mkv", Data: torrenttest.Bytes(300 << 10)})
+	seeder := torrenttest.Seed(t, live, "127.0.0.1")
+	empty := torrenttest.HTTPTracker(t, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 2*time.Second,
+		[]*torrenttest.Torrent{dead, live}, []string{empty.URL(), tracker.URL()})
+	p.details(t)
+	info, code := p.play(t, "")
+	if code != "" {
+		t.Fatalf("PlaybackInfo answered %s", code)
+	}
+	p.converted(t, info, p.versions[1].ID)
+	if len(empty.Announces()) == 0 {
+		t.Error("the first version's swarm was not joined")
+	}
+}
+
+// A torrent that cannot start, no peer sending it in time, answers what
+// jellyfin-web tells as media that cannot be played at this time, rather
+// than as media no app plays; it does again while the version is left out,
+// and Health tells why.
+func TestATorrentThatCannotStartCannotBePlayedNow(t *testing.T) {
+	t.Parallel()
+	dead := torrenttest.Build("A Movie", 64<<10, torrenttest.File{Name: "a-movie.mkv", Data: torrenttest.Bytes(300 << 10)})
+	empty := torrenttest.HTTPTracker(t, "127.0.0.1")
+	p := newTorrentPlay(t, "ffprobe-not-installed", 2*time.Second, []*torrenttest.Torrent{dead}, []string{empty.URL()})
+	picked := p.details(t)
+	for _, when := range []string{"once tried", "while left out"} {
+		if info, code := p.play(t, picked); code != "RateLimitExceeded" || len(info.MediaSources) != 0 {
+			t.Fatalf("%s: answered %q, %d sources", when, code, len(info.MediaSources))
+		}
+	}
+	status := p.engine.Status(t.Context())
+	if status.Unstarted == nil || status.Unstarted.Found != 0 || status.Unstarted.Answered != 1 {
+		t.Fatalf("Health tells %+v", status.Unstarted)
 	}
 }

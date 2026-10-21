@@ -588,7 +588,7 @@ func FuzzUDPTracker(f *testing.F) {
 		conn := &datagramConn{datagrams: [][]byte{connect, reply}, echo: echo}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		answer, err := announceUDP(ctx, packetRoute{conn}, "tracker.invalid:6969", announce{port: announcedPort, left: 1})
+		answer, err := announceUDP(ctx, packetRoute{conn}, "tracker.invalid:6969", announce{port: 51413, left: 1})
 		if err != nil {
 			return
 		}

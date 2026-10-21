@@ -67,6 +67,9 @@ type playable struct {
 	versions  []library.Version
 	subtitles []library.ExternalSubtitle
 	tracks    trackPreferences
+	// unstarted tells a torrent version left out for a while, as it could
+	// not start (see playback.Service.Unstarted).
+	unstarted bool
 }
 
 // playable gathers a title's versions and subtitles, both asked of the

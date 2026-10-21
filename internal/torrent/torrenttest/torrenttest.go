@@ -585,9 +585,10 @@ type Proxy struct {
 	user     string
 	password string
 
-	mu      sync.Mutex
-	targets []string
-	conns   []net.Conn
+	mu       sync.Mutex
+	targets  []string
+	conns    []net.Conn
+	udpDelay time.Duration
 }
 
 // StartProxy starts a SOCKS5 proxy; udp offers UDP ASSOCIATE, and user,
@@ -605,6 +606,14 @@ func StartProxy(tb testing.TB, udp bool, user, password string) *Proxy {
 
 // Address is where the proxy listens.
 func (p *Proxy) Address() string { return p.address }
+
+// DelayUDP has the proxy answer each UDP ASSOCIATE only after d, as a
+// remote proxy is slow to.
+func (p *Proxy) DelayUDP(d time.Duration) {
+	p.mu.Lock()
+	p.udpDelay = d
+	p.mu.Unlock()
+}
 
 // Resume starts the proxy again on its address, once stopped.
 func (p *Proxy) Resume(tb testing.TB) {
@@ -755,6 +764,10 @@ func (p *Proxy) serve(conn net.Conn) {
 		}()
 		_, _ = io.Copy(conn, upstream)
 	case request[1] == 3 && p.udp:
+		p.mu.Lock()
+		delay := p.udpDelay
+		p.mu.Unlock()
+		time.Sleep(delay)
 		relay, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 		if err != nil {
 			return

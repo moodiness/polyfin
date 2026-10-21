@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"context"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -40,20 +41,24 @@ type candidates struct {
 }
 
 // chosen is what a play found among its candidates: the version chosen,
-// nil when none plays, and those found unreadable.
+// nil when none plays, and those found unreadable; unstarted tells a
+// torrent among them that could not start (see playback.TorrentUnstarted).
 type chosen struct {
 	decided    *decided
 	unreadable map[int]bool
+	unstarted  bool
 }
 
 // tried is what trying a candidate gave: whether it plays, and plays
-// without conversion; unreadable when it could not be analyzed.
+// without conversion; unreadable when it could not be analyzed, unstarted
+// when it is a torrent that could not start.
 type tried struct {
 	n           int
 	decided     decided
 	plays       bool
 	unconverted bool
 	unreadable  bool
+	unstarted   bool
 }
 
 // choose tries the candidates of p for a play, and returns the version
@@ -67,14 +72,16 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	// The analyses and keyframe indexes started are kept whatever the app
 	// does meanwhile, for the next play. The first candidate is read as the
 	// play's; the others, read alongside in case it does not play, in the
-	// background, giving way to playbacks (see playback.Background).
+	// background, giving way to playbacks (see playback.Background). A
+	// torrent, which only a playback reads, is read as the play's wherever
+	// it comes: the play joins its swarm.
 	detached := r.WithContext(context.WithoutCancel(r.Context()))
 	aside := r.WithContext(playback.Background(detached.Context()))
 	try := func(n int, analyze bool) tried {
 		i := c.order[n]
 		version := p.versions[i]
 		detached := detached
-		if n > 0 {
+		if n > 0 && version.Torrent == nil {
 			detached = aside
 		}
 		var analysis media.Analysis
@@ -82,7 +89,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			var err error
 			if analysis, err = h.Playback.Analyze(detached.Context(), version); err != nil {
 				h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
-				return tried{n: n, unreadable: true}
+				return tried{n: n, unreadable: true, unstarted: version.Torrent != nil && playback.TorrentUnstarted(err)}
 			}
 		} else {
 			var known bool
@@ -130,6 +137,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			if t.unreadable {
 				result.unreadable[c.order[t.n]] = true
 			}
+			result.unstarted = result.unstarted || t.unstarted
 			if !t.plays && started < attempted {
 				start()
 			}
@@ -203,6 +211,8 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 		listed <- subtitles
 	}()
 	versions, complete, err := h.Library.VersionsToPlay(ctx, user, item.ID)
+	// Before offered, which leaves the failed out of versions in place.
+	p.unstarted = h.unstartedTorrent(versions)
 	p.versions = h.offered(ctx, user, versions)
 	grace := time.NewTimer(subtitleGrace)
 	defer grace.Stop()
@@ -223,3 +233,10 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 // subtitleGrace is how long a play waits for the addons' subtitles once
 // its versions are in.
 const subtitleGrace = time.Second
+
+// unstartedTorrent reports whether one of versions is a torrent left out
+// for a while, as it could not start: a play then tells that the title
+// cannot be played now.
+func (h *Handler) unstartedTorrent(versions []library.Version) bool {
+	return slices.ContainsFunc(versions, func(v library.Version) bool { return v.Torrent != nil && h.Playback.Unstarted(v.ID) })
+}

@@ -400,17 +400,29 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	prefer := settings.PreferDirectPlay && !explicit
 	c := plan(p.versions)
 	choice := h.choose(r, user, p, opened, request, c, prefer)
+	unstarted := choice.unstarted || p.unstarted
 	if choice.decided == nil && !complete && r.Context().Err() == nil {
 		versions, err := h.Library.Versions(r.Context(), user, item.ID)
 		if err != nil {
 			h.browseError(w, r, err)
 			return
 		}
+		unstarted = unstarted || h.unstartedTorrent(versions)
 		p.versions = h.offered(r.Context(), user, versions)
 		c = plan(p.versions)
 		choice = h.choose(r, user, p, opened, request, c, prefer)
+		unstarted = unstarted || choice.unstarted
 	}
 	if choice.decided == nil {
+		if unstarted {
+			// A torrent that could not start, for its route or its swarm,
+			// may play later: Jellyfin's closest answer, which jellyfin-web
+			// tells as media that cannot be played at this time, rather than
+			// as media no app plays.
+			h.Logger.Info("No version plays now: a torrent version could not start, see System › Health", "item", item.ID)
+			writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "RateLimitExceeded"})
+			return
+		}
 		writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
 		return
 	}

@@ -261,7 +261,9 @@ var errNoTorrents = errors.New("this server plays no torrent")
 
 // torrentLocation is where the source cache reads a torrent's file: from
 // its swarm, which the playbacks reading it join (see source.Location's
-// Playing) and nothing else.
+// Playing) and nothing else. A swarm is given longer than a host to
+// answer (see torrent.StartTimeout and torrent.PieceTimeout): the engine
+// tells why a torrent did not start before the cache stops waiting.
 func (s *Service) torrentLocation(version library.Version) source.Location {
 	spec, err := torrent.NewSpec(version.Torrent.InfoHash, version.Torrent.FileIdx, version.Torrent.Sources)
 	if err == nil && s.torrents == nil {
@@ -269,11 +271,17 @@ func (s *Service) torrentLocation(version library.Version) source.Location {
 	}
 	engine := s.torrents
 	location := source.Location{URL: version.URL, Size: version.Size, Announcer: version.Addon,
+		HeaderTimeout: torrentHeaders, StallTimeout: torrent.PieceTimeout,
 		Opener: source.FileOpener(func(ctx context.Context, _ string) (source.RandomFile, int64, error) {
 			if err != nil {
 				return nil, 0, err
 			}
 			r, err := engine.Open(ctx, spec)
+			var unstarted *torrent.StartError
+			if errors.As(err, &unstarted) {
+				// The swarm was waited for as long as a start may take.
+				return nil, 0, source.Final(err)
+			}
 			if err != nil {
 				return nil, 0, err
 			}
@@ -283,6 +291,30 @@ func (s *Service) torrentLocation(version library.Version) source.Location {
 		location.Playing = func() func() { return engine.Play(spec) }
 	}
 	return location
+}
+
+// torrentHeaders bounds the wait for a torrent's file to open, past the
+// engine's own bound on its start, and torrentHead the wait for its first
+// bytes, which an analysis waits for before ffprobe's timeout runs.
+const (
+	torrentHeaders = torrent.StartTimeout + 15*time.Second
+	torrentHead    = torrentHeaders + torrent.PieceTimeout
+)
+
+// TorrentUnstarted reports whether err tells of a torrent that could not
+// start: its route cannot carry it, torrents are off, or no peer sent it
+// in time. It may play later: a play finding nothing else answers that
+// the title cannot be played now, rather than that it suits no app.
+func TorrentUnstarted(err error) bool {
+	var unstarted *torrent.StartError
+	return torrent.RouteFailure(err) || errors.As(err, &unstarted) || errors.Is(err, errNoTorrents)
+}
+
+// Unstarted reports whether a version is kept as failed for a torrent
+// that could not start (see TorrentUnstarted).
+func (s *Service) Unstarted(version accounts.ID) bool {
+	failure, failed := s.failures.Get(version)
+	return failed && TorrentUnstarted(failure.err)
 }
 
 // routeCheck bounds the check of the torrents' route before a read.
@@ -353,8 +385,9 @@ func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Anal
 // keyframe index of a Matroska file is read meanwhile, as an HLS play
 // reads it next (see indexAhead). An analysis for a playback, ctx not
 // marked Background, reads its source as a playback, even when it joins
-// one started in the background. A version read from its input is
-// analyzed there (see LocalInputs).
+// one started in the background; a torrent's playback joins its swarm
+// before anything reads it, the index read ahead included. A version read
+// from its input is analyzed there (see LocalInputs).
 func (s *Service) Analyze(ctx context.Context, version library.Version) (media.Analysis, error) {
 	if version.Torrent != nil {
 		// Over a route that cannot carry it, a torrent's file is not read:
@@ -368,6 +401,14 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 	}
 	if s.ReadsInput(version) {
 		return s.analyzeInput(ctx, version)
+	}
+	if s.idleTorrent(ctx, version) {
+		return media.Analysis{}, ErrTorrentIdle
+	}
+	if version.Torrent != nil && !background(ctx) {
+		src := s.open(version)
+		defer src.Release()
+		defer src.Urge()()
 	}
 	if _, failed := s.failures.Get(version.ID); !failed {
 		s.indexAhead(version)
@@ -428,6 +469,13 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		var err error
 		if version.HoldsConnection {
 			err = notPlaylist(probing, src)
+		}
+		if version.Torrent != nil {
+			// A torrent's swarm takes longer to start than ffprobe's timeout
+			// allows: its first bytes are waited for first.
+			head, cancel := context.WithTimeout(probing, torrentHead)
+			_, err = src.Size(head)
+			cancel()
 		}
 		if err == nil {
 			analysis, err = probe(s.ffprobe(), probing, target)

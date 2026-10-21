@@ -40,9 +40,6 @@ const (
 	// how many nodes peers tell are kept.
 	dhtEvery        = 5 * time.Minute
 	maxNodesLearned = 50
-	// announcedPort is the port told to trackers: Polyfin connects out
-	// only, as no peer can reach it through a proxy.
-	announcedPort = 6881
 )
 
 // errStopped reports a read of a torrent that stopped: its playback ended.
@@ -82,6 +79,10 @@ type torrent struct {
 	downBytes   int64
 	refs        int
 	linger      *time.Timer
+	// announces is what each tracker last answered, nil for peers, and
+	// looked whether the DHT was looked up, for a StartError.
+	announces map[string]error
+	looked    bool
 }
 
 // inflightPiece is a piece being downloaded: its bytes, the blocks
@@ -98,7 +99,7 @@ func newTorrent(e *Engine, spec Spec, route Route, udp bool) *torrent {
 	t := &torrent{engine: e, hash: spec.Hash, route: route, udp: udp, ctx: ctx, cancel: cancel,
 		trackers: slices.Clone(spec.Trackers), nodes: slices.Clone(spec.Nodes), dht: spec.DHT,
 		inflight: map[int]*inflightPiece{}, peers: map[netip.AddrPort]*peer{}, known: map[netip.AddrPort]bool{},
-		reads: map[*Reader]int64{}, changed: make(chan struct{})}
+		reads: map[*Reader]int64{}, changed: make(chan struct{}), announces: map[string]error{}}
 	return t
 }
 
@@ -268,7 +269,7 @@ func (t *torrent) dial(address netip.AddrPort) {
 // uncounted as it ends, by a panic too.
 func (t *torrent) join(address netip.AddrPort) *peer {
 	t.mu.Lock()
-	dht := t.dht && t.udp
+	dht := t.usesDHT()
 	t.mu.Unlock()
 	dialed := false
 	defer func() {
@@ -353,12 +354,17 @@ func (t *torrent) announce(tracker string) {
 		if errors.Is(err, errTrackerUDP) {
 			return
 		}
+		if t.ctx.Err() == nil {
+			t.mu.Lock()
+			t.announces[tracker] = err
+			t.mu.Unlock()
+		}
 		wait := time.Minute
 		if err != nil {
 			failures++
 			wait = min(time.Duration(failures)*15*time.Second, 5*time.Minute)
 			if t.ctx.Err() == nil {
-				t.engine.config.Logger.Debug("A tracker could not be reached", "error", err)
+				t.engine.config.Logger.Debug("A tracker could not be reached", "tracker", trackerHost(tracker), "error", err)
 			}
 		} else {
 			failures = 0
@@ -390,17 +396,18 @@ func (t *torrent) announced(event string) announce {
 	if t.info != nil {
 		left = t.info.Length
 	}
-	return announce{hash: t.hash, peerID: t.engine.peerID, port: announcedPort, event: event, left: left,
+	return announce{hash: t.hash, peerID: t.engine.peerID, port: announcePort(t.engine.peerID), event: event, left: left,
 		uploaded: t.upBytes, downloaded: t.downBytes}
 }
 
-// lookup looks the torrent's peers up on the DHT while it runs, when its
-// sources ask for it and the route carries UDP.
+// lookup looks the torrent's peers up on the DHT while it runs, when the
+// route carries UDP and its sources ask for it or name no tracker, from
+// the nodes they name and the engine's bootstrap nodes.
 func (t *torrent) lookup() {
 	defer t.recovered("DHT lookup", nil)
 	for {
 		t.mu.Lock()
-		on, starts := t.dht && t.udp, slices.Clone(t.nodes)
+		on, starts := t.usesDHT(), slices.Concat(t.nodes, t.engine.config.Bootstrap)
 		t.mu.Unlock()
 		wait := 15 * time.Second
 		if on && len(starts) > 0 && t.lookupOnce(starts) {
@@ -426,8 +433,18 @@ func (t *torrent) lookupOnce(starts []string) bool {
 	defer conn.Close()
 	ctx, cancel := context.WithTimeout(t.ctx, 2*time.Minute)
 	defer cancel()
+	t.mu.Lock()
+	t.looked = true
+	t.mu.Unlock()
 	_ = lookupPeers(ctx, conn, t.hash, starts, t.addPeers)
 	return true
+}
+
+// usesDHT reports whether the torrent is looked up on the DHT: its route
+// carries UDP, and its sources ask for it or name no tracker, the DHT
+// being then the only way to its peers. The lock is held.
+func (t *torrent) usesDHT() bool {
+	return t.udp && (t.dht || len(t.trackers) == 0)
 }
 
 // handle reads a peer's message. Its locks are released by defer, so that
@@ -922,8 +939,13 @@ func (r *Reader) Close() error {
 }
 
 // open waits for the torrent's info, and returns a reader of its file
-// index, -1 for the largest.
+// index, -1 for the largest. Past the engine's StartTimeout without it,
+// the torrent did not start: a *StartError tells what came of the search
+// for its peers. The reader reads under ctx, the wait being bounded alone.
 func (t *torrent) open(ctx context.Context, index int) (*Reader, error) {
+	started := time.Now()
+	deadline := time.NewTimer(t.engine.config.StartTimeout)
+	defer deadline.Stop()
 	for {
 		t.mu.Lock()
 		info, err, changed := t.info, t.err, t.changed
@@ -940,6 +962,7 @@ func (t *torrent) open(ctx context.Context, index int) (*Reader, error) {
 				}
 			}
 			t.mu.Unlock()
+			t.engine.startedOne()
 			return &Reader{t: t, file: file, ctx: ctx, size: file.Length}, nil
 		}
 		t.mu.Unlock()
@@ -949,6 +972,12 @@ func (t *torrent) open(ctx context.Context, index int) (*Reader, error) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
+		case <-deadline.C:
+			t.mu.Lock()
+			err := t.startError(time.Since(started))
+			t.mu.Unlock()
+			t.engine.startFailed(err)
+			return nil, err
 		case <-changed:
 		}
 	}

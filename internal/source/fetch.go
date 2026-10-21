@@ -1,6 +1,7 @@
 package source
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -677,20 +678,21 @@ func (s *Source) advance(c *conn, n int) {
 }
 
 // readBlock reads one block over connection c, closing it once it goes
-// stallTimeout without a byte.
+// the stall timeout without a byte.
 func (s *Source) readBlock(c *conn, p []byte) (int, error) {
 	s.mu.Lock()
 	cancel := c.cancel
+	stall := cmp.Or(s.origin.StallTimeout, s.cache.stallTimeout)
 	s.mu.Unlock()
 	var stalled atomic.Bool
-	timer := time.AfterFunc(s.cache.stallTimeout, func() {
+	timer := time.AfterFunc(stall, func() {
 		stalled.Store(true)
 		cancel()
 	})
-	n, err := io.ReadFull(watched{c.body, timer, s.cache.stallTimeout}, p)
+	n, err := io.ReadFull(watched{c.body, timer, stall}, p)
 	timer.Stop()
 	if stalled.Load() && n < len(p) {
-		err = fmt.Errorf("%w: no byte for %s", errStalled, s.cache.stallTimeout)
+		err = fmt.Errorf("%w: no byte for %s", errStalled, stall)
 	}
 	return n, err
 }
@@ -812,7 +814,9 @@ func (s *Source) unpinFrom(via *pin) {
 func (s *Source) connect(c *conn, block int64) error {
 	offset := block * blockSize
 	renewed, retried := false, false
-	timeout := s.cache.headerTimeout
+	s.mu.Lock()
+	timeout := cmp.Or(s.origin.HeaderTimeout, s.cache.headerTimeout)
+	s.mu.Unlock()
 	if c.stalled {
 		timeout = s.cache.recoveryTimeout
 	}
@@ -839,7 +843,7 @@ func (s *Source) connect(c *conn, block int64) error {
 			switch {
 			case c.slot.ctx.Err() != nil:
 				return fmt.Errorf("%w: %v", ErrUnavailable, c.slot.ctx.Err())
-			case !alone || errors.Is(err, errNoAnswer) || attempt >= attempts:
+			case !alone || errors.Is(err, errNoAnswer) || errors.As(err, new(*finalError)) || attempt >= attempts:
 				return fmt.Errorf("%w: %w", ErrUnavailable, withoutURL(err))
 			}
 			_ = pause(c.slot.ctx, backoff(attempt, ""))

@@ -6,7 +6,6 @@ package torrent
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"log/slog"
 	"sync"
@@ -53,7 +52,14 @@ type Config struct {
 	// Linger is how long a torrent runs once its playbacks ended, as a
 	// player pauses between requests; 0 for 30 seconds.
 	Linger time.Duration
-	Logger *slog.Logger
+	// StartTimeout bounds the wait for a torrent's start (see Open); 0 for
+	// StartTimeout.
+	StartTimeout time.Duration
+	// Bootstrap lists the DHT nodes, host:port, a lookup starts from
+	// besides those the addon's sources name (see BootstrapNodes); none
+	// when empty, as in tests.
+	Bootstrap []string
+	Logger    *slog.Logger
 }
 
 // Engine runs the torrents being played.
@@ -77,6 +83,10 @@ type Engine struct {
 	noUDP     bool
 	udpRoute  Route
 	sharedOut atomic.Int64
+	// unstarted is the last torrent that did not start in time, and when;
+	// nil once another started since.
+	unstarted   *StartError
+	unstartedAt time.Time
 }
 
 // New returns an engine keeping pieces in config.Dir.
@@ -84,13 +94,15 @@ func New(config Config) (*Engine, error) {
 	if config.Linger == 0 {
 		config.Linger = 30 * time.Second
 	}
+	if config.StartTimeout == 0 {
+		config.StartTimeout = StartTimeout
+	}
 	s, err := newStore(config.Dir, config.Budget, config.Logger)
 	if err != nil {
 		return nil, err
 	}
 	e := &Engine{config: config, store: s, torrents: map[Hash]*torrent{}, checkEvery: checkEvery}
-	copy(e.peerID[:], "-PF0001-")
-	_, _ = rand.Read(e.peerID[8:])
+	e.peerID = newPeerID()
 	mbps := func(n int) int64 { return int64(n) * 1_000_000 / 8 }
 	e.up = newLimiter(func() int64 { return mbps(config.Settings().UploadMbps) }, true)
 	e.down = newLimiter(func() int64 { return mbps(config.Settings().DownloadMbps) }, false)
@@ -255,7 +267,8 @@ func (e *Engine) remove(t *torrent, err error) {
 
 // Open returns a reader of the file of spec, once a playback joined its
 // torrent and its peers told what files it holds, waiting at most until
-// ctx is done. A torrent no playback joined is ErrNotPlaying; one whose
+// ctx is done or the config's StartTimeout passes, which is a
+// *StartError. A torrent no playback joined is ErrNotPlaying; one whose
 // route fails, why.
 func (e *Engine) Open(ctx context.Context, spec Spec) (*Reader, error) {
 	route, err := e.currentRoute()
@@ -316,6 +329,10 @@ type Status struct {
 	// Failure is why a torrent last could not play, at FailedAt.
 	Failure  error
 	FailedAt time.Time
+	// Unstarted is the last torrent that did not start in time, at
+	// UnstartedAt; nil once another started since.
+	Unstarted   *StartError
+	UnstartedAt time.Time
 }
 
 // Status checks the route and tells what runs.
@@ -341,6 +358,7 @@ func (e *Engine) Status(ctx context.Context) Status {
 	}
 	e.mu.Lock()
 	status.Failure, status.FailedAt = e.failure, e.failedAt
+	status.Unstarted, status.UnstartedAt = e.unstarted, e.unstartedAt
 	torrents := make([]*torrent, 0, len(e.torrents))
 	for _, t := range e.torrents {
 		torrents = append(torrents, t)

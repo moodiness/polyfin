@@ -210,12 +210,16 @@ var ebmlMagic = []byte{0x1A, 0x45, 0xDF, 0xA3}
 // is a Matroska file, by its name or its first bytes: its index needs only
 // its size, and an HLS play reads it next. The read is shared with Plan's,
 // and kept the same way. It is background work: a play reading the index
-// meanwhile has it read as a playback.
+// meanwhile has it read as a playback, and a torrent's file is read only
+// once a playback joined its swarm.
 func (s *Service) indexAhead(version library.Version) {
 	if _, ok := s.indexes.Get(version.ID); ok {
 		return
 	}
 	if _, failed := s.unindexed.Get(version.ID); failed {
+		return
+	}
+	if s.idleTorrent(Background(context.Background()), version) {
 		return
 	}
 	s.flight.DoChan("index ahead "+version.ID.String(), func() (any, error) {

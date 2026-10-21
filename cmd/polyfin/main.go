@@ -333,9 +333,11 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	player.LocalSources(folders.Source)
 	// Torrent streams are read from their swarms while they play, over the
 	// route the settings set alone, their pieces within a quarter of the
-	// source cache's space, which counts them.
+	// source cache's space, which counts them. DHT lookups start from the
+	// bootstrap nodes clients use, over a route that carries UDP.
 	torrents, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(store.Settings()) },
-		Dir: filepath.Join(cfg.CacheDir, "torrents"), Budget: func() int64 { return cacheLimit() / 4 }, Logger: logger})
+		Dir: filepath.Join(cfg.CacheDir, "torrents"), Budget: func() int64 { return cacheLimit() / 4 },
+		Bootstrap: torrent.BootstrapNodes, Logger: logger})
 	if err != nil {
 		return fmt.Errorf("prepare the torrent directory: %w", err)
 	}

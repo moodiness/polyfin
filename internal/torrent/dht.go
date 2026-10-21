@@ -12,8 +12,9 @@ import (
 
 // The DHT (BEP 5) is only read: Polyfin looks a torrent's peers up as a
 // read-only node (BEP 43), answers no query and announces nothing, as no
-// peer can connect in. Polyfin names no bootstrap node: a lookup starts
-// from the nodes the addon's sources name and those peers tell (PORT).
+// peer can connect in. A lookup starts from the nodes the addon's sources
+// name, the engine's bootstrap nodes (see BootstrapNodes), and those peers
+// tell (PORT).
 const (
 	// dhtParallel is how many queries a lookup has out at once,
 	// dhtQueries how many it sends at most, and dhtWait how long one

@@ -97,6 +97,20 @@ var errNoAnswer = fmt.Errorf("no headers in time: %w", context.DeadlineExceeded)
 // errStalled reports a connection that sent no bytes for a while.
 var errStalled = errors.New("the connection stalled")
 
+// Final marks an opener's error as the source's failure at once, without
+// the tries the cache makes: the opener already waited as long as the
+// source may take, as a torrent's start, and trying again would wait as
+// long again. The error reads as err.
+func Final(err error) error {
+	return &finalError{err}
+}
+
+type finalError struct{ err error }
+
+func (e *finalError) Error() string { return e.err.Error() }
+
+func (e *finalError) Unwrap() error { return e.err }
+
 // Answer describes what a source answered to make a request fail, for
 // logs: its status, the range ignored, an answer cut short, or none. Never
 // the source's URL.
@@ -147,8 +161,15 @@ type Location struct {
 	Opener Opener
 	// Playing, when set, is called as a playback starts reading the source
 	// (see Source.Urge), and what it returns as that playback stops: a
-	// torrent's swarm is joined only meanwhile.
+	// torrent's swarm is joined only meanwhile. Such a source failing while
+	// no playback reads it failed for that alone: the next playback tries
+	// it again at once.
 	Playing func() (stop func())
+	// HeaderTimeout and StallTimeout, when set, replace the cache's wait
+	// for the source's headers and for a byte of a connection: a torrent's
+	// swarm takes longer to start, and to send a piece, than a host to
+	// answer.
+	HeaderTimeout, StallTimeout time.Duration
 }
 
 // Opener sends requests to sources; *stremio.Client is one.
@@ -510,10 +531,13 @@ type Source struct {
 	// nextFetch is when Fetch and FetchRanges may send their next request.
 	nextFetch time.Time
 	// failure is why the source failed, at failedAt; failed is closed
-	// while it is reported, and replaced once it is tried again.
+	// while it is reported, and replaced once it is tried again. unplayed
+	// marks a failure of a source read only by playbacks (see Location's
+	// Playing) that came while none read it.
 	failure  error
 	failedAt time.Time
 	failed   chan struct{}
+	unplayed bool
 	// answeredAt is when the source last answered with content.
 	answeredAt time.Time
 	// attached counts the streaming readers open.
@@ -525,6 +549,8 @@ type Source struct {
 	urged     int
 	heldBack  time.Time
 	slotWaits int
+	// joined counts the playbacks whose location's Playing returned.
+	joined int
 }
 
 // Urge has the source read for a playback until done is called, as a
@@ -532,6 +558,8 @@ type Source struct {
 // connection never waits for its host's other connections, and those of
 // background reads give way to it (see slots.go), and its location's
 // Playing runs meanwhile. Without, the source is read in the background.
+// Once Playing returns, a failure that came while no playback had it run
+// is forgotten: what reads the source next tries it again at once.
 func (s *Source) Urge() (done func()) {
 	s.mu.Lock()
 	s.urged++
@@ -541,12 +569,21 @@ func (s *Source) Urge() (done func()) {
 	stop := func() {}
 	if playing != nil {
 		stop = playing()
+		s.mu.Lock()
+		s.joined++
+		if s.failure != nil && s.unplayed {
+			s.failure, s.failed, s.unplayed = nil, make(chan struct{}), false
+		}
+		s.mu.Unlock()
 	}
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			s.mu.Lock()
 			s.urged--
+			if playing != nil {
+				s.joined--
+			}
 			s.mu.Unlock()
 			stop()
 		})
@@ -874,6 +911,7 @@ func (s *Source) fail(err error) {
 		close(s.failed)
 	}
 	s.failure, s.failedAt = err, time.Now()
+	s.unplayed = s.origin.Playing != nil && s.joined == 0
 	for block, w := range s.wanted {
 		w.err = err
 		delete(s.wanted, block)
