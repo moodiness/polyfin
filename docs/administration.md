@@ -70,7 +70,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - the **Transcoder**: GPU, encoders, and conversions against the limit (see [transcoding](transcoding.md));
   - the **Database** and its size;
   - the **Source cache**, against **Disk space for files being read (GB)**, with the part torrent pieces take;
-  - **Torrents**, while they are on: the route, the torrents playing, their peers and what was shared (see [Torrents](torrents.md));
+  - **Torrents**, while they are on: the route, the torrents playing, their peers and those reached over uTP, and what was shared (see [Torrents](torrents.md));
   - **Disk space** for the cache, recordings and backups folders;
   - **Backups**: the last run and its result, the last backup made, its file and size, the next one, each destination's last upload, and the last restore. A failed backup, or a last backup older than two days, is a problem; so is a destination whose last upload failed (an error), or whose newest backup is older than two days (a warning). See [Backups](backups.md);
   - **Thumbnails**: the queue and paused sources;
