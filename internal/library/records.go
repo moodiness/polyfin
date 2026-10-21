@@ -119,7 +119,11 @@ func (s *Service) saveNew(ctx context.Context, records []record) error {
 // apps opening a person's page do, failed on the second (a duplicate
 // items_key_key) or deadlocked. So the new items are inserted first,
 // skipping those either key finds, which waits for the requests inserting
-// them; then the others are merged, by a statement that sees them.
+// them; then the others are merged by an UPDATE, which never inserts. An
+// INSERT ... ON CONFLICT (id) DO UPDATE inserted an item its look-up of
+// the identifier missed, and failed on the key: the look-up misses an item
+// another request updates as it looks (PostgreSQL reads the entries of an
+// index page before their rows), or one deleted since the statement began.
 func (s *Service) upsert(ctx context.Context, records []*record, merged string) error {
 	ids, keys, kinds, data, err := columns(records)
 	if err != nil {
@@ -146,21 +150,23 @@ func (s *Service) upsert(ctx context.Context, records []*record, merged string) 
 		}
 	}
 	ids, keys, kinds, data = ids[:stored], keys[:stored], kinds[:stored], data[:stored]
-	// Only the items stored under their identifier are merged, in order. A
+	// Only the items stored under their identifier are merged, locked first
+	// in order so that requests merging the same items never deadlock; a
+	// batch is one transaction, which holds the locks until the merge. A
 	// record whose key is another identifier's is left out, and told: its
 	// identifier was not derived from its key.
-	rows, err = s.db.Query(ctx, `WITH saved AS (INSERT INTO items (id, key, kind, data)
-			SELECT id, key, kind, data FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[]) WITH ORDINALITY AS incoming(id, key, kind, data, n)
-			WHERE EXISTS (SELECT 1 FROM items WHERE items.id = incoming.id) ORDER BY n
-			ON CONFLICT (id) DO UPDATE SET data = `+merged+`, updated_at = now()
-			WHERE items.data IS DISTINCT FROM `+merged+`)
+	var taken []string
+	batch := &pgx.Batch{}
+	batch.Queue(`SELECT 1 FROM items WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE`, ids)
+	batch.Queue(`WITH saved AS (UPDATE items SET data = `+merged+`, updated_at = now()
+			FROM unnest($1::uuid[], $2::text[], $3::text[], $4::jsonb[]) AS excluded(id, key, kind, data)
+			WHERE items.id = excluded.id AND items.data IS DISTINCT FROM `+merged+`)
 		SELECT incoming.key FROM unnest($1::uuid[], $2::text[]) AS incoming(id, key)
-		WHERE EXISTS (SELECT 1 FROM items WHERE items.key = incoming.key AND items.id <> incoming.id)`, ids, keys, kinds, data)
-	if err != nil {
+		WHERE EXISTS (SELECT 1 FROM items WHERE items.key = incoming.key AND items.id <> incoming.id)`, ids, keys, kinds, data).Query(func(rows pgx.Rows) (err error) {
+		taken, err = pgx.CollectRows(rows, pgx.RowTo[string])
 		return err
-	}
-	taken, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
+	})
+	if err := s.db.SendBatch(ctx, batch).Close(); err != nil {
 		return err
 	}
 	if len(taken) > 0 {

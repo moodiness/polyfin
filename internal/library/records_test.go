@@ -1,9 +1,13 @@
 package library
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -129,5 +133,78 @@ func TestRecordsKeepTheirKeysIdentifier(t *testing.T) {
 	}
 	if _, err := e.service.load(t.Context(), stray); err != nil {
 		t.Errorf("the stored record: %v", err)
+	}
+}
+
+// A save merges the items it finds stored with what it records, whatever
+// another writer does to them meanwhile: it never inserts one, which the
+// key of another item would fail. Here the merge waits for an item another
+// writer holds, which deletes the next one and gives its key to a record of
+// another identifier: the save succeeds, merges the first, and leaves the
+// second out, telling it.
+func TestMergingItemsChangedMeanwhileSucceeds(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	ctx := t.Context()
+	log := &lockedBuffer{}
+	e.service.logger = slog.New(slog.NewTextHandler(log, nil))
+	records := []record{{Key: titleKey(KindMovie, "tt1"), Kind: KindMovie}, {Key: titleKey(KindMovie, "tt2"), Kind: KindMovie}}
+	for i := range records {
+		records[i].ID = itemID(records[i].Key)
+	}
+	slices.SortFunc(records, func(a, b record) int { return bytes.Compare(a.ID[:], b.ID[:]) })
+	first, second := records[0], records[1]
+	if err := e.service.save(ctx, records); err != nil {
+		t.Fatal(err)
+	}
+
+	holder, err := e.service.db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = holder.Rollback(context.WithoutCancel(ctx)) }()
+	var holderPID int
+	if err := holder.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&holderPID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := holder.Exec(ctx, "SELECT 1 FROM items WHERE id = $1 FOR UPDATE", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	folder := accounts.ID{7}
+	listed := slices.Clone(records)
+	for i := range listed {
+		listed[i].Parent = &folder
+	}
+	saved := make(chan error, 1)
+	go func() { saved <- e.service.save(ctx, listed) }()
+	eventually(t, "the save to wait for the first item", func() bool {
+		var waiting int
+		_ = e.service.db.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))", holderPID).Scan(&waiting)
+		return waiting > 0
+	})
+	stray := accounts.ID{9}
+	if _, err := holder.Exec(ctx, "DELETE FROM items WHERE id = $1", second.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := holder.Exec(ctx, `INSERT INTO items (id, key, kind, data) VALUES ($1, $2, 'movie', '{"kind": "movie"}')`, stray, second.Key); err != nil {
+		t.Fatal(err)
+	}
+	if err := holder.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-saved; err != nil {
+		t.Fatalf("the save: %v", err)
+	}
+	if r, err := e.service.load(ctx, first.ID); err != nil || r.Parent == nil || *r.Parent != folder {
+		t.Errorf("the first item: %+v %v", r, err)
+	}
+	if _, err := e.service.load(ctx, second.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("the second item: %v", err)
+	}
+	if r, err := e.service.load(ctx, stray); err != nil || r.Key != second.Key {
+		t.Errorf("the record holding its key: %+v %v", r, err)
+	}
+	if !strings.Contains(log.String(), "Items were not recorded") || !strings.Contains(log.String(), second.Key) {
+		t.Errorf("log:\n%s", log)
 	}
 }
