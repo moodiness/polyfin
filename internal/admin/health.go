@@ -191,16 +191,20 @@ type cacheJSON struct {
 	Torrents int64 `json:"torrents"`
 }
 
-// torrentHealthJSON is how torrent streams play: their route, "interface"
-// or "proxy", empty for none, Name the network interface's name or the
-// SOCKS5 proxy's address, the torrents playing, their peers, and the bytes
-// shared since the server started.
+// torrentHealthJSON is how torrent streams play: their route, "interface",
+// "proxy" or "wireguard", empty for none, Name the network interface's
+// name, the SOCKS5 proxy's address or the WireGuard server, the torrents
+// playing, their peers, and the bytes shared since the server started.
+// Over a WireGuard tunnel, Addresses are the tunnel's addresses and
+// LastHandshake when its last handshake was, null for none yet.
 type torrentHealthJSON struct {
-	Route    string `json:"route"`
-	Name     string `json:"name"`
-	Playing  int    `json:"playing"`
-	Peers    int    `json:"peers"`
-	Uploaded int64  `json:"uploaded"`
+	Route         string     `json:"route"`
+	Name          string     `json:"name"`
+	Addresses     []string   `json:"addresses,omitempty"`
+	LastHandshake *time.Time `json:"lastHandshake,omitempty"`
+	Playing       int        `json:"playing"`
+	Peers         int        `json:"peers"`
+	Uploaded      int64      `json:"uploaded"`
 }
 
 // diskJSON is the disk one of the server's folders is on: Folder is
@@ -316,6 +320,14 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 				result.Torrents.Route, result.Torrents.Name = "interface", settings.TorrentInterface
 			case settings.TorrentProxy != "":
 				result.Torrents.Route, result.Torrents.Name = "proxy", settings.TorrentProxy
+			case status.Tunnel != nil:
+				result.Torrents.Route, result.Torrents.Name = "wireguard", status.Tunnel.Endpoint
+				for _, prefix := range status.Tunnel.Addresses {
+					result.Torrents.Addresses = append(result.Torrents.Addresses, prefix.String())
+				}
+				if !status.Tunnel.LastHandshake.IsZero() {
+					result.Torrents.LastHandshake = &status.Tunnel.LastHandshake
+				}
 			}
 		}
 	}

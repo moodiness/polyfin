@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/tmdb"
+	"github.com/moodiness/polyfin/internal/torrent"
 )
 
 type userJSON struct {
@@ -685,18 +686,23 @@ type settingsJSON struct {
 	// TorrentDownloadMbps and TorrentUploadMbps keep their current values
 	// when a PUT leaves them out. The proxy's password is never sent back:
 	// TorrentProxyPasswordSet tells whether one is saved; a PUT leaving it
-	// out keeps it, and empty removes it. InterfaceRoutes tells whether
-	// this system binds sockets to an interface, Linux alone; a PUT
-	// ignores it.
-	TorrentStreams          *bool   `json:"torrentStreams"`
-	TorrentInterface        *string `json:"torrentInterface"`
-	TorrentProxy            *string `json:"torrentProxy"`
-	TorrentProxyUser        *string `json:"torrentProxyUser"`
-	TorrentProxyPassword    *string `json:"torrentProxyPassword,omitempty"`
-	TorrentProxyPasswordSet bool    `json:"torrentProxyPasswordSet"`
-	TorrentDownloadMbps     *int    `json:"torrentDownloadMbps"`
-	TorrentUploadMbps       *int    `json:"torrentUploadMbps"`
-	InterfaceRoutes         bool    `json:"interfaceRoutes"`
+	// out keeps it, and empty removes it. The WireGuard configuration is
+	// never sent back either, its private key with it:
+	// TorrentWireGuardSaved tells what the saved one says, null for none;
+	// a PUT leaving TorrentWireGuard out keeps it, and empty removes it.
+	// InterfaceRoutes tells whether this system binds sockets to an
+	// interface, Linux alone; a PUT ignores it and TorrentWireGuardSaved.
+	TorrentStreams          *bool          `json:"torrentStreams"`
+	TorrentInterface        *string        `json:"torrentInterface"`
+	TorrentProxy            *string        `json:"torrentProxy"`
+	TorrentProxyUser        *string        `json:"torrentProxyUser"`
+	TorrentProxyPassword    *string        `json:"torrentProxyPassword,omitempty"`
+	TorrentProxyPasswordSet bool           `json:"torrentProxyPasswordSet"`
+	TorrentWireGuard        *string        `json:"torrentWireGuard,omitempty"`
+	TorrentWireGuardSaved   *wireGuardJSON `json:"torrentWireGuardSaved"`
+	TorrentDownloadMbps     *int           `json:"torrentDownloadMbps"`
+	TorrentUploadMbps       *int           `json:"torrentUploadMbps"`
+	InterfaceRoutes         bool           `json:"interfaceRoutes"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
@@ -895,10 +901,40 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TorrentProxy:            &settings.TorrentProxy,
 		TorrentProxyUser:        &settings.TorrentProxyUser,
 		TorrentProxyPasswordSet: settings.TorrentProxyPassword != "",
+		TorrentWireGuardSaved:   savedWireGuard(settings.TorrentWireGuard),
 		TorrentDownloadMbps:     &settings.TorrentDownloadMbps,
 		TorrentUploadMbps:       &settings.TorrentUploadMbps,
 		InterfaceRoutes:         accounts.InterfaceRoutes,
 	}
+}
+
+// wireGuardJSON is what a saved WireGuard configuration says, without its
+// keys: its server, the tunnel's addresses, and its DNS servers, empty
+// when it names none.
+type wireGuardJSON struct {
+	Endpoint  string   `json:"endpoint"`
+	Addresses []string `json:"addresses"`
+	DNS       []string `json:"dns"`
+}
+
+// savedWireGuard tells what the WireGuard configuration config says, nil
+// for none, or one the key cannot open.
+func savedWireGuard(config string) *wireGuardJSON {
+	if config == "" {
+		return nil
+	}
+	parsed, err := torrent.ParseWireGuardConfig(config)
+	if err != nil {
+		return nil
+	}
+	saved := &wireGuardJSON{Endpoint: parsed.Endpoint, Addresses: []string{}, DNS: []string{}}
+	for _, prefix := range parsed.Addresses {
+		saved.Addresses = append(saved.Addresses, prefix.String())
+	}
+	for _, addr := range parsed.DNS {
+		saved.DNS = append(saved.DNS, addr.String())
+	}
+	return saved
 }
 
 // pathID parses an identifier path value, answering 404 when it is malformed.
@@ -1567,6 +1603,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TorrentProxy:         valueOr(body.TorrentProxy, current.TorrentProxy),
 		TorrentProxyUser:     valueOr(body.TorrentProxyUser, current.TorrentProxyUser),
 		TorrentProxyPassword: valueOr(body.TorrentProxyPassword, current.TorrentProxyPassword),
+		TorrentWireGuard:     valueOr(body.TorrentWireGuard, current.TorrentWireGuard),
 		TorrentDownloadMbps:  valueOr(body.TorrentDownloadMbps, current.TorrentDownloadMbps),
 		TorrentUploadMbps:    valueOr(body.TorrentUploadMbps, current.TorrentUploadMbps),
 	}
@@ -1579,6 +1616,14 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, err := h.Accounts.UpdateSettings(r.Context(), next)
+	// A WireGuard configuration refused tells where and why, for the
+	// admin app to say it in its language; never a value of it.
+	var configErr *torrent.WireGuardConfigError
+	if errors.As(err, &configErr) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_wireguard_config", "message": configErr.Error(),
+			"line": configErr.Line, "key": configErr.Key, "reason": configErr.Reason})
+		return
+	}
 	if accountError(w, err) {
 		return
 	}

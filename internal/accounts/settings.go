@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/mail"
 	"net/netip"
@@ -16,6 +17,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/moodiness/polyfin/internal/torrent"
 )
 
 // ErrInvalidServerName reports an empty, too long or unprintable server name.
@@ -1530,17 +1533,21 @@ type Settings struct {
 	MetricsToken string
 	// TorrentStreams plays the torrents addons list, to the users allowed
 	// to (see TorrentsAllowed), over one route alone: TorrentInterface, the
-	// network interface every torrent socket is bound to (Linux only), or
+	// network interface every torrent socket is bound to (Linux only),
 	// else TorrentProxy, a SOCKS5 proxy (host:port) with TorrentProxyUser
-	// and TorrentProxyPassword when it asks for them. TorrentProxyPassword
-	// is a secret, like PublicMetaDBKey. TorrentDownloadMbps bounds the
-	// download, 0 for no limit; TorrentUploadMbps the upload, 0 for no
-	// sharing.
+	// and TorrentProxyPassword when it asks for them, else
+	// TorrentWireGuard, the configuration of a WireGuard tunnel Polyfin
+	// runs (see torrent.ParseWireGuardConfig), stored as Marshal writes
+	// it. TorrentProxyPassword and TorrentWireGuard, which holds the
+	// tunnel's private key, are secrets, like PublicMetaDBKey.
+	// TorrentDownloadMbps bounds the download, 0 for no limit;
+	// TorrentUploadMbps the upload, 0 for no sharing.
 	TorrentStreams       bool
 	TorrentInterface     string
 	TorrentProxy         string
 	TorrentProxyUser     string
 	TorrentProxyPassword string
+	TorrentWireGuard     string
 	TorrentDownloadMbps  int
 	TorrentUploadMbps    int
 }
@@ -1564,17 +1571,26 @@ const (
 )
 
 // ErrInvalidTorrentRoute reports torrent settings without a route while
-// torrents play, with both, with an interface name or a proxy address not
-// valid, or with an interface on a system other than Linux; and
-// ErrInvalidTorrentLimit a limit outside [0, MaxTorrentMbps].
+// torrents play, with more than one, with an interface name or a proxy
+// address not valid, or with an interface on a system other than Linux;
+// ErrInvalidTorrentLimit a limit outside [0, MaxTorrentMbps]; and
+// ErrInvalidWireGuardConfig a WireGuard configuration refused, wrapped
+// with the *torrent.WireGuardConfigError that tells why.
 var (
-	ErrInvalidTorrentRoute = errors.New("invalid route for torrents")
-	ErrInvalidTorrentLimit = errors.New("invalid limit for torrents")
+	ErrInvalidTorrentRoute    = errors.New("invalid route for torrents")
+	ErrInvalidTorrentLimit    = errors.New("invalid limit for torrents")
+	ErrInvalidWireGuardConfig = errors.New("invalid WireGuard configuration")
 )
 
 // validTorrentRoute checks the torrent settings' route.
 func validTorrentRoute(s Settings) bool {
-	if s.TorrentInterface != "" && s.TorrentProxy != "" {
+	routes := 0
+	for _, route := range []string{s.TorrentInterface, s.TorrentProxy, s.TorrentWireGuard} {
+		if route != "" {
+			routes++
+		}
+	}
+	if routes > 1 {
 		return false
 	}
 	if s.TorrentInterface != "" && (!InterfaceRoutes || !ValidInterfaceName(s.TorrentInterface)) {
@@ -1587,7 +1603,7 @@ func validTorrentRoute(s Settings) bool {
 		strings.ContainsRune(s.TorrentProxyUser, 0) || strings.ContainsRune(s.TorrentProxyPassword, 0) {
 		return false
 	}
-	return !s.TorrentStreams || s.TorrentInterface != "" || s.TorrentProxy != ""
+	return !s.TorrentStreams || routes == 1
 }
 
 // ValidInterfaceName reports whether name may name a Linux network
@@ -1709,7 +1725,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
 	"metrics, metrics_token, " +
-	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_download_mbps, torrent_upload_mbps"
+	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_wireguard, torrent_download_mbps, torrent_upload_mbps"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1764,6 +1780,7 @@ func (settings *Settings) fields() []any {
 		&settings.PlaybackHistory, &settings.PlaybackHistoryDays, &settings.WeeklySummaryDay, &settings.WeeklySummaryHour,
 		&settings.ImportEveryMinutes, &settings.Metrics, &settings.MetricsToken,
 		&settings.TorrentStreams, &settings.TorrentInterface, &settings.TorrentProxy, &settings.TorrentProxyUser, &settings.TorrentProxyPassword,
+		&settings.TorrentWireGuard,
 		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps}
 }
 
@@ -1803,6 +1820,7 @@ func (settings *Settings) secrets() []struct {
 		{"smtpPassword", &settings.SMTPPassword},
 		{"metricsToken", &settings.MetricsToken},
 		{"torrentProxyPassword", &settings.TorrentProxyPassword},
+		{"torrentWireGuard", &settings.TorrentWireGuard},
 	}
 }
 
@@ -2228,6 +2246,15 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	settings.TorrentInterface = strings.TrimSpace(settings.TorrentInterface)
 	settings.TorrentProxy = strings.TrimSpace(settings.TorrentProxy)
+	if strings.TrimSpace(settings.TorrentWireGuard) == "" {
+		settings.TorrentWireGuard = ""
+	} else {
+		config, err := torrent.ParseWireGuardConfig(settings.TorrentWireGuard)
+		if err != nil {
+			return Settings{}, fmt.Errorf("%w: %w", ErrInvalidWireGuardConfig, err)
+		}
+		settings.TorrentWireGuard = config.Marshal()
+	}
 	if !validTorrentRoute(settings) {
 		return Settings{}, ErrInvalidTorrentRoute
 	}
@@ -2242,6 +2269,11 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	s.secretsMu.Lock()
 	defer s.secretsMu.Unlock()
+	// Another route replaces a WireGuard configuration the key cannot
+	// open: it is not kept as it was stored.
+	if settings.TorrentInterface != "" || settings.TorrentProxy != "" {
+		delete(s.unreadable, "torrentWireGuard")
+	}
 	stored := s.sealSecrets(settings)
 	_, err = s.db.Exec(ctx, updateSettingsQuery, stored.fields()...)
 	if err != nil {

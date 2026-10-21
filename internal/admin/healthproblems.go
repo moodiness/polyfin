@@ -697,6 +697,13 @@ func (p healthProblemJSON) text(language string) string {
 			why = [2]string{"the SOCKS5 proxy " + p.Name + " does not answer", "le proxy SOCKS5 " + p.Name + " ne répond pas"}
 		case torrent.ProxyRefused:
 			why = [2]string{"the SOCKS5 proxy " + p.Name + " refused the user and password", "le proxy SOCKS5 " + p.Name + " a refusé l’utilisateur et le mot de passe"}
+		case torrent.WireGuardEndpoint:
+			why = [2]string{"the WireGuard server " + p.Name + " cannot be looked up", "le serveur WireGuard " + p.Name + " est introuvable"}
+		case torrent.WireGuardDown:
+			why = [2]string{"the WireGuard tunnel to " + p.Name + " cannot start", "le tunnel WireGuard vers " + p.Name + " ne peut pas démarrer"}
+		case torrent.WireGuardHandshake:
+			why = [2]string{"the WireGuard server " + p.Name + " does not answer the handshake: it is unreachable, or a key of the configuration is wrong",
+				"le serveur WireGuard " + p.Name + " ne répond pas à la négociation : il est injoignable, ou une clé de la configuration est erronée"}
 		default:
 			why = [2]string{"no route is set", "aucune route n’est définie"}
 		}

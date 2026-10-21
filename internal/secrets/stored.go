@@ -37,6 +37,8 @@ var settingSecrets = []struct{ column, name string }{
 	{"myanimelist_client_secret", "myAnimeListClientSecret"},
 	{"smtp_password", "smtpPassword"},
 	{"metrics_token", "metricsToken"},
+	{"torrent_proxy_password", "torrentProxyPassword"},
+	{"torrent_wireguard", "torrentWireGuard"},
 }
 
 // Unreadable is a stored secret the key cannot open: a setting, by the

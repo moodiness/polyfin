@@ -3,6 +3,8 @@ package accounts
 import (
 	"net/netip"
 	"slices"
+
+	"github.com/moodiness/polyfin/internal/torrent"
 )
 
 // DefaultCustomCss and DefaultCustomJs are the web player's custom CSS and
@@ -195,6 +197,7 @@ func DefaultSettings() Settings {
 		TorrentProxy:         "",
 		TorrentProxyUser:     "",
 		TorrentProxyPassword: "",
+		TorrentWireGuard:     "",
 		TorrentDownloadMbps:  0,
 		TorrentUploadMbps:    0,
 	}
@@ -405,6 +408,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"torrentProxy":         text(MaxTorrentProxyBytes, d.TorrentProxy),
 		"torrentProxyUser":     text(MaxTorrentProxyBytes, d.TorrentProxyUser),
 		"torrentProxyPassword": text(MaxTorrentProxyBytes, d.TorrentProxyPassword),
+		"torrentWireGuard":     text(torrent.MaxWireGuardConfigBytes, d.TorrentWireGuard),
 		"torrentDownloadMbps":  between(0, MaxTorrentMbps, d.TorrentDownloadMbps),
 		"torrentUploadMbps":    between(0, MaxTorrentMbps, d.TorrentUploadMbps),
 	}

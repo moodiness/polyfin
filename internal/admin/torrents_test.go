@@ -2,10 +2,12 @@ package admin
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,5 +94,72 @@ func TestHealthTellsATorrentDidNotStart(t *testing.T) {
 		"to": "/settings/torrents#torrent-route", "transient": false, "failure": "no_peers"}
 	if len(found) != 1 || !reflect.DeepEqual(found[0], want) {
 		t.Fatalf("problems: %v", found)
+	}
+}
+
+// A WireGuard configuration is refused with its line, key and reason,
+// never shown back once saved, only what it says without its keys; a
+// tunnel whose key the server does not know is an error of System ›
+// Health.
+func TestWireGuardSettingsAndHealth(t *testing.T) {
+	t.Parallel()
+	server := torrenttest.StartWireGuardServer(t, nil)
+	private := torrenttest.NewPrivateKey()
+	wrongKey := server.ConfigWithKey(private)
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
+		engine, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
+			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(engine.Close)
+		o.Health = HealthSources{Torrents: engine}
+	})
+	administrator := api.signedIn("administrator", true)
+
+	bad := strings.Replace(wrongKey, "Endpoint = 127.0.0.1:", "Endpoint = 127.0.0.1:x", 1)
+	put := func(config string) map[string]any {
+		return map[string]any{"serverName": "Polyfin", "language": "en", "torrentStreams": true, "torrentWireGuard": config}
+	}
+	status, body, _ := administrator.call(http.MethodPut, "/settings", put(bad))
+	if status != http.StatusBadRequest || body["error"] != "invalid_wireguard_config" || body["key"] != "Endpoint" ||
+		body["reason"] != "invalid" || body["line"] != float64(8) || strings.Contains(fmt.Sprint(body), private) {
+		t.Fatalf("an invalid endpoint: %d %v", status, body)
+	}
+	status, body, _ = administrator.call(http.MethodPut, "/settings", put(wrongKey))
+	if status != http.StatusOK {
+		t.Fatalf("saving: %d %v", status, body)
+	}
+	_, body, _ = administrator.call(http.MethodGet, "/settings", nil)
+	saved, _ := body["torrentWireGuardSaved"].(map[string]any)
+	if _, sent := body["torrentWireGuard"]; sent || strings.Contains(fmt.Sprint(body), private) || saved == nil ||
+		!strings.HasPrefix(saved["endpoint"].(string), "127.0.0.1:") || !reflect.DeepEqual(saved["addresses"], []any{"10.64.0.2/32"}) ||
+		!reflect.DeepEqual(saved["dns"], []any{"10.64.0.1"}) {
+		t.Fatalf("settings: %v", body)
+	}
+
+	_, body, _ = administrator.call(http.MethodGet, "/health/problems?language=en", nil)
+	found, _ := body["problems"].([]any)
+	if len(found) != 1 {
+		t.Fatalf("problems: %v", found)
+	}
+	problem, _ := found[0].(map[string]any)
+	if problem["code"] != "torrent_route" || problem["failure"] != torrent.WireGuardHandshake || !strings.HasPrefix(problem["name"].(string), "127.0.0.1:") {
+		t.Fatalf("problem: %v", problem)
+	}
+	_, body, _ = administrator.call(http.MethodGet, "/health", nil)
+	torrents, _ := body["torrents"].(map[string]any)
+	if torrents["route"] != "wireguard" || torrents["lastHandshake"] != nil || !reflect.DeepEqual(torrents["addresses"], []any{"10.64.0.2/32"}) {
+		t.Fatalf("Health's torrents: %v", torrents)
+	}
+
+	// With the right key, Health tells the last handshake.
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", put(server.Config())); status != http.StatusOK {
+		t.Fatalf("saving: %d %v", status, body)
+	}
+	_, body, _ = administrator.call(http.MethodGet, "/health", nil)
+	torrents, _ = body["torrents"].(map[string]any)
+	if torrents["route"] != "wireguard" || torrents["lastHandshake"] == nil {
+		t.Fatalf("Health's torrents: %v", torrents)
 	}
 }

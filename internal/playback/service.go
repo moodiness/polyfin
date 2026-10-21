@@ -252,7 +252,7 @@ func (s *Service) Torrents(engine *torrent.Engine) {
 // TorrentSettings are the torrent engine's settings among the server's.
 func TorrentSettings(s accounts.Settings) torrent.Settings {
 	return torrent.Settings{Enabled: s.TorrentStreams, Interface: s.TorrentInterface, Proxy: s.TorrentProxy,
-		ProxyUser: s.TorrentProxyUser, ProxyPassword: s.TorrentProxyPassword,
+		ProxyUser: s.TorrentProxyUser, ProxyPassword: s.TorrentProxyPassword, WireGuard: s.TorrentWireGuard,
 		DownloadMbps: s.TorrentDownloadMbps, UploadMbps: s.TorrentUploadMbps}
 }
 

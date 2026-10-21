@@ -126,6 +126,11 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			case "torrentProxy":
 				// A proxy is a host and a port.
 				end = ":1080"
+			case "torrentWireGuard":
+				// A WireGuard configuration, a comment ending it.
+				key := "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk="
+				start = "[Interface]\nPrivateKey = " + key + "\nAddress = 10.2.0.2/32\n[Peer]\nPublicKey = " + key +
+					"\nEndpoint = 203.0.113.5:51820\nAllowedIPs = 0.0.0.0/0\n# "
 			case "torrentInterface":
 				// Only Linux binds sockets to an interface.
 				if !InterfaceRoutes {
