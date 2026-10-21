@@ -22,7 +22,7 @@ const account = {
     },
     /** My account › Metadata language. */
     metadataLanguage: {
-      help: 'The language of titles’ names, overviews and images in your apps, when one of the server’s addons describes them in it; titles no addon describes in it keep the server’s description. Genres, ratings and people stay the same for everyone. The names Polyfin makes itself, such as seasons, follow it when it is English or French.',
+      help: 'The language of titles’ names, overviews and images in your apps, when one of the server’s addons describes them in it; titles no addon describes in it keep the server’s description. Genres, ratings and people stay the same for everyone. The names Polyfin makes itself, such as seasons, follow it when Polyfin speaks it: English, French, German, Spanish, Italian or Portuguese.',
       label: 'Metadata language',
       server: 'The server’s',
       noLanguage:

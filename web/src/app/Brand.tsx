@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import { languages, useI18n } from '@/i18n'
-import { Segmented } from '@/ui'
+import { cx, Select } from '@/ui'
 
 /** The Polyfin logo and name, linking home. The logo is the only place for the brand gradient. */
 export function Brand({ link = true }: { link?: boolean }) {
@@ -28,21 +28,16 @@ export function Brand({ link = true }: { link?: boolean }) {
   )
 }
 
-/** FR / EN, as a segmented control. */
-export function LanguageSwitch({ size = 'sm' }: { size?: 'sm' | 'md' }) {
+/** The interface's language, as a list of the languages, each named in its own language. */
+export function LanguageSwitch({ className }: { className?: string }) {
   const { language, setLanguage, t } = useI18n()
   return (
-    <Segmented
-      label={t.language.label}
-      size={size}
+    <Select
+      aria-label={t.language.label}
       value={language}
-      onChange={setLanguage}
-      options={languages.map((code) => ({
-        value: code,
-        label: t.language[code].short,
-        title: t.language[code].name,
-        lang: code,
-      }))}
+      onValue={setLanguage}
+      options={languages.map((code) => ({ value: code, label: t.language[code].name, lang: code }))}
+      className={cx('w-[184px]', className)}
     />
   )
 }

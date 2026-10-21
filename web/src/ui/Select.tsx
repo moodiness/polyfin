@@ -143,6 +143,7 @@ function ListOption({
   selected,
   checked = false,
   disabled = false,
+  lang,
   onActivate,
   onChoose,
   children,
@@ -153,6 +154,8 @@ function ListOption({
   /** Draws the check mark of the chosen option. */
   checked?: boolean
   disabled?: boolean
+  /** A `lang` attribute, for an option written in another language. */
+  lang?: string
   onActivate: () => void
   onChoose: () => void
   children: ReactNode
@@ -161,6 +164,7 @@ function ListOption({
     <div
       id={id}
       role="option"
+      lang={lang}
       aria-selected={selected}
       aria-disabled={disabled || undefined}
       data-active={active || undefined}
@@ -187,6 +191,8 @@ export type SelectOption<T extends string | number> = {
   value: T
   label: string
   disabled?: boolean
+  /** A `lang` attribute, for an option written in another language (a language's own name). */
+  lang?: string
 }
 
 export type SelectProps<T extends string | number> = {
@@ -419,7 +425,9 @@ export function Select<T extends string | number>({
         onBlur={onBlur}
         className={cx(control, 'flex cursor-pointer items-center pr-9 text-left')}
       >
-        <span className="min-w-0 truncate">{chosen >= 0 ? options[chosen].label : ''}</span>
+        <span className="min-w-0 truncate" lang={chosen >= 0 ? options[chosen].lang : undefined}>
+          {chosen >= 0 ? options[chosen].label : ''}
+        </span>
       </button>
       <CaretDownIcon
         size={14}
@@ -480,6 +488,7 @@ export function Select<T extends string | number>({
                 selected={index === chosen}
                 checked={index === chosen}
                 disabled={options[index].disabled}
+                lang={options[index].lang}
                 onActivate={() => setActive(index)}
                 onChoose={() => choose(index)}
               >

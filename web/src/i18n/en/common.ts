@@ -11,6 +11,10 @@ const common = {
     label: 'Interface language',
     en: { short: 'EN', name: 'English' },
     fr: { short: 'FR', name: 'Français' },
+    de: { short: 'DE', name: 'Deutsch' },
+    es: { short: 'ES', name: 'Español' },
+    it: { short: 'IT', name: 'Italiano' },
+    'pt-BR': { short: 'PT', name: 'Português (Brasil)' },
   },
   common: {
     enterNumber: 'Enter a number.',

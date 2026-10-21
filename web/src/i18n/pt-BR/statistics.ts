@@ -1,0 +1,67 @@
+import type en from '../en/statistics'
+
+const statistics: typeof en = {
+  statistics: {
+    title: 'Estatísticas',
+    description:
+      'Como o servidor é usado: horas assistidas, os títulos, aplicativos e dispositivos, e como os vídeos chegam aos aplicativos. Músicas e audiolivros não são contados.',
+    period: 'Período',
+    periods: { '7d': '7 dias', '30d': '30 dias', year: 'Ano', all: 'Tudo' },
+    user: 'Usuário',
+    allUsers: 'Todos os usuários',
+    exportCsv: 'Exportar CSV',
+    historyOff: {
+      server: 'O histórico de reprodução está desativado: novas reproduções não são contadas.',
+      own: 'O histórico de reprodução está desativado neste servidor: novas reproduções não são contadas.',
+    },
+    openSettings: 'Abrir Configurações › Reprodução',
+    empty: 'Nenhuma reprodução neste período',
+    emptyHint:
+      'Vídeos reproduzidos por pelo menos 10 segundos em um aplicativo Jellyfin aparecem aqui assim que são interrompidos.',
+    figures: { played: 'Horas assistidas', plays: 'Reproduções', users: 'Usuários' },
+    perDay: 'Horas assistidas por dia',
+    perMonth: 'Horas assistidas por mês',
+    perUser: 'Horas assistidas por usuário',
+    movies: 'Filmes mais assistidos',
+    series: 'Séries mais assistidas',
+    channels: 'Canais mais assistidos',
+    apps: 'Aplicativos',
+    devices: 'Dispositivos',
+    methods: 'Como os vídeos são reproduzidos',
+    methodNames: {
+      direct_play: 'Reprodução direta',
+      direct_stream: 'Remux',
+      conversion: 'Conversão',
+      '': 'Desconhecido',
+    },
+    hours: 'Horários de maior uso',
+    hoursHelp: 'Horas assistidas em cada hora da semana, no seu fuso horário.',
+    hoursCell: (day: string, hour: string, time: string) => `${day} ${hour}: ${time}`,
+    plays: (count: number) => (count === 1 ? '1 reprodução' : `${count} reproduções`),
+    users: (count: number) => (count === 1 ? '1 usuário' : `${count} usuários`),
+    share: (percent: string) => `${percent} das reproduções`,
+    none: 'Nenhum neste período.',
+    unknownApp: 'Aplicativo desconhecido',
+    unknownDevice: 'Dispositivo desconhecido',
+    bar: (label: string, time: string) => `${label}: ${time}`,
+    history: 'Reproduções recentes',
+    historyEmpty: 'Nenhuma reprodução neste período.',
+    columns: {
+      started: 'Início',
+      user: 'Usuário',
+      title: 'Título',
+      device: 'Aplicativo e dispositivo',
+      played: 'Reproduzido',
+      method: 'Modo de reprodução',
+    },
+    appOn: (app: string, device: string) => (app && device ? `${app} em ${device}` : app || device),
+    shared: 'Compartilhado',
+    sharedHelp: 'Reproduzido por um convidado por meio de um link de compartilhamento',
+    sharedLink: 'Link compartilhado',
+    webBrowser: 'Navegador web',
+    showMore: 'Mostrar mais',
+    loadingMore: 'Carregando…',
+  },
+}
+
+export default statistics

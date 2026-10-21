@@ -9,6 +9,10 @@ const common: typeof en = {
     label: 'Langue de l’interface',
     en: { short: 'EN', name: 'English' },
     fr: { short: 'FR', name: 'Français' },
+    de: { short: 'DE', name: 'Deutsch' },
+    es: { short: 'ES', name: 'Español' },
+    it: { short: 'IT', name: 'Italiano' },
+    'pt-BR': { short: 'PT', name: 'Português (Brasil)' },
   },
   common: {
     enterNumber: 'Saisissez un nombre.',

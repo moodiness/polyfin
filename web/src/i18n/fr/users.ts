@@ -72,7 +72,7 @@ const users: typeof en = {
     updated: 'Modifications enregistrées.',
     metadataLanguageTitle: 'Langue des métadonnées',
     metadataLanguageHelp:
-      'La langue des noms, des résumés et des images des titres dans les applis de cet utilisateur, quand l’un des addons du serveur les décrit dans cette langue ; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous : le contrôle parental et les genres bloqués jugent chaque utilisateur de la même façon. Les noms que Polyfin crée lui-même la suivent quand c’est l’anglais ou le français.',
+      'La langue des noms, des résumés et des images des titres dans les applis de cet utilisateur, quand l’un des addons du serveur les décrit dans cette langue ; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous : le contrôle parental et les genres bloqués jugent chaque utilisateur de la même façon. Les noms que Polyfin crée lui-même la suivent quand Polyfin la parle : anglais, français, allemand, espagnol, italien ou portugais.',
     metadataLanguageNone:
       'Aucun addon du serveur n’a encore de langue. Donnez-en une à un addon sur sa page, dans Contenu › Sources.',
     parentalTitle: 'Contrôle parental',

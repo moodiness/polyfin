@@ -22,7 +22,7 @@ const account: typeof en = {
       twoStep: 'Connexion en deux étapes',
     },
     metadataLanguage: {
-      help: 'La langue des noms, des résumés et des images des titres dans vos applis, quand l’un des addons du serveur les décrit dans cette langue ; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous. Les noms que Polyfin crée lui-même, comme les saisons, la suivent quand c’est l’anglais ou le français.',
+      help: 'La langue des noms, des résumés et des images des titres dans vos applis, quand l’un des addons du serveur les décrit dans cette langue ; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous. Les noms que Polyfin crée lui-même, comme les saisons, la suivent quand Polyfin la parle : anglais, français, allemand, espagnol, italien ou portugais.',
       label: 'Langue des métadonnées',
       server: 'Celle du serveur',
       noLanguage:

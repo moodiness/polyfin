@@ -1,0 +1,218 @@
+import type en from '../en/home'
+
+/** The GPU methods, as the server names them. */
+const gpuMethodNames: Record<string, string> = {
+  cuda: 'NVIDIA',
+  vaapi: 'VAAPI',
+  videotoolbox: 'VideoToolbox',
+  qsv: 'QSV',
+  amf: 'AMF',
+}
+
+const home: typeof en = {
+  quickConnect: {
+    title: 'Quick Connect',
+    description:
+      'Inicie sesión en una aplicación de televisión o de móvil sin escribir su contraseña: elija Quick Connect en la aplicación y, a continuación, introduzca el código de 6 dígitos que se muestra.',
+    code: 'Código de Quick Connect',
+    codeHint: 'Los códigos caducan a los 10 minutos.',
+    lookingUp: 'Buscando el dispositivo…',
+    requestTitle: 'Dispositivo pendiente de aprobación',
+    device: 'Dispositivo',
+    app: 'Aplicación',
+    requested: 'Solicitado',
+    approve: 'Aprobar e iniciar sesión en este dispositivo',
+    approving: 'Aprobando…',
+    approved: (device: string, user: string) => `${device} ha iniciado sesión como ${user}.`,
+    another: 'Aprobar otro dispositivo',
+    steps: [
+      'Abra la aplicación de Jellyfin en el dispositivo y elija Quick Connect.',
+      'Escriba aquí el código de 6 dígitos que se muestra.',
+      'Compruebe el dispositivo y, a continuación, apruébelo.',
+    ],
+    stepsLabel: 'Cómo funciona',
+  },
+  notFound: {
+    title: 'Página no encontrada',
+    description: 'Esta página no existe.',
+    home: 'Volver a la página de inicio',
+  },
+  dashboard: {
+    overview: {
+      greeting: (hour: number, name: string) =>
+        `${hour >= 18 || hour < 5 ? 'Buenas noches' : hour >= 12 ? 'Buenas tardes' : 'Buenos días'}, ${name}`,
+      summary: (playing: number, problems: number) =>
+        `${playing === 0 ? 'No se está reproduciendo nada' : playing === 1 ? 'Una reproducción en curso' : `${playing} reproducciones en curso`}${
+          problems === 0
+            ? ' y nada que revisar. Todo funciona con normalidad.'
+            : problems === 1
+              ? ', y una cosa que revisar.'
+              : `, y ${problems} cosas que revisar.`
+        }`,
+      description:
+        'Lo que se está reproduciendo en el servidor y lo que ha ocurrido recientemente.',
+      conversions: 'Conversiones de vídeo',
+      conversionsOf: (count: number, limit: number) =>
+        limit > 0 ? `${count} de ${limit}` : `${count}, sin límite`,
+      uptime: 'En funcionamiento desde hace',
+      problems: 'Para revisar',
+      problemsEmpty: 'Nada que revisar',
+      problemsEmptyHelp:
+        'Polyfin supervisa sus discos, fuentes, guías, copias de seguridad y tareas. Todo lo que requiera su atención aparecerá aquí.',
+      problemError: 'Problema',
+      problemWarning: 'Por comprobar',
+      update: (version: string, running: string) =>
+        `Polyfin ${version} está disponible. Este servidor ejecuta la versión ${running}.`,
+      releaseNotes: 'Notas de la versión',
+      open: 'Abrir',
+      openHealth: 'Abrir Estado del sistema',
+      serverTitle: 'Estado del servidor',
+      version: 'Versión',
+      database: 'Base de datos',
+      databaseSize: (size: string) => `${size} en disco`,
+      cache: 'Caché',
+      cacheOf: (limit: string) => `de ${limit}`,
+      cacheNoLimit: 'sin límite',
+      cacheOff: 'Desactivada',
+      cacheUnit: 'Caché en uso',
+      graphics: 'Tarjeta gráfica',
+      graphicsNone: 'Ninguna',
+      graphicsCpu: 'Las conversiones usan el procesador',
+      toneMapping: 'mapeo de tonos',
+    },
+    live: {
+      title: 'Reproduciendo ahora',
+      empty: 'No se está reproduciendo nada en este momento.',
+      emptyHelp:
+        'Las reproducciones desde aplicaciones de Jellyfin aparecen aquí en pocos segundos.',
+      autoRefresh: 'Se actualiza cada 3 segundos.',
+      paused: 'En pausa',
+      unknownTitle: 'Título no encontrado',
+      movie: (year: number) => (year > 0 ? `Película, ${year}` : 'Película'),
+      liveChannel: 'En vivo',
+      progress: (title: string) => `Posición de reproducción de ${title}`,
+      remaining: (time: string) => `Quedan ${time}`,
+      startedAt: (time: string) => `Iniciado ${time}`,
+      appOn: (app: string, device: string) => (app ? `${app} en ${device}` : device),
+      sharedLink: 'Enlace compartido',
+      downloadOn: (app: string, device: string) =>
+        app ? `Descarga, ${app} en ${device}` : 'Descarga',
+      downloading: 'Descargando',
+      downloadProgress: (title: string) => `Progreso de la descarga de ${title}`,
+      downloadNotControllable:
+        'Una descarga convertida para verla sin conexión. Se detiene cuando la aplicación la cancela.',
+      howItPlays: 'Cómo se reproduce',
+      details: 'Detalles',
+      delivery: {
+        directPlay: 'Reproducción directa',
+        remux: 'Remux',
+        conversion: 'Conversión',
+        stream: 'Transmisión',
+      } as Record<string, string>,
+      deliveryHelp: {
+        directPlay: 'La aplicación lee el archivo tal cual.',
+        remux: 'Polyfin reempaqueta el archivo para la aplicación, sin volver a codificarlo.',
+        conversion: 'Polyfin vuelve a codificar lo que la aplicación no puede reproducir.',
+        stream:
+          'Polyfin transmite el archivo a la aplicación. Los detalles vuelven a mostrarse en cuanto la aplicación pide más.',
+      } as Record<string, string>,
+      why: 'Motivo',
+      source: 'Fuente',
+      sent: 'Enviado',
+      encoder: 'Codificador',
+      gpu: (method: string) => `GPU (${gpuMethodNames[method] ?? method})`,
+      gpuMethod: (method: string) => gpuMethodNames[method] ?? method,
+      cpu: 'CPU',
+      copied: 'Copiado',
+      toneMapped: 'HDR a SDR',
+      burned: 'Subtítulos incrustados',
+      qualityGroup: 'Grupo de calidad',
+      original: 'Original',
+      sizeLimit: 'Menor que la fuente',
+      qualityPlayed: 'Calidad reproducida',
+      qualityAmong: (played: string, offered: string) => `${played}, entre ${offered}`,
+      sizeLimits: {
+        steppedDown: (height: string) => `La aplicación bajó de ${height}`,
+        gpu: (height: string) => `${height} como máximo: convertido por la tarjeta gráfica`,
+        processor: (height: string) => `${height} como máximo: convertido por el procesador`,
+        toneMapping: (height: string) => `${height} como máximo: HDR convertido por el procesador`,
+        qualityGroup: (height: string) => `Grupo de calidad: ${height}`,
+        serverMax: (height: string) => `Calidad máxima del vídeo convertido: ${height}`,
+        appBitrate: (rate: string) => `Tasa de bits permitida por la aplicación: ${rate}`,
+        userBitrate: (rate: string) => `Calidad máxima del usuario: ${rate}`,
+      },
+      unknown: 'Desconocido',
+      stop: 'Detener',
+      stopFor: (user: string) => `Detener la reproducción de ${user}`,
+      stopTitle: '¿Detener esta reproducción?',
+      stopConfirm: (user: string, title: string) =>
+        `¿Detener «${title}» en el dispositivo de ${user}? La aplicación deja de reproducir de inmediato.`,
+      stopped: 'Se ha pedido a la aplicación que se detenga.',
+      message: 'Enviar un mensaje',
+      messageTo: (user: string) => `Enviar un mensaje a ${user}`,
+      messageLabel: (device: string) => `Mensaje que se mostrará en ${device}`,
+      messageHint: 'Se muestra en el dispositivo durante 10 segundos. 500 caracteres como máximo.',
+      send: 'Enviar',
+      messageSent: 'Mensaje enviado.',
+      notControllable: 'Esta aplicación no admite el control remoto.',
+      sharedNotControllable:
+        'Un invitado que ve el contenido mediante un enlace para compartir. Para detenerlo, revoque el enlace en la página del usuario.',
+    },
+    reasons: {
+      ContainerNotSupported: 'Formato de archivo no compatible',
+      VideoCodecNotSupported: 'Códec de vídeo no compatible',
+      AudioCodecNotSupported: 'Códec de audio no compatible',
+      SubtitleCodecNotSupported: 'Formato de subtítulos no compatible',
+      AudioIsExternal: 'Audio en un archivo aparte',
+      SecondaryAudioNotSupported: 'Segunda pista de audio no compatible',
+      VideoProfileNotSupported: 'Perfil de vídeo no compatible',
+      VideoLevelNotSupported: 'Nivel de vídeo no compatible',
+      VideoResolutionNotSupported: 'Resolución demasiado alta',
+      VideoBitDepthNotSupported: 'Profundidad de bits de vídeo no compatible',
+      VideoFramerateNotSupported: 'Velocidad de fotogramas no compatible',
+      RefFramesNotSupported: 'Demasiados fotogramas de referencia',
+      AnamorphicVideoNotSupported: 'Vídeo anamórfico no compatible',
+      InterlacedVideoNotSupported: 'Vídeo entrelazado no compatible',
+      VideoCodecTagNotSupported: 'Etiqueta de códec de vídeo no compatible',
+      VideoBitrateNotSupported: 'Tasa de bits de vídeo demasiado alta',
+      AudioChannelsNotSupported: 'Demasiados canales de audio',
+      AudioProfileNotSupported: 'Perfil de audio no compatible',
+      AudioSampleRateNotSupported: 'Frecuencia de muestreo de audio no compatible',
+      AudioBitDepthNotSupported: 'Profundidad de bits de audio no compatible',
+      AudioBitrateNotSupported: 'Tasa de bits de audio demasiado alta',
+      ContainerBitrateExceedsLimit: 'Por encima del límite de tasa de bits',
+      UnknownVideoStreamInfo: 'Vídeo sin describir',
+      UnknownAudioStreamInfo: 'Audio sin describir',
+      DirectPlayError: 'Error en la reproducción directa',
+      VideoRangeTypeNotSupported: 'HDR no compatible',
+      StreamCountExceedsLimit: 'Demasiadas pistas',
+    } as Record<string, string>,
+    activity: {
+      title: 'Actividad reciente',
+      openLog: 'Abrir el registro',
+      empty: 'Aún no hay actividad.',
+      emptyHelp:
+        'Los inicios de sesión, las reproducciones y los cambios en el servidor aparecen aquí a medida que se producen.',
+      warning: 'Advertencia',
+      error: 'Error',
+      filter: 'Mostrar',
+      filters: {
+        all: 'Todo',
+        problems: 'Problemas',
+        signIns: 'Inicios de sesión',
+        playback: 'Reproducción',
+        users: 'Usuarios',
+        server: 'Servidor y extensiones',
+        recordings: 'Grabaciones',
+      },
+      search: 'Buscar en los eventos mostrados',
+      listLabel: 'Últimos eventos',
+      noMatch: 'Ningún evento coincide.',
+      noMatchHelp: 'Elija otro filtro o borre la búsqueda.',
+      count: (shown: number, total: number) => `${shown} de ${total} eventos.`,
+      autoRefresh: 'Se actualiza cada 15 segundos.',
+    },
+  },
+}
+
+export default home

@@ -66,7 +66,7 @@ const users = {
     updated: 'Changes saved.',
     metadataLanguageTitle: 'Metadata language',
     metadataLanguageHelp:
-      'The language of titles’ names, overviews and images in this user’s apps, when one of the server’s addons describes them in it; titles no addon describes in it keep the server’s description. Genres, ratings and people stay the same for everyone, so parental control and blocked genres judge every user alike. The names Polyfin makes itself follow it when it is English or French.',
+      'The language of titles’ names, overviews and images in this user’s apps, when one of the server’s addons describes them in it; titles no addon describes in it keep the server’s description. Genres, ratings and people stay the same for everyone, so parental control and blocked genres judge every user alike. The names Polyfin makes itself follow it when Polyfin speaks it: English, French, German, Spanish, Italian or Portuguese.',
     metadataLanguageNone:
       'No addon of the server has a language yet. Give one a language on its page under Content › Sources.',
     parentalTitle: 'Parental control',

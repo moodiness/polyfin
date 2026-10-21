@@ -1,0 +1,532 @@
+import type en from '../en/users'
+
+const users: typeof en = {
+  users: {
+    title: 'Usuários',
+    description: 'Crie e gerencie as contas autorizadas a usar este servidor.',
+    listTitle: 'Contas',
+    empty: 'Nenhum usuário ainda.',
+    administrator: 'Administrador',
+    hidden: 'Oculto na tela de login',
+    disabled: 'Desativado',
+    you: 'Você',
+    createTitle: 'Criar um usuário',
+    name: 'Nome',
+    password: 'Senha',
+    isAdministrator: 'Administrador',
+    isAdministratorHelp: 'Administradores podem gerenciar usuários e as configurações do servidor.',
+    showOnSignIn: 'Mostrar na tela de login',
+    showOnSignInHelp:
+      'Usuários visíveis aparecem na tela de login dos aplicativos Jellyfin. Usuários ocultos digitam o próprio nome, como no padrão do Jellyfin.',
+    create: 'Criar usuário',
+    creating: 'Criando…',
+    created: (name: string) => `${name} foi criado.`,
+    edit: 'Editar',
+    close: 'Fechar',
+    rename: 'Renomear',
+    renamed: 'Nome alterado.',
+    resetPassword: 'Redefinir senha',
+    newPassword: 'Nova senha',
+    resetPasswordHelp: 'Alterar a senha desconecta todos os dispositivos Jellyfin deste usuário.',
+    passwordReset: 'Senha redefinida.',
+    accessTitle: 'Acesso',
+    isDisabled: 'Desativado',
+    isDisabledHelp:
+      'Um usuário desativado não consegue entrar, e todos os seus dispositivos são desconectados.',
+    ended: 'Encerrada',
+    endsOn: (date: string) => `Encerra em ${date}`,
+    endedOn: (date: string) => `Encerrada em ${date}`,
+    endTitle: 'Encerra em',
+    endHelp:
+      'A partir desta data, no fuso horário do servidor, a conta é recusada como uma conta desativada: ela não consegue entrar, e seus dispositivos são recusados. Tudo o que ela tem é mantido, e uma data posterior, ou “Nunca”, a reativa.',
+    endAdministratorHelp:
+      'A conta de um administrador nunca é encerrada: tornar um usuário administrador apaga a data de encerramento dele.',
+    endDate: 'Data de encerramento',
+    saveEnd: 'Salvar data',
+    endNever: 'Nunca',
+    canTranscode: 'Pode usar conversão (transcodificação)',
+    canTranscodeHelp:
+      'Permite que o servidor recodifique vídeo e áudio quando o aplicativo deste usuário não consegue reproduzir um arquivo como ele está. Sem isso, os arquivos são reproduzidos como estão ou apenas reempacotados.',
+    canDownload: 'Pode baixar',
+    canDownloadHelp:
+      'Permite que este usuário salve títulos nos aplicativos Jellyfin para assistir offline.',
+    canPlayTorrents: 'Pode reproduzir streams de torrent',
+    canPlayTorrentsHelp:
+      'Oferece a este usuário a lista de torrents dos complementos, enquanto Configurações › Torrents os reproduz. Desativado para todos, inclusive administradores, até ser concedido.',
+    noTranscoding: 'Sem conversão',
+    noDownloads: 'Sem downloads',
+    turnOffDownloads: 'Desativar downloads para todos',
+    turnOffDownloadsConfirm:
+      'Todos os usuários e todos os grupos perdem a permissão de baixar, inclusive nos aplicativos Jellyfin já conectados. Você pode concedê-la de novo a um usuário ou grupo na página dele, em Acesso.',
+    turningOffDownloads: 'Desativando…',
+    downloadsTurnedOff: (count: number) =>
+      count === 0
+        ? 'Ninguém podia baixar.'
+        : count === 1
+          ? '1 usuário não pode mais baixar.'
+          : `${count} usuários não podem mais baixar.`,
+    lastAdminHelp: 'O último administrador ativo não pode ser excluído, rebaixado nem desativado.',
+    updated: 'Alterações salvas.',
+    metadataLanguageTitle: 'Idioma dos metadados',
+    metadataLanguageHelp:
+      'O idioma dos nomes, sinopses e imagens dos títulos nos aplicativos deste usuário, quando um dos complementos do servidor os descreve nesse idioma; títulos que nenhum complemento descreve nele mantêm a descrição do servidor. Gêneros, classificações etárias e pessoas continuam iguais para todos, então o controle parental e os gêneros bloqueados avaliam todos os usuários da mesma forma. Os nomes que o próprio Polyfin cria seguem esse idioma quando o Polyfin o fala: inglês, francês, alemão, espanhol, italiano ou português.',
+    metadataLanguageNone:
+      'Nenhum complemento do servidor tem idioma ainda. Defina um idioma para um complemento na página dele, em Conteúdo › Fontes.',
+    parentalTitle: 'Controle parental',
+    maxRating: 'Classificação etária máxima',
+    maxRatingHelp: 'Títulos com classificação acima deste limite ficam ocultos para este usuário.',
+    noLimit: 'Sem limite',
+    blockUnratedMovies: 'Bloquear filmes sem classificação',
+    blockUnratedShows: 'Bloquear séries sem classificação',
+    ratingLimit: (rating: string) => `Até ${rating}`,
+    saveParental: 'Salvar controle parental',
+    devicesTitle: 'Dispositivos',
+    delete: 'Excluir usuário',
+    deleteConfirm: (name: string) =>
+      `Excluir ${name}? Os dispositivos dele serão desconectados, e esta ação não pode ser desfeita.`,
+    deleting: 'Excluindo…',
+    deleted: (name: string) => `${name} foi excluído.`,
+    canAddAddons: 'Pode adicionar os próprios complementos',
+    canAddAddonsHelp:
+      'Permite que este usuário adicione os próprios complementos Stremio na página Minhas fontes. Sem isso, os complementos dele são mantidos, mas não usados.',
+    noPersonalAddons: 'Sem complementos próprios',
+    blockedUntil: (time: string) => `Bloqueado até ${time}`,
+    blockedHelp:
+      'Foram digitadas senhas incorretas demais para esta conta: ela não pode entrar até esse horário, mesmo com a senha correta.',
+    unblock: 'Desbloquear',
+    unblocking: 'Desbloqueando…',
+    unblocked: 'A conta foi desbloqueada.',
+    twoStepOn: 'O login em duas etapas está ativado.',
+    twoStepHelp:
+      'Se este usuário perdeu o celular com o aplicativo autenticador e não tem mais nenhum código de recuperação, desative-o: ele entra apenas com a senha e depois o configura novamente em Minha conta.',
+    turnOffTwoStep: 'Desativar login em duas etapas',
+    turningOffTwoStep: 'Desativando…',
+    turnOffTwoStepTitle: (name: string) => `Desativar o login em duas etapas de ${name}?`,
+    turnOffTwoStepConfirm: (name: string) =>
+      `${name} passará a entrar apenas com a senha. O registro de atividades registra que você o desativou.`,
+    twoStepTurnedOff: 'Login em duas etapas desativado para este usuário.',
+    playbackAccessTitle: 'Reprodução e acesso',
+    maxPlaybacks: 'Reproduções simultâneas (0 = sem limite)',
+    maxPlaybacksHelp:
+      'Quantos dispositivos deste usuário podem reproduzir ao mesmo tempo. Ele ainda pode entrar em mais dispositivos.',
+    maxBitrate: 'Qualidade máxima',
+    maxBitrateHelp:
+      'Acima dela, o vídeo é convertido para uma qualidade menor quando este usuário pode usar a conversão; caso contrário, é reproduzida uma versão mais leve.',
+    bitrateNoLimit: 'Sem limite',
+    bitrate4k: '40 Mbit/s (4K)',
+    bitrate1080High: '20 Mbit/s (1080p, alta qualidade)',
+    bitrate1080: '10 Mbit/s (1080p)',
+    bitrate720: '4 Mbit/s (720p)',
+    bitrate480: '2 Mbit/s (480p)',
+    bitrateOther: (mbits: string) => `${mbits} Mbit/s`,
+    liveTv: 'TV ao Vivo',
+    liveTvHelp: 'Mostra os canais de TV ao Vivo para este usuário.',
+    syncPlay: 'Assistir juntos',
+    syncPlayHelp:
+      'Reproduzir o mesmo título em sincronia com outras pessoas, nos aplicativos Jellyfin que oferecem esse recurso.',
+    syncPlayCreateAndJoin: 'Criar e entrar em grupos',
+    syncPlayJoin: 'Apenas entrar',
+    syncPlayNone: 'Não',
+    remoteControl: 'Pode controlar os aplicativos de outros usuários',
+    remoteControlHelp:
+      'Permite que este usuário reproduza, pause ou envie mensagens para os aplicativos Jellyfin de outros usuários. Todos podem controlar os próprios aplicativos.',
+    liveTvManagement: 'Pode gravar TV ao Vivo',
+    liveTvManagementHelp: 'Agendar e excluir gravações.',
+    savePlaybackAccess: 'Salvar reprodução e acesso',
+    visibleLibrariesTitle: 'Bibliotecas visíveis',
+    visibleLibrariesHelp:
+      'As bibliotecas do servidor que os aplicativos deste usuário mostram. Bibliotecas adicionadas depois são mostradas. Isso apenas escolhe as bibliotecas mostradas: os títulos continuam acessíveis por outras bibliotecas, pela pesquisa ou por links. Para bloquear títulos, use o controle parental ou os gêneros bloqueados.',
+    noServerLibraries: 'O servidor ainda não tem nenhuma biblioteca.',
+    saveVisibleLibraries: 'Salvar bibliotecas visíveis',
+    blockedGenresTitle: 'Gêneros bloqueados',
+    blockedGenresHelp:
+      'Títulos de qualquer um destes gêneros ficam ocultos para este usuário em todos os lugares, como os títulos acima do limite do controle parental dele.',
+    genre: 'Gênero',
+    genreHint: 'Escolha um gênero das bibliotecas do servidor ou digite um.',
+    addGenre: 'Adicionar',
+    removeGenre: (genre: string) => `Remover ${genre}`,
+    noBlockedGenres: 'Nenhum gênero está bloqueado.',
+    saveBlockedGenres: 'Salvar gêneros bloqueados',
+    allowedHoursTitle: 'Horários permitidos',
+    allowedHoursHelp:
+      'Quando há horários definidos, este usuário só pode entrar e usar o servidor durante eles, no fuso horário do servidor. Fora deles, os aplicativos dele são recusados.',
+    noAllowedHours: 'Nenhum horário definido: este usuário pode usar o servidor a qualquer hora.',
+    day: 'Dia',
+    from: 'De',
+    to: 'Até',
+    addHours: 'Adicionar horário',
+    removeHours: 'Remover',
+    hoursOrder: 'Cada horário de término deve ser posterior ao horário de início.',
+    saveAllowedHours: 'Salvar horários permitidos',
+    days: {
+      Sunday: 'Domingo',
+      Monday: 'Segunda-feira',
+      Tuesday: 'Terça-feira',
+      Wednesday: 'Quarta-feira',
+      Thursday: 'Quinta-feira',
+      Friday: 'Sexta-feira',
+      Saturday: 'Sábado',
+      Everyday: 'Todos os dias',
+      Weekday: 'Dias úteis (segunda a sexta-feira)',
+      Weekend: 'Fins de semana',
+    },
+    canManageCollections: 'Pode gerenciar coleções',
+    canManageCollectionsHelp:
+      'Permite que este usuário crie coleções de títulos nos aplicativos Jellyfin, adicione ou remova títulos delas e as exclua. Todos os usuários veem as coleções, cada um apenas com os títulos que pode ver.',
+    resetPinRequested: 'Redefinição de senha solicitada: PIN',
+    resetPinValidUntil: (time: string) => `, válido até ${time}`,
+    resetPinHelp: 'Passe este PIN ao usuário: ele entra com o PIN, que se torna a nova senha dele.',
+    canManageSubtitles: 'Pode gerenciar legendas',
+    canManageSubtitlesHelp:
+      'Permite que este usuário adicione arquivos de legenda aos títulos pelos aplicativos Jellyfin dele e pesquise ali as legendas dos complementos.',
+    canShare: 'Pode compartilhar títulos',
+    canShareHelp:
+      'Permite que este usuário dê acesso a um filme ou episódio a alguém sem conta, por meio de um link que expira, em Minha conta ou na página de um título no player web, enquanto Configurações › Segurança › Permitir links de compartilhamento estiver ativado. Desativar revoga os links dele.',
+    shareLinksTitle: 'Links compartilhados',
+    shareLinksHelp:
+      'Os links que este usuário criou para compartilhar um filme ou um episódio. “Revogar” encerra um deles imediatamente.',
+    qualityGroup: 'Grupo de qualidade',
+    qualityGroupHelp:
+      'A resolução mais alta oferecida a este usuário. Versões superiores são deixadas de fora enquanto houver uma que se encaixe; se nenhuma se encaixar, elas são convertidas para uma resolução menor, ou recusadas quando este usuário não pode usar a conversão. A TV ao Vivo também é convertida para uma resolução menor. Somente as versões que se encaixam são baixadas como estão; com “Downloads convertidos” ativado (Configurações › Conversão), os aplicativos que solicitarem baixam as outras convertidas para uma resolução menor.',
+    qualityGroupOriginal: 'Original (sem limite)',
+    member: 'Membro',
+    lastSignInLabel: 'Último login:',
+    active: 'Ativo',
+    pinRequested: 'PIN solicitado',
+    emptyHelp:
+      'Crie uma conta para cada pessoa que assiste aqui e, em seguida, entre com ela em um aplicativo Jellyfin.',
+    devicesEmptyHelp: 'Os aplicativos aparecem aqui assim que entram com esta conta.',
+    notFound: 'Usuário não encontrado',
+    notFoundHelp:
+      'Este usuário não existe mais, ou o endereço está incorreto. Escolha um usuário na lista.',
+    backToUsers: 'Voltar para usuários',
+    sectionsLabel: 'Seções do usuário',
+    profileTitle: 'Nome e senha',
+    accessHelp: 'Cada alteração é salva imediatamente.',
+    noServerLibrariesHelp:
+      'Adicione uma biblioteca em Conteúdo › Bibliotecas e, em seguida, escolha aqui quais este usuário vê.',
+    jellyfinImport: {
+      open: 'Importar de outro servidor',
+      title: 'Importar de outro servidor',
+      description:
+        'Traga contas e seus dados de exibição de um servidor Jellyfin, Emby ou Plex: nomes das contas e status de administrador e, para cada usuário, os filmes e episódios reproduzidos com suas datas, pontos de retomada e favoritos, identificados pelo IMDb, TMDB ou TVDB. Os dados do Polyfin são apenas complementados, e nada é gravado no outro servidor. Os servidores não fornecem senhas: você define uma para cada nova conta ou mantém aquela com que o usuário entra.',
+      serverKind: 'Servidor',
+      servers: {
+        jellyfin: 'Jellyfin',
+        emby: 'Emby',
+        plex: 'Plex',
+      },
+      serverKindHelp: {
+        jellyfin: 'Jellyfin, ou um servidor compatível com a API dele.',
+        emby: 'Emby, com suas próprias chaves da API e usuários.',
+        plex: 'Plex Media Server, lido com o token do proprietário.',
+      },
+      connectTitle: (server: string) => `Conectar ao ${server}`,
+      connectHelp:
+        'O endereço, a chave e as senhas são usados apenas nesta importação: o Polyfin não os salva.',
+      address: 'Endereço do servidor',
+      addressHelp: (server: string) =>
+        `O endereço em que o ${server} abre em um navegador. Um endereço da rede local funciona.`,
+      plexAddressHelp:
+        'O endereço do próprio Plex Media Server, geralmente na porta 32400. Um endereço da rede local funciona.',
+      connectWith: 'Conectar com',
+      withApiKey: 'Uma chave da API',
+      withAccount: 'Uma conta de usuário',
+      apiKey: 'Chave da API',
+      apiKeyHelp:
+        'Crie uma no painel do Jellyfin, em Chaves de API: ela lê os dados de exibição de todos os usuários.',
+      embyApiKeyHelp:
+        'Crie uma nas configurações do Emby, em Chaves de API: ela lê os dados de exibição de todos os usuários. A chave pessoal de um usuário não é aceita: o Emby não informa a quem ela pertence.',
+      plexToken: 'Token do Plex',
+      plexTokenHelp:
+        'O token do proprietário do servidor, que o Polyfin usa apenas para ler o servidor. Para encontrá-lo, abra o Plex em um navegador, conectado como proprietário. Abra o menu de qualquer filme, escolha Get Info e depois View XML: o endereço da página que se abre termina com X-Plex-Token= seguido do token. Copie o que vem depois.',
+      accountName: 'Nome de usuário',
+      accountNameHelp: (server: string) =>
+        `A conta de um administrador lista todos os usuários. O Polyfin entra como os aplicativos do ${server} fazem e depois sai.`,
+      accountPassword: 'Senha',
+      accountPasswordHelp: 'Deixe em branco se a conta não tiver senha.',
+      connect: 'Conectar',
+      connecting: 'Conectando…',
+      chooseTitle: 'Escolher quem importar',
+      chooseHelp: (server: string, product: string, version: string) =>
+        `${server}, ${product} ${version}. Para cada usuário, escolha a conta do Polyfin para onde importar ou crie uma.`,
+      changeServer: 'Trocar de servidor',
+      noUsers: (product: string) => `Este servidor ${product} não tem nenhum usuário.`,
+      lastActivityLabel: 'Última atividade:',
+      importAs: 'Importar para',
+      skip: 'Não importar',
+      newUser: 'Novo usuário',
+      watchData: 'Importar dados de exibição',
+      watchDataHelp: 'Títulos reproduzidos com suas datas, pontos de retomada e favoritos.',
+      plexOwnerWatchDataHelp:
+        'Títulos reproduzidos com suas datas e número de reproduções, e pontos de retomada.',
+      plexWatchDataHelp:
+        'Títulos reproduzidos com suas datas e número de reproduções. O Plex não permite que o Polyfin leia os pontos de retomada desta conta.',
+      watchDataNeeded: 'Sem isso, nada é importado para este usuário.',
+      plexNotice:
+        'Com o token do proprietário, o Plex permite que o Polyfin leia os títulos reproduzidos e os pontos de retomada do proprietário, mas apenas os títulos reproduzidos das outras contas, a partir do histórico de reprodução delas: os pontos de retomada delas ficam no Plex. O Plex não tem favoritos para importar.',
+      ownerNotice: (owner: string | null, signedIn: boolean) =>
+        `${signedIn ? `Conectado como ${owner ?? 'um usuário'}, o Polyfin lê apenas os dados de exibição desse usuário.` : `Esta chave pertence a ${owner ?? 'um usuário'}: ela lê apenas os dados de exibição desse usuário.`} Para importar os de outro usuário, digite a senha da conta dele no servidor: o Polyfin entra como ele para lê-los. Sem a senha, a conta dele ainda pode ser criada.`,
+      ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
+        `${signedIn ? `Conectado como ${owner ?? 'este usuário'}` : `Esta chave pertence a ${owner ?? 'um usuário'}`}, que não é administrador deste servidor: o Polyfin importa apenas esta conta. Para listar os outros usuários do servidor, conecte-se com a conta de um administrador ou uma chave da API.`,
+      serverPassword: (server: string) => `Senha no ${server}`,
+      serverPasswordHelp: (user: string) =>
+        `O Polyfin entra como ${user} para ler os dados de exibição e depois sai. Deixe em branco se a conta não tiver senha.`,
+      keepPassword: 'Manter esta senha no Polyfin',
+      keepPasswordHelp:
+        'A nova conta entra no Polyfin com a mesma senha, se ela tiver pelo menos 8 caracteres.',
+      nothingToImport: 'Escolha um usuário para criar ou dados de exibição para importar.',
+      start: 'Iniciar importação',
+      starting: 'Iniciando…',
+      started: (created: number, importing: boolean) =>
+        created === 0
+          ? 'A importação foi iniciada.'
+          : `${created === 1 ? '1 usuário criado.' : `${created} usuários criados.`}${importing ? ' A importação foi iniciada.' : ''}`,
+      currentTitle: 'Importação em andamento',
+      lastTitle: 'Última importação',
+      startedLabel: 'Iniciada',
+      endedLabel: 'Concluída',
+      startedBy: (name: string, own: boolean) =>
+        own ? `Histórico de exibição de ${name}, em Minha conta` : `Iniciada por ${name}`,
+      runningHelp:
+        'Você pode sair desta página: a importação continua. Se o Polyfin reiniciar nesse meio-tempo, a importação para: o que já foi importado permanece, e importar novamente não duplica nada.',
+      stop: 'Parar importação',
+      stopping: 'Parando…',
+      states: {
+        running: 'Em andamento',
+        done: 'Concluída',
+        stopped: 'Interrompida',
+        failed: 'Falhou',
+      },
+      problems: {
+        jellyfin_unreachable: (server: string) =>
+          `Não foi possível acessar ${server} durante a importação. O que já foi importado foi mantido.`,
+        jellyfin_key_refused: (server: string) =>
+          `${server} recusou a chave da API durante a importação: ela pode ter sido revogada. O que já foi importado foi mantido.`,
+        not_jellyfin: (server: string) =>
+          `O servidor deixou de responder como ${server} durante a importação. O que já foi importado foi mantido.`,
+        internal: () =>
+          'O Polyfin encontrou um erro durante a importação: o registro do servidor traz mais detalhes. O que já foi importado foi mantido.',
+        jellyfin_user_forbidden: () =>
+          'O servidor não permite que esta chave leia os dados deste usuário. Importe-os com uma chave da API do painel do servidor ou com a chave do próprio usuário.',
+      },
+      errors: {
+        emby: {
+          invalid_jellyfin_address:
+            'Digite o endereço do servidor Emby, como http://192.168.1.10:8096.',
+          jellyfin_key_refused:
+            'O Emby recusou esta chave da API. Crie uma nas configurações dele, em Chaves de API, e cole-a novamente.',
+          jellyfin_sign_in_refused: 'O Emby recusou este nome ou senha.',
+          jellyfin_sign_in_forbidden:
+            'O Emby não permite que esta conta entre: ela pode estar desativada ou fora do horário permitido.',
+          jellyfin_password_refused:
+            'O Emby recusou esta senha. Deixe-a em branco se a conta não tiver senha.',
+          jellyfin_unreachable:
+            'Nada respondeu neste endereço. Verifique-o e confirme que o Emby está em execução.',
+          not_jellyfin:
+            'Um servidor respondeu neste endereço, mas não é o Emby. Verifique o endereço.',
+        },
+        plex: {
+          invalid_jellyfin_address:
+            'Digite o endereço do Plex Media Server, como http://192.168.1.10:32400.',
+          jellyfin_key_refused:
+            'O Plex recusou este token. Copie novamente o token do proprietário.',
+          jellyfin_key_limited:
+            'Este token não pode listar as contas do servidor: ele não é do proprietário do servidor. Use o token do proprietário.',
+          jellyfin_unreachable:
+            'Nada respondeu neste endereço. Verifique-o e confirme que o Plex Media Server está em execução.',
+          not_jellyfin:
+            'Um servidor respondeu neste endereço, mas não é o Plex Media Server. Verifique o endereço.',
+        },
+      } as Record<'emby' | 'plex', Partial<Record<string, string>>>,
+      userStates: {
+        waiting: 'Aguardando',
+        reading: 'Lendo',
+        saving: 'Salvando',
+        done: 'Concluído',
+        failed: 'Falhou',
+      },
+      notImported: 'Não importado',
+      userMapping: (jellyfinName: string, userName: string) => `${jellyfinName} → ${userName}`,
+      read: (count: number) => (count === 1 ? '1 item lido' : `${count} itens lidos`),
+      counts: (played: number, resumed: number, favorites: number) =>
+        `${played === 1 ? '1 marcado como reproduzido' : `${played} marcados como reproduzidos`}, ${resumed === 1 ? '1 ponto de retomada' : `${resumed} pontos de retomada`}, ${favorites === 1 ? '1 favorito' : `${favorites} favoritos`}`,
+      unmatched: (count: number) =>
+        count === 1 ? '1 título não encontrado' : `${count} títulos não encontrados`,
+      unmatchedTitle: (name: string) => `Títulos não encontrados para ${name}`,
+      unmatchedHelp:
+        'Estes títulos não foram importados: nenhum título do Polyfin corresponde a eles pelo IMDb, TMDB ou TVDB.',
+      titleColumn: 'Título',
+      kindColumn: 'Tipo',
+      yearColumn: 'Ano',
+      reasonColumn: 'Motivo',
+      kinds: {
+        movie: 'Filme',
+        episode: 'Episódio',
+        series: 'Série',
+      },
+      reasons: {
+        no_identifier: 'Nenhum identificador do IMDb, TMDB ou TVDB',
+        not_found: 'Não está no Polyfin',
+      },
+      more: (count: number) => (count === 1 ? 'E mais 1.' : `E mais ${count}.`),
+    },
+    appImport: {
+      open: 'Importar de um aplicativo',
+      title: 'Importar de um aplicativo',
+      description:
+        'Traga os dados de visualização de um usuário a partir da conta dele em um aplicativo baseado em complementos: os filmes e episódios reproduzidos com as datas, os pontos de retomada e a biblioteca do aplicativo como favoritos, identificados por IMDb, TMDB ou Kitsu. Os dados do Polyfin são apenas complementados, e nada é gravado no aplicativo. Você precisa do login do usuário no aplicativo; os usuários também podem importar por conta própria, em Minha conta.',
+      user: 'Para a conta de',
+      userHelp:
+        'O usuário do Polyfin a cujos dados de visualização e complementos a importação será adicionada.',
+    },
+    letterboxdImport: {
+      open: 'Importar do Letterboxd',
+      title: 'Importar do Letterboxd',
+      description:
+        'Traga os filmes de um usuário a partir do arquivo de exportação do Letterboxd: os filmes assistidos com as datas e o número de reproduções, a watchlist, as avaliações e, se você quiser, os filmes curtidos como favoritos. Os dados do Polyfin são apenas complementados. Os usuários também podem importar os próprios dados, em Minha conta.',
+      user: 'Para a conta de',
+      userHelp: 'O usuário do Polyfin a cujos dados de visualização a importação será adicionada.',
+    },
+  },
+  invites: {
+    title: 'Links de convite',
+    create: 'Criar um link de convite',
+    empty: 'Nenhum link de convite ainda.',
+    emptyHelp:
+      'Um link de convite permite que as pessoas para quem você o enviar criem a própria conta, com as configurações que você escolher.',
+    maxUses: 'Contas que ele pode criar',
+    maxUsesHelp: 'De 1 a 100. 1 por padrão.',
+    expires: 'Expira',
+    after: (days: number) => (days === 1 ? 'Após 1 dia' : `Após ${days} dias`),
+    never: 'Nunca',
+    accountsEnd: 'Encerramento das contas',
+    accountsEndHelp:
+      'Cada conta criada pelo link é encerrada esta quantidade de dias após ser criada.',
+    accountsEndAfter: (days: number) =>
+      days === 1
+        ? 'As contas são encerradas após 1 dia'
+        : `As contas são encerradas após ${days} dias`,
+    model: 'Configurações de',
+    modelHelp:
+      'As novas contas copiam as permissões, as bibliotecas visíveis, os gêneros bloqueados, os horários permitidos, o controle parental, os limites de reprodução e de acesso e o grupo de qualidade deste usuário. Elas nunca são administradoras.',
+    newUser: 'Um novo usuário, como em Criar um usuário',
+    submit: 'Criar link',
+    creating: 'Criando…',
+    createdTitle: 'Link de convite criado',
+    createdNotice: 'Copie este link agora: ele é exibido apenas desta vez.',
+    copy: 'Copiar link',
+    copied: 'Link copiado.',
+    copyFailed: 'Não foi possível copiar o link. Selecione-o e copie-o manualmente.',
+    done: 'Concluído',
+    uses: (uses: number, maxUses: number) =>
+      maxUses === 1 ? `${uses} de 1 conta criada` : `${uses} de ${maxUses} contas criadas`,
+    settingsOf: (name: string) => `Configurações de ${name}`,
+    newUserSettings: 'Configurações de novo usuário',
+    expiresLabel: 'Expira',
+    expiredLabel: 'Expirado',
+    neverExpires: 'Nunca expira',
+    createdBy: (name: string) => `Criado por ${name}`,
+    createdByDeleted: 'Criado por um usuário excluído',
+    states: {
+      active: 'Ativo',
+      used_up: 'Esgotado',
+      expired: 'Expirado',
+      revoked: 'Revogado',
+    },
+    revoke: 'Revogar',
+    revokeTitle: 'Revogar este link de convite?',
+    revokeConfirm:
+      'O link deixa de funcionar imediatamente. As contas já criadas por meio dele são mantidas.',
+    revoking: 'Revogando…',
+    revoked: 'Link de convite revogado.',
+  },
+  groups: {
+    tabsLabel: 'Usuários e grupos',
+    title: 'Grupos',
+    description:
+      'Um grupo reúne os limites da página de um usuário. Seus membros o seguem: uma alteração no grupo chega a todos eles de uma vez.',
+    listTitle: 'Grupos',
+    empty: 'Nenhum grupo ainda.',
+    emptyHelp:
+      'Crie um grupo para definir de uma vez as permissões, os limites de reprodução, o controle parental, as bibliotecas, os gêneros e os horários de várias contas.',
+    create: 'Criar um grupo',
+    name: 'Nome',
+    nameTaken: 'Este nome já é usado por outro grupo.',
+    nameRule: 'De 1 a 64 caracteres, diferente dos nomes dos outros grupos.',
+    copyFrom: 'Configurações de',
+    copyFromHelp:
+      'O grupo começa com as permissões, os limites de reprodução e de acesso, o grupo de qualidade, o controle parental, as bibliotecas visíveis, os gêneros bloqueados e os horários permitidos deste usuário.',
+    submit: 'Criar grupo',
+    creating: 'Criando…',
+    created: (name: string) => `O grupo ${name} foi criado.`,
+    memberCount: (count: number) =>
+      count === 0 ? 'Nenhum membro' : count === 1 ? '1 membro' : `${count} membros`,
+    notFound: 'Grupo não encontrado',
+    notFoundHelp: 'Ele pode ter sido excluído.',
+    backToGroups: 'Voltar aos grupos',
+    sectionsLabel: 'Seções do grupo',
+    pageHelp: 'Cada seção é salva separadamente e chega na hora aos membros que seguem o grupo.',
+    rename: 'Renomear',
+    renamed: 'O grupo foi renomeado.',
+    updated: 'O grupo foi atualizado.',
+    accessHelp:
+      'As permissões que os membros recebem do grupo. A função, a tela de login, “Desativado” e a data de encerramento continuam na página de cada um.',
+    delete: 'Excluir grupo',
+    deleteTitle: (name: string) => `Excluir o grupo ${name}?`,
+    deleteConfirm:
+      'Seus membros mantêm os valores do grupo como configurações próprias, que suas páginas poderão alterar depois.',
+    deleting: 'Excluindo…',
+    deleted: (name: string) => `O grupo ${name} foi excluído.`,
+    membersTitle: 'Membros',
+    membersHelp:
+      'Um membro que deixa de seguir o grupo mantém os valores dele como configurações próprias, marcadas como “Configurações próprias”.',
+    noMembers: 'Nenhum membro ainda.',
+    noMembersHelp:
+      'Adicione membros aqui ou escolha o grupo na seção Acesso da página de um usuário.',
+    ownSettings: 'Configurações próprias',
+    followsHelp: 'Segue o grupo',
+    ownSettingsHelp: 'Mantém as próprias configurações',
+    addMembers: 'Adicionar membros',
+    addMembersTitle: (name: string) => `Adicionar membros a ${name}`,
+    addMembersHelp:
+      'Os usuários escolhidos seguem o grupo: eles recebem os valores do grupo no lugar dos seus. Administradores não podem entrar em um grupo.',
+    noCandidates: 'Ninguém para adicionar.',
+    noCandidatesHelp: 'Todos os usuários que não são administradores já estão neste grupo.',
+    movesFrom: (name: string) => `Sai do grupo ${name}`,
+    add: 'Adicionar',
+    adding: 'Adicionando…',
+    membersAdded: (count: number) =>
+      count === 1 ? '1 membro foi adicionado.' : `${count} membros foram adicionados.`,
+    group: 'Grupo',
+    noGroup: 'Nenhum grupo',
+    groupHelp:
+      'Um membro segue o grupo: os valores dele se aplicam, e esta página os mostra somente para leitura. Ao sair, eles ficam como configurações próprias do usuário.',
+    administratorNoGroup:
+      'Administradores não podem entrar em um grupo, pois suas permissões são diferentes.',
+    administratorLeaves: (name: string) =>
+      `Tornar este usuário administrador o remove do grupo ${name}.`,
+    newAccountGroupHelp: 'As contas criadas entram neste grupo e o seguem.',
+    newUserGroupHelp: 'O usuário entra neste grupo e o segue.',
+    followGroup: 'Seguir o grupo',
+    followGroupHelp:
+      'Desativado, o usuário mantém os valores atuais do grupo como seus, e esta página pode alterá-los.',
+    setByGroup: (name: string) => `Definido pelo grupo ${name}.`,
+    openGroup: 'Abrir o grupo',
+    joinTitle: 'Entrar no grupo?',
+    joinConfirm: (user: string, group: string) =>
+      `${user} entra em ${group} e passa a segui-lo: os valores do grupo substituem os seus em Acesso, Reprodução e acesso, Controle parental, Bibliotecas visíveis, Gêneros bloqueados e Horários permitidos.`,
+    join: 'Entrar',
+    followAgainTitle: 'Seguir o grupo novamente?',
+    followAgainConfirm: (user: string, group: string) =>
+      `${user} volta a receber os valores de ${group}: as configurações próprias nas seções do grupo serão substituídas.`,
+    followAgain: 'Seguir o grupo',
+    groupBadge: (name: string) => `Grupo ${name}`,
+    groupOwnBadge: (name: string) => `Grupo ${name}, configurações próprias`,
+    filter: 'Mostrar os usuários de',
+    allGroups: 'Todos os grupos',
+    noneShown: 'Nenhum usuário aqui.',
+  },
+}
+
+export default users

@@ -252,8 +252,9 @@ export function MenuItem({
 }
 
 /**
- * Exclusive choices inside a Menu, drawn as a segmented control (the language): each option is a
- * `menuitemradio` reached with the arrows like the other items.
+ * Exclusive choices inside a Menu (the language): the label and the chosen option's title on one
+ * line, then the options side by side across the menu's width, as a segmented control. Each option
+ * is a `menuitemradio` reached with the arrows like the other items.
  */
 export function MenuChoice<T extends string>({
   label,
@@ -261,23 +262,27 @@ export function MenuChoice<T extends string>({
   value,
   onChange,
 }: {
-  /** Shown on the left, and the group's accessible name. */
+  /** Shown above the options, and the group's accessible name. */
   label: string
   options: readonly { value: T; label: string; lang?: string; title?: string }[]
   value: T
   onChange: (value: T) => void
 }) {
   const id = useId()
+  const chosen = options.find((option) => option.value === value)
   return (
-    <div
-      role="group"
-      aria-labelledby={id}
-      className="flex h-10 items-center justify-between gap-3 px-2.5"
-    >
-      <span id={id} className="text-control text-ink-2">
-        {label}
+    <div role="group" aria-labelledby={id} className="flex flex-col gap-1.5 px-2.5 pt-1.5 pb-2">
+      <span className="flex items-baseline justify-between gap-3">
+        <span id={id} className="text-control text-ink-2">
+          {label}
+        </span>
+        {chosen?.title && (
+          <span lang={chosen.lang} className="truncate text-[12.5px] text-ink-3" aria-hidden="true">
+            {chosen.title}
+          </span>
+        )}
       </span>
-      <span className="inline-flex rounded-field border border-line-2 bg-bg p-0.5">
+      <span className="flex rounded-field border border-line-2 bg-bg p-0.5">
         {options.map((option) => (
           <button
             key={option.value}
@@ -286,9 +291,10 @@ export function MenuChoice<T extends string>({
             tabIndex={-1}
             lang={option.lang}
             title={option.title}
+            aria-label={option.title}
             aria-checked={option.value === value}
             onClick={() => onChange(option.value)}
-            className="h-[26px] cursor-pointer rounded-md px-2.5 text-[12.5px] font-medium text-ink-3 transition-[background-color,color] duration-160 hover:text-ink focus-visible:outline-offset-0 aria-checked:bg-s4 aria-checked:text-ink"
+            className="h-[26px] min-w-0 flex-1 cursor-pointer rounded-md px-1 text-[12.5px] font-medium text-ink-3 transition-[background-color,color] duration-160 hover:text-ink focus-visible:outline-offset-0 aria-checked:bg-s4 aria-checked:text-ink"
           >
             {option.label}
           </button>

@@ -6,7 +6,7 @@ export type SegmentedOption<T extends string> = {
   label: string
   /** Optional Phosphor icon before the label. */
   icon?: Icon
-  /** A `lang` attribute, for options written in another language (FR / EN). */
+  /** A `lang` attribute, for options written in another language. */
   lang?: string
   /** A longer name, as a tooltip and for screen readers. */
   title?: string
@@ -24,7 +24,7 @@ export type SegmentedProps<T extends string> = {
 }
 
 /**
- * Two to four exclusive choices shown side by side (language, a list's filter, a view mode). Each
+ * Two to four exclusive choices shown side by side (a list's filter, a view mode). Each
  * is a button with `aria-pressed`. For more choices, use Select; for navigation, use Tabs.
  */
 export function Segmented<T extends string>({

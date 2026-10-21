@@ -1,0 +1,261 @@
+import type en from '../en/libraries'
+
+const libraries: typeof en = {
+  libraries: {
+    title: 'Librerie',
+    description:
+      'Scegli quali cataloghi degli add-on del server compaiono come librerie nelle applicazioni Jellyfin, per tutti gli utenti.',
+    shownTitle: 'Mostrate nelle applicazioni Jellyfin',
+    shownHelp:
+      'Le librerie compaiono in questo ordine. Lascia un nome vuoto per usare il nome del catalogo. Alle librerie con lo stesso nome viene aggiunto il tipo nelle applicazioni, per esempio «Popolari (Film)».',
+    shownHelpMine:
+      'Le librerie compaiono in questo ordine, dopo le librerie del server se le usi. Lascia un nome vuoto per usare il nome del catalogo. Alle librerie con lo stesso nome viene aggiunto il tipo nelle applicazioni, per esempio «Popolari (Film)».',
+    defaultHelp:
+      'Quando installi un add-on, i suoi cataloghi di collezioni diventano librerie: ognuna mostra le sue collezioni (per esempio generi o decenni), che si aprono sui rispettivi film e serie TV. Un add-on senza collezioni ottiene come librerie i suoi cataloghi di film, serie TV e TV, fino a 20. È solo un punto di partenza: abilita tutti i cataloghi che vuoi. Ogni libreria aggiunge una riga alla schermata iniziale delle applicazioni Jellyfin, tranne i cataloghi TV, i cui canali compaiono in Diretta TV.',
+    manyWarning:
+      'Più di 20 librerie possono appesantire la schermata iniziale delle applicazioni Jellyfin.',
+    noAddons: 'Aggiungi prima un’origine: i suoi cataloghi verranno elencati qui.',
+    shownEmpty: 'Nessuna libreria: le applicazioni Jellyfin non mostrano nulla di questi add-on.',
+    name: 'Nome nelle applicazioni',
+    appName: (name: string) => `Mostrata nelle applicazioni come «${name}».`,
+    liveTv: 'I suoi canali compaiono in Diretta TV nelle applicazioni Jellyfin.',
+    iptvVod: 'Da un’origine IPTV.',
+    iptvVodLink: 'Le sue opzioni di importazione',
+    addonOff: 'Add-on disattivato',
+    missing: 'Non più disponibile',
+    hideInMenus: 'Nascondi dalla barra superiore del player web',
+    hideInMenusHelp:
+      'Mantiene la sua riga nella schermata iniziale. Anche il menu laterale del player web la esclude; le altre applicazioni Jellyfin la elencano comunque. Si applica al prossimo caricamento del player web.',
+    hiddenInMenus: 'Nascosta dalla barra superiore',
+    remove: 'Rimuovi',
+    removeLabel: (name: string) => `Rimuovi ${name}`,
+    removedLive: (name: string) => `${name} rimosso dalle librerie.`,
+    availableTitle: 'Cataloghi disponibili',
+    availableHelp:
+      'Aggiungendo un catalogo, questo viene mostrato come libreria alla fine dell’elenco qui sopra.',
+    filter: 'Filtra',
+    filterPlaceholder: 'Nome del catalogo o dell’add-on',
+    type: 'Tipo',
+    allTypes: 'Tutti i tipi',
+    add: 'Aggiungi',
+    addLabel: (name: string) => `Aggiungi ${name}`,
+    addedLive: (name: string, position: number) => `${name} aggiunto come libreria ${position}.`,
+    notBrowsable: 'Non disponibile',
+    notBrowsableHelp: 'Richiede una ricerca o un altro valore, quindi non può essere una libreria.',
+    availableEmpty: 'Tutti i cataloghi sono già mostrati.',
+    noMatch: 'Nessun catalogo corrisponde a questo filtro.',
+    reset: 'Ripristina',
+    saved: 'Librerie salvate.',
+    guideAfterSave: 'Salva le librerie per aggiungere una guida dei programmi a questo catalogo.',
+    guideFetched: 'Ultimo recupero',
+    guideNever: 'Non ancora recuperata.',
+    loading: 'Caricamento librerie…',
+    listLabel: 'Librerie, nell’ordine in cui le mostrano le applicazioni',
+    columnCatalog: 'Catalogo',
+    shownEmptyTitle: 'Ancora nessuna libreria',
+    shownEmptyHow: 'Aggiungi cataloghi dall’elenco qui sotto: ognuno diventa una libreria.',
+    noAddonsTitle: 'Ancora nessun catalogo',
+    addSource: 'Aggiungi un’origine',
+    defaultTitle: 'Come vengono scelte le prime librerie',
+    availableLabel: (addon: string) => `Cataloghi di ${addon}`,
+    music: {
+      library: {
+        music: 'Libreria musicale',
+        audiobook: 'Libreria di libri',
+        podcast: 'Libreria musicale',
+      } as Record<string, string>,
+      help: {
+        music: 'I suoi elementi compaiono nella sezione musica delle applicazioni Jellyfin.',
+        audiobook:
+          'I suoi audiolibri compaiono in una libreria di libri delle applicazioni Jellyfin.',
+        podcast: 'I suoi episodi compaiono nella sezione musica delle applicazioni Jellyfin.',
+      } as Record<string, string>,
+    },
+    image: {
+      label: 'Immagine nelle applicazioni',
+      edit: (name: string, state: string) => `Immagine di ${name}: ${state}`,
+      choices: {
+        none: 'Nessuna',
+        automatic: 'Automatica',
+        generated: 'Generata',
+        custom: 'Personalizzata',
+      },
+      help: {
+        none: 'Le applicazioni mostrano questa libreria senza immagine, come prima.',
+        automatic:
+          'Polyfin la prende dal catalogo: lo sfondo di uno dei primi titoli, altrimenti una locandina.',
+        generated:
+          'Polyfin la compone con le locandine dei primi titoli del catalogo, o delle prime collezioni di una libreria di collezioni, insieme al nome della libreria, dopo averle lette.',
+        custom:
+          'Un’immagine che carichi tu, o che Polyfin scarica una sola volta da un indirizzo. Le immagini larghe in 16:9 si adattano meglio ai riquadri delle librerie. JPEG, PNG o WebP, massimo 10 MB.',
+      },
+      parental: 'Gli utenti sotto controllo parentale o con generi bloccati non la vedono.',
+      notFound: {
+        automatic:
+          'Per ora non è stato trovato nulla in questo catalogo, quindi le applicazioni non mostrano alcuna immagine.',
+        generated:
+          'Nessuna locandina ancora letta da questo catalogo, quindi le applicazioni non mostrano alcuna immagine. Polyfin la compone quando la libreria viene aperta in un’applicazione.',
+      },
+      noImage: 'Nessuna immagine',
+      upload: 'Carica un’immagine',
+      uploadAnother: 'Carica un’altra immagine',
+      address: 'Oppure l’indirizzo di un’immagine',
+      addressHelp: 'Polyfin la scarica una sola volta e ne conserva una copia.',
+      useAddress: 'Usa questo indirizzo',
+      remove: 'Rimuovi l’immagine',
+      removeTitle: (name: string) => `Rimuovere l’immagine di ${name}?`,
+      removeToNone:
+        'L’immagine caricata viene eliminata. Le applicazioni mostrano questa libreria senza immagine.',
+      removeToAutomatic:
+        'L’immagine caricata viene eliminata. Le applicazioni mostrano invece l’immagine trovata nel catalogo.',
+      removeToGenerated:
+        'L’immagine caricata viene eliminata. Le applicazioni mostrano invece l’immagine composta da Polyfin.',
+      removeConfirm: 'Rimuovi',
+      saved: 'Immagine salvata.',
+      removed: 'Immagine rimossa.',
+      atOnce: 'Le modifiche all’immagine vengono salvate subito.',
+      afterSave: 'Salva prima le librerie, poi scegli l’immagine di questa libreria.',
+      close: (name: string) => `Chiudi l’immagine di ${name}`,
+    },
+    narrow: {
+      title: 'Genere e massimo',
+      edit: (name: string) => `Genere e massimo di ${name}`,
+      close: (name: string) => `Chiudi genere e massimo di ${name}`,
+      staged: 'Salvati con il pulsante Salva, come i nomi.',
+      genre: 'Genere',
+      allGenres: 'Tutti i generi',
+      genreHelp: 'Mostra solo i titoli di questo genere.',
+      maxItems: 'Numero massimo di titoli',
+      noMax: 'Nessun massimo',
+      maxHelp: (max: string, where: string) =>
+        `Mostra al massimo questo numero di titoli nella libreria, e altrettanti in ciascuna delle sue collezioni, al posto del limite dei cataloghi in ${where}. Da 1 a ${max}. Vuoto: si applica quel limite.`,
+      maxHelpMine: (max: string) =>
+        `Mostra al massimo questo numero di titoli nella libreria, e altrettanti in ciascuna delle sue collezioni, al posto del limite del server. Da 1 a ${max}. Vuoto: si applica il limite del server.`,
+      maxRange: (max: string) => `Inserisci un numero intero da 1 a ${max}, oppure lascia vuoto.`,
+      maxBadge: (count: string) => `max ${count}`,
+    },
+  },
+  smartLists: {
+    title: 'Liste intelligenti',
+    help: 'Liste create da regole sui titoli dei cataloghi del server, come «Film francesi degli anni ’90 non ancora visti». Tutti gli utenti le vedono, entro le librerie che possono vedere.',
+    helpMine:
+      'Liste create da regole sui titoli dei tuoi cataloghi, e di quelli del server mentre li usi. Solo tu le vedi.',
+    add: 'Aggiungi una lista intelligente',
+    emptyTitle: 'Ancora nessuna lista intelligente',
+    emptyHow:
+      'Una lista intelligente mantiene i titoli dei cataloghi scelti che corrispondono alle sue regole, e segue quei cataloghi quando cambiano.',
+    loading: 'Caricamento delle liste intelligenti…',
+    shownAsLibrary: 'Libreria',
+    shownAsCollection: 'Collezione',
+    catalogCount: (count: number) => (count === 1 ? '1 catalogo' : `${count} cataloghi`),
+    ruleCount: (count: number) => (count === 1 ? '1 regola' : `${count} regole`),
+    maxBadge: (count: string) => `max ${count}`,
+    newTitle: 'Nuova lista intelligente',
+    back: 'Librerie',
+    backMine: 'Le mie origini',
+    lede: 'Scegli i cataloghi da cui attinge e le regole a cui corrispondono i suoi titoli. L’anteprima mostra i suoi titoli come sono adesso, prima di salvare.',
+    notFound: 'Questa lista intelligente non esiste.',
+    name: 'Nome',
+    nameHelp: 'Il nome mostrato dalle applicazioni Jellyfin.',
+    shownAs: 'Mostrata come',
+    shownAsChoices: { library: 'Una libreria', collection: 'Una collezione' },
+    shownAsHelp: {
+      library:
+        'Una libreria a sé nelle applicazioni Jellyfin, con la sua riga nella schermata iniziale: una libreria di film o di serie TV quando tutti i suoi cataloghi sono dello stesso tipo.',
+      collection:
+        'Una collezione nella vista Collezioni, accanto a quelle create dagli utenti. Le applicazioni non possono aggiungere o rimuovere i suoi titoli.',
+    },
+    catalogs: 'Cataloghi',
+    catalogsHelp:
+      'I suoi titoli provengono da questi cataloghi, ciascuno letto fino al suo massimo: quello della libreria quando il catalogo è una delle tue librerie, altrimenti Titoli letti per catalogo di film e serie TV.',
+    catalogFilter: 'Filtra i cataloghi',
+    catalogFilterPlaceholder: 'Nome del catalogo o dell’add-on',
+    serverBadge: 'Server',
+    noCatalogs: 'Ancora nessun catalogo da cui attingere: aggiungi prima un’origine.',
+    noCatalogMatch: 'Nessun catalogo corrisponde a questo filtro.',
+    rules: 'Regole',
+    rulesHelp: 'Senza regole, la lista mantiene tutti i titoli dei suoi cataloghi.',
+    match: 'I titoli corrispondono a',
+    matchChoices: { all: 'Tutte le regole', any: 'Almeno una regola' },
+    groupMatch: 'Questo gruppo corrisponde a',
+    group: 'Gruppo',
+    addRule: 'Aggiungi una regola',
+    addGroup: 'Aggiungi un gruppo',
+    removeRule: 'Rimuovi questa regola',
+    removeGroup: 'Rimuovi questo gruppo',
+    field: 'Riguarda',
+    fields: {
+      genre: 'Genere',
+      year: 'Anno',
+      rating: 'Voto IMDb',
+      language: 'Lingua',
+      type: 'Film o serie TV',
+      rank: 'Posizione nel suo catalogo',
+      state: 'Stato di visione',
+    } as Record<string, string>,
+    negation: 'Corrisponde o no',
+    is: 'è',
+    isNot: 'non è',
+    genre: 'Genere',
+    from: 'Da',
+    to: 'A',
+    language: 'Lingua',
+    rankMax: 'Tra i suoi primi',
+    types: { movie: 'Un film', series: 'Una serie TV' } as Record<string, string>,
+    states: {
+      played: 'Visto',
+      unplayed: 'Non visto',
+      started: 'Iniziato, non finito',
+      favorite: 'Preferito',
+    } as Record<string, string>,
+    stateHelp:
+      'Le regole visto, iniziato e preferito seguono ciò che ha fatto ciascun utente: ognuno vede la propria lista.',
+    languageHelp:
+      'La lingua arriva con la descrizione di un titolo, che Polyfin legge in background: un titolo non ancora descritto viene escluso finché non lo è.',
+    sort: 'Ordina',
+    sorts: {
+      catalog: 'Come li elencano i suoi cataloghi, uno per ciascuno a turno',
+      premiere: 'Data di uscita, dalla più recente',
+      rating: 'Voto IMDb, dal più alto',
+      name: 'Nome',
+      random: 'Casuale, estratto di nuovo ogni giorno',
+    } as Record<string, string>,
+    maxItems: 'Numero massimo di titoli',
+    maxHelp: (max: string) => `Da 1 a ${max}. Vuoto: nessun massimo.`,
+    noMax: 'Nessun massimo',
+    create: 'Crea la lista',
+    save: 'Salva',
+    created: 'Lista intelligente creata.',
+    saved: 'Lista intelligente salvata.',
+    delete: 'Elimina',
+    deleteTitle: (name: string) => `Eliminare ${name}?`,
+    deleteBody:
+      'Le applicazioni Jellyfin non la mostrano più. I suoi titoli restano nei rispettivi cataloghi.',
+    deleted: 'Lista intelligente eliminata.',
+    preview: 'Anteprima',
+    previewHelp:
+      'I titoli che la lista ti mostra ora. Ogni utente la vede con i propri titoli visti.',
+    refresh: 'Aggiorna',
+    listed: (count: string) => (count === '1' ? '1 titolo' : `${count} titoli`),
+    firstOf: (shown: string, listed: string) => `I primi ${shown} di ${listed}.`,
+    unknown: (count: string) =>
+      count === '1'
+        ? '1 titolo è ancora in attesa della sua descrizione, che ne indica la lingua: la lista cresce man mano che arrivano le descrizioni.'
+        : `${count} titoli sono ancora in attesa della loro descrizione, che ne indica la lingua: la lista cresce man mano che arrivano le descrizioni.`,
+    incomplete:
+      'Alcuni cataloghi non hanno risposto in tempo: la lista mostra ciò che è stato letto finora e legge il resto.',
+    previewEmpty: 'Per ora nessun titolo corrisponde a queste regole.',
+    previewNeedsCatalog: 'Scegli almeno un catalogo per vedere la lista.',
+    previewLabel: 'Titoli della lista',
+    columns: {
+      title: 'Titolo',
+      type: 'Tipo',
+      year: 'Anno',
+      rating: 'IMDb',
+      genres: 'Generi',
+      languages: 'Lingua',
+    },
+  },
+}
+
+export default libraries

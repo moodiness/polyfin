@@ -138,9 +138,9 @@ export function MobileMenu({ user, webClient }: { user: SessionUser; webClient: 
               <span className="sr-only">{t.nav.webPlayerHint}</span>
             </a>
           )}
-          <div className="flex h-12 items-center justify-between px-3 text-[15px] font-medium text-ink-2">
+          <div className="flex h-12 items-center justify-between gap-3 px-3 text-[15px] font-medium text-ink-2">
             {t.nav.language}
-            <LanguageSwitch size="md" />
+            <LanguageSwitch />
           </div>
           <a href={repositoryUrl} target="_blank" rel="noopener" className={itemClass}>
             <GithubLogoIcon size={18} aria-hidden="true" className="shrink-0 text-ink-3" />
