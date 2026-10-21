@@ -197,7 +197,7 @@ func (p *peer) write() {
 		p.outbox, p.outBytes = nil, 0
 		p.outMu.Unlock()
 		for _, message := range messages {
-			if message[4] == msgPiece && len(message) > 13 {
+			if len(message) > 13 && message[4] == msgPiece {
 				// Shared bytes wait for the upload limit.
 				if err := p.t.engine.up.wait(p.t.ctx, int64(len(message)-13)); err != nil {
 					return
