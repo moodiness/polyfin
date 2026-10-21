@@ -324,6 +324,24 @@ func TestCollectionsAreMadeChangedAndDeletedAsInJellyfin(t *testing.T) {
 	}
 }
 
+// The Collections view is named in the server's language, as the
+// libraries Polyfin names are.
+func TestCollectionsViewIsNamedInTheServerLanguage(t *testing.T) {
+	t.Parallel()
+	s, admin, titles := grouping(t)
+	s.setting(t, func(settings *accounts.Settings) { settings.Language = "de" })
+	s.createCollection(t, admin, "name=Picks&ids="+titles.kids)
+	views := s.viewIDs(t, admin)
+	view, ok := views["Sammlungen"]
+	if !ok {
+		t.Fatalf("views: %v", views)
+	}
+	var folder BaseItemDto
+	if s.get(t, "/Items/"+view, admin, &folder); folder.Name != "Sammlungen" {
+		t.Errorf("the view's own page names it %q", folder.Name)
+	}
+}
+
 func TestCollectionsNeedThePermissionToManageThem(t *testing.T) {
 	t.Parallel()
 	s, admin, titles := grouping(t)

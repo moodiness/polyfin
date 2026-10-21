@@ -235,9 +235,11 @@ func mayDeleteCollections(user accounts.User) bool {
 
 // Browsing collections.
 
-// collectionsViewItem is the Collections view, among the user's libraries.
-func collectionsViewItem() library.Item {
-	return library.Item{ID: collectionsViewID, Kind: library.KindLibrary, Name: "Collections", CollectionType: "boxsets"}
+// collectionsViewItem is the Collections view, among the user's libraries,
+// named in the server's language.
+func (h *Handler) collectionsViewItem() library.Item {
+	return library.Item{ID: collectionsViewID, Kind: library.KindLibrary, Name: library.CollectionsName(h.Accounts.Settings().Language),
+		CollectionType: "boxsets"}
 }
 
 // addCollectionsView adds the Collections view to views once a collection
@@ -254,7 +256,7 @@ func (h *Handler) addCollectionsView(r *http.Request, user accounts.User, views 
 			return views, err
 		}
 	}
-	view, err := h.folderDtos(r, user, []library.Item{collectionsViewItem()})
+	view, err := h.folderDtos(r, user, []library.Item{h.collectionsViewItem()})
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +267,7 @@ func (h *Handler) addCollectionsView(r *http.Request, user accounts.User, views 
 // a collection. It reports whether id named one.
 func (h *Handler) describeCollection(w http.ResponseWriter, r *http.Request, user accounts.User, id accounts.ID) bool {
 	if id == collectionsViewID {
-		views, err := h.folderDtos(r, user, []library.Item{collectionsViewItem()})
+		views, err := h.folderDtos(r, user, []library.Item{h.collectionsViewItem()})
 		if err != nil {
 			h.internalError(w, r, err)
 			return true
@@ -301,7 +303,7 @@ func (h *Handler) collectionAncestors(w http.ResponseWriter, r *http.Request, us
 		h.internalError(w, r, err)
 		return true
 	}
-	views, err := h.folderDtos(r, user, []library.Item{collectionsViewItem()})
+	views, err := h.folderDtos(r, user, []library.Item{h.collectionsViewItem()})
 	if err != nil {
 		h.internalError(w, r, err)
 		return true

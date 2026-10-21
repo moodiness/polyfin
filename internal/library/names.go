@@ -88,6 +88,11 @@ func ChapterName(language string, number int) string {
 	return vocabularyOf(language).chapter + " " + strconv.Itoa(number)
 }
 
+// CollectionsName names the Collections view in a server language.
+func CollectionsName(language string) string {
+	return vocabularyOf(language).collections
+}
+
 // contentType names the content of a catalog type for a library name, as
 // collectionType groups them, music rows by what they list; other types
 // are named as they are.

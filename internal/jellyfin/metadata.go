@@ -84,7 +84,7 @@ func (h *Handler) originalItem(r *http.Request, user accounts.User, id accounts.
 	case rootFolderID:
 		return rootFolderItem(), nil
 	case collectionsViewID:
-		return collectionsViewItem(), nil
+		return h.collectionsViewItem(), nil
 	case playlistsViewID:
 		return playlistsViewItem(), nil
 	case liveTvViewID:
