@@ -1,6 +1,7 @@
 package anime
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -303,6 +304,38 @@ func TestTitlesAreNamedAsPolyfinNamesThem(t *testing.T) {
 		if source != c.source || entry != c.entry || episode != c.episode || ok != c.ok {
 			t.Errorf("%s: %s %d %d %v", c.id, source, entry, episode, ok)
 		}
+	}
+}
+
+// A list put in use as the service stops keeps its state: a restart reads
+// the copies kept, fresh, and asks for nothing.
+func TestAListInUseAsTheServiceStopsKeepsItsState(t *testing.T) {
+	l := serveLists(t)
+	dir := t.TempDir()
+	s := newService(Options{Dir: dir, Version: "1.2.3", IDsURL: l.server.URL + "/ids.json", EpisodesURL: l.server.URL + "/episodes.xml"},
+		timing{refreshEvery: time.Hour, retryFirst: 5 * time.Millisecond, retryMax: 20 * time.Millisecond, download: 5 * time.Second})
+	// The service stops right as the last list is put in use, before
+	// anything else is done with it.
+	last := s.lists[len(s.lists)-1]
+	read := last.read
+	last.read = func(r io.Reader) (func(), error) {
+		use, err := read(r)
+		return func() { use(); s.cancel() }, err
+	}
+	s.start()
+	s.wg.Wait()
+	if !s.Ready() {
+		t.Fatal("the lists were not put in use")
+	}
+	downloads := len(l.sent())
+
+	l.fail(http.StatusInternalServerError)
+	restarted := l.start(t, dir, time.Hour)
+	eventually(t, "the copies being read", restarted.Ready)
+	time.Sleep(50 * time.Millisecond)
+	restarted.Close()
+	if n := len(l.sent()); n != downloads {
+		t.Errorf("a restart asked %d times", n-downloads)
 	}
 }
 

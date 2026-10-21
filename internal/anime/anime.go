@@ -368,10 +368,12 @@ func (s *Service) load(l *list) error {
 }
 
 // refreshList downloads l unless it did not change, and schedules its next
-// check: a day later, or sooner after a failure.
+// check: a day later, or sooner after a failure. A list put in use is kept
+// with its state even when the service stops meanwhile, so that a restart
+// reads it fresh rather than downloading it again.
 func (s *Service) refreshList(l *list) {
 	changed, err := s.download(l)
-	if s.ctx.Err() != nil {
+	if err != nil && s.ctx.Err() != nil {
 		return
 	}
 	if err != nil {
