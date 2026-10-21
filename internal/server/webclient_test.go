@@ -1061,6 +1061,7 @@ func TestPlayButtonsWaitForASource(t *testing.T) {
 		free        = `show play free "Resume" replay free "Play"`
 		frSearching = `show play held+spin "Recherche des sources…" replay held+spin "Recherche des sources…"`
 		frNone      = `show play held "Aucune source disponible pour ce titre." replay held "Aucune source disponible pour ce titre." note "Aucune source disponible pour ce titre." "Réessayer"`
+		ptSearching = `show play held+spin "Procurando fontes…" replay held+spin "Procurando fontes…"`
 	)
 	looking, found, empty := progress{1, 1, 0}, progress{0, 1, 1}, progress{0, 1, 0}
 	scenarios := map[string]scenario{
@@ -1100,7 +1101,10 @@ func TestPlayButtonsWaitForASource(t *testing.T) {
 		"in French": {lang: "fr-FR", answers: []progress{looking, empty, empty},
 			steps: []string{title, "show", "tick", "show"},
 			want:  []string{ask, frSearching, ask, frNone}},
-		"in another language, English": {lang: "de", answers: []progress{looking},
+		"in Brazilian Portuguese": {lang: "pt-BR", answers: []progress{looking},
+			steps: []string{title, "show"},
+			want:  []string{ask, ptSearching}},
+		"in another language, English": {lang: "nl", answers: []progress{looking},
 			steps: []string{title, "show"},
 			want:  []string{ask, searching}},
 		// Before the first answer: item details list the placeholder alone,

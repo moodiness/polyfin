@@ -70,7 +70,8 @@
 // asked too soon, Polyfin answers 429 with Retry-After, and the button waits
 // that long. A MutationObserver on the page holds the buttons again when
 // jellyfin-web renders it anew. Its words follow jellyfin-web's language, the
-// document's lang (English and French, English otherwise). It never changes
+// document's lang (English, French, German, Spanish, Italian or Brazilian
+// Portuguese, which any Portuguese gets; English otherwise). It never changes
 // the page during a video, and gives everything back when the route leaves
 // the title.
 //
@@ -563,6 +564,46 @@
       show: 'Afficher de nouveau ce titre',
       hidden: 'Ce titre est masqué de vos listes.',
       shown: 'Ce titre est de retour dans vos listes.',
+    },
+    de: {
+      searching: 'Quellen werden gesucht…',
+      none: 'Für diesen Titel ist keine Quelle verfügbar.',
+      again: 'Erneut versuchen',
+      removeResume: 'Aus „Weiterschauen“ entfernen',
+      hide: 'Diesen Titel ausblenden',
+      show: 'Diesen Titel wieder einblenden',
+      hidden: 'Dieser Titel ist in deinen Listen ausgeblendet.',
+      shown: 'Dieser Titel ist wieder in deinen Listen.',
+    },
+    es: {
+      searching: 'Buscando fuentes…',
+      none: 'No hay ninguna fuente disponible para este título.',
+      again: 'Reintentar',
+      removeResume: 'Quitar de «Seguir viendo»',
+      hide: 'Ocultar este título',
+      show: 'Volver a mostrar este título',
+      hidden: 'Este título está oculto en sus listas.',
+      shown: 'Este título vuelve a estar en sus listas.',
+    },
+    it: {
+      searching: 'Ricerca delle origini…',
+      none: 'Nessuna origine disponibile per questo titolo.',
+      again: 'Riprova',
+      removeResume: 'Rimuovi da «Continua a guardare»',
+      hide: 'Nascondi questo titolo',
+      show: 'Mostra di nuovo questo titolo',
+      hidden: 'Questo titolo è nascosto dai tuoi elenchi.',
+      shown: 'Questo titolo è di nuovo nei tuoi elenchi.',
+    },
+    pt: {
+      searching: 'Procurando fontes…',
+      none: 'Nenhuma fonte disponível para este título.',
+      again: 'Tentar novamente',
+      removeResume: 'Remover de “Continuar assistindo”',
+      hide: 'Ocultar este título',
+      show: 'Mostrar este título novamente',
+      hidden: 'Este título está oculto nas suas listas.',
+      shown: 'Este título voltou para as suas listas.',
     },
   }
   function say(key) {
@@ -1247,6 +1288,10 @@
   var scoreWords = {
     en: { imdb: 'IMDb rating', critics: 'Critics', criticsTitle: 'Critics’ score', audience: 'Audience', audienceTitle: 'Audience score', percent: '%' },
     fr: { imdb: 'Note IMDb', critics: 'Critiques', criticsTitle: 'Score des critiques', audience: 'Public', audienceTitle: 'Score du public', percent: '\u00a0%' },
+    de: { imdb: 'IMDb-Bewertung', critics: 'Kritiker', criticsTitle: 'Kritikerwertung', audience: 'Publikum', audienceTitle: 'Publikumswertung', percent: '\u00a0%' },
+    es: { imdb: 'Valoración de IMDb', critics: 'Crítica', criticsTitle: 'Puntuación de la crítica', audience: 'Público', audienceTitle: 'Puntuación del público', percent: '\u00a0%' },
+    it: { imdb: 'Voto IMDb', critics: 'Critica', criticsTitle: 'Punteggio della critica', audience: 'Pubblico', audienceTitle: 'Punteggio del pubblico', percent: '%' },
+    pt: { imdb: 'Nota do IMDb', critics: 'Crítica', criticsTitle: 'Nota da crítica', audience: 'Público', audienceTitle: 'Nota do público', percent: '%' },
   }
   function sayScore(key) {
     var language = /^[a-z]*/.exec(String(document.documentElement.lang || '').toLowerCase())[0]
@@ -1662,7 +1707,7 @@
   var shareTimer = null
   var shareWatcher = null
   var shareWatched = null
-  var shareWords = { en: 'Share', fr: 'Partager' }
+  var shareWords = { en: 'Share', fr: 'Partager', de: 'Teilen', es: 'Compartir', it: 'Condividi', pt: 'Compartilhar' }
   // followShare asks whether the title the route opens may be shared, and
   // takes the button off the page of the title it leaves.
   function followShare() {
@@ -2108,6 +2153,54 @@
       notifications: 'Mon compte › Notifications',
       added: 'Rappel prévu : vous serez prévenu avant le début.',
       removed: 'Rappel supprimé.',
+    },
+    de: {
+      remind: 'Erinnern',
+      set: 'Erinnerung gesetzt',
+      every: 'An jede Ausstrahlung erinnern',
+      more: 'Weitere Erinnerungen',
+      remove: 'Erinnerung entfernen',
+      everyAiring: 'Erinnert dich an jede Ausstrahlung gegen ',
+      noTarget: 'Noch keines deiner Ziele erhält Erinnerungen: Wähle „Sendung beginnt“ für eines davon unter ',
+      notifications: 'Mein Konto › Benachrichtigungen',
+      added: 'Erinnerung gesetzt: Du wirst vor dem Beginn benachrichtigt.',
+      removed: 'Erinnerung entfernt.',
+    },
+    es: {
+      remind: 'Recordármelo',
+      set: 'Recordatorio programado',
+      every: 'Recordarme cada emisión',
+      more: 'Más recordatorios',
+      remove: 'Quitar el recordatorio',
+      everyAiring: 'Le recuerda cada emisión hacia las ',
+      noTarget: 'Ninguno de sus destinos recibe todavía recordatorios: elija «Programa a punto de empezar» para uno de ellos en ',
+      notifications: 'Mi cuenta › Notificaciones',
+      added: 'Recordatorio programado: se le avisará antes de que empiece.',
+      removed: 'Recordatorio quitado.',
+    },
+    it: {
+      remind: 'Ricordamelo',
+      set: 'Promemoria impostato',
+      every: 'Ricordami ogni messa in onda',
+      more: 'Altri promemoria',
+      remove: 'Rimuovi il promemoria',
+      everyAiring: 'Ti ricorda ogni messa in onda verso le ',
+      noTarget: 'Nessuna delle tue destinazioni riceve ancora i promemoria: scegli «Programma in partenza» per una di esse in ',
+      notifications: 'Il mio account › Notifiche',
+      added: 'Promemoria impostato: riceverai un avviso prima dell’inizio.',
+      removed: 'Promemoria rimosso.',
+    },
+    pt: {
+      remind: 'Lembrar-me',
+      set: 'Lembrete definido',
+      every: 'Lembrar-me de cada exibição',
+      more: 'Mais lembretes',
+      remove: 'Remover o lembrete',
+      everyAiring: 'Lembra você de cada exibição por volta das ',
+      noTarget: 'Nenhum dos seus destinos recebe lembretes ainda: escolha “Programa começando” para um deles em ',
+      notifications: 'Minha conta › Notificações',
+      added: 'Lembrete definido: você será avisado antes do início.',
+      removed: 'Lembrete removido.',
     },
   }
   function language() {
