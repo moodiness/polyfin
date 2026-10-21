@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/recordings"
 )
@@ -194,14 +195,10 @@ func (s *Service) newEvent(kind string) Event {
 	return ev
 }
 
-// phrase says something in the server language, from the English and
-// French patterns, each with %s for args.
-func (s *Service) phrase(english, french string, args ...any) string {
-	pattern := english
-	if s.accounts.Settings().Language == "fr" {
-		pattern = french
-	}
-	return fmt.Sprintf(pattern, args...)
+// phrase says something in the server language, from its text in each
+// language, with %s for args.
+func (s *Service) phrase(text i18n.Text, args ...any) string {
+	return fmt.Sprintf(text.In(s.accounts.Settings().Language), args...)
 }
 
 // webLink is the address of item's page in the web client, nil without a
@@ -238,8 +235,8 @@ func (s *Service) adminLink(page string) *string {
 // testEvent is the message "Send a test" sends.
 func (s *Service) testEvent() Event {
 	ev := s.newEvent(Test)
-	ev.Title = s.phrase("Test message", "Message de test")
-	ev.Message = s.phrase("Notifications from %s reach this target.", "Les notifications de %s arrivent bien ici.", ev.Server.Name)
+	ev.Title = s.phrase(i18n.Text{"Test message", "Message de test", "Testnachricht", "Mensaje de prueba", "Messaggio di prova", "Mensagem de teste"})
+	ev.Message = s.phrase(i18n.Text{"Notifications from %s reach this target.", "Les notifications de %s arrivent bien ici.", "Benachrichtigungen von %s erreichen dieses Ziel.", "Las notificaciones de %s llegan a este destino.", "Le notifiche di %s raggiungono questa destinazione.", "As notificações de %s chegam a este destino."}, ev.Server.Name)
 	return ev
 }
 
@@ -255,7 +252,7 @@ func (s *Service) episodeEvent(user *accounts.User, episode library.Item) Event 
 	if ev.Episode.ProviderIDs == nil {
 		ev.Episode.ProviderIDs = map[string]string{}
 	}
-	ev.Title = s.phrase("New episode of %s", "Nouvel épisode de %s", episode.SeriesName)
+	ev.Title = s.phrase(i18n.Text{"New episode of %s", "Nouvel épisode de %s", "Neue Folge von %s", "Nuevo episodio de %s", "Nuovo episodio di %s", "Novo episódio de %s"}, episode.SeriesName)
 	ev.Message = fmt.Sprintf("S%02dE%02d", episode.ParentIndexNumber, episode.IndexNumber)
 	if episode.Name != "" {
 		ev.Message += " · " + episode.Name
@@ -272,7 +269,7 @@ func (s *Service) recordingEvent(ended recordings.Ended, user *accounts.User, ch
 		kind = RecordingFailed
 	}
 	ev := s.newEvent(kind)
-	who := s.phrase("a deleted user", "un utilisateur supprimé")
+	who := s.phrase(i18n.Text{"a deleted user", "un utilisateur supprimé", "einen gelöschten Benutzer", "un usuario eliminado", "un utente eliminato", "um usuário excluído"})
 	if user != nil {
 		ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
 		who = user.Name
@@ -280,20 +277,20 @@ func (s *Service) recordingEvent(ended recordings.Ended, user *accounts.User, ch
 	ev.Recording = &RecordingJSON{ID: ended.Recording.String(), Name: ended.Name, ChannelID: ended.Channel.String(), ChannelName: channel,
 		Start: ended.Start.UTC(), End: ended.End.UTC(), Partial: ended.Partial}
 	if channel == "" {
-		channel = s.phrase("its channel", "sa chaîne")
+		channel = s.phrase(i18n.Text{"its channel", "sa chaîne", "seinem Kanal", "su canal", "un canale", "seu canal"})
 	}
 	switch {
 	case ended.Failed:
-		ev.Title = s.phrase("Recording failed: %s", "Échec de l’enregistrement : %s", ended.Name)
-		ev.Message = s.phrase("Nothing could be recorded on %s, for %s.", "Rien n’a pu être enregistré sur %s, pour %s.", channel, who)
+		ev.Title = s.phrase(i18n.Text{"Recording failed: %s", "Échec de l’enregistrement : %s", "Aufnahme fehlgeschlagen: %s", "Grabación fallida: %s", "Registrazione non riuscita: %s", "Falha na gravação: %s"}, ended.Name)
+		ev.Message = s.phrase(i18n.Text{"Nothing could be recorded on %s, for %s.", "Rien n’a pu être enregistré sur %s, pour %s.", "Auf %s konnte für %s nichts aufgenommen werden.", "No se pudo grabar nada en %s, para %s.", "Non è stato possibile registrare nulla su %s, per %s.", "Nada pôde ser gravado em %s, para %s."}, channel, who)
 		if ended.NoTuner {
-			ev.Message += " " + s.phrase("Every tuner was recording another channel.", "Tous les tuners enregistraient une autre chaîne.")
+			ev.Message += " " + s.phrase(i18n.Text{"Every tuner was recording another channel.", "Tous les tuners enregistraient une autre chaîne.", "Alle Tuner nahmen einen anderen Kanal auf.", "Todos los sintonizadores estaban grabando otro canal.", "Tutti i sintonizzatori stavano registrando un altro canale.", "Todos os sintonizadores estavam gravando outro canal."})
 		}
 	default:
-		ev.Title = s.phrase("Recording finished: %s", "Enregistrement terminé : %s", ended.Name)
-		ev.Message = s.phrase("Recorded on %s, for %s.", "Enregistré sur %s, pour %s.", channel, who)
+		ev.Title = s.phrase(i18n.Text{"Recording finished: %s", "Enregistrement terminé : %s", "Aufnahme beendet: %s", "Grabación terminada: %s", "Registrazione terminata: %s", "Gravação concluída: %s"}, ended.Name)
+		ev.Message = s.phrase(i18n.Text{"Recorded on %s, for %s.", "Enregistré sur %s, pour %s.", "Aufgenommen auf %s, für %s.", "Grabado en %s, para %s.", "Registrato su %s, per %s.", "Gravado em %s, para %s."}, channel, who)
 		if ended.Partial {
-			ev.Message += " " + s.phrase("Part of the programme is missing.", "Une partie de l’émission manque.")
+			ev.Message += " " + s.phrase(i18n.Text{"Part of the programme is missing.", "Une partie de l’émission manque.", "Ein Teil der Sendung fehlt.", "Falta parte del programa.", "Manca una parte del programma.", "Falta parte do programa."})
 		}
 		ev.URL = s.webLink(ended.Recording)
 	}
@@ -302,9 +299,9 @@ func (s *Service) recordingEvent(ended recordings.Ended, user *accounts.User, ch
 
 // healthEventOf tells that problem was found, or solved.
 func (s *Service) healthEventOf(problem Problem, since time.Time, solved bool) Event {
-	kind, title := HealthProblem, s.phrase("Problem found", "Problème détecté")
+	kind, title := HealthProblem, s.phrase(i18n.Text{"Problem found", "Problème détecté", "Problem erkannt", "Problema detectado", "Problema rilevato", "Problema detectado"})
 	if solved {
-		kind, title = HealthSolved, s.phrase("Problem solved", "Problème résolu")
+		kind, title = HealthSolved, s.phrase(i18n.Text{"Problem solved", "Problème résolu", "Problem behoben", "Problema resuelto", "Problema risolto", "Problema resolvido"})
 	}
 	ev := s.newEvent(kind)
 	ev.Problem = &ProblemJSON{Key: problem.Key, Severity: problem.Severity, Text: problem.Text, Since: since.UTC()}
@@ -317,12 +314,12 @@ func (s *Service) userJoinedEvent(user accounts.User, invite accounts.Invite) Ev
 	ev := s.newEvent(UserJoined)
 	ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
 	ev.Invite = &InviteJSON{ID: invite.ID.String()}
-	ev.Title = s.phrase("New user: %s", "Nouvel utilisateur : %s", user.Name)
+	ev.Title = s.phrase(i18n.Text{"New user: %s", "Nouvel utilisateur : %s", "Neuer Benutzer: %s", "Nuevo usuario: %s", "Nuovo utente: %s", "Novo usuário: %s"}, user.Name)
 	if creator := invite.CreatedBy; creator != nil {
 		ev.Invite.CreatedBy = &UserJSON{ID: creator.ID.String(), Name: creator.Name}
-		ev.Message = s.phrase("%s joined through %s's invite.", "%s a rejoint le serveur grâce à l’invitation de %s.", user.Name, creator.Name)
+		ev.Message = s.phrase(i18n.Text{"%s joined through %s's invite.", "%s a rejoint le serveur grâce à l’invitation de %s.", "%s ist über die Einladung von %s beigetreten.", "%s se ha unido mediante la invitación de %s.", "%s ha aderito tramite l’invito di %s.", "%s entrou pelo convite de %s."}, user.Name, creator.Name)
 	} else {
-		ev.Message = s.phrase("%s joined through an invite.", "%s a rejoint le serveur grâce à une invitation.", user.Name)
+		ev.Message = s.phrase(i18n.Text{"%s joined through an invite.", "%s a rejoint le serveur grâce à une invitation.", "%s ist über eine Einladung beigetreten.", "%s se ha unido mediante una invitación.", "%s ha aderito tramite un invito.", "%s entrou por um convite."}, user.Name)
 	}
 	ev.URL = s.adminLink("/users/" + user.ID.String())
 	return ev
@@ -333,8 +330,8 @@ func (s *Service) userJoinedEvent(user accounts.User, invite accounts.Invite) Ev
 func (s *Service) newVersionEvent(version, link string) Event {
 	ev := s.newEvent(NewVersion)
 	ev.Release = &ReleaseJSON{Version: version, URL: link, Current: s.version}
-	ev.Title = s.phrase("New version: Polyfin %s", "Nouvelle version : Polyfin %s", version)
-	ev.Message = s.phrase("Polyfin %s is available. This server runs version %s.", "Polyfin %s est disponible. Ce serveur est en version %s.",
+	ev.Title = s.phrase(i18n.Text{"New version: Polyfin %s", "Nouvelle version : Polyfin %s", "Neue Version: Polyfin %s", "Nueva versión: Polyfin %s", "Nuova versione: Polyfin %s", "Nova versão: Polyfin %s"}, version)
+	ev.Message = s.phrase(i18n.Text{"Polyfin %s is available. This server runs version %s.", "Polyfin %s est disponible. Ce serveur est en version %s.", "Polyfin %s ist verfügbar. Dieser Server läuft mit Version %s.", "Polyfin %s está disponible. Este servidor usa la versión %s.", "Polyfin %s è disponibile. Questo server usa la versione %s.", "O Polyfin %s está disponível. Este servidor está na versão %s."},
 		version, s.version)
 	ev.URL = &link
 	return ev
@@ -350,19 +347,17 @@ func (s *Service) connectionStoppedEvent(user accounts.User, kind, service strin
 	}
 	ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
 	ev.Connection = &ConnectionJSON{Kind: kind, Service: service, Name: name}
-	ev.Title = s.phrase("Connection stopped: %s", "Connexion arrêtée : %s", name)
+	ev.Title = s.phrase(i18n.Text{"Connection stopped: %s", "Connexion arrêtée : %s", "Verbindung beendet: %s", "Conexión detenida: %s", "Connessione interrotta: %s", "Conexão interrompida: %s"}, name)
 	if kind == ConnectionApp {
-		ev.Message = s.phrase("%s refused the sign-in Polyfin kept for %s: nothing is imported from it until %s signs in again "+
-			"under My account › Import from an app, with Stay connected ticked.",
-			"%s a refusé la connexion que Polyfin gardait pour %s : plus rien n’en est importé tant que %s ne s’y reconnecte pas "+
-				"sous Mon compte › Importer depuis une appli, avec « Rester connecté » coché.", name, user.Name, user.Name)
+		ev.Message = s.phrase(i18n.Text{"%s refused the sign-in Polyfin kept for %s: nothing is imported from it until %s signs in again " +
+			"under My account › Import from an app, with Stay connected ticked.", "%s a refusé la connexion que Polyfin gardait pour %s : plus rien n’en est importé tant que %s ne s’y reconnecte pas " +
+			"sous Mon compte › Importer depuis une appli, avec « Rester connecté » coché.", "%s hat die Anmeldung abgelehnt, die Polyfin für %s gespeichert hat: Von dort wird nichts importiert, bis sich %s unter Mein Konto › Aus einer App importieren erneut anmeldet, mit aktiviertem „Verbunden bleiben“.", "%s ha rechazado el inicio de sesión que Polyfin guardaba para %s: no se importa nada de ahí hasta que %s vuelva a iniciar sesión en Mi cuenta › Importar desde una aplicación, con «Permanecer conectado» marcado.", "%s ha rifiutato l’accesso che Polyfin conservava per %s: da lì non viene importato nulla finché %s non accede di nuovo in Il mio account › Importa da un’applicazione, con «Resta connesso» selezionato.", "%s recusou o login que o Polyfin mantinha para %s: nada é importado de lá até que %s entre novamente em Minha conta › Importar de um aplicativo, com “Permanecer conectado” marcado."}, name, user.Name, user.Name)
 		ev.URL = s.adminLink("/me/account#app-import")
 		return ev
 	}
-	ev.Message = s.phrase("%s refused the token or key Polyfin kept for %s: nothing is sent to it or imported from it until %s "+
-		"presses Connect again under My account › Tracking.",
-		"%s a refusé le jeton ou la clé que Polyfin gardait pour %s : plus rien ne lui est envoyé ni n’en est importé tant que %s "+
-			"n’appuie pas sur Reconnecter sous Mon compte › Suivi.", name, user.Name, user.Name)
+	ev.Message = s.phrase(i18n.Text{"%s refused the token or key Polyfin kept for %s: nothing is sent to it or imported from it until %s " +
+		"presses Connect again under My account › Tracking.", "%s a refusé le jeton ou la clé que Polyfin gardait pour %s : plus rien ne lui est envoyé ni n’en est importé tant que %s " +
+		"n’appuie pas sur Reconnecter sous Mon compte › Suivi.", "%s hat das Token oder den Schlüssel abgelehnt, den Polyfin für %s gespeichert hat: Es wird nichts dorthin gesendet oder von dort importiert, bis %s unter Mein Konto › Tracking auf „Erneut verbinden“ klickt.", "%s ha rechazado el token o la clave que Polyfin guardaba para %s: no se le envía ni se importa nada hasta que %s pulse «Volver a conectar» en Mi cuenta › Seguimiento.", "%s ha rifiutato il token o la chiave che Polyfin conservava per %s: non viene inviato né importato nulla finché %s non preme «Collega di nuovo» in Il mio account › Monitoraggio.", "%s recusou o token ou a chave que o Polyfin mantinha para %s: nada é enviado a ele nem importado dele até que %s clique em “Conectar novamente” em Minha conta › Acompanhamento."}, name, user.Name, user.Name)
 	ev.URL = s.adminLink("/me/account#tracking")
 	return ev
 }

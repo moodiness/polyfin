@@ -3,6 +3,8 @@ package playback
 import (
 	"fmt"
 	"slices"
+
+	"github.com/moodiness/polyfin/internal/i18n"
 )
 
 // noteWords are the endings of version names telling how a version plays,
@@ -13,14 +15,24 @@ type noteWords struct {
 	hdr, quality, subtitles, video, audio                         string
 }
 
-var (
-	englishNotes = noteWords{"(direct play)", "(direct stream)", "(converted)", "(converted: %s)", "(cannot play here)",
-		"HDR", "quality limit", "subtitles", "video", "audio"}
-	// frenchNotes set the colon off with a no-break space, which keeps it
-	// on the line of the word before.
-	frenchNotes = noteWords{"(lecture directe)", "(flux direct)", "(converti)", "(converti\u00a0: %s)", "(illisible ici)",
-		"HDR", "limite de qualité", "sous-titres", "vidéo", "audio"}
-)
+// playNotes are the notes of each server language. The French set the
+// colon off with a no-break space, which keeps it on the line of the word
+// before; the Spanish, Italian and Portuguese agree with "version", which
+// is feminine there.
+var playNotes = map[string]noteWords{
+	"en": {"(direct play)", "(direct stream)", "(converted)", "(converted: %s)", "(cannot play here)",
+		"HDR", "quality limit", "subtitles", "video", "audio"},
+	"fr": {"(lecture directe)", "(flux direct)", "(converti)", "(converti\u00a0: %s)", "(illisible ici)",
+		"HDR", "limite de qualité", "sous-titres", "vidéo", "audio"},
+	"de": {"(direktes Abspielen)", "(direkter Stream)", "(konvertiert)", "(konvertiert: %s)", "(hier nicht abspielbar)",
+		"HDR", "Qualitätslimit", "Untertitel", "Video", "Audio"},
+	"es": {"(reproducción directa)", "(transmisión directa)", "(convertida)", "(convertida: %s)", "(no se puede reproducir aquí)",
+		"HDR", "calidad máxima", "subtítulos", "vídeo", "audio"},
+	"it": {"(riproduzione diretta)", "(stream diretto)", "(convertita)", "(convertita: %s)", "(non riproducibile qui)",
+		"HDR", "limite qualità", "sottotitoli", "video", "audio"},
+	"pt-BR": {"(reprodução direta)", "(stream direto)", "(convertida)", "(convertida: %s)", "(não reproduzível aqui)",
+		"HDR", "qualidade", "legendas", "vídeo", "áudio"},
+}
 
 // videoReasons are the TranscodeReasons about the video.
 var videoReasons = []string{"VideoCodecNotSupported", "VideoProfileNotSupported", "VideoLevelNotSupported", "VideoResolutionNotSupported",
@@ -40,9 +52,9 @@ var videoReasons = []string{"VideoCodecNotSupported", "VideoProfileNotSupported"
 // decision needs a conversion the server or the user may not have, or
 // none plays the version. It is 30 characters at most.
 func PlayNote(decision Decision, playable bool, language string) string {
-	w := &englishNotes
-	if wordsFor(language) == &frenchWords {
-		w = &frenchNotes
+	w, ok := playNotes[i18n.Match(language)]
+	if !ok {
+		w = playNotes["en"]
 	}
 	has := func(reasons ...string) bool {
 		return slices.ContainsFunc(decision.Reasons, func(reason string) bool { return slices.Contains(reasons, reason) })

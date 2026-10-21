@@ -112,8 +112,12 @@ func objectOf(item library.Item, parent string) (object, bool) {
 
 // listText are the names of the server's own lists, by language.
 var listText = map[string]map[string]string{
-	"en": {resumeID: "Continue Watching", nextUpID: "Next Up", liveTvID: "Live TV"},
-	"fr": {resumeID: "Reprendre", nextUpID: "À suivre", liveTvID: "TV en direct"},
+	"en":    {resumeID: "Continue Watching", nextUpID: "Next Up", liveTvID: "Live TV"},
+	"fr":    {resumeID: "Reprendre", nextUpID: "À suivre", liveTvID: "TV en direct"},
+	"de":    {resumeID: "Weiterschauen", nextUpID: "Als Nächstes", liveTvID: "Live-TV"},
+	"es":    {resumeID: "Seguir viendo", nextUpID: "A continuación", liveTvID: "Televisión en vivo"},
+	"it":    {resumeID: "Continua a guardare", nextUpID: "Prossimo", liveTvID: "Diretta TV"},
+	"pt-BR": {resumeID: "Continuar assistindo", nextUpID: "A seguir", liveTvID: "TV ao Vivo"},
 }
 
 // list is one of the server's own lists, under the root.

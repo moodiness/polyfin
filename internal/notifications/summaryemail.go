@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 )
 
 // summaryHTML is the HTML part of a summary's email, laid out as the other
@@ -63,14 +64,14 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 		sections = append(sections, section)
 	}
 	if user {
-		titles(s.phrase("Movies watched", "Films regardés"), sum.Movies)
-		titles(s.phrase("Series watched", "Séries regardées"), sum.Series)
+		titles(s.phrase(i18n.Text{"Movies watched", "Films regardés", "Geschaute Filme", "Películas vistas", "Film visti", "Filmes assistidos"}), sum.Movies)
+		titles(s.phrase(i18n.Text{"Series watched", "Séries regardées", "Geschaute Serien", "Series vistas", "Serie TV viste", "Séries assistidas"}), sum.Series)
 	} else {
-		titles(s.phrase("Most watched movies", "Films les plus regardés"), sum.Movies)
-		titles(s.phrase("Most watched series", "Séries les plus regardées"), sum.Series)
+		titles(s.phrase(i18n.Text{"Most watched movies", "Films les plus regardés", "Meistgesehene Filme", "Películas más vistas", "Film più visti", "Filmes mais assistidos"}), sum.Movies)
+		titles(s.phrase(i18n.Text{"Most watched series", "Séries les plus regardées", "Meistgesehene Serien", "Series más vistas", "Serie TV più viste", "Séries mais assistidas"}), sum.Series)
 	}
 	if sum.TopMonth != nil {
-		sections = append(sections, summarySection{Heading: s.phrase("Most watched month", "Mois le plus regardé"),
+		sections = append(sections, summarySection{Heading: s.phrase(i18n.Text{"Most watched month", "Mois le plus regardé", "Meistgesehener Monat", "Mes con más visionado", "Mese più visto", "Mês mais assistido"}),
 			Items: []summaryItem{{Name: s.topMonthText(*sum.TopMonth, true), Detail: s.playsText(sum.TopMonth.Plays)}}})
 	}
 	if sum.NewEpisodes > 0 {
@@ -80,19 +81,20 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 			section.Items = append(section.Items, summaryItem{Name: name, URL: s.itemLink(e.ID), Detail: e.Name})
 		}
 		if more := sum.NewEpisodes - len(sum.Episodes); more > 0 {
-			section.More = s.count(more, "And %d more.", "And %d more.", "Et %d autre.", "Et %d autres.")
+			section.More = s.count(more, i18n.Text{"And %d more.", "Et %d autre.", "Und %d weitere.", "Y %d más.", "E ancora %d.", "E mais %d."},
+				i18n.Text{"And %d more.", "Et %d autres.", "Und %d weitere.", "Y %d más.", "E ancora %d.", "E mais %d."})
 		}
 		sections = append(sections, section)
 	}
 	if len(sum.Users) > 0 {
-		section := summarySection{Heading: s.phrase("New users", "Nouveaux utilisateurs")}
+		section := summarySection{Heading: s.phrase(i18n.Text{"New users", "Nouveaux utilisateurs", "Neue Benutzer", "Nuevos usuarios", "Nuovi utenti", "Novos usuários"})}
 		for _, u := range sum.Users {
 			item := summaryItem{Name: u.Name}
 			if link := s.adminLink("/users/" + u.ID); link != nil {
 				item.URL = *link
 			}
 			if u.InvitedBy != nil {
-				item.Detail = s.phrase("invited by %s", "invité par %s", u.InvitedBy.Name)
+				item.Detail = s.phrase(i18n.Text{"invited by %s", "invité par %s", "eingeladen von %s", "invitado por %s", "invitato da %s", "convidado por %s"}, u.InvitedBy.Name)
 			}
 			section.Items = append(section.Items, item)
 		}
@@ -104,9 +106,11 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 			item := summaryItem{Name: a.Name}
 			switch {
 			case a.Kind == "album":
-				item.Detail = s.count(a.Files, "%d track", "%d tracks", "%d piste", "%d pistes")
+				item.Detail = s.count(a.Files, i18n.Text{"%d track", "%d piste", "%d Titel", "%d pista", "%d traccia", "%d faixa"},
+					i18n.Text{"%d tracks", "%d pistes", "%d Titel", "%d pistas", "%d tracce", "%d faixas"})
 			case a.Kind == "show" || a.Files > 1:
-				item.Detail = s.count(a.Files, "%d file", "%d files", "%d fichier", "%d fichiers")
+				item.Detail = s.count(a.Files, i18n.Text{"%d file", "%d fichier", "%d Datei", "%d archivo", "%d file", "%d arquivo"},
+					i18n.Text{"%d files", "%d fichiers", "%d Dateien", "%d archivos", "%d file", "%d arquivos"})
 			}
 			section.Items = append(section.Items, item)
 		}
@@ -115,9 +119,9 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 	if len(sum.Problems) > 0 {
 		section := summarySection{Heading: s.problemsHeading(sum)}
 		for _, p := range sum.Problems {
-			item := summaryItem{Name: p.Text, Detail: s.phrase("Warning", "Avertissement")}
+			item := summaryItem{Name: p.Text, Detail: s.phrase(i18n.Text{"Warning", "Avertissement", "Warnung", "Advertencia", "Avviso", "Aviso"})}
 			if p.Severity == SeverityError {
-				item.Detail = s.phrase("Error", "Erreur")
+				item.Detail = s.phrase(i18n.Text{"Error", "Erreur", "Fehler", "Error", "Errore", "Erro"})
 			}
 			if link := s.healthLink(p.page); link != nil {
 				item.URL = *link
@@ -130,7 +134,7 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 	if ev.URL != nil {
 		url = *ev.URL
 	}
-	open := s.phrase("Open the statistics", "Ouvrir les statistiques")
+	open := s.phrase(i18n.Text{"Open the statistics", "Ouvrir les statistiques", "Statistiken öffnen", "Abrir las estadísticas", "Apri le statistiche", "Abrir as estatísticas"})
 	if err := summaryHTML.Execute(page, map[string]any{"Language": language, "Title": ev.Title, "Period": s.periodLine(ev.Type, sum),
 		"Played": s.playedLine(sum), "Sections": sections, "URL": url, "Open": open, "Footer": footer}); err != nil {
 		return "", err
@@ -155,7 +159,7 @@ func (s *Service) summaryEmail(page *bytes.Buffer, language string, ev Event, fo
 		}
 	}
 	if url != "" {
-		text.WriteString("\n" + s.phrase("%s: %s", "%s : %s", open, url) + "\n")
+		text.WriteString("\n" + s.phrase(i18n.Text{"%s: %s", "%s : %s", "%s: %s", "%s: %s", "%s: %s", "%s: %s"}, open, url) + "\n")
 	}
 	return text.String(), nil
 }

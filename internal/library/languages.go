@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -39,8 +40,8 @@ const (
 
 // useLanguage sets the view's metadata language from the user's: theirs
 // when one of the view's server addons has it, with those addons as its
-// translators, else none. The names Polyfin generates follow it when it is
-// English or French, else the server's language.
+// translators, else none. The names Polyfin generates follow it when
+// Polyfin speaks it (see i18n.Match), else the server's language.
 func (v *view) useLanguage(metadata, server string) {
 	if metadata != "" {
 		for _, entry := range v.addons {
@@ -56,12 +57,11 @@ func (v *view) useLanguage(metadata, server string) {
 }
 
 // generatedLanguage is the language Polyfin names what it generates in for
-// a metadata language: its own when it is English or French, region aside,
-// else the server's.
+// a metadata language: its own when Polyfin speaks it, region aside, else
+// the server's.
 func generatedLanguage(metadata, server string) string {
-	base, _, _ := strings.Cut(metadata, "-")
-	if _, ok := vocabulary[base]; ok {
-		return base
+	if language := i18n.Match(metadata); language != "" {
+		return language
 	}
 	return server
 }

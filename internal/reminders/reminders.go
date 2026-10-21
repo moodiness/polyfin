@@ -28,6 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/recordings"
 )
@@ -130,8 +131,9 @@ type Reminder struct {
 	Genres      []string
 	Rating      string
 	Start, End  time.Time
-	// Language is the web client's when the reminder was set, "en" or
-	// "fr", which its message is written in; empty for the server's.
+	// Language is the web client's when the reminder was set, one of
+	// i18n.Languages, which its message is written in; empty for the
+	// server's.
 	Language string
 }
 
@@ -277,16 +279,10 @@ func (s *Service) untilNext(ctx context.Context) time.Duration {
 	return min(max(next.Sub(s.now()), time.Second), maxWait)
 }
 
-// language keeps "en" and "fr", from a client's language such as "fr-FR";
-// anything else is the server's.
+// language keeps the languages Polyfin speaks, from a client's language
+// such as "fr-FR" or "pt" (see i18n.Match); anything else is the server's.
 func language(raw string) string {
-	raw = strings.ToLower(strings.TrimSpace(raw))
-	for _, known := range []string{"en", "fr"} {
-		if raw == known || strings.HasPrefix(raw, known+"-") || strings.HasPrefix(raw, known+"_") {
-			return known
-		}
-	}
-	return ""
+	return i18n.Match(strings.TrimSpace(raw))
 }
 
 // allowed reports whether user may see programme p, with the Live TV

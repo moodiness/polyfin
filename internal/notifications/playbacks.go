@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/plays"
 )
 
@@ -59,16 +60,16 @@ func (s *Service) playbackEvent(c plays.Change) Event {
 	switch c.Kind {
 	case plays.Started:
 		if plays.Video(t.Kind) {
-			ev.Title = s.phrase("%s is watching %s", "%s regarde %s", p.UserName, name)
+			ev.Title = s.phrase(i18n.Text{"%s is watching %s", "%s regarde %s", "%s schaut %s", "%s está viendo %s", "%s sta guardando %s", "%s está assistindo %s"}, p.UserName, name)
 		} else {
-			ev.Title = s.phrase("%s is listening to %s", "%s écoute %s", p.UserName, name)
+			ev.Title = s.phrase(i18n.Text{"%s is listening to %s", "%s écoute %s", "%s hört %s", "%s está escuchando %s", "%s sta ascoltando %s", "%s está ouvindo %s"}, p.UserName, name)
 		}
 	case plays.Paused:
-		ev.Title = s.phrase("%s paused %s", "%s a mis %s en pause", p.UserName, name)
+		ev.Title = s.phrase(i18n.Text{"%s paused %s", "%s a mis %s en pause", "%s hat %s pausiert", "%s ha pausado %s", "%s ha messo in pausa %s", "%s pausou %s"}, p.UserName, name)
 	case plays.Resumed:
-		ev.Title = s.phrase("%s resumed %s", "%s a repris %s", p.UserName, name)
+		ev.Title = s.phrase(i18n.Text{"%s resumed %s", "%s a repris %s", "%s hat %s fortgesetzt", "%s ha reanudado %s", "%s ha ripreso %s", "%s retomou %s"}, p.UserName, name)
 	case plays.Stopped:
-		ev.Title = s.phrase("%s stopped %s", "%s a arrêté %s", p.UserName, name)
+		ev.Title = s.phrase(i18n.Text{"%s stopped %s", "%s a arrêté %s", "%s hat %s beendet", "%s ha detenido %s", "%s ha interrotto %s", "%s parou %s"}, p.UserName, name)
 	}
 	var parts []string
 	if t.Kind == plays.Episode && t.Name != "" {
@@ -76,7 +77,7 @@ func (s *Service) playbackEvent(c plays.Change) Event {
 	}
 	switch {
 	case p.App != "" && p.DeviceName != "":
-		parts = append(parts, s.phrase("%s on %s", "%s sur %s", p.App, p.DeviceName))
+		parts = append(parts, s.phrase(i18n.Text{"%s on %s", "%s sur %s", "%s auf %s", "%s en %s", "%s su %s", "%s em %s"}, p.App, p.DeviceName))
 	case p.App != "" || p.DeviceName != "":
 		parts = append(parts, p.App+p.DeviceName)
 	}
@@ -85,11 +86,11 @@ func (s *Service) playbackEvent(c plays.Change) Event {
 	}
 	switch p.Method {
 	case plays.DirectPlay:
-		parts = append(parts, s.phrase("Direct play", "Lecture directe"))
+		parts = append(parts, s.phrase(i18n.Text{"Direct play", "Lecture directe", "Direktes Abspielen", "Reproducción directa", "Riproduzione diretta", "Reprodução direta"}))
 	case plays.DirectStream:
-		parts = append(parts, s.phrase("Remux", "Remux"))
+		parts = append(parts, s.phrase(i18n.Text{"Remux", "Remux", "Remux", "Remux", "Remux", "Remux"}))
 	case plays.Conversion:
-		parts = append(parts, s.phrase("Conversion", "Conversion"))
+		parts = append(parts, s.phrase(i18n.Text{"Conversion", "Conversion", "Konvertierung", "Conversión", "Conversione", "Conversão"}))
 	}
 	ev.Message = strings.Join(parts, " · ")
 	ev.URL = s.webLink(t.Item)

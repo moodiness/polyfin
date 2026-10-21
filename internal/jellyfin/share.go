@@ -19,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/plays"
@@ -26,7 +27,7 @@ import (
 
 // A share link (see accounts.ShareLink) lets a guest without an account
 // watch one movie or one episode of the user who made it, its sharer, at
-// /share/{token}: a page of Polyfin's own, in English or French, with the
+// /share/{token}: a page of Polyfin's own, in one of i18n.Languages, with the
 // title, its artwork, its overview and a player. The token opens nothing
 // else: the page's routes below are the only ones that read it, and every
 // other route refuses it as any unknown token.
@@ -354,21 +355,16 @@ func writeShareError(w http.ResponseWriter, failed shareError) {
 	writeJSON(w, failed.status, map[string]string{"error": failed.code})
 }
 
-// shareLanguage is the language of the page: French or English as the
-// browser prefers, else the server's.
+// shareLanguage is the language of the page: the first Polyfin speaks
+// among those the browser prefers, else the server's.
 func (h *Handler) shareLanguage(r *http.Request) string {
 	for part := range strings.SplitSeq(r.Header.Get("Accept-Language"), ",") {
 		tag, _, _ := strings.Cut(strings.TrimSpace(part), ";")
-		base, _, _ := strings.Cut(strings.ToLower(tag), "-")
-		switch base {
-		case "fr", "en":
-			return base
+		if language := i18n.Match(tag); language != "" {
+			return language
 		}
 	}
-	if h.Accounts.Settings().Language == "fr" {
-		return "fr"
-	}
-	return "en"
+	return h.Accounts.Settings().Language
 }
 
 // sharePageData is what the page shows.

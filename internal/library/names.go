@@ -27,7 +27,7 @@ type words struct {
 	replay string
 	// watchlist names the Watchlist view (see WatchlistViewID).
 	watchlist string
-	// language is the language of the words, "en" or "fr".
+	// language is the language of the words, one of i18n.Languages.
 	language string
 }
 
@@ -40,6 +40,22 @@ var vocabulary = map[string]words{
 		movies: "Films", shows: "Séries", videos: "Vidéos", collections: "Collections",
 		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique", replay: "Replay",
 		watchlist: "À regarder"},
+	"de": {season: "Staffel", specials: "Specials", episode: "Folge", video: "Video", chapter: "Kapitel",
+		movies: "Filme", shows: "Serien", videos: "Videos", collections: "Sammlungen",
+		songs: "Titel", albums: "Alben", artists: "Künstler", playlists: "Wiedergabelisten", myMusic: "Meine Musik", replay: "Replay",
+		watchlist: "Merkliste"},
+	"es": {season: "Temporada", specials: "Especiales", episode: "Episodio", video: "Vídeo", chapter: "Capítulo",
+		movies: "Películas", shows: "Series", videos: "Vídeos", collections: "Colecciones",
+		songs: "Canciones", albums: "Álbumes", artists: "Artistas", playlists: "Listas de reproducción", myMusic: "Mi música", replay: "Replay",
+		watchlist: "Para ver"},
+	"it": {season: "Stagione", specials: "Speciali", episode: "Episodio", video: "Video", chapter: "Capitolo",
+		movies: "Film", shows: "Serie TV", videos: "Video", collections: "Collezioni",
+		songs: "Brani", albums: "Album", artists: "Artisti", playlists: "Playlist", myMusic: "La mia musica", replay: "Replay",
+		watchlist: "Da guardare"},
+	"pt-BR": {season: "Temporada", specials: "Especiais", episode: "Episódio", video: "Vídeo", chapter: "Capítulo",
+		movies: "Filmes", shows: "Séries", videos: "Vídeos", collections: "Coleções",
+		songs: "Músicas", albums: "Álbuns", artists: "Artistas", playlists: "Playlists", myMusic: "Minha música", replay: "Replay",
+		watchlist: "Para assistir"},
 }
 
 // vocabularyOf returns the words of a server language, English when the

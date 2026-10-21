@@ -159,7 +159,7 @@ func (h *Handler) setReminder(w http.ResponseWriter, r *http.Request) {
 		ProgramId string
 		Series    bool
 		// Language is the client's, such as "fr", which the message is
-		// written in; English or French, else the server's.
+		// written in when Polyfin speaks it, else in the server's.
 		Language string
 	}
 	if !jsonContent(r.Header.Get("Content-Type")) {

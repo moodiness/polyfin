@@ -605,7 +605,7 @@ func TestLibraryNamesTellCollisionsApart(t *testing.T) {
 		{"content types in French", "fr",
 			[]addons.Library{catalog("A", "movie", "Populaires"), catalog("A", "series", "Populaires"), catalog("A", "collection", "Populaires")},
 			[]string{"Populaires (Films)", "Populaires (Séries)", "Populaires (Collections)"}},
-		{"unknown languages fall back to English", "de",
+		{"unknown languages fall back to English", "nl",
 			[]addons.Library{catalog("A", "movie", "Top"), catalog("A", "series", "Top")},
 			[]string{"Top (Movies)", "Top (Shows)"}},
 		{"the same type from two addons gets the addon name", "fr",

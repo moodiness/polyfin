@@ -22,6 +22,7 @@ import (
 	"unicode"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 )
 
 // sendEmail sends ev to the email target t through the SMTP server of the
@@ -206,11 +207,11 @@ func (s *Service) emailMessage(settings accounts.Settings, t target, ev Event) (
 		from.Name = settings.ServerName
 	}
 	domain := settings.SMTPFrom[strings.LastIndexByte(settings.SMTPFrom, '@')+1:]
-	url, open := "", s.phrase("Open", "Ouvrir")
+	url, open := "", s.phrase(i18n.Text{"Open", "Ouvrir", "Öffnen", "Abrir", "Apri", "Abrir"})
 	if ev.URL != nil {
 		url = *ev.URL
 	}
-	footer := s.phrase("Sent by Polyfin from %s.", "Envoyé par Polyfin depuis %s.", settings.ServerName)
+	footer := s.phrase(i18n.Text{"Sent by Polyfin from %s.", "Envoyé par Polyfin depuis %s.", "Gesendet von Polyfin auf %s.", "Enviado por Polyfin desde %s.", "Inviato da Polyfin da %s.", "Enviado pelo Polyfin de %s."}, settings.ServerName)
 
 	var message bytes.Buffer
 	body := multipart.NewWriter(&message)

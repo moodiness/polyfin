@@ -11,6 +11,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/forwarded"
+	"github.com/moodiness/polyfin/internal/i18n"
 )
 
 // Users managed from Jellyfin apps.
@@ -290,10 +291,14 @@ type PinRedeemResult struct {
 // pinPlace tells, in the server language, where the administrator finds
 // the PIN: jellyfin-web shows it as the file Jellyfin writes the PIN to.
 func (h *Handler) pinPlace() string {
-	if h.Accounts.Settings().Language == "fr" {
-		return "la page Utilisateurs de l’interface d’administration de Polyfin, et son journal"
-	}
-	return "the Users page of the Polyfin admin interface, and its log"
+	return i18n.Text{
+		"the Users page of the Polyfin admin interface, and its log",
+		"la page Utilisateurs de l’interface d’administration de Polyfin, et son journal",
+		"die Seite „Benutzer“ der Polyfin-Verwaltungsoberfläche und ihr Protokoll",
+		"la página Usuarios de la interfaz de administración de Polyfin, y su registro",
+		"la pagina Utenti dell’interfaccia di amministrazione di Polyfin e il suo log",
+		"a página Usuários da interface de administração do Polyfin e o registro dele",
+	}.In(h.Accounts.Settings().Language)
 }
 
 // forgotPassword gives the user named a PIN valid 30 minutes, which the

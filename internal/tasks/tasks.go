@@ -30,6 +30,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/i18n"
 )
 
 // Jellyfin's task categories, which apps group tasks by.
@@ -39,10 +41,11 @@ const (
 	CategoryLiveTV      = "Live TV"
 )
 
-// categoryText names the categories in the server languages other than
-// English.
-var categoryText = map[string]map[string]string{
-	"fr": {CategoryMaintenance: "Maintenance", CategoryLibrary: "Médiathèque", CategoryLiveTV: "TV en direct"},
+// categoryText names the categories in each server language.
+var categoryText = map[string]i18n.Text{
+	CategoryMaintenance: {"Maintenance", "Maintenance", "Wartung", "Mantenimiento", "Manutenzione", "Manutenção"},
+	CategoryLibrary:     {"Library", "Médiathèque", "Bibliothek", "Biblioteca", "Libreria", "Biblioteca"},
+	CategoryLiveTV:      {"Live TV", "TV en direct", "Live-TV", "Televisión en vivo", "Diretta TV", "TV ao Vivo"},
 }
 
 // Text is a task's name and description in one language.
@@ -376,8 +379,8 @@ func (e *entry) info(language string, now time.Time) Info {
 		text = e.Text["en"]
 	}
 	category := e.Category
-	if named, ok := categoryText[language][category]; ok {
-		category = named
+	if named, ok := categoryText[category]; ok {
+		category = named.In(language)
 	}
 	info := Info{ID: e.id, Key: e.Key, Name: text.Name, Description: text.Description, Category: category,
 		Interval: e.Interval, AtStart: e.AtStart, State: e.state}

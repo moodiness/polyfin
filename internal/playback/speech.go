@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/speech"
@@ -555,8 +556,6 @@ func videoFrameRate(analysis media.Analysis) float64 {
 // SyncedTitle is the name of an addon subtitle SyncSubtitle changed: its
 // display title followed by "(synced)" in the server language.
 func SyncedTitle(title, language string) string {
-	if wordsFor(language) == &frenchWords {
-		return title + " (recalé)"
-	}
-	return title + " (synced)"
+	return title + " " + i18n.Text{"(synced)", "(recalé)", "(synchronisiert)", "(sincronizado)", "(sincronizzato)", "(sincronizada)"}.
+		In(i18n.Match(language))
 }

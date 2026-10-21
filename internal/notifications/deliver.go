@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -400,7 +401,7 @@ func (s *Service) request(t target, secret string, ev Event) (*http.Request, err
 			header.Set("Authorization", "Bearer "+secret)
 		}
 	case Telegram:
-		address, payload = s.telegramAPI+"/bot"+secret+"/sendMessage", telegramMessage(t.topic, ev, s.phrase("Open", "Ouvrir"))
+		address, payload = s.telegramAPI+"/bot"+secret+"/sendMessage", telegramMessage(t.topic, ev, s.phrase(i18n.Text{"Open", "Ouvrir", "Öffnen", "Abrir", "Apri", "Abrir"}))
 	case Gotify:
 		address, payload = t.address+"/message", gotifyMessage(ev)
 		header.Set("X-Gotify-Key", secret)

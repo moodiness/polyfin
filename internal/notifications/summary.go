@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/plays"
 )
@@ -583,33 +584,33 @@ func (s *Service) summaryEvent(event string, user *accounts.User, sum SummaryJSO
 		ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
 		switch event {
 		case MonthlySummary:
-			ev.Title = s.phrase("Your month on %s", "Votre mois sur %s", ev.Server.Name)
+			ev.Title = s.phrase(i18n.Text{"Your month on %s", "Votre mois sur %s", "Dein Monat auf %s", "Su mes en %s", "Il tuo mese su %s", "Seu mês em %s"}, ev.Server.Name)
 		case YearlySummary:
-			ev.Title = s.phrase("Your year on %s", "Votre année sur %s", ev.Server.Name)
+			ev.Title = s.phrase(i18n.Text{"Your year on %s", "Votre année sur %s", "Dein Jahr auf %s", "Su año en %s", "Il tuo anno su %s", "Seu ano em %s"}, ev.Server.Name)
 		default:
-			ev.Title = s.phrase("Your week on %s", "Votre semaine sur %s", ev.Server.Name)
+			ev.Title = s.phrase(i18n.Text{"Your week on %s", "Votre semaine sur %s", "Deine Woche auf %s", "Su semana en %s", "La tua settimana su %s", "Sua semana em %s"}, ev.Server.Name)
 		}
 		ev.URL = s.adminLink("/me/account#statistics")
 	} else {
 		switch event {
 		case MonthlySummary:
-			ev.Title = s.phrase("The month on %s", "Le mois sur %s", ev.Server.Name)
+			ev.Title = s.phrase(i18n.Text{"The month on %s", "Le mois sur %s", "Der Monat auf %s", "El mes en %s", "Il mese su %s", "O mês em %s"}, ev.Server.Name)
 		case YearlySummary:
-			ev.Title = s.phrase("The year on %s", "L’année sur %s", ev.Server.Name)
+			ev.Title = s.phrase(i18n.Text{"The year on %s", "L’année sur %s", "Das Jahr auf %s", "El año en %s", "L’anno su %s", "O ano em %s"}, ev.Server.Name)
 		default:
-			ev.Title = s.phrase("The week on %s", "La semaine sur %s", ev.Server.Name)
+			ev.Title = s.phrase(i18n.Text{"The week on %s", "La semaine sur %s", "Die Woche auf %s", "La semana en %s", "La settimana su %s", "A semana em %s"}, ev.Server.Name)
 		}
 		ev.URL = s.adminLink("/system/statistics")
 	}
 	lines := []string{s.periodLine(event, sum), s.playedLine(sum)}
 	if sum.TopMonth != nil {
-		lines = append(lines, s.phrase("Most watched month: %s.", "Mois le plus regardé : %s.", s.topMonthText(*sum.TopMonth, false)))
+		lines = append(lines, s.phrase(i18n.Text{"Most watched month: %s.", "Mois le plus regardé : %s.", "Meistgesehener Monat: %s.", "Mes con más visionado: %s.", "Mese più visto: %s.", "Mês mais assistido: %s."}, s.topMonthText(*sum.TopMonth, false)))
 	}
 	if len(sum.Movies) > 0 {
-		lines = append(lines, s.phrase("Movies: %s.", "Films : %s.", titleNames(sum.Movies, summaryServerTop)))
+		lines = append(lines, s.phrase(i18n.Text{"Movies: %s.", "Films : %s.", "Filme: %s.", "Películas: %s.", "Film: %s.", "Filmes: %s."}, titleNames(sum.Movies, summaryServerTop)))
 	}
 	if len(sum.Series) > 0 {
-		lines = append(lines, s.phrase("Series: %s.", "Séries : %s.", titleNames(sum.Series, summaryServerTop)))
+		lines = append(lines, s.phrase(i18n.Text{"Series: %s.", "Séries : %s.", "Serien: %s.", "Series: %s.", "Serie TV: %s.", "Séries: %s."}, titleNames(sum.Series, summaryServerTop)))
 	}
 	if sum.NewEpisodes > 0 {
 		lines = append(lines, s.episodesHeading(sum)+".")
@@ -617,13 +618,13 @@ func (s *Service) summaryEvent(event string, user *accounts.User, sum SummaryJSO
 	switch len(sum.Users) {
 	case 0:
 	case 1:
-		lines = append(lines, s.phrase("New user: %s.", "Nouvel utilisateur : %s.", sum.Users[0].Name))
+		lines = append(lines, s.phrase(i18n.Text{"New user: %s.", "Nouvel utilisateur : %s.", "Neuer Benutzer: %s.", "Nuevo usuario: %s.", "Nuovo utente: %s.", "Novo usuário: %s."}, sum.Users[0].Name))
 	default:
 		names := make([]string, 0, len(sum.Users))
 		for _, u := range sum.Users {
 			names = append(names, u.Name)
 		}
-		lines = append(lines, s.phrase("New users: %s.", "Nouveaux utilisateurs : %s.", strings.Join(names, ", ")))
+		lines = append(lines, s.phrase(i18n.Text{"New users: %s.", "Nouveaux utilisateurs : %s.", "Neue Benutzer: %s.", "Nuevos usuarios: %s.", "Nuovi utenti: %s.", "Novos usuários: %s."}, strings.Join(names, ", ")))
 	}
 	if sum.AddedFiles > 0 {
 		lines = append(lines, s.addedHeading(sum)+".")
@@ -648,19 +649,17 @@ func titleNames(titles []SummaryTitleJSON, n int) string {
 // the server's time zone.
 func (s *Service) periodLine(event string, sum SummaryJSON) string {
 	start := sum.Start.In(s.zone)
-	french := s.accounts.Settings().Language == "fr"
+	language := s.accounts.Settings().Language
 	switch event {
 	case MonthlySummary:
-		if french {
-			name := frenchMonths[start.Month()-1]
-			if strings.IndexByte("aeiou", name[0]) >= 0 {
-				return fmt.Sprintf("Mois d’%s %d.", name, start.Year())
-			}
-			return fmt.Sprintf("Mois de %s %d.", name, start.Year())
+		name := monthName(language, start.Month())
+		if language == "fr" && strings.IndexByte("aeiou", name[0]) >= 0 {
+			return fmt.Sprintf("Mois d’%s %d.", name, start.Year())
 		}
-		return fmt.Sprintf("Month of %s %d.", start.Month(), start.Year())
+		return s.phrase(i18n.Text{"Month of %s %d.", "Mois de %s %d.", "Monat %s %d.", "Mes de %s de %d.", "Mese di %s %d.", "Mês de %s de %d."},
+			name, start.Year())
 	case YearlySummary:
-		return s.phrase("Year %d.", "Année %d.", start.Year())
+		return s.phrase(i18n.Text{"Year %d.", "Année %d.", "Jahr %d.", "Año %d.", "Anno %d.", "Ano %d."}, start.Year())
 	}
 	return s.weekLine(sum)
 }
@@ -672,10 +671,7 @@ func (s *Service) topMonthText(m SummaryMonthJSON, withYear bool) string {
 	if err != nil {
 		return m.Month
 	}
-	name := month.Month().String()
-	if s.accounts.Settings().Language == "fr" {
-		name = frenchMonths[month.Month()-1]
-	}
+	name := monthName(s.accounts.Settings().Language, month.Month())
 	if withYear {
 		name += " " + strconv.Itoa(month.Year())
 	}
@@ -685,73 +681,93 @@ func (s *Service) topMonthText(m SummaryMonthJSON, withYear bool) string {
 // weekLine names the week of sum, by its days in the server's time zone.
 func (s *Service) weekLine(sum SummaryJSON) string {
 	start, end := sum.Start.In(s.zone), sum.End.In(s.zone)
-	if s.accounts.Settings().Language == "fr" {
-		first := strconv.Itoa(start.Day())
-		if start.Day() == 1 {
-			first = "1er"
-		}
-		if start.Month() == end.Month() {
-			return fmt.Sprintf("Semaine du %s au %d %s.", first, end.Day(), frenchMonths[end.Month()-1])
-		}
-		return fmt.Sprintf("Semaine du %s %s au %d %s.", first, frenchMonths[start.Month()-1], end.Day(), frenchMonths[end.Month()-1])
+	language := s.accounts.Settings().Language
+	// The first day, as French, Italian and Portuguese write the 1st.
+	first := strconv.Itoa(start.Day())
+	if start.Day() == 1 {
+		first = i18n.Text{"1", "1er", "1", "1", "1º", "1º"}.In(language)
 	}
 	if start.Month() == end.Month() {
-		return fmt.Sprintf("Week of %s %d to %d.", start.Month(), start.Day(), end.Day())
+		return s.phrase(i18n.Text{"Week of %[2]s %[1]s to %[3]d.", "Semaine du %[1]s au %[3]d %[4]s.", "Woche vom %[1]s. bis %[3]d. %[4]s.",
+			"Semana del %[1]s al %[3]d de %[4]s.", "Settimana dal %[1]s al %[3]d %[4]s.", "Semana de %[1]s a %[3]d de %[4]s."},
+			first, monthName(language, start.Month()), end.Day(), monthName(language, end.Month()))
 	}
-	return fmt.Sprintf("Week of %s %d to %s %d.", start.Month(), start.Day(), end.Month(), end.Day())
+	return s.phrase(i18n.Text{"Week of %[2]s %[1]s to %[4]s %[3]d.", "Semaine du %[1]s %[2]s au %[3]d %[4]s.", "Woche vom %[1]s. %[2]s bis %[3]d. %[4]s.",
+		"Semana del %[1]s de %[2]s al %[3]d de %[4]s.", "Settimana dal %[1]s %[2]s al %[3]d %[4]s.", "Semana de %[1]s de %[2]s a %[3]d de %[4]s."},
+		first, monthName(language, start.Month()), end.Day(), monthName(language, end.Month()))
 }
 
-var frenchMonths = [12]string{"janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre",
-	"décembre"}
+// monthNames name the months in each server language, as running text
+// writes them.
+var monthNames = map[string][12]string{
+	"en":    {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"},
+	"fr":    {"janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"},
+	"de":    {"Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"},
+	"es":    {"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"},
+	"it":    {"gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"},
+	"pt-BR": {"janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"},
+}
+
+// monthName names month in language, in English when Polyfin does not
+// speak it.
+func monthName(language string, month time.Month) string {
+	names, ok := monthNames[language]
+	if !ok {
+		names = monthNames["en"]
+	}
+	return names[month-1]
+}
 
 // playedLine tells how long and how many times videos played.
 func (s *Service) playedLine(sum SummaryJSON) string {
 	if sum.Plays == 0 {
-		return s.phrase("Nothing was watched.", "Rien n’a été regardé.")
+		return s.phrase(i18n.Text{"Nothing was watched.", "Rien n’a été regardé.", "Es wurde nichts geschaut.", "No se ha visto nada.", "Non è stato guardato nulla.", "Nada foi assistido."})
 	}
-	return s.phrase("%s watched, %s.", "%s de visionnage, %s.", s.duration(sum.Played), s.playsText(sum.Plays))
+	return s.phrase(i18n.Text{"%s watched, %s.", "%s de visionnage, %s.", "%s geschaut, %s.", "%s de visionado, %s.", "%s di visione, %s.", "%s de reprodução, %s."}, s.duration(sum.Played), s.playsText(sum.Plays))
 }
 
 // playsText counts playbacks.
 func (s *Service) playsText(n int) string {
-	return s.count(n, "%d playback", "%d playbacks", "%d lecture", "%d lectures")
+	return s.count(n, i18n.Text{"%d playback", "%d lecture", "%d Wiedergabe", "%d reproducción", "%d riproduzione", "%d reprodução"},
+		i18n.Text{"%d playbacks", "%d lectures", "%d Wiedergaben", "%d reproducciones", "%d riproduzioni", "%d reproduções"})
 }
 
 // episodesHeading counts the new episodes of sum.
 func (s *Service) episodesHeading(sum SummaryJSON) string {
 	if sum.Scope == ScopeUser {
-		return s.count(sum.NewEpisodes, "%d new episode of the series you follow", "%d new episodes of the series you follow",
-			"%d nouvel épisode des séries que vous suivez", "%d nouveaux épisodes des séries que vous suivez")
+		return s.count(sum.NewEpisodes, i18n.Text{"%d new episode of the series you follow", "%d nouvel épisode des séries que vous suivez", "%d neue Folge der Serien, denen du folgst", "%d episodio nuevo de las series que sigue", "%d nuovo episodio delle serie TV che segui", "%d novo episódio das séries que você segue"},
+			i18n.Text{"%d new episodes of the series you follow", "%d nouveaux épisodes des séries que vous suivez", "%d neue Folgen der Serien, denen du folgst", "%d episodios nuevos de las series que sigue", "%d nuovi episodi delle serie TV che segui", "%d novos episódios das séries que você segue"})
 	}
-	return s.count(sum.NewEpisodes, "%d new episode of the series users follow", "%d new episodes of the series users follow",
-		"%d nouvel épisode des séries suivies", "%d nouveaux épisodes des séries suivies")
+	return s.count(sum.NewEpisodes, i18n.Text{"%d new episode of the series users follow", "%d nouvel épisode des séries suivies", "%d neue Folge der verfolgten Serien", "%d episodio nuevo de las series seguidas", "%d nuovo episodio delle serie TV seguite", "%d novo episódio das séries seguidas"},
+		i18n.Text{"%d new episodes of the series users follow", "%d nouveaux épisodes des séries suivies", "%d neue Folgen der verfolgten Serien", "%d episodios nuevos de las series seguidas", "%d nuovi episodi delle serie TV seguite", "%d novos episódios das séries seguidas"})
 }
 
 // addedHeading counts the files added to the local folders.
 func (s *Service) addedHeading(sum SummaryJSON) string {
-	return s.count(sum.AddedFiles, "%d file added to the local folders", "%d files added to the local folders",
-		"%d fichier ajouté aux dossiers locaux", "%d fichiers ajoutés aux dossiers locaux")
+	return s.count(sum.AddedFiles, i18n.Text{"%d file added to the local folders", "%d fichier ajouté aux dossiers locaux", "%d Datei zu den lokalen Ordnern hinzugefügt", "%d archivo añadido a las carpetas locales", "%d file aggiunto alle cartelle locali", "%d arquivo adicionado às pastas locais"},
+		i18n.Text{"%d files added to the local folders", "%d fichiers ajoutés aux dossiers locaux", "%d Dateien zu den lokalen Ordnern hinzugefügt", "%d archivos añadidos a las carpetas locales", "%d file aggiunti alle cartelle locali", "%d arquivos adicionados às pastas locais"})
 }
 
 // problemsHeading counts the problems found.
 func (s *Service) problemsHeading(sum SummaryJSON) string {
-	return s.count(len(sum.Problems), "%d problem found by System › Health", "%d problems found by System › Health",
-		"%d problème détecté par Système › Santé", "%d problèmes détectés par Système › Santé")
+	return s.count(len(sum.Problems), i18n.Text{"%d problem found by System › Health", "%d problème détecté par Système › Santé", "%d Problem von System › Systemzustand erkannt", "%d problema detectado por Sistema › Estado del sistema", "%d problema rilevato da Sistema › Stato di salute", "%d problema detectado por Sistema › Integridade"},
+		i18n.Text{"%d problems found by System › Health", "%d problèmes détectés par Système › Santé", "%d Probleme von System › Systemzustand erkannt", "%d problemas detectados por Sistema › Estado del sistema", "%d problemi rilevati da Sistema › Stato di salute", "%d problemas detectados por Sistema › Integridade"})
 }
 
 // count says n with the pattern for one or for several, in the server
-// language: French counts 0 as one.
-func (s *Service) count(n int, english1, englishN, french1, frenchN string) string {
-	if s.accounts.Settings().Language == "fr" {
-		if n <= 1 {
-			return fmt.Sprintf(french1, n)
-		}
-		return fmt.Sprintf(frenchN, n)
+// language: French and Brazilian Portuguese count 0 as one.
+func (s *Service) count(n int, one, several i18n.Text) string {
+	language := s.accounts.Settings().Language
+	if n == 1 || n == 0 && zeroIsOne(language) {
+		return fmt.Sprintf(one.In(language), n)
 	}
-	if n == 1 {
-		return fmt.Sprintf(english1, n)
-	}
-	return fmt.Sprintf(englishN, n)
+	return fmt.Sprintf(several.In(language), n)
+}
+
+// zeroIsOne reports whether language counts 0 as one, as French and
+// Brazilian Portuguese do ("0 lecture", "0 reprodução").
+func zeroIsOne(language string) bool {
+	return language == "fr" || language == "pt-BR"
 }
 
 // duration says a time played in seconds: in minutes under an hour, in
@@ -759,19 +775,18 @@ func (s *Service) count(n int, english1, englishN, french1, frenchN string) stri
 func (s *Service) duration(seconds int64) string {
 	if seconds < 3600 {
 		minutes := int(math.Round(float64(seconds) / 60))
-		return s.count(minutes, "%d minute", "%d minutes", "%d minute", "%d minutes")
+		return s.count(minutes, i18n.Text{"%d minute", "%d minute", "%d Minute", "%d minuto", "%d minuto", "%d minuto"},
+			i18n.Text{"%d minutes", "%d minutes", "%d Minuten", "%d minutos", "%d minuti", "%d minutos"})
 	}
 	hours := math.Round(float64(seconds)/360) / 10
 	text := strconv.FormatFloat(hours, 'f', -1, 64)
-	if s.accounts.Settings().Language == "fr" {
+	language := s.accounts.Settings().Language
+	if language != "en" {
 		text = strings.Replace(text, ".", ",", 1)
-		if hours < 2 {
-			return text + " heure"
-		}
-		return text + " heures"
 	}
-	if hours == 1 {
-		return text + " hour"
+	// French and Brazilian Portuguese keep the singular under two hours.
+	if hours == 1 || hours < 2 && zeroIsOne(language) {
+		return s.phrase(i18n.Text{"%s hour", "%s heure", "%s Stunde", "%s hora", "%s ora", "%s hora"}, text)
 	}
-	return text + " hours"
+	return s.phrase(i18n.Text{"%s hours", "%s heures", "%s Stunden", "%s horas", "%s ore", "%s horas"}, text)
 }

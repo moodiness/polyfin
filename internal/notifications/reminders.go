@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/reminders"
 )
 
@@ -31,28 +32,30 @@ func (s *Service) ProgrammeStarting(due reminders.Due) (title, message string) {
 	ev.User = &UserJSON{ID: due.User.ID.String(), Name: due.User.Name}
 	ev.Programme = &ProgrammeJSON{ID: r.Program.String(), Name: r.Name, ChannelID: r.Channel.String(), ChannelName: r.ChannelName,
 		Start: r.Start.UTC(), End: r.End.UTC()}
-	french := r.Language == "fr" || r.Language == "" && s.accounts.Settings().Language == "fr"
-	say := func(english, inFrench string, args ...any) string {
-		if french {
-			return fmt.Sprintf(inFrench, args...)
-		}
-		return fmt.Sprintf(english, args...)
+	language := i18n.Match(r.Language)
+	if language == "" {
+		language = s.accounts.Settings().Language
+	}
+	say := func(text i18n.Text, args ...any) string {
+		return fmt.Sprintf(text.In(language), args...)
 	}
 	// The minutes left, rounded up: a reminder is sent before its
 	// programme starts.
 	minutes := int((due.Left + time.Minute - 1) / time.Minute)
 	minutes = max(minutes, 1)
-	left := say("%d minutes", "%d minutes", minutes)
+	left := say(i18n.Text{"%d minutes", "%d minutes", "%d Minuten", "%d minutos", "%d minuti", "%d minutos"}, minutes)
 	if minutes == 1 {
-		left = say("1 minute", "1 minute")
+		left = say(i18n.Text{"1 minute", "1 minute", "1 Minute", "1 minuto", "1 minuto", "1 minuto"})
 	}
 	channel := r.ChannelName
 	if channel == "" {
-		channel = say("its channel", "sa chaîne")
+		channel = say(i18n.Text{"its channel", "sa chaîne", "seinem Kanal", "su canal", "un canale", "seu canal"})
 	}
 	at := r.Start.In(s.zone).Format("15:04")
-	ev.Title = say("Starting at %s: %s", "Commence à %s : %s", at, r.Name)
-	ev.Message = say("%s starts in %s on %s.", "%s commence dans %s sur %s.", r.Name, left, channel)
+	ev.Title = say(i18n.Text{"Starting at %s: %s", "Commence à %s : %s", "Beginnt um %s: %s", "Empieza a las %s: %s", "Inizia alle %s: %s",
+		"Começa às %s: %s"}, at, r.Name)
+	ev.Message = say(i18n.Text{"%s starts in %s on %s.", "%s commence dans %s sur %s.", "%s beginnt in %s auf %s.", "%s empieza dentro de %s en %s.",
+		"%s inizia tra %s su %s.", "%s começa em %s em %s."}, r.Name, left, channel)
 	ev.URL = s.webLink(r.Channel)
 	user := due.User.ID
 	s.dispatch(ev, func(t target) bool { return t.owner != nil && *t.owner == user })

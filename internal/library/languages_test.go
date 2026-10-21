@@ -172,7 +172,7 @@ func TestUsersSeeATitleInTheirLanguage(t *testing.T) {
 	}{
 		{e.admin, "The Heist", "A crew plans a heist.", "https://images.example/heist.jpg", "", "Season 1"},
 		{e.member, "Le Casse", "Overview fr", "https://images.example/heist-fr.jpg", "https://images.example/heist-backdrop-fr.jpg", "Saison 1"},
-		{e.germanUser, "Der Coup", "Overview de", "https://images.example/heist-de.jpg", "https://images.example/heist-backdrop-de.jpg", "Season 1"},
+		{e.germanUser, "Der Coup", "Overview de", "https://images.example/heist-de.jpg", "https://images.example/heist-backdrop-de.jpg", "Staffel 1"},
 	} {
 		item, err := e.service.Item(t.Context(), c.user, movies["The Heist"])
 		if err != nil {
@@ -186,8 +186,8 @@ func TestUsersSeeATitleInTheirLanguage(t *testing.T) {
 		}
 
 		// The series' episodes too; an episode the translation leaves out
-		// keeps the description's, and seasons are named in English or
-		// French, else in the server's language.
+		// keeps the description's, and seasons are named in the user's
+		// language when Polyfin speaks it, else in the server's language.
 		seasons, err := e.service.Seasons(t.Context(), c.user, shows["The Show"])
 		if err != nil || len(seasons) != 1 || seasons[0].Name != c.seasonName {
 			t.Errorf("%s: seasons %v %v", c.user.Name, names(seasons), err)
@@ -202,7 +202,7 @@ func TestUsersSeeATitleInTheirLanguage(t *testing.T) {
 			t.Errorf("%s: episodes %v of %q", c.user.Name, names(episodes), episodes[0].SeriesName)
 		}
 		if c.user.ID != e.admin.ID && (episodes[0].Images.Primary != "https://images.example/pilot-"+c.user.MetadataLanguage+".jpg" ||
-			episodes[1].Name != map[string]string{"member": "Épisode 2", "german": "Episode 2"}[c.user.Name]) {
+			episodes[1].Name != map[string]string{"member": "Épisode 2", "german": "Folge 2"}[c.user.Name]) {
 			t.Errorf("%s: episodes %q %q", c.user.Name, episodes[0].Images.Primary, episodes[1].Name)
 		}
 		if episode, err := e.service.Item(t.Context(), c.user, episodes[0].ID); err != nil || episode.Name != pilot {
@@ -276,7 +276,7 @@ func TestAListingShowsTheTranslationOnceKept(t *testing.T) {
 	if got := names(e.children(e.admin, "Top (Movies)", 0, 10).Items); !slices.Equal(got, []string{"The Heist", "Plain"}) {
 		t.Errorf("the administrator's listing: %v", got)
 	}
-	e.translated(e.germanUser, "Top (Movies)", 0, "Der Coup")
+	e.translated(e.germanUser, "Top (Filme)", 0, "Der Coup")
 }
 
 // The home rows of a catalog and of the titles new in the libraries show
@@ -305,7 +305,7 @@ func TestHomeRowsShowTheTranslationOnceKept(t *testing.T) {
 	at.advance(2 * time.Hour)
 	read()
 	e.translated(e.member, "Top (Films)", 0, "Le Casse")
-	e.translated(e.germanUser, "Top (Movies)", 0, "Der Coup")
+	e.translated(e.germanUser, "Top (Filme)", 0, "Der Coup")
 
 	list, err := e.addons.Addons(t.Context(), addons.Shared())
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/media"
 )
 
@@ -34,7 +35,7 @@ type ExternalSubtitle struct {
 
 // MediaStreams describes an analyzed version's tracks as Jellyfin does: the
 // external subtitles first (indexes 0…k-1), then the container's tracks
-// shifted by k. language is the server language ("en" or "fr") for
+// shifted by k. language is the server language (one of i18n.Languages) for
 // DisplayTitle and Localized* strings.
 func MediaStreams(analysis media.Analysis, externals []ExternalSubtitle, language string) []MediaStream {
 	w := wordsFor(language)
@@ -206,18 +207,26 @@ type words struct {
 	undefined, byDefault, forced, external, hearingImpaired, original string
 }
 
-var (
-	englishWords = words{"Undefined", "Default", "Forced", "External", "Hearing Impaired", "Original"}
-	// frenchWords were observed with UICulture=fr. Language and channel
-	// layout names stay in English there.
-	frenchWords = words{"Non défini", "Par défaut", "Forcé", "Externe", "Malentendants", "Original"}
-)
+// streamWords are the words of each server language. The French were
+// observed with UICulture=fr; language and channel layout names stay in
+// English there.
+var streamWords = map[string]words{
+	"en":    {"Undefined", "Default", "Forced", "External", "Hearing Impaired", "Original"},
+	"fr":    {"Non défini", "Par défaut", "Forcé", "Externe", "Malentendants", "Original"},
+	"de":    {"Undefiniert", "Standard", "Erzwungen", "Extern", "Hörgeschädigt", "Original"},
+	"es":    {"Indefinido", "Predeterminado", "Forzado", "Externo", "Discapacidad auditiva", "Original"},
+	"it":    {"Non definito", "Predefinito", "Forzato", "Esterno", "Non udenti", "Originale"},
+	"pt-BR": {"Indefinido", "Padrão", "Forçado", "Externo", "Deficiência auditiva", "Original"},
+}
 
+// wordsFor returns the words of a language such as "fr" or "fr-FR" (see
+// i18n.Match), the English for one Polyfin does not speak.
 func wordsFor(language string) *words {
-	if language == "fr" || strings.HasPrefix(language, "fr-") {
-		return &frenchWords
+	w, ok := streamWords[i18n.Match(language)]
+	if !ok {
+		w = streamWords["en"]
 	}
-	return &englishWords
+	return &w
 }
 
 func appendExternals(streams []MediaStream, externals []ExternalSubtitle, w *words) []MediaStream {
