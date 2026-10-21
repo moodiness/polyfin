@@ -66,7 +66,10 @@ func (t *torrent) dialPeer(address netip.AddrPort, dht bool) (net.Conn, bool, er
 	startTCP := func() {
 		tcp = true
 		pending++
-		go func() { connected <- t.dialTCP(ctx, address) }()
+		go func() {
+			defer t.recovered("TCP dial", func(err error) { connected <- attempt{err: err} })
+			connected <- t.dialTCP(ctx, address)
+		}()
 	}
 	// tcpMayShake tells TCP's handshake waits for uTP no more.
 	tcpMayShake := true
@@ -74,7 +77,10 @@ func (t *torrent) dialPeer(address netip.AddrPort, dht bool) (net.Conn, bool, er
 	if t.udp && !t.engine.utpOff && address.Addr().Unmap().Is4() {
 		tcpMayShake = false
 		pending++
-		go func() { connected <- t.dialUTP(ctx, address) }()
+		go func() {
+			defer t.recovered("uTP dial", func(err error) { connected <- attempt{utp: true, err: err} })
+			connected <- t.dialUTP(ctx, address)
+		}()
 		t.mu.Lock()
 		first := len(t.peers) == 0
 		t.mu.Unlock()
@@ -107,7 +113,13 @@ func (t *torrent) dialPeer(address netip.AddrPort, dht bool) (net.Conn, bool, er
 	for {
 		if !shaking && len(up) > 0 && (up[0].utp || tcpMayShake) {
 			shaking = true
-			go func(a attempt) { shaken <- t.shake(ctx, a, dht) }(up[0])
+			go func(a attempt) {
+				defer t.recovered("handshake", func(err error) {
+					a.conn.Close()
+					shaken <- attempt{utp: a.utp, err: err}
+				})
+				shaken <- t.shake(ctx, a, dht)
+			}(up[0])
 			up = up[1:]
 		}
 		if !shaking && pending == 0 && len(up) == 0 {
@@ -145,7 +157,10 @@ func (t *torrent) dialPeer(address netip.AddrPort, dht bool) (net.Conn, bool, er
 					a.conn.Close()
 				}
 				for range pending {
-					go closeLater(connected)
+					go func() {
+						defer t.recovered("dial", nil)
+						closeLater(connected)
+					}()
 				}
 				return r.conn, r.extensions, nil
 			}
