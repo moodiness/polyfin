@@ -159,6 +159,16 @@ const system: typeof en = {
         },
         torrentUdp: (name: string) =>
           `Le proxy SOCKS5 ${name} ne propose pas UDP ASSOCIATE : les torrents sont lus en TCP, sans trackers UDP ni DHT.`,
+        torrentStart: (why: string) =>
+          `Un torrent n’a pas démarré à temps : ${why}. Vérifiez que la route atteint Internet ; le journal donne la réponse de chaque tracker au niveau débogage.`,
+        torrentStartWhy: {
+          no_udp:
+            'aucun pair n’a été trouvé, et la route ne transporte pas l’UDP, dont ont besoin le DHT et les trackers UDP',
+          refused:
+            'ses trackers ont refusé l’annonce ou n’ont pas répondu, et le DHT n’a trouvé aucun pair',
+          no_peers: 'ses trackers et le DHT n’ont trouvé aucun pair',
+          silent: 'des pairs ont été trouvés, mais aucun ne l’a envoyé',
+        },
         dlnaPort: (port: number) =>
           `Polyfin ne peut pas écouter sur le port UDP ${port} : les appareils DLNA du réseau local ne le trouvent donc pas d’eux-mêmes. Un autre programme l’utilise sans doute, comme un autre serveur DLNA sur le même hôte. Enregistrer les paramètres réessaie.`,
         discoveryAddress: (address: string) =>

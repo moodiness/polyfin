@@ -151,6 +151,15 @@ const system = {
         },
         torrentUdp: (name: string) =>
           `The SOCKS5 proxy ${name} does not offer UDP ASSOCIATE: torrents play over TCP, with UDP trackers and the DHT off.`,
+        torrentStart: (why: string) =>
+          `A torrent did not start in time: ${why}. Check that the route reaches the internet; the log tells each tracker’s answer at debug level.`,
+        torrentStartWhy: {
+          no_udp:
+            'no peer was found, and the route carries no UDP, which the DHT and UDP trackers need',
+          refused: 'its trackers refused the announce or did not answer, and the DHT found no peer',
+          no_peers: 'its trackers and the DHT found no peer',
+          silent: 'peers were found, but none sent it',
+        },
         dlnaPort: (port: number) =>
           `Polyfin cannot listen on UDP port ${port}, so DLNA devices on the local network do not find it by themselves. Another program probably uses it, such as another DLNA server on the same host. Saving the settings tries again.`,
         discoveryAddress: (address: string) =>

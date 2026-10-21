@@ -76,9 +76,11 @@ const (
 	// Torrent streams do not play: their route cannot carry them, Failure
 	// tells why (a torrent.RouteError's kind, or "no_route") and Name the
 	// interface or the proxy; or their proxy offers no UDP ASSOCIATE, so
-	// UDP trackers and the DHT are off.
+	// UDP trackers and the DHT are off; or a torrent did not start in time
+	// lately, Failure telling why (see torrentStartFailure).
 	problemTorrentRoute = "torrent_route"
 	problemTorrentUDP   = "torrent_udp"
+	problemTorrentStart = "torrent_start"
 	// Every metadata addon of the server has a language: Name and To are
 	// the first one's, whose Language of its descriptions should be None.
 	problemMetadataLanguages = "metadata_languages"
@@ -337,6 +339,10 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			} else if status.NoUDP {
 				add(healthProblemJSON{Key: "torrents:udp", Code: problemTorrentUDP, Tone: notifications.SeverityWarning,
 					To: "/settings/torrents#torrent-route", Name: h.Accounts.Settings().TorrentProxy})
+			}
+			if u := status.Unstarted; u != nil && status.RouteError == nil && h.now().Sub(status.UnstartedAt) < unstartedFor {
+				add(healthProblemJSON{Key: "torrents:start", Code: problemTorrentStart, Tone: notifications.SeverityWarning,
+					To: "/settings/torrents#torrent-route", Failure: torrentStartFailure(u)})
 			}
 		}
 	}
@@ -699,6 +705,17 @@ func (p healthProblemJSON) text(language string) string {
 	case problemTorrentUDP:
 		return say("The SOCKS5 proxy %s does not offer UDP ASSOCIATE: torrents play over TCP, with UDP trackers and the DHT off.",
 			"Le proxy SOCKS5 %s ne propose pas UDP ASSOCIATE : les torrents sont lus en TCP, sans trackers UDP ni DHT.", p.Name)
+	case problemTorrentStart:
+		why := map[string][2]string{
+			"no_udp": {"no peer was found, and the route carries no UDP, which the DHT and UDP trackers need",
+				"aucun pair n’a été trouvé, et la route ne transporte pas l’UDP, dont ont besoin le DHT et les trackers UDP"},
+			"refused": {"its trackers refused the announce or did not answer, and the DHT found no peer",
+				"ses trackers ont refusé l’annonce ou n’ont pas répondu, et le DHT n’a trouvé aucun pair"},
+			"no_peers": {"its trackers and the DHT found no peer", "ses trackers et le DHT n’ont trouvé aucun pair"},
+			"silent":   {"peers were found, but none sent it", "des pairs ont été trouvés, mais aucun ne l’a envoyé"},
+		}[p.Failure]
+		return say("A torrent did not start in time: %s. Check that the route reaches the internet; the log tells each tracker’s answer at debug level.",
+			"Un torrent n’a pas démarré à temps : %s. Vérifiez que la route atteint Internet ; le journal donne la réponse de chaque tracker au niveau débogage.", pick(why))
 	case problemDLNAPort:
 		return say("Polyfin cannot listen on UDP port %d, so DLNA devices on the local network do not find it by themselves. "+
 			"Another program probably uses it, such as another DLNA server on the same host. Saving the settings tries again.",
@@ -769,4 +786,25 @@ func gigabytes(bytes int64, language string) string {
 		return strings.Replace(text, ".", ",", 1) + " Go"
 	}
 	return text + " GB"
+}
+
+// unstartedFor is how long Health tells of a torrent that did not start,
+// unless a torrent starts meanwhile: as long as a play leaves its version
+// out.
+const unstartedFor = 15 * time.Minute
+
+// torrentStartFailure is the code of why a torrent did not start: peers
+// found that sent nothing ("silent"), none found over a route without UDP
+// ("no_udp"), trackers that all refused or did not answer ("refused"), or
+// none found where it was looked for ("no_peers").
+func torrentStartFailure(err *torrent.StartError) string {
+	switch {
+	case err.Found > 0:
+		return "silent"
+	case err.NoUDP:
+		return "no_udp"
+	case err.Trackers > 0 && err.Answered == 0:
+		return "refused"
+	}
+	return "no_peers"
 }

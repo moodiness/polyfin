@@ -1,11 +1,13 @@
 package admin
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/torrent"
@@ -48,5 +50,47 @@ func TestHealthTellsWhyTorrentsDoNotPlay(t *testing.T) {
 		if len(found) != 1 || !reflect.DeepEqual(found[0], test.want) {
 			t.Fatalf("problems: %v", found)
 		}
+	}
+}
+
+// A torrent that did not start in time is a warning of System › Health,
+// which tells why, until a torrent starts.
+func TestHealthTellsATorrentDidNotStart(t *testing.T) {
+	t.Parallel()
+	proxy := torrenttest.StartProxy(t, true, "", "")
+	empty := torrenttest.HTTPTracker(t, "127.0.0.1")
+	var engine *torrent.Engine
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
+		settings := o.Accounts.Settings()
+		settings.TorrentStreams, settings.TorrentProxy = true, proxy.Address()
+		if _, err := o.Accounts.UpdateSettings(t.Context(), settings); err != nil {
+			t.Fatal(err)
+		}
+		var err error
+		engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
+			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, StartTimeout: time.Second, Logger: slog.New(slog.DiscardHandler)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(engine.Close)
+		o.Health = HealthSources{Torrents: engine}
+	})
+	tor := torrenttest.Build("A Movie", 32<<10, torrenttest.File{Name: "a.mkv", Data: torrenttest.Bytes(100 << 10)})
+	spec, err := torrent.NewSpec(tor.HashHex(), nil, []string{"tracker:" + empty.URL()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Play(spec)()
+	var unstarted *torrent.StartError
+	if _, err := engine.Open(t.Context(), spec); !errors.As(err, &unstarted) {
+		t.Fatalf("got %v, want a StartError", err)
+	}
+	administrator := api.signedIn("administrator", true)
+	_, body, _ := administrator.call(http.MethodGet, "/health/problems?language=en", nil)
+	found, _ := body["problems"].([]any)
+	want := map[string]any{"key": "torrents:start", "code": "torrent_start", "tone": "warning",
+		"to": "/settings/torrents#torrent-route", "transient": false, "failure": "no_peers"}
+	if len(found) != 1 || !reflect.DeepEqual(found[0], want) {
+		t.Fatalf("problems: %v", found)
 	}
 }

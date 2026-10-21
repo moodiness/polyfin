@@ -98,6 +98,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.torrentRoute(text.torrentWhy[problem.failure](problem.name ?? ''))
     case 'torrent_udp':
       return text.torrentUdp(problem.name)
+    case 'torrent_start':
+      return text.torrentStart(text.torrentStartWhy[problem.failure])
     case 'discovery_address':
       return text.discoveryAddress(problem.address)
     case 'proxy_name_unresolved':

@@ -3511,6 +3511,8 @@ export type HealthProblem = {
       name?: string
     }
   | { code: 'torrent_udp'; name: string }
+  /** A torrent did not start in time lately: `failure` tells why. */
+  | { code: 'torrent_start'; failure: 'no_udp' | 'refused' | 'no_peers' | 'silent' }
   | { code: 'proxy_name_unresolved'; name: string }
   | { code: 'secrets_unreadable'; secrets: UnreadableSecret[] }
   | { code: 'secrets_plaintext' }
