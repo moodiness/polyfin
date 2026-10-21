@@ -31,6 +31,12 @@ var ErrStillRunning = errors.New("Polyfin Desktop still runs on this data folder
 // command for the app's end.
 const quitPoll = 500 * time.Millisecond
 
+// removeWait bounds how long the app tries again to remove its record,
+// or a request it answered: Windows refuses to remove a file another
+// process holds open, as the quit command does each time it reads the
+// record, and as a file scanner may.
+const removeWait = 2 * time.Second
+
 // ListenQuit, called once the app holds the data folder's lock, records
 // the app in Folders.Instance, forgets a request a crash left, and
 // returns a channel closed when a request to quit comes. stop ends the
@@ -68,7 +74,7 @@ func ListenQuit(folders desktop.Folders) (requested <-chan struct{}, stop func()
 		once.Do(func() {
 			close(done)
 			<-ended
-			_ = os.Remove(folders.Instance())
+			removeFile(folders.Instance())
 		})
 	}, nil
 }
@@ -81,8 +87,21 @@ func quitRequested(folders desktop.Folders, token string) bool {
 	if err != nil || strings.TrimSpace(string(data)) != token {
 		return false
 	}
-	_ = os.Remove(folders.QuitRequest())
+	removeFile(folders.QuitRequest())
 	return true
+}
+
+// removeFile removes path, trying again for removeWait while it cannot,
+// so that the app's files do not outlive it.
+func removeFile(path string) {
+	deadline := time.Now().Add(removeWait)
+	for {
+		err := os.Remove(path)
+		if err == nil || errors.Is(err, os.ErrNotExist) || time.Now().After(deadline) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // RequestQuit asks the app running on the data folder to quit, as its
