@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -248,9 +247,9 @@ func TestReadsWithinABudgetFetchNoMoreThanIt(t *testing.T) {
 			defer release()
 			ffmpeg := newSmallBuffers(t).client
 			// read reads n bytes from off, all that is served for n < 0,
-			// and returns what the addon sent, the request still open,
-			// once that reached enough or stopped growing.
-			read := func(off, n, enough int64) int64 {
+			// and returns what the addon sent, as measure counts it, the
+			// request still open.
+			read := func(off, n int64, measure func(*atomic.Int64) int64) int64 {
 				t.Helper()
 				request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, input, nil)
 				if err != nil {
@@ -270,33 +269,47 @@ func TestReadsWithinABudgetFetchNoMoreThanIt(t *testing.T) {
 				} else if _, err := io.CopyN(io.Discard, response.Body, n); err != nil {
 					t.Fatalf("from %d: %v", off, err)
 				}
-				return settled(&sent, enough)
+				return measure(&sent)
 			}
 			if !tc.budgeted {
-				// The window read ahead of a playback is 32 blocks.
-				if got := read(0, 1<<20, 32<<20); got < 32<<20 {
+				// The window read ahead of a playback is 32 blocks. It is
+				// read in two rounds of requests, the second over the
+				// connections of the first opened again further: a busy
+				// runner can pause them between the two for more than a
+				// second, which is not the end of the read-ahead.
+				if got := read(0, 1<<20, reached(32<<20)); got < 32<<20 {
 					t.Errorf("the addon sent %d MiB for 1 MiB read: nothing ahead", got>>20)
 				}
 				return
 			}
-			read(0, 1<<20, math.MaxInt64)
-			read(size-(2<<20), 1<<20, math.MaxInt64)
-			if got := read(size/2, -1, math.MaxInt64); got > budget+allowance {
+			read(0, 1<<20, settled)
+			read(size-(2<<20), 1<<20, settled)
+			if got := read(size/2, -1, settled); got > budget+allowance {
 				t.Errorf("the addon sent %d MiB, over the budget of %d MiB", got>>20, budget>>20)
 			}
 		})
 	}
 }
 
-// settled is what sent counts once it reached enough, or stopped growing
-// for a second.
-func settled(sent *atomic.Int64, enough int64) int64 {
+// settled is what sent counts once it stopped growing for a second.
+func settled(sent *atomic.Int64) int64 {
 	last := sent.Load()
-	for still, deadline := time.Now(), time.Now().Add(10*time.Second); last < enough && time.Since(still) < time.Second && time.Now().Before(deadline); {
+	for still, deadline := time.Now(), time.Now().Add(10*time.Second); time.Since(still) < time.Second && time.Now().Before(deadline); {
 		time.Sleep(20 * time.Millisecond)
 		if now := sent.Load(); now != last {
 			last, still = now, time.Now()
 		}
 	}
 	return last
+}
+
+// reached measures what sent counts once it reached enough, or after ten
+// seconds: what is still to come then never comes.
+func reached(enough int64) func(*atomic.Int64) int64 {
+	return func(sent *atomic.Int64) int64 {
+		for deadline := time.Now().Add(10 * time.Second); sent.Load() < enough && time.Now().Before(deadline); {
+			time.Sleep(20 * time.Millisecond)
+		}
+		return sent.Load()
+	}
 }
