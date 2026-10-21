@@ -16,7 +16,7 @@ import (
 var ErrNoRoute = errors.New("no route is set for torrents")
 
 // ErrNoUDP reports a route that carries no UDP: a SOCKS5 proxy without
-// UDP ASSOCIATE. UDP trackers and the DHT stay off over it.
+// UDP ASSOCIATE. UDP trackers, the DHT and uTP stay off over it.
 var ErrNoUDP = errors.New("the route carries no UDP")
 
 // ErrInterfaceUnsupported reports a network interface route on a system
@@ -100,16 +100,25 @@ type Route interface {
 	Close() error
 }
 
-// PacketConn is a UDP socket of a route.
+// PacketConn is a UDP socket of a route. Its reads are made by one
+// goroutine at a time.
 type PacketConn interface {
 	// WriteTo sends p to address, a host name or an IP address with a
 	// port.
 	WriteTo(p []byte, address string) error
+	// WriteToAddrPort sends p to an IPv4 address and port, as uTP does
+	// for each packet: no name to look up.
+	WriteToAddrPort(p []byte, to netip.AddrPort) error
 	// ReadFrom reads a datagram and the IP address and port it came from.
 	ReadFrom(p []byte) (int, netip.AddrPort, error)
 	SetReadDeadline(t time.Time) error
 	Close() error
 }
+
+// udpReadBuffer is the receive buffer asked for a route's UDP socket: uTP
+// sends bursts of a window, which a busy server reads late, and the
+// system's default holds about 200 KB. The system may give less.
+const udpReadBuffer = 2 << 20
 
 // InterfaceRoute binds every socket to the network interface name, such as
 // a WireGuard interface: it is up with an address, or nothing is sent.
@@ -215,7 +224,9 @@ func (r *interfaceRoute) ListenPacket(ctx context.Context) (PacketConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &interfacePacketConn{route: r, conn: conn.(*net.UDPConn)}, nil
+	udp := conn.(*net.UDPConn)
+	_ = udp.SetReadBuffer(udpReadBuffer)
+	return &interfacePacketConn{route: r, conn: udp}, nil
 }
 
 type interfacePacketConn struct {
@@ -231,6 +242,11 @@ func (c *interfacePacketConn) WriteTo(p []byte, address string) error {
 		return err
 	}
 	_, err = c.conn.WriteToUDPAddrPort(p, target)
+	return err
+}
+
+func (c *interfacePacketConn) WriteToAddrPort(p []byte, to netip.AddrPort) error {
+	_, err := c.conn.WriteToUDPAddrPort(p, to)
 	return err
 }
 

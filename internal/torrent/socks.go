@@ -287,7 +287,8 @@ func (r *proxyRoute) ListenPacket(ctx context.Context) (PacketConn, error) {
 		control.Close()
 		return nil, err
 	}
-	c := &socksPacketConn{control: control, udp: udp, relay: netip.AddrPortFrom(relay.Addr().Unmap(), relay.Port())}
+	_ = udp.SetReadBuffer(udpReadBuffer)
+	c := &socksPacketConn{control: control, udp: udp, relay: netip.AddrPortFrom(relay.Addr().Unmap(), relay.Port()), in: make([]byte, 65536)}
 	// The association lasts as long as its TCP connection.
 	go func() {
 		_, _ = io.Copy(io.Discard, control)
@@ -296,12 +297,17 @@ func (r *proxyRoute) ListenPacket(ctx context.Context) (PacketConn, error) {
 	return c, nil
 }
 
-// socksPacketConn sends datagrams through a proxy's UDP relay.
+// socksPacketConn sends datagrams through a proxy's UDP relay. in is the
+// buffer reads take a datagram in, out the one WriteToAddrPort builds one
+// in, under outMu.
 type socksPacketConn struct {
 	control net.Conn
 	udp     *net.UDPConn
 	relay   netip.AddrPort
 	once    sync.Once
+	in      []byte
+	outMu   sync.Mutex
+	out     []byte
 }
 
 func (c *socksPacketConn) WriteTo(p []byte, address string) error {
@@ -315,17 +321,34 @@ func (c *socksPacketConn) WriteTo(p []byte, address string) error {
 	return err
 }
 
+func (c *socksPacketConn) WriteToAddrPort(p []byte, to netip.AddrPort) error {
+	c.outMu.Lock()
+	defer c.outMu.Unlock()
+	ip := to.Addr().Unmap()
+	datagram := append(c.out[:0], 0, 0, 0)
+	if ip.Is4() {
+		raw := ip.As4()
+		datagram = append(append(datagram, socksIPv4), raw[:]...)
+	} else {
+		raw := ip.As16()
+		datagram = append(append(datagram, socksIPv6), raw[:]...)
+	}
+	datagram = binary.BigEndian.AppendUint16(datagram, to.Port())
+	c.out = append(datagram, p...)
+	_, err := c.udp.WriteToUDPAddrPort(c.out, c.relay)
+	return err
+}
+
 func (c *socksPacketConn) ReadFrom(p []byte) (int, netip.AddrPort, error) {
-	buffer := make([]byte, 65536)
 	for {
-		n, from, err := c.udp.ReadFromUDPAddrPort(buffer)
+		n, from, err := c.udp.ReadFromUDPAddrPort(c.in)
 		if err != nil {
 			return 0, netip.AddrPort{}, err
 		}
 		if netip.AddrPortFrom(from.Addr().Unmap(), from.Port()) != c.relay {
 			continue
 		}
-		if n, source, ok := readSocksDatagram(buffer[:n], p); ok {
+		if n, source, ok := readSocksDatagram(c.in[:n], p); ok {
 			return n, source, nil
 		}
 	}

@@ -89,6 +89,13 @@ func TestInterfaceRoutePlays(t *testing.T) {
 	waitFor(t, "the UDP tracker's announce", func() bool { return udpTracker.Announces() > 0 })
 }
 
+func TestInterfaceRoutePlaysOverUTP(t *testing.T) {
+	t.Parallel()
+	tor := utpTorrent()
+	seeder := torrenttest.SeedUTP(t, tor, "127.0.0.1")
+	playsOverUTP(t, &testSettings{s: Settings{Enabled: true, Interface: "lo"}}, tor, seeder, seeder.Address())
+}
+
 func TestMissingInterfaceStartsNothing(t *testing.T) {
 	t.Parallel()
 	tor, _, _ := twoFiles()
@@ -115,7 +122,8 @@ func TestMissingInterfaceStartsNothing(t *testing.T) {
 
 // TestInterfaceGoingDown needs a dummy interface with an address, named
 // by POLYFIN_TEST_TORRENT_INTERFACE, and the right to set it down and up
-// (NET_ADMIN): a throwaway container provides both.
+// (NET_ADMIN): a throwaway container provides both. It plays from a
+// seeder over TCP, then from one over uTP alone.
 func TestInterfaceGoingDown(t *testing.T) {
 	name := os.Getenv("POLYFIN_TEST_TORRENT_INTERFACE")
 	if name == "" {
@@ -136,9 +144,20 @@ func TestInterfaceGoingDown(t *testing.T) {
 		}
 	}
 	defer ip("link", "set", "dev", name, "up")
+	for _, overUTP := range []bool{false, true} {
+		ip("link", "set", "dev", name, "up")
+		tor, _, _ := twoFiles()
+		var seeder *torrenttest.Peer
+		if overUTP {
+			seeder = torrenttest.SeedUTP(t, tor, host)
+		} else {
+			seeder = torrenttest.Seed(t, tor, host)
+		}
+		interfaceGoingDown(t, ip, name, host, tor, seeder)
+	}
+}
 
-	tor, _, _ := twoFiles()
-	seeder := torrenttest.Seed(t, tor, host)
+func interfaceGoingDown(t *testing.T, ip func(...string), name, host string, tor *torrenttest.Torrent, seeder *torrenttest.Peer) {
 	tracker := torrenttest.HTTPTracker(t, host, seeder.Address())
 	settings := &testSettings{s: Settings{Enabled: true, Interface: name, DownloadMbps: 1}}
 	e := newEngine(t, settings, 64<<20)

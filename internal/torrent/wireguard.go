@@ -402,6 +402,15 @@ func (c *tunnelPacketConn) WriteTo(p []byte, address string) error {
 	return err
 }
 
+func (c *tunnelPacketConn) WriteToAddrPort(p []byte, to netip.AddrPort) error {
+	ip := to.Addr().Unmap()
+	if !ip.Is4() {
+		return fmt.Errorf("%s is an IPv6 address, which the tunnel does not carry here", ip)
+	}
+	_, err := c.conn.WriteTo(p, net.UDPAddrFromAddrPort(netip.AddrPortFrom(ip, to.Port())))
+	return err
+}
+
 func (c *tunnelPacketConn) ReadFrom(p []byte) (int, netip.AddrPort, error) {
 	n, from, err := c.conn.ReadFrom(p)
 	if err != nil {

@@ -1,7 +1,8 @@
 // Package torrenttest runs, on the loopback interface, what tests of
-// torrents need: a torrent built from bytes, peers seeding or leeching it,
-// HTTP and UDP trackers, a SOCKS5 proxy with or without UDP ASSOCIATE, and
-// a DHT node. None of them reaches anything else.
+// torrents need: a torrent built from bytes, peers seeding or leeching it
+// over TCP, or seeding it over uTP alone, HTTP and UDP trackers, a SOCKS5
+// proxy with or without UDP ASSOCIATE, and a DHT node. None of them
+// reaches anything else.
 package torrenttest
 
 import (
@@ -165,6 +166,8 @@ type Peer struct {
 	// order.
 	eager, strict bool
 	messages      []byte
+	// handshakes counts the handshakes received for the torrent.
+	handshakes int
 }
 
 // Seed starts a seeder of t listening on host ("127.0.0.1" for most tests).
@@ -202,6 +205,11 @@ func start(tb testing.TB, t *Torrent, host string, seed bool) *Peer {
 	if err != nil {
 		tb.Fatal(err)
 	}
+	return listen(tb, t, listener, seed)
+}
+
+// listen serves the peers that connect to listener.
+func listen(tb testing.TB, t *Torrent, listener net.Listener, seed bool) *Peer {
 	p := &Peer{torrent: t, seed: seed, listener: listener, got: make([]bool, t.Pieces)}
 	go func() {
 		for {
@@ -337,6 +345,9 @@ func (p *Peer) serve(conn net.Conn) {
 	if _, err := io.ReadFull(conn, hello[:]); err != nil || !bytes.Equal(hello[28:48], p.torrent.Hash[:]) {
 		return
 	}
+	p.mu.Lock()
+	p.handshakes++
+	p.mu.Unlock()
 	reply := append([]byte{19}, "BitTorrent protocol"...)
 	reply = append(reply, 0, 0, 0, 0, 0, 0x10, 0, 1)
 	reply = append(reply, p.torrent.Hash[:]...)
@@ -875,6 +886,8 @@ type Proxy struct {
 	targets  []string
 	conns    []net.Conn
 	udpDelay time.Duration
+	// udpTargets are the UDP targets recorded, each once.
+	udpTargets map[string]bool
 }
 
 // StartProxy starts a SOCKS5 proxy; udp offers UDP ASSOCIATE, and user,
@@ -949,6 +962,20 @@ func (p *Proxy) record(target string) {
 	p.mu.Lock()
 	p.targets = append(p.targets, target)
 	p.mu.Unlock()
+}
+
+// recordOnce records a target the first time it is asked to reach it.
+func (p *Proxy) recordOnce(target string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.udpTargets[target] {
+		return
+	}
+	if p.udpTargets == nil {
+		p.udpTargets = map[string]bool{}
+	}
+	p.udpTargets[target] = true
+	p.targets = append(p.targets, target)
 }
 
 func readAddress(r io.Reader) (string, error) {
@@ -1085,12 +1112,19 @@ func (p *Proxy) relay(relay *net.UDPConn) {
 				continue
 			}
 			client = from
-			p.record("udp " + target)
-			resolved, err := net.ResolveUDPAddr("udp4", target)
+			// A target is recorded once: uTP sends it many datagrams.
+			p.recordOnce("udp " + target)
+			// An address is not looked up: the resolver is the system's,
+			// which a test may replace.
+			resolved, err := netip.ParseAddrPort(target)
 			if err != nil {
-				continue
+				addr, err := net.ResolveUDPAddr("udp4", target)
+				if err != nil {
+					continue
+				}
+				resolved = addr.AddrPort()
 			}
-			_, _ = relay.WriteToUDP(buffer[3+(n-3-r.Len()):n], resolved)
+			_, _ = relay.WriteToUDPAddrPort(buffer[3+(n-3-r.Len()):n], resolved)
 			continue
 		}
 		header := []byte{0, 0, 0, 1}
@@ -1105,5 +1139,5 @@ func (p *Proxy) relay(relay *net.UDPConn) {
 func (p *Proxy) isTarget(from netip.AddrPort) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return slices.Contains(p.targets, "udp "+from.String())
+	return p.udpTargets["udp "+from.String()]
 }

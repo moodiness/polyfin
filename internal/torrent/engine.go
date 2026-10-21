@@ -86,6 +86,8 @@ type Engine struct {
 	tunnelFresh, tunnelWait time.Duration
 	// noEndgame turns the endgame off, to measure what it brings.
 	noEndgame bool
+	// utpOff, set by tests, reaches peers over TCP alone.
+	utpOff bool
 
 	mu       sync.Mutex
 	torrents map[Hash]*torrent
@@ -344,14 +346,16 @@ type Status struct {
 	Enabled bool
 	// Route describes the route, empty without one; RouteError is why it
 	// cannot carry torrents now, nil when it can; NoUDP tells a proxy
-	// without UDP ASSOCIATE, over which UDP trackers and the DHT are off.
+	// without UDP ASSOCIATE, over which UDP trackers, the DHT and uTP are
+	// off.
 	Route      string
 	RouteError error
 	NoUDP      bool
 	// Tunnel is the WireGuard tunnel's state, nil over another route.
 	Tunnel *TunnelStatus
-	// Playing counts the torrents running, and Peers their peers.
-	Playing, Peers int
+	// Playing counts the torrents running, Peers their peers, and
+	// UTPPeers those of them reached over uTP.
+	Playing, Peers, UTPPeers int
 	// Used is the bytes the pieces take on disk.
 	Used int64
 	// Failure is why a torrent last could not play, at FailedAt.
@@ -397,8 +401,10 @@ func (e *Engine) Status(ctx context.Context) Status {
 	}
 	e.mu.Unlock()
 	for _, t := range torrents {
+		all, viaUTP := t.peerCount()
 		status.Playing++
-		status.Peers += t.peerCount()
+		status.Peers += all
+		status.UTPPeers += viaUTP
 	}
 	return status
 }

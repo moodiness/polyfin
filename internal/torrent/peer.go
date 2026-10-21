@@ -3,7 +3,6 @@ package torrent
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -278,23 +277,4 @@ func readBlock(payload []byte) (block, bool) {
 	}
 	return block{piece: int(binary.BigEndian.Uint32(payload)), offset: int64(binary.BigEndian.Uint32(payload[4:])),
 		length: int64(binary.BigEndian.Uint32(payload[8:]))}, true
-}
-
-// dialPeer connects to a peer over route and shakes hands.
-func dialPeer(ctx context.Context, route Route, address netip.AddrPort, hash Hash, peerID [20]byte, dht bool) (net.Conn, bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, handshakeTimeout)
-	defer cancel()
-	conn, err := route.Dial(ctx, address.String())
-	if err != nil {
-		return nil, false, err
-	}
-	deadline, _ := ctx.Deadline()
-	_ = conn.SetDeadline(deadline)
-	extensions, err := handshake(conn, hash, peerID, dht)
-	if err != nil {
-		conn.Close()
-		return nil, false, err
-	}
-	_ = conn.SetDeadline(time.Time{})
-	return conn, extensions, nil
 }

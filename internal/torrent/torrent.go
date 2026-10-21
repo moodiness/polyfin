@@ -12,6 +12,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/torrent/utp"
 )
 
 const (
@@ -99,6 +101,12 @@ type torrent struct {
 	pexWaiting []netip.AddrPort
 	// stopLookup stops the DHT lookup running, nil when none runs.
 	stopLookup context.CancelFunc
+	// utpMu guards the uTP socket (see utpSocket): it is opened while
+	// the torrent's lock is free.
+	utpMu      sync.Mutex
+	utpSock    *utp.Socket
+	utpStopped bool
+	utpRetryAt time.Time
 }
 
 // inflightPiece is a piece being downloaded: its bytes, the blocks
@@ -182,6 +190,7 @@ func (t *torrent) fail(err error) {
 	t.signal()
 	t.mu.Unlock()
 	t.cancel()
+	t.stopUTP()
 	for _, p := range peers {
 		p.close()
 	}
@@ -303,7 +312,7 @@ func (t *torrent) join(address netip.AddrPort) *peer {
 			t.mu.Unlock()
 		}
 	}()
-	conn, extensions, err := dialPeer(t.ctx, t.route, address, t.hash, t.engine.peerID, dht)
+	conn, extensions, err := t.dialPeer(address, dht)
 	dialed = true
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -317,6 +326,11 @@ func (t *torrent) join(address netip.AddrPort) *peer {
 	}
 	p := newPeer(t, conn, address)
 	t.peers[address] = p
+	over := "TCP"
+	if overUTP(p) {
+		over = "uTP"
+	}
+	t.engine.config.Logger.Debug("A torrent reached a peer", "over", over)
 	if extensions {
 		size := 0
 		if t.engine.up.allows() {
@@ -1196,9 +1210,21 @@ func (t *torrent) failed() bool {
 	return t.err != nil && t.err != errStopped
 }
 
-// peerCount is how many peers the torrent is connected to.
-func (t *torrent) peerCount() int {
+// peerCount is how many peers the torrent is connected to, and how many of
+// them over uTP.
+func (t *torrent) peerCount() (all, viaUTP int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return len(t.peers)
+	return len(t.peers), t.utpPeers()
+}
+
+// utpPeers counts the peers reached over uTP. The lock is held.
+func (t *torrent) utpPeers() int {
+	n := 0
+	for _, p := range t.peers {
+		if overUTP(p) {
+			n++
+		}
+	}
+	return n
 }

@@ -144,6 +144,10 @@ func (c *datagramConn) WriteTo(p []byte, _ string) error {
 	return nil
 }
 
+func (c *datagramConn) WriteToAddrPort(p []byte, to netip.AddrPort) error {
+	return c.WriteTo(p, to.String())
+}
+
 func (c *datagramConn) ReadFrom(p []byte) (int, netip.AddrPort, error) {
 	if len(c.datagrams) == 0 {
 		return 0, netip.AddrPort{}, timeoutError{}
