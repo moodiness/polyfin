@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -174,12 +175,15 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		c.health.record(ctx, manifestURL, target, started, failureOfStatus(response.StatusCode))
+		if wait, ok := parseRetryAfter(response.Header.Get("Retry-After"), time.Now()); ok && response.StatusCode == http.StatusTooManyRequests {
+			return nil, fmt.Errorf("%w: %w, %w", ErrUnreachable, httpStatus(response.StatusCode), wait)
+		}
 		return nil, fmt.Errorf("%w: %w", ErrUnreachable, httpStatus(response.StatusCode))
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
 		c.health.record(ctx, manifestURL, target, started, failureOf(ctx, err))
-		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
+		return nil, fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
 	if len(body) > maxResponseBytes {
 		c.health.record(ctx, manifestURL, target, started, FailureInvalidResponse)
@@ -199,6 +203,35 @@ func (s httpStatus) Error() string { return fmt.Sprintf("HTTP %d", int(s)) }
 func StatusOf(err error) int {
 	status, _ := errors.AsType[httpStatus](err)
 	return int(status)
+}
+
+// retryAfter is how long an addon that answered 429 asked to wait before
+// it is asked again, as its Retry-After told.
+type retryAfter time.Duration
+
+func (r retryAfter) Error() string { return "retry after " + time.Duration(r).String() }
+
+// RetryAfter returns how long the addon whose answer err is asked to wait,
+// by the Retry-After of its 429; false when it did not say.
+func RetryAfter(err error) (time.Duration, bool) {
+	wait, ok := errors.AsType[retryAfter](err)
+	return time.Duration(wait), ok
+}
+
+// parseRetryAfter reads a Retry-After header, in seconds or as a date, as
+// of now: a date past is no wait.
+func parseRetryAfter(value string, now time.Time) (retryAfter, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	if seconds, err := strconv.Atoi(value); err == nil {
+		return retryAfter(time.Duration(max(seconds, 0)) * time.Second), true
+	}
+	if date, err := http.ParseTime(value); err == nil {
+		return retryAfter(max(date.Sub(now), 0)), true
+	}
+	return 0, false
 }
 
 // Fetch downloads a resource of an addon of another protocol than

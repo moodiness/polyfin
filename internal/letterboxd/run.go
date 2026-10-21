@@ -96,15 +96,17 @@ func (r *run) match(ctx context.Context) (map[int]found, []Unmatched, error) {
 			}
 			searches[key] = done
 		}
+		// A movie the addons that answered do not know may be one an addon
+		// that failed knows.
 		reason := ""
-		if done.err != nil {
-			reason = ReasonSearchFailed
-		} else if item, ok, ambiguous := localfiles.ChooseTitle(library.KindMovie, m.Name, m.Year, done.results); ambiguous {
+		if item, ok, ambiguous := localfiles.ChooseTitle(library.KindMovie, m.Name, m.Year, done.results); ambiguous {
 			reason = ReasonAmbiguous
-		} else if !ok {
-			reason = ReasonNotFound
-		} else {
+		} else if ok {
 			matched[i] = found{ref: titleRef(item), item: item.ID}
+		} else if done.err != nil {
+			reason = ReasonSearchFailed
+		} else {
+			reason = ReasonNotFound
 		}
 		if reason != "" {
 			unmatched = append(unmatched, Unmatched{Name: m.Name, Year: m.Year, Link: m.Link, Reason: reason})

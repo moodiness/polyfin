@@ -1,6 +1,7 @@
 package stremio
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
@@ -147,6 +148,28 @@ func failureOf(ctx context.Context, err error) string {
 	default:
 		return FailureUnreachable
 	}
+}
+
+// FailureOf names the failure of a request to an addon that returned err,
+// with the codes Health reports, for a feature telling why an addon failed
+// it: an answer "not found" is FailureHTTPError there, and an answer that
+// could not be read, too large or not of the expected form,
+// FailureInvalidResponse. It is empty for an error that is no addon's.
+func FailureOf(err error) string {
+	if status := StatusOf(err); status != 0 {
+		return cmp.Or(failureOfStatus(status), FailureHTTPError)
+	}
+	switch {
+	case errors.Is(err, ErrInvalidResponse):
+		return FailureInvalidResponse
+	case errors.Is(err, ErrPrivateNetwork):
+		return FailurePrivateNetwork
+	case errors.Is(err, context.DeadlineExceeded):
+		return FailureTimeout
+	case errors.Is(err, ErrUnreachable):
+		return FailureUnreachable
+	}
+	return ""
 }
 
 // failureOfStatus names the failure an HTTP status tells, none for an

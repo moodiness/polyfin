@@ -142,7 +142,8 @@ func (v view) inLanguageOrder(entries []installed) {
 // needs, among the catalogs of kinds. Of the translators' catalogs, those
 // of the user's translators are asked when mine is set, and all of them,
 // for every user, for the kinds no addon without a language offers a
-// catalog of.
+// catalog of, Polyfin's own sources aside, as for describing (see
+// standIn).
 func standInCatalogs(v view, kinds []Kind, mine bool, offers func(installed, stremio.Catalog) (source, bool)) []source {
 	var found []source
 	covered := map[Kind]bool{}
@@ -154,7 +155,7 @@ func standInCatalogs(v view, kinds []Kind, mine bool, offers func(installed, str
 			}
 			if src, ok := offers(entry, catalog); ok {
 				found = append(found, src)
-				covered[kind] = covered[kind] || !translator(entry)
+				covered[kind] = covered[kind] || !translator(entry) && !own(entry.addon)
 			}
 		}
 	}

@@ -479,8 +479,9 @@ func (h *Handler) searchProviders(w http.ResponseWriter, r *http.Request, kind l
 		writeJSON(w, http.StatusOK, results)
 		return
 	}
+	// What the addons that answered found shows, even when others failed.
 	found, err := h.Library.RemoteSearch(r.Context(), kind, request.SearchInfo.Name, remoteSearchLimit)
-	if err != nil {
+	if err != nil && len(found) == 0 {
 		h.browseError(w, r, err)
 		return
 	}

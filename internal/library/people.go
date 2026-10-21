@@ -61,13 +61,14 @@ func (s *Service) saveCredits(ctx context.Context, title accounts.ID, credits []
 }
 
 // searchable reports whether a catalog looks a term up: it takes a search
-// property, and any other property it requires offers options.
+// property, and requires no other, as Stremio apps search only the
+// catalogs a search alone can ask.
 func searchable(catalog stremio.Catalog) bool {
 	search := false
 	for _, extra := range catalog.Extra {
 		if extra.Name == "search" {
 			search = true
-		} else if extra.IsRequired && len(extra.Options) == 0 {
+		} else if extra.IsRequired {
 			return false
 		}
 	}

@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -660,10 +662,48 @@ type RemoteResult struct {
 	Provider string
 }
 
+// SearchFailure is a search catalog RemoteSearch could not read: the name
+// of its addon, why, as stremio.FailureOf names it, SearchFailed for
+// another error, and the error.
+type SearchFailure struct {
+	Addon   string
+	Failure string
+	Err     error
+}
+
+// SearchFailed names the failure of a search catalog that is no addon's
+// answer.
+const SearchFailed = "failed"
+
+// SearchError reports the search catalogs RemoteSearch could not read, in
+// the order of their addons; what the others found is returned with it.
+type SearchError struct {
+	Failures []SearchFailure
+}
+
+func (e *SearchError) Error() string {
+	parts := make([]string, 0, len(e.Failures))
+	for _, f := range e.Failures {
+		parts = append(parts, f.Addon+": "+f.Err.Error())
+	}
+	return "search catalogs could not be read: " + strings.Join(parts, "; ")
+}
+
+func (e *SearchError) Unwrap() []error {
+	errs := make([]error, 0, len(e.Failures))
+	for _, f := range e.Failures {
+		errs = append(errs, f.Err)
+	}
+	return errs
+}
+
 // RemoteSearch looks a name up for titles of kind in the search catalogs of
-// the server's addons that describe titles, as Jellyfin asks its metadata
-// providers when an administrator identifies an item. Without such an
-// addon, it finds nothing.
+// the server's addons that describe titles (see remoteSources), as Jellyfin
+// asks its metadata providers when an administrator identifies an item:
+// the first page of each, together, as Stremio apps search, their titles
+// interleaved. Without such an addon, it finds nothing. When catalogs
+// could not be read, it returns a *SearchError that tells which, with the
+// titles the others found: one failing catalog fails no other.
 func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limit int) ([]RemoteResult, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || limit <= 0 {
@@ -678,13 +718,32 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 	if len(sources) == 0 {
 		return nil, nil
 	}
-	titles, _, err := s.merged(ctx, v, sources, 0, limit)
-	if err != nil {
+	lists := make([][]stremio.Meta, len(sources))
+	errs := make([]error, len(sources))
+	var group errgroup.Group
+	group.SetLimit(catalogFetches)
+	for i, src := range sources {
+		group.Go(func() error {
+			lists[i], _, errs[i] = s.window(ctx, v, src, 0, limit)
+			return nil
+		})
+	}
+	_ = group.Wait()
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	var failures []SearchFailure
+	for i, err := range errs {
+		if err != nil {
+			src := sources[i]
+			s.logger.Debug("A search catalog could not be read", "addon", src.addon.addon.Manifest.Name, "catalog", src.catalog.ID, "error", err)
+			failures = append(failures, SearchFailure{Addon: src.addon.addon.Manifest.Name, Failure: cmp.Or(stremio.FailureOf(err), SearchFailed), Err: err})
+		}
+	}
+	titles := interleave(sources, lists)
 	var results []RemoteResult
 	var records []record
-	for _, title := range titles {
+	for _, title := range titles[:min(len(titles), limit)] {
 		item, r, err := title.title(accounts.ID{})
 		if err != nil {
 			continue
@@ -693,7 +752,14 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 		results = append(results, RemoteResult{Item: item, Provider: title.src.addon.addon.Manifest.Name})
 		records = append(records, r)
 	}
-	return results, s.save(ctx, records)
+	err = s.save(ctx, records)
+	switch {
+	case len(failures) > 0 && err != nil:
+		return results, errors.Join(&SearchError{Failures: failures}, err)
+	case len(failures) > 0:
+		return results, &SearchError{Failures: failures}
+	}
+	return results, err
 }
 
 // RemoteSearches reports whether RemoteSearch can find titles of kind: a
@@ -706,14 +772,18 @@ func (s *Service) RemoteSearches(ctx context.Context, kind Kind) (bool, error) {
 	return len(remoteSources(v, kind, "")) > 0, nil
 }
 
-// remoteSources are the search catalogs of titles of kind of the addons of
-// v that describe titles, searching name: of those given a language, which
-// describe titles for their language's users only, none, unless no addon
-// without a language offers such a catalog (see standInCatalogs). A local
-// folder's titles are those this search finds.
+// remoteSources are the title search catalogs of titles of kind of the
+// addons of v that describe titles, those a search alone can ask (see
+// searchable), searching name on their first page: of those given a
+// language, which describe titles for their language's users only, none,
+// unless no addon without a language offers such a catalog (see
+// standInCatalogs). People searches, which look up who is credited in a
+// title, and Polyfin's own sources, whose titles are not those of the
+// metadata addons, are left out. A local folder's titles are those this
+// search finds.
 func remoteSources(v view, kind Kind, name string) []source {
 	return standInCatalogs(v, []Kind{kind}, false, func(entry installed, catalog stremio.Catalog) (source, bool) {
-		return source{addon: entry, catalog: catalog, search: name},
-			entry.addon.Manifest.HasResource("meta") && !entry.addon.Local() && searchable(catalog)
+		return source{addon: entry, catalog: catalog, search: name, first: true},
+			entry.addon.Manifest.HasResource("meta") && !own(entry.addon) && searchable(catalog) && !searchesPeople(catalog)
 	})
 }
