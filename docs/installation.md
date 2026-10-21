@@ -106,7 +106,7 @@ Each line needs the host's own port free: forward the port on the router instead
 
 ### Keep torrents to a VPN
 
-Torrent streams, off by default, go through one route alone (see [Torrents](torrents.md)). A SOCKS5 proxy needs nothing more. A network interface must be seen by the container: use `compose.host.yaml` with WireGuard on the host, or share the network of a WireGuard container that has `NET_ADMIN` (`network_mode: service:<name>`), publishing Polyfin's ports on that container. On Linux 5.7 or later, Polyfin's own container needs no added capability.
+Torrent streams, off by default, go through one route alone (see [Torrents](torrents.md)). A SOCKS5 proxy or a WireGuard tunnel, which Polyfin runs itself from a provider's `.conf`, needs nothing more. A network interface must be seen by the container: use `compose.host.yaml` with WireGuard on the host, or share the network of a WireGuard container that has `NET_ADMIN` (`network_mode: service:<name>`), publishing Polyfin's ports on that container. On Linux 5.7 or later, Polyfin's own container needs no added capability.
 
 ### Pin a version
 

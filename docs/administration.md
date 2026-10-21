@@ -90,9 +90,9 @@ A local folder whose files are left unmatched because the search of their titles
 
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
 
-Torrent streams that cannot play are an error, naming why: the network interface missing, down or without an address, or the SOCKS5 proxy not answering or refusing its user. A proxy without `UDP ASSOCIATE` is a warning: torrents play over TCP, with UDP trackers and the DHT off. Both link to **Settings › Torrents** (see [Kill switch](torrents.md#kill-switch)).
+Torrent streams that cannot play are an error, naming why: the network interface missing, down or without an address, the SOCKS5 proxy not answering or refusing its user, or the WireGuard server not answering the handshake. A proxy without `UDP ASSOCIATE` is a warning: torrents play over TCP, with UDP trackers and the DHT off. Both link to **Settings › Torrents** (see [Kill switch](torrents.md#kill-switch)).
 
-Health sends no request outside the server, but for the SOCKS5 proxy of torrents, checked as their kill switch checks it. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
+Health sends no request outside the server, but for the SOCKS5 proxy and the WireGuard server of torrents, checked as their kill switch checks them. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
 
 ## New versions
 

@@ -1,6 +1,6 @@
 # Torrents
 
-Some addons list torrents rather than links: a stream with an `infoHash`, the index of the file to play (`fileIdx`), and its trackers and DHT nodes (`sources`). Polyfin can play them, with all of their traffic kept to one route, a network interface such as a VPN's, or a SOCKS5 proxy. Nothing is ever sent another way. It is off by default.
+Some addons list torrents rather than links: a stream with an `infoHash`, the index of the file to play (`fileIdx`), and its trackers and DHT nodes (`sources`). Polyfin can play them, with all of their traffic kept to one route: a network interface such as a VPN's, a SOCKS5 proxy, or a WireGuard tunnel Polyfin runs itself. Nothing is ever sent another way. It is off by default.
 
 Playing a torrent means joining its swarm: the other peers see the address the route gives, and Polyfin shares what it downloaded while the upload limit allows. You answer for what the server downloads and shares.
 
@@ -9,7 +9,7 @@ Playing a torrent means joining its swarm: the other peers see the address the r
 Under **Settings › Torrents**:
 
 - **Play torrent streams** turns torrents on. It cannot be on without a route.
-- **Route** chooses between **Network interface** and **SOCKS5 proxy**. On Windows and macOS, as on Polyfin Desktop, only the proxy is offered: those systems cannot bind a socket to a network interface.
+- **Route** chooses between **Network interface**, **SOCKS5 proxy** and **WireGuard tunnel**. On Windows and macOS, as on Polyfin Desktop, the network interface is not offered: those systems cannot bind a socket to one.
 - **Download limit (Mbps, 0 = none)**, 0 by default.
 - **Upload limit (Mbps, 0 = no sharing)**, 0 by default. Peers favour those that share back, so a start may be slower at 0.
 
@@ -30,13 +30,35 @@ Each user also needs **Can play torrent streams**, in the **Access** section of 
 
 - Peers and HTTP trackers go through its `CONNECT`, tracker names being looked up by the proxy.
 - UDP trackers and the DHT need its `UDP ASSOCIATE`, which not every SOCKS5 server offers. Without it they stay off, the torrents play over TCP, and **System › Health** says so.
-- Through a proxy, no peer can connect in: Polyfin only connects out. It does the same over an interface.
+- Through a proxy, no peer can connect in: Polyfin only connects out. It does the same over an interface and through a WireGuard tunnel.
 
 The proxy itself is reached the server's usual way: run it on the host or inside the VPN's network.
 
+### WireGuard tunnel
+
+**WireGuard configuration** takes the `.conf` a VPN provider gives for WireGuard, pasted whole. Polyfin runs the tunnel itself, for torrents alone: userspace WireGuard (wireguard-go, MIT licence) with its own network stack (gVisor's, Apache 2.0 licence), written in Go. Nothing is set up on the host: no `NET_ADMIN`, no `/dev/net/tun`, no route or firewall rule. It works the same on Linux, in Docker, on Windows and macOS, and in Polyfin Desktop. The rest of the server keeps its usual network.
+
+- Every torrent socket is a socket of the tunnel's network stack: peers over TCP, HTTP and HTTPS trackers, UDP trackers and the DHT. Its packets go, encrypted, to the configuration's server alone, over one UDP socket of the host. UDP trackers and the DHT always work, unlike through a proxy.
+- Tracker names are looked up through the tunnel, by the `DNS` servers of the configuration, never by the system's resolver: no DNS leak. A configuration without `DNS` is accepted, and then no name is looked up at all: trackers named by an address, peers and the DHT still work, trackers named by a host name are skipped. **Settings › Torrents** says so once it is saved.
+- The server's own name, when `Endpoint` names one, is looked up the host's usual way, as any WireGuard client does: it is how the tunnel is reached, and tells only that name. It is looked up again when a handshake fails.
+- The configuration is checked when it is saved, and refused with its line, its key and why: `PrivateKey`, `PublicKey` and `PresharedKey` must be keys of 32 bytes in base64, `Address` IP addresses with one IPv4 address among them, `Endpoint` a host and a port, `AllowedIPs` IP prefixes with `0.0.0.0/0` among them (the peers of a torrent are anywhere), `DNS` IP addresses, `MTU` 576 to 65535 (1420 by default), `PersistentKeepalive` off or 0 to 65535 seconds. One `[Peer]` alone is taken. The keys wg-quick uses to set its host up (`PostUp`, `PreDown`, `Table` and the like) are left aside: Polyfin never runs them.
+- The configuration is stored encrypted with `POLYFIN_SECRET_KEY`, its private and preshared keys with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)), and never shown again: the settings say a configuration is saved, with its server, its addresses and its DNS servers. Logs never hold a key. Choosing another route removes it.
+- Incoming connections are not supported: no peer can connect in, even through a port the provider forwards. Polyfin only connects out, as over the other routes.
+
+#### Throughput and processor use
+
+Measured on a Mac with an Apple M1 Max, the server and the source on the same machine (`go test -run '^$' -bench WireGuardRoute -benchtime 5x ./internal/torrent`), with other work running beside it. The processor time is Polyfin's side alone, the server running in a process of its own:
+
+| Download | Throughput | Processor time per MB |
+| --- | --- | --- |
+| Direct connection | 4,975 MB/s | 0.21 ms |
+| WireGuard tunnel | 83 MB/s (about 660 Mbit/s) | 32 ms |
+
+The tunnel encrypts every packet and runs its own TCP in userspace, so it costs far more processor time than a kernel connection: about 0.4 of a core for a 100 Mbit/s download. Torrents rarely go that fast, and the download limit bounds them.
+
 ## Kill switch
 
-With the interface missing, down or without an address, or the proxy not answering, torrent versions do not play: they are skipped like a version that cannot be read (see [Playback](playback.md)), and **System › Health** says why under **Needs attention**. Nothing falls back to another route: the route is checked every 5 seconds while a torrent plays, and a torrent whose route drops stops at once. A route's failure is not the version's: the version plays again as soon as the route is back, and Health clears.
+With the interface missing, down or without an address, the proxy not answering, or the WireGuard server not answering its handshake, as with a wrong key, torrent versions do not play: they are skipped like a version that cannot be read (see [Playback](playback.md)), and **System › Health** says why under **Needs attention**. Nothing falls back to another route: the route is checked every 5 seconds while a torrent plays, and a torrent whose route drops stops at once. A WireGuard tunnel counts as up while its last handshake is less than 30 seconds old; past that, a check makes a new one and waits 8 seconds for its answer. A route's failure is not the version's: the version plays again as soon as the route is back, and Health clears.
 
 ## Reading and storage
 
@@ -85,7 +107,7 @@ What to check:
 
 ## Docker
 
-`compose.yaml` runs Polyfin read-only, as user 65532, with no capabilities. A proxy needs none of the following; an interface must be seen by the container:
+`compose.yaml` runs Polyfin read-only, as user 65532, with no capabilities. A proxy and a WireGuard tunnel need none of the following; an interface must be seen by the container:
 
 - WireGuard on the host: run Polyfin with the host's network (`compose.host.yaml`), and name the host's interface.
 - A WireGuard container: give it `NET_ADMIN`, and have Polyfin's container share its network with `network_mode: service:<name>`. Polyfin's ports are then published on the WireGuard container.
@@ -94,8 +116,4 @@ On Linux 5.7 or later, Polyfin's own container needs no added capability.
 
 ## Health
 
-**System › Health** shows a **Torrents** panel while torrents are on: the route, the torrents playing, their peers, and what was shared since the start. The **Source cache** tells the part torrent pieces take. Under **Needs attention**, an error names a route that cannot carry the torrents and why, a warning a proxy without `UDP ASSOCIATE`, and a warning a torrent that did not start in time in the last 15 minutes and why, until a torrent starts.
-
-## Study: WireGuard built in
-
-Polyfin could run its own tunnel from a provider's `.conf` pasted in the settings, used by torrent traffic alone: userspace WireGuard with its netstack, no host setup, no `NET_ADMIN`, no `/dev/net/tun`. Still to study: throughput and CPU against a kernel interface, the `.conf`'s DNS servers, keeping the private key encrypted with `POLYFIN_SECRET_KEY`, and incoming connections. Not built yet.
+**System › Health** shows a **Torrents** panel while torrents are on: the route, a WireGuard tunnel's addresses and last handshake, the torrents playing, their peers, and what was shared since the start. The **Source cache** tells the part torrent pieces take. Under **Needs attention**, an error names a route that cannot carry the torrents and why, such as a WireGuard server that does not answer the handshake, a warning a proxy without `UDP ASSOCIATE`, and a warning a torrent that did not start in time in the last 15 minutes and why, until a torrent starts.
