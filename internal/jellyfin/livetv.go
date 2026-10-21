@@ -47,7 +47,7 @@ func (h *Handler) liveTvRoutes(rt *router) {
 	// The DVR: timers, series timers and recordings.
 	h.recordingRoutes(rt, signedIn)
 	// Polyfin's programme reminders.
-	h.reminderRoutes(signedIn)
+	h.reminderRoutes(rt, signedIn)
 	// Players fetch these without credentials: see liveFile and
 	// liveSegment.
 	rt.handle(http.MethodGet, "/Videos/{itemId}/live/{file}", http.HandlerFunc(h.liveFile))

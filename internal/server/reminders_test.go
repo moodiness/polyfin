@@ -201,7 +201,8 @@ async function run(scenario) {
       // The versions, scores and views are other parts'.
       if (!url.includes('/Polyfin/Reminders/')) return Promise.reject(new Error('not asked here'))
       log.push('ask ' + url)
-      return scenario.answer ? Promise.resolve({ ...scenario.answer }) : Promise.reject(new Error('not found'))
+      // An empty 204, as for an item that is no programme, fails to read.
+      return scenario.answer ? Promise.resolve({ ...scenario.answer }) : Promise.reject(new SyntaxError('Unexpected end of JSON input'))
     },
     ajax: (request) => {
       log.push(request.type + ' ' + request.url + (request.data ? ' ' + request.data : ''))

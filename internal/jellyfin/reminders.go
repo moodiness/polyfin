@@ -14,12 +14,15 @@ import (
 // Jellyfin has no programme reminders, and its apps no button for one.
 // Polyfin's own routes set them, for its web player's script (see
 // internal/server/webclient.js) and any app, under the Live TV permission
-// as Jellyfin's Live TV routes:
+// as Jellyfin's Live TV routes, but for the state of a programme, which
+// signed-in users without it may ask:
 //
 //	GET /Polyfin/Reminders lists the user's reminders and series reminders;
 //	GET /Polyfin/Reminders/Programs/{programId} tells how a programme
 //	  stands: started or not, its reminder and series reminder, and whether
-//	  a reminder would reach the user;
+//	  a reminder would reach the user; it answers 204 with nothing for an
+//	  item that is no programme of the user's guide, or for a user without
+//	  Live TV, since the script asks it of every page it shows;
 //	POST /Polyfin/Reminders sets a reminder of a programme, or of every
 //	  airing of it (Series), and answers as the previous route;
 //	DELETE /Polyfin/Reminders/{id} deletes a reminder or a series reminder.
@@ -31,9 +34,9 @@ import (
 // where they choose the targets that receive reminders.
 const notificationsPage = "/admin/me/account#notifications"
 
-func (h *Handler) reminderRoutes(signedIn func(method, pattern string, handler http.HandlerFunc)) {
+func (h *Handler) reminderRoutes(rt *router, signedIn func(method, pattern string, handler http.HandlerFunc)) {
 	signedIn(http.MethodGet, "/Polyfin/Reminders", h.listReminders)
-	signedIn(http.MethodGet, "/Polyfin/Reminders/Programs/{programId}", h.programReminder)
+	rt.handle(http.MethodGet, "/Polyfin/Reminders/Programs/{programId}", h.authenticated(h.programReminder))
 	signedIn(http.MethodPost, "/Polyfin/Reminders", h.setReminder)
 	signedIn(http.MethodDelete, "/Polyfin/Reminders/{reminderId}", h.deleteReminder)
 }
@@ -144,7 +147,13 @@ func (h *Handler) programReminder(w http.ResponseWriter, r *http.Request) {
 	}
 	user := callerFrom(r.Context()).User
 	state, err := h.Reminders.State(r.Context(), user, id)
-	if err != nil {
+	switch {
+	case errors.Is(err, reminders.ErrNotFound), errors.Is(err, reminders.ErrForbidden):
+		// Nothing to tell, which is no error: the browser would log one
+		// on every other page the script asks about.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	case err != nil:
 		h.reminderError(w, r, err)
 		return
 	}

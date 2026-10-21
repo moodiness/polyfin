@@ -264,7 +264,7 @@
 // apps do not show reminders, a line says so, with a link to My account ›
 // Notifications in the admin app. Jellyfin has no reminder: the script asks
 // Polyfin's /Polyfin/Reminders/Programs/{id}, which answers how the
-// programme stands, and nothing useful for an item that is not a programme
+// programme stands, and an empty 204 for an item that is not a programme
 // of the user's guide or for a user without Live TV, who get no button; it
 // posts to /Polyfin/Reminders to set one, with the page's language, which
 // the message is written in, and deletes /Polyfin/Reminders/{id} to remove
@@ -2278,8 +2278,8 @@
     fields.parentNode.insertBefore(drawn, fields.nextSibling)
   }
   // ask asks Polyfin how the programme id stands: an item that is not a
-  // programme of the user's guide, or a user without Live TV, gets no
-  // answer, and no button.
+  // programme of the user's guide, or a user without Live TV, gets an
+  // empty answer, which getJSON fails to read, and no button.
   function ask(id) {
     var api = window.ApiClient
     if (!api) return

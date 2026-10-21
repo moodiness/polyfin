@@ -81,6 +81,18 @@ func TestProgrammeRemindersFromTheWebClient(t *testing.T) {
 	if status, _ := s.call(http.MethodGet, "/Polyfin/Reminders", app("tv", guest), nil); status != http.StatusForbidden {
 		t.Errorf("reminders listed without Live TV: %d", status)
 	}
+	// The script asks every page it shows: a user without Live TV, or an
+	// item that is no programme, such as its channel, gets nothing, and no
+	// error.
+	if next.ChannelId == nil || *next.ChannelId == "" {
+		t.Fatal("the programme has no channel")
+	}
+	for _, ask := range []struct{ token, id string }{{guest, next.Id}, {token, *next.ChannelId}} {
+		if status, body := s.call(http.MethodGet, "/Polyfin/Reminders/Programs/"+ask.id, app("tv", ask.token), nil); status != http.StatusNoContent ||
+			len(body) != 0 {
+			t.Errorf("the state of %s: %d %s", ask.id, status, body)
+		}
+	}
 
 	if err := service.SetSettings(t.Context(), member.ID, reminders.Settings{Before: 5, OnApps: true}); err != nil {
 		t.Fatal(err)
