@@ -42,10 +42,13 @@ func TestProgrammePagesGetReminders(t *testing.T) {
 	}
 	set := with(map[string]any{"ReminderId": "r1"})
 	series := with(map[string]any{"ReminderId": "r1", "SeriesReminderId": "s1", "SeriesStartDate": "2026-10-14T18:30:00.0000000Z"})
+	// start, when set, is the address the page opens on, before the script
+	// runs in its head, without a body until the step "loaded".
 	type scenario struct {
 		answer  map[string]any
 		changes []map[string]any
 		lang    string
+		start   string
 		steps   []string
 		want    []string
 	}
@@ -81,6 +84,7 @@ func TestProgrammePagesGetReminders(t *testing.T) {
 		"rendered anew":    {answer: coming, steps: []string{title, "show", "draw", "show"}, want: []string{ask, "[Remind me] [more]", "[Remind me] [more]"}},
 		"leaving the page": {answer: coming, steps: []string{title, "show", "#/home", "show"}, want: []string{ask, "[Remind me] [more]", "none"}},
 		"during a video":   {answer: coming, steps: []string{"video", title, "show", "end video", "show"}, want: []string{"none", ask, "[Remind me] [more]"}},
+		"opened directly":  {answer: coming, start: title, steps: []string{"show", "loaded", "draw", "show"}, want: []string{"none", ask, "[Remind me] [more]"}},
 		"in French": {
 			answer: series, lang: "fr-FR", steps: []string{title, "show"},
 			want: []string{ask, "[Rappel prévu] note(Vous rappelle chaque diffusion vers 18:30.)"},
@@ -156,7 +160,7 @@ async function run(scenario) {
   }
   const sheets = []
   const document = {
-    body,
+    body: scenario.start ? null : body,
     documentElement: { lang: scenario.lang || 'en-US' },
     head: { appendChild: (sheet) => sheets.push(sheet) },
     createElement: (tag) => new Element(tag),
@@ -210,6 +214,7 @@ async function run(scenario) {
       return Promise.resolve(answer ? { ...answer } : undefined)
     },
   }
+  if (scenario.start) go(scenario.start)
   vm.runInNewContext(script, {
     location, history, URL, document, MutationObserver, window: { ApiClient }, Object, JSON, String, Date,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail } },
@@ -226,6 +231,7 @@ async function run(scenario) {
   for (const step of scenario.steps) {
     if (step === 'show') show()
     else if (step === 'blank') { for (const child of [...page.children]) page.removeChild(child) }
+    else if (step === 'loaded') { document.body = body; for (const listener of listeners.DOMContentLoaded || []) listener() }
     else if (step === 'draw') draw()
     else if (step === 'video') video = body.appendChild(new Element('div')), video.className = 'videoPlayerContainer'
     else if (step === 'end video') body.removeChild(video)
@@ -261,11 +267,12 @@ async function run(scenario) {
 		Answer  map[string]any   `json:"answer,omitempty"`
 		Changes []map[string]any `json:"changes"`
 		Lang    string           `json:"lang,omitempty"`
+		Start   string           `json:"start,omitempty"`
 		Steps   []string         `json:"steps"`
 	}
 	inputs := map[string]input{}
 	for name, s := range scenarios {
-		inputs[name] = input{s.answer, s.changes, s.lang, s.steps}
+		inputs[name] = input{s.answer, s.changes, s.lang, s.start, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)

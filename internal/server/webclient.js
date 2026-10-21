@@ -2248,7 +2248,16 @@
       watcher = null
       return
     }
-    if (!watcher && document.body) {
+    // The script runs in the page's head: a page opened on a programme's
+    // address has no body yet, which the observer waits for.
+    if (document.body) watch()
+    else addEventListener('DOMContentLoaded', quietly(watch))
+  }
+  // watch observes the document while a programme's page is followed, and
+  // looks at the page.
+  function watch() {
+    if (!program || !document.body) return
+    if (!watcher) {
       watcher = new MutationObserver(quietly(place))
       watcher.observe(document.body, { childList: true, subtree: true })
     }
