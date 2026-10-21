@@ -1022,6 +1022,11 @@ func (s *Service) childrenIn(ctx context.Context, v view, user accounts.User, pa
 	switch r.Kind {
 	case KindCollection:
 		return s.collectionChildren(ctx, v, r, start, count, first)
+	case KindFolder, KindVideo:
+		if !r.otherTitle() {
+			return Page{}, ErrNotFound
+		}
+		return s.folderChildren(ctx, v, parent, start, count)
 	case KindSeries:
 		seasons, err := s.Seasons(ctx, user, parent)
 		return slicePage(seasons, start, count), err
@@ -1077,6 +1082,9 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 	if l.catalog.Type == "collection" && titlesThrough(ctx) {
 		return s.collectionLibraryTitles(ctx, v, l, src, start, count)
 	}
+	if otherType(l.catalog.Type) && titlesThrough(ctx) {
+		return s.otherLibraryVideos(ctx, v, l, src, start, count)
+	}
 	// A listing that keeps none of what the library lists, its collections
 	// or its titles, lists nothing, out of none.
 	if kind, ok := listedKind(l.catalog.Type); l.catalog.Type == "collection" && !keepsKind(ctx, KindCollection) ||
@@ -1100,6 +1108,7 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		}
 		items, records = append(items, item), append(records, r)
 	}
+	s.shapeOthers(ctx, v, items, records)
 	if l.catalog.Type == "collection" {
 		s.addGenerated(ctx, v, items, records)
 	}
@@ -1256,6 +1265,7 @@ func (s *Service) collectionLibraryTitles(ctx context.Context, v view, l library
 		}
 		items, records = append(items, item), append(records, r)
 	}
+	s.shapeOthers(ctx, v, items, records)
 	result := page(items, start, totalWithinMax(total, l.maxItems))
 	if result.More && !src.first {
 		s.prefetch(ctx, v, l.addon, func(ctx context.Context) { _, _, _ = s.merged(ctx, v, sources, start+count, count) })
@@ -1284,6 +1294,11 @@ func titleItem(addon accounts.ID, catalog stremio.Catalog, meta stremio.Meta, pa
 	}
 	meta.Type = metaType
 	key := titleKey(kind, meta.ID)
+	// Until its description tells (see shapeOthers), a title of the other
+	// or channel type is a folder: one without videos lists itself.
+	if otherType(metaType) {
+		kind = KindFolder
+	}
 	item := Item{ID: itemID(key), Kind: kind, ParentID: parent, Available: true}
 	fromMeta(&item, meta)
 	preview := meta
@@ -1333,6 +1348,7 @@ func (s *Service) collectionChildren(ctx context.Context, v view, r record, star
 		}
 		items, records = append(items, item), append(records, rec)
 	}
+	s.shapeOthers(ctx, v, items, records)
 	result := page(items, start, totalWithinMax(total, most))
 	if nested && start == 0 && !result.More {
 		slices.SortStableFunc(result.Items, func(a, b Item) int { return releaseOf(a).Compare(releaseOf(b)) })
@@ -1613,6 +1629,13 @@ func (s *Service) titleMeta(ctx context.Context, v view, r record) (stremio.Meta
 // gives. A description from one of the server's addons gives the rating
 // kept for the title.
 func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (stremio.Meta, bool) {
+	meta, _, ok := s.describeBy(ctx, v, r, shared)
+	return meta, ok
+}
+
+// describeBy is describe, which also returns the addon that described the
+// title.
+func (s *Service) describeBy(ctx context.Context, v view, r record, shared bool) (stremio.Meta, installed, bool) {
 	for _, candidate := range describers(v, r, shared) {
 		kept, err := s.keptMeta(ctx, candidate, r.Meta.Type, r.Meta.ID)
 		if err == nil {
@@ -1627,11 +1650,11 @@ func (s *Service) describe(ctx context.Context, v view, r record, shared bool) (
 			if candidate.shared && !candidate.addon.Local() {
 				s.learnTraits(ctx, r, meta, kept.at)
 			}
-			return meta, true
+			return meta, candidate, true
 		}
 		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
 	}
-	return stremio.Meta{}, false
+	return stremio.Meta{}, installed{}, false
 }
 
 // describers lists the user's addons, the server's only when shared is
@@ -1852,7 +1875,7 @@ func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds 
 func (s *Service) goneVideos(ctx context.Context, records []record) (map[accounts.ID]bool, error) {
 	var videos []string
 	for _, r := range records {
-		if r.Kind == KindVideo && r.Meta != nil {
+		if r.homeVideo() {
 			videos = append(videos, r.Meta.ID)
 		}
 	}
@@ -1868,7 +1891,7 @@ func (s *Service) goneVideos(ctx context.Context, records []record) (map[account
 	}
 	gone := map[accounts.ID]bool{}
 	for _, r := range records {
-		if r.Kind == KindVideo && r.Meta != nil && !held[r.Meta.ID] {
+		if r.homeVideo() && !held[r.Meta.ID] {
 			gone[r.ID] = true
 		}
 	}
@@ -1934,7 +1957,13 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		items := []Item{item}
 		s.addGenerated(ctx, v, items, []record{r})
 		return items[0], nil
-	case KindMovie, KindSeries, KindVideo:
+	case KindMovie, KindSeries, KindVideo, KindFolder:
+		if r.folderVideo() {
+			return s.folderVideoItem(ctx, v, r)
+		}
+		if r.Meta == nil {
+			return Item{}, ErrNotFound
+		}
 		meta := *r.Meta
 		full, described := s.titleMeta(ctx, v, r)
 		if described {
@@ -1948,16 +1977,23 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		}
 		// Jellyfin answers a title the user may not see as one that does not
 		// exist.
-		if !v.allows(r.Kind, s.overriddenTraits(id, t)) {
+		kind := r.Kind
+		if described && r.otherTitle() {
+			kind = otherKind(meta)
+		}
+		if !v.allows(kind, s.overriddenTraits(id, t)) {
 			return Item{}, ErrNotFound
 		}
-		item := Item{ID: id, Kind: r.Kind, ParentID: deref(r.Parent), Available: true}
+		item := Item{ID: id, Kind: kind, ParentID: deref(r.Parent), Available: true}
 		// The user's language changes what the title shows, never the facts
 		// judged above.
 		fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta))
 		item.OfficialRating = t.rating
-		if r.Kind == KindSeries && len(meta.Videos) > 0 {
+		switch {
+		case kind == KindSeries && len(meta.Videos) > 0:
 			item.Contents = contents(meta, nil, s.now())
+		case kind == KindFolder && described:
+			item.Contents = folderContents(meta, s.now())
 		}
 		// Apps show the credited people and open them by identifier: those
 		// of an addon's description are recorded when it is fetched (see
@@ -2312,7 +2348,12 @@ const peopleGrace = 300 * time.Millisecond
 // language searches titles of a kind: then every translator searches
 // them, for every user.
 func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind, limit int) ([]Item, error) {
-	sources := standInCatalogs(v, kinds, true, func(entry installed, catalog stremio.Catalog) (source, bool) {
+	// The catalogs of folders are those of videos (see titleKind).
+	catalogKinds := kinds
+	if slices.Contains(kinds, KindFolder) && !slices.Contains(kinds, KindVideo) {
+		catalogKinds = append(slices.Clone(kinds), KindVideo)
+	}
+	sources := standInCatalogs(v, catalogKinds, true, func(entry installed, catalog stremio.Catalog) (source, bool) {
 		return source{addon: entry, catalog: catalog, search: term, first: true}, searchable(catalog)
 	})
 	if len(sources) == 0 {
@@ -2323,16 +2364,27 @@ func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind,
 		return nil, err
 	}
 	titles = titles[:min(len(titles), limit, searchLimit)]
-	var items []Item
-	var records, translated []record
+	found := make([]Item, 0, len(titles))
+	listed := make([]record, 0, len(titles))
+	var translators []bool
 	for _, title := range titles {
 		item, r, err := title.title(accounts.ID{})
 		if err != nil {
 			continue
 		}
 		r.Parent = nil
-		items = append(items, item)
-		if translator(title.src.addon) && !v.standIn(r.Meta.Type, r.Meta.ID, false) {
+		found, listed = append(found, item), append(listed, r)
+		translators = append(translators, translator(title.src.addon) && !v.standIn(r.Meta.Type, r.Meta.ID, false))
+	}
+	s.shapeOthers(ctx, v, found, listed)
+	var items []Item
+	var records, translated []record
+	for i, r := range listed {
+		if r.otherTitle() && !slices.Contains(kinds, found[i].Kind) {
+			continue
+		}
+		items = append(items, found[i])
+		if translators[i] {
 			// What a translator found is described in its language: it
 			// stands for the title only until another addon lists it, and
 			// never replaces what another addon listed.

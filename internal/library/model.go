@@ -54,6 +54,9 @@ const (
 	// KindVideo is a home video: a title of a local home videos folder,
 	// which no metadata addon knows (see VideoType).
 	KindVideo Kind = "video"
+	// KindFolder is a title of the other or channel type with videos of
+	// its own: a folder of videos, each a KindVideo (see othervideos.go).
+	KindFolder Kind = "folder"
 	// KindExtra is a video a local folder keeps beside a title, and
 	// KindThemeSong a theme song: never listed, but reached through the
 	// title (see extras.go).
@@ -110,6 +113,9 @@ type Item struct {
 	People      []Person
 	Trailers    []Trailer
 	Images      Images
+	// FolderID is the folder a video of a title's description belongs to
+	// (see othervideos.go), zero for other items.
+	FolderID accounts.ID
 	// Series and season of seasons and episodes.
 	SeriesID    accounts.ID
 	SeriesName  string
@@ -176,15 +182,20 @@ type Credit struct {
 	Name string
 }
 
-// Contents describes the episodes under a series or season.
+// Contents describes the episodes under a series or season, or the videos
+// of a folder.
 type Contents struct {
-	// Children counts the seasons of a series, or the episodes of a season.
+	// Children counts the seasons of a series, or the episodes of a season,
+	// or the videos of a folder.
 	Children int
-	// Released counts the episodes already released, which last came out
-	// at LastReleased and last Runtime together.
+	// Released counts the episodes or videos already released, which last
+	// came out at LastReleased and last Runtime together.
 	Released     int
 	Runtime      time.Duration
 	LastReleased *time.Time
+	// Videos are a folder's released videos, by item, which count as
+	// watched in it.
+	Videos []accounts.ID
 }
 
 // Images are artwork URLs; empty when the item has none. Banner is only
@@ -285,12 +296,15 @@ func ImageTag(url string) string {
 }
 
 // titleKind maps a Stremio type to a playable title kind. The tv type is
-// live TV, which lists channels rather than titles (see LiveCatalog).
+// live TV, which lists channels rather than titles (see LiveCatalog). The
+// other and channel types are videos, or folders of videos, as their
+// descriptions tell (see othervideos.go): their identifiers are those of
+// videos either way.
 func titleKind(stremioType string) (Kind, bool) {
 	switch stremioType {
 	case "movie", "anime.movie":
 		return KindMovie, true
-	case VideoType:
+	case VideoType, "other", "channel":
 		return KindVideo, true
 	case "series", "anime.series", "anime":
 		return KindSeries, true
@@ -310,7 +324,7 @@ func collectionType(catalogType string) string {
 		return "tvshows"
 	case "collection":
 		return "boxsets"
-	case VideoType:
+	case VideoType, "other", "channel":
 		return "homevideos"
 	case eclipse.TypeTrack, eclipse.TypeAlbum, eclipse.TypeArtist, eclipse.TypePlaylist:
 		return "music"

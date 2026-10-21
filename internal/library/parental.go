@@ -58,15 +58,16 @@ func certification(meta stremio.Meta) string {
 
 // unratedKind names the kind of an item as parental control does (see
 // accounts.UnratedKinds): seasons and episodes follow their series, and
-// home videos are Other, as Jellyfin's videos are. Other items, folders
-// and people, are never hidden.
+// home videos, the videos of titles neither movies nor series and the
+// folders of such videos are Other, as Jellyfin's videos are. Other
+// items, other folders and people, are never hidden.
 func unratedKind(kind Kind) (string, bool) {
 	switch kind {
 	case KindMovie:
 		return "Movie", true
 	case KindSeries, KindSeason, KindEpisode:
 		return "Series", true
-	case KindVideo:
+	case KindVideo, KindFolder:
 		return "Other", true
 	}
 	return "", false
@@ -177,7 +178,7 @@ func (v view) rates(r record) bool {
 func (s *Service) knownTraits(ctx context.Context, v view, r record) (t traits, stale bool) {
 	// A home video has no rating nor genres: it is what its folder tells,
 	// and nothing to look up.
-	if r.Kind == KindVideo {
+	if r.homeVideo() {
 		return traits{ratingKnown: true, genresKnown: true}, false
 	}
 	if r.Rating != nil && (r.Genres != nil || !v.blocksGenres()) {
@@ -241,7 +242,8 @@ func (s *Service) learnTraits(ctx context.Context, r record, meta stremio.Meta, 
 
 // visible keeps the records of the items the user's parental control and
 // blocked genres let them reach, in order. Seasons and episodes are judged
-// by their series. The ratings and genres of titles not known yet are
+// by their series, and the videos of a folder by their folder. The
+// ratings and genres of titles not known yet are
 // looked up, until the request's deadline; those still unknown then are
 // left out. held reports that some were left out only because their lookup
 // did not answer in time or could not start, the request's lookups being
@@ -253,9 +255,16 @@ func (s *Service) visible(ctx context.Context, v view, records []record) (kept [
 	titles := make([]record, len(records))
 	for i, r := range records {
 		titles[i] = r
-		if (r.Kind == KindSeason || r.Kind == KindEpisode) && v.judges(r.Kind) {
-			if series, err := s.load(ctx, r.seriesItemID()); err == nil {
-				titles[i] = series
+		var holder accounts.ID
+		switch {
+		case (r.Kind == KindSeason || r.Kind == KindEpisode) && v.judges(r.Kind):
+			holder = r.seriesItemID()
+		case r.folderVideo() && v.judges(r.Kind):
+			holder = r.folderItemID()
+		}
+		if holder != (accounts.ID{}) {
+			if title, err := s.load(ctx, holder); err == nil {
+				titles[i] = title
 			}
 		}
 	}

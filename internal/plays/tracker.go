@@ -14,7 +14,8 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
-// The kinds of what is played; HomeVideo is a local folder's home video.
+// The kinds of what is played; HomeVideo is a video: a local folder's home
+// video, or a title neither a movie nor a series, or one of its videos.
 const (
 	Movie     = "movie"
 	Episode   = "episode"

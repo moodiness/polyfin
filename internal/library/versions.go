@@ -105,9 +105,11 @@ func (s *Service) withoutTorrents(user accounts.User, versions []Version) []Vers
 }
 
 // Origin is the addon that listed a stream and what it listed it for.
+// Title is set for a stream a title's description embeds for its video
+// ID (see embed), the title's Stremio identifier, of type Type.
 type Origin struct {
-	Addon    accounts.ID
-	Type, ID string
+	Addon           accounts.ID
+	Type, ID, Title string
 }
 
 // ExternalSubtitle is a subtitle file offered for an item: by an addon, or
@@ -142,6 +144,14 @@ type target struct {
 	// name is the movie's or the series' name, whose words labels may
 	// repeat (see ReadLabels).
 	name string
+	// holder is the record of the title whose description holds the
+	// video: an episode's series, or a folder's video's folder. embedded
+	// are the streams it embeds for the video, described by embeddedBy,
+	// nil until known, the title embeddedIn (see embed).
+	holder     *record
+	embedded   []stremio.Stream
+	embeddedBy *installed
+	embeddedIn string
 }
 
 type streamKey struct {
@@ -179,7 +189,16 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 			return target{}, view{}, ErrNotFound
 		}
 		return target{item: id, kind: r.Kind, metaType: originEclipse, id: r.Music.ID}, v, nil
-	case (r.Kind == KindMovie || r.Kind == KindVideo) && r.Meta != nil:
+	case r.folderVideo():
+		folder, err := s.load(ctx, r.folderItemID())
+		if err != nil || folder.Meta == nil {
+			return target{}, view{}, ErrNotFound
+		}
+		t := target{item: id, kind: KindVideo, metaType: folder.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
+			name: folder.Meta.Name, holder: &folder}
+		s.embed(ctx, v, &t, false)
+		return t, v, nil
+	case (r.Kind == KindMovie || r.Kind == KindVideo || r.Kind == KindFolder) && r.Meta != nil:
 		meta := r.Meta
 		if full, _, ok := s.describedMeta(ctx, v, r, false, inDatabase); ok {
 			meta = &full
@@ -199,8 +218,10 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		if err != nil || series.Meta == nil {
 			return target{}, view{}, ErrNotFound
 		}
-		return target{item: id, kind: KindEpisode, metaType: series.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
-			name: series.Meta.Name}, v, nil
+		t := target{item: id, kind: KindEpisode, metaType: series.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
+			name: series.Meta.Name, holder: &series}
+		s.embed(ctx, v, &t, false)
+		return t, v, nil
 	default:
 		return target{}, view{}, ErrNotFound
 	}
@@ -278,7 +299,15 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 		}
 		return []Version{version}, true, nil
 	}
+	if mode == waitAll || mode == staleNow {
+		s.embed(ctx, v, &t, true)
+	}
 	serving := streamServing(v, t)
+	if len(t.embedded) > 0 {
+		// An addon that embeds a video's streams in its description is
+		// not asked for them again, as Stremio apps do not ask it.
+		serving = slices.DeleteFunc(serving, func(entry installed) bool { return entry.addon.ID == t.embeddedBy.addon.ID })
+	}
 	tracked := s.tracked()
 	tracked.titles.Put(listedTitle{t.metaType, t.id}, t.item)
 	if mode == askLater {
@@ -337,6 +366,19 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 	wg.Wait()
 	var versions []Version
 	seen := map[accounts.ID]bool{}
+	// A video's own streams come first (see embed).
+	for _, stream := range t.embedded {
+		if !listable(stream) {
+			continue
+		}
+		version := embeddedVersion(t, stream)
+		if seen[version.ID] {
+			continue
+		}
+		seen[version.ID] = true
+		versions = append(versions, version)
+		s.versions.Put(version.ID, version)
+	}
 	for i, streams := range lists {
 		for _, stream := range streams {
 			if !listable(stream) {
@@ -429,6 +471,11 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 			return Version{}, ErrNotFound
 		}
 		return s.resolveTrack(ctx, entry, r, true)
+	}
+	if old.Origin.Title != "" {
+		// A stream a description embeds is renewed by describing its
+		// title again.
+		return s.renewEmbedded(ctx, entry, old)
 	}
 	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime}
 	if old.HoldsConnection {

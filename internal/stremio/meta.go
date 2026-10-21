@@ -135,7 +135,8 @@ type Trailer struct {
 	Name   string `json:"name,omitempty"`
 }
 
-// Video is an episode of a series, or a programme of a live TV channel.
+// Video is an episode of a series, a video of another title, or a
+// programme of a live TV channel.
 type Video struct {
 	ID        string `json:"id"`
 	Title     string `json:"title,omitempty"`
@@ -153,6 +154,10 @@ type Video struct {
 	StartTime string `json:"startTime,omitempty"`
 	EndTime   string `json:"endTime,omitempty"`
 	Genres    Names  `json:"genres,omitempty"`
+	// Streams are the video's own streams, which Stremio apps play
+	// without asking the stream resource (see library's embedded
+	// streams).
+	Streams []Stream `json:"streams,omitempty"`
 }
 
 // EpisodeNumber reads the episode number from either field addons use.

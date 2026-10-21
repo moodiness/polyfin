@@ -13,9 +13,11 @@ type words struct {
 	season      string // followed by the season number
 	specials    string // season 0
 	episode     string // followed by the episode number, for untitled episodes
+	video       string // followed by the video's number, for untitled videos of a folder
 	chapter     string // followed by the chapter number, for untitled chapters
 	movies      string
 	shows       string
+	videos      string
 	collections string
 	// The content of music rows: songs, albums, artists and playlists.
 	songs, albums, artists, playlists string
@@ -30,12 +32,12 @@ type words struct {
 }
 
 var vocabulary = map[string]words{
-	"en": {season: "Season", specials: "Specials", episode: "Episode", chapter: "Chapter",
-		movies: "Movies", shows: "Shows", collections: "Collections",
+	"en": {season: "Season", specials: "Specials", episode: "Episode", video: "Video", chapter: "Chapter",
+		movies: "Movies", shows: "Shows", videos: "Videos", collections: "Collections",
 		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists", myMusic: "My music", replay: "Replay",
 		watchlist: "Watchlist"},
-	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", chapter: "Chapitre",
-		movies: "Films", shows: "Séries", collections: "Collections",
+	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", video: "Vidéo", chapter: "Chapitre",
+		movies: "Films", shows: "Séries", videos: "Vidéos", collections: "Collections",
 		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique", replay: "Replay",
 		watchlist: "À regarder"},
 }
@@ -89,6 +91,8 @@ func (w words) contentType(catalogType string) string {
 		return w.movies
 	case "tvshows":
 		return w.shows
+	case "homevideos":
+		return w.videos
 	case "boxsets":
 		return w.collections
 	default:

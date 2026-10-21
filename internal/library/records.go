@@ -69,10 +69,20 @@ func (s *Service) save(ctx context.Context, records []record) error {
 	}
 	unique := inLockOrder(records)
 	for i, r := range unique {
-		if r.Meta != nil {
-			trimmed, preview := *r, *r.Meta
-			preview.Videos = nil
-			trimmed.Meta = &preview
+		if r.Meta != nil || r.Video != nil && r.Video.Streams != nil {
+			trimmed := *r
+			if r.Meta != nil {
+				preview := *r.Meta
+				preview.Videos = nil
+				trimmed.Meta = &preview
+			}
+			// A video's own streams are read from its title's description
+			// (see embed), whose links change.
+			if r.Video != nil {
+				video := *r.Video
+				video.Streams = nil
+				trimmed.Video = &video
+			}
 			unique[i] = &trimmed
 		}
 	}
