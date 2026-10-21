@@ -192,6 +192,34 @@ func TestWireGuardWrongKeyFailsTheHandshake(t *testing.T) {
 	}
 }
 
+// A dial through the tunnel that fails returns no connection. A nil
+// *gonet.TCPConn handed on as a net.Conn is not nil: the peer dialing,
+// which closes the connections it ends up not needing, closed one and
+// panicked, which ended the server.
+func TestWireGuardFailedDialReturnsNoConnection(t *testing.T) {
+	t.Parallel()
+	server := torrenttest.StartWireGuardServer(t, nil)
+	e, _ := tunneled(t, server.Config())
+	route, err := e.currentRoute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := torrenttest.Through(netip.MustParseAddrPort(closed.Addr().String()))
+	closed.Close()
+	conn, err := route.Dial(t.Context(), target.String())
+	if err == nil {
+		conn.Close()
+		t.Fatal("a dial to a closed port succeeded")
+	}
+	if conn != nil {
+		t.Errorf("a failed dial returned a connection: %#v", conn)
+	}
+}
+
 // Tracker names are looked up through the tunnel, by its DNS, and never by
 // the system. The test stays sequential: it replaces net.DefaultResolver,
 // which parallel tests would use, with one that records what it is asked.

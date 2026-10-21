@@ -318,7 +318,12 @@ func (r *wireGuardRoute) Dial(ctx context.Context, address string) (net.Conn, er
 	if err != nil {
 		return nil, err
 	}
-	return tnet.DialContextTCPAddrPort(ctx, target)
+	conn, err := tnet.DialContextTCPAddrPort(ctx, target)
+	if err != nil {
+		// A nil *gonet.TCPConn would be a net.Conn that is not nil.
+		return nil, err
+	}
+	return conn, nil
 }
 
 // resolve looks a host up over the tunnel, by the configuration's DNS
