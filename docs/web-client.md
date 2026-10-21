@@ -38,7 +38,7 @@ Polyfin does this with one script of its own added to jellyfin-web's page, `/web
 - when every addon has answered without a version, says "No source is available for this title." under the buttons, with a **Try again** button that has Polyfin ask the addons again;
 - ends a long version, audio or subtitle name with "…" before its menu's arrow, which stream addons' detailed version names used to run under. The open menu shows whole names.
 
-Its words follow the web client's language: English or French, English for any other. It changes nothing during a video, holds the buttons again when jellyfin-web redraws the page, and gives everything back when you leave it. A Live TV recording's page has a single source under the recording's own identifier, as a title's page has while no version is known: Polyfin answers that it has no versions to wait for, so its buttons are given back at once. See [Title pages](playback.md#title-pages).
+Its words follow the web client's language: English, French, German, Spanish, Italian or Portuguese (in Brazilian Portuguese), English for any other. It changes nothing during a video, holds the buttons again when jellyfin-web redraws the page, and gives everything back when you leave it. A Live TV recording's page has a single source under the recording's own identifier, as a title's page has while no version is known: Polyfin answers that it has no versions to wait for, so its buttons are given back at once. See [Title pages](playback.md#title-pages).
 
 On the home page, it has the title of a collection library's "Recently Added in" row open the library on the default screen chosen under **Settings › Home**, as its links in the header do, rather than on Suggestions (see [Collections from addons](addons-and-libraries.md#collections-from-addons)).
 
@@ -52,13 +52,13 @@ It adds Polyfin's entries to the ⋮ menus of cards, which a right click on a ca
 - "Hide this title", on a movie, a home video or a series, or on a season or an episode, which hides its series, or on a video of a folder, which hides its folder (see [Folders of videos](addons-and-libraries.md#folders-of-videos)): the title leaves the user's lists, its cards leave the page, and a message says so;
 - "Show this title again", in its place, on a title the user hid.
 
-Their words follow the web client's language, English or French. See [Watch state](users.md#watch-state) for what they change.
+Their words follow the web client's language, as above. See [Watch state](users.md#watch-state) for what they change.
 
 jellyfin-web keeps what its home rows list for up to a minute, also across a reload, and draws a row again from it without asking. So that a card taken off does not come back meanwhile, the script remembers what it took off for 2 minutes, in the browser tab's session storage, for that server and user only, and leaves it out of the rows. Nothing is kept past that.
 
 On the home page, it adds the rows chosen under **Settings › Web player › Home rows** (see [Home rows](#home-rows)), each at its place among the sections the user chose under jellyfin-web's **Settings › Home**. They look like the library rows: posters, played marks, counts of unplayed episodes and progress bars, with the ⋮ menu and the play button. A card opens the title's page, and the row's name opens its full list. The script asks for the rows each time the home page shows, and puts them back when jellyfin-web redraws the page. It changes nothing elsewhere.
 
-On a movie's or an episode's page, it adds a **Share** button before the ⋮ button, for a user who may share titles while the server allows share links (see [Share links](users.md#share-links)). It opens **My account › Shared links** in the admin app, in the same tab, with the title chosen: the user picks when the link expires and how many may watch at once, then copies the link. A series, a season, a title the user may not see, or a user without the permission gets no button. Its word follows the web client's language, English or French. It changes nothing during a video, comes back when jellyfin-web redraws the page, and goes when you leave the title.
+On a movie's or an episode's page, it adds a **Share** button before the ⋮ button, for a user who may share titles while the server allows share links (see [Share links](users.md#share-links)). It opens **My account › Shared links** in the admin app, in the same tab, with the title chosen: the user picks when the link expires and how many may watch at once, then copies the link. A series, a season, a title the user may not see, or a user without the permission gets no button. Its word follows the web client's language, as above. It changes nothing during a video, comes back when jellyfin-web redraws the page, and goes when you leave the title.
 
 **For app developers:**
 

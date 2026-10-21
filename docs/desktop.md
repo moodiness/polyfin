@@ -63,7 +63,7 @@ The icon shows whether Polyfin runs: faded while it starts or is stopped. Its me
 | Install Polyfin `<version>` | Shown when a new version is out (see [Updates](#updates)) |
 | Quit Polyfin | Stops Polyfin, then its database, and quits: no process is left |
 
-Opening the app while it runs opens the admin app. The menu speaks French when the system does, and English otherwise. When the system shows no icon, such as a Windows session without its taskbar, Polyfin starts all the same: after 30 seconds without its icon, the app writes an error to `desktop.log` (see [Folders](#folders)) and runs on without it, until `polyfin-desktop -quit` quits it (see [Quitting from a terminal](#quitting-from-a-terminal)).
+Opening the app while it runs opens the admin app. The menu speaks the system's language when Polyfin does (English, French, German, Spanish, Italian or Portuguese, in Brazilian Portuguese), and English otherwise. When the system shows no icon, such as a Windows session without its taskbar, Polyfin starts all the same: after 30 seconds without its icon, the app writes an error to `desktop.log` (see [Folders](#folders)) and runs on without it, until `polyfin-desktop -quit` quits it (see [Quitting from a terminal](#quitting-from-a-terminal)).
 
 Polyfin stops by itself only when you stop it. When the server ends by itself, the app starts it again, a few seconds later. When the database stops by itself, it is started again too. After a crash of the app, or of the computer, the next start stops the server and the database that were left running, or clears the lock file of a database that crashed, which recovers its data as it starts.
 

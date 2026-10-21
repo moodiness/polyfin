@@ -435,7 +435,7 @@ The link is shown once, with **Copy link**: Polyfin keeps only a hash of it and 
 
 ### The guest's page
 
-The link opens a page of the admin app, `/admin/invite/…`, that needs no account, in English or French as the guest chooses. It shows the server's name and asks for **Your name**, a **Password** and **Confirm password**, under the rules of **Create a user**. Once the account is created, the guest lands on the [web client](web-client.md), signed in. Without the web client, they land on the admin app instead, signed in, where a member sees their own pages.
+The link opens a page of the admin app, `/admin/invite/…`, that needs no account, in the language the guest chooses among the admin app's. It shows the server's name and asks for **Your name**, a **Password** and **Confirm password**, under the rules of **Create a user**. Once the account is created, the guest lands on the [web client](web-client.md), signed in. Without the web client, they land on the admin app instead, signed in, where a member sees their own pages.
 
 A link that is used up, expired or revoked says so, and so does an address that is no link at all.
 
@@ -489,7 +489,7 @@ The form asks for:
 
 ### What the guest sees
 
-The link opens a page Polyfin serves at `/share/…`, which needs no account, in English or French as the guest's browser prefers (else the server's language). It shows the server's name, the title, its artwork and overview, when the link expires, a player, and the text subtitles of the version played, which the player's captions menu offers. The title's name, overview and artwork are those the sharer sees, in their [metadata language](#metadata-language). It lists no library, no search and no other title. A link expired, revoked, turned off or unknown says so.
+The link opens a page Polyfin serves at `/share/…`, which needs no account, in the first language Polyfin speaks among those the guest's browser prefers (else the server's language). It shows the server's name, the title, its artwork and overview, when the link expires, a player, and the text subtitles of the version played, which the player's captions menu offers. The title's name, overview and artwork are those the sharer sees, in their [metadata language](#metadata-language). It lists no library, no search and no other title. A link expired, revoked, turned off or unknown says so.
 
 The page plays HTTP Live Streaming, natively where the browser can, else with [hls.js](https://github.com/video-dev/hls.js) 1.6.16, which Polyfin serves itself: the page loads nothing from elsewhere.
 
@@ -610,7 +610,7 @@ A user with at least one row who is outside all of them cannot sign in (403). Th
 - A user under parental control or blocking genres gets their language too.
 - A title's genres, ratings, people, versions and subtitles are the same in every language, so parental control, blocked genres, hidden titles and smart lists judge every user alike.
 - A title that no addon in the language describes shows the server's description.
-- When the language is English or French, the names Polyfin generates follow it too (see [Language of generated names](getting-started.md#language-of-generated-names)).
+- When Polyfin speaks the language, the names it generates follow it too (see [Language of generated names](getting-started.md#language-of-generated-names)).
 - An invite link's model user passes on their metadata language.
 - The page of a link the user shares shows the title in their language: its name, overview, poster and backdrop (see [Share links](#share-links)).
 - **Edit images** lists TMDB's images in their language first (see [Edit images](addons-and-libraries.md#edit-images)).

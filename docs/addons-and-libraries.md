@@ -260,7 +260,7 @@ Polyfin keeps what music addons answer. Catalog pages are read again after **Ref
 
 #### My music
 
-Every music addon with a search also offers "My music", a catalog Polyfin makes, listed with the addon's rows under **Content › Libraries** and **My sources**. It is enabled, named and ordered like any library; without a name of its own, apps show it as "My music", or "Ma musique" when the server's language is French. Each user sees their own music of the addon in it:
+Every music addon with a search also offers "My music", a catalog Polyfin makes, listed with the addon's rows under **Content › Libraries** and **My sources**. It is enabled, named and ordered like any library; without a name of its own, apps show it as "My music" in the server's language, such as "Ma musique" in French. Each user sees their own music of the addon in it:
 
 - the songs they played, most recently played first, then the songs they marked favorite;
 - then the albums, artists and playlists they marked favorite.

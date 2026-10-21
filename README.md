@@ -24,6 +24,7 @@ See it on the [website](https://moodiness.github.io/polyfin/): the ad above, a s
 - **Skip buttons:** intros, recaps, credits and previews to skip, from three community databases.
 - **Tracking:** each user can send what they watch to Trakt, Simkl, MDBList and PublicMetaDB, and import what they watched there, or in their Stremio or Nuvio account.
 - **Built in:** Jellyfin's own web client at `/web/`, and an admin app at `/admin/`.
+- **Languages:** the admin app, the names and messages Polyfin writes itself, its additions to the web client and Polyfin Desktop are in English, French, German, Spanish, Italian and Brazilian Portuguese.
 
 ## How it works
 
