@@ -682,7 +682,7 @@ function Cache({ health }: { health: Health }) {
 
 /**
  * How torrent streams play: their route, a WireGuard tunnel's addresses and last handshake, the
- * torrents playing, their peers, what was shared.
+ * torrents playing, their peers and those reached over uTP, what was shared.
  */
 function Torrents({ health }: { health: Health }) {
   const { language, t } = useI18n()
@@ -706,6 +706,7 @@ function Torrents({ health }: { health: Health }) {
     ...tunnel,
     [text.torrentsPlaying, String(torrents.playing)],
     [text.torrentPeers, String(torrents.peers)],
+    [text.torrentUTPPeers, String(torrents.utpPeers)],
     [text.torrentsShared, formatBytes(torrents.uploaded, language)],
   ] as const
   return (

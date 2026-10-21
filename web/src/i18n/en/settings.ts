@@ -86,7 +86,7 @@ const settings = {
         'Its name, such as wg0. Every torrent socket is bound to it, and tracker names are looked up over it. Linux only. In Docker, the container must see the interface: see the torrents docs.',
       proxy: 'SOCKS5 proxy for torrents',
       proxyHelp:
-        'Its address and port, such as 10.0.0.2:1080. Peers and HTTP trackers go through its CONNECT. UDP trackers and the DHT need its UDP ASSOCIATE, and stay off without it. Through a proxy, no peer can connect in.',
+        'Its address and port, such as 10.0.0.2:1080. Peers and HTTP trackers go through its CONNECT. UDP trackers, the DHT and uTP need its UDP ASSOCIATE, and stay off without it. Through a proxy, no peer can connect in.',
       proxyUser: 'Proxy user',
       proxyUserHelp: 'Empty when the proxy asks for none.',
       proxyPassword: 'Proxy password',

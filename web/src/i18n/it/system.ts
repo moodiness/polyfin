@@ -323,6 +323,7 @@ const system: typeof en = {
       torrentNoHandshake: 'Ancora nessuno',
       torrentsPlaying: 'Torrent in riproduzione',
       torrentPeers: 'Peer',
+      torrentUTPPeers: 'Peer tramite uTP',
       torrentsShared: 'Condiviso dall’avvio',
       disksTitle: 'Spazio su disco',
       folders: { cache: 'cache', recordings: 'registrazioni', backups: 'backup' } as Record<

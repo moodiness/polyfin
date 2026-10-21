@@ -91,7 +91,7 @@ const settings: typeof en = {
         'Ihr Name, etwa wg0. Jeder Torrent-Socket wird an sie gebunden, und Tracker-Namen werden über sie aufgelöst. Nur Linux. In Docker muss der Container die Schnittstelle sehen: siehe Torrent-Dokumentation.',
       proxy: 'SOCKS5-Proxy für Torrents',
       proxyHelp:
-        'Seine Adresse und sein Port, etwa 10.0.0.2:1080. Peers und HTTP-Tracker laufen über sein CONNECT. UDP-Tracker und das DHT brauchen sein UDP ASSOCIATE und bleiben ohne es aus. Über einen Proxy kann sich kein Peer eingehend verbinden.',
+        'Seine Adresse und sein Port, etwa 10.0.0.2:1080. Peers und HTTP-Tracker laufen über sein CONNECT. UDP-Tracker, das DHT und uTP brauchen sein UDP ASSOCIATE und bleiben ohne es aus. Über einen Proxy kann sich kein Peer eingehend verbinden.',
       proxyUser: 'Proxy-Benutzer',
       proxyUserHelp: 'Leer, wenn der Proxy keinen verlangt.',
       proxyPassword: 'Proxy-Passwort',

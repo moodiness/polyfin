@@ -159,7 +159,7 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 	}
 	_, body, _ = administrator.call(http.MethodGet, "/health", nil)
 	torrents, _ = body["torrents"].(map[string]any)
-	if torrents["route"] != "wireguard" || torrents["lastHandshake"] == nil {
+	if torrents["route"] != "wireguard" || torrents["lastHandshake"] == nil || torrents["peers"] != float64(0) || torrents["utpPeers"] != float64(0) {
 		t.Fatalf("Health's torrents: %v", torrents)
 	}
 }

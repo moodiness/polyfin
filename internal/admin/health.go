@@ -194,9 +194,10 @@ type cacheJSON struct {
 // torrentHealthJSON is how torrent streams play: their route, "interface",
 // "proxy" or "wireguard", empty for none, Name the network interface's
 // name, the SOCKS5 proxy's address or the WireGuard server, the torrents
-// playing, their peers, and the bytes shared since the server started.
-// Over a WireGuard tunnel, Addresses are the tunnel's addresses and
-// LastHandshake when its last handshake was, null for none yet.
+// playing, their peers, those of them reached over uTP, and the bytes
+// shared since the server started. Over a WireGuard tunnel, Addresses are
+// the tunnel's addresses and LastHandshake when its last handshake was,
+// null for none yet.
 type torrentHealthJSON struct {
 	Route         string     `json:"route"`
 	Name          string     `json:"name"`
@@ -204,6 +205,7 @@ type torrentHealthJSON struct {
 	LastHandshake *time.Time `json:"lastHandshake,omitempty"`
 	Playing       int        `json:"playing"`
 	Peers         int        `json:"peers"`
+	UTPPeers      int        `json:"utpPeers"`
 	Uploaded      int64      `json:"uploaded"`
 }
 
@@ -314,7 +316,8 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.Health.Torrents != nil {
 		if status := h.Health.Torrents.Status(ctx); status.Enabled {
-			result.Torrents = &torrentHealthJSON{Playing: status.Playing, Peers: status.Peers, Uploaded: h.Health.Torrents.Uploaded()}
+			result.Torrents = &torrentHealthJSON{Playing: status.Playing, Peers: status.Peers, UTPPeers: status.UTPPeers,
+				Uploaded: h.Health.Torrents.Uploaded()}
 			switch settings := h.Accounts.Settings(); {
 			case settings.TorrentInterface != "":
 				result.Torrents.Route, result.Torrents.Name = "interface", settings.TorrentInterface

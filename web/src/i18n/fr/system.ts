@@ -316,6 +316,7 @@ const system: typeof en = {
       torrentNoHandshake: 'Aucune pour l’instant',
       torrentsPlaying: 'Torrents en lecture',
       torrentPeers: 'Pairs',
+      torrentUTPPeers: 'Pairs joints en uTP',
       torrentsShared: 'Partagé depuis le démarrage',
       disksTitle: 'Espace disque',
       folders: { cache: 'du cache', recordings: 'des enregistrements', backups: 'des sauvegardes' },

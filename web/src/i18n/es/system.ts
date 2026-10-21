@@ -322,6 +322,7 @@ const system: typeof en = {
       torrentNoHandshake: 'Ninguna todavía',
       torrentsPlaying: 'Torrents en reproducción',
       torrentPeers: 'Pares',
+      torrentUTPPeers: 'Pares por uTP',
       torrentsShared: 'Compartido desde el inicio',
       disksTitle: 'Espacio en disco',
       folders: {

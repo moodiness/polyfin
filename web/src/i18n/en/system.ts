@@ -310,6 +310,7 @@ const system = {
       torrentNoHandshake: 'None yet',
       torrentsPlaying: 'Torrents playing',
       torrentPeers: 'Peers',
+      torrentUTPPeers: 'Peers over uTP',
       torrentsShared: 'Shared since the start',
       disksTitle: 'Disk space',
       folders: { cache: 'cache', recordings: 'recordings', backups: 'backups' } as Record<

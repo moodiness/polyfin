@@ -86,7 +86,7 @@ const settings: typeof en = {
         'Su nombre, como wg0. Todos los sockets de torrent se vinculan a ella, y los nombres de los trackers se resuelven a través de ella. Solo Linux. En Docker, el contenedor debe ver la interfaz: consulte la documentación de torrents.',
       proxy: 'Proxy SOCKS5 para torrents',
       proxyHelp:
-        'Su dirección y puerto, como 10.0.0.2:1080. Los pares y los trackers HTTP pasan por su CONNECT. Los trackers UDP y la DHT necesitan su UDP ASSOCIATE y, sin él, permanecen desactivados. A través de un proxy, ningún par puede conectarse de entrada.',
+        'Su dirección y puerto, como 10.0.0.2:1080. Los pares y los trackers HTTP pasan por su CONNECT. Los trackers UDP, la DHT y uTP necesitan su UDP ASSOCIATE y, sin él, permanecen desactivados. A través de un proxy, ningún par puede conectarse de entrada.',
       proxyUser: 'Usuario del proxy',
       proxyUserHelp: 'Vacío si el proxy no lo pide.',
       proxyPassword: 'Contraseña del proxy',

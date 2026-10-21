@@ -90,7 +90,7 @@ const settings: typeof en = {
         'Son nom, comme wg0. Chaque socket des torrents y est lié, et les noms des trackers sont résolus par elle. Linux seulement. Sous Docker, le conteneur doit voir l’interface : voir la documentation des torrents.',
       proxy: 'Proxy SOCKS5 des torrents',
       proxyHelp:
-        'Son adresse et son port, comme 10.0.0.2:1080. Les pairs et les trackers HTTP passent par son CONNECT. Les trackers UDP et le DHT ont besoin de son UDP ASSOCIATE, et restent désactivés sans lui. À travers un proxy, aucun pair ne peut se connecter à Polyfin.',
+        'Son adresse et son port, comme 10.0.0.2:1080. Les pairs et les trackers HTTP passent par son CONNECT. Les trackers UDP, le DHT et uTP ont besoin de son UDP ASSOCIATE, et restent désactivés sans lui. À travers un proxy, aucun pair ne peut se connecter à Polyfin.',
       proxyUser: 'Utilisateur du proxy',
       proxyUserHelp: 'Vide quand le proxy n’en demande pas.',
       proxyPassword: 'Mot de passe du proxy',

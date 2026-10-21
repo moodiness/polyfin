@@ -324,6 +324,7 @@ const system: typeof en = {
       torrentNoHandshake: 'Noch keiner',
       torrentsPlaying: 'Laufende Torrents',
       torrentPeers: 'Peers',
+      torrentUTPPeers: 'Peers über uTP',
       torrentsShared: 'Geteilt seit dem Start',
       disksTitle: 'Speicherplatz',
       folders: { cache: 'Cache', recordings: 'Aufnahmen', backups: 'Backups' } as Record<

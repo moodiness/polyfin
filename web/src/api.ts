@@ -3430,9 +3430,9 @@ export type Health = {
   cache: { used: number; limit: number; sources: number; torrents: number } | null
   /**
    * How torrent streams play, null while they are off: their route ('' for none) and its name,
-   * the WireGuard server for a tunnel, the torrents playing, their peers, and the bytes shared
-   * since the server started. Over a tunnel, `addresses` are its addresses and `lastHandshake`
-   * when its last handshake was, absent for none yet.
+   * the WireGuard server for a tunnel, the torrents playing, their peers, those of them reached
+   * over uTP, and the bytes shared since the server started. Over a tunnel, `addresses` are its
+   * addresses and `lastHandshake` when its last handshake was, absent for none yet.
    */
   torrents: {
     route: 'interface' | 'proxy' | 'wireguard' | ''
@@ -3441,6 +3441,7 @@ export type Health = {
     lastHandshake?: string
     playing: number
     peers: number
+    utpPeers: number
     uploaded: number
   } | null
   disks: {
