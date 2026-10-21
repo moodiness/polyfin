@@ -216,6 +216,35 @@ export type HttpsMode = 'off' | 'files' | 'letsencrypt'
 /** The challenges Let's Encrypt checks host names with (see Settings.acmeChallenge). */
 export type AcmeChallenge = 'http-01' | 'tls-alpn-01'
 
+/** What a saved WireGuard configuration says, without its keys (see Settings.torrentWireGuardSaved). */
+export type WireGuardSaved = {
+  /** The server, host:port. */
+  endpoint: string
+  /** The tunnel's addresses, with their prefix length. */
+  addresses: string[]
+  /** The DNS servers tracker names are looked up by, through the tunnel; empty for none. */
+  dns: string[]
+}
+
+/**
+ * Why a WireGuard configuration was refused (invalid_wireguard_config): the line, from 1, 0 for
+ * the configuration as a whole, the key or section it is about, and the reason.
+ */
+export type WireGuardConfigProblem = {
+  line: number
+  key: string
+  reason:
+    | 'too_long'
+    | 'syntax'
+    | 'outside'
+    | 'unknown'
+    | 'repeated'
+    | 'missing'
+    | 'invalid'
+    | 'no_ipv4'
+    | 'not_all'
+}
+
 export type Settings = {
   serverName: string
   quickConnectEnabled: boolean
@@ -547,7 +576,8 @@ export type Settings = {
   metricsTokenSet: boolean
   /**
    * Whether torrent streams play, over one route alone: the network interface every torrent
-   * socket is bound to (Linux only), or a SOCKS5 proxy, host:port; '' for none.
+   * socket is bound to (Linux only), a SOCKS5 proxy, host:port, or a WireGuard tunnel Polyfin runs;
+   * '' for none.
    */
   torrentStreams: boolean
   torrentInterface: string
@@ -557,6 +587,10 @@ export type Settings = {
   torrentProxyPasswordSet: boolean
   /** Sent only to change the proxy's password: a new one, or "" to remove it. */
   torrentProxyPassword?: string
+  /** What the saved WireGuard configuration says, without its keys (read-only); null for none. */
+  torrentWireGuardSaved: WireGuardSaved | null
+  /** Sent only to change the WireGuard configuration: a provider's .conf, or "" to remove it. */
+  torrentWireGuard?: string
   /** Download limit in Mbps, 0 for none; upload limit, 0 for no sharing. */
   torrentDownloadMbps: number
   torrentUploadMbps: number
@@ -1438,12 +1472,15 @@ export class ApiError extends Error {
   readonly jellyfinId: string | null
   /** What a remote server or a tool answered, as the server tells it, when it tells it. */
   readonly detail: string | null
+  /** Why a WireGuard configuration was refused, for invalid_wireguard_config. */
+  readonly wireGuard: WireGuardConfigProblem | null
 
   constructor(
     status: number,
     code: string,
     jellyfinId: string | null = null,
     detail: string | null = null,
+    wireGuard: WireGuardConfigProblem | null = null,
   ) {
     super(`Admin API error ${status}: ${code}`)
     this.name = 'ApiError'
@@ -1451,6 +1488,7 @@ export class ApiError extends Error {
     this.code = code
     this.jellyfinId = jellyfinId
     this.detail = detail
+    this.wireGuard = wireGuard
   }
 }
 
@@ -1483,19 +1521,35 @@ async function apiError(response: Response): Promise<ApiError> {
   let code = 'unknown'
   let jellyfinId: string | null = null
   let detail: string | null = null
+  let wireGuard: WireGuardConfigProblem | null = null
   try {
     const payload = (await response.json()) as {
       error?: unknown
       jellyfinId?: unknown
       message?: unknown
+      line?: unknown
+      key?: unknown
+      reason?: unknown
     }
     if (typeof payload.error === 'string') code = payload.error
     if (typeof payload.jellyfinId === 'string') jellyfinId = payload.jellyfinId
     if (typeof payload.message === 'string') detail = payload.message
+    if (
+      code === 'invalid_wireguard_config' &&
+      typeof payload.line === 'number' &&
+      typeof payload.key === 'string' &&
+      typeof payload.reason === 'string'
+    ) {
+      wireGuard = {
+        line: payload.line,
+        key: payload.key,
+        reason: payload.reason as WireGuardConfigProblem['reason'],
+      }
+    }
   } catch {
     // Non-JSON error body (proxy page, empty response): keep the generic code.
   }
-  return new ApiError(response.status, code, jellyfinId, detail)
+  return new ApiError(response.status, code, jellyfinId, detail, wireGuard)
 }
 
 const seg = encodeURIComponent
@@ -3376,11 +3430,15 @@ export type Health = {
   cache: { used: number; limit: number; sources: number; torrents: number } | null
   /**
    * How torrent streams play, null while they are off: their route ('' for none) and its name,
-   * the torrents playing, their peers, and the bytes shared since the server started.
+   * the WireGuard server for a tunnel, the torrents playing, their peers, and the bytes shared
+   * since the server started. Over a tunnel, `addresses` are its addresses and `lastHandshake`
+   * when its last handshake was, absent for none yet.
    */
   torrents: {
-    route: 'interface' | 'proxy' | ''
+    route: 'interface' | 'proxy' | 'wireguard' | ''
     name: string
+    addresses?: string[]
+    lastHandshake?: string
     playing: number
     peers: number
     uploaded: number
@@ -3457,7 +3515,7 @@ export type Health = {
  * notification target, by its name, of a user or of the server (`user` null).
  */
 export type UnreadableSecret = {
-  setting: ServerSecretName | 'smtpPassword' | 'torrentProxyPassword' | null
+  setting: ServerSecretName | 'smtpPassword' | 'torrentProxyPassword' | 'torrentWireGuard' | null
   service: TrackingServiceName | null
   app: AppKind | null
   target: string | null
@@ -3507,6 +3565,9 @@ export type HealthProblem = {
         | 'interface_unsupported'
         | 'proxy_unreachable'
         | 'proxy_refused'
+        | 'wireguard_endpoint'
+        | 'wireguard_down'
+        | 'wireguard_handshake'
         | 'no_route'
       name?: string
     }

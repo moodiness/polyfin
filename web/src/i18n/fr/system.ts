@@ -155,6 +155,10 @@ const system: typeof en = {
           proxy_unreachable: (name: string) => `le proxy SOCKS5 ${name} ne répond pas`,
           proxy_refused: (name: string) =>
             `le proxy SOCKS5 ${name} a refusé l’utilisateur et le mot de passe`,
+          wireguard_endpoint: (name: string) => `le serveur WireGuard ${name} est introuvable`,
+          wireguard_down: (name: string) => `le tunnel WireGuard vers ${name} ne peut pas démarrer`,
+          wireguard_handshake: (name: string) =>
+            `le serveur WireGuard ${name} ne répond pas à la négociation : il est injoignable, ou une clé de la configuration est erronée`,
           no_route: () => 'aucune route n’est définie',
         },
         torrentUdp: (name: string) =>
@@ -301,7 +305,15 @@ const system: typeof en = {
       torrentsTitle: 'Torrents',
       torrentsHelp:
         'Les torrents que la lecture lit en ce moment, par leur seule route. Un torrent s’arrête à la fin de sa lecture : plus de pairs, plus de partage.',
-      torrentRoute: { interface: 'Interface réseau', proxy: 'Proxy SOCKS5', '': 'Aucune route' },
+      torrentRoute: {
+        interface: 'Interface réseau',
+        proxy: 'Proxy SOCKS5',
+        wireguard: 'Tunnel WireGuard',
+        '': 'Aucune route',
+      },
+      torrentAddresses: 'Adresses du tunnel',
+      torrentHandshake: 'Dernière négociation',
+      torrentNoHandshake: 'Aucune pour l’instant',
       torrentsPlaying: 'Torrents en lecture',
       torrentPeers: 'Pairs',
       torrentsShared: 'Partagé depuis le démarrage',
@@ -382,6 +394,7 @@ const system: typeof en = {
         aniListClientSecret: 'Client secret AniList',
         myAnimeListClientSecret: 'Client secret MyAnimeList',
         torrentProxyPassword: 'Mot de passe du proxy SOCKS5 des torrents',
+        torrentWireGuard: 'Configuration WireGuard des torrents',
         smtpPassword: 'Mot de passe SMTP',
         metricsToken: 'Jeton des métriques',
       },

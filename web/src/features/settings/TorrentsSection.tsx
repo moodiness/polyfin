@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useI18n } from '@/i18n'
-import { NumberInput, SecretField, Select, TextInput } from '@/ui'
-import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts'
+import { NumberInput, SecretField, Select, Textarea, TextInput } from '@/ui'
+import { FieldRow, SettingRow, SettingsGroup, SwitchRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 
-type Route = 'interface' | 'proxy'
+type Route = 'interface' | 'proxy' | 'wireguard'
 
 /**
  * Settings › Torrents: playing the torrents addons list, over one route alone, a network interface
- * (Linux only) or a SOCKS5 proxy, and the limits of their traffic.
+ * (Linux only), a SOCKS5 proxy or a WireGuard tunnel Polyfin runs, and the limits of their traffic.
  */
 export default function TorrentsSection({
   form,
@@ -20,15 +20,26 @@ export default function TorrentsSection({
 }: SectionFormApi) {
   const { t } = useI18n()
   const text = t.settings.torrents
-  // Where the interface is not offered, the proxy is the only route.
+  // Where the interface is not offered, the proxy and the tunnel are the routes.
   const [route, setRoute] = useState<Route>(
-    form.interfaceRoutes && form.torrentInterface !== '' ? 'interface' : 'proxy',
+    form.interfaceRoutes && form.torrentInterface !== ''
+      ? 'interface'
+      : form.torrentWireGuardSaved !== null && form.torrentProxy === ''
+        ? 'wireguard'
+        : 'proxy',
   )
   const choose = (next: Route) => {
     setRoute(next)
-    // One route alone: the other is cleared.
-    update(next === 'interface' ? { torrentProxy: '' } : { torrentInterface: '' })
+    // One route alone: the others are cleared, a saved WireGuard configuration removed; back to
+    // the tunnel, the saved one is kept.
+    if (next === 'interface') update({ torrentProxy: '', torrentWireGuard: '' })
+    else if (next === 'proxy') update({ torrentInterface: '', torrentWireGuard: '' })
+    else update({ torrentInterface: '', torrentProxy: '', torrentWireGuard: undefined })
   }
+  const routes: Route[] = form.interfaceRoutes
+    ? ['interface', 'proxy', 'wireguard']
+    : ['proxy', 'wireguard']
+  const saved = form.torrentWireGuardSaved
   return (
     <SettingsGroup>
       <SwitchRow
@@ -38,27 +49,58 @@ export default function TorrentsSection({
         checked={form.torrentStreams}
         onChange={(torrentStreams) => update({ torrentStreams })}
       />
-      {form.interfaceRoutes ? (
+      <FieldRow
+        anchor="torrent-route"
+        label={text.route}
+        help={form.interfaceRoutes ? text.routeHelp : text.routeHelpNoInterface}
+        error={error('torrent-route')}
+      >
+        <Select
+          value={route}
+          options={routes.map((value) => ({ value, label: text.routes[value] }))}
+          onValue={choose}
+          className="max-w-xs"
+        />
+      </FieldRow>
+      {route === 'wireguard' && (
         <FieldRow
-          anchor="torrent-route"
-          label={text.route}
-          help={text.routeHelp}
-          error={error('torrent-route')}
+          anchor="torrent-wireguard"
+          label={text.wireGuard}
+          help={
+            <>
+              {text.wireGuardHelp}
+              {saved !== null && form.torrentWireGuard !== '' && (
+                <>
+                  {' '}
+                  {text.wireGuardSaved(saved.endpoint, saved.addresses.join(', '))}{' '}
+                  {saved.dns.length > 0
+                    ? text.wireGuardDns(saved.dns.join(', '))
+                    : text.wireGuardNoDns}
+                </>
+              )}
+            </>
+          }
+          error={error('torrent-wireguard')}
         >
-          <Select
-            value={route}
-            options={(['interface', 'proxy'] as const).map((value) => ({
-              value,
-              label: text.routes[value],
-            }))}
-            onValue={choose}
-            className="max-w-xs"
+          <Textarea
+            value={form.torrentWireGuard ?? ''}
+            onValue={(torrentWireGuard) =>
+              // Emptied, the field keeps the saved configuration rather than removing it.
+              update({ torrentWireGuard: torrentWireGuard === '' ? undefined : torrentWireGuard })
+            }
+            placeholder={
+              saved !== null && form.torrentWireGuard !== '' ? text.wireGuardReplace : '[Interface]'
+            }
+            maxLength={limits('torrentWireGuard').max}
+            rows={8}
+            mono
+            spellCheck={false}
+            autoComplete="off"
+            invalid={error('torrent-wireguard') !== undefined}
           />
         </FieldRow>
-      ) : (
-        <TextRow anchor="torrent-route">{text.routeHelpProxyOnly}</TextRow>
       )}
-      {route === 'interface' ? (
+      {route === 'interface' && (
         <FieldRow
           anchor="torrent-interface"
           label={text.interface}
@@ -76,7 +118,8 @@ export default function TorrentsSection({
             className="max-w-xs"
           />
         </FieldRow>
-      ) : (
+      )}
+      {route === 'proxy' && (
         <>
           <FieldRow
             anchor="torrent-proxy"

@@ -67,16 +67,20 @@ const settings = {
       'The address apps on the local network reach Polyfin at, such as http://192.168.1.10:8096. Discovery answers give it, and Jellyfin apps read it as the server’s local address. Empty, the answers give the address of the network interface that reaches the app, which is right unless Polyfin runs in a Docker bridge network: there, enter the host’s address and Polyfin’s port.',
     torrents: {
       description:
-        'Some addons list torrents rather than links. Polyfin can play them: it joins a torrent’s swarm only while a playback reads it, and keeps all of its traffic to one route, a network interface such as a VPN’s, or a SOCKS5 proxy. Nothing is ever sent another way. The pieces are kept within Disk space for files being read, under Settings › Playback.',
+        'Some addons list torrents rather than links. Polyfin can play them: it joins a torrent’s swarm only while a playback reads it, and keeps all of its traffic to one route, a network interface such as a VPN’s, a SOCKS5 proxy, or a WireGuard tunnel Polyfin runs itself. Nothing is ever sent another way. The pieces are kept within Disk space for files being read, under Settings › Playback.',
       play: 'Play torrent streams',
       playHelp:
         'Off by default. Playing a torrent downloads it from other peers, and shares what was downloaded while the upload limit allows: you answer for what this server downloads and shares. Users also need Can play torrent streams, on their page under Users. Needs a route.',
       route: 'Route',
       routeHelp:
         'Every torrent socket, for peers, trackers and the DHT, goes this way alone. When it is down, torrent versions are skipped, also during a playback, and System › Health says why.',
-      routeHelpProxyOnly:
-        'This system binds no socket to a network interface, which only Linux does, as on Polyfin Desktop for Windows and macOS: torrents go through a SOCKS5 proxy alone. When it does not answer, torrent versions are skipped and System › Health says why.',
-      routes: { interface: 'Network interface', proxy: 'SOCKS5 proxy' },
+      routeHelpNoInterface:
+        'Every torrent socket, for peers, trackers and the DHT, goes this way alone. This system binds no socket to a network interface, which only Linux does, as on Polyfin Desktop for Windows and macOS: a SOCKS5 proxy or a WireGuard tunnel carries the torrents. When it is down, torrent versions are skipped, also during a playback, and System › Health says why.',
+      routes: {
+        interface: 'Network interface',
+        proxy: 'SOCKS5 proxy',
+        wireguard: 'WireGuard tunnel',
+      },
       interface: 'Network interface for torrents',
       interfaceHelp:
         'Its name, such as wg0. Every torrent socket is bound to it, and tracker names are looked up over it. Linux only. In Docker, the container must see the interface: see the torrents docs.',
@@ -87,6 +91,54 @@ const settings = {
       proxyUserHelp: 'Empty when the proxy asks for none.',
       proxyPassword: 'Proxy password',
       proxyPasswordHelp: 'Stored encrypted when POLYFIN_SECRET_KEY is set.',
+      wireGuard: 'WireGuard configuration',
+      wireGuardHelp:
+        'Paste the .conf your VPN provider gives for WireGuard. Polyfin runs the tunnel itself, for torrents alone, with nothing to set up on this system. Tracker names are looked up through the tunnel by its DNS servers, never another way. No peer can connect in. Stored encrypted when POLYFIN_SECRET_KEY is set, and never shown again.',
+      wireGuardSaved: (endpoint: string, addresses: string) =>
+        `A configuration is saved: server ${endpoint}, addresses ${addresses}.`,
+      wireGuardDns: (servers: string) =>
+        `Tracker names are looked up by ${servers}, through the tunnel.`,
+      wireGuardNoDns:
+        'It names no DNS server: trackers named by a host name are not reached, those named by an address are.',
+      wireGuardReplace: 'Paste another configuration to replace the saved one.',
+      wireGuardInvalid: (problem: { line: number; key: string; reason: string }) => {
+        const where = problem.line > 0 ? `Line ${problem.line}: ` : ''
+        const expected: Record<string, string> = {
+          PrivateKey: 'a key of 32 bytes in base64',
+          PublicKey: 'a key of 32 bytes in base64',
+          PresharedKey: 'a key of 32 bytes in base64',
+          Address: 'IP addresses, such as 10.2.0.2/32, separated by commas',
+          DNS: 'IP addresses separated by commas',
+          MTU: 'a number from 576 to 65535',
+          ListenPort: 'a port from 0 to 65535',
+          Endpoint: 'a host name or an IP address with a port, such as vpn.example.com:51820',
+          AllowedIPs:
+            'IP addresses with their prefix length, such as 0.0.0.0/0, separated by commas',
+          PersistentKeepalive: 'off, or a number of seconds from 0 to 65535',
+        }
+        switch (problem.reason) {
+          case 'too_long':
+            return 'The WireGuard configuration must be text of at most 8192 bytes.'
+          case 'syntax':
+            return `${where}each line must be a [section], a Key = Value, or a # comment.`
+          case 'outside':
+            return `${where}${problem.key} comes before [Interface] or [Peer].`
+          case 'unknown':
+            return `${where}${problem.key} is not part of a WireGuard configuration.`
+          case 'repeated':
+            return problem.key === 'Peer'
+              ? `${where}only one [Peer] is supported.`
+              : `${where}${problem.key} is given twice.`
+          case 'missing':
+            return `${where}${problem.key} is missing from the WireGuard configuration.`
+          case 'no_ipv4':
+            return `${where}Address needs an IPv4 address, which UDP trackers and the DHT use.`
+          case 'not_all':
+            return `${where}AllowedIPs needs 0.0.0.0/0: the peers of a torrent are anywhere.`
+          default:
+            return `${where}${problem.key} must be ${expected[problem.key] ?? 'valid'}.`
+        }
+      },
       downloadLimit: 'Download limit (Mbps, 0 = none)',
       downloadLimitHelp: (r: RangeText) => `From 0 to ${r.max}; ${r.default} by default.`,
       uploadLimit: 'Upload limit (Mbps, 0 = no sharing)',

@@ -49,7 +49,7 @@ import {
   useHealth,
   useHealthProblems,
 } from '@/features/system/problems'
-import { errorMessage, formatBytes, formatSpan } from '@/format'
+import { errorMessage, formatBytes, formatSpan, relativeTime } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
 import BackupStatus from './BackupStatus'
@@ -680,14 +680,30 @@ function Cache({ health }: { health: Health }) {
   )
 }
 
-/** How torrent streams play: their route, the torrents playing, their peers, what was shared. */
+/**
+ * How torrent streams play: their route, a WireGuard tunnel's addresses and last handshake, the
+ * torrents playing, their peers, what was shared.
+ */
 function Torrents({ health }: { health: Health }) {
   const { language, t } = useI18n()
   const text = t.system.health
   const torrents = health.torrents
   if (torrents === null) return null
+  const tunnel: (readonly [string, string])[] =
+    torrents.route === 'wireguard'
+      ? [
+          [text.torrentAddresses, (torrents.addresses ?? []).join(', ')],
+          [
+            text.torrentHandshake,
+            torrents.lastHandshake === undefined
+              ? text.torrentNoHandshake
+              : relativeTime(torrents.lastHandshake, language, t.time.justNow),
+          ],
+        ]
+      : []
   const rows = [
     [text.torrentRoute[torrents.route], torrents.name],
+    ...tunnel,
     [text.torrentsPlaying, String(torrents.playing)],
     [text.torrentPeers, String(torrents.peers)],
     [text.torrentsShared, formatBytes(torrents.uploaded, language)],

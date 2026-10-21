@@ -3,9 +3,13 @@ import type { Messages } from '@/i18n'
 
 type ErrorCode = keyof Messages['errors']
 
-/** Maps an API error code to localized text; unknown codes fall back to a generic message. */
+/**
+ * Maps an API error code to localized text; unknown codes fall back to a generic message. A
+ * WireGuard configuration refused tells its line, key and reason.
+ */
 export function errorMessage(t: Messages, error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.wireGuard !== null) return t.settings.torrents.wireGuardInvalid(error.wireGuard)
     return Object.hasOwn(t.errors, error.code)
       ? t.errors[error.code as ErrorCode]
       : t.errors.generic

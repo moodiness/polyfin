@@ -270,7 +270,8 @@ const common: typeof en = {
     invalid_backups_kept:
       'Le nombre de sauvegardes conservées doit être un nombre entier de 1 à 90.',
     invalid_torrent_route:
-      'Les flux torrent demandent une seule route : un nom d’interface réseau (Linux seulement), ou un proxy SOCKS5 sous la forme hôte:port, pas les deux.',
+      'Les flux torrent demandent une seule route : un nom d’interface réseau (Linux seulement), un proxy SOCKS5 sous la forme hôte:port, ou une configuration WireGuard.',
+    invalid_wireguard_config: 'La configuration WireGuard n’est pas valide.',
     invalid_torrent_limit: 'Les limites doivent être des nombres entiers de Mbit/s, de 0 à 10000.',
     invalid_cache_size: 'L’espace disque doit être un nombre entier de Go, de 1 à 2000.',
     invalid_vaapi_device: 'Choisissez la carte graphique dans la liste.',

@@ -147,6 +147,10 @@ const system = {
           interface_unsupported: () => 'a network interface works on Linux only',
           proxy_unreachable: (name: string) => `the SOCKS5 proxy ${name} does not answer`,
           proxy_refused: (name: string) => `the SOCKS5 proxy ${name} refused the user and password`,
+          wireguard_endpoint: (name: string) => `the WireGuard server ${name} cannot be looked up`,
+          wireguard_down: (name: string) => `the WireGuard tunnel to ${name} cannot start`,
+          wireguard_handshake: (name: string) =>
+            `the WireGuard server ${name} does not answer the handshake: it is unreachable, or a key of the configuration is wrong`,
           no_route: () => 'no route is set',
         },
         torrentUdp: (name: string) =>
@@ -295,7 +299,15 @@ const system = {
       torrentsTitle: 'Torrents',
       torrentsHelp:
         'The torrents playback reads now, over their route alone. A torrent stops when its playback ends: no more peers, no more sharing.',
-      torrentRoute: { interface: 'Network interface', proxy: 'SOCKS5 proxy', '': 'No route' },
+      torrentRoute: {
+        interface: 'Network interface',
+        proxy: 'SOCKS5 proxy',
+        wireguard: 'WireGuard tunnel',
+        '': 'No route',
+      },
+      torrentAddresses: 'Tunnel addresses',
+      torrentHandshake: 'Last handshake',
+      torrentNoHandshake: 'None yet',
       torrentsPlaying: 'Torrents playing',
       torrentPeers: 'Peers',
       torrentsShared: 'Shared since the start',
@@ -378,6 +390,7 @@ const system = {
         myAnimeListClientSecret: 'MyAnimeList client secret',
         smtpPassword: 'SMTP password',
         torrentProxyPassword: 'Torrents’ SOCKS5 proxy password',
+        torrentWireGuard: 'Torrents’ WireGuard configuration',
         metricsToken: 'Metrics token',
       },
       connectionOf: (service: string, user: string) => `${service} connection of ${user}`,

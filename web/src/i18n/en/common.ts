@@ -248,7 +248,8 @@ const common = {
     invalid_backup_hour: 'Choose the hour of the backups from the list.',
     invalid_backups_kept: 'The number of backups kept must be a whole number from 1 to 90.',
     invalid_torrent_route:
-      'Torrent streams need one route: a network interface name (Linux only), or a SOCKS5 proxy as host:port, not both.',
+      'Torrent streams need one route alone: a network interface name (Linux only), a SOCKS5 proxy as host:port, or a WireGuard configuration.',
+    invalid_wireguard_config: 'The WireGuard configuration is not valid.',
     invalid_torrent_limit: 'The limits must be whole numbers of Mbps from 0 to 10000.',
     invalid_cache_size: 'The disk space must be a whole number of GB from 1 to 2000.',
     invalid_vaapi_device: 'Choose the graphics card from the list.',

@@ -71,16 +71,20 @@ const settings: typeof en = {
       'L’adresse à laquelle les applications du réseau local joignent Polyfin, comme http://192.168.1.10:8096. Les réponses à la découverte la donnent, et les applications Jellyfin la lisent comme l’adresse locale du serveur. Vide, les réponses donnent l’adresse de l’interface réseau qui joint l’application : c’est la bonne, sauf si Polyfin tourne dans un réseau bridge de Docker. Saisissez alors l’adresse de l’hôte et le port de Polyfin.',
     torrents: {
       description:
-        'Certains addons listent des torrents plutôt que des liens. Polyfin peut les lire : il ne rejoint l’essaim d’un torrent que pendant qu’une lecture le lit, et garde tout son trafic sur une seule route, une interface réseau comme celle d’un VPN, ou un proxy SOCKS5. Rien n’est jamais envoyé par un autre chemin. Les morceaux sont gardés dans l’Espace disque des fichiers en lecture, dans Paramètres › Lecture.',
+        'Certains addons listent des torrents plutôt que des liens. Polyfin peut les lire : il ne rejoint l’essaim d’un torrent que pendant qu’une lecture le lit, et garde tout son trafic sur une seule route, une interface réseau comme celle d’un VPN, un proxy SOCKS5, ou un tunnel WireGuard que Polyfin fait tourner lui-même. Rien n’est jamais envoyé par un autre chemin. Les morceaux sont gardés dans l’Espace disque des fichiers en lecture, dans Paramètres › Lecture.',
       play: 'Lire les flux torrent',
       playHelp:
         'Désactivé par défaut. Lire un torrent le télécharge auprès d’autres pairs, et partage ce qui a été téléchargé tant que la limite d’envoi le permet : vous répondez de ce que ce serveur télécharge et partage. Les utilisateurs ont aussi besoin de Peut lire les flux torrent, sur leur page dans Utilisateurs. Demande une route.',
       route: 'Route',
       routeHelp:
         'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Quand elle ne fonctionne pas, les versions torrent sont ignorées, y compris pendant une lecture, et Système › Santé dit pourquoi.',
-      routeHelpProxyOnly:
-        'Ce système ne lie aucun socket à une interface réseau, ce que seul Linux fait, comme Polyfin Desktop sous Windows et macOS : les torrents ne passent que par un proxy SOCKS5. Quand il ne répond pas, les versions torrent sont ignorées et Système › Santé dit pourquoi.',
-      routes: { interface: 'Interface réseau', proxy: 'Proxy SOCKS5' },
+      routeHelpNoInterface:
+        'Chaque socket des torrents, pour les pairs, les trackers et le DHT, ne passe que par là. Ce système ne lie aucun socket à une interface réseau, ce que seul Linux fait, comme Polyfin Desktop sous Windows et macOS : un proxy SOCKS5 ou un tunnel WireGuard porte les torrents. Quand la route ne fonctionne pas, les versions torrent sont ignorées, y compris pendant une lecture, et Système › Santé dit pourquoi.',
+      routes: {
+        interface: 'Interface réseau',
+        proxy: 'Proxy SOCKS5',
+        wireguard: 'Tunnel WireGuard',
+      },
       interface: 'Interface réseau des torrents',
       interfaceHelp:
         'Son nom, comme wg0. Chaque socket des torrents y est lié, et les noms des trackers sont résolus par elle. Linux seulement. Sous Docker, le conteneur doit voir l’interface : voir la documentation des torrents.',
@@ -91,6 +95,54 @@ const settings: typeof en = {
       proxyUserHelp: 'Vide quand le proxy n’en demande pas.',
       proxyPassword: 'Mot de passe du proxy',
       proxyPasswordHelp: 'Stocké chiffré quand POLYFIN_SECRET_KEY est définie.',
+      wireGuard: 'Configuration WireGuard',
+      wireGuardHelp:
+        'Collez le .conf que votre fournisseur de VPN donne pour WireGuard. Polyfin fait tourner le tunnel lui-même, pour les seuls torrents, sans rien à configurer sur ce système. Les noms des trackers sont résolus à travers le tunnel par ses serveurs DNS, jamais autrement. Aucun pair ne peut se connecter à Polyfin. Stockée chiffrée quand POLYFIN_SECRET_KEY est définie, et jamais réaffichée.',
+      wireGuardSaved: (endpoint: string, addresses: string) =>
+        `Une configuration est enregistrée : serveur ${endpoint}, adresses ${addresses}.`,
+      wireGuardDns: (servers: string) =>
+        `Les noms des trackers sont résolus par ${servers}, à travers le tunnel.`,
+      wireGuardNoDns:
+        'Elle ne nomme aucun serveur DNS : les trackers désignés par un nom d’hôte ne sont pas joints, ceux désignés par une adresse le sont.',
+      wireGuardReplace: 'Collez une autre configuration pour remplacer celle enregistrée.',
+      wireGuardInvalid: (problem: { line: number; key: string; reason: string }) => {
+        const where = problem.line > 0 ? `Ligne ${problem.line} : ` : ''
+        const expected: Record<string, string> = {
+          PrivateKey: 'une clé de 32 octets en base64',
+          PublicKey: 'une clé de 32 octets en base64',
+          PresharedKey: 'une clé de 32 octets en base64',
+          Address: 'des adresses IP, comme 10.2.0.2/32, séparées par des virgules',
+          DNS: 'des adresses IP séparées par des virgules',
+          MTU: 'un nombre de 576 à 65535',
+          ListenPort: 'un port de 0 à 65535',
+          Endpoint: 'un nom d’hôte ou une adresse IP avec un port, comme vpn.example.com:51820',
+          AllowedIPs:
+            'des adresses IP avec la longueur de leur préfixe, comme 0.0.0.0/0, séparées par des virgules',
+          PersistentKeepalive: 'off, ou un nombre de secondes de 0 à 65535',
+        }
+        switch (problem.reason) {
+          case 'too_long':
+            return 'La configuration WireGuard doit être un texte d’au plus 8192 octets.'
+          case 'syntax':
+            return `${where}chaque ligne doit être une [section], une Clé = Valeur ou un commentaire #.`
+          case 'outside':
+            return `${where}${problem.key} vient avant [Interface] ou [Peer].`
+          case 'unknown':
+            return `${where}${problem.key} ne fait pas partie d’une configuration WireGuard.`
+          case 'repeated':
+            return problem.key === 'Peer'
+              ? `${where}une seule section [Peer] est prise en charge.`
+              : `${where}${problem.key} est donné deux fois.`
+          case 'missing':
+            return `${where}${problem.key} manque dans la configuration WireGuard.`
+          case 'no_ipv4':
+            return `${where}Address doit contenir une adresse IPv4, qu’utilisent les trackers UDP et le DHT.`
+          case 'not_all':
+            return `${where}AllowedIPs doit contenir 0.0.0.0/0 : les pairs d’un torrent sont partout.`
+          default:
+            return `${where}${problem.key} doit être ${expected[problem.key] ?? 'valide'}.`
+        }
+      },
       downloadLimit: 'Limite de téléchargement (Mbit/s, 0 = aucune)',
       downloadLimitHelp: (r: RangeText) => `De 0 à ${r.max} ; ${r.default} par défaut.`,
       uploadLimit: 'Limite d’envoi (Mbit/s, 0 = aucun partage)',

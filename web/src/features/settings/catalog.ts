@@ -1011,6 +1011,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'torrents',
+    anchor: 'torrent-wireguard',
+    label: (t) => s(t).torrents.wireGuard,
+    help: (t) => s(t).torrents.wireGuardHelp,
+    keywords: ['torrent', 'VPN', 'WireGuard', '.conf', 'kill switch'],
+    codes: ['invalid_wireguard_config'],
+  },
+  {
+    section: 'torrents',
     anchor: 'torrent-download-limit',
     label: (t) => s(t).torrents.downloadLimit,
     help: (t, r) => s(t).torrents.downloadLimitHelp(r('torrentDownloadMbps')),
