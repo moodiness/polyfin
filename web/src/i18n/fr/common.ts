@@ -514,6 +514,7 @@ const common: typeof en = {
     movie: 'Films',
     series: 'Séries',
     channel: 'Chaînes',
+    other: 'Autres vidéos',
     tv: 'TV',
     track: 'Titres',
     album: 'Albums',

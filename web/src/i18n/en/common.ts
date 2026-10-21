@@ -478,6 +478,7 @@ const common = {
     movie: 'Movies',
     series: 'Series',
     channel: 'Channels',
+    other: 'Other videos',
     tv: 'TV',
     track: 'Tracks',
     album: 'Albums',
