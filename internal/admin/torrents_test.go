@@ -151,7 +151,14 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 	if torrents, _ := body["torrents"].(map[string]any); status != http.StatusOK || torrents["route"] != "wireguard" {
 		t.Fatalf("Health while the tunnel does not answer: %d %v", status, body)
 	}
+	// The problems tell the same failure within Health's deadline, 2
+	// seconds, rather than after the 8 a check waits for a handshake: the
+	// admin app asks for them every few seconds.
+	asked := time.Now()
 	_, body, _ = administrator.call(http.MethodGet, "/health/problems?language=en", nil)
+	if took := time.Since(asked); took > 5*time.Second {
+		t.Errorf("the problems took %v while the tunnel does not answer", took)
+	}
 	found, _ := body["problems"].([]any)
 	if len(found) != 1 {
 		t.Fatalf("problems: %v", found)

@@ -328,7 +328,14 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		problems = append(problems, httpsProblems(h.Health.HTTPS(), h.now())...)
 	}
 	if h.Health.Torrents != nil {
-		if status := h.Health.Torrents.Status(ctx); status.Enabled {
+		// The route's check has Health's deadline: a WireGuard tunnel whose
+		// server does not answer waits out the whole of it for a handshake,
+		// which tells the same failure as a longer wait, and the admin app
+		// asks for the problems every few seconds.
+		routeCtx, cancelRoute := context.WithTimeout(ctx, readyWait)
+		status := h.Health.Torrents.Status(routeCtx)
+		cancelRoute()
+		if status.Enabled {
 			if status.RouteError != nil {
 				p := healthProblemJSON{Key: "torrents:route", Code: problemTorrentRoute, Tone: notifications.SeverityError,
 					To: "/settings/torrents#torrent-route", Failure: "no_route"}
