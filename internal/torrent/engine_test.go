@@ -227,6 +227,29 @@ func TestDHTStartsFromNodesPeersTell(t *testing.T) {
 	waitFor(t, "the second seeder to be found on the DHT", func() bool { return len(second.Remotes()) > 0 })
 }
 
+// A DHT lookup that found no peer, its node's answer lost, is made again
+// soon rather than after dhtEvery: a torrent the DHT alone lists still
+// starts within its StartTimeout.
+func TestADHTLookupThatFoundNoPeerIsMadeAgainSoon(t *testing.T) {
+	t.Parallel()
+	tor, _, large := twoFiles()
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	node := torrenttest.StartDHTNode(t, seeder.Address())
+	node.Drop(1)
+	e := newEngine(t, proxied(torrenttest.StartProxy(t, true, "", "")), 64<<20)
+	spec, err := NewSpec(tor.HashHex(), nil, []string{"dht:" + node.Address()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Play(spec)()
+	if got := readAll(t, e, spec); len(got) != len(large) {
+		t.Fatalf("read %d bytes", len(got))
+	}
+	if queries := node.Queries(); queries < 2 {
+		t.Fatalf("the node was asked %d times", queries)
+	}
+}
+
 func TestKillSwitch(t *testing.T) {
 	t.Parallel()
 	tor, _, _ := twoFiles()

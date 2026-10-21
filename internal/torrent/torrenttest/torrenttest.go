@@ -524,6 +524,7 @@ type DHTNode struct {
 	peers   []netip.AddrPort
 	mu      sync.Mutex
 	queries int
+	drop    int
 }
 
 // StartDHTNode starts a DHT node listing peers for any info hash.
@@ -553,7 +554,14 @@ func StartDHTNode(tb testing.TB, peers ...netip.AddrPort) *DHTNode {
 			txid := string(rest[colon+1 : colon+1+length])
 			d.mu.Lock()
 			d.queries++
+			dropped := d.drop > 0
+			if dropped {
+				d.drop--
+			}
 			d.mu.Unlock()
+			if dropped {
+				continue
+			}
 			var values []any
 			for _, peer := range d.peers {
 				values = append(values, string(binary.BigEndian.AppendUint16(peer.Addr().AsSlice(), peer.Port())))
@@ -574,6 +582,14 @@ func (d *DHTNode) Queries() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.queries
+}
+
+// Drop has the node leave the next n queries unanswered, as when a
+// datagram is lost or an answer comes too late.
+func (d *DHTNode) Drop(n int) {
+	d.mu.Lock()
+	d.drop = n
+	d.mu.Unlock()
 }
 
 // Proxy is a SOCKS5 proxy on the loopback interface, with or without UDP

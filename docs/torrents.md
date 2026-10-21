@@ -87,7 +87,7 @@ A torrent version analyzed once plays at once the next time: its analysis is kep
 
 A link's host sends its headers within seconds. A torrent needs peers first, from trackers that may each take 30 seconds to answer and from DHT lookups that hop from node to node, then its info dictionary, then its first pieces. So a torrent's playback waits longer:
 
-- 60 seconds for the torrent to start: peers found and the info dictionary received. That fits two rounds of a slow tracker beside the DHT lookups.
+- 60 seconds for the torrent to start: peers found and the info dictionary received. That fits two rounds of a slow tracker beside the DHT lookups. A lookup that found no peer, as when its nodes' answers were lost or came after 3 seconds, is made again 15 seconds later; one that found peers, every 5 minutes.
 - 30 seconds for a piece, at the start as later: a peer chooses whom it sends to every 10 seconds, and tries a new peer every 30.
 - Its first bytes, within those, before ffprobe's own **Maximum time to analyze a version** starts.
 

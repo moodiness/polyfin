@@ -36,9 +36,11 @@ const (
 	// chokeEvery how often the peers shared with are chosen again.
 	checkEvery = 5 * time.Second
 	chokeEvery = 10 * time.Second
-	// dhtEvery is how often the DHT is looked up again, maxNodesLearned
-	// how many nodes peers tell are kept.
+	// dhtEvery is how often the DHT is looked up again, dhtAgain how soon
+	// after a lookup that found no peer or could not be made, and
+	// maxNodesLearned how many nodes peers tell are kept.
 	dhtEvery        = 5 * time.Minute
+	dhtAgain        = 15 * time.Second
 	maxNodesLearned = 50
 )
 
@@ -409,7 +411,7 @@ func (t *torrent) lookup() {
 		t.mu.Lock()
 		on, starts := t.usesDHT(), slices.Concat(t.nodes, t.engine.config.Bootstrap)
 		t.mu.Unlock()
-		wait := 15 * time.Second
+		wait := dhtAgain
 		if on && len(starts) > 0 && t.lookupOnce(starts) {
 			wait = dhtEvery
 		}
@@ -424,7 +426,10 @@ func (t *torrent) lookup() {
 }
 
 // lookupOnce looks the torrent's peers up on the DHT from starts, over a
-// socket of the route; false when the route opens none.
+// socket of the route; false when the route opens none, or the lookup
+// found no peer: a node's answer lost or later than dhtWait, as a
+// datagram may be, would otherwise keep the torrent off the DHT for
+// dhtEvery, past the wait for its start.
 func (t *torrent) lookupOnce(starts []string) bool {
 	conn, err := t.route.ListenPacket(t.ctx)
 	if err != nil {
@@ -436,8 +441,12 @@ func (t *torrent) lookupOnce(starts []string) bool {
 	t.mu.Lock()
 	t.looked = true
 	t.mu.Unlock()
-	_ = lookupPeers(ctx, conn, t.hash, starts, t.addPeers)
-	return true
+	found := false
+	_ = lookupPeers(ctx, conn, t.hash, starts, func(peers []netip.AddrPort) {
+		found = true
+		t.addPeers(peers)
+	})
+	return found
 }
 
 // usesDHT reports whether the torrent is looked up on the DHT: its route
