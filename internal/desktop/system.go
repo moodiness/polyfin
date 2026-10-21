@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/i18n"
 )
 
 // Command is exec.CommandContext for the programs the app runs, which on
@@ -85,8 +87,8 @@ func clipboard(goos string) [][]string {
 	}
 }
 
-// Language is the system's language when the app speaks it, French or
-// English, else English: "fr" or "en".
+// Language is the system's language when the app speaks it (one of
+// i18n.Languages), else English.
 func Language() string {
 	for _, variable := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
 		if value := os.Getenv(variable); value != "" && value != "C" && value != "POSIX" {
@@ -96,10 +98,11 @@ func Language() string {
 	return languageOf(systemLanguage())
 }
 
-// languageOf reads a locale such as fr_FR.UTF-8 or fr-CA.
+// languageOf reads a locale such as fr_FR.UTF-8, de-CH or pt-BR (see
+// i18n.Match).
 func languageOf(locale string) string {
-	if strings.HasPrefix(strings.ToLower(locale), "fr") {
-		return "fr"
+	if language := i18n.Match(locale); language != "" {
+		return language
 	}
 	return "en"
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/desktop/app"
+	"github.com/moodiness/polyfin/internal/i18n"
 )
 
 // The icon is a PNG of the size asked, wrapped for Windows in an icon
@@ -32,8 +33,11 @@ func TestIcon(t *testing.T) {
 	}
 }
 
-// Both languages have every line, French with its own punctuation.
+// Every language has every line (internal/i18n's TestTexts checks their
+// placeholders), French with its own punctuation; another language gets
+// the English.
 func TestTexts(t *testing.T) {
+	english, french := trayTexts["en"], trayTexts["fr"]
 	s := app.Status{Phase: app.Downloading, Percent: 42, Problems: []app.Problem{app.NoTools}}
 	if got := english.phase(s); got != "Downloading FFmpeg: 42%" {
 		t.Errorf("English = %q", got)
@@ -41,25 +45,41 @@ func TestTexts(t *testing.T) {
 	if got := french.phase(s); got != "Téléchargement de FFmpeg : 42 %" {
 		t.Errorf("French = %q", got)
 	}
-	if got := french.problems(s); len(got) != 1 || !strings.Contains(got[0], "FFmpeg") {
-		t.Errorf("French problems = %v", got)
-	}
 	if got := formatted(english.setupCode, "AB3D-7KQ9"); got != "Setup code: AB3D-7KQ9 (click to copy)" {
 		t.Errorf("setup code = %q", got)
 	}
 	if english.copyKey != "Copy the secret key" || french.copyKey != "Copier la clé secrète" || !strings.Contains(french.keyCopied, "sauvegardes") {
 		t.Error("the secret key's lines")
 	}
-	for _, phase := range []app.Phase{app.Starting, app.Running, app.Stopping, app.Stopped, app.Failed, app.Updating, app.Rebuilding} {
-		if english.phase(app.Status{Phase: phase}) == "" || french.phase(app.Status{Phase: phase}) == "" {
-			t.Errorf("no line for %s", phase)
-		}
-	}
 	if english.phase(app.Status{Phase: app.Rebuilding}) != "Rebuilding the database's indexes" || french.phase(app.Status{Phase: app.Rebuilding}) != "Reconstruction des index de la base de données" {
 		t.Error("the rebuilding line")
 	}
-	if strings.Contains(strings.Join([]string{french.failed, french.stopping, french.keyCopied, french.keyHint}, ""), "'") {
-		t.Error("French uses a straight apostrophe")
+	if textsFor("nl") != english || textsFor("pt-BR") != trayTexts["pt-BR"] {
+		t.Error("textsFor")
+	}
+	if len(trayTexts) != len(i18n.Languages) {
+		t.Errorf("%d languages, want %d", len(trayTexts), len(i18n.Languages))
+	}
+	for _, language := range i18n.Languages {
+		text, ok := trayTexts[language]
+		if !ok {
+			t.Errorf("no texts in %s", language)
+			continue
+		}
+		if got := text.problems(s); len(got) != 1 || !strings.Contains(got[0], "FFmpeg") {
+			t.Errorf("%s problems = %v", language, got)
+		}
+		if got := text.phase(s); !strings.Contains(got, "42") || strings.Contains(got, "%!") {
+			t.Errorf("%s = %q", language, got)
+		}
+		for _, phase := range []app.Phase{app.Starting, app.Running, app.Stopping, app.Stopped, app.Failed, app.Updating, app.Rebuilding} {
+			if text.phase(app.Status{Phase: phase}) == "" {
+				t.Errorf("no line for %s in %s", phase, language)
+			}
+		}
+		if language != "en" && strings.Contains(text.failed+text.stopping+text.keyCopied+text.keyHint+text.updating, "'") {
+			t.Errorf("%s uses a straight apostrophe", language)
+		}
 	}
 }
 

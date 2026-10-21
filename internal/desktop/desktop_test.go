@@ -113,7 +113,8 @@ func TestOpenerAndClipboard(t *testing.T) {
 	if clipboard("darwin")[0][0] != "pbcopy" || clipboard("windows")[0][0] != "clip" || len(clipboard("linux")) != 3 {
 		t.Error("clipboard programs")
 	}
-	for locale, want := range map[string]string{"fr_FR.UTF-8": "fr", "fr-CA": "fr", "en_US.UTF-8": "en", "de_DE": "en", "": "en"} {
+	for locale, want := range map[string]string{"fr_FR.UTF-8": "fr", "fr-CA": "fr", "en_US.UTF-8": "en", "de_DE": "de", "es-419": "es",
+		"it_IT.UTF-8": "it", "pt-BR": "pt-BR", "pt_PT.UTF-8": "pt-BR", "nl_NL": "en", "": "en"} {
 		if got := languageOf(locale); got != want {
 			t.Errorf("languageOf(%q) = %q", locale, got)
 		}
