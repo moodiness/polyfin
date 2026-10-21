@@ -4,6 +4,7 @@ import (
 	"net/netip"
 	"slices"
 
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/torrent"
 )
 
@@ -44,7 +45,7 @@ func DefaultSettings() Settings {
 		ServerName:          "Polyfin",
 		QuickConnectEnabled: true,
 		LegacyAuthorization: false,
-		Language:            Languages[0],
+		Language:            i18n.Languages[0],
 		PrepareAhead:        true,
 		Transcoding:         true,
 		CatalogLimit:        DefaultCatalogLimit,
@@ -241,7 +242,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"serverName":          between(1, maxNameLength, d.ServerName),
 		"quickConnectEnabled": is(d.QuickConnectEnabled),
 		"legacyAuthorization": is(d.LegacyAuthorization),
-		"language":            choice(d.Language, anys(Languages)),
+		"language":            choice(d.Language, anys(i18n.Languages)),
 		"prepareAhead":        is(d.PrepareAhead),
 		"transcoding":         is(d.Transcoding),
 		"catalogLimit":        between(MinCatalogLimit, MaxCatalogLimit, d.CatalogLimit),

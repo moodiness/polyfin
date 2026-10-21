@@ -18,6 +18,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/torrent"
 )
 
@@ -1066,15 +1067,6 @@ func (s Settings) BackupDir(dataDir string) string {
 	return DefaultBackupFolder(dataDir)
 }
 
-// Languages are the server languages, as ISO 639-1 codes. The first is the
-// default.
-var Languages = []string{"en", "fr"}
-
-// ValidLanguage reports whether language is one of Languages.
-func ValidLanguage(language string) bool {
-	return slices.Contains(Languages, language)
-}
-
 // Settings are the server-wide options set from the admin interface.
 type Settings struct {
 	// ServerName is the name Jellyfin apps show for this server.
@@ -1110,7 +1102,7 @@ type Settings struct {
 	// time they ask for stand for it.
 	DLNAMarkPlayed bool
 	// Language is the language of the names Polyfin generates for Jellyfin
-	// apps, one of Languages.
+	// apps, one of i18n.Languages.
 	Language string
 	// PrepareAhead analyzes the version a title would play as soon as its
 	// details open, and readies the next episode near the end of the one
@@ -1974,7 +1966,7 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if !validServerName(settings.ServerName) {
 		return Settings{}, ErrInvalidServerName
 	}
-	if !ValidLanguage(settings.Language) {
+	if !i18n.Valid(settings.Language) {
 		return Settings{}, ErrInvalidLanguage
 	}
 	if settings.CatalogLimit < MinCatalogLimit || settings.CatalogLimit > MaxCatalogLimit {

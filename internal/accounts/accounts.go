@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
@@ -130,7 +131,7 @@ type User struct {
 	// MetadataLanguage is the language the user's titles are described in,
 	// by the server's addons given that language (see addons.Addon.Language);
 	// empty for the server's descriptions. It also names what Polyfin
-	// generates when it is English or French.
+	// generates when Polyfin speaks it (see i18n.Match).
 	MetadataLanguage string
 	// TwoStep is set once the user signs in with a code from an
 	// authenticator app after their password (see Store.ConfirmTwoStep).
@@ -358,7 +359,7 @@ func (s *Store) SetupRequired(ctx context.Context) (bool, error) {
 
 // CreateFirstAdministrator creates the first administrator, once. language,
 // the language the administrator set the server up in, becomes the server
-// language when it is one of Languages; anything else is ignored.
+// language when it is one of i18n.Languages; anything else is ignored.
 func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, language string) (User, error) {
 	var user User
 	var settings *Settings
@@ -375,7 +376,7 @@ func (s *Store) CreateFirstAdministrator(ctx context.Context, name, password, la
 		}
 		var err error
 		user, err = createUser(ctx, tx, NewUser{Name: name, Password: password, IsAdministrator: true, IsHidden: true})
-		if err != nil || !ValidLanguage(language) {
+		if err != nil || !i18n.Valid(language) {
 			return err
 		}
 		settings = &Settings{}

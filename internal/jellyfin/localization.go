@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/localization"
 )
 
@@ -47,7 +47,8 @@ type LocalizationOption struct {
 }
 
 // interfaceLanguageNames name the server languages in themselves.
-var interfaceLanguageNames = map[string]string{"en": "English", "fr": "Français"}
+var interfaceLanguageNames = map[string]string{"en": "English", "fr": "Français", "de": "Deutsch", "es": "Español",
+	"it": "Italiano", "pt-BR": "Português (Brasil)"}
 
 func (h *Handler) localizationRoutes(rt *router) {
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
@@ -126,8 +127,8 @@ var parentalRatings = sync.OnceValue(func() []ParentalRating {
 // localizationOptions lists the languages Polyfin speaks, the server
 // languages.
 var localizationOptions = sync.OnceValue(func() []LocalizationOption {
-	result := make([]LocalizationOption, len(accounts.Languages))
-	for i, language := range accounts.Languages {
+	result := make([]LocalizationOption, len(i18n.Languages))
+	for i, language := range i18n.Languages {
 		result[i] = LocalizationOption{Name: interfaceLanguageNames[language], Value: language}
 	}
 	return result

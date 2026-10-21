@@ -11,6 +11,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/diskspace"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
 
@@ -136,13 +137,9 @@ func uiCulture(language string) string {
 }
 
 // cultureLanguage is the server language of a culture, empty when Polyfin
-// does not speak it.
+// does not speak it (see i18n.Match).
 func cultureLanguage(culture string) string {
-	language, _, _ := strings.Cut(strings.ToLower(strings.TrimSpace(culture)), "-")
-	if accounts.ValidLanguage(language) {
-		return language
-	}
-	return ""
+	return i18n.Match(strings.TrimSpace(culture))
 }
 
 // serverConfiguration answers the server configuration to any signed-in
@@ -358,10 +355,8 @@ func (h *Handler) storage(w http.ResponseWriter, _ *http.Request) {
 		result.TranscodingTempFolder = folderStorage(filepath.Join(h.CacheDir, "segments"))
 	}
 	if dir := h.Recordings.Dir(); dir != "" {
-		name := "Recordings"
-		if h.Accounts.Settings().Language == "fr" {
-			name = "Enregistrements"
-		}
+		name := i18n.Text{"Recordings", "Enregistrements", "Aufnahmen", "Grabaciones", "Registrazioni", "Gravações"}.
+			In(h.Accounts.Settings().Language)
 		result.Libraries = append(result.Libraries, LibraryStorageDto{Id: recordingsLibrary, Name: name,
 			Folders: []FolderStorageDto{folderStorage(dir)}})
 	}

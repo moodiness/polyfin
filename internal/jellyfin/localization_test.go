@@ -95,7 +95,8 @@ func TestLocalizationListsHoldTheStandardsEntries(t *testing.T) {
 
 	var options []LocalizationOption
 	s.get(t, "/Localization/Options", token, &options)
-	if !slices.Equal(options, []LocalizationOption{{"English", "en"}, {"Français", "fr"}}) {
+	if !slices.Equal(options, []LocalizationOption{{"English", "en"}, {"Français", "fr"}, {"Deutsch", "de"}, {"Español", "es"},
+		{"Italiano", "it"}, {"Português (Brasil)", "pt-BR"}}) {
 		t.Errorf("options: %+v", options)
 	}
 }

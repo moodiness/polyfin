@@ -203,12 +203,12 @@ func TestStatusTellsWhetherTheWebClientIsServed(t *testing.T) {
 func TestSetupIgnoresLanguagesTheServerDoesNotSpeak(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 10)
-	account := map[string]string{"name": "admin", "password": "correct horse", "setupCode": setupCode, "language": "de"}
+	account := map[string]string{"name": "admin", "password": "correct horse", "setupCode": setupCode, "language": "nl"}
 	if status, body, _ := api.browser().call(http.MethodPost, "/setup", account); status != http.StatusCreated {
 		t.Fatalf("setup: %d %v", status, body)
 	}
 	if got := api.store.Settings().Language; got != "en" {
-		t.Errorf("server language after a setup in German: %q", got)
+		t.Errorf("server language after a setup in Dutch: %q", got)
 	}
 }
 
@@ -226,7 +226,7 @@ func TestSettingsLanguage(t *testing.T) {
 	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["language"] != "fr" || body["serverName"] != "Maison" {
 		t.Errorf("settings after saving: %v", body)
 	}
-	for _, language := range []any{"de", "", nil} {
+	for _, language := range []any{"nl", "de-DE", "", nil} {
 		settings["language"] = language
 		if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusBadRequest || body["error"] != "invalid_language" {
 			t.Errorf("language %v: %d %v", language, status, body)

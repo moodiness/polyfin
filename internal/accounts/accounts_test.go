@@ -138,7 +138,7 @@ func TestSettingsRoundTripAndRefuseUnknownLanguages(t *testing.T) {
 	if got := reopened.Settings(); !reflect.DeepEqual(got, want) {
 		t.Errorf("settings after reopening: %+v, want %+v", got, want)
 	}
-	for _, language := range []string{"", "de", "FR", "fr-FR"} {
+	for _, language := range []string{"", "nl", "FR", "fr-FR", "pt", "pt-br"} {
 		changed := want
 		changed.Language = language
 		if _, err := store.UpdateSettings(ctx, changed); !errors.Is(err, ErrInvalidLanguage) {
@@ -260,7 +260,7 @@ func TestContentSettingsDefaultRoundTripAndStayInRange(t *testing.T) {
 }
 
 func TestSetupStoresTheAdministratorsLanguage(t *testing.T) {
-	for _, tc := range []struct{ given, want string }{{"fr", "fr"}, {"en", "en"}, {"de", "en"}, {"", "en"}} {
+	for _, tc := range []struct{ given, want string }{{"fr", "fr"}, {"en", "en"}, {"de", "de"}, {"pt-BR", "pt-BR"}, {"nl", "en"}, {"", "en"}} {
 		store := newStore(t)
 		if _, err := store.CreateFirstAdministrator(t.Context(), "admin", "correct horse", tc.given); err != nil {
 			t.Fatal(err)
