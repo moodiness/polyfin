@@ -215,11 +215,13 @@ jobs:
         run: |
           go build ./...
           go vet ./...
-      - name: Test the per-system code and local folders
+      - name: Test the per-system code, local folders and torrents
+        # Torrents run on Polyfin Desktop for Windows: their routes, the
+        # WireGuard tunnel among them, are tested here too.
         run: |
           go test -p 2 ./cmd/polyfin ./internal/process ./internal/diskspace ./internal/media ./internal/localfiles \
-            ./internal/hls ./internal/thumbnails ./internal/accounts ./internal/config ./internal/playback
-          go test ./internal/admin -run '^(TestStatusTellsTheSystem|TestUnwatchedFolderText)$'
+            ./internal/hls ./internal/thumbnails ./internal/accounts ./internal/config ./internal/playback ./internal/torrent/...
+          go test ./internal/admin -run '^(TestStatusTellsTheSystem|TestUnwatchedFolderText|TestHealthTellsWhyTorrentsDoNotPlay|TestWireGuardSettingsAndHealth)$'
           go test ./internal/database -run '^TestMigrationsEndTheirLinesWithLF$'
 
   macos:
