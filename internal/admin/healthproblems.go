@@ -82,6 +82,11 @@ const (
 	// Every metadata addon of the server has a language: Name and To are
 	// the first one's, whose Language of its descriptions should be None.
 	problemMetadataLanguages = "metadata_languages"
+	// A local folder's files are left unmatched as their titles'
+	// searches failed: Addon names the addon that failed most of them,
+	// empty for another failure, and Failure tells why (see
+	// searchFailureJSON).
+	problemFolderSearch = "folder_search"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -101,7 +106,8 @@ const (
 // names it, and Owner, its user, for a stopped connection; Failure
 // ("missing", "unreadable", "mismatch") and File for certificate files;
 // Error, Let's Encrypt's, for a renewal that failed; Expires for a
-// certificate close to its end, an error once it ended. To is the
+// certificate close to its end, an error once it ended; Addon, with Name
+// and Failure, for a local folder whose searches failed. To is the
 // admin app's page that describes it, with its anchor. Transient ones are
 // not told as health problems: they come and go with the load, or, for
 // stopped connections, the connection_stopped event told them already.
@@ -116,6 +122,7 @@ type healthProblemJSON struct {
 	Name      string           `json:"name,omitempty"`
 	Owner     *ownerJSON       `json:"owner,omitempty"`
 	Failure   string           `json:"failure,omitempty"`
+	Addon     string           `json:"addon,omitempty"`
 	Share     string           `json:"share,omitempty"`
 	Host      string           `json:"host,omitempty"`
 	Address   string           `json:"address,omitempty"`
@@ -224,6 +231,11 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 					sources = append(sources, healthProblemJSON{Key: "folder_unwatched:" + addon.ID.String(), Code: problemFolderUnwatched,
 						Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
 						Failure: folder.Unwatched, Share: folder.Share})
+				}
+				if folder.SearchFailed > 0 {
+					sources = append(sources, healthProblemJSON{Key: "folder_search:" + addon.ID.String(), Code: problemFolderSearch,
+						Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
+						Addon: folder.SearchAddon, Failure: folder.SearchFailure})
 				}
 				continue
 			}
@@ -510,6 +522,19 @@ var addonFailures = map[string][2]string{
 	"invalid_response": {"sent an answer too large", "a envoyé une réponse trop grande"},
 }
 
+// searchFailures name the failures of search catalogs' requests, in
+// English and French, as the folder pages name them: an answer that
+// could not be read is too large or not of the expected form.
+var searchFailures = map[string][2]string{
+	"unreachable":      {"could not be reached", "est injoignable"},
+	"timeout":          {"did not answer in time", "n’a pas répondu à temps"},
+	"private_network":  {"is on a local network", "est sur un réseau local"},
+	"rate_limited":     {"asked to slow down (too many requests)", "a demandé de ralentir (trop de requêtes)"},
+	"server_error":     {"answered with a server error", "a répondu par une erreur serveur"},
+	"http_error":       {"refused the request", "a refusé la requête"},
+	"invalid_response": {"sent an answer Polyfin cannot read", "a envoyé une réponse que Polyfin ne sait pas lire"},
+}
+
 // diskFolders name the folders whose disks are measured, in English and
 // French.
 var diskFolders = map[string][2]string{
@@ -602,6 +627,16 @@ func (p healthProblemJSON) text(language string) string {
 		}
 		return say("%s: Polyfin cannot watch this local folder for changes. It is still scanned on its schedule.",
 			"%s : Polyfin ne peut pas surveiller les changements de ce dossier local. Il est toujours analysé selon sa planification.", name)
+	case problemFolderSearch:
+		why := ""
+		if failure, known := searchFailures[p.Failure]; known && p.Addon != "" {
+			why = say(" (%s: %s)", " (%s : %s)", p.Addon, pick(failure))
+		} else if p.Addon != "" {
+			why = " (" + p.Addon + ")"
+		}
+		return say("%s: the titles of its files could not be searched%s. They stay unmatched until a search goes through, which Polyfin tries again on its own, after a few minutes, then less often.",
+			"%s : les titres de ses fichiers n’ont pas pu être recherchés%s. Ils restent non associés jusqu’à ce qu’une recherche aboutisse, ce que Polyfin réessaie de lui-même, après quelques minutes, puis moins souvent.",
+			name, why)
 	case problemGuide:
 		return say("%s: the last programme guide fetch failed.", "%s : la dernière récupération du guide a échoué.", name)
 	case problemSecretsUnreadable:

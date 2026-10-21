@@ -64,6 +64,31 @@ type folderJSON struct {
 	HostKey        string `json:"hostKey"`
 	OfferedHostKey string `json:"offeredHostKey"`
 	PollMinutes    *int   `json:"pollMinutes"`
+	// SearchFailed counts the files left unmatched as their titles'
+	// searches failed, searchFailure tells the addon that failed most of
+	// them and why (null when none did), and searchRetryAt when the folder
+	// is scanned again to search them again (null when it is not to be).
+	SearchFailed  int                `json:"searchFailed"`
+	SearchFailure *searchFailureJSON `json:"searchFailure"`
+	SearchRetryAt *time.Time         `json:"searchRetryAt"`
+}
+
+// searchFailureJSON is a failed search of a title: the name of the addon
+// that failed it, and why, as System › Health names an addon's failures
+// ("unreachable", "timeout", "private_network", "rate_limited",
+// "server_error", "http_error", "invalid_response"), or "failed".
+type searchFailureJSON struct {
+	Addon   string `json:"addon"`
+	Failure string `json:"failure"`
+}
+
+// newSearchFailureJSON is a failed search, nil when failure is empty: the
+// search did not fail.
+func newSearchFailureJSON(addon, failure string) *searchFailureJSON {
+	if failure == "" {
+		return nil
+	}
+	return &searchFailureJSON{Addon: addon, Failure: failure}
 }
 
 // matchedByJSON counts the matched files by how they were matched: by an
@@ -117,7 +142,8 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 		DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
 		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork, ReadExtras: f.ReadExtras, Extras: f.Extras,
 		Endpoint: f.Endpoint, Region: f.Region, RcloneRemote: f.Remote, PrivateKeySet: f.PrivateKeySet, PassphraseSet: f.PassphraseSet,
-		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, PollMinutes: f.PollMinutes}
+		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, PollMinutes: f.PollMinutes,
+		SearchFailed: f.SearchFailed, SearchFailure: newSearchFailureJSON(f.SearchAddon, f.SearchFailure), SearchRetryAt: f.SearchRetryAt}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -307,6 +333,9 @@ type unmatchedJSON struct {
 	Year   *int   `json:"year"`
 	Size   int64  `json:"size"`
 	Reason string `json:"reason"`
+	// Search tells, for a failed search ("search_failed"), the addon that
+	// failed it and why; null for another reason.
+	Search *searchFailureJSON `json:"search"`
 	// Disc is the kind of the disc the file is read as, "bluray" or "dvd",
 	// unit being the disc's folder, or a Blu-ray disc's title other than
 	// its main one, "<folder>#<playlist>", or "bluray_image" or
@@ -354,7 +383,8 @@ func (h *handler) folderUnmatched(w http.ResponseWriter, r *http.Request) {
 		return &s
 	}
 	for _, u := range list {
-		file := unmatchedJSON{Path: u.Path, Unit: u.Unit, Title: u.Title, Size: u.Size, Reason: u.Reason, Disc: text(u.Disc)}
+		file := unmatchedJSON{Path: u.Path, Unit: u.Unit, Title: u.Title, Size: u.Size, Reason: u.Reason, Disc: text(u.Disc),
+			Search: newSearchFailureJSON(u.SearchAddon, u.SearchFailure)}
 		if u.Year > 0 {
 			file.Year = new(u.Year)
 		}

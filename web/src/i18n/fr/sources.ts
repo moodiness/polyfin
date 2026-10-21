@@ -447,6 +447,27 @@ const sources: typeof en = {
       no_title: 'Ses tags et son nom ne donnent aucun titre',
       no_album: 'Ses tags et ses dossiers ne donnent aucun album',
     } as Record<string, string>,
+    searchFailedBy: (addon: string, failure: string) =>
+      failure === ''
+        ? `La recherche de ${addon} a échoué`
+        : `La recherche a échoué : ${addon} ${failure}`,
+    searchFailures: {
+      unreachable: 'est injoignable',
+      timeout: 'n’a pas répondu à temps',
+      private_network: 'est sur un réseau local',
+      rate_limited: 'a demandé de ralentir (trop de requêtes)',
+      server_error: 'a répondu par une erreur serveur',
+      http_error: 'a refusé la requête',
+      invalid_response: 'a envoyé une réponse que Polyfin ne sait pas lire',
+    } as Record<string, string>,
+    searchFailedTitle: (count: number, figure: string) =>
+      count === 1
+        ? 'Le titre d’un fichier n’a pas pu être recherché'
+        : `Les titres de ${figure} fichiers n’ont pas pu être recherchés`,
+    searchRetry: (at: string) =>
+      `Polyfin recherche de nouveau de lui-même, la prochaine fois le ${at}, puis moins souvent tant que la recherche échoue, et à chaque analyse.`,
+    searchHelp:
+      'L’association demande un addon du serveur qui décrit ces titres et a un catalogue de recherche. Si ses recherches échouent toujours, vérifiez-le dans Système › Santé, ou associez les fichiers à la main ci-dessous.',
     read: (title: string) => `Lu comme « ${title} »`,
     showFolder: (unit: string) => `Dossier de la série : ${unit}`,
     discTitle: (disc: string, title: number) => `${disc} · titre ${title}`,

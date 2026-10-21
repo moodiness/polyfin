@@ -136,6 +136,8 @@ const system: typeof en = {
           `${name} : Polyfin ne peut pas surveiller les changements de ce partage réseau : il refuse l’utilisateur ou le mot de passe de Polyfin. Vérifiez-les, et saisissez-les à nouveau.`,
         shareUnwatched: (name: string) =>
           `${name} : Polyfin ne peut pas surveiller les changements de ce partage réseau. Il est toujours analysé selon sa planification.`,
+        folderSearch: (name: string, addon: string, failure: string) =>
+          `${name} : les titres de ses fichiers n’ont pas pu être recherchés${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon} : ${failure})`}. Ils restent non associés jusqu’à ce qu’une recherche aboutisse, ce que Polyfin réessaie de lui-même, après quelques minutes, puis moins souvent.`,
         guide: (name: string) => `${name} : la dernière récupération du guide a échoué.`,
         paused: (host: string) =>
           `Miniatures en pause pour ${host} : la source a demandé de ralentir.`,

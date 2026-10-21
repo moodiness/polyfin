@@ -786,6 +786,23 @@ export type LocalFolder = {
    * minutes, 0 only at its scans; null for the other folders.
    */
   pollMinutes: number | null
+  /**
+   * The files left unmatched as their titles' searches failed, the addon that failed most of them
+   * and why (null when none did), and when the folder is scanned again to search them again (null
+   * when it is not to be).
+   */
+  searchFailed: number
+  searchFailure: SearchFailure | null
+  searchRetryAt: string | null
+}
+
+/**
+ * A failed search of a title: the name of the addon that failed it, '' for another failure, and
+ * why, as System › Health names an addon's failures, or 'failed'.
+ */
+export type SearchFailure = {
+  addon: string
+  failure: string
 }
 
 /** The kind of a disc: a Blu-ray disc's or a DVD's folder, or a disc image. */
@@ -824,6 +841,8 @@ export type UnmatchedFile = {
     | 'disc_title'
     | 'disc_episode'
     | 'lone_extra'
+  /** For a failed search, the addon that failed it and why; null for another reason. */
+  search: SearchFailure | null
   /**
    * The kind of disc the file is read as, its unit the disc's folder, or the image itself for a
    * disc image; null for another file.
@@ -3503,6 +3522,8 @@ export type HealthProblem = {
   | { code: 'tuner'; name: string; failure: string }
   | { code: 'folder'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   | { code: 'folder_unwatched'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
+  /** A local folder's searches failed: the addon that failed most of them ('' for another failure) and why. */
+  | { code: 'folder_search'; name: string; addon?: string; failure: string }
   | { code: 'task'; task: string }
   | { code: 'https_port'; port: number }
   | { code: 'https_files'; failure: 'missing' | 'unreadable' | 'mismatch'; file: string }

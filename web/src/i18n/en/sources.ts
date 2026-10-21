@@ -425,6 +425,25 @@ const sources = {
       no_title: 'Its tags and name give no title',
       no_album: 'Its tags and folders give no album',
     } as Record<string, string>,
+    searchFailedBy: (addon: string, failure: string) =>
+      failure === '' ? `The search of ${addon} failed` : `The search failed: ${addon} ${failure}`,
+    searchFailures: {
+      unreachable: 'could not be reached',
+      timeout: 'did not answer in time',
+      private_network: 'is on a local network',
+      rate_limited: 'asked to slow down (too many requests)',
+      server_error: 'answered with a server error',
+      http_error: 'refused the request',
+      invalid_response: 'sent an answer Polyfin cannot read',
+    } as Record<string, string>,
+    searchFailedTitle: (count: number, figure: string) =>
+      count === 1
+        ? 'The title of 1 file could not be searched'
+        : `The titles of ${figure} files could not be searched`,
+    searchRetry: (at: string) =>
+      `Polyfin searches again on its own, next on ${at}, then less often while the search fails, and at each scan.`,
+    searchHelp:
+      'Matching needs a server addon that describes these titles and has a search catalog. If its searches keep failing, check it under System › Health, or link the files by hand below.',
     read: (title: string) => `Read as “${title}”`,
     showFolder: (unit: string) => `Show folder: ${unit}`,
     discTitle: (disc: string, title: number) => `${disc} · title ${title}`,

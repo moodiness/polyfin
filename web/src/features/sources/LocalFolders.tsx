@@ -35,7 +35,7 @@ import {
   type ServerSystem,
   type UnmatchedFile,
 } from '@/api'
-import { errorMessage, formatBytes } from '@/format'
+import { dateTime, errorMessage, formatBytes } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import {
   Badge,
@@ -920,6 +920,29 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
           {folder.files > 0 && text.keptNote}
         </Notice>
       )}
+      {folder.searchFailed > 0 && (
+        <Notice tone="warn" className="mt-5">
+          <strong className="font-medium">
+            {text.searchFailedTitle(
+              folder.searchFailed,
+              folder.searchFailed.toLocaleString(language),
+            )}
+            .
+          </strong>{' '}
+          {folder.searchFailure !== null && folder.searchFailure.addon !== '' && (
+            <>
+              {text.searchFailedBy(
+                folder.searchFailure.addon,
+                text.searchFailures[folder.searchFailure.failure] ?? '',
+              )}
+              .{' '}
+            </>
+          )}
+          {folder.searchRetryAt !== null &&
+            `${text.searchRetry(dateTime(folder.searchRetryAt, language))} `}
+          {text.searchHelp}
+        </Notice>
+      )}
     </PanelSection>
   )
 }
@@ -1103,7 +1126,12 @@ function UnmatchedRow({
         <p className="font-mono text-small break-all text-ink">{file.path}</p>
         <p className="mt-1 text-small text-ink-3">
           {[
-            text.reasons[file.reason] ?? file.reason,
+            file.search !== null && file.search.addon !== ''
+              ? text.searchFailedBy(
+                  file.search.addon,
+                  text.searchFailures[file.search.failure] ?? '',
+                )
+              : (text.reasons[file.reason] ?? file.reason),
             title !== '' ? text.read(title) : '',
             file.discTitle
               ? titleName(file.disc, file.discTitle.discPath, file.discTitle.number, folder, text)

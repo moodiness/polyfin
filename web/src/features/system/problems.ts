@@ -140,6 +140,12 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       if (problem.failure === 'instance_limit') return text.folderInstanceLimit(problem.name)
       if (problem.failure === 'open_files_limit') return text.folderOpenFilesLimit(problem.name)
       return text.folderUnwatched(problem.name)
+    case 'folder_search':
+      return text.folderSearch(
+        problem.name,
+        problem.addon ?? '',
+        t.localFolders.searchFailures[problem.failure] ?? '',
+      )
     case 'task':
       return text.task(problem.task)
     case 'https_port':

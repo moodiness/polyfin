@@ -130,6 +130,8 @@ const system = {
           `${name}: Polyfin cannot watch this network share for changes: it refuses Polyfin’s user or password. Check them, and enter them again.`,
         shareUnwatched: (name: string) =>
           `${name}: Polyfin cannot watch this network share for changes. It is still scanned on its schedule.`,
+        folderSearch: (name: string, addon: string, failure: string) =>
+          `${name}: the titles of its files could not be searched${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. They stay unmatched until a search goes through, which Polyfin tries again on its own, after a few minutes, then less often.`,
         guide: (name: string) => `${name}: the last programme guide fetch failed.`,
         paused: (host: string) => `Thumbnails paused for ${host}: it asked to slow down.`,
         unknownProxy: (address: string) =>
