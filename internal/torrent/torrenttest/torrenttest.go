@@ -162,9 +162,10 @@ type Peer struct {
 
 	// eager has the peer unchoke at once, before any INTERESTED; strict
 	// has it drop a REQUEST received before INTERESTED, as a strict
-	// client does. messages are the IDs of the messages received, in
-	// order.
+	// client does, dropped counting them. messages are the IDs of the
+	// messages received, in order.
 	eager, strict bool
+	dropped       int
 	messages      []byte
 	// handshakes counts the handshakes received for the torrent.
 	handshakes int
@@ -192,6 +193,14 @@ func (p *Peer) Messages() []byte {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return slices.Clone(p.messages)
+}
+
+// Dropped counts the REQUESTs a strict peer dropped, received before
+// INTERESTED.
+func (p *Peer) Dropped() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.dropped
 }
 
 // Leech starts a leecher of t: it asks for every piece of whoever connects.
@@ -527,7 +536,13 @@ func (p *Peer) serve(conn net.Conn) {
 			}
 			request()
 		case 6:
-			if !p.seed || len(payload) != 12 || strict && !interested {
+			if !p.seed || len(payload) != 12 {
+				continue
+			}
+			if strict && !interested {
+				p.mu.Lock()
+				p.dropped++
+				p.mu.Unlock()
 				continue
 			}
 			p.mu.Lock()

@@ -55,16 +55,15 @@ func TestInterestedBeforeRequests(t *testing.T) {
 }
 
 // A strict peer, which drops the REQUESTs received before INTERESTED,
-// sends at once: the blocks do not wait for requestAge to be asked again.
+// serves every block: it drops none, so none waits for requestAge to be
+// asked again, however long a loaded machine takes to read.
 func TestStrictPeerSendsAtOnce(t *testing.T) {
 	t.Parallel()
 	tor := torrenttest.Build("A Movie", 64<<10, torrenttest.File{Name: "a-movie.mkv", Data: torrenttest.Bytes(900<<10 + 77)})
 	peer := torrenttest.SeedUnchoked(t, tor, "127.0.0.1", true)
 	took := playFrom(t, tor, peer)
 	t.Logf("read from a strict peer in %v", took)
-	// Asked again, the blocks would come after requestAge, 15 seconds: the
-	// bound leaves several seconds either way.
-	if took > requestAge-5*time.Second {
-		t.Fatalf("the read took %v: the blocks waited to be asked again", took)
+	if dropped := peer.Dropped(); dropped != 0 {
+		t.Fatalf("the strict peer dropped %d requests sent before INTERESTED", dropped)
 	}
 }
