@@ -313,8 +313,10 @@ var itemTypes = map[library.Kind]string{
 	library.KindLibrary:    "CollectionFolder",
 	library.KindCollection: "BoxSet",
 	library.KindMovie:      "Movie",
-	// Jellyfin's home videos are videos too.
+	// Jellyfin's home videos are videos too, and the titles of other
+	// types, without videos or with them, videos and folders of videos.
 	library.KindVideo:   "Video",
+	library.KindFolder:  "Folder",
 	library.KindSeries:  "Series",
 	library.KindSeason:  "Season",
 	library.KindEpisode: "Episode",
@@ -358,7 +360,7 @@ func namesType(name string, kind library.Kind) bool {
 func isFolder(kind library.Kind) bool {
 	switch kind {
 	case library.KindLibrary, library.KindCollection, library.KindSeries, library.KindSeason,
-		library.KindArtist, library.KindAlbum, library.KindMusicPlaylist, library.KindReplayFolder:
+		library.KindArtist, library.KindAlbum, library.KindMusicPlaylist, library.KindReplayFolder, library.KindFolder:
 		return true
 	}
 	return false
@@ -465,6 +467,17 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.AirDays = &[]string{}
 	case library.KindCollection:
 		dto.DisplayOrder = "PremiereDate"
+	case library.KindFolder:
+		// Listings count a folder's videos when asked; its own description
+		// always does (see below).
+		if c := item.Contents; c != nil && !detail {
+			if fields.has("ChildCount") {
+				dto.ChildCount = new(c.Children)
+			}
+			if fields.has("RecursiveItemCount") {
+				dto.RecursiveItemCount = new(c.Released)
+			}
+		}
 	}
 	if playable {
 		dto.VideoType = "VideoFile"

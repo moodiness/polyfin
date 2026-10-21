@@ -58,10 +58,10 @@ var collectionsViewID, _ = accounts.ParseID(nameID("view", "collections"))
 
 // collectionKinds are the items a collection holds. Like Jellyfin's, a
 // collection holds titles, home videos among them, their seasons and
-// episodes, other groups and channels; Polyfin leaves out people and
-// programmes, which its guide replaces.
+// episodes, folders of videos, other groups and channels; Polyfin leaves
+// out people and programmes, which its guide replaces.
 var collectionKinds = []library.Kind{library.KindMovie, library.KindVideo, library.KindSeries, library.KindSeason, library.KindEpisode,
-	library.KindCollection, library.KindChannel}
+	library.KindFolder, library.KindCollection, library.KindChannel}
 
 // collectionItems checks the items ids names for a collection: each must be
 // an item user can reach that a collection may hold. Jellyfin answers an
@@ -635,6 +635,9 @@ func (h *Handler) collectionDtos(r *http.Request, user accounts.User, lists []co
 			if title.Kind == library.KindSeries || title.Kind == library.KindSeason {
 				parents = append(parents, title.ID)
 			}
+			if title.Kind == library.KindFolder && title.Contents != nil {
+				ids = append(ids, title.Contents.Videos...)
+			}
 		}
 	}
 	data, err := h.UserData.Get(r.Context(), user.ID, ids)
@@ -689,6 +692,15 @@ func collectionItem(c collections.Collection, titles []library.Item, data map[ac
 			if title.Contents != nil {
 				item.Contents.Released += title.Contents.Released
 				played += min(counts[title.ID].Played, title.Contents.Released)
+			}
+		case library.KindFolder:
+			if title.Contents != nil {
+				item.Contents.Released += title.Contents.Released
+				for _, video := range title.Contents.Videos {
+					if data[video].Played {
+						played++
+					}
+				}
 			}
 		}
 		for _, genre := range title.Genres {

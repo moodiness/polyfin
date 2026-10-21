@@ -83,7 +83,7 @@ func (h *Handler) RemoveResume(ctx context.Context, user accounts.User, id accou
 func (h *Handler) removeResumeOf(ctx context.Context, user accounts.User, item library.Item) error {
 	var targets []library.Item
 	switch item.Kind {
-	case library.KindSeries, library.KindSeason:
+	case library.KindSeries, library.KindSeason, library.KindFolder:
 		var err error
 		if targets, err = h.markTargets(ctx, user, item); err != nil {
 			return err
@@ -157,10 +157,13 @@ func (h *Handler) hideTitle(hidden bool) http.HandlerFunc {
 	}
 }
 
-// hiddenTarget returns the title hiding item hides: the movie, home video
-// or series itself, or the series of a season or an episode.
+// hiddenTarget returns the title hiding item hides: the movie, home video,
+// series or folder of videos itself, the series of a season or an
+// episode, or the folder of one of its videos.
 func (h *Handler) hiddenTarget(ctx context.Context, user accounts.User, item library.Item) (library.Item, error) {
 	switch {
+	case item.FolderID != accounts.ID{}:
+		return h.Library.Item(ctx, user, item.FolderID)
 	case library.Hideable(item.Kind):
 		return item, nil
 	case (item.Kind == library.KindSeason || item.Kind == library.KindEpisode) && item.SeriesID != accounts.ID{}:

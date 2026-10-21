@@ -591,7 +591,7 @@ func pageOf(items []BaseItemDto, start, limit, total int) QueryResult {
 // type filters.
 func searchKinds(keep func(library.Item) bool) []library.Kind {
 	var kinds []library.Kind
-	for _, kind := range []library.Kind{library.KindMovie, library.KindSeries, library.KindVideo} {
+	for _, kind := range []library.Kind{library.KindMovie, library.KindSeries, library.KindVideo, library.KindFolder} {
 		if keep(library.Item{Kind: kind}) {
 			kinds = append(kinds, kind)
 		}

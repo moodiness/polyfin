@@ -99,7 +99,7 @@ func objectOf(item library.Item, parent string) (object, bool) {
 		o.id, o.class, o.container = musicPrefix+id, "object.container.person.musicArtist", true
 	case library.KindMusicPlaylist:
 		o.id, o.class, o.container = musicPrefix+id, "object.container.playlistContainer", true
-	case library.KindLibrary, library.KindCollection:
+	case library.KindLibrary, library.KindCollection, library.KindFolder:
 		o.id, o.class, o.container = folderPrefix+id, "object.container.storageFolder", true
 		if item.CollectionType == "music" {
 			o.id = musicPrefix + id

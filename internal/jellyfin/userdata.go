@@ -71,7 +71,7 @@ type userState struct {
 // description of a library goes through it.
 func (h *Handler) userState(ctx context.Context, user accounts.User, items []library.Item) (userState, error) {
 	ids := make([]accounts.ID, 0, len(items))
-	var parents, songs []accounts.ID
+	var parents, songs, videos []accounts.ID
 	for _, item := range items {
 		ids = append(ids, item.ID)
 		if item.Kind == library.KindSeries || item.Kind == library.KindSeason {
@@ -80,14 +80,34 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 		if item.Kind == library.KindTrack {
 			songs = append(songs, item.ID)
 		}
+		if item.Kind == library.KindFolder && item.Contents != nil {
+			videos = append(videos, item.Contents.Videos...)
+		}
 	}
-	data, err := h.UserData.Get(ctx, user.ID, ids)
+	data, err := h.UserData.Get(ctx, user.ID, append(ids, videos...))
 	if err != nil {
 		return userState{}, err
 	}
 	counts, err := h.UserData.EpisodeCounts(ctx, user.ID, parents)
 	if err != nil {
 		return userState{}, err
+	}
+	// A folder counts its videos the user watched, and started, as a
+	// series counts its episodes.
+	for _, item := range items {
+		if item.Kind != library.KindFolder || item.Contents == nil {
+			continue
+		}
+		var c userdata.Counts
+		for _, video := range item.Contents.Videos {
+			if data[video].Played {
+				c.Played++
+			}
+			if data[video].Position > 0 {
+				c.Resumable++
+			}
+		}
+		counts[item.ID] = c
 	}
 	state := userState{data: data, counts: counts, contents: map[accounts.ID]*library.Contents{}, lyrics: h.Lyrics.Known(ctx, songs),
 		gains: h.gains(ctx, items), collectionLibraries: h.collectionLibrariesByType(ctx)}
@@ -110,8 +130,9 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 }
 
 // of describes what the user did with item. Series and seasons count
-// their played episodes; a partly watched episode counts as unplayed.
-// Other folders only show that they are not played.
+// their played episodes, and folders their played videos; a partly
+// watched episode or video counts as unplayed. Other folders only show
+// that they are not played.
 func (s userState) of(item library.Item) UserItemData {
 	result := UserItemData{Key: hyphenated(item.ID), ItemId: item.ID.String()}
 	data := s.data[item.ID]
@@ -128,7 +149,7 @@ func (s userState) of(item library.Item) UserItemData {
 		if percent, ok := data.PlayedPercentage(); ok {
 			result.PlayedPercentage = new(percent)
 		}
-	case library.KindSeries, library.KindSeason, library.KindCollection:
+	case library.KindSeries, library.KindSeason, library.KindCollection, library.KindFolder:
 		result.PlayedPercentage = new(0.0)
 		contents := item.Contents
 		if contents == nil {
@@ -148,9 +169,10 @@ func (s userState) of(item library.Item) UserItemData {
 }
 
 // resumable reports whether the user can resume item: a movie or episode
-// with a resume point, or a series or season with such an episode.
+// with a resume point, or a series, season or folder with such an episode
+// or video.
 func (s userState) resumable(item library.Item) bool {
-	if item.Kind == library.KindSeries || item.Kind == library.KindSeason {
+	if item.Kind == library.KindSeries || item.Kind == library.KindSeason || item.Kind == library.KindFolder {
 		return s.counts[item.ID].Resumable > 0
 	}
 	return s.data[item.ID].Position > 0
@@ -289,6 +311,9 @@ func (h *Handler) markTargets(ctx context.Context, user accounts.User, item libr
 		episodes, err = h.Library.Episodes(ctx, user, item.ID, nil)
 	case library.KindSeason:
 		episodes, err = h.Library.Episodes(ctx, user, item.SeriesID, &item.ID)
+	case library.KindFolder:
+		// As Jellyfin marks a folder's videos.
+		episodes, err = h.Library.FolderVideos(ctx, user, item.ID)
 	default:
 		return nil, nil
 	}
