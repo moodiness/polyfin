@@ -15,7 +15,7 @@ import (
 )
 
 // The peer wire protocol (BEP 3), its extension protocol (BEP 10) and the
-// metadata exchange (BEP 9).
+// metadata exchange (BEP 9); peer exchange (BEP 11) is in pex.go.
 const (
 	msgChoke         = 0
 	msgUnchoke       = 1
@@ -101,6 +101,11 @@ type peer struct {
 	// when it does not; metadataSize the size it announced.
 	metadataID   int
 	metadataSize int
+	// extended tells that Polyfin sent the peer its extension handshake;
+	// pexCount counts the peer's ut_pex messages read since pexSince.
+	extended bool
+	pexSince time.Time
+	pexCount int
 	// requests are the blocks asked for and not received, with when.
 	requests map[block]time.Time
 	// asked are the blocks the peer asked for, served in order.
@@ -243,13 +248,19 @@ func (p *peer) read() error {
 	}
 }
 
-// sendExtendedHandshake tells the peer the extensions Polyfin speaks, and
-// the size of the metadata when it shares it.
+// sendExtendedHandshake tells the peer the extensions Polyfin speaks:
+// peer exchange unless the torrent is private, and the size of the
+// metadata when it shares it. The lock is held.
 func (p *peer) sendExtendedHandshake(metadataSize int) {
-	d := map[string]any{"m": map[string]any{"ut_metadata": extMetadata}, "v": "Polyfin", "reqq": 250}
+	m := map[string]any{"ut_metadata": extMetadata}
+	if info := p.t.info; info == nil || !info.Private {
+		m["ut_pex"] = extPEX
+	}
+	d := map[string]any{"m": m, "v": "Polyfin", "reqq": 250}
 	if metadataSize > 0 {
 		d["metadata_size"] = metadataSize
 	}
+	p.extended = true
 	p.send(msgExtended, []byte{0}, encode(d))
 }
 

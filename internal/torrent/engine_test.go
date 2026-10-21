@@ -34,7 +34,7 @@ func (t *testSettings) set(change func(*Settings)) {
 	change(&t.s)
 }
 
-func newEngine(t *testing.T, settings *testSettings, budget int64) *Engine {
+func newEngine(t testing.TB, settings *testSettings, budget int64) *Engine {
 	t.Helper()
 	e, err := New(Config{Settings: settings.get, Dir: t.TempDir(), Budget: func() int64 { return budget },
 		Linger: 50 * time.Millisecond, Logger: slog.New(slog.DiscardHandler)})
@@ -67,7 +67,7 @@ func readAll(t *testing.T, e *Engine, spec Spec) []byte {
 	return data
 }
 
-func waitFor(t *testing.T, what string, done func() bool) {
+func waitFor(t testing.TB, what string, done func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(time.Minute)
 	for !done() {
@@ -457,7 +457,7 @@ func TestPiecesAtTheReadComeFirst(t *testing.T) {
 	tor := newTorrent(e, Spec{}, nil, false)
 	tor.info, tor.have, tor.files = &info, make([]bool, 100), []File{file}
 	reader := &Reader{t: tor, file: file}
-	tor.reads[reader] = 50*length + 10
+	tor.reads[reader] = readSpan{at: 50*length + 10, end: 50*length + 10}
 	tor.have[51] = true
 	got := tor.wanted()
 	if want := []int{50, 52, 53, 0, 99, 1, 98}; !slices.Equal(got, want) {

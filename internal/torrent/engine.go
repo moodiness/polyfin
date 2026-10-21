@@ -84,6 +84,8 @@ type Engine struct {
 	// tunnelFresh and tunnelWait, when set, replace a WireGuard tunnel's
 	// times (see tunnelFresh).
 	tunnelFresh, tunnelWait time.Duration
+	// noEndgame turns the endgame off, to measure what it brings.
+	noEndgame bool
 
 	mu       sync.Mutex
 	torrents map[Hash]*torrent

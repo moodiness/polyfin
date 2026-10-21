@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("d5:added12:\n\x00\x00\x01\x1a\xe1\n\x00\x00\x02\x1a\xe17:added.f1:\x04e")

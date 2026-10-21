@@ -44,6 +44,9 @@ type Info struct {
 	Pieces      []Hash
 	Files       []File
 	Length      int64
+	// Private marks a torrent whose peers come from its trackers alone
+	// (BEP 27): no peer exchange.
+	Private bool
 }
 
 // maxPieceLength and maxInfoSize bound what a torrent may claim, so that
@@ -67,7 +70,8 @@ func parseInfo(data []byte) (Info, error) {
 	if err != nil || len(rest) != 0 {
 		return Info{}, errInfo
 	}
-	info := Info{Name: str(d, "name")}
+	private, _ := num(d, "private")
+	info := Info{Name: str(d, "name"), Private: private == 1}
 	pieceLength, _ := num(d, "piece length")
 	pieces := str(d, "pieces")
 	if pieceLength <= 0 || pieceLength > maxPieceLength || len(pieces) == 0 || len(pieces)%20 != 0 {

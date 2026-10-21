@@ -24,6 +24,9 @@ const (
 	// peer is asked for it too.
 	pipeline   = 32
 	requestAge = 15 * time.Second
+	// maxDuplicates bounds the blocks of the endgame asked of a second
+	// peer and not received yet.
+	maxDuplicates = 16
 	// readWindow is how far past a read the pieces are fetched, and
 	// edgePieces how many pieces of a file's start and end are, for its
 	// index.
@@ -73,7 +76,7 @@ type torrent struct {
 	known       map[netip.AddrPort]bool
 	queue       []netip.AddrPort
 	dialing     int
-	reads       map[*Reader]int64
+	reads       map[*Reader]readSpan
 	files       []File
 	changed     chan struct{}
 	err         error
@@ -85,15 +88,31 @@ type torrent struct {
 	// looked whether the DHT was looked up, for a StartError.
 	announces map[string]error
 	looked    bool
+
+	// duplicates counts the blocks asked of more than one peer, once for
+	// each peer past the first.
+	duplicates int
+	// flags are the flags peer exchange told of peers (pexUTP among
+	// them), and pexWaiting the peers it told before the torrent's info
+	// tells whether it is private, dialed once it is not.
+	flags      map[netip.AddrPort]byte
+	pexWaiting []netip.AddrPort
 }
 
 // inflightPiece is a piece being downloaded: its bytes, the blocks
-// received, and when each was asked for.
+// received, when each was last asked for, and of how many peers.
 type inflightPiece struct {
 	data      []byte
 	got       []bool
 	requested []time.Time
+	asks      []uint8
 	left      int
+}
+
+// readSpan is what a read waits for: the bytes from at to end, among the
+// torrent's. Once read, end is at.
+type readSpan struct {
+	at, end int64
 }
 
 func newTorrent(e *Engine, spec Spec, route Route, udp bool) *torrent {
@@ -101,7 +120,7 @@ func newTorrent(e *Engine, spec Spec, route Route, udp bool) *torrent {
 	t := &torrent{engine: e, hash: spec.Hash, route: route, udp: udp, ctx: ctx, cancel: cancel,
 		trackers: slices.Clone(spec.Trackers), nodes: slices.Clone(spec.Nodes), dht: spec.DHT,
 		inflight: map[int]*inflightPiece{}, peers: map[netip.AddrPort]*peer{}, known: map[netip.AddrPort]bool{},
-		reads: map[*Reader]int64{}, changed: make(chan struct{}), announces: map[string]error{}}
+		flags: map[netip.AddrPort]byte{}, reads: map[*Reader]readSpan{}, changed: make(chan struct{}), announces: map[string]error{}}
 	return t
 }
 
@@ -338,11 +357,52 @@ func (t *torrent) sendBitfield(p *peer) {
 // for. The lock is held.
 func (t *torrent) release(p *peer) {
 	for b := range p.requests {
-		if in := t.inflight[b.piece]; in != nil {
-			in.requested[b.offset/blockSize] = time.Time{}
+		t.forget(p, b)
+	}
+}
+
+// ask asks a peer for block i of an inflight piece. The lock is held.
+func (t *torrent) ask(p *peer, in *inflightPiece, i int, b block, now time.Time) {
+	if in.asks[i] > 0 {
+		t.duplicates++
+	}
+	in.asks[i]++
+	in.requested[i] = now
+	p.requests[b] = now
+	p.send(msgRequest, requestPayload(b))
+}
+
+// forget forgets a block asked of a peer, received or not; false when it
+// was not asked. The lock is held.
+func (t *torrent) forget(p *peer, b block) bool {
+	if _, asked := p.requests[b]; !asked {
+		return false
+	}
+	delete(p.requests, b)
+	if in := t.inflight[b.piece]; in != nil {
+		i := b.offset / blockSize
+		if in.asks[i] > 1 {
+			t.duplicates--
+		}
+		in.asks[i]--
+		if in.asks[i] == 0 {
+			in.requested[i] = time.Time{}
 		}
 	}
-	clear(p.requests)
+	return true
+}
+
+// cancelOthers cancels a block asked of peers other than the one that
+// sent it. The lock is held.
+func (t *torrent) cancelOthers(in *inflightPiece, b block) {
+	if in.asks[b.offset/blockSize] == 0 {
+		return
+	}
+	for _, other := range t.peers {
+		if t.forget(other, b) {
+			other.send(msgCancel, requestPayload(b))
+		}
+	}
 }
 
 // announce asks a tracker for peers until the torrent stops, then tells it
@@ -628,11 +688,10 @@ func (t *torrent) wanted() []int {
 			order = append(order, i)
 		}
 	}
-	// The window ahead leaves room in the store for the pieces read now.
-	window := int(max(1, min(max(4, readWindow/length), t.engine.store.budget()/length/2)))
+	window := t.window()
 	for d := range window {
-		for _, offset := range t.reads {
-			add(int(offset/length) + d)
+		for _, span := range t.reads {
+			add(int(span.at/length) + d)
 		}
 	}
 	for _, f := range t.files {
@@ -646,13 +705,48 @@ func (t *torrent) wanted() []int {
 	return order
 }
 
+// window is how many pieces past a read are fetched: readWindow, within
+// room in the store for the pieces read now. The lock is held.
+func (t *torrent) window() int {
+	length := t.info.PieceLength
+	return int(max(1, min(max(4, readWindow/length), t.engine.store.budget()/length/2)))
+}
+
+// needed lists the pieces the reads wait for, those of their spans, up
+// to a window each. The lock is held.
+func (t *torrent) needed() []int {
+	length := t.info.PieceLength
+	var pieces []int
+	for _, span := range t.reads {
+		if span.end <= span.at {
+			continue
+		}
+		first := int(span.at / length)
+		last := min(int((span.end-1)/length), first+t.window()-1, len(t.have)-1)
+		for i := first; i <= last; i++ {
+			if !t.have[i] && !slices.Contains(pieces, i) {
+				pieces = append(pieces, i)
+			}
+		}
+	}
+	return pieces
+}
+
+// blockOf is block i of an inflight piece.
+func blockOf(in *inflightPiece, index, i int) block {
+	offset := int64(i) * blockSize
+	return block{piece: index, offset: offset, length: min(blockSize, int64(len(in.data))-offset)}
+}
+
 // fill asks a peer that unchoked Polyfin for the blocks it lacks, up to
-// pipeline. The lock is held.
+// pipeline: those of the endgame first, then the pieces wanted in order.
+// The lock is held.
 func (t *torrent) fill(p *peer) {
 	if t.info == nil || t.err != nil {
 		return
 	}
 	now := time.Now()
+	t.endgame(p, now)
 	wants := false
 	for _, index := range t.wanted() {
 		if index >= len(p.has) || !p.has[index] {
@@ -666,20 +760,19 @@ func (t *torrent) fill(p *peer) {
 		if in == nil {
 			size := t.info.pieceSize(index)
 			blocks := int((size + blockSize - 1) / blockSize)
-			in = &inflightPiece{data: make([]byte, size), got: make([]bool, blocks), requested: make([]time.Time, blocks), left: blocks}
+			in = &inflightPiece{data: make([]byte, size), got: make([]bool, blocks), requested: make([]time.Time, blocks),
+				asks: make([]uint8, blocks), left: blocks}
 			t.inflight[index] = in
 		}
 		for i := range in.got {
 			if len(p.requests) >= pipeline {
 				break
 			}
-			b := block{piece: index, offset: int64(i) * blockSize, length: min(blockSize, int64(len(in.data))-int64(i)*blockSize)}
-			if _, mine := p.requests[b]; in.got[i] || mine || !in.requested[i].IsZero() && now.Sub(in.requested[i]) < requestAge {
+			b := blockOf(in, index, i)
+			if _, mine := p.requests[b]; in.got[i] || mine || in.asks[i] > 0 && now.Sub(in.requested[i]) < requestAge {
 				continue
 			}
-			in.requested[i] = now
-			p.requests[b] = now
-			p.send(msgRequest, requestPayload(b))
+			t.ask(p, in, i, b, now)
 		}
 	}
 	if wants != p.interested {
@@ -689,6 +782,53 @@ func (t *torrent) fill(p *peer) {
 		} else {
 			p.send(msgNotInterested)
 		}
+	}
+}
+
+// endgame asks a peer, once every block the reads wait for is asked, for
+// those other peers were asked for, the longest waiting first: a slow
+// peer's blocks come from the first to send them, the others cancelled.
+// A block is asked of two peers at most, maxDuplicates blocks at once,
+// and the pieces no read waits for are left to the peers asked. The lock
+// is held.
+func (t *torrent) endgame(p *peer, now time.Time) {
+	if t.engine.noEndgame || p.choked || len(p.requests) >= pipeline || t.duplicates >= maxDuplicates {
+		return
+	}
+	type held struct {
+		in    *inflightPiece
+		i     int
+		b     block
+		since time.Time
+	}
+	var blocks []held
+	for _, index := range t.needed() {
+		in := t.inflight[index]
+		if in == nil {
+			// A piece not asked yet: not the endgame.
+			return
+		}
+		for i, got := range in.got {
+			switch {
+			case got:
+				continue
+			case in.asks[i] == 0:
+				return
+			case in.asks[i] > 1 || index >= len(p.has) || !p.has[index]:
+				continue
+			}
+			b := blockOf(in, index, i)
+			if _, mine := p.requests[b]; !mine {
+				blocks = append(blocks, held{in: in, i: i, b: b, since: in.requested[i]})
+			}
+		}
+	}
+	slices.SortFunc(blocks, func(a, b held) int { return a.since.Compare(b.since) })
+	for _, h := range blocks {
+		if len(p.requests) >= pipeline || t.duplicates >= maxDuplicates {
+			return
+		}
+		t.ask(p, h.in, h.i, h.b, now)
 	}
 }
 
@@ -714,15 +854,17 @@ func (t *torrent) received(p *peer, index int, offset int64, data []byte) {
 	t.completed(index)
 }
 
-// keepBlock copies a block into its piece, and returns the piece and its
-// hash once it is whole; until then, it asks the peer for more.
+// keepBlock copies a block into its piece, cancels it where others were
+// asked for it too, and returns the piece and its hash once it is whole;
+// until then, it asks the peer for more.
 func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inflightPiece, Hash, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	in := t.inflight[index]
 	b := block{piece: index, offset: offset, length: int64(len(data))}
-	delete(p.requests, b)
-	if in == nil || offset%blockSize != 0 || offset+int64(len(data)) > int64(len(in.data)) || in.got[offset/blockSize] {
+	t.forget(p, b)
+	if in == nil || offset%blockSize != 0 || offset >= int64(len(in.data)) || in.got[offset/blockSize] ||
+		b != blockOf(in, index, int(offset/blockSize)) {
 		t.fill(p)
 		return nil, Hash{}, false
 	}
@@ -730,6 +872,7 @@ func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inf
 	in.got[offset/blockSize] = true
 	in.left--
 	t.downBytes += int64(len(data))
+	t.cancelOthers(in, b)
 	if in.left > 0 {
 		t.fill(p)
 		return nil, Hash{}, false
@@ -777,6 +920,11 @@ func (t *torrent) evicted(index int) {
 
 // extended reads a message of the extension protocol.
 func (t *torrent) extended(p *peer, id byte, payload []byte) error {
+	if id == extPEX {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		return t.receivedPEX(p, payload)
+	}
 	d, rest, err := decodeDict(payload)
 	if err != nil {
 		return err
@@ -868,8 +1016,14 @@ func (t *torrent) receivedMetadata(index int64, data []byte) {
 		if len(p.has) > len(info.Pieces) {
 			p.has = p.has[:len(info.Pieces)]
 		}
+		if info.Private && p.extended {
+			// Peer exchange, offered while the info was not known, is
+			// turned off.
+			p.send(msgExtended, []byte{0}, encode(map[string]any{"m": map[string]any{"ut_pex": 0}}))
+		}
 		t.fill(p)
 	}
+	t.queuePEX()
 	t.signal()
 }
 
@@ -886,7 +1040,7 @@ type Reader struct {
 func (r *Reader) Size() int64 { return r.size }
 
 // ReadAt reads the file at off, waiting for its pieces as long as the
-// reader's context allows.
+// reader's context allows. What it waits for is the endgame's.
 func (r *Reader) ReadAt(p []byte, off int64) (int, error) {
 	t := r.t
 	if off >= r.file.Length {
@@ -894,10 +1048,17 @@ func (r *Reader) ReadAt(p []byte, off int64) (int, error) {
 	}
 	start := r.file.Offset + off
 	end := min(start+int64(len(p)), r.file.Offset+r.file.Length)
+	defer func() {
+		t.mu.Lock()
+		if span, reading := t.reads[r]; reading {
+			t.reads[r] = readSpan{at: span.at, end: span.at}
+		}
+		t.mu.Unlock()
+	}()
 	n := 0
 	for position := start; position < end; {
 		t.mu.Lock()
-		t.reads[r] = position
+		t.reads[r] = readSpan{at: position, end: end}
 		length := t.info.PieceLength
 		index := int(position / length)
 		within := position - int64(index)*length
