@@ -298,6 +298,9 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	result.Process = processJSON{Version: h.Version, GoVersion: runtime.Version(), StartedAt: h.Health.Started,
 		Memory: memory.Sys, Heap: memory.HeapAlloc, Goroutines: runtime.NumGoroutine()}
 
+	// The database's checks share a deadline; the torrent route's check,
+	// below, has its own, since a WireGuard tunnel whose server does not
+	// answer waits out the whole of it for a handshake.
 	ctx, cancel := context.WithTimeout(r.Context(), readyWait)
 	defer cancel()
 	result.Database.Reachable = h.Database.Ping(ctx) == nil
@@ -305,6 +308,16 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		if size, err := h.Health.DatabaseSize(ctx); err == nil {
 			result.Database.Size = &size
 		}
+	}
+	if result.Database.Reachable {
+		backup, err := h.backupStatus(ctx)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		result.Backup = backup
+	} else if h.Backups.Available() {
+		result.Backup = &backupJSON{Folder: h.Backups.Dir()}
 	}
 
 	if h.Health.Cache != nil {
@@ -315,7 +328,10 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if h.Health.Torrents != nil {
-		if status := h.Health.Torrents.Status(ctx); status.Enabled {
+		routeCtx, cancelRoute := context.WithTimeout(r.Context(), readyWait)
+		status := h.Health.Torrents.Status(routeCtx)
+		cancelRoute()
+		if status.Enabled {
 			result.Torrents = &torrentHealthJSON{Playing: status.Playing, Peers: status.Peers, UTPPeers: status.UTPPeers,
 				Uploaded: h.Health.Torrents.Uploaded()}
 			switch settings := h.Accounts.Settings(); {
@@ -343,16 +359,6 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 			disk.Free, disk.Used, disk.Mount, disk.Low = free, used, mount, lowOnSpace(free, used)
 		}
 		result.Disks = append(result.Disks, disk)
-	}
-	if result.Database.Reachable {
-		backup, err := h.backupStatus(ctx)
-		if err != nil {
-			h.internalError(w, r, err)
-			return
-		}
-		result.Backup = backup
-	} else if h.Backups.Available() {
-		result.Backup = &backupJSON{Folder: h.Backups.Dir()}
 	}
 
 	settings := h.Accounts.Settings()

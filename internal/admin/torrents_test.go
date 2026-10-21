@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/torrent"
 	"github.com/moodiness/polyfin/internal/torrent/torrenttest"
@@ -100,13 +101,16 @@ func TestHealthTellsATorrentDidNotStart(t *testing.T) {
 // A WireGuard configuration is refused with its line, key and reason,
 // never shown back once saved, only what it says without its keys; a
 // tunnel whose key the server does not know is an error of System ›
-// Health.
+// Health, which still answers meanwhile, backups on as by default.
 func TestWireGuardSettingsAndHealth(t *testing.T) {
 	t.Parallel()
 	server := torrenttest.StartWireGuardServer(t, nil)
 	private := torrenttest.NewPrivateKey()
 	wrongKey := server.ConfigWithKey(private)
-	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
+	api := newTestAPI(t, 10, func(o *Options, d testDeps) {
+		settings, dataDir := o.Accounts.Settings, o.DataDir
+		o.Backups = backup.New(backup.Config{Folder: func() string { return settings().BackupDir(dataDir) }, DB: d.pool, Settings: settings,
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 		engine, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
 			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 		if err != nil {
@@ -118,8 +122,10 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 	administrator := api.signedIn("administrator", true)
 
 	bad := strings.Replace(wrongKey, "Endpoint = 127.0.0.1:", "Endpoint = 127.0.0.1:x", 1)
+	backups := t.TempDir()
 	put := func(config string) map[string]any {
-		return map[string]any{"serverName": "Polyfin", "language": "en", "torrentStreams": true, "torrentWireGuard": config}
+		return map[string]any{"serverName": "Polyfin", "language": "en", "torrentStreams": true, "torrentWireGuard": config,
+			"backups": true, "backupFolder": backups}
 	}
 	status, body, _ := administrator.call(http.MethodPut, "/settings", put(bad))
 	if status != http.StatusBadRequest || body["error"] != "invalid_wireguard_config" || body["key"] != "Endpoint" ||
@@ -138,6 +144,13 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 		t.Fatalf("settings: %v", body)
 	}
 
+	// While the tunnel's server does not answer, Health still answers,
+	// its route check given up at its own deadline, before any check
+	// waited long enough to know the handshake failed.
+	status, body, _ = administrator.call(http.MethodGet, "/health", nil)
+	if torrents, _ := body["torrents"].(map[string]any); status != http.StatusOK || torrents["route"] != "wireguard" {
+		t.Fatalf("Health while the tunnel does not answer: %d %v", status, body)
+	}
 	_, body, _ = administrator.call(http.MethodGet, "/health/problems?language=en", nil)
 	found, _ := body["problems"].([]any)
 	if len(found) != 1 {
