@@ -48,6 +48,15 @@ func (t *Torrent) HashHex() string { return hex.EncodeToString(t.Hash[:]) }
 // Build makes a torrent of files, one file alone being a single-file
 // torrent.
 func Build(name string, pieceLength int, files ...File) *Torrent {
+	return build(name, pieceLength, false, files)
+}
+
+// BuildPrivate makes a private torrent (BEP 27) of files.
+func BuildPrivate(name string, pieceLength int, files ...File) *Torrent {
+	return build(name, pieceLength, true, files)
+}
+
+func build(name string, pieceLength int, private bool, files []File) *Torrent {
 	var data []byte
 	for _, f := range files {
 		data = append(data, f.Data...)
@@ -58,6 +67,9 @@ func Build(name string, pieceLength int, files ...File) *Torrent {
 		pieces = append(pieces, sum[:]...)
 	}
 	info := map[string]any{"name": name, "piece length": pieceLength, "pieces": string(pieces)}
+	if private {
+		info["private"] = 1
+	}
 	if len(files) == 1 {
 		info["length"] = len(files[0].Data)
 	} else {
@@ -132,6 +144,20 @@ type Peer struct {
 	conns    []net.Conn
 	// ports are the DHT ports the peer tells in PORT messages.
 	dhtPort uint16
+	// pexPeers are the peers the peer tells in ut_pex messages, with
+	// pexFlags each, and pexSent counts the messages sent.
+	pexPeers []netip.AddrPort
+	pexFlags byte
+	pexSent  int
+	// released, once Hold is called, holds the blocks asked until it is
+	// closed; delay is how long each block asked waits, one after the
+	// other. requests and cancels count the REQUEST and CANCEL messages
+	// received.
+	released    chan struct{}
+	releaseOnce sync.Once
+	delay       time.Duration
+	requests    int
+	cancels     int
 }
 
 // Seed starts a seeder of t listening on host ("127.0.0.1" for most tests).
@@ -173,6 +199,61 @@ func (p *Peer) TellDHT(port uint16) {
 	p.mu.Lock()
 	p.dhtPort = port
 	p.mu.Unlock()
+}
+
+// TellPeers has the peer tell peers in a ut_pex message (BEP 11), each
+// with flags, to those that connect and offer peer exchange.
+func (p *Peer) TellPeers(flags byte, peers ...netip.AddrPort) {
+	p.mu.Lock()
+	p.pexPeers, p.pexFlags = slices.Clone(peers), flags
+	p.mu.Unlock()
+}
+
+// PEXSent counts the ut_pex messages the peer sent.
+func (p *Peer) PEXSent() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.pexSent
+}
+
+// Hold has the seeder hold the blocks it is asked for until Release,
+// as a peer that answers nothing; those cancelled meanwhile are never
+// sent.
+func (p *Peer) Hold() {
+	p.mu.Lock()
+	p.released = make(chan struct{})
+	p.mu.Unlock()
+}
+
+// Release sends the blocks held, and those asked next at once.
+func (p *Peer) Release() {
+	p.mu.Lock()
+	released := p.released
+	p.mu.Unlock()
+	if released != nil {
+		p.releaseOnce.Do(func() { close(released) })
+	}
+}
+
+// Delay has the seeder send each block d after the one before, as a slow
+// peer does; those cancelled meanwhile are never sent.
+func (p *Peer) Delay(d time.Duration) {
+	p.mu.Lock()
+	p.delay = d
+	p.mu.Unlock()
+}
+
+// Requests and Cancels count the REQUEST and CANCEL messages received.
+func (p *Peer) Requests() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.requests
+}
+
+func (p *Peer) Cancels() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.cancels
 }
 
 // Address is where the peer listens.
@@ -305,6 +386,63 @@ func (p *Peer) serve(conn net.Conn) {
 			}
 		}
 	}
+	// answer sends a block asked for, a REQUEST's payload.
+	answer := func(payload []byte) error {
+		index := int(binary.BigEndian.Uint32(payload))
+		offset := int(binary.BigEndian.Uint32(payload[4:]))
+		n := int(binary.BigEndian.Uint32(payload[8:]))
+		start := index*p.torrent.PieceLength + offset
+		if start+n > len(p.torrent.Data) {
+			return nil
+		}
+		p.mu.Lock()
+		p.sent += int64(n)
+		p.mu.Unlock()
+		return send(7, payload[:8], p.torrent.Data[start:start+n])
+	}
+	// Blocks held or delayed are answered in order by one goroutine,
+	// unless cancelled meanwhile.
+	var cancelMu sync.Mutex
+	cancelled := map[string]bool{}
+	waiting := make(chan []byte, 1024)
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		for {
+			var payload []byte
+			select {
+			case <-done:
+				return
+			case payload = <-waiting:
+			}
+			p.mu.Lock()
+			released, delay := p.released, p.delay
+			p.mu.Unlock()
+			if released != nil {
+				select {
+				case <-done:
+					return
+				case <-released:
+				}
+			}
+			if delay > 0 {
+				timer := time.NewTimer(delay)
+				select {
+				case <-done:
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+			}
+			cancelMu.Lock()
+			skip := cancelled[string(payload)]
+			delete(cancelled, string(payload))
+			cancelMu.Unlock()
+			if !skip && answer(payload) != nil {
+				return
+			}
+		}
+	}()
 	r := bufio.NewReader(conn)
 	for {
 		var header [4]byte
@@ -345,19 +483,34 @@ func (p *Peer) serve(conn net.Conn) {
 			if !p.seed || len(payload) != 12 {
 				continue
 			}
-			index := int(binary.BigEndian.Uint32(payload))
-			offset := int(binary.BigEndian.Uint32(payload[4:]))
-			n := int(binary.BigEndian.Uint32(payload[8:]))
-			start := index*p.torrent.PieceLength + offset
-			if start+n > len(p.torrent.Data) {
+			p.mu.Lock()
+			p.requests++
+			slow := p.released != nil || p.delay > 0
+			p.mu.Unlock()
+			if slow {
+				cancelMu.Lock()
+				delete(cancelled, string(payload))
+				cancelMu.Unlock()
+				select {
+				case waiting <- payload:
+				default:
+					// Past what any client asks at once: dropped.
+				}
+				continue
+			}
+			if answer(payload) != nil {
+				return
+			}
+		case 8:
+			if len(payload) != 12 {
 				continue
 			}
 			p.mu.Lock()
-			p.sent += int64(n)
+			p.cancels++
 			p.mu.Unlock()
-			if send(7, payload[:8], p.torrent.Data[start:start+n]) != nil {
-				return
-			}
+			cancelMu.Lock()
+			cancelled[string(payload)] = true
+			cancelMu.Unlock()
 		case 7:
 			if len(payload) < 8 {
 				continue
@@ -370,6 +523,16 @@ func (p *Peer) serve(conn net.Conn) {
 			}
 			p.mu.Unlock()
 		case 20:
+			if len(payload) > 0 && payload[0] == 0 {
+				// The engine's extension handshake: peer exchange is
+				// answered with the ID it gives ut_pex.
+				if i := bytes.Index(payload, []byte("6:ut_pexi")); i >= 0 {
+					end := bytes.IndexByte(payload[i+9:], 'e')
+					if id, _ := strconv.Atoi(string(payload[i+9 : i+9+end])); id > 0 && id < 256 {
+						p.sendPEX(byte(id), send)
+					}
+				}
+			}
 			if len(payload) > 0 && payload[0] == 3 && p.seed {
 				// A metadata request: msg_type 0 and its piece.
 				piece := 0
@@ -387,6 +550,34 @@ func (p *Peer) serve(conn net.Conn) {
 					p.torrent.Info[start:end])
 			}
 		}
+	}
+}
+
+// sendPEX sends the peers to tell, if any, in a ut_pex message of id.
+func (p *Peer) sendPEX(id byte, send func(byte, ...[]byte) error) {
+	p.mu.Lock()
+	peers, flags := p.pexPeers, p.pexFlags
+	p.mu.Unlock()
+	if len(peers) == 0 {
+		return
+	}
+	var added, addedFlags, added6, added6Flags []byte
+	for _, peer := range peers {
+		if peer.Addr().Is4() {
+			added = append(added, peer.Addr().AsSlice()...)
+			added = binary.BigEndian.AppendUint16(added, peer.Port())
+			addedFlags = append(addedFlags, flags)
+		} else {
+			added6 = append(added6, peer.Addr().AsSlice()...)
+			added6 = binary.BigEndian.AppendUint16(added6, peer.Port())
+			added6Flags = append(added6Flags, flags)
+		}
+	}
+	message := map[string]any{"added": added, "added.f": addedFlags, "added6": added6, "added6.f": added6Flags}
+	if send(20, []byte{id}, encode(message)) == nil {
+		p.mu.Lock()
+		p.pexSent++
+		p.mu.Unlock()
 	}
 }
 
