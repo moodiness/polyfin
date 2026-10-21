@@ -131,6 +131,38 @@ func countPrefix(list []string, value string) int {
 	return n
 }
 
+// A check, a dial or a UDP association through the proxy cut short by its
+// context, as when the torrent that made it stops or another connection to
+// the peer won, tells nothing of the proxy: the next check, with time to
+// answer, does not read its failure, which would stop the torrents.
+func TestProxyRequestsCutShortAreNotKept(t *testing.T) {
+	t.Parallel()
+	proxy := torrenttest.StartProxy(t, true, "", "")
+	route := ProxyRoute(proxy.Address(), "", "")
+	stopped, stop := context.WithCancel(context.Background())
+	stop()
+	if err := route.Check(stopped); err == nil {
+		t.Fatal("a check whose context was done passed")
+	}
+	if err := route.Check(context.Background()); err != nil {
+		t.Fatalf("the check after a check cut short: %v", err)
+	}
+	if conn, err := route.Dial(stopped, "192.0.2.1:6881"); err == nil {
+		conn.Close()
+		t.Fatal("a dial whose context was done passed")
+	}
+	if err := route.Check(context.Background()); err != nil {
+		t.Fatalf("the check after a dial cut short: %v", err)
+	}
+	if conn, err := route.ListenPacket(stopped); err == nil {
+		conn.Close()
+		t.Fatal("an association whose context was done passed")
+	}
+	if err := route.Check(context.Background()); err != nil {
+		t.Errorf("the check after an association cut short: %v", err)
+	}
+}
+
 func TestProxyWithoutUDPAssociatePlaysOverTCP(t *testing.T) {
 	t.Parallel()
 	tor, _, large := twoFiles()

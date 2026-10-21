@@ -69,6 +69,12 @@ func (r *proxyRoute) Check(ctx context.Context) error {
 	if err == nil {
 		conn.Close()
 	}
+	if err != nil && ctx.Err() != nil {
+		// Cut short, as by a torrent stopping, the check tells nothing of
+		// the proxy: its failure is not kept for the next check, as a
+		// WireGuard tunnel's is not.
+		return err
+	}
 	r.mu.Lock()
 	r.checkedAt, r.checkErr = time.Now(), err
 	r.mu.Unlock()
@@ -227,7 +233,7 @@ func command(conn net.Conn, cmd byte, address string) (string, error) {
 func (r *proxyRoute) Dial(ctx context.Context, address string) (net.Conn, error) {
 	conn, err := r.handshake(ctx)
 	if err != nil {
-		r.failed(err)
+		r.failed(ctx, err)
 		return nil, err
 	}
 	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Now()) })
@@ -248,8 +254,14 @@ func (r *proxyRoute) Dial(ctx context.Context, address string) (net.Conn, error)
 	return conn, nil
 }
 
-// failed records that the proxy did not answer, for Check.
-func (r *proxyRoute) failed(err error) {
+// failed records that the proxy did not answer, for Check, unless ctx
+// ended first: a dial or an association cut short, as when the torrent
+// that made it stops or another connection to the peer won, tells nothing
+// of the proxy.
+func (r *proxyRoute) failed(ctx context.Context, err error) {
+	if ctx.Err() != nil {
+		return
+	}
 	r.mu.Lock()
 	r.checkedAt, r.checkErr = time.Now(), err
 	r.mu.Unlock()
@@ -258,7 +270,7 @@ func (r *proxyRoute) failed(err error) {
 func (r *proxyRoute) ListenPacket(ctx context.Context) (PacketConn, error) {
 	control, err := r.handshake(ctx)
 	if err != nil {
-		r.failed(err)
+		r.failed(ctx, err)
 		return nil, err
 	}
 	_ = control.SetDeadline(time.Now().Add(proxyTimeout))
