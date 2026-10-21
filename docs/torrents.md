@@ -41,7 +41,8 @@ With the interface missing, down or without an address, or the proxy not answeri
 ## Reading and storage
 
 - A torrent version is read through the source cache, as a link is: FFmpeg, ffprobe and apps read it the same way, and it is always relayed, never sent to an app.
-- The file played is `fileIdx`, or the largest one when the addon names none, as Stremio does. The trackers of `sources` (`tracker:<url>`, HTTP, HTTPS or UDP) are announced to, and its DHT entries (`dht:<info hash>` or `dht:<host>:<port>`) have the torrent looked up on the DHT. Polyfin names no DHT bootstrap node: a lookup starts from the nodes the addon names and those the peers tell.
+- The file played is `fileIdx`, or the largest one when the addon names none, as Stremio does. The trackers of `sources` (`tracker:<url>`, HTTP, HTTPS or UDP) are announced to, and its DHT entries (`dht:<info hash>` or `dht:<host>:<port>`) have the torrent looked up on the DHT, as has a torrent whose sources name no tracker. A lookup starts from the nodes the addon names, the well-known bootstrap nodes other clients use, and those the peers tell. The DHT and UDP trackers need a route that carries UDP: over a proxy without `UDP ASSOCIATE`, none of them is asked.
+- An announce tells the trackers a port of the dynamic range (49152 to 65535), the same for the whole run, though nothing listens on it: trackers refuse port 0, and many refuse 6881 to 6889. The info hash and the peer ID are escaped byte by byte. A tracker that refuses the announce has its own reason logged at debug level, with its host.
 - Pieces at the read position come first, then the start and the end of the file, for its index. They are kept on disk within a quarter of **Disk space for files being read (GB)** (**Settings › Playback**), and count in Health's **Source cache**.
 - uTP is off: peers are reached over TCP.
 - What peers, trackers, DHT nodes and the proxy send is checked against bounds before Polyfin keeps it: a malformed message ends only its own connection, announce or lookup, and the torrent goes on with the others. A peer that keeps asking without reading the answers is disconnected once 4 MiB wait for it.
@@ -49,6 +50,38 @@ With the interface missing, down or without an address, or the proxy not answeri
 ## Only while playing
 
 Only a playback starts a torrent. Preparing playback in advance, thumbnails and downloads do not: a torrent version cannot be downloaded, and has no thumbnails. When the playback ends, after 30 seconds without a read, as when a player pauses, the torrent stops: no more sharing, no more peers, and its pieces are removed. The trackers are told it stopped.
+
+## How a torrent starts
+
+1. Opening a title's page lists its torrent versions. Nothing reads them yet: preparing playback ahead leaves them alone, and a torrent version that was never played has no analysis.
+2. Pressing **Play** sends PlaybackInfo. Among the versions it tries (**Versions tried when one does not work**, see [Playback](playback.md)), each torrent version is tried as the play's own, even when it is not the first: the play joins its swarm before anything reads it, through the route.
+3. The torrent asks its trackers and the DHT for peers, connects to them, and receives its info dictionary from one of them. The pieces at the start and the end of the file come first.
+4. The version is analyzed inside that playback: its first bytes are waited for, then ffprobe reads it within **Maximum time to analyze a version** as it reads any file, and the analysis is kept for later plays. PlaybackInfo then answers the version as the app plays it: as it is, remuxed, or converted.
+5. The stream or HLS requests the app sends next read the torrent as the same playback.
+
+A torrent version analyzed once plays at once the next time: its analysis is kept, and only the stream joins the swarm.
+
+### Deadlines
+
+A link's host sends its headers within seconds. A torrent needs peers first, from trackers that may each take 30 seconds to answer and from DHT lookups that hop from node to node, then its info dictionary, then its first pieces. So a torrent's playback waits longer:
+
+- 60 seconds for the torrent to start: peers found and the info dictionary received. That fits two rounds of a slow tracker beside the DHT lookups.
+- 30 seconds for a piece, at the start as later: a peer chooses whom it sends to every 10 seconds, and tries a new peer every 30.
+- Its first bytes, within those, before ffprobe's own **Maximum time to analyze a version** starts.
+
+A torrent that does not start in time is not tried again for 15 minutes, like a version that cannot be read, and the other versions are played meanwhile.
+
+## When torrents do not start
+
+When no version of a title plays because a torrent could not start, its route being down or no peer sending it in time, PlaybackInfo answers Jellyfin's `RateLimitExceeded` rather than `NoCompatibleStream`: jellyfin-web says the media cannot be played at this time, rather than that the app is not compatible with it. The log tells why at Info level (`A torrent did not start in time`, with the peers found and how the trackers answered), and **System › Health** too.
+
+What to check:
+
+- **System › Health** under **Needs attention**: a route that cannot carry torrents, a proxy without `UDP ASSOCIATE`, or a torrent that did not start, and why.
+- That the route reaches the internet: an interface that is up but routes nowhere, or a proxy that cannot reach out, finds no peer.
+- UDP: through a proxy, it needs `UDP ASSOCIATE`, and the proxy must relay the datagrams back. Without UDP, only HTTP trackers find peers, and many torrents list UDP trackers alone.
+- The trackers' answers: turn on **Detailed log** under **Settings › Diagnostics**, play again, and read `A tracker could not be reached` in **System › Logs**, with each tracker's own reason for a refusal.
+- The swarm itself: a torrent with no seeder does not start anywhere. Try another version.
 
 ## Docker
 
@@ -61,7 +94,7 @@ On Linux 5.7 or later, Polyfin's own container needs no added capability.
 
 ## Health
 
-**System › Health** shows a **Torrents** panel while torrents are on: the route, the torrents playing, their peers, and what was shared since the start. The **Source cache** tells the part torrent pieces take. Under **Needs attention**, an error names a route that cannot carry the torrents and why, and a warning a proxy without `UDP ASSOCIATE`.
+**System › Health** shows a **Torrents** panel while torrents are on: the route, the torrents playing, their peers, and what was shared since the start. The **Source cache** tells the part torrent pieces take. Under **Needs attention**, an error names a route that cannot carry the torrents and why, a warning a proxy without `UDP ASSOCIATE`, and a warning a torrent that did not start in time in the last 15 minutes and why, until a torrent starts.
 
 ## Study: WireGuard built in
 
