@@ -1,7 +1,8 @@
 // Package torrent plays the torrents addons list: it joins a torrent's
 // swarm while a playback reads it, fetches the pieces at the read position
-// first, and keeps every socket on one route, a network interface or a
-// SOCKS5 proxy, with nothing sent another way.
+// first, and keeps every socket on one route, a network interface, a
+// SOCKS5 proxy or a WireGuard tunnel run inside Polyfin, with nothing sent
+// another way.
 package torrent
 
 import (
@@ -25,19 +26,28 @@ type Settings struct {
 	Enabled bool
 	// Interface is the network interface every socket is bound to; else
 	// Proxy is the SOCKS5 proxy, host:port, with ProxyUser and
-	// ProxyPassword when it asks for them.
+	// ProxyPassword when it asks for them; else WireGuard is the
+	// configuration of a WireGuard tunnel (see ParseWireGuardConfig).
 	Interface                       string
 	Proxy, ProxyUser, ProxyPassword string
+	WireGuard                       string
 	DownloadMbps, UploadMbps        int
 }
 
-// RouteOf returns the route settings describe, ErrNoRoute for none.
-func RouteOf(s Settings) (Route, error) {
+// RouteOf returns the route settings describe, ErrNoRoute for none;
+// logger takes what the route logs.
+func RouteOf(s Settings, logger *slog.Logger) (Route, error) {
 	switch {
 	case s.Interface != "":
 		return InterfaceRoute(s.Interface), nil
 	case s.Proxy != "":
 		return ProxyRoute(s.Proxy, s.ProxyUser, s.ProxyPassword), nil
+	case s.WireGuard != "":
+		config, err := ParseWireGuardConfig(s.WireGuard)
+		if err != nil {
+			return nil, err
+		}
+		return WireGuardRoute(config, logger), nil
 	}
 	return nil, ErrNoRoute
 }
@@ -71,6 +81,9 @@ type Engine struct {
 	down   *limiter
 	// checkEvery is how often a running torrent's route is checked.
 	checkEvery time.Duration
+	// tunnelFresh and tunnelWait, when set, replace a WireGuard tunnel's
+	// times (see tunnelFresh).
+	tunnelFresh, tunnelWait time.Duration
 
 	mu       sync.Mutex
 	torrents map[Hash]*torrent
@@ -118,24 +131,35 @@ func New(config Config) (*Engine, error) {
 }
 
 // currentRoute is the route the settings set now, an error when torrents
-// are off or none is set.
+// are off or none is set. A route the settings no longer set is closed: a
+// WireGuard tunnel stops.
 func (e *Engine) currentRoute() (Route, error) {
 	settings := e.config.Settings()
-	if !settings.Enabled {
-		return nil, ErrDisabled
-	}
-	key := Settings{Interface: settings.Interface, Proxy: settings.Proxy, ProxyUser: settings.ProxyUser, ProxyPassword: settings.ProxyPassword}
+	key := Settings{Interface: settings.Interface, Proxy: settings.Proxy, ProxyUser: settings.ProxyUser, ProxyPassword: settings.ProxyPassword,
+		WireGuard: settings.WireGuard}
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.route != nil && e.routeKey == key {
-		return e.route, nil
+	if settings.Enabled && e.route != nil && e.routeKey == key {
+		route := e.route
+		e.mu.Unlock()
+		return route, nil
 	}
-	route, err := RouteOf(key)
-	if err != nil {
-		return nil, err
+	old := e.route
+	e.route, e.routeKey = nil, Settings{}
+	route, err := Route(nil), ErrDisabled
+	if settings.Enabled {
+		route, err = RouteOf(key, e.config.Logger)
 	}
-	e.route, e.routeKey = route, key
-	return route, nil
+	if err == nil {
+		if tunnel, ok := route.(*wireGuardRoute); ok && e.tunnelFresh != 0 {
+			tunnel.fresh, tunnel.wait = e.tunnelFresh, e.tunnelWait
+		}
+		e.route, e.routeKey = route, key
+	}
+	e.mu.Unlock()
+	if old != nil {
+		old.Close()
+	}
+	return route, err
 }
 
 // failed records why torrents could not play, for Health.
@@ -322,6 +346,8 @@ type Status struct {
 	Route      string
 	RouteError error
 	NoUDP      bool
+	// Tunnel is the WireGuard tunnel's state, nil over another route.
+	Tunnel *TunnelStatus
 	// Playing counts the torrents running, and Peers their peers.
 	Playing, Peers int
 	// Used is the bytes the pieces take on disk.
@@ -343,6 +369,10 @@ func (e *Engine) Status(ctx context.Context) Status {
 		if err == nil {
 			status.Route = route.String()
 			err = route.Check(ctx)
+			if tunnel, ok := route.(*wireGuardRoute); ok {
+				state := tunnel.tunnel()
+				status.Tunnel = &state
+			}
 		}
 		status.RouteError = err
 		e.mu.Lock()
@@ -385,7 +415,7 @@ func (e *Engine) countUpload(n int64) {
 	e.sharedOut.Add(n)
 }
 
-// Close stops every torrent.
+// Close stops every torrent, and the route: a WireGuard tunnel stops.
 func (e *Engine) Close() {
 	e.mu.Lock()
 	torrents := make([]*torrent, 0, len(e.torrents))
@@ -393,7 +423,12 @@ func (e *Engine) Close() {
 		torrents = append(torrents, t)
 	}
 	clear(e.torrents)
+	route := e.route
+	e.route, e.routeKey = nil, Settings{}
 	e.mu.Unlock()
+	if route != nil {
+		route.Close()
+	}
 	for _, t := range torrents {
 		t.fail(errStopped)
 	}

@@ -22,9 +22,10 @@ import (
 )
 
 // The fuzz tests feed Polyfin's parsers what other programs send: peers,
-// trackers, DHT nodes, the SOCKS5 proxy and addons. None may panic, and
-// what they keep stays within the limits set. The inputs that made one
-// fail are in testdata/fuzz, run as regular tests.
+// trackers, DHT nodes, the SOCKS5 proxy and addons, and the WireGuard
+// configurations providers hand out. None may panic, and what they keep
+// stays within the limits set. The inputs that made one fail are in
+// testdata/fuzz, run as regular tests.
 
 // fuzzTorrent is a torrent of two files and three pieces, each of one
 // block; large, of two pieces, of two blocks and one. Its bytes are always
@@ -706,6 +707,45 @@ func FuzzNewSpec(f *testing.F) {
 			if !validNode(node) {
 				t.Fatalf("an invalid DHT node %q", node)
 			}
+		}
+	})
+}
+
+// FuzzWireGuardConfig checks a configuration that was read writes back as
+// one that reads the same, and that a refusal tells its line and key
+// without repeating a value.
+func FuzzWireGuardConfig(f *testing.F) {
+	key := "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk="
+	valid := "[Interface]\nPrivateKey = " + key + "\nAddress = 10.2.0.2/32, fd00::2\nDNS = 10.2.0.1, 2001:db8::53\nMTU = 1280\n" +
+		"ListenPort = 51820\nPostUp = true\n\n[Peer]\nPublicKey = " + key + "\nPresharedKey = " + key + "\n" +
+		"Endpoint = vpn.example.com:51820\nAllowedIPs = 0.0.0.0/0, ::/0\nPersistentKeepalive = 25\n"
+	for _, seed := range []string{valid, strings.ReplaceAll(valid, "\n", "\r\n"), strings.ToUpper(valid),
+		strings.Replace(valid, "vpn.example.com", "[2001:db8::1]", 1), strings.Replace(valid, "0.0.0.0/0", "::ffff:0.0.0.0/96", 1),
+		"[Interface]\n# only a comment\n[Peer]\n", "[Interface\n", "Key = Value\n", "[Peer]\nEndpoint = a..b:1\n"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		c, err := ParseWireGuardConfig(text)
+		if err != nil {
+			var configErr *WireGuardConfigError
+			if !errors.As(err, &configErr) || configErr.Line < 0 || configErr.Line > strings.Count(text, "\n")+1 || len(err.Error()) > 200 {
+				t.Fatalf("%q is refused with %#v", text, err)
+			}
+			if strings.Contains(err.Error(), key) {
+				t.Fatalf("the refusal of %q tells a key: %v", text, err)
+			}
+			return
+		}
+		if !c.ipv4().IsValid() || c.Endpoint == "" || len(c.AllowedIPs) == 0 {
+			t.Fatalf("%q reads as %+v", text, c)
+		}
+		written := c.Marshal()
+		again, err := ParseWireGuardConfig(written)
+		if err != nil {
+			t.Fatalf("%q writes as %q, refused: %v", text, written, err)
+		}
+		if !reflect.DeepEqual(again, c) || again.Marshal() != written {
+			t.Fatalf("%q writes as %q, which reads as %+v rather than %+v", text, written, again, c)
 		}
 	})
 }

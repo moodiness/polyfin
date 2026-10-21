@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// ErrNoRoute reports torrents played without a route: neither a network
-// interface nor a SOCKS5 proxy is set.
+// ErrNoRoute reports torrents played without a route: no network
+// interface, SOCKS5 proxy or WireGuard tunnel is set.
 var ErrNoRoute = errors.New("no route is set for torrents")
 
 // ErrNoUDP reports a route that carries no UDP: a SOCKS5 proxy without
@@ -31,11 +31,18 @@ const (
 	InterfaceUnsupported = "interface_unsupported"
 	ProxyUnreachable     = "proxy_unreachable"
 	ProxyRefused         = "proxy_refused"
+	// WireGuardEndpoint: the name of the WireGuard server cannot be
+	// looked up; WireGuardDown: the tunnel cannot start, as when its
+	// ListenPort is taken; WireGuardHandshake: the server does not answer
+	// the handshake, as with a wrong key or a server down.
+	WireGuardEndpoint  = "wireguard_endpoint"
+	WireGuardDown      = "wireguard_down"
+	WireGuardHandshake = "wireguard_handshake"
 )
 
 // RouteError is why a route cannot carry the torrents: Kind tells what,
-// Route names the interface or the proxy's address, and Err, when set,
-// is the system's error.
+// Route names the interface, the proxy's address or the WireGuard server,
+// and Err, when set, is the system's error.
 type RouteError struct {
 	Kind, Route string
 	Err         error
@@ -56,6 +63,12 @@ func (e *RouteError) Error() string {
 		text = "the SOCKS5 proxy " + e.Route + " does not answer"
 	case ProxyRefused:
 		text = "the SOCKS5 proxy " + e.Route + " refused the user and password"
+	case WireGuardEndpoint:
+		text = "the WireGuard server " + e.Route + " cannot be looked up"
+	case WireGuardDown:
+		text = "the WireGuard tunnel to " + e.Route + " cannot start"
+	case WireGuardHandshake:
+		text = "the WireGuard server " + e.Route + " does not answer the handshake"
 	}
 	if e.Err != nil {
 		text += ": " + e.Err.Error()
