@@ -162,6 +162,21 @@ func TestATrackerRefusalIsLoggedWithItsReason(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer e.Play(other)()
+	// The start is awaited before the read: the StartTimeout of 3 seconds
+	// is for the refused start, and this one, an announce, a dial through
+	// the proxy and the info dictionary, takes over 3 seconds under the
+	// race detector beside the package's WireGuard tests.
+	waitFor(t, "the torrent to start", func() bool {
+		e.mu.Lock()
+		running := e.torrents[other.Hash]
+		e.mu.Unlock()
+		if running == nil {
+			return false
+		}
+		running.mu.Lock()
+		defer running.mu.Unlock()
+		return running.info != nil
+	})
 	if got := readAll(t, e, other); len(got) != len(large) {
 		t.Fatalf("read %d bytes", len(got))
 	}
