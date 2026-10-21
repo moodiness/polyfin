@@ -1,12 +1,15 @@
 package anime
 
 import (
+	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -399,5 +402,53 @@ func TestRefreshKeepsTheLastCopyAndAsksConditionally(t *testing.T) {
 	again.Close()
 	if kept, err := os.ReadFile(filepath.Join(dir, "anime-list-master.xml")); err != nil || string(kept) != episodesFixture {
 		t.Errorf("copy kept: %d bytes, %v", len(kept), err)
+	}
+}
+
+// logged keeps the level of each record about a list not downloaded.
+type logged struct {
+	mu     sync.Mutex
+	levels []slog.Level
+}
+
+func (l *logged) Enabled(context.Context, slog.Level) bool { return true }
+func (l *logged) WithAttrs([]slog.Attr) slog.Handler       { return l }
+func (l *logged) WithGroup(string) slog.Handler            { return l }
+func (l *logged) Handle(_ context.Context, r slog.Record) error {
+	if strings.Contains(r.Message, "could not be downloaded") {
+		l.mu.Lock()
+		l.levels = append(l.levels, r.Level)
+		l.mu.Unlock()
+	}
+	return nil
+}
+
+func (l *logged) count(level slog.Level) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n := 0
+	for _, seen := range l.levels {
+		if seen == level {
+			n++
+		}
+	}
+	return n
+}
+
+// A list that cannot be downloaded is a warning once, then told at debug
+// level each time it fails again: a server that cannot reach the lists
+// would otherwise warn several times a day.
+func TestAListFailingAgainWarnsOnce(t *testing.T) {
+	l := serveLists(t)
+	l.fail(http.StatusServiceUnavailable)
+	records := &logged{}
+	s := newService(Options{Dir: t.TempDir(), Version: "1.2.3", Logger: slog.New(records), IDsURL: l.server.URL + "/ids.json",
+		EpisodesURL: l.server.URL + "/episodes.xml"},
+		timing{refreshEvery: time.Hour, retryFirst: 5 * time.Millisecond, retryMax: 20 * time.Millisecond, download: 5 * time.Second})
+	s.start()
+	t.Cleanup(s.Close)
+	eventually(t, "each list failing three times", func() bool { return records.count(slog.LevelWarn)+records.count(slog.LevelDebug) >= 6 })
+	if warned := records.count(slog.LevelWarn); warned != 2 {
+		t.Errorf("%d warnings for the two lists failing again and again", warned)
 	}
 }
