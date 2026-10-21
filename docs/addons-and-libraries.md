@@ -15,7 +15,7 @@ Polyfin gets its content from Stremio addons. Each addon has a role:
 To share an addon with every user, open **Add a source** under **Content › Sources**, keep the **Stremio addon** tab, and paste its **Manifest address** (from the addon's configure page). Then pick under **Content › Libraries** which of its catalogs become libraries in Jellyfin apps.
 
 - When an addon offers collection catalogs, those are enabled first.
-- Otherwise its first 20 movie, series and TV catalogs are enabled.
+- Otherwise its first 20 movie, series and TV catalogs are enabled. Its catalogs of other types, such as a cloud store's `other` catalog, are not: enable them under **Content › Libraries** (see [What catalogs list](#what-catalogs-list)).
 - This is only a starting point: you can enable any number of catalogs.
 
 Only administrators can install addons hosted on a local network address.
@@ -76,6 +76,43 @@ Stremio catalogs become Jellyfin libraries. Stremio streams become versions of t
 **For app developers:**
 
 - Versions are Jellyfin media sources.
+
+### What catalogs list
+
+An addon gives each catalog, and each title, a Stremio type, which decides what the titles are in Jellyfin apps:
+
+| Stremio type | Titles in Jellyfin apps | Library type |
+| --- | --- | --- |
+| `movie`, `anime.movie` | Movies | `movies` |
+| `series`, `anime.series` | Shows, with their seasons and episodes | `tvshows` |
+| `anime` | Shows, or movies for its `anime.movie` titles | none (mixed) |
+| `other`, `channel` | Folders of videos, or videos | `homevideos` |
+| `collection` | Collections (see [Collections from addons](#collections-from-addons)) | none (mixed) |
+| `tv` | Live TV channels, not a library (see [Live TV](live-tv.md)) | |
+
+A title of another type is left out of its catalog's library.
+
+#### Folders of videos
+
+`other` is Stremio's type for what is neither a movie nor a series: the files of a cloud store, for instance, whose addon lists each download as a title and its files as the title's videos. `channel` is a channel's uploads, the same shape. Polyfin lists them as Stremio apps do:
+
+- A title whose details list videos is a folder. Apps open it to list its videos, in the order the addon gives them, each named after its video (or "Video 3" without a name), with its date and image when the addon gives them.
+- A title without videos is a video itself, which plays the streams the addon lists for the title.
+- Catalogs do not tell which titles have videos: their details do. Listing a library asks the addon for the details of the titles it does not know yet, a few at a time, for up to 5 seconds; a title still unknown then is listed as a folder, which lists itself as its one video when it turns out to have none, and is listed as it is from then on.
+- The library is a home videos library, as Jellyfin's for videos that are not movies nor shows: jellyfin-web shows it with its **Folders** view, the titles, and its **Videos** view, every video of the library, through its folders, for its first 500 titles, or its **Maximum titles** when lower (see [Genre and maximum](#genre-and-maximum)).
+- A folder shows how many of its videos are left to watch, and is played once all are. Marking it played, or unplayed, marks its videos; removing it from Continue Watching removes their resume points.
+- Videos play as movies do: directly, remuxed or converted, with their resume point and in Continue Watching. The tracking services hear nothing of them.
+- Search finds them in the catalogs that offer it, as folders or videos. Parental control judges them as **Other**, unrated unless their details give a rating, and a video by its folder; blocked genres hide them by their details' genres. Hiding a folder, or one of its videos, hides the folder with its videos. A folder can be added to a collection.
+
+#### Streams in a title's details
+
+A video, or an episode of a series, may carry its own streams in the title's details (`videos[].streams`), which Stremio apps play without asking any addon for streams. Polyfin lists them as the video's first versions, with their names, file names and sizes as other versions get theirs, then the streams of the other addons. The addon that gave them is not asked for the video's streams: such an addon often answers that request with a notice alone, nothing to play. A stream whose link expires is renewed by asking the addon for the title's details again.
+
+**For app developers:**
+
+- A folder is a `Folder` item (`IsFolder` true) with `ChildCount`, `RecursiveItemCount` and `UserData.UnplayedItemCount`; its videos are `Video` items whose `ParentId` is the folder, and `/Items?ParentId=` lists them. A title without videos is a `Video` item of the library. The library's `CollectionType` is `homevideos`.
+- `/Items?ParentId=<library>&Recursive=true&IncludeItemTypes=Video` lists the videos through the folders, and tells more may follow while a folder's details are not known yet. `IncludeItemTypes=Folder` with `searchTerm` searches folders.
+- A title keeps its item when its details gain or lose videos: it is listed as a folder or a video as they tell.
 
 ### Library images
 

@@ -49,7 +49,7 @@ When the server refuses to play a title, jellyfin-web 12.2 shows the reason, suc
 It adds Polyfin's entries to the ⋮ menus of cards, which a right click on a card also opens, and of a title's page:
 
 - "Remove from Continue Watching", on a card of a Continue Watching row, the home page's or a library's: the title leaves the row, and keeps whether it is played;
-- "Hide this title", on a movie, a home video or a series, or on a season or an episode, which hides its series: the title leaves the user's lists, its cards leave the page, and a message says so;
+- "Hide this title", on a movie, a home video or a series, or on a season or an episode, which hides its series, or on a video of a folder, which hides its folder (see [Folders of videos](addons-and-libraries.md#folders-of-videos)): the title leaves the user's lists, its cards leave the page, and a message says so;
 - "Show this title again", in its place, on a title the user hid.
 
 Their words follow the web client's language, English or French. See [Watch state](users.md#watch-state) for what they change.
