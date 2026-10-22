@@ -64,6 +64,12 @@ On a movie's or an episode's page, it adds a **Share** button before the ⋮ but
 
 - The script asks `GET /Polyfin/Items/{id}/Share`, with the web client's token. It answers `{"Shareable": true, "Url": "/admin/me/account?share=<id>#shared-links"}` when the title may be shared, and `{"Shareable": false, "Url": null}` otherwise.
 
+jellyfin-web keeps its answers for up to a minute before asking again, and for a day in all, also across a reload. Some are not kept per user: the search page's suggestions and results, a library's Suggestions tab with its Continue Watching, Latest and Next Up, its recommendations, filters and studios. jellyfin-web's own **Sign out** forgets them all. A session that ends otherwise does not, such as a device signed out from the user's **Devices** section, or a browser that lost its sign-in. The next user to sign in in that browser would then see the last user's, titles their parental control forbids included. So when a different user signs in from the one they were kept for, the script has jellyfin-web forget everything it kept, as it does when the language changes. The same user signing in again keeps them.
+
+**Compared with Jellyfin:**
+
+- jellyfin-web keeps these answers the same way on a Jellyfin server, which fills the search page's suggestions too; there, the next user to sign in after a session that ended otherwise sees the last user's.
+
 ### Signing in to the admin app
 
 A user signed in to the web client, administrator or member, arrives in the admin app signed in. Without a session, the admin app hands over the access token the web client keeps in the browser for this server.
