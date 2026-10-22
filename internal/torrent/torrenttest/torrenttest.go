@@ -169,6 +169,15 @@ type Peer struct {
 	messages      []byte
 	// handshakes counts the handshakes received for the torrent.
 	handshakes int
+	// dropFirst has the seeder drop, without a word, the first REQUEST of
+	// the blocks it tells, and dropAll every REQUEST,
+	// dropped counting them too; asks counts the REQUESTs of each block,
+	// by its index among the torrent's.
+	dropFirst func(block int) bool
+	dropAll   bool
+	// keepAlive, when set, has the peer send a keep-alive that often.
+	keepAlive time.Duration
+	asks      map[int]int
 }
 
 // Seed starts a seeder of t listening on host ("127.0.0.1" for most tests).
@@ -195,12 +204,48 @@ func (p *Peer) Messages() []byte {
 	return slices.Clone(p.messages)
 }
 
-// Dropped counts the REQUESTs a strict peer dropped, received before
-// INTERESTED.
+// Dropped counts the REQUESTs the peer dropped: a strict peer's received
+// before INTERESTED, and those DropFirst and DropAll drop.
 func (p *Peer) Dropped() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.dropped
+}
+
+// DropFirst has the seeder drop, without a word (no REJECT, no CHOKE), the
+// first REQUEST of the blocks drop tells, by their index among the
+// torrent's, as a client that loses requests does; it sends those asked
+// again.
+func (p *Peer) DropFirst(drop func(block int) bool) {
+	p.mu.Lock()
+	p.dropFirst = drop
+	p.mu.Unlock()
+}
+
+// DropAll has the seeder drop every REQUEST without a word, as a client
+// that keeps the connection but sends nothing does.
+func (p *Peer) DropAll() {
+	p.mu.Lock()
+	p.dropAll = true
+	p.mu.Unlock()
+}
+
+// KeepAlive has the peer send a keep-alive every d, as clients do.
+func (p *Peer) KeepAlive(d time.Duration) {
+	p.mu.Lock()
+	p.keepAlive = d
+	p.mu.Unlock()
+}
+
+// MostAsked is how many REQUESTs the block asked most received.
+func (p *Peer) MostAsked() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	most := 0
+	for _, n := range p.asks {
+		most = max(most, n)
+	}
+	return most
 }
 
 // Leech starts a leecher of t: it asks for every piece of whoever connects.
@@ -457,6 +502,28 @@ func (p *Peer) serve(conn net.Conn) {
 	waiting := make(chan []byte, 1024)
 	done := make(chan struct{})
 	defer close(done)
+	p.mu.Lock()
+	every := p.keepAlive
+	p.mu.Unlock()
+	if every > 0 {
+		go func() {
+			ticker := time.NewTicker(every)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+					writeMu.Lock()
+					_, err := conn.Write([]byte{0, 0, 0, 0})
+					writeMu.Unlock()
+					if err != nil {
+						return
+					}
+				}
+			}
+		}()
+	}
 	go func() {
 		for {
 			var payload []byte
@@ -545,10 +612,22 @@ func (p *Peer) serve(conn net.Conn) {
 				p.mu.Unlock()
 				continue
 			}
+			index := int(binary.BigEndian.Uint32(payload))*p.torrent.PieceLength + int(binary.BigEndian.Uint32(payload[4:]))
 			p.mu.Lock()
 			p.requests++
+			if p.asks == nil {
+				p.asks = map[int]int{}
+			}
+			p.asks[index/blockSize]++
+			drop := p.dropAll || p.dropFirst != nil && p.asks[index/blockSize] == 1 && p.dropFirst(index/blockSize)
+			if drop {
+				p.dropped++
+			}
 			slow := p.released != nil || p.delay > 0
 			p.mu.Unlock()
+			if drop {
+				continue
+			}
 			if slow {
 				cancelMu.Lock()
 				delete(cancelled, string(payload))
