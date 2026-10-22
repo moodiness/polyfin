@@ -162,12 +162,24 @@ func (p playable) externals(version library.Version) []playback.ExternalSubtitle
 
 // versionFiles lists the subtitle files of a version, which come first
 // among its streams: its title's, files, those users added then the
-// addons', followed by its own, beside a local file.
+// addons', followed by its own, beside a local file or listed with its
+// stream.
 func versionFiles(files []library.ExternalSubtitle, version library.Version) []library.ExternalSubtitle {
 	if len(version.Subtitles) == 0 {
 		return files
 	}
 	return append(slices.Clip(files), version.Subtitles...)
+}
+
+// currentFile returns the subtitle file at index among files, version's
+// (see versionFiles), to serve now: one of the version's own as it is now,
+// as the links an addon lists with a stream expire with its version list
+// (see library.Service.VersionSubtitle).
+func (h *Handler) currentFile(ctx context.Context, version library.Version, files []library.ExternalSubtitle, index int) (library.ExternalSubtitle, error) {
+	if index < len(files)-len(version.Subtitles) {
+		return files[index], nil
+	}
+	return h.Library.VersionSubtitle(ctx, version, files[index])
 }
 
 // pictureCodecs are the codecs of the picture subtitle files beside local

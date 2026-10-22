@@ -1,12 +1,13 @@
 # Subtitles
 
-This page explains where Polyfin's subtitles come from and how they reach each Jellyfin app: addon subtitles and how they are synced to the version played, subtitle files beside local files, text tracks inside files, ASS styles and fonts, and image subtitles, which Polyfin can read into text.
+This page explains where Polyfin's subtitles come from and how they reach each Jellyfin app: addon subtitles and how they are synced to the version played, subtitle files listed with a stream, subtitle files beside local files, text tracks inside files, ASS styles and fonts, and image subtitles, which Polyfin can read into text.
 
 ## Where subtitles come from
 
-Apps get four kinds of subtitles:
+Apps get five kinds of subtitles:
 
 - subtitles from the addons;
+- the subtitle files a stream addon lists with a stream, for that stream's version;
 - the subtitle files beside a local file, for that file's version;
 - the text tracks inside a version's file;
 - the text copies of picture subtitles, with **Turn picture subtitles into text** on (see [Picture subtitles read into text](#picture-subtitles-read-into-text)).
@@ -56,6 +57,18 @@ Once the version's speech is known, each addon subtitle chosen for it is timed o
 - Apps get it synced in every format, WebVTT, SubRip, ASS or JSON, and in HLS.
 - Its name ends with "(synced)" in the server language, « (recalé) » in French: in PlaybackInfo once it was timed, which happens for the subtitle the app shows and for those read lately.
 - A subtitle chosen before its version's speech was known comes as it is, and is synced from the next time it is chosen.
+
+## Subtitle files listed with a stream
+
+A stream addon may list subtitle files with each stream, written for that file. Polyfin reads them for every stream addon, for links and torrents alike:
+
+- They are subtitles of that stream's version only, listed after the title's subtitles (those users added, then the addons'), with the language the addon gives and the addon as their source. The item's details and PlaybackInfo list them as soon as the version is listed, a torrent version's too, before it was ever played.
+- Each app gets them from Polyfin, in the format it asks for, as it gets the addons' subtitles: the addon's address never reaches apps. Polyfin downloads them only from public addresses for a user's own addons, as it does their streams.
+- With **Sync addon subtitles** on, they are synced to their version as the addons' subtitles are; a torrent version's come as they are (see [Torrents](torrents.md#only-while-playing)).
+- Their links may expire with the stream's. They last as long as the version list (**Keep version lists for (minutes)**, see [Addons and libraries](addons-and-libraries.md#catalog-limits-and-refresh)). A file asked for after that is read from the link the addon gives now: Polyfin uses the addon's answer if a newer one came within that time, else asks the addon again for the title's streams, or for the description that embeds the stream. A file the addon no longer lists, or one of a stream it no longer lists, is not served.
+- They reach only the users the version reaches: parental control, blocked genres and the torrent permission apply to them as to their version.
+
+**Compared with Jellyfin:** Jellyfin has no addons. Polyfin offers these files as Jellyfin offers the subtitle files beside a video: external subtitles of that version alone.
 
 ## Subtitle files beside local files
 

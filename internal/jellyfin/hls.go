@@ -621,9 +621,13 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 	case copied:
 		data = hls.SubtitleSegment(copyCues, plan, n)
 	case index < len(req.files):
+		var file library.ExternalSubtitle
 		var text subtitleText
-		if text, err = h.subtitleFile(r.Context(), req.files[index]); err == nil {
-			data = hls.SubtitleSegment(h.syncedSubtitle(r.Context(), req.remux.Version.ID, req.files[index], text).cues, plan, n)
+		if file, err = h.currentFile(r.Context(), req.remux.Version, req.files, index); err == nil {
+			text, err = h.subtitleFile(r.Context(), file)
+		}
+		if err == nil {
+			data = hls.SubtitleSegment(h.syncedSubtitle(r.Context(), req.remux.Version.ID, file, text).cues, plan, n)
 		}
 	default:
 		ctx, cancel := context.WithTimeout(r.Context(), segmentWait)

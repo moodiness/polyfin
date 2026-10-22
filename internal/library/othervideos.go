@@ -317,15 +317,20 @@ func embeddedVersion(t target, stream stremio.Stream) Version {
 
 // renewEmbedded asks the addon that described the title holding a
 // version's video for its description again, and returns the same file
-// with the link it gives now (see Renew).
-func (s *Service) renewEmbedded(ctx context.Context, entry installed, old Version) (Version, error) {
-	kept, err := s.fetchKeptMeta(ctx, entry, metaKey{entry.addon.ID, old.Origin.Type, old.Origin.Title})
-	if err != nil {
-		return Version{}, err
+// with the link it gives now (see Renew); with kept set, the description
+// kept is read instead while it is younger than a version list's life.
+func (s *Service) renewEmbedded(ctx context.Context, entry installed, old Version, kept bool) (Version, error) {
+	key := metaKey{entry.addon.ID, old.Origin.Type, old.Origin.Title}
+	description, ok := s.metas.Get(key)
+	if !kept || !ok || s.now().Sub(description.at) > s.listLife() {
+		var err error
+		if description, err = s.fetchKeptMeta(ctx, entry, key); err != nil {
+			return Version{}, err
+		}
 	}
 	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime, embeddedBy: &entry,
 		embeddedIn: old.Origin.Title}
-	for _, stream := range videoStreams(kept.value, old.Origin.ID) {
+	for _, stream := range videoStreams(description.value, old.Origin.ID) {
 		if !listable(stream) {
 			continue
 		}

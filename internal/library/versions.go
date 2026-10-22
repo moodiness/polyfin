@@ -60,8 +60,9 @@ type Version struct {
 	// connections while it plays, as a channel's stream does: a replay
 	// programme's, from an IPTV provider's archive.
 	HoldsConnection bool
-	// Subtitles are the version's own subtitle files, those beside a local
-	// file, which the version offers after its title's.
+	// Subtitles are the version's own subtitle files, which it offers
+	// after its title's: those beside a local file, and those the addon
+	// lists with the stream (see VersionSubtitle).
 	Subtitles []ExternalSubtitle
 	// Torrent is the torrent whose file the version is, nil for a link:
 	// URL is then the torrent's magnet link (see torrentLink), which
@@ -114,7 +115,7 @@ type Origin struct {
 
 // ExternalSubtitle is a subtitle file offered for an item: by an addon, or
 // added by a user (see UploadSubtitle); or for a version, beside a local
-// file (see Version.Subtitles).
+// file or listed with the stream (see Version.Subtitles).
 type ExternalSubtitle struct {
 	ID accounts.ID
 	// Language is the addon's code, usually ISO 639-2 ("fre").
@@ -455,6 +456,14 @@ const renewWait = 10 * time.Second
 // Only the addon's answers count, not the items kept from the list
 // replaced, whose links are those that expired.
 func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
+	return s.renew(ctx, old, false)
+}
+
+// renew is Renew; with kept set, the addon's answer or description kept,
+// given less than a version list's life ago (see listLife), is read as it
+// is rather than asked for again: a version its answer lacks is then
+// ErrNotFound.
+func (s *Service) renew(ctx context.Context, old Version, kept bool) (Version, error) {
 	addon, err := s.addons.Find(ctx, old.Origin.Addon)
 	if errors.Is(err, addons.ErrNotFound) {
 		return Version{}, ErrNotFound
@@ -475,7 +484,7 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 	if old.Origin.Title != "" {
 		// A stream a description embeds is renewed by describing its
 		// title again.
-		return s.renewEmbedded(ctx, entry, old)
+		return s.renewEmbedded(ctx, entry, old, kept)
 	}
 	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime}
 	if old.HoldsConnection {
@@ -492,6 +501,14 @@ func (s *Service) Renew(ctx context.Context, old Version) (Version, error) {
 		return Version{}, ErrNotFound
 	}
 	key := streamKey{addon.ID, t.metaType, t.id}
+	if kept {
+		if _, fresh, _ := s.streamListOf(ctx, key); fresh {
+			if version, ok := s.renewedFromAnswer(t, entry, key, old); ok {
+				return version, nil
+			}
+			return Version{}, ErrNotFound
+		}
+	}
 	s.tracked().titles.Put(listedTitle{t.metaType, t.id}, t.item)
 	if _, err := s.streamAnswer(ctx, entry, key); err != nil {
 		return Version{}, err
@@ -532,14 +549,14 @@ func (s *Service) renewedFromAnswer(t target, entry installed, key streamKey, ol
 // title's name, which a renewal does not load.
 func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, old Version) (Version, bool) {
 	for _, stream := range streams {
-		if !listable(stream) {
+		// The stream's identity tells it before its labels are read.
+		if !listable(stream) || versionID(t.item, streamIdentity(stream)) != old.ID {
 			continue
 		}
-		if version := newVersion(t, entry, stream); version.ID == old.ID {
-			version.Labels = old.Labels
-			s.versions.Put(version.ID, version)
-			return version, true
-		}
+		version := newVersion(t, entry, stream)
+		version.Labels = old.Labels
+		s.versions.Put(version.ID, version)
+		return version, true
 	}
 	return Version{}, false
 }
@@ -567,19 +584,55 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources)}
 	}
 	version.ID = versionID(t.item, streamIdentity(stream))
-	// A local file's subtitle files are its own. Those addons list with a
-	// stream are not read yet.
-	if entry.addon.Local() {
-		for _, subtitle := range stream.Subtitles {
-			if !subtitle.Valid() {
-				continue
-			}
-			version.Subtitles = append(version.Subtitles, ExternalSubtitle{ID: subtitleID(entry.addon.ID, subtitle), Language: subtitle.Lang,
-				URL: subtitle.URL, Addon: entry.addon.Manifest.Name, Confined: entry.confined, Format: subtitle.Format, Title: subtitle.Title,
-				Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired, Default: subtitle.Default})
+	// The subtitle files listed with a stream are its version's own: those
+	// beside a local file, or those an addon gives with its stream.
+	for _, subtitle := range stream.Subtitles {
+		if !subtitle.Valid() {
+			continue
 		}
+		version.Subtitles = append(version.Subtitles, ExternalSubtitle{ID: subtitleID(entry.addon.ID, subtitle), Language: subtitle.Lang,
+			URL: subtitle.URL, Addon: entry.addon.Manifest.Name, Confined: entry.confined, Format: subtitle.Format, Title: subtitle.Title,
+			Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired, Default: subtitle.Default})
 	}
 	return version
+}
+
+// VersionSubtitle returns file, one of the version's own subtitle files
+// (see Version.Subtitles), as it is now. A file beside a local file is its
+// folder's. A file an addon lists with its stream may expire with the
+// stream's link: it lasts as long as a version list (see listLife), then
+// is the file the addon lists with the stream now, from its answer kept
+// while fresh, else asked again as Renew asks it. It is the file of the
+// same language, at the same place among those. A version, or a file, the
+// addon no longer lists is ErrNotFound.
+func (s *Service) VersionSubtitle(ctx context.Context, version Version, file ExternalSubtitle) (ExternalSubtitle, error) {
+	// Only Polyfin's own local folders tell a file's format.
+	if file.Format != "" {
+		return file, nil
+	}
+	current, err := s.renew(ctx, version, true)
+	if err != nil {
+		return ExternalSubtitle{}, err
+	}
+	place := 0
+	for _, before := range version.Subtitles {
+		if before.ID == file.ID {
+			break
+		}
+		if before.Language == file.Language {
+			place++
+		}
+	}
+	for _, now := range current.Subtitles {
+		if now.Language != file.Language {
+			continue
+		}
+		if place == 0 {
+			return now, nil
+		}
+		place--
+	}
+	return ExternalSubtitle{}, ErrNotFound
 }
 
 // streams lists an addon's streams for a title: those remembered while

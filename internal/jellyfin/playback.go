@@ -1098,9 +1098,10 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 	// External subtitles come first among a version's streams, its title's
 	// then its own; embedded tracks follow, served whole (see embeddedTrack
 	// and pgsTrack). The version is looked for past its title's files only.
+	var version library.Version
 	if index >= len(files) {
-		if version, ok := h.sourceVersion(r, item); ok {
-			files = versionFiles(files, version)
+		if found, ok := h.sourceVersion(r, item); ok {
+			version, files = found, versionFiles(files, found)
 		}
 	}
 	var text subtitleText
@@ -1147,8 +1148,11 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 		h.pgsFile(w, r, files[index])
 		return
 	default:
-		var err error
-		if text, err = h.subtitleFile(r.Context(), files[index]); err != nil {
+		file, err := h.currentFile(r.Context(), version, files, index)
+		if err == nil {
+			text, err = h.subtitleFile(r.Context(), file)
+		}
+		if err != nil {
 			if r.Context().Err() == nil {
 				h.Logger.Warn("A subtitle could not be read", "addon", files[index].Addon, "error", err)
 			}
@@ -1156,9 +1160,9 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// An addon's subtitle is synced to the version it is served for.
-		if addonSubtitle(files[index]) {
-			if version, ok := h.subtitleVersion(r, item); ok {
-				text = h.syncedSubtitle(r.Context(), version, files[index], text)
+		if addonSubtitle(file) {
+			if played, ok := h.subtitleVersion(r, item); ok {
+				text = h.syncedSubtitle(r.Context(), played, file, text)
 			}
 		}
 	}

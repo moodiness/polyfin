@@ -115,6 +115,8 @@ Only a playback starts a torrent. Preparing playback in advance, thumbnails and 
 
 **Sync addon subtitles** (see [Subtitles](subtitles.md#addon-subtitles-synced-to-the-version)) looks for no speech in a torrent version: that would download three stretches of it from the swarm, up to 300 MB, as its playback starts, beside it, and what the playback holds then, its start and its index, has none of them. A torrent version's addon subtitles come with the times the addons give.
 
+The subtitle files an addon lists with a torrent stream are that version's own, listed from the title's page on, before any play. Polyfin downloads them from their links, without joining the swarm (see [Subtitles](subtitles.md#subtitle-files-listed-with-a-stream)).
+
 ## How a torrent starts
 
 1. Opening a title's page lists its torrent versions. Nothing reads them yet: preparing playback ahead leaves them alone, and a torrent version that was never played has no analysis.
