@@ -410,15 +410,44 @@ func (s *Service) fetchKeptMeta(ctx context.Context, addon installed, key metaKe
 	if err := s.storeMeta(ctx, addon, key, kept); err != nil {
 		s.logger.Debug("A description could not be kept", "addon", addon.addon.Manifest.Name, "error", err)
 	}
-	// A translator's people are not the title's: its facts are those of
-	// the addons without a language, unless it stands in for them for
-	// every user (see languages.go).
-	if kind, ok := titleKind(key.metaType); ok && (kind == KindMovie || kind == KindSeries) && (!translator(addon) || s.standsInForAll(ctx, key.metaType, key.id)) {
+	// The title's people are those of the description its page shows
+	// them from (see givesCredits): a translator's, or another addon's
+	// read meanwhile, are not.
+	if kind, ok := titleKind(key.metaType); ok && (kind == KindMovie || kind == KindSeries) && s.givesCredits(ctx, addon, kind, key.metaType, key.id) {
 		if err := s.saveCredits(ctx, itemID(titleKey(kind, key.id)), people(meta), addon.confined); err != nil {
 			s.logger.Debug("The people of a title could not be recorded", "addon", addon.addon.Manifest.Name, "error", err)
 		}
 	}
 	return kept, nil
+}
+
+// givesCredits reports whether addon's description of a title gives its
+// credits: whether it is the first of the title's describers among every
+// enabled addon (see describers), the one whose catalog listed it first,
+// then those without a language, in the order of the sources; addons given
+// a language only when none without one describes the title. Local
+// folders and IPTV sources record their own (see Item).
+func (s *Service) givesCredits(ctx context.Context, addon installed, kind Kind, metaType, id string) bool {
+	list, err := s.addons.All(ctx)
+	if err != nil {
+		return false
+	}
+	var v view
+	for _, a := range list {
+		if a.Enabled {
+			v.addons = append(v.addons, installed{addon: a})
+		}
+	}
+	r, err := s.load(ctx, itemID(titleKey(kind, id)))
+	if err != nil || r.Meta == nil {
+		r = record{Meta: &stremio.Meta{Type: metaType, ID: id}}
+	}
+	for _, candidate := range describers(v, r, false) {
+		if !own(candidate.addon) {
+			return candidate.addon.ID == addon.addon.ID
+		}
+	}
+	return false
 }
 
 // refreshMeta asks the addon for a description again in the background;

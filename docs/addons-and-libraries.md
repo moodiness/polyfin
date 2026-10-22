@@ -118,10 +118,12 @@ A video, or an episode of a series, may carry its own streams in the title's det
 
 Under **Content › Libraries**, each library shows a small image at the start of its row. Select it to choose, under **Image in apps**, the image Jellyfin apps show on the library's tile:
 
-- **None**: no image, as before. This is the default.
+- **None**: no image. Libraries made before Polyfin 0.45 keep it until changed here.
 - **Automatic**: Polyfin takes it from the catalog's first page: the first backdrop, as library tiles are wide, else the first wide poster, else the first poster. A music library takes the first artwork of its row. A catalog without any shows no image. Users under parental control or blocking genres are not shown it, since it may come from a title hidden from them.
-- **Generated**: Polyfin draws a wide 16:9 image from the posters of the catalog's first titles, up to six, under a gradient, with the library's name written across them (see [Generated images](#generated-images)). A collection library takes the posters of its first collections, and for a collection without one, the first poster of its own generated image. A music library has no posters to draw from: it does not offer this choice. The image comes once Polyfin has read the catalog's first page, as apps do when they open the library. Users under parental control or blocking genres are not shown it, as for **Automatic**.
+- **Generated**: the default of the movie and series libraries made since Polyfin 0.45, as Jellyfin draws an image for each of its libraries; other libraries start with **None**. Polyfin draws a wide 16:9 image from the posters of the catalog's first titles, up to six, under a gradient, with the library's name written across them (see [Generated images](#generated-images)). A collection library takes the posters of its first collections, and for a collection without one, the first poster of its own generated image. A music library has no posters to draw from: it does not offer this choice. The image comes once Polyfin has read the catalog's first page, as apps do when they open the library. Users under parental control or blocking genres are not shown it, as for **Automatic**.
 - **Custom**: **Upload an image**, or paste an address under **Or an image address**, which Polyfin downloads once. The picture follows the rules of [Edit images](#edit-images): a JPEG, PNG or WebP picture of up to 10 MB, kept in the database. Only administrators can use local network addresses. **Remove the image** deletes it, and the library shows none.
+
+Apps are told the shape of the image: 16:9 for a generated image and for an automatic backdrop or wide poster, so that apps sizing tiles by it show it whole.
 
 Image changes are saved at once, apart from the list's **Save**. A catalog just added to the list gets its image once the list is saved. Live TV catalogs make no library tile, so they have no image. Users choose the images of their own libraries the same way under **My sources**.
 
@@ -532,7 +534,7 @@ A person's titles are:
 - those your addons' people-search catalogs (such as a catalog named People Search) find for their name; plus
 - the titles of your addons that Polyfin already knows them in.
 
-Without a people-search catalog, only the second kind show.
+Without a people-search catalog, only the second kind show. A title's people are those of the description its page shows them from: the first addon without a language that describes it, starting with the one whose catalog listed it (see [Languages](#languages)). When that description is read again, in the background or with **Refresh metadata**, someone it no longer credits loses the title on their page, as in Jellyfin. Other addons' descriptions, and those of addons given a language, change no one's titles.
 
 The people list holds the people credited in the titles of your addons that someone opened. People credited only in other users' own addons stay hidden.
 

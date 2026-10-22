@@ -102,24 +102,6 @@ func (v view) factual(entry installed, metaType, id string, shared bool) bool {
 	return !translator(entry) || v.standIn(metaType, id, shared)
 }
 
-// standsInForAll reports whether translators stand in for every user for
-// titles of a type and identifier (see standIn): no enabled addon without
-// a language, the server's or a user's own, describes them. Only then are
-// a translator's people the title's: they are recorded for everyone.
-func (s *Service) standsInForAll(ctx context.Context, metaType, id string) bool {
-	list, err := s.addons.All(ctx)
-	if err != nil {
-		return false
-	}
-	var v view
-	for _, addon := range list {
-		if addon.Enabled {
-			v.addons = append(v.addons, installed{addon: addon})
-		}
-	}
-	return v.standIn(metaType, id, false)
-}
-
 // inLanguageOrder orders addons of v the user's language's first, keeping
 // the order of the others.
 func (v view) inLanguageOrder(entries []installed) {
