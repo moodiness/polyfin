@@ -264,8 +264,11 @@ var errNoTorrents = errors.New("this server plays no torrent")
 // Playing) and nothing else. A swarm is given longer than a host to
 // answer (see torrent.StartTimeout and torrent.PieceTimeout): the engine
 // tells why a torrent did not start before the cache stops waiting.
+// Without the file's index, the stream's filename and the episode tell
+// the file (see torrent.Info.File).
 func (s *Service) torrentLocation(version library.Version) source.Location {
 	spec, err := torrent.NewSpec(version.Torrent.InfoHash, version.Torrent.FileIdx, version.Torrent.Sources)
+	spec.Name, spec.Season, spec.Episode = version.Filename, version.Torrent.Season, version.Torrent.Episode
 	if err == nil && s.torrents == nil {
 		err = errNoTorrents
 	}

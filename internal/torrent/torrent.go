@@ -1346,11 +1346,11 @@ func (r *Reader) Close() error {
 	return nil
 }
 
-// open waits for the torrent's info, and returns a reader of its file
-// index, -1 for the largest. Past the engine's StartTimeout without it,
+// open waits for the torrent's info, and returns a reader of the file
+// spec plays (see Info.File). Past the engine's StartTimeout without it,
 // the torrent did not start: a *StartError tells what came of the search
 // for its peers. The reader reads under ctx, the wait being bounded alone.
-func (t *torrent) open(ctx context.Context, index int) (*Reader, error) {
+func (t *torrent) open(ctx context.Context, spec Spec) (*Reader, error) {
 	started := time.Now()
 	deadline := time.NewTimer(t.engine.config.StartTimeout)
 	defer deadline.Stop()
@@ -1358,7 +1358,7 @@ func (t *torrent) open(ctx context.Context, index int) (*Reader, error) {
 		t.mu.Lock()
 		info, err, changed := t.info, t.err, t.changed
 		if info != nil && err == nil {
-			file, err := info.File(index)
+			file, err := info.File(spec)
 			if err != nil {
 				t.mu.Unlock()
 				return nil, err

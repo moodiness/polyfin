@@ -8,6 +8,8 @@ import (
 	"path"
 	"strconv"
 	"strings"
+
+	"github.com/moodiness/polyfin/internal/episodename"
 )
 
 // Hash is a torrent's info hash, the SHA-1 of its info dictionary.
@@ -129,25 +131,42 @@ func checkInfo(hash Hash, data []byte) (Info, error) {
 	return parseInfo(data)
 }
 
-// File returns the file of the torrent to play: the one at index, else,
-// for index -1, the largest, as Stremio picks it.
-func (info Info) File(index int) (File, error) {
-	if index >= 0 {
+// File returns the file of the torrent spec plays: the one at its index;
+// without one, the file of the name the addon gives, else, for an
+// episode, the largest video whose name tells that episode (see
+// episodename.Of), as in a season's pack, else the largest.
+func (info Info) File(spec Spec) (File, error) {
+	if index := spec.File; index >= 0 {
 		if index >= len(info.Files) || info.Files[index].Padding {
 			return File{}, fmt.Errorf("the torrent has no file %s", strconv.Itoa(index))
 		}
 		return info.Files[index], nil
 	}
-	largest := -1
+	name := path.Base(strings.ReplaceAll(spec.Name, `\`, "/"))
+	named, episode, largest := -1, -1, -1
+	larger := func(i, than int) bool { return than < 0 || info.Files[i].Length > info.Files[than].Length }
 	for i, f := range info.Files {
-		if !f.Padding && (largest < 0 || f.Length > info.Files[largest].Length) {
+		if f.Padding {
+			continue
+		}
+		if spec.Name != "" && strings.EqualFold(path.Base(f.Path), name) && larger(i, named) {
+			named = i
+		}
+		if spec.Episode > 0 && episodename.Video(f.Path) && larger(i, episode) {
+			if e, ok := episodename.Of(f.Path); ok && e.Holds(spec.Season, spec.Episode) {
+				episode = i
+			}
+		}
+		if larger(i, largest) {
 			largest = i
 		}
 	}
-	if largest < 0 {
-		return File{}, errors.New("the torrent has no file to play")
+	for _, i := range []int{named, episode, largest} {
+		if i >= 0 {
+			return info.Files[i], nil
+		}
 	}
-	return info.Files[largest], nil
+	return File{}, errors.New("the torrent has no file to play")
 }
 
 // pieceSize is the length of piece index, the last one being shorter.

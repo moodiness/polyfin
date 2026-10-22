@@ -318,7 +318,7 @@ func (e *Engine) Open(ctx context.Context, spec Spec) (*Reader, error) {
 	if t == nil {
 		return nil, ErrNotPlaying
 	}
-	return t.open(ctx, spec.File)
+	return t.open(ctx, spec)
 }
 
 // Ready reports why torrents cannot play now: off, without a route, or

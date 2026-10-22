@@ -252,7 +252,7 @@ func checkInfoBounds(t *testing.T, info Info) {
 	if size := info.pieceSize(last); size <= 0 || size > info.PieceLength {
 		t.Fatalf("a last piece of %d bytes, of %d at most", size, info.PieceLength)
 	}
-	if file, err := info.File(-1); err == nil && file.Length > 0 {
+	if file, err := info.File(Spec{File: -1}); err == nil && file.Length > 0 {
 		if index := (file.Offset + file.Length - 1) / info.PieceLength; index < 0 || index > int64(last) {
 			t.Fatalf("the file's end is in piece %d of %d", index, len(info.Pieces))
 		}

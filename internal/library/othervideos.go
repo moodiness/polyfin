@@ -330,6 +330,7 @@ func (s *Service) renewEmbedded(ctx context.Context, entry installed, old Versio
 	}
 	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime, embeddedBy: &entry,
 		embeddedIn: old.Origin.Title}
+	t.season, t.episode = old.torrentEpisode()
 	for _, stream := range videoStreams(description.value, old.Origin.ID) {
 		if !listable(stream) {
 			continue

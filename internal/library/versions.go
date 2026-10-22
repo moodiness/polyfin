@@ -71,12 +71,25 @@ type Version struct {
 }
 
 // Torrent is a torrent's file as an addon lists it: its info hash, the
-// file's index, nil for the largest, and the stream's sources, its
-// trackers and DHT nodes.
+// file's index, nil when the addon gives none, and the stream's sources,
+// its trackers and DHT nodes. Season and Episode are the episode it was
+// listed for, Episode 0 for another title: without an index, the file
+// whose name tells that episode plays, after the one the stream's
+// filename names (see torrent.Info.File).
 type Torrent struct {
-	InfoHash string
-	FileIdx  *int
-	Sources  []string
+	InfoHash        string
+	FileIdx         *int
+	Sources         []string
+	Season, Episode int
+}
+
+// torrentEpisode is the episode a torrent version was listed for, which
+// its renewal keeps.
+func (v Version) torrentEpisode() (season, episode int) {
+	if v.Torrent == nil {
+		return 0, 0
+	}
+	return v.Torrent.Season, v.Torrent.Episode
 }
 
 // listable reports whether a stream is one Polyfin may play: a link, or a
@@ -145,6 +158,9 @@ type target struct {
 	// name is the movie's or the series' name, whose words labels may
 	// repeat (see ReadLabels).
 	name string
+	// season and episode are the episode's, episode 0 for another title:
+	// a torrent's file without an index is found by them.
+	season, episode int
 	// holder is the record of the title whose description holds the
 	// video: an episode's series, or a folder's video's folder. embedded
 	// are the streams it embeds for the video, described by embeddedBy,
@@ -220,7 +236,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 			return target{}, view{}, ErrNotFound
 		}
 		t := target{item: id, kind: KindEpisode, metaType: series.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
-			name: series.Meta.Name, holder: &series}
+			name: series.Meta.Name, season: int(r.Video.Season), episode: r.Video.EpisodeNumber(), holder: &series}
 		s.embed(ctx, v, &t, false)
 		return t, v, nil
 	default:
@@ -487,6 +503,7 @@ func (s *Service) renew(ctx context.Context, old Version, kept bool) (Version, e
 		return s.renewEmbedded(ctx, entry, old, kept)
 	}
 	t := target{item: old.Item, metaType: old.Origin.Type, id: old.Origin.ID, runtime: old.Runtime}
+	t.season, t.episode = old.torrentEpisode()
 	if old.HoldsConnection {
 		t.kind = KindReplay
 	}
@@ -581,7 +598,8 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 	}
 	if stream.Torrent() {
 		version.URL = torrentLink(stream)
-		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources)}
+		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources),
+			Season: t.season, Episode: t.episode}
 	}
 	version.ID = versionID(t.item, streamIdentity(stream))
 	// The subtitle files listed with a stream are its version's own: those

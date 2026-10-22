@@ -13,15 +13,20 @@ import (
 var ErrInvalidSpec = errors.New("invalid torrent stream")
 
 // Spec names the file of a torrent a version plays, as an addon lists it:
-// its info hash, the file's index, -1 for the largest, and where to find
-// peers besides: the trackers and DHT nodes of the stream's sources, and
-// whether to look the torrent up on the DHT.
+// its info hash, the file's index, -1 when the addon gives none, and where
+// to find peers besides: the trackers and DHT nodes of the stream's
+// sources, and whether to look the torrent up on the DHT. Without an
+// index, Name, the file's name the addon gives, and Season and Episode,
+// the episode played (Episode 0 for another title), tell the file (see
+// Info.File).
 type Spec struct {
-	Hash     Hash
-	File     int
-	Trackers []string
-	Nodes    []string
-	DHT      bool
+	Hash            Hash
+	File            int
+	Name            string
+	Season, Episode int
+	Trackers        []string
+	Nodes           []string
+	DHT             bool
 }
 
 // Bounds on what an addon's sources may add.
@@ -65,11 +70,6 @@ func NewSpec(infoHash string, fileIdx *int, sources []string) (Spec, error) {
 		}
 	}
 	return spec, nil
-}
-
-// Key names the file a spec plays among those of the engine.
-func (s Spec) Key() string {
-	return s.Hash.String() + "/" + strconv.Itoa(s.File)
 }
 
 func validTracker(raw string) bool {
