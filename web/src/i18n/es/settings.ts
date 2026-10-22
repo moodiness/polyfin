@@ -340,7 +340,7 @@ const settings: typeof en = {
       `Convertir vídeo es el trabajo más pesado que realiza el servidor. Cuando se alcanza este número de reproducciones con el vídeo convertido (incluidos los subtítulos incrustados en la imagen), una nueva reproducción recibe una versión que no necesita conversión, o no se inicia. Las reproducciones en curso nunca se cortan. La televisión en directo también mantiene sus propios límites: 4 canales por usuario y 16 para el servidor. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
     maxConversionHeight: 'Calidad máxima del vídeo convertido',
     maxConversionHeightHelp:
-      'El vídeo convertido se reduce como máximo a esta altura, conservando sus proporciones, para que se reproduzca bien en una conexión más lenta. Los archivos reproducidos tal cual o simplemente reempaquetados conservan su calidad. Una tarjeta gráfica convierte hasta 4K; el procesador se detiene en 1080p y, cuando convierte HDR a SDR, en «Calidad máxima del HDR convertido por el procesador» (Conversión › HDR).',
+      'El vídeo convertido se reduce como máximo a esta altura, conservando sus proporciones, para que se reproduzca bien en una conexión más lenta. Los archivos reproducidos tal cual o simplemente reempaquetados conservan su calidad. Una tarjeta gráfica convierte hasta 4K; el procesador se detiene en 1080p y, cuando convierte HDR a SDR, en «Calidad máxima del HDR convertido por el procesador», en Conversión (transcodificación) › HDR.',
     conversionHeightOriginal: 'Original',
     conversionHeight: (height: number) => `${height}p`,
     convertedDownloads: 'Descargas convertidas',

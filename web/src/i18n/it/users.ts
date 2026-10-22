@@ -193,7 +193,7 @@ const users: typeof en = {
       'I link creati da questo utente per condividere un film o un episodio. «Revoca» ne interrompe uno subito.',
     qualityGroup: 'Gruppo di qualità',
     qualityGroupHelp:
-      'La risoluzione massima offerta a questo utente. Le versioni superiori vengono escluse finché ce n’è una adatta; se nessuna è adatta, vengono convertite a una qualità inferiore, oppure rifiutate se questo utente non può usare la conversione. Anche la Diretta TV viene convertita a una qualità inferiore. Solo le versioni adatte vengono scaricate così come sono; con «Download convertiti» attivo (Impostazioni › Conversione), le applicazioni che lo richiedono scaricano le altre convertite a una qualità inferiore.',
+      'La risoluzione massima offerta a questo utente. Le versioni superiori vengono escluse finché ce n’è una adatta; se nessuna è adatta, vengono convertite a una qualità inferiore, oppure rifiutate se questo utente non può usare la conversione. Anche la Diretta TV viene convertita a una qualità inferiore. Solo le versioni adatte vengono scaricate così come sono; con «Download convertiti» attivo in Impostazioni › Conversione (transcodifica), le applicazioni che lo richiedono scaricano le altre convertite a una qualità inferiore.',
     qualityGroupOriginal: 'Originale (nessun limite)',
     member: 'Membro',
     lastSignInLabel: 'Ultimo accesso:',

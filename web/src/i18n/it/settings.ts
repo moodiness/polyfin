@@ -342,7 +342,7 @@ const settings: typeof en = {
       `Convertire il video è il lavoro più pesante che svolge il server. Quando questo numero di riproduzioni ha il video convertito (inclusi i sottotitoli impressi nell’immagine), una nuova riproduzione riceve una versione che non richiede conversione, oppure non parte. Le riproduzioni già in corso non vengono mai interrotte. Anche la Diretta TV mantiene i propri limiti: 4 canali per utente e 16 per il server. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
     maxConversionHeight: 'Qualità massima del video convertito',
     maxConversionHeightHelp:
-      'Il video convertito viene ridotto al massimo a questa altezza, mantenendone le proporzioni, così da essere riprodotto bene anche su una connessione più lenta. I file riprodotti così come sono o semplicemente reimpacchettati mantengono la loro qualità. Una scheda grafica converte fino al 4K; il processore si ferma a 1080p e, quando converte da HDR a SDR, a «Qualità massima dell’HDR convertito dal processore» (Conversione › HDR).',
+      'Il video convertito viene ridotto al massimo a questa altezza, mantenendone le proporzioni, così da essere riprodotto bene anche su una connessione più lenta. I file riprodotti così come sono o semplicemente reimpacchettati mantengono la loro qualità. Una scheda grafica converte fino al 4K; il processore si ferma a 1080p e, quando converte da HDR a SDR, a «Qualità massima dell’HDR convertito dal processore», in Conversione (transcodifica) › HDR.',
     conversionHeightOriginal: 'Originale',
     conversionHeight: (height: number) => `${height}p`,
     convertedDownloads: 'Download convertiti',

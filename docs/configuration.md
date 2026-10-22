@@ -50,8 +50,8 @@ These variables are no longer read at every start: they are settings of the admi
 | Variable | Setting |
 | --- | --- |
 | `POLYFIN_CACHE_SIZE` | **Disk space for files being read (GB)**, under **Settings › Playback** |
-| `POLYFIN_HWACCEL` | The GPU choice, under **Settings › Conversion** (see [Transcoding](transcoding.md)) |
-| `POLYFIN_VAAPI_DEVICE` | **Graphics card for VAAPI**, under **Settings › Conversion** |
+| `POLYFIN_HWACCEL` | The GPU choice, under **Settings › Conversion (transcoding)** (see [Transcoding](transcoding.md)) |
+| `POLYFIN_VAAPI_DEVICE` | **Graphics card for VAAPI**, under **Settings › Conversion (transcoding)** |
 | `POLYFIN_SEGMENTS` | The databases turned on, and their order, under **Settings › Content** (see [Skip segments](skip-segments.md)) |
 | `POLYFIN_RECORDINGS_DIR` | **Record Live TV**, turned on, and **Recordings folder**, under **Settings › Recordings** (see [Live TV](live-tv.md)) |
 | `POLYFIN_BACKUP_DIR` | **Back up the database every day**, turned on, and **Backups folder**, under **Settings › Backups** (see [Backups](backups.md)) |

@@ -192,7 +192,7 @@ const users: typeof en = {
       'Los enlaces que este usuario ha creado para compartir una película o un episodio. «Revocar» detiene uno al instante.',
     qualityGroup: 'Grupo de calidad',
     qualityGroupHelp:
-      'La resolución más alta que se ofrece a este usuario. Las versiones superiores se descartan mientras haya una que se ajuste; si ninguna se ajusta, se convierten a menor resolución, o se rechazan si este usuario no puede usar la conversión. La televisión en directo también se convierte a menor resolución. Solo las versiones que se ajustan se descargan tal cual; con «Descargas convertidas» activado (Ajustes › Conversión), las aplicaciones que lo solicitan descargan las demás convertidas a menor resolución.',
+      'La resolución más alta que se ofrece a este usuario. Las versiones superiores se descartan mientras haya una que se ajuste; si ninguna se ajusta, se convierten a menor resolución, o se rechazan si este usuario no puede usar la conversión. La televisión en directo también se convierte a menor resolución. Solo las versiones que se ajustan se descargan tal cual; con «Descargas convertidas» activado en Ajustes › Conversión (transcodificación), las aplicaciones que lo solicitan descargan las demás convertidas a menor resolución.',
     qualityGroupOriginal: 'Original (sin límite)',
     member: 'Miembro',
     lastSignInLabel: 'Último inicio de sesión:',

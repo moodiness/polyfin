@@ -729,7 +729,7 @@ The group applies after the version order settings hide versions, and before the
 
 - Live TV channels follow the same rule once analyzed, as their height is only known then. So do recordings.
 - A version's file downloads only when it fits. When none fits, the file is refused (403), as without the permission.
-- With **Converted downloads** on, under **Settings › Conversion**, apps that ask for a smaller copy, such as Streamyfin, download a taller version converted down to the group, when the user may have video converted. See [Converted downloads](transcoding.md#converted-downloads).
+- With **Converted downloads** on, under **Settings › Conversion (transcoding)**, apps that ask for a smaller copy, such as Streamyfin, download a taller version converted down to the group, when the user may have video converted. See [Converted downloads](transcoding.md#converted-downloads).
 
 **Compared with Jellyfin:**
 

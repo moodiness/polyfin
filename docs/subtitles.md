@@ -105,7 +105,7 @@ With **Turn picture subtitles into text** on, a text copy of the track spares th
 
 PGS and DVD (VobSub) subtitles are pictures, and many apps take only text: jellyfin-web in Chrome (unless set to draw PGS) and Findroid list text formats alone, and Swiftfin's native player asks PGS and VobSub burned in. Polyfin can read these pictures into text with Tesseract, so that these apps get a text track instead of a conversion.
 
-Under **Settings › Conversion**, in **Picture subtitles**:
+Under **Settings › Conversion (transcoding)**, in **Picture subtitles**:
 
 | Setting | Default | What it does |
 |---|---|---|

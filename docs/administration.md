@@ -73,7 +73,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - **Torrents**, while they are on: the route, the torrents playing, their peers and those reached over uTP, and what was shared (see [Torrents](torrents.md));
   - **Disk space** for the cache, recordings and backups folders;
   - **Backups**: the last run and its result, the last backup made, its file and size, the next one, each destination's last upload, and the last restore. A failed backup, or a last backup older than two days, is a problem; so is a destination whose last upload failed (an error), or whose newest backup is older than two days (a warning). See [Backups](backups.md);
-  - **Thumbnails**: the queue and paused sources;
+  - **Thumbnails (trickplay)**: the queue and paused sources;
   - **Polyfin**: memory, goroutines, uptime and version;
   - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error;
   - **Known proxies**: while some are listed by host name, the addresses each name resolves to (see [Proxies by name](reverse-proxy.md#proxies-by-name)).

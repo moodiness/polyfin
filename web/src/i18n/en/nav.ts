@@ -25,10 +25,10 @@ const nav = {
     settingsSections: {
       general: 'General',
       playback: 'Playback',
-      conversion: 'Conversion',
+      conversion: 'Conversion (transcoding)',
       content: 'Content',
       catalogs: 'Catalogs',
-      thumbnails: 'Thumbnails',
+      thumbnails: 'Thumbnails (trickplay)',
       security: 'Security',
       tracking: 'Tracking',
       liveTv: 'Live TV',

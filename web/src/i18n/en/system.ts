@@ -330,8 +330,9 @@ const system = {
       } as Record<string, string>,
       free: (free: string) => `${free} free`,
       notMeasured: 'Cannot be measured here.',
-      thumbnailsTitle: 'Thumbnails',
-      thumbnailsOff: 'Thumbnails and chapter images are off (Settings › Thumbnails).',
+      thumbnailsTitle: 'Thumbnails (trickplay)',
+      thumbnailsOff:
+        'Thumbnails and chapter images are off under Settings › Thumbnails (trickplay).',
       waiting: (count: number, length: number) => `${count} of ${length} waiting`,
       working: 'Making images now',
       idle: 'Idle',

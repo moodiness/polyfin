@@ -333,9 +333,9 @@ const system: typeof en = {
       },
       free: (free: string) => `${free} libres`,
       notMeasured: 'Impossible à mesurer ici.',
-      thumbnailsTitle: 'Miniatures',
+      thumbnailsTitle: 'Vignettes (trickplay)',
       thumbnailsOff:
-        'Les miniatures et images de chapitres sont désactivées (Paramètres › Miniatures).',
+        'Les miniatures et images de chapitres sont désactivées dans Paramètres › Vignettes (trickplay).',
       waiting: (count: number, length: number) => `${count} sur ${length} en attente`,
       working: 'Création d’images en cours',
       idle: 'Au repos',

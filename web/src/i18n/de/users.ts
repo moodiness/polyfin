@@ -191,7 +191,7 @@ const users: typeof en = {
       'Die Links, die dieser Benutzer erstellt hat, um einen Film oder eine Folge zu teilen. „Widerrufen“ beendet einen sofort.',
     qualityGroup: 'Qualitätsgruppe',
     qualityGroupHelp:
-      'Die höchste Auflösung, die diesem Benutzer angeboten wird. Höhere Versionen werden ausgelassen, solange eine passt; passt keine, werden sie herunterkonvertiert oder abgelehnt, wenn dieser Benutzer keine Konvertierung nutzen darf. Live-TV wird ebenfalls herunterkonvertiert. Nur passende Versionen werden unverändert heruntergeladen; ist „Konvertierte Downloads“ aktiviert (Einstellungen › Konvertierung), laden die Apps, die es anfordern, die anderen herunterkonvertiert herunter.',
+      'Die höchste Auflösung, die diesem Benutzer angeboten wird. Höhere Versionen werden ausgelassen, solange eine passt; passt keine, werden sie herunterkonvertiert oder abgelehnt, wenn dieser Benutzer keine Konvertierung nutzen darf. Live-TV wird ebenfalls herunterkonvertiert. Nur passende Versionen werden unverändert heruntergeladen; ist „Konvertierte Downloads“ unter Einstellungen › Konvertierung (Transkodierung) aktiviert, laden die Apps, die es anfordern, die anderen herunterkonvertiert herunter.',
     qualityGroupOriginal: 'Original (ohne Begrenzung)',
     member: 'Mitglied',
     lastSignInLabel: 'Letzte Anmeldung:',

@@ -25,10 +25,10 @@ const nav: typeof en = {
     settingsSections: {
       general: 'Generale',
       playback: 'Riproduzione',
-      conversion: 'Conversione',
+      conversion: 'Conversione (transcodifica)',
       content: 'Contenuti',
       catalogs: 'Cataloghi',
-      thumbnails: 'Miniature',
+      thumbnails: 'Miniature (trickplay)',
       security: 'Sicurezza',
       tracking: 'Monitoraggio',
       liveTv: 'Diretta TV',

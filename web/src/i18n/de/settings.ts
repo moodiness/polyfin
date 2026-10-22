@@ -341,7 +341,7 @@ const settings: typeof en = {
       `Das Konvertieren von Video ist die aufwendigste Arbeit des Servers. Sobald bei so vielen Wiedergaben das Video konvertiert wird (einschließlich ins Bild eingebrannter Untertitel), erhält eine neue Wiedergabe eine Version, die keine Konvertierung braucht, oder sie startet nicht. Bereits laufende Wiedergaben werden nie abgebrochen. Live-TV behält außerdem eigene Grenzen: 4 Kanäle pro Benutzer und 16 für den Server. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
     maxConversionHeight: 'Maximale Qualität konvertierter Videos',
     maxConversionHeightHelp:
-      'Konvertierte Videos werden höchstens auf diese Höhe verkleinert, ohne verzerrt zu werden, damit sie auch über eine langsamere Verbindung flüssig laufen. Unverändert abgespielte oder nur neu verpackte Dateien behalten ihre Qualität. Eine Grafikkarte konvertiert bis 4K; der Prozessor hört bei 1080p auf und, wenn er HDR in SDR konvertiert, bei „Maximale Qualität von vom Prozessor konvertiertem HDR“ (Konvertierung › HDR).',
+      'Konvertierte Videos werden höchstens auf diese Höhe verkleinert, ohne verzerrt zu werden, damit sie auch über eine langsamere Verbindung flüssig laufen. Unverändert abgespielte oder nur neu verpackte Dateien behalten ihre Qualität. Eine Grafikkarte konvertiert bis 4K; der Prozessor hört bei 1080p auf und, wenn er HDR in SDR konvertiert, bei „Maximale Qualität von vom Prozessor konvertiertem HDR“ unter Konvertierung (Transkodierung) › HDR.',
     conversionHeightOriginal: 'Original',
     conversionHeight: (height: number) => `${height}p`,
     convertedDownloads: 'Konvertierte Downloads',

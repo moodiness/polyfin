@@ -162,8 +162,8 @@ Five more settings change how Polyfin picks a version and how much video the ser
 | **Maximum time to analyze a version** | **Settings › Playback** | 20 seconds (5 to 120) | Bounds every ffprobe analysis, of files and of live streams; a channel is analyzed for 8 seconds at most. A source that does not answer in time is given up for 15 minutes, and Polyfin moves on to the next version sooner. |
 | **Versions tried when one does not work** | **Settings › Playback** | 3 (1 to 10) | How many versions Polyfin analyzes when the app picked none, for titles and channels alike, up to 3 at once for titles. Later versions analyzed before are still tried, as they cost nothing. |
 | **Prefer versions the app plays without conversion** | **Settings › Playback** | Off | Looks among the versions analyzed at once for one that plays on the app as it is or remuxed with its tracks copied. If none does, falls back to the first that plays at all. |
-| **Video conversions at once (0 = no limit)** | **Settings › Conversion** | 0, no limit (up to 32) | Caps the playbacks whose video the server converts. |
-| **Maximum quality of converted video** | **Settings › Conversion** | Original (or 480p to 2160p) | Scales converted video down to that height. |
+| **Video conversions at once (0 = no limit)** | **Settings › Conversion (transcoding)** | 0, no limit (up to 32) | Caps the playbacks whose video the server converts. |
+| **Maximum quality of converted video** | **Settings › Conversion (transcoding)** | Original (or 480p to 2160p) | Scales converted video down to that height. |
 
 ### Prefer versions the app plays without conversion
 
@@ -316,15 +316,15 @@ The files of local folders go through it too. Those of S3 buckets, SFTP folders 
 
 ## Scrubbing thumbnails and chapter images
 
-**Settings › Thumbnails** makes Jellyfin's scrubbing thumbnails (trickplay) and chapter images. Both are off by default, because both read parts of the source.
+**Settings › Thumbnails (trickplay)** makes Jellyfin's scrubbing thumbnails and chapter images. Both are off by default, because both read parts of the source.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Thumbnails when moving through a title** | **Settings › Thumbnails** | Off | Makes trickplay thumbnails. |
-| **Chapter images** | **Settings › Thumbnails** | Off | Makes chapter images. |
-| **One thumbnail every (seconds, at least)** | **Settings › Thumbnails** | 10 seconds (5 to 60) | Shortest time between thumbnails. A version longer than the requests allow at that pace gets longer steps (see [How the images look](#how-the-images-look)). |
-| **Thumbnail width** | **Settings › Thumbnails** | 320 (or 240, 480) | Thumbnail width in pixels. |
-| **Space for images (GB)** | **Settings › Thumbnails** | 2 GB (1 to 50) | Past this, the versions whose images were used longest ago lose them, and get them again on their next play. |
+| **Thumbnails when moving through a title** | **Settings › Thumbnails (trickplay)** | Off | Makes trickplay thumbnails. |
+| **Chapter images** | **Settings › Thumbnails (trickplay)** | Off | Makes chapter images. |
+| **One thumbnail every (seconds, at least)** | **Settings › Thumbnails (trickplay)** | 10 seconds (5 to 60) | Shortest time between thumbnails. A version longer than the requests allow at that pace gets longer steps (see [How the images look](#how-the-images-look)). |
+| **Thumbnail width** | **Settings › Thumbnails (trickplay)** | 320 (or 240, 480) | Thumbnail width in pixels. |
+| **Space for images (GB)** | **Settings › Thumbnails (trickplay)** | 2 GB (1 to 50) | Past this, the versions whose images were used longest ago lose them, and get them again on their next play. |
 
 Turning either setting off hides what was made. It shows again when you turn the setting back on.
 

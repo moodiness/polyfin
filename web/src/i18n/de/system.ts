@@ -344,9 +344,9 @@ const system: typeof en = {
       } as Record<string, string>,
       free: (free: string) => `${free} frei`,
       notMeasured: 'Kann hier nicht gemessen werden.',
-      thumbnailsTitle: 'Miniaturansichten',
+      thumbnailsTitle: 'Miniaturansichten (Trickplay)',
       thumbnailsOff:
-        'Miniaturansichten und Kapitelbilder sind deaktiviert (Einstellungen › Miniaturansichten).',
+        'Miniaturansichten und Kapitelbilder sind unter Einstellungen › Vorschaubilder (Trickplay) deaktiviert.',
       waiting: (count: number, length: number) => `${count} von ${length} wartend`,
       working: 'Bilder werden gerade erstellt',
       idle: 'Inaktiv',

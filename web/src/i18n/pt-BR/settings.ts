@@ -338,7 +338,7 @@ const settings: typeof en = {
       `Converter vídeo é o trabalho mais pesado que o servidor faz. Quando esse número de reproduções estiver com o vídeo sendo convertido (incluindo legendas gravadas na imagem), uma nova reprodução recebe uma versão que não precisa de conversão, ou não é iniciada. Reproduções já em andamento nunca são interrompidas. A TV ao Vivo também mantém seus próprios limites: 4 canais por usuário e 16 para o servidor. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
     maxConversionHeight: 'Qualidade máxima do vídeo convertido',
     maxConversionHeightHelp:
-      'O vídeo convertido é reduzido no máximo a esta altura, mantendo suas proporções, para que seja reproduzido bem em uma conexão mais lenta. Arquivos reproduzidos como estão ou apenas reempacotados mantêm sua qualidade. Uma placa de vídeo converte até 4K; o processador vai até 1080p e, quando converte HDR para SDR, até “Qualidade máxima do HDR convertido pelo processador” (Conversão › HDR).',
+      'O vídeo convertido é reduzido no máximo a esta altura, mantendo suas proporções, para que seja reproduzido bem em uma conexão mais lenta. Arquivos reproduzidos como estão ou apenas reempacotados mantêm sua qualidade. Uma placa de vídeo converte até 4K; o processador vai até 1080p e, quando converte HDR para SDR, até “Qualidade máxima do HDR convertido pelo processador”, em Conversão (transcodificação) › HDR.',
     conversionHeightOriginal: 'Original',
     conversionHeight: (height: number) => `${height}p`,
     convertedDownloads: 'Downloads convertidos',

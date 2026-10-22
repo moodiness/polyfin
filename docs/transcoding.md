@@ -1,6 +1,6 @@
 # Transcoding
 
-This page covers when Polyfin converts (transcodes) video and audio, how to give it a GPU for that, how HDR is tone mapped, and every setting under **Settings › Conversion**.
+This page covers when Polyfin converts (transcodes) video and audio, how to give it a GPU for that, how HDR is tone mapped, and every setting under **Settings › Conversion (transcoding)**.
 
 ## When Polyfin converts
 
@@ -25,7 +25,7 @@ Converted video is never larger than its source. It is smaller when one of these
 - **Processor:** up to 1080p.
 - **HDR converted by the processor:** up to **Maximum quality of HDR converted by the processor**, 720p or 1080p with **Automatic**, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 - **Quality group:** the user's, set on their page under **Users**.
-- **Maximum quality of converted video:** under **Settings › Conversion**.
+- **Maximum quality of converted video:** under **Settings › Conversion (transcoding)**.
 - **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower. The video gets the limit less the bitrate of the audio sent: the converted audio's, 192 kb/s in stereo by default (see [Audio](#audio)), or the track's own when it is copied. A lossless track of several Mb/s converted to stereo AAC thus leaves 1080p 9.8 Mb/s within 10 Mb/s. The `TranscodingUrl` writes the two as `VideoBitrate` and `AudioBitrate`.
 
 When two limits are equal, the user's quality group is named first, then **Maximum quality of converted video**, then the GPU or the processor. The bitrate is named only when it allows less than all of them.
@@ -36,7 +36,7 @@ Jellyfin takes off the limit its own estimate of the audio: 384 kb/s for stereo 
 
 ## Adaptive quality
 
-With **Several qualities when converting** under **Settings › Conversion**, converted video offers apps lower qualities to step down to when their connection slows, instead of stopping to load. It is **Off** by default: one quality, the one Polyfin picks (see [Size of converted video](#size-of-converted-video)). **Outside the local network** offers lower qualities only to apps outside the local network, judged as for password reset PINs: loopback, private and link-local addresses, through **Known proxies** (see [Reverse proxy](reverse-proxy.md#known-proxies)). **Always** offers them to every app.
+With **Several qualities when converting** under **Settings › Conversion (transcoding)**, converted video offers apps lower qualities to step down to when their connection slows, instead of stopping to load. It is **Off** by default: one quality, the one Polyfin picks (see [Size of converted video](#size-of-converted-video)). **Outside the local network** offers lower qualities only to apps outside the local network, judged as for password reset PINs: loopback, private and link-local addresses, through **Known proxies** (see [Reverse proxy](reverse-proxy.md#known-proxies)). **Always** offers them to every app.
 
 - **Qualities:** the first is the one Polyfin picks. After it come up to two lower steps of the ladder (2160p, 1440p, 1080p, 720p, 540p, 480p, 360p), each the tallest whose bitrate is at most half that of the quality above. 1080p at 10 Mb/s adds 720p at 5 Mb/s and 480p at 2 Mb/s; 720p at 5 Mb/s adds 480p and 360p. Nothing goes below 360p, so a 360p conversion keeps one quality. Each keeps the first's codec, encoder, tone mapping, frame rate, audio and subtitles, at its own size and bitrate.
 - **Only converted video:** video copied without conversion keeps one quality. A converted quality beside a copy would turn a playback that costs nothing into a conversion when the network is at its worst, which **Video conversions at once** could refuse mid-play, and would mix codecs, and HDR with SDR, in one playlist. Live TV and music keep one quality too.
@@ -57,7 +57,7 @@ Apps that do not switch play the first quality, as with the setting off. jellyfi
 
 ## Turning conversion and downloads on or off
 
-The server has one switch, **Conversion (transcoding)** under **Settings › Conversion**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or remuxed into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app, as a recording converted to HEVC on an app that does not play HEVC (see [Smaller recordings](live-tv.md#smaller-recordings)). Image subtitles the app cannot show are left out, but for the text copies of picture subtitles (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
+The server has one switch, **Conversion (transcoding)** under **Settings › Conversion (transcoding)**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or remuxed into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app, as a recording converted to HEVC on an app that does not play HEVC (see [Smaller recordings](live-tv.md#smaller-recordings)). Image subtitles the app cannot show are left out, but for the text copies of picture subtitles (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
 
 On a user's page under **Users**, the **Access** section holds each user's own **Can use conversion (transcoding)** and **Can download** permissions, on by default. Conversion needs both the server's switch and the user's permission; downloads need the user's permission only. **Turn off downloads for everyone**, on the **Users** page, takes it away from every user and every user group at once, also in the apps already signed in. A user group can hold both permissions for its members (see [User groups](users.md#user-groups)). See [Users](users.md).
 
@@ -75,7 +75,7 @@ On a user's page under **Users**, the **Access** section holds each user's own *
 
 ## Converted downloads
 
-Apps that keep titles for offline viewing download a version's file as it is, unless **Converted downloads**, under **Settings › Conversion**, is on. It is off by default.
+Apps that keep titles for offline viewing download a version's file as it is, unless **Converted downloads**, under **Settings › Conversion (transcoding)**, is on. It is off by default.
 
 With it on, an app that asks for a smaller copy, as Streamyfin's download sheet does with the quality the user picks, gets one:
 
@@ -89,7 +89,7 @@ With it on, an app that asks for a smaller copy, as Streamyfin's download sheet 
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Converted downloads** | **Settings › Conversion** | Off | Sends apps that ask for it a copy of a title copied or converted to the quality picked, rather than its file. |
+| **Converted downloads** | **Settings › Conversion (transcoding)** | Off | Sends apps that ask for it a copy of a title copied or converted to the quality picked, rather than its file. |
 
 **Compared with Jellyfin:**
 
@@ -122,7 +122,7 @@ A backup restored on another system keeps its choice of method; when the new sys
 
 ### Detection
 
-At startup Polyfin encodes a few frames with each encoder of the system's methods, in the order above, and logs the one it converts video on. It skips this when **Settings › Conversion** chooses a GPU. For VAAPI, it tries each render node of `/dev/dri` in turn, unless **Graphics card for VAAPI** names one.
+At startup Polyfin encodes a few frames with each encoder of the system's methods, in the order above, and logs the one it converts video on. It skips this when **Settings › Conversion (transcoding)** chooses a GPU. For VAAPI, it tries each render node of `/dev/dri` in turn, unless **Graphics card for VAAPI** names one.
 
 A method whose encoders all fail is logged with FFmpeg's reason (`A GPU method does not encode`, with the method, the encoder and the end of what FFmpeg wrote), at the level of the line that tells what video is converted on: information under **Automatic**, a warning when the settings choose that method.
 
@@ -198,7 +198,7 @@ Remuxes and conversions of files are cut into HLS segments on the source's own k
 
 Apps change the audio track of a converted video by playing it again: jellyfin-web asks `PlaybackInfo` for the new track, stops the old play session with `DELETE /Videos/ActiveEncodings`, and loads the new stream from the same position; Jellyfin Android TV, Swiftfin and Streamyfin stop the player and play again too. Off, as before, the new session converts the video again from the keyframe before the position, though the picture has not changed, and the segments already made are deleted.
 
-With **Keep the converted video when the audio track changes** under **Settings › Conversion › Performance**, off by default:
+With **Keep the converted video when the audio track changes** under **Settings › Conversion (transcoding) › Performance**, off by default:
 
 - **Video and audio apart:** a converting FFmpeg makes the video alone, and a second FFmpeg the audio track played, copied or converted as before, cut at the same segment times. The audio's FFmpeg reads the file through the source cache, as the video's does, and makes no segment the video has not reached, nor further than **Seconds prepared ahead**. With [several qualities](#adaptive-quality), one audio FFmpeg serves them all.
 - **Joined as served:** each segment joins the video and the audio of the same times, copying both, in fragmented MP4 (one initialization segment holding both tracks) and in MPEG-TS (the audio's packets interleaved with the video's). Apps see the same endpoints, master playlist, `CODECS` and segment numbers as before.
@@ -214,7 +214,7 @@ With **Keep the converted video when the audio track changes** under **Settings 
 
 ## Conversion settings
 
-**Settings › Conversion** also tunes how video and audio are converted, for files and Live TV alike. Recordings copy the stream, and are converted like any file when played. See [Live TV](live-tv.md).
+**Settings › Conversion (transcoding)** also tunes how video and audio are converted, for files and Live TV alike. Recordings copy the stream, and are converted like any file when played. See [Live TV](live-tv.md).
 
 Finished recordings can also be converted to HEVC at night, to take less space, with **Convert finished recordings to HEVC** under **Settings › Recordings** (see [Smaller recordings](live-tv.md#smaller-recordings)). Those conversions use the **Graphics card used to convert**, the **Encoding speed**, the **HEVC quality**, 28 when it is 0, and the **Deinterlacing method** and **Double the frame rate** below, never tone mapping. Each counts as one of the **Video conversions at once**, and waits while playbacks fill them.
 
@@ -224,8 +224,8 @@ Every default but **Seconds prepared ahead**, **Tone map HDR on the graphics car
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Turn picture subtitles into text** | **Settings › Conversion** | **Off** | **When played** or **Also after library scans**: PGS and VobSub tracks are read into text copies with Tesseract, which apps that cannot draw them play without a video conversion. |
-| **Picture subtitle tracks read at once** | **Settings › Conversion** | 1 (range 1 to 4) | How many tracks Tesseract reads at the same time, one processor thread each. |
+| **Turn picture subtitles into text** | **Settings › Conversion (transcoding)** | **Off** | **When played** or **Also after library scans**: PGS and VobSub tracks are read into text copies with Tesseract, which apps that cannot draw them play without a video conversion. |
+| **Picture subtitle tracks read at once** | **Settings › Conversion (transcoding)** | 1 (range 1 to 4) | How many tracks Tesseract reads at the same time, one processor thread each. |
 
 See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text).
 
@@ -233,10 +233,10 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Graphics card used to convert** | **Settings › Conversion** | `POLYFIN_HWACCEL` at the first start, else **Automatic** | **Automatic** (the first that works, in the order of [GPU methods per system](#gpu-methods-per-system)), the system's methods, or **None**, applied once saved: **NVIDIA (NVENC)** and **AMD or Intel (VAAPI)** on Linux, **VideoToolbox** on macOS, **NVIDIA (NVENC)**, **Intel (QSV)** and **AMD (AMF)** on Windows. |
-| **Graphics card for VAAPI** | **Settings › Conversion** | **Each in turn** | On Linux, with **Automatic** or **AMD or Intel (VAAPI)**, the render node VAAPI converts video on when several graphics cards could: **Each in turn**, the first that works, or one of those found in `/dev/dri`. Applied once saved. |
-| **Detected on this server** | **Settings › Conversion** | Read only | Shows the card chosen with its device, its encoders, whether it tone maps HDR and, for VAAPI, whether it takes a quality number. Also shows the processor's encoders and tone mapping, with the height it tone maps up to. |
-| **Read these formats on the graphics card** | **Settings › Conversion** | All checked | H.264, HEVC, HEVC 10-bit (needs HEVC), VP9, AV1, MPEG-2 and VC-1. An unchecked format is decoded by the processor, for conversions and thumbnails. |
+| **Graphics card used to convert** | **Settings › Conversion (transcoding)** | `POLYFIN_HWACCEL` at the first start, else **Automatic** | **Automatic** (the first that works, in the order of [GPU methods per system](#gpu-methods-per-system)), the system's methods, or **None**, applied once saved: **NVIDIA (NVENC)** and **AMD or Intel (VAAPI)** on Linux, **VideoToolbox** on macOS, **NVIDIA (NVENC)**, **Intel (QSV)** and **AMD (AMF)** on Windows. |
+| **Graphics card for VAAPI** | **Settings › Conversion (transcoding)** | **Each in turn** | On Linux, with **Automatic** or **AMD or Intel (VAAPI)**, the render node VAAPI converts video on when several graphics cards could: **Each in turn**, the first that works, or one of those found in `/dev/dri`. Applied once saved. |
+| **Detected on this server** | **Settings › Conversion (transcoding)** | Read only | Shows the card chosen with its device, its encoders, whether it tone maps HDR and, for VAAPI, whether it takes a quality number. Also shows the processor's encoders and tone mapping, with the height it tone maps up to. |
+| **Read these formats on the graphics card** | **Settings › Conversion (transcoding)** | All checked | H.264, HEVC, HEVC 10-bit (needs HEVC), VP9, AV1, MPEG-2 and VC-1. An unchecked format is decoded by the processor, for conversions and thumbnails. |
 
 - The chosen card is detected when you save, once per choice. Playbacks already converting go on as they started.
 - Options the hardware cannot do are disabled.
@@ -246,44 +246,44 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Encoding speed** | **Settings › Conversion** | **Automatic** | **Automatic** keeps Polyfin's speeds: `veryfast` for x264 and x265, `p4` for NVENC, the encoder's own for VAAPI, VideoToolbox, QSV and AMF. **Very slow (best picture)** to **Ultra fast (lightest work)** are x264's presets, mapped to NVENC's `p7` to `p1`, VAAPI's compression levels 1 to 7, QSV's presets of the same names (`veryfast` for the two fastest), AMF's `quality`, `balanced` and `speed`, and VideoToolbox's speed priority (off from **Slow** down, on from **Fast** up). |
-| **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion** | 0 (range 1 to 51) | 0 aims for the bitrate alone, as before. A number is a quality factor that the bitrate caps: CRF for x264 and x265, CQ for NVENC, QVBR's quality for the VAAPI drivers that have it, and VideoToolbox's quality, from 1 to 100, as 100 minus twice the number. Other VAAPI drivers, QSV and AMF ignore it: their quality modes leave the maximum bitrate out. Recordings converted to HEVC use it with every encoder. |
-| **Allow converting to HEVC** | **Settings › Conversion** | Off | On: apps that list HEVC before H.264 get HEVC. Off: H.264 comes first, and only apps that take no H.264 get HEVC, as before. |
-| **Several qualities when converting** | **Settings › Conversion** | Off | **Off**, **Outside the local network** or **Always**: converted video also offers up to two lower qualities that apps step down to on a slow connection. See [Adaptive quality](#adaptive-quality). |
-| **Deinterlacing method** | **Settings › Conversion** | Yadif | Yadif or Bwdif, on the NVIDIA card too when it keeps the frames, and Yadif with VideoToolbox (Bwdif goes through the processor there). An AMD or Intel card keeping the frames uses its own deinterlacer whatever the method; AMF has none, and its interlaced video is deinterlaced on the processor. |
-| **Double the frame rate** | **Settings › Conversion** | — | Makes a frame of each field of video up to 30 frames a second. |
+| **Encoding speed** | **Settings › Conversion (transcoding)** | **Automatic** | **Automatic** keeps Polyfin's speeds: `veryfast` for x264 and x265, `p4` for NVENC, the encoder's own for VAAPI, VideoToolbox, QSV and AMF. **Very slow (best picture)** to **Ultra fast (lightest work)** are x264's presets, mapped to NVENC's `p7` to `p1`, VAAPI's compression levels 1 to 7, QSV's presets of the same names (`veryfast` for the two fastest), AMF's `quality`, `balanced` and `speed`, and VideoToolbox's speed priority (off from **Slow** down, on from **Fast** up). |
+| **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion (transcoding)** | 0 (range 1 to 51) | 0 aims for the bitrate alone, as before. A number is a quality factor that the bitrate caps: CRF for x264 and x265, CQ for NVENC, QVBR's quality for the VAAPI drivers that have it, and VideoToolbox's quality, from 1 to 100, as 100 minus twice the number. Other VAAPI drivers, QSV and AMF ignore it: their quality modes leave the maximum bitrate out. Recordings converted to HEVC use it with every encoder. |
+| **Allow converting to HEVC** | **Settings › Conversion (transcoding)** | Off | On: apps that list HEVC before H.264 get HEVC. Off: H.264 comes first, and only apps that take no H.264 get HEVC, as before. |
+| **Several qualities when converting** | **Settings › Conversion (transcoding)** | Off | **Off**, **Outside the local network** or **Always**: converted video also offers up to two lower qualities that apps step down to on a slow connection. See [Adaptive quality](#adaptive-quality). |
+| **Deinterlacing method** | **Settings › Conversion (transcoding)** | Yadif | Yadif or Bwdif, on the NVIDIA card too when it keeps the frames, and Yadif with VideoToolbox (Bwdif goes through the processor there). An AMD or Intel card keeping the frames uses its own deinterlacer whatever the method; AMF has none, and its interlaced video is deinterlaced on the processor. |
+| **Double the frame rate** | **Settings › Conversion (transcoding)** | — | Makes a frame of each field of video up to 30 frames a second. |
 
 ### HDR
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Convert HDR to SDR (tone mapping)** | **Settings › Conversion** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's cap, and Dolby Vision without an HDR10 layer is not converted. |
-| **Tone mapping method** | **Settings › Conversion** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA cards only: the processor's filter has none and uses Hable. Intel cards and VideoToolbox use their own curve and ignore the method. |
-| **Tone map HDR on the graphics card** | **Settings › Conversion** | On | NVIDIA cards, Intel cards through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K. Off: the processor tone maps it on every card, a way out when a card's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
-| **Maximum quality of HDR converted by the processor** | **Settings › Conversion** | **Automatic (measured at startup)** | **Automatic** (1080p or 720p, as measured at startup, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
-| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion** | 0 (the video's), or 100 to 10,000 nits | Processor only; the cards do not take it, so it is hidden when an NVIDIA card tone maps. |
-| **Highlight desaturation (0 = off)** | **Settings › Conversion** | 0 to 10 | Processor only, shown as the peak is. |
+| **Convert HDR to SDR (tone mapping)** | **Settings › Conversion (transcoding)** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's cap, and Dolby Vision without an HDR10 layer is not converted. |
+| **Tone mapping method** | **Settings › Conversion (transcoding)** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA cards only: the processor's filter has none and uses Hable. Intel cards and VideoToolbox use their own curve and ignore the method. |
+| **Tone map HDR on the graphics card** | **Settings › Conversion (transcoding)** | On | NVIDIA cards, Intel cards through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K. Off: the processor tone maps it on every card, a way out when a card's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
+| **Maximum quality of HDR converted by the processor** | **Settings › Conversion (transcoding)** | **Automatic (measured at startup)** | **Automatic** (1080p or 720p, as measured at startup, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
+| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion (transcoding)** | 0 (the video's), or 100 to 10,000 nits | Processor only; the cards do not take it, so it is hidden when an NVIDIA card tone maps. |
+| **Highlight desaturation (0 = off)** | **Settings › Conversion (transcoding)** | 0 to 10 | Processor only, shown as the peak is. |
 
 ### Audio
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Mix to stereo** | **Settings › Conversion** | FFmpeg's own | Or Jellyfin's Dave750, Night mode, RFC 7845 and AC-4, for the layouts Jellyfin lists for each, 5.1 and 7.1 among them. |
-| **Volume when mixing to stereo** | **Settings › Conversion** | 1 (range 0.5 to 3) | Volume of the stereo mix. |
-| **Most audio channels** | **Settings › Conversion** | As many as the app takes | Or mono, stereo or 5.1. Shapes converted audio. |
-| **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion** | 0 (range 32 to 320 kb/s) | 0 keeps Polyfin's 192 kb/s in stereo and 64 kb/s a channel above stereo. Shapes converted audio. |
+| **Mix to stereo** | **Settings › Conversion (transcoding)** | FFmpeg's own | Or Jellyfin's Dave750, Night mode, RFC 7845 and AC-4, for the layouts Jellyfin lists for each, 5.1 and 7.1 among them. |
+| **Volume when mixing to stereo** | **Settings › Conversion (transcoding)** | 1 (range 0.5 to 3) | Volume of the stereo mix. |
+| **Most audio channels** | **Settings › Conversion (transcoding)** | As many as the app takes | Or mono, stereo or 5.1. Shapes converted audio. |
+| **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion (transcoding)** | 0 (range 32 to 320 kb/s) | 0 keeps Polyfin's 192 kb/s in stereo and 64 kb/s a channel above stereo. Shapes converted audio. |
 
 ### Performance
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Processor threads per conversion (0 = automatic)** | **Settings › Conversion** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
-| **Seconds prepared ahead** | **Settings › Conversion** | 120 (range 30 to 600) | How many seconds of picture a remux or conversion of a file makes past the last segment the app asked for, before it waits. |
-| **Keep the converted video when the audio track changes** | **Settings › Conversion** | Off | Converts the video apart from its audio, and keeps it 30 seconds once its play session stops, for a new session asking for another audio track to take over. Off, a track change converts the video again, as before. See [Changing the audio track](#changing-the-audio-track). |
+| **Processor threads per conversion (0 = automatic)** | **Settings › Conversion (transcoding)** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
+| **Seconds prepared ahead** | **Settings › Conversion (transcoding)** | 120 (range 30 to 600) | How many seconds of picture a remux or conversion of a file makes past the last segment the app asked for, before it waits. |
+| **Keep the converted video when the audio track changes** | **Settings › Conversion (transcoding)** | Off | Converts the video apart from its audio, and keeps it 30 seconds once its play session stops, for a new session asking for another audio track to take over. Off, a track change converts the video again, as before. See [Changing the audio track](#changing-the-audio-track). |
 
 **Compared with Jellyfin:**
 
-- **Settings › Conversion** works as Jellyfin's Transcoding page does.
+- **Settings › Conversion (transcoding)** works as Jellyfin's Transcoding page does.
 - Jellyfin checks only H.264 and VC-1 under hardware decoding by default.
 - Polyfin maps encoding speeds to NVENC and VAAPI as Jellyfin does; Jellyfin sets VAAPI compression levels on Intel drivers only.
 - Jellyfin's quality defaults are CRF 23 (H.264) and 28 (HEVC), and only for x264 and x265.
