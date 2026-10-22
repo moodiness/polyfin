@@ -434,11 +434,12 @@ func (e *Engine) Close() {
 	route := e.route
 	e.route, e.routeKey = nil, Settings{}
 	e.mu.Unlock()
-	if route != nil {
-		route.Close()
-	}
+	// The torrents stop over their route still up, then the route closes.
 	for _, t := range torrents {
 		t.fail(errStopped)
+	}
+	if route != nil {
+		route.Close()
 	}
 	e.store.close()
 }

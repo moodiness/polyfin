@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -61,7 +62,7 @@ type wireGuardRoute struct {
 	mu        sync.Mutex
 	closed    bool
 	dev       *device.Device
-	tnet      *netstack.Net
+	run       *tunnelRun
 	peer      *device.Peer
 	checkedAt time.Time
 	checkErr  error
@@ -80,16 +81,101 @@ func (r *wireGuardRoute) Close() error {
 	return nil
 }
 
-// stop stops the tunnel, its sockets with it. wireguard-go may log as its
+// stop stops the tunnel, its sockets first. wireguard-go may log as its
 // device closes: r.mu is not held.
 func (r *wireGuardRoute) stop() {
 	r.mu.Lock()
-	dev := r.dev
-	r.dev, r.tnet, r.peer = nil, nil, nil
+	dev, run := r.dev, r.run
+	r.dev, r.run, r.peer = nil, nil, nil
 	r.mu.Unlock()
+	if run != nil {
+		run.stop()
+	}
 	if dev != nil {
 		dev.Close()
 	}
+}
+
+// tunnelRun is a run of the tunnel's network stack, and what Polyfin sends
+// through it. wireguard-go's stack panics on a packet sent while its
+// device closes (a send on a closed channel), so each of Polyfin's sends
+// (a datagram, a TCP write or dial, a name looked up) holds sends for
+// reading, and stop takes it for writing before the device closes: it
+// waits for the sends in flight, which closing the sockets and ending ctx
+// cut short, and refuses those that come next.
+type tunnelRun struct {
+	tnet   *netstack.Net
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	sends   sync.RWMutex
+	stopped bool
+
+	mu sync.Mutex
+	// sockets are the sockets open on the run, by what Polyfin was given,
+	// nil once the run stops.
+	sockets map[io.Closer]io.Closer
+}
+
+func newTunnelRun(tnet *netstack.Net) *tunnelRun {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &tunnelRun{tnet: tnet, ctx: ctx, cancel: cancel, sockets: map[io.Closer]io.Closer{}}
+}
+
+// send sends through the tunnel by f, unless the run stopped.
+func (run *tunnelRun) send(f func() error) error {
+	run.sends.RLock()
+	defer run.sends.RUnlock()
+	if run.stopped {
+		return errRouteClosed
+	}
+	return f()
+}
+
+// bound is ctx, ended too when the run stops.
+func (run *tunnelRun) bound(ctx context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(run.ctx, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
+	}
+}
+
+// opened records a socket given as given, closed when the run stops;
+// false when it stopped, socket being then closed.
+func (run *tunnelRun) opened(given, socket io.Closer) bool {
+	run.mu.Lock()
+	defer run.mu.Unlock()
+	if run.sockets == nil {
+		socket.Close()
+		return false
+	}
+	run.sockets[given] = socket
+	return true
+}
+
+// closed forgets a socket closed.
+func (run *tunnelRun) closed(given io.Closer) {
+	run.mu.Lock()
+	defer run.mu.Unlock()
+	delete(run.sockets, given)
+}
+
+// stop ends the run's dials and lookups, closes its sockets, which ends
+// their writes, and waits for the sends in flight.
+func (run *tunnelRun) stop() {
+	run.cancel()
+	run.mu.Lock()
+	sockets := run.sockets
+	run.sockets = nil
+	run.mu.Unlock()
+	for _, socket := range sockets {
+		socket.Close()
+	}
+	run.sends.Lock()
+	run.stopped = true
+	run.sends.Unlock()
 }
 
 // TunnelStatus is what Health tells of a WireGuard tunnel: its server,
@@ -220,7 +306,7 @@ func (r *wireGuardRoute) start(ctx context.Context) (*device.Peer, error) {
 		dev.Close()
 		return nil, errRouteClosed
 	}
-	r.dev, r.tnet, r.peer = dev, tnet, peer
+	r.dev, r.run, r.peer = dev, newTunnelRun(tnet), peer
 	r.mu.Unlock()
 	return peer, nil
 }
@@ -292,7 +378,7 @@ func (r *wireGuardRoute) lastHandshake() time.Time {
 
 // stack returns the tunnel's network stack, once a check found the tunnel
 // up: while it is down, no socket opens.
-func (r *wireGuardRoute) stack() (*netstack.Net, error) {
+func (r *wireGuardRoute) stack() (*tunnelRun, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	switch {
@@ -300,36 +386,68 @@ func (r *wireGuardRoute) stack() (*netstack.Net, error) {
 		return nil, errRouteClosed
 	case r.checkErr != nil:
 		return nil, r.checkErr
-	case r.tnet == nil:
+	case r.run == nil:
 		return nil, &RouteError{Kind: WireGuardHandshake, Route: r.config.Endpoint}
 	}
-	return r.tnet, nil
+	return r.run, nil
 }
 
 func (r *wireGuardRoute) Dial(ctx context.Context, address string) (net.Conn, error) {
 	if err := r.Check(ctx); err != nil {
 		return nil, err
 	}
-	tnet, err := r.stack()
+	run, err := r.stack()
 	if err != nil {
 		return nil, err
 	}
-	target, err := r.resolve(ctx, tnet, address, true)
+	ctx, cancel := run.bound(ctx)
+	defer cancel()
+	target, err := r.resolve(ctx, run, address, true)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := tnet.DialContextTCPAddrPort(ctx, target)
-	if err != nil {
-		// A nil *gonet.TCPConn would be a net.Conn that is not nil.
+	var conn net.Conn
+	if err := run.send(func() error {
+		tcp, err := run.tnet.DialContextTCPAddrPort(ctx, target)
+		if err != nil {
+			// A nil *gonet.TCPConn would be a net.Conn that is not nil.
+			return err
+		}
+		conn = tcp
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-	return conn, nil
+	tunneled := &tunnelConn{Conn: conn, run: run}
+	if !run.opened(tunneled, conn) {
+		return nil, errRouteClosed
+	}
+	return tunneled, nil
+}
+
+// tunnelConn is a TCP connection of the tunnel's network stack.
+type tunnelConn struct {
+	net.Conn
+	run *tunnelRun
+}
+
+func (c *tunnelConn) Write(p []byte) (n int, err error) {
+	err = c.run.send(func() error {
+		n, err = c.Conn.Write(p)
+		return err
+	})
+	return n, err
+}
+
+func (c *tunnelConn) Close() error {
+	c.run.closed(c)
+	return c.Conn.Close()
 }
 
 // resolve looks a host up over the tunnel, by the configuration's DNS
 // servers, IP addresses as they are. IPv6 is taken when tcp and the tunnel
 // has an IPv6 address; UDP sockets are IPv4.
-func (r *wireGuardRoute) resolve(ctx context.Context, tnet *netstack.Net, address string, tcp bool) (netip.AddrPort, error) {
+func (r *wireGuardRoute) resolve(ctx context.Context, run *tunnelRun, address string, tcp bool) (netip.AddrPort, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return netip.AddrPort{}, err
@@ -351,8 +469,11 @@ func (r *wireGuardRoute) resolve(ctx context.Context, tnet *netstack.Net, addres
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	found, err := tnet.LookupContextHost(ctx, host)
-	if err != nil {
+	var found []string
+	if err := run.send(func() (err error) {
+		found, err = run.tnet.LookupContextHost(ctx, host)
+		return err
+	}); err != nil {
 		return netip.AddrPort{}, fmt.Errorf("look %s up over the WireGuard tunnel: %w", host, err)
 	}
 	var fallback netip.Addr
@@ -378,33 +499,36 @@ func (r *wireGuardRoute) ListenPacket(ctx context.Context) (PacketConn, error) {
 	if err := r.Check(ctx); err != nil {
 		return nil, err
 	}
-	tnet, err := r.stack()
+	run, err := r.stack()
 	if err != nil {
 		return nil, err
 	}
-	udp, err := tnet.ListenUDPAddrPort(netip.AddrPortFrom(r.config.ipv4(), 0))
+	udp, err := run.tnet.ListenUDPAddrPort(netip.AddrPortFrom(r.config.ipv4(), 0))
 	if err != nil {
 		return nil, err
 	}
-	return &tunnelPacketConn{route: r, tnet: tnet, conn: udp}, nil
+	c := &tunnelPacketConn{route: r, run: run, conn: udp}
+	if !run.opened(c, udp) {
+		return nil, errRouteClosed
+	}
+	return c, nil
 }
 
 // tunnelPacketConn is a UDP socket of the tunnel's network stack.
 type tunnelPacketConn struct {
 	route *wireGuardRoute
-	tnet  *netstack.Net
+	run   *tunnelRun
 	conn  net.PacketConn
 }
 
 func (c *tunnelPacketConn) WriteTo(p []byte, address string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := c.run.bound(context.Background())
 	defer cancel()
-	target, err := c.route.resolve(ctx, c.tnet, address, false)
+	target, err := c.route.resolve(ctx, c.run, address, false)
 	if err != nil {
 		return err
 	}
-	_, err = c.conn.WriteTo(p, net.UDPAddrFromAddrPort(target))
-	return err
+	return c.send(p, target)
 }
 
 func (c *tunnelPacketConn) WriteToAddrPort(p []byte, to netip.AddrPort) error {
@@ -412,8 +536,14 @@ func (c *tunnelPacketConn) WriteToAddrPort(p []byte, to netip.AddrPort) error {
 	if !ip.Is4() {
 		return fmt.Errorf("%s is an IPv6 address, which the tunnel does not carry here", ip)
 	}
-	_, err := c.conn.WriteTo(p, net.UDPAddrFromAddrPort(netip.AddrPortFrom(ip, to.Port())))
-	return err
+	return c.send(p, netip.AddrPortFrom(ip, to.Port()))
+}
+
+func (c *tunnelPacketConn) send(p []byte, to netip.AddrPort) error {
+	return c.run.send(func() error {
+		_, err := c.conn.WriteTo(p, net.UDPAddrFromAddrPort(to))
+		return err
+	})
 }
 
 func (c *tunnelPacketConn) ReadFrom(p []byte) (int, netip.AddrPort, error) {
@@ -431,4 +561,7 @@ func (c *tunnelPacketConn) ReadFrom(p []byte) (int, netip.AddrPort, error) {
 
 func (c *tunnelPacketConn) SetReadDeadline(t time.Time) error { return c.conn.SetReadDeadline(t) }
 
-func (c *tunnelPacketConn) Close() error { return c.conn.Close() }
+func (c *tunnelPacketConn) Close() error {
+	c.run.closed(c)
+	return c.conn.Close()
+}

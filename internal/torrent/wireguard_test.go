@@ -13,6 +13,8 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -480,4 +482,86 @@ func startSource(tb testing.TB, size int) netip.AddrPort {
 		}
 	}()
 	return netip.MustParseAddrPort(listener.Addr().String())
+}
+
+// A route closed while its sockets still send, as by an engine that closes
+// with torrents playing, closes its tunnel after their last datagram:
+// wireguard-go's stack, which panics on a packet sent as it closes, gets
+// none then, and the sockets fail.
+func TestWireGuardRouteClosesAfterItsSocketsSend(t *testing.T) {
+	t.Parallel()
+	server := torrenttest.StartWireGuardServer(t, nil)
+	e, _ := tunneled(t, server.Config())
+	route, err := e.currentRoute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sink.Close()
+	target := torrenttest.Through(netip.MustParseAddrPort(sink.LocalAddr().String())).String()
+	conn, err := route.ListenPacket(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	var sent atomic.Int64
+	var senders sync.WaitGroup
+	for range 4 {
+		senders.Go(func() {
+			for conn.WriteTo([]byte("datagram"), target) == nil {
+				sent.Add(1)
+			}
+		})
+	}
+	for sent.Load() < 100 {
+		time.Sleep(time.Millisecond)
+	}
+	route.Close()
+	senders.Wait()
+	if _, err := route.ListenPacket(t.Context()); !errors.Is(err, errRouteClosed) {
+		t.Fatalf("a socket opened on a closed route: %v", err)
+	}
+}
+
+// A WireGuard configuration changed while a torrent plays through the
+// tunnel closes the tunnel under the torrent's uTP socket, which sends an
+// acknowledgment for each packet received: the playback fails, telling the
+// route changed, and nothing panics.
+func TestWireGuardRouteReplacedDuringAPlayback(t *testing.T) {
+	t.Parallel()
+	tor := torrenttest.Build("A Movie", 256<<10, torrenttest.File{Name: "a-movie.mkv", Data: torrenttest.Bytes(8 << 20)})
+	seeder := torrenttest.SeedUTP(t, tor, "127.0.0.1")
+	seeder.Delay(time.Millisecond)
+	server := torrenttest.StartWireGuardServer(t, nil)
+	other := torrenttest.StartWireGuardServer(t, nil)
+	e, settings := tunneled(t, server.Config())
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", torrenttest.Through(seeder.Address()))
+	spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + trackerURL(settings, tracker.URL())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Play(spec)()
+	ctx, cancel := context.WithTimeout(context.Background(), utpDeadline)
+	defer cancel()
+	r, err := e.Open(ctx, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	read := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(io.Discard, io.NewSectionReader(r, 0, r.Size()))
+		read <- err
+	}()
+	waitFor(t, "the seeder to send", func() bool { return seeder.Sent() >= 64<<10 })
+	settings.set(func(s *Settings) { s.WireGuard = other.Config() })
+	if _, err := e.currentRoute(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-read; err == nil || seeder.Sent() >= int64(len(tor.Data)) {
+		t.Fatalf("the playback went on through the tunnel replaced: %v, %d bytes sent", err, seeder.Sent())
+	}
 }
