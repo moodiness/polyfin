@@ -27,14 +27,13 @@ const mergedPerson = `excluded.data
 
 // saveCredits records the people a title credits, so that apps can open
 // them by identifier, and so that a person lists the titles Polyfin knows
-// them in. Credits accumulate across titles; the merge happens in the
-// upsert, so that titles described at once do not lose each other's. A
-// person's record takes its identifier and key from the same name,
-// whatever identifier the credit carries.
+// them in. A title's credits replace those recorded for it before: people
+// it no longer credits lose it, as in Jellyfin, where a refreshed item's
+// people replace the ones it had. Credits accumulate across titles; the
+// merge happens in the upsert, so that titles described at once do not
+// lose each other's. A person's record takes its identifier and key from
+// the same name, whatever identifier the credit carries.
 func (s *Service) saveCredits(ctx context.Context, title accounts.ID, credits []Person, confined bool) error {
-	if len(credits) == 0 {
-		return nil
-	}
 	byID := map[accounts.ID]*record{}
 	var people []*record
 	for _, person := range credits {
@@ -57,7 +56,22 @@ func (s *Service) saveCredits(ctx context.Context, title accounts.ID, credits []
 	// people in another order, described together, must not wait on each
 	// other.
 	slices.SortFunc(people, func(a, b *record) int { return bytes.Compare(a.ID[:], b.ID[:]) })
-	return s.upsert(ctx, people, mergedPerson)
+	if len(people) > 0 {
+		if err := s.upsert(ctx, people, mergedPerson); err != nil {
+			return err
+		}
+	}
+	// The people no longer credited lose the title, in a statement of its
+	// own that locks them in the same order.
+	listed := make([]accounts.ID, len(people))
+	for i, r := range people {
+		listed[i] = r.ID
+	}
+	_, err := s.db.Exec(ctx, `WITH dropped AS (SELECT id FROM items
+			WHERE kind = 'person' AND data->'credits' ? $1 AND NOT id = ANY($2::uuid[]) ORDER BY id FOR UPDATE)
+		UPDATE items SET data = jsonb_set(items.data, '{credits}', (items.data->'credits') - $1::text), updated_at = now()
+		FROM dropped WHERE items.id = dropped.id`, title.String(), listed)
+	return err
 }
 
 // searchable reports whether a catalog looks a term up: it takes a search
