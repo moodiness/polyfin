@@ -373,17 +373,20 @@ type Status struct {
 	UnstartedAt time.Time
 }
 
-// Status checks the route and tells what runs.
+// Status checks the route and tells what runs. A WireGuard tunnel tells
+// its last check at once (see lastResult).
 func (e *Engine) Status(ctx context.Context) Status {
 	status := Status{Enabled: e.config.Settings().Enabled, Used: e.store.usage()}
 	if status.Enabled {
 		route, err := e.currentRoute()
 		if err == nil {
 			status.Route = route.String()
-			err = route.Check(ctx)
 			if tunnel, ok := route.(*wireGuardRoute); ok {
+				err = tunnel.lastResult(ctx)
 				state := tunnel.tunnel()
 				status.Tunnel = &state
+			} else {
+				err = route.Check(ctx)
 			}
 		}
 		status.RouteError = err

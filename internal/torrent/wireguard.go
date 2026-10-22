@@ -45,27 +45,40 @@ const (
 // Nothing listens: no peer can connect in. The tunnel starts at the first
 // check; logger takes wireguard-go's errors, at debug level.
 func WireGuardRoute(config *WireGuardConfig, logger *slog.Logger) Route {
-	return &wireGuardRoute{config: config, logger: logger, fresh: tunnelFresh, wait: tunnelWait}
+	checks, endChecks := context.WithCancel(context.Background())
+	return &wireGuardRoute{config: config, logger: logger, fresh: tunnelFresh, wait: tunnelWait, checks: checks, endChecks: endChecks}
 }
 
 type wireGuardRoute struct {
 	config      *WireGuardConfig
 	logger      *slog.Logger
 	fresh, wait time.Duration
-
-	// checking makes one check at a time, and starts the tunnel once.
-	checking sync.Mutex
+	// checks is the context of the checks, which run in the background
+	// (see startCheck): endChecks ends it when the route closes.
+	checks    context.Context
+	endChecks context.CancelFunc
 	// deviceErr is wireguard-go's last error, told with a failed
 	// handshake.
 	deviceErr atomic.Pointer[string]
 
-	mu        sync.Mutex
-	closed    bool
-	dev       *device.Device
-	run       *tunnelRun
-	peer      *device.Peer
+	mu     sync.Mutex
+	closed bool
+	dev    *device.Device
+	run    *tunnelRun
+	peer   *device.Peer
+	// checking is closed when the check running ends, nil when none
+	// runs: one runs at a time, and it alone starts the tunnel.
+	checking chan struct{}
+	// checkedAt and checkErr are the end and the result of the last
+	// check, zero and nil before the first.
 	checkedAt time.Time
 	checkErr  error
+	// asked tells the tunnel was asked for since the last check started:
+	// only then does a failed check make another (see recheck).
+	asked bool
+	// overdue is the first check once Health's deadline passed waiting for
+	// it: until it ends, Health tells a failed handshake at once.
+	overdue <-chan struct{}
 }
 
 // errRouteClosed reports a socket asked of a route that was replaced.
@@ -77,6 +90,7 @@ func (r *wireGuardRoute) Close() error {
 	r.mu.Lock()
 	r.closed = true
 	r.mu.Unlock()
+	r.endChecks()
 	r.stop()
 	return nil
 }
@@ -193,31 +207,132 @@ func (r *wireGuardRoute) tunnel() TunnelStatus {
 
 // Check reports the tunnel down when its server cannot be looked up or
 // reached, or does not answer a handshake, as with a wrong key: a
-// handshake within r.fresh tells it is up, else a new one is made. A
-// failure is kept for checkedFor, as a proxy's, unless ctx ended it
-// before r.wait.
+// handshake within r.fresh tells it is up, else a check makes a new one
+// (see startCheck). A failure is kept for checkedFor, as a proxy's. Check
+// waits for the check running until ctx is done, and then tells a failed
+// handshake, which is not kept: the check goes on.
 func (r *wireGuardRoute) Check(ctx context.Context) error {
-	r.checking.Lock()
-	defer r.checking.Unlock()
+	done, err := r.lastCheck()
+	if done == nil {
+		return err
+	}
+	select {
+	case <-done:
+		return r.result()
+	case <-ctx.Done():
+		return r.handshakeFailure()
+	}
+}
+
+// lastResult is what Health tells of the tunnel, at once once a check
+// ended: the last check's result, whatever its age, while the check
+// lastCheck joins or starts runs in the background. Before the first check
+// ends, it waits for it until ctx is done, and then tells a failed
+// handshake, as it does at once afterwards until that check ends: Health's
+// deadline is shorter than r.wait, and the requests that follow it answer
+// at once rather than each waiting out that deadline.
+func (r *wireGuardRoute) lastResult(ctx context.Context) error {
+	done, err := r.lastCheck()
+	if done == nil {
+		return err
+	}
 	r.mu.Lock()
-	if r.closed {
+	checked, err, overdue := !r.checkedAt.IsZero(), r.checkErr, r.overdue == done
+	r.mu.Unlock()
+	switch {
+	case checked:
+		return err
+	case overdue:
+		return r.handshakeFailure()
+	}
+	select {
+	case <-done:
+		return r.result()
+	case <-ctx.Done():
+		r.mu.Lock()
+		r.overdue = done
 		r.mu.Unlock()
+		return r.handshakeFailure()
+	}
+}
+
+// lastCheck returns the result of the last check while it holds, a
+// failure for checkedFor and a success while the last handshake is less
+// than r.fresh old, or else the end of the check running, which it starts
+// when none runs.
+func (r *wireGuardRoute) lastCheck() (<-chan struct{}, error) {
+	r.mu.Lock()
+	r.asked = true
+	switch done, err := r.checking, r.checkErr; {
+	case r.closed:
+		r.mu.Unlock()
+		return nil, errRouteClosed
+	case done != nil:
+		r.mu.Unlock()
+		return done, nil
+	case err != nil && time.Since(r.checkedAt) < checkedFor:
+		r.mu.Unlock()
+		return nil, err
+	}
+	r.mu.Unlock()
+	if last := r.lastHandshake(); !last.IsZero() && time.Since(last) < r.fresh {
+		r.mu.Lock()
+		r.checkedAt, r.checkErr = time.Now(), nil
+		r.mu.Unlock()
+		return nil, nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil, errRouteClosed
+	}
+	if r.checking == nil {
+		r.startCheck()
+	}
+	return r.checking, nil
+}
+
+// result is the last check's result.
+func (r *wireGuardRoute) result() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
 		return errRouteClosed
 	}
-	if r.checkErr != nil && time.Since(r.checkedAt) < checkedFor {
-		err := r.checkErr
+	return r.checkErr
+}
+
+// startCheck starts a check in the background, which waits r.wait for a
+// handshake whatever the deadline of the request that asked: a request
+// that cannot wait that long answers without it, and the next ones have
+// its result. A failed check makes another checkedFor later if the tunnel
+// was asked for meanwhile, by Health or a playback: while Health is open,
+// a tunnel that is down is checked again every checkedFor, and one that
+// comes back is seen within checkedFor and one check, 13 seconds when
+// Endpoint is an address. It is called with r.mu held.
+func (r *wireGuardRoute) startCheck() {
+	done := make(chan struct{})
+	r.checking, r.asked = done, false
+	go func() {
+		err := r.check(r.checks)
+		r.mu.Lock()
+		r.checking, r.checkedAt, r.checkErr = nil, time.Now(), err
 		r.mu.Unlock()
-		return err
-	}
-	r.mu.Unlock()
-	err := r.check(ctx)
-	if err != nil && ctx.Err() != nil {
-		return err
-	}
+		close(done)
+		if err != nil {
+			time.AfterFunc(checkedFor, r.recheck)
+		}
+	}()
+}
+
+// recheck checks again a tunnel found down, if it was asked for since that
+// check started and no check runs.
+func (r *wireGuardRoute) recheck() {
 	r.mu.Lock()
-	r.checkedAt, r.checkErr = time.Now(), err
-	r.mu.Unlock()
-	return err
+	defer r.mu.Unlock()
+	if r.asked && !r.closed && r.checking == nil {
+		r.startCheck()
+	}
 }
 
 func (r *wireGuardRoute) check(ctx context.Context) error {
@@ -236,14 +351,20 @@ func (r *wireGuardRoute) check(ctx context.Context) error {
 	if r.awaitHandshake(ctx, last) {
 		return nil
 	}
-	failure := &RouteError{Kind: WireGuardHandshake, Route: r.config.Endpoint}
-	if message := r.deviceErr.Load(); message != nil {
-		failure.Err = errors.New(*message)
-	}
 	// A server named by its host name may have moved: the next check
 	// looks it up again.
 	if _, err := netip.ParseAddrPort(r.config.Endpoint); err != nil && ctx.Err() == nil {
 		r.stop()
+	}
+	return r.handshakeFailure()
+}
+
+// handshakeFailure reports a handshake that did not come, with
+// wireguard-go's last error.
+func (r *wireGuardRoute) handshakeFailure() error {
+	failure := &RouteError{Kind: WireGuardHandshake, Route: r.config.Endpoint}
+	if message := r.deviceErr.Load(); message != nil {
+		failure.Err = errors.New(*message)
 	}
 	return failure
 }
@@ -270,7 +391,8 @@ func (r *wireGuardRoute) awaitHandshake(ctx context.Context, last time.Time) boo
 }
 
 // start starts the tunnel unless it runs, and returns its peer, the
-// server. It is called with r.checking held.
+// server, looking the server's name up for r.wait at most. The running
+// check alone calls it.
 func (r *wireGuardRoute) start(ctx context.Context) (*device.Peer, error) {
 	r.mu.Lock()
 	peer := r.peer
@@ -278,7 +400,9 @@ func (r *wireGuardRoute) start(ctx context.Context) (*device.Peer, error) {
 	if peer != nil {
 		return peer, nil
 	}
-	server, err := r.lookUpServer(ctx)
+	lookup, cancel := context.WithTimeout(ctx, r.wait)
+	server, err := r.lookUpServer(lookup)
+	cancel()
 	if err != nil {
 		return nil, err
 	}

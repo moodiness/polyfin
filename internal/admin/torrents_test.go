@@ -145,32 +145,35 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 	}
 
 	// While the tunnel's server does not answer, Health still answers,
-	// its route check given up at its own deadline, before any check
-	// waited long enough to know the handshake failed.
+	// its route check given up at its own deadline, before the check
+	// waited long enough to know the handshake failed. The check goes on
+	// in the background: the requests that follow answer at once and tell
+	// the same failure, rather than each waiting out the deadline, 2
+	// seconds, for a check of its own. The admin app asks for Health and
+	// the problems every few seconds.
 	status, body, _ = administrator.call(http.MethodGet, "/health", nil)
 	if torrents, _ := body["torrents"].(map[string]any); status != http.StatusOK || torrents["route"] != "wireguard" {
 		t.Fatalf("Health while the tunnel does not answer: %d %v", status, body)
 	}
-	// The problems tell the same failure within Health's deadline, 2
-	// seconds, rather than after the 8 a check waits for a handshake: the
-	// admin app asks for them every few seconds.
 	asked := time.Now()
-	_, body, _ = administrator.call(http.MethodGet, "/health/problems?language=en", nil)
-	if took := time.Since(asked); took > 5*time.Second {
-		t.Errorf("the problems took %v while the tunnel does not answer", took)
+	for range 3 {
+		_, body, _ = administrator.call(http.MethodGet, "/health/problems?language=en", nil)
+		found, _ := body["problems"].([]any)
+		if len(found) != 1 {
+			t.Fatalf("problems: %v", found)
+		}
+		problem, _ := found[0].(map[string]any)
+		if problem["code"] != "torrent_route" || problem["failure"] != torrent.WireGuardHandshake || !strings.HasPrefix(problem["name"].(string), "127.0.0.1:") {
+			t.Fatalf("problem: %v", problem)
+		}
+		_, body, _ = administrator.call(http.MethodGet, "/health", nil)
+		torrents, _ := body["torrents"].(map[string]any)
+		if torrents["route"] != "wireguard" || torrents["lastHandshake"] != nil || !reflect.DeepEqual(torrents["addresses"], []any{"10.64.0.2/32"}) {
+			t.Fatalf("Health's torrents: %v", torrents)
+		}
 	}
-	found, _ := body["problems"].([]any)
-	if len(found) != 1 {
-		t.Fatalf("problems: %v", found)
-	}
-	problem, _ := found[0].(map[string]any)
-	if problem["code"] != "torrent_route" || problem["failure"] != torrent.WireGuardHandshake || !strings.HasPrefix(problem["name"].(string), "127.0.0.1:") {
-		t.Fatalf("problem: %v", problem)
-	}
-	_, body, _ = administrator.call(http.MethodGet, "/health", nil)
-	torrents, _ := body["torrents"].(map[string]any)
-	if torrents["route"] != "wireguard" || torrents["lastHandshake"] != nil || !reflect.DeepEqual(torrents["addresses"], []any{"10.64.0.2/32"}) {
-		t.Fatalf("Health's torrents: %v", torrents)
+	if took := time.Since(asked); took > 3*readyWait {
+		t.Errorf("3 requests for the problems and 3 for Health took %v while the tunnel does not answer, each waiting for a check", took)
 	}
 
 	// With the right key, Health tells the last handshake.
@@ -178,7 +181,7 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 		t.Fatalf("saving: %d %v", status, body)
 	}
 	_, body, _ = administrator.call(http.MethodGet, "/health", nil)
-	torrents, _ = body["torrents"].(map[string]any)
+	torrents, _ := body["torrents"].(map[string]any)
 	if torrents["route"] != "wireguard" || torrents["lastHandshake"] == nil || torrents["peers"] != float64(0) || torrents["utpPeers"] != float64(0) {
 		t.Fatalf("Health's torrents: %v", torrents)
 	}

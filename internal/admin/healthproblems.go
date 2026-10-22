@@ -339,10 +339,10 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		problems = append(problems, httpsProblems(h.Health.HTTPS(), h.now())...)
 	}
 	if h.Health.Torrents != nil {
-		// The route's check has Health's deadline: a WireGuard tunnel whose
-		// server does not answer waits out the whole of it for a handshake,
-		// which tells the same failure as a longer wait, and the admin app
-		// asks for the problems every few seconds.
+		// The route's check has Health's deadline. A WireGuard tunnel tells
+		// its last check at once, the next running in the background: only
+		// the first, for a server that does not answer, waits out that
+		// deadline, and the admin app asks for the problems every few seconds.
 		routeCtx, cancelRoute := context.WithTimeout(ctx, readyWait)
 		status := h.Health.Torrents.Status(routeCtx)
 		cancelRoute()

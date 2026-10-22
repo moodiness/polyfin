@@ -92,9 +92,8 @@ func StartWireGuardServer(tb testing.TB, names map[string]netip.Addr) *WireGuard
 	events <- tun.EventUp
 	s.dev = device.NewDevice(&stackTUN{nic: nic, stack: ip, ctx: ctx, cancel: cancel, events: events},
 		conn.NewDefaultBind(), &device.Logger{Verbosef: device.DiscardLogf, Errorf: device.DiscardLogf})
-	client := publicKey(s.clientKey)
-	config := "private_key=" + hex.EncodeToString(s.privateKey[:]) + "\nlisten_port=0\nreplace_peers=true\n" +
-		"public_key=" + hex.EncodeToString(client[:]) + "\nreplace_allowed_ips=true\nallowed_ip=" + TunnelClient.String() + "/32\n"
+	config := "private_key=" + hex.EncodeToString(s.privateKey[:]) + "\nlisten_port=0\nreplace_peers=true\n" + s.clientPeer() +
+		"replace_allowed_ips=true\nallowed_ip=" + TunnelClient.String() + "/32\n"
 	if err := s.dev.IpcSet(config); err != nil {
 		tb.Fatal(err)
 	}
@@ -115,6 +114,25 @@ func StartWireGuardServer(tb testing.TB, names map[string]netip.Addr) *WireGuard
 	}
 	tb.Cleanup(s.Close)
 	return s
+}
+
+// clientPeer is the client's peer line, in wireguard-go's configuration.
+func (s *WireGuardServer) clientPeer() string {
+	client := publicKey(s.clientKey)
+	return "public_key=" + hex.EncodeToString(client[:]) + "\n"
+}
+
+// Answer sets whether the server answers the handshakes of Config's
+// client: one it does not answer is dropped, as by a server that is down.
+func (s *WireGuardServer) Answer(tb testing.TB, answer bool) {
+	tb.Helper()
+	config := s.clientPeer() + "remove=true\n"
+	if answer {
+		config = s.clientPeer() + "replace_allowed_ips=true\nallowed_ip=" + TunnelClient.String() + "/32\n"
+	}
+	if err := s.dev.IpcSet(config); err != nil {
+		tb.Fatal(err)
+	}
 }
 
 // Config is the WireGuard configuration a provider would hand out for

@@ -194,6 +194,71 @@ func TestWireGuardWrongKeyFailsTheHandshake(t *testing.T) {
 	}
 }
 
+// tunnelDown reports whether Health tells a tunnel whose handshake failed.
+func tunnelDown(status Status) bool {
+	var routeErr *RouteError
+	return errors.As(status.RouteError, &routeErr) && routeErr.Kind == WireGuardHandshake
+}
+
+// Health tells a tunnel whose server does not answer down at once after
+// its first request, which waits until its deadline: the check that
+// request started goes on in the background, with its own wait for a
+// handshake, and the requests that follow tell its result rather than
+// each starting a check that its deadline cuts short.
+func TestWireGuardHealthTellsTheLastCheckAtOnce(t *testing.T) {
+	t.Parallel()
+	server := torrenttest.StartWireGuardServer(t, nil)
+	server.Answer(t, false)
+	e, _ := tunneled(t, server.Config())
+	// A check outlasts the requests.
+	e.tunnelWait = time.Minute
+
+	first, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	if status := e.Status(first); !tunnelDown(status) || status.Tunnel == nil {
+		t.Fatalf("the first request: %+v", status)
+	}
+	for i := range 3 {
+		next, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		status := e.Status(next)
+		waited := next.Err() != nil
+		cancel()
+		if waited || !tunnelDown(status) {
+			t.Fatalf("request %d after the first: waited out its deadline %v, %+v", i+1, waited, status)
+		}
+	}
+}
+
+// A tunnel whose server answers again stops being told down while Health
+// asks, as the Health page does: the tunnel found down is checked again.
+func TestWireGuardHealthSeesTheTunnelComeBack(t *testing.T) {
+	t.Parallel()
+	server := torrenttest.StartWireGuardServer(t, nil)
+	server.Answer(t, false)
+	e, _ := tunneled(t, server.Config())
+	health := func() Status {
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		defer cancel()
+		return e.Status(ctx)
+	}
+	if status := health(); !tunnelDown(status) {
+		t.Fatalf("Health while the server does not answer: %+v", status)
+	}
+	server.Answer(t, true)
+	// A check sees the server within the wait of the check running, 5
+	// seconds here, then 5 more before the next one, and that wait.
+	deadline := time.Now().Add(time.Minute)
+	for status := health(); status.RouteError != nil; status = health() {
+		if time.Now().After(deadline) {
+			t.Fatalf("Health still tells the tunnel down a minute after its server came back: %+v", status)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if status := health(); status.RouteError != nil || status.Tunnel == nil || status.Tunnel.LastHandshake.IsZero() {
+		t.Fatalf("Health once the tunnel is back: %+v", status)
+	}
+}
+
 // A dial through the tunnel that fails returns no connection. A nil
 // *gonet.TCPConn handed on as a net.Conn is not nil: the peer dialing,
 // which closes the connections it ends up not needing, closed one and
