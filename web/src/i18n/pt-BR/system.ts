@@ -193,6 +193,8 @@ const system: typeof en = {
           `As legendas em imagem em ${name} não são convertidas em texto: o Tesseract não tem dados para este idioma. Adicione o arquivo ${file} à pasta indicada por POLYFIN_TESSDATA_DIR.`,
         metadataLanguages: (name: string) =>
           `${name}: todos os complementos de metadados do servidor têm um idioma, então eles descrevem os títulos no idioma deles para todos os usuários, seja qual for o idioma dos metadados de cada um. Mantenha Idioma das descrições como Nenhum neste complemento, ou em mais um complemento de metadados.`,
+        nvidiaDriver: (version: string) =>
+          `A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão ${version}, de que o FFmpeg precisa para o NVENC. Atualize o driver para usar a placa.`,
         backupFailed: 'O último backup do banco de dados falhou.',
         backupStale: 'O último backup do banco de dados tem mais de dois dias.',
         backupDestinationFailed: (name: string) =>

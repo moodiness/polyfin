@@ -35,6 +35,10 @@ type HealthSources struct {
 	CacheDir string
 	// Encoder runs the remuxes and conversions.
 	Encoder *hls.Manager
+	// NVIDIADriver tells the NVIDIA driver version NVENC needs, when the
+	// GPU's driver is older (hls.Manager.NVIDIADriver), empty otherwise;
+	// nil tells nothing.
+	NVIDIADriver func() string
 	// Thumbnails makes the scrubbing thumbnails and chapter images.
 	Thumbnails *thumbnails.Service
 	// DatabaseSize measures the database.

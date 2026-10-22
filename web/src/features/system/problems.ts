@@ -166,6 +166,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.subtitleOcrLanguage(ocrLanguageName(language, problem), problem.file)
     case 'metadata_languages':
       return text.metadataLanguages(problem.name)
+    case 'nvidia_driver':
+      return text.nvidiaDriver(problem.name)
     case 'connection_stopped':
       return problem.kind === 'app'
         ? text.appStopped(t.account.appImport.apps[problem.name], problem.owner.name)

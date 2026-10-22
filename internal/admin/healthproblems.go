@@ -90,6 +90,9 @@ const (
 	// empty for another failure, and Failure tells why (see
 	// searchFailureJSON).
 	problemFolderSearch = "folder_search"
+	// NVENC needs a newer NVIDIA driver than the GPU's: Name is the
+	// version it needs.
+	problemNVIDIADriver = "nvidia_driver"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -97,10 +100,11 @@ const (
 // with the fields it fills: Folder and Free (bytes) for a disk; Name and
 // Owner (nil for the server's) for an addon, IPTV source, local folder or
 // guide, Name alone for a host name of Known proxies that resolves to
-// nothing or for the server's metadata addon whose language should be
-// None, with Failure, the failure's code, for an addon or a local folder,
-// or why a local folder is not watched, and Share, the kind of network
-// share a folder is ("smb", "webdav"); Host for paused thumbnails; Address
+// nothing, for the server's metadata addon whose language should be None,
+// or for the NVIDIA driver version NVENC needs, with Failure, the
+// failure's code, for an addon or a local folder, or why a local folder
+// is not watched, and Share, the kind of network share a folder is
+// ("smb", "webdav"); Host for paused thumbnails; Address
 // for an address that sends forwarded headers without being a known
 // proxy, or for a container's address discovery announces; Port for the
 // UDP port discovery cannot listen on, or the TCP port HTTPS cannot; Task,
@@ -284,6 +288,13 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		if conversions, limit := encoder.Conversions(); limit > 0 && conversions >= limit {
 			p := warning("conversions", problemConversionsFull, "transcoder")
 			p.Transient = true
+			add(p)
+		}
+	}
+	if h.Health.NVIDIADriver != nil {
+		if version := h.Health.NVIDIADriver(); version != "" {
+			p := warning("nvidia_driver", problemNVIDIADriver, "transcoder")
+			p.Name = version
 			add(p)
 		}
 	}
@@ -808,6 +819,13 @@ func (p healthProblemJSON) text(language string) string {
 			"Keep Language of its descriptions at None on this addon, or on one more metadata addon.",
 			"%s : chaque addon de métadonnées du serveur a une langue : ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. " +
 				"Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.", "%s: Jedes Metadaten-Add-on des Servers hat eine Sprache, daher beschreiben sie Titel für jeden Benutzer in ihrer Sprache, unabhängig von seiner Metadatensprache. Belasse „Sprache der Beschreibungen“ bei diesem Add-on oder bei einem weiteren Metadaten-Add-on auf „Keine“.", "%s: todas las extensiones de metadatos del servidor tienen un idioma, así que describen los títulos en su idioma para todos los usuarios, sea cual sea su idioma de los metadatos. Deje «Idioma de sus descripciones» en «Ninguno» en esta extensión o en otra extensión de metadatos más.", "%s: ogni add-on di metadati del server ha una lingua, quindi descrivono i titoli nella propria lingua per tutti gli utenti, qualunque sia la loro lingua dei metadati. Lascia Lingua delle descrizioni su Nessuna in questo add-on, o in un altro add-on di metadati.", "%s: todos os complementos de metadados do servidor têm um idioma, então eles descrevem os títulos no idioma deles para todos os usuários, seja qual for o idioma dos metadados de cada um. Mantenha Idioma das descrições como Nenhum neste complemento, ou em mais um complemento de metadados."}, p.Name)
+	case problemNVIDIADriver:
+		return say(i18n.Text{"The NVIDIA graphics card does not convert video: its driver is older than version %s, which FFmpeg needs for NVENC. Update the driver to use the card.",
+			"La carte graphique NVIDIA ne convertit pas la vidéo : son pilote est antérieur à la version %s, dont FFmpeg a besoin pour NVENC. Mettez à jour le pilote pour utiliser la carte.",
+			"Die NVIDIA-Grafikkarte konvertiert keine Videos: Ihr Treiber ist älter als Version %s, die FFmpeg für NVENC braucht. Aktualisiere den Treiber, um die Karte zu nutzen.",
+			"La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión %s, que FFmpeg necesita para NVENC. Actualice el controlador para usar la tarjeta.",
+			"La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione %s, necessaria a FFmpeg per NVENC. Aggiorna il driver per usare la scheda.",
+			"A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão %s, de que o FFmpeg precisa para o NVENC. Atualize o driver para usar a placa."}, p.Name)
 	}
 	return ""
 }

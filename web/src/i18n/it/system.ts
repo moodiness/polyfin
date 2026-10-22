@@ -197,6 +197,8 @@ const system: typeof en = {
           `I sottotitoli grafici in ${name} non vengono convertiti in testo: Tesseract non ha dati per questa lingua. Aggiungi il file ${file} alla cartella indicata da POLYFIN_TESSDATA_DIR.`,
         metadataLanguages: (name: string) =>
           `${name}: ogni add-on di metadati del server ha una lingua, quindi descrivono i titoli nella propria lingua per tutti gli utenti, qualunque sia la loro lingua dei metadati. Lascia Lingua delle descrizioni su Nessuna in questo add-on, o in un altro add-on di metadati.`,
+        nvidiaDriver: (version: string) =>
+          `La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione ${version}, necessaria a FFmpeg per NVENC. Aggiorna il driver per usare la scheda.`,
         backupFailed: 'L’ultimo backup del database non è riuscito.',
         backupStale: 'L’ultimo backup del database risale a più di due giorni fa.',
         backupDestinationFailed: (name: string) =>

@@ -3596,6 +3596,8 @@ export type HealthProblem = {
   | { code: 'subtitle_ocr_language'; name: string; file: string }
   /** Every metadata addon of the server has a language: `name` is the first one's. */
   | { code: 'metadata_languages'; name: string }
+  /** NVENC needs a newer NVIDIA driver than the GPU's: `name` is the version it needs. */
+  | { code: 'nvidia_driver'; name: string }
   | { code: 'connection_stopped'; kind: 'app'; name: AppKind; owner: NonNullable<Owner> }
   | {
       code: 'connection_stopped'

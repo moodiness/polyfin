@@ -605,6 +605,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			Cache:            sources,
 			CacheDir:         cfg.CacheDir,
 			Encoder:          segments,
+			NVIDIADriver:     segments.NVIDIADriver,
 			Thumbnails:       images,
 			DatabaseSize:     func(ctx context.Context) (int64, error) { return database.Size(ctx, pool) },
 			Started:          started,
