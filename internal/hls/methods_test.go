@@ -81,7 +81,7 @@ func TestEachSystemDetectsOnlyItsMethods(t *testing.T) {
 		r := &recordingRunner{answer: func([]string) (time.Duration, error) { return time.Second, nil }}
 		m := &Manager{system: system, dir: t.TempDir(), logger: slog.New(slog.DiscardHandler), detected: map[string]*Hardware{}, run: r.run,
 			can: capabilities{encoders: everyEncoder, filters: everyFilter}}
-		if hw := m.detect(foreign, "/dev/dri/renderD128"); hw != nil || r.count() != 0 {
+		if hw, _ := m.detect(foreign, "/dev/dri/renderD128"); hw != nil || r.count() != 0 {
 			t.Errorf("%s found %s: %+v after %q", system, foreign, hw, r.runs)
 		}
 	}
@@ -123,7 +123,7 @@ func TestEachMethodIsDetectedOnItsDevice(t *testing.T) {
 		}}
 		m := &Manager{system: tc.system, dir: t.TempDir(), logger: slog.New(slog.DiscardHandler), detected: map[string]*Hardware{}, run: r.run,
 			can: capabilities{encoders: everyEncoder, filters: everyFilter}}
-		hw := m.detect(tc.want, "")
+		hw, _ := m.detect(tc.want, "")
 		if hw == nil || hw.Method != tc.method || len(hw.Encoders) != 2 || hw.ToneMapping != (tc.toneMapping != "") || hw.QVBR {
 			t.Errorf("%s: %+v", tc.name, hw)
 			continue

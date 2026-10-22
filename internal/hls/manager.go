@@ -705,9 +705,13 @@ type Manager struct {
 	can    capabilities
 	// hardware is the GPU DetectHardware chose last, nil for none; detected
 	// holds what it found for each choice, and detecting serializes it.
+	// failed holds why the GPU methods tried for each choice failed, and
+	// failures those of the choice made last.
 	hardware  atomic.Pointer[Hardware]
 	detecting sync.Mutex
 	detected  map[string]*Hardware
+	failed    map[string][]gpuFailure
+	failures  atomic.Pointer[[]gpuFailure]
 	// measuring counts the timings under way (see measureLater and
 	// timeToneMappingLater), and timingGPU those of the GPU's chains; run,
 	// when set, runs FFmpeg in their place, for tests.

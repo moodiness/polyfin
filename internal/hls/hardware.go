@@ -1,10 +1,14 @@
 package hls
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -121,10 +125,17 @@ func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 	defer m.detecting.Unlock()
 	hw, done := m.detected[want]
 	if !done {
-		hw = m.detect(want, device)
+		var failures []gpuFailure
+		hw, failures = m.detect(want, device)
 		m.detected[want] = hw
+		if m.failed == nil {
+			m.failed = map[string][]gpuFailure{}
+		}
+		m.failed[want] = failures
 	}
 	m.hardware.Store(hw)
+	failures := m.failed[want]
+	m.failures.Store(&failures)
 	if !done {
 		m.measureLater(want, hw)
 	}
@@ -135,10 +146,24 @@ func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 }
 
 // SelectHardware chooses the GPU as DetectHardware does, and logs the
-// outcome. The first choice also times HDR tone mapped on the processor in
-// the background, once the GPU's chains are (see timeToneMapping).
+// outcome, after why each GPU method tried before or instead of the one
+// chosen failed, at the outcome's level. The first choice also times HDR
+// tone mapped on the processor in the background, once the GPU's chains
+// are (see timeToneMapping).
 func (m *Manager) SelectHardware(want, device string) {
-	switch hw, ok := m.DetectHardware(want, device); {
+	hw, ok := m.DetectHardware(want, device)
+	level := slog.LevelInfo
+	if !ok && want != "auto" {
+		level = slog.LevelWarn
+	}
+	for _, failure := range *m.failures.Load() {
+		attrs := []any{"hwaccel", failure.method, "encoder", failure.encoder, "error", failure.err}
+		if failure.device != "" {
+			attrs = append(attrs, "device", failure.device)
+		}
+		m.logger.Log(context.Background(), level, "A GPU method does not encode", attrs...)
+	}
+	switch {
 	case ok:
 		m.logger.Info("Video is converted on the GPU", "method", hw.Method, "device", hw.Device, "encoders", hw.Encoders,
 			"tone_mapping", hw.ToneMapping, "qvbr", hw.QVBR)
@@ -150,8 +175,39 @@ func (m *Manager) SelectHardware(want, device string) {
 	m.toneMappingTimed.Do(m.timeToneMappingLater)
 }
 
-// detect finds the GPU want asks for (see DetectHardware), nil for none.
-func (m *Manager) detect(want, device string) *Hardware {
+// gpuFailure is why a GPU method, on device for VAAPI, encoded nothing:
+// FFmpeg's error with the first of its encoders that failed. driver is
+// the NVIDIA driver version NVENC needs, when FFmpeg found the GPU's
+// older, empty otherwise.
+type gpuFailure struct {
+	method, device, encoder string
+	err                     error
+	driver                  string
+}
+
+// olderDriver matches what FFmpeg writes when NVENC needs a newer NVIDIA
+// driver than the GPU's, with the version it needs. FFmpeg writes that
+// version after a missing NVENC library too, a failure of another kind.
+var olderDriver = regexp.MustCompile(`(?s)Driver does not support the required nvenc API version.*The minimum required Nvidia driver for nvenc is ([0-9][0-9.]*) or newer`)
+
+// NVIDIADriver is the NVIDIA driver version FFmpeg's NVENC needs, when the
+// detection of the GPU chosen last found the GPU's driver older, empty
+// otherwise.
+func (m *Manager) NVIDIADriver() string {
+	if failures := m.failures.Load(); failures != nil {
+		for _, failure := range *failures {
+			if failure.driver != "" {
+				return failure.driver
+			}
+		}
+	}
+	return ""
+}
+
+// detect finds the GPU want asks for (see DetectHardware), nil for none,
+// and why each method tried before it, or instead of it, failed.
+func (m *Manager) detect(want, device string) (*Hardware, []gpuFailure) {
+	var failures []gpuFailure
 	for _, candidate := range m.methods() {
 		if want != "auto" && want != candidate.name {
 			continue
@@ -162,19 +218,32 @@ func (m *Manager) detect(want, device string) *Hardware {
 		}
 		for _, node := range devices {
 			hw := Hardware{Method: candidate.method, Device: node}
+			var failure *gpuFailure
 			for _, encoder := range candidate.encoders {
-				if slices.Contains(m.can.encoders, encoder) && m.encodes(hw, encoder) {
+				if !slices.Contains(m.can.encoders, encoder) {
+					continue
+				}
+				err := m.encodes(hw, encoder)
+				if err == nil {
 					hw.Encoders = append(hw.Encoders, encoder)
+				} else if failure == nil {
+					failure = &gpuFailure{method: candidate.name, device: node, encoder: encoder, err: err}
 				}
 			}
 			if len(hw.Encoders) > 0 {
 				hw.ToneMapping = m.toneMaps(hw)
-				hw.QVBR = hw.Method == "vaapi" && m.encodes(hw, hw.Encoders[0], "-rc_mode", "QVBR", "-global_quality", "25", "-b:v", "1000000", "-maxrate", "1500000")
-				return &hw
+				hw.QVBR = hw.Method == "vaapi" && m.encodes(hw, hw.Encoders[0], "-rc_mode", "QVBR", "-global_quality", "25", "-b:v", "1000000", "-maxrate", "1500000") == nil
+				return &hw, failures
+			}
+			if failure != nil {
+				if found := olderDriver.FindStringSubmatch(failure.err.Error()); found != nil && candidate.name == "nvenc" {
+					failure.driver = found[1]
+				}
+				failures = append(failures, *failure)
 			}
 		}
 	}
-	return nil
+	return nil, failures
 }
 
 // toneMaps reports whether hw tone maps HDR to SDR, as conversions would:
@@ -439,15 +508,22 @@ func (m *Manager) logChoice(kind string, gpu bool, t timing) {
 var probeStart = []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
 
 // timed runs FFmpeg with args, within 20 s, and reports how long it took,
-// through m.run when tests set it.
+// or why it failed with the end of what FFmpeg wrote, through m.run when
+// tests set it.
 func (m *Manager) timed(ctx context.Context, args []string) (time.Duration, error) {
 	if m.run != nil {
 		return m.run(ctx, args)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
+	cmd := exec.CommandContext(ctx, m.ffmpeg, args...)
+	stderr := &tail{limit: 4096}
+	cmd.Stderr = stderr
 	started := time.Now()
-	err := exec.CommandContext(ctx, m.ffmpeg, args...).Run()
+	err := cmd.Run()
+	if err != nil {
+		err = fmt.Errorf("FFmpeg failed: %w: %s", err, bytes.TrimSpace(stderr.bytes()))
+	}
 	return time.Since(started), err
 }
 
@@ -479,9 +555,9 @@ func renderNodes(device string) []string {
 	return nodes
 }
 
-// encodes reports whether encoder encodes a quarter of a second of test
-// pattern on hw, with options.
-func (m *Manager) encodes(hw Hardware, encoder string, options ...string) bool {
+// encodes encodes a quarter of a second of test pattern with encoder on
+// hw, with options, and tells why it failed, nil when it did not.
+func (m *Manager) encodes(hw Hardware, encoder string, options ...string) error {
 	args := append([]string{"-hide_banner", "-nostdin", "-loglevel", "error"}, hw.devices()...)
 	args = append(args, "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-t", "0.25")
 	if hw.Method == "vaapi" {
@@ -490,7 +566,8 @@ func (m *Manager) encodes(hw Hardware, encoder string, options ...string) bool {
 	args = append(args, "-c:v", encoder)
 	args = append(args, options...)
 	args = append(args, "-f", "null", "-")
-	return m.succeeds(args...)
+	_, err := m.timed(context.Background(), args)
+	return err
 }
 
 // deinterlaces reports whether the deinterlacer name deinterlaces a

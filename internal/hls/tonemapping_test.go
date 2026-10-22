@@ -72,7 +72,7 @@ func TestOnlyIntelGPUsTryVAAPIToneMapping(t *testing.T) {
 			vendor: func(node string) string { asked = append(asked, node); return tc.vendor },
 			can: capabilities{encoders: encoders, filters: []string{"hwupload", "hwdownload", "scale_vaapi", "tonemap_vaapi", "deinterlace_vaapi",
 				"libplacebo", "zscale", "tonemap"}}}
-		hw := m.detect("vaapi", "/dev/dri/renderD129")
+		hw, _ := m.detect("vaapi", "/dev/dri/renderD129")
 		if hw == nil || hw.ToneMapping != tc.want || !slices.Equal(asked, []string{"/dev/dri/renderD129"}) {
 			t.Errorf("%s: %+v, vendors asked of %v", tc.name, hw, asked)
 			continue
@@ -106,7 +106,7 @@ func TestNVIDIAKeepsItsToneMappingCheck(t *testing.T) {
 	m := &Manager{dir: t.TempDir(), logger: slog.New(slog.DiscardHandler), detected: map[string]*Hardware{}, run: r.run,
 		vendor: func(string) string { t.Error("a vendor asked of an NVIDIA GPU"); return "" },
 		can:    capabilities{encoders: []string{"h264_nvenc", "libx265"}, filters: []string{"libplacebo", "tonemap_vaapi", "scale_vaapi", "hwupload"}}}
-	if hw := m.detect("nvenc", ""); hw == nil || !hw.ToneMapping || !r.ran("libplacebo") || r.ran("tonemap_vaapi") {
+	if hw, _ := m.detect("nvenc", ""); hw == nil || !hw.ToneMapping || !r.ran("libplacebo") || r.ran("tonemap_vaapi") {
 		t.Errorf("%+v: %q", hw, r.runs)
 	}
 }
