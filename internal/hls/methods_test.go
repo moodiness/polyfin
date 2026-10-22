@@ -274,7 +274,8 @@ func TestDesktopGPUPipelines(t *testing.T) {
 // HEVC encoder none, and its quality runs from 1 to 100 within the
 // maximum rate; QSV and AMF force IDR frames, QSV picks its level, and AMF
 // names levels with a tenth; QSV and AMF aim for the bitrate, a quality
-// set or not. Presets follow x264's names.
+// set or not. Presets follow x264's names. Every H.264 encoder, x264 as
+// the GPUs', encodes the High profile the master playlist announces.
 func TestEachEncoderFamilyTakesItsOptions(t *testing.T) {
 	plan := NewPlan(seconds(0, 6, 12), 18*time.Second)
 	for _, tc := range []struct {
@@ -282,6 +283,10 @@ func TestEachEncoderFamilyTakesItsOptions(t *testing.T) {
 		e          VideoEncoding
 		want, none [][]string
 	}{
+		{"x264", VideoEncoding{Encoder: "libx264", Level: "4.1", Bitrate: 8_000_000},
+			[][]string{{"-b:v", "8000000", "-maxrate", "12000000"}, {"-preset", "veryfast", "-sc_threshold", "0", "-profile:v", "high", "-level:v", "4.1"}}, nil},
+		{"x265", VideoEncoding{Encoder: "libx265", Level: "4.1", Bitrate: 8_000_000},
+			[][]string{{"-preset", "veryfast", "-sc_threshold", "0", "-profile:v", "main"}}, nil},
 		{"VideoToolbox H.264", VideoEncoding{Encoder: "h264_videotoolbox", Level: "5.1", Bitrate: 8_000_000, Preset: "faster"},
 			[][]string{{"-b:v", "8000000", "-maxrate", "12000000", "-bufsize", "16000000"}, {"-profile:v", "high", "-level:v", "5.1", "-prio_speed", "1"}},
 			[][]string{{"-forced_idr"}, {"-rc_mode"}, {"-compression_level"}, {"-global_quality"}}},

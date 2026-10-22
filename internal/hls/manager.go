@@ -468,8 +468,10 @@ func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 	if !v.Burns() {
 		args = append(args, "-vf", skip+v.filters())
 	}
+	// Every H.264 encoder, x264 as the GPUs', encodes the High profile the
+	// master playlist announces; HEVC, Main.
 	profile := "main"
-	if strings.HasPrefix(v.Encoder, "h264") {
+	if v.Encoder == "libx264" || strings.HasPrefix(v.Encoder, "h264") {
 		profile = "high"
 	}
 	switch {

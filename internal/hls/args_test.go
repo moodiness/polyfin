@@ -85,9 +85,10 @@ func defaultCases() []struct {
 
 // The conversion settings' defaults keep the FFmpeg command lines
 // Polyfin ran before they were settings: testdata/default-args.json was
-// recorded from version 0.11.0, then given FFmpeg's progress pipe and the
-// smaller probing of jobs past the first segment. The GPUs there keep no
-// frame in their memory (see TestGPUPipelines).
+// recorded from version 0.11.0, then given FFmpeg's progress pipe, the
+// smaller probing of jobs past the first segment, and x264's High
+// profile. The GPUs there keep no frame in their memory (see
+// TestGPUPipelines).
 func TestDefaultSettingsKeepTheArguments(t *testing.T) {
 	data, err := os.ReadFile("testdata/default-args.json")
 	if err != nil {

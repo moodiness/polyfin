@@ -364,8 +364,9 @@ func TestRemuxedSegmentsJoinIntoTheSource(t *testing.T) {
 					}
 				}
 				if c.encode {
-					out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_name,width,height,pix_fmt", "-of", "csv=p=0", all).Output()
-					want := "h264," + strconv.Itoa(encoding.Width) + "," + strconv.Itoa(encoding.Height) + ",yuv420p"
+					// H.264 High, as the master playlist's CODECS announces.
+					out, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "stream=codec_name,profile,width,height,pix_fmt", "-of", "csv=p=0", all).Output()
+					want := "h264,High," + strconv.Itoa(encoding.Width) + "," + strconv.Itoa(encoding.Height) + ",yuv420p"
 					if got, _, _ := firstLine(out); got != want {
 						t.Errorf("converted video: %q, want %q", got, want)
 					}
