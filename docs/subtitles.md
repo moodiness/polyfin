@@ -19,7 +19,7 @@ Addons find subtitles for a title, written for one release of it, not always the
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Sync addon subtitles** | **Settings › Playback** | On | Finds when each version played has speech, and syncs the addons' subtitles to it. Off, subtitles come with the times the addons give, and no speech is looked for. |
+| **Sync addon subtitles** | **Settings › Playback** | On | Finds when each version played has speech, and syncs the addons' subtitles to it. Torrent versions are left out. Off, subtitles come with the times the addons give, and no speech is looked for. |
 
 ### How Polyfin measures
 
@@ -34,6 +34,7 @@ Polyfin finds this once per version, in the background, at the version's first p
 - An addon's file is read for at most 300 MB. Its three stretches last as long as that reads at the file's bitrate, from its size and length, up to 3 minutes each: a 12 Mbit/s file gets about 45 seconds each. Each stretch counts a tenth more, 10 seconds before it, where FFmpeg starts at a keyframe, and 8 MB that FFmpeg is sent beyond what it decodes. A file whose stretches would last under 30 seconds each, above about 16 Mbit/s, is not read, and a read that goes past 300 MB stops: the version then has no speech reference, and its subtitles come as they are. Shorter stretches hold fewer lines: a subtitle with less than 20 seconds of them in the stretches is left as it is.
 - The files of local folders get stretches of 3 minutes, without a limit.
 - A version that is not one file, such as a DVD, and a replay, which would hold one of its provider's connections, are not looked at.
+- Nor is a torrent version: looking would download its stretches from the swarm as the playback starts, beside it (see [Torrents](torrents.md#only-while-playing)). Its addon subtitles come as they are.
 
 ### What it corrects
 

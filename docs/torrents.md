@@ -113,6 +113,8 @@ A WireGuard tunnel to a far server adds delay, and a delay that varies. LEDBAT t
 
 Only a playback starts a torrent. Preparing playback in advance, thumbnails and downloads do not: a torrent version cannot be downloaded, and has no thumbnails. When the playback ends, after 30 seconds without a read, as when a player pauses, the torrent stops: no more sharing, no more peers, and its pieces are removed. The trackers are told it stopped.
 
+**Sync addon subtitles** (see [Subtitles](subtitles.md#addon-subtitles-synced-to-the-version)) looks for no speech in a torrent version: that would download three stretches of it from the swarm, up to 300 MB, as its playback starts, beside it, and what the playback holds then, its start and its index, has none of them. A torrent version's addon subtitles come with the times the addons give.
+
 ## How a torrent starts
 
 1. Opening a title's page lists its torrent versions. Nothing reads them yet: preparing playback ahead leaves them alone, and a torrent version that was never played has no analysis.
