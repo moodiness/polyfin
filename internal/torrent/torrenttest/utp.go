@@ -22,18 +22,18 @@ func SeedUTP(tb testing.TB, t *Torrent, host string) *Peer {
 }
 
 // SeedBoth starts a seeder of t reachable over TCP and uTP on the same
-// port of host, as most clients are.
+// port of host, as most clients are. A port the system gives for one
+// protocol may be taken, or reserved, for the other: Windows reserves
+// ranges of ports for each protocol apart. So each try asks the system
+// for a port of one protocol, then takes it over the other, TCP first
+// and UDP first in turn.
 func SeedBoth(tb testing.TB, t *Torrent, host string) *Peer {
 	tb.Helper()
-	for range 20 {
-		tcp, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+	var last error
+	for try := range 200 {
+		tcp, udp, err := samePort(host, try%2 == 0)
 		if err != nil {
-			tb.Fatal(err)
-		}
-		udp, err := net.ListenUDP("udp", net.UDPAddrFromAddrPort(netip.MustParseAddrPort(tcp.Addr().String())))
-		if err != nil {
-			// The port is taken over UDP: another one.
-			tcp.Close()
+			last = err
 			continue
 		}
 		both := &bothListener{tcp: tcp, utp: newUTPListener(udp), accepted: make(chan net.Conn), done: make(chan struct{})}
@@ -41,8 +41,35 @@ func SeedBoth(tb testing.TB, t *Torrent, host string) *Peer {
 		go both.accept(both.utp)
 		return listen(tb, t, both, true)
 	}
-	tb.Fatal("no port free over both TCP and UDP")
+	tb.Fatalf("no port free over both TCP and UDP: %v", last)
 	return nil
+}
+
+// samePort listens on one port of host over TCP and UDP, the port given
+// by the system for TCP when tcpFirst, for UDP otherwise.
+func samePort(host string, tcpFirst bool) (net.Listener, *net.UDPConn, error) {
+	if tcpFirst {
+		tcp, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+		if err != nil {
+			return nil, nil, err
+		}
+		udp, err := net.ListenUDP("udp", net.UDPAddrFromAddrPort(netip.MustParseAddrPort(tcp.Addr().String())))
+		if err != nil {
+			tcp.Close()
+			return nil, nil, err
+		}
+		return tcp, udp, nil
+	}
+	udp, err := net.ListenUDP("udp", net.UDPAddrFromAddrPort(netip.AddrPortFrom(netip.MustParseAddr(host), 0)))
+	if err != nil {
+		return nil, nil, err
+	}
+	tcp, err := net.Listen("tcp", udp.LocalAddr().String())
+	if err != nil {
+		udp.Close()
+		return nil, nil, err
+	}
+	return tcp, udp, nil
 }
 
 // Handshakes counts the handshakes the peer received for its torrent.
