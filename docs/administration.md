@@ -92,6 +92,8 @@ An NVIDIA graphics card whose driver is older than the version FFmpeg needs for 
 
 A local folder whose files are left unmatched because the search of their titles failed is a warning, naming the addon that failed most of them and why, with a link to the folder's page. It goes away once the searches go through, which Polyfin tries again on its own (see [Failed searches](local-folders.md#failed-searches)).
 
+An addon whose search catalog did not answer a search in time is a warning, with a link to **Addons**: searches leave it out for 5 minutes, then ask it again (see [Catalog pages](addons-and-libraries.md#catalog-pages)). It comes and goes with the searches, so it is not sent as a health problem; the addon's own failure, "did not answer in time", is.
+
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
 
 Torrent streams that cannot play are an error, naming why: the network interface missing, down or without an address, the SOCKS5 proxy not answering or refusing its user, or the WireGuard server not answering the handshake. A proxy without `UDP ASSOCIATE` is a warning: torrents play over TCP, with UDP trackers and the DHT off. Both link to **Settings › Torrents** (see [Kill switch](torrents.md#kill-switch)).

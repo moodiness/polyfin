@@ -74,6 +74,7 @@ All results stay within the user's libraries, parental control and blocked genre
 **Compared with Jellyfin:**
 
 - Jellyfin ranks every kind together; Polyfin keeps the order above.
+- Jellyfin searches its own library and answers at once. Polyfin asks the addons' search catalogs and answers with what they found within a few seconds, without waiting for an addon that is late (see [Catalog pages](addons-and-libraries.md#catalog-pages)): the same search may find more a moment later.
 
 **For app developers:** `/Search/Hints` answers from the same search as `/Items`, without its channels and programmes.
 
