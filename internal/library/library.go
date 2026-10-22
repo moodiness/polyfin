@@ -1639,22 +1639,30 @@ func (s *Service) describeBy(ctx context.Context, v view, r record, shared bool)
 	for _, candidate := range describers(v, r, shared) {
 		kept, err := s.keptMeta(ctx, candidate, r.Meta.Type, r.Meta.ID)
 		if err == nil {
-			meta := kept.value
-			if candidate.addon.IPTV() {
-				how := inDatabase
-				if iptv.IsOpening(ctx) {
-					how = fromAddons
-				}
-				meta, _ = s.enrich(ctx, v, candidate, meta, shared, how)
-			}
-			if candidate.shared && !candidate.addon.Local() {
-				s.learnTraits(ctx, r, meta, kept.at)
-			}
-			return meta, candidate, true
+			return s.completed(ctx, v, r, candidate, kept, shared), candidate, true
 		}
 		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
 	}
 	return stremio.Meta{}, installed{}, false
+}
+
+// completed is the description of r that candidate gave, completed as
+// describeBy returns it, an IPTV source's with the details of the
+// descriptions kept; one from one of the server's addons gives the rating
+// kept for the title.
+func (s *Service) completed(ctx context.Context, v view, r record, candidate installed, kept fetched[stremio.Meta], shared bool) stremio.Meta {
+	meta := kept.value
+	if candidate.addon.IPTV() {
+		how := inDatabase
+		if iptv.IsOpening(ctx) {
+			how = fromAddons
+		}
+		meta, _ = s.enrich(ctx, v, candidate, meta, shared, how)
+	}
+	if candidate.shared && !candidate.addon.Local() {
+		s.learnTraits(ctx, r, meta, kept.at)
+	}
+	return meta
 }
 
 // describers lists the user's addons, the server's only when shared is

@@ -764,6 +764,54 @@ func TestCreditsAreRecordedWhenADescriptionIsFetched(t *testing.T) {
 	}
 }
 
+func TestARefreshTheAddonFailsKeepsTheDescription(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	addon := pagedAddon(1, 0)
+	for key, meta := range addon.metas {
+		meta.Genres = []string{"Drama"}
+		addon.metas[key] = meta
+	}
+	e.install(addons.Shared(), addon)
+	movie := e.children(e.member, "Top", 0, 1).Items[0]
+	described := func(e env, when, overview string) {
+		t.Helper()
+		item, err := e.service.Item(t.Context(), e.member, movie.ID)
+		var people []string
+		for _, person := range item.People {
+			people = append(people, person.Name)
+		}
+		if err != nil || item.Overview != overview || !slices.Equal(item.Genres, []string{"Drama"}) || !slices.Equal(people, []string{"Jane Doe"}) {
+			t.Errorf("%s: overview %q, genres %v, people %v, %v", when, item.Overview, item.Genres, people, err)
+		}
+	}
+	described(e, "before refreshing", "Full description of movie 0")
+	addon.mu.Lock()
+	addon.metaFails = true
+	addon.mu.Unlock()
+	if err := e.service.Refresh(t.Context(), e.member, movie.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := addon.metaRequests(); got != 2 {
+		t.Errorf("descriptions asked for: %d", got)
+	}
+	// The title keeps the description, in memory and in the database.
+	described(e, "after a failed refresh", "Full description of movie 0")
+	described(e.restarted(), "after a failed refresh and a restart", "Full description of movie 0")
+	// Once the addon answers again, a refresh replaces it.
+	addon.mu.Lock()
+	addon.metaFails = false
+	for key, meta := range addon.metas {
+		meta.Description = "New description"
+		addon.metas[key] = meta
+	}
+	addon.mu.Unlock()
+	if err := e.service.Refresh(t.Context(), e.member, movie.ID); err != nil {
+		t.Fatal(err)
+	}
+	described(e, "after a refresh", "New description")
+}
+
 func TestAutomaticImagesNeverWait(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)

@@ -8,13 +8,15 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// Refresh forgets what Polyfin keeps of a title for the user's addons, and
-// asks them to describe it again: its description (a season's or an
-// episode's is their series'), the version and subtitle lists of the movie
-// or of the series' episodes, stale ones included, the rating and genres
+// Refresh asks the user's addons to describe a title again, and forgets
+// what Polyfin keeps of it: the version and subtitle lists of the movie or
+// of the series' episodes, stale ones included, the rating and genres
 // looked up for parental control, and the ratings MDBList gave, asked for
-// again as the title next shows. Items that are not titles have nothing
-// to forget.
+// again as the title next shows. Its description (a season's or an
+// episode's is their series') is replaced only once an addon answered:
+// then the other addons' are forgotten, to be asked for again. While the
+// addons fail, the title keeps the description it had. Items that are not
+// titles have nothing to forget.
 // ErrNotFound is returned for an item the user cannot reach.
 func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.ID) error {
 	v, err := s.view(ctx, user)
@@ -60,9 +62,9 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 			}
 		}
 	}
-	for _, entry := range v.addons {
-		key := metaKey{entry.addon.ID, title.Meta.Type, title.Meta.ID}
-		if r.Kind == KindSeries || r.Kind == KindSeason {
+	if r.Kind == KindSeries || r.Kind == KindSeason {
+		for _, entry := range v.addons {
+			key := metaKey{entry.addon.ID, title.Meta.Type, title.Meta.ID}
 			kept, ok := s.metas.Get(key)
 			if !ok {
 				kept, ok = s.loadMeta(ctx, entry, key)
@@ -70,9 +72,6 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 			if ok {
 				lists = append(lists, videoIDs(kept.value, r)...)
 			}
-		}
-		if err := s.forgetMeta(ctx, key); err != nil {
-			return err
 		}
 	}
 	for _, entry := range v.addons {
@@ -95,10 +94,54 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 	}
 	// The description is asked for again now, as apps show the title's
 	// page again after a refresh; it gives the rating again too.
-	if _, described := s.titleMeta(ctx, v, title); !described && ctx.Err() == nil {
-		s.logger.Debug("No addon could describe a refreshed title", "item", title.ID)
+	answered, described := s.redescribe(ctx, v, title)
+	if !described {
+		return nil
+	}
+	for _, entry := range v.addons {
+		if entry.addon.ID == answered.addon.ID {
+			continue
+		}
+		if err := s.forgetMeta(ctx, metaKey{entry.addon.ID, title.Meta.Type, title.Meta.ID}); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// redescribe asks the addons that describe r for its description again,
+// in the order describeBy asks them, until one answers: its answer
+// replaces the description it kept. An addon that fails while it keeps a
+// description, the one r shows, leaves r described as it was. It returns
+// the addon that answered.
+func (s *Service) redescribe(ctx context.Context, v view, r record) (installed, bool) {
+	for _, candidate := range describers(v, r, false) {
+		key := metaKey{candidate.addon.ID, r.Meta.Type, r.Meta.ID}
+		var kept fetched[stremio.Meta]
+		var err error
+		if own(candidate.addon) {
+			kept, err = s.keptMeta(ctx, candidate, key.metaType, key.id)
+		} else {
+			kept, err = s.fetchKeptMeta(ctx, candidate, key)
+		}
+		if err == nil {
+			s.completed(ctx, v, r, candidate, kept, false)
+			return candidate, true
+		}
+		if ctx.Err() != nil {
+			return installed{}, false
+		}
+		if _, ok := s.keptDescription(ctx, candidate, key, inDatabase); ok {
+			s.logger.Warn("A title could not be refreshed: it keeps the description the addon gave before",
+				"item", r.ID, "addon", candidate.addon.Manifest.Name, "error", err)
+			return installed{}, false
+		}
+		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
+	}
+	if ctx.Err() == nil {
+		s.logger.Debug("No addon could describe a refreshed title", "item", r.ID)
+	}
+	return installed{}, false
 }
 
 // videoIDs lists the videos of a series' description that r covers: all of
