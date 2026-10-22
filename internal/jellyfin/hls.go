@@ -53,12 +53,12 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 	if method == "Hls" || method == "Encode" {
 		q.add("SubtitleStreamIndex", strconv.Itoa(decision.SubtitleStreamIndex))
 	}
-	audioBitrate := int64(0)
-	if audio != nil && audio.BitRate != nil {
-		audioBitrate = *audio.BitRate
-	}
+	// The video takes what the limit leaves once the audio sent is taken
+	// off, the audio's bitrate going with it: the HLS requests read both
+	// back (see conversionLimits).
+	audioBitrate := playback.SentAudioBitrate(audio, decision.Audio)
 	if limit > 0 {
-		q.add("VideoBitrate", strconv.FormatInt(playback.VideoLimit(limit, audio), 10))
+		q.add("VideoBitrate", strconv.FormatInt(playback.VideoLimit(limit, audioBitrate), 10))
 	}
 	if audio != nil {
 		if audioBitrate > 0 {

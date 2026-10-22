@@ -370,6 +370,45 @@ func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
 	}
 }
 
+// Under a bitrate limit, the video takes what the audio sent leaves: a
+// lossless track converted to stereo AAC leaves all but 192 kb/s, so a
+// 1080p source keeps 1080p within 10 Mb/s; a track copied leaves what
+// its own bitrate does.
+func TestConvertedVideoTakesWhatTheAudioSentLeaves(t *testing.T) {
+	source := func(codec string, channels int) MediaSource {
+		return MediaSource{Container: "mkv", Bitrate: 24_200_000, Streams: []MediaStream{
+			{Type: "Video", Index: 0, Codec: "hevc", Profile: "Main 10", VideoRange: "SDR", VideoRangeType: "SDR",
+				Width: new(1920), Height: new(1080), AverageFrameRate: new(23.976), BitRate: new(int64(20_000_000))},
+			{Type: "Audio", Index: 1, Codec: codec, IsDefault: true, Channels: new(channels), BitRate: new(int64(4_200_000))},
+		}}
+	}
+	software := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true}
+	options := Options{MaxStreamingBitrate: 10_000_000, EnableDirectPlay: true, EnableDirectStream: true, Can: software}
+	for _, test := range []struct {
+		name    string
+		source  MediaSource
+		height  int
+		bitrate int64
+		audio   *AudioConversion
+	}{
+		// Chrome takes no TrueHD: it is converted to AAC in stereo.
+		{"TrueHD converted", source("truehd", 6), 1080, 9_808_000, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
+		// Chrome takes FLAC in stereo over HLS: it is copied.
+		{"FLAC copied", source("flac", 2), 720, 5_000_000, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := Decide(readDeviceProfile(t, "jellyfin-web-chrome"), test.source, options)
+			if !got.HLS || got.Video == nil || got.Video.Height != test.height || got.Video.Bitrate != test.bitrate {
+				t.Fatalf("HLS %v, video %+v; want %dp at %d", got.HLS, got.Video, test.height, test.bitrate)
+			}
+			if (got.Audio == nil) != (test.audio == nil) || got.Audio != nil &&
+				(got.Audio.Codec != test.audio.Codec || got.Audio.Channels != test.audio.Channels || got.Audio.Bitrate != test.audio.Bitrate) {
+				t.Errorf("audio %+v, want %+v", got.Audio, test.audio)
+			}
+		})
+	}
+}
+
 func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 	can := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true}
 	video := func(width, height int, bitrate int64, interlaced bool) MediaStream {

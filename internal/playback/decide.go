@@ -473,10 +473,11 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 // and how the video and the audio that plays then reach the app. The video
 // is copied when t takes its codec, the codec profiles of its container
 // accept it with the codec tag a remux writes, and the source fits the
-// bitrate limit; else it is converted. The audio is copied when t takes
-// its codec and channels and the codec profiles accept it, as the only
-// audio, so never a secondary track; else it is converted to a codec t
-// takes.
+// bitrate limit; else it is converted, within what the limit leaves once
+// the audio sent is taken off (see SentAudioBitrate). The audio is copied
+// when t takes its codec and channels and the codec profiles accept it,
+// as the only audio, so never a secondary track; else it is converted to
+// a codec t takes.
 func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mustConvert bool) (bool, *VideoConversion, *AudioConversion) {
 	// Streamed as one file, the video goes out as fragmented MP4 or
 	// MPEG-TS, the containers hls.ParseFormat reads.
@@ -486,19 +487,27 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mu
 		return false, nil, nil
 	}
 	s := subject{video: d.video, codecTag: RemuxTag(d.video.Codec, t.Container)}
+	audio, audioStreams := d.streamAudio(t, options, s)
 	var video *VideoConversion
 	if options.ConvertVideo || mustConvert || !listHas(t.VideoCodec, d.video.Codec) || d.remuxFails("Video", d.video, t.Container, s) {
 		// Converted video is scaled down to the lower of the heights it is
 		// capped at, which never prevents a conversion.
-		limits := Limits{Bitrate: limit, Video: VideoLimit(limit, d.played), Group: options.MaxHeight, Server: options.ConversionHeight}
+		limits := Limits{Bitrate: limit, Video: VideoLimit(limit, SentAudioBitrate(d.played, audio)), Group: options.MaxHeight, Server: options.ConversionHeight}
 		limits.ByUser = options.UserBitrate > 0 && limit > 0 && limit >= options.UserBitrate
 		if video = ConvertVideo(t.VideoCodec, limits, *d.video, options.Can); video == nil {
 			return false, nil, nil
 		}
 	}
+	return audioStreams, video, audio
+}
+
+// streamAudio decides how the audio that plays reaches the app streamed
+// with t: copied (nil, true), converted (its conversion, true), or not at
+// all (nil, false) when t takes no codec Polyfin encodes.
+func (d *decider) streamAudio(t *TranscodingProfile, options Options, s subject) (*AudioConversion, bool) {
 	audio := d.played
 	if audio == nil {
-		return true, video, nil
+		return nil, true
 	}
 	s.audio = audio
 	channelsTaken := true
@@ -506,27 +515,38 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mu
 		channelsTaken = false
 	}
 	if !options.ConvertAudio && channelsTaken && listHas(t.AudioCodec, audio.Codec) && !d.remuxFails("VideoAudio", audio, t.Container, s) {
-		return true, video, nil
+		return nil, true
 	}
 	channels := 0
 	if audio.Channels != nil {
 		channels = *audio.Channels
 	}
 	conversion := ConvertAudio(t.AudioCodec, t.MaxAudioChannels, channels, audio.ChannelLayout, options.Can.Tuning)
-	return conversion != nil, video, conversion
+	return conversion, conversion != nil
+}
+
+// SentAudioBitrate is the bitrate of the audio sent for played, the audio
+// track that plays: its conversion's when it is converted to a lossy
+// codec, else the track's own, copied or converted without loss. Zero
+// means none known.
+func SentAudioBitrate(played *MediaStream, conversion *AudioConversion) int64 {
+	switch {
+	case conversion != nil && conversion.Bitrate > 0:
+		return conversion.Bitrate
+	case played != nil && played.BitRate != nil:
+		return *played.BitRate
+	}
+	return 0
 }
 
 // VideoLimit is what a bitrate limit leaves the video, as Jellyfin writes
-// it in a TranscodingUrl: the limit less the source bitrate of the audio
-// that plays. Zero means no limit.
-func VideoLimit(limit int64, audio *MediaStream) int64 {
+// it in a TranscodingUrl: the limit less the bitrate of the audio sent
+// (see SentAudioBitrate). Zero means no limit.
+func VideoLimit(limit, audioBitrate int64) int64 {
 	if limit <= 0 {
 		return 0
 	}
-	if audio != nil && audio.BitRate != nil {
-		limit -= *audio.BitRate
-	}
-	return max(limit, 1)
+	return max(limit-audioBitrate, 1)
 }
 
 // remuxFails reports whether a codec profile of a type refuses stream in a

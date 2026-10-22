@@ -238,6 +238,37 @@ func TestMaxBitrateConvertsFallsBackOrRefuses(t *testing.T) {
 	}
 }
 
+// Under an app's bitrate limit, the video takes what the audio sent
+// leaves, which the TranscodingUrl writes as AudioBitrate: a lossless
+// track Chrome cannot take goes out as stereo AAC at 192 kb/s, so a 1080p
+// source keeps 1080p within 10 Mbit/s rather than giving the track's own
+// bitrate to the audio.
+func TestALosslessTrackConvertedLeavesTheVideoItsBitrate(t *testing.T) {
+	t.Parallel()
+	p := playing(t)
+	analysis := p.remuxable(t)
+	analysis.Bitrate = 24_200_000
+	analysis.Streams[0] = media.Stream{Index: 0, Type: "audio", Codec: "truehd", Default: true, Channels: 6, ChannelLayout: "5.1(side)",
+		SampleRate: 48000, Bitrate: 4_200_000}
+	analysis.Streams[1].Width, analysis.Streams[1].Height, analysis.Streams[1].Bitrate = 1920, 1080, 20_000_000
+	p.storeAnalysis(t, p.versions[0], analysis)
+	needsEncoders(t)
+	p.permit(t, p.user, true, true, false)
+	answer := p.ask(t, p.token, p.movie, p.profile(t, "jellyfin-web-chrome"), map[string]any{"MediaSourceId": p.movie, "MaxStreamingBitrate": 10_000_000})
+	if len(answer.MediaSources) != 1 {
+		t.Fatalf("answer: %+v", answer)
+	}
+	source := answer.MediaSources[0]
+	if source.SupportsDirectPlay || !strings.Contains(source.TranscodingUrl, "&VideoBitrate=9808000&AudioBitrate=192000&") ||
+		!strings.Contains(source.TranscodingUrl, "allowVideoStreamCopy=false") || videoHeightOf(source) != 1080 {
+		t.Fatalf("height %d, %s", videoHeightOf(source), source.TranscodingUrl)
+	}
+	status, _, master := fetchText(t, p.url+source.TranscodingUrl)
+	if status != http.StatusOK || !strings.Contains(master, "RESOLUTION=1920x1080") {
+		t.Errorf("master playlist: %d %s", status, master)
+	}
+}
+
 func TestMaxBitrateAppliesToLiveTv(t *testing.T) {
 	t.Parallel()
 	addon := newTVAddon(t, false, "")
