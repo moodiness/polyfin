@@ -168,7 +168,7 @@ func formerlyListed(kind, rel string) bool {
 		return false
 	}
 	name := parts[len(parts)-1]
-	return kind == KindMusic || !audioFile(name) && !(videoExtensions[strings.ToLower(path.Ext(name))] && sampleVideo(name))
+	return kind == KindMusic || !audioFile(name) && !(videoFile(name) && sampleVideo(name))
 }
 
 // splitExtras takes the extras out of what a walk of a movies or shows

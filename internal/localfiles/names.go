@@ -7,19 +7,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/moodiness/polyfin/internal/episodename"
 	"github.com/moodiness/polyfin/internal/iptv"
 )
-
-// videoExtensions are the files a scan lists, by their extension.
-var videoExtensions = map[string]bool{
-	".mkv": true, ".mp4": true, ".m4v": true, ".avi": true, ".mov": true, ".ts": true, ".m2ts": true, ".mts": true,
-	".webm": true, ".wmv": true, ".mpg": true, ".mpeg": true, ".flv": true, ".ogv": true,
-}
 
 // videoFile reports whether name is a video a scan lists, a sample's
 // included: a scan reading extras reads it as one (see splitExtras).
 func videoFile(name string) bool {
-	return videoExtensions[strings.ToLower(path.Ext(name))]
+	return episodename.Video(name)
 }
 
 // sideExtensions are the files a scan lists beside the videos, by their
@@ -149,16 +144,12 @@ var (
 	// bracketed are the other tags between brackets or braces, such as a
 	// release group or an edition: they are not the title.
 	bracketed = regexp.MustCompile(`\[[^\]]*\]|\{[^}]*\}`)
-	// episodeTag matches S01E02, s01e02, S01E01-E02, S01E01E02 and
-	// S01E01-02; crossTag 1x02; episodeOnly E02 or Episode 2, in a season
-	// folder.
-	episodeTag  = regexp.MustCompile(`(?i)\bs(\d{1,3})[ ._-]?e(\d{1,4})((?:(?:-e?|[ ._]?-?[ ._]?e)\d{1,4})*)`)
-	extraEpisod = regexp.MustCompile(`(?i)(?:-e?|[ ._]?-?[ ._]?e)(\d{1,4})`)
-	crossTag    = regexp.MustCompile(`(?i)\b(\d{1,2})x(\d{2,3})\b`)
-	episodeOnly = regexp.MustCompile(`(?i)(?:^|[ ._-])(?:e|ep|episode)[ ._]?(\d{1,4})\b`)
-	// seasonFolder names a season's folder: Season 01, Saison 1, S01,
-	// Specials (season 0).
-	seasonFolder = regexp.MustCompile(`(?i)^(?:season|series|saison|staffel|temporada|s)[ ._-]*(\d{1,3})$`)
+	// The episodes names tell, as the episodename package reads them.
+	episodeTag   = episodename.Tag
+	extraEpisod  = episodename.Extra
+	crossTag     = episodename.Cross
+	episodeOnly  = episodename.Alone
+	seasonFolder = episodename.SeasonFolder
 	// yearInParentheses is the year of "Title (1968)"; yearToken one among
 	// the words of "Title.1968.1080p".
 	yearInParentheses = regexp.MustCompile(`\((\d{4})\)`)
