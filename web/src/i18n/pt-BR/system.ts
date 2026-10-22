@@ -134,6 +134,8 @@ const system: typeof en = {
           `${name}: o Polyfin não consegue monitorar alterações neste compartilhamento de rede: ele recusa o usuário ou a senha do Polyfin. Verifique-os e digite-os novamente.`,
         shareUnwatched: (name: string) =>
           `${name}: o Polyfin não consegue monitorar alterações neste compartilhamento de rede. Ele continua sendo rastreado conforme o agendamento.`,
+        folderNoSearch: (name: string) =>
+          `${name}: nenhum complemento do servidor descreve e pesquisa os títulos dos arquivos, então eles continuam sem associação. Adicione um em Conteúdo › Fontes: os complementos próprios dos usuários, em Minhas fontes, não contam.`,
         folderSearch: (name: string, addon: string, failure: string) =>
           `${name}: não foi possível pesquisar os títulos dos arquivos${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. Eles continuam sem associação até que uma pesquisa dê certo, o que o Polyfin tenta de novo sozinho, depois de alguns minutos e, então, com menos frequência.`,
         searchLate: (name: string) =>

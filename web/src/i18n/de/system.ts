@@ -135,6 +135,8 @@ const system: typeof en = {
           `${name}: Polyfin kann diese Netzwerkfreigabe nicht auf Änderungen überwachen: Sie lehnt den Benutzer oder das Passwort von Polyfin ab. Prüfe beides und gib es erneut ein.`,
         shareUnwatched: (name: string) =>
           `${name}: Polyfin kann diese Netzwerkfreigabe nicht auf Änderungen überwachen. Sie wird weiterhin nach ihrem Zeitplan gescannt.`,
+        folderNoSearch: (name: string) =>
+          `${name}: Kein Add-on des Servers beschreibt und sucht die Titel seiner Dateien, daher bleiben sie nicht zugeordnet. Füge eines unter Inhalte › Quellen hinzu: Die eigenen Add-ons der Benutzer unter „Meine Quellen“ zählen nicht.`,
         folderSearch: (name: string, addon: string, failure: string) =>
           `${name}: Die Titel seiner Dateien konnten nicht gesucht werden${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. Sie bleiben nicht zugeordnet, bis eine Suche gelingt, was Polyfin von selbst erneut versucht, erst nach ein paar Minuten, dann seltener.`,
         searchLate: (name: string) =>

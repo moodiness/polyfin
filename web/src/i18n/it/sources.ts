@@ -438,6 +438,7 @@ const sources: typeof en = {
       disc_episode: 'Un titolo del disco di una serie TV: indica il suo episodio',
       lone_extra: 'Un extra senza il suo titolo accanto: collegalo per renderlo un titolo',
       not_found: 'Gli add-on dei metadati non conoscono alcun titolo con questo nome',
+      no_search: 'Nessun add-on del server descrive e cerca titoli di questo tipo',
       ambiguous: 'Diversi titoli hanno questo nome: aggiungi l’anno oppure collegalo',
       other_year: 'I titoli con questo nome sono di altri anni',
       search_failed: 'Impossibile effettuare la ricerca negli add-on dei metadati',
@@ -457,6 +458,12 @@ const sources: typeof en = {
       http_error: 'ha rifiutato la richiesta',
       invalid_response: 'ha inviato una risposta che Polyfin non riesce a leggere',
     } as Record<string, string>,
+    noSearchTitle: (count: number, figure: string) =>
+      count === 1
+        ? 'Nessun add-on può cercare il titolo di 1 file'
+        : `Nessun add-on può cercare i titoli di ${figure} file`,
+    noSearchHelp:
+      'L’associazione richiede un add-on del server, in Contenuti › Origini, che descriva questi titoli e abbia un catalogo di ricerca. Gli add-on personali degli utenti, in Le mie origini, non contano. Una volta aggiunto, scansiona la cartella.',
     searchFailedTitle: (count: number, figure: string) =>
       count === 1
         ? 'Non è stato possibile cercare il titolo di 1 file'

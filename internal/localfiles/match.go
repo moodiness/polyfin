@@ -27,6 +27,10 @@ const (
 	reasonUnreadableName = "unreadable_name"
 	// reasonNotFound: the metadata addons know no title of its name.
 	reasonNotFound = "not_found"
+	// reasonNoSearch: no addon of the server describes and searches
+	// titles of its kind (see library.Service.RemoteSearches), so none
+	// could be asked; a user's own addons do not count.
+	reasonNoSearch = "no_search"
 	// reasonAmbiguous: they know several, and its name tells no year that
 	// leaves one.
 	reasonAmbiguous = "ambiguous"
@@ -96,6 +100,9 @@ type searches struct {
 	failed int
 	first  library.SearchFailure
 	wait   time.Duration
+	// searchable tells, by kind, whether a server's addon searches
+	// titles of the kind, asked once per scan.
+	searchable map[library.Kind]bool
 }
 
 type search struct {
@@ -111,7 +118,29 @@ const (
 	maxRateWait = time.Minute
 )
 
-func newSearches() *searches { return &searches{results: map[string]*search{}} }
+func newSearches() *searches {
+	return &searches{results: map[string]*search{}, searchable: map[library.Kind]bool{}}
+}
+
+// canSearch reports whether a server's addon searches titles of kind, once
+// per scan. When that cannot be told, the titles are searched, and the
+// search tells what fails.
+func (c *searches) canSearch(ctx context.Context, titles Titles, kind library.Kind) bool {
+	c.mu.Lock()
+	known, ok := c.searchable[kind]
+	c.mu.Unlock()
+	if ok {
+		return known
+	}
+	known, err := titles.RemoteSearches(ctx, kind)
+	if err != nil {
+		return true
+	}
+	c.mu.Lock()
+	c.searchable[kind] = known
+	c.mu.Unlock()
+	return known
+}
 
 // find searches the metadata addons for titles of kind named title, once
 // per scan. Like library.RemoteSearch, it may answer the titles some
@@ -241,6 +270,9 @@ func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link stri
 	}
 	if n.title == "" {
 		return match{reason: reasonUnreadableName}, nil
+	}
+	if !cache.canSearch(ctx, s.titles, titleKind(kind)) {
+		return match{reason: reasonNoSearch}, nil
 	}
 	results, err := cache.find(ctx, s.titles, titleKind(kind), n.title)
 	if err != nil && ctx.Err() != nil {

@@ -437,6 +437,7 @@ const sources: typeof en = {
       disc_episode: 'Um título do disco de uma série: informe o episódio',
       lone_extra: 'Um extra sem o seu título ao lado: vincule-o para torná-lo um título',
       not_found: 'Os complementos de metadados não conhecem nenhum título com este nome',
+      no_search: 'Nenhum complemento do servidor descreve e pesquisa títulos deste tipo',
       ambiguous: 'Vários títulos têm este nome: adicione o ano a ele, ou vincule-o',
       other_year: 'Os títulos com este nome são de outros anos',
       search_failed: 'Não foi possível pesquisar nos complementos de metadados',
@@ -454,6 +455,12 @@ const sources: typeof en = {
       http_error: 'recusou a requisição',
       invalid_response: 'enviou uma resposta que o Polyfin não consegue ler',
     } as Record<string, string>,
+    noSearchTitle: (count: number, figure: string) =>
+      count === 1
+        ? 'Nenhum complemento consegue pesquisar o título de 1 arquivo'
+        : `Nenhum complemento consegue pesquisar os títulos de ${figure} arquivos`,
+    noSearchHelp:
+      'A associação precisa de um complemento do servidor, em Conteúdo › Fontes, que descreva esses títulos e tenha um catálogo de pesquisa. Os complementos próprios dos usuários, em Minhas fontes, não contam. Depois de adicionar um, rastreie a pasta.',
     searchFailedTitle: (count: number, figure: string) =>
       count === 1
         ? 'Não foi possível pesquisar o título de 1 arquivo'

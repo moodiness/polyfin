@@ -90,6 +90,7 @@ var (
 type Titles interface {
 	RemoteSearch(ctx context.Context, kind library.Kind, name string, limit int) ([]library.RemoteResult, error)
 	TitleMeta(ctx context.Context, metaType, id string) (stremio.Meta, bool)
+	RemoteSearches(ctx context.Context, kind library.Kind) (bool, error)
 }
 
 // Service stores the local folders, scans them and answers for them as
@@ -404,6 +405,9 @@ type Folder struct {
 	SearchAddon, SearchFailure string
 	SearchRetryAt              *time.Time
 	SearchRetries              int
+	// NoSearch counts the files left unmatched as no addon of the server
+	// describes and searches titles of the folder's kind.
+	NoSearch int
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
@@ -767,6 +771,9 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 		return nil
 	})
 	if err != nil {
+		return Folder{}, err
+	}
+	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM local_files WHERE addon_id = $1 AND reason = $2", id, reasonNoSearch).Scan(&f.NoSearch); err != nil {
 		return Folder{}, err
 	}
 	// The addon that failed the most searches tells why.

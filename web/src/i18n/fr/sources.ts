@@ -441,6 +441,7 @@ const sources: typeof en = {
       disc_episode: 'Un titre du disque d’une série : indiquez son épisode',
       lone_extra: 'Un bonus sans son titre à côté : associez-le pour en faire un titre',
       not_found: 'Les addons de métadonnées ne connaissent aucun titre de ce nom',
+      no_search: 'Aucun addon du serveur ne décrit ni ne recherche les titres de ce genre',
       ambiguous: 'Plusieurs titres portent ce nom : ajoutez-y l’année, ou associez-le',
       other_year: 'Les titres de ce nom sont d’autres années',
       search_failed: 'La recherche auprès des addons de métadonnées a échoué',
@@ -460,6 +461,12 @@ const sources: typeof en = {
       http_error: 'a refusé la requête',
       invalid_response: 'a envoyé une réponse que Polyfin ne sait pas lire',
     } as Record<string, string>,
+    noSearchTitle: (count: number, figure: string) =>
+      count === 1
+        ? 'Aucun addon ne peut rechercher le titre de 1 fichier'
+        : `Aucun addon ne peut rechercher les titres de ${figure} fichiers`,
+    noSearchHelp:
+      'L’association demande un addon du serveur, dans Contenu › Sources, qui décrit ces titres et a un catalogue de recherche. Les addons propres aux utilisateurs, dans Mes sources, ne comptent pas. Une fois l’addon ajouté, analysez le dossier.',
     searchFailedTitle: (count: number, figure: string) =>
       count === 1
         ? 'Le titre d’un fichier n’a pas pu être recherché'

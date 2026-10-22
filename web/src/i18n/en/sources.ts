@@ -419,6 +419,7 @@ const sources = {
       disc_episode: 'A title of a show’s disc: give its episode',
       lone_extra: 'An extra without its title beside it: link it to make it a title',
       not_found: 'The metadata addons know no title of this name',
+      no_search: 'No addon of the server describes and searches titles of this kind',
       ambiguous: 'Several titles have this name: add the year to it, or link it',
       other_year: 'Titles of this name are of other years',
       search_failed: 'The metadata addons could not be searched',
@@ -436,6 +437,12 @@ const sources = {
       http_error: 'refused the request',
       invalid_response: 'sent an answer Polyfin cannot read',
     } as Record<string, string>,
+    noSearchTitle: (count: number, figure: string) =>
+      count === 1
+        ? 'No addon can search the title of 1 file'
+        : `No addon can search the titles of ${figure} files`,
+    noSearchHelp:
+      'Matching needs an addon of the server, under Content › Sources, that describes these titles and has a search catalog. Users’ own addons, under My sources, do not count. Once one is added, scan the folder.',
     searchFailedTitle: (count: number, figure: string) =>
       count === 1
         ? 'The title of 1 file could not be searched'

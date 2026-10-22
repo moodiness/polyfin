@@ -94,6 +94,10 @@ const (
 	// as it did not answer a search in time: Name and Owner are the
 	// addon's. It comes and goes with the searches: transient.
 	problemSearchLate = "search_late"
+	// A local folder's files are left unmatched as no addon of the server
+	// describes and searches titles of its kind: one is to be added under
+	// Content › Sources, a user's own addons not counting.
+	problemFolderNoSearch = "folder_no_search"
 	// NVENC needs a newer NVIDIA driver than the GPU's: Name is the
 	// version it needs.
 	problemNVIDIADriver = "nvidia_driver"
@@ -251,6 +255,10 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 					sources = append(sources, healthProblemJSON{Key: "folder_search:" + addon.ID.String(), Code: problemFolderSearch,
 						Tone: notifications.SeverityWarning, To: "/sources/shared/" + addon.ID.String(), Name: addon.Manifest.Name,
 						Addon: folder.SearchAddon, Failure: folder.SearchFailure})
+				}
+				if folder.NoSearch > 0 {
+					sources = append(sources, healthProblemJSON{Key: "folder_no_search:" + addon.ID.String(), Code: problemFolderNoSearch,
+						Tone: notifications.SeverityWarning, To: "/sources", Name: addon.Manifest.Name})
 				}
 				continue
 			}
@@ -669,6 +677,13 @@ func (p healthProblemJSON) text(language string) string {
 			"%s: non è stato possibile cercare i titoli dei suoi file%s. Restano non associati finché una ricerca non va a buon fine, cosa che Polyfin riprova da solo, dopo qualche minuto, poi meno spesso.",
 			"%s: não foi possível pesquisar os títulos dos arquivos%s. Eles continuam sem associação até que uma pesquisa dê certo, o que o Polyfin tenta de novo sozinho, depois de alguns minutos e, então, com menos frequência."},
 			name, why)
+	case problemFolderNoSearch:
+		return say(i18n.Text{"%s: no addon of the server describes and searches the titles of its files, so they stay unmatched. Add one under Content › Sources: users’ own addons, under My sources, do not count.",
+			"%s : aucun addon du serveur ne décrit ni ne recherche les titres de ses fichiers, qui restent donc non associés. Ajoutez-en un dans Contenu › Sources : les addons propres aux utilisateurs, dans Mes sources, ne comptent pas.",
+			"%s: Kein Add-on des Servers beschreibt und sucht die Titel seiner Dateien, daher bleiben sie nicht zugeordnet. Füge eines unter Inhalte › Quellen hinzu: Die eigenen Add-ons der Benutzer unter „Meine Quellen“ zählen nicht.",
+			"%s: ninguna extensión del servidor describe ni busca los títulos de sus archivos, así que siguen sin asociar. Añada una en Contenido › Fuentes: las extensiones propias de los usuarios, en Mis fuentes, no cuentan.",
+			"%s: nessun add-on del server descrive e cerca i titoli dei suoi file, che quindi restano non associati. Aggiungine uno in Contenuti › Origini: gli add-on personali degli utenti, in Le mie origini, non contano.",
+			"%s: nenhum complemento do servidor descreve e pesquisa os títulos dos arquivos, então eles continuam sem associação. Adicione um em Conteúdo › Fontes: os complementos próprios dos usuários, em Minhas fontes, não contam."}, name)
 	case problemGuide:
 		return say(i18n.Text{"%s: the last programme guide fetch failed.", "%s : la dernière récupération du guide a échoué.", "%s: Der letzte Abruf des Fernsehprogramms ist fehlgeschlagen.", "%s: ha fallado la última obtención de la guía de programación.", "%s: l’ultimo recupero della guida TV non è riuscito.", "%s: a última obtenção do guia de programação falhou."}, name)
 	case problemSecretsUnreadable:

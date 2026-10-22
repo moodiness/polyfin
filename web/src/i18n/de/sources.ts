@@ -436,6 +436,7 @@ const sources: typeof en = {
       lone_extra:
         'Ein Extra ohne zugehörigen Titel daneben: Verknüpfe es, um es zu einem Titel zu machen',
       not_found: 'Die Metadaten-Add-ons kennen keinen Titel mit diesem Namen',
+      no_search: 'Kein Add-on des Servers beschreibt und sucht Titel dieser Art',
       ambiguous: 'Mehrere Titel haben diesen Namen: Ergänze das Jahr oder verknüpfe ihn',
       other_year: 'Titel mit diesem Namen stammen aus anderen Jahren',
       search_failed: 'Die Metadaten-Add-ons konnten nicht durchsucht werden',
@@ -455,6 +456,12 @@ const sources: typeof en = {
       http_error: 'hat die Anfrage abgelehnt',
       invalid_response: 'hat eine Antwort gesendet, die Polyfin nicht lesen kann',
     } as Record<string, string>,
+    noSearchTitle: (count: number, figure: string) =>
+      count === 1
+        ? 'Kein Add-on kann den Titel von 1 Datei suchen'
+        : `Kein Add-on kann die Titel von ${figure} Dateien suchen`,
+    noSearchHelp:
+      'Die Zuordnung braucht ein Add-on des Servers unter Inhalte › Quellen, das diese Titel beschreibt und einen Suchkatalog hat. Die eigenen Add-ons der Benutzer unter „Meine Quellen“ zählen nicht. Scanne den Ordner, sobald eines hinzugefügt ist.',
     searchFailedTitle: (count: number, figure: string) =>
       count === 1
         ? 'Der Titel von 1 Datei konnte nicht gesucht werden'

@@ -439,6 +439,7 @@ const sources: typeof en = {
       disc_episode: 'Un título del disco de una serie: indique su episodio',
       lone_extra: 'Un extra sin su título al lado: asócielo para convertirlo en un título',
       not_found: 'Las extensiones de metadatos no conocen ningún título con este nombre',
+      no_search: 'Ninguna extensión del servidor describe ni busca títulos de este tipo',
       ambiguous: 'Varios títulos tienen este nombre: añádale el año o asócielo',
       other_year: 'Los títulos con este nombre son de otros años',
       search_failed: 'No se pudo buscar en las extensiones de metadatos',
@@ -458,6 +459,12 @@ const sources: typeof en = {
       http_error: 'rechazó la solicitud',
       invalid_response: 'envió una respuesta que Polyfin no puede leer',
     } as Record<string, string>,
+    noSearchTitle: (count: number, figure: string) =>
+      count === 1
+        ? 'Ninguna extensión puede buscar el título de 1 archivo'
+        : `Ninguna extensión puede buscar los títulos de ${figure} archivos`,
+    noSearchHelp:
+      'La asociación necesita una extensión del servidor, en Contenido › Fuentes, que describa estos títulos y tenga un catálogo de búsqueda. Las extensiones propias de los usuarios, en Mis fuentes, no cuentan. Cuando añada una, escanee la carpeta.',
     searchFailedTitle: (count: number, figure: string) =>
       count === 1
         ? 'No se pudo buscar el título de 1 archivo'

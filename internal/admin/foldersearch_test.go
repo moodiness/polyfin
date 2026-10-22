@@ -120,3 +120,68 @@ func TestFolderSearchFailuresTold(t *testing.T) {
 		t.Errorf("told: %+v", told)
 	}
 }
+
+// A local folder whose titles no addon of the server can search tells it:
+// the folder counts its files left so, and System › Health and its
+// notifications point to Content › Sources while it lasts.
+func TestFoldersWithoutASearchTold(t *testing.T) {
+	t.Parallel()
+	var options *Options
+	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		lib := library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
+		o.Folders = localfiles.New(deps.pool, deps.addons, lib, logger, o.Accounts.Settings, nil)
+		t.Cleanup(o.Folders.Close)
+		options = o
+	})
+	admin := api.signedIn("root", true)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Nosferatu (1922).mkv"), []byte("video"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if status := admin.raw(http.MethodPost, "/scopes/shared/folders", `{"name": "Shelf", "kind": "movies", "path": "`+dir+`"}`,
+		&created); status != http.StatusCreated {
+		t.Fatalf("folder: %d", status)
+	}
+	folder := func() map[string]any {
+		t.Helper()
+		var list []map[string]any
+		if status := admin.raw(http.MethodGet, "/scopes/shared/addons", "", &list); status != http.StatusOK {
+			t.Fatalf("addons: %d", status)
+		}
+		i := slices.IndexFunc(list, func(a map[string]any) bool { return a["id"] == created.ID })
+		f, _ := list[i]["folder"].(map[string]any)
+		return f
+	}
+	waitUntil(t, func() bool {
+		f := folder()
+		return f["scannedAt"] != nil && f["scanning"] == false
+	})
+	if f := folder(); f["unmatched"] != 1.0 || f["noSearch"] != 1.0 || f["searchFailed"] != 0.0 {
+		t.Errorf("folder: unmatched %v, noSearch %v, searchFailed %v", f["unmatched"], f["noSearch"], f["searchFailed"])
+	}
+
+	var problems struct {
+		Problems []map[string]any `json:"problems"`
+	}
+	if status := admin.raw(http.MethodGet, "/health/problems?language=en", "", &problems); status != http.StatusOK {
+		t.Fatalf("problems: %d", status)
+	}
+	i := slices.IndexFunc(problems.Problems, func(p map[string]any) bool { return p["code"] == "folder_no_search" })
+	if i < 0 {
+		t.Fatalf("problems: %v", problems.Problems)
+	}
+	if p := problems.Problems[i]; p["key"] != "folder_no_search:"+created.ID || p["tone"] != "warning" || p["to"] != "/sources" || p["name"] != "Shelf" {
+		t.Errorf("problem: %v", p)
+	}
+	told, err := HealthProblems(*options)(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(told, func(p notifications.Problem) bool { return p.Key == "folder_no_search:"+created.ID && p.Text != "" }) {
+		t.Errorf("told: %+v", told)
+	}
+}

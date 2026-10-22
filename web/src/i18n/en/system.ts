@@ -130,6 +130,8 @@ const system = {
           `${name}: Polyfin cannot watch this network share for changes: it refuses Polyfin’s user or password. Check them, and enter them again.`,
         shareUnwatched: (name: string) =>
           `${name}: Polyfin cannot watch this network share for changes. It is still scanned on its schedule.`,
+        folderNoSearch: (name: string) =>
+          `${name}: no addon of the server describes and searches the titles of its files, so they stay unmatched. Add one under Content › Sources: users’ own addons, under My sources, do not count.`,
         folderSearch: (name: string, addon: string, failure: string) =>
           `${name}: the titles of its files could not be searched${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. They stay unmatched until a search goes through, which Polyfin tries again on its own, after a few minutes, then less often.`,
         searchLate: (name: string) =>

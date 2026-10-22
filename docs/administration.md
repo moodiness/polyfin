@@ -94,6 +94,8 @@ A local folder whose files are left unmatched because the search of their titles
 
 An addon whose search catalog did not answer a search in time is a warning, with a link to **Addons**: searches leave it out for 5 minutes, then ask it again (see [Catalog pages](addons-and-libraries.md#catalog-pages)). It comes and goes with the searches, so it is not sent as a health problem; the addon's own failure, "did not answer in time", is.
 
+A local folder whose files are left unmatched because no addon of the server describes and searches titles of its kind is a warning too, with a link to **Content › Sources**, where such an addon is added: users' own addons, under **My sources**, do not count. It goes away once a scan matches those files (see [What a search needs](local-folders.md#what-a-search-needs)).
+
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
 
 Torrent streams that cannot play are an error, naming why: the network interface missing, down or without an address, the SOCKS5 proxy not answering or refusing its user, or the WireGuard server not answering the handshake. A proxy without `UDP ASSOCIATE` is a warning: torrents play over TCP, with UDP trackers and the DHT off. Both link to **Settings › Torrents** (see [Kill switch](torrents.md#kill-switch)).

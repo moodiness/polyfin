@@ -943,6 +943,14 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
           {text.searchHelp}
         </Notice>
       )}
+      {folder.noSearch > 0 && (
+        <Notice tone="warn" className="mt-5">
+          <strong className="font-medium">
+            {text.noSearchTitle(folder.noSearch, folder.noSearch.toLocaleString(language))}.
+          </strong>{' '}
+          {text.noSearchHelp}
+        </Notice>
+      )}
     </PanelSection>
   )
 }

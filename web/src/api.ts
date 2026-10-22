@@ -828,6 +828,8 @@ export type LocalFolder = {
   searchFailed: number
   searchFailure: SearchFailure | null
   searchRetryAt: string | null
+  /** The files left unmatched as no addon of the server describes and searches titles of its kind. */
+  noSearch: number
 }
 
 /**
@@ -872,6 +874,7 @@ export type UnmatchedFile = {
     | 'ambiguous'
     | 'other_year'
     | 'search_failed'
+    | 'no_search'
     | 'disc_title'
     | 'disc_episode'
     | 'lone_extra'
@@ -3590,6 +3593,8 @@ export type HealthProblem = {
   | { code: 'folder_unwatched'; name: string; failure: string; share?: Exclude<FolderShare, ''> }
   /** A local folder's searches failed: the addon that failed most of them ('' for another failure) and why. */
   | { code: 'folder_search'; name: string; addon?: string; failure: string }
+  /** No addon of the server describes and searches the titles of a local folder's files. */
+  | { code: 'folder_no_search'; name: string }
   | { code: 'task'; task: string }
   | { code: 'https_port'; port: number }
   | { code: 'https_files'; failure: 'missing' | 'unreadable' | 'mismatch'; file: string }

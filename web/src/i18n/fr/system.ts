@@ -136,6 +136,8 @@ const system: typeof en = {
           `${name} : Polyfin ne peut pas surveiller les changements de ce partage réseau : il refuse l’utilisateur ou le mot de passe de Polyfin. Vérifiez-les, et saisissez-les à nouveau.`,
         shareUnwatched: (name: string) =>
           `${name} : Polyfin ne peut pas surveiller les changements de ce partage réseau. Il est toujours analysé selon sa planification.`,
+        folderNoSearch: (name: string) =>
+          `${name} : aucun addon du serveur ne décrit ni ne recherche les titres de ses fichiers, qui restent donc non associés. Ajoutez-en un dans Contenu › Sources : les addons propres aux utilisateurs, dans Mes sources, ne comptent pas.`,
         folderSearch: (name: string, addon: string, failure: string) =>
           `${name} : les titres de ses fichiers n’ont pas pu être recherchés${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon} : ${failure})`}. Ils restent non associés jusqu’à ce qu’une recherche aboutisse, ce que Polyfin réessaie de lui-même, après quelques minutes, puis moins souvent.`,
         searchLate: (name: string) =>

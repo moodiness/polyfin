@@ -136,7 +136,9 @@ func (s *Service) redescribe(ctx context.Context, v view, r record) (installed, 
 				"item", r.ID, "addon", candidate.addon.Manifest.Name, "error", err)
 			return installed{}, false
 		}
-		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
+		if !notOwn(candidate, err) {
+			s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
+		}
 	}
 	if ctx.Err() == nil {
 		s.logger.Debug("No addon could describe a refreshed title", "item", r.ID)

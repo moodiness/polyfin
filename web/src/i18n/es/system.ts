@@ -135,6 +135,8 @@ const system: typeof en = {
           `${name}: Polyfin no puede vigilar los cambios de este recurso compartido de red: rechaza el usuario o la contraseña de Polyfin. Compruébelos e introdúzcalos de nuevo.`,
         shareUnwatched: (name: string) =>
           `${name}: Polyfin no puede vigilar los cambios de este recurso compartido de red. Se sigue escaneando según su programación.`,
+        folderNoSearch: (name: string) =>
+          `${name}: ninguna extensión del servidor describe ni busca los títulos de sus archivos, así que siguen sin asociar. Añada una en Contenido › Fuentes: las extensiones propias de los usuarios, en Mis fuentes, no cuentan.`,
         folderSearch: (name: string, addon: string, failure: string) =>
           `${name}: no se pudieron buscar los títulos de sus archivos${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. Siguen sin asociar hasta que una búsqueda salga bien, lo que Polyfin vuelve a intentar por sí solo, al cabo de unos minutos y luego con menos frecuencia.`,
         searchLate: (name: string) =>

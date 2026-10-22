@@ -71,6 +71,9 @@ type folderJSON struct {
 	SearchFailed  int                `json:"searchFailed"`
 	SearchFailure *searchFailureJSON `json:"searchFailure"`
 	SearchRetryAt *time.Time         `json:"searchRetryAt"`
+	// NoSearch counts the files left unmatched as no addon of the server
+	// describes and searches titles of the folder's kind.
+	NoSearch int `json:"noSearch"`
 }
 
 // searchFailureJSON is a failed search of a title: the name of the addon
@@ -143,7 +146,8 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork, ReadExtras: f.ReadExtras, Extras: f.Extras,
 		Endpoint: f.Endpoint, Region: f.Region, RcloneRemote: f.Remote, PrivateKeySet: f.PrivateKeySet, PassphraseSet: f.PassphraseSet,
 		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, PollMinutes: f.PollMinutes,
-		SearchFailed: f.SearchFailed, SearchFailure: newSearchFailureJSON(f.SearchAddon, f.SearchFailure), SearchRetryAt: f.SearchRetryAt}
+		SearchFailed: f.SearchFailed, SearchFailure: newSearchFailureJSON(f.SearchAddon, f.SearchFailure), SearchRetryAt: f.SearchRetryAt,
+		NoSearch: f.NoSearch}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
