@@ -887,14 +887,14 @@ func (t *torrent) received(p *peer, index int, offset int64, data []byte) {
 	}
 	if sha1.Sum(in.data) != expected {
 		t.engine.config.Logger.Debug("A torrent's piece did not match its hash")
-		t.refill(p)
+		t.discard(p, index)
 		return
 	}
 	if err := t.engine.store.put(pieceKey{t.hash, index}, in.data); errors.Is(err, errClosed) {
 		return
 	} else if err != nil {
 		t.engine.config.Logger.Warn("A torrent's piece could not be kept", "error", err)
-		t.refill(p)
+		t.discard(p, index)
 		return
 	}
 	t.completed(index)
@@ -923,14 +923,17 @@ func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inf
 		t.fill(p)
 		return nil, Hash{}, false
 	}
-	delete(t.inflight, index)
+	// The piece stays in flight, whole, until it is kept or found wrong:
+	// meanwhile, none of its blocks is asked again.
 	return in, t.info.Pieces[index], true
 }
 
-// refill asks a peer for the blocks Polyfin lacks.
-func (t *torrent) refill(p *peer) {
+// discard drops a whole piece found wrong, or that could not be kept, and
+// asks the peer for the blocks Polyfin lacks.
+func (t *torrent) discard(p *peer, index int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	delete(t.inflight, index)
 	t.fill(p)
 }
 
@@ -939,6 +942,7 @@ func (t *torrent) refill(p *peer) {
 func (t *torrent) completed(index int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	delete(t.inflight, index)
 	if t.err != nil {
 		return
 	}
