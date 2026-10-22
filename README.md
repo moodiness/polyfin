@@ -1,5 +1,14 @@
 <p align="center"><a href="https://moodiness.github.io/polyfin/videos/polyfin-ad.mp4"><img src="assets/polyfin-social.png" alt="Polyfin"></a></p>
 
+> [!NOTE]
+> **This fork** adds to Polyfin:
+> - **Rip exclusion list** (Settings › Playback): CAM, telesync, telecine, screener and workprint releases are removed from every title, each type toggled on its own, all on by default.
+> - **NostalgiaTV and other live-TV apps:** library-wide episode listings (`/Items?IncludeItemTypes=Episode&Recursive=true`, with or without a library, narrowed by `Genres`/`GenreIds`) and `/Genres` without a library, answered from a pool of each TV library's first 40 series, ported from AIOFin.
+> - **Hide specials** toggle (Settings › Playback): season 0 left out of seasons, episode lists and Next Up, on by default.
+> - **AIOStreams look** for the web player (jellyfin-web, themed by its default Custom CSS: near-black pages, white pill buttons, rounded cards, Inter), with **Plex-style subtitles**.
+> - **Wide collections:** an addon's collection with a landscape poster (`posterShape`), such as streaming-service tiles, shows on wide cards on the home page and in its library.
+> - **Docker image on GitHub:** every push to `main` publishes `ghcr.io/<owner>/polyfin` (see `.github/workflows/docker.yml`). Set `POLYFIN_IMAGE` in `.env` and run `docker compose up -d`.
+
 Polyfin is a self-hosted server that speaks the Jellyfin API. Its content comes from:
 - **Stremio addons:** catalogs, metadata, streams and subtitles;
 - **Eclipse music addons:** music, audiobooks and podcasts;
@@ -15,11 +24,11 @@ See it on the [website](https://moodiness.github.io/polyfin/): the ad above, a s
 ## Features
 
 - **Works with Jellyfin apps:** sign in with a password or Quick Connect, then browse, search and play. Polyfin targets the Jellyfin 12.2 API.
-- **Stremio addons as libraries:** catalogs become libraries and collections, streams become versions of a title, and addon subtitles become subtitle tracks.
+- **Stremio addons as libraries:** catalogs become libraries and collections, and streams become versions of a title.
 - **Live TV and IPTV:** TV catalogs, M3U playlists and Xtream Codes accounts become Live TV, with a programme guide and recordings. IPTV providers' archives of past programmes play from a Replay view. IPTV movies and series become libraries.
 - **Music, audiobooks and podcasts:** Eclipse music addons install like Stremio addons and become music and books libraries. Tracks play as they are, or are converted when the app needs it.
 - **Playback and transcoding:** direct play when the app supports the file. Otherwise a remux or a conversion to HLS, on an NVIDIA, AMD or Intel GPU, or VideoToolbox on macOS, when there is one, with HDR tone mapped on NVIDIA and Intel GPUs and VideoToolbox, else on the processor.
-- **Subtitles:** addon subtitles, text tracks inside files, and ASS styles with their fonts. Image subtitles are burned in when an app cannot show them.
+- **Subtitles:** only the tracks inside the files, ASS styles with their fonts included; the web player has them burned in. Image subtitles are burned in when an app cannot show them.
 - **Multiple users:** each user has their own watched state, resume points, favorites and Next Up, with parental control and per-user limits. Invite links let people create their own account.
 - **Skip buttons:** intros, recaps, credits and previews to skip, from three community databases.
 - **Tracking:** each user can send what they watch to Trakt, Simkl, MDBList and PublicMetaDB, and import what they watched there, or in their Stremio or Nuvio account.

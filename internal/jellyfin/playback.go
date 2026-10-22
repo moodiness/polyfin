@@ -536,6 +536,17 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 	}
 	if posted.DeviceProfile != nil {
 		request.DeviceProfile = posted.DeviceProfile
+		// Browsers claim video they then show black (see
+		// playback.WithoutRiskyVideo): the web player is offered H.264 and
+		// the like, converted when the file is not.
+		if webApp(r) && h.Accounts.Settings().WebSafeVideo {
+			request.DeviceProfile = playback.WithoutRiskyVideo(request.DeviceProfile)
+		}
+		// Only the files' own subtitles are offered, and the web player has
+		// them burned into the picture, whatever their format.
+		if webApp(r) {
+			request.DeviceProfile = playback.BurningSubtitles(request.DeviceProfile)
+		}
 	}
 	if posted.EnableDirectPlay != nil {
 		request.EnableDirectPlay = posted.EnableDirectPlay
@@ -595,7 +606,6 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 		return decided{}, false
 	}
 	source := h.baseSource(r, p, version, id, analysis, true)
-	source.MediaStreams = h.withTextCopies(r.Context(), p, version, analysis, source.MediaStreams)
 	decision, options, described := h.trackDecision(p, version, source.MediaStreams, analysis, request, allowed, named)
 	// Over HLS, a version is cut into segments: on its keyframes, or,
 	// for a file without an index such as MPEG-TS, every few seconds,
@@ -753,7 +763,6 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 			streamed = false
 		}
 	}
-	h.queueTextCopies(r.Context(), p, decision, streams, version, analysis)
 	h.deliverable(r.Context(), decision, streams, version, analysis, streamed)
 	h.prefetchSubtitle(r.Context(), decision, streams, version, analysis)
 
@@ -852,27 +861,6 @@ func subtitleFiles(streams []playback.MediaStream) int {
 	return files
 }
 
-// queueTextCopies has a version's picture subtitles read into text when
-// the app plays it and cannot draw them: when the decision would burn one
-// in, or leave one out, rather than have the app draw it. The track chosen
-// is read first. Nothing waits for them: the copies are listed from the
-// next PlaybackInfo once read.
-func (h *Handler) queueTextCopies(ctx context.Context, p playable, decision playback.Decision, streams []playback.MediaStream,
-	version library.Version, analysis media.Analysis) {
-	cannot := false
-	for _, stream := range streams {
-		if stream.Type == "Subtitle" && stream.CopyOf == nil && playback.PictureSubtitle(stream.Codec) {
-			if delivery, ok := decision.Subtitles[stream.Index]; ok && delivery.Method == "Encode" {
-				cannot = true
-			}
-		}
-	}
-	if !cannot {
-		return
-	}
-	h.Playback.QueueTextCopies(ctx, version, analysis, versionFiles(p.subtitles, version), decision.SubtitleStreamIndex)
-}
-
 // prefetchSubtitle starts reading whole the embedded track the app shows
 // by default when it goes out as a file, so that it is ready when the app
 // asks for it a moment later.
@@ -892,15 +880,16 @@ func (h *Handler) prefetchSubtitle(ctx context.Context, decision playback.Decisi
 }
 
 // burnable reports whether the subtitle stream of Jellyfin index index can
-// be burned into converted video: a picture subtitle file, or an image
-// track inside the file.
+// be burned into converted video: a subtitle file, pictures or text, an
+// image track inside the file, or a text track Polyfin reads (see
+// textBurnFile). A picture subtitle's text copy, listed after the tracks,
+// goes out as text.
 func burnable(streams []playback.MediaStream, analysis media.Analysis, index int) bool {
 	files := subtitleFiles(streams)
 	if index < files {
-		i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Subtitle" && s.Index == index })
-		return i >= 0 && !streams[i].IsTextSubtitleStream
+		return slices.ContainsFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Subtitle" && s.Index == index })
 	}
-	return playback.BurnableSubtitle(analysis, index-files)
+	return playback.BurnableSubtitle(analysis, index-files) || playback.ExtractableSubtitle(analysis, index-files)
 }
 
 // permitted reports whether the conversions a decision plans, of the video

@@ -55,7 +55,16 @@ type Remux struct {
 	// burned in instead, which FFmpeg reads beside the version.
 	Burn     *int
 	BurnFile string
+	// BurnText is a text subtitle file burned in instead, a local path
+	// Polyfin wrote (see hls.VideoEncoding.BurnText); StyledText tells an
+	// ASS or SSA one.
+	BurnText   string
+	StyledText bool
 }
+
+// textBurnFonts holds the fonts libass draws burned-in text subtitles
+// with: the Docker image's DejaVu fonts.
+const textBurnFonts = "/usr/share/fonts/truetype/dejavu"
 
 // Plan returns how a version is cut into segments, reading its keyframe
 // index on first use. An MPEG-TS file, which has no index, is cut every
@@ -489,6 +498,9 @@ func (r Remux) videoConversion() string {
 	if r.Burn != nil {
 		burn = "stream " + strconv.Itoa(*r.Burn)
 	}
+	if r.BurnText != "" {
+		burn = "text " + r.BurnText
+	}
 	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%dx%d\x00%d\x00%t\x00%t\x00%t\x00%s", c.Codec, c.Encoder, c.Width, c.Height, c.Bitrate,
 		c.ToneMap, c.ToneMapOnCPU, c.Deinterlace, burn)))
 	return hex.EncodeToString(sum[:12])
@@ -610,8 +622,12 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 		}
 		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
 			FrameRate: rate, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace, Burn: remux.Burn, BurnFile: remux.BurnFile,
+			BurnText: remux.BurnText, StyledText: remux.StyledText,
 			Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak,
 			ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double, DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
+		if remux.BurnText != "" {
+			r.Encode.FontsDir = textBurnFonts
+		}
 	}
 	if c := remux.ConvertAudio; c != nil && r.Audio >= 0 {
 		r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter = c.Codec, c.Channels, c.Bitrate, c.Filter

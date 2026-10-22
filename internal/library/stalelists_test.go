@@ -284,3 +284,14 @@ func TestStaleSubtitleListsAreListedWhileTheAddonIsAskedAgain(t *testing.T) {
 		t.Errorf("once the follow-ups ended: %q", got)
 	}
 }
+
+// Only the subtitles inside the files are offered: the addons' are
+// neither listed nor asked for.
+func TestInFileSubtitlesOnlyListsNoAddonsSubtitles(t *testing.T) {
+	t.Parallel()
+	e := newStaleEnv(t, 20*time.Millisecond, 20*time.Millisecond)
+	listed, err := e.service.Subtitles(t.Context(), e.member, e.movie)
+	if err != nil || len(listed) != 0 || e.asked("subtitles") != 0 {
+		t.Fatalf("%+v %v, asked %d times", listed, err, e.asked("subtitles"))
+	}
+}

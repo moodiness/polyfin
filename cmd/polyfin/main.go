@@ -48,7 +48,6 @@ import (
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/notifications"
-	"github.com/moodiness/polyfin/internal/ocr"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/plays"
@@ -351,19 +350,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// A folder whose address, credentials or host key changed has its
 	// versions that could not be read tried again at once.
 	folders.UseRetry(player.Retry)
-	// Picture subtitles are read into text with Tesseract, as the settings
-	// ask: those of the versions played, and of the videos scans find. The
-	// files written meanwhile go in the cache folder, emptied at start, as
-	// the system's temporary folder is read-only in the image's container.
-	ocrDir := filepath.Join(cfg.CacheDir, "ocr")
-	if err := errors.Join(os.RemoveAll(ocrDir), os.MkdirAll(ocrDir, 0o700)); err != nil {
-		return fmt.Errorf("prepare the OCR directory: %w", err)
-	}
-	player.UseTesseract(cfg.FFmpeg, ocrDir, &ocr.Tesseract{Path: cfg.Tesseract, DataDir: cfg.TessdataDir, TempDir: ocrDir})
-	folders.UseScanned(player.QueueScanned)
-	if _, err := exec.LookPath(cfg.Tesseract); err != nil && store.Settings().SubtitleOCR != "off" {
-		logger.Warn("Tesseract was not found: picture subtitles are not read into text", "tesseract", cfg.Tesseract)
-	}
+	// Picture subtitles are never read into text: only the subtitle tracks
+	// inside the files are offered, as they are.
 	registerLocalFoldersTask(registry, folders)
 	// Channel streams of IPTV sources share their account's connections,
 	// and how they answer orders them.

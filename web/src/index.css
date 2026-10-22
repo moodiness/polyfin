@@ -1,36 +1,37 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/geist';
+@import '@fontsource-variable/inter';
 @import '@fontsource-variable/geist-mono';
 
 /*
- * « Nuit » design tokens. Pages use them through Tailwind classes (`bg-s1`, `text-ink-2`,
+ * Design tokens, in the palette of AIOStreams: near-black surfaces, a violet accent, Inter.
+ * (Derived from Polyfin's « Nuit » tokens.) Pages use them through Tailwind classes (`bg-s1`, `text-ink-2`,
  * `border-line-2`, `rounded-panel`, `shadow-pop`, `text-h1`…) and never raw colors.
  */
 @theme {
   /* Backgrounds: the brand night, then tinted surfaces. */
-  --color-bg: #08080e;
-  --color-s1: #0d0d15; /* panels */
-  --color-s2: #12121c; /* fields, hovered rows */
-  --color-s3: #191925; /* selected, secondary buttons */
-  --color-s4: #232331; /* pressed, switch off */
+  --color-bg: #070707;
+  --color-s1: #0b0b0b; /* panels */
+  --color-s2: #121212; /* fields, hovered rows */
+  --color-s3: #1c1c1c; /* selected, secondary buttons */
+  --color-s4: #2a2a2a; /* pressed, switch off */
 
-  /* Hairlines: bluish white at 7, 11 and 17 %. */
-  --color-line: rgb(236 236 255 / 0.07);
-  --color-line-2: rgb(236 236 255 / 0.11);
-  --color-line-3: rgb(236 236 255 / 0.17);
+  /* Hairlines: white at 7, 10 and 16 %. */
+  --color-line: rgb(255 255 255 / 0.07);
+  --color-line-2: rgb(255 255 255 / 0.1);
+  --color-line-3: rgb(255 255 255 / 0.16);
 
   /* Text, strongest first. All pass AA on every surface. */
-  --color-ink: #ededf5;
-  --color-ink-2: #a6a6ba;
-  --color-ink-3: #80809a;
+  --color-ink: #e6e6e6;
+  --color-ink-2: #a9a9a9;
+  --color-ink-3: #8f8f8f;
 
   /* The only accent (white text on it), its pressed state, and links and the focus ring. */
-  --color-accent: #5b63f6;
-  --color-accent-press: #4f57ec;
-  --color-link: #9aa0ff;
-  --color-link-hover: #c3c6ff;
+  --color-accent: #6152df;
+  --color-accent-press: #5243cb;
+  --color-link: #9f92ff;
+  --color-link-hover: #c7c2ff;
   /* Behind dialogs and the palette. */
-  --color-scrim: rgb(4 4 10 / 0.62);
+  --color-scrim: rgb(0 0 0 / 0.66);
 
   /* States: always shown with an icon and a word. */
   --color-ok: #5cc79d;
@@ -38,13 +39,13 @@
   --color-danger: #f27d74;
 
   /* The brand gradient stops: the logo and playback progress only (see `bg-brand`). */
-  --color-brand-1: #6d4aff;
-  --color-brand-2: #4c3fd9;
-  --color-brand-3: #5b63f6;
-  --color-brand-4: #3e8ef7;
-  --color-brand-5: #22d3ee;
+  --color-brand-1: #c7c2ff;
+  --color-brand-2: #9f92ff;
+  --color-brand-3: #6152df;
+  --color-brand-4: #5243cb;
+  --color-brand-5: #3f2eb2;
 
-  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Type scale: 30 / 22 / 16 / 15 / 14 / 13 / 12, plus 13.5 for controls as in the mockup. */
@@ -72,8 +73,8 @@
   --text-micro--line-height: 1.45;
 
   /* Radii: panels, rows and tiles, fields and buttons, checkboxes. */
-  --radius-panel: 16px;
-  --radius-row: 12px;
+  --radius-panel: 12px;
+  --radius-row: 8px;
   --radius-field: 8px;
   --radius-check: 5px;
 
@@ -83,7 +84,7 @@
   --container-page: 1232px;
 
   /* The one shadow, for floating surfaces only (menus, palette, dialogs). */
-  --shadow-pop: 0 28px 70px -20px rgb(3 3 14 / 0.9), 0 0 0 1px var(--color-line-2);
+  --shadow-pop: 0 28px 70px -20px rgb(0 0 0 / 0.9), 0 0 0 1px var(--color-line-2);
 
   --ease-nuit: cubic-bezier(0.2, 0.7, 0.2, 1);
 

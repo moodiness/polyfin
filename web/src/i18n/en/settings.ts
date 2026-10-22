@@ -281,12 +281,32 @@ const settings = {
       `Versions known to be larger are listed nowhere: not on title pages, in playback or in downloads. When the rules below and this one would hide every version of a title, none is hidden. Up to ${r.max} GB; ${r.default} by default.`,
     hiddenVersionCodecs: 'Hide these video codecs',
     hiddenVersionCodecsHelp: 'Versions known to be in these codecs are listed nowhere.',
+    hideSpecials: 'Hide specials',
+    exactTitleMatch: 'Match titles exactly',
+    exactTitleMatchHelp:
+      'Leaves out the versions whose file name starts with a longer title holding the movie’s or the series’ own: Smiling Friends’ releases are not offered for Friends. A leading “The”, the year and punctuation do not count. Versions without a file name are kept. On by default.',
+    defaultAudioLanguage: 'Default audio language',
+    defaultAudioLanguageHelp:
+      'The audio language played for users who chose none in their own settings.',
+    defaultSubtitleLanguage: 'Default subtitle language',
+    defaultSubtitleLanguageHelp:
+      'The subtitle language shown for users who chose none in their own settings.',
+    defaultLanguageNone: 'None',
+    hideSpecialsHelp:
+      'Leaves series’ specials (season 0) out of their seasons, episode lists and Next Up. On by default.',
+    hiddenRipTypes: 'Exclude these rips',
+    hiddenRipTypesHelp:
+      'Versions whose name, description or file name carries one of these release tags are removed everywhere, even when no other version of the title is left. Tags are matched as whole words: CAM, HDCAM, TS, HD-TS, TELESYNC, TC, TELECINE, SCR, DVDSCR, SCREENER, R5, WORKPRINT and the like. All of them by default.',
+    ripTypes: {
+      cam: 'CAM (CAM, HDCAM, CAMRip)',
+      telesync: 'Telesync (TS, HD-TS, PDVD)',
+      telecine: 'Telecine (TC, HDTC)',
+      screener: 'Screener (SCR, DVDSCR, R5)',
+      workprint: 'Workprint (WP)',
+    },
     hiddenVersionWords: 'Hide versions whose labels contain',
     hiddenVersionWordsHelp: (r: RangeText) =>
       `One word or phrase a line, matched in any letter case in a version’s name, description and file name: for addons that say in their labels that a file is not ready to play yet. Up to ${r.max} lines; none by default.`,
-    syncAddonSubtitles: 'Sync addon subtitles',
-    syncAddonSubtitlesHelp:
-      'Times the addons’ subtitles to the version played, when they run early, late, or faster or slower than it. At a version’s first play, Polyfin finds in the background when it has speech: from a text subtitle inside the file, else from three stretches of its audio, reading at most 300 MB of an addon’s file. From then on, a subtitle that fits clearly better shifted or sped up comes synced, its name ending with “(synced)”.',
     remuxDb: 'Describe versions from RemuxDB',
     remuxDbHelp:
       'Shows the audio, subtitle and video tracks of a version before it is first played, as RemuxDB found them in the same file. When a title’s details open, Polyfin asks RemuxDB, a community database, by the title’s IMDb identifier, and finds the versions by their file names. Playback still analyzes each version.',
@@ -337,6 +357,9 @@ const settings = {
       'Converted video is scaled down to this height at most, keeping its shape, so that it plays well over a slower connection. Files played as they are or simply repackaged keep their quality. A graphics card converts up to 4K; the processor stops at 1080p, and when it converts HDR to SDR, at "Maximum quality of HDR converted by the processor" (Conversion › HDR).',
     conversionHeightOriginal: 'Original',
     conversionHeight: (height: number) => `${height}p`,
+    webSafeVideo: 'Play every file in the web player',
+    webSafeVideoHelp:
+      'Browsers say they play HEVC, Dolby Vision and AV1 video, then often show it black, the sound and the clock running. On, the web player is never sent those as they are: such versions play converted to H.264. The Jellyfin apps keep their own players.',
     convertedDownloads: 'Converted downloads',
     convertedDownloadsHelp:
       'Apps that ask for it, such as Streamyfin, save a title at the quality the user picks: Polyfin sends a smaller copy, made as the app downloads it and never kept on the server. Without it, they save the file as it is. Each download counts toward "Video conversions at once" while it converts, and as one of the user’s "Playbacks at once". The user needs "Can download", and "Can use conversion (transcoding)" when the video or the audio is converted. An interrupted download starts again. Off by default.',
@@ -345,7 +368,6 @@ const settings = {
         'When an app cannot play a file as it is, Polyfin converts it with FFmpeg. These settings choose how, for movies, series and Live TV alike. The defaults suit most servers.',
       groups: {
         general: 'General',
-        subtitles: 'Picture subtitles',
         gpu: 'Graphics card',
         video: 'Video',
         hdr: 'HDR',
@@ -353,17 +375,6 @@ const settings = {
         audio: 'Audio',
         performance: 'Performance',
       },
-      subtitleOcr: 'Turn picture subtitles into text',
-      subtitleOcrHelp:
-        'PGS and DVD (VobSub) subtitles are pictures, and many apps take only text: for them, Polyfin burns the track into the video, which needs a conversion. With this on, Tesseract reads each picture track once, in the background, into a text copy listed as one more track marked "(OCR)", which plays without conversion. Until a copy is ready, the track is burned in as before. The picture track stays: italics, colors and positions are lost, and stylized fonts can be misread. "When played" reads a version’s tracks the first time an app that cannot draw them plays it; "Also after library scans" also reads the tracks of new local files. Off by default.',
-      subtitleOcrChoices: {
-        off: 'Off',
-        played: 'When played',
-        scans: 'Also after library scans',
-      },
-      subtitleOcrTracks: 'Picture subtitle tracks read at once',
-      subtitleOcrTracksHelp: (r: RangeText) =>
-        `Each track is read by one Tesseract process using one processor core. From ${r.min} to ${r.max}; ${r.default} by default.`,
       hardwareAcceleration: 'Graphics card used to convert',
       hardwareAccelerationHelp:
         'A graphics card (GPU) converts video much faster than the processor. Each system offers its own: NVIDIA and VAAPI on Linux, VideoToolbox on macOS, NVIDIA, Intel and AMD on Windows. Without a card that works, the processor converts. A change applies once saved, without a restart.',
@@ -613,6 +624,9 @@ const settings = {
     importEveryMinutes: 'Import connected accounts every',
     importEveryMinutesHelp:
       'How often Polyfin imports again the Stremio and Nuvio accounts users stay connected to, and the watch histories they import from tracking services. A change applies at once: each next import comes this long after the last one. Each import reads the whole account again, so a short interval sends more requests to those services, and, for Stremio, whose terms forbid automated extraction, makes that grey area more pronounced. 6 hours by default.',
+    registration: 'Registration',
+    registrationHelp:
+      'Lets anyone who opens /register on this server create a member account, with the default settings, hidden from the sign-in screen. Off, the page says registration is closed and leads back to the sign-in screen. Each address may register only a few accounts before it waits, as for failed sign-ins.',
     shareLinks: 'Allow share links',
     shareLinksHelp:
       'Users with Can share titles, on their page under Users, may give a movie or an episode to someone without an account, through a link that expires after 1 hour to 30 days. The guest watches in a browser, at 1080p at most and within the user’s quality group, and counts among the user’s playbacks at once. When off, no link can be made and every link is refused, without being deleted. Off by default.',
@@ -755,12 +769,21 @@ const settings = {
     webPlayerHelp:
       'What the web player (jellyfin-web, at /web/) shows besides its own pages. The script applies the next time a page of the web player is loaded; the web player keeps the CSS and the sign-in message for up to a minute.',
     openWebPlayer: 'Open the web player',
+    brandingHelp: 'The logo the web player shows in place of Jellyfin’s, and on the register page.',
+    brandLogo: 'Logo',
+    brandLogoHelp:
+      'Shown in place of the Jellyfin logo in the web player: its header, menu, splash and sign-in screens and the browser tab, and in the Jellyfin apps that open the web player (desktop, Android, iOS). Apps with screens of their own, such as Infuse or Swiftfin, keep theirs. PNG, JPEG, WebP, GIF or SVG, up to 1 MB; a wide logo suits the header best.',
+    brandLogoChoose: 'Choose an image',
+    brandLogoRemove: 'Use the Jellyfin logo',
+    brandLogoNone: 'Jellyfin logo',
+    brandLogoType: 'Choose a PNG, JPEG, WebP, GIF or SVG image.',
+    brandLogoSize: 'Choose an image of 1 MB at most.',
     customCss: 'Custom CSS',
     customCssHelp:
-      'Applied to every page of the web player, for every user, as Jellyfin’s custom CSS. Users can turn it off under Settings › Display. By default, it holds the LumaaGlaass theme’s stylesheet, which goes with the default Custom JavaScript: empty both to keep the web player’s own look.',
+      'Applied to every page of the web player, for every user, as Jellyfin’s custom CSS. Users can turn it off under Settings › Display. By default, it holds the AIOStreams look: near-black pages, white pill buttons, rounded cards, the Inter font and Plex-style subtitles. Empty it to keep the web player’s own look.',
     customJs: 'Custom JavaScript',
     customJsHelp:
-      'Loaded by every page of the web player, after its own scripts. Empty loads nothing. By default, it loads the LumaaGlaass theme’s script, which goes with the default Custom CSS.',
+      'Loaded by every page of the web player, after its own scripts. Empty loads nothing, the default.',
     customJsWarningTitle: 'Only paste code you trust',
     customJsWarning:
       'This script runs in the browser of every user who opens the web player on this server, with their account. It can read what they see and act for them.',

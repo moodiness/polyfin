@@ -29,7 +29,7 @@ These pages explain how to run Polyfin and what it does for the people who use i
 |---|---|
 | [Playback](playback.md) | How a title plays, versions, chapters, preparing playback ahead, choosing a version, watching together, and thumbnails |
 | [Transcoding](transcoding.md) | When Polyfin converts, GPUs, HDR tone mapping, and the conversion settings |
-| [Subtitles](subtitles.md) | Addon subtitles, text tracks inside files, ASS styles and fonts, and image subtitles |
+| [Subtitles](subtitles.md) | Only the tracks inside files: text tracks, ASS styles and fonts, and image subtitles |
 | [Skip segments](skip-segments.md) | Skipping intros, recaps, credits and previews: the sources, their order, and their keys |
 | [DLNA](dlna.md) | Sharing the libraries with TVs and players that have no Jellyfin app: devices and their users, profiles, Docker networking, and limits |
 | [Tracking](tracking.md) | Sending what you watch to Trakt, Simkl, MDBList and PublicMetaDB, and the songs you play to Last.fm and ListenBrainz, and importing what you watched there |

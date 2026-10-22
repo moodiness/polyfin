@@ -520,7 +520,6 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 	if !audio && event == playbackStarted {
 		h.queueImages(ctx, user, deviceID, item, mediaSource)
 		h.findInAudio(ctx, user, item, mediaSource)
-		h.findSpeech(ctx, user, item, mediaSource)
 	}
 	if audio && event == playbackStarted {
 		h.prepareNextTrack(user, item, state)

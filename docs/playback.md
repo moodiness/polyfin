@@ -216,7 +216,7 @@ A version a criterion knows nothing of comes after those it knows, and a hide ru
 
 ### Version names
 
-With **Say in version names how they play**, in **Settings › Playback** and on by default, the name of a movie's or an episode's version ends with how the app plays it, as a synced subtitle's ends with "(synced)" (see [Subtitles](subtitles.md)). The rest of the name does not change.
+With **Say in version names how they play**, in **Settings › Playback** and on by default, the name of a movie's or an episode's version ends with how the app plays it. The rest of the name does not change.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|

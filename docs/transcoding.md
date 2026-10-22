@@ -9,7 +9,7 @@ Polyfin picks the lightest way an app can play a file:
 - **Direct play:** when the app supports the file, Polyfin redirects the app to the stream and stays out of the video path.
 - **Remux:** when the app can play the video but not the container, Polyfin repackages it into its own on-demand HLS, built on FFmpeg for remote sources.
 - **Audio conversion:** when the app cannot take the audio, Polyfin converts the audio.
-- **Video conversion:** when the app cannot take the video, or must have image subtitles (PGS, VobSub, DVB) burned in, Polyfin converts the video, HDR to SDR included. A text copy of a PGS or VobSub track, with **Turn picture subtitles into text** on, spares that conversion once it is ready. See [Subtitles](subtitles.md).
+- **Video conversion:** when the app cannot take the video, or must have image subtitles (PGS, VobSub, DVB) burned in, Polyfin converts the video, HDR to SDR included. The web player has every subtitle track burned in. See [Subtitles](subtitles.md).
 
 Video converts on a GPU when one is available, with the methods of the system Polyfin runs on (see [GPU methods per system](#gpu-methods-per-system)): an NVIDIA GPU through NVENC, or an AMD or Intel GPU through VAAPI, on Linux. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. For how apps choose between versions of a title, see [Playback](playback.md).
 
@@ -53,7 +53,7 @@ Apps that do not switch play the first quality, as with the setting off. jellyfi
 
 ## Turning conversion and downloads on or off
 
-The server has one switch, **Conversion (transcoding)** under **Settings › Conversion**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or remuxed into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app, as a recording converted to HEVC on an app that does not play HEVC (see [Smaller recordings](live-tv.md#smaller-recordings)). Image subtitles the app cannot show are left out, but for the text copies of picture subtitles (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
+The server has one switch, **Conversion (transcoding)** under **Settings › Conversion**. With it off, Polyfin never re-encodes video or audio, and never burns subtitles in. Apps play files as they are, or remuxed into HLS with their tracks copied, and Polyfin picks the next version that plays that way. A title with no version that plays that way on an app does not start on that app, as a recording converted to HEVC on an app that does not play HEVC (see [Smaller recordings](live-tv.md#smaller-recordings)). Image subtitles the app cannot show are left out, but for the text copies of picture subtitles (see [Picture subtitles read into text](subtitles.md#only-the-tracks-inside-the-files)).
 
 On a user's page under **Users**, the **Access** section holds each user's own **Can use conversion (transcoding)** and **Can download** permissions, on by default. Conversion needs both the server's switch and the user's permission; downloads need the user's permission only. **Turn off downloads for everyone**, on the **Users** page, takes it away from every user and every user group at once, also in the apps already signed in. A user group can hold both permissions for its members (see [User groups](users.md#user-groups)). See [Users](users.md).
 
@@ -206,15 +206,6 @@ With **Keep the converted video when the audio track changes** under **Settings 
 Finished recordings can also be converted to HEVC at night, to take less space, with **Convert finished recordings to HEVC** under **Settings › Recordings** (see [Smaller recordings](live-tv.md#smaller-recordings)). Those conversions use the **Graphics card used to convert**, the **Encoding speed**, the **HEVC quality**, 28 when it is 0, and the **Deinterlacing method** and **Double the frame rate** below, never tone mapping. Each counts as one of the **Video conversions at once**, and waits while playbacks fill them.
 
 Every default but **Seconds prepared ahead**, **Tone map HDR on the graphics card** (Intel GPUs did not tone map before) and **Maximum quality of HDR converted by the processor** (720p before) keeps Polyfin's conversions as they were before these settings existed. A change applies to the next playback, without a restart.
-
-### Picture subtitles
-
-| Setting | Where | Default | What it does |
-|---|---|---|---|
-| **Turn picture subtitles into text** | **Settings › Conversion** | **Off** | **When played** or **Also after library scans**: PGS and VobSub tracks are read into text copies with Tesseract, which apps that cannot draw them play without a video conversion. |
-| **Picture subtitle tracks read at once** | **Settings › Conversion** | 1 (range 1 to 4) | How many tracks Tesseract reads at the same time, one processor thread each. |
-
-See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text).
 
 ### Graphics card
 

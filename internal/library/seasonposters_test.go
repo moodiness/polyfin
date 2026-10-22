@@ -56,6 +56,7 @@ func TestSeasonPostersMapToTheirSeasons(t *testing.T) {
 func TestSeasonsShowTheirOwnPosters(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
+	e.showSpecials(t)
 	const series = "https://images.example/show.jpg"
 	show := stremio.Meta{ID: "tt100", Type: "series", Name: "Show", Poster: series,
 		Extras: &stremio.Extras{SeasonPosters: stremio.Posters{"https://images.example/s1.jpg", "", "https://images.example/s3.jpg"}},

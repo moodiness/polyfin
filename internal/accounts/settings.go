@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -306,6 +307,23 @@ var VersionCriteria = []string{"language", "resolution-high", "resolution-low", 
 // efficient first.
 var VersionCodecs = []string{"av1", "hevc", "vp9", "h264", "vc1", "mpeg4", "mpeg2video"}
 
+// RipTypes are the kinds of pre-release rips Settings.HiddenRipTypes can
+// exclude: recordings made in a cinema with a camera (cam) or from its
+// audio and projection feeds (telesync, telecine), copies sent out ahead of
+// release (screener, R5 included) and unfinished cuts (workprint). Each is
+// told by the release tags of its labels and file name (see RipTags).
+var RipTypes = []string{"cam", "telesync", "telecine", "screener", "workprint"}
+
+// RipTags are the release tags naming each of RipTypes, in lower case,
+// matched as whole words of a version's labels and file name.
+var RipTags = map[string][]string{
+	"cam":       {"cam", "camrip", "hdcam", "hqcam", "tscam", "newcam"},
+	"telesync":  {"ts", "hdts", "tsrip", "telesync", "pdvd", "predvd", "predvdrip", "hqts"},
+	"telecine":  {"tc", "hdtc", "telecine", "tcrip"},
+	"screener":  {"scr", "screener", "dvdscr", "dvdscreener", "bdscr", "webscr", "webscreener", "r5", "r6"},
+	"workprint": {"workprint", "wp"},
+}
+
 // The bounds of the version rules: MaxVersionCriteria criteria order the
 // versions at most, MaxVersionSources sources are placed at most, versions
 // are hidden above MaxHideVersionsLargerGB at most, and
@@ -339,6 +357,12 @@ var (
 	ErrInvalidHideVersionsLarger  = errors.New("invalid size above which versions are hidden")
 	ErrInvalidHiddenVersionCodecs = errors.New("invalid hidden video codecs")
 	ErrInvalidHiddenVersionWords  = errors.New("invalid words hiding versions")
+	// ErrInvalidHiddenRipTypes reports a HiddenRipTypes holding a value
+	// that is not one of RipTypes, or one twice.
+	ErrInvalidHiddenRipTypes = errors.New("invalid rip types excluded")
+	// ErrInvalidDefaultLanguage reports a default language that is not an
+	// ISO 639-2 code of three letters.
+	ErrInvalidDefaultLanguage = errors.New("invalid default language")
 )
 
 // VersionCriterionKind is what a criterion of VersionCriteria looks at,
@@ -358,6 +382,16 @@ func validVersionOrder(order []string) bool {
 	for i, criterion := range order {
 		if !slices.Contains(VersionCriteria, criterion) ||
 			slices.ContainsFunc(order[:i], func(before string) bool { return VersionCriterionKind(before) == VersionCriterionKind(criterion) }) {
+			return false
+		}
+	}
+	return true
+}
+
+// validRipTypes reports whether types are some of RipTypes, each once.
+func validRipTypes(types []string) bool {
+	for i, kind := range types {
+		if !slices.Contains(RipTypes, kind) || slices.Contains(types[:i], kind) {
 			return false
 		}
 	}
@@ -653,6 +687,10 @@ var (
 	ErrInvalidCustomCss       = errors.New("invalid custom CSS")
 	ErrInvalidCustomJs        = errors.New("invalid custom JavaScript")
 	ErrInvalidLoginDisclaimer = errors.New("invalid login disclaimer")
+	// ErrInvalidBrandLogo reports a Settings.BrandLogo that is not an
+	// image of BrandLogoTypes as a base64 data URL, or larger than
+	// MaxBrandLogoBytes once decoded.
+	ErrInvalidBrandLogo = errors.New("invalid brand logo")
 )
 
 // The largest Settings.CustomCss and CustomJs, and LoginDisclaimer, in
@@ -1196,6 +1234,17 @@ type Settings struct {
 	// ShareLink). Off, no link is made and every link is refused, without
 	// being deleted.
 	ShareLinks bool
+	// Registration lets anyone who opens /register create a member
+	// account with the default settings; closed, the page says so. On by
+	// default.
+	Registration bool
+	// RegistrationCodes asks /register for an unused registration code
+	// before its form (see RegistrationCode).
+	RegistrationCodes bool
+	// DefaultAudioLanguage and DefaultSubtitleLanguage are the ISO 639-2
+	// languages played for users who chose none, empty for none.
+	DefaultAudioLanguage    string
+	DefaultSubtitleLanguage string
 	// LoginAttempts is how many wrong passwords in a row block an account
 	// for LoginBlock; 0 never blocks.
 	LoginAttempts int
@@ -1271,6 +1320,18 @@ type Settings struct {
 	HideVersionsLargerGB int
 	HiddenVersionCodecs  []string
 	HiddenVersionWords   []string
+	// HiddenRipTypes excludes the versions whose labels or file name tag
+	// them as one of these kinds of pre-release rips, of RipTypes: CAM,
+	// telesync and the like. Unlike the rules above, these are excluded
+	// even when no other version is left. Every kind by default.
+	HiddenRipTypes []string
+	// HideSpecials leaves series' specials (season 0) out of their seasons,
+	// episode lists and Next Up. On by default.
+	HideSpecials bool
+	// ExactTitleMatch leaves out the versions whose file names a title
+	// other than the movie's or the series' own: Smiling Friends for
+	// Friends. On by default.
+	ExactTitleMatch bool
 	// NameHowVersionsPlay ends the names of a movie's or an episode's
 	// versions with how the app asking plays each, as the device profile of
 	// its last PlaybackInfo decides it.
@@ -1291,6 +1352,10 @@ type Settings struct {
 	// do, for users who may download. Off, such apps download the version
 	// as it is.
 	ConvertedDownloads bool
+	// WebSafeVideo offers the web player (jellyfin-web, in a browser) no
+	// HEVC, Dolby Vision or AV1 video, which browsers claim and then often
+	// show black: such versions play converted to H.264. On by default.
+	WebSafeVideo bool
 	// SubtitleOCR reads picture subtitles into text with Tesseract, one of
 	// SubtitleOCRModes; SubtitleOCRTracks bounds the tracks read at once.
 	SubtitleOCR       string
@@ -1417,6 +1482,11 @@ type Settings struct {
 	CustomCss       string
 	CustomJs        string
 	LoginDisclaimer string
+	// BrandLogo is the logo the web player shows in place of Jellyfin's
+	// (its header, menu, splash and sign-in screens, the TV layout and the
+	// browser tab), as a base64 data URL of one of BrandLogoTypes, served at
+	// /Branding/Logo; empty for Jellyfin's own.
+	BrandLogo string
 	// AddVersionsToOpenPage has the web player add the versions the
 	// addons find to a title's page while it is open (see
 	// /Polyfin/Items/{id}/Versions). When off, it only replaces the
@@ -1684,6 +1754,31 @@ func validTrackingApp(credential string) bool {
 }
 
 // validWebText reports whether text fits in max bytes and holds no NUL.
+// MaxBrandLogoBytes is the largest Settings.BrandLogo image, decoded.
+const MaxBrandLogoBytes = 1 << 20
+
+// BrandLogoTypes are the image types a Settings.BrandLogo may be.
+var BrandLogoTypes = []string{"image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"}
+
+// BrandLogoImage decodes a Settings.BrandLogo data URL into its type and
+// bytes; ok is false for anything else.
+func BrandLogoImage(logo string) (contentType string, image []byte, ok bool) {
+	header, data, found := strings.Cut(strings.TrimPrefix(logo, "data:"), ",")
+	if !found || !strings.HasPrefix(logo, "data:") {
+		return "", nil, false
+	}
+	contentType, encoding, _ := strings.Cut(header, ";")
+	if encoding != "base64" || !slices.Contains(BrandLogoTypes, contentType) ||
+		base64.StdEncoding.DecodedLen(len(data)) > MaxBrandLogoBytes+3 {
+		return "", nil, false
+	}
+	image, err := base64.StdEncoding.DecodeString(data)
+	if err != nil || len(image) == 0 || len(image) > MaxBrandLogoBytes {
+		return "", nil, false
+	}
+	return contentType, image, true
+}
+
 func validWebText(text string, max int) bool {
 	return len(text) <= max && !strings.ContainsRune(text, 0)
 }
@@ -1695,12 +1790,12 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"dlna, dlna_name, dlna_new_devices_user, dlna_mark_played, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, even_volume, measure_loudness, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"mdblist_ratings_key, critic_rating_shows, tmdb_key, " +
-	"personal_addons, server_imports, share_links, login_attempts, inactive_device_days, known_proxies, known_proxy_names, " +
+	"personal_addons, server_imports, share_links, registration, registration_codes, default_audio_language, default_subtitle_language, login_attempts, inactive_device_days, known_proxies, known_proxy_names, " +
 	"two_step_administrators, " +
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
-	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
-	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, " +
+	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, hidden_rip_types, hide_specials, exact_title_match, name_how_versions_play, " +
+	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, web_safe_video, subtitle_ocr, subtitle_ocr_tracks, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"adaptive_quality, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
@@ -1710,7 +1805,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"recording_commercials, " +
 	"live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
 	"convert_recordings, convert_recordings_from, convert_recordings_until, convert_recordings_on_processor, " +
-	"custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
+	"custom_css, custom_js, login_disclaimer, brand_logo, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, collection_library_apps, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
@@ -1739,16 +1834,16 @@ func (settings *Settings) fields() []any {
 		&settings.SimilarTitles, &settings.GenerateImages, &settings.Lyrics, &settings.EvenVolume, &settings.MeasureLoudness, &settings.PlayedPercent, &settings.ResumePercent,
 		&settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.MDBListRatingsKey, &settings.CriticRatingShows, &settings.TMDBKey,
-		&settings.PersonalAddons, &settings.ServerImports, &settings.ShareLinks, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
+		&settings.PersonalAddons, &settings.ServerImports, &settings.ShareLinks, &settings.Registration, &settings.RegistrationCodes, &settings.DefaultAudioLanguage, &settings.DefaultSubtitleLanguage, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
 		&settings.KnownProxyNames,
 		&settings.TwoStepAdministrators,
 		&settings.HTTPSMode, &settings.HTTPSPort, &settings.HTTPSRedirect, &settings.HTTPSCertificate, &settings.HTTPSPrivateKey,
 		&settings.ACMEHosts, &settings.ACMEEmail, &settings.ACMETerms, &settings.ACMEChallenge, &settings.DetailedLog,
 		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay,
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.VersionSourceOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs,
-		&settings.HiddenVersionWords,
+		&settings.HiddenVersionWords, &settings.HiddenRipTypes, &settings.HideSpecials, &settings.ExactTitleMatch,
 		&settings.NameHowVersionsPlay,
-		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads, &settings.SubtitleOCR, &settings.SubtitleOCRTracks,
+		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads, &settings.WebSafeVideo, &settings.SubtitleOCR, &settings.SubtitleOCRTracks,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.AdaptiveQuality,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
@@ -1761,7 +1856,7 @@ func (settings *Settings) fields() []any {
 		&settings.LiveTvRefreshHours, &settings.LocalScanHours,
 		&settings.WatchLocalFolders,
 		&settings.ConvertRecordings, &settings.ConvertRecordingsFrom, &settings.ConvertRecordingsUntil, &settings.ConvertRecordingsOnProcessor,
-		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
+		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.BrandLogo, &settings.AddVersionsToOpenPage,
 		&settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.AniListClientID, &settings.AniListClientSecret, &settings.MyAnimeListClientID, &settings.MyAnimeListClientSecret,
@@ -2071,6 +2166,22 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if err != nil {
 		return Settings{}, err
 	}
+	for _, language := range []*string{&settings.DefaultAudioLanguage, &settings.DefaultSubtitleLanguage} {
+		*language = strings.ToLower(strings.TrimSpace(*language))
+		if !validDefaultLanguage(*language) {
+			return Settings{}, ErrInvalidDefaultLanguage
+		}
+	}
+	if !validRipTypes(settings.HiddenRipTypes) {
+		return Settings{}, ErrInvalidHiddenRipTypes
+	}
+	rips := []string{}
+	for _, kind := range RipTypes {
+		if slices.Contains(settings.HiddenRipTypes, kind) {
+			rips = append(rips, kind)
+		}
+	}
+	settings.HiddenRipTypes = rips
 	// The lists are kept apart from the caller's, none being an empty
 	// list: the columns hold no NULL. The codecs hidden are kept in the
 	// order of VersionCodecs.
@@ -2135,6 +2246,11 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !validWebText(settings.LoginDisclaimer, MaxLoginDisclaimerBytes) {
 		return Settings{}, ErrInvalidLoginDisclaimer
+	}
+	if settings.BrandLogo != "" {
+		if _, _, ok := BrandLogoImage(settings.BrandLogo); !ok {
+			return Settings{}, ErrInvalidBrandLogo
+		}
 	}
 	if !validTrackingApp(settings.TraktClientID) || !validTrackingApp(settings.TraktClientSecret) {
 		return Settings{}, ErrInvalidTraktApp
@@ -2350,4 +2466,19 @@ func validConversion(settings Settings) ([]string, error) {
 		return nil, ErrInvalidHardwareDecodingCodecs
 	}
 	return codecs, nil
+}
+
+func validDefaultLanguage(language string) bool {
+	if language == "" {
+		return true
+	}
+	if len(language) != 3 {
+		return false
+	}
+	for _, c := range language {
+		if c < 'a' || c > 'z' {
+			return false
+		}
+	}
+	return true
 }

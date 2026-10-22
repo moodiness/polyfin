@@ -33,7 +33,11 @@ func (h *Handler) subtitleUploadRoutes(rt *router) {
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
 		rt.handle(method, pattern, h.authenticated(handler))
 	}
-	signedIn(http.MethodPost, "/Videos/{itemId}/Subtitles", h.uploadSubtitle)
+	// Only the subtitle tracks inside the files are offered: a file
+	// uploaded would never be listed, so none is taken.
+	signedIn(http.MethodPost, "/Videos/{itemId}/Subtitles", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
 	signedIn(http.MethodDelete, "/Videos/{itemId}/Subtitles/{index}", h.deleteSubtitle)
 }
 

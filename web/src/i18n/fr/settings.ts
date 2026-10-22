@@ -287,12 +287,32 @@ const settings: typeof en = {
     hiddenVersionCodecs: 'Masquer ces codecs vidéo',
     hiddenVersionCodecsHelp:
       'Les versions dont on sait qu’elles sont dans ces codecs ne sont listées nulle part.',
+    hideSpecials: 'Masquer les épisodes spéciaux',
+    exactTitleMatch: 'Titres exacts',
+    exactTitleMatchHelp:
+      'Retire les versions dont le nom de fichier commence par un autre titre que celui du film ou de la série : les sorties de Smiling Friends ne sont pas proposées pour Friends. « The », l’année et la ponctuation ne comptent pas. Les versions sans nom de fichier sont gardées. Activé par défaut.',
+    defaultAudioLanguage: 'Langue audio par défaut',
+    defaultAudioLanguageHelp:
+      'La langue audio jouée pour les utilisateurs qui n’en ont choisi aucune.',
+    defaultSubtitleLanguage: 'Langue des sous-titres par défaut',
+    defaultSubtitleLanguageHelp:
+      'La langue des sous-titres affichée pour les utilisateurs qui n’en ont choisi aucune.',
+    defaultLanguageNone: 'Aucune',
+    hideSpecialsHelp:
+      'Retire les épisodes spéciaux des séries (saison 0) de leurs saisons, listes d’épisodes et de « À suivre ». Activé par défaut.',
+    hiddenRipTypes: 'Exclure ces rips',
+    hiddenRipTypesHelp:
+      'Les versions dont le nom, la description ou le nom de fichier porte une de ces étiquettes sont retirées partout, même quand il ne reste aucune autre version du titre. Les étiquettes sont reconnues comme mots entiers : CAM, HDCAM, TS, HD-TS, TELESYNC, TC, TELECINE, SCR, DVDSCR, SCREENER, R5, WORKPRINT, etc. Toutes par défaut.',
+    ripTypes: {
+      cam: 'CAM (CAM, HDCAM, CAMRip)',
+      telesync: 'Telesync (TS, HD-TS, PDVD)',
+      telecine: 'Telecine (TC, HDTC)',
+      screener: 'Screener (SCR, DVDSCR, R5)',
+      workprint: 'Workprint (WP)',
+    },
     hiddenVersionWords: 'Masquer les versions dont les libellés contiennent',
     hiddenVersionWordsHelp: (r: RangeText) =>
       `Un mot ou une expression par ligne, cherché sans tenir compte des majuscules dans le nom, la description et le nom de fichier d’une version : pour les addons qui disent dans leurs libellés qu’un fichier n’est pas encore prêt à être lu. Jusqu’à ${r.max} lignes ; aucun par défaut.`,
-    syncAddonSubtitles: 'Recaler les sous-titres des addons',
-    syncAddonSubtitlesHelp:
-      'Cale les sous-titres des addons sur la version lue, quand ils arrivent trop tôt, trop tard, ou défilent plus vite ou plus lentement qu’elle. À la première lecture d’une version, Polyfin repère en arrière-plan quand on y parle : grâce à un sous-titre texte du fichier, sinon dans trois passages de son audio, en lisant au plus 300 Mo du fichier d’un addon. Ensuite, un sous-titre qui colle nettement mieux décalé ou accéléré arrive recalé, son nom finissant par « (recalé) ».',
     remuxDb: 'Décrire les versions grâce à RemuxDB',
     remuxDbHelp:
       'Affiche les pistes audio, de sous-titres et vidéo d’une version avant sa première lecture, telles que RemuxDB les a trouvées dans le même fichier. Quand les détails d’un titre s’ouvrent, Polyfin interroge RemuxDB, une base communautaire, avec l’identifiant IMDb du titre, et retrouve les versions par le nom de leur fichier. La lecture analyse toujours chaque version.',
@@ -344,6 +364,9 @@ const settings: typeof en = {
       'Les vidéos converties sont réduites à cette hauteur au plus, sans être déformées, pour passer mieux sur une connexion lente. Les fichiers lus tels quels ou simplement présentés autrement gardent leur qualité. La carte graphique convertit jusqu’en 4K ; le processeur s’arrête à 1080p, et quand il convertit du HDR en SDR, à « Qualité max du HDR converti par le processeur » (Conversion › HDR).',
     conversionHeightOriginal: 'Originale',
     conversionHeight: (height: number) => `${height}p`,
+    webSafeVideo: 'Lire tous les fichiers dans le lecteur web',
+    webSafeVideoHelp:
+      'Les navigateurs disent lire la vidéo HEVC, Dolby Vision et AV1, puis l’affichent souvent en noir, le son et l’horloge tournant. Activé, le lecteur web ne les reçoit jamais telles quelles : ces versions sont lues converties en H.264. Les applications Jellyfin gardent leurs propres lecteurs.',
     convertedDownloads: 'Téléchargements convertis',
     convertedDownloadsHelp:
       'Les applis qui le demandent, comme Streamyfin, enregistrent un titre dans la qualité choisie par l’utilisateur : Polyfin envoie une copie plus légère, faite pendant que l’appli la télécharge et jamais gardée sur le serveur. Sinon, elles enregistrent le fichier tel quel. Chaque téléchargement compte dans « Conversions vidéo en même temps » quand il convertit, et comme une des « Lectures en même temps » de l’utilisateur. L’utilisateur doit pouvoir télécharger, et utiliser la conversion (transcodage) quand l’image ou le son sont convertis. Un téléchargement interrompu recommence du début. Désactivé par défaut.',
@@ -352,7 +375,6 @@ const settings: typeof en = {
         'Quand une application ne sait pas lire un fichier tel quel, Polyfin le convertit avec FFmpeg. Ces réglages disent comment, pour les films, les séries et la TV en direct. Les valeurs par défaut conviennent à la plupart des serveurs.',
       groups: {
         general: 'Général',
-        subtitles: 'Sous-titres en images',
         gpu: 'Carte graphique',
         video: 'Image',
         hdr: 'HDR',
@@ -360,17 +382,6 @@ const settings: typeof en = {
         audio: 'Son',
         performance: 'Performances',
       },
-      subtitleOcr: 'Lire en texte les sous-titres en images',
-      subtitleOcrHelp:
-        'Les sous-titres PGS et de DVD (VobSub) sont des images, et beaucoup d’applications ne prennent que du texte : pour elles, Polyfin incruste la piste dans l’image, ce qui demande une conversion. Activé, Tesseract lit une fois chaque piste en images, en arrière-plan, pour en faire une copie en texte, listée comme une piste de plus marquée « (OCR) », qui se lit sans conversion. Tant que la copie n’est pas prête, la piste est incrustée comme avant. La piste en images reste : l’italique, les couleurs et les positions sont perdus, et des polices travaillées peuvent être mal lues. « À la lecture » lit les pistes d’une version la première fois qu’une application qui ne sait pas les afficher la lit ; « Aussi après les analyses des bibliothèques » lit aussi les pistes des nouveaux fichiers locaux. Désactivé par défaut.',
-      subtitleOcrChoices: {
-        off: 'Désactivé',
-        played: 'À la lecture',
-        scans: 'Aussi après les analyses des bibliothèques',
-      },
-      subtitleOcrTracks: 'Pistes de sous-titres en images lues en même temps',
-      subtitleOcrTracksHelp: (r: RangeText) =>
-        `Chaque piste est lue par un processus Tesseract, sur un cœur du processeur. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
       hardwareAcceleration: 'Carte graphique pour convertir',
       hardwareAccelerationHelp:
         'Une carte graphique (GPU) convertit la vidéo bien plus vite que le processeur. Chaque système propose les siennes : NVIDIA et VAAPI sous Linux, VideoToolbox sous macOS, NVIDIA, Intel et AMD sous Windows. Sans carte qui fonctionne, le processeur convertit. Un changement s’applique dès l’enregistrement, sans redémarrer.',
@@ -632,6 +643,9 @@ const settings: typeof en = {
     importEveryMinutes: 'Importer les comptes connectés toutes les',
     importEveryMinutesHelp:
       'Tous les combien Polyfin importe de nouveau les comptes Stremio et Nuvio auxquels les utilisateurs restent connectés, et les historiques qu’ils importent depuis les services de suivi. Un changement s’applique tout de suite : chaque prochaine importation a lieu ce délai après la dernière. Chaque importation relit tout le compte : un intervalle court envoie plus de requêtes à ces services et, pour Stremio, dont les conditions interdisent l’extraction automatisée, rend cette zone grise plus marquée. 6 heures par défaut.',
+    registration: 'Inscription',
+    registrationHelp:
+      'Permet à quiconque ouvre /register sur ce serveur de créer un compte membre, avec les réglages par défaut, masqué de l’écran de connexion. Désactivée, la page indique que les inscriptions sont fermées et ramène à l’écran de connexion. Chaque adresse ne peut créer que quelques comptes avant de devoir attendre, comme pour les connexions échouées.',
     shareLinks: 'Autoriser les liens de partage',
     shareLinksHelp:
       'Les utilisateurs qui ont « Peut partager des titres », sur leur page sous Utilisateurs, peuvent donner un film ou un épisode à quelqu’un qui n’a pas de compte, grâce à un lien qui expire après 1 heure à 30 jours. L’invité regarde dans un navigateur, en 1080p au plus et dans le groupe de qualité de l’utilisateur, et compte parmi les lectures simultanées de l’utilisateur. Sinon, aucun lien ne peut être créé et tous les liens sont refusés, sans être supprimés. Désactivé par défaut.',
@@ -775,12 +789,22 @@ const settings: typeof en = {
     webPlayerHelp:
       'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le script s’applique au prochain chargement d’une page du lecteur web ; le lecteur web garde le CSS et le message de connexion jusqu’à une minute.',
     openWebPlayer: 'Ouvrir le lecteur web',
+    brandingHelp:
+      'Le logo que le lecteur web affiche à la place de celui de Jellyfin, et sur la page d’inscription.',
+    brandLogo: 'Logo',
+    brandLogoHelp:
+      'Affiché à la place du logo Jellyfin dans le lecteur web : son en-tête, son menu, ses écrans de démarrage et de connexion et l’onglet du navigateur, ainsi que dans les applications Jellyfin qui ouvrent le lecteur web (bureau, Android, iOS). Les applications qui ont leurs propres écrans, comme Infuse ou Swiftfin, gardent le leur. PNG, JPEG, WebP, GIF ou SVG, 1 Mo au plus ; un logo large convient le mieux à l’en-tête.',
+    brandLogoChoose: 'Choisir une image',
+    brandLogoRemove: 'Utiliser le logo Jellyfin',
+    brandLogoNone: 'Logo Jellyfin',
+    brandLogoType: 'Choisissez une image PNG, JPEG, WebP, GIF ou SVG.',
+    brandLogoSize: 'Choisissez une image de 1 Mo au plus.',
     customCss: 'CSS personnalisé',
     customCssHelp:
-      'Appliqué à toutes les pages du lecteur web, pour tous les utilisateurs, comme le CSS personnalisé de Jellyfin. Chacun peut le désactiver dans Paramètres › Affichage. Par défaut, il contient la feuille de style du thème LumaaGlaass, qui va avec le JavaScript personnalisé par défaut : videz les deux pour garder l’apparence d’origine du lecteur web.',
+      'Appliqué à toutes les pages du lecteur web, pour tous les utilisateurs, comme le CSS personnalisé de Jellyfin. Chacun peut le désactiver dans Paramètres › Affichage. Par défaut, il contient l’apparence d’AIOStreams : pages presque noires, boutons blancs arrondis, cartes arrondies, police Inter et sous-titres façon Plex. Videz-le pour garder l’apparence d’origine du lecteur web.',
     customJs: 'JavaScript personnalisé',
     customJsHelp:
-      'Chargé par toutes les pages du lecteur web, après ses propres scripts. Vide, rien n’est chargé. Par défaut, il charge le script du thème LumaaGlaass, qui va avec le CSS personnalisé par défaut.',
+      'Chargé par toutes les pages du lecteur web, après ses propres scripts. Vide, rien n’est chargé, ce qui est le défaut.',
     customJsWarningTitle: 'Ne collez que du code de confiance',
     customJsWarning:
       'Ce script s’exécute dans le navigateur de chaque utilisateur qui ouvre le lecteur web de ce serveur, avec son compte. Il peut lire ce qu’il voit et agir à sa place.',

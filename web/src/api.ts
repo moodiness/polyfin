@@ -324,6 +324,14 @@ export type Settings = {
   personalAddons: boolean
   /** Whether users may import their own watch history from another server, under My account. */
   serverImports: boolean
+  /** Lets anyone who opens /register create a member account. */
+  registration: boolean
+  /** Asks /register for an unused registration code before its form. */
+  registrationCodes: boolean
+  /** ISO 639-2 audio language played for users who chose none, '' for none. */
+  defaultAudioLanguage: string
+  /** ISO 639-2 subtitle language shown for users who chose none, '' for none. */
+  defaultSubtitleLanguage: string
   /** Whether users with the permission may share a movie or an episode through a link that expires. */
   shareLinks: boolean
   /** Wrong passwords in a row that block an account for 15 minutes; 0 never blocks. */
@@ -388,23 +396,22 @@ export type Settings = {
   hiddenVersionCodecs: VersionCodec[]
   /** Hides the versions whose labels hold one of these words, in any letter case. */
   hiddenVersionWords: string[]
+  /** Excludes the versions tagged as these pre-release rips, even when none is left. */
+  hiddenRipTypes: RipType[]
+  /** Leaves series' specials (season 0) out of seasons, episode lists and Next Up. */
+  hideSpecials: boolean
+  /** Leaves out the versions whose file name names another title. */
+  exactTitleMatch: boolean
   /** Ends version names with how the app asking plays each, as its last playback decides it. */
   nameHowVersionsPlay: boolean
-  /** Times the addons' subtitles to the version played, against when it has speech. */
-  syncAddonSubtitles: boolean
   /** Playbacks whose video the server converts at once, 0 for no limit. */
   maxConversions: number
   /** Height converted video is scaled down to at most, 0 to keep the original's. */
   maxConversionHeight: number
   /** Streams a title as one file, copied or converted within the user's quality, to apps saving it offline. */
+  /** Offers the web player no HEVC, Dolby Vision or AV1 video, which browsers often show black. */
+  webSafeVideo: boolean
   convertedDownloads: boolean
-  /**
-   * Reads picture subtitles (PGS, VobSub) into text tracks with Tesseract: never, when an app that
-   * cannot draw them plays a version, or also after the scans of local folders.
-   */
-  subtitleOcr: SubtitleOcr
-  /** Picture subtitle tracks read at once. */
-  subtitleOcrTracks: number
   /** Encoder speed against quality: auto (Polyfin's choice), then veryslow to ultrafast. */
   encoderPreset: EncoderPreset
   /** Quality factor of H.264 and HEVC conversions (CRF, CQ or QVBR's), 0 aiming for the bitrate alone. */
@@ -494,6 +501,8 @@ export type Settings = {
   customJs: string
   /** Text, Markdown or HTML jellyfin-web shows under its sign-in form (Jellyfin's branding). */
   loginDisclaimer: string
+  /** The web player's logo in place of Jellyfin's, as a data URL; empty for Jellyfin's. */
+  brandLogo: string
   /** Whether the web player adds the versions that come to a title's page while it is open. */
   addVersionsToOpenPage: boolean
   /** Trakt app users connect through; both its client ID and secret are needed. */
@@ -628,6 +637,7 @@ export type VersionCriterion =
   | 'hdr-last'
   | 'source'
 export type VersionCodec = 'av1' | 'hevc' | 'vp9' | 'h264' | 'vc1' | 'mpeg4' | 'mpeg2video'
+export type RipType = 'cam' | 'telesync' | 'telecine' | 'screener' | 'workprint'
 /** A source of the server listing versions of movies and episodes, in Content › Sources order. */
 export type VersionSource = { id: string; name: string }
 export type ToneMappingAlgorithm =
@@ -635,7 +645,6 @@ export type ToneMappingAlgorithm =
 export type DeinterlaceMethod = 'yadif' | 'bwdif'
 export type AdaptiveQuality = 'off' | 'remote' | 'always'
 export type DownmixAlgorithm = 'None' | 'Dave750' | 'NightmodeDialogue' | 'Rfc7845' | 'Ac4'
-export type SubtitleOcr = 'off' | 'played' | 'scans'
 
 /** A GPU conversions run on. */
 export type ConversionGPU = {
@@ -2162,6 +2171,29 @@ export type Invite = {
  * server's public address is set.
  */
 export type NewInvite = Invite & { token: string; url: string | null }
+
+export type RegistrationCode = {
+  code: string
+  createdAt: string
+  usedAt: string | null
+  usedBy: string | null
+  /** Accounts created with it. */
+  uses: number
+  /** Accounts it may create, 0 for no limit. */
+  maxUses: number
+}
+
+export const fetchRegistrationCodes = (signal?: AbortSignal) =>
+  request<RegistrationCode[]>('GET', '/registration-codes', undefined, signal)
+
+export const createRegistrationCodes = (count: number, maxUses = 1) =>
+  request<RegistrationCode[]>('POST', '/registration-codes', { count, maxUses })
+
+export const updateRegistrationCode = (code: string, maxUses: number) =>
+  request<void>('PATCH', `/registration-codes/${seg(code)}`, { maxUses })
+
+export const deleteRegistrationCode = (code: string) =>
+  request<void>('DELETE', `/registration-codes/${seg(code)}`)
 
 export const fetchInvites = (signal?: AbortSignal) =>
   request<Invite[]>('GET', '/invites', undefined, signal)
@@ -4037,6 +4069,7 @@ export const queryKeys = {
   userContentChoices: ['user-content-choices'] as const,
   apiKeys: ['api-keys'] as const,
   invites: ['invites'] as const,
+  registrationCodes: ['registration-codes'] as const,
   ownShareLinks: ['account', 'share-links'] as const,
   shareTitles: (term: string) => ['account', 'share-titles', term] as const,
   shareTitle: (id: string) => ['account', 'share-title', id] as const,

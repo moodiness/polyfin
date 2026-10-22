@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	_ "embed"
 	"net/netip"
 	"slices"
 
@@ -9,33 +10,16 @@ import (
 )
 
 // DefaultCustomCss and DefaultCustomJs are the web player's custom CSS and
-// script on a new server: they load the LumaaGlaass theme from jsDelivr at
-// the main branch of its repository, so servers follow the theme without a
-// Polyfin release, with its settings page for each user. Changing them takes
-// both, and a migration replacing the column defaults and the values still
-// equal to these.
-const DefaultCustomCss = `@import url('https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@main/assets/lumaaglaass.css');`
+// script on a new server: the AIOStreams look (aiostreams_theme.css), held
+// whole in the setting (it fetches only the Inter font), and no script.
+// Changing the CSS takes a new migration replacing the column default and
+// the values still equal to the last one, which
+// scripts/aiostreams-look-migration.py writes (0145, 0147, 0148).
+//
+//go:embed aiostreams_theme.css
+var DefaultCustomCss string
 
-const DefaultCustomJs = `(() => {
-    window.LumaaGlaassOptions = {
-        preferences: true,
-        homeCarousel: true,
-        collectionFilter: true
-    };
-
-    const id = 'lg-script';
-    if (document.getElementById(id)) return;
-
-    const script = document.createElement('script');
-    script.id = id;
-    script.src = 'https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@main/assets/lumaaglaass.js';
-    script.onerror = () => {
-        script.remove();
-        console.error('LumaaGlaass could not be loaded.');
-    };
-
-    document.head.appendChild(script);
-})();`
+const DefaultCustomJs = ""
 
 // DefaultSettings are the settings of a new server, those the columns of
 // the settings default to: changing a default takes this and a migration
@@ -78,6 +62,7 @@ func DefaultSettings() Settings {
 		PersonalAddons:     true,
 		ServerImports:      true,
 		ShareLinks:         false,
+		Registration:       true,
 		LoginAttempts:      DefaultLoginAttempts,
 		InactiveDeviceDays: DefaultInactiveDeviceDays,
 		KnownProxies:       []netip.Prefix{},
@@ -101,11 +86,15 @@ func DefaultSettings() Settings {
 		VersionSourceOrder:  []ID{},
 		HiddenVersionCodecs: []string{},
 		HiddenVersionWords:  []string{},
+		HiddenRipTypes:      slices.Clone(RipTypes),
+		HideSpecials:        true,
+		ExactTitleMatch:     true,
 		NameHowVersionsPlay: true,
-		SyncAddonSubtitles:  true,
+		SyncAddonSubtitles:  false,
 		MaxConversions:      DefaultMaxConversions,
 		MaxConversionHeight: ConversionHeights[0],
 		ConvertedDownloads:  false,
+		WebSafeVideo:        true,
 		SubtitleOCR:         SubtitleOCRModes[0],
 		SubtitleOCRTracks:   DefaultSubtitleOCRTracks,
 
@@ -279,6 +268,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"personalAddons":     is(d.PersonalAddons),
 		"serverImports":      is(d.ServerImports),
 		"shareLinks":         is(d.ShareLinks),
+		"registration":       is(d.Registration),
 		"loginAttempts":      orZero(MinLoginAttempts, MaxLoginAttempts, d.LoginAttempts),
 		"inactiveDeviceDays": between(0, MaxInactiveDeviceDays, d.InactiveDeviceDays),
 		"knownProxies":       between(0, MaxKnownProxies, d.KnownProxies),
@@ -304,13 +294,17 @@ func SettingsBounds() map[string]SettingBounds {
 		"hideVersionsLargerGb": orZero(1, MaxHideVersionsLargerGB, d.HideVersionsLargerGB),
 		"hiddenVersionCodecs":  choice(d.HiddenVersionCodecs, anys(VersionCodecs)),
 		"hiddenVersionWords":   between(0, MaxHiddenVersionWords, d.HiddenVersionWords),
+		"hiddenRipTypes":       choice(d.HiddenRipTypes, anys(RipTypes)),
+		"hideSpecials":         is(d.HideSpecials),
+		"exactTitleMatch":      is(d.ExactTitleMatch),
+		"registrationCodes":    is(d.RegistrationCodes),
+		"defaultAudioLanguage":    is(d.DefaultAudioLanguage),
+		"defaultSubtitleLanguage": is(d.DefaultSubtitleLanguage),
 		"nameHowVersionsPlay":  is(d.NameHowVersionsPlay),
-		"syncAddonSubtitles":   is(d.SyncAddonSubtitles),
 		"maxConversions":       between(MinMaxConversions, MaxMaxConversions, d.MaxConversions),
 		"maxConversionHeight":  choice(d.MaxConversionHeight, anys(ConversionHeights)),
 		"convertedDownloads":   is(d.ConvertedDownloads),
-		"subtitleOcr":          choice(d.SubtitleOCR, anys(SubtitleOCRModes)),
-		"subtitleOcrTracks":    between(MinSubtitleOCRTracks, MaxSubtitleOCRTracks, d.SubtitleOCRTracks),
+		"webSafeVideo":         is(d.WebSafeVideo),
 
 		"encoderPreset":              choice(d.EncoderPreset, anys(EncoderPresets)),
 		"h264Quality":                orZero(MinVideoQuality, MaxVideoQuality, d.H264Quality),
@@ -357,6 +351,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"customCss":               text(MaxCustomCodeBytes, d.CustomCss),
 		"customJs":                text(MaxCustomCodeBytes, d.CustomJs),
 		"loginDisclaimer":         text(MaxLoginDisclaimerBytes, d.LoginDisclaimer),
+		"brandLogo":               text(MaxBrandLogoBytes, d.BrandLogo),
 		"addVersionsToOpenPage":   is(d.AddVersionsToOpenPage),
 		"traktClientId":           text(MaxTrackingAppBytes, d.TraktClientID),
 		"traktClientSecret":       text(MaxTrackingAppBytes, d.TraktClientSecret),

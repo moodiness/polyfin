@@ -38,6 +38,7 @@ const nav = {
       backups: 'Backups',
       notifications: 'Notifications',
       webPlayer: 'Web player',
+      branding: 'Branding',
       diagnostics: 'Diagnostics',
     },
     settingsSectionsLabel: 'Settings sections',

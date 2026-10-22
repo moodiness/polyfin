@@ -161,6 +161,13 @@ type VideoEncoding struct {
 	// beside the source (see burnGraph).
 	Burn     *int
 	BurnFile string
+	// BurnText is a text subtitle file (SRT, WebVTT, ASS) burned in
+	// instead, a local path or an address, drawn by libass with the fonts
+	// of FontsDir; StyledText tells an ASS or SSA file, which keeps its own
+	// styles, from one given Plex's look (see textBurnStyle).
+	BurnText   string
+	StyledText bool
+	FontsDir   string
 	// Hardware is the GPU decoding and encoding the video, nil for none.
 	Hardware *Hardware
 	// Preset trades the encoder's speed for quality: one of x264's preset
@@ -267,7 +274,38 @@ func (v *VideoEncoding) cpuCurve() string {
 
 // Burns reports whether subtitles are burned into the video.
 func (v *VideoEncoding) Burns() bool {
-	return v.Burn != nil || v.BurnFile != ""
+	return v.Burn != nil || v.BurnFile != "" || v.BurnText != ""
+}
+
+// textBurnStyle draws unstyled text subtitles as Plex shows them: white,
+// bold sans serif, a thin black outline and shadow, no box, low on the
+// picture.
+const textBurnStyle = "FontName=DejaVu Sans,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000," +
+	"BorderStyle=1,Outline=1.6,Shadow=0.8,MarginV=24"
+
+// filterValue escapes a value of a filter option, a file path Polyfin
+// names itself, as FFmpeg's filter graph reads it: its option separator,
+// quote and escape characters, and the graph's.
+func filterValue(value string) string {
+	return strings.NewReplacer("\\", "\\\\", "'", "\\'", ":", "\\:", ",", "\\,", ";", "\\;", "[", "\\[", "]", "\\]").Replace(value)
+}
+
+// textBurnGraph is burnGraph for a text subtitle: libass draws it on the
+// converted frames, whose timestamps are the source's (FFmpeg runs with
+// -copyts), so that it keeps time after a seek.
+func (v *VideoEncoding) textBurnGraph(video int, skip string) string {
+	converted := v.convert() + ",format=yuv420p"
+	if v.pipeline() == throughDevice {
+		converted = v.deviceToneMapping() + ",hwdownload,format=nv12"
+	}
+	options := "filename=" + filterValue(v.BurnText)
+	if v.FontsDir != "" {
+		options += ":fontsdir=" + filterValue(v.FontsDir)
+	}
+	if !v.StyledText {
+		options += ":force_style=" + filterValue(textBurnStyle)
+	}
+	return "[0:" + strconv.Itoa(video) + "]" + skip + converted + ",subtitles=" + options + "," + v.Hardware.output() + "[video]"
 }
 
 // burnLead is how long before a job's start the pictures of a subtitle
@@ -292,6 +330,9 @@ const burnLead = 10 * time.Second
 // does not seek in PGS files reliably: the pictures shown before the job's
 // start but those of its last burnLead are left out before scaling.
 func (v *VideoEncoding) burnGraph(video int, from time.Duration, skip string) string {
+	if v.BurnText != "" {
+		return v.textBurnGraph(video, skip)
+	}
 	converted := v.convert() + ",format=yuv420p"
 	if v.pipeline() == throughDevice {
 		converted = v.deviceToneMapping() + ",hwdownload,format=nv12"

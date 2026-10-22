@@ -319,7 +319,8 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 	if mode == askLater || mode == staleNow {
 		s.askStreams(ctx, user, t, unknown)
 	}
-	return s.withoutTorrents(user, versions), len(unknown) == 0, nil
+	versions = s.withoutMismatched(t, s.withoutTorrents(user, versions))
+	return versions, len(unknown) == 0, nil
 }
 
 // listVersions lists the versions serving list for t, as far as mode goes,
@@ -567,18 +568,8 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources)}
 	}
 	version.ID = versionID(t.item, streamIdentity(stream))
-	// A local file's subtitle files are its own. Those addons list with a
-	// stream are not read yet.
-	if entry.addon.Local() {
-		for _, subtitle := range stream.Subtitles {
-			if !subtitle.Valid() {
-				continue
-			}
-			version.Subtitles = append(version.Subtitles, ExternalSubtitle{ID: subtitleID(entry.addon.ID, subtitle), Language: subtitle.Lang,
-				URL: subtitle.URL, Addon: entry.addon.Manifest.Name, Confined: entry.confined, Format: subtitle.Format, Title: subtitle.Title,
-				Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired, Default: subtitle.Default})
-		}
-	}
+	// Only the tracks inside the file are offered: neither the subtitle
+	// files beside a local file nor those addons list with a stream.
 	return version
 }
 
@@ -870,9 +861,9 @@ func versionName(stream stremio.Stream) string {
 	return strings.Join(parts, " · ")
 }
 
-// Subtitles lists the subtitle files users added to a movie or an episode,
-// then those the user's addons offer for it, in addon order, waiting for
-// every addon.
+// Subtitles lists the subtitle files offered for a movie or an episode
+// beside its versions' own tracks: none, as only the tracks inside the
+// files are offered. It fails as the title's lookup does.
 func (s *Service) Subtitles(ctx context.Context, user accounts.User, id accounts.ID) ([]ExternalSubtitle, error) {
 	subtitles, _, err := s.subtitlesOf(ctx, user, id, waitAll)
 	return subtitles, err
@@ -887,69 +878,14 @@ func (s *Service) SubtitlesNow(ctx context.Context, user accounts.User, id accou
 	return s.subtitlesOf(ctx, user, id, askLater)
 }
 
-func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accounts.ID, mode listing) ([]ExternalSubtitle, bool, error) {
-	t, v, err := s.target(ctx, user, id)
-	if err != nil {
+// subtitlesOf lists no subtitle file: only the tracks inside the files
+// are offered, never the addons' subtitles nor files users added. It still
+// checks the user may see the title, for the answers that name it.
+func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accounts.ID, _ listing) ([]ExternalSubtitle, bool, error) {
+	if _, _, err := s.target(ctx, user, id); err != nil {
 		return nil, false, err
 	}
-	var serving []installed
-	for _, entry := range v.addons {
-		if serves(entry, "subtitles", t.metaType, t.id) {
-			serving = append(serving, entry)
-		}
-	}
-	lists := make([][]stremio.Subtitle, len(serving))
-	complete := true
-	if mode == waitAll {
-		var wg sync.WaitGroup
-		for i, entry := range serving {
-			wg.Go(func() {
-				subtitles, err := s.subtitleList(ctx, entry, t)
-				if err != nil && ctx.Err() == nil {
-					s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.Manifest.Name, "error", err)
-				}
-				lists[i] = subtitles
-			})
-		}
-		wg.Wait()
-	} else {
-		detached := context.WithoutCancel(ctx)
-		for i, entry := range serving {
-			l, fresh, ok := listOf(s, s.subtitleLists, streamKey{entry.addon.ID, t.metaType, t.id})
-			lists[i] = l.items
-			// A stale list is listed until the addon answers again.
-			if !ok || !fresh && mode == askLater {
-				complete = false
-				if mode == askLater {
-					go func() {
-						if _, err := s.subtitleList(detached, entry, t); err != nil {
-							s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.Manifest.Name, "error", err)
-						}
-					}()
-				}
-			}
-		}
-	}
-	result, err := s.uploaded(ctx, id)
-	if err != nil {
-		return nil, false, err
-	}
-	seen := map[accounts.ID]bool{}
-	for i, subtitles := range lists {
-		for _, subtitle := range subtitles {
-			if !subtitle.Valid() {
-				continue
-			}
-			file := subtitleID(serving[i].addon.ID, subtitle)
-			if seen[file] {
-				continue
-			}
-			seen[file] = true
-			result = append(result, ExternalSubtitle{ID: file, Language: subtitle.Lang, URL: subtitle.URL,
-				Addon: serving[i].addon.Manifest.Name, Confined: serving[i].confined})
-		}
-	}
-	return result, complete, nil
+	return nil, true, nil
 }
 
 // subtitleList lists an addon's subtitles for a title: those remembered

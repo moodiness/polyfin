@@ -117,6 +117,10 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			// address.
 			letter, start, end := "a", "", ""
 			switch name {
+			case "brandLogo":
+				// An image as a data URL, not any text: see
+				// TestBrandLogoImage.
+				continue
 			case "remuxDbUrl", "publicAddress", "localAddress":
 				start = "https://"
 			case "recordingsFolder", "backupFolder", "httpsCertificate", "httpsPrivateKey":

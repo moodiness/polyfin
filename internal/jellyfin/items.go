@@ -622,6 +622,14 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 			// Covers are square.
 			ratio = 1
 		}
+		// The shape the addon gives its poster: collections' wide artwork
+		// shows on wide cards, as Jellyfin apps choose cards by this ratio.
+		switch item.PosterShape {
+		case "landscape":
+			ratio = 16.0 / 9.0
+		case "square":
+			ratio = 1
+		}
 		dto.PrimaryImageAspectRatio = new(ratio)
 	}
 	if item.Images.Logo != "" {

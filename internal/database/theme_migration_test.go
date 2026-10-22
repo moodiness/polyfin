@@ -38,7 +38,8 @@ func TestThemeMigrationFillsOnlyServersWithoutCustomCode(t *testing.T) {
 		t.Fatal(err)
 	}
 	themeCss, themeJs := read(t, fresh)
-	if themeCss == "" || themeJs == "" {
+	// A new server's theme is a stylesheet; this fork's has no script.
+	if themeCss == "" {
 		t.Fatalf("a new server's custom code: %q, %q", themeCss, themeJs)
 	}
 	for name, tc := range map[string]struct{ css, js, wantCss, wantJs string }{

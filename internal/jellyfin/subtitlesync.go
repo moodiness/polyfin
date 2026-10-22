@@ -14,18 +14,6 @@ import (
 // found in the background at the version's first play (see
 // playback.Service.FindSpeech and SyncSubtitle).
 
-// findSpeech has the speech of the version a playback started with found,
-// for a movie or an episode, the titles addons offer subtitles for, when
-// the settings sync them.
-func (h *Handler) findSpeech(ctx context.Context, user accounts.User, item library.Item, mediaSource string) {
-	if item.Kind != library.KindMovie && item.Kind != library.KindEpisode || !h.Accounts.Settings().SyncAddonSubtitles {
-		return
-	}
-	if version, ok := h.startedVersion(ctx, user, item, mediaSource); ok {
-		h.Playback.FindSpeech(version)
-	}
-}
-
 // addonSubtitle reports whether a subtitle file is an addon's, which is
 // synced: not one a user added, nor one beside a local file, which is
 // that file's own.

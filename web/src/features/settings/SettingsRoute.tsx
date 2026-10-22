@@ -190,6 +190,8 @@ function sectionLede(
       return ledes.notifications
     case 'web-player':
       return s.webPlayerHelp
+    case 'branding':
+      return s.brandingHelp
     case 'diagnostics':
       return ledes.diagnostics
   }

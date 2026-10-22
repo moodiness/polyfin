@@ -84,7 +84,7 @@ Local network discovery has two warnings, linked to its settings (see [Local net
 
 HTTPS has four, linked to its settings: a port it cannot listen on, certificate files that cannot be served, a failed attempt with Let's Encrypt, and a certificate that expires within 14 days, an error once it expired (see [HTTPS problems](#https-problems)).
 
-A picture subtitle track that could not be read into text, its language having no Tesseract data, is a warning, one per language, naming the language and the `.traineddata` file to put in the folder `POLYFIN_TESSDATA_DIR` names, with a link to **Turn picture subtitles into text**. It goes away once the file is there (see [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text)).
+A picture subtitle track that could not be read into text, its language having no Tesseract data, is a warning, one per language, naming the language and the `.traineddata` file to put in the folder `POLYFIN_TESSDATA_DIR` names, with a link to **Turn picture subtitles into text**. It goes away once the file is there (see [Picture subtitles read into text](subtitles.md#only-the-tracks-inside-the-files)).
 
 When every metadata addon of the server has a language, a warning names the first one, with a link to its page: they then describe titles in their language for every user, whatever the user's metadata language. Keep **Language of its descriptions** at **None** on that addon, or on one more metadata addon (see [Languages](addons-and-libraries.md#languages)).
 

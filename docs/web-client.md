@@ -124,15 +124,12 @@ No app can be given a new kind of home section. With **Also a library in other a
 
 ### Default theme
 
-By default, **Custom CSS** imports the stylesheet of [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web, and **Custom JavaScript** loads its script. Both load the main branch of its repository, so the theme's changes reach the web client without a Polyfin update.
+By default, **Custom CSS** holds the AIOStreams look (`internal/accounts/aiostreams_theme.css`), modelled on AIOStreams' own Jellyfin client: near-black pages (`#070707`), white pill buttons for the main action and dark ones for the rest, white as the accent in place of jellyfin-web's light blue, rounded cards with a faint ring, the Inter font, title backdrops that fade into the page, and Plex-style subtitles (white, semi-bold, outlined, no box). **Custom JavaScript** is empty.
 
-- Each browser loads the theme's files from jsDelivr (`cdn.jsdelivr.net`). A browser that cannot reach it shows the web client's own look.
-- jsDelivr takes up to 12 hours to serve a change to the theme, and a browser keeps the files it loaded for up to 7 days.
-- Each user chooses the theme's appearance and features on the LumaaGlaass page of the web client's settings menu. The choices are saved with their account, on every device.
-- The theme needs jellyfin-web's Dark theme, the default.
-- To keep the web client's own look, empty both fields: emptying one leaves half the theme.
-- To keep one version of the theme, replace `main` with a commit or a tag of its repository in both addresses.
-- A server upgraded from an earlier version gets the theme at its first start if both fields were empty, and moves to its main branch if both still held the theme at the commit Polyfin pinned before. A server whose fields hold its own CSS or script keeps both as they are.
+- The stylesheet is held whole in the setting; browsers fetch only the Inter font from Google Fonts.
+- It is the web client's only theme: `/web/config.json` offers jellyfin-web's Dark theme alone, as "AIOStreams", which the stylesheet is made for. A user who chose another theme under **Settings › Display** gets this one.
+- To keep the web client's own look, empty **Custom CSS**.
+- A server upgraded from a version that loaded LumaaGlaass moves to this look if both fields still held the LumaaGlaass defaults. A server whose fields hold its own CSS or script keeps both as they are.
 
 **Compared with Jellyfin:**
 

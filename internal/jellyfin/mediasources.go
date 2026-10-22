@@ -247,9 +247,6 @@ func (h *Handler) describedSource(r *http.Request, p playable, version library.V
 		analysis, known = h.RemuxDB.Described(version)
 	}
 	source := h.baseSource(r, p, version, id, analysis, known)
-	if analyzed {
-		source.MediaStreams = h.withTextCopies(r.Context(), p, version, analysis, source.MediaStreams)
-	}
 	whole := !h.Playback.ReadsInput(version)
 	source.SupportsDirectPlay, source.SupportsDirectStream = whole, whole
 	if known {
@@ -330,18 +327,6 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 		}
 	}
 	return source
-}
-
-// withTextCopies lists after a version's streams the text copies of its
-// picture subtitles that were read (see playback.Service.TextCopies).
-// They follow the version's own analysis, never RemuxDB's description.
-func (h *Handler) withTextCopies(ctx context.Context, p playable, version library.Version, analysis media.Analysis,
-	streams []playback.MediaStream) []playback.MediaStream {
-	copies := h.Playback.TextCopies(ctx, version, analysis, versionFiles(p.subtitles, version))
-	if len(copies) == 0 {
-		return streams
-	}
-	return playback.AppendTextCopies(streams, copies, h.Accounts.Settings().Language)
 }
 
 // textCopyOf is the index of the text copy of the subtitle of index

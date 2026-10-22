@@ -326,6 +326,8 @@ func (s *Service) generate(ctx context.Context, v view, item *Item, find func() 
 		return
 	}
 	item.Images.Primary = choice.image(false)
+	// The generated poster is 2:3, whatever shape the addon named.
+	item.PosterShape = ""
 	if item.Images.Thumb == "" {
 		item.Images.Thumb = choice.image(true)
 	}

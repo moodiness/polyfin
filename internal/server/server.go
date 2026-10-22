@@ -128,6 +128,9 @@ func New(options Options) http.Handler {
 			http.Redirect(w, r, basePath(r)+webPrefix+"robots.txt", http.StatusFound)
 		})
 	}
+	register := registration(options.AdminAPI, options.Web)
+	mux.Handle("/register", register)
+	mux.Handle("/register/", register)
 	mux.Handle("/", options.Jellyfin)
 
 	handler := countRequests(securityHeaders(compress(mux)))
