@@ -1342,8 +1342,8 @@ type Settings struct {
 	// DownmixAlgorithms, and DownmixBoost the volume it is multiplied by
 	// then. MaxAudioChannels caps converted audio, one of
 	// AudioChannelLimits, and AudioBitratePerChannel, in kb/s, sets its
-	// bitrate; 0 keeps Polyfin's (192 kb/s in stereo, 64 kb/s a channel
-	// above).
+	// bitrate; 0 keeps Jellyfin's (128 kb/s in mono, 384 kb/s in stereo,
+	// 640 kb/s in 5.1).
 	DownmixAlgorithm       string
 	DownmixBoost           float64
 	MaxAudioChannels       int

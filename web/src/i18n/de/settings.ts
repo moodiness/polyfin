@@ -520,7 +520,7 @@ const settings: typeof en = {
               : '5.1',
       audioBitratePerChannel: 'Audiobitrate pro Kanal in kb/s (0 = automatisch)',
       audioBitratePerChannelHelp: (r: RangeText) =>
-        `Automatisch ergibt 192 kb/s bei Stereo und darüber 64 kb/s pro Kanal. 0 oder von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+        `Automatisch ergibt die Bitraten von Jellyfin: 128 kb/s bei Mono, 384 kb/s bei Stereo und 640 kb/s bei 5.1, weniger unter einer niedrigen Bitratengrenze. 0 oder von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
       encodingThreads: 'Prozessor-Threads pro Konvertierung (0 = automatisch)',
       encodingThreadsHelp: (r: RangeText) =>
         `Begrenzt, wie viel vom Prozessor eine Konvertierung nutzt, um Platz für andere Arbeit zu lassen. Von ${r.min} bis ${r.max}; bei 0 wählt FFmpeg.`,

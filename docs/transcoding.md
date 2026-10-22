@@ -26,13 +26,20 @@ Converted video is never larger than its source. It is smaller when one of these
 - **HDR converted by the processor:** up to **Maximum quality of HDR converted by the processor**, 720p or 1080p with **Automatic**, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 - **Quality group:** the user's, set on their page under **Users**.
 - **Maximum quality of converted video:** under **Settings › Conversion (transcoding)**.
-- **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower. The video gets the limit less the bitrate of the audio sent: the converted audio's, 192 kb/s in stereo by default (see [Audio](#audio)), or the track's own when it is copied. A lossless track of several Mb/s converted to stereo AAC thus leaves 1080p 9.8 Mb/s within 10 Mb/s. The `TranscodingUrl` writes the two as `VideoBitrate` and `AudioBitrate`.
+- **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower. The video gets the limit less the bitrate of the audio sent: the converted audio's (see [Audio bitrate](#audio-bitrate)), or the track's own when it is copied. A lossless track of several Mb/s converted to stereo AAC at 384 kb/s thus leaves 1080p 9.6 Mb/s within 10 Mb/s. The `TranscodingUrl` writes the two as `VideoBitrate` and `AudioBitrate`.
 
 When two limits are equal, the user's quality group is named first, then **Maximum quality of converted video**, then the GPU or the processor. The bitrate is named only when it allows less than all of them.
 
 On Home in the admin app, a playback's **Details** show which one limited the size, in the **Smaller than the source** row: for instance "720p at most: HDR converted by the processor", "Quality group: 720p" or "Bitrate allowed by the app: 5.6 Mbps". The row does not show when the video keeps the source's size.
 
-Jellyfin takes off the limit its own estimate of the audio: 384 kb/s for stereo AAC and 640 kb/s for 5.1 when it converts, or the track's bitrate when it copies it, each capped by a share of the limit (1.5 Mb/s within 10 Mb/s). Polyfin takes off what it sends, so its video gets about 200 kb/s more when the audio is converted to stereo; a copied track above that cap leaves its video less than in Jellyfin.
+### Audio bitrate
+
+Converted audio gets Jellyfin's bitrates, with **Audio bitrate per channel in kb/s** at 0: 128 kb/s in mono, 384 kb/s from stereo to five channels, 640 kb/s in 5.1. Under a low bitrate limit, it gets at most its share of the limit, as in Jellyfin: 128 kb/s within 640 kb/s, 384 kb/s within 2 Mb/s, 448 kb/s within 3 Mb/s, and 640 kb/s above. A number in the setting gives that much per channel, whatever the limit.
+
+**Compared with Jellyfin:**
+
+- Jellyfin counts 384 kb/s for stereo AAC in its `TranscodingUrl`, but its encoder makes 256 kb/s. Polyfin sends what it counts.
+- When the audio is copied, Jellyfin takes off the limit at most its share of the limit for audio (1.5 Mb/s within 10 Mb/s), and Polyfin the track's own bitrate: a copied track above that share leaves its video less than in Jellyfin.
 
 ## Adaptive quality
 
@@ -271,7 +278,7 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 | **Mix to stereo** | **Settings › Conversion (transcoding)** | FFmpeg's own | Or Jellyfin's Dave750, Night mode, RFC 7845 and AC-4, for the layouts Jellyfin lists for each, 5.1 and 7.1 among them. |
 | **Volume when mixing to stereo** | **Settings › Conversion (transcoding)** | 1 (range 0.5 to 3) | Volume of the stereo mix. |
 | **Most audio channels** | **Settings › Conversion (transcoding)** | As many as the app takes | Or mono, stereo or 5.1. Shapes converted audio. |
-| **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion (transcoding)** | 0 (range 32 to 320 kb/s) | 0 keeps Polyfin's 192 kb/s in stereo and 64 kb/s a channel above stereo. Shapes converted audio. |
+| **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion (transcoding)** | 0 (range 32 to 320 kb/s) | 0 gives Jellyfin's bitrates: 128 kb/s in mono, 384 kb/s from stereo to five channels, 640 kb/s in 5.1, less under a low bitrate limit (see [Audio bitrate](#audio-bitrate)). A number gives that much per channel, whatever the limit. Shapes converted audio. |
 
 ### Performance
 

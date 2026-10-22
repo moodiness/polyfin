@@ -517,7 +517,7 @@ const settings: typeof en = {
               : '5.1',
       audioBitratePerChannel: 'Taxa de bits de áudio por canal em kb/s (0 = automático)',
       audioBitratePerChannelHelp: (r: RangeText) =>
-        `Automático gera 192 kb/s em estéreo e 64 kb/s por canal acima disso. 0, ou de ${r.min} a ${r.max}; ${r.default} por padrão.`,
+        `Automático gera as taxas de bits do Jellyfin: 128 kb/s em mono, 384 kb/s em estéreo e 640 kb/s em 5.1, menos com um limite de taxa de bits baixo. 0, ou de ${r.min} a ${r.max}; ${r.default} por padrão.`,
       encodingThreads: 'Threads do processador por conversão (0 = automático)',
       encodingThreadsHelp: (r: RangeText) =>
         `Limita o quanto do processador uma conversão usa, para deixar espaço para outras tarefas. De ${r.min} a ${r.max}; 0 deixa o FFmpeg escolher.`,

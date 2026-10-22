@@ -240,7 +240,7 @@ func TestMaxBitrateConvertsFallsBackOrRefuses(t *testing.T) {
 
 // Under an app's bitrate limit, the video takes what the audio sent
 // leaves, which the TranscodingUrl writes as AudioBitrate: a lossless
-// track Chrome cannot take goes out as stereo AAC at 192 kb/s, so a 1080p
+// track Chrome cannot take goes out as stereo AAC at 384 kb/s, so a 1080p
 // source keeps 1080p within 10 Mbit/s rather than giving the track's own
 // bitrate to the audio.
 func TestALosslessTrackConvertedLeavesTheVideoItsBitrate(t *testing.T) {
@@ -259,7 +259,7 @@ func TestALosslessTrackConvertedLeavesTheVideoItsBitrate(t *testing.T) {
 		t.Fatalf("answer: %+v", answer)
 	}
 	source := answer.MediaSources[0]
-	if source.SupportsDirectPlay || !strings.Contains(source.TranscodingUrl, "&VideoBitrate=9808000&AudioBitrate=192000&") ||
+	if source.SupportsDirectPlay || !strings.Contains(source.TranscodingUrl, "&VideoBitrate=9616000&AudioBitrate=384000&") ||
 		!strings.Contains(source.TranscodingUrl, "allowVideoStreamCopy=false") || videoHeightOf(source) != 1080 {
 		t.Fatalf("height %d, %s", videoHeightOf(source), source.TranscodingUrl)
 	}

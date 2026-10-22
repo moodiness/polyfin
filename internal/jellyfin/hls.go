@@ -232,15 +232,16 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 	remux := playback.Remux{Session: session, User: user.ID, Device: query(r, "deviceId"), Version: version,
 		Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
 	// The conversions PlaybackInfo chose follow from the URL, as they
-	// would for Jellyfin, through the same functions. Converted video is
-	// scaled down to the user's quality group and to the height the
-	// settings allow, the lower winning, as the encoding starts: settings
-	// Jellyfin does not have.
+	// would for Jellyfin, through the same functions, under the limit it
+	// played under. Converted video is scaled down to the user's quality
+	// group and to the height the settings allow, the lower winning, as
+	// the encoding starts: settings Jellyfin does not have.
+	limits := h.conversionLimits(r, user)
 	if strings.EqualFold(query(r, "allowVideoStreamCopy"), "false") {
 		convert := func() {
 			streams := playback.MediaStreams(analysis, externalStreams(files), h.Accounts.Settings().Language)
 			if i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Video" }); i >= 0 {
-				remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), h.conversionLimits(r, user), streams[i], h.Playback.Capabilities())
+				remux.ConvertVideo = playback.ConvertVideo(query(r, "videoCodec"), limits, streams[i], h.Playback.Capabilities())
 			}
 		}
 		convert()
@@ -277,7 +278,7 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 			}
 		}
 		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels, layout,
-			h.Playback.Capabilities().Tuning)
+			limits.Bitrate, h.Playback.Capabilities().Tuning)
 	}
 	// PlaybackInfo copies no video above the user's bitrate limit, nor
 	// taller than their quality group: this guards URLs kept from before

@@ -67,23 +67,23 @@ func TestTuningChangesConversions(t *testing.T) {
 		tuning   Tuning
 		want     *AudioConversion
 	}{
-		{"at most stereo", "aac", 6, "5.1(side)", Tuning{MaxAudioChannels: 2}, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
+		{"at most stereo", "aac", 6, "5.1(side)", Tuning{MaxAudioChannels: 2}, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
 		{"at most mono", "flac", 6, "5.1", Tuning{MaxAudioChannels: 1}, &AudioConversion{Codec: "flac", Channels: 1}},
 		{"96 kb/s a channel", "aac", 6, "5.1", Tuning{AudioBitrate: 96_000}, &AudioConversion{Codec: "aac", Channels: 6, Bitrate: 576_000}},
 		{"96 kb/s a channel in stereo", "aac", 2, "stereo", Tuning{AudioBitrate: 96_000}, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
 		{"Dave750 downmix", "aac", 6, "5.1(side)", Tuning{MaxAudioChannels: 2, Downmix: "Dave750"},
-			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000, Filter: dave}},
+			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: dave}},
 		{"downmix with a guessed layout, boosted", "ac3", 6, "", Tuning{MaxAudioChannels: 2, Downmix: "Dave750", DownmixBoost: 1.5},
-			&AudioConversion{Codec: "ac3", Channels: 2, Bitrate: 192_000, Filter: dave + ",volume=1.5"}},
+			&AudioConversion{Codec: "ac3", Channels: 2, Bitrate: 384_000, Filter: dave + ",volume=1.5"}},
 		{"7.1 downmixed through 5.1", "aac", 8, "7.1", Tuning{MaxAudioChannels: 2, Downmix: "Ac4"},
-			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000,
+			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000,
 				Filter: "pan=5.1(side)|c0=c0|c1=c1|c2=c2|c3=c3|c4=0.707*c4+0.707*c6|c5=0.707*c5+0.707*c7,pan=stereo|c0=c0+0.707*c2+0.707*c4|c1=c1+0.707*c2+0.707*c5"}},
 		{"a layout the algorithm lacks keeps FFmpeg's downmix, boosted", "aac", 6, "6.0", Tuning{MaxAudioChannels: 2, Downmix: "NightmodeDialogue", DownmixBoost: 2},
-			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000, Filter: "volume=2"}},
-		{"stereo is not mixed down", "aac", 2, "stereo", Tuning{Downmix: "Rfc7845", DownmixBoost: 2}, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
-		{"5.1 kept is not mixed down", "aac", 6, "5.1", Tuning{Downmix: "Rfc7845", DownmixBoost: 2}, &AudioConversion{Codec: "aac", Channels: 6, Bitrate: 384_000}},
+			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: "volume=2"}},
+		{"stereo is not mixed down", "aac", 2, "stereo", Tuning{Downmix: "Rfc7845", DownmixBoost: 2}, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
+		{"5.1 kept is not mixed down", "aac", 6, "5.1", Tuning{Downmix: "Rfc7845", DownmixBoost: 2}, &AudioConversion{Codec: "aac", Channels: 6, Bitrate: 640_000}},
 	} {
-		if got := ConvertAudio(tc.codecs, "", tc.channels, tc.layout, tc.tuning); !reflect.DeepEqual(got, tc.want) {
+		if got := ConvertAudio(tc.codecs, "", tc.channels, tc.layout, 0, tc.tuning); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: %+v, want %+v", tc.name, got, tc.want)
 		}
 	}
@@ -181,7 +181,7 @@ func TestTunedConversionPlays(t *testing.T) {
 	stream := media.Stream{Index: 0, Type: "video", Codec: "h264", Width: 320, Height: 180, AverageRate: 24, BitDepth: 8}
 	remux := Remux{Format: hls.FMP4,
 		ConvertVideo: ConvertVideo("hevc,h264", Limits{}, MediaStream{Codec: "h264", VideoRange: "SDR", Width: new(320), Height: new(180)}, can),
-		ConvertAudio: ConvertAudio("aac", "", 6, "5.1(side)", tuning)}
+		ConvertAudio: ConvertAudio("aac", "", 6, "5.1(side)", 0, tuning)}
 	plan := hls.NewPlan([]time.Duration{0, 6 * time.Second}, 12*time.Second)
 	r := hls.Remux{Input: input, Video: 0, Audio: 1, Format: hls.FMP4, Plan: plan}
 	remux.convert(&r, stream, tuning)

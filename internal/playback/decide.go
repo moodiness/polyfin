@@ -487,7 +487,7 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mu
 		return false, nil, nil
 	}
 	s := subject{video: d.video, codecTag: RemuxTag(d.video.Codec, t.Container)}
-	audio, audioStreams := d.streamAudio(t, options, s)
+	audio, audioStreams := d.streamAudio(t, options, limit, s)
 	var video *VideoConversion
 	if options.ConvertVideo || mustConvert || !listHas(t.VideoCodec, d.video.Codec) || d.remuxFails("Video", d.video, t.Container, s) {
 		// Converted video is scaled down to the lower of the heights it is
@@ -502,9 +502,10 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mu
 }
 
 // streamAudio decides how the audio that plays reaches the app streamed
-// with t: copied (nil, true), converted (its conversion, true), or not at
-// all (nil, false) when t takes no codec Polyfin encodes.
-func (d *decider) streamAudio(t *TranscodingProfile, options Options, s subject) (*AudioConversion, bool) {
+// with t under a bitrate limit, 0 for none: copied (nil, true), converted
+// (its conversion, true), or not at all (nil, false) when t takes no codec
+// Polyfin encodes.
+func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int64, s subject) (*AudioConversion, bool) {
 	audio := d.played
 	if audio == nil {
 		return nil, true
@@ -521,7 +522,7 @@ func (d *decider) streamAudio(t *TranscodingProfile, options Options, s subject)
 	if audio.Channels != nil {
 		channels = *audio.Channels
 	}
-	conversion := ConvertAudio(t.AudioCodec, t.MaxAudioChannels, channels, audio.ChannelLayout, options.Can.Tuning)
+	conversion := ConvertAudio(t.AudioCodec, t.MaxAudioChannels, channels, audio.ChannelLayout, limit, options.Can.Tuning)
 	return conversion, conversion != nil
 }
 

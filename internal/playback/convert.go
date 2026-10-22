@@ -63,11 +63,13 @@ var audioEncoders = []string{"aac", "ac3", "eac3", "flac"}
 // ConvertAudio is the conversion of audio of channels in layout, as
 // ffprobe names it, for a transcoding profile taking codecs, as a
 // comma-separated list, and at most maxChannels channels when it is a
-// number: the first codec of the list FFmpeg encodes, with the audio's
-// channels up to the limit, to the tuning's and to what the codec carries,
-// mixed down to stereo as the tuning says. It is nil when the profile takes
-// no codec Polyfin encodes.
-func ConvertAudio(codecs, maxChannels string, channels int, layout string, t Tuning) *AudioConversion {
+// number, under a bitrate limit, 0 for none: the first codec of the list
+// FFmpeg encodes, with the audio's channels up to the limit, to the
+// tuning's and to what the codec carries, mixed down to stereo as the
+// tuning says, at the tuning's bitrate a channel, else at Jellyfin's (see
+// audioBitrateFor). It is nil when the profile takes no codec Polyfin
+// encodes.
+func ConvertAudio(codecs, maxChannels string, channels int, layout string, limit int64, t Tuning) *AudioConversion {
 	codec := ""
 	for name := range strings.SplitSeq(codecs, ",") {
 		if name = strings.ToLower(strings.TrimSpace(name)); slices.Contains(audioEncoders, name) {
@@ -82,8 +84,8 @@ func ConvertAudio(codecs, maxChannels string, channels int, layout string, t Tun
 	if channels <= 0 {
 		channels = 2
 	}
-	if limit, err := strconv.Atoi(maxChannels); err == nil && limit > 0 {
-		channels = min(channels, limit)
+	if most, err := strconv.Atoi(maxChannels); err == nil && most > 0 {
+		channels = min(channels, most)
 	}
 	if t.MaxAudioChannels > 0 {
 		channels = min(channels, t.MaxAudioChannels)
@@ -97,16 +99,46 @@ func ConvertAudio(codecs, maxChannels string, channels int, layout string, t Tun
 	case codec == "flac":
 	case t.AudioBitrate > 0:
 		conversion.Bitrate = int64(channels) * t.AudioBitrate
-	case channels == 2:
-		conversion.Bitrate = 192_000
 	default:
-		// About 64 kb/s a channel: 192 kb/s in stereo, 384 kb/s in 5.1.
-		conversion.Bitrate = max(int64(channels)*64_000, 128_000)
+		conversion.Bitrate = audioBitrateFor(channels, limit)
 	}
 	if channels == 2 && source > 2 {
 		conversion.Filter = t.downmix(source, layout)
 	}
 	return conversion
+}
+
+// audioBitrateFor is the bitrate Jellyfin's StreamBuilder gives audio
+// converted to a lossy codec with channels: 128 kb/s in mono, 384 kb/s up
+// to five channels, 640 kb/s from six; under a bitrate limit, at most its
+// share of the limit (see audioShare).
+func audioBitrateFor(channels int, limit int64) int64 {
+	bitrate := int64(384_000)
+	switch {
+	case channels < 2:
+		bitrate = 128_000
+	case channels >= 6:
+		bitrate = 640_000
+	}
+	if limit > 0 {
+		bitrate = min(bitrate, audioShare(limit))
+	}
+	return bitrate
+}
+
+// audioShare is the most audio gets under a bitrate limit, as Jellyfin's
+// StreamBuilder gives it: 128 kb/s up to 640 kb/s, 384 kb/s up to 2 Mb/s,
+// 640 kb/s up to 4 Mb/s, and more above, beyond what converted audio gets.
+func audioShare(limit int64) int64 {
+	for _, share := range []struct{ limit, most int64 }{
+		{640_000, 128_000}, {2_000_000, 384_000}, {3_000_000, 448_000}, {4_000_000, 640_000}, {5_000_000, 768_000},
+		{10_000_000, 1_536_000}, {15_000_000, 2_304_000}, {20_000_000, 3_584_000},
+	} {
+		if limit <= share.limit {
+			return share.most
+		}
+	}
+	return 7_168_000
 }
 
 // VideoConversion is what the video is converted to when the app cannot

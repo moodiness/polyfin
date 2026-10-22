@@ -247,7 +247,7 @@ func TestRemuxesCopyTheVideoAndConvertWhatAudioTheAppCannotTake(t *testing.T) {
 	sdr := source
 	sdr.Streams = slices.Clone(source.Streams)
 	sdr.Streams[0].VideoRangeType = "SDR"
-	stereo := &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}
+	stereo := &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}
 	tests := []struct {
 		name    string
 		profile string
@@ -261,7 +261,7 @@ func TestRemuxesCopyTheVideoAndConvertWhatAudioTheAppCannotTake(t *testing.T) {
 		// remux writes, and E-AC-3.
 		{"Swiftfin's native player", "swiftfin-native", source, Options{}, true, nil, []string{"ContainerNotSupported", "VideoCodecTagNotSupported"}},
 		// An app may ask for the audio to be converted all the same.
-		{"audio copy refused", "swiftfin-native", source, Options{ConvertAudio: true}, true, &AudioConversion{Codec: "aac", Channels: 6, Bitrate: 384_000},
+		{"audio copy refused", "swiftfin-native", source, Options{ConvertAudio: true}, true, &AudioConversion{Codec: "aac", Channels: 6, Bitrate: 640_000},
 			[]string{"ContainerNotSupported", "VideoCodecTagNotSupported"}},
 		// Chrome refuses Dolby Vision, which a remux keeps.
 		{"Dolby Vision in Chrome", "jellyfin-web-chrome", source, Options{AudioStreamIndex: new(2)}, false, nil,
@@ -301,14 +301,14 @@ func TestAudioIsConvertedToTheFirstCodecFFmpegEncodes(t *testing.T) {
 		channels            int
 		want                *AudioConversion
 	}{
-		{"aac,mp2,opus,flac", "2", 8, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
-		{"mp3,eac3,aac", "", 8, &AudioConversion{Codec: "eac3", Channels: 6, Bitrate: 384_000}},
+		{"aac,mp2,opus,flac", "2", 8, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
+		{"mp3,eac3,aac", "", 8, &AudioConversion{Codec: "eac3", Channels: 6, Bitrate: 640_000}},
 		{"FLAC", "8", 8, &AudioConversion{Codec: "flac", Channels: 8}},
 		{"aac", "", 1, &AudioConversion{Codec: "aac", Channels: 1, Bitrate: 128_000}},
-		{"aac", "", 0, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
+		{"aac", "", 0, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
 		{"mp2,opus", "2", 6, nil},
 	} {
-		if got := ConvertAudio(test.codecs, test.maxChannels, test.channels, "", Tuning{}); !reflect.DeepEqual(got, test.want) {
+		if got := ConvertAudio(test.codecs, test.maxChannels, test.channels, "", 0, Tuning{}); !reflect.DeepEqual(got, test.want) {
 			t.Errorf("ConvertAudio(%q, %q, %d) = %+v, want %+v", test.codecs, test.maxChannels, test.channels, got, test.want)
 		}
 	}
@@ -327,7 +327,7 @@ func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
 	}
 	software := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true}
 	sdr720 := &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 5_000_000, ToneMap: true}
-	stereo := &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}
+	stereo := &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}
 	tests := []struct {
 		name    string
 		profile string
@@ -371,7 +371,7 @@ func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
 }
 
 // Under a bitrate limit, the video takes what the audio sent leaves: a
-// lossless track converted to stereo AAC leaves all but 192 kb/s, so a
+// lossless track converted to stereo AAC leaves all but 384 kb/s, so a
 // 1080p source keeps 1080p within 10 Mb/s; a track copied leaves what
 // its own bitrate does.
 func TestConvertedVideoTakesWhatTheAudioSentLeaves(t *testing.T) {
@@ -392,7 +392,7 @@ func TestConvertedVideoTakesWhatTheAudioSentLeaves(t *testing.T) {
 		audio   *AudioConversion
 	}{
 		// Chrome takes no TrueHD: it is converted to AAC in stereo.
-		{"TrueHD converted", source("truehd", 6), 1080, 9_808_000, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 192_000}},
+		{"TrueHD converted", source("truehd", 6), 1080, 9_616_000, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
 		// Chrome takes FLAC in stereo over HLS: it is copied.
 		{"FLAC copied", source("flac", 2), 720, 5_000_000, nil},
 	} {
