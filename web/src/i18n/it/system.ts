@@ -178,6 +178,21 @@ const system: typeof en = {
           no_peers: 'i suoi tracker e la DHT non hanno trovato nessun peer',
           silent: 'sono stati trovati dei peer, ma nessuno l’ha inviato',
         },
+        torrentStartPeers: (found: number, why: string) =>
+          `${found} ${found === 1 ? 'peer trovato' : 'peer trovati'}: ${why}`,
+        torrentPeerWhy: {
+          connected: (n: number) => `${n} ${n === 1 ? 'connesso' : 'connessi'}`,
+          timedOut: (n: number) => `${n} senza risposta in tempo`,
+          refused: (n: number) =>
+            `${n} ${n === 1 ? 'ha rifiutato' : 'hanno rifiutato'} la connessione`,
+          unreachable: (n: number) => `${n} ${n === 1 ? 'irraggiungibile' : 'irraggiungibili'}`,
+          proxy: (n: number) => `${n} ${n === 1 ? 'rifiutato' : 'rifiutati'} dal proxy`,
+          closed: (n: number) =>
+            `${n} ${n === 1 ? 'ha chiuso' : 'hanno chiuso'} la connessione durante l’handshake`,
+          left: (n: number) => `${n} ${n === 1 ? 'connesso, poi uscito' : 'connessi, poi usciti'}`,
+          other: (n: number) => `${n} ${n === 1 ? 'fallito' : 'falliti'} per altri motivi`,
+          untried: (n: number) => `${n} non ancora ${n === 1 ? 'contattato' : 'contattati'}`,
+        },
         dlnaPort: (port: number) =>
           `Polyfin non riesce a mettersi in ascolto sulla porta UDP ${port}, quindi i dispositivi DLNA sulla rete locale non lo trovano da soli. Probabilmente la usa un altro programma, ad esempio un altro server DLNA sullo stesso host. Salvando le impostazioni si riprova.`,
         discoveryAddress: (address: string) =>

@@ -177,6 +177,20 @@ const system: typeof en = {
           no_peers: 'sus trackers y la DHT no encontraron ningún par',
           silent: 'se encontraron pares, pero ninguno lo envió',
         },
+        torrentStartPeers: (found: number, why: string) =>
+          `${found} ${found === 1 ? 'par encontrado' : 'pares encontrados'}: ${why}`,
+        torrentPeerWhy: {
+          connected: (n: number) => `${n} ${n === 1 ? 'conectado' : 'conectados'}`,
+          timedOut: (n: number) => `${n} sin respuesta a tiempo`,
+          refused: (n: number) => `${n} ${n === 1 ? 'rechazó' : 'rechazaron'} la conexión`,
+          unreachable: (n: number) => `${n} ${n === 1 ? 'inaccesible' : 'inaccesibles'}`,
+          proxy: (n: number) => `${n} ${n === 1 ? 'rechazado' : 'rechazados'} por el proxy`,
+          closed: (n: number) => `${n} ${n === 1 ? 'cerró' : 'cerraron'} la conexión en el saludo`,
+          left: (n: number) =>
+            `${n} ${n === 1 ? 'conectado y luego desconectado' : 'conectados y luego desconectados'}`,
+          other: (n: number) => `${n} ${n === 1 ? 'falló' : 'fallaron'} por otro motivo`,
+          untried: (n: number) => `${n} aún sin contactar`,
+        },
         dlnaPort: (port: number) =>
           `Polyfin no puede escuchar en el puerto UDP ${port}, así que los dispositivos DLNA de la red local no lo encuentran por sí solos. Probablemente otro programa lo está usando, como otro servidor DLNA en el mismo host. Al guardar los ajustes se vuelve a intentar.`,
         discoveryAddress: (address: string) =>

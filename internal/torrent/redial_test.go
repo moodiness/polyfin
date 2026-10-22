@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
-	"syscall"
 	"testing"
 	"time"
 
@@ -81,21 +81,75 @@ func TestAPeerThatDroppedIsDialedAgain(t *testing.T) {
 	}
 }
 
+// A torrent that does not start counts its peers by how their dial
+// failed: one refused, one that closed the connection at the handshake.
+func TestAStartErrorCountsWhyPeersDidNotConnect(t *testing.T) {
+	t.Parallel()
+	tor := torrenttest.Build("A Movie", 64<<10, torrenttest.File{Name: "a.mkv", Data: torrenttest.Bytes(300 << 10)})
+	closing, refused := closingListener(t), freeAddress(t)
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", closing, refused)
+	e := newEngineWith(t, proxied(torrenttest.StartProxy(t, false, "", "")), func(c *Config) { c.StartTimeout = 10 * time.Second })
+	spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Play(spec)()
+	_, err = e.Open(context.Background(), spec)
+	var unstarted *StartError
+	if !errors.As(err, &unstarted) || unstarted.Found != 2 || unstarted.Unconnected != (PeerFailures{Refused: 1, Closed: 1}) {
+		t.Fatalf("got %v", err)
+	}
+	if status := e.Status(context.Background()); status.Unstarted != unstarted {
+		t.Fatalf("Health tells %v", status.Unstarted)
+	}
+}
+
+// closingListener is a peer that closes each connection at once.
+func closingListener(t *testing.T) netip.AddrPort {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			conn.Close()
+		}
+	}()
+	return netip.MustParseAddrPort(listener.Addr().String())
+}
+
+// freeAddress is an address where nothing listens.
+func freeAddress(t *testing.T) netip.AddrPort {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	listener.Close()
+	return netip.MustParseAddrPort(address)
+}
+
 // How a dial ended is read from its error, whichever route made it.
 func TestOutcomeOfADial(t *testing.T) {
 	t.Parallel()
 	for err, want := range map[error]outcome{
-		&net.OpError{Op: "dial", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}: outcomeRefused,
-		&socksReplyError{code: socksRefused}:                                               outcomeRefused,
-		&socksReplyError{code: socksHostUnreachable}:                                       outcomeUnreachable,
-		&socksReplyError{code: socksTTLExpired}:                                            outcomeTimedOut,
-		&socksReplyError{code: 1}:                                                          outcomeProxy,
-		&RouteError{Kind: ProxyUnreachable}:                                                outcomeProxy,
-		fmt.Errorf("dial: %w", context.DeadlineExceeded):                                   outcomeTimedOut,
-		os.ErrDeadlineExceeded:                                                             outcomeTimedOut,
-		io.ErrUnexpectedEOF:                                                                outcomeClosed,
-		&net.OpError{Op: "connect", Err: errors.New("connection was refused")}:             outcomeRefused,
-		&net.OpError{Op: "connect", Err: errors.New("no route to host")}:                   outcomeUnreachable,
+		&socksReplyError{code: socksRefused}:                                   outcomeRefused,
+		&socksReplyError{code: socksHostUnreachable}:                           outcomeUnreachable,
+		&socksReplyError{code: socksTTLExpired}:                                outcomeTimedOut,
+		&socksReplyError{code: 1}:                                              outcomeProxy,
+		&RouteError{Kind: ProxyUnreachable}:                                    outcomeProxy,
+		fmt.Errorf("dial: %w", context.DeadlineExceeded):                       outcomeTimedOut,
+		os.ErrDeadlineExceeded:                                                 outcomeTimedOut,
+		io.ErrUnexpectedEOF:                                                    outcomeClosed,
+		&net.OpError{Op: "connect", Err: errors.New("connection was refused")}: outcomeRefused,
+		&net.OpError{Op: "connect", Err: errors.New("no route to host")}:       outcomeUnreachable,
 		errHandshake: outcomeOther,
 	} {
 		if got := outcomeOf(err); got != want {

@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -94,6 +97,71 @@ func TestHealthTellsATorrentDidNotStart(t *testing.T) {
 	want := map[string]any{"key": "torrents:start", "code": "torrent_start", "tone": "warning",
 		"to": "/settings/torrents#torrent-route", "transient": false, "failure": "no_peers"}
 	if len(found) != 1 || !reflect.DeepEqual(found[0], want) {
+		t.Fatalf("problems: %v", found)
+	}
+}
+
+// A torrent whose peers were found but did not connect has Health count
+// them by why: here one refused the connection, and one closed it at the
+// handshake.
+func TestHealthCountsWhyATorrentsPeersDidNotConnect(t *testing.T) {
+	t.Parallel()
+	proxy := torrenttest.StartProxy(t, false, "", "")
+	closing, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closing.Close() })
+	go func() {
+		for {
+			conn, err := closing.Accept()
+			if err != nil {
+				return
+			}
+			conn.Close()
+		}
+	}()
+	refusing, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refusing.Close()
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", netip.MustParseAddrPort(closing.Addr().String()),
+		netip.MustParseAddrPort(refusing.Addr().String()))
+	var engine *torrent.Engine
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
+		settings := o.Accounts.Settings()
+		settings.TorrentStreams, settings.TorrentProxy = true, proxy.Address()
+		if _, err := o.Accounts.UpdateSettings(t.Context(), settings); err != nil {
+			t.Fatal(err)
+		}
+		var err error
+		engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
+			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, StartTimeout: 10 * time.Second, Logger: slog.New(slog.DiscardHandler)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(engine.Close)
+		o.Health = HealthSources{Torrents: engine}
+	})
+	tor := torrenttest.Build("A Movie", 32<<10, torrenttest.File{Name: "a.mkv", Data: torrenttest.Bytes(100 << 10)})
+	spec, err := torrent.NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Play(spec)()
+	var unstarted *torrent.StartError
+	if _, err := engine.Open(t.Context(), spec); !errors.As(err, &unstarted) {
+		t.Fatalf("got %v, want a StartError", err)
+	}
+	administrator := api.signedIn("administrator", true)
+	_, body, _ := administrator.call(http.MethodGet, "/health/problems?language=en", nil)
+	found, _ := body["problems"].([]any)
+	want := map[string]any{"key": "torrents:start", "code": "torrent_start", "tone": "warning",
+		"to": "/settings/torrents#torrent-route", "transient": false, "failure": "silent",
+		"peers": map[string]any{"found": float64(2), "connected": float64(0), "refused": float64(1), "closed": float64(1)}}
+	// The proxy offers no UDP ASSOCIATE, which Health tells too.
+	if !slices.ContainsFunc(found, func(p any) bool { return reflect.DeepEqual(p, want) }) {
 		t.Fatalf("problems: %v", found)
 	}
 }

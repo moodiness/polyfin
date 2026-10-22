@@ -70,6 +70,37 @@ const serviceNames = {
   listenbrainz: 'ListenBrainz',
 }
 
+/** The reasons a torrent's peers did not connect, in the order Health tells them. */
+const peerReasons = [
+  'connected',
+  'timedOut',
+  'refused',
+  'unreachable',
+  'proxy',
+  'closed',
+  'left',
+  'other',
+  'untried',
+] as const
+
+/** Why a torrent that did not start, with peers found, sent nothing: its peers counted by why. */
+function torrentStartWhy(
+  t: Messages,
+  problem: Extract<HealthProblem, { code: 'torrent_start' }>,
+): string {
+  const text = t.system.health.problems
+  const why = text.torrentStartWhy[problem.failure]
+  const peers = problem.peers
+  if (!peers) return why
+  const counts = peerReasons.flatMap((reason) => {
+    const n = peers[reason] ?? 0
+    return n > 0 ? [text.torrentPeerWhy[reason](n)] : []
+  })
+  return counts.length === 0
+    ? why
+    : `${why} (${text.torrentStartPeers(peers.found, counts.join(', '))})`
+}
+
 /** What a problem the server found says. */
 export function problemText(t: Messages, language: string, problem: HealthProblem): string {
   const health = t.system.health
@@ -99,7 +130,7 @@ export function problemText(t: Messages, language: string, problem: HealthProble
     case 'torrent_udp':
       return text.torrentUdp(problem.name)
     case 'torrent_start':
-      return text.torrentStart(text.torrentStartWhy[problem.failure])
+      return text.torrentStart(torrentStartWhy(t, problem))
     case 'discovery_address':
       return text.discoveryAddress(problem.address)
     case 'proxy_name_unresolved':

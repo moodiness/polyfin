@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -40,13 +41,44 @@ type StartError struct {
 	// DHT tells whether the DHT was looked up, and NoUDP that it could not
 	// be, the route carrying no UDP.
 	DHT, NoUDP bool
-	// Found counts the peers found, and Connected those that answered.
+	// Found counts the peers found, and Connected those that answered;
+	// Unconnected tells why the others are not.
 	Found, Connected int
+	Unconnected      PeerFailures
+}
+
+// PeerFailures counts a torrent's peers not connected by how their last
+// dial or connection ended: TimedOut did not answer in time, over TCP or
+// uTP; Refused refused the connection, as the peer or a SOCKS5 proxy
+// tells; Unreachable have no route to them; Proxy were refused by the
+// SOCKS5 proxy for another reason, or could not be asked through it;
+// Closed closed the connection during the handshake; Left were connected,
+// and their connection ended; Other failed otherwise; Untried were not
+// dialed yet, or their first dial runs.
+type PeerFailures struct {
+	TimedOut, Refused, Unreachable, Proxy, Closed, Left, Other, Untried int
+}
+
+func (f PeerFailures) String() string {
+	var parts []string
+	for _, part := range []struct {
+		n    int
+		what string
+	}{{f.TimedOut, "timed out"}, {f.Refused, "refused"}, {f.Unreachable, "unreachable"}, {f.Proxy, "refused by the proxy"},
+		{f.Closed, "closed the connection"}, {f.Left, "left"}, {f.Other, "failed otherwise"}, {f.Untried, "not dialed yet"}} {
+		if part.n > 0 {
+			parts = append(parts, strconv.Itoa(part.n)+" "+part.what)
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (e *StartError) Error() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "the torrent did not start in %s: %d peers found, %d connected", e.After.Round(time.Second), e.Found, e.Connected)
+	if unconnected := e.Unconnected.String(); unconnected != "" {
+		fmt.Fprintf(&b, " (%s)", unconnected)
+	}
 	fmt.Fprintf(&b, "; %d trackers, %d answered, %d refused the announce", e.Trackers, e.Answered, e.Refused)
 	if e.UDPOff > 0 {
 		fmt.Fprintf(&b, ", %d over UDP left out", e.UDPOff)
@@ -83,6 +115,7 @@ func outcomeOf(err error) outcome {
 	var reply *socksReplyError
 	var route *RouteError
 	var timeout interface{ Timeout() bool }
+	is := func(target error) bool { return errors.Is(err, target) }
 	switch {
 	case errors.As(err, &reply):
 		switch reply.code {
@@ -96,13 +129,14 @@ func outcomeOf(err error) outcome {
 		return outcomeProxy
 	case errors.As(err, &route):
 		return outcomeProxy
-	case errors.Is(err, syscall.ECONNREFUSED):
+	case slices.ContainsFunc(refusedErrors, is):
 		return outcomeRefused
-	case errors.Is(err, syscall.EHOSTUNREACH), errors.Is(err, syscall.ENETUNREACH):
+	case slices.ContainsFunc(unreachableErrors, is):
 		return outcomeUnreachable
-	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, os.ErrDeadlineExceeded), errors.As(err, &timeout) && timeout.Timeout():
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, os.ErrDeadlineExceeded), errors.As(err, &timeout) && timeout.Timeout(),
+		slices.ContainsFunc(timedOutErrors, is):
 		return outcomeTimedOut
-	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF), errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.EPIPE):
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF), slices.ContainsFunc(closedErrors, is):
 		return outcomeClosed
 	}
 	// A WireGuard tunnel's network stack tells its errors by their text
@@ -118,6 +152,36 @@ func outcomeOf(err error) outcome {
 		return outcomeClosed
 	}
 	return outcomeOther
+}
+
+// unconnected counts the peers found and not connected by how their last
+// dial or connection ended. The lock is held.
+func (t *torrent) unconnected() PeerFailures {
+	var f PeerFailures
+	for address, c := range t.known {
+		if t.peers[address] != nil {
+			continue
+		}
+		switch c.last {
+		case outcomeTimedOut:
+			f.TimedOut++
+		case outcomeRefused:
+			f.Refused++
+		case outcomeUnreachable:
+			f.Unreachable++
+		case outcomeProxy:
+			f.Proxy++
+		case outcomeClosed:
+			f.Closed++
+		case outcomeLeft:
+			f.Left++
+		case outcomeOther:
+			f.Other++
+		default:
+			f.Untried++
+		}
+	}
+	return f
 }
 
 // BootstrapNodes are the DHT nodes the main BitTorrent clients start their
@@ -167,7 +231,8 @@ func (e *Engine) startedOne() {
 // startError tells what came of the search for the torrent's peers. The
 // lock is held.
 func (t *torrent) startError(after time.Duration) *StartError {
-	err := &StartError{After: after, Found: len(t.known), Connected: len(t.peers), NoUDP: !t.udp, DHT: t.looked}
+	err := &StartError{After: after, Found: len(t.known), Connected: len(t.peers), Unconnected: t.unconnected(), NoUDP: !t.udp,
+		DHT: t.looked}
 	for _, tracker := range t.trackers {
 		if strings.HasPrefix(tracker, "udp:") && !t.udp {
 			err.UDPOff++

@@ -168,6 +168,19 @@ const system = {
           no_peers: 'its trackers and the DHT found no peer',
           silent: 'peers were found, but none sent it',
         },
+        torrentStartPeers: (found: number, why: string) =>
+          `${found} ${found === 1 ? 'peer' : 'peers'} found: ${why}`,
+        torrentPeerWhy: {
+          connected: (n: number) => `${n} connected`,
+          timedOut: (n: number) => `${n} timed out`,
+          refused: (n: number) => `${n} refused the connection`,
+          unreachable: (n: number) => `${n} unreachable`,
+          proxy: (n: number) => `${n} refused by the proxy`,
+          closed: (n: number) => `${n} closed the connection at the handshake`,
+          left: (n: number) => `${n} connected, then left`,
+          other: (n: number) => `${n} failed otherwise`,
+          untried: (n: number) => `${n} not dialed yet`,
+        },
         dlnaPort: (port: number) =>
           `Polyfin cannot listen on UDP port ${port}, so DLNA devices on the local network do not find it by themselves. Another program probably uses it, such as another DLNA server on the same host. Saving the settings tries again.`,
         discoveryAddress: (address: string) =>

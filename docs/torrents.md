@@ -141,7 +141,18 @@ A torrent that does not start in time is not tried again for 15 minutes, like a 
 
 ## When torrents do not start
 
-When no version of a title plays because a torrent could not start, its route being down or no peer sending it in time, PlaybackInfo answers Jellyfin's `RateLimitExceeded` rather than `NoCompatibleStream`: jellyfin-web says the media cannot be played at this time, rather than that the app is not compatible with it. The log tells why at Info level (`A torrent did not start in time`, with the peers found and how the trackers answered), and **System › Health** too.
+When no version of a title plays because a torrent could not start, its route being down or no peer sending it in time, PlaybackInfo answers Jellyfin's `RateLimitExceeded` rather than `NoCompatibleStream`: jellyfin-web says the media cannot be played at this time, rather than that the app is not compatible with it. The log tells why in one line at Info level (`A torrent did not start in time`, with the peers found, how the trackers answered, and the peers not connected counted by how their last dial or connection ended), and **System › Health** too. For example, `23 peers found, 0 connected (15 timed out, 8 refused)`:
+
+- timed out: no answer within 20 seconds, over TCP and over uTP, or a proxy that tells the connection timed out;
+- refused: the peer refused the connection, directly or as the SOCKS5 proxy tells (its reply 5);
+- unreachable: no route to the peer, directly or as the proxy tells;
+- refused by the proxy: another refusal of the SOCKS5 proxy, by its rules or for its own failure;
+- closed the connection: the peer ended the connection before its handshake, as a peer does with a torrent it does not have;
+- left: the peer was connected, and its connection ended;
+- failed otherwise: another failure;
+- not dialed yet: the peer waits for a dial, or its first dial runs.
+
+A peer tried over both uTP and TCP is counted by TCP's answer.
 
 What to check:
 
@@ -162,4 +173,4 @@ On Linux 5.7 or later, Polyfin's own container needs no added capability.
 
 ## Health
 
-**System › Health** shows a **Torrents** panel while torrents are on: the route, a WireGuard tunnel's addresses and last handshake, the torrents playing, their peers and how many of them were reached over uTP, and what was shared since the start. The **Source cache** tells the part torrent pieces take. Under **Needs attention**, an error names a route that cannot carry the torrents and why, such as a WireGuard server that does not answer the handshake, a warning a proxy without `UDP ASSOCIATE`, and a warning a torrent that did not start in time in the last 15 minutes and why, until a torrent starts. Health waits 2 seconds for a route's check. A WireGuard tunnel's check runs in the background and gives the handshake its 8 seconds: past Health's 2, a server that did not answer is told as not answering, and Health then tells the tunnel's last check at once rather than waiting again. While Health is open, a tunnel found down is checked again 5 seconds after each check, so one that comes back stops being reported within 13 seconds, a few more when `Endpoint` names the server by a host name, which is then looked up again.
+**System › Health** shows a **Torrents** panel while torrents are on: the route, a WireGuard tunnel's addresses and last handshake, the torrents playing, their peers and how many of them were reached over uTP, and what was shared since the start. The **Source cache** tells the part torrent pieces take. Under **Needs attention**, an error names a route that cannot carry the torrents and why, such as a WireGuard server that does not answer the handshake, a warning a proxy without `UDP ASSOCIATE`, and a warning a torrent that did not start in time in the last 15 minutes and why, with its peers counted by how their last dial ended (see [When torrents do not start](#when-torrents-do-not-start)), until a torrent starts. Health waits 2 seconds for a route's check. A WireGuard tunnel's check runs in the background and gives the handshake its 8 seconds: past Health's 2, a server that did not answer is told as not answering, and Health then tells the tunnel's last check at once rather than waiting again. While Health is open, a tunnel found down is checked again 5 seconds after each check, so one that comes back stops being reported within 13 seconds, a few more when `Endpoint` names the server by a host name, which is then looked up again.

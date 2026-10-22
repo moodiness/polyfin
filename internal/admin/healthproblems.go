@@ -78,7 +78,8 @@ const (
 	// tells why (a torrent.RouteError's kind, or "no_route") and Name the
 	// interface or the proxy; or their proxy offers no UDP ASSOCIATE, so
 	// UDP trackers and the DHT are off; or a torrent did not start in time
-	// lately, Failure telling why (see torrentStartFailure).
+	// lately, Failure telling why (see torrentStartFailure) and Peers, when
+	// some were found, why they did not connect.
 	problemTorrentRoute = "torrent_route"
 	problemTorrentUDP   = "torrent_udp"
 	problemTorrentStart = "torrent_start"
@@ -122,10 +123,11 @@ const (
 // ("missing", "unreadable", "mismatch") and File for certificate files;
 // Error, Let's Encrypt's, for a renewal that failed; Expires for a
 // certificate close to its end, an error once it ended; Addon, with Name
-// and Failure, for a local folder whose searches failed. To is the
-// admin app's page that describes it, with its anchor. Transient ones are
-// not told as health problems: they come and go with the load, or, for
-// stopped connections, the connection_stopped event told them already.
+// and Failure, for a local folder whose searches failed; Peers for a
+// torrent that did not start. To is the admin app's page that describes
+// it, with its anchor. Transient ones are not told as health problems:
+// they come and go with the load, or, for stopped connections, the
+// connection_stopped event told them already.
 type healthProblemJSON struct {
 	Key       string           `json:"key"`
 	Code      string           `json:"code"`
@@ -148,6 +150,33 @@ type healthProblemJSON struct {
 	File      string           `json:"file,omitempty"`
 	Error     string           `json:"error,omitempty"`
 	Expires   *time.Time       `json:"expires,omitempty"`
+	Peers     *peerCountsJSON  `json:"peers,omitempty"`
+}
+
+// peerCountsJSON counts the peers a torrent that did not start found:
+// those connected, and the others by how their last dial or connection
+// ended (see torrent.PeerFailures).
+type peerCountsJSON struct {
+	Found       int `json:"found"`
+	Connected   int `json:"connected"`
+	TimedOut    int `json:"timedOut,omitempty"`
+	Refused     int `json:"refused,omitempty"`
+	Unreachable int `json:"unreachable,omitempty"`
+	Proxy       int `json:"proxy,omitempty"`
+	Closed      int `json:"closed,omitempty"`
+	Left        int `json:"left,omitempty"`
+	Other       int `json:"other,omitempty"`
+	Untried     int `json:"untried,omitempty"`
+}
+
+// newPeerCountsJSON counts the peers err found, nil for none.
+func newPeerCountsJSON(err *torrent.StartError) *peerCountsJSON {
+	if err.Found == 0 {
+		return nil
+	}
+	f := err.Unconnected
+	return &peerCountsJSON{Found: err.Found, Connected: err.Connected, TimedOut: f.TimedOut, Refused: f.Refused, Unreachable: f.Unreachable,
+		Proxy: f.Proxy, Closed: f.Closed, Left: f.Left, Other: f.Other, Untried: f.Untried}
 }
 
 // healthProblemsRoute answers the problems System › Health shows, errors
@@ -377,7 +406,7 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			}
 			if u := status.Unstarted; u != nil && status.RouteError == nil && h.now().Sub(status.UnstartedAt) < unstartedFor {
 				add(healthProblemJSON{Key: "torrents:start", Code: problemTorrentStart, Tone: notifications.SeverityWarning,
-					To: "/settings/torrents#torrent-route", Failure: torrentStartFailure(u)})
+					To: "/settings/torrents#torrent-route", Failure: torrentStartFailure(u), Peers: newPeerCountsJSON(u)})
 			}
 		}
 	}

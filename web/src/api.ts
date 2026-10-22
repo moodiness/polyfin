@@ -3535,6 +3535,23 @@ export type UnreadableSecret = {
 }
 
 /**
+ * The peers a torrent that did not start found: those connected, and the others by how their last
+ * dial or connection ended, each count left out at 0.
+ */
+export type TorrentPeerCounts = {
+  found: number
+  connected: number
+  timedOut?: number
+  refused?: number
+  unreachable?: number
+  proxy?: number
+  closed?: number
+  left?: number
+  other?: number
+  untried?: number
+}
+
+/**
  * Something Health shows as needing attention, as the server finds it: `key` names it while it
  * lasts, `code` tells what it is, with its details; `to` is the page that describes it, with its
  * anchor. `transient` ones are not told as health problems: they come and go with the load, or
@@ -3578,8 +3595,15 @@ export type HealthProblem = {
       name?: string
     }
   | { code: 'torrent_udp'; name: string }
-  /** A torrent did not start in time lately: `failure` tells why. */
-  | { code: 'torrent_start'; failure: 'no_udp' | 'refused' | 'no_peers' | 'silent' }
+  /**
+   * A torrent did not start in time lately: `failure` tells why, and `peers`, when some were found,
+   * why they did not connect.
+   */
+  | {
+      code: 'torrent_start'
+      failure: 'no_udp' | 'refused' | 'no_peers' | 'silent'
+      peers?: TorrentPeerCounts
+    }
   | { code: 'proxy_name_unresolved'; name: string }
   | { code: 'secrets_unreadable'; secrets: UnreadableSecret[] }
   | { code: 'secrets_plaintext' }
