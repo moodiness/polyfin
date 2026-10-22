@@ -600,8 +600,9 @@ func (a *App) checkUpdate(ctx context.Context, databaseURL string) {
 }
 
 // InstallUpdate downloads the offered release, stops Polyfin, and replaces
-// the app with it. It returns what to start once the app has quit. On a
-// failure, Polyfin runs on as it was.
+// the app with it. It returns what to start once the app has quit, nil
+// when nothing is. On a failure, Polyfin runs on as it was, and the menu
+// tells that the update could not be installed.
 func (a *App) InstallUpdate(ctx context.Context) (*exec.Cmd, error) {
 	offer := a.Status().Offer
 	if offer == nil || a.o.Updates == nil {
@@ -626,8 +627,9 @@ func (a *App) InstallUpdate(ctx context.Context) (*exec.Cmd, error) {
 	a.Stop(ctx)
 	cmd, err := update.Install(ctx, file, a.o.Updates.Kind, a.o.Executable)
 	if err != nil {
-		a.failUpdate(err)
+		// Starting clears the problems: the failure is told after it.
 		a.Start()
+		a.failUpdate(err)
 		return nil, err
 	}
 	a.logger.Info("The new version is installed: starting it", "version", offer.Version)

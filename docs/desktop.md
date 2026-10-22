@@ -52,15 +52,15 @@ The icon shows whether Polyfin runs: faded while it starts or is stopped. Its me
 
 | Item | What it does |
 | --- | --- |
-| The first line | What Polyfin is doing: starting, downloading FFmpeg, rebuilding the database's indexes (see [Updates](#updates)), running, stopping, or stopped. A second line tells about a problem, and opens the log folder: the key store that could not be read, FFmpeg that could not be downloaded, or an update that could not be installed |
+| The first line | What Polyfin is doing: starting, downloading FFmpeg or an update, rebuilding the database's indexes (see [Updates](#updates)), running, stopping, or stopped. A second line tells about a problem, and opens the log folder, whose `desktop.log` tells why: the key store that could not be read, FFmpeg that could not be downloaded, or an update that could not be installed |
 | Setup code | Shown until the administrator exists: copies the code and opens the admin app |
 | Open the admin app | Opens `http://localhost:8096/admin/` in the browser |
 | Open the web client | Opens jellyfin-web, at `http://localhost:8096/web/` (see [Web client](web-client.md)) |
-| Open the log folder | Opens the folder of the logs, in the system's file manager |
+| Open the log folder | Opens the folder of the logs in a window of the system's file manager, such as Explorer on Windows or Finder on macOS (see [Folders](#folders)) |
 | Copy the secret key | Copies the secret key from the system's key store to the clipboard, to keep with your backups (see [The secret key](#the-secret-key)) |
 | Stop Polyfin, Start Polyfin | Stops Polyfin, then its database, or starts them again, the app staying open |
 | Start with the computer | Whether the system starts the app when you sign in (see below) |
-| Install Polyfin `<version>` | Shown when a new version is out (see [Updates](#updates)) |
+| Install Polyfin `<version>` | Shown when a new version is out: downloads it, stops Polyfin, installs the new version and quits (see [Updates](#updates)) |
 | Quit Polyfin | Stops Polyfin, then its database, and quits: no process is left |
 
 Opening the app while it runs opens the admin app. The menu speaks the system's language when Polyfin does (English, French, German, Spanish, Italian or Portuguese, in Brazilian Portuguese), and English otherwise. When the system shows no icon, such as a Windows session without its taskbar, Polyfin starts all the same: after 30 seconds without its icon, the app writes an error to `desktop.log` (see [Folders](#folders)) and runs on without it, until `polyfin-desktop -quit` quits it (see [Quitting from a terminal](#quitting-from-a-terminal)).
@@ -128,9 +128,11 @@ When the key store cannot be read at a start, such as a Linux session without a 
 
 While **Check for new versions** is on, under **Settings › General**, Polyfin looks for new releases, as for the Docker image (see [New versions](administration.md#new-versions)). When one is out, the app asks GitHub for the release's package for its system, and the menu offers to install it. Installing it downloads the package, checks it against the SHA-256 GitHub gives for it, refusing it otherwise, stops Polyfin and its database, then:
 
-- **Windows:** runs the installer, which replaces the app;
+- **Windows:** opens the installer's window, as a download does, and quits: choose Next to replace the app, and its last page offers to start the new version;
 - **macOS:** replaces the app with the one of the disk image, and starts it;
 - **Linux:** replaces the AppImage with the new one, and starts it, or opens the `.deb` in the system's package installer.
+
+When the package cannot be downloaded, checked or installed, or the installer cannot start, Polyfin runs on as it was: the menu's second line says that the update could not be installed, and the menu offers it again.
 
 The data folder stays as it is: the new version upgrades the database's tables as it starts, as in Docker. When the new version's PostgreSQL sorts text with another ICU version, it first rebuilds the database's indexes, which follow the order of text, and records the new collation version, so that PostgreSQL stops warning of a mismatch: the menu's first line says so meanwhile, for seconds or a few minutes on a large library, and the log tells what was rebuilt. A development build offers no update.
 

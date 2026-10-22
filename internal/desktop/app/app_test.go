@@ -143,18 +143,10 @@ func waitFor(t *testing.T, a *App, what string, done func(Status) bool) Status {
 	return Status{}
 }
 
-// The app starts the cluster, then the server with its environment; shows
-// the setup code; opens the setup once; starts the server again when it
-// ends by itself; and stops both, leaving no process.
-func TestAppRunsAndStopsEverything(t *testing.T) {
-	inst := install(t)
-	data := t.TempDir()
-	port := listenPort(t)
-	t.Setenv("POLYFIN_LISTEN", "127.0.0.1:"+port)
-	t.Setenv("FAKE_POLYFIN_SERVER", "1")
-	t.Setenv("FAKE_POLYFIN_EXIT", "1")
-	t.Setenv("POLYFIN_SECRET_KEY", "from the environment, left out")
-	// The tools are there already, as after a first start.
+// readyTools lays out FFmpeg and ffprobe in the data folder, as after a
+// first start, and returns their manifest and folder.
+func readyTools(t *testing.T, data string) (tools.Manifest, string) {
+	t.Helper()
 	toolsDir := filepath.Join(data, "tools", "ffmpeg-9.0.2")
 	for _, p := range []string{"bin/ffmpeg", "bin/ffprobe"} {
 		if err := os.MkdirAll(filepath.Join(toolsDir, "bin"), 0o700); err != nil {
@@ -169,6 +161,21 @@ func TestAppRunsAndStopsEverything(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(toolsDir, ".polyfin-tools"), []byte(strings.Repeat("a", 64)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	return manifest, toolsDir
+}
+
+// The app starts the cluster, then the server with its environment; shows
+// the setup code; opens the setup once; starts the server again when it
+// ends by itself; and stops both, leaving no process.
+func TestAppRunsAndStopsEverything(t *testing.T) {
+	inst := install(t)
+	data := t.TempDir()
+	port := listenPort(t)
+	t.Setenv("POLYFIN_LISTEN", "127.0.0.1:"+port)
+	t.Setenv("FAKE_POLYFIN_SERVER", "1")
+	t.Setenv("FAKE_POLYFIN_EXIT", "1")
+	t.Setenv("POLYFIN_SECRET_KEY", "from the environment, left out")
+	manifest, toolsDir := readyTools(t, data)
 	keys := &fakeKeys{secrets: map[string]string{}}
 	var opened []string
 	login := &fakeLogin{}
