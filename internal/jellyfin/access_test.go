@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -266,6 +267,39 @@ func TestALosslessTrackConvertedLeavesTheVideoItsBitrate(t *testing.T) {
 	status, _, master := fetchText(t, p.url+source.TranscodingUrl)
 	if status != http.StatusOK || !strings.Contains(master, "RESOLUTION=1920x1080") {
 		t.Errorf("master playlist: %d %s", status, master)
+	}
+}
+
+// Within the 120 Mbit/s an app asks for on the local network, video it
+// cannot take is converted at about its source's bitrate, as Jellyfin
+// does: a 15 Mbit/s 10-bit HEVC source becomes H.264 at 26.25 Mbit/s,
+// which the master playlist announces with its peaks, and its DTS 5.1
+// track AAC 5.1 at 640 kb/s.
+func TestConvertedVideoKeepsItsSourcesBitrate(t *testing.T) {
+	t.Parallel()
+	p := playing(t)
+	analysis := p.remuxable(t)
+	analysis.Bitrate = 16_509_000
+	analysis.Streams[0] = media.Stream{Index: 0, Type: "audio", Codec: "dts", Default: true, Channels: 6, ChannelLayout: "5.1(side)",
+		SampleRate: 48000, Bitrate: 1_509_000}
+	analysis.Streams[1] = media.Stream{Index: 1, Type: "video", Codec: "hevc", Profile: "Main 10", Width: 1920, Height: 1080, FrameRate: 24,
+		AverageRate: 24, PixelFormat: "yuv420p10le", BitDepth: 10, Bitrate: 15_000_000}
+	p.storeAnalysis(t, p.versions[0], analysis)
+	needsEncoders(t)
+	p.permit(t, p.user, true, true, false)
+	answer := p.ask(t, p.token, p.movie, p.profile(t, "minimal"), map[string]any{"MediaSourceId": p.movie})
+	if len(answer.MediaSources) != 1 {
+		t.Fatalf("answer: %+v", answer)
+	}
+	source := answer.MediaSources[0]
+	if source.SupportsDirectPlay || !strings.Contains(source.TranscodingUrl, "&VideoBitrate=119360000&AudioBitrate=640000&") ||
+		!strings.Contains(source.TranscodingUrl, "allowVideoStreamCopy=false") {
+		t.Fatalf("%s", source.TranscodingUrl)
+	}
+	status, _, master := fetchText(t, p.url+source.TranscodingUrl)
+	if want := "BANDWIDTH=" + strconv.Itoa(26_250_000*3/2+640_000) + ","; status != http.StatusOK || !strings.Contains(master, want) ||
+		!strings.Contains(master, "RESOLUTION=1920x1080") {
+		t.Errorf("master playlist: %d %s, want %s", status, master, want)
 	}
 }
 

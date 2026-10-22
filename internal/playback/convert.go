@@ -2,6 +2,7 @@ package playback
 
 import (
 	"cmp"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -219,11 +220,13 @@ type ConversionSize struct {
 var videoEncoders = []struct{ codec, encoder string }{{"h264", "libx264"}, {"hevc", "libx265"}}
 
 // rungs are the heights video is converted to, with the least video bitrate
-// each needs and the most it uses. A GPU converts up to 4K; the processor
+// each needs and its usual one, which a conversion gets when its source's
+// bitrate is not known (see videoBitrate), and the lower qualities offered
+// to step down to (see Steps). A GPU converts up to 4K; the processor
 // stops at softwareHeight.
 var rungs = []struct {
-	height         int
-	least, ceiling int64
+	height       int
+	least, usual int64
 }{
 	{2160, 25_000_000, 40_000_000},
 	{1440, 12_000_000, 20_000_000},
@@ -292,14 +295,14 @@ func fits(video MediaStream, height int) bool {
 // encodes that codec, at the height the bitrate limit allows, up to 4K on a
 // GPU and 1080p on the processor, never larger than the source nor, when
 // they are positive, than the user's quality group and the settings' cap,
-// the bitrate being that height's, converted to SDR and deinterlaced as
-// needed. HDR is tone mapped on that GPU when it can (see toneMapsOnGPU),
-// else on the processor, up to the capabilities' ToneMappedHeight, unless
-// the tuning turns tone mapping off. It is nil when the profile takes
-// neither codec, and for HDR that cannot be converted: on the processor,
-// without FFmpeg's filters, or Dolby Vision with no base layer other
-// players read, which only NVIDIA's GPUs tone map and which without tone
-// mapping would show wrong colors.
+// at about the source's bitrate (see videoBitrate) up to the limit's,
+// converted to SDR and deinterlaced as needed. HDR is tone mapped on that
+// GPU when it can (see toneMapsOnGPU), else on the processor, up to the
+// capabilities' ToneMappedHeight, unless the tuning turns tone mapping
+// off. It is nil when the profile takes neither codec, and for HDR that
+// cannot be converted: on the processor, without FFmpeg's filters, or
+// Dolby Vision with no base layer other players read, which only NVIDIA's
+// GPUs tone map and which without tone mapping would show wrong colors.
 func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilities) *VideoConversion {
 	candidates := videoEncoders
 	if can.Tuning.PreferHEVC {
@@ -384,15 +387,80 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 		width, height = *video.Width, *video.Height
 	}
 	conversion.Width, conversion.Height = frame(rung.height, width, height)
-	conversion.Bitrate = rung.ceiling
+	conversion.Bitrate = videoBitrate(video, conversion.Codec, conversion.Width, conversion.Height, rung.usual)
 	if limits.Video > 0 {
 		conversion.Bitrate = min(conversion.Bitrate, limits.Video)
 	}
-	if video.BitRate != nil && *video.BitRate > 0 {
-		conversion.Bitrate = min(conversion.Bitrate, *video.BitRate)
-	}
 	conversion.Bitrate = max(conversion.Bitrate, 300_000)
 	return conversion
+}
+
+// videoBitrate is the bitrate of video converted to codec at width by
+// height, before any limit, as Jellyfin's encoder gives it: the source's,
+// for the share of its picture a smaller conversion keeps, which Jellyfin
+// does not take; up to two and a half times that below 3 Mb/s; more for
+// 10-bit video, converted to 8 bits; and more for a codec needing more
+// bits than the source's, H.264 taking 1/0.6 times HEVC's and VP9's, and
+// twice AV1's, below 30 Mb/s. usual is the bitrate when the source's is
+// not known.
+func videoBitrate(video MediaStream, codec string, width, height int, usual int64) int64 {
+	if video.BitRate == nil || *video.BitRate <= 0 {
+		return usual
+	}
+	source := *video.BitRate
+	bitrate := float64(source)
+	if video.Width != nil && video.Height != nil && *video.Width > 0 && *video.Height > 0 {
+		bitrate *= min(float64(width*height)/float64(*video.Width**video.Height), 1)
+	}
+	// Jellyfin's GetMinBitrate, "chosen from testing to improve low
+	// bitrate streams".
+	switch {
+	case bitrate <= 2_000_000:
+		bitrate = math.RoundToEven(bitrate * 2.5)
+	case bitrate <= 3_000_000:
+		bitrate *= 2
+	}
+	// GetBitDepthCompensatedBitrate, by the source's bitrate, for video
+	// whose depth is not known too.
+	if video.BitDepth == nil || *video.BitDepth > 8 {
+		factor := 1.05
+		switch {
+		case source <= 4_000_000:
+			factor = 1.5
+		case source <= 8_000_000:
+			factor = 1.2
+		case source <= 12_000_000:
+			factor = 1.1
+		}
+		bitrate = math.RoundToEven(bitrate * factor)
+	}
+	// ScaleBitrate: never less than the source's.
+	factor := max(codecEfficiency(codec)/codecEfficiency(video.Codec), 1)
+	switch {
+	case bitrate <= 500_000:
+		factor = max(factor, 4)
+	case bitrate <= 1_000_000:
+		factor = max(factor, 3)
+	case bitrate <= 2_000_000:
+		factor = max(factor, 2.5)
+	case bitrate <= 3_000_000:
+		factor = max(factor, 2)
+	case bitrate >= 30_000_000:
+		factor = 1
+	}
+	return int64(math.RoundToEven(bitrate * factor))
+}
+
+// codecEfficiency is the share of H.264's bitrate a codec needs for the
+// same picture, as Jellyfin counts it: 0.6 for HEVC and VP9, 0.5 for AV1.
+func codecEfficiency(codec string) float64 {
+	switch strings.ToLower(codec) {
+	case "hevc", "h265", "vp9":
+		return 0.6
+	case "av1":
+		return 0.5
+	}
+	return 1
 }
 
 // frame is the size of video of width by height, 0 when not known,
@@ -421,12 +489,12 @@ const steps = 2
 
 // Steps are the lower qualities a conversion of video of width by height,
 // 0 when not known, offers apps to step down to, tallest first: up to two
-// rungs of the ladder below its own, each the tallest whose bitrate is at
-// most half that of the quality above, down to 360p. 1080p at 10 Mb/s
-// offers 720p at 5 Mb/s and 480p at 2 Mb/s. Each keeps the conversion's
-// codec, encoder and tone mapping, at its rung's size, framed as a
-// conversion to that rung would be, and bitrate; Size tells what set the
-// first quality's.
+// rungs of the ladder below its own, each the tallest whose usual bitrate
+// is at most half that of the quality above, at that bitrate, down to
+// 360p. 1080p at 26 Mb/s or at 10 Mb/s offers 720p at 5 Mb/s and 480p at
+// 2 Mb/s. Each keeps the conversion's codec, encoder and tone mapping, at
+// its rung's size, framed as a conversion to that rung would be; Size
+// tells what set the first quality's.
 func (v *VideoConversion) Steps(width, height int) []VideoConversion {
 	// The rung the conversion is at: the smallest whose frame holds it.
 	above := rungs[0].height
@@ -441,14 +509,14 @@ func (v *VideoConversion) Steps(width, height int) []VideoConversion {
 		if len(lower) == steps {
 			break
 		}
-		if r.height >= above || r.ceiling > bitrate/2 {
+		if r.height >= above || r.usual > bitrate/2 {
 			continue
 		}
 		step := *v
 		step.Width, step.Height = frame(r.height, width, height)
-		step.Bitrate = r.ceiling
+		step.Bitrate = r.usual
 		lower = append(lower, step)
-		above, bitrate = r.height, r.ceiling
+		above, bitrate = r.height, r.usual
 	}
 	return lower
 }

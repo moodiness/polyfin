@@ -35,11 +35,14 @@ func TestConversionsStepDownTheLadder(t *testing.T) {
 		{"1080p at 7 Mb/s", "h264", software, Limits{Bitrate: 7_000_000, Video: 7_000_000}, sdr(1920, 1080),
 			"1920x1080@7000000 960x540@3000000 640x360@1000000"},
 		{"4K on a GPU", "hevc", nvidia, Limits{}, sdr(3840, 2160), "3840x2160@40000000 2560x1440@20000000 1920x1080@10000000"},
+		// The first keeps about the source's bitrate; the others halve
+		// from it.
+		{"a 15 Mb/s HEVC source", "h264", software, Limits{}, MediaStream{Codec: "hevc", VideoRange: "SDR", Width: new(1920), Height: new(1080),
+			BitDepth: new(10), BitRate: new(int64(15_000_000))}, "1920x1080@26250000 1280x720@5000000 852x480@2000000"},
 		// Nothing below 360p, nor half a bitrate too low for it.
 		{"480p", "h264", software, Limits{Server: 480}, sdr(1920, 1080), "852x480@2000000 640x360@1000000"},
 		{"360p", "h264", software, Limits{Server: 360}, sdr(1920, 1080), "640x360@1000000"},
-		{"a source at 1.5 Mb/s", "h264", software, Limits{}, MediaStream{Codec: "mpeg2video", VideoRange: "SDR", Width: new(1920), Height: new(1080),
-			BitRate: new(int64(1_500_000))}, "1920x1080@1500000"},
+		{"1.5 Mb/s", "h264", software, Limits{Bitrate: 1_500_000, Video: 1_500_000}, sdr(1920, 1080), "960x540@1500000"},
 	} {
 		first := ConvertVideo(test.codecs, test.limits, test.video, test.can)
 		if first == nil {

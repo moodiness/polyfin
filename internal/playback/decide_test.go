@@ -326,7 +326,9 @@ func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
 		},
 	}
 	software := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true}
-	sdr720 := &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 5_000_000, ToneMap: true}
+	// The 720p keep the share of the source's 55 Mb/s their picture is, as
+	// H.264 does HEVC's: 55 / 9 × 1.05 / 0.6.
+	sdr720 := &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 10_694_445, ToneMap: true}
 	stereo := &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}
 	tests := []struct {
 		name    string
@@ -394,7 +396,7 @@ func TestConvertedVideoTakesWhatTheAudioSentLeaves(t *testing.T) {
 		// Chrome takes no TrueHD: it is converted to AAC in stereo.
 		{"TrueHD converted", source("truehd", 6), 1080, 9_616_000, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
 		// Chrome takes FLAC in stereo over HLS: it is copied.
-		{"FLAC copied", source("flac", 2), 720, 5_000_000, nil},
+		{"FLAC copied", source("flac", 2), 720, 5_800_000, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got := Decide(readDeviceProfile(t, "jellyfin-web-chrome"), test.source, options)
@@ -412,7 +414,7 @@ func TestConvertedVideoTakesWhatTheAudioSentLeaves(t *testing.T) {
 func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 	can := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true}
 	video := func(width, height int, bitrate int64, interlaced bool) MediaStream {
-		stream := MediaStream{Codec: "mpeg2video", VideoRange: "SDR", Width: new(width), Height: new(height), IsInterlaced: interlaced}
+		stream := MediaStream{Codec: "mpeg2video", VideoRange: "SDR", Width: new(width), Height: new(height), IsInterlaced: interlaced, BitDepth: new(8)}
 		if bitrate > 0 {
 			stream.BitRate = new(bitrate)
 		}
@@ -427,7 +429,7 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 	}{
 		{"no limit", "h264", 0, video(3840, 2160, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 1080, Bitrate: 10_000_000}},
 		{"never larger than the source", "h264", 0, video(1280, 720, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 10_000_000}},
-		{"never more than the source's bitrate", "h264", 0, video(1920, 1080, 4_000_000, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 1080, Bitrate: 4_000_000}},
+		{"the source's bitrate", "h264", 0, video(1920, 1080, 4_000_000, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 1080, Bitrate: 4_000_000}},
 		{"a low limit", "h264", 1_000_000, video(1920, 1080, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 852, Height: 480, Bitrate: 1_000_000}},
 		{"a very low limit", "h264", 100_000, video(1920, 800, 0, true), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 640, Height: 266, Bitrate: 300_000, Deinterlace: true}},
 		// A 2.40:1 picture fits 1080p's 16:9 frame by its width.
