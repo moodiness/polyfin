@@ -482,12 +482,13 @@ func (s *Service) scanMusic(ctx context.Context, id accounts.ID, list listing, r
 			}
 			info, reason := named(rel, info)
 			// A file read again unchanged, for its gains, keeps its
-			// measure.
+			// measure; a new one is added now by the server's clock (see
+			// store).
 			_, err = s.db.Exec(groupCtx, `INSERT INTO local_tracks (addon_id, path, size, modified, title, artist, album, album_artist, artists,
 					artist_ids, album_artists, album_artist_ids, album_id, track, disc, year, genres, duration, codec, container, sample_rate,
-					bit_depth, cover, lyrics, reason, track_gain, album_gain)
+					bit_depth, cover, lyrics, reason, track_gain, album_gain, added_at)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
-					$26, $27)
+					$26, $27, $28)
 				ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, title = $5, artist = $6, album = $7, album_artist = $8,
 					artists = $9, artist_ids = $10, album_artists = $11, album_artist_ids = $12, album_id = $13, track = $14, disc = $15,
 					year = $16, genres = $17, duration = $18, codec = $19, container = $20, sample_rate = $21, bit_depth = $22, cover = $23,
@@ -498,7 +499,7 @@ func (s *Service) scanMusic(ctx context.Context, id accounts.ID, list listing, r
 				id, rel, f.size, f.modified, info.title, info.artist, info.album, info.albumArtist, nonNil(info.artists),
 				artistIDs(info.artists), nonNil(info.albumArtists), artistIDs(info.albumArtists), nameID("al", info.albumArtist, info.album),
 				info.track, info.disc, info.year, nonNil(info.genres), info.duration, info.codec, audioContainers[strings.ToLower(path.Ext(rel))],
-				info.sampleRate, info.bitDepth, info.cover, info.lyrics, reason, info.trackGain, info.albumGain)
+				info.sampleRate, info.bitDepth, info.cover, info.lyrics, reason, info.trackGain, info.albumGain, s.now())
 			return err
 		})
 	}

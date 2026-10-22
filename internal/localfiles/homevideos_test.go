@@ -327,7 +327,7 @@ func TestHomeVideosFollowTheirFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	scan(family.ID)
-	added := time.Now()
+	added := e.service.now()
 
 	move(filepath.Join(dir, "Beach.mp4"), filepath.Join(dir, "Beach day.mp4"))
 	move(filepath.Join(dir, "Party.mp4"), filepath.Join(dir, "2019/Party.mp4"))
@@ -371,7 +371,7 @@ func TestHomeVideosFollowTheirFiles(t *testing.T) {
 	if late := e.files(second.ID)["Small one.mp4"]; late != before["Small.mp4"] {
 		t.Errorf("moved into a folder scanned first: %s, was %s", late, before["Small.mp4"])
 	}
-	if titles, total, err := e.service.Added(t.Context(), added, time.Now().Add(time.Minute), 10); err != nil || total != 2 {
+	if titles, total, err := e.service.Added(t.Context(), added, e.service.now().Add(time.Minute), 10); err != nil || total != 2 {
 		t.Errorf("added: %+v %d %v", titles, total, err)
 	}
 

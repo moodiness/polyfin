@@ -465,7 +465,8 @@ func contents(size int64, print []byte) string {
 // changed, probed again, has its frame made again. A video stored before
 // keeps its identifier, and a new one takes a new one, or that of the
 // video gone it is when it is recognizable, no other video of its scan
-// having its contents (see recognize).
+// having its contents (see recognize), with when that one was first found;
+// else it is added now by the server's clock (see store).
 func (s *Service) storeVideo(ctx context.Context, id accounts.ID, rel string, f found, t homeTitle, probe videoProbe, changed bool,
 	print []byte, recognizable bool) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
@@ -479,14 +480,17 @@ func (s *Service) storeVideo(ctx context.Context, id accounts.ID, rel string, f 
 				videoID, added, recognized = gone, at, true
 			}
 		}
+		if !recognized {
+			added = new(s.now())
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO local_files (addon_id, path, size, modified, unit, title, stremio_id, name, title_year, matched_by,
 					added_at)
-				VALUES ($1, $2, $3, $4, $2, $5, $6, $5, $7, $8, CASE WHEN $9 THEN $10::timestamptz ELSE now() END)
+				VALUES ($1, $2, $3, $4, $2, $5, $6, $5, $7, $8, $9)
 				ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, unit = $2, title = $5, year = NULL, season = NULL,
 					episode = NULL, last_episode = NULL, height = NULL,
 					stremio_id = CASE WHEN local_files.matched_by = $8 THEN local_files.stremio_id ELSE $6 END,
 					imdb_id = '', tmdb_id = '', name = $5, poster = '', title_year = $7, matched_by = $8, reason = '', nfo_id = ''`,
-			id, rel, f.size, f.modified, t.name, videoID, t.released.Year(), byOwn, recognized, added); err != nil {
+			id, rel, f.size, f.modified, t.name, videoID, t.released.Year(), byOwn, added); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO local_videos (addon_id, path, size, modified, created, duration, hdr, released, dated_by, plot,

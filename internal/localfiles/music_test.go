@@ -564,7 +564,7 @@ func TestAddedTracksAreCountedByAlbum(t *testing.T) {
 	ffmpeg, ffprobe := musicTools(t)
 	e := newEnv(t)
 	e.service.UseTools(ffprobe, ffmpeg)
-	since := time.Now().Add(-time.Second)
+	since := e.service.now().Add(-time.Second)
 	dir := t.TempDir()
 	for _, name := range []string{"01 One.flac", "02 Two.flac"} {
 		tone(t, ffmpeg, filepath.Join(dir, "Band", "Early", name), map[string]string{"artist": "Band", "album": "Early"}, "")
@@ -572,7 +572,7 @@ func TestAddedTracksAreCountedByAlbum(t *testing.T) {
 	tone(t, ffmpeg, filepath.Join(dir, "stray.flac"), nil, "")
 	e.folder(KindMovies, map[string]int{"The General (1926).mkv": 10})
 	e.musicFolder(dir)
-	added, total, err := e.service.Added(t.Context(), since, time.Now().Add(time.Minute), 10)
+	added, total, err := e.service.Added(t.Context(), since, e.service.now().Add(time.Minute), 10)
 	if err != nil || total != 4 || len(added) != 2 || added[0] != (Added{Name: "Early", Kind: KindMusic, Files: 2}) || added[1].Kind != KindMovies {
 		t.Errorf("added: %+v, %d files, %v", added, total, err)
 	}
