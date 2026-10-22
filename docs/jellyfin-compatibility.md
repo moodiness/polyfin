@@ -80,13 +80,13 @@ All results stay within the user's libraries, parental control and blocked genre
 
 ### Search suggestions
 
-Before anything is typed, jellyfin-web's search page shows Suggestions: movies and series picked at random among the first page of each of the user's libraries, their favorite and liked titles first. They stay within the user's libraries, parental control and blocked genres, without the titles they hid.
+Before anything is typed, jellyfin-web's search page shows Suggestions: the user's favorite and liked titles first, then movies and series from the top of each of the user's libraries, in their catalog's order: the most popular first in a popular catalog. The libraries are mixed, one title of each in turn, and the picks change each time the page opens, each library giving one of its next two titles at random. They stay within the user's libraries, parental control and blocked genres, without the titles they hid.
 
 **Compared with Jellyfin:**
 
-- Jellyfin picks suggestions among everything; Polyfin picks among the first page of each library.
+- Jellyfin picks suggestions at random among everything; Polyfin picks among the first page of each library, from its top, as a remote catalog puts its titles forward.
 
-**For app developers:** `/Items` without `ParentId` answers such suggestions, as `/Items/Suggestions` picks them, when it asks `Recursive=true` for `Movie`, `Series` or `MusicArtist` only, sorted by `Random`, alone or with `IsFavoriteOrLiked`, which puts favorite and liked titles first.
+**For app developers:** `/Items` without `ParentId` answers such suggestions when it asks `Recursive=true` for `Movie`, `Series` or `MusicArtist` only, sorted by `Random`, alone or with `IsFavoriteOrLiked`, which puts favorite and liked titles first. `/Items/Suggestions` still picks at random among the first page of each library, as Jellyfin picks at random.
 
 ### Movie recommendations
 

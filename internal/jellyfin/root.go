@@ -227,13 +227,15 @@ func (h *Handler) suggestions(w http.ResponseWriter, r *http.Request) {
 	matches := func(list []string, value string) bool {
 		return len(list) == 0 || slices.ContainsFunc(list, func(v string) bool { return strings.EqualFold(v, value) })
 	}
-	pool, err := h.suggestionPool(r, user, func(item library.Item) bool {
+	libraries, err := h.suggestionCandidates(r, user, func(item library.Item) bool {
 		return matches(types, itemTypes[item.Kind]) && matches(media, mediaType(item.Kind))
 	})
 	if err != nil {
 		h.browseError(w, r, err)
 		return
 	}
+	pool := slices.Concat(libraries...)
+	rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
 	from := min(max(start, 0), len(pool))
 	to := len(pool)
 	if limit >= 0 {
@@ -251,25 +253,54 @@ func (h *Handler) suggestions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: total, StartIndex: max(start, 0)})
 }
 
-// suggestionPool is the items keep keeps among the first page of each of
-// the user's libraries, each once, in random order.
-func (h *Handler) suggestionPool(r *http.Request, user accounts.User, keep func(library.Item) bool) ([]library.Item, error) {
+// suggestionCandidates is, for each of the user's libraries, the titles
+// keep keeps on its first page, in the catalog's order, each title in the
+// first library that has it.
+func (h *Handler) suggestionCandidates(r *http.Request, user accounts.User, keep func(library.Item) bool) ([][]library.Item, error) {
 	pages, err := h.firstPages(r, user)
 	if err != nil {
 		return nil, err
 	}
 	seen := map[accounts.ID]bool{}
-	var pool []library.Item
+	libraries := make([][]library.Item, 0, len(pages))
 	for _, page := range pages {
+		var titles []library.Item
 		for _, item := range page.Items {
 			if !seen[item.ID] && keep(item) {
 				seen[item.ID] = true
-				pool = append(pool, item)
+				titles = append(titles, item)
 			}
 		}
+		if len(titles) > 0 {
+			libraries = append(libraries, titles)
+		}
 	}
-	rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
-	return pool, nil
+	return libraries, nil
+}
+
+// topPickWindow is how many of a library's next titles each round of
+// topPicks picks among.
+const topPickWindow = 2
+
+// topPicks orders the libraries' titles, each in its catalog's order, round
+// by round: each round, the libraries in a new random order each give one of
+// their next topPickWindow titles at random. A library's first titles, its
+// most popular in a popular catalog, come first, the libraries mixed, and
+// the picks vary between calls. It takes the libraries' slices over.
+func topPicks(libraries [][]library.Item) []library.Item {
+	var picks []library.Item
+	for {
+		libraries = slices.DeleteFunc(libraries, func(titles []library.Item) bool { return len(titles) == 0 })
+		if len(libraries) == 0 {
+			return picks
+		}
+		rand.Shuffle(len(libraries), func(i, j int) { libraries[i], libraries[j] = libraries[j], libraries[i] })
+		for i, titles := range libraries {
+			n := rand.IntN(min(topPickWindow, len(titles)))
+			picks = append(picks, titles[n])
+			libraries[i] = slices.Delete(titles, n, n+1)
+		}
+	}
 }
 
 // randomTitles reports whether a listing without a folder asks for titles
@@ -293,14 +324,17 @@ func randomTitles(r *http.Request) bool {
 }
 
 // randomListing answers a listing of titles at random (see randomTitles)
-// as suggestions do, with the user's favorite and liked titles first when
-// it sorts by them.
+// with the top titles of the user's libraries (see topPicks), the user's
+// favorite and liked ones first when it sorts by them. Jellyfin picks at
+// random among everything, which a remote catalog cannot list: its first
+// titles are those it puts forward.
 func (h *Handler) randomListing(w http.ResponseWriter, r *http.Request, user accounts.User, start, limit int) {
-	pool, err := h.suggestionPool(r, user, itemTypeFilter(r))
+	libraries, err := h.suggestionCandidates(r, user, itemTypeFilter(r))
 	if err != nil {
 		h.browseError(w, r, err)
 		return
 	}
+	pool := topPicks(libraries)
 	from := min(max(start, 0), len(pool))
 	to := min(from+limit, len(pool))
 	// Sorting by favorites needs the state of every title, a page only
