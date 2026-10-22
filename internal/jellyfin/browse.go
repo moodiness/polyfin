@@ -469,7 +469,11 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			h.narrowedListing(w, r, user, names, start, limit)
 			return
 		}
-		// Without a folder, Jellyfin apps ask for whole-server listings,
+		if randomTitles(r) {
+			h.randomListing(w, r, user, start, limit)
+			return
+		}
+		// Other listings without a folder are whole-server listings,
 		// which remote catalogs cannot answer.
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
 		return

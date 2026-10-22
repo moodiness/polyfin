@@ -223,26 +223,17 @@ func (h *Handler) suggestions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	pages, err := h.firstPages(r, user)
-	if err != nil {
-		h.browseError(w, r, err)
-		return
-	}
 	types, media := listQuery(r, "type"), listQuery(r, "mediaType")
 	matches := func(list []string, value string) bool {
 		return len(list) == 0 || slices.ContainsFunc(list, func(v string) bool { return strings.EqualFold(v, value) })
 	}
-	seen := map[accounts.ID]bool{}
-	var pool []library.Item
-	for _, page := range pages {
-		for _, item := range page.Items {
-			if !seen[item.ID] && matches(types, itemTypes[item.Kind]) && matches(media, mediaType(item.Kind)) {
-				seen[item.ID] = true
-				pool = append(pool, item)
-			}
-		}
+	pool, err := h.suggestionPool(r, user, func(item library.Item) bool {
+		return matches(types, itemTypes[item.Kind]) && matches(media, mediaType(item.Kind))
+	})
+	if err != nil {
+		h.browseError(w, r, err)
+		return
 	}
-	rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
 	from := min(max(start, 0), len(pool))
 	to := len(pool)
 	if limit >= 0 {
@@ -258,4 +249,75 @@ func (h *Handler) suggestions(w http.ResponseWriter, r *http.Request) {
 		total = len(pool)
 	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: total, StartIndex: max(start, 0)})
+}
+
+// suggestionPool is the items keep keeps among the first page of each of
+// the user's libraries, each once, in random order.
+func (h *Handler) suggestionPool(r *http.Request, user accounts.User, keep func(library.Item) bool) ([]library.Item, error) {
+	pages, err := h.firstPages(r, user)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[accounts.ID]bool{}
+	var pool []library.Item
+	for _, page := range pages {
+		for _, item := range page.Items {
+			if !seen[item.ID] && keep(item) {
+				seen[item.ID] = true
+				pool = append(pool, item)
+			}
+		}
+	}
+	rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
+	return pool, nil
+}
+
+// randomTitles reports whether a listing without a folder asks for titles
+// at random, as jellyfin-web's search page asks for its Suggestions before
+// anything is typed: through the folders, sorted at random, favorite and
+// liked titles first or not, of movies, series or music artists only.
+func randomTitles(r *http.Request) bool {
+	oneOf := func(names ...string) func(string) bool {
+		return func(value string) bool {
+			return slices.ContainsFunc(names, func(name string) bool { return strings.EqualFold(name, value) })
+		}
+	}
+	isNot := func(names ...string) func(string) bool {
+		in := oneOf(names...)
+		return func(value string) bool { return !in(value) }
+	}
+	recursive, _ := boolQuery(r, "recursive")
+	sorts, include := listQuery(r, "sortBy"), listQuery(r, "includeItemTypes")
+	return recursive && slices.ContainsFunc(sorts, oneOf("Random")) && !slices.ContainsFunc(sorts, isNot("Random", "IsFavoriteOrLiked")) &&
+		len(include) > 0 && !slices.ContainsFunc(include, isNot("Movie", "Series", "MusicArtist"))
+}
+
+// randomListing answers a listing of titles at random (see randomTitles)
+// as suggestions do, with the user's favorite and liked titles first when
+// it sorts by them.
+func (h *Handler) randomListing(w http.ResponseWriter, r *http.Request, user accounts.User, start, limit int) {
+	pool, err := h.suggestionPool(r, user, itemTypeFilter(r))
+	if err != nil {
+		h.browseError(w, r, err)
+		return
+	}
+	from := min(max(start, 0), len(pool))
+	to := min(from+limit, len(pool))
+	// Sorting by favorites needs the state of every title, a page only
+	// that of its own.
+	liked := slices.ContainsFunc(listQuery(r, "sortBy"), func(key string) bool { return strings.EqualFold(key, "IsFavoriteOrLiked") })
+	described := pool[from:to]
+	if liked {
+		described = pool
+	}
+	state, err := h.userState(r.Context(), user, described)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	if liked {
+		slices.SortStableFunc(pool, func(a, b library.Item) int { return compareBy("IsFavoriteOrLiked", b, a, state) })
+	}
+	items := h.listDtos(r, user, pool[from:to], requestedFields(r), state)
+	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(pool), StartIndex: start})
 }

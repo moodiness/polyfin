@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"slices"
 	"testing"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 func TestRootFolderCountsAndSuggestionsAnswerAsJellyfin(t *testing.T) {
@@ -70,5 +72,83 @@ func TestRootFolderCountsAndSuggestionsAnswerAsJellyfin(t *testing.T) {
 	e.get(t, "/Items/Suggestions?mediaType=Video&enableTotalRecordCount=true", e.member, &all)
 	if all.TotalRecordCount != 3 || len(all.Items) != 3 {
 		t.Errorf("video suggestions: %d %v", all.TotalRecordCount, itemNames(all.Items))
+	}
+}
+
+// emptySearchSuggestions is what jellyfin-web asks for the Suggestions of
+// its search page before anything is typed.
+const emptySearchSuggestions = "/Items?sortBy=IsFavoriteOrLiked&sortBy=Random&includeItemTypes=Movie,Series,MusicArtist&limit=20&recursive=true"
+
+// The empty search page's Suggestions list titles picked at random from the
+// user's libraries, as /Items/Suggestions picks them, their favorite and
+// liked ones first: only what they may see, in the libraries they see,
+// without the titles they hid.
+func TestEmptySearchSuggestionsListTheTitlesTheUserSees(t *testing.T) {
+	t.Parallel()
+	e := newEdited(t)
+	e.user("calm", func(c *accounts.UserChanges) { c.BlockedGenres = &[]string{"crime"} })
+	suggested := func(token string) []string {
+		t.Helper()
+		var page QueryResult
+		if status := e.get(t, emptySearchSuggestions, token, &page); status != http.StatusOK || page.TotalRecordCount != len(page.Items) {
+			t.Fatalf("suggestions: %d %d %v", status, page.TotalRecordCount, itemNames(page.Items))
+		}
+		return itemNames(page.Items)
+	}
+	same := func(got []string, want ...string) bool {
+		return len(got) == len(want) && !slices.ContainsFunc(want, func(name string) bool { return !slices.Contains(got, name) })
+	}
+	if got := suggested(e.member); !same(got, "Allowed", "Restricted", "Unrated", "Show") {
+		t.Errorf("member's suggestions: %v", got)
+	}
+	if got := suggested(e.child); !same(got, "Allowed", "Unrated") {
+		t.Errorf("child's suggestions: %v", got)
+	}
+	if got := suggested(e.signIn("calm", "phone")); !same(got, "Allowed", "Unrated") {
+		t.Errorf("suggestions without the blocked genre: %v", got)
+	}
+
+	// A favorite and a liked title come first.
+	for _, path := range []string{"/Users/" + e.memberID + "/FavoriteItems/" + e.ids["Unrated"], "/UserItems/" + e.ids["Show"] + "/Rating?likes=true"} {
+		if status, body := e.call(http.MethodPost, path, app("tv", e.member), nil); status != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, status, body)
+		}
+	}
+	for range 3 {
+		if got := suggested(e.member); len(got) != 4 || !same(got[:2], "Unrated", "Show") {
+			t.Errorf("favorite and liked first: %v", got)
+		}
+	}
+
+	// A hidden title and a hidden library are left out.
+	if status, body := e.call(http.MethodPost, "/Polyfin/UserItems/"+e.ids["Restricted"]+"/Hidden", app("tv", e.member), nil); status != http.StatusNoContent {
+		t.Fatalf("hiding a title: %d %s", status, body)
+	}
+	member, _ := accounts.ParseID(e.memberID)
+	shows, _ := accounts.ParseID(e.ids["Shows"])
+	if _, err := e.store.UpdateUser(t.Context(), member, accounts.UserChanges{HiddenLibraries: &[]accounts.ID{shows}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := suggested(e.member); !slices.Equal(got, []string{"Unrated", "Allowed"}) {
+		t.Errorf("suggestions without the hidden title and library: %v", got)
+	}
+}
+
+// Other listings without a folder still answer none: only the empty search
+// page's Suggestions are answered from the user's libraries.
+func TestOtherListingsWithoutAFolderStayEmpty(t *testing.T) {
+	t.Parallel()
+	e := newEdited(t)
+	for _, path := range []string{
+		"/Items?sortBy=DateCreated&sortOrder=Descending&includeItemTypes=Movie,Series&limit=20&recursive=true",
+		"/Items?sortBy=Random&includeItemTypes=Movie,Episode&limit=20&recursive=true",
+		"/Items?sortBy=Random&limit=20&recursive=true",
+		"/Items?sortBy=IsFavoriteOrLiked&sortBy=Random&includeItemTypes=Movie,Series&limit=20",
+		"/Items?includeItemTypes=Movie,Series&recursive=true",
+	} {
+		var page QueryResult
+		if status := e.get(t, path, e.member, &page); status != http.StatusOK || len(page.Items) != 0 || page.TotalRecordCount != 0 {
+			t.Errorf("%s: %d %d %v", path, status, page.TotalRecordCount, itemNames(page.Items))
+		}
 	}
 }

@@ -77,6 +77,16 @@ All results stay within the user's libraries, parental control and blocked genre
 
 **For app developers:** `/Search/Hints` answers from the same search as `/Items`, without its channels and programmes.
 
+### Search suggestions
+
+Before anything is typed, jellyfin-web's search page shows Suggestions: movies and series picked at random among the first page of each of the user's libraries, their favorite and liked titles first. They stay within the user's libraries, parental control and blocked genres, without the titles they hid.
+
+**Compared with Jellyfin:**
+
+- Jellyfin picks suggestions among everything; Polyfin picks among the first page of each library.
+
+**For app developers:** `/Items` without `ParentId` answers such suggestions, as `/Items/Suggestions` picks them, when it asks `Recursive=true` for `Movie`, `Series` or `MusicArtist` only, sorted by `Random`, alone or with `IsFavoriteOrLiked`, which puts favorite and liked titles first.
+
 ### Movie recommendations
 
 For each of the last movies the user played, recommendations give the "Because you watched" titles similar to it. They come from the similar titles of title pages, without those already played. With **Similar titles** off there are none.
