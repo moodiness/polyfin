@@ -11,7 +11,7 @@ Polyfin picks the lightest way an app can play a file:
 - **Audio conversion:** when the app cannot take the audio, Polyfin converts the audio.
 - **Video conversion:** when the app cannot take the video, or must have image subtitles (PGS, VobSub, DVB) burned in, Polyfin converts the video, HDR to SDR included. A text copy of a PGS or VobSub track, with **Turn picture subtitles into text** on, spares that conversion once it is ready. See [Subtitles](subtitles.md).
 
-Video converts on a GPU when one is available, with the methods of the system Polyfin runs on (see [GPU methods per system](#gpu-methods-per-system)): an NVIDIA GPU through NVENC, or an AMD or Intel GPU through VAAPI, on Linux. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. For how apps choose between versions of a title, see [Playback](playback.md).
+Video converts on a GPU when one is available, with the methods of the system Polyfin runs on (see [GPU methods per system](#gpu-methods-per-system)): an NVIDIA GPU through NVENC, or an AMD or Intel GPU through VAAPI, on Linux. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. Converted H.264 is in the High profile the master playlist announces, from x264 on the processor as from every GPU; converted HEVC is in the Main profile. For how apps choose between versions of a title, see [Playback](playback.md).
 
 With **Say in version names how they play** on, the default, apps see in each version's name which of these ways it takes: "(direct play)", "(direct stream)" when its tracks are copied into HLS, "(converted: reason)", or "(cannot play here)" when it needs a conversion the server or the user may not have. See [Version names](playback.md#version-names).
 
@@ -24,11 +24,13 @@ Converted video is never larger than its source. It is smaller when one of these
 - **HDR converted by the processor:** up to **Maximum quality of HDR converted by the processor**, 720p or 1080p with **Automatic**, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 - **Quality group:** the user's, set on their page under **Users**.
 - **Maximum quality of converted video:** under **Settings › Conversion**.
-- **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower.
+- **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower. The video gets the limit less the bitrate of the audio sent: the converted audio's, 192 kb/s in stereo by default (see [Audio](#audio)), or the track's own when it is copied. A lossless track of several Mb/s converted to stereo AAC thus leaves 1080p 9.8 Mb/s within 10 Mb/s. The `TranscodingUrl` writes the two as `VideoBitrate` and `AudioBitrate`.
 
 When two limits are equal, the user's quality group is named first, then **Maximum quality of converted video**, then the GPU or the processor. The bitrate is named only when it allows less than all of them.
 
 On Home in the admin app, a playback's **Details** show which one limited the size, in the **Smaller than the source** row: for instance "720p at most: HDR converted by the processor", "Quality group: 720p" or "Bitrate allowed by the app: 5.6 Mbps". The row does not show when the video keeps the source's size.
+
+Jellyfin takes off the limit its own estimate of the audio: 384 kb/s for stereo AAC and 640 kb/s for 5.1 when it converts, or the track's bitrate when it copies it, each capped by a share of the limit (1.5 Mb/s within 10 Mb/s). Polyfin takes off what it sends, so its video gets about 200 kb/s more when the audio is converted to stereo; a copied track above that cap leaves its video less than in Jellyfin.
 
 ## Adaptive quality
 
