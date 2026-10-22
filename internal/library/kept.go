@@ -152,7 +152,8 @@ func refreshing(ctx context.Context) bool {
 // answer; a read that refreshes (see withRefreshing) waits for the addon's
 // answer to a page past its refresh age, and takes the kept one if the
 // addon fails. A search's page is kept apart, for searchTTL, and never
-// refreshed: every term is a new page, seldom read again.
+// refreshed: every term is a new page, seldom read again. An empty one is
+// kept emptySearchLife only.
 func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
 	// An IPTV source's live TV catalog is one page, which it remembers
 	// itself until its list changes; its movie and series catalogs read
@@ -176,7 +177,7 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 		return s.local.Catalog(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, skip, src.search)
 	}
 	key := src.key(skip)
-	if kept, ok := s.pagesOf(key).Get(key); ok {
+	if kept, ok := s.pagesOf(key).Get(key); ok && !emptySearchSpent(key, kept, s.now()) {
 		if key.search == "" && !kept.fresh(s.now(), s.catalogLife()) {
 			if refreshing(ctx) {
 				return s.refetchPage(ctx, src, key, kept.value)
@@ -214,6 +215,12 @@ func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Met
 		return nil, err
 	}
 	return result.([]stremio.Meta), nil
+}
+
+// emptySearchSpent reports whether kept, the page of key, is a search's
+// empty page older than emptySearchLife at now: the addon is asked again.
+func emptySearchSpent(key pageKey, kept fetched[[]stremio.Meta], now time.Time) bool {
+	return key.search != "" && len(kept.value) == 0 && !kept.fresh(now, emptySearchLife)
 }
 
 // pagesOf returns the cache that keeps the page of key.
@@ -274,6 +281,10 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 	}
 	kept := fetched[[]stremio.Meta]{metas, asked}
 	s.pagesOf(key).Put(key, kept)
+	// A search catalog that answers is no longer late (see lateSearch).
+	if key.search != "" {
+		s.lateSearches.forget(searchCatalogOf(key))
+	}
 	if key.kept() {
 		if err := s.storePage(ctx, src, key, kept); err != nil {
 			s.logger.Debug("A catalog page could not be kept", "catalog", src.catalog.ID, "error", err)

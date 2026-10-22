@@ -110,6 +110,12 @@ type Service struct {
 	// keptWait how long one does when what was kept fills it (see Whole).
 	wholeWait time.Duration
 	keptWait  time.Duration
+	// searchGrace and searchBound bound how long a search waits for its
+	// title searches, and lateSearches are the search catalogs it leaves
+	// out, as they were late (see searchdeadline.go).
+	searchGrace  time.Duration
+	searchBound  time.Duration
+	lateSearches lateSearches
 	// guideDir is where XMLTV guides in ZIP archives are spooled while they
 	// are read (see SpoolGuidesIn); empty, they are not read.
 	guideDir string
@@ -253,6 +259,8 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		ratingWait:     ratingWait,
 		wholeWait:      wholeListingWait,
 		keptWait:       keptListingWait,
+		searchGrace:    searchGrace,
+		searchBound:    searchBound,
 		music:          eclipse.NewClient(client),
 		watchlist:      watchlist.New(db),
 		smart:          smartlists.New(db),
@@ -2410,14 +2418,22 @@ func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind,
 
 // searched reads the first page of each search catalog, together, and
 // interleaves their titles as merged does. It answers once the title
-// searches did, waiting peopleGrace more for the people searches, and for
-// all of them when there are only people searches. Searches still running
-// then answer for the next request: their pages are kept (see page).
+// searches did, or at its deadline: searchGrace after one of them found
+// its page, searchBound at most. It then waits peopleGrace more for the
+// people searches, and only for them, within searchBound, when there are
+// only people searches. Searches still running then answer for the next
+// request: their pages are kept (see page). The title searches that
+// missed the deadline are left out of the searches for a while, and so
+// are those already left out (see lateSearch).
 func (s *Service) searched(ctx context.Context, v view, sources []source, need int) []listed {
+	sources = slices.DeleteFunc(slices.Clone(sources), s.skipsSearch)
 	lists := make([][]stremio.Meta, len(sources))
+	asked, answered := make([]bool, len(sources)), make([]bool, len(sources))
 	var mu sync.Mutex
 	var titleSearches, all sync.WaitGroup
 	fetches := make(chan struct{}, catalogFetches)
+	found := make(chan struct{})
+	var foundOnce sync.Once
 	people, titles := false, 0
 	for i, src := range sources {
 		byPeople := searchesPeople(src.catalog)
@@ -2434,36 +2450,60 @@ func (s *Service) searched(ctx context.Context, v view, sources []source, need i
 			}
 			fetches <- struct{}{}
 			defer func() { <-fetches }()
+			mu.Lock()
+			asked[i] = true
+			mu.Unlock()
 			metas, _, err := s.window(ctx, v, src, 0, need)
 			// An app that stops waiting cancels ctx: nothing failed.
 			if err != nil && ctx.Err() == nil {
-				s.logger.Warn("A search catalog could not be read", "catalog", src.catalog.ID, "error", err)
+				s.logger.Warn("A search catalog could not be read", "addon", src.addon.addon.Manifest.Name, "catalog", src.catalog.ID, "error", err)
 			}
 			mu.Lock()
-			defer mu.Unlock()
-			lists[i] = metas
+			lists[i], answered[i] = metas, true
+			mu.Unlock()
+			if err == nil && !byPeople {
+				foundOnce.Do(func() { close(found) })
+			}
 		}()
 	}
 	everything := done(&all)
-	if people && titles > 0 {
+	titlesDone, firstFound := everything, (<-chan struct{})(nil)
+	if titles > 0 {
+		titlesDone, firstFound = done(&titleSearches), found
+	}
+	bound := time.NewTimer(s.searchBound)
+	defer bound.Stop()
+	var grace <-chan time.Time
+	finished, late := false, false
+	for !finished && !late && ctx.Err() == nil {
 		select {
-		case <-done(&titleSearches):
-			select {
-			case <-everything:
-			case <-time.After(peopleGrace):
-			case <-ctx.Done():
-			}
-		case <-everything:
+		case <-titlesDone:
+			finished = true
+		case <-firstFound:
+			firstFound, grace = nil, time.After(s.searchGrace)
+		case <-grace:
+			late = true
+		case <-bound.C:
+			late = true
 		case <-ctx.Done():
 		}
-	} else {
+	}
+	if finished && people && titles > 0 {
 		select {
 		case <-everything:
+		case <-time.After(peopleGrace):
 		case <-ctx.Done():
 		}
 	}
 	mu.Lock()
 	defer mu.Unlock()
+	if late && ctx.Err() == nil {
+		for i, src := range sources {
+			if asked[i] && !answered[i] && !searchesPeople(src.catalog) && !own(src.addon.addon) {
+				s.lateSearch(src)
+			}
+		}
+	}
 	return interleave(sources, slices.Clone(lists))
 }
 
