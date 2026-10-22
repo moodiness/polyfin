@@ -155,6 +155,10 @@ type Service struct {
 	// (see overridesNow); overridesMu orders their loading and changes.
 	overrides   atomic.Pointer[overrideSet]
 	overridesMu sync.Mutex
+
+	// warmed tells when Warm read the libraries' first pages, and opened
+	// the users' own libraries opened lately (see warmedposters.go).
+	warmed warmedPosters
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
@@ -280,6 +284,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.streamLists = cache.NewLasting[streamKey, list[stremio.Stream]](2000, s.keptListLife, clock)
 	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock)
 	s.musicCache = newMusicCaches(s)
+	s.warmed.opened = cache.New[accounts.ID, struct{}](openedLibraries, openedFor)
 	return s
 }
 
@@ -997,11 +1002,15 @@ func (s *Service) KnownPages(ctx context.Context, user accounts.User, count int)
 }
 
 // children lists a folder's children (see Children), its titles showing
-// the user's language as far as it is kept (see translate).
+// the user's language as far as it is kept (see translate). An app's
+// listing of one of the user's own libraries opens it (see WithOpening).
 func (s *Service) children(ctx context.Context, user accounts.User, parent accounts.ID, start, count int, genre string, first bool) (Page, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return Page{}, err
+	}
+	if l, ok := v.library(parent); ok && opening(ctx) {
+		s.openedLibrary(l)
 	}
 	page, err := s.childrenIn(ctx, v, user, parent, start, count, genre, first)
 	s.translate(ctx, v, page.Items)

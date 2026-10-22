@@ -233,6 +233,7 @@ func New(options Options) *Handler {
 	h.listings = newListings(h.listVersions)
 	if options.Library != nil {
 		options.Library.OnVersionsChanged(h.versionsChanged)
+		options.Library.OnFirstPagesRead(h.warmPosters)
 	}
 	options.Accounts.OnSignOut(h.signedOut)
 	if options.Thumbnails != nil {

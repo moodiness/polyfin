@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -53,7 +54,8 @@ import (
 // memory, the most recently used up to imageCacheBytes, and on disk under
 // the cache folder's images folder, up to imageDiskBytes, which a restart
 // keeps. An app asking for an image much smaller than the original (see
-// resizedWidth) gets it resized, kept the same way.
+// resizedWidth) gets it resized, kept the same way. Posters are also
+// warmed ahead of any request (see warmedposters.go).
 
 const (
 	// imageCacheBytes bounds the memory used by recently relayed artwork.
@@ -67,16 +69,25 @@ const (
 	imageHostFetches     = 16
 	imageSlowHostFetches = 4
 	imageSlowDown        = 10 * time.Minute
+	// imageWarmShare is the share of a host's places that downloads
+	// warming posters take at most, one at least: 1 in imageWarmShare.
+	imageWarmShare = 4
 	// imageFailureLife is how long a failed download answers again without
 	// asking, with the same status and cause.
 	imageFailureLife = 2 * time.Minute
-	// imageResizes bounds the images resized at once.
-	imageResizes = 2
 	// immutableImage is how apps may keep an image they asked for by its
 	// tag, which changes with the image.
 	immutableImage = "public, max-age=31536000, immutable"
 	taggedImage    = "public, max-age=604800"
 )
+
+// imageResizes bounds the images resized at once: one for each two of the
+// processors Go runs on, two at least. A resize keeps one busy.
+var imageResizes = max(2, runtime.GOMAXPROCS(0)/2)
+
+// neverUsed is the use time of an image warmed that no app asked for yet:
+// the least recently used of all (see trimDisk).
+var neverUsed = time.Unix(0, 0)
 
 // artwork is a downloaded image.
 type artwork struct {
@@ -94,6 +105,9 @@ type imageCache struct {
 	flight   singleflight.Group
 	failures *cache.Cache[string, downloadError]
 	resizes  chan struct{}
+	// warmResizes holds a place for each resize warming a poster, half of
+	// resizes at most (see warmImage).
+	warmResizes chan struct{}
 
 	mu sync.Mutex
 	// memory holds the images in memory, most recently used first, by key;
@@ -102,9 +116,15 @@ type imageCache struct {
 	order  *list.List
 	size   int
 	// disk holds the images kept on disk, by key; diskSize counts their
-	// bytes.
-	disk     map[string]*diskImage
-	diskSize int64
+	// bytes, which diskBytes bounds: imageDiskBytes, less in tests.
+	// warmFull tells that warming lacked room (see roomToWarm).
+	disk      map[string]*diskImage
+	diskSize  int64
+	diskBytes int64
+	warmFull  bool
+	// warmed holds the keys of each poster warmed, its original's then its
+	// sizes' (see warmImage).
+	warmed map[string][]string
 	// hosts are the downloads under way from each host.
 	hosts map[string]*hostFetches
 }
@@ -127,8 +147,10 @@ func (c *imageCache) open(dir string, logger *slog.Logger) {
 		c.logger = logger
 		c.failures = cache.New[string, downloadError](5000, imageFailureLife)
 		c.resizes = make(chan struct{}, imageResizes)
+		c.warmResizes = make(chan struct{}, max(1, imageResizes/2))
 		c.memory, c.order = map[string]*list.Element{}, list.New()
-		c.disk, c.hosts = map[string]*diskImage{}, map[string]*hostFetches{}
+		c.disk, c.diskBytes, c.hosts = map[string]*diskImage{}, imageDiskBytes, map[string]*hostFetches{}
+		c.warmed = map[string][]string{}
 		if dir == "" {
 			return
 		}
@@ -250,10 +272,10 @@ func (c *imageCache) remember(key string, image artwork) {
 	}
 }
 
-// trimDisk deletes the least recently used images beyond imageDiskBytes;
-// c.mu is held.
+// trimDisk deletes the least recently used images beyond diskBytes, down
+// to keptDisk; c.mu is held.
 func (c *imageCache) trimDisk() {
-	if c.diskSize <= imageDiskBytes {
+	if c.diskSize <= c.diskBytes {
 		return
 	}
 	kept := make([]*diskImage, 0, len(c.disk))
@@ -262,13 +284,102 @@ func (c *imageCache) trimDisk() {
 	}
 	slices.SortFunc(kept, func(a, b *diskImage) int { return a.used.Compare(b.used) })
 	for _, image := range kept {
-		if c.diskSize <= imageDiskBytes*9/10 {
+		if c.diskSize <= c.keptDisk() {
 			return
 		}
 		_ = os.Remove(filepath.Join(c.dir, image.name))
 		delete(c.disk, image.name)
 		c.diskSize -= image.size
 	}
+}
+
+// keptDisk is what trimDisk leaves on disk, and what warming fills it to
+// at most: nine tenths of diskBytes.
+func (c *imageCache) keptDisk() int64 { return c.diskBytes * 9 / 10 }
+
+// peek returns the image kept for key, in memory or on disk, without
+// making it recently used, nor keeping in memory one read from disk.
+func (c *imageCache) peek(key string) (artwork, bool) {
+	c.mu.Lock()
+	if element, ok := c.memory[key]; ok {
+		c.mu.Unlock()
+		return element.Value.(*memoryImage).image, true
+	}
+	kept, ok := c.disk[fileName(key)]
+	c.mu.Unlock()
+	if !ok {
+		return artwork{}, false
+	}
+	image, err := readImage(filepath.Join(c.dir, kept.name))
+	return image, err == nil
+}
+
+// roomToWarm reports whether the disk has room for images warmed: it is
+// kept, below keptDisk, and refused none since warming started (see
+// startWarming).
+func (c *imageCache) roomToWarm() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.dir != "" && c.diskSize < c.keptDisk() && !c.warmFull
+}
+
+// startWarming lets warming fill the disk again (see roomToWarm).
+func (c *imageCache) startWarming() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.warmFull = false
+}
+
+// keepWarmed keeps on disk, not in memory, an image warmed ahead of any
+// request, if the disk has room for it below keptDisk: it never makes
+// room by deleting others, and refuses the next ones once it lacks room
+// (see roomToWarm). It is the least recently used until an app asks for
+// it (see get), so the images apps asked for outlast it.
+func (c *imageCache) keepWarmed(key string, image artwork) {
+	name := fileName(key)
+	size := int64(len(image.contentType) + 1 + len(image.body))
+	c.mu.Lock()
+	if _, ok := c.disk[name]; ok || c.dir == "" {
+		c.mu.Unlock()
+		return
+	}
+	if c.diskSize+size > c.keptDisk() {
+		c.warmFull = true
+		c.mu.Unlock()
+		return
+	}
+	// Its place is held while it is written.
+	c.diskSize += size
+	c.mu.Unlock()
+	written, err := writeImage(c.dir, name, image)
+	if err == nil {
+		err = os.Chtimes(filepath.Join(c.dir, name), neverUsed, neverUsed)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.diskSize -= size
+	if err != nil {
+		c.logger.Debug("Artwork could not be kept on disk", "error", err)
+		return
+	}
+	if kept, ok := c.disk[name]; ok {
+		// An app's request kept it meanwhile.
+		c.diskSize -= kept.size
+	}
+	c.disk[name] = &diskImage{name: name, size: written, used: neverUsed}
+	c.diskSize += written
+}
+
+// kept reports whether every one of keys is kept on disk.
+func (c *imageCache) kept(keys []string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, key := range keys {
+		if _, ok := c.disk[fileName(key)]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // readImage reads an image file: its content type on the first line, then
@@ -310,13 +421,28 @@ func writeImage(dir, name string, image artwork) (int64, error) {
 // for all the callers at once, on a context the callers giving up do not
 // cancel; each caller waits on its own ctx. What produce makes is kept.
 func (c *imageCache) fetch(ctx context.Context, key string, produce func(context.Context) (artwork, error)) (artwork, error) {
-	if image, ok := c.get(key); ok {
+	return c.fetchFor(ctx, key, false, produce)
+}
+
+// fetchFor is fetch, for warming when warming: an image kept is then not
+// made recently used, and the one produce makes is kept as warmed (see
+// keepWarmed).
+func (c *imageCache) fetchFor(ctx context.Context, key string, warming bool, produce func(context.Context) (artwork, error)) (artwork, error) {
+	if warming {
+		if image, ok := c.peek(key); ok {
+			return image, nil
+		}
+	} else if image, ok := c.get(key); ok {
 		return image, nil
 	}
 	detached := context.WithoutCancel(ctx)
 	results := c.flight.DoChan(key, func() (any, error) {
 		image, err := produce(detached)
-		if err == nil {
+		switch {
+		case err != nil:
+		case warming:
+			c.keepWarmed(key, image)
+		default:
 			c.put(key, image)
 		}
 		return image, err
@@ -333,17 +459,22 @@ func (c *imageCache) fetch(ctx context.Context, key string, produce func(context
 }
 
 // hostFetches are the downloads under way from a host: active of them,
-// those waiting woken when one ends, and the host spared until slowUntil.
+// warming of those warming posters, those waiting woken when one ends, and
+// the host spared until slowUntil.
 type hostFetches struct {
 	active    int
+	warming   int
 	slowUntil time.Time
 	ended     chan struct{}
 }
 
 // host waits for a place among the downloads from target's host, and
 // returns what gives it back: imageHostFetches places, imageSlowHostFetches
-// for a host to spare, iptv telling a host that serves an IPTV source.
-func (c *imageCache) host(ctx context.Context, target string, iptv bool) (func(), error) {
+// for a host to spare, iptv telling a host that serves an IPTV source. A
+// download warming a poster takes one of those places only while the
+// downloads warming take less than 1 in imageWarmShare of them: the others
+// stay for apps.
+func (c *imageCache) host(ctx context.Context, target string, iptv, warming bool) (func(), error) {
 	parsed, err := url.Parse(target)
 	if err != nil {
 		return func() {}, nil
@@ -359,13 +490,19 @@ func (c *imageCache) host(ctx context.Context, target string, iptv bool) (func()
 		if iptv || time.Now().Before(fetches.slowUntil) {
 			places = imageSlowHostFetches
 		}
-		if fetches.active < places {
+		if fetches.active < places && (!warming || fetches.warming < max(1, places/imageWarmShare)) {
 			fetches.active++
+			if warming {
+				fetches.warming++
+			}
 			c.mu.Unlock()
 			return func() {
 				c.mu.Lock()
 				defer c.mu.Unlock()
 				fetches.active--
+				if warming {
+					fetches.warming--
+				}
 				close(fetches.ended)
 				fetches.ended = make(chan struct{})
 			}, nil
@@ -422,11 +559,17 @@ func (h *Handler) fetchArtwork(ctx context.Context, target string, confined, ipt
 // fetchArtworkHeld is fetchArtwork, the download holding what hold gives
 // besides its place among those from its host, when hold is set.
 func (h *Handler) fetchArtworkHeld(ctx context.Context, target string, confined, iptv bool, hold func(context.Context) (func(), error)) (artwork, error) {
+	return h.downloadArtwork(ctx, target, confined, iptv, false, hold)
+}
+
+// downloadArtwork is fetchArtworkHeld, for warming a poster when warming
+// (see fetchFor and host).
+func (h *Handler) downloadArtwork(ctx context.Context, target string, confined, iptv, warming bool, hold func(context.Context) (func(), error)) (artwork, error) {
 	if failed, ok := h.images.failures.Get(target); ok {
 		return artwork{}, downloadError{failed.status, fmt.Errorf("the last download failed: %w", failed.err)}
 	}
-	return h.images.fetch(ctx, target, func(ctx context.Context) (artwork, error) {
-		release, err := h.images.host(ctx, target, iptv)
+	return h.images.fetchFor(ctx, target, warming, func(ctx context.Context) (artwork, error) {
+		release, err := h.images.host(ctx, target, iptv, warming)
 		if err != nil {
 			return artwork{}, err
 		}
@@ -468,7 +611,13 @@ const maxLocalImageBytes = 32 << 20
 // imageCache): its URL changes with it. An image no longer in its folder,
 // or that is no image, is not found.
 func (h *Handler) localArtwork(ctx context.Context, target, key string) (artwork, error) {
-	return h.images.fetch(ctx, target, func(ctx context.Context) (artwork, error) {
+	return h.localArtworkFor(ctx, target, key, false)
+}
+
+// localArtworkFor is localArtwork, for warming a poster when warming (see
+// fetchFor).
+func (h *Handler) localArtworkFor(ctx context.Context, target, key string, warming bool) (artwork, error) {
+	return h.images.fetchFor(ctx, target, warming, func(ctx context.Context) (artwork, error) {
 		file, err := h.Library.OpenLocalArtwork(ctx, key)
 		if err != nil {
 			status := http.StatusBadGateway
@@ -543,10 +692,26 @@ func resizedWidth(query url.Values, width, height int) int {
 	return 0
 }
 
+// resizedKey is the key an image resized to width is kept by.
+func resizedKey(target string, width int) string {
+	return target + "\x00width=" + strconv.Itoa(width)
+}
+
 // resized returns the image at target resized to width, made once and
 // kept (see imageCache), or the original when it cannot be resized.
 func (h *Handler) resized(ctx context.Context, target string, original artwork, width int) artwork {
-	image, err := h.images.fetch(ctx, target+"\x00width="+strconv.Itoa(width), func(context.Context) (artwork, error) {
+	return h.resizedFor(ctx, target, original, width, false)
+}
+
+// resizedFor is resized, for warming a poster when warming: the resize
+// then also takes a place among warmResizes, and is kept as warmed (see
+// fetchFor).
+func (h *Handler) resizedFor(ctx context.Context, target string, original artwork, width int, warming bool) artwork {
+	image, err := h.images.fetchFor(ctx, resizedKey(target, width), warming, func(context.Context) (artwork, error) {
+		if warming {
+			h.images.warmResizes <- struct{}{}
+			defer func() { <-h.images.warmResizes }()
+		}
 		h.images.resizes <- struct{}{}
 		defer func() { <-h.images.resizes }()
 		return resize(original, width)

@@ -634,9 +634,10 @@ const WarmInterval = time.Hour
 // it, with the automatic images of those that find their own, so that no
 // home screen waits for an addon: those of the server's addons, and of
 // users' own addons when the settings allow them. Pages already fresh are
-// not asked again; stale ones are refreshed. It also forgets the pages
-// and descriptions kept in the database that no one read for long, and
-// the catalogs and titles no read saw for long (see arrivals.go).
+// not asked again; stale ones are refreshed. Then it tells those pages
+// are read (see OnFirstPagesRead). It also forgets the pages and
+// descriptions kept in the database that no one read for long, and the
+// catalogs and titles no read saw for long (see arrivals.go).
 func (s *Service) Warm(ctx context.Context) error {
 	scopes := []struct {
 		scope    addons.Scope
@@ -699,6 +700,7 @@ func (s *Service) Warm(ctx context.Context) error {
 		}
 	}
 	_ = group.Wait()
+	s.firstPagesRead(ctx)
 	if _, err := s.db.Exec(ctx, "DELETE FROM catalog_pages WHERE fetched_at < $1", s.now().Add(-s.keptCatalogLife())); err != nil {
 		return err
 	}

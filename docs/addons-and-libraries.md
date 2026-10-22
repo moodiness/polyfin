@@ -422,7 +422,7 @@ Polyfin also keeps catalog pages and titles' descriptions in its database. So li
 To answer quickly:
 
 - While you look at a page of a library or collection, Polyfin reads the next one ahead, unless the addon's last answer failed.
-- When it starts, and every hour, Polyfin reads the first page of every library: the scheduled task "Read the libraries' first pages" in jellyfin-web's dashboard.
+- When it starts, and every hour, Polyfin reads the first page of every library: the scheduled task "Read the libraries' first pages" in jellyfin-web's dashboard. It then warms the posters of those pages, so that a home row or a library shows them at once the first time too (see [Artwork](#artwork)).
 - Home rows (**Latest**) show the first page of each catalog only, as Stremio apps do.
 - Polyfin remembers how many titles each catalog's pages hold and where a catalog ends. A collection read again asks its catalogs for all the pages it needs at once.
 - jellyfin-web's collection pages ask for every title at once, up to 500 in Polyfin. Reading them all can take long the first time: the page waits for the addons 3 seconds at most and shows the titles read by then, at least the first page of each catalog, while Polyfin reads the rest in the background. The next time, the page shows them all at once; if Polyfin is still reading, it shows those read so far after 1 second at most.
@@ -580,12 +580,25 @@ Polyfin relays images from the addons' artwork servers, IPTV channel logos inclu
 - It keeps the images it relayed in memory (128 MB) and in the `images` folder of Polyfin's cache folder (1 GB), the least recently used going first. They are not downloaded again after a restart.
 - An image that could not be downloaded is not asked for again for 2 minutes. Meanwhile, its requests answer the same. With **Detailed log** on under **Settings › Diagnostics**, each of them logs `Artwork could not be downloaded` with the first download's cause: `the last download failed: ` followed by its error, such as `addon unreachable: HTTP 500`.
 - An image its artwork server does not have (`404` or `410`) answers `404`, as Jellyfin answers for an image an item does not have, and apps show their placeholder. An artwork server that fails otherwise (no answer, a `5xx`) makes it answer `502`.
-- An app asking for an image much smaller than the original (`maxWidth`, `maxHeight`, `fillWidth`, `fillHeight`, `width` or `height`) gets it resized, as a JPEG, or a PNG when it was one. Sizes are rounded up to a few steps, which are kept too.
+- An app asking for an image much smaller than the original (`maxWidth`, `maxHeight`, `fillWidth`, `fillHeight`, `width` or `height`) gets it resized, as a JPEG, or a PNG when it was one. Sizes are rounded up to a few steps, which are kept too. Polyfin resizes as many images at once as half its processors, 2 at least.
 - An image asked for with its `tag` may be kept by the app for good: the tag changes with the image.
 
 Seasons show their own poster when the metadata addon lists the seasons' posters, as Jellyfin shows a season's own image. A season without one shows its series' poster.
 
 That list does not name the seasons. So Polyfin reads it only when it has one poster per season of the series' episodes, with specials included or left out. Otherwise it shows the series' poster on every season, rather than risk showing one season's poster on another. Polyfin asks the addon for nothing more: the posters come with the series' description.
+
+### Posters warmed ahead
+
+The first time a poster shows, it waits for the artwork server, then for its resize. So every hour, once it has read the libraries' first pages, Polyfin downloads their posters and resizes them to the sizes jellyfin-web asks for its cards: 240, 400 and 480 pixels wide for a poster of 2 by 3. A home row or a library then shows them from Polyfin's cache the first time too, and its next posters on scrolling as well.
+
+- Polyfin warms the first 100 titles of each library that some user sees, as each user sees it: a server library hidden from every user is left out, and so is a title that every user who sees its library hides, or that parental control or blocked genres hide from them. A title whose rating or genres Polyfin does not know yet waits for the next hour.
+- A user's own libraries are warmed only once the user opened them in an app, and for a week after. A home row does not open its library. Polyfin forgets the libraries opened when it restarts.
+- Music libraries and smart lists are left out, and so are the images Polyfin draws or an administrator uploaded, and the posters a user's metadata language shows instead of the server's. A local folder's posters are warmed as the addons' are.
+- Warming downloads at most a quarter of the images Polyfin asks one artwork server for at a time: 4, and 1 from a server of an IPTV source or one Polyfin spares. It resizes at most half as many images at once as apps' requests do. The rest stays for apps.
+- What it keeps goes in the `images` folder only, never in memory, and fills it up to 90% of its bound: warming deletes no image for room, and stops once the folder is that full. The images it warmed go first when apps' images fill the folder, until an app asks for them. Without a cache folder, nothing is warmed.
+- A poster warmed is not downloaded again while the folder keeps it.
+
+Jellyfin downloads a title's images when it scans its library, and resizes them the first time an app asks. Polyfin has no scan of the addons' catalogs: it warms what apps show first, and resizes it ahead too.
 
 ### Generated images
 

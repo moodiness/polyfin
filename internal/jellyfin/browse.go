@@ -207,9 +207,10 @@ func titlesThrough(r *http.Request) bool {
 // a library or a collection reads, so that its pages and its total count
 // only what the listing keeps: a listing of collections within an addon's
 // collection, which lists titles, lists none, out of none (see
-// library.WithKinds).
+// library.WithKinds). The app opens the folder it lists (see
+// library.WithOpening).
 func listingContext(r *http.Request, keep func(library.Item) bool) context.Context {
-	ctx := library.WithKinds(r.Context(), func(kind library.Kind) bool { return keep(library.Item{Kind: kind}) })
+	ctx := library.WithKinds(library.WithOpening(r.Context()), func(kind library.Kind) bool { return keep(library.Item{Kind: kind}) })
 	if titlesThrough(r) {
 		ctx = library.WithTitlesThrough(ctx)
 	}
