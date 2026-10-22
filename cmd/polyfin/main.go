@@ -602,6 +602,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Sharing:        lib,
 		Health: admin.HealthSources{
 			Addons:           addonClient,
+			SearchesLeaveOut: lib.SearchesLeaveOut,
 			Cache:            sources,
 			CacheDir:         cfg.CacheDir,
 			Encoder:          segments,

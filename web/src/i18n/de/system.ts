@@ -137,6 +137,8 @@ const system: typeof en = {
           `${name}: Polyfin kann diese Netzwerkfreigabe nicht auf Änderungen überwachen. Sie wird weiterhin nach ihrem Zeitplan gescannt.`,
         folderSearch: (name: string, addon: string, failure: string) =>
           `${name}: Die Titel seiner Dateien konnten nicht gesucht werden${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. Sie bleiben nicht zugeordnet, bis eine Suche gelingt, was Polyfin von selbst erneut versucht, erst nach ein paar Minuten, dann seltener.`,
+        searchLate: (name: string) =>
+          `${name}: Seine Suche hat nicht rechtzeitig geantwortet. Suchen lassen es einige Minuten lang aus und fragen es dann erneut.`,
         guide: (name: string) =>
           `${name}: Der letzte Abruf des Fernsehprogramms ist fehlgeschlagen.`,
         paused: (host: string) =>

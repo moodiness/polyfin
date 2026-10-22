@@ -148,6 +148,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
         problem.addon ?? '',
         t.localFolders.searchFailures[problem.failure] ?? '',
       )
+    case 'search_late':
+      return text.searchLate(ownedName(t, problem.name, problem.owner ?? null))
     case 'task':
       return text.task(problem.task)
     case 'https_port':

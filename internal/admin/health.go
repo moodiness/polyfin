@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/diskspace"
@@ -30,6 +31,10 @@ import (
 type HealthSources struct {
 	// Addons tells how the requests to the addons went (stremio.Client).
 	Addons *stremio.Client
+	// SearchesLeaveOut tells whether the searches leave out a search
+	// catalog of an addon for now, as it did not answer a search in time
+	// (library.Service.SearchesLeaveOut); nil tells none.
+	SearchesLeaveOut func(addon accounts.ID) bool
 	// Cache keeps the sources being played, CacheDir holds it.
 	Cache    *source.Cache
 	CacheDir string

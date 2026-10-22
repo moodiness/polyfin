@@ -90,6 +90,10 @@ const (
 	// empty for another failure, and Failure tells why (see
 	// searchFailureJSON).
 	problemFolderSearch = "folder_search"
+	// The searches leave out an addon's search catalog for a few minutes,
+	// as it did not answer a search in time: Name and Owner are the
+	// addon's. It comes and goes with the searches: transient.
+	problemSearchLate = "search_late"
 	// NVENC needs a newer NVIDIA driver than the GPU's: Name is the
 	// version it needs.
 	problemNVIDIADriver = "nvidia_driver"
@@ -212,12 +216,16 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 				continue
 			}
 			if addon.Stremio() || addon.Eclipse() {
-				if h.Health.Addons == nil {
-					continue
+				if h.Health.Addons != nil {
+					if health, ok := h.Health.Addons.Health(addon.ManifestURL); ok && health.Failure != "" {
+						p := warning("addon:"+addon.ID.String(), problemAddon, "addons")
+						p.Name, p.Owner, p.Failure = addon.Manifest.Name, scope.Owner, health.Failure
+						add(p)
+					}
 				}
-				if health, ok := h.Health.Addons.Health(addon.ManifestURL); ok && health.Failure != "" {
-					p := warning("addon:"+addon.ID.String(), problemAddon, "addons")
-					p.Name, p.Owner, p.Failure = addon.Manifest.Name, scope.Owner, health.Failure
+				if h.Health.SearchesLeaveOut != nil && h.Health.SearchesLeaveOut(addon.ID) {
+					p := warning("search_late:"+addon.ID.String(), problemSearchLate, "addons")
+					p.Name, p.Owner, p.Transient = addon.Manifest.Name, scope.Owner, true
 					add(p)
 				}
 				continue

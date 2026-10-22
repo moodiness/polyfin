@@ -136,6 +136,8 @@ const system: typeof en = {
           `${name}: o Polyfin não consegue monitorar alterações neste compartilhamento de rede. Ele continua sendo rastreado conforme o agendamento.`,
         folderSearch: (name: string, addon: string, failure: string) =>
           `${name}: não foi possível pesquisar os títulos dos arquivos${addon === '' ? '' : failure === '' ? ` (${addon})` : ` (${addon}: ${failure})`}. Eles continuam sem associação até que uma pesquisa dê certo, o que o Polyfin tenta de novo sozinho, depois de alguns minutos e, então, com menos frequência.`,
+        searchLate: (name: string) =>
+          `${name}: a pesquisa dele não respondeu a tempo. As pesquisas o deixam de fora por alguns minutos e depois o consultam de novo.`,
         guide: (name: string) => `${name}: a última obtenção do guia de programação falhou.`,
         paused: (host: string) =>
           `Miniaturas pausadas para ${host}: ele pediu para diminuir o ritmo.`,

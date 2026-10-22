@@ -3547,6 +3547,8 @@ export type HealthProblem = {
   | { code: 'database' }
   | { code: 'disk'; folder: 'cache' | 'recordings' | 'backups'; free: number }
   | { code: 'addon'; name: string; owner?: NonNullable<Owner>; failure: string }
+  /** Searches leave out the addon's search catalog for a few minutes: it did not answer in time. */
+  | { code: 'search_late'; name: string; owner?: NonNullable<Owner> }
   | { code: 'conversions_full' }
   | { code: 'thumbnails_paused'; host: string }
   | { code: 'unknown_proxy'; address: string }
