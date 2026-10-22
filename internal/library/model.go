@@ -113,6 +113,10 @@ type Item struct {
 	People      []Person
 	Trailers    []Trailer
 	Images      Images
+	// WidePrimary tells that the Primary image is wide, as a library's
+	// generated image and the backdrop it finds automatically are, rather
+	// than what items of its kind usually show.
+	WidePrimary bool
 	// FolderID is the folder a video of a title's description belongs to
 	// (see othervideos.go), zero for other items.
 	FolderID accounts.ID

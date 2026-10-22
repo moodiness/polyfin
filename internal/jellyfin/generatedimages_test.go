@@ -518,3 +518,37 @@ func TestAddonsCannotGiveGeneratedImages(t *testing.T) {
 		t.Errorf("the poster in the scheme of generated images: %d, its poster reached %d times", statuses["Through the scheme"], secretHits.Load())
 	}
 }
+
+// A movie or series library made from now on shows a generated image
+// without anyone choosing it, as Jellyfin draws one for its libraries:
+// apps see a wide Primary image on its tile. A user blocking genres still
+// gets none, and a collection library keeps no image.
+func TestNewLibrariesGetAGeneratedImage(t *testing.T) {
+	t.Parallel()
+	g := newGenerating(t)
+	g.titlesOf(t, g.views["Top"])
+	g.later()
+	views := func(token string) map[string]BaseItemDto {
+		t.Helper()
+		var page QueryResult
+		g.get(t, "/UserViews", token, &page)
+		byName := map[string]BaseItemDto{}
+		for _, view := range page.Items {
+			byName[view.Name] = view
+		}
+		return byName
+	}
+	top := views(g.member)["Top"]
+	if top.ImageTags["Primary"] == "" || top.PrimaryImageAspectRatio == nil || *top.PrimaryImageAspectRatio != 16.0/9.0 {
+		t.Fatalf("the new movie library: tags %v, ratio %v", top.ImageTags, top.PrimaryImageAspectRatio)
+	}
+	if status, picture, _ := g.download(t, "/Items/"+g.views["Top"]+"/Images/Primary"); status != http.StatusOK || !named(picture) {
+		t.Errorf("the new library's image: %d", status)
+	}
+	if sets := views(g.member)["Sets"]; sets.ImageTags["Primary"] != "" {
+		t.Errorf("the collection library: %v", sets.ImageTags)
+	}
+	if kid := views(g.kid)["Top"]; kid.ImageTags["Primary"] != "" {
+		t.Errorf("a user blocking genres: %v", kid.ImageTags)
+	}
+}

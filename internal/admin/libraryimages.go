@@ -24,6 +24,7 @@ type LibraryImages interface {
 	DownloadImage(ctx context.Context, id accounts.ID, imageType, address string, confined bool) error
 	DeleteUploadedImage(ctx context.Context, id accounts.ID, imageType string) error
 	DeleteLibraryImages(ctx context.Context, addon addons.Addon) error
+	LookUpGeneratedImage(id accounts.ID)
 }
 
 // libraryImageRequest chooses the image of one of the scope's libraries:
@@ -129,6 +130,9 @@ func (h *handler) saveLibraryImage(w http.ResponseWriter, r *http.Request) {
 			h.internalError(w, r, err)
 			return
 		}
+	}
+	if choice == addons.LibraryImageGenerated {
+		h.LibraryImages.LookUpGeneratedImage(id)
 	}
 	h.listLibraries(w, r)
 }

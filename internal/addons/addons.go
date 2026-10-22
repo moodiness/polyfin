@@ -228,6 +228,17 @@ const (
 	LibraryImageGenerated = "generated"
 )
 
+// NewLibraryImage is the image a library of a catalog of catalogType
+// finds when it is made: a movie or series library gets one Polyfin draws,
+// as Jellyfin draws one for its libraries; the others, none. Libraries
+// made before keep the image they had.
+func NewLibraryImage(catalogType string) string {
+	if catalogType == "movie" || catalogType == "series" {
+		return LibraryImageGenerated
+	}
+	return LibraryImageNone
+}
+
 // MaxGuides bounds the guides of a live TV catalog.
 const MaxGuides = 10
 
@@ -572,8 +583,8 @@ func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, b
 				continue
 			}
 			last++
-			if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position) VALUES ($1, $2, $3, $4)",
-				addon.ID, catalog.Type, catalog.ID, last); err != nil {
+			if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position, image) VALUES ($1, $2, $3, $4, $5)",
+				addon.ID, catalog.Type, catalog.ID, last, NewLibraryImage(catalog.Type)); err != nil {
 				return err
 			}
 		}
@@ -709,8 +720,8 @@ func SyncCatalogs(ctx context.Context, tx pgx.Tx, id accounts.ID, manifest strem
 			continue
 		}
 		last++
-		if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
-			id, catalog.Type, catalog.ID, last); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position, image) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+			id, catalog.Type, catalog.ID, last, NewLibraryImage(catalog.Type)); err != nil {
 			return err
 		}
 	}
@@ -750,8 +761,8 @@ func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) er
 		}
 		last++
 		count++
-		if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
-			addon.ID, catalog.Type, catalog.ID, last); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position, image) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+			addon.ID, catalog.Type, catalog.ID, last, NewLibraryImage(catalog.Type)); err != nil {
 			return err
 		}
 	}
@@ -1094,7 +1105,7 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 			}
 			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
 				KeyType: addon.LibraryKeyTypes[catalog.ID], AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog),
-				Image: LibraryImageNone})
+				Image: NewLibraryImage(catalog.Type)})
 		}
 	}
 	return result
@@ -1182,12 +1193,12 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 			}
 		}
 		for position, choice := range choices {
-			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position, genre, max_items, hide_in_menus)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE
+			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position, genre, max_items, hide_in_menus, image)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE
 				SET name = excluded.name, position = excluded.position, genre = excluded.genre, max_items = excluded.max_items,
 				hide_in_menus = excluded.hide_in_menus`,
 				choice.AddonID, choice.CatalogType, choice.CatalogID, choice.Name, position+1, choice.Genre, choice.MaxItems,
-				choice.HideInMenus); err != nil {
+				choice.HideInMenus, NewLibraryImage(choice.CatalogType)); err != nil {
 				return err
 			}
 		}

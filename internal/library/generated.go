@@ -226,6 +226,19 @@ type generatedImages struct {
 	entries map[accounts.ID]generatedEntry
 }
 
+// LookUpGeneratedImage has the generated image of an item looked up again
+// as it next shows, as when an administrator chooses one for a library: a
+// library made with a generated image, listed before its titles were read,
+// may have been found to have none a moment ago.
+func (s *Service) LookUpGeneratedImage(id accounts.ID) {
+	s.generated.mu.Lock()
+	defer s.generated.mu.Unlock()
+	if entry, ok := s.generated.entries[id]; ok {
+		entry.checked = time.Time{}
+		s.generated.entries[id] = entry
+	}
+}
+
 // generatedEntryOf returns the entry of item id.
 func (s *Service) generatedEntryOf(ctx context.Context, id accounts.ID) (generatedEntry, error) {
 	g := &s.generated

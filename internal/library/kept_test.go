@@ -197,6 +197,12 @@ func TestStalePagesShowWhileTheyAreRefreshed(t *testing.T) {
 	t.Parallel()
 	e := newLifetimeEnv(t)
 	e.setting(func(s *accounts.Settings) { s.CatalogRefreshMinutes = 60 })
+	// The listing is the first to find the page stale: a generated image,
+	// looked up as the libraries are listed, would refresh it before.
+	if err := e.addons.SetLibraryImage(t.Context(), addons.Shared(), addons.LibraryKey{AddonID: e.addonID("a"), CatalogType: "movie", CatalogID: "top"},
+		addons.LibraryImageNone); err != nil {
+		t.Fatal(err)
+	}
 	listing := func() []string {
 		t.Helper()
 		page, err := e.service.Children(t.Context(), e.member, e.library(e.member, "Top").ID, 0, 10, "")

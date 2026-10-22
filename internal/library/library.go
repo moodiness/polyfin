@@ -71,7 +71,7 @@ type Service struct {
 	joined func(key string)
 	// libraryImages are the libraries' automatic images, by catalog (see
 	// automaticImage).
-	libraryImages *cache.Cache[pageKey, fetched[string]]
+	libraryImages *cache.Cache[pageKey, fetched[foundImage]]
 	sizes         pageSizes
 	// generated remembers what the generated images of collections and
 	// libraries show (see generated.go).
@@ -273,7 +273,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock).Sized(64<<20, fetchedSize[[]stremio.Meta])
 	s.searchPages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](500, func() time.Duration { return searchTTL }, clock).
 		Sized(16<<20, fetchedSize[[]stremio.Meta])
-	s.libraryImages = cache.NewLasting[pageKey, fetched[string]](1000, s.keptCatalogLife, clock)
+	s.libraryImages = cache.NewLasting[pageKey, fetched[foundImage]](1000, s.keptCatalogLife, clock)
 	s.prefetches = make(chan struct{}, prefetchLimit)
 	s.translations = make(chan struct{}, translationReaders)
 	s.readAhead = true
@@ -541,13 +541,15 @@ func (s *Service) Libraries(ctx context.Context, user accounts.User) ([]Item, er
 		item := l.item
 		image, shown := images[i], !v.restricted()
 		if l.image == addons.LibraryImageGenerated {
-			image, shown = s.libraryImage(ctx, v, l)
+			// A library's generated image is wide.
+			image.wide = true
+			image.url, shown = s.libraryImage(ctx, v, l)
 		}
-		if shown {
-			item.Images.Primary = image
+		if shown && image.url != "" {
+			item.Images.Primary, item.WidePrimary = image.url, image.wide
 		}
 		items = append(items, item)
-		records = append(records, libraryRecord(l, image))
+		records = append(records, libraryRecord(l, image.url))
 	}
 	for _, l := range v.smart {
 		if l.item.Kind == KindLibrary {
@@ -1649,9 +1651,19 @@ func (s *Service) describeBy(ctx context.Context, v view, r record, shared bool)
 		if err == nil {
 			return s.completed(ctx, v, r, candidate, kept, shared), candidate, true
 		}
-		s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
+		if !notOwn(candidate, err) {
+			s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
+		}
 	}
 	return stremio.Meta{}, installed{}, false
+}
+
+// notOwn reports whether err tells that a local folder or an IPTV source
+// does not have a title: asked after every addon that may describe it, as
+// they describe only their own titles, they do not know most titles, which
+// is not worth a log record each time a title opens.
+func notOwn(candidate installed, err error) bool {
+	return own(candidate.addon) && errors.Is(err, stremio.ErrNotFound)
 }
 
 // completed is the description of r that candidate gave, completed as
@@ -1919,16 +1931,19 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 		item := l.item
 		switch {
 		case l.image == addons.LibraryImageAutomatic && !v.restricted():
-			item.Images.Primary = s.automaticImage(ctx, l.catalogSource(), func() string {
+			image := s.automaticImage(ctx, l.catalogSource(), func() string {
 				r, err := s.load(ctx, id)
 				if err != nil {
 					return ""
 				}
 				return r.Poster
 			})
+			if image.url != "" {
+				item.Images.Primary, item.WidePrimary = image.url, image.wide
+			}
 		case l.image == addons.LibraryImageGenerated:
-			if image, shown := s.libraryImage(ctx, v, l); shown {
-				item.Images.Primary = image
+			if image, shown := s.libraryImage(ctx, v, l); shown && image != "" {
+				item.Images.Primary, item.WidePrimary = image, true
 			}
 		}
 		return item, nil

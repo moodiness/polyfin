@@ -495,6 +495,9 @@ func (set *overrideSet) apply(item *Item) {
 	}
 	for imageType, tag := range set.images[item.ID] {
 		setImage(&item.Images, imageType, uploadedURL(item.ID, imageType, tag))
+		if imageType == "Primary" {
+			item.WidePrimary = false
+		}
 	}
 	if item.SeriesID != (accounts.ID{}) {
 		if series, ok := set.fields[item.SeriesID]; ok {

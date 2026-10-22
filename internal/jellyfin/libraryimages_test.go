@@ -69,6 +69,15 @@ func TestLibrariesShowTheImageChosen(t *testing.T) {
 		}
 		return views.Items[0].Id, views.Items[0].ImageTags["Primary"]
 	}
+	ratioOf := func(token string) float64 {
+		t.Helper()
+		var views QueryResult
+		s.get(t, "/UserViews", token, &views)
+		if ratio := views.Items[0].PrimaryImageAspectRatio; ratio != nil {
+			return *ratio
+		}
+		return 0
+	}
 	folderImage := func() string {
 		t.Helper()
 		var folders []VirtualFolderInfo
@@ -81,6 +90,11 @@ func TestLibrariesShowTheImageChosen(t *testing.T) {
 		return status, string(body)
 	}
 
+	// A new movie library shows a generated image: the test starts from
+	// none.
+	if err := s.addons.SetLibraryImage(t.Context(), addons.Shared(), key, addons.LibraryImageNone); err != nil {
+		t.Fatal(err)
+	}
 	id, tag := view(token)
 	if tag != "" || folderImage() != "" {
 		t.Errorf("a library without an image: tag %q, folder image %q", tag, folderImage())
@@ -99,6 +113,9 @@ func TestLibrariesShowTheImageChosen(t *testing.T) {
 	}
 	if tag != want || folderImage() != id {
 		t.Errorf("an automatic image: tag %q, folder image %q", tag, folderImage())
+	}
+	if ratio := ratioOf(token); ratio != 16.0/9.0 {
+		t.Errorf("an automatic backdrop's aspect ratio: %v", ratio)
 	}
 	if status, body := download(id); status != http.StatusOK || body != "jpeg backdrop" {
 		t.Errorf("downloading the automatic image: %d %q", status, body)

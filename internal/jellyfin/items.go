@@ -622,6 +622,10 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 			// Covers are square.
 			ratio = 1
 		}
+		if item.WidePrimary {
+			// A library's generated image, or the backdrop it found.
+			ratio = 16.0 / 9.0
+		}
 		dto.PrimaryImageAspectRatio = new(ratio)
 	}
 	if item.Images.Logo != "" {
