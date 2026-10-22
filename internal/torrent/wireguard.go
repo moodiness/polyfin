@@ -17,7 +17,8 @@ import (
 
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
-	"golang.zx2c4.com/wireguard/tun/netstack"
+
+	"github.com/moodiness/polyfin/internal/torrent/netstack"
 )
 
 // ErrNoDNS reports a host name to look up over a WireGuard tunnel whose
@@ -111,12 +112,14 @@ func (r *wireGuardRoute) stop() {
 }
 
 // tunnelRun is a run of the tunnel's network stack, and what Polyfin sends
-// through it. wireguard-go's stack panics on a packet sent while its
-// device closes (a send on a closed channel), so each of Polyfin's sends
-// (a datagram, a TCP write or dial, a name looked up) holds sends for
-// reading, and stop takes it for writing before the device closes: it
-// waits for the sends in flight, which closing the sockets and ending ctx
-// cut short, and refuses those that come next.
+// through it. Each of Polyfin's sends (a datagram, a TCP write or dial, a
+// name looked up) holds sends for reading, and stop takes it for writing
+// before the device closes: it waits for the sends in flight, which
+// closing the sockets and ending ctx cut short, and refuses those that
+// come next, which tell the route changed. The packets the stack still
+// sends of itself as the device closes, a TCP retransmission or the answer
+// to a packet received, are dropped by the interface (see package
+// netstack), which upstream's panicked on.
 type tunnelRun struct {
 	tnet   *netstack.Net
 	ctx    context.Context

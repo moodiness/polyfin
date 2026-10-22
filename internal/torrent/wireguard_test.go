@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/torrent/netstack"
 	"github.com/moodiness/polyfin/internal/torrent/torrenttest"
 )
 
@@ -361,6 +363,133 @@ func TestWireGuardRouteChangeStopsTheTunnel(t *testing.T) {
 	}
 }
 
+// A tunnel's interface closed while a packet waits there for wireguard-go
+// drops the packet at once, and nothing panics. Nothing reads the
+// interface here, so the packet waits until it closes, as one can while a
+// route closes on a busy server: wireguard-go closes the interface before
+// it stops its peers, and gVisor's own goroutines send until the stack
+// closes. The packets are an answer to a packet received, gVisor's port
+// unreachable for a socket just closed (PR #550's CI saw a send on a
+// closed channel there), and a TCP retransmission, sent by gVisor's
+// timers with the endpoint's lock held, which closing the stack takes.
+// The test tells the goroutine waiting by its stack, and runs alone for
+// that: while it runs, no other test's tunnel sends.
+func TestWireGuardInterfaceClosesWhileAPacketWaits(t *testing.T) {
+	t.Run("an answer to a packet received", func(t *testing.T) {
+		tun, _, err := netstack.CreateNetTUN([]netip.Addr{torrenttest.TunnelClient}, nil, 1420)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A datagram from the server to a port with no socket, as one
+		// sent to a socket the route just closed.
+		packet := datagramTo(t, netip.AddrPortFrom(torrenttest.TunnelClient, 9))
+		wrote := make(chan error, 1)
+		go func() {
+			_, err := tun.Write([][]byte{packet}, 0)
+			wrote <- err
+		}()
+		waitFor(t, "the port unreachable to wait", func() bool { return waitsInWriteNotify(interfaceTest, "") })
+		if err := tun.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := <-wrote; err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tun.Read([][]byte{make([]byte, 1500)}, []int{0}, 0); !errors.Is(err, os.ErrClosed) {
+			t.Fatalf("a read of the closed interface: %v", err)
+		}
+	})
+	t.Run("a TCP retransmission", func(t *testing.T) {
+		tun, tnet, err := netstack.CreateNetTUN([]netip.Addr{torrenttest.TunnelClient}, nil, 1420)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		dialed := make(chan struct{})
+		go func() {
+			defer close(dialed)
+			if conn, err := tnet.DialContextTCPAddrPort(ctx, netip.AddrPortFrom(torrenttest.Public, 80)); err == nil {
+				conn.Close()
+			}
+		}()
+		// The dial's SYN; its retransmission, a second later, waits.
+		if _, err := tun.Read([][]byte{make([]byte, 1500)}, []int{0}, 0); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, "the SYN's retransmission to wait", func() bool {
+			return waitsInWriteNotify("gvisor.dev/gvisor/pkg/tcpip/transport/tcp", interfaceTest)
+		})
+		closed := make(chan error, 1)
+		go func() { closed <- tun.Close() }()
+		select {
+		case err := <-closed:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(time.Minute):
+			t.Fatal("the interface's Close waits for the retransmission it holds")
+		}
+		cancel()
+		<-dialed
+	})
+}
+
+// datagramTo returns an IPv4 UDP packet from the server, inside the tunnel,
+// to to, as a stack of the server's sends it.
+func datagramTo(t *testing.T, to netip.AddrPort) []byte {
+	t.Helper()
+	tun, tnet, err := netstack.CreateNetTUN([]netip.Addr{torrenttest.Public}, nil, 1420)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tun.Close()
+	conn, err := tnet.DialUDPAddrPort(netip.AddrPort{}, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	sent := make(chan error, 1)
+	go func() {
+		_, err := conn.Write([]byte("datagram"))
+		sent <- err
+	}()
+	buf, sizes := make([]byte, 1500), []int{0}
+	if _, err := tun.Read([][]byte{buf}, sizes, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-sent; err != nil {
+		t.Fatal(err)
+	}
+	return buf[:sizes[0]]
+}
+
+// interfaceTest is in the stacks of the goroutines that
+// TestWireGuardInterfaceClosesWhileAPacketWaits starts.
+const interfaceTest = "torrent.TestWireGuardInterfaceClosesWhileAPacketWaits.func"
+
+// waitsInWriteNotify reports whether a goroutine waits in the tunnel
+// interface's WriteNotify to hand wireguard-go a packet, with with in its
+// stack and without not, unless without is empty.
+func waitsInWriteNotify(with, without string) bool {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	for g := range strings.SplitSeq(string(buf), "\n\n") {
+		header, _, _ := strings.Cut(g, "\n")
+		waiting := strings.Contains(header, "[chan send") || strings.Contains(header, "[select")
+		if waiting && strings.Contains(g, ").WriteNotify(") && strings.Contains(g, with) && (without == "" || !strings.Contains(g, without)) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestParseWireGuardConfig(t *testing.T) {
 	t.Parallel()
 	private, public, shared := torrenttest.NewPrivateKey(), torrenttest.NewPrivateKey(), torrenttest.NewPrivateKey()
@@ -550,9 +679,8 @@ func startSource(tb testing.TB, size int) netip.AddrPort {
 }
 
 // A route closed while its sockets still send, as by an engine that closes
-// with torrents playing, closes its tunnel after their last datagram:
-// wireguard-go's stack, which panics on a packet sent as it closes, gets
-// none then, and the sockets fail.
+// with torrents playing, closes its tunnel after their last datagram: the
+// stack gets none of them as it closes, and the sockets fail.
 func TestWireGuardRouteClosesAfterItsSocketsSend(t *testing.T) {
 	t.Parallel()
 	server := torrenttest.StartWireGuardServer(t, nil)
