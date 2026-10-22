@@ -20,6 +20,8 @@ import (
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/subtitles"
 	"github.com/moodiness/polyfin/internal/testspeech"
+	"github.com/moodiness/polyfin/internal/torrent"
+	"github.com/moodiness/polyfin/internal/torrent/torrenttest"
 )
 
 // An addon's subtitle shifted by 4 seconds, and one timed for 25 fps on a
@@ -311,5 +313,113 @@ func reached(enough int64) func(*atomic.Int64) int64 {
 			time.Sleep(20 * time.Millisecond)
 		}
 		return sent.Load()
+	}
+}
+
+// speechService is a service reading versions from opener, whose speech
+// FFmpeg finds.
+func speechService(t *testing.T, ffmpeg string, opener source.Opener) *Service {
+	t.Helper()
+	s := newService(t, opener, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), nil)
+	segments, err := hls.NewManager(ffmpeg, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(segments.Close)
+	s.segments = segments
+	return s
+}
+
+// speechLookedFor waits until the speech of the versions queued at their
+// first play was looked for.
+func speechLookedFor(t *testing.T, s *Service) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Minute); ; time.Sleep(20 * time.Millisecond) {
+		s.speech.mu.Lock()
+		running := s.speech.running
+		s.speech.mu.Unlock()
+		if !running {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the speech queued is still looked for after 5 minutes")
+		}
+	}
+}
+
+// The first play of an addon's link has its version's speech found in the
+// background: its addon subtitle, 4 seconds late, comes back in time.
+func TestALinksFirstPlayFindsItsSpeech(t *testing.T) {
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	t.Parallel()
+	const length = 12 * time.Minute
+	spoken := testspeech.Bursts(1, length)
+	s := speechService(t, ffmpeg, &fileSource{data: testspeech.Version(t, ffmpeg, spoken, length, false)})
+	version := library.Version{ID: accounts.ID{1}, URL: "http://files.example/version.mkv", Addon: "Files"}
+	s.FindSpeech(version)
+	speechLookedFor(t, s)
+	late := testspeech.Cues(spoken, func(d time.Duration) time.Duration { return d + 4*time.Second })
+	timing, ok := s.SyncSubtitle(t.Context(), version.ID, accounts.ID{2}, late)
+	if !ok || !timing.Changes() {
+		t.Fatalf("the late subtitle was timed %+v (%v)", timing, ok)
+	}
+	for i, cue := range timing.Apply(late) {
+		if gap := cue.Start - spoken[i].Start; gap.Abs() > 200*time.Millisecond {
+			t.Fatalf("cue %d starts at %s, the speech at %s", i, cue.Start, spoken[i].Start)
+		}
+	}
+}
+
+// The first play of a torrent's file, its torrent running, asks its swarm
+// for nothing to find its speech: the seeder sends nothing, and the addon
+// subtitle, 4 seconds late, is served as it is.
+func TestATorrentsFirstPlayDownloadsNothingForItsSpeech(t *testing.T) {
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	t.Parallel()
+	const length = 12 * time.Minute
+	spoken := testspeech.Bursts(1, length)
+	data := testspeech.Version(t, ffmpeg, spoken, length, false)
+	s := speechService(t, ffmpeg, &fileSource{data: data})
+	// The playback analyzed the file before: here the same file as a
+	// link's, so that the seeder sends nothing for the analysis.
+	analysis, err := s.Analyze(t.Context(), library.Version{ID: accounts.ID{1}, URL: "http://files.example/version.mkv", Addon: "Files"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tor := torrenttest.Build("A Movie", 64<<10, torrenttest.File{Name: "a-movie.mkv", Data: data})
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	proxy := torrenttest.StartProxy(t, true, "", "")
+	engine, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return torrent.Settings{Enabled: true, Proxy: proxy.Address()} },
+		Dir: t.TempDir(), Budget: func() int64 { return 256 << 20 }, Logger: slog.New(slog.DiscardHandler)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(engine.Close)
+	s.Torrents(engine)
+	sources := []string{"tracker:" + tracker.URL()}
+	version := library.Version{ID: accounts.ID{2}, URL: "magnet:?xt=urn:btih:" + tor.HashHex(), Addon: "Torrents",
+		Torrent: &library.Torrent{InfoHash: tor.HashHex(), Sources: sources}}
+	s.analyses.Put(version.ID, analysis)
+	spec, err := torrent.NewSpec(tor.HashHex(), nil, sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The playback runs the torrent all along.
+	defer engine.Play(spec)()
+	s.FindSpeech(version)
+	speechLookedFor(t, s)
+	if requests, sent := seeder.Requests(), seeder.Sent(); requests != 0 || sent != 0 {
+		t.Errorf("the seeder was asked %d blocks and sent %d bytes", requests, sent)
+	}
+	late := testspeech.Cues(spoken, func(d time.Duration) time.Duration { return d + 4*time.Second })
+	if timing, ok := s.SyncSubtitle(t.Context(), version.ID, accounts.ID{3}, late); ok || timing.Changes() {
+		t.Errorf("the late subtitle was timed %+v (%v)", timing, ok)
 	}
 }

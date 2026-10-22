@@ -30,7 +30,9 @@ import (
 // when the version has speech: a text track inside its file, whose times
 // are the file's, else the speech it finds in three stretches of its
 // audio. It finds it once per version, in the background, at the
-// version's first play, and keeps it.
+// version's first play, and keeps it. A torrent's file, read from its
+// swarm, is not looked at (see FindSpeech): its addon subtitles are
+// served as they are.
 const (
 	// speechStretch is how long each stretch of audio looked at lasts, at
 	// most, and minStretch at least.
@@ -138,11 +140,13 @@ type storedSpeech struct {
 // settings sync the addons' subtitles and it was not found before: from a
 // text track inside its file, else from its audio (see speechReference).
 // A version that is not one file, or that holds one of its source's
-// connections, as a replay does, is not looked at. A version recently
-// failed or already waiting is not queued; neither is one when the queue
-// is full.
+// connections, as a replay does, is not looked at. Neither is a torrent's
+// file: finding its speech would download stretches of it from the swarm
+// as its playback starts, and what the playback holds then, its first
+// minutes, has none of them. A version recently failed or already
+// waiting is not queued; neither is one when the queue is full.
 func (s *Service) FindSpeech(version library.Version) {
-	if !s.settings().SyncAddonSubtitles || s.ReadsInput(version) || version.HoldsConnection {
+	if !s.settings().SyncAddonSubtitles || s.ReadsInput(version) || version.HoldsConnection || version.Torrent != nil {
 		return
 	}
 	if _, failed := s.speech.failed.Get(version.ID); failed {
@@ -186,7 +190,7 @@ func (s *Service) findQueuedSpeech() {
 // before. A version whose speech cannot be found for now is not tried
 // again for a while.
 func (s *Service) findSpeech(ctx context.Context, version library.Version) {
-	if _, found := s.storedSpeech(ctx, version.ID); found || s.idleTorrent(ctx, version) {
+	if _, found := s.storedSpeech(ctx, version.ID); found {
 		return
 	}
 	started := time.Now()
