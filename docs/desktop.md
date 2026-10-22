@@ -46,6 +46,12 @@ Polyfin listens on port 8096 for apps and the browser, and on UDP port 7359 for 
 
 Refused, Polyfin still works on the computer itself, at `localhost`, and other devices cannot reach it. On Linux, a firewall such as `ufw` asks nothing: open the ports yourself, such as `sudo ufw allow 8096/tcp` and `sudo ufw allow 7359/udp`. DLNA, once on, listens on UDP port 1900 too (see [DLNA](dlna.md)).
 
+## NVIDIA graphics cards
+
+On Windows and Linux, Polyfin converts video on an NVIDIA graphics card through NVENC, which the downloaded FFmpeg 9.0 opens only with NVIDIA driver 610.00 or newer. With an older driver, video is converted on another graphics card of the computer if one encodes, or else on the processor, and **System › Health** shows a warning naming the version needed.
+
+Maxwell, Pascal and Volta cards, such as the GeForce GTX 900 and 10 series and the Quadro M and P series, get no driver past NVIDIA's R580 series, so they cannot use NVENC with Polyfin. See [NVIDIA driver](transcoding.md#nvidia-driver).
+
 ## The menu
 
 The icon shows whether Polyfin runs: faded while it starts or is stopped. Its menu has:

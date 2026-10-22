@@ -88,6 +88,8 @@ A picture subtitle track that could not be read into text, its language having n
 
 When every metadata addon of the server has a language, a warning names the first one, with a link to its page: they then describe titles in their language for every user, whatever the user's metadata language. Keep **Language of its descriptions** at **None** on that addon, or on one more metadata addon (see [Languages](addons-and-libraries.md#languages)).
 
+An NVIDIA graphics card whose driver is older than the version FFmpeg needs for NVENC is a warning naming that version, with a link to **Transcoder**: video is converted on another graphics card or on the processor until the driver is updated (see [NVIDIA driver](transcoding.md#nvidia-driver)).
+
 A local folder whose files are left unmatched because the search of their titles failed is a warning, naming the addon that failed most of them and why, with a link to the folder's page. It goes away once the searches go through, which Polyfin tries again on its own (see [Failed searches](local-folders.md#failed-searches)).
 
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).

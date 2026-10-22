@@ -124,7 +124,15 @@ A backup restored on another system keeps its choice of method; when the new sys
 
 At startup Polyfin encodes a few frames with each encoder of the system's methods, in the order above, and logs the one it converts video on. It skips this when **Settings › Conversion** chooses a GPU. For VAAPI, it tries each render node of `/dev/dri` in turn, unless **Graphics card for VAAPI** names one.
 
+A method whose encoders all fail is logged with FFmpeg's reason (`A GPU method does not encode`, with the method, the encoder and the end of what FFmpeg wrote), at the level of the line that tells what video is converted on: information under **Automatic**, a warning when the settings choose that method.
+
 It then measures, in the background, which way converts faster on that GPU (see [Frames on the GPU](#frames-on-the-gpu)), in a few seconds.
+
+### NVIDIA driver
+
+The FFmpeg 9.0 of the Docker image and of Polyfin Desktop needs NVIDIA driver 610.00 or newer for NVENC, on Linux and on Windows. In Docker, this is the host's driver. With an older driver, NVENC fails at startup: the log gives FFmpeg's reason, `Driver does not support the required nvenc API version`, and **System › Health** shows a warning naming the version needed. Video is then converted on another GPU of the computer if one encodes, or else on the processor.
+
+NVIDIA's R580 drivers are the last for Maxwell, Pascal and Volta cards, such as the GeForce GTX 900 and 10 series, the Quadro M and P series and the Titan V. They never reach 610, so these cards cannot use NVENC with Polyfin. Turing cards (GeForce GTX 16 and RTX 20 series) and newer ones can, once their driver is updated.
 
 ### Frames on the GPU
 
@@ -142,6 +150,7 @@ Frames always go through memory for burned-in subtitles (except on Intel and Vid
 
 - Docker: `--runtime=nvidia`. Compose: `runtime: nvidia`.
 - This needs the NVIDIA Container Toolkit, or Unraid's Nvidia Driver plugin.
+- The host's NVIDIA driver must be 610.00 or newer (see [NVIDIA driver](#nvidia-driver)).
 - HDR is also tone mapped on the NVIDIA GPU, through Vulkan. This needs `graphics` among `NVIDIA_DRIVER_CAPABILITIES`; the image sets it.
 
 ### Giving the container an AMD or Intel GPU
