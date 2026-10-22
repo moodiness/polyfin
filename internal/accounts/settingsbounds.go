@@ -11,15 +11,18 @@ import (
 // DefaultCustomCss and DefaultCustomJs are the web player's custom CSS and
 // script on a new server: they load the LumaaGlaass theme from jsDelivr at
 // the main branch of its repository, so servers follow the theme without a
-// Polyfin release, with its settings page for each user. Changing them takes
-// both, and a migration replacing the column defaults and the values still
-// equal to these.
+// Polyfin release, with its settings page for each user and its home
+// carousel off. Changing them takes both, and a migration replacing the
+// column defaults and the values still equal to these. While the script is
+// DefaultCustomJs, the jellyfin package answers the theme's settings of a
+// user who never saved them with the carousel off, as the page itself
+// ignores the script's options.
 const DefaultCustomCss = `@import url('https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@main/assets/lumaaglaass.css');`
 
 const DefaultCustomJs = `(() => {
     window.LumaaGlaassOptions = {
         preferences: true,
-        homeCarousel: true,
+        homeCarousel: false,
         collectionFilter: true
     };
 

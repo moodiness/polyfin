@@ -3,6 +3,7 @@ package database
 import (
 	"io/fs"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -108,6 +109,70 @@ func TestThemeMainBranchMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
 		"own CSS":    {"a {}", pinnedJs, "a {}", pinnedJs},
 		"own script": {pinnedCss, "b()", pinnedCss, "b()"},
 		"emptied":    {"", "", "", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			pool := testdb.New(t)
+			ctx := t.Context()
+			if err := migrate(ctx, pool, migrations[:at]); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, "UPDATE settings SET custom_css = $1, custom_js = $2", tc.css, tc.js); err != nil {
+				t.Fatal(err)
+			}
+			if err := migrate(ctx, pool, migrations); err != nil {
+				t.Fatal(err)
+			}
+			if css, js := read(t, pool); css != tc.wantCss || js != tc.wantJs {
+				t.Errorf("the custom code became %q and %q, want %q and %q", css, js, tc.wantCss, tc.wantJs)
+			}
+		})
+	}
+}
+
+// The default script turns the theme's home carousel off on servers whose
+// script was still the previous default: a server that changed its script
+// keeps it, and the stylesheet is never touched.
+func TestThemeCarouselOffMigrationChangesOnlyTheUnchangedScript(t *testing.T) {
+	files, err := fs.Sub(embedded, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrations, err := loadMigrations(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := slices.IndexFunc(migrations, func(m migration) bool { return m.name == "theme_carousel_off" })
+	if at < 0 {
+		t.Fatal("no theme_carousel_off migration")
+	}
+	read := func(t *testing.T, pool *pgxpool.Pool) (css, js string) {
+		t.Helper()
+		if err := pool.QueryRow(t.Context(), "SELECT custom_css, custom_js FROM settings").Scan(&css, &js); err != nil {
+			t.Fatal(err)
+		}
+		return css, js
+	}
+	before := testdb.New(t)
+	if err := migrate(t.Context(), before, migrations[:at]); err != nil {
+		t.Fatal(err)
+	}
+	themeCss, carouselJs := read(t, before)
+	fresh := testdb.New(t)
+	if err := migrate(t.Context(), fresh, migrations); err != nil {
+		t.Fatal(err)
+	}
+	freshCss, freshJs := read(t, fresh)
+	if freshCss != themeCss || !strings.Contains(freshJs, "homeCarousel: false") ||
+		strings.Replace(freshJs, "homeCarousel: false", "homeCarousel: true", 1) != carouselJs {
+		t.Fatalf("a new server's custom code: %q, %q", freshCss, freshJs)
+	}
+	edited := strings.Replace(carouselJs, "collectionFilter: true", "collectionFilter: false", 1)
+	for name, tc := range map[string]struct{ css, js, wantCss, wantJs string }{
+		"unchanged":     {themeCss, carouselJs, themeCss, freshJs},
+		"own CSS":       {"a {}", carouselJs, "a {}", freshJs},
+		"edited script": {themeCss, edited, themeCss, edited},
+		"own script":    {themeCss, "b()", themeCss, "b()"},
+		"emptied":       {"", "", "", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			pool := testdb.New(t)
