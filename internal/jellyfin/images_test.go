@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -11,10 +12,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -224,6 +228,66 @@ func TestMissingArtworkIsNotFound(t *testing.T) {
 				t.Errorf("%s: %v, want %d", name, err, want)
 			}
 		}
+	}
+}
+
+// artworkLog keeps the level and error of each "Artwork could not be
+// downloaded" line a logger handles.
+type artworkLog struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (l *artworkLog) Enabled(context.Context, slog.Level) bool { return true }
+
+func (l *artworkLog) Handle(_ context.Context, record slog.Record) error {
+	if record.Message != "Artwork could not be downloaded" {
+		return nil
+	}
+	record.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == "error" {
+			l.mu.Lock()
+			l.lines = append(l.lines, record.Level.String()+" "+attr.Value.String())
+			l.mu.Unlock()
+		}
+		return true
+	})
+	return nil
+}
+
+func (l *artworkLog) WithAttrs([]slog.Attr) slog.Handler { return l }
+
+func (l *artworkLog) WithGroup(string) slog.Handler { return l }
+
+// The requests that a download's remembered failure answers log its cause,
+// as the first one does.
+func TestRememberedArtworkFailuresLogTheirCause(t *testing.T) {
+	t.Parallel()
+	logged := &artworkLog{}
+	s, token, views := browsingOn(t, newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, _ *pgxpool.Pool) {
+		o.Logger = slog.New(logged)
+	}))
+	var page QueryResult
+	s.get(t, "/Items?ParentId="+views["Top"], token, &page)
+	movie := page.Items[0]
+	if len(movie.BackdropImageTags) == 0 {
+		t.Fatalf("no backdrop: %+v", movie.BackdropImageTags)
+	}
+	// The addon's artwork server does not have the backdrop.
+	for range 2 {
+		response, err := http.Get(s.url + "/Items/" + movie.Id + "/Images/Backdrop/0?tag=" + movie.BackdropImageTags[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Errorf("backdrop: %d", response.StatusCode)
+		}
+	}
+	logged.mu.Lock()
+	defer logged.mu.Unlock()
+	if len(logged.lines) != 2 || !strings.HasPrefix(logged.lines[1], "DEBUG the last download failed: ") || !strings.Contains(logged.lines[1], "404") {
+		t.Errorf("logged: %q", logged.lines)
 	}
 }
 

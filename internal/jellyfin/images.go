@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"image"
 	_ "image/gif" // registers GIF with image.DecodeConfig
 	"image/jpeg"
@@ -47,8 +48,8 @@ import (
 // one host at once, imageSlowHostFetches to a host that serves an IPTV
 // source or its logos, often the provider's panel, and to a host that
 // showed it was overloaded, for imageSlowDown. A download that failed
-// answers the same for
-// imageFailureLife without asking again. Downloaded images are kept in
+// answers the same for imageFailureLife without asking again, its error
+// telling the first one's cause. Downloaded images are kept in
 // memory, the most recently used up to imageCacheBytes, and on disk under
 // the cache folder's images folder, up to imageDiskBytes, which a restart
 // keeps. An app asking for an image much smaller than the original (see
@@ -67,7 +68,7 @@ const (
 	imageSlowHostFetches = 4
 	imageSlowDown        = 10 * time.Minute
 	// imageFailureLife is how long a failed download answers again without
-	// asking.
+	// asking, with the same status and cause.
 	imageFailureLife = 2 * time.Minute
 	// imageResizes bounds the images resized at once.
 	imageResizes = 2
@@ -91,7 +92,7 @@ type imageCache struct {
 	dir      string
 	logger   *slog.Logger
 	flight   singleflight.Group
-	failures *cache.Cache[string, int]
+	failures *cache.Cache[string, downloadError]
 	resizes  chan struct{}
 
 	mu sync.Mutex
@@ -124,7 +125,7 @@ type diskImage struct {
 func (c *imageCache) open(dir string, logger *slog.Logger) {
 	c.once.Do(func() {
 		c.logger = logger
-		c.failures = cache.New[string, int](5000, imageFailureLife)
+		c.failures = cache.New[string, downloadError](5000, imageFailureLife)
 		c.resizes = make(chan struct{}, imageResizes)
 		c.memory, c.order = map[string]*list.Element{}, list.New()
 		c.disk, c.hosts = map[string]*diskImage{}, map[string]*hostFetches{}
@@ -421,8 +422,8 @@ func (h *Handler) fetchArtwork(ctx context.Context, target string, confined, ipt
 // fetchArtworkHeld is fetchArtwork, the download holding what hold gives
 // besides its place among those from its host, when hold is set.
 func (h *Handler) fetchArtworkHeld(ctx context.Context, target string, confined, iptv bool, hold func(context.Context) (func(), error)) (artwork, error) {
-	if status, failed := h.images.failures.Get(target); failed {
-		return artwork{}, downloadError{status, errors.New("the last download failed")}
+	if failed, ok := h.images.failures.Get(target); ok {
+		return artwork{}, downloadError{failed.status, fmt.Errorf("the last download failed: %w", failed.err)}
 	}
 	return h.images.fetch(ctx, target, func(ctx context.Context) (artwork, error) {
 		release, err := h.images.host(ctx, target, iptv)
@@ -449,8 +450,9 @@ func (h *Handler) fetchArtworkHeld(ctx context.Context, target string, confined,
 			if overloaded(err) {
 				h.images.spare(target)
 			}
-			h.images.failures.Put(target, status)
-			return artwork{}, downloadError{status, err}
+			failed := downloadError{status, err}
+			h.images.failures.Put(target, failed)
+			return artwork{}, failed
 		}
 		return artwork{body: body, contentType: contentType}, nil
 	})
