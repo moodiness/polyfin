@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -161,6 +162,9 @@ type VideoEncoding struct {
 	// beside the source (see burnGraph).
 	Burn     *int
 	BurnFile string
+	// Colors are the source's, as its analysis states them, which video
+	// converted without tone mapping keeps (see tags).
+	Colors Colors
 	// Hardware is the GPU decoding and encoding the video, nil for none.
 	Hardware *Hardware
 	// Preset trades the encoder's speed for quality: one of x264's preset
@@ -192,16 +196,59 @@ type VideoEncoding struct {
 	DecodeOnCPU bool
 }
 
+// Colors are the color range, matrix, transfer and primaries of a video,
+// as FFmpeg names them, each empty when not known.
+type Colors struct {
+	Range, Matrix, Transfer, Primaries string
+}
+
+// taggedColors are the colors tags writes, by setparams option, with the
+// names FFmpeg gives them: those of the videos apps play, which scaling
+// in YUV keeps. An RGB matrix is left out, as the frames go out in YUV.
+var taggedColors = []struct {
+	option string
+	names  []string
+}{
+	{"range", []string{"tv", "pc"}},
+	{"colorspace", []string{"bt709", "fcc", "bt470bg", "smpte170m", "smpte240m", "bt2020nc", "bt2020c"}},
+	{"color_trc", []string{"bt709", "bt470m", "bt470bg", "smpte170m", "smpte240m", "linear", "iec61966-2-1", "bt2020-10", "bt2020-12", "smpte2084", "arib-std-b67"}},
+	{"color_primaries", []string{"bt709", "bt470m", "bt470bg", "smpte170m", "smpte240m", "film", "bt2020"}},
+}
+
+// tags is the filter tagging the converted frames with the source's
+// colors, which the encoders write into the bitstream, empty when none is
+// known, and when tone mapping, whose filters tag the frames BT.709. The
+// encoders take the colors the frames carry, and FFmpeg's HEVC decoder
+// gives frames only those of the bitstream: without it, an HEVC source
+// stating its colors in its container alone goes out without any. A color
+// not known is left as the frames have it.
+func (v *VideoEncoding) tags() string {
+	if v.ToneMap {
+		return ""
+	}
+	var options []string
+	for i, value := range []string{v.Colors.Range, v.Colors.Matrix, v.Colors.Transfer, v.Colors.Primaries} {
+		if slices.Contains(taggedColors[i].names, value) {
+			options = append(options, taggedColors[i].option+"="+value)
+		}
+	}
+	if len(options) == 0 {
+		return ""
+	}
+	return ",setparams=" + strings.Join(options, ":")
+}
+
 // filters is the filter chain of the video: 8-bit, at the size asked, in
-// SDR, as the encoder takes it, on the GPU when its frames stay there.
+// SDR, as the encoder takes it, on the GPU when its frames stay there,
+// tagged with its colors.
 func (v *VideoEncoding) filters() string {
 	switch v.pipeline() {
 	case onGPU:
-		return v.gpuFilters()
+		return v.gpuFilters() + v.tags()
 	case throughDevice:
-		return v.deviceToneMapping()
+		return v.deviceToneMapping() + v.tags()
 	}
-	return v.convert() + "," + v.Hardware.output()
+	return v.convert() + "," + v.Hardware.output() + v.tags()
 }
 
 // convert is the filter chain bringing the video to the size asked, in
@@ -307,7 +354,7 @@ func (v *VideoEncoding) burnGraph(video int, from time.Duration, skip string) st
 	}
 	return "[0:" + strconv.Itoa(video) + "]" + skip + converted + "[converted];" +
 		subtitle + "scale=" + strconv.Itoa(v.Width) + ":-2[subtitle];" +
-		"[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass," + v.Hardware.output() + "[video]"
+		"[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass," + v.Hardware.output() + v.tags() + "[video]"
 }
 
 // args are FFmpeg's encoder options for a job starting at segment n.

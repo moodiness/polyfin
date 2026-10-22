@@ -13,6 +13,8 @@ Polyfin picks the lightest way an app can play a file:
 
 Video converts on a GPU when one is available, with the methods of the system Polyfin runs on (see [GPU methods per system](#gpu-methods-per-system)): an NVIDIA GPU through NVENC, or an AMD or Intel GPU through VAAPI, on Linux. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. Converted H.264 is in the High profile the master playlist announces, from x264 on the processor as from every GPU; converted HEVC is in the Main profile. For how apps choose between versions of a title, see [Playback](playback.md).
 
+Converted video keeps the colors its source states: range, matrix, transfer and primaries, as Polyfin's analysis reads them, from the video track or, when only there, from its container, such as Matroska's color information. FFmpeg's encoders write the colors the decoded frames carry, and its HEVC decoder knows only those of the video track, so Polyfin tags the converted frames with the source's itself. A color the source does not state stays unstated, and apps pick their own. HDR tone mapped to SDR is tagged BT.709, by the GPU's or the processor's tone mapping.
+
 With **Say in version names how they play** on, the default, apps see in each version's name which of these ways it takes: "(direct play)", "(direct stream)" when its tracks are copied into HLS, "(converted: reason)", or "(cannot play here)" when it needs a conversion the server or the user may not have. See [Version names](playback.md#version-names).
 
 ## Size of converted video

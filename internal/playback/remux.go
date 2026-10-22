@@ -608,9 +608,12 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 		if double {
 			rate *= 2
 		}
+		// The source's colors, which video converted without tone mapping
+		// keeps (see hls.VideoEncoding.Colors).
+		colors := hls.Colors{Range: video.ColorRange, Matrix: video.ColorSpace, Transfer: video.ColorTransfer, Primaries: video.ColorPrimaries}
 		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
 			FrameRate: rate, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace, Burn: remux.Burn, BurnFile: remux.BurnFile,
-			Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak,
+			Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak,
 			ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double, DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
 	}
 	if c := remux.ConvertAudio; c != nil && r.Audio >= 0 {

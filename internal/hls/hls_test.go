@@ -436,6 +436,106 @@ func TestHDRIsConvertedToSDR(t *testing.T) {
 	}
 }
 
+// FFmpeg's encoders tag their output with the colors the decoded frames
+// carry. FFmpeg's HEVC decoder gives frames only those of the bitstream:
+// an HEVC source that states its colors in its container alone, as
+// Matroska's Colour element can, decodes to frames without any. Converted
+// video keeps the source's colors all the same, on the processor and on a
+// GPU, and claims none the source does not state.
+func TestConvertedVideoKeepsTheSourcesColors(t *testing.T) {
+	ffmpeg, ffprobe := tools(t)
+	if encoders, _ := exec.Command(ffmpeg, "-hide_banner", "-encoders").Output(); !bytes.Contains(encoders, []byte(" libx265 ")) {
+		t.Skip("FFmpeg has no libx265 to make the source with")
+	}
+	dir := t.TempDir()
+	untagged, tagged := filepath.Join(dir, "untagged.mkv"), filepath.Join(dir, "tagged.mkv")
+	for _, run := range [][]string{
+		{"-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24", "-t", "8", "-c:v", "libx265", "-x265-params", "log-level=error",
+			"-force_key_frames", "0,6", untagged},
+		{"-i", untagged, "-c", "copy", "-color_range", "tv", "-colorspace", "bt709", "-color_trc", "bt709", "-color_primaries", "bt709", tagged},
+	} {
+		if out, err := exec.Command(ffmpeg, append([]string{"-hide_banner", "-loglevel", "error"}, run...)...).CombinedOutput(); err != nil {
+			t.Fatalf("make the source: %v: %s", err, out)
+		}
+	}
+	plan := NewPlan(seconds(0, 6), 8*time.Second)
+	bt709 := Colors{Range: "tv", Matrix: "bt709", Transfer: "bt709", Primaries: "bt709"}
+	for _, gpu := range []string{"", "nvenc", "vaapi", "videotoolbox"} {
+		name := gpu
+		if name == "" {
+			name = "processor"
+		}
+		t.Run(name, func(t *testing.T) {
+			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer m.Close()
+			encoding := VideoEncoding{Encoder: "libx264", Level: "4.1", Width: 320, Height: 180, Bitrate: 500_000, FrameRate: 24}
+			switch hw, ok := m.DetectHardware(gpu, ""); {
+			case gpu == "" && !slices.Contains(m.Encoders(), "libx264"):
+				t.Skip("FFmpeg has no libx264")
+			case gpu != "":
+				i := slices.IndexFunc(hw.Encoders, func(e string) bool { return strings.HasPrefix(e, "h264_") })
+				if !ok || i < 0 {
+					t.Skip("no GPU encodes H.264 with " + gpu)
+				}
+				encoding.Encoder, encoding.Hardware = hw.Encoders[i], &hw
+			}
+			for _, tc := range []struct {
+				input  string
+				colors Colors
+				want   string
+			}{
+				{tagged, bt709, "tv,bt709,bt709,bt709"},
+				// Unknown colors stay unknown.
+				{untagged, Colors{}, "unknown,unknown,unknown"},
+			} {
+				encoding := encoding
+				encoding.Colors = tc.colors
+				open := func(context.Context) (Remux, func(), error) {
+					return Remux{Input: tc.input, Video: 0, Audio: -1, Format: FMP4, Plan: plan, Encode: &encoding}, func() {}, nil
+				}
+				ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+				key := Key{Session: filepath.Base(tc.input), Audio: -1, Format: FMP4}
+				header, err := m.Init(ctx, key, open)
+				if err != nil {
+					cancel()
+					t.Fatal(err)
+				}
+				segment, err := m.Segment(ctx, key, open, 0)
+				cancel()
+				if err != nil {
+					header.Close()
+					t.Fatal(err)
+				}
+				data, _ := io.ReadAll(header)
+				more, _ := io.ReadAll(segment)
+				header.Close()
+				segment.Close()
+				joined := filepath.Join(t.TempDir(), "joined.mp4")
+				if err := os.WriteFile(joined, append(data, more...), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				// The stream's colors, then those its first frame decodes
+				// with, which come from the bitstream.
+				stream, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries",
+					"stream=color_range,color_space,color_transfer,color_primaries", "-of", "csv=p=0", joined).Output()
+				frame, _ := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-read_intervals", "%+#1", "-show_entries",
+					"frame=color_space,color_transfer,color_primaries", "-of", "csv=p=0", joined).Output()
+				got, _, _ := firstLine(stream)
+				// The frame's line ends with an empty field for its side data.
+				decoded, _, _ := firstLine(frame)
+				decoded = strings.TrimRight(decoded, ",")
+				if !strings.HasSuffix(got, tc.want) || !strings.HasSuffix(","+tc.want, ","+decoded) {
+					t.Errorf("%s: stream %q, frame %q, want %q", filepath.Base(tc.input), got, decoded, tc.want)
+				}
+				m.Stop(key.Session)
+			}
+		})
+	}
+}
+
 func TestARemuxThatFailsReportsItsError(t *testing.T) {
 	ffmpeg, ffprobe := tools(t)
 	input, keyframes := source(t, ffmpeg, ffprobe, "aac")

@@ -269,6 +269,49 @@ func TestDesktopGPUPipelines(t *testing.T) {
 	}
 }
 
+// Every encoder writes the colors the frames carry: converted frames are
+// tagged last with the source's colors, those known, on the processor
+// and on each GPU, burned subtitles or not; tone mapped frames are left
+// to the tone mapping, which tags them BT.709.
+func TestConvertedFramesAreTaggedWithTheSourcesColors(t *testing.T) {
+	plan := NewPlan(seconds(0, 6, 12), 18*time.Second)
+	gpu := func(method string, encoder string) *Hardware {
+		return &Hardware{Method: method, Encoders: []string{encoder}, Resident: true, ToneMapping: true}
+	}
+	const all = ",setparams=range=tv:colorspace=bt709:color_trc=bt709:color_primaries=bt709"
+	bt709 := Colors{Range: "tv", Matrix: "bt709", Transfer: "bt709", Primaries: "bt709"}
+	burned := 2
+	for _, tc := range []struct {
+		name   string
+		e      VideoEncoding
+		suffix string
+	}{
+		{"x264", VideoEncoding{Encoder: "libx264", Colors: bt709}, all},
+		{"NVENC", VideoEncoding{Encoder: "h264_nvenc", Hardware: gpu("cuda", "h264_nvenc"), Colors: bt709}, all},
+		{"VAAPI", VideoEncoding{Encoder: "h264_vaapi", Hardware: gpu("vaapi", "h264_vaapi"), Colors: bt709}, all},
+		{"QSV", VideoEncoding{Encoder: "h264_qsv", Hardware: gpu("qsv", "h264_qsv"), Colors: bt709}, all},
+		{"AMF", VideoEncoding{Encoder: "h264_amf", Hardware: gpu("amf", "h264_amf"), Colors: bt709}, all},
+		{"VideoToolbox", VideoEncoding{Encoder: "h264_videotoolbox", Hardware: gpu("videotoolbox", "h264_videotoolbox"), Colors: bt709}, all},
+		{"burned in", VideoEncoding{Encoder: "libx264", Burn: &burned, Colors: bt709}, all + "[video]"},
+		// Only what the source states: an HEVC source without a VUI
+		// still has limited range.
+		{"range alone", VideoEncoding{Encoder: "libx264", Colors: Colors{Range: "tv", Matrix: "unknown"}}, "format=yuv420p,setparams=range=tv"},
+		{"nothing known", VideoEncoding{Encoder: "libx264", Colors: Colors{Matrix: "unknown", Transfer: "reserved"}}, "format=yuv420p"},
+		{"an RGB source", VideoEncoding{Encoder: "libx264", Colors: Colors{Matrix: "gbr"}}, "format=yuv420p"},
+		{"tone mapped", VideoEncoding{Encoder: "libx264", ToneMap: true, Colors: Colors{Range: "tv", Matrix: "bt2020nc", Transfer: "smpte2084", Primaries: "bt2020"}},
+			"zscale=t=bt709:m=bt709:r=tv,format=yuv420p"},
+		{"tone mapped by VideoToolbox", VideoEncoding{Encoder: "h264_videotoolbox", Hardware: gpu("videotoolbox", "h264_videotoolbox"), ToneMap: true,
+			Colors: Colors{Transfer: "smpte2084", Primaries: "bt2020"}}, "color_transfer=bt709"},
+	} {
+		tc.e.Level, tc.e.Width, tc.e.Height, tc.e.Bitrate, tc.e.FrameRate = "4.1", 1920, 1080, 8_000_000, 24
+		args := Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 1, Format: FMP4, Plan: plan, Encode: &tc.e}.args(0, 0)
+		i := slices.IndexFunc(args, func(arg string) bool { return arg == "-vf" || arg == "-filter_complex" })
+		if i < 0 || !strings.HasSuffix(args[i+1], tc.suffix) {
+			t.Errorf("%s: %q, want it to end with %q", tc.name, args, tc.suffix)
+		}
+	}
+}
+
 // Each encoder family takes its own options, from FFmpeg's documentation
 // of each: VideoToolbox's H.264 encoder names levels up to 5.2 and its
 // HEVC encoder none, and its quality runs from 1 to 100 within the
