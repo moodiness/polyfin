@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"os"
 	"runtime/debug"
 	"slices"
 	"sync"
@@ -18,9 +19,23 @@ import (
 
 const (
 	// maxPeers is how many peers a torrent connects to, maxDialing how many
-	// it dials at once.
+	// it dials at once: a dial no peer answers holds its slot for the
+	// handshake's 20 seconds, so twice as many dials reach a seeder behind
+	// 23 silent peers in 20 seconds rather than 40, while the connections
+	// through a proxy stay within maxPeers.
 	maxPeers   = 30
-	maxDialing = 8
+	maxDialing = 16
+	// redialWait is how long a peer whose dial failed, or whose
+	// connection ended, waits before it is dialed again, doubled for each
+	// failure in a row up to maxRedialWait: a peer refuses while its
+	// slots are full, a route drops a connection, and both come back. A
+	// connection that lasted stableFor counts as no failure, and a peer
+	// given up for its silence counts as givenUpFails, which waits
+	// maxRedialWait.
+	redialWait    = 10 * time.Second
+	maxRedialWait = 5 * time.Minute
+	stableFor     = time.Minute
+	givenUpFails  = 64
 	// pipeline is how many blocks a peer is asked for at once. dropWait is
 	// how long a request a peer skipped, sending blocks asked after it,
 	// waits before it is taken as dropped and its block asked again, of
@@ -84,17 +99,21 @@ type torrent struct {
 	have        []bool
 	inflight    map[int]*inflightPiece
 	peers       map[netip.AddrPort]*peer
-	known       map[netip.AddrPort]bool
+	known       map[netip.AddrPort]candidate
 	queue       []netip.AddrPort
 	dialing     int
-	reads       map[*Reader]readSpan
-	files       []File
-	changed     chan struct{}
-	err         error
-	upBytes     int64
-	downBytes   int64
-	refs        int
-	linger      *time.Timer
+	// redials are the peers waiting to be dialed again, nextRedial the
+	// soonest time one may be, zero when none waits.
+	redials    []netip.AddrPort
+	nextRedial time.Time
+	reads      map[*Reader]readSpan
+	files      []File
+	changed    chan struct{}
+	err        error
+	upBytes    int64
+	downBytes  int64
+	refs       int
+	linger     *time.Timer
 	// announces is what each tracker last answered, nil for peers, and
 	// looked whether the DHT was looked up, for a StartError.
 	announces map[string]error
@@ -118,6 +137,16 @@ type torrent struct {
 	utpRetryAt time.Time
 }
 
+// candidate is a peer the torrent knows of: fails counts its dials in a
+// row that failed, or its connections that ended soon, and retryAt, while
+// it waits to be dialed again, is when it may be; last is how its last
+// dial or connection ended, outcomeNone before any.
+type candidate struct {
+	fails   int
+	retryAt time.Time
+	last    outcome
+}
+
 // inflightPiece is a piece being downloaded: its bytes, the blocks
 // received, when each was last asked for, and of how many peers.
 type inflightPiece struct {
@@ -138,7 +167,7 @@ func newTorrent(e *Engine, spec Spec, route Route, udp bool) *torrent {
 	ctx, cancel := context.WithCancel(context.Background())
 	t := &torrent{engine: e, hash: spec.Hash, route: route, udp: udp, ctx: ctx, cancel: cancel,
 		trackers: slices.Clone(spec.Trackers), nodes: slices.Clone(spec.Nodes), dht: spec.DHT,
-		inflight: map[int]*inflightPiece{}, peers: map[netip.AddrPort]*peer{}, known: map[netip.AddrPort]bool{},
+		inflight: map[int]*inflightPiece{}, peers: map[netip.AddrPort]*peer{}, known: map[netip.AddrPort]candidate{},
 		flags: map[netip.AddrPort]byte{}, reads: map[*Reader]readSpan{}, changed: make(chan struct{}), announces: map[string]error{}}
 	return t
 }
@@ -269,19 +298,30 @@ func (t *torrent) addPeers(peers []netip.AddrPort) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for _, address := range peers {
-		if !address.IsValid() || address.Port() == 0 || t.known[address] || len(t.known) > 2000 {
+		if !address.IsValid() || address.Port() == 0 || t.knows(address) || len(t.known) > 2000 {
 			continue
 		}
-		t.known[address] = true
+		t.known[address] = candidate{}
 		t.queue = append(t.queue, address)
 	}
 	t.signal()
 }
 
-// connect keeps the torrent connected to up to maxPeers peers.
+// knows reports whether the torrent knows of a peer. The lock is held.
+func (t *torrent) knows(address netip.AddrPort) bool {
+	_, known := t.known[address]
+	return known
+}
+
+// connect keeps the torrent connected to up to maxPeers peers, dialing
+// again those that wait once their time comes (see redial).
 func (t *torrent) connect() {
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
+	defer timer.Stop()
 	for {
 		t.mu.Lock()
+		next := t.requeue(time.Now())
 		for len(t.queue) > 0 && t.dialing < maxDialing && len(t.peers)+t.dialing < maxPeers && t.err == nil {
 			address := t.queue[0]
 			t.queue = t.queue[1:]
@@ -290,15 +330,74 @@ func (t *torrent) connect() {
 		}
 		changed := t.changed
 		t.mu.Unlock()
+		var due <-chan time.Time
+		if !next.IsZero() {
+			timer.Reset(time.Until(next))
+			due = timer.C
+		}
 		select {
 		case <-t.ctx.Done():
 			return
 		case <-changed:
+		case <-due:
 		}
 	}
 }
 
-// dial connects to a peer, and reads it until the connection ends.
+// requeue queues the peers whose wait to be dialed again ended by now,
+// and returns when the next one's ends, zero when none waits. The lock is
+// held.
+func (t *torrent) requeue(now time.Time) time.Time {
+	if t.nextRedial.IsZero() || now.Before(t.nextRedial) {
+		return t.nextRedial
+	}
+	t.nextRedial = time.Time{}
+	waiting := t.redials[:0]
+	for _, address := range t.redials {
+		c := t.known[address]
+		if c.retryAt.After(now) {
+			waiting = append(waiting, address)
+			if t.nextRedial.IsZero() || c.retryAt.Before(t.nextRedial) {
+				t.nextRedial = c.retryAt
+			}
+			continue
+		}
+		c.retryAt = time.Time{}
+		t.known[address] = c
+		t.queue = append(t.queue, address)
+	}
+	clear(t.redials[len(waiting):])
+	t.redials = waiting
+	return t.nextRedial
+}
+
+// redial has a known peer dialed again after its wait, its dial or
+// connection having ended as last tells: the engine's redialWait, doubled
+// for each of its fails in a row past the first, up to maxRedialWait.
+// Nothing waits once the torrent stopped. The lock is held.
+func (t *torrent) redial(address netip.AddrPort, last outcome, fails int) {
+	c, known := t.known[address]
+	if !known || t.err != nil {
+		return
+	}
+	wait := redialWait
+	if t.engine != nil && t.engine.redialWait > 0 {
+		wait = t.engine.redialWait
+	}
+	for i := 1; i < fails && wait < maxRedialWait; i++ {
+		wait *= 2
+	}
+	c.fails, c.last, c.retryAt = fails, last, time.Now().Add(min(wait, maxRedialWait))
+	t.known[address] = c
+	t.redials = append(t.redials, address)
+	if t.nextRedial.IsZero() || c.retryAt.Before(t.nextRedial) {
+		t.nextRedial = c.retryAt
+	}
+	t.signal()
+}
+
+// dial connects to a peer, and reads it until the connection ends. A peer
+// that sent nothing for the engine's idleTimeout is given up.
 func (t *torrent) dial(address netip.AddrPort) {
 	defer t.recovered("peer connection", nil)
 	p := t.join(address)
@@ -307,12 +406,17 @@ func (t *torrent) dial(address netip.AddrPort) {
 	}
 	defer t.leave(p)
 	go p.write()
-	_ = p.read()
+	if err := p.read(); errors.Is(err, os.ErrDeadlineExceeded) {
+		t.mu.Lock()
+		p.givenUp = true
+		t.mu.Unlock()
+	}
 }
 
 // join dials a peer counted in dialing, and adds it to the torrent's
 // peers; nil when it does not answer, or is no longer needed. The dial is
-// uncounted as it ends, by a panic too.
+// uncounted as it ends, by a panic too; a dial that failed is made again
+// after its wait (see redial).
 func (t *torrent) join(address netip.AddrPort) *peer {
 	t.mu.Lock()
 	dht := t.usesDHT()
@@ -322,6 +426,7 @@ func (t *torrent) join(address netip.AddrPort) *peer {
 		if !dialed {
 			t.mu.Lock()
 			t.dialing--
+			t.redial(address, outcomeOther, t.known[address].fails+1)
 			t.signal()
 			t.mu.Unlock()
 		}
@@ -336,9 +441,13 @@ func (t *torrent) join(address netip.AddrPort) *peer {
 		if conn != nil {
 			conn.Close()
 		}
+		if err != nil {
+			t.redial(address, outcomeOf(err), t.known[address].fails+1)
+		}
 		return nil
 	}
 	p := newPeer(t, conn, address)
+	p.joined = time.Now()
 	t.peers[address] = p
 	over := "TCP"
 	if overUTP(p) {
@@ -357,7 +466,9 @@ func (t *torrent) join(address netip.AddrPort) *peer {
 }
 
 // leave closes a peer's connection, and gives the blocks asked of it to
-// the other peers.
+// the other peers. The peer is dialed again after its wait (see redial):
+// the first one when its connection lasted stableFor, the longest one
+// when it was given up, and the next one of its failures otherwise.
 func (t *torrent) leave(p *peer) {
 	p.close()
 	t.mu.Lock()
@@ -365,6 +476,14 @@ func (t *torrent) leave(p *peer) {
 	delete(t.peers, p.address)
 	t.release(p)
 	t.chooseUnchoked()
+	fails := t.known[p.address].fails + 1
+	switch {
+	case p.givenUp:
+		fails = givenUpFails
+	case time.Since(p.joined) >= stableFor:
+		fails = 1
+	}
+	t.redial(p.address, outcomeLeft, fails)
 	t.signal()
 }
 
@@ -508,6 +627,7 @@ func (t *torrent) reask() {
 		if silent >= t.engine.idleTimeout {
 			t.engine.config.Logger.Debug("A torrent's peer was given up: it sent none of the blocks asked", "for", silent.Round(time.Second))
 			p.close()
+			p.givenUp = true
 			t.release(p)
 			asked = append(asked, p)
 			continue

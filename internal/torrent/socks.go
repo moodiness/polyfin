@@ -30,6 +30,26 @@ const (
 	socksUnsupported = 7
 )
 
+// The replies of a SOCKS5 proxy that could not reach a peer (RFC 1928):
+// its network or host unreachable, the connection refused, or the TTL
+// expired, which proxies answer to a connection that timed out.
+const (
+	socksNetUnreachable  = 3
+	socksHostUnreachable = 4
+	socksRefused         = 5
+	socksTTLExpired      = 6
+)
+
+// socksReplyError is a SOCKS5 proxy's refusal of a request, by its reply
+// code.
+type socksReplyError struct {
+	code byte
+}
+
+func (e *socksReplyError) Error() string {
+	return fmt.Sprintf("the SOCKS5 proxy refused the request (reply %d)", e.code)
+}
+
 // proxyTimeout bounds a proxy's handshake, and checkedFor how long a
 // proxy that answered is not asked again.
 const (
@@ -225,7 +245,7 @@ func command(conn net.Conn, cmd byte, address string) (string, error) {
 		return "", ErrNoUDP
 	}
 	if reply[0] != socksVersion || reply[1] != 0 {
-		return "", fmt.Errorf("the SOCKS5 proxy refused the request (reply %d)", reply[1])
+		return "", &socksReplyError{code: reply[1]}
 	}
 	return readSocksAddress(conn)
 }

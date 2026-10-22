@@ -110,7 +110,7 @@ func TestPrivateTorrentIgnoresPeerExchange(t *testing.T) {
 	// torrent read in order: what it told is settled.
 	tr := torrentOf(e, tor.Hash)
 	tr.mu.Lock()
-	known, flags, waiting := tr.known[told.Address()], len(tr.flags), len(tr.pexWaiting)
+	known, flags, waiting := tr.knows(told.Address()), len(tr.flags), len(tr.pexWaiting)
 	tr.mu.Unlock()
 	if teller.PEXSent() == 0 || known || flags != 0 || waiting != 0 || len(told.Remotes()) != 0 {
 		t.Fatalf("%d messages sent; the peer told known %v, dialed %d times; %d flags and %d peers kept",

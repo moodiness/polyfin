@@ -386,6 +386,16 @@ func (p *Peer) Close() {
 	}
 }
 
+// Disconnect closes the peer's connections, as a peer that drops them
+// does; it still listens.
+func (p *Peer) Disconnect() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, c := range p.conns {
+		c.Close()
+	}
+}
+
 const blockSize = 16 << 10
 
 func (p *Peer) serve(conn net.Conn) {
@@ -982,6 +992,8 @@ type Proxy struct {
 	udpDelay time.Duration
 	// udpTargets are the UDP targets recorded, each once.
 	udpTargets map[string]bool
+	// refuse are the targets whose next request is refused.
+	refuse map[string]bool
 }
 
 // StartProxy starts a SOCKS5 proxy; udp offers UDP ASSOCIATE, and user,
@@ -1006,6 +1018,17 @@ func (p *Proxy) DelayUDP(d time.Duration) {
 	p.mu.Lock()
 	p.udpDelay = d
 	p.mu.Unlock()
+}
+
+// RefuseFirst has the proxy answer the next request to reach target that
+// the connection was refused (reply 5), as when the peer refused it.
+func (p *Proxy) RefuseFirst(target netip.AddrPort) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.refuse == nil {
+		p.refuse = map[string]bool{}
+	}
+	p.refuse[target.String()] = true
 }
 
 // Resume starts the proxy again on its address, once stopped.
@@ -1155,8 +1178,16 @@ func (p *Proxy) serve(conn net.Conn) {
 	switch {
 	case request[1] == 1:
 		p.record("tcp " + target)
-		upstream, err := net.DialTimeout("tcp", target, 10*time.Second)
-		if err != nil {
+		p.mu.Lock()
+		refused := p.refuse[target]
+		delete(p.refuse, target)
+		p.mu.Unlock()
+		var upstream net.Conn
+		var err error
+		if !refused {
+			upstream, err = net.DialTimeout("tcp", target, 10*time.Second)
+		}
+		if refused || err != nil {
 			_, _ = conn.Write(append([]byte{5, 5, 0}, bound...))
 			return
 		}

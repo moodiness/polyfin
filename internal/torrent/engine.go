@@ -91,6 +91,9 @@ type Engine struct {
 	// or no block while blocks are asked of it (see torrent.reask); tests
 	// shorten them.
 	dropWait, idleTimeout time.Duration
+	// redialWait, when set, replaces how long a peer waits before it is
+	// dialed again (see torrent.redial); tests shorten it.
+	redialWait time.Duration
 	// utpOff, set by tests, reaches peers over TCP alone.
 	utpOff bool
 

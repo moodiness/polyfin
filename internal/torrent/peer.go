@@ -127,6 +127,10 @@ type peer struct {
 	received atomic.Int64
 	// asked are the blocks the peer asked for, served in order.
 	asked []block
+	// joined is when the peer's connection was shaken; givenUp tells that
+	// it was closed as the peer sent none of the blocks asked.
+	joined  time.Time
+	givenUp bool
 
 	outMu  sync.Mutex
 	outbox [][]byte

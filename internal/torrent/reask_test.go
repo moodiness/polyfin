@@ -114,8 +114,8 @@ func TestAStalledPeerIsNotAskedTwice(t *testing.T) {
 
 // A peer that drops every REQUEST is given up once it sent no block for
 // idleTimeout: when it sends nothing at all, by the read deadline; when it
-// sends keep-alives, by reask. It is asked for no block twice, and stays
-// known, so it is not dialed again.
+// sends keep-alives, by reask. It is asked for no block twice, and waits
+// the longest before it is dialed again.
 func TestAPeerThatSendsNoBlockIsGivenUp(t *testing.T) {
 	t.Parallel()
 	for name, keepAlive := range map[string]time.Duration{"silent": 0, "keeping alive": 100 * time.Millisecond} {
@@ -157,10 +157,10 @@ func TestAPeerThatSendsNoBlockIsGivenUp(t *testing.T) {
 				t.Fatalf("a block asked %d times, %d requests in all", most, requests)
 			}
 			tr.mu.Lock()
-			known := tr.known[seeder.Address()]
+			c, known := tr.known[seeder.Address()]
 			tr.mu.Unlock()
-			if !known {
-				t.Fatal("the peer given up may be dialed again")
+			if !known || c.retryAt.Before(time.Now().Add(maxRedialWait/2)) {
+				t.Fatalf("the peer given up is dialed again at %v", c.retryAt)
 			}
 			cancel()
 			if err := <-read; err == nil {

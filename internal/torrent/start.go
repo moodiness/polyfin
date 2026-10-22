@@ -1,10 +1,14 @@
 package torrent
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -56,6 +60,64 @@ func (e *StartError) Error() string {
 		b.WriteString("; no DHT: the addon asks for none")
 	}
 	return b.String()
+}
+
+// outcome is how a peer's last dial or connection ended (see
+// PeerFailures).
+type outcome uint8
+
+const (
+	outcomeNone outcome = iota
+	outcomeTimedOut
+	outcomeRefused
+	outcomeUnreachable
+	outcomeProxy
+	outcomeClosed
+	outcomeLeft
+	outcomeOther
+)
+
+// outcomeOf tells how a dial that failed with err ended: over TCP and uTP
+// both, err is TCP's (see dialPeer).
+func outcomeOf(err error) outcome {
+	var reply *socksReplyError
+	var route *RouteError
+	var timeout interface{ Timeout() bool }
+	switch {
+	case errors.As(err, &reply):
+		switch reply.code {
+		case socksRefused:
+			return outcomeRefused
+		case socksNetUnreachable, socksHostUnreachable:
+			return outcomeUnreachable
+		case socksTTLExpired:
+			return outcomeTimedOut
+		}
+		return outcomeProxy
+	case errors.As(err, &route):
+		return outcomeProxy
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return outcomeRefused
+	case errors.Is(err, syscall.EHOSTUNREACH), errors.Is(err, syscall.ENETUNREACH):
+		return outcomeUnreachable
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, os.ErrDeadlineExceeded), errors.As(err, &timeout) && timeout.Timeout():
+		return outcomeTimedOut
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF), errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.EPIPE):
+		return outcomeClosed
+	}
+	// A WireGuard tunnel's network stack tells its errors by their text
+	// alone.
+	switch text := err.Error(); {
+	case strings.HasSuffix(text, "connection was refused"):
+		return outcomeRefused
+	case strings.HasSuffix(text, "no route to host"), strings.HasSuffix(text, "network is unreachable"):
+		return outcomeUnreachable
+	case strings.HasSuffix(text, "operation timed out"):
+		return outcomeTimedOut
+	case strings.HasSuffix(text, "connection reset by peer"):
+		return outcomeClosed
+	}
+	return outcomeOther
 }
 
 // BootstrapNodes are the DHT nodes the main BitTorrent clients start their

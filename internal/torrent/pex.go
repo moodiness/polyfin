@@ -140,7 +140,7 @@ func (t *torrent) receivedPEX(p *peer, payload []byte) error {
 	for _, a := range added {
 		if _, kept := t.flags[a.address]; !kept && len(t.flags) >= maxPEXPeers {
 			continue
-		} else if !kept && t.peers[a.address] == nil && !t.known[a.address] {
+		} else if !kept && t.peers[a.address] == nil && !t.knows(a.address) {
 			t.pexWaiting = append(t.pexWaiting, a.address)
 		}
 		t.flags[a.address] = a.flags
@@ -180,8 +180,8 @@ func (t *torrent) queuePEX() {
 		return
 	}
 	for _, address := range t.pexWaiting {
-		if !t.known[address] && len(t.known) <= 2000 {
-			t.known[address] = true
+		if !t.knows(address) && len(t.known) <= 2000 {
+			t.known[address] = candidate{}
 			t.queue = append(t.queue, address)
 		}
 	}
