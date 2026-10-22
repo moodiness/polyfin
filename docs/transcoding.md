@@ -151,6 +151,8 @@ A method whose encoders all fail is logged with FFmpeg's reason (`A GPU method d
 
 It then measures, in the background, which way converts faster on that GPU (see [Frames on the GPU](#frames-on-the-gpu)), in a few seconds.
 
+On arm64, VAAPI is tried only where libva is installed. The arm64 image has no libva, nor the AMD and Intel drivers VAAPI uses, so there VAAPI is not tried, and the log says `VAAPI is not offered here: libva is not installed`. On amd64, and on an arm64 system with libva, a failure gives FFmpeg's own reason.
+
 ### NVIDIA driver
 
 The FFmpeg 9.0 of the Docker image and of Polyfin Desktop needs NVIDIA driver 610.00 or newer for NVENC, on Linux and on Windows. In Docker, this is the host's driver. With an older driver, NVENC fails at startup: the log gives FFmpeg's reason, `Driver does not support the required nvenc API version`, and **System › Health** shows a warning naming the version needed. Video is then converted on another GPU of the computer if one encodes, or else on the processor.
@@ -179,6 +181,7 @@ Frames always go through memory for burned-in subtitles (except on Intel and Vid
 ### Giving the container an AMD or Intel GPU
 
 - Docker: `--device /dev/dri`. Compose: `devices`.
+- This works with the amd64 image only: the arm64 image has no VAAPI.
 
 ### Permissions
 

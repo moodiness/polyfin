@@ -727,8 +727,11 @@ type Manager struct {
 	// Linux, for tests.
 	vendor func(node string) string
 	// system is the GOOS whose GPU methods detection tries (see methods):
-	// runtime.GOOS.
-	system string
+	// runtime.GOOS; arch, its GOARCH.
+	system, arch string
+	// libraryDirs are the folders detection looks for libva in on arm64
+	// (see vaapiOffered); nil, those the dynamic linker reads.
+	libraryDirs []string
 	// conversions returns how many playbacks may have their video
 	// converted at once, 0 or less for no limit; nil sets no limit.
 	conversions func() int
@@ -779,7 +782,8 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), system: runtime.GOOS, stall: stallTimeout,
+	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), system: runtime.GOOS, arch: runtime.GOARCH,
+		stall:    stallTimeout,
 		grace:    recordGrace,
 		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{},
 		kept: map[Key]*keeping{}}

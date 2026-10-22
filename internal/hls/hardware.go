@@ -3,6 +3,7 @@ package hls
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -157,7 +158,11 @@ func (m *Manager) SelectHardware(want, device string) {
 		level = slog.LevelWarn
 	}
 	for _, failure := range *m.failures.Load() {
-		attrs := []any{"hwaccel", failure.method, "encoder", failure.encoder, "error", failure.err}
+		attrs := []any{"hwaccel", failure.method}
+		if failure.encoder != "" {
+			attrs = append(attrs, "encoder", failure.encoder)
+		}
+		attrs = append(attrs, "error", failure.err)
 		if failure.device != "" {
 			attrs = append(attrs, "device", failure.device)
 		}
@@ -176,7 +181,8 @@ func (m *Manager) SelectHardware(want, device string) {
 }
 
 // gpuFailure is why a GPU method, on device for VAAPI, encoded nothing:
-// FFmpeg's error with the first of its encoders that failed. driver is
+// FFmpeg's error with the first of its encoders that failed, or, with no
+// encoder, why the method was not tried (see vaapiOffered). driver is
 // the NVIDIA driver version NVENC needs, when FFmpeg found the GPU's
 // older, empty otherwise.
 type gpuFailure struct {
@@ -214,6 +220,10 @@ func (m *Manager) detect(want, device string) (*Hardware, []gpuFailure) {
 		}
 		devices := []string{""}
 		if candidate.method == "vaapi" {
+			if err := m.vaapiOffered(); err != nil {
+				failures = append(failures, gpuFailure{method: candidate.name, err: err})
+				continue
+			}
 			devices = renderNodes(device)
 		}
 		for _, node := range devices {
@@ -244,6 +254,50 @@ func (m *Manager) detect(want, device string) (*Hardware, []gpuFailure) {
 		}
 	}
 	return nil, failures
+}
+
+// errNoLibva is why VAAPI is not tried on arm64 without libva.
+var errNoLibva = errors.New("VAAPI is not offered here: libva is not installed, as in Polyfin's arm64 image")
+
+// vaapiOffered tells, on arm64, that VAAPI is not offered when libva is
+// not installed, as in Polyfin's arm64 image: FFmpeg would then abort
+// before it opens the device, on the first library it lacks, which says
+// nothing of the GPU. Other systems try VAAPI with FFmpeg, whose reason a
+// failure then gives.
+func (m *Manager) vaapiOffered() error {
+	if m.arch != "arm64" {
+		return nil
+	}
+	dirs := m.libraryDirs
+	if dirs == nil {
+		dirs = linkerDirs()
+	}
+	for _, dir := range dirs {
+		if _, err := os.Stat(filepath.Join(dir, "libva.so.2")); err == nil {
+			return nil
+		}
+	}
+	return errNoLibva
+}
+
+// linkerDirs are the folders the dynamic linker finds libraries in: those
+// of LD_LIBRARY_PATH, of /etc/ld.so.conf and the files it includes from
+// /etc/ld.so.conf.d, and its own.
+func linkerDirs() []string {
+	dirs := filepath.SplitList(os.Getenv("LD_LIBRARY_PATH"))
+	confs, _ := filepath.Glob("/etc/ld.so.conf.d/*.conf")
+	for _, conf := range append([]string{"/etc/ld.so.conf"}, confs...) {
+		data, err := os.ReadFile(conf)
+		if err != nil {
+			continue
+		}
+		for line := range strings.Lines(string(data)) {
+			if line = strings.TrimSpace(line); strings.HasPrefix(line, "/") {
+				dirs = append(dirs, line)
+			}
+		}
+	}
+	return append(dirs, "/lib/aarch64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/lib64", "/usr/lib64", "/lib", "/usr/lib", "/usr/local/lib")
 }
 
 // toneMaps reports whether hw tone maps HDR to SDR, as conversions would:

@@ -107,3 +107,50 @@ func TestOtherNVENCFailuresAreLoggedOnly(t *testing.T) {
 		t.Errorf("driver needed %q", driver)
 	}
 }
+
+// What FFmpeg 9 writes, aborting, when VAAPI starts on a system without
+// X11's library, as Polyfin's arm64 image, before it opens the device.
+const noX11 = `implib-gen: libX11.so.6: failed to load library 'libX11.so.6' via dlopen: libX11.so.6: cannot open shared object file: No such file or directory
+ffmpeg: libX11.so.6.tramp.S:42: _libX11_so_6_tramp_resolve: Assertion ` + "`0 && \"Assertion in generated code\"'" + ` failed.`
+
+// On arm64, where Polyfin's image has no VAAPI, VAAPI asked for on a
+// system without libva is told as not offered, without trying FFmpeg;
+// with libva, and on amd64 whatever the system, FFmpeg's own reason is
+// logged.
+func TestVAAPIIsNotOfferedOnArm64WithoutLibva(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake FFmpeg is a shell script")
+	}
+	for _, tc := range []struct {
+		arch        string
+		libva       bool
+		want, tried string
+	}{
+		{"arm64", false, "VAAPI is not offered here: libva is not installed", ""},
+		{"arm64", true, "libX11.so.6", "vaapi"},
+		{"amd64", false, "libX11.so.6", "vaapi"},
+	} {
+		dir := t.TempDir()
+		script, tried := filepath.Join(dir, "ffmpeg"), filepath.Join(dir, "tried")
+		if err := os.WriteFile(script, []byte("#!/bin/sh\ncase \"$*\" in\n*_vaapi*)\n\techo vaapi >> "+tried+"\n\tcat >&2 <<'EOF'\n"+noX11+
+			"\nEOF\n\texit 134 ;;\nesac\necho 'No device available for the encoder' >&2\nexit 1\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		libraries := t.TempDir()
+		if tc.libva {
+			if err := os.WriteFile(filepath.Join(libraries, "libva.so.2"), nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var log bytes.Buffer
+		m := &Manager{system: "linux", arch: tc.arch, libraryDirs: []string{libraries}, ffmpeg: script, dir: t.TempDir(),
+			logger: slog.New(slog.NewTextHandler(&log, nil)), detected: map[string]*Hardware{}, done: make(chan struct{}),
+			can: capabilities{encoders: everyEncoder, filters: everyFilter}}
+		m.SelectHardware("vaapi", "/dev/dri/renderD129")
+		m.Close()
+		ran, _ := os.ReadFile(tried)
+		if line := logLine(log.String(), "level=WARN", "hwaccel=vaapi", tc.want); line == "" || strings.Contains(string(ran), "vaapi") != (tc.tried != "") {
+			t.Errorf("%s, libva %v: FFmpeg tried %q, log %s", tc.arch, tc.libva, ran, log.String())
+		}
+	}
+}
