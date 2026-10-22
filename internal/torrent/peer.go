@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -105,8 +106,25 @@ type peer struct {
 	extended bool
 	pexSince time.Time
 	pexCount int
-	// requests are the blocks asked for and not received, with when.
-	requests map[block]time.Time
+	// requests are the blocks asked for and not received, numbered from
+	// seq in the order they were asked (see torrent.reask). reasked
+	// counts, for each block, the requests of it the peer dropped; past
+	// maxReasks, the peer is not asked for it again.
+	requests map[block]*request
+	seq      uint64
+	reasked  map[block]int
+	// heard is when the peer last sent a block asked, or was asked one
+	// while none was asked of it; pace is about how long it takes to send
+	// a block, once paced tells it sent one: a coarse clock, as Windows'
+	// may be, measures a fast block at 0; probed tells that it was probed
+	// for its silence since it last sent a block (see torrent.reask).
+	heard  time.Time
+	pace   time.Duration
+	paced  bool
+	probed bool
+	// received is when a byte of the peer's last arrived, in Unix
+	// nanoseconds: a block on its way is not silence.
+	received atomic.Int64
 	// asked are the blocks the peer asked for, served in order.
 	asked []block
 
@@ -126,8 +144,19 @@ type block struct {
 	length int64
 }
 
+// request is a block asked of a peer: its number among the peer's
+// requests, and when a block asked after it first arrived, as a peer that
+// serves requests in order does with those it keeps. again tells that it
+// was asked again for the peer's silence: the block may answer the first
+// request as well, so its arrival overtakes none.
+type request struct {
+	seq       uint64
+	overtaken time.Time
+	again     bool
+}
+
 func newPeer(t *torrent, conn net.Conn, address netip.AddrPort) *peer {
-	return &peer{t: t, conn: conn, address: address, choked: true, requests: map[block]time.Time{},
+	return &peer{t: t, conn: conn, address: address, choked: true, requests: map[block]*request{}, reasked: map[block]int{},
 		wake: make(chan struct{}, 1), closed: make(chan struct{})}
 }
 
@@ -203,7 +232,7 @@ func (p *peer) write() {
 				}
 				p.t.uploaded(int64(len(message) - 13))
 			}
-			_ = p.conn.SetWriteDeadline(time.Now().Add(idleTimeout))
+			_ = p.conn.SetWriteDeadline(time.Now().Add(p.t.engine.idleTimeout))
 			if _, err := w.Write(message); err != nil {
 				return
 			}
@@ -214,12 +243,23 @@ func (p *peer) write() {
 	}
 }
 
+// receiving reads a peer's connection, noting when its bytes arrive.
+type receiving struct{ p *peer }
+
+func (r receiving) Read(b []byte) (int, error) {
+	n, err := r.p.conn.Read(b)
+	if n > 0 {
+		r.p.received.Store(time.Now().UnixNano())
+	}
+	return n, err
+}
+
 // read reads the peer's messages until the connection ends.
 func (p *peer) read() error {
-	r := bufio.NewReaderSize(p.conn, 64<<10)
+	r := bufio.NewReaderSize(receiving{p}, 64<<10)
 	var header [4]byte
 	for {
-		_ = p.conn.SetReadDeadline(time.Now().Add(idleTimeout))
+		_ = p.conn.SetReadDeadline(time.Now().Add(p.t.engine.idleTimeout))
 		if _, err := io.ReadFull(r, header[:]); err != nil {
 			return err
 		}

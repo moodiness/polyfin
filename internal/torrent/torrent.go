@@ -21,11 +21,20 @@ const (
 	// it dials at once.
 	maxPeers   = 30
 	maxDialing = 8
-	// pipeline is how many blocks a peer is asked for at once, and
-	// requestAge how long a block asked of a peer waits before another
-	// peer is asked for it too.
-	pipeline   = 32
-	requestAge = 15 * time.Second
+	// pipeline is how many blocks a peer is asked for at once. dropWait is
+	// how long a request a peer skipped, sending blocks asked after it,
+	// waits before it is taken as dropped and its block asked again, of
+	// another peer or the same; past maxReasks drops of a block, the peer
+	// is not asked for it again (see reask).
+	pipeline  = 32
+	dropWait  = 5 * time.Second
+	maxReasks = 2
+	// stallWait is how long a peer that sent blocks may then send not a
+	// byte before the oldest request it holds is asked again, when no new
+	// request can tell whether it dropped it: twice as long as a uTP
+	// connection lives on unanswered, longer than any stall of the link.
+	// Tests that shorten dropWait shorten it alike.
+	stallWait = 30 * time.Second
 	// maxDuplicates bounds the blocks of the endgame asked of a second
 	// peer and not received yet.
 	maxDuplicates = 16
@@ -215,7 +224,8 @@ func (t *torrent) recovered(what string, then func(error)) {
 
 // watch stops the torrent as soon as its route cannot carry it, or is no
 // longer the one set: nothing falls back to another route. A panic stops
-// the torrent too.
+// the torrent too. Meanwhile, it chooses the peers shared with, and asks
+// again for the blocks peers dropped (see reask).
 func (t *torrent) watch() {
 	defer t.recovered("route check", func(err error) {
 		t.engine.failed(err)
@@ -225,6 +235,8 @@ func (t *torrent) watch() {
 	defer ticker.Stop()
 	chokes := time.NewTicker(chokeEvery)
 	defer chokes.Stop()
+	stale := time.NewTicker(max(t.engine.dropWait/4, 10*time.Millisecond))
+	defer stale.Stop()
 	for {
 		select {
 		case <-t.ctx.Done():
@@ -233,6 +245,8 @@ func (t *torrent) watch() {
 			t.mu.Lock()
 			t.chooseUnchoked()
 			t.mu.Unlock()
+		case <-stale.C:
+			t.reask()
 		case <-ticker.C:
 			route, err := t.engine.currentRoute()
 			if err == nil && route != t.route {
@@ -384,8 +398,33 @@ func (t *torrent) ask(p *peer, in *inflightPiece, i int, b block, now time.Time)
 	}
 	in.asks[i]++
 	in.requested[i] = now
-	p.requests[b] = now
+	if len(p.requests) == 0 {
+		p.heard = now
+	}
+	p.seq++
+	p.requests[b] = &request{seq: p.seq}
 	p.send(msgRequest, requestPayload(b))
+}
+
+// arrived notes a block a peer sent: the requests asked of it before the
+// block and still waiting are overtaken, and the peer is heard. The lock
+// is held.
+func (t *torrent) arrived(p *peer, b block, now time.Time) {
+	r := p.requests[b]
+	if r == nil {
+		return
+	}
+	for _, other := range p.requests {
+		if !r.again && other.seq < r.seq && other.overtaken.IsZero() {
+			other.overtaken = now
+		}
+	}
+	if wait := now.Sub(p.heard); !p.paced {
+		p.pace, p.paced = wait, true
+	} else {
+		p.pace = (3*p.pace + wait) / 4
+	}
+	p.heard, p.probed = now, false
 }
 
 // forget forgets a block asked of a peer, received or not; false when it
@@ -419,6 +458,134 @@ func (t *torrent) cancelOthers(in *inflightPiece, b block) {
 			other.send(msgCancel, requestPayload(b))
 		}
 	}
+}
+
+// reask asks again for the blocks peers dropped, of the other peers
+// first, and of the same peer when none of them takes it: a peer may drop
+// a REQUEST without a word, and a torrent it serves alone would wait for
+// the block for good. Polyfin does not offer the fast extension (BEP 6),
+// so no peer tells a drop with REJECT_REQUEST.
+//
+// A peer serves requests in order: a request is dropped once blocks asked
+// after it arrived and it did not, dropWait later. A slow peer is not
+// taken for one that drops: its blocks come in order, however long the
+// last ones wait. A peer that dropped the last requests asked of it sends
+// nothing after them; nor does one whose connection stalls, as uTP's do
+// on a loaded link, while the blocks asked are on their way. So silence
+// asks nothing again at first: once the peer sent not a byte for four
+// times as long as it takes to send a block, dropWait at least, it is
+// asked for one more block, never asked yet, once until it sends again:
+// its arrival tells the requests before it were dropped, and a peer that
+// only stalls sends it in turn. Only when no such block is left, and the
+// peer stayed silent for stallWait, longer than a connection stalls, is
+// the oldest request asked again. The CANCEL goes first, so that a peer
+// that only queued a request does not send its block twice. A block
+// a peer dropped more than maxReasks times is not asked of it again: it
+// may not have it, and the others may. A peer is given up, as one that
+// sends nothing is after idleTimeout, only when it sent no block asked
+// for idleTimeout, keep-alives aside; it stays known, so it is not dialed
+// again. A request cancelled is no longer counted as asked, so the
+// endgame's duplicates, of the blocks reads wait for, stay within
+// maxDuplicates.
+func (t *torrent) reask() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.info == nil || t.err != nil {
+		return
+	}
+	now := time.Now()
+	var asked []*peer
+	again := map[*peer]block{}
+	cancel := func(p *peer, b block) {
+		t.forget(p, b)
+		p.send(msgCancel, requestPayload(b))
+	}
+	for _, p := range t.peers {
+		if len(p.requests) == 0 {
+			continue
+		}
+		silent := now.Sub(p.heard)
+		if silent >= t.engine.idleTimeout {
+			t.engine.config.Logger.Debug("A torrent's peer was given up: it sent none of the blocks asked", "for", silent.Round(time.Second))
+			p.close()
+			t.release(p)
+			asked = append(asked, p)
+			continue
+		}
+		dropped := false
+		for b, r := range p.requests {
+			if !r.overtaken.IsZero() && now.Sub(r.overtaken) >= t.engine.dropWait {
+				p.reasked[b]++
+				cancel(p, b)
+				dropped = true
+			}
+		}
+		last := p.heard
+		if received := time.Unix(0, p.received.Load()); received.After(last) {
+			last = received
+		}
+		quiet := now.Sub(last)
+		switch {
+		case dropped || !p.paced || p.probed || quiet < max(t.engine.dropWait, 4*p.pace):
+		case t.probe(p, now):
+			p.probed = true
+		case quiet >= stallWait/dropWait*t.engine.dropWait:
+			var oldest block
+			for b, r := range p.requests {
+				if (oldest == block{}) || r.seq < p.requests[oldest].seq {
+					oldest = b
+				}
+			}
+			cancel(p, oldest)
+			again[p] = oldest
+			p.probed, dropped = true, true
+		}
+		if dropped {
+			asked = append(asked, p)
+		}
+	}
+	if len(asked) == 0 {
+		return
+	}
+	defer func() {
+		for p, b := range again {
+			if r := p.requests[b]; r != nil {
+				r.again = true
+			}
+		}
+	}()
+	for _, p := range t.peers {
+		if !slices.Contains(asked, p) {
+			t.fill(p)
+		}
+	}
+	for _, p := range asked {
+		select {
+		case <-p.closed:
+		default:
+			t.fill(p)
+		}
+	}
+}
+
+// probe asks a silent peer for one more block, past its pipeline: the
+// first it has of those wanted, asked of no peer yet; false when none is
+// left. The lock is held.
+func (t *torrent) probe(p *peer, now time.Time) bool {
+	for _, index := range t.wanted() {
+		if index >= len(p.has) || !p.has[index] {
+			continue
+		}
+		in := t.inflightOf(index)
+		for i := range in.got {
+			b := blockOf(in, index, i)
+			if !in.got[i] && in.asks[i] == 0 && p.reasked[b] <= maxReasks {
+				t.ask(p, in, i, b, now)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // announce asks a tracker for peers until the torrent stops, then tells it
@@ -777,6 +944,20 @@ func blockOf(in *inflightPiece, index, i int) block {
 	return block{piece: index, offset: offset, length: min(blockSize, int64(len(in.data))-offset)}
 }
 
+// inflightOf is the piece index being downloaded, started when it is
+// not. The lock is held.
+func (t *torrent) inflightOf(index int) *inflightPiece {
+	in := t.inflight[index]
+	if in == nil {
+		size := t.info.pieceSize(index)
+		blocks := int((size + blockSize - 1) / blockSize)
+		in = &inflightPiece{data: make([]byte, size), got: make([]bool, blocks), requested: make([]time.Time, blocks),
+			asks: make([]uint8, blocks), left: blocks}
+		t.inflight[index] = in
+	}
+	return in
+}
+
 // fill asks a peer that unchoked Polyfin for the blocks it lacks, up to
 // pipeline: those of the endgame first, then the pieces wanted in order.
 // The lock is held.
@@ -810,20 +991,19 @@ func (t *torrent) fill(p *peer) {
 		if p.choked || len(p.requests) >= pipeline {
 			break
 		}
-		in := t.inflight[index]
-		if in == nil {
-			size := t.info.pieceSize(index)
-			blocks := int((size + blockSize - 1) / blockSize)
-			in = &inflightPiece{data: make([]byte, size), got: make([]bool, blocks), requested: make([]time.Time, blocks),
-				asks: make([]uint8, blocks), left: blocks}
-			t.inflight[index] = in
-		}
+		in := t.inflightOf(index)
 		for i := range in.got {
 			if len(p.requests) >= pipeline {
 				break
 			}
+			// A block asked is left to its peer until reask cancels it:
+			// only the endgame asks a block of two peers at once. A block
+			// the peer dropped past maxReasks times is left to the others.
+			if in.got[i] || in.asks[i] > 0 {
+				continue
+			}
 			b := blockOf(in, index, i)
-			if _, mine := p.requests[b]; in.got[i] || mine || in.asks[i] > 0 && now.Sub(in.requested[i]) < requestAge {
+			if p.reasked[b] > maxReasks {
 				continue
 			}
 			t.ask(p, in, i, b, now)
@@ -864,7 +1044,7 @@ func (t *torrent) endgame(p *peer, now time.Time) {
 				continue
 			}
 			b := blockOf(in, index, i)
-			if _, mine := p.requests[b]; !mine {
+			if _, mine := p.requests[b]; !mine && p.reasked[b] <= maxReasks {
 				blocks = append(blocks, held{in: in, i: i, b: b, since: in.requested[i]})
 			}
 		}
@@ -908,6 +1088,7 @@ func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inf
 	defer t.mu.Unlock()
 	in := t.inflight[index]
 	b := block{piece: index, offset: offset, length: int64(len(data))}
+	t.arrived(p, b, time.Now())
 	t.forget(p, b)
 	if in == nil || offset%blockSize != 0 || offset >= int64(len(in.data)) || in.got[offset/blockSize] ||
 		b != blockOf(in, index, int(offset/blockSize)) {
@@ -919,6 +1100,9 @@ func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inf
 	in.left--
 	t.downBytes += int64(len(data))
 	t.cancelOthers(in, b)
+	for _, other := range t.peers {
+		delete(other.reasked, b)
+	}
 	if in.left > 0 {
 		t.fill(p)
 		return nil, Hash{}, false

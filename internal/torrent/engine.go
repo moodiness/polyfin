@@ -86,6 +86,11 @@ type Engine struct {
 	tunnelFresh, tunnelWait time.Duration
 	// noEndgame turns the endgame off, to measure what it brings.
 	noEndgame bool
+	// dropWait is how long a request a peer skipped waits before it is
+	// taken as dropped, and idleTimeout how long a peer may send nothing,
+	// or no block while blocks are asked of it (see torrent.reask); tests
+	// shorten them.
+	dropWait, idleTimeout time.Duration
 	// utpOff, set by tests, reaches peers over TCP alone.
 	utpOff bool
 
@@ -118,7 +123,8 @@ func New(config Config) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Engine{config: config, store: s, torrents: map[Hash]*torrent{}, checkEvery: checkEvery}
+	e := &Engine{config: config, store: s, torrents: map[Hash]*torrent{}, checkEvery: checkEvery, dropWait: dropWait,
+		idleTimeout: idleTimeout}
 	e.peerID = newPeerID()
 	mbps := func(n int) int64 { return int64(n) * 1_000_000 / 8 }
 	e.up = newLimiter(func() int64 { return mbps(config.Settings().UploadMbps) }, true)

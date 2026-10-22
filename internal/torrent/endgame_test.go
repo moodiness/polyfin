@@ -192,8 +192,8 @@ func TestEndgameBounds(t *testing.T) {
 }
 
 // On the local swarm, a read the slow peer was asked for ends with the
-// blocks of a peer found next, the slow peer's cancelled, before a block
-// is asked again for its age.
+// blocks of a peer found next, the slow peer's cancelled, long before the
+// slow peer, which sends nothing, is given up.
 func TestEndgameFinishesARangeASlowPeerHeld(t *testing.T) {
 	t.Parallel()
 	tor := torrenttest.Build("Slow", 64<<10, torrenttest.File{Name: "a.mkv", Data: torrenttest.Bytes(1 << 20)})
@@ -232,8 +232,8 @@ func TestEndgameFinishesARangeASlowPeerHeld(t *testing.T) {
 	if err := <-read; err != nil {
 		t.Fatal(err)
 	}
-	if took := time.Since(started); took >= requestAge {
-		t.Fatalf("the read took %v, as long as a block waits to be asked again", took)
+	if took := time.Since(started); took >= idleTimeout {
+		t.Fatalf("the read took %v, as long as a peer that sends nothing waits to be given up", took)
 	}
 	if !bytes.Equal(buf, tor.Data[:len(buf)]) {
 		t.Fatal("the range read is not the torrent's")
