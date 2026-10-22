@@ -276,8 +276,8 @@ func requestQuit() int {
 	return 1
 }
 
-// startAfterQuit starts the new app, or the installer, once this one
-// let its data folder go.
+// startAfterQuit starts the new app, or the system's package installer,
+// once this one let its data folder go.
 func startAfterQuit(cmd *exec.Cmd) error {
 	if err := cmd.Start(); err != nil {
 		return err

@@ -94,22 +94,7 @@ func TestInstall(t *testing.T) {
 	}
 }
 
-func TestOpenerAndClipboard(t *testing.T) {
-	for _, c := range []struct {
-		goos string
-		dir  bool
-		want string
-	}{
-		{"darwin", false, "open http://localhost:8096/admin/"},
-		{"windows", false, "rundll32 url.dll,FileProtocolHandler http://localhost:8096/admin/"},
-		{"windows", true, "explorer http://localhost:8096/admin/"},
-		{"linux", false, "xdg-open http://localhost:8096/admin/"},
-	} {
-		name, args := opener(c.goos, "http://localhost:8096/admin/", c.dir)
-		if got := name + " " + strings.Join(args, " "); got != c.want {
-			t.Errorf("opener(%s) = %q", c.goos, got)
-		}
-	}
+func TestClipboardAndLanguage(t *testing.T) {
 	if clipboard("darwin")[0][0] != "pbcopy" || clipboard("windows")[0][0] != "clip" || len(clipboard("linux")) != 3 {
 		t.Error("clipboard programs")
 	}

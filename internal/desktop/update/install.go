@@ -34,11 +34,13 @@ func CanInstall(kind Kind, exe string) error {
 // Install installs the downloaded package pkg in place of the app whose
 // executable is exe, once the server and the database have stopped. It
 // returns what to start once the app has quit: the new app, or the
-// system's installer, which replaces the app's files itself. The data
-// folder is never touched.
+// system's package installer. The data folder is never touched.
 //
 //   - macOS: the bundle of the disk image replaces the app's bundle.
-//   - Windows: the installer runs, as it would from a download.
+//   - Windows: the installer starts at once, its window shown as from a
+//     download, and nothing is left to start: its wizard waits for a
+//     click, and asks to quit Polyfin first if it still runs, so a
+//     failure to start it is told while the app still runs.
 //   - Linux: the new AppImage replaces the one the app runs from; a .deb
 //     opens in the system's package installer.
 func Install(ctx context.Context, pkg string, kind Kind, exe string) (*exec.Cmd, error) {
@@ -51,9 +53,14 @@ func Install(ctx context.Context, pkg string, kind Kind, exe string) (*exec.Cmd,
 		if err := installDMG(ctx, pkg, bundle); err != nil {
 			return nil, err
 		}
-		return desktop.Command(context.Background(), "/usr/bin/open", "-n", bundle), nil
+		return desktop.WindowCommand(context.Background(), "/usr/bin/open", "-n", bundle), nil
 	case Installer:
-		return desktop.Command(context.Background(), pkg), nil
+		cmd := desktop.WindowCommand(context.Background(), pkg)
+		if err := cmd.Start(); err != nil {
+			return nil, err
+		}
+		_ = cmd.Process.Release()
+		return nil, nil
 	case AppImage:
 		image := os.Getenv("APPIMAGE")
 		if image == "" {
@@ -62,9 +69,9 @@ func Install(ctx context.Context, pkg string, kind Kind, exe string) (*exec.Cmd,
 		if err := replaceFile(pkg, image); err != nil {
 			return nil, err
 		}
-		return desktop.Command(context.Background(), image), nil
+		return desktop.WindowCommand(context.Background(), image), nil
 	default:
-		return desktop.Command(context.Background(), "xdg-open", pkg), nil
+		return desktop.WindowCommand(context.Background(), "xdg-open", pkg), nil
 	}
 }
 
