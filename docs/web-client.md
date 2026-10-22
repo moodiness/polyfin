@@ -129,10 +129,14 @@ By default, **Custom CSS** imports the stylesheet of [LumaaGlaass](https://githu
 - Each browser loads the theme's files from jsDelivr (`cdn.jsdelivr.net`). A browser that cannot reach it shows the web client's own look.
 - jsDelivr takes up to 12 hours to serve a change to the theme, and a browser keeps the files it loaded for up to 7 days.
 - Each user chooses the theme's appearance and features on the LumaaGlaass page of the web client's settings menu. The choices are saved with their account, on every device.
+- The theme's home carousel, the large rotating artwork above the home rows, is off by default: the home starts with its rows, over a still background. A user turns it on with "Home carousel" on the LumaaGlaass page, then "Save". An administrator can do it for another user from that user's settings.
+  - The page ignores `homeCarousel` in the script's options, so while **Custom JavaScript** is the default one, Polyfin answers the page the carousel off for a user who never saved it. Nothing is saved for the user until they save the page.
+  - "Delete saved settings", and "Reset to defaults" or the "Recommended" profile followed by "Save", bring back the theme's own values, carousel on.
+  - With your own **Custom JavaScript**, the theme's own values apply, carousel on. `homeCarousel: false` in the script's options hides it for every user only with `preferences: false`, which also removes the LumaaGlaass page.
 - The theme needs jellyfin-web's Dark theme, the default.
 - To keep the web client's own look, empty both fields: emptying one leaves half the theme.
 - To keep one version of the theme, replace `main` with a commit or a tag of its repository in both addresses.
-- A server upgraded from an earlier version gets the theme at its first start if both fields were empty, and moves to its main branch if both still held the theme at the commit Polyfin pinned before. A server whose fields hold its own CSS or script keeps both as they are.
+- A server upgraded from an earlier version gets the theme at its first start if both fields were empty, and moves to its main branch if both still held the theme at the commit Polyfin pinned before. A server whose **Custom JavaScript** still held the previous default script gets the carousel off. A server whose fields hold its own CSS or script keeps both as they are.
 
 **Compared with Jellyfin:**
 
