@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"cmp"
 	"context"
+	"path"
 	"slices"
 	"strings"
 
@@ -34,7 +35,10 @@ type versionRules struct {
 	larger       int64
 	hiddenCodecs []string
 	// words are the words hiding versions, in lower case.
-	words    []string
+	words []string
+	// rips are the release tags of the rip types excluded (see
+	// accounts.RipTags), which exclude versions even when none is left.
+	rips     map[string]bool
 	language string
 }
 
@@ -46,7 +50,40 @@ func newVersionRules(settings accounts.Settings) versionRules {
 	for _, word := range settings.HiddenVersionWords {
 		rules.words = append(rules.words, strings.ToLower(word))
 	}
+	for _, kind := range settings.HiddenRipTypes {
+		for _, tag := range accounts.RipTags[kind] {
+			if rules.rips == nil {
+				rules.rips = map[string]bool{}
+			}
+			rules.rips[tag] = true
+		}
+	}
 	return rules
+}
+
+// excluded reports whether a version is a rip of a type excluded: one of
+// its labels' or its file name's words is a tag of that type ("HDCAM",
+// "TS", "DVDScr"). Words are runs of letters and digits, so "HD-TS" and
+// "CAM-Rip" are told too, and "Its" or "Bats" are not.
+func (r versionRules) excluded(version library.Version) bool {
+	if len(r.rips) == 0 {
+		return false
+	}
+	// A file's extension is not a tag: an MPEG transport stream is a ".ts".
+	ext := path.Ext(version.Filename)
+	text := strings.TrimSuffix(version.Name, ext) + "\n" + strings.TrimSuffix(version.Filename, ext)
+	words := strings.FieldsFunc(strings.ToLower(text), func(c rune) bool {
+		return !('a' <= c && c <= 'z' || '0' <= c && c <= '9')
+	})
+	return slices.ContainsFunc(words, func(word string) bool { return r.rips[word] })
+}
+
+// withoutRips leaves out the versions that are rips of a type excluded.
+func (r versionRules) withoutRips(versions []library.Version) []library.Version {
+	if len(r.rips) == 0 {
+		return versions
+	}
+	return slices.DeleteFunc(slices.Clone(versions), r.excluded)
 }
 
 // rulesFor returns the rules settings set for user: with their preferred
@@ -81,7 +118,7 @@ func (r versionRules) hides() bool {
 // group or the version rules (see offered).
 func (h *Handler) reordered(user accounts.User) bool {
 	rules := newVersionRules(h.Accounts.Settings())
-	return user.QualityGroup > 0 || len(rules.order) > 0 || rules.hides()
+	return user.QualityGroup > 0 || len(rules.order) > 0 || rules.hides() || len(rules.rips) > 0
 }
 
 // hiddenVersion reports whether the hide rules hide a version among its
@@ -89,6 +126,9 @@ func (h *Handler) reordered(user accounts.User) bool {
 // identifier, which it may have been shown before a rule hid it.
 func (h *Handler) hiddenVersion(ctx context.Context, user accounts.User, version library.Version) bool {
 	rules := newVersionRules(h.Accounts.Settings())
+	if rules.excluded(version) {
+		return true
+	}
 	if !rules.hides() || !rules.hidden(version, h.versionFacts(ctx, version)) {
 		return false
 	}
@@ -97,7 +137,7 @@ func (h *Handler) hiddenVersion(ctx context.Context, user accounts.User, version
 		return false
 	}
 	// When the rules would hide every version, none is hidden.
-	return slices.ContainsFunc(versions, func(other library.Version) bool {
+	return slices.ContainsFunc(rules.withoutRips(versions), func(other library.Version) bool {
 		return !h.Playback.Failed(other.ID) && !rules.hidden(other, h.versionFacts(ctx, other))
 	})
 }
@@ -317,6 +357,8 @@ func rangeRank(hdr, first library.DynamicRange) int {
 // (see keptInPlace).
 func (h *Handler) ordered(ctx context.Context, user accounts.User, versions []library.Version) []library.Version {
 	rules := h.rulesFor(ctx, user)
+	// Rips of the types excluded are left out first, whatever is left.
+	versions = rules.withoutRips(versions)
 	var sources map[accounts.ID]int
 	if slices.Contains(rules.order, "source") {
 		sources = rules.sourceRanks(versions)

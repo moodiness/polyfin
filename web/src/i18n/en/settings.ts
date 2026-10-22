@@ -281,6 +281,30 @@ const settings = {
       `Versions known to be larger are listed nowhere: not on title pages, in playback or in downloads. When the rules below and this one would hide every version of a title, none is hidden. Up to ${r.max} GB; ${r.default} by default.`,
     hiddenVersionCodecs: 'Hide these video codecs',
     hiddenVersionCodecsHelp: 'Versions known to be in these codecs are listed nowhere.',
+    hideSpecials: 'Hide specials',
+    inFileSubtitlesOnly: 'Only subtitles inside the files',
+    inFileSubtitlesOnlyHelp:
+      'Offers only the subtitle tracks the video files carry: no addon’s subtitles, no files beside them or added by users, and no text (OCR) copies of picture subtitles. In the web player, the track chosen is burned into the picture. On by default.',
+    exactTitleMatch: 'Match titles exactly',
+    exactTitleMatchHelp:
+      'Leaves out the versions whose file name starts with a longer title holding the movie’s or the series’ own: Smiling Friends’ releases are not offered for Friends. A leading “The”, the year and punctuation do not count. Versions without a file name are kept. On by default.',
+    defaultAudioLanguage: 'Default audio language',
+    defaultAudioLanguageHelp: 'The audio language played for users who chose none in their own settings.',
+    defaultSubtitleLanguage: 'Default subtitle language',
+    defaultSubtitleLanguageHelp: 'The subtitle language shown for users who chose none in their own settings.',
+    defaultLanguageNone: 'None',
+    hideSpecialsHelp:
+      'Leaves series’ specials (season 0) out of their seasons, episode lists and Next Up. On by default.',
+    hiddenRipTypes: 'Exclude these rips',
+    hiddenRipTypesHelp:
+      'Versions whose name, description or file name carries one of these release tags are removed everywhere, even when no other version of the title is left. Tags are matched as whole words: CAM, HDCAM, TS, HD-TS, TELESYNC, TC, TELECINE, SCR, DVDSCR, SCREENER, R5, WORKPRINT and the like. All of them by default.',
+    ripTypes: {
+      cam: 'CAM (CAM, HDCAM, CAMRip)',
+      telesync: 'Telesync (TS, HD-TS, PDVD)',
+      telecine: 'Telecine (TC, HDTC)',
+      screener: 'Screener (SCR, DVDSCR, R5)',
+      workprint: 'Workprint (WP)',
+    },
     hiddenVersionWords: 'Hide versions whose labels contain',
     hiddenVersionWordsHelp: (r: RangeText) =>
       `One word or phrase a line, matched in any letter case in a version’s name, description and file name: for addons that say in their labels that a file is not ready to play yet. Up to ${r.max} lines; none by default.`,
@@ -337,6 +361,9 @@ const settings = {
       'Converted video is scaled down to this height at most, keeping its shape, so that it plays well over a slower connection. Files played as they are or simply repackaged keep their quality. A graphics card converts up to 4K; the processor stops at 1080p, and when it converts HDR to SDR, at "Maximum quality of HDR converted by the processor" (Conversion › HDR).',
     conversionHeightOriginal: 'Original',
     conversionHeight: (height: number) => `${height}p`,
+    webSafeVideo: 'Play every file in the web player',
+    webSafeVideoHelp:
+      'Browsers say they play HEVC, Dolby Vision and AV1 video, then often show it black, the sound and the clock running. On, the web player is never sent those as they are: such versions play converted to H.264. The Jellyfin apps keep their own players.',
     convertedDownloads: 'Converted downloads',
     convertedDownloadsHelp:
       'Apps that ask for it, such as Streamyfin, save a title at the quality the user picks: Polyfin sends a smaller copy, made as the app downloads it and never kept on the server. Without it, they save the file as it is. Each download counts toward "Video conversions at once" while it converts, and as one of the user’s "Playbacks at once". The user needs "Can download", and "Can use conversion (transcoding)" when the video or the audio is converted. An interrupted download starts again. Off by default.',
@@ -613,6 +640,9 @@ const settings = {
     importEveryMinutes: 'Import connected accounts every',
     importEveryMinutesHelp:
       'How often Polyfin imports again the Stremio and Nuvio accounts users stay connected to, and the watch histories they import from tracking services. A change applies at once: each next import comes this long after the last one. Each import reads the whole account again, so a short interval sends more requests to those services, and, for Stremio, whose terms forbid automated extraction, makes that grey area more pronounced. 6 hours by default.',
+    registration: 'Registration',
+    registrationHelp:
+      'Lets anyone who opens /register on this server create a member account, with the default settings, hidden from the sign-in screen. Off, the page says registration is closed and leads back to the sign-in screen. Each address may register only a few accounts before it waits, as for failed sign-ins.',
     shareLinks: 'Allow share links',
     shareLinksHelp:
       'Users with Can share titles, on their page under Users, may give a movie or an episode to someone without an account, through a link that expires after 1 hour to 30 days. The guest watches in a browser, at 1080p at most and within the user’s quality group, and counts among the user’s playbacks at once. When off, no link can be made and every link is refused, without being deleted. Off by default.',
@@ -755,12 +785,21 @@ const settings = {
     webPlayerHelp:
       'What the web player (jellyfin-web, at /web/) shows besides its own pages. The script applies the next time a page of the web player is loaded; the web player keeps the CSS and the sign-in message for up to a minute.',
     openWebPlayer: 'Open the web player',
+    brandingHelp: 'The logo the web player shows in place of Jellyfin’s, and on the register page.',
+    brandLogo: 'Logo',
+    brandLogoHelp:
+      'Shown in place of the Jellyfin logo in the web player: its header, menu, splash and sign-in screens and the browser tab, and in the Jellyfin apps that open the web player (desktop, Android, iOS). Apps with screens of their own, such as Infuse or Swiftfin, keep theirs. PNG, JPEG, WebP, GIF or SVG, up to 1 MB; a wide logo suits the header best.',
+    brandLogoChoose: 'Choose an image',
+    brandLogoRemove: 'Use the Jellyfin logo',
+    brandLogoNone: 'Jellyfin logo',
+    brandLogoType: 'Choose a PNG, JPEG, WebP, GIF or SVG image.',
+    brandLogoSize: 'Choose an image of 1 MB at most.',
     customCss: 'Custom CSS',
     customCssHelp:
-      'Applied to every page of the web player, for every user, as Jellyfin’s custom CSS. Users can turn it off under Settings › Display. By default, it holds the LumaaGlaass theme’s stylesheet, which goes with the default Custom JavaScript: empty both to keep the web player’s own look.',
+      'Applied to every page of the web player, for every user, as Jellyfin’s custom CSS. Users can turn it off under Settings › Display. By default, it holds the AIOStreams look: near-black pages, white pill buttons, rounded cards, the Inter font and Plex-style subtitles. Empty it to keep the web player’s own look.',
     customJs: 'Custom JavaScript',
     customJsHelp:
-      'Loaded by every page of the web player, after its own scripts. Empty loads nothing. By default, it loads the LumaaGlaass theme’s script, which goes with the default Custom CSS.',
+      'Loaded by every page of the web player, after its own scripts. Empty loads nothing, the default.',
     customJsWarningTitle: 'Only paste code you trust',
     customJsWarning:
       'This script runs in the browser of every user who opens the web player on this server, with their account. It can read what they see and act for them.',

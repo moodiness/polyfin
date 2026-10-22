@@ -319,7 +319,14 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 	if mode == askLater || mode == staleNow {
 		s.askStreams(ctx, user, t, unknown)
 	}
-	return s.withoutTorrents(user, versions), len(unknown) == 0, nil
+	versions = s.withoutMismatched(t, s.withoutTorrents(user, versions))
+	if s.settings().InFileSubtitlesOnly {
+		// Only the tracks inside the files are offered.
+		for i := range versions {
+			versions[i].Subtitles = nil
+		}
+	}
+	return versions, len(unknown) == 0, nil
 }
 
 // listVersions lists the versions serving list for t, as far as mode goes,
@@ -891,6 +898,10 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
 		return nil, false, err
+	}
+	// Only the tracks inside the files are offered.
+	if s.settings().InFileSubtitlesOnly {
+		return nil, true, nil
 	}
 	var serving []installed
 	for _, entry := range v.addons {

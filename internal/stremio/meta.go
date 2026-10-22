@@ -91,33 +91,37 @@ func (p *Posters) UnmarshalJSON(data []byte) error {
 // Meta describes a title, as returned by catalogs (a preview) and by the
 // meta resource (complete).
 type Meta struct {
-	ID              string        `json:"id"`
-	Type            string        `json:"type"`
-	Name            string        `json:"name"`
-	Poster          string        `json:"poster,omitempty"`
-	Background      string        `json:"background,omitempty"`
-	Logo            string        `json:"logo,omitempty"`
-	LandscapePoster string        `json:"landscapePoster,omitempty"`
-	Description     string        `json:"description,omitempty"`
-	ReleaseInfo     Text          `json:"releaseInfo,omitempty"`
-	Year            Text          `json:"year,omitempty"`
-	Released        string        `json:"released,omitempty"`
-	Runtime         Text          `json:"runtime,omitempty"`
-	Genres          Names         `json:"genres,omitempty"`
-	Director        Names         `json:"director,omitempty"`
-	Writer          Names         `json:"writer,omitempty"`
-	Cast            Names         `json:"cast,omitempty"`
-	ImdbRating      Text          `json:"imdbRating,omitempty"`
-	Status          string        `json:"status,omitempty"`
-	Language        string        `json:"language,omitempty"`
-	ImdbID          string        `json:"imdb_id,omitempty"`
-	TmdbID          Text          `json:"_tmdbId,omitempty"`
-	TvdbID          Text          `json:"_tvdbId,omitempty"`
-	Trailers        []Trailer     `json:"trailers,omitempty"`
-	Videos          []Video       `json:"videos,omitempty"`
-	Collection      *Collection   `json:"collection,omitempty"`
-	Extras          *Extras       `json:"app_extras,omitempty"`
-	BehaviorHints   *MetaBehavior `json:"behaviorHints,omitempty"`
+	ID              string `json:"id"`
+	Type            string `json:"type"`
+	Name            string `json:"name"`
+	Poster          string `json:"poster,omitempty"`
+	Background      string `json:"background,omitempty"`
+	Logo            string `json:"logo,omitempty"`
+	LandscapePoster string `json:"landscapePoster,omitempty"`
+	// PosterShape is the shape of Poster: "poster" (2:3, the default),
+	// "landscape" (16:9) or "square", as addons' collection catalogs give
+	// their wide artwork.
+	PosterShape   string        `json:"posterShape,omitempty"`
+	Description   string        `json:"description,omitempty"`
+	ReleaseInfo   Text          `json:"releaseInfo,omitempty"`
+	Year          Text          `json:"year,omitempty"`
+	Released      string        `json:"released,omitempty"`
+	Runtime       Text          `json:"runtime,omitempty"`
+	Genres        Names         `json:"genres,omitempty"`
+	Director      Names         `json:"director,omitempty"`
+	Writer        Names         `json:"writer,omitempty"`
+	Cast          Names         `json:"cast,omitempty"`
+	ImdbRating    Text          `json:"imdbRating,omitempty"`
+	Status        string        `json:"status,omitempty"`
+	Language      string        `json:"language,omitempty"`
+	ImdbID        string        `json:"imdb_id,omitempty"`
+	TmdbID        Text          `json:"_tmdbId,omitempty"`
+	TvdbID        Text          `json:"_tvdbId,omitempty"`
+	Trailers      []Trailer     `json:"trailers,omitempty"`
+	Videos        []Video       `json:"videos,omitempty"`
+	Collection    *Collection   `json:"collection,omitempty"`
+	Extras        *Extras       `json:"app_extras,omitempty"`
+	BehaviorHints *MetaBehavior `json:"behaviorHints,omitempty"`
 	// ChannelNumber and GuideID describe a channel of Polyfin's own IPTV
 	// sources: the number its provider gives it, 0 for none, and its
 	// channel in XMLTV guides; GuideNumber is a tuner's number of the

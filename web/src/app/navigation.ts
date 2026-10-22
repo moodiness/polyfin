@@ -28,6 +28,7 @@ import {
   UserCircleIcon,
   UsersIcon,
   type Icon,
+  PaintBrushIcon,
 } from '@phosphor-icons/react'
 import type { Messages } from '@/i18n'
 
@@ -84,6 +85,7 @@ export const settingsSections = [
   { id: 'backups', key: 'backups', icon: ArchiveIcon },
   { id: 'notifications', key: 'notifications', icon: BellIcon },
   { id: 'web-player', key: 'webPlayer', icon: BrowserIcon },
+  { id: 'branding', key: 'branding', icon: PaintBrushIcon },
   { id: 'diagnostics', key: 'diagnostics', icon: StethoscopeIcon },
 ] as const satisfies readonly {
   id: string

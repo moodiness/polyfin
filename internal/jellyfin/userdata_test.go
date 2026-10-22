@@ -347,6 +347,12 @@ func airingAddon(t *testing.T) string {
 func TestUpcomingListsComingEpisodesOfWatchedAndFavoriteSeries(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
+	// The airing addon lists a special (season 0), which this test expects.
+	settings := s.store.Settings()
+	settings.HideSpecials = false
+	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
 	s.user("member", nil)
 	addon, err := s.addons.Install(t.Context(), addons.Shared(), airingAddon(t), false)
 	if err != nil {

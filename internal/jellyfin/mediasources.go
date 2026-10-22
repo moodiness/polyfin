@@ -337,6 +337,10 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 // They follow the version's own analysis, never RemuxDB's description.
 func (h *Handler) withTextCopies(ctx context.Context, p playable, version library.Version, analysis media.Analysis,
 	streams []playback.MediaStream) []playback.MediaStream {
+	// Only the subtitle tracks inside the files are listed: no OCR copies.
+	if h.Accounts.Settings().InFileSubtitlesOnly {
+		return streams
+	}
 	copies := h.Playback.TextCopies(ctx, version, analysis, versionFiles(p.subtitles, version))
 	if len(copies) == 0 {
 		return streams

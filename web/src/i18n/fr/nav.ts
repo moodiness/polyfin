@@ -38,6 +38,7 @@ const nav: typeof en = {
       backups: 'Sauvegardes',
       notifications: 'Notifications',
       webPlayer: 'Lecteur web',
+      branding: 'Image de marque',
       diagnostics: 'Diagnostic',
     },
     settingsSectionsLabel: 'Sections des paramètres',

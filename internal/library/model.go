@@ -78,6 +78,10 @@ type Item struct {
 	ID   accounts.ID
 	Kind Kind
 	Name string
+	// PosterShape is the shape of the Primary image as the addon gives it
+	// (see stremio.Meta.PosterShape): "landscape", "square", or empty for
+	// the kind's own.
+	PosterShape string
 	// ParentID is the folder the item was listed in; zero for libraries.
 	ParentID accounts.ID
 	// CollectionType is the content of a library: "movies", "tvshows",
@@ -410,6 +414,7 @@ func fromMeta(item *Item, meta stremio.Meta) {
 		item.OriginalTitle = item.Name
 	}
 	item.Overview = meta.Description
+	item.PosterShape = strings.ToLower(strings.TrimSpace(meta.PosterShape))
 	item.Genres = slices.Clip(meta.Genres)
 	first, last := parseYears(string(meta.ReleaseInfo))
 	if first == 0 {

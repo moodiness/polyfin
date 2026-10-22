@@ -16,7 +16,11 @@ services:
     restart: unless-stopped
 
   polyfin:
-    image: ghcr.io/moodiness/polyfin:latest
+    # The image the fork's GitHub Actions publish (.github/workflows/docker.yml):
+    # set POLYFIN_IMAGE in .env, e.g. ghcr.io/<your-user>/polyfin:latest.
+    # `docker compose up -d --build` builds it here instead.
+    image: ${POLYFIN_IMAGE:-ghcr.io/moodiness/polyfin:latest}
+    build: .
     environment:
       POLYFIN_DATABASE_URL: postgresql://polyfin:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/polyfin
       # Encrypts the keys and tokens Polyfin stores, optional but advised:

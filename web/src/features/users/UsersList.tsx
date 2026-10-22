@@ -42,6 +42,7 @@ import {
 } from '@/ui'
 import CreateUserModal from './CreateUserModal'
 import { CreateInviteModal, InviteLinks } from './InviteLinks'
+import Registration from './Registration'
 import { clockTime, useRestrictions, UsersTabs } from './shared'
 
 /** The users the list shows: every one, those in no group, or the members of one group. */
@@ -158,6 +159,7 @@ export default function UsersList() {
           )}
         </Block>
         <InviteLinks onCreate={() => setInviting(true)} />
+        <Registration />
       </PageLayout>
       {/* Outside the layout, whose block spacing would push the panel down. */}
       <CreateUserModal

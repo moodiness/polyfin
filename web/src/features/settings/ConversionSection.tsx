@@ -94,6 +94,13 @@ export default function ConversionSection({
           />
         </FieldRow>
         <SwitchRow
+          anchor="web-safe-video"
+          label={s.webSafeVideo}
+          help={s.webSafeVideoHelp}
+          checked={form.webSafeVideo}
+          onChange={(webSafeVideo) => update({ webSafeVideo })}
+        />
+        <SwitchRow
           anchor="converted-downloads"
           label={s.convertedDownloads}
           help={s.convertedDownloadsHelp}

@@ -50,7 +50,7 @@ const (
 	// maxSettingsBody fits the settings with their custom CSS and script at
 	// their largest, each character written as JSON's longest escape
 	// (\u003c), plus the other settings.
-	maxSettingsBody = 6*(2*accounts.MaxCustomCodeBytes+accounts.MaxLoginDisclaimerBytes) + maxBody
+	maxSettingsBody = 6*(2*accounts.MaxCustomCodeBytes+accounts.MaxLoginDisclaimerBytes) + 2*accounts.MaxBrandLogoBytes + maxBody
 	readyWait       = 2 * time.Second
 )
 
@@ -198,6 +198,8 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("POST /admin/api/session/two-step", h.signInSecondStep)
 	mux.HandleFunc("GET /admin/api/invite/{token}", h.publicInvite)
 	mux.HandleFunc("POST /admin/api/invite/{token}", h.acceptInvite)
+	mux.HandleFunc("GET /admin/api/register", h.registration)
+	mux.HandleFunc("POST /admin/api/register", h.register)
 
 	mux.Handle("GET /admin/api/session", h.signedInAnyHour(h.session))
 	mux.Handle("DELETE /admin/api/session", h.signedInAnyHour(h.signOut))
@@ -276,6 +278,10 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/key", h.administrator(h.readStremioKey(h.userAppImportTarget)))
 	mux.Handle("POST /admin/api/users/{id}/app-connections/{app}/import", h.administrator(h.importAppConnection(h.userAppImportTarget)))
 	mux.Handle("DELETE /admin/api/users/{id}/app-connections/{app}", h.administrator(h.disconnectApp(h.userAppImportTarget)))
+	mux.Handle("GET /admin/api/registration-codes", h.administrator(h.registrationCodes))
+	mux.Handle("POST /admin/api/registration-codes", h.administrator(h.createRegistrationCodes))
+	mux.Handle("DELETE /admin/api/registration-codes/{code}", h.administrator(h.deleteRegistrationCode))
+	mux.Handle("PATCH /admin/api/registration-codes/{code}", h.administrator(h.updateRegistrationCode))
 	mux.Handle("GET /admin/api/invites", h.administrator(h.invites))
 	mux.Handle("POST /admin/api/invites", h.administrator(h.createInvite))
 	mux.Handle("POST /admin/api/invites/{id}/revoke", h.administrator(h.revokeInvite))
@@ -560,6 +566,11 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidHideVersionsLarger, http.StatusBadRequest, "invalid_hide_versions_larger"},
 		{accounts.ErrInvalidHiddenVersionCodecs, http.StatusBadRequest, "invalid_hidden_version_codecs"},
 		{accounts.ErrInvalidHiddenVersionWords, http.StatusBadRequest, "invalid_hidden_version_words"},
+		{accounts.ErrInvalidHiddenRipTypes, http.StatusBadRequest, "invalid_hidden_rip_types"},
+		{accounts.ErrInvalidDefaultLanguage, http.StatusBadRequest, "invalid_default_language"},
+		{accounts.ErrTooManyRegistrationCodes, http.StatusConflict, "too_many_registration_codes"},
+		{accounts.ErrRegistrationCodeUnknown, http.StatusNotFound, "registration_code_not_found"},
+		{accounts.ErrInvalidRegistrationCodeUses, http.StatusBadRequest, "invalid_max_uses"},
 		{accounts.ErrInvalidMaxConversions, http.StatusBadRequest, "invalid_max_conversions"},
 		{accounts.ErrInvalidMaxConversionHeight, http.StatusBadRequest, "invalid_max_conversion_height"},
 		{accounts.ErrInvalidSubtitleOCR, http.StatusBadRequest, "invalid_subtitle_ocr"},
@@ -592,6 +603,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},
 		{accounts.ErrInvalidCustomJs, http.StatusBadRequest, "invalid_custom_js"},
 		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},
+		{accounts.ErrInvalidBrandLogo, http.StatusBadRequest, "invalid_brand_logo"},
 		{accounts.ErrInvalidTraktApp, http.StatusBadRequest, "invalid_trakt_app"},
 		{accounts.ErrInvalidSimklApp, http.StatusBadRequest, "invalid_simkl_app"},
 		{accounts.ErrInvalidLastFMApp, http.StatusBadRequest, "invalid_lastfm_app"},

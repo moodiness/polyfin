@@ -464,6 +464,11 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		h.stateListing(w, r, user, filter, parent, hasParent, start, limit)
 		return
 	}
+	// Every episode of the TV libraries, as live-TV style apps such as
+	// NostalgiaTV ask (see episodepool.go).
+	if h.episodeListing(w, r, user, parent, hasParent, names, fields, start, limit) {
+		return
+	}
 	if !hasParent {
 		if names.requested() {
 			h.narrowedListing(w, r, user, names, start, limit)
@@ -845,12 +850,23 @@ func (h *Handler) episodes(w http.ResponseWriter, r *http.Request) {
 // libraryGenres returns the genres a library's catalog offers. Other
 // folders have none, Polyfin's own among them; a folder that does not
 // exist is refused, as Jellyfin does.
-func (h *Handler) libraryGenres(w http.ResponseWriter, r *http.Request) ([]string, bool) {
+func (h *Handler) libraryGenres(w http.ResponseWriter, r *http.Request, pooled bool) ([]string, bool) {
 	b := bindErrors{}
 	id, hasParent := b.guid(r, "parentId")
 	user, ok := h.viewer(w, r, b, unknownListingUser)
-	if !ok || !hasParent {
+	if !ok {
 		return nil, ok
+	}
+	if !hasParent {
+		// Live-TV style apps ask for the server's genres to make channels
+		// of; those of the TV libraries' series are the ones their
+		// episode listings can be narrowed to (see episodepool.go).
+		if pooled {
+			if genres, found := h.poolGenres(r.Context(), user); found {
+				return genres, true
+			}
+		}
+		return nil, true
 	}
 	genres, err := h.Library.Genres(r.Context(), user, id)
 	if errors.Is(err, library.ErrNotFound) {
@@ -876,7 +892,7 @@ func (h *Handler) libraryGenres(w http.ResponseWriter, r *http.Request) ([]strin
 }
 
 func (h *Handler) filters(w http.ResponseWriter, r *http.Request) {
-	genres, ok := h.libraryGenres(w, r)
+	genres, ok := h.libraryGenres(w, r, false)
 	if !ok {
 		return
 	}
@@ -897,7 +913,7 @@ func toAny(values []string) []any {
 }
 
 func (h *Handler) filters2(w http.ResponseWriter, r *http.Request) {
-	genres, ok := h.libraryGenres(w, r)
+	genres, ok := h.libraryGenres(w, r, false)
 	if !ok {
 		return
 	}
@@ -910,7 +926,7 @@ func (h *Handler) filters2(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) genres(w http.ResponseWriter, r *http.Request) {
-	genres, ok := h.libraryGenres(w, r)
+	genres, ok := h.libraryGenres(w, r, true)
 	if !ok {
 		return
 	}

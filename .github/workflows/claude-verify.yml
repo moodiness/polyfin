@@ -1,0 +1,106 @@
+name: Verify (temporary)
+
+# Temporary: runs the checks on claude/ branches and reports failures as
+# annotations, readable without the log archive. Removed before merging.
+on:
+  push:
+    branches: ["claude/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      POLYFIN_TEST_DATABASE_URL: postgresql://polyfin:polyfin@127.0.0.1:5432/polyfin
+    services:
+      postgres:
+        image: mirror.gcr.io/library/postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_DB: polyfin
+          POSTGRES_USER: polyfin
+          POSTGRES_PASSWORD: polyfin
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U polyfin -d polyfin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+      - name: FFmpeg, PostgreSQL client and Tesseract
+        run: |
+          docker buildx build --target ffmpeg --output type=local,dest="$RUNNER_TEMP/ffmpeg" .
+          echo "POLYFIN_TEST_FFMPEG=$RUNNER_TEMP/ffmpeg/bin/ffmpeg" >> "$GITHUB_ENV"
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSLo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18 tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra
+          echo "POLYFIN_TEST_PG_DUMP=/usr/lib/postgresql/18/bin/pg_dump" >> "$GITHUB_ENV"
+          echo "POLYFIN_TEST_PG_RESTORE=/usr/lib/postgresql/18/bin/pg_restore" >> "$GITHUB_ENV"
+          echo "POLYFIN_TEST_TESSERACT=/usr/bin/tesseract" >> "$GITHUB_ENV"
+      - name: Checks
+        run: |
+          set +e
+          {
+            echo "## web"
+            make web >/dev/null 2>web.err || tail -40 web.err
+            echo "## gofmt"
+            gofmt -l cmd internal web/*.go
+            echo "## vet"
+            go vet ./... 2>&1 | tail -60
+          } > digest.txt 2>&1
+          go test -race -json ./... > test.json 2>build.err
+          echo "## build" >> digest.txt
+          tail -60 build.err >> digest.txt
+          python3 - <<'EOF' >> digest.txt
+          import json, collections
+          out = collections.defaultdict(list)
+          failed = []
+          for line in open('test.json'):
+              try:
+                  e = json.loads(line)
+              except ValueError:
+                  continue
+              key = (e.get('Package'), e.get('Test'))
+              if e.get('Action') == 'output':
+                  out[key].append(e.get('Output', ''))
+              elif e.get('Action') == 'fail':
+                  failed.append(key)
+          print('## failed', len(failed))
+          for pkg, test in failed:
+              if test is None and any(t for p, t in failed if p == pkg and t):
+                  continue
+              lines = [l for l in out[(pkg, test)] if not l.startswith(('=== RUN', '=== PAUSE', '=== CONT'))]
+              print('#', pkg, test)
+              print(''.join(lines[-12:]).rstrip()[-1500:])
+          EOF
+      - name: Report
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          text = open('digest.txt').read() if __import__('os').path.exists('digest.txt') else 'no digest'
+          chunks = [text[i:i + 60000] for i in range(0, len(text), 60000)][:9]
+          for i, c in enumerate(chunks):
+              c = c.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              print(f'::warning title=digest {i}::{c}')
+          EOF

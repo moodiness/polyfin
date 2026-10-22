@@ -188,6 +188,12 @@ func newEnv(t *testing.T) env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Addons' subtitles, off by default, are those most tests read.
+	offered := users.Settings()
+	offered.InFileSubtitlesOnly = false
+	if _, err := users.UpdateSettings(t.Context(), offered); err != nil {
+		t.Fatal(err)
+	}
 	admin, _ := users.CreateUser(t.Context(), accounts.NewUser{Name: "admin", Password: "correct horse", IsAdministrator: true})
 	member, _ := users.CreateUser(t.Context(), accounts.NewUser{Name: "member", Password: "correct horse"})
 	client := stremio.NewClient("test")
@@ -406,6 +412,7 @@ func TestCollectionsGroupCatalogs(t *testing.T) {
 func TestSeriesSeasonsAndEpisodes(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
+	e.showSpecials(t)
 	now := time.Now().UTC()
 	future := now.Add(30 * 24 * time.Hour).Format(time.RFC3339)
 	show := stremio.Meta{ID: "tt100", Type: "series", Name: "Show", Poster: "https://images.example/show.jpg",
@@ -636,6 +643,7 @@ func TestLibraryNamesTellCollisionsApart(t *testing.T) {
 func TestGeneratedNamesFollowTheServerLanguage(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
+	e.showSpecials(t)
 	show := stremio.Meta{ID: "tt200", Type: "series", Name: "Show", Videos: []stremio.Video{
 		{ID: "tt200:0:1", Title: "Behind the scenes", Season: 0, Episode: 1, Released: "2019-12-01T00:00:00Z"},
 		{ID: "tt200:1:1", Title: "Pilot", Season: 1, Episode: 1, Released: "2020-01-01T00:00:00Z"},

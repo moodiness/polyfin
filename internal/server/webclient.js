@@ -6,7 +6,8 @@
 // eighth, shows a title's three scores for a ninth, adds entries to the
 // item menus for a tenth, adds the server's home rows to the home page for
 // an eleventh, offers to share a movie or an episode for a twelfth, and adds
-// reminders to a programme's page for a thirteenth.
+// reminders to a programme's page for a thirteenth, and makes the server's
+// logo, when it has one, the page's icon for a fourteenth.
 //
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
@@ -2500,4 +2501,29 @@
     true,
   )
   quietly(follow)()
+
+  // The server's logo (Settings › Web player › Logo) as the page's icon:
+  // the stylesheet shows it everywhere else, but the tab's icon is a link.
+  quietly(function () {
+    var logo = new URL('../Branding/Logo', location.href).href
+    fetch(logo, { method: 'HEAD', cache: 'no-cache' })
+      .then(function (response) {
+        if (!response.ok) return
+        var tag = (response.headers.get('ETag') || '').replace(/"/g, '')
+        var href = logo + (tag ? '?tag=' + tag : '')
+        var links = document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')
+        if (!links.length) {
+          var link = document.createElement('link')
+          link.rel = 'icon'
+          document.head.appendChild(link)
+          links = [link]
+        }
+        for (var i = 0; i < links.length; i++) {
+          links[i].href = href
+          links[i].removeAttribute('type')
+          links[i].removeAttribute('sizes')
+        }
+      })
+      .catch(function () {})
+  })()
 })()

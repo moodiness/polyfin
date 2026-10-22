@@ -228,6 +228,44 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'hidden-rip-types',
+    label: (t) => s(t).hiddenRipTypes,
+    help: (t) => s(t).hiddenRipTypesHelp,
+    codes: ['invalid_hidden_rip_types'],
+  },
+  {
+    section: 'playback',
+    anchor: 'hide-specials',
+    label: (t) => s(t).hideSpecials,
+    help: (t) => s(t).hideSpecialsHelp,
+  },
+  {
+    section: 'playback',
+    anchor: 'in-file-subtitles-only',
+    label: (t) => s(t).inFileSubtitlesOnly,
+    help: (t) => s(t).inFileSubtitlesOnlyHelp,
+  },
+  {
+    section: 'playback',
+    anchor: 'exact-title-match',
+    label: (t) => s(t).exactTitleMatch,
+    help: (t) => s(t).exactTitleMatchHelp,
+  },
+  {
+    section: 'playback',
+    anchor: 'default-audio-language',
+    label: (t) => s(t).defaultAudioLanguage,
+    help: (t) => s(t).defaultAudioLanguageHelp,
+    codes: ['invalid_default_language'],
+  },
+  {
+    section: 'playback',
+    anchor: 'default-subtitle-language',
+    label: (t) => s(t).defaultSubtitleLanguage,
+    help: (t) => s(t).defaultSubtitleLanguageHelp,
+  },
+  {
+    section: 'playback',
     anchor: 'playback-history',
     label: (t) => s(t).playbackHistory,
     help: (t) => s(t).playbackHistoryHelp,
@@ -260,6 +298,12 @@ export const settingEntries: readonly SettingEntry[] = [
     label: (t) => s(t).maxConversionHeight,
     help: (t) => s(t).maxConversionHeightHelp,
     codes: ['invalid_max_conversion_height'],
+  },
+  {
+    section: 'conversion',
+    anchor: 'web-safe-video',
+    label: (t) => s(t).webSafeVideo,
+    help: (t) => s(t).webSafeVideoHelp,
   },
   {
     section: 'conversion',
@@ -689,6 +733,12 @@ export const settingEntries: readonly SettingEntry[] = [
     label: (t) => s(t).importEveryMinutes,
     help: (t) => s(t).importEveryMinutesHelp,
     codes: ['invalid_import_every_minutes'],
+  },
+  {
+    section: 'security',
+    anchor: 'registration',
+    label: (t) => s(t).registration,
+    help: (t) => s(t).registrationHelp,
   },
   {
     section: 'security',
@@ -1216,6 +1266,14 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => `${s(t).customJsHelp} ${s(t).customJsWarning}`,
     keywords: ['javascript', 'js', 'jellyfin-web'],
     codes: ['invalid_custom_js'],
+  },
+  {
+    section: 'branding',
+    anchor: 'brand-logo',
+    label: (t) => s(t).brandLogo,
+    help: (t) => s(t).brandLogoHelp,
+    keywords: ['markdown', 'disclaimer'],
+    codes: ['invalid_brand_logo'],
   },
   {
     section: 'web-player',

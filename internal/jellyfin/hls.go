@@ -261,12 +261,15 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 	if index, err := strconv.Atoi(query(r, "subtitleStreamIndex")); err == nil && index >= 0 && remux.ConvertVideo != nil &&
 		strings.EqualFold(query(r, "subtitleMethod"), "Encode") {
 		switch {
-		case index < len(files):
-			if pictureFile(files[index]) {
-				remux.BurnFile = files[index].URL
-			}
-		case playback.BurnableSubtitle(analysis, index-len(files)):
+		case index < len(files) && pictureFile(files[index]):
+			remux.BurnFile = files[index].URL
+		case index >= len(files) && playback.BurnableSubtitle(analysis, index-len(files)):
 			remux.Burn = new(index - len(files))
+		default:
+			// A text subtitle: drawn by libass from a file Polyfin writes.
+			if path, styled, ok := h.textBurnFile(r.Context(), version, analysis, files, index); ok {
+				remux.BurnText, remux.StyledText = path, styled
+			}
 		}
 	}
 	if strings.EqualFold(query(r, "allowAudioStreamCopy"), "false") {
@@ -459,7 +462,9 @@ func (h *Handler) adaptiveQuality(r *http.Request) bool {
 func (h *Handler) renditions(ctx context.Context, req remuxRequest, selected, rawQuery string) []hls.Rendition {
 	language := h.Accounts.Settings().Language
 	streams := playback.MediaStreams(req.analysis, externalStreams(req.files), language)
-	streams = playback.AppendTextCopies(streams, h.Playback.TextCopies(ctx, req.remux.Version, req.analysis, req.files), language)
+	if !h.Accounts.Settings().InFileSubtitlesOnly {
+		streams = playback.AppendTextCopies(streams, h.Playback.TextCopies(ctx, req.remux.Version, req.analysis, req.files), language)
+	}
 	shown, err := strconv.Atoi(selected)
 	if err != nil {
 		shown = -1

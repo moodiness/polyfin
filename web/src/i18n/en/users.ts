@@ -3,6 +3,28 @@ const users = {
   users: {
     title: 'Users',
     description: 'Create and manage the accounts allowed to use this server.',
+    registrationTitle: 'Registration',
+    registration: 'Let people register',
+    registrationHelp:
+      'Anyone who opens /register on this server can create a member account with the default settings. Off, the page says registration is closed.',
+    registrationOpenPage: 'Open the page',
+    registrationFailed: 'The setting could not be saved. Try again.',
+    registrationCodes: 'Require a registration code',
+    registrationCodesHelp:
+      'Visitors of /register type one of these codes before the form. Choose beside each code how many accounts it may create.',
+    registrationCodesCount: (n: number) => (n === 1 ? '1 usable code' : `${n} usable codes`),
+    registrationCodesNew: 'New code',
+    registrationCodesFailed: 'The codes could not be changed. Try again.',
+    registrationCodeUsed: (name: string) => `Used by ${name}`,
+    registrationCodeUnused: 'Unused',
+    registrationCodeUses: (uses: number, max: number) =>
+      max === 0 ? `Used ${uses} times` : `Used ${uses} of ${max}`,
+    registrationCodeLimit: (n: number) => (n === 1 ? 'Single use' : `${n} uses`),
+    registrationCodeUnlimited: 'Unlimited',
+    registrationCodeLimitLabel: 'How many times the code can be used',
+    registrationCodeCopy: 'Copy code',
+    registrationCodeCopied: 'Copied',
+    registrationCodeDelete: 'Delete code',
     listTitle: 'Accounts',
     empty: 'No user yet.',
     administrator: 'Administrator',

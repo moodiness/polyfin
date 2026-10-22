@@ -484,6 +484,12 @@ type settingsJSON struct {
 	PersonalAddons     *bool `json:"personalAddons"`
 	ServerImports      *bool `json:"serverImports"`
 	ShareLinks         *bool `json:"shareLinks"`
+	Registration       *bool `json:"registration"`
+	RegistrationCodes  *bool `json:"registrationCodes"`
+	DefaultAudioLanguage    *string `json:"defaultAudioLanguage"`
+	DefaultSubtitleLanguage *string `json:"defaultSubtitleLanguage"`
+	ExactTitleMatch    *bool `json:"exactTitleMatch"`
+	InFileSubtitlesOnly *bool `json:"inFileSubtitlesOnly"`
 	LoginAttempts      *int  `json:"loginAttempts"`
 	InactiveDeviceDays *int  `json:"inactiveDeviceDays"`
 	DetailedLog        *bool `json:"detailedLog"`
@@ -524,12 +530,15 @@ type settingsJSON struct {
 	HideVersionsLargerGB *int                `json:"hideVersionsLargerGb"`
 	HiddenVersionCodecs  *[]string           `json:"hiddenVersionCodecs"`
 	HiddenVersionWords   *[]string           `json:"hiddenVersionWords"`
+	HiddenRipTypes       *[]string           `json:"hiddenRipTypes"`
+	HideSpecials         *bool               `json:"hideSpecials"`
 	// NameHowVersionsPlay keeps its current value when a PUT leaves it out.
 	NameHowVersionsPlay *bool `json:"nameHowVersionsPlay"`
 	SyncAddonSubtitles  *bool `json:"syncAddonSubtitles"`
 	MaxConversions      *int  `json:"maxConversions"`
 	MaxConversionHeight *int  `json:"maxConversionHeight"`
 	ConvertedDownloads  *bool `json:"convertedDownloads"`
+	WebSafeVideo        *bool `json:"webSafeVideo"`
 	// SubtitleOCR ("off", "played" or "scans") and SubtitleOCRTracks keep
 	// their current values when a PUT leaves them out.
 	SubtitleOCR       *string `json:"subtitleOcr"`
@@ -596,6 +605,8 @@ type settingsJSON struct {
 	CustomCss       *string `json:"customCss"`
 	CustomJs        *string `json:"customJs"`
 	LoginDisclaimer *string `json:"loginDisclaimer"`
+	// BrandLogo is a data URL, empty for Jellyfin's logo.
+	BrandLogo *string `json:"brandLogo"`
 	// AddVersionsToOpenPage keeps its current value when a PUT leaves it
 	// out.
 	AddVersionsToOpenPage *bool `json:"addVersionsToOpenPage"`
@@ -772,6 +783,12 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		PersonalAddons:        &settings.PersonalAddons,
 		ServerImports:         &settings.ServerImports,
 		ShareLinks:            &settings.ShareLinks,
+		Registration:          &settings.Registration,
+		RegistrationCodes:     &settings.RegistrationCodes,
+		DefaultAudioLanguage:    &settings.DefaultAudioLanguage,
+		DefaultSubtitleLanguage: &settings.DefaultSubtitleLanguage,
+		ExactTitleMatch:       &settings.ExactTitleMatch,
+		InFileSubtitlesOnly:   &settings.InFileSubtitlesOnly,
 		LoginAttempts:         &settings.LoginAttempts,
 		TwoStepAdministrators: &settings.TwoStepAdministrators,
 		InactiveDeviceDays:    &settings.InactiveDeviceDays,
@@ -794,11 +811,14 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		HideVersionsLargerGB:  &settings.HideVersionsLargerGB,
 		HiddenVersionCodecs:   &settings.HiddenVersionCodecs,
 		HiddenVersionWords:    &settings.HiddenVersionWords,
+		HiddenRipTypes:        &settings.HiddenRipTypes,
+		HideSpecials:          &settings.HideSpecials,
 		NameHowVersionsPlay:   &settings.NameHowVersionsPlay,
 		SyncAddonSubtitles:    &settings.SyncAddonSubtitles,
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
 		ConvertedDownloads:    &settings.ConvertedDownloads,
+		WebSafeVideo:          &settings.WebSafeVideo,
 		SubtitleOCR:           &settings.SubtitleOCR,
 		SubtitleOCRTracks:     &settings.SubtitleOCRTracks,
 
@@ -847,6 +867,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		CustomCss:             &settings.CustomCss,
 		CustomJs:              &settings.CustomJs,
 		LoginDisclaimer:       &settings.LoginDisclaimer,
+		BrandLogo:             &settings.BrandLogo,
 		AddVersionsToOpenPage: &settings.AddVersionsToOpenPage,
 
 		TraktClientID:        &settings.TraktClientID,
@@ -1472,6 +1493,12 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		PersonalAddons:        valueOr(body.PersonalAddons, current.PersonalAddons),
 		ServerImports:         valueOr(body.ServerImports, current.ServerImports),
 		ShareLinks:            valueOr(body.ShareLinks, current.ShareLinks),
+		Registration:          valueOr(body.Registration, current.Registration),
+		RegistrationCodes:     valueOr(body.RegistrationCodes, current.RegistrationCodes),
+		DefaultAudioLanguage:    valueOr(body.DefaultAudioLanguage, current.DefaultAudioLanguage),
+		DefaultSubtitleLanguage: valueOr(body.DefaultSubtitleLanguage, current.DefaultSubtitleLanguage),
+		ExactTitleMatch:       valueOr(body.ExactTitleMatch, current.ExactTitleMatch),
+		InFileSubtitlesOnly:   valueOr(body.InFileSubtitlesOnly, current.InFileSubtitlesOnly),
 		LoginAttempts:         valueOr(body.LoginAttempts, current.LoginAttempts),
 		TwoStepAdministrators: valueOr(body.TwoStepAdministrators, current.TwoStepAdministrators),
 		InactiveDeviceDays:    valueOr(body.InactiveDeviceDays, current.InactiveDeviceDays),
@@ -1496,11 +1523,14 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		HideVersionsLargerGB:  valueOr(body.HideVersionsLargerGB, current.HideVersionsLargerGB),
 		HiddenVersionCodecs:   valueOr(body.HiddenVersionCodecs, current.HiddenVersionCodecs),
 		HiddenVersionWords:    valueOr(body.HiddenVersionWords, current.HiddenVersionWords),
+		HiddenRipTypes:        valueOr(body.HiddenRipTypes, current.HiddenRipTypes),
+		HideSpecials:          valueOr(body.HideSpecials, current.HideSpecials),
 		NameHowVersionsPlay:   valueOr(body.NameHowVersionsPlay, current.NameHowVersionsPlay),
 		SyncAddonSubtitles:    valueOr(body.SyncAddonSubtitles, current.SyncAddonSubtitles),
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
 		ConvertedDownloads:    valueOr(body.ConvertedDownloads, current.ConvertedDownloads),
+		WebSafeVideo:          valueOr(body.WebSafeVideo, current.WebSafeVideo),
 		SubtitleOCR:           valueOr(body.SubtitleOCR, current.SubtitleOCR),
 		SubtitleOCRTracks:     valueOr(body.SubtitleOCRTracks, current.SubtitleOCRTracks),
 
@@ -1549,6 +1579,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		CustomCss:             valueOr(body.CustomCss, current.CustomCss),
 		CustomJs:              valueOr(body.CustomJs, current.CustomJs),
 		LoginDisclaimer:       valueOr(body.LoginDisclaimer, current.LoginDisclaimer),
+		BrandLogo:             valueOr(body.BrandLogo, current.BrandLogo),
 		AddVersionsToOpenPage: valueOr(body.AddVersionsToOpenPage, current.AddVersionsToOpenPage),
 
 		TraktClientID:     valueOr(body.TraktClientID, current.TraktClientID),

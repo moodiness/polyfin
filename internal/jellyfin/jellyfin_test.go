@@ -110,6 +110,8 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	// it on: the others count every request to the sources.
 	settings := store.Settings()
 	settings.PrepareAhead = false
+	// Addons' subtitles, left out by default, are those most tests read.
+	settings.InFileSubtitlesOnly = false
 	if _, err := store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}

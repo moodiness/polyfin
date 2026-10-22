@@ -8,6 +8,7 @@ import {
   type AcmeChallenge,
   type HttpsMode,
   type Settings,
+  type RipType,
   type VersionCodec,
   type VersionCriterion,
 } from '@/api'
@@ -29,6 +30,7 @@ import {
 import NotificationTargets from '@/features/notifications/NotificationTargets'
 import { computer, useServerSystem } from '@/features/sources/LocalFolders'
 import CodeEditor from './CodeEditor'
+import LogoField from './LogoField'
 import CollectionLibraryApps from './CollectionLibraryApps'
 import BackupDestinations from './BackupDestinations'
 import HomeRows from './HomeRows'
@@ -93,6 +95,7 @@ export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => R
   backups: (api) => <Backups {...api} />,
   notifications: (api) => <Notifications {...api} />,
   'web-player': (api) => <WebPlayer {...api} />,
+  branding: (api) => <Branding {...api} />,
   diagnostics: (api) => <DiagnosticsFields {...api} />,
 }
 
@@ -191,6 +194,24 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
       )}
     </SettingsGroup>
   )
+}
+
+const defaultLanguageCodes = [
+  'eng', 'fre', 'spa', 'ger', 'ita', 'por', 'dut', 'swe', 'nor', 'dan', 'fin', 'pol', 'rus', 'ukr', 'cze',
+  'gre', 'tur', 'ara', 'heb', 'hin', 'jpn', 'kor', 'chi', 'tha', 'vie', 'ind',
+] as const
+
+function languageOptions(none: string) {
+  const names = new Intl.DisplayNames([navigator.language || 'en'], { type: 'language' })
+  const two: Record<string, string> = { eng: 'en', fre: 'fr', spa: 'es', ger: 'de', ita: 'it', por: 'pt', dut: 'nl', swe: 'sv',
+    nor: 'no', dan: 'da', fin: 'fi', pol: 'pl', rus: 'ru', ukr: 'uk', cze: 'cs', gre: 'el', tur: 'tr', ara: 'ar', heb: 'he',
+    hin: 'hi', jpn: 'ja', kor: 'ko', chi: 'zh', tha: 'th', vie: 'vi', ind: 'id' }
+  return [
+    { value: '', label: none },
+    ...defaultLanguageCodes
+      .map((code) => ({ value: code as string, label: names.of(two[code]) ?? code }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  ]
 }
 
 function Playback({ form, update, error, number, range, limits }: SectionFormApi) {
@@ -375,6 +396,84 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
           <WordList
             value={form.hiddenVersionWords}
             onValue={(hiddenVersionWords) => update({ hiddenVersionWords })}
+          />
+        </FieldRow>
+        <SettingRow anchor="hidden-rip-types">
+          <fieldset aria-describedby="hidden-rip-types-help">
+            <legend className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+              {s.hiddenRipTypes}
+            </legend>
+            <p id="hidden-rip-types-help" className="mt-1 max-w-[60ch] text-small text-ink-3">
+              {s.hiddenRipTypesHelp}
+            </p>
+            <div className="mt-3.5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {((form.bounds.hiddenRipTypes?.choices ?? []) as RipType[]).map((kind, _, all) => (
+                <Checkbox
+                  key={kind}
+                  label={s.ripTypes[kind]}
+                  checked={form.hiddenRipTypes.includes(kind)}
+                  onChange={(checked) =>
+                    update({
+                      hiddenRipTypes: all.filter((other) =>
+                        other === kind ? checked : form.hiddenRipTypes.includes(other),
+                      ),
+                    })
+                  }
+                />
+              ))}
+            </div>
+            {error('hidden-rip-types') && (
+              <div className="mt-2">
+                <FieldError>{error('hidden-rip-types')}</FieldError>
+              </div>
+            )}
+          </fieldset>
+        </SettingRow>
+        <SwitchRow
+          anchor="hide-specials"
+          label={s.hideSpecials}
+          help={s.hideSpecialsHelp}
+          checked={form.hideSpecials}
+          onChange={(hideSpecials) => update({ hideSpecials })}
+        />
+        <SwitchRow
+          anchor="in-file-subtitles-only"
+          label={s.inFileSubtitlesOnly}
+          help={s.inFileSubtitlesOnlyHelp}
+          checked={form.inFileSubtitlesOnly}
+          onChange={(inFileSubtitlesOnly) => update({ inFileSubtitlesOnly })}
+        />
+        <SwitchRow
+          anchor="exact-title-match"
+          label={s.exactTitleMatch}
+          help={s.exactTitleMatchHelp}
+          checked={form.exactTitleMatch}
+          onChange={(exactTitleMatch) => update({ exactTitleMatch })}
+        />
+        <FieldRow
+          anchor="default-audio-language"
+          label={s.defaultAudioLanguage}
+          help={s.defaultAudioLanguageHelp}
+          error={error('default-audio-language')}
+        >
+          <Select
+            value={form.defaultAudioLanguage}
+            options={languageOptions(s.defaultLanguageNone)}
+            onValue={(defaultAudioLanguage) => update({ defaultAudioLanguage })}
+            className="max-w-xs"
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="default-subtitle-language"
+          label={s.defaultSubtitleLanguage}
+          help={s.defaultSubtitleLanguageHelp}
+          error={error('default-subtitle-language')}
+        >
+          <Select
+            value={form.defaultSubtitleLanguage}
+            options={languageOptions(s.defaultLanguageNone)}
+            onValue={(defaultSubtitleLanguage) => update({ defaultSubtitleLanguage })}
+            className="max-w-xs"
           />
         </FieldRow>
       </SettingsGroup>
@@ -849,6 +948,13 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
           className="max-w-xs"
         />
       </FieldRow>
+      <SwitchRow
+        anchor="registration"
+        label={s.registration}
+        help={s.registrationHelp}
+        checked={form.registration}
+        onChange={(registration) => update({ registration })}
+      />
       <SwitchRow
         anchor="share-links"
         label={s.shareLinks}
@@ -1499,6 +1605,23 @@ function Backups({ form, update, error, number, range, limits }: SectionFormApi)
         </SettingRow>
       </SettingsGroup>
     </>
+  )
+}
+
+function Branding({ form, update, error }: SectionFormApi) {
+  const { t } = useI18n()
+  const s = t.settings
+  return (
+    <SettingsGroup>
+      <FieldRow
+        anchor="brand-logo"
+        label={s.brandLogo}
+        help={s.brandLogoHelp}
+        error={error('brand-logo')}
+      >
+        <LogoField value={form.brandLogo} onValue={(brandLogo) => update({ brandLogo })} />
+      </FieldRow>
+    </SettingsGroup>
   )
 }
 

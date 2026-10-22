@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -131,6 +132,10 @@ func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() st
 			header.Set("ETag", webScriptETag)
 			http.ServeContent(w, r, webScript, time.Time{}, bytes.NewReader(webScriptBody))
 			return
+		case "config.json":
+			if serveWebConfig(w, r, files) {
+				return
+			}
 		case customScript:
 			script := custom.current()
 			if script.body == "" {
@@ -221,6 +226,37 @@ func withWebScripts(page []byte, custom hashedScript) []byte {
 		customTag = []byte(`<script src="` + customScript + `?v=` + custom.hash + `" defer></script>`)
 	}
 	return slices.Concat(page[:at], webScriptTag, customTag, page[at:])
+}
+
+// oneTheme is the only theme the web client offers: its dark theme, under
+// the default Custom CSS that gives it the AIOStreams look (see
+// accounts.DefaultCustomCss). Other themes would show under that stylesheet
+// half themed; a user who chose one gets this one.
+var oneTheme = map[string]any{"name": "AIOStreams", "id": "dark", "color": "#070707", "default": true}
+
+// serveWebConfig serves jellyfin-web's config.json with oneTheme as its only
+// theme, the rest as the file has it. It reports whether it answered: a
+// file it cannot read or parse is served as it is.
+func serveWebConfig(w http.ResponseWriter, r *http.Request, files fs.FS) bool {
+	data, err := fs.ReadFile(files, "config.json")
+	if err != nil {
+		return false
+	}
+	var config map[string]any
+	if json.Unmarshal(data, &config) != nil || config == nil {
+		return false
+	}
+	config["themes"] = []any{oneTheme}
+	body, err := json.Marshal(config)
+	if err != nil {
+		return false
+	}
+	header := w.Header()
+	header.Set("Content-Type", "application/json")
+	header.Set("Cache-Control", "no-cache")
+	header.Set("ETag", etag(body))
+	http.ServeContent(w, r, "config.json", time.Time{}, bytes.NewReader(body))
+	return true
 }
 
 func etag(content []byte) string {

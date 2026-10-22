@@ -254,7 +254,8 @@ func New(options Options) *Handler {
 	anonymous(http.MethodGet, "/System/Ping", h.ping)
 	anonymous(http.MethodPost, "/System/Ping", h.ping)
 
-	anonymous(http.MethodGet, "/Branding/Configuration", h.brandingConfiguration)
+	anonymous(http.MethodGet, "/Branding/Configuration", h.appliedBranding)
+	anonymous(http.MethodGet, "/Branding/Logo", h.brandingLogo)
 	anonymous(http.MethodGet, "/Branding/Css", h.brandingCSS)
 	anonymous(http.MethodGet, "/Branding/Css.css", h.brandingCSS)
 

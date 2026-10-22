@@ -90,9 +90,9 @@ func TestWebClientServesJellyfinWebFiles(t *testing.T) {
 		{"/web/1133.03edf3bb7ee048ee10be.css", "body{}", "text/css; charset=utf-8", immutableCache},
 		{"/web/font.0123456789abcdef0123.woff2", "wOF2", "font/woff2", immutableCache},
 		{"/web/themes/dark/theme.css", "html{}", "text/css; charset=utf-8", "no-cache"},
-		// Unmodified: no server listed and a single server, so that the
-		// client connects to the one that served it.
-		{"/web/config.json", webConfig, "application/json", "no-cache"},
+		// No server listed and a single server, so that the client
+		// connects to the one that served it, and one theme (see below).
+		{"/web/config.json", `"multiserver":false`, "application/json", "no-cache"},
 		{"/web/polyfin.js", "location.replace", "text/javascript; charset=utf-8", "no-cache"},
 	} {
 		response := get(h, tc.target)
@@ -118,8 +118,17 @@ func TestWebClientServesJellyfinWebFiles(t *testing.T) {
 			t.Errorf("%s: no nosniff", tc.target)
 		}
 	}
-	if body := get(h, "/web/config.json").Body.String(); body != webConfig {
-		t.Errorf("config.json changed: %q", body)
+	// config.json keeps what it says, but offers one theme: the dark one
+	// the default Custom CSS gives the AIOStreams look.
+	var config struct {
+		Multiserver *bool            `json:"multiserver"`
+		Servers     []string         `json:"servers"`
+		Themes      []map[string]any `json:"themes"`
+	}
+	body := get(h, "/web/config.json").Body.String()
+	if err := json.Unmarshal([]byte(body), &config); err != nil || config.Multiserver == nil || *config.Multiserver ||
+		config.Servers == nil || len(config.Servers) != 0 || len(config.Themes) != 1 || config.Themes[0]["id"] != "dark" || config.Themes[0]["default"] != true {
+		t.Errorf("config.json: %q", body)
 	}
 }
 

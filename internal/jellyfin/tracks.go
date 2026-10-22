@@ -45,7 +45,16 @@ func (h *Handler) trackPreferences(ctx context.Context, user accounts.User) trac
 		}
 		configuration = defaultUserConfiguration()
 	}
-	return newTrackPreferences(configuration)
+	preferences := newTrackPreferences(configuration)
+	// The server's default languages stand in for the user's none.
+	settings := h.Accounts.Settings()
+	if preferences.audioLanguage == "" {
+		preferences.audioLanguage = settings.DefaultAudioLanguage
+	}
+	if preferences.subtitleLanguage == "" {
+		preferences.subtitleLanguage = settings.DefaultSubtitleLanguage
+	}
+	return preferences
 }
 
 // defaultAudio is the audio track a decision plays when none is asked:
