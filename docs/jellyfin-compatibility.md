@@ -1,6 +1,6 @@
 # Jellyfin compatibility
 
-Polyfin targets the Jellyfin 12.2 API, so standard Jellyfin apps sign in, browse, search and play. This page lists the compatible apps, what they get from Polyfin, and the Jellyfin features Polyfin does without.
+Polyfin targets the Jellyfin 12.3 API, so standard Jellyfin apps sign in, browse, search and play. This page lists the compatible apps, what they get from Polyfin, and the Jellyfin features Polyfin does without.
 
 ## Compatible apps
 
@@ -174,11 +174,11 @@ On a user's page under **Users**, the **Access** section's **Can manage subtitle
 
 ### Picture subtitles drawn by the app
 
-When jellyfin-web is set to draw PGS subtitles itself, a PGS track inside a Matroska file reaches it as a SUP file, as Jellyfin 12.2 serves its raw file. Polyfin reads the track whole through the file's index, as it does for text tracks, and keeps it for later playbacks. The app reads the file by ranges as it plays.
+When jellyfin-web is set to draw PGS subtitles itself, a PGS track inside a Matroska file reaches it as a SUP file, as Jellyfin 12.3 serves its raw file. Polyfin reads the track whole through the file's index, as it does for text tracks, and keeps it for later playbacks. The app reads the file by ranges as it plays.
 
 - A track the index does not list block by block, or larger than 32 MB, is not offered as a file.
 - DVD (VobSub) tracks are not offered as files. With **Turn picture subtitles into text** on, their text copies are, once read, as are those of PGS tracks (see below).
-- A PGS file (`.sup`) beside a local file reaches the app as it is, by ranges. A VobSub pair beside a local file (`.idx` and `.sub`) is burned in, as Jellyfin 12.2 does: it gives VobSub as a file only extracted as Matroska.
+- A PGS file (`.sup`) beside a local file reaches the app as it is, by ranges. A VobSub pair beside a local file (`.idx` and `.sub`) is burned in, as Jellyfin 12.3 does: it gives VobSub as a file only extracted as Matroska.
 
 **For app developers:** `GET /Videos/{id}/{mediaSourceId}/Subtitles/{index}/0/Stream.pgssub` (or `.sup`) answers `application/octet-stream` and supports `Range`.
 
@@ -199,6 +199,11 @@ With **Turn picture subtitles into text** on, a PGS or VobSub track read into te
 - **Letter filters:** `nameStartsWith`, `nameLessThan` and `nameStartsWithOrGreater` ignore letter case. They narrow people, music, favorites and other personal lists, and playlists. Movie and series libraries come from addons' catalogs, so they are not narrowed.
 - **People counts:** `/Persons` counts only the people it can list.
 - **Downmix:** music and audiobooks converted to stereo go through the downmix chosen in the server settings, as the audio of converted video does.
+
+### Jellyfin 12.3 details
+
+- **Ratings that are not numbers:** a `CommunityRating` or `CriticRating` that is not a finite number is none, as Jellyfin 12.3 keeps none. An addon's IMDb rating of `NaN` or `Infinity` leaves the title without a rating. Sent to the metadata editor (`POST /Items/{id}`), `"NaN"`, `"Infinity"`, `"-Infinity"` or a number too large for a float is taken as no value: the answer is 204, and the field follows the addon again. Gains (`NormalizationGain`) are always finite numbers.
+- **Videos without a frame size:** a video track ffprobe gives no width or height, as a live stream probed early may be, takes its `AspectRatio` from ffprobe's display aspect ratio alone, and has none without one, as in Jellyfin 12.3, whose probe of such a track failed before. Jellyfin reports an unknown display aspect ratio as `0:1`; Polyfin leaves it out, with or without a frame size.
 
 ### Refresh metadata
 
@@ -238,7 +243,7 @@ Jellyfin apps that look for servers on the local network list Polyfin, as they l
 
 **For app developers:**
 
-- Polyfin listens on UDP port 7359, IPv4 and IPv6. A datagram that holds `who is JellyfinServer?`, in any letter case, as Jellyfin 12.2 reads it, gets one answer, sent to its sender: `{"Address":"http://192.168.1.10:8096","Id":"<server ID>","Name":"<server name>","EndpointAddress":null}`. Polyfin answers Emby's `who is EmbyServer?` the same way, which Jellyfin 12.2 leaves unanswered.
+- Polyfin listens on UDP port 7359, IPv4 and IPv6. A datagram that holds `who is JellyfinServer?`, in any letter case, as Jellyfin 12.3 reads it, gets one answer, sent to its sender: `{"Address":"http://192.168.1.10:8096","Id":"<server ID>","Name":"<server name>","EndpointAddress":null}`. Polyfin answers Emby's `who is EmbyServer?` the same way, which Jellyfin 12.3 leaves unanswered.
 - `Id` and `Name` are those of `/System/Info/Public`. `Address` is **Address on the local network** when set, as Jellyfin's `PublishedServerUrl`. Otherwise it is `http://`, the address of the server's interface that reaches the sender, and Polyfin's HTTP port.
 - Only senders on the local network are answered: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and loopback. Jellyfin answers any sender.
 - `LocalAddress` of `/System/Info/Public` and `/System/Info` is **Address on the local network** when set, as Jellyfin gives its `PublishedServerUrl` there, and otherwise the address the request reached: over the HTTPS Polyfin serves itself, `https://` and the HTTPS port included (see [HTTPS](administration.md#https)).
@@ -280,7 +285,7 @@ The backups page of the web client's dashboard, since Jellyfin 10.11, shows the 
 
 ## Jellyfin features Polyfin does without
 
-These dashboard features answer as a Jellyfin 12.2 on which nothing of the kind is configured:
+These dashboard features answer as a Jellyfin 12.3 on which nothing of the kind is configured:
 
 - plugins, packages and plugin repositories;
 - browsing the server's folders;
