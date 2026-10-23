@@ -313,10 +313,12 @@ func variant(analysis media.Analysis, video media.Stream, bandwidth int64, remux
 	}
 	codecs := []string{videoCodecString(video)}
 	if c := remux.conversion(video); c != nil {
-		// What the encoder writes, at most its peak rate with the audio.
+		// What the encoder writes, at most its peak rate with the audio
+		// sent, on average its bitrate with it.
 		codecs[0] = c.CodecString(v.FrameRate)
 		v.Width, v.Height, v.Range = c.Width, c.Height, "SDR"
-		v.Bandwidth = c.peak() + 640_000
+		audio := sentAudio(analysis, remux)
+		v.Bandwidth, v.AverageBandwidth = c.peak()+audio, c.Bitrate+audio
 	}
 	if audio, ok := streamOf(analysis, remux.Audio); ok {
 		if remux.ConvertAudio != nil {
@@ -330,6 +332,21 @@ func variant(analysis media.Analysis, video media.Stream, bandwidth int64, remux
 		v.Codecs = strings.Join(codecs, ",")
 	}
 	return v
+}
+
+// sentAudio is the bitrate of the audio remux sends, as SentAudioBitrate
+// counts it off a limit: its conversion's, else the track's own or, when
+// not known, its estimate; 0 without audio.
+func sentAudio(analysis media.Analysis, remux Remux) int64 {
+	s, ok := streamOf(analysis, remux.Audio)
+	if !ok || s.Type != "audio" {
+		return 0
+	}
+	played := &MediaStream{Channels: new(s.Channels)}
+	if bitrate := audioBitrate(s); bitrate > 0 {
+		played.BitRate = new(bitrate)
+	}
+	return SentAudioBitrate(played, remux.ConvertAudio)
 }
 
 // hlsRange is a video's VIDEO-RANGE: PQ and HLG name the transfer of HDR

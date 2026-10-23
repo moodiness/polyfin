@@ -9,8 +9,10 @@ import (
 
 // Variant describes a stream a master playlist offers.
 type Variant struct {
-	// Bandwidth is in bits per second.
-	Bandwidth int64
+	// Bandwidth is the most the variant reaches, AverageBandwidth what it
+	// sends on average, in bits per second; 0 for AverageBandwidth is
+	// Bandwidth.
+	Bandwidth, AverageBandwidth int64
 	// Codecs is the RFC 6381 CODECS attribute; empty leaves it out, and
 	// players read the codecs from the media.
 	Codecs        string
@@ -37,7 +39,11 @@ func WriteMaster(w io.Writer, variants []Variant, subtitles []Rendition) error {
 		writeRenditions(&b, subtitles)
 	}
 	for _, v := range variants {
-		attributes := []string{"BANDWIDTH=" + strconv.FormatInt(v.Bandwidth, 10), "AVERAGE-BANDWIDTH=" + strconv.FormatInt(v.Bandwidth, 10)}
+		average := v.AverageBandwidth
+		if average <= 0 {
+			average = v.Bandwidth
+		}
+		attributes := []string{"BANDWIDTH=" + strconv.FormatInt(v.Bandwidth, 10), "AVERAGE-BANDWIDTH=" + strconv.FormatInt(average, 10)}
 		if v.Range != "" {
 			attributes = append(attributes, "VIDEO-RANGE="+v.Range)
 		}

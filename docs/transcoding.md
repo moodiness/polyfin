@@ -26,7 +26,7 @@ Converted video is never larger than its source. It is smaller when one of these
 - **HDR converted by the processor:** up to **Maximum quality of HDR converted by the processor**, 720p or 1080p with **Automatic**, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 - **Quality group:** the user's, set on their page under **Users**.
 - **Maximum quality of converted video:** under **Settings › Conversion (transcoding)**.
-- **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower. The video gets the limit less the bitrate of the audio sent: the converted audio's (see [Audio bitrate](#audio-bitrate)), or the track's own when it is copied. A lossless track of several Mb/s converted to stereo AAC at 384 kb/s thus leaves 1080p 9.6 Mb/s within 10 Mb/s. The `TranscodingUrl` writes the two as `VideoBitrate` and `AudioBitrate`.
+- **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower. The video gets the limit less the bitrate of the audio sent: the converted audio's (see [Audio bitrate](#audio-bitrate)), or the track's own when it is copied. A copied track whose bitrate is not known, as AC-3 or DTS in a Matroska file often is, counts as converted audio of its channels would: 128 kb/s in mono, 384 kb/s up to five channels, 640 kb/s from six. A lossless track of several Mb/s converted to stereo AAC at 384 kb/s thus leaves 1080p 9.6 Mb/s within 10 Mb/s. The `TranscodingUrl` writes the two as `VideoBitrate` and `AudioBitrate`.
 
 When two limits are equal, the user's quality group is named first, then **Maximum quality of converted video**, then the GPU or the processor. The bitrate is named only when it allows less than all of them.
 
@@ -44,7 +44,7 @@ Converted video keeps about its source's bitrate, as in Jellyfin, up to what the
 
 A 15 Mb/s 10-bit HEVC movie in 1080p thus converts to H.264 at 26 Mb/s with no limit, and at 9.6 Mb/s within 10 Mb/s with its audio converted to stereo. The user's quality group and **Maximum quality of converted video** lower the bitrate with the picture's size.
 
-**Peaks:** the encoder lets the video peak at one and a half times its bitrate, over a buffer of two seconds of it. Under the app's or the user's limit, the peak stays within what the limit leaves once the audio sent is taken off, so that video and audio together never go above the limit: where the limit sets the bitrate, as with 10 Mb/s above, the video peaks at its bitrate. Within 3 Mb/s, 720p H.264 aims for 2.6 Mb/s and peaks at 2.6 Mb/s, with 384 kb/s of audio. With **H.264 quality** or **HEVC quality** set, the encoder aims for that quality, and peaks as much. The master playlist's `BANDWIDTH` is that peak with 640 kb/s for the audio.
+**Peaks:** the encoder lets the video peak at one and a half times its bitrate, over a buffer of two seconds of it. Under the app's or the user's limit, the peak stays within what the limit leaves once the audio sent is taken off, so that video and audio together never go above the limit: where the limit sets the bitrate, as with 10 Mb/s above, the video peaks at its bitrate. Within 3 Mb/s, 720p H.264 aims for 2.6 Mb/s and peaks at 2.6 Mb/s, with 384 kb/s of audio. With **H.264 quality** or **HEVC quality** set, the encoder aims for that quality, and peaks as much. The master playlist's `BANDWIDTH` is that peak with the audio sent, counted as above, and its `AVERAGE-BANDWIDTH` the video's bitrate with that audio: within 3 Mb/s, both are 3000000.
 
 **Cost:** a higher bitrate takes more bandwidth, and more of the processor without a GPU. In Auto on the local network, jellyfin-web asks for at least 140 Mb/s, so its conversions get about the source's bitrate. To keep them smaller, set a **Maximum quality** for the user, or a quality in the app.
 
@@ -58,7 +58,8 @@ Converted audio gets Jellyfin's bitrates, with **Audio bitrate per channel in kb
 - With no limit at all, Jellyfin's encoder aims for no bitrate. Its apps always send one: jellyfin-web asks for at least 140 Mb/s on the local network, which gives what Polyfin gives with no limit.
 - Jellyfin's encoders peak at the bitrate they aim for, whatever the limit (`-maxrate` equal to the bitrate, VideoToolbox without one, QSV one bit per second above), over a buffer of twice the bitrate. Polyfin does the same where a limit sets the bitrate, and peaks at one and a half times the bitrate otherwise, within the limit: a conversion well below the limit, as on the local network, keeps room for its hardest scenes.
 - Jellyfin counts 384 kb/s for stereo AAC in its `TranscodingUrl`, but its encoder makes 256 kb/s. Polyfin sends what it counts.
-- When the audio is copied, Jellyfin takes off the limit at most its share of the limit for audio (1.5 Mb/s within 10 Mb/s), and Polyfin the track's own bitrate: a copied track above that share leaves its video less than in Jellyfin.
+- When the audio is copied, Jellyfin takes off the limit at most its share of the limit for audio (1.5 Mb/s within 10 Mb/s), and Polyfin the track's own bitrate: a copied track above that share leaves its video less than in Jellyfin. A copied track whose bitrate is not known counts the same in both.
+- Jellyfin's master playlist writes, as both `BANDWIDTH` and `AVERAGE-BANDWIDTH`, the bitrate its encoder aims for with the audio bitrate it counts: for a copied track, the request's audio bitrate capped by its channels (256 kb/s in stereo), whatever the track's own. Polyfin writes the video's peak and its average apart, each with the audio actually sent. Jellyfin's lower qualities, offered only when an app asks, are the first less 50 kb/s to 2 Mb/s, then twice that; Polyfin's are the steps of its ladder.
 
 ## Adaptive quality
 
@@ -77,7 +78,7 @@ Apps that do not switch play the first quality, as with the setting off. jellyfi
 
 **For app developers:**
 
-- The master playlist lists the first quality first, then the lower ones, each with its own `BANDWIDTH`, `RESOLUTION` and `CODECS`, and says `#EXT-X-INDEPENDENT-SEGMENTS`. Every quality is cut on the same plan, with a keyframe forced at each segment's start, so segment n covers the same time in each, and an app may switch at any segment.
+- The master playlist lists the first quality first, then the lower ones, each with its own `BANDWIDTH` (its video's peak with the audio sent), `AVERAGE-BANDWIDTH` (its video's bitrate with the audio sent), `RESOLUTION` and `CODECS`, and says `#EXT-X-INDEPENDENT-SEGMENTS`. Every quality is cut on the same plan, with a keyframe forced at each segment's start, so segment n covers the same time in each, and an app may switch at any segment.
 - The first quality's media playlist is `main.m3u8`, its segments under `hls1/main/`, as before. The lower ones' are `hls1/main1/main.m3u8` and `hls1/main2/main.m3u8`, their segments beside them under `hls1/main1/` and `hls1/main2/`, in the same play session and with the same query.
 - Asking for one quality never stops another: an app may ask for the same segment of two qualities at once, and gets both.
 

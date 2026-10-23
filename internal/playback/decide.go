@@ -528,16 +528,24 @@ func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int6
 
 // SentAudioBitrate is the bitrate of the audio sent for played, the audio
 // track that plays: its conversion's when it is converted to a lossy
-// codec, else the track's own, copied or converted without loss. Zero
-// means none known.
+// codec, else the track's own, copied or converted without loss. A track
+// whose bitrate is not known counts as Jellyfin's StreamBuilder counts
+// it, as lossy audio of its channels (see audioBitrateFor). Zero means no
+// audio.
 func SentAudioBitrate(played *MediaStream, conversion *AudioConversion) int64 {
 	switch {
 	case conversion != nil && conversion.Bitrate > 0:
 		return conversion.Bitrate
-	case played != nil && played.BitRate != nil:
+	case played == nil:
+		return 0
+	case played.BitRate != nil && *played.BitRate > 0:
 		return *played.BitRate
 	}
-	return 0
+	channels := 2
+	if played.Channels != nil && *played.Channels > 0 {
+		channels = *played.Channels
+	}
+	return audioBitrateFor(channels, 0)
 }
 
 // VideoLimit is what a bitrate limit leaves the video, as Jellyfin writes

@@ -390,10 +390,10 @@ func TestConvertedVideoKeepsUnderTheHeightCap(t *testing.T) {
 		t.Errorf("converted without a cap, %+v:\n%s", sizeOf(target), playlist)
 	}
 	p.setting(t, func(settings *accounts.Settings) { settings.MaxConversionHeight = 480 })
-	// 854 × 480 at most, at the bitrate of 480p, 2 Mb/s, at most 3 Mb/s
-	// with the audio's allowance.
+	// 854 × 480 at most, at the bitrate of 480p, 2 Mb/s, at most 3 Mb/s,
+	// with the 128 kb/s of the Opus track copied.
 	target, playlist := master(video)
-	if !strings.Contains(playlist, "BANDWIDTH=3640000,") || !strings.Contains(playlist, "RESOLUTION=854x354") {
+	if !strings.Contains(playlist, "BANDWIDTH=3128000,AVERAGE-BANDWIDTH=2128000,") || !strings.Contains(playlist, "RESOLUTION=854x354") {
 		t.Errorf("converted under 480 lines:\n%s", playlist)
 	}
 	if size := sizeOf(target); size != (playback.ConversionSize{Reason: playback.SizeServerMax, MaxHeight: 480}) {

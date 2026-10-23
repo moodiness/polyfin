@@ -67,7 +67,7 @@ func TestSeveralQualitiesWhenConverting(t *testing.T) {
 	}
 
 	if _, playlist := master(video); len(streamInfs(playlist)) != 1 || strings.Contains(playlist, "INDEPENDENT") ||
-		!strings.Contains(playlist, "BANDWIDTH=15640000,") || !strings.Contains(playlist, "RESOLUTION=1920x1080") {
+		!strings.Contains(playlist, "BANDWIDTH=15128000,AVERAGE-BANDWIDTH=10128000,") || !strings.Contains(playlist, "RESOLUTION=1920x1080") {
 		t.Errorf("off:\n%s", playlist)
 	}
 
@@ -77,10 +77,12 @@ func TestSeveralQualitiesWhenConverting(t *testing.T) {
 	if len(variants) != 3 || !strings.Contains(playlist, "#EXT-X-INDEPENDENT-SEGMENTS\n") {
 		t.Fatalf("always:\n%s", playlist)
 	}
+	// Each peaks at one and a half times its bitrate, with the 128 kb/s of
+	// the Opus track copied.
 	for i, want := range []struct{ bandwidth, resolution, uri string }{
-		{"BANDWIDTH=15640000,", "RESOLUTION=1920x1080", "main.m3u8?"},
-		{"BANDWIDTH=8140000,", "RESOLUTION=1280x720", "hls1/main1/main.m3u8?"},
-		{"BANDWIDTH=3640000,", "RESOLUTION=852x480", "hls1/main2/main.m3u8?"},
+		{"BANDWIDTH=15128000,AVERAGE-BANDWIDTH=10128000,", "RESOLUTION=1920x1080", "main.m3u8?"},
+		{"BANDWIDTH=7628000,AVERAGE-BANDWIDTH=5128000,", "RESOLUTION=1280x720", "hls1/main1/main.m3u8?"},
+		{"BANDWIDTH=3128000,AVERAGE-BANDWIDTH=2128000,", "RESOLUTION=852x480", "hls1/main2/main.m3u8?"},
 	} {
 		if v := variants[i]; !strings.HasPrefix(v[0], want.bandwidth) || !strings.Contains(v[0], want.resolution) ||
 			!strings.Contains(v[0], `CODECS="avc1.`) || !strings.HasPrefix(v[1], want.uri+"DeviceId=") {
