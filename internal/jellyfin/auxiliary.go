@@ -513,13 +513,10 @@ func (h *Handler) displayPreferences(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	state, saved, err := h.loadDisplayState(r, user, id, client)
+	state, _, err := h.loadDisplayState(r, user, id, client)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
-	}
-	if !saved {
-		state = h.defaultThemeUnsaved(state, id, client)
 	}
 	writeJSON(w, http.StatusOK, state.dto(id, client))
 }

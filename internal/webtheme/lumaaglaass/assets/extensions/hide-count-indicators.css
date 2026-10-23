@@ -1,0 +1,4 @@
+/* LumaaGlaass - Hide count indicators extension. */
+.countIndicator {
+    display: none !important;
+}

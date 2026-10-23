@@ -185,6 +185,9 @@ COPY third_party/jellyfin-web/LICENSE third_party/jellyfin-web/NOTICE /usr/share
 # hls.js, embedded in Polyfin for the page of share links (Apache-2.0): its
 # license and a notice.
 COPY third_party/hls.js/LICENSE third_party/hls.js/NOTICE /usr/share/doc/hls.js/
+# LumaaGlaass, the default web player theme, embedded in Polyfin (MIT): its
+# license and a notice.
+COPY third_party/lumaaglaass/LICENSE third_party/lumaaglaass/NOTICE /usr/share/doc/lumaaglaass/
 COPY --from=build /polyfin /polyfin
 # Polyfin's files: the parts of the files being read, which it empties
 # when it starts, and by default the Live TV recordings and the database

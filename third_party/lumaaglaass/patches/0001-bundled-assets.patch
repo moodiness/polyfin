@@ -1,0 +1,20 @@
+diff --git a/assets/lumaaglaass.js b/assets/lumaaglaass.js
+index 294394e..998b73d 100644
+--- a/assets/lumaaglaass.js
++++ b/assets/lumaaglaass.js
+@@ -21,12 +21,13 @@
+     let settings = loaderSettings;
+     // Assets - Extensions load from this script's folder when it comes from the repository, so a pinned
+     // revision stays pinned. A query suffix also follows every extension, which makes a cache-busted
+-    // main script and its dependent files update as one unit. A pasted copy uses the main branch.
++    // main script and its dependent files update as one unit. A pasted copy uses the copy Polyfin
++    // bundles, from the web client's own address, in the version of the running server.
+     const ASSET_SOURCE = (() => {
+         const source = document.currentScript?.src || '';
+         const match = source.match(/^(.*\/assets\/)lumaaglaass\.js([?#].*)?$/);
+         return match ? { root: match[1], suffix: match[2] || '' } :
+-            { root: 'https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@main/assets/', suffix: '' };
++            { root: 'polyfin/themes/lumaaglaass/latest/assets/', suffix: '' };
+     })();
+     const ASSETS = ASSET_SOURCE.root;
+     const assetUrl = path => ASSETS + path + ASSET_SOURCE.suffix;

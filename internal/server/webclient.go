@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/webtheme"
 )
 
 const (
@@ -55,6 +57,14 @@ var (
 		".data":  "application/octet-stream",
 		".mem":   "application/octet-stream",
 	}
+	// themeTypes are the content types of the bundled theme's files, which
+	// a system's own types could name otherwise.
+	themeTypes = map[string]string{
+		".css": "text/css; charset=utf-8",
+		".js":  "text/javascript; charset=utf-8",
+	}
+	// themeFiles are the bundled theme's files, compressed once each.
+	themeFiles = newGzipFiles(webtheme.Files)
 )
 
 // WebClientFiles returns the files of jellyfin-web in dir, or nil when dir
@@ -103,8 +113,10 @@ func (c *customScripts) current() hashedScript {
 // administrator's when there is one; files whose name or query carries a
 // build or content hash are cached for good. Other files are revalidated
 // (Jellyfin sends no Cache-Control for them, which leaves browsers guessing
-// a lifetime for config.json and the like). Text files go compressed to
-// clients that take gzip, compressed once each (see gzipFiles).
+// a lifetime for config.json and the like). The default theme's files are
+// Polyfin's own, under webtheme.Path (see serveTheme). Text files go
+// compressed to clients that take gzip, compressed once each (see
+// gzipFiles).
 func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() string, api http.Handler, logger *slog.Logger) http.Handler {
 	custom := &customScripts{get: customJs}
 	compressed := newGzipFiles(files)
@@ -150,6 +162,10 @@ func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() st
 			http.ServeContent(w, r, customScript, time.Time{}, strings.NewReader(script.body))
 			return
 		}
+		if rest, ok := strings.CutPrefix(name, webtheme.Path); ok {
+			serveTheme(w, r, rest, logger)
+			return
+		}
 		info, err := fs.Stat(files, name)
 		if err != nil || !info.Mode().IsRegular() {
 			api.ServeHTTP(w, r)
@@ -168,23 +184,64 @@ func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() st
 		if compressed.serve(w, r, name, info, contentType) {
 			return
 		}
-		file, err := files.Open(name)
+		serveFile(w, r, files, name, info, api, logger)
+	})
+}
+
+// serveFile sends the file name of files, whose information is info, as
+// it is; when it cannot be opened, missing answers instead.
+func serveFile(w http.ResponseWriter, r *http.Request, files fs.FS, name string, info fs.FileInfo, missing http.Handler, logger *slog.Logger) {
+	file, err := files.Open(name)
+	if err != nil {
+		missing.ServeHTTP(w, r)
+		return
+	}
+	defer file.Close()
+	content, ok := file.(io.ReadSeeker)
+	if !ok {
+		data, err := io.ReadAll(file)
 		if err != nil {
-			api.ServeHTTP(w, r)
+			logger.Error("A file of the web client cannot be read", "file", name, "error", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-		content, ok := file.(io.ReadSeeker)
-		if !ok {
-			data, err := io.ReadAll(file)
-			if err != nil {
-				logger.Error("A file of jellyfin-web cannot be read", "file", name, "error", err)
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				return
-			}
-			content = bytes.NewReader(data)
+		content = bytes.NewReader(data)
+	}
+	http.ServeContent(w, r, name, info.ModTime(), content)
+}
+
+// serveTheme serves the bundled theme's file at rest, a version then the
+// file's name. At the version of the bundled files, it is cached for good;
+// at any other it is redirected there, revalidated, so that it gets
+// today's files: "latest", which the theme's script asks for when it
+// cannot tell its own address, and the version an earlier Polyfin bundled,
+// which an administrator's own script may still name.
+func serveTheme(w http.ResponseWriter, r *http.Request, rest string, logger *slog.Logger) {
+	version, name, _ := strings.Cut(rest, "/")
+	info, err := fs.Stat(webtheme.Files, name)
+	if version == "" || !fs.ValidPath(name) || err != nil || !info.Mode().IsRegular() {
+		http.NotFound(w, r)
+		return
+	}
+	header := w.Header()
+	if version != webtheme.Version {
+		target := basePath(r) + webPrefix + webtheme.Address(name)
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
 		}
-		http.ServeContent(w, r, name, info.ModTime(), content)
-	})
+		header.Set("Cache-Control", "no-cache")
+		http.Redirect(w, r, target, http.StatusFound)
+		return
+	}
+	header.Set("Cache-Control", immutableCache)
+	contentType := themeTypes[path.Ext(name)]
+	if contentType != "" {
+		header.Set("Content-Type", contentType)
+	}
+	if themeFiles.serve(w, r, name, info, contentType) {
+		return
+	}
+	serveFile(w, r, webtheme.Files, name, info, http.NotFoundHandler(), logger)
 }
 
 // serveWebIndex serves jellyfin-web's index.html with Polyfin's script,

@@ -157,8 +157,9 @@ func TestThemeCarouselOffMigrationChangesOnlyTheUnchangedScript(t *testing.T) {
 		t.Fatal(err)
 	}
 	themeCss, carouselJs := read(t, before)
+	// Up to this migration only: later ones move the theme on again.
 	fresh := testdb.New(t)
-	if err := migrate(t.Context(), fresh, migrations); err != nil {
+	if err := migrate(t.Context(), fresh, migrations[:at+1]); err != nil {
 		t.Fatal(err)
 	}
 	freshCss, freshJs := read(t, fresh)
@@ -183,7 +184,78 @@ func TestThemeCarouselOffMigrationChangesOnlyTheUnchangedScript(t *testing.T) {
 			if _, err := pool.Exec(ctx, "UPDATE settings SET custom_css = $1, custom_js = $2", tc.css, tc.js); err != nil {
 				t.Fatal(err)
 			}
-			if err := migrate(ctx, pool, migrations); err != nil {
+			if err := migrate(ctx, pool, migrations[:at+1]); err != nil {
+				t.Fatal(err)
+			}
+			if css, js := read(t, pool); css != tc.wantCss || js != tc.wantJs {
+				t.Errorf("the custom code became %q and %q, want %q and %q", css, js, tc.wantCss, tc.wantJs)
+			}
+		})
+	}
+}
+
+// The default theme is the copy Polyfin bundles, served by the web client,
+// on new servers and on servers whose two fields still held the theme from
+// a CDN at its main branch. A server that changed either keeps both, never
+// a stylesheet and a script from two versions of the theme.
+func TestThemeBundledMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
+	files, err := fs.Sub(embedded, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrations, err := loadMigrations(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := slices.IndexFunc(migrations, func(m migration) bool { return m.name == "theme_bundled" })
+	if at < 0 {
+		t.Fatal("no theme_bundled migration")
+	}
+	read := func(t *testing.T, pool *pgxpool.Pool) (css, js string) {
+		t.Helper()
+		if err := pool.QueryRow(t.Context(), "SELECT custom_css, custom_js FROM settings").Scan(&css, &js); err != nil {
+			t.Fatal(err)
+		}
+		return css, js
+	}
+	before := testdb.New(t)
+	if err := migrate(t.Context(), before, migrations[:at]); err != nil {
+		t.Fatal(err)
+	}
+	cdnCss, cdnJs := read(t, before)
+	// Up to this migration only: later ones may move the theme on again.
+	fresh := testdb.New(t)
+	if err := migrate(t.Context(), fresh, migrations[:at+1]); err != nil {
+		t.Fatal(err)
+	}
+	bundledCss, bundledJs := read(t, fresh)
+	for _, code := range []string{bundledCss, bundledJs} {
+		if strings.Contains(code, "://") || !strings.Contains(code, "'polyfin/themes/lumaaglaass/") {
+			t.Fatalf("a new server's custom code does not load the bundled theme: %q", code)
+		}
+	}
+	if !strings.Contains(cdnJs, "homeCarousel: false") || !strings.Contains(bundledJs, "homeCarousel: false") {
+		t.Fatalf("the theme's options changed: %q, then %q", cdnJs, bundledJs)
+	}
+	edited := strings.Replace(cdnJs, "homeCarousel: false", "homeCarousel: true", 1)
+	for name, tc := range map[string]struct{ css, js, wantCss, wantJs string }{
+		"unchanged":     {cdnCss, cdnJs, bundledCss, bundledJs},
+		"own CSS":       {"a {}", cdnJs, "a {}", cdnJs},
+		"edited CSS":    {cdnCss + "\nbody { color: red; }", cdnJs, cdnCss + "\nbody { color: red; }", cdnJs},
+		"edited script": {cdnCss, edited, cdnCss, edited},
+		"own script":    {cdnCss, "b()", cdnCss, "b()"},
+		"emptied":       {"", "", "", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			pool := testdb.New(t)
+			ctx := t.Context()
+			if err := migrate(ctx, pool, migrations[:at]); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, "UPDATE settings SET custom_css = $1, custom_js = $2", tc.css, tc.js); err != nil {
+				t.Fatal(err)
+			}
+			if err := migrate(ctx, pool, migrations[:at+1]); err != nil {
 				t.Fatal(err)
 			}
 			if css, js := read(t, pool); css != tc.wantCss || js != tc.wantJs {

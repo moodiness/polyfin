@@ -1,0 +1,32 @@
+diff --git a/assets/extensions/preferences.js b/assets/extensions/preferences.js
+index 8aa6b50..f6b6f52 100644
+--- a/assets/extensions/preferences.js
++++ b/assets/extensions/preferences.js
+@@ -423,10 +423,15 @@
+     const PREFERENCES_CACHE = 'lumaaglaass-settings:';
+     const ACTION_MODES = ['native', 'details', 'hide'], BUTTON_MODES = ['native', 'hide'];
+     // Recommended - Explicit per-account starting choices; it does not set public theme variables.
++    // An option the loader sets (window.LumaaGlaassOptions, handed over as host.defaults) is the
++    // starting choice of its field, so an account that never saved starts as the server chose.
++    const loaderDefault = (name, recommended) =>
++        typeof window.LumaaGlaassOptions?.[name] === 'boolean' && typeof host.defaults?.[name] === 'boolean'
++            ? host.defaults[name] : recommended;
+     const RECOMMENDED_VALUES = Object.freeze({
+-        homeCarousel: true,
+-        homeLibraryNamesOnly: true,
+-        collectionFilter: true,
++        homeCarousel: loaderDefault('homeCarousel', true),
++        homeLibraryNamesOnly: loaderDefault('homeLibraryNamesOnly', true),
++        collectionFilter: loaderDefault('collectionFilter', true),
+         hideCountIndicators: true,
+         'playerControls.versions': true,
+         'playerControls.episodes': true,
+@@ -462,7 +467,7 @@
+     };
+     // Fields - One control each, by its path in the saved object: choices make a select, no choices a
+     // switch. requires names the switch that enables a field; asset, the file it loads (Assets).
+-    // Defaults here are the per-account Recommended profile; the main loader's global options remain separate.
++    // Defaults here are the per-account Recommended profile, which takes the options the loader sets.
+     const PREFERENCE_SECTIONS = [
+         {
+             title: 'SettingsTheme', fields: [

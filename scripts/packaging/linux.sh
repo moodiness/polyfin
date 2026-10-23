@@ -53,7 +53,7 @@ Polyfin is under the MIT License, in /opt/polyfin/licenses/polyfin/LICENSE.
 The other programs it carries are under their own licenses, in
 /opt/polyfin/licenses: PostgreSQL and ICU; jellyfin-web, unmodified, under
 the GPL-2.0, whose source is attached to every release of Polyfin; the
-DejaVu fonts; and hls.js.
+DejaVu fonts; hls.js; and the LumaaGlaass theme.
 EOF
 
 deb="polyfin-desktop_${VERSION}_${arch}.deb"

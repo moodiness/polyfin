@@ -6,20 +6,20 @@ import (
 
 	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/torrent"
+	"github.com/moodiness/polyfin/internal/webtheme"
 )
 
 // DefaultCustomCss and DefaultCustomJs are the web player's custom CSS and
-// script on a new server: they load the LumaaGlaass theme from jsDelivr at
-// the main branch of its repository, so servers follow the theme without a
-// Polyfin release, with its settings page for each user and its home
-// carousel off. Changing them takes both, and a migration replacing the
-// column defaults and the values still equal to these. While the script is
-// DefaultCustomJs, the jellyfin package answers the theme's settings of a
-// user who never saved them with the carousel off, as the page itself
-// ignores the script's options.
-const DefaultCustomCss = `@import url('https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@main/assets/lumaaglaass.css');`
+// script on a new server: they load the LumaaGlaass theme Polyfin bundles
+// (see webtheme), from the web client's own address, with its settings
+// page for each user and its home carousel off. The page takes the
+// script's options as its defaults. Their addresses carry the version of
+// the bundled files, which changes with them: changing these, or the
+// files, takes a migration replacing the column defaults and the values
+// still equal to the previous ones.
+var DefaultCustomCss = `@import url('` + webtheme.Address("assets/lumaaglaass.css") + `');`
 
-const DefaultCustomJs = `(() => {
+var DefaultCustomJs = `(() => {
     window.LumaaGlaassOptions = {
         preferences: true,
         homeCarousel: false,
@@ -31,7 +31,7 @@ const DefaultCustomJs = `(() => {
 
     const script = document.createElement('script');
     script.id = id;
-    script.src = 'https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@main/assets/lumaaglaass.js';
+    script.src = '` + webtheme.Address("assets/lumaaglaass.js") + `';
     script.onerror = () => {
         script.remove();
         console.error('LumaaGlaass could not be loaded.');

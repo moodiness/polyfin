@@ -150,16 +150,17 @@ shared_files() {
 }
 
 # install_shared DEST: jellyfin-web, the fonts and the licenses, into the
-# install folder DEST, with Polyfin's own license and hls.js's, which the
-# server embeds.
+# install folder DEST, with Polyfin's own license, and those of hls.js and
+# LumaaGlaass, which the server embeds.
 install_shared() {
 	local files
 	files="$(shared_files)"
-	mkdir -p "$1/licenses/polyfin" "$1/licenses/hls.js"
+	mkdir -p "$1/licenses/polyfin" "$1/licenses/hls.js" "$1/licenses/lumaaglaass"
 	cp -R "$files/jellyfin-web" "$files/fonts" "$1/"
 	cp -R "$files/licenses/." "$1/licenses/"
 	cp "$ROOT/LICENSE" "$1/licenses/polyfin/"
 	cp "$ROOT/third_party/hls.js/LICENSE" "$ROOT/third_party/hls.js/NOTICE" "$1/licenses/hls.js/"
+	cp "$ROOT/third_party/lumaaglaass/LICENSE" "$ROOT/third_party/lumaaglaass/NOTICE" "$1/licenses/lumaaglaass/"
 }
 
 # check_install DIR EXE: DIR holds the install layout of docs/desktop.md,
