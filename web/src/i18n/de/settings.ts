@@ -60,7 +60,7 @@ const settings: typeof en = {
       'Polyfin benennt in Jellyfin-Apps einiges selbst: Staffeln („Staffel 1“, „Specials“), Folgen ohne Titel und den Typ, der an Bibliotheken mit gleichem Namen angehängt wird („Beliebt (Filme)“).',
     legacyAuthorization: 'Veraltete Autorisierung erlauben',
     legacyAuthorizationHelp:
-      'Akzeptiert die alten X-Emby-*-Header, den Parameter api_key und das Emby-Schema für Apps, die sie noch brauchen. Standardmäßig aus, wie in Jellyfin 12.2.',
+      'Akzeptiert die alten X-Emby-*-Header, den Parameter api_key und das Emby-Schema für Apps, die sie noch brauchen. Standardmäßig aus, wie in Jellyfin 12.3.',
     updateCheck: 'Nach neuen Versionen suchen',
     updateCheckHelp:
       'Einmal täglich und kurz nach dem Start fragt Polyfin bei GitHub die neueste Veröffentlichung ab und sendet dabei nur seine Version. Eine neuere Version wird auf der Startseite und unter System › Systemzustand angezeigt und an die Benachrichtigungen für neue Versionen gesendet. Wenn aus, kontaktiert Polyfin GitHub nie.',

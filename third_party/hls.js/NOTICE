@@ -5,7 +5,7 @@ Polyfin embeds hls.js's dist/hls.min.js, unmodified, as published on npm
 (hls.js@1.6.16), at internal/jellyfin/share/assets/hls.min.js. It serves
 it at /share/assets/hls.min.js to the page of share links, which plays
 HLS with it in browsers without HLS of their own: nothing is loaded from
-elsewhere. jellyfin-web 12.2 ships the same version, but inside its own
+elsewhere. jellyfin-web 12.3 ships the same version, but inside its own
 build, where no other page can load it.
 
 Source: https://github.com/video-dev/hls.js/tree/v1.6.16

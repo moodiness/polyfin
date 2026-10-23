@@ -12,7 +12,7 @@
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
 // watches the route only, never the page, so that a new jellyfin-web keeps
-// working with it. jellyfin-web 12.2 routes after the "#", matched without
+// working with it. jellyfin-web 12.3 routes after the "#", matched without
 // regard to case as its router does, "#!/" being an older form:
 //   #/dashboard and every #/dashboard/… page (users, libraries, playback,
 //     Live TV, devices, activity, logs, API keys, scheduled tasks, plugins…);
@@ -94,7 +94,7 @@
 // Sixth, it closes the generic error jellyfin-web shows on top of a refused
 // playback's own error. When a title's PlaybackInfo answers with an
 // ErrorCode, such as the RateLimitExceeded of a user playing on as many
-// devices as allowed, jellyfin-web 12.2 explains the code, then rejects the
+// devices as allowed, jellyfin-web 12.3 explains the code, then rejects the
 // playback without a reason, and its rejection handler shows "There was an
 // error processing the request" over it: the user meets the wrong error
 // first. Of two alerts with the same title shown within a second of each
@@ -108,7 +108,7 @@
 // is signed in, it asks /Polyfin/UserViews, which lists the user's views as
 // /UserViews does, in its order, each with HideInMenus, and keeps one style
 // that hides the links of each such library: the buttons of the top bar
-// (jellyfin-web 12.2's UserViewNav, MUI Buttons in the AppBar whose address
+// (jellyfin-web 12.3's UserViewNav, MUI Buttons in the AppBar whose address
 // holds the view's identifier), its More menu (#user-view-overflow-menu),
 // the side menu of that layout (an MUI Drawer, used below 900 pixels wide
 // instead of the buttons) and the legacy layout's side menu
@@ -134,7 +134,7 @@
 // counts as none. Any error just stops it.
 //
 // Eighth, it gives a user signed in who is not an administrator, a member,
-// a "Polyfin" entry where jellyfin-web 12.2 shows administrators Dashboard:
+// a "Polyfin" entry where jellyfin-web 12.3 shows administrators Dashboard:
 // it opens the admin app at /admin/ in the same tab, where the admin app
 // signs the member in with the web client's token, as it does an
 // administrator. It is named "Polyfin" in every language and drawn as
@@ -194,7 +194,7 @@
 // hidden titles and, for a card with a resume point, Continue Watching;
 // the first action sheet that opens within 10 seconds, no other click
 // coming between, gets the entries once the answers come. An entry closes
-// the menu as Back does, then acts. jellyfin-web 12.2 keeps the answers of
+// the menu as Back does, then acts. jellyfin-web 12.3 keeps the answers of
 // its rows for a minute, in memory and in the browser's IndexedDB, and
 // draws a row from such an answer, asking nothing, when the change's
 // UserDataChanged message refreshes it or when the page loads again within
@@ -276,7 +276,7 @@
 // route leaves the programme. Any error just stops it.
 //
 // Fourteenth, it drops what jellyfin-web keeps of a user's answers once
-// another user signs in. jellyfin-web 12.2 keeps its answers in a React
+// another user signs in. jellyfin-web 12.3 keeps its answers in a React
 // Query cache for a minute before asking again, and for 24 hours in all,
 // in memory and in the browser's IndexedDB (database keyval-store, store
 // keyval, key jellyfin-query-cache), which a later load restores. Some of

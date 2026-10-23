@@ -55,7 +55,7 @@ const settings = {
       'Polyfin names some things itself in Jellyfin apps: seasons (“Season 1”, “Specials”), episodes without a title, and the type added to libraries that share a name (“Popular (Movies)”).',
     legacyAuthorization: 'Allow legacy authorization',
     legacyAuthorizationHelp:
-      'Accepts the old X-Emby-* headers, the api_key parameter and the Emby scheme for apps that still need them. Off by default, like Jellyfin 12.2.',
+      'Accepts the old X-Emby-* headers, the api_key parameter and the Emby scheme for apps that still need them. Off by default, like Jellyfin 12.3.',
     updateCheck: 'Check for new versions',
     updateCheckHelp:
       'Once a day, and shortly after startup, Polyfin asks GitHub for its latest release, sending only its version. A newer one shows on Home and under System › Health, and is sent to the New version notifications. Off, Polyfin never contacts GitHub.',

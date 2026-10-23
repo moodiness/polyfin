@@ -1,5 +1,5 @@
 /**
- * jellyfin-web 12.2, which Polyfin serves at /web/ on this same origin, keeps its sign-ins in
+ * jellyfin-web 12.3, which Polyfin serves at /web/ on this same origin, keeps its sign-ins in
  * localStorage under this key, as `{"Servers": [{"Id": serverId, "AccessToken": token, …}]}`.
  */
 const credentialsKey = 'jellyfin_credentials'
@@ -71,7 +71,7 @@ export async function signInToWebClient(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `MediaBrowser Client="Jellyfin Web", Device="${device}", DeviceId="${encodeURIComponent(deviceId)}", Version="12.2.0"`,
+      Authorization: `MediaBrowser Client="Jellyfin Web", Device="${device}", DeviceId="${encodeURIComponent(deviceId)}", Version="12.3.0"`,
     },
     body: JSON.stringify({ Username: name, Pw: password }),
   })

@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// jellyfin-web 12.2 keeps its answers in a React Query cache, in memory and
+// jellyfin-web 12.3 keeps its answers in a React Query cache, in memory and
 // in IndexedDB, some keyed without the user, such as the search page's
 // Suggestions. When another user signs in than the one they were kept for,
 // the script empties that cache, as jellyfin-web's own language change does,
