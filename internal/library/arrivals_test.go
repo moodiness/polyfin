@@ -3,7 +3,6 @@ package library
 import (
 	"context"
 	"slices"
-	"sync"
 	"testing"
 	"time"
 
@@ -13,24 +12,6 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
-
-// clock is a time tests move by hand.
-type clock struct {
-	mu  sync.Mutex
-	now time.Time
-}
-
-func (c *clock) Now() time.Time {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.now
-}
-
-func (c *clock) advance(d time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.now = c.now.Add(d)
-}
 
 // A title that comes into a library's catalog is new in the user's
 // libraries for 7 days, the newest first; the titles there at the first

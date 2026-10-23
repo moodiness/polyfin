@@ -193,16 +193,17 @@ func TestXMLTVGuideFeedsTheCatalogsChannels(t *testing.T) {
 func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
-	now := time.Now().UTC().Truncate(time.Minute)
-	e.service.now = func() time.Time { return now }
+	at := &clock{now: time.Now().UTC().Truncate(time.Minute)}
+	e.service.SetClock(at.Now)
 	key := e.tvCatalog(addons.Shared(), stremio.Meta{ID: "tv:one", Type: "tv", Name: "One"})
-	first := `<tv><channel id="1"><display-name>One</display-name></channel>` + programme("1", now.Add(-time.Hour), now.Add(time.Hour), "First") + `</tv>`
+	first := `<tv><channel id="1"><display-name>One</display-name></channel>` + programme("1", at.Now().Add(-time.Hour), at.Now().Add(time.Hour), "First") + `</tv>`
 	guide := newGuideServer(t, first)
 	if _, err := e.addons.SetGuide(t.Context(), addons.Shared(), key, guide.url); err != nil {
 		t.Fatal(err)
 	}
 	airing := func() []string {
 		t.Helper()
+		now := at.Now()
 		programs, err := e.service.Programs(t.Context(), e.member, now, now.Add(time.Second))
 		if err != nil {
 			t.Fatal(err)
@@ -217,18 +218,18 @@ func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 	}
 
 	guide.set(strings.Replace(first, "First", "Second", 1), 0)
-	now = now.Add(11 * time.Hour)
+	at.advance(11 * time.Hour)
 	if err := e.service.RefreshGuides(t.Context(), false); err != nil {
 		t.Fatal(err)
 	}
 	if guide.downloads.Load() != 1 {
 		t.Errorf("a guide fetched 11 hours ago was fetched again")
 	}
-	now = now.Add(time.Hour)
+	at.advance(time.Hour)
 	if err := e.service.RefreshGuides(t.Context(), false); err != nil {
 		t.Fatal(err)
 	}
-	now = now.Add(-12 * time.Hour)
+	at.advance(-12 * time.Hour)
 	if got := airing(); !slices.Equal(got, []string{"One: Second"}) || guide.downloads.Load() != 2 {
 		t.Errorf("after 12 hours: %q after %d downloads", got, guide.downloads.Load())
 	}
@@ -244,7 +245,7 @@ func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 		t.Fatal(err)
 	}
 	status := e.guideOf(addons.Shared(), key)
-	if status.Error != "unreachable" || !status.FetchedAt.Equal(*fetched) || !status.CheckedAt.Equal(now) {
+	if status.Error != "unreachable" || !status.FetchedAt.Equal(*fetched) || !status.CheckedAt.Equal(at.Now()) {
 		t.Errorf("failed fetch: %+v", status)
 	}
 	if got := airing(); !slices.Equal(got, []string{"One: Second"}) {
@@ -268,8 +269,8 @@ func TestXMLTVGuidesAreRefreshed(t *testing.T) {
 func TestGuidesFollowTheRefreshSetting(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
-	now := time.Now().UTC().Truncate(time.Minute)
-	e.service.now = func() time.Time { return now }
+	at := &clock{now: time.Now().UTC().Truncate(time.Minute)}
+	e.service.SetClock(at.Now)
 	e.setting(func(s *accounts.Settings) { s.LiveTvRefreshHours = 2 })
 	key := e.tvCatalog(addons.Shared(), stremio.Meta{ID: "tv:one", Type: "tv", Name: "One"})
 	guide := newGuideServer(t, `<tv><channel id="1"><display-name>One</display-name></channel></tv>`)
@@ -280,7 +281,7 @@ func TestGuidesFollowTheRefreshSetting(t *testing.T) {
 		after     time.Duration
 		downloads int32
 	}{{0, 1}, {119 * time.Minute, 1}, {time.Minute, 2}} {
-		now = now.Add(step.after)
+		at.advance(step.after)
 		if err := e.service.RefreshGuides(t.Context(), false); err != nil {
 			t.Fatal(err)
 		}
@@ -296,8 +297,8 @@ func TestGuidesFollowTheRefreshSetting(t *testing.T) {
 func TestRateLimitedGuidesAreTriedAgainSooner(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
-	now := time.Now().UTC().Truncate(time.Minute)
-	e.service.now = func() time.Time { return now }
+	at := &clock{now: time.Now().UTC().Truncate(time.Minute)}
+	e.service.SetClock(at.Now)
 	key := e.tvCatalog(addons.Shared(), stremio.Meta{ID: "tv:one", Type: "tv", Name: "One"})
 	guide := newGuideServer(t, `<tv><channel id="1"><display-name>One</display-name></channel></tv>`)
 	guide.set("", http.StatusTooManyRequests)
@@ -308,7 +309,7 @@ func TestRateLimitedGuidesAreTriedAgainSooner(t *testing.T) {
 		after     time.Duration
 		downloads int32
 	}{{0, 1}, {4 * time.Minute, 1}, {time.Minute, 2}, {14 * time.Minute, 2}, {time.Minute, 3}, {59 * time.Minute, 3}, {time.Minute, 4}} {
-		now = now.Add(step.after)
+		at.advance(step.after)
 		if err := e.service.RefreshGuides(t.Context(), false); err != nil {
 			t.Fatal(err)
 		}
@@ -317,11 +318,11 @@ func TestRateLimitedGuidesAreTriedAgainSooner(t *testing.T) {
 		}
 	}
 	status := e.guideOf(addons.Shared(), key)
-	if at, ok := e.service.GuideRetry(status.ID); status.Error != guideRateLimited || !ok || !at.Equal(now.Add(time.Hour)) {
-		t.Errorf("a rate-limited guide: %q, next try %v %v", status.Error, at, ok)
+	if next, ok := e.service.GuideRetry(status.ID); status.Error != guideRateLimited || !ok || !next.Equal(at.Now().Add(time.Hour)) {
+		t.Errorf("a rate-limited guide: %q, next try %v %v", status.Error, next, ok)
 	}
 	guide.set(`<tv><channel id="1"><display-name>One</display-name></channel></tv>`, 0)
-	now = now.Add(time.Hour)
+	at.advance(time.Hour)
 	if err := e.service.RefreshGuides(t.Context(), false); err != nil {
 		t.Fatal(err)
 	}
