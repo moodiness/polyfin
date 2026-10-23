@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/playback"
 )
 
 // torrentPlays remembers the torrent each device last played, and for
@@ -38,8 +37,11 @@ const othersRecently = time.Minute
 // playback, and has a playback of another title end the linger of the
 // torrents the device or its user left (see leaveTorrents). A stop ends
 // nothing: jellyfin-web may send it late, after the next playback of the
-// same title started.
-func (h *Handler) followTorrents(device, user accounts.ID, event playbackEvent, before playback.NowPlaying, had bool) {
+// same title started. Nor does a late report of a title the device left
+// (current false, see leaveTitle), which leaves the torrent it plays and
+// the one it left as they are; switched tells that the report changed the
+// device's title.
+func (h *Handler) followTorrents(device, user accounts.ID, event playbackEvent, current, switched, had bool) {
 	now := h.now()
 	h.torrents.mu.Lock()
 	if event == playbackStopped {
@@ -52,12 +54,12 @@ func (h *Handler) followTorrents(device, user accounts.ID, event playbackEvent, 
 	}
 	h.torrents.mu.Unlock()
 	playing, ok := h.sessions.Playing(device)
-	if !ok {
+	if !ok || !current {
 		return
 	}
 	title := h.titleOf(playing.Item)
 	hash := h.torrentOf(playing.PlaySessionID, playing.MediaSourceID)
-	if event == playbackStarted || !had || h.titleOf(before.Item) != title {
+	if event == playbackStarted || !had || switched {
 		h.leaveTorrents(device, user, title, hash)
 	}
 	if hash != "" {

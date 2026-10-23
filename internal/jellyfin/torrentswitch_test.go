@@ -263,3 +263,38 @@ func TestAnotherUsersPlaybackKeepsTheTorrent(t *testing.T) {
 		t.Fatal("the torrent nobody plays any longer still runs")
 	}
 }
+
+// A late report of the play session of a title the device left, after it
+// started another, ends neither the torrent of the title it plays nor
+// takes the one it left back: a late progress or start of A, after B
+// started, leaves B's torrent running.
+func TestALateReportOfATitleTheDeviceLeftKeepsTheTorrentItPlays(t *testing.T) {
+	t.Parallel()
+	p := newTorrentTitles(t)
+	token := p.signIn("member", "web")
+	play := func(name, session string) {
+		t.Helper()
+		p.play(t, "web", token, name)
+		p.report(t, "web", token, "/Sessions/Playing/Progress", name, map[string]any{"PlaySessionId": session})
+	}
+	play("Copper Valley", "session-a")
+	play("Iron Coast", "session-b")
+	if p.running(t, "Copper Valley") || !p.running(t, "Iron Coast") {
+		t.Fatal("the switch did not end the torrent the device left")
+	}
+	late := map[string]any{"PlaySessionId": "session-a", "PositionTicks": 600_000_000}
+	p.report(t, "web", token, "/Sessions/Playing/Progress", "Copper Valley", late)
+	if !p.running(t, "Iron Coast") || p.kept(t, "Iron Coast") == 0 {
+		t.Fatal("a late progress of the title the device left ended the torrent it plays")
+	}
+	p.report(t, "web", token, "/Sessions/Playing", "Copper Valley", late)
+	if !p.running(t, "Iron Coast") || p.kept(t, "Iron Coast") == 0 {
+		t.Fatal("a late start of the title the device left ended the torrent it plays")
+	}
+
+	// The device moving on for real ends it.
+	play("Copper Valley", "session-c")
+	if p.running(t, "Iron Coast") {
+		t.Fatal("the torrent the device left runs on")
+	}
+}

@@ -120,7 +120,8 @@ A playback of another title ends that wait at once. When a device reports that i
 - A torrent another device, a DLNA device, a guest or a converted download still plays, or that another user stopped less than a minute ago, runs on.
 - A pause, a seek, another audio track, a replay of the same title, and another episode of the same torrent, as in a season pack, keep it.
 - A stop alone ends nothing at once: jellyfin-web may send the stop of a playback late, once the next playback of the same title started.
-- The remuxes and conversions the device made of the title it left stop as it reports the other title, even when its app sent no stop (see [Transcoding](transcoding.md#hls-segments)), and the torrent with them. A torrent still read otherwise as the other title starts stops as soon as that read ends.
+- A late report of the title the device left, such as a progress of its play session that arrives after the other title started, ends nothing and keeps nothing: the device plays the title of its latest playback.
+- The repackaging and conversions the device made of the title it left stop as it reports the other title, even when its app sent no stop (see [Transcoding](transcoding.md#hls-segments)), and the torrent with them. A torrent still read otherwise as the other title starts stops as soon as that read ends.
 
 Once no playback reads a torrent's file any longer, Polyfin stops reading ahead in it and closes its reads at once, rather than finishing them and keeping them open for a next read. What the peers were asked for still comes: on the local test swarm, with a peer sending about 160 KB/s, a stop went from 3.3 MB more over 20 seconds to 0.6 MB over 4 seconds, and switching to another title from 3.2 MB over 19 seconds, with both torrents running 30 seconds, to 1.2 MB over 6 seconds, the first torrent stopping as the second title's playback was reported.
 
