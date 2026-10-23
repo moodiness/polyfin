@@ -5,6 +5,7 @@ package library
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"math"
 	"regexp"
 	"slices"
 	"strconv"
@@ -356,6 +357,17 @@ func parseRuntime(text string) time.Duration {
 	return total
 }
 
+// parseRating reads an addon's IMDb rating, 0 for none. Text that reads as
+// a number that is not finite ("NaN", "Infinity", "1e999") is none, as
+// Jellyfin 12.3 keeps none: JSON has no such numbers.
+func parseRating(text string) float64 {
+	rating, _ := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	if math.IsNaN(rating) || math.IsInf(rating, 0) {
+		return 0
+	}
+	return rating
+}
+
 func parseDate(text string) *time.Time {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -430,7 +442,7 @@ func fromMeta(item *Item, meta stremio.Meta) {
 		item.EndDate = &end
 	}
 	item.Runtime = parseRuntime(string(meta.Runtime))
-	item.CommunityRating, _ = strconv.ParseFloat(strings.TrimSpace(string(meta.ImdbRating)), 64)
+	item.CommunityRating = parseRating(string(meta.ImdbRating))
 	item.OfficialRating = certification(meta)
 	switch strings.ToLower(meta.Status) {
 	case "ended", "canceled", "cancelled":

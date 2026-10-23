@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"mime"
 	"net/http"
 	"slices"
@@ -202,7 +203,9 @@ func (h *Handler) externalIDInfos(w http.ResponseWriter, r *http.Request) {
 
 // flexibleNumber binds a number as Jellyfin does from the metadata editor,
 // which sends the text of its fields: a number, or text holding one, and
-// null or empty text for none.
+// null or empty text for none. A number that is not finite ("NaN",
+// "Infinity", or one too large for a float) is none too, as Jellyfin 12.3
+// takes it: it keeps no such rating.
 type flexibleNumber struct{ value *float64 }
 
 func (n *flexibleNumber) UnmarshalJSON(raw []byte) error {
@@ -215,8 +218,12 @@ func (n *flexibleNumber) UnmarshalJSON(raw []byte) error {
 		return nil
 	}
 	value, err := strconv.ParseFloat(text, 64)
-	if err != nil {
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
 		return err
+	}
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		n.value = nil
+		return nil
 	}
 	n.value = &value
 	return nil

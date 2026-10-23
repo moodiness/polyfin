@@ -81,6 +81,20 @@ func TestM3UEntriesAreClassified(t *testing.T) {
 	}
 }
 
+// A provider's rating is kept when it is a number out of ten, as text;
+// anything else, a number that is not finite included, is none.
+func TestProviderRatingsAreNumbersOutOfTen(t *testing.T) {
+	t.Parallel()
+	for rating, want := range map[string]string{
+		"7.5": "7.5", " 8 ": "8", "10": "10", "0": "", "-1": "", "11": "", "": "", "n/a": "",
+		"NaN": "", "nan": "", "Infinity": "", "-Infinity": "", "1e999": "",
+	} {
+		if got := ratingText(rating); got != want {
+			t.Errorf("%q: %q, want %q", rating, got, want)
+		}
+	}
+}
+
 func or(value, fallback string) string {
 	if value == "" {
 		return fallback

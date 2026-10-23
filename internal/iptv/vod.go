@@ -159,10 +159,11 @@ func titleName(raw string) (string, int) {
 	return cleanName(base), year
 }
 
-// ratingText keeps a provider rating out of ten, "" for none.
+// ratingText keeps a provider rating out of ten, "" for none, such as one
+// that is not a number ("NaN").
 func ratingText(rating string) string {
 	value, err := strconv.ParseFloat(strings.TrimSpace(rating), 64)
-	if err != nil || value <= 0 || value > 10 {
+	if err != nil || !(value > 0 && value <= 10) {
 		return ""
 	}
 	return strconv.FormatFloat(value, 'f', -1, 64)
