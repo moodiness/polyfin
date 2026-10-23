@@ -215,6 +215,12 @@ Remuxes and conversions of files are cut into HLS segments on the source's own k
 - A Blu-ray disc is cut on the keyframes its clips' information files list, and its video copied when the app takes it; a DVD is converted and cut every few seconds, as an MPEG-TS file is. See [Local folders](local-folders.md#blu-ray-discs).
 - Polyfin makes segments up to **Seconds prepared ahead** past the last one the app asked for, then waits for the app.
 - An app asking for a segment whose source stopped sending anything for 20 seconds gets `503` at once, rather than waiting minutes. Its next request waits for the same conversion, which goes on when the source answers again. A source that fails for good ends its conversion, and the next request answers `503` too.
+- A remux or conversion stops when its app stops its play session (`/Sessions/Playing/Stopped`, or `DELETE /Videos/ActiveEncodings`), and once its app has asked nothing of it for 3 minutes, as when a player stays paused; it starts again at the next request.
+- An app may play another title without stopping the one before, as an app that sends no stop does, or one that crashed and started again. As it reports the new title, the remuxes and conversions of the play sessions its device reported for the title before stop, as its stop would have stopped them, and they no longer read their source, a torrent's swarm included (see [Torrents](torrents.md#only-while-playing)). The same title played again, as for another audio track, stops nothing: the app stops what it leaves itself. The playbacks of the user's other devices, of DLNA devices, of guests through share links and of converted downloads go on.
+
+**Compared with Jellyfin:**
+
+- Jellyfin stops a remux or conversion one minute after its last segment request or playback report naming its play session, and never because its device started another title: a conversion left without a stop runs on for that minute. Polyfin keeps a paused conversion 3 minutes, and stops that of a title its device left at once.
 
 **For app developers:**
 

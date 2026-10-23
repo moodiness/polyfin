@@ -38,20 +38,33 @@ type torrentTitles struct {
 // switchTitles are the two movies.
 var switchTitles = []string{"Copper Valley", "Iron Coast"}
 
+// newTorrentTitles serves files of random bytes, whose analysis is stored
+// as ffprobe would have made it.
 func newTorrentTitles(t *testing.T) torrentTitles {
+	t.Helper()
+	return torrentTitlesOf(t, "ffprobe-not-installed", nil)
+}
+
+// torrentTitlesOf serves media, the same file for both movies, analyzed
+// by ffprobe; random bytes with a stored analysis when nil.
+func torrentTitlesOf(t *testing.T, ffprobe string, media []byte) torrentTitles {
 	t.Helper()
 	p := torrentTitles{seeders: map[string]*torrenttest.Peer{}, tors: map[string]*torrenttest.Torrent{}, movies: map[string]string{},
 		versions: map[string]library.Version{}}
 	proxy := torrenttest.StartProxy(t, true, "", "")
 	trackers := map[string]string{}
 	for i, name := range switchTitles {
-		tor := torrenttest.Build(name, 32<<10, torrenttest.File{Name: "movie.mkv", Data: torrenttest.Bytes((300 + i) << 10)})
+		data := media
+		if data == nil {
+			data = torrenttest.Bytes((300 + i) << 10)
+		}
+		tor := torrenttest.Build(name, 32<<10, torrenttest.File{Name: "movie.mkv", Data: data})
 		p.tors[name] = tor
 		p.seeders[name] = torrenttest.Seed(t, tor, "127.0.0.1")
 		trackers[name] = torrenttest.HTTPTracker(t, "127.0.0.1", p.seeders[name].Address()).URL()
 	}
 	p.pieces = t.TempDir()
-	p.testServer = newProbingServer(t, 10, "ffprobe-not-installed", func(options *Options, _ *pgxpool.Pool) {
+	p.testServer = newProbingServer(t, 10, ffprobe, func(options *Options, _ *pgxpool.Pool) {
 		var err error
 		p.engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(options.Accounts.Settings()) },
 			Dir: p.pieces, Budget: func() int64 { return 64 << 20 }, Logger: slog.New(slog.DiscardHandler)})
@@ -113,7 +126,9 @@ func newTorrentTitles(t *testing.T) torrentTitles {
 			t.Fatalf("versions of %s: %+v %v", name, versions, err)
 		}
 		p.versions[name] = versions[0]
-		setup.analyzed(t, versions[0], "h264-aac-mp4")
+		if media == nil {
+			setup.analyzed(t, versions[0], "h264-aac-mp4")
+		}
 	}
 	return p
 }

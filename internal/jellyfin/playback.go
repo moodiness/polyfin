@@ -68,6 +68,7 @@ func (h *Handler) record(r *http.Request, event playbackEvent, state playback.Pl
 			h.Playback.StopRemux(state.PlaySessionID)
 		}
 	}
+	h.leaveTitle(c.Device.ID, event, state.PlaySessionID)
 	h.followTorrents(c.Device.ID, c.User.ID, event, before, had)
 	// The report has arrived: it is recorded even when the app hangs up
 	// right after sending it, as when it closes once playback stops.
