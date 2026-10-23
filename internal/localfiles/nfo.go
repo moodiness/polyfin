@@ -57,10 +57,11 @@ var nfoDates = []string{"premiered", "aired", "releasedate"}
 
 // readNFO reads what an NFO file gives: the IMDb and TMDB identifiers of
 // the <uniqueid type="imdb"> and <uniqueid type="tmdb"> elements of its
-// root, else of the older <imdbid> and <tmdbid>; its <title>, <plot> and
-// <year>, and its date, the first of nfoDates read as a day; an IMDb
-// title's address in a file that is not XML. A file that stops being
-// well-formed gives what was read before.
+// root, else of the older <imdbid> and <tmdbid>, or of the <imdb_id>
+// Jellyfin writes for a show; its <title>, <plot> and <year>, and its
+// date, the first of nfoDates read as a day; an IMDb title's address in a
+// file that is not XML. A file that stops being well-formed gives what was
+// read before.
 func readNFO(r io.Reader) (nfoInfo, error) {
 	var info nfoInfo
 	data, err := io.ReadAll(io.LimitReader(r, maxNFO))
@@ -113,7 +114,7 @@ func readNFO(r io.Reader) (nfoInfo, error) {
 					info.imdb = value
 				case element == "uniqueid" && kind == "tmdb" && info.tmdb == "" && tmdbPattern.MatchString(value):
 					info.tmdb = value
-				case element == "imdbid" && olderIMDb == "" && imdbPattern.MatchString(value):
+				case (element == "imdbid" || element == "imdb_id") && olderIMDb == "" && imdbPattern.MatchString(value):
 					olderIMDb = value
 				case element == "tmdbid" && olderTMDB == "" && tmdbPattern.MatchString(value):
 					olderTMDB = value

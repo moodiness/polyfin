@@ -26,6 +26,16 @@ func TestReadNFO(t *testing.T) {
 		{"older elements", "<movie><imdbid>tt0063350</imdbid><tmdbid>10331</tmdbid></movie>", "tt0063350", "10331"},
 		{"unique identifiers first", `<movie><imdbid>tt0100258</imdbid><uniqueid type="imdb">tt0063350</uniqueid></movie>`, "tt0063350", ""},
 		{"a show's", `<tvshow><uniqueid type="TMDB"> 962 </uniqueid></tvshow>`, "", "962"},
+		// Jellyfin's NFO saver writes a show's IMDb identifier as <imdb_id>,
+		// its TVDB one as <id>, and no <uniqueid>.
+		{"a show's, as Jellyfin writes it", `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<tvshow>
+  <title>The Lone Ranger</title>
+  <id>71166</id>
+  <imdb_id>tt0041038</imdb_id>
+  <tmdbid>1914</tmdbid>
+  <tvdbid>71166</tvdbid>
+</tvshow>`, "tt0041038", "1914"},
 		{"another encoding and a mark", "\xef\xbb\xbf<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n<movie><title>Caf\xe9</title>" +
 			"<uniqueid type=\"imdb\">TT0063350</uniqueid></movie>", "tt0063350", ""},
 		{"not the root's", `<movie><actor><uniqueid type="imdb">tt0100258</uniqueid></actor><set><tmdbid>5</tmdbid></set></movie>`, "", ""},

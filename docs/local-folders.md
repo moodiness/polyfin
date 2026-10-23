@@ -227,7 +227,7 @@ Folders organized by Jellyfin or a media manager often hold NFO files, which giv
 /media/shows/The Lone Ranger (1949)/tvshow.nfo
 ```
 
-In XML NFO files, Polyfin reads `<uniqueid type="imdb">` and `<uniqueid type="tmdb">`, else the older `<imdbid>` and `<tmdbid>`, directly in the root element. An NFO file that is not XML may hold the address of the title's IMDb page instead. File names are compared in any case. Only the identifiers are read: titles, plots and ratings still come from the metadata addons, and artwork from them or the images beside the files (see [Artwork](#artwork)), and episodes' NFO files are not read.
+In XML NFO files, Polyfin reads `<uniqueid type="imdb">` and `<uniqueid type="tmdb">`, else the older `<imdbid>` and `<tmdbid>`, or the `<imdb_id>` that Jellyfin writes in a show's `tvshow.nfo`, directly in the root element. An NFO file that is not XML may hold the address of the title's IMDb page instead. File names are compared in any case. Only the identifiers are read: titles, plots and ratings still come from the metadata addons, and artwork from them or the images beside the files (see [Artwork](#artwork)), and episodes' NFO files are not read.
 
 ### Subtitle files
 
