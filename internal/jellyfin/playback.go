@@ -52,7 +52,7 @@ func (h *Handler) playbackRoutes(rt *router) {
 // user's data.
 func (h *Handler) record(r *http.Request, event playbackEvent, state playback.PlayState, positionKnown bool) {
 	c := callerFrom(r.Context())
-	before, _ := h.sessions.Playing(c.Device.ID)
+	before, had := h.sessions.Playing(c.Device.ID)
 	switch event {
 	case playbackStarted:
 		h.sessions.Start(c.Device.ID, c.User.ID, state)
@@ -68,6 +68,7 @@ func (h *Handler) record(r *http.Request, event playbackEvent, state playback.Pl
 			h.Playback.StopRemux(state.PlaySessionID)
 		}
 	}
+	h.followTorrents(c.Device.ID, c.User.ID, event, before, had)
 	// The report has arrived: it is recorded even when the app hangs up
 	// right after sending it, as when it closes once playback stops.
 	h.track(context.WithoutCancel(r.Context()), c.User, c.Device, event, state, positionKnown, before)

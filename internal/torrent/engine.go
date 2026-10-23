@@ -214,11 +214,7 @@ func (e *Engine) start(spec Spec) *torrent {
 	if t != nil {
 		t.mu.Lock()
 		if t.err == nil {
-			t.refs++
-			if t.linger != nil {
-				t.linger.Stop()
-				t.linger = nil
-			}
+			t.joined()
 			t.mu.Unlock()
 			e.mu.Unlock()
 			t.merge(spec)
@@ -235,11 +231,7 @@ func (e *Engine) start(spec Spec) *torrent {
 		old.mu.Lock()
 		running := old.err == nil
 		if running {
-			old.refs++
-			if old.linger != nil {
-				old.linger.Stop()
-				old.linger = nil
-			}
+			old.joined()
 		}
 		old.mu.Unlock()
 		if running {
@@ -268,16 +260,58 @@ func (e *Engine) carriesUDP(ctx context.Context, route Route) bool {
 	return true
 }
 
+// joined counts one playback more of t, which runs: its linger, or the
+// end asked for it, is called off. t's lock is held.
+func (t *torrent) joined() {
+	t.refs++
+	t.ending = false
+	if t.linger != nil {
+		t.linger.Stop()
+		t.linger = nil
+	}
+}
+
 // release ends a playback of t: once none is left, t stops after the
-// linger.
+// linger, or at once when its end was asked for (see End).
 func (e *Engine) release(t *torrent) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	t.refs--
 	if t.refs > 0 || t.err != nil {
+		t.mu.Unlock()
+		return
+	}
+	if t.ending {
+		t.mu.Unlock()
+		e.stop(t)
 		return
 	}
 	t.linger = time.AfterFunc(e.config.Linger, func() { e.stop(t) })
+	t.mu.Unlock()
+}
+
+// End ends the linger of the torrent of hash, as a playback of another
+// title took the place of the one that read it: with no playback reading
+// it, it stops at once, as the linger would; otherwise it stops as the
+// last of them ends, unless another joins it meanwhile.
+func (e *Engine) End(hash Hash) {
+	e.mu.Lock()
+	t := e.torrents[hash]
+	e.mu.Unlock()
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	if t.err != nil || t.refs > 0 {
+		t.ending = t.err == nil
+		t.mu.Unlock()
+		return
+	}
+	if t.linger != nil {
+		t.linger.Stop()
+		t.linger = nil
+	}
+	t.mu.Unlock()
+	e.stop(t)
 }
 
 // stop stops a torrent no playback reads: no more peers, no more sharing.

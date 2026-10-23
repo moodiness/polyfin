@@ -249,6 +249,22 @@ func (s *Service) Torrents(engine *torrent.Engine) {
 	s.torrents = engine
 }
 
+// EndTorrent ends the linger of the torrent of infoHash, as versions name
+// it: a playback of another title took the place of the one that read it
+// (see torrent.Engine.End).
+func (s *Service) EndTorrent(infoHash string) {
+	if hash, err := torrent.ParseHash(infoHash); err == nil && s.torrents != nil {
+		s.torrents.End(hash)
+	}
+}
+
+// TorrentRunning reports whether the torrent of infoHash, as versions name
+// it, runs: a playback joined it, and it did not stop.
+func (s *Service) TorrentRunning(infoHash string) bool {
+	hash, err := torrent.ParseHash(infoHash)
+	return err == nil && s.torrents != nil && s.torrents.Running(hash)
+}
+
 // TorrentSettings are the torrent engine's settings among the server's.
 func TorrentSettings(s accounts.Settings) torrent.Settings {
 	return torrent.Settings{Enabled: s.TorrentStreams, Interface: s.TorrentInterface, Proxy: s.TorrentProxy,

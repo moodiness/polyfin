@@ -496,3 +496,58 @@ func TestPiecesAtTheReadComeFirst(t *testing.T) {
 		t.Fatalf("wanted %v, want %v", got, want)
 	}
 }
+
+// Ending a torrent's linger stops it at once when no playback reads it,
+// its pieces removed and its readers told; one still read stops as its
+// last playback ends, unless another playback joined it meanwhile.
+func TestEndStopsATorrentAtOnceOrAsItsPlaybacksEnd(t *testing.T) {
+	t.Parallel()
+	tor, _, _ := twoFiles()
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	proxy := torrenttest.StartProxy(t, true, "", "")
+	e := newEngine(t, proxied(proxy), 64<<20)
+	// The linger never passes during the test.
+	e.config.Linger = time.Hour
+	spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stop := e.Play(spec)
+	readAll(t, e, spec)
+	e.End(spec.Hash)
+	if !e.Running(spec.Hash) {
+		t.Fatal("the torrent stopped while a playback reads it")
+	}
+	stop()
+	if e.Running(spec.Hash) || e.Usage() != 0 {
+		t.Fatalf("the torrent runs on once its last playback ended, %d bytes kept", e.Usage())
+	}
+
+	// A playback joining it after the end was asked keeps the linger.
+	first := e.Play(spec)
+	readAll(t, e, spec)
+	e.End(spec.Hash)
+	second := e.Play(spec)
+	first()
+	second()
+	if !e.Running(spec.Hash) || e.Usage() == 0 {
+		t.Fatal("the torrent stopped without its linger, though a playback joined it again")
+	}
+	// Lingering, it stops at once, a read under way told why.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	r, err := e.Open(ctx, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.End(spec.Hash)
+	if e.Running(spec.Hash) || e.Usage() != 0 {
+		t.Fatalf("the lingering torrent runs on, %d bytes kept", e.Usage())
+	}
+	if _, err := r.ReadAt(make([]byte, 1), 0); !errors.Is(err, errStopped) {
+		t.Fatalf("a read of the stopped torrent got %v", err)
+	}
+	waitFor(t, "the seeder's connections to close", func() bool { return seeder.Open() == 0 })
+}

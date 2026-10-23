@@ -113,7 +113,16 @@ A WireGuard tunnel to a far server adds delay, and a delay that varies. LEDBAT t
 
 ## Only while playing
 
-Only a playback starts a torrent. Preparing playback in advance, thumbnails and downloads do not: a torrent version cannot be downloaded, and has no thumbnails. When the playback ends, after 30 seconds without a read, as when a player pauses, the torrent stops: no more sharing, no more peers, and its pieces are removed. The trackers are told it stopped.
+Only a playback starts a torrent. Preparing playback in advance, thumbnails and downloads do not: a torrent version cannot be downloaded, and has no thumbnails. When the playback ends, after 30 seconds without a read, as when a player pauses or between its requests, the torrent stops: no more sharing, no more peers, and its pieces are removed. The trackers are told it stopped.
+
+A playback of another title ends that wait at once. When a device reports that it plays another title, a torrent's or not, the torrents it played before stop then, and so do those its user played on another device that stopped since:
+
+- A torrent another device, a DLNA device, a guest or a converted download still plays, or that another user stopped less than a minute ago, runs on.
+- A pause, a seek, another audio track, a replay of the same title, and another episode of the same torrent, as in a season pack, keep it.
+- A stop alone ends nothing at once: jellyfin-web may send the stop of a playback late, once the next playback of the same title started.
+- A torrent still read as the other title starts, as by a conversion not stopped yet, stops as soon as that read ends.
+
+Once no playback reads a torrent's file any longer, Polyfin stops reading ahead in it and closes its reads at once, rather than finishing them and keeping them open for a next read. What the peers were asked for still comes: on the local test swarm, with a peer sending about 160 KB/s, a stop went from 3.3 MB more over 20 seconds to 0.6 MB over 4 seconds, and switching to another title from 3.2 MB over 19 seconds, with both torrents running 30 seconds, to 1.2 MB over 6 seconds, the first torrent stopping as the second title's playback was reported.
 
 **Sync addon subtitles** (see [Subtitles](subtitles.md#addon-subtitles-synced-to-the-version)) looks for no speech in a torrent version: that would download three stretches of it from the swarm, up to 300 MB, as its playback starts, beside it, and what the playback holds then, its start and its index, has none of them. A torrent version's addon subtitles come with the times the addons give.
 

@@ -114,6 +114,9 @@ type torrent struct {
 	downBytes  int64
 	refs       int
 	linger     *time.Timer
+	// ending tells that the torrent stops once its playbacks end, without
+	// the linger (see Engine.End).
+	ending bool
 	// announces is what each tracker last answered, nil for peers, and
 	// looked whether the DHT was looked up, for a StartError.
 	announces map[string]error

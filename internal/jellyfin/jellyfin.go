@@ -205,6 +205,8 @@ type Handler struct {
 	downloads *downloadPlays
 	// dlna are the playbacks of DLNA devices (see dlna.go).
 	dlna *dlnaPlays
+	// torrents are the torrents devices last played (see torrentswitch.go).
+	torrents *torrentPlays
 }
 
 // New returns the Jellyfin API handler.
@@ -228,6 +230,7 @@ func New(options Options) *Handler {
 		guests:         newGuestPlays(),
 		downloads:      newDownloadPlays(),
 		dlna:           newDLNAPlays(),
+		torrents:       newTorrentPlays(),
 	}
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.listings = newListings(h.listVersions)
