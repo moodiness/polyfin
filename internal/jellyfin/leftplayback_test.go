@@ -81,3 +81,48 @@ func TestADeviceLeavingAConvertedTitleWithoutAStopEndsItsConversion(t *testing.T
 		}
 	}
 }
+
+// A report of a play session a device already left, arriving after it
+// started another title, as a progress timer still running or a slow
+// network sends it, stops nothing: the title the device plays is the one
+// of its latest play session. Nor does the late progress of a title the
+// device stopped before playing another.
+func TestALateReportOfATitleTheDeviceLeftKeepsTheConversionItPlays(t *testing.T) {
+	t.Parallel()
+	ffmpeg, file := vodFile(t, "a-movie.mkv", "-c:v", "mpeg4")
+	media, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := torrentTitlesOf(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), media)
+	web := p.signIn("member", "web")
+	first := p.convert(t, "web", web, "Copper Valley")
+	second := p.convert(t, "web", web, "Iron Coast")
+	if p.converting(first) {
+		t.Fatal("the conversion of the title the device left runs on")
+	}
+	late := map[string]any{"PlaySessionId": first, "PlayMethod": "Transcode", "PositionTicks": 600_000_000}
+	p.report(t, "web", web, "/Sessions/Playing/Progress", "Copper Valley", late)
+	p.report(t, "web", web, "/Sessions/Playing", "Copper Valley", late)
+	if !p.converting(second) {
+		t.Fatal("a late report of the title the device left stopped the conversion it plays")
+	}
+	p.report(t, "web", web, "/Sessions/Playing/Progress", "Iron Coast", map[string]any{"PlaySessionId": second, "PlayMethod": "Transcode"})
+	if !p.converting(second) {
+		t.Fatal("a progress of the title the device plays stopped its conversion")
+	}
+
+	// A clean stop, another title, then a late progress of the one stopped.
+	p.report(t, "web", web, "/Sessions/Playing/Stopped", "Iron Coast", map[string]any{"PlaySessionId": second})
+	third := p.convert(t, "web", web, "Copper Valley")
+	p.report(t, "web", web, "/Sessions/Playing/Progress", "Iron Coast", map[string]any{"PlaySessionId": second, "PlayMethod": "Transcode"})
+	if !p.converting(third) {
+		t.Fatal("a late progress of the title the device stopped stopped the conversion it plays")
+	}
+
+	// Moving on for real still ends it.
+	p.convert(t, "web", web, "Iron Coast")
+	if p.converting(third) {
+		t.Fatal("the conversion of the title the device left runs on")
+	}
+}
