@@ -20,8 +20,10 @@ import (
 // captionedAddon serves one drama, "Captioned", whose streams carry their
 // own subtitles, and no subtitles resource: a link with an English and a
 // French file, a link with none, and a torrent with a Spanish file. Its
-// links, the subtitles' included, hold the generation the addon is at:
-// a link of an earlier generation has expired and answers 403.
+// subtitle links hold the generation the addon is at: a link of an earlier
+// generation has expired and answers 403. Its video links always play: one
+// that failed would have Polyfin renew it in the background, asking the
+// addon for its streams while a test moves the generation and the clock.
 func captionedAddon(t *testing.T, generation *atomic.Int64) (manifest, host string) {
 	t.Helper()
 	var server *httptest.Server
@@ -57,6 +59,8 @@ func captionedAddon(t *testing.T, generation *atomic.Int64) (manifest, host stri
 			lines := map[string]string{"eng": "Hello", "fre": "Bonjour", "spa": "Hola"}
 			lang := strings.TrimSuffix(strings.TrimPrefix(path, "/subs/"), ".srt")
 			_, _ = fmt.Fprintf(w, "1\r\n00:00:01,000 --> 00:00:04,000\r\n%s %d\r\n", lines[lang], current)
+		case strings.HasPrefix(path, "/files/"):
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
 		default:
 			http.NotFound(w, r)
 		}
