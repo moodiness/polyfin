@@ -216,6 +216,11 @@ type generatedEntry struct {
 	choice  generatedChoice
 	found   bool
 	checked time.Time
+	// unknown tells that none was found as the item's first titles were
+	// not known yet, kept tells how many answers were kept then (see
+	// generatedImages.kept).
+	unknown bool
+	kept    uint64
 }
 
 // generatedImages remembers the choices of the items' generated images,
@@ -224,6 +229,12 @@ type generatedImages struct {
 	mu      sync.Mutex
 	loaded  bool
 	entries map[accounts.ID]generatedEntry
+	// kept counts the catalog pages and descriptions addons answered and
+	// Polyfin kept: an item that had none as its first titles were not
+	// known looks again once one more is kept, rather than after
+	// generatedCheck, so that a new library's image shows once an app
+	// opened it.
+	kept atomic.Uint64
 }
 
 // LookUpGeneratedImage has the generated image of an item looked up again
@@ -280,7 +291,8 @@ func (s *Service) generatedChoiceOf(ctx context.Context, id accounts.ID, name st
 	if entry.found && entry.choice.name == name && now.Sub(entry.checked) < generatedCheck {
 		return entry.choice, true
 	}
-	if !entry.found && now.Sub(entry.checked) < generatedCheck {
+	kept := s.generated.kept.Load()
+	if !entry.found && now.Sub(entry.checked) < generatedCheck && (!entry.unknown || entry.kept == kept) {
 		return generatedChoice{}, false
 	}
 	titles, known, confined := find()
@@ -297,7 +309,7 @@ func (s *Service) generatedChoiceOf(ctx context.Context, id accounts.ID, name st
 		}
 	}
 	s.generated.mu.Lock()
-	s.generated.entries[id] = generatedEntry{choice: choice, found: found, checked: now}
+	s.generated.entries[id] = generatedEntry{choice: choice, found: found, checked: now, unknown: !found && !known, kept: kept}
 	s.generated.mu.Unlock()
 	return choice, found
 }

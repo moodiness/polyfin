@@ -501,6 +501,13 @@ var browseShapes = shapeRules{
 		// The recorded items lacked the rating and cast photo the fake addon
 		// provides.
 		"OfficialRating": {"latest"}, "PrimaryImageTag": {"movie"},
+		// The recorded libraries and collections had no image. Polyfin's
+		// new libraries, and collections without a poster, draw one as soon
+		// as their titles are read, which may come before the listing or
+		// after it, and tell its shape as Jellyfin does: its UserViews always
+		// asks for the field, and an item gets it only with an image
+		// (DtoService.GetPrimaryImageAspectRatio).
+		"PrimaryImageAspectRatio": {"views", "boxsets", "boxset"},
 	},
 }
 

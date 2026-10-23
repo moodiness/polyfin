@@ -281,6 +281,7 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 	}
 	kept := fetched[[]stremio.Meta]{metas, asked}
 	s.pagesOf(key).Put(key, kept)
+	s.generated.kept.Add(1)
 	// A search catalog that answers is no longer late (see lateSearch).
 	if key.search != "" {
 		s.lateSearches.forget(searchCatalogOf(key))
@@ -407,6 +408,7 @@ func (s *Service) fetchKeptMeta(ctx context.Context, addon installed, key metaKe
 	}
 	kept := fetched[stremio.Meta]{meta, s.now()}
 	s.metas.Put(key, kept)
+	s.generated.kept.Add(1)
 	if err := s.storeMeta(ctx, addon, key, kept); err != nil {
 		s.logger.Debug("A description could not be kept", "addon", addon.addon.Manifest.Name, "error", err)
 	}

@@ -315,8 +315,10 @@ var playlistShapes = shapeRules{
 	},
 	returned: map[string][]string{
 		// Polyfin gives the aspect ratio of artwork in every listing,
-		// without waiting for the field to be requested.
-		"PrimaryImageAspectRatio": {"playlist-items"},
+		// without waiting for the field to be requested. The recorded
+		// libraries had no image; Polyfin's draw one once their titles are
+		// read (see browseShapes).
+		"PrimaryImageAspectRatio": {"playlist-items", "views-with-playlists"},
 	},
 }
 
