@@ -86,7 +86,7 @@ func TestConvertedVideoIsScaledDownToTheHeightCap(t *testing.T) {
 		{"a source under the cap", 720, 0, video(640, 360), h264(640, 360, 10_000_000)},
 		{"a source at the cap", 720, 0, video(1280, 720), h264(1280, 720, 10_000_000)},
 		{"a cap above what Polyfin converts to", 2160, 0, video(3840, 2160), h264(1920, 1080, 10_000_000)},
-		{"a limit lower than the cap's bitrate", 720, 2_000_000, video(1920, 1080), h264(960, 540, 2_000_000)},
+		{"a limit lower than the cap's bitrate", 720, 2_000_000, video(1920, 1080), peaking(h264(960, 540, 2_000_000), 2_000_000)},
 	} {
 		if got := sizeless(ConvertVideo("h264", Limits{Bitrate: test.limit, Video: test.limit, Server: test.maxHeight}, test.video, can)); !reflect.DeepEqual(got, test.want) {
 			t.Errorf("%s: %+v, want %+v", test.name, got, test.want)

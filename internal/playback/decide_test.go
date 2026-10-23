@@ -348,7 +348,7 @@ func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
 		// Over a limit, the video takes what the audio leaves: 720p at
 		// 3.36 Mb/s within 4 Mb/s.
 		{"over the bitrate limit", "swiftfin-native", source, Options{MaxStreamingBitrate: 4_000_000, Can: software}, true,
-			&VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 3_360_000, ToneMap: true}, nil},
+			&VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 3_360_000, Peak: 3_360_000, ToneMap: true}, nil},
 		// An app may refuse the copy of video it could take.
 		{"video copy refused", "swiftfin-native", source, Options{ConvertVideo: true, Can: software}, true, sdr720, nil},
 	}
@@ -430,8 +430,11 @@ func TestVideoIsConvertedToWhatTheLimitAllows(t *testing.T) {
 		{"no limit", "h264", 0, video(3840, 2160, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 1080, Bitrate: 10_000_000}},
 		{"never larger than the source", "h264", 0, video(1280, 720, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1280, Height: 720, Bitrate: 10_000_000}},
 		{"the source's bitrate", "h264", 0, video(1920, 1080, 4_000_000, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 1080, Bitrate: 4_000_000}},
-		{"a low limit", "h264", 1_000_000, video(1920, 1080, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 852, Height: 480, Bitrate: 1_000_000}},
-		{"a very low limit", "h264", 100_000, video(1920, 800, 0, true), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 640, Height: 266, Bitrate: 300_000, Deinterlace: true}},
+		{"a low limit", "h264", 1_000_000, video(1920, 1080, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 852, Height: 480, Bitrate: 1_000_000,
+			Peak: 1_000_000}},
+		// The least bitrate is above the limit, which the video cannot stay within.
+		{"a very low limit", "h264", 100_000, video(1920, 800, 0, true), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 640, Height: 266, Bitrate: 300_000,
+			Peak: 300_000, Deinterlace: true}},
 		// A 2.40:1 picture fits 1080p's 16:9 frame by its width.
 		{"a wide picture", "h264", 0, video(3832, 1600, 0, false), &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 1920, Height: 800, Bitrate: 10_000_000}},
 		{"HDR tone mapped at 720p at most", "h264", 0, MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", Width: new(3840), Height: new(2160)},
@@ -518,7 +521,7 @@ func TestTheGPUConvertsUpTo4K(t *testing.T) {
 	}{
 		{"4K", "h264", 0, 0, video(3840, 2160), on(3840, 2160, 40_000_000)},
 		{"a wide 4K episode", "h264", 0, 0, video(3832, 1600), on(3832, 1600, 40_000_000)},
-		{"a limit that allows 1440p", "h264", 20_000_000, 0, video(3840, 2160), on(2560, 1440, 20_000_000)},
+		{"a limit that allows 1440p", "h264", 20_000_000, 0, video(3840, 2160), peaking(on(2560, 1440, 20_000_000), 20_000_000)},
 		{"the quality cap", "h264", 0, 1080, video(3832, 1600), on(1920, 800, 10_000_000)},
 		{"HEVC, encoded in software", "hevc", 0, 0, video(3840, 2160),
 			&VideoConversion{Codec: "hevc", Encoder: "libx265", Width: 1920, Height: 1080, Bitrate: 10_000_000}},

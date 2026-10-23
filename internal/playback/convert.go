@@ -148,8 +148,10 @@ type VideoConversion struct {
 	// Codec is h264 or hevc; Encoder, the FFmpeg encoder writing it.
 	Codec, Encoder string
 	Width, Height  int
-	// Bitrate is the average the encoder aims for, in bits per second.
-	Bitrate int64
+	// Bitrate is the average the encoder aims for, in bits per second, and
+	// Peak the most the video may reach, when a bitrate limit allows less
+	// than one and a half times Bitrate, 0 otherwise (see ConvertVideo).
+	Bitrate, Peak int64
 	// ToneMap converts HDR to SDR; Deinterlace, interlaced video to
 	// progressive.
 	ToneMap, Deinterlace bool
@@ -392,7 +394,22 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 		conversion.Bitrate = min(conversion.Bitrate, limits.Video)
 	}
 	conversion.Bitrate = max(conversion.Bitrate, 300_000)
+	// Under a limit, the video peaks within what the limit leaves it, so
+	// that with the audio sent it stays within the limit: at its bitrate,
+	// as in Jellyfin, where the limit sets the bitrate.
+	if limits.Video > 0 && limits.Video < conversion.Bitrate*3/2 {
+		conversion.Peak = max(limits.Video, conversion.Bitrate)
+	}
 	return conversion
+}
+
+// peak is the most a conversion's video reaches, in bits per second: its
+// Peak under a limit, else one and a half times its bitrate.
+func (v *VideoConversion) peak() int64 {
+	if v.Peak > 0 {
+		return v.Peak
+	}
+	return v.Bitrate * 3 / 2
 }
 
 // videoBitrate is the bitrate of video converted to codec at width by
@@ -514,7 +531,9 @@ func (v *VideoConversion) Steps(width, height int) []VideoConversion {
 		}
 		step := *v
 		step.Width, step.Height = frame(r.height, width, height)
-		step.Bitrate = r.usual
+		// Half the quality above or less, it peaks at one and a half
+		// times its bitrate, below the first's peak.
+		step.Bitrate, step.Peak = r.usual, 0
 		lower = append(lower, step)
 		above, bitrate = r.height, r.usual
 	}

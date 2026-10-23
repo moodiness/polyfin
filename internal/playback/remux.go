@@ -316,7 +316,7 @@ func variant(analysis media.Analysis, video media.Stream, bandwidth int64, remux
 		// What the encoder writes, at most its peak rate with the audio.
 		codecs[0] = c.CodecString(v.FrameRate)
 		v.Width, v.Height, v.Range = c.Width, c.Height, "SDR"
-		v.Bandwidth = c.Bitrate*3/2 + 640_000
+		v.Bandwidth = c.peak() + 640_000
 	}
 	if audio, ok := streamOf(analysis, remux.Audio); ok {
 		if remux.ConvertAudio != nil {
@@ -489,8 +489,8 @@ func (r Remux) videoConversion() string {
 	if r.Burn != nil {
 		burn = "stream " + strconv.Itoa(*r.Burn)
 	}
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%dx%d\x00%d\x00%t\x00%t\x00%t\x00%s", c.Codec, c.Encoder, c.Width, c.Height, c.Bitrate,
-		c.ToneMap, c.ToneMapOnCPU, c.Deinterlace, burn)))
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%dx%d\x00%d\x00%d\x00%t\x00%t\x00%t\x00%s", c.Codec, c.Encoder, c.Width, c.Height, c.Bitrate,
+		c.Peak, c.ToneMap, c.ToneMapOnCPU, c.Deinterlace, burn)))
 	return hex.EncodeToString(sum[:12])
 }
 
@@ -611,7 +611,7 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 		// The source's colors, which video converted without tone mapping
 		// keeps (see hls.VideoEncoding.Colors).
 		colors := hls.Colors{Range: video.ColorRange, Matrix: video.ColorSpace, Transfer: video.ColorTransfer, Primaries: video.ColorPrimaries}
-		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate,
+		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate, MaxRate: c.Peak,
 			FrameRate: rate, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace, Burn: remux.Burn, BurnFile: remux.BurnFile,
 			Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak,
 			ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double, DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}

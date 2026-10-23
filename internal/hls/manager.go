@@ -145,8 +145,10 @@ type VideoEncoding struct {
 	// level it declares.
 	Encoder, Level string
 	Width, Height  int
-	// Bitrate is the average the encoder aims for, in bits per second.
-	Bitrate int64
+	// Bitrate is the average the encoder aims for, in bits per second, and
+	// MaxRate the most it lets the video peak at, 0 for one and a half
+	// times Bitrate.
+	Bitrate, MaxRate int64
 	// FrameRate is the converted video's, frames a second: the source's,
 	// twice it with DoubleRate.
 	FrameRate float64
@@ -510,7 +512,11 @@ func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 	default:
 		args = append(args, "-b:v", strconv.FormatInt(v.Bitrate, 10))
 	}
-	args = append(args, "-maxrate", strconv.FormatInt(v.Bitrate*3/2, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
+	maxRate := v.MaxRate
+	if maxRate <= 0 {
+		maxRate = v.Bitrate * 3 / 2
+	}
+	args = append(args, "-maxrate", strconv.FormatInt(maxRate, 10), "-bufsize", strconv.FormatInt(v.Bitrate*2, 10),
 		"-force_key_frames", keyframes)
 	if !v.Burns() {
 		args = append(args, "-vf", skip+v.filters())
