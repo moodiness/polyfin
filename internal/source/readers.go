@@ -158,9 +158,9 @@ func (s *Source) newest() *Reader {
 }
 
 // missingAhead reports whether a block of the read-ahead window is not
-// cached yet. The source's lock is held.
+// cached yet, while the source is read ahead. The source's lock is held.
 func (s *Source) missingAhead() bool {
-	if s.window.owner == nil {
+	if s.window.owner == nil || !s.readsAhead() {
 		return false
 	}
 	for block := s.window.cursor; block < s.window.horizon && !s.pastEnd(block); block++ {

@@ -158,3 +158,67 @@ func TestUrgeRunsPlaying(t *testing.T) {
 		t.Fatal("Playing did not stop once with the urge")
 	}
 }
+
+// heldFile is a file whose first block reads at once, and whose other
+// blocks are held until the read's request ends, as a torrent's pieces no
+// peer sends: ahead is told of each read held. open counts the files open.
+type heldFile struct {
+	data  []byte
+	ctx   context.Context
+	ahead chan<- struct{}
+	open  *atomic.Int32
+}
+
+func (f heldFile) ReadAt(p []byte, off int64) (int, error) {
+	if off < blockSize {
+		return copy(p, f.data[off:]), nil
+	}
+	select {
+	case f.ahead <- struct{}{}:
+	default:
+	}
+	<-f.ctx.Done()
+	return 0, f.ctx.Err()
+}
+
+func (f heldFile) Close() error {
+	f.open.Add(-1)
+	return nil
+}
+
+// A source only playbacks read, as a torrent's file, is no longer read
+// once none urges it: what was read ahead of the playback stops, and the
+// file is closed at once, rather than read on and kept open for a next
+// read, which goes on downloading a torrent.
+func TestASourceOnlyPlaybacksReadStopsWithTheLastOne(t *testing.T) {
+	c := newCache(t, 64*blockSize)
+	data := make([]byte, 40*blockSize)
+	ahead := make(chan struct{}, 1)
+	var open atomic.Int32
+	opener := FileOpener(func(ctx context.Context, _ string) (RandomFile, int64, error) {
+		open.Add(1)
+		return heldFile{data: data, ctx: ctx, ahead: ahead, open: &open}, int64(len(data)), nil
+	})
+	// The file sends nothing for minutes before it counts as stalled.
+	s := c.Open(accounts.ID{4}, Location{URL: "torrent:4", Opener: opener, StallTimeout: 10 * time.Minute,
+		Playing: func() func() { return func() {} }}, nil)
+	defer s.Release()
+	done := s.Urge()
+	r := s.NewReader()
+	first := make([]byte, blockSize)
+	if _, err := r.ReadAt(t.Context(), first, 0); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-ahead:
+	case <-time.After(time.Minute):
+		t.Fatal("the playback was not read ahead of")
+	}
+	r.Close()
+	done()
+	for deadline := time.Now().Add(30 * time.Second); open.Load() != 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d reads of the file still run once no playback urges it", open.Load())
+		}
+	}
+}

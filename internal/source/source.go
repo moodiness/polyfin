@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -583,11 +584,35 @@ func (s *Source) Urge() (done func()) {
 			s.urged--
 			if playing != nil {
 				s.joined--
+				if s.urged == 0 {
+					s.unurged()
+				}
 			}
 			s.mu.Unlock()
 			stop()
 		})
 	}
+}
+
+// unurged stops what reads a source only playbacks may read, a torrent's
+// file, once none urges it: its connections end, but those reading a block
+// a reader waits for or a span warmed, and none reads ahead or lingers
+// until a playback urges it again (see readsAhead), so that the swarm is
+// left at once. The source's lock is held.
+func (s *Source) unurged() {
+	for _, c := range slices.Clone(s.conns) {
+		if c.next < 0 || s.wanted[c.next] == nil && !s.inWarm(c.next) {
+			c.drop()
+			s.removeConn(c)
+		}
+	}
+}
+
+// readsAhead tells whether the source is read ahead of its readers, and
+// its connections linger for them: always, but for a source only
+// playbacks may read, while one urges it. The source's lock is held.
+func (s *Source) readsAhead() bool {
+	return s.origin.Playing == nil || s.urged > 0
 }
 
 // HeldBack reports whether the source's reads were held back since a

@@ -336,7 +336,7 @@ func (s *Source) pick(c *conn, fresh bool) (target, end int64, split *conn, ok b
 		return c.next, c.end, nil, true
 	}
 	// The window read ahead of the newest streaming reader.
-	if s.window.owner != nil {
+	if s.window.owner != nil && s.readsAhead() {
 		if target, end, split, ok := s.pickSpan(c, s.window.cursor, s.window.horizon, fresh); ok {
 			return target, end, split, true
 		}
@@ -456,10 +456,10 @@ func (s *Source) missingRun(first, last int64) bool {
 	return last-first >= minStretch
 }
 
-// inWindow reports whether block is in the read-ahead window. The source's
-// lock is held.
+// inWindow reports whether block is in the read-ahead window, while the
+// source is read ahead. The source's lock is held.
 func (s *Source) inWindow(block int64) bool {
-	return s.window.owner != nil && block >= s.window.cursor && block < s.window.horizon
+	return s.window.owner != nil && s.readsAhead() && block >= s.window.cursor && block < s.window.horizon
 }
 
 // inWarm reports whether block is in a span warmed. The source's lock is
@@ -484,12 +484,12 @@ func (s *Source) needed(block int64) bool {
 }
 
 // idle waits a little, with the connection open, for a reader to want
-// more, and tells whether one did. Only the last connection lingers; the
-// others end at once. A background connection lingering gives its slot up
-// to a connection waiting for one.
+// more, and tells whether one did. Only the last connection lingers, while
+// the source is read ahead; the others end at once. A background
+// connection lingering gives its slot up to a connection waiting for one.
 func (s *Source) idle(c *conn) bool {
 	s.mu.Lock()
-	if c.dropped || !c.connected || len(s.conns) > 1 {
+	if c.dropped || !c.connected || len(s.conns) > 1 || !s.readsAhead() {
 		s.removeConn(c)
 		s.mu.Unlock()
 		return false
@@ -508,12 +508,22 @@ func (s *Source) idle(c *conn) bool {
 	defer s.cache.lingering(c.slot, false)
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
-	select {
-	case <-s.wake:
-		return true
-	case <-timer.C:
-	case <-s.ctx.Done():
-	case <-yielding:
+	for waiting := true; waiting; {
+		select {
+		case <-s.wake:
+			return true
+		case <-timer.C:
+			waiting = false
+		case <-s.ctx.Done():
+			waiting = false
+		case <-yielding:
+			waiting = false
+		case <-c.nudge:
+			// Dropped, as no playback urges the source any longer.
+			s.mu.Lock()
+			waiting = !c.dropped
+			s.mu.Unlock()
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
