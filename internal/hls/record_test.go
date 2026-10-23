@@ -148,6 +148,20 @@ func probedDuration(t *testing.T, path string) time.Duration {
 	return time.Duration(seconds * float64(time.Second))
 }
 
+// heldSoFar is the duration ffprobe reads in a recording still being
+// written, 0 while it reads none.
+func heldSoFar(ffprobe, path string) time.Duration {
+	out, err := exec.Command(ffprobe, "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", path).Output()
+	if err != nil {
+		return 0
+	}
+	seconds, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	if err != nil {
+		return 0
+	}
+	return time.Duration(seconds * float64(time.Second))
+}
+
 // A recording whose live playlist lists no new segment stops soon after
 // it ends, rather than when FFmpeg is killed: a first interrupt leaves
 // FFmpeg waiting for the next segment, a second ends that wait. The file
@@ -201,7 +215,7 @@ func TestARecordingWhoseSourceStallsStopsAtOnce(t *testing.T) {
 // A recording whose source flows stops at the first interrupt, FFmpeg
 // writing what it holds.
 func TestARecordingWhoseSourceFlowsStopsAtTheFirstInterrupt(t *testing.T) {
-	ffmpeg, _ := tools(t)
+	ffmpeg, ffprobe := tools(t)
 	source := filepath.Join(t.TempDir(), "source.ts")
 	out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=10:duration=30",
 		"-f", "lavfi", "-i", "sine=duration=30", "-c:v", "libx264", "-g", "10", "-pix_fmt", "yuv420p", "-c:a", "aac", "-f", "mpegts", source).CombinedOutput()
@@ -232,16 +246,19 @@ func TestARecordingWhoseSourceFlowsStopsAtTheFirstInterrupt(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	// FFmpeg is interrupted again only after 8 seconds: stopping before,
-	// it stopped at the first.
+	// it stopped at the first. It writes nothing until it has probed the
+	// first seconds of the source, then writes them at once: it is stopped
+	// once the recording holds a second of them, since a first interrupt
+	// while it writes them out loses the rest (see Record), as when a
+	// loaded machine pauses it then.
 	const grace = 8 * time.Second
-	started := time.Now()
 	elapsed, path := recorded(t, grace, server.URL+"/live.ts", func(path string) {
 		for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(50 * time.Millisecond) {
-			if info, err := os.Stat(path); err == nil && info.Size() > 0 && time.Since(started) > 3*time.Second {
+			if heldSoFar(ffprobe, path) >= time.Second {
 				return
 			}
 			if time.Now().After(deadline) {
-				t.Fatal("FFmpeg never wrote the recording")
+				t.Fatal("FFmpeg never wrote a second of the recording")
 			}
 		}
 	})

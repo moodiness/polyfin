@@ -64,6 +64,10 @@ func (m *Manager) userLives(user string) (int, *live) {
 // read. FFmpeg writes nothing more after its second interrupt, so it
 // writes each packet as it comes (see recordArgs): all that is lost is
 // the few packets it was still putting in order, past the recording's end.
+// FFmpeg writes nothing until it has probed the first seconds of its
+// input, then writes what it read at once: a first interrupt that comes
+// while it still writes them out loses the rest of them, so a recording
+// stopped that early keeps less than FFmpeg read.
 // It is killed recordKill after the first interrupt, as a last resort.
 func (m *Manager) Record(ctx context.Context, key Key, open Opener, path string) error {
 	ctx, cancel := context.WithCancel(ctx)
