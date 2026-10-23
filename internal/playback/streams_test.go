@@ -320,6 +320,33 @@ func TestVideoSizes(t *testing.T) {
 	}
 }
 
+// A video track ffprobe gives no frame size, as a live stream probed early
+// (Jellyfin 12.3's test data video_ts_no_dimensions*.json), takes its aspect
+// ratio from the display aspect ratio alone: none without one, and none for
+// an unknown one, which Jellyfin 12.3 reports as "0:1". Its pixels are not
+// anamorphic when their shape is unknown.
+func TestVideoWithoutFrameSize(t *testing.T) {
+	for _, c := range []struct {
+		dar, sar    string
+		aspectRatio string
+		anamorphic  bool
+	}{
+		{"", "", "", false},
+		{"0:1", "0:1", "", false},
+		{"16:9", "1:1", "16:9", false},
+		{"16:9", "4:3", "16:9", true},
+	} {
+		analysis := media.Analysis{Format: "mpegts", Streams: []media.Stream{{
+			Type: "video", Codec: "mpeg2video", AspectRatio: c.dar, SampleAspect: c.sar,
+		}, {Type: "audio", Codec: "mp2", Channels: 2, Language: "eng"}}}
+		stream := MediaStreams(analysis, nil, "en")[0]
+		if stream.AspectRatio != c.aspectRatio || *stream.IsAnamorphic != c.anamorphic || stream.Width != nil || stream.Height != nil {
+			t.Errorf("DAR %q SAR %q: %q anamorphic %v, size %v×%v, want %q %v", c.dar, c.sar, stream.AspectRatio, *stream.IsAnamorphic,
+				stream.Width, stream.Height, c.aspectRatio, c.anamorphic)
+		}
+	}
+}
+
 func TestFrenchStrings(t *testing.T) {
 	// Observed with UICulture=fr: the words are French, the language and
 	// channel layout names stay English.
