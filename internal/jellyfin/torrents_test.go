@@ -532,3 +532,56 @@ func TestATorrentThatCannotStartCannotBePlayedNow(t *testing.T) {
 		t.Fatalf("Health tells %+v", status.Unstarted)
 	}
 }
+
+// A torrent version whose peer sends nothing past its start does not hold
+// PlaybackInfo for its whole analysis: the play answers, once the start
+// and a piece's wait passed, that the title cannot be played now, as for a
+// torrent that did not start, whatever the analysis time allowed. The
+// analysis goes on, and the next play plays the version once it is in.
+func TestATorrentPlayAnswersOnceItsStartAndAPiecesWaitPassed(t *testing.T) {
+	t.Parallel()
+	ffmpeg, tor := torrentMovie(t, "A Movie")
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	const start = 2 * time.Second
+	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), start, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	p.setting(t, func(s *accounts.Settings) { s.AnalysisTimeout = accounts.MaxAnalysisTimeout })
+	picked := p.details(t)
+	// The peer tells the torrent's files, then holds every piece.
+	seeder.Hold()
+	defer seeder.Release()
+
+	type answer struct {
+		status int
+		body   []byte
+		took   time.Duration
+	}
+	answered := make(chan answer, 1)
+	profile := deviceProfile(t, "jellyfin-web-chrome")
+	go func() {
+		started := time.Now()
+		query := url.Values{"UserId": {p.user.ID.String()}, "StartTimeTicks": {"0"}, "IsPlayback": {"true"}, "AutoOpenLiveStream": {"true"},
+			"MaxStreamingBitrate": {"120000000"}, "MediaSourceId": {picked}}
+		status, body := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo?"+query.Encode(), app("web", p.token),
+			map[string]any{"DeviceProfile": profile})
+		answered <- answer{status, body, time.Since(started)}
+	}()
+	// The start, a piece's wait, and a margin for a busy machine; the
+	// analysis alone was allowed 120 seconds.
+	wait := start + torrent.PieceTimeout + 30*time.Second
+	select {
+	case a := <-answered:
+		var failed noCompatibleStream
+		if a.status != http.StatusOK || json.Unmarshal(a.body, &failed) != nil || failed.ErrorCode != "RateLimitExceeded" {
+			t.Fatalf("PlaybackInfo answered %d %.200s after %v", a.status, a.body, a.took)
+		}
+	case <-time.After(wait):
+		t.Fatalf("PlaybackInfo did not answer within %v", wait)
+	}
+
+	seeder.Release()
+	eventually(t, "the analysis to go on", func() bool { _, ok := p.handler.Playback.Analyzed(t.Context(), p.versions[0].ID); return ok })
+	if info, code := p.play(t, picked); code != "" || len(info.MediaSources) == 0 {
+		t.Fatalf("the next play answered %q", code)
+	}
+}

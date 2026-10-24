@@ -164,6 +164,7 @@ A link's host sends its headers within seconds. A torrent needs peers first, fro
 - 60 seconds for the torrent to start: peers found and the info dictionary received. That fits two rounds of a slow tracker beside the DHT lookups. A lookup that found no peer, as when its nodes' answers were lost or came after 3 seconds, is made again 15 seconds later; one that found peers, every 5 minutes.
 - 30 seconds for a piece, at the start as later: a peer chooses whom it sends to every 10 seconds, and tries a new peer every 30.
 - Its first bytes, within those, before ffprobe's own **Maximum time to analyze a version** starts.
+- PlaybackInfo waits for a torrent version as long as its start and a piece, 90 seconds, not for its whole analysis. A torrent version still being read then is passed over, and the answer is `RateLimitExceeded` (see [When torrents do not start](#when-torrents-do-not-start)) when no other version plays. Its analysis goes on, and is kept: the next play of the title uses it at once. A slow swarm, or a route that drops while the torrent starts, so never holds the app's request for minutes.
 
 A torrent that does not start in time is not tried again for 15 minutes, like a version that cannot be read, and the other versions are played meanwhile.
 

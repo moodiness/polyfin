@@ -329,6 +329,17 @@ const (
 	torrentHead    = torrentHeaders + torrent.PieceTimeout
 )
 
+// TorrentPlayWait is how long a play waits for the torrent versions it
+// tries: their start, then a piece. A torrent version whose analysis takes
+// longer is passed over, and goes on being analyzed for the next play
+// (see TorrentUnstarted). 0 without torrents.
+func (s *Service) TorrentPlayWait() time.Duration {
+	if s.torrents == nil {
+		return 0
+	}
+	return s.torrents.StartTimeout() + torrent.PieceTimeout
+}
+
 // TorrentUnstarted reports whether err tells of a torrent that could not
 // start: its route cannot carry it, torrents are off, or no peer sent it
 // in time. It may play later: a play finding nothing else answers that

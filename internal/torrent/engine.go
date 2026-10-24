@@ -398,6 +398,12 @@ func (e *Engine) playing(ctx context.Context, hash Hash) (*torrent, error) {
 	return t, nil
 }
 
+// StartTimeout is how long a torrent is waited for to start: its peers
+// found and its info dictionary received (see Open).
+func (e *Engine) StartTimeout() time.Duration {
+	return e.config.StartTimeout
+}
+
 // Ready reports why torrents cannot play now: off, without a route, or
 // over a route that cannot carry them; nil when they can.
 func (e *Engine) Ready(ctx context.Context) error {

@@ -42,11 +42,14 @@ type candidates struct {
 
 // chosen is what a play found among its candidates: the version chosen,
 // nil when none plays, and those found unreadable; unstarted tells a
-// torrent among them that could not start (see playback.TorrentUnstarted).
+// torrent among them that could not start (see playback.TorrentUnstarted),
+// or that was still being read when the play stopped waiting for it, which
+// late tells.
 type chosen struct {
 	decided    *decided
 	unreadable map[int]bool
 	unstarted  bool
+	late       bool
 }
 
 // tried is what trying a candidate gave: whether it plays, and plays
@@ -131,6 +134,16 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	states := make([]*tried, attempted)
 	var patience <-chan time.Time
 	patient := true
+	// A torrent version is waited for as long as its start and a piece
+	// take, not for its whole analysis: past that, the torrent versions
+	// still being read are passed over, and no candidate more is tried.
+	var late <-chan time.Time
+	if wait := h.Playback.TorrentPlayWait(); wait > 0 &&
+		slices.ContainsFunc(c.order[:attempted], func(i int) bool { return p.versions[i].Torrent != nil }) {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		late = timer.C
+	}
 	for started > 0 {
 		if n, done := pick(states[:started], prefer, patient); done {
 			if n >= 0 {
@@ -145,7 +158,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				result.unreadable[c.order[t.n]] = true
 			}
 			result.unstarted = result.unstarted || t.unstarted
-			if !t.plays && started < attempted {
+			if !t.plays && started < attempted && !result.late {
 				start()
 			}
 			if t.plays && patience == nil {
@@ -155,11 +168,21 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			}
 		case <-patience:
 			patient = false
+		case <-late:
+			late, result.late = nil, true
+			for n, t := range states[:started] {
+				if version := p.versions[c.order[n]]; t == nil && version.Torrent != nil {
+					// Its result, should it still come, replaces this.
+					states[n] = &tried{n: n, unstarted: true}
+					result.unstarted = true
+					h.Logger.Info("A torrent version took too long to start for the play; it is read on for the next one", "addon", version.Addon)
+				}
+			}
 		case <-r.Context().Done():
 			return result
 		}
 	}
-	if result.decided != nil {
+	if result.decided != nil || result.late {
 		return result
 	}
 	// None of those analyzed now plays: the others are tried only when

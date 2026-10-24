@@ -404,7 +404,8 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	c := plan(p.versions)
 	choice := h.choose(r, user, p, opened, request, c, prefer)
 	unstarted := choice.unstarted || p.unstarted
-	if choice.decided == nil && !complete && r.Context().Err() == nil {
+	// A play that stopped waiting for a torrent does not wait for it again.
+	if choice.decided == nil && !complete && !choice.late && r.Context().Err() == nil {
 		versions, err := h.Library.Versions(r.Context(), user, item.ID)
 		if err != nil {
 			h.browseError(w, r, err)
