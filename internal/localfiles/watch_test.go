@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -30,6 +31,13 @@ type watchTest struct {
 	w     *watcher
 	wg    *sync.WaitGroup
 	scans chan accounts.ID
+
+	// sync is where change writes the files that end a change, and marks
+	// counts them; gate is the system's watcher in use (see newNotifyTest).
+	sync  string
+	marks int
+	mu    sync.Mutex
+	gate  *gatedWatcher
 }
 
 // noShares is the share source of watchers whose shares, when the tests
@@ -56,6 +64,137 @@ func newWatchTest(t *testing.T, folders func(context.Context) ([]watchFolder, er
 		wg.Wait()
 	})
 	return &watchTest{t: t, w: w, wg: wg, scans: scans}
+}
+
+// newNotifyTest is a watchTest on the system's watcher, whose events reach
+// the watcher a change at a time (see change).
+func newNotifyTest(t *testing.T, folders func(context.Context) ([]watchFolder, error)) *watchTest {
+	t.Helper()
+	var wt *watchTest
+	dir := t.TempDir()
+	wt = newWatchTest(t, folders, func() (fileWatcher, error) {
+		g, err := openGatedWatcher(dir)
+		if err != nil {
+			return nil, err
+		}
+		wt.mu.Lock()
+		wt.gate = g
+		wt.mu.Unlock()
+		return g, nil
+	})
+	wt.sync = dir
+	return wt
+}
+
+// change makes a change of the folders watched, and has the watcher take
+// all of its events at once, before change returns. A change is several
+// calls, as a RemoveAll's or a WriteFile's: on a loaded machine the test
+// may be paused between them, or the system's reports of them read apart,
+// longer than testQuiet, and the watcher would scan the change twice, as
+// it does changes that far apart.
+func (wt *watchTest) change(do func()) {
+	wt.t.Helper()
+	wt.mu.Lock()
+	g := wt.gate
+	wt.mu.Unlock()
+	wt.marks++
+	mark := filepath.Join(wt.sync, strconv.Itoa(wt.marks)+".txt")
+	taken := g.hold(mark)
+	do()
+	write(wt.t, mark, 0)
+	select {
+	case <-taken:
+	case <-time.After(5 * time.Second):
+		wt.t.Fatal("the change was never reported")
+	}
+}
+
+// gatedWatcher is the system's watcher, whose events it holds while a test
+// makes a change, then hands to the watcher together (see change). It
+// watches a folder of the test's own too, which the watcher does not know:
+// a file written there once the change is made is reported after every
+// event of the change, which ends it.
+type gatedWatcher struct {
+	fileWatcher
+	out  chan fsnotify.Event
+	stop chan struct{}
+	once sync.Once
+
+	mu    sync.Mutex
+	mark  string // the file ending the change held, empty when none is
+	held  []fsnotify.Event
+	taken chan struct{}
+}
+
+func openGatedWatcher(dir string) (*gatedWatcher, error) {
+	files, err := openNotifyWatcher()
+	if err != nil {
+		return nil, err
+	}
+	if err := files.Add(dir); err != nil {
+		_ = files.Close()
+		return nil, err
+	}
+	g := &gatedWatcher{fileWatcher: files, out: make(chan fsnotify.Event), stop: make(chan struct{})}
+	go g.pass()
+	return g, nil
+}
+
+// hold holds the events until the one of mark, then hands them all to the
+// watcher, mark's last, and closes the channel it returns once the watcher
+// took them.
+func (g *gatedWatcher) hold(mark string) <-chan struct{} {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.mark, g.taken = filepath.Clean(mark), make(chan struct{})
+	return g.taken
+}
+
+// pass hands the system's events to the watcher, as it holds them.
+func (g *gatedWatcher) pass() {
+	defer close(g.out)
+	for event := range g.fileWatcher.Events() {
+		g.mu.Lock()
+		if g.mark == "" {
+			g.mu.Unlock()
+			if !g.send(event) {
+				return
+			}
+			continue
+		}
+		g.held = append(g.held, event)
+		if filepath.Clean(event.Name) != g.mark {
+			g.mu.Unlock()
+			continue
+		}
+		held, taken := g.held, g.taken
+		g.held, g.mark = nil, ""
+		g.mu.Unlock()
+		// The watcher takes an event once done with the one before: once
+		// it took mark's, which it leaves alone, it handled the change.
+		for _, e := range held {
+			if !g.send(e) {
+				return
+			}
+		}
+		close(taken)
+	}
+}
+
+func (g *gatedWatcher) send(event fsnotify.Event) bool {
+	select {
+	case g.out <- event:
+		return true
+	case <-g.stop:
+		return false
+	}
+}
+
+func (g *gatedWatcher) Events() <-chan fsnotify.Event { return g.out }
+
+func (g *gatedWatcher) Close() error {
+	g.once.Do(func() { close(g.stop) })
+	return g.fileWatcher.Close()
 }
 
 // start watches the folders, then handles the events in the background.
@@ -97,15 +236,17 @@ func testID(b byte) accounts.ID { return accounts.ID{15: b} }
 func TestWatchScansAfterFilesAdded(t *testing.T) {
 	root := t.TempDir()
 	id := testID(1)
-	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt := newNotifyTest(t, one(id, root))
 	wt.start()
 	// A file at the root and a new folder holding another: one scan.
-	write(t, filepath.Join(root, "Night of the Living Dead (1968).mkv"), 10)
-	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
+	wt.change(func() {
+		write(t, filepath.Join(root, "Night of the Living Dead (1968).mkv"), 10)
+		write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
+	})
 	wt.scanned(id)
 	wt.still()
 	// The new folder is watched.
-	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922) - 720p.mkv"), 10)
+	wt.change(func() { write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922) - 720p.mkv"), 10) })
 	wt.scanned(id)
 	wt.still()
 }
@@ -165,34 +306,44 @@ func TestWatchScansAfterRemoveAndRename(t *testing.T) {
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	write(t, filepath.Join(root, "The Gold Rush (1925)", "The Gold Rush (1925).mkv"), 10)
 	id := testID(1)
-	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt := newNotifyTest(t, one(id, root))
 	wt.start()
 
-	if err := os.Remove(filepath.Join(root, "The General (1926).mkv")); err != nil {
-		t.Fatal(err)
-	}
+	wt.change(func() {
+		if err := os.Remove(filepath.Join(root, "The General (1926).mkv")); err != nil {
+			t.Fatal(err)
+		}
+	})
 	wt.scanned(id)
 	wt.still()
 
-	if err := os.Rename(filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"),
-		filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922) - 1080p.mkv")); err != nil {
-		t.Fatal(err)
-	}
+	wt.change(func() {
+		if err := os.Rename(filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"),
+			filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922) - 1080p.mkv")); err != nil {
+			t.Fatal(err)
+		}
+	})
 	wt.scanned(id)
 	wt.still()
 
 	// A folder renamed is watched under its new name.
-	if err := os.Rename(filepath.Join(root, "The Gold Rush (1925)"), filepath.Join(root, "The Gold Rush (1925) {imdb-tt0015864}")); err != nil {
-		t.Fatal(err)
-	}
+	wt.change(func() {
+		if err := os.Rename(filepath.Join(root, "The Gold Rush (1925)"), filepath.Join(root, "The Gold Rush (1925) {imdb-tt0015864}")); err != nil {
+			t.Fatal(err)
+		}
+	})
 	wt.scanned(id)
 	wt.still()
-	write(t, filepath.Join(root, "The Gold Rush (1925) {imdb-tt0015864}", "The Gold Rush (1925) - 720p.mkv"), 10)
+	wt.change(func() {
+		write(t, filepath.Join(root, "The Gold Rush (1925) {imdb-tt0015864}", "The Gold Rush (1925) - 720p.mkv"), 10)
+	})
 	wt.scanned(id)
 
-	if err := os.RemoveAll(filepath.Join(root, "The Gold Rush (1925) {imdb-tt0015864}")); err != nil {
-		t.Fatal(err)
-	}
+	wt.change(func() {
+		if err := os.RemoveAll(filepath.Join(root, "The Gold Rush (1925) {imdb-tt0015864}")); err != nil {
+			t.Fatal(err)
+		}
+	})
 	wt.scanned(id)
 	wt.still()
 }
@@ -200,11 +351,13 @@ func TestWatchScansAfterRemoveAndRename(t *testing.T) {
 func TestWatchIgnoresOtherFiles(t *testing.T) {
 	root := t.TempDir()
 	id := testID(1)
-	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt := newNotifyTest(t, one(id, root))
 	wt.start()
-	write(t, filepath.Join(root, "notes.txt"), 10)
-	write(t, filepath.Join(root, ".hidden", "The General (1926).mkv"), 10)
-	write(t, filepath.Join(root, "Score.flac"), 10)
+	wt.change(func() {
+		write(t, filepath.Join(root, "notes.txt"), 10)
+		write(t, filepath.Join(root, ".hidden", "The General (1926).mkv"), 10)
+		write(t, filepath.Join(root, "Score.flac"), 10)
+	})
 	wt.still()
 }
 
@@ -215,15 +368,15 @@ func TestWatchScansAfterExtrasChanges(t *testing.T) {
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Extras", "Restoration.mkv"), 10)
 	id := testID(1)
-	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt := newNotifyTest(t, one(id, root))
 	wt.start()
-	write(t, filepath.Join(root, "Nosferatu (1922)", "Extras", "Making of.mkv"), 10)
+	wt.change(func() { write(t, filepath.Join(root, "Nosferatu (1922)", "Extras", "Making of.mkv"), 10) })
 	wt.scanned(id)
 	wt.still()
-	write(t, filepath.Join(root, "Nosferatu (1922)", "theme.mp3"), 10)
+	wt.change(func() { write(t, filepath.Join(root, "Nosferatu (1922)", "theme.mp3"), 10) })
 	wt.scanned(id)
 	wt.still()
-	write(t, filepath.Join(root, "Nosferatu (1922)", "Trailers", "Teaser.mkv"), 10)
+	wt.change(func() { write(t, filepath.Join(root, "Nosferatu (1922)", "Trailers", "Teaser.mkv"), 10) })
 	wt.scanned(id)
 	wt.still()
 }
@@ -234,18 +387,20 @@ func TestWatchScansAfterNFOChanges(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
-	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt := newNotifyTest(t, one(id, root))
 	wt.start()
 	nfo := filepath.Join(root, "Nosferatu (1922)", "movie.nfo")
-	write(t, nfo, 10)
+	wt.change(func() { write(t, nfo, 10) })
 	wt.scanned(id)
 	wt.still()
-	write(t, nfo, 20)
+	wt.change(func() { write(t, nfo, 20) })
 	wt.scanned(id)
 	wt.still()
-	if err := os.Remove(nfo); err != nil {
-		t.Fatal(err)
-	}
+	wt.change(func() {
+		if err := os.Remove(nfo); err != nil {
+			t.Fatal(err)
+		}
+	})
 	wt.scanned(id)
 	wt.still()
 }
@@ -256,18 +411,20 @@ func TestWatchScansAfterSubtitleChanges(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
-	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt := newNotifyTest(t, one(id, root))
 	wt.start()
 	for _, name := range []string{"Nosferatu (1922).fr.srt", "Nosferatu (1922).en.ass", "Nosferatu (1922).de.SSA", "Nosferatu (1922).vtt",
 		"Nosferatu (1922).es.sup", "Nosferatu (1922).it.idx", "Nosferatu (1922).it.SUB"} {
-		write(t, filepath.Join(root, name), 10)
+		wt.change(func() { write(t, filepath.Join(root, name), 10) })
 		wt.scanned(id)
 		wt.still()
 	}
 	for _, name := range []string{"Nosferatu (1922).fr.srt", "Nosferatu (1922).it.SUB"} {
-		if err := os.Remove(filepath.Join(root, name)); err != nil {
-			t.Fatal(err)
-		}
+		wt.change(func() {
+			if err := os.Remove(filepath.Join(root, name)); err != nil {
+				t.Fatal(err)
+			}
+		})
 		wt.scanned(id)
 		wt.still()
 	}
@@ -279,19 +436,21 @@ func TestWatchScansAfterArtworkChanges(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
-	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt := newNotifyTest(t, one(id, root))
 	wt.start()
 	for _, name := range []string{"poster.jpg", "Nosferatu (1922)-fanart.PNG", "clearlogo.webp", "folder.jpeg"} {
-		write(t, filepath.Join(root, "Nosferatu (1922)", name), 10)
+		wt.change(func() { write(t, filepath.Join(root, "Nosferatu (1922)", name), 10) })
 		wt.scanned(id)
 		wt.still()
 	}
-	write(t, filepath.Join(root, "Nosferatu (1922)", "poster.jpg"), 20)
+	wt.change(func() { write(t, filepath.Join(root, "Nosferatu (1922)", "poster.jpg"), 20) })
 	wt.scanned(id)
 	wt.still()
-	if err := os.Remove(filepath.Join(root, "Nosferatu (1922)", "folder.jpeg")); err != nil {
-		t.Fatal(err)
-	}
+	wt.change(func() {
+		if err := os.Remove(filepath.Join(root, "Nosferatu (1922)", "folder.jpeg")); err != nil {
+			t.Fatal(err)
+		}
+	})
 	wt.scanned(id)
 	wt.still()
 }
@@ -306,19 +465,21 @@ func TestWatchScansAfterMusicChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := testID(1)
-	wt := newWatchTest(t, func(context.Context) ([]watchFolder, error) {
+	wt := newNotifyTest(t, func(context.Context) ([]watchFolder, error) {
 		return []watchFolder{{id: id, root: root, kind: KindMusic}}, nil
-	}, openNotifyWatcher)
+	})
 	wt.start()
 	for _, name := range []string{"Band/Live/01 Opening.flac", "Band/Live/02 Closing.M4A", "Band/Live/Cover.jpg", "Band/Artist.png",
 		"Band/Live/01 Opening.lrc", "Band/Live/Live.m3u8", "Band/Extras/01 Demo.mp3", "Band/Other/01 B-side.ogg"} {
-		write(t, filepath.Join(root, filepath.FromSlash(name)), 10)
+		wt.change(func() { write(t, filepath.Join(root, filepath.FromSlash(name)), 10) })
 		wt.scanned(id)
 		wt.still()
 	}
-	write(t, filepath.Join(root, "Band", "Live", "booklet.jpg"), 10)
-	write(t, filepath.Join(root, "Band", "Live", "clip.mkv"), 10)
-	write(t, filepath.Join(root, "Band", "Live", "notes.nfo"), 10)
+	wt.change(func() {
+		write(t, filepath.Join(root, "Band", "Live", "booklet.jpg"), 10)
+		write(t, filepath.Join(root, "Band", "Live", "clip.mkv"), 10)
+		write(t, filepath.Join(root, "Band", "Live", "notes.nfo"), 10)
+	})
 	wt.still()
 }
 
@@ -327,13 +488,15 @@ func TestWatchFolderBack(t *testing.T) {
 	root := filepath.Join(parent, "movies")
 	write(t, filepath.Join(root, "The General (1926).mkv"), 10)
 	id := testID(1)
-	wt := newWatchTest(t, one(id, root), openNotifyWatcher)
+	wt := newNotifyTest(t, one(id, root))
 	wt.start()
 
 	// Gone, it is scanned, which reports it missing.
-	if err := os.RemoveAll(root); err != nil {
-		t.Fatal(err)
-	}
+	wt.change(func() {
+		if err := os.RemoveAll(root); err != nil {
+			t.Fatal(err)
+		}
+	})
 	wt.scanned(id)
 	wt.still()
 
