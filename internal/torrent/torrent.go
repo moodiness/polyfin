@@ -1002,8 +1002,10 @@ func (t *torrent) chooseUnchoked() {
 
 // wanted lists the pieces to fetch, most urgent first: those at and after
 // each read, nearest first, then the start and end of each file read. A
-// whole file's read (see Engine.ReadFile) fetches its own pieces alone.
-// The lock is held.
+// read fetches ahead within its file alone, up to the piece holding its
+// last byte, which it may share with the next file: never the next
+// file's own pieces. A whole file's read (see Engine.ReadFile) fetches
+// its own pieces alone. The lock is held.
 func (t *torrent) wanted() []int {
 	if t.info == nil {
 		return nil
@@ -1022,21 +1024,26 @@ func (t *torrent) wanted() []int {
 	for d := range window {
 		for r, span := range t.reads {
 			i := int(span.at/length) + d
-			if r.whole && (span.end <= span.at || int64(i)*length >= span.end) {
+			if _, last := r.file.pieces(length); i > last || r.whole && (span.end <= span.at || int64(i)*length >= span.end) {
 				continue
 			}
 			add(i)
 		}
 	}
 	for _, f := range t.files {
-		first := int(f.Offset / length)
-		last := int((f.Offset + max(f.Length, 1) - 1) / length)
+		first, last := f.pieces(length)
 		for d := range edgePieces {
-			add(first + d)
-			add(last - d)
+			add(min(first+d, last))
+			add(max(last-d, first))
 		}
 	}
 	return order
+}
+
+// pieces are the first and last pieces holding the file's bytes, of
+// length each: those it may share with the files beside it included.
+func (f File) pieces(length int64) (first, last int) {
+	return int(f.Offset / length), int((f.Offset + max(f.Length, 1) - 1) / length)
 }
 
 // window is how many pieces past a read are fetched: readWindow, within
