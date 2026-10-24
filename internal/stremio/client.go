@@ -305,7 +305,7 @@ func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byt
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxImageBytes+1))
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: %v", ErrUnreachable, err)
+		return nil, "", fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
 	if len(body) > maxImageBytes {
 		return nil, "", fmt.Errorf("%w: image larger than %d bytes", ErrInvalidResponse, maxImageBytes)
