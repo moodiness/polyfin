@@ -374,14 +374,14 @@ func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
 
 // Under a bitrate limit, the video takes what the audio sent leaves: a
 // lossless track converted to stereo AAC leaves all but 384 kb/s, so a
-// 1080p source keeps 1080p within 10 Mb/s; a track copied leaves what
-// its own bitrate does.
+// 1080p source keeps 1080p within 10 Mb/s; a track copied, within the
+// audio's share of the limit, leaves what its own bitrate does.
 func TestConvertedVideoTakesWhatTheAudioSentLeaves(t *testing.T) {
-	source := func(codec string, channels int) MediaSource {
+	source := func(codec string, channels int, bitrate int64) MediaSource {
 		return MediaSource{Container: "mkv", Bitrate: 24_200_000, Streams: []MediaStream{
 			{Type: "Video", Index: 0, Codec: "hevc", Profile: "Main 10", VideoRange: "SDR", VideoRangeType: "SDR",
 				Width: new(1920), Height: new(1080), AverageFrameRate: new(23.976), BitRate: new(int64(20_000_000))},
-			{Type: "Audio", Index: 1, Codec: codec, IsDefault: true, Channels: new(channels), BitRate: new(int64(4_200_000))},
+			{Type: "Audio", Index: 1, Codec: codec, IsDefault: true, Channels: new(channels), BitRate: new(bitrate)},
 		}}
 	}
 	software := Capabilities{Encoders: []string{"libx264", "libx265"}, ToneMapping: true}
@@ -394,9 +394,12 @@ func TestConvertedVideoTakesWhatTheAudioSentLeaves(t *testing.T) {
 		audio   *AudioConversion
 	}{
 		// Chrome takes no TrueHD: it is converted to AAC in stereo.
-		{"TrueHD converted", source("truehd", 6), 1080, 9_616_000, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
-		// Chrome takes FLAC in stereo over HLS: it is copied.
-		{"FLAC copied", source("flac", 2), 720, 5_800_000, nil},
+		{"TrueHD converted", source("truehd", 6, 4_200_000), 1080, 9_616_000, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
+		// Chrome takes FLAC in stereo over HLS: within 1.536 Mb/s, the
+		// share of 10 Mb/s, it is copied.
+		{"FLAC copied", source("flac", 2, 1_500_000), 1080, 8_500_000, nil},
+		// Above it, it is converted as TrueHD is.
+		{"FLAC converted", source("flac", 2, 4_200_000), 1080, 9_616_000, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got := Decide(readDeviceProfile(t, "jellyfin-web-chrome"), test.source, options)

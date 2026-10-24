@@ -235,10 +235,13 @@ func TestConvertedDownloads(t *testing.T) {
 	if target := transcodingURL(viewer, low); target != "" {
 		t.Errorf("without Can use conversion: %s", target)
 	}
+	// The AAC track states no bitrate: counted at 192 kb/s, above the
+	// 128 kb/s share of 300 kb/s, it is converted to 128 kb/s, which
+	// leaves the video the rest.
 	target := transcodingURL(phone, low)
 	kept := target
 	if !strings.HasPrefix(target, "/videos/"+hyphenated(id)+"/stream.mp4?") || !strings.Contains(target, "allowVideoStreamCopy=false") ||
-		strings.Contains(target, "allowAudioStreamCopy") {
+		!strings.Contains(target, "allowAudioStreamCopy=false") || !strings.Contains(target, "&VideoBitrate=172000&AudioBitrate=128000&") {
 		t.Fatalf("at 300 kb/s: %s", target)
 	}
 	// The URL works for the user it was signed for only: another user's

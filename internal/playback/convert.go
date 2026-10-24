@@ -65,17 +65,20 @@ var audioEncoders = []string{"aac", "ac3", "eac3", "flac"}
 // ffprobe names it, for a transcoding profile taking codecs, as a
 // comma-separated list, and at most maxChannels channels when it is a
 // number, under a bitrate limit, 0 for none: the first codec of the list
-// FFmpeg encodes, with the audio's channels up to the limit, to the
-// tuning's and to what the codec carries, mixed down to stereo as the
-// tuning says, at the tuning's bitrate a channel, else at Jellyfin's (see
+// FFmpeg encodes, a lossy one first under a limit, which bounds only
+// those, with the audio's channels up to the limit, to the tuning's and
+// to what the codec carries, mixed down to stereo as the tuning says, at
+// the tuning's bitrate a channel, else at Jellyfin's (see
 // audioBitrateFor). It is nil when the profile takes no codec Polyfin
 // encodes.
 func ConvertAudio(codecs, maxChannels string, channels int, layout string, limit int64, t Tuning) *AudioConversion {
 	codec := ""
 	for name := range strings.SplitSeq(codecs, ",") {
-		if name = strings.ToLower(strings.TrimSpace(name)); slices.Contains(audioEncoders, name) {
+		if name = strings.ToLower(strings.TrimSpace(name)); slices.Contains(audioEncoders, name) && (codec == "" || codec == "flac") {
 			codec = name
-			break
+			if limit <= 0 || name != "flac" {
+				break
+			}
 		}
 	}
 	if codec == "" {

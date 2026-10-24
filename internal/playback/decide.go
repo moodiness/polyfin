@@ -476,8 +476,9 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 // bitrate limit; else it is converted, within what the limit leaves once
 // the audio sent is taken off (see SentAudioBitrate). The audio is copied
 // when t takes its codec and channels and the codec profiles accept it,
-// as the only audio, so never a secondary track; else it is converted to
-// a codec t takes.
+// as the only audio, so never a secondary track, and, when the video is
+// converted under a limit, when it fits the audio's share of the limit
+// (see streamAudio); else it is converted to a codec t takes.
 func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mustConvert bool) (bool, *VideoConversion, *AudioConversion) {
 	// Streamed as one file, the video goes out as fragmented MP4 or
 	// MPEG-TS, the containers hls.ParseFormat reads.
@@ -487,9 +488,10 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mu
 		return false, nil, nil
 	}
 	s := subject{video: d.video, codecTag: RemuxTag(d.video.Codec, t.Container)}
-	audio, audioStreams := d.streamAudio(t, options, limit, s)
+	convertVideo := options.ConvertVideo || mustConvert || !listHas(t.VideoCodec, d.video.Codec) || d.remuxFails("Video", d.video, t.Container, s)
+	audio, audioStreams := d.streamAudio(t, options, limit, convertVideo, s)
 	var video *VideoConversion
-	if options.ConvertVideo || mustConvert || !listHas(t.VideoCodec, d.video.Codec) || d.remuxFails("Video", d.video, t.Container, s) {
+	if convertVideo {
 		// Converted video is scaled down to the lower of the heights it is
 		// capped at, which never prevents a conversion.
 		limits := Limits{Bitrate: limit, Video: VideoLimit(limit, SentAudioBitrate(d.played, audio)), Group: options.MaxHeight, Server: options.ConversionHeight}
@@ -504,8 +506,13 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mu
 // streamAudio decides how the audio that plays reaches the app streamed
 // with t under a bitrate limit, 0 for none: copied (nil, true), converted
 // (its conversion, true), or not at all (nil, false) when t takes no codec
-// Polyfin encodes.
-func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int64, s subject) (*AudioConversion, bool) {
+// Polyfin encodes. With the video converted under a limit, a track whose
+// bitrate is above the audio's share of the limit (see audioShare) is
+// converted, as Jellyfin's encoder refuses to copy a track above the
+// audio bitrate it counts, that share at most: copied, it would leave the
+// video too little. It is copied all the same when t takes no codec
+// Polyfin encodes. A track copied with the video fits the limit with it.
+func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int64, convertVideo bool, s subject) (*AudioConversion, bool) {
 	audio := d.played
 	if audio == nil {
 		return nil, true
@@ -515,7 +522,9 @@ func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int6
 	if most, err := strconv.Atoi(t.MaxAudioChannels); err == nil && audio.Channels != nil && *audio.Channels > most {
 		channelsTaken = false
 	}
-	if !options.ConvertAudio && channelsTaken && listHas(t.AudioCodec, audio.Codec) && !d.remuxFails("VideoAudio", audio, t.Container, s) {
+	copyable := !options.ConvertAudio && channelsTaken && listHas(t.AudioCodec, audio.Codec) && !d.remuxFails("VideoAudio", audio, t.Container, s)
+	heavy := convertVideo && limit > 0 && audio.BitRate != nil && *audio.BitRate > audioShare(limit)
+	if copyable && !heavy {
 		return nil, true
 	}
 	channels := 0
@@ -523,6 +532,9 @@ func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int6
 		channels = *audio.Channels
 	}
 	conversion := ConvertAudio(t.AudioCodec, t.MaxAudioChannels, channels, audio.ChannelLayout, limit, options.Can.Tuning)
+	if conversion == nil && copyable {
+		return nil, true
+	}
 	return conversion, conversion != nil
 }
 
