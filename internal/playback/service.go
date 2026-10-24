@@ -127,6 +127,9 @@ type Service struct {
 	// torrents plays the versions that are torrents' files, nil when
 	// Polyfin plays none (see Torrents).
 	torrents *torrent.Engine
+	// torrentFiles are the subtitle files inside the torrents of versions
+	// (see torrentsubtitles.go).
+	torrentFiles torrentSubtitleState
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading
@@ -280,11 +283,8 @@ var errNoTorrents = errors.New("this server plays no torrent")
 // Playing) and nothing else. A swarm is given longer than a host to
 // answer (see torrent.StartTimeout and torrent.PieceTimeout): the engine
 // tells why a torrent did not start before the cache stops waiting.
-// Without the file's index, the stream's filename and the episode tell
-// the file (see torrent.Info.File).
 func (s *Service) torrentLocation(version library.Version) source.Location {
-	spec, err := torrent.NewSpec(version.Torrent.InfoHash, version.Torrent.FileIdx, version.Torrent.Sources)
-	spec.Name, spec.Season, spec.Episode = version.Filename, version.Torrent.Season, version.Torrent.Episode
+	spec, err := torrentSpec(version)
 	if err == nil && s.torrents == nil {
 		err = errNoTorrents
 	}
@@ -310,6 +310,15 @@ func (s *Service) torrentLocation(version library.Version) source.Location {
 		location.Playing = func() func() { return engine.Play(spec) }
 	}
 	return location
+}
+
+// torrentSpec names the file of a torrent a version plays. Without the
+// file's index, the stream's filename and the episode tell the file (see
+// torrent.Info.File).
+func torrentSpec(version library.Version) (torrent.Spec, error) {
+	spec, err := torrent.NewSpec(version.Torrent.InfoHash, version.Torrent.FileIdx, version.Torrent.Sources)
+	spec.Name, spec.Season, spec.Episode = version.Filename, version.Torrent.Season, version.Torrent.Episode
+	return spec, err
 }
 
 // torrentHeaders bounds the wait for a torrent's file to open, past the
@@ -405,8 +414,10 @@ func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Anal
 // reads it next (see indexAhead). An analysis for a playback, ctx not
 // marked Background, reads its source as a playback, even when it joins
 // one started in the background; a torrent's playback joins its swarm
-// before anything reads it, the index read ahead included. A version read
-// from its input is analyzed there (see LocalInputs).
+// before anything reads it, the index read ahead included, and lists the
+// subtitle files inside its torrent at its first play (see
+// listTorrentSubtitles). A version read from its input is analyzed there
+// (see LocalInputs).
 func (s *Service) Analyze(ctx context.Context, version library.Version) (media.Analysis, error) {
 	if version.Torrent != nil {
 		// Over a route that cannot carry it, a torrent's file is not read:
@@ -416,6 +427,12 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 		}
 	}
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
+		if err := s.listTorrentSubtitles(ctx, version); err != nil {
+			// The torrent's files are waited for as its stream would wait
+			// for them: a torrent that did not start does not play now.
+			s.fail(version, err)
+			return media.Analysis{}, err
+		}
 		return analysis, nil
 	}
 	if s.ReadsInput(version) {
@@ -432,7 +449,13 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 	if _, failed := s.failures.Get(version.ID); !failed {
 		s.indexAhead(version)
 	}
-	return s.analyze(ctx, version, media.Prober.Probe)
+	analysis, err := s.analyze(ctx, version, media.Prober.Probe)
+	if err == nil {
+		if err := s.listTorrentSubtitles(ctx, version); err != nil {
+			s.logger.Info("The files of a torrent could not be listed", "addon", version.Addon, "error", err)
+		}
+	}
+	return analysis, err
 }
 
 // analyze is Analyze, the version read with probe. ffprobe is stopped as

@@ -128,7 +128,8 @@ type Origin struct {
 
 // ExternalSubtitle is a subtitle file offered for an item: by an addon, or
 // added by a user (see UploadSubtitle); or for a version, beside a local
-// file or listed with the stream (see Version.Subtitles).
+// file or listed with the stream (see Version.Subtitles), or inside its
+// torrent (see TorrentSubtitle).
 type ExternalSubtitle struct {
 	ID accounts.ID
 	// Language is the addon's code, usually ISO 639-2 ("fre").
@@ -137,15 +138,26 @@ type ExternalSubtitle struct {
 	Addon    string
 	Confined bool
 	// Uploaded is set for a file a user added, whose text Polyfin keeps
-	// (see UploadedSubtitleText). A file a user added or a local file
-	// tells its Format (srt, vtt, ass or ssa) and its flags; a local file,
-	// a Title too.
+	// (see UploadedSubtitleText). A file a user added, a local file or a
+	// torrent's tells its Format (srt, vtt, ass or ssa) and its flags; a
+	// local file and a torrent's, a Title too.
 	Uploaded        bool
 	Format          string
 	Title           string
 	Forced          bool
 	HearingImpaired bool
 	Default         bool
+	// Torrent is set for a file inside a version's torrent, which has no
+	// URL: its text is fetched from the swarm once, then kept.
+	Torrent *TorrentSubtitle
+}
+
+// TorrentSubtitle is a subtitle file inside the torrent of a version: the
+// version, its torrent, and the file's index among the torrent's files.
+type TorrentSubtitle struct {
+	Version accounts.ID
+	Torrent Torrent
+	Index   int
 }
 
 // target is what to ask addons for: a title or an episode.
