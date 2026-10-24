@@ -6,6 +6,7 @@ import {
   ArrowSquareOutIcon,
   ArrowsClockwiseIcon,
   CalendarDotsIcon,
+  DownloadSimpleIcon,
   HardDrivesIcon,
   PuzzlePieceIcon,
   TelevisionSimpleIcon,
@@ -15,6 +16,7 @@ import {
 import {
   checkAddon,
   fetchSources,
+  goroutinesDownloadUrl,
   queryClient,
   queryKeys,
   type AddonHealth,
@@ -27,6 +29,7 @@ import {
   Badge,
   Block,
   Button,
+  buttonClass,
   EmptyState,
   ExternalButtonLink,
   IconTile,
@@ -978,6 +981,15 @@ function Process({ health }: { health: Health }) {
             },
           ]}
         />
+        <p className="mt-4 max-w-[70ch] text-small text-ink-3">{text.goroutinesHelp}</p>
+        <a
+          href={goroutinesDownloadUrl}
+          download
+          className={`${buttonClass('secondary', 'md')} mt-3`}
+        >
+          <DownloadSimpleIcon size={16} aria-hidden="true" />
+          {text.goroutinesDownload}
+        </a>
       </Panel>
     </Anchor>
   )

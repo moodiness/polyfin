@@ -85,6 +85,7 @@ func TestDashboardRoutesAreForAdministratorsOnly(t *testing.T) {
 		{http.MethodGet, "/timers"},
 		{http.MethodGet, "/health"},
 		{http.MethodPost, "/health/addons/" + id + "/check"},
+		{http.MethodGet, "/health/goroutines"},
 		{http.MethodGet, "/logs"},
 		{http.MethodGet, "/logs/download"},
 		{http.MethodGet, "/variables"},

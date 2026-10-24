@@ -74,7 +74,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - **Disk space** for the cache, recordings and backups folders;
   - **Backups**: the last run and its result, the last backup made, its file and size, the next one, each destination's last upload, and the last restore. A failed backup, or a last backup older than two days, is a problem; so is a destination whose last upload failed (an error), or whose newest backup is older than two days (a warning). See [Backups](backups.md);
   - **Thumbnails (trickplay)**: the queue and paused sources;
-  - **Polyfin**: memory, goroutines, uptime and version;
+  - **Polyfin**: memory, goroutines, uptime and version, and **Download the goroutines**: a text file of what every goroutine of the server is doing, with its stack and how long it has waited, as Go prints it when a program crashes. When a request never answers, download it while the request still waits, and send it with the report. It holds the paths of Polyfin's source files, but no address, token or password. Only administrators may download it (`GET /admin/api/health/goroutines`);
   - **Stored keys**: whether `POLYFIN_SECRET_KEY` encrypts them, how many are stored unencrypted, and which cannot be decrypted with it (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). Keys stored unencrypted show as a warning, keys that cannot be decrypted as an error;
   - **Known proxies**: while some are listed by host name, the addresses each name resolves to (see [Proxies by name](reverse-proxy.md#proxies-by-name)).
 

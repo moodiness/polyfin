@@ -4015,6 +4015,9 @@ export const fetchLogLines = (after: number, limit: number, signal?: AbortSignal
 
 export const logDownloadUrl = `${apiBase}/logs/download`
 
+/** What every goroutine of the server is doing, as text, for a request that never answers. */
+export const goroutinesDownloadUrl = `${apiBase}/health/goroutines`
+
 /** Whose playbacks the statistics cover: everyone's (administrators) or the signed-in user's. */
 export type StatisticsScope = 'server' | 'own'
 

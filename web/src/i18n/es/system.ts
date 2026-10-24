@@ -403,6 +403,9 @@ const system: typeof en = {
       memory: 'Memoria',
       heap: 'En uso',
       goroutines: 'Goroutines',
+      goroutinesDownload: 'Descargar las goroutines',
+      goroutinesHelp:
+        'Cuando una solicitud nunca recibe respuesta, descarga lo que está haciendo el servidor y envíalo con tu informe. No contiene direcciones ni secretos.',
       secretsTitle: 'Claves almacenadas',
       secretsHelp:
         'Las claves del servidor, los tokens y claves de seguimiento de los usuarios, y las contraseñas de los recursos compartidos de red, cifrados en la base de datos con POLYFIN_SECRET_KEY (openssl rand -base64 32).',

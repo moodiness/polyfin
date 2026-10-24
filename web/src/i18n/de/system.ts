@@ -403,6 +403,9 @@ const system: typeof en = {
       memory: 'Arbeitsspeicher',
       heap: 'Belegt',
       goroutines: 'Goroutinen',
+      goroutinesDownload: 'Goroutinen herunterladen',
+      goroutinesHelp:
+        'Wenn eine Anfrage nie beantwortet wird, laden Sie herunter, was der Server gerade tut, und senden Sie es mit Ihrer Meldung. Es enthält keine Adressen und keine Geheimnisse.',
       secretsTitle: 'Gespeicherte Schlüssel',
       secretsHelp:
         'Die Schlüssel des Servers, die Tracking-Tokens und -Schlüssel der Benutzer und die Passwörter der Netzwerkfreigaben, in der Datenbank verschlüsselt mit POLYFIN_SECRET_KEY (openssl rand -base64 32).',

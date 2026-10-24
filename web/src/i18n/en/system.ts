@@ -387,6 +387,9 @@ const system = {
       memory: 'Memory',
       heap: 'In use',
       goroutines: 'Goroutines',
+      goroutinesDownload: 'Download the goroutines',
+      goroutinesHelp:
+        'When a request never answers, download what the server is doing and send it with your report. It holds no address or secret.',
       secretsTitle: 'Stored keys',
       secretsHelp:
         'The server’s keys, the users’ tracking tokens and keys, and the network shares’ passwords, encrypted in the database with POLYFIN_SECRET_KEY (openssl rand -base64 32).',
