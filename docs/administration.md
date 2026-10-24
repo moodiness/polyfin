@@ -147,6 +147,59 @@ A development build, whose version is `dev`, asks nothing and never shows a new 
 |---|---|---|---|
 | **Check for new versions** | **Settings › General** | On | Asks GitHub once a day, and a minute after Polyfin starts, for Polyfin's latest release, and tells administrators about a newer one. Off, GitHub is never asked. |
 
+## Restart and updates
+
+Administrators restart Polyfin, and start its update, from **Home**, under **Server state**, without opening the host or Docker. Polyfin has no action that stops it for good: in a container with a restart policy, or in Polyfin Desktop, it would start again at once, and a remote off switch is easy to misuse from a stolen session. Polyfin is never given the Docker socket either: it is root on the host for whoever takes over a server.
+
+Each action:
+
+- is an administrator's alone;
+- is confirmed each time with the administrator's password, or, with two-step sign-in on, a code of their app or a recovery code: wrong ones count as wrong passwords at sign-in do (see [Two-step sign-in](users.md#two-step-sign-in));
+- runs at most once a minute: another request within the minute is refused;
+- is recorded in the activity log, with who asked, and shows in **Recent activity** under **Server and addons**.
+
+### Restart
+
+**Restart** stops Polyfin as a stop signal does: playbacks, conversions, recordings and tasks end, open connections are given up to 15 seconds, then Polyfin exits with code 75 (`EX_TEMPFAIL`), which tells that it should be started again. Whatever runs Polyfin starts it again:
+
+- in Docker, the container's restart policy: `unless-stopped` and `always`, and `on-failure` too, as the code is not 0 (see [Restart from the admin app](installation.md#restart-from-the-admin-app));
+- under systemd, `Restart=always` or `Restart=on-failure`;
+- in Polyfin Desktop, the app itself, as when the server ends by itself (see [Restart](desktop.md#restart)).
+
+The admin app then waits, and reloads once a new Polyfin answers, which apps reconnect to as well. Sessions are kept in the database: nobody signs in again.
+
+A container does not tell the processes in it its restart policy: only the Docker socket does. So Polyfin cannot know whether it will be started again, unless it runs in Polyfin Desktop or an administrator turns on **Polyfin is started again when it stops**, under **Settings › General**. Until then, **Restart** warns that Polyfin may not come back, and asks to choose **Restart anyway**; the API refuses a restart that does not say so. Without a restart policy, Polyfin stays stopped until it is started on the host, and the admin app says so after 2 minutes.
+
+### Polyfin Desktop's update
+
+In Polyfin Desktop, the notice of a new version on **Home** offers **Install Polyfin `<version>`** while the app's menu offers it: a release newer than the server, with a package for the system (see [Updates](desktop.md#updates)). It asks the app to do what its menu item does: download the package and check it, stop Polyfin, install the new version and start it. The notice shows the download's progress, then the admin app waits for the new version to answer. When the install fails, Polyfin runs on as it was, and the admin app says so. Elsewhere than in Polyfin Desktop, this is never offered.
+
+### Update now
+
+A container cannot update its own image without the Docker socket. An update tool that you run beside Polyfin can, and many offer an HTTP API that updates the containers it watches when asked. Give its address under **Settings › General**, and **Update now** shows under **Server state**. Polyfin sends this request, and nothing else:
+
+- method `POST`, with no body;
+- to the address exactly as given, path and query included, such as `http://updater:8080/v1/update`: match it to your tool's update endpoint;
+- with the header `Authorization: Bearer <token>` when a token is set, and `User-Agent: Polyfin/<version>`;
+- it gives up after 10 seconds to connect, and 50 seconds for the answer, and follows no redirect.
+
+The admin app shows what the tool answered, its HTTP status and the start of its text, whatever the status, or that it could not be reached or did not answer in time. A tool that answers only once it has updated may replace Polyfin's container before it answers: the admin app then waits for Polyfin to answer again, and reloads. The token is stored encrypted, as the other secrets, never sent back to the admin app, and shown again only on demand (see [Showing a saved key](#showing-a-saved-key)).
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Polyfin is started again when it stops** | **Settings › General** | Off | Confirms that a restart policy or a service manager starts Polyfin again: **Restart** then warns no more. Not shown in Polyfin Desktop, which always does. |
+| **Update tool address** | **Settings › General** | Empty | The update API **Update now** sends its request to. Empty hides **Update now**. |
+| **Update tool token** | **Settings › General** | Empty | The bearer token sent with the request, when the tool asks for one. |
+
+### Compared with Jellyfin
+
+Jellyfin's dashboard has "Restart" and "Shut down" buttons, through `POST /System/Restart`, allowed to administrators and to any user on the local network ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Jellyfin.Api/Controllers/SystemController.cs#L114-L122)), and `POST /System/Shutdown`, to administrators ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Jellyfin.Api/Controllers/SystemController.cs#L130-L138)). Jellyfin restarts within its own process: it stops its host and starts a new one in a loop ([SystemManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/SystemManager.cs#L126-L139), [Program.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Jellyfin.Server/Program.cs#L145-L163)). Polyfin differs on purpose:
+
+- it exits and lets what runs it start it again, which also recovers a server stuck in a way a restart within the process would not;
+- it has no shutdown;
+- its actions are the admin app's, for administrators only, never for a local address, and each asks for the password or a two-step code again;
+- `/System/Restart` and `/System/Shutdown` are not offered to Jellyfin apps.
+
 ## Local network discovery
 
 Jellyfin apps look for servers on the local network by broadcasting `who is JellyfinServer?` to UDP port 7359, and Emby apps `who is EmbyServer?`. While **Answer local network discovery** is on, Polyfin answers them with its address, ID and name, and the apps list it among the servers found (see [Finding servers on the local network](jellyfin-compatibility.md#finding-servers-on-the-local-network)). It answers only addresses of the local network: private IPv4 ranges, IPv6 unique local addresses, link-local addresses and the server itself. A port forwarded from the internet therefore gets no answer.

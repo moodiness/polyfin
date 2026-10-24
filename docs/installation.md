@@ -112,6 +112,21 @@ Torrent streams, off by default, go through one route alone (see [Torrents](torr
 
 Replace the image's `latest` tag in `compose.yaml` with a release, such as `0.22.0`. `latest` follows stable releases.
 
+### Restart from the admin app
+
+**Restart**, on the admin app's **Home**, stops Polyfin and exits with code 75 (`EX_TEMPFAIL`), not 0, and the container's restart policy starts it again (see [Restart and updates](administration.md#restart)):
+
+| Restart policy | After Restart |
+|---|---|
+| `unless-stopped`, as in `compose.yaml` | started again |
+| `always` | started again |
+| `on-failure` | started again: 75 is not 0 |
+| `no`, Docker's default for `docker run` | stays stopped until `docker start` |
+
+With `docker run`, give it with `--restart unless-stopped`. Polyfin cannot see the policy from inside the container, so the admin app warns before restarting until an administrator turns on **Polyfin is started again when it stops**, under **Settings › General**.
+
+Updating the image needs Docker itself: pull the new image and recreate the container, or let an update tool that runs beside Polyfin do it, which **Update now** can ask (see [Update now](administration.md#update-now)). Polyfin is never given the Docker socket.
+
 ### Back up the database
 
 Everything Polyfin keeps, from accounts and watch history to settings, addons and IPTV line-ups, is in its PostgreSQL database. To back it up every day, turn **Back up the database every day** on, under **Settings › Backups**. The backups go to Polyfin's data volume. They are safer on another disk than the database's: mount a folder of the server there, in the `polyfin` service of `compose.yaml`:

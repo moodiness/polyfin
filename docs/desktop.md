@@ -143,6 +143,12 @@ When the package cannot be downloaded, checked or installed, or the installer ca
 
 The data folder stays as it is: the new version upgrades the database's tables as it starts, as in Docker. When the new version's PostgreSQL sorts text with another ICU version, it first rebuilds the database's indexes, which follow the order of text, and records the new collation version, so that PostgreSQL stops warning of a mismatch: the menu's first line says so meanwhile, for seconds or a few minutes on a large library, and the log tells what was rebuilt. A development build offers no update.
 
+The admin app offers the same update, as **Install Polyfin `<version>`** in the notice of the new version on **Home**, to administrators, while the menu offers it (see [Restart and updates](administration.md#polyfin-desktop-s-update)). It does what the menu item does, through the data folder, which is yours alone: the app writes the update it offers to `desktop-update.json` while the server runs, with the download's progress and whether the last install failed, and the server, asked by an administrator, writes the app's token and the version to `desktop.install`, which the app looks for twice a second. A request left by a crash carries another run's token, and installs nothing; one for a version the app does not offer, or while Polyfin is not running, is ignored. The server knows it runs in the app from `POLYFIN_DESKTOP=1`, which the app sets.
+
+## Restart
+
+**Restart**, on the admin app's **Home**, stops the server, which exits with code 75, and the app starts it again within seconds, as when the server ends by itself: the menu's first line says Starting meanwhile. The database keeps running. No restart policy is needed, and the admin app does not warn.
+
 ## Moving to Docker and back
 
 The database is a PostgreSQL 18 database like the Docker image's, and a backup made on the desktop restores into a Docker server, and back, from the admin app (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)):
