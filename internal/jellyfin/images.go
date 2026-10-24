@@ -293,6 +293,77 @@ func (c *imageCache) trimDisk() {
 	}
 }
 
+// ImageCacheUsage is what the image cache keeps, or what clearing it
+// freed: Files images on disk, of Bytes bytes, which Limit bounds, and
+// MemoryImages images in memory, of MemoryBytes bytes.
+type ImageCacheUsage struct {
+	Files        int
+	Bytes        int64
+	Limit        int64
+	MemoryImages int
+	MemoryBytes  int64
+}
+
+// usage tells what the cache keeps; c.mu is held.
+func (c *imageCache) usage() ImageCacheUsage {
+	return ImageCacheUsage{Files: len(c.disk), Bytes: c.diskSize, Limit: c.diskBytes, MemoryImages: len(c.memory), MemoryBytes: int64(c.size)}
+}
+
+// clear forgets every image kept, in memory and on disk, the downloads
+// remembered as failed and the posters warmed, and returns what it freed.
+// A download or resize under way keeps its image once it ends, as for any
+// request.
+func (c *imageCache) clear() ImageCacheUsage {
+	c.mu.Lock()
+	var freed ImageCacheUsage
+	names := make([]string, 0, len(c.disk))
+	for name, image := range c.disk {
+		names = append(names, name)
+		freed.Bytes += image.size
+	}
+	freed.Files, freed.Limit = len(names), c.diskBytes
+	freed.MemoryImages, freed.MemoryBytes = len(c.memory), int64(c.size)
+	// The places of images warmed being written stay held (see
+	// keepWarmed): only those of the images dropped are given back.
+	c.diskSize -= freed.Bytes
+	c.disk = map[string]*diskImage{}
+	c.memory, c.order, c.size = map[string]*list.Element{}, list.New(), 0
+	c.warmed = map[string][]string{}
+	c.warmFull = false
+	dir := c.dir
+	c.mu.Unlock()
+	c.failures.DeleteFunc(func(string, downloadError) bool { return true })
+	for _, name := range names {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			c.logger.Debug("A cached image could not be deleted", "error", err)
+		}
+	}
+	return freed
+}
+
+// ImageCache tells what the image cache keeps: the artwork relayed, its
+// resized copies and the images Polyfin draws (see generated.go).
+func (h *Handler) ImageCache() ImageCacheUsage {
+	h.images.open(h.imageDir(), h.Logger)
+	h.images.mu.Lock()
+	defer h.images.mu.Unlock()
+	return h.images.usage()
+}
+
+// ClearImageCache empties the image cache, and returns what it freed.
+// Each image is downloaded, resized or drawn again at its next request;
+// the posters the libraries' first pages show are warmed again by the
+// next warming (see warmPosters). The scrubbing thumbnails and chapter
+// images, kept in the database, uploaded artwork, local folders' artwork
+// files and the web player's theme are not in it.
+func (h *Handler) ClearImageCache() ImageCacheUsage {
+	h.images.open(h.imageDir(), h.Logger)
+	freed := h.images.clear()
+	h.Logger.Info("The image cache was cleared", "images", freed.Files, "bytes", freed.Bytes,
+		"in_memory", freed.MemoryImages)
+	return freed
+}
+
 // keptDisk is what trimDisk leaves on disk, and what warming fills it to
 // at most: nine tenths of diskBytes.
 func (c *imageCache) keptDisk() int64 { return c.diskBytes * 9 / 10 }
