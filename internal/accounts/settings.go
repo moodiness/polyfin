@@ -1622,7 +1622,9 @@ type Settings struct {
 	// it. TorrentProxyPassword and TorrentWireGuard, which holds the
 	// tunnel's private key, are secrets, like PublicMetaDBKey.
 	// TorrentDownloadMbps bounds the download, 0 for no limit;
-	// TorrentUploadMbps the upload, 0 for no sharing.
+	// TorrentUploadMbps the upload, 0 for no sharing. TorrentsAtOnce
+	// bounds the torrents running at once, server-wide, 0 for no limit
+	// (see torrent.ErrAtCap).
 	TorrentStreams       bool
 	TorrentInterface     string
 	TorrentProxy         string
@@ -1631,6 +1633,7 @@ type Settings struct {
 	TorrentWireGuard     string
 	TorrentDownloadMbps  int
 	TorrentUploadMbps    int
+	TorrentsAtOnce       int
 }
 
 // TorrentsAllowed reports whether user is offered torrents' files: the
@@ -1647,6 +1650,7 @@ const InterfaceRoutes = runtime.GOOS == "linux"
 // of the fields of the torrents' route.
 const (
 	MaxTorrentMbps          = 10000
+	MaxTorrentsAtOnce       = 100
 	MaxTorrentInterfaceName = 15
 	MaxTorrentProxyBytes    = 255
 )
@@ -1654,7 +1658,8 @@ const (
 // ErrInvalidTorrentRoute reports torrent settings without a route while
 // torrents play, with more than one, with an interface name or a proxy
 // address not valid, or with an interface on a system other than Linux;
-// ErrInvalidTorrentLimit a limit outside [0, MaxTorrentMbps]; and
+// ErrInvalidTorrentLimit a limit outside [0, MaxTorrentMbps], or torrents
+// at once outside [0, MaxTorrentsAtOnce]; and
 // ErrInvalidWireGuardConfig a WireGuard configuration refused, wrapped
 // with the *torrent.WireGuardConfigError that tells why.
 var (
@@ -1806,7 +1811,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
 	"metrics, metrics_token, " +
-	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_wireguard, torrent_download_mbps, torrent_upload_mbps, " +
+	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_wireguard, torrent_download_mbps, torrent_upload_mbps, torrents_at_once, " +
 	"restart_confirmed, update_tool_url, update_tool_token"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
@@ -1863,7 +1868,7 @@ func (settings *Settings) fields() []any {
 		&settings.ImportEveryMinutes, &settings.Metrics, &settings.MetricsToken,
 		&settings.TorrentStreams, &settings.TorrentInterface, &settings.TorrentProxy, &settings.TorrentProxyUser, &settings.TorrentProxyPassword,
 		&settings.TorrentWireGuard,
-		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps,
+		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps, &settings.TorrentsAtOnce,
 		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken}
 }
 
@@ -2353,7 +2358,8 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		return Settings{}, ErrInvalidTorrentRoute
 	}
 	if settings.TorrentDownloadMbps < 0 || settings.TorrentDownloadMbps > MaxTorrentMbps ||
-		settings.TorrentUploadMbps < 0 || settings.TorrentUploadMbps > MaxTorrentMbps {
+		settings.TorrentUploadMbps < 0 || settings.TorrentUploadMbps > MaxTorrentMbps ||
+		settings.TorrentsAtOnce < 0 || settings.TorrentsAtOnce > MaxTorrentsAtOnce {
 		return Settings{}, ErrInvalidTorrentLimit
 	}
 	// Metrics turned on with no token, the first time or when the key

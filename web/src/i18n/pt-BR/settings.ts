@@ -155,6 +155,9 @@ const settings: typeof en = {
       uploadLimit: 'Limite de upload (Mbps, 0 = sem compartilhamento)',
       uploadLimitHelp: (r: RangeText) =>
         `Os peers favorecem quem compartilha de volta, então o início pode ser mais lento com 0. O compartilhamento para quando a reprodução termina. De 0 a ${r.max}; ${r.default} por padrão.`,
+      atOnce: 'Torrents ao mesmo tempo (0 = sem limite)',
+      atOnceHelp: (r: RangeText) =>
+        `Quantos torrents podem rodar ao mesmo tempo, para todos os usuários juntos. No limite, um título reproduz outra de suas versões que não seja um torrent, ou é informado como impossível de reproduzir por enquanto; uma vaga é liberada quando um torrent para, 30 segundos após sua reprodução, ou na hora quando o mesmo dispositivo ou usuário reproduz outro título. De 0 a ${r.max}; ${r.default} por padrão.`,
     },
     dlna: {
       title: 'DLNA',

@@ -694,8 +694,9 @@ type settingsJSON struct {
 	UpdateToolToken    *string `json:"updateToolToken,omitempty"`
 	UpdateToolTokenSet bool    `json:"updateToolTokenSet"`
 	// TorrentStreams, TorrentInterface, TorrentProxy, TorrentProxyUser,
-	// TorrentDownloadMbps and TorrentUploadMbps keep their current values
-	// when a PUT leaves them out. The proxy's password is never sent back:
+	// TorrentDownloadMbps, TorrentUploadMbps and TorrentsAtOnce keep their
+	// current values when a PUT leaves them out. The proxy's password is
+	// never sent back:
 	// TorrentProxyPasswordSet tells whether one is saved; a PUT leaving it
 	// out keeps it, and empty removes it. The WireGuard configuration is
 	// never sent back either, its private key with it:
@@ -713,6 +714,7 @@ type settingsJSON struct {
 	TorrentWireGuardSaved   *wireGuardJSON `json:"torrentWireGuardSaved"`
 	TorrentDownloadMbps     *int           `json:"torrentDownloadMbps"`
 	TorrentUploadMbps       *int           `json:"torrentUploadMbps"`
+	TorrentsAtOnce          *int           `json:"torrentsAtOnce"`
 	InterfaceRoutes         bool           `json:"interfaceRoutes"`
 	// LumaaGlaass is the custom CSS and script the web player gets for
 	// the theme Polyfin bundles, which the admin app shows; a PUT ignores
@@ -931,6 +933,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TorrentWireGuardSaved:   savedWireGuard(settings.TorrentWireGuard),
 		TorrentDownloadMbps:     &settings.TorrentDownloadMbps,
 		TorrentUploadMbps:       &settings.TorrentUploadMbps,
+		TorrentsAtOnce:          &settings.TorrentsAtOnce,
 		InterfaceRoutes:         accounts.InterfaceRoutes,
 	}
 }
@@ -1638,6 +1641,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TorrentWireGuard:     valueOr(body.TorrentWireGuard, current.TorrentWireGuard),
 		TorrentDownloadMbps:  valueOr(body.TorrentDownloadMbps, current.TorrentDownloadMbps),
 		TorrentUploadMbps:    valueOr(body.TorrentUploadMbps, current.TorrentUploadMbps),
+		TorrentsAtOnce:       valueOr(body.TorrentsAtOnce, current.TorrentsAtOnce),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)

@@ -209,6 +209,7 @@ func DefaultSettings() Settings {
 		TorrentWireGuard:     "",
 		TorrentDownloadMbps:  0,
 		TorrentUploadMbps:    0,
+		TorrentsAtOnce:       0,
 	}
 }
 
@@ -425,6 +426,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"torrentWireGuard":     text(torrent.MaxWireGuardConfigBytes, d.TorrentWireGuard),
 		"torrentDownloadMbps":  between(0, MaxTorrentMbps, d.TorrentDownloadMbps),
 		"torrentUploadMbps":    between(0, MaxTorrentMbps, d.TorrentUploadMbps),
+		"torrentsAtOnce":       between(0, MaxTorrentsAtOnce, d.TorrentsAtOnce),
 	}
 }
 

@@ -1056,6 +1056,14 @@ export const settingEntries: readonly SettingEntry[] = [
     keywords: ['torrent', 'seed', 'share', 'partage'],
     codes: ['invalid_torrent_limit'],
   },
+  {
+    section: 'torrents',
+    anchor: 'torrents-at-once',
+    label: (t) => s(t).torrents.atOnce,
+    help: (t, r) => s(t).torrents.atOnceHelp(r('torrentsAtOnce')),
+    keywords: ['torrent', 'cap', 'limit', 'swarm'],
+    codes: ['invalid_torrent_limit'],
+  },
   // DLNA
   {
     section: 'dlna',

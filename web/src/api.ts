@@ -618,6 +618,8 @@ export type Settings = {
   /** Download limit in Mbps, 0 for none; upload limit, 0 for no sharing. */
   torrentDownloadMbps: number
   torrentUploadMbps: number
+  /** How many torrents may run at once, server-wide, 0 for no limit. */
+  torrentsAtOnce: number
   /** Whether this system binds sockets to a network interface, Linux alone (read-only). */
   interfaceRoutes: boolean
   /** What each setting accepts, and its default, by its name here (read-only). */
@@ -3598,6 +3600,8 @@ export type Health = {
     addresses?: string[]
     lastHandshake?: string
     playing: number
+    /** The bound on `playing`, Torrents at once, 0 for none. */
+    atOnce: number
     peers: number
     utpPeers: number
     uploaded: number

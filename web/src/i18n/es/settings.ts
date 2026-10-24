@@ -154,6 +154,9 @@ const settings: typeof en = {
       uploadLimit: 'Límite de subida (Mbps, 0 = sin compartir)',
       uploadLimitHelp: (r: RangeText) =>
         `Los pares favorecen a quienes comparten, así que el inicio puede ser más lento con 0. Se deja de compartir cuando termina la reproducción. De 0 a ${r.max}; ${r.default} de forma predeterminada.`,
+      atOnce: 'Torrents a la vez (0 = sin límite)',
+      atOnceHelp: (r: RangeText) =>
+        `Cuántos torrents pueden funcionar a la vez, para todos los usuarios juntos. En el límite, un título reproduce otra de sus versiones que no sea un torrent, o se indica que no se puede reproducir por ahora; un lugar se libera cuando un torrent se detiene, 30 segundos después de su reproducción, o enseguida cuando el mismo dispositivo o usuario reproduce otro título. De 0 a ${r.max}; ${r.default} de forma predeterminada.`,
     },
     dlna: {
       title: 'DLNA',

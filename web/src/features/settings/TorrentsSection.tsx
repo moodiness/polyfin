@@ -197,6 +197,21 @@ export default function TorrentsSection({
           className="max-w-[10rem]"
         />
       </FieldRow>
+      <FieldRow
+        anchor="torrents-at-once"
+        label={text.atOnce}
+        help={text.atOnceHelp(range('torrentsAtOnce'))}
+        error={error('torrents-at-once')}
+      >
+        <NumberInput
+          {...limits('torrentsAtOnce')}
+          step={1}
+          {...number('torrents-at-once', form.torrentsAtOnce, (value) =>
+            update({ torrentsAtOnce: Math.trunc(value) }),
+          )}
+          className="max-w-[10rem]"
+        />
+      </FieldRow>
     </SettingsGroup>
   )
 }

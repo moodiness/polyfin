@@ -153,6 +153,9 @@ const settings = {
       uploadLimit: 'Upload limit (Mbps, 0 = no sharing)',
       uploadLimitHelp: (r: RangeText) =>
         `Peers favour those that share back, so a start may be slower at 0. Sharing stops when the playback ends. From 0 to ${r.max}; ${r.default} by default.`,
+      atOnce: 'Torrents at once (0 = no limit)',
+      atOnceHelp: (r: RangeText) =>
+        `How many torrents may run at once, for every user together. At the limit, a title plays another of its versions that is not a torrent, or is said to be unplayable for now; a place frees as a torrent stops, 30 seconds after its playback, or at once when the same device or user plays another title. From 0 to ${r.max}; ${r.default} by default.`,
     },
     dlna: {
       title: 'DLNA',
