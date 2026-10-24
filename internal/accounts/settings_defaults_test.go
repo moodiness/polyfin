@@ -117,7 +117,7 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			// address.
 			letter, start, end := "a", "", ""
 			switch name {
-			case "remuxDbUrl", "publicAddress", "localAddress":
+			case "remuxDbUrl", "publicAddress", "localAddress", "updateToolUrl":
 				start = "https://"
 			case "recordingsFolder", "backupFolder", "httpsCertificate", "httpsPrivateKey":
 				start = systemPath("/")

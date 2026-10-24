@@ -511,19 +511,21 @@ func (h *handler) addonHealth(addon addons.Addon, owner *ownerJSON) addonHealthJ
 	return result
 }
 
-// checkInterval is how often an addon may be checked by hand: one request
-// for its manifest, never more.
+// checkInterval is how often an addon may be checked by hand, one request
+// for its manifest, never more, and how often each of the server's
+// actions may be asked (see serverAction).
 const checkInterval = time.Minute
 
-// addonChecks remembers when each addon was last checked by hand.
-type addonChecks struct {
+// spacing remembers when each request was last allowed, by key: an
+// addon checked by hand, or one of the server's actions.
+type spacing struct {
 	mu   sync.Mutex
 	last map[string]time.Time
 }
 
-// allow reports whether id may be checked at now, and records it, or how
-// long until it may.
-func (c *addonChecks) allow(id string, now time.Time) (bool, time.Duration) {
+// allow reports whether the request of id may be allowed at now, and
+// records it, or how long until it may.
+func (c *spacing) allow(id string, now time.Time) (bool, time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.last == nil {

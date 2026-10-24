@@ -23,6 +23,7 @@ var serverSecrets = map[string]func(accounts.Settings) string{
 	"aniListClientSecret":     func(s accounts.Settings) string { return s.AniListClientSecret },
 	"myAnimeListClientSecret": func(s accounts.Settings) string { return s.MyAnimeListClientSecret },
 	"metricsToken":            func(s accounts.Settings) string { return s.MetricsToken },
+	"updateToolToken":         func(s accounts.Settings) string { return s.UpdateToolToken },
 }
 
 // secretJSON is a secret revealed on demand. Answers never cache it.

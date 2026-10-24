@@ -685,6 +685,14 @@ type settingsJSON struct {
 	// newMetricsToken).
 	Metrics         *bool `json:"metrics"`
 	MetricsTokenSet bool  `json:"metricsTokenSet"`
+	// RestartConfirmed and UpdateToolURL keep their current values when a
+	// PUT leaves them out. The update tool's token is never sent back:
+	// UpdateToolTokenSet tells whether one is saved; a PUT leaving it out
+	// keeps it, and empty removes it.
+	RestartConfirmed   *bool   `json:"restartConfirmed"`
+	UpdateToolURL      *string `json:"updateToolUrl"`
+	UpdateToolToken    *string `json:"updateToolToken,omitempty"`
+	UpdateToolTokenSet bool    `json:"updateToolTokenSet"`
 	// TorrentStreams, TorrentInterface, TorrentProxy, TorrentProxyUser,
 	// TorrentDownloadMbps and TorrentUploadMbps keep their current values
 	// when a PUT leaves them out. The proxy's password is never sent back:
@@ -910,6 +918,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 
 		Metrics:         &settings.Metrics,
 		MetricsTokenSet: settings.MetricsToken != "",
+
+		RestartConfirmed:   &settings.RestartConfirmed,
+		UpdateToolURL:      &settings.UpdateToolURL,
+		UpdateToolTokenSet: settings.UpdateToolToken != "",
 
 		TorrentStreams:          &settings.TorrentStreams,
 		TorrentInterface:        &settings.TorrentInterface,
@@ -1613,6 +1625,10 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 
 		Metrics:      valueOr(body.Metrics, current.Metrics),
 		MetricsToken: current.MetricsToken,
+
+		RestartConfirmed: valueOr(body.RestartConfirmed, current.RestartConfirmed),
+		UpdateToolURL:    valueOr(body.UpdateToolURL, current.UpdateToolURL),
+		UpdateToolToken:  valueOr(body.UpdateToolToken, current.UpdateToolToken),
 
 		TorrentStreams:       valueOr(body.TorrentStreams, current.TorrentStreams),
 		TorrentInterface:     valueOr(body.TorrentInterface, current.TorrentInterface),

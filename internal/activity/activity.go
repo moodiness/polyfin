@@ -360,6 +360,28 @@ func (s *Store) BackupRestored(ctx context.Context, administrator, file string) 
 		administrator, file), Type: "BackupRestored", Severity: Warning})
 }
 
+// ServerRestarted records that administrator restarted Polyfin from the
+// admin app, before it stops.
+func (s *Store) ServerRestarted(ctx context.Context, administrator string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s restarted Polyfin", "%s a redémarré Polyfin", "%s hat Polyfin neu gestartet", "%s ha reiniciado Polyfin", "%s ha riavviato Polyfin", "%s reiniciou o Polyfin"}, administrator),
+		Type: "ServerRestarted"})
+}
+
+// DesktopUpdateStarted records that administrator had Polyfin Desktop
+// install version, which stops Polyfin.
+func (s *Store) DesktopUpdateStarted(ctx context.Context, administrator, version string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s had Polyfin Desktop install Polyfin %s", "%s a fait installer Polyfin %s à Polyfin Desktop", "%s hat Polyfin Desktop Polyfin %s installieren lassen", "%s ha hecho que Polyfin Desktop instale Polyfin %s", "%s ha fatto installare Polyfin %s a Polyfin Desktop", "%s fez o Polyfin Desktop instalar o Polyfin %s"}, administrator, version),
+		Type: "ServerUpdateStarted"})
+}
+
+// UpdateToolAsked records that administrator asked the update tool to
+// update now, before the request is sent: a tool that replaces Polyfin's
+// own container may stop Polyfin before it answers.
+func (s *Store) UpdateToolAsked(ctx context.Context, administrator string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s asked the update tool to update now", "%s a demandé à l’outil de mise à jour de mettre à jour maintenant", "%s hat das Update-Werkzeug um ein sofortiges Update gebeten", "%s ha pedido a la herramienta de actualización que actualice ahora", "%s ha chiesto allo strumento di aggiornamento di aggiornare ora", "%s pediu à ferramenta de atualização que atualize agora"}, administrator),
+		Type: "ServerUpdateStarted"})
+}
+
 // secretNames name the secrets that can be revealed: the server's, by
 // their admin API name, and the users' own API keys, by service.
 var secretNames = map[string]i18n.Text{
@@ -373,6 +395,7 @@ var secretNames = map[string]i18n.Text{
 	"publicmetadb":      {"their PublicMetaDB API key", "sa clé d’API PublicMetaDB", "den eigenen PublicMetaDB-API-Schlüssel", "su clave API de PublicMetaDB", "la propria chiave API PublicMetaDB", "a própria chave da API do PublicMetaDB"},
 	"listenbrainz":      {"their ListenBrainz user token", "son jeton d’utilisateur ListenBrainz", "das eigene ListenBrainz-Benutzertoken", "su token de usuario de ListenBrainz", "il proprio token utente ListenBrainz", "o próprio token de usuário do ListenBrainz"},
 	"metricsToken":      {"the metrics token", "le jeton des métriques", "das Metrik-Token", "el token de métricas", "il token delle metriche", "o token de métricas"},
+	"updateToolToken":   {"the update tool's token", "le jeton de l’outil de mise à jour", "das Token des Update-Werkzeugs", "el token de la herramienta de actualización", "il token dello strumento di aggiornamento", "o token da ferramenta de atualização"},
 }
 
 // SecretRevealed records that user had a stored secret shown, by its name

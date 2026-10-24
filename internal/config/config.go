@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/desktop"
 	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/dlna"
 	"github.com/moodiness/polyfin/internal/https"
@@ -85,6 +86,10 @@ type Config struct {
 	// Retired are the variables set that the settings hold now, which
 	// Polyfin no longer reads.
 	Retired []Retired
+	// Desktop tells that Polyfin Desktop runs Polyfin, as it says with
+	// desktop.ServerVariable set to 1: it starts Polyfin again when it
+	// exits, and offers its updates.
+	Desktop bool
 }
 
 // Retired is a variable Polyfin no longer reads, and the section of the
@@ -220,6 +225,7 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		cfg.SecretKey = key
 	}
+	cfg.Desktop = strings.TrimSpace(getenv(desktop.ServerVariable)) == "1"
 	cfg.readEnvironment(getenv)
 	return cfg, errors.Join(errs...)
 }

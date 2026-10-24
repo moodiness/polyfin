@@ -42,6 +42,7 @@ import (
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/tmdb"
 	"github.com/moodiness/polyfin/internal/trackers"
+	"github.com/moodiness/polyfin/internal/updatetool"
 )
 
 const (
@@ -177,13 +178,24 @@ type Options struct {
 	// Sharing finds the titles users give through share links; nil lets
 	// no one make a link.
 	Sharing Sharing
+	// Restart stops Polyfin as a signal does, for its container's restart
+	// policy, its service manager or Polyfin Desktop to start it again; it
+	// returns at once. Nil offers no restart.
+	Restart func()
+	// Desktop tells that Polyfin Desktop runs Polyfin: it starts it again,
+	// and offers its updates in the data folder (see desktop.Offered).
+	Desktop bool
+	// UpdateTool sends Update now's requests; nil sends none.
+	UpdateTool *updatetool.Client
 }
 
 type handler struct {
 	Options
 	now func() time.Time
 	// checks spaces the checks of addons asked by hand.
-	checks addonChecks
+	checks spacing
+	// actions spaces the server's actions: a restart, an update.
+	actions spacing
 	// steps are the sign-ins waiting for their second step.
 	steps pendingSteps
 }
@@ -326,6 +338,10 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/timers", h.administrator(h.timers))
 	mux.Handle("GET /admin/api/health", h.administrator(h.health))
 	mux.Handle("GET /admin/api/health/problems", h.administrator(h.healthProblemsRoute))
+	mux.Handle("GET /admin/api/server", h.administrator(h.serverActions))
+	mux.Handle("POST /admin/api/server/restart", h.administrator(h.restartServer))
+	mux.Handle("POST /admin/api/server/desktop-update", h.administrator(h.installDesktopUpdate))
+	mux.Handle("POST /admin/api/server/update-tool", h.administrator(h.askUpdateTool))
 	mux.Handle("POST /admin/api/health/addons/{id}/check", h.administrator(h.checkAddon))
 	mux.Handle("GET /admin/api/health/goroutines", h.administrator(h.downloadGoroutines))
 	mux.Handle("POST /admin/api/health/images/clear", h.administrator(h.clearImageCache))
@@ -629,6 +645,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidCollectionReadHour, http.StatusBadRequest, "invalid_collection_read_hour"},
 		{accounts.ErrInvalidCollectionLibraryApps, http.StatusBadRequest, "invalid_collection_library_apps"},
 		{accounts.ErrInvalidRemuxDBURL, http.StatusBadRequest, "invalid_remuxdb_url"},
+		{accounts.ErrInvalidUpdateToolURL, http.StatusBadRequest, "invalid_update_tool_url"},
+		{accounts.ErrInvalidUpdateToolToken, http.StatusBadRequest, "invalid_update_tool_token"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
 		{accounts.ErrInvalidTorrentRoute, http.StatusBadRequest, "invalid_torrent_route"},
 		{accounts.ErrInvalidTorrentLimit, http.StatusBadRequest, "invalid_torrent_limit"},

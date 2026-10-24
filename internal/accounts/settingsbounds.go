@@ -197,6 +197,10 @@ func DefaultSettings() Settings {
 		Metrics:      false,
 		MetricsToken: "",
 
+		RestartConfirmed: false,
+		UpdateToolURL:    "",
+		UpdateToolToken:  "",
+
 		TorrentStreams:       false,
 		TorrentInterface:     "",
 		TorrentProxy:         "",
@@ -408,6 +412,10 @@ func SettingsBounds() map[string]SettingBounds {
 
 		"metrics":      is(d.Metrics),
 		"metricsToken": text(MaxMetricsTokenBytes, d.MetricsToken),
+
+		"restartConfirmed": is(d.RestartConfirmed),
+		"updateToolUrl":    text(MaxUpdateToolURLBytes, d.UpdateToolURL),
+		"updateToolToken":  text(MaxUpdateToolTokenBytes, d.UpdateToolToken),
 
 		"torrentStreams":       is(d.TorrentStreams),
 		"torrentInterface":     text(MaxTorrentInterfaceName, d.TorrentInterface),

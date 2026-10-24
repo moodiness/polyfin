@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -72,6 +73,7 @@ import (
 	"github.com/moodiness/polyfin/internal/torrent"
 	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/updates"
+	"github.com/moodiness/polyfin/internal/updatetool"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
 	webui "github.com/moodiness/polyfin/web"
@@ -111,6 +113,14 @@ Environment:
 Every other option is a setting of the admin app.
 `
 
+// exitRestart is the exit code of a restart asked in the admin app,
+// EX_TEMPFAIL: not 0, so that a restart policy that restarts only what
+// failed starts Polyfin again.
+const exitRestart = 75
+
+// errRestart is serve's end when an administrator restarted Polyfin.
+var errRestart = errors.New("restart")
+
 func main() {
 	command := "serve"
 	if len(os.Args) > 1 {
@@ -121,6 +131,15 @@ func main() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		var restore pendingRestore
 		err := serve(ctx, &restore)
+		// A restart from the admin app exits once Polyfin has stopped, as
+		// on a signal, with exitRestart: Docker's restart policies, on-failure
+		// included, systemd's Restart=on-failure and Polyfin Desktop start a
+		// process that failed again, where 0 would leave on-failure down.
+		if errors.Is(err, errRestart) {
+			stop()
+			fmt.Fprintln(os.Stderr, "polyfin: stopped to restart, as an administrator asked: exit code", exitRestart)
+			os.Exit(exitRestart)
+		}
 		// A stop requested while waiting for PostgreSQL is not a failure.
 		interrupted := ctx.Err() != nil && errors.Is(err, context.Canceled)
 		// Polyfin stopped to restore a backup: it starts again afterwards,
@@ -155,9 +174,9 @@ func main() {
 	}
 }
 
-// serve runs Polyfin until ctx ends, or until an administrator restores a
-// backup: restore then holds what Restore needs, once every part of
-// Polyfin has stopped.
+// serve runs Polyfin until ctx ends, until an administrator restores a
+// backup, or restarts Polyfin: restore then holds what Restore needs, once
+// every part of Polyfin has stopped, and errRestart tells a restart.
 func serve(ctx context.Context, restore *pendingRestore) error {
 	started := time.Now()
 	// Everything Polyfin runs in the background ends with ctx, or when it
@@ -574,6 +593,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	if err != nil {
 		return fmt.Errorf("theme copy: %w", err)
 	}
+	restartRequested := make(chan struct{})
+	var restartOnce sync.Once
 	adminOptions := admin.Options{
 		Version:       version,
 		ServerID:      serverID,
@@ -642,6 +663,11 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Stremio:        fromStremio,
 		Plays:          history,
 		DLNA:           sharing,
+		// A restart asked in the admin app stops Polyfin as a signal does,
+		// below, for what runs it to start it again.
+		Restart:    func() { restartOnce.Do(func() { close(restartRequested) }) },
+		Desktop:    cfg.Desktop,
+		UpdateTool: updatetool.New("Polyfin/" + version),
 	}
 	// Notifications tell of new episodes, ended recordings, the problems
 	// System › Health finds, and once a week, a month and a year what
@@ -709,11 +735,18 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	secure.Start(ctx, httpServer.Handler)
 	logger.Info("Polyfin started", "version", version, "address", listener.Addr().String(), "server_id", serverID)
 
+	restarting := false
 	select {
 	case err := <-served:
 		return err
 	case <-ctx.Done():
 		logger.Info("Polyfin is stopping")
+	case <-restartRequested:
+		// The same stop as on a signal, but Polyfin then exits with
+		// exitRestart, for what runs it to start it again.
+		logger.Info("Polyfin is stopping to restart")
+		restarting = true
+		stopAll()
 	case plan := <-backups.Requested():
 		// Playbacks, conversions, recordings and tasks stop with the rest:
 		// the backup is restored once nothing uses the database.
@@ -729,7 +762,12 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	}
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("Closing connections still open after the shutdown timeout", "error", err)
-		return httpServer.Close()
+		if err := httpServer.Close(); err != nil {
+			return err
+		}
+	}
+	if restarting {
+		return errRestart
 	}
 	return nil
 }

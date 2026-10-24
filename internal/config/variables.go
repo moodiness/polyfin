@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/moodiness/polyfin/internal/desktop"
 )
 
 // prefix starts the names of Polyfin's environment variables.
@@ -60,6 +62,10 @@ func Variables(environ []string, cfg Config) []Variable {
 		"POLYFIN_ACME_CA_FILE":        cfg.ACMECAFile,
 		// A secret, never shown: secretName hides it.
 		"POLYFIN_SECRET_KEY": "",
+	}
+	// Polyfin Desktop's own, listed when it runs Polyfin only.
+	if cfg.Desktop {
+		effective[desktop.ServerVariable] = "1"
 	}
 	names := make([]string, 0, len(effective)+len(set))
 	for name := range effective {

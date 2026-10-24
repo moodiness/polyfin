@@ -929,6 +929,38 @@ func ValidRemuxDBURL(address string) bool {
 	return err == nil && parsed.Hostname() != "" && parsed.User == nil
 }
 
+// ErrInvalidUpdateToolURL reports a Settings.UpdateToolURL that is not
+// empty nor a valid address (see ValidUpdateToolURL), and
+// ErrInvalidUpdateToolToken a Settings.UpdateToolToken longer than
+// MaxUpdateToolTokenBytes or holding spaces or control characters.
+var (
+	ErrInvalidUpdateToolURL   = errors.New("invalid update tool address")
+	ErrInvalidUpdateToolToken = errors.New("invalid update tool token")
+)
+
+// MaxUpdateToolURLBytes is the longest Settings.UpdateToolURL, and
+// MaxUpdateToolTokenBytes the longest Settings.UpdateToolToken.
+const (
+	MaxUpdateToolURLBytes   = 1024
+	MaxUpdateToolTokenBytes = 1024
+)
+
+// ValidUpdateToolURL reports whether address may be the update API of an
+// update tool: empty, or an absolute http or https URL with a host, a path
+// and a query, without user info or fragment, of at most
+// MaxUpdateToolURLBytes, holding no spaces or control characters.
+func ValidUpdateToolURL(address string) bool {
+	if address == "" {
+		return true
+	}
+	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") || len(address) > MaxUpdateToolURLBytes ||
+		strings.ContainsFunc(address, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) || strings.Contains(address, "#") {
+		return false
+	}
+	parsed, err := url.Parse(address)
+	return err == nil && parsed.Hostname() != "" && parsed.User == nil
+}
+
 // ErrInvalidPublicAddress reports a Settings.PublicAddress that is not
 // empty nor a valid address (see ValidPublicAddress).
 var ErrInvalidPublicAddress = errors.New("invalid public address")
@@ -1116,6 +1148,19 @@ type Settings struct {
 	// UpdateCheck asks GitHub once a day for Polyfin's latest release, to
 	// tell administrators about a new version (see package updates).
 	UpdateCheck bool
+	// RestartConfirmed tells that an administrator confirmed that Polyfin
+	// is started again when it exits, by its container's restart policy
+	// or its service manager: Restart in the admin app then asks no more
+	// than a confirmation. Polyfin cannot see its container's restart
+	// policy without the Docker socket.
+	RestartConfirmed bool
+	// UpdateToolURL is the address Update now sends its request to, the
+	// update API of a tool the administrator runs beside Polyfin, empty
+	// for none (see ValidUpdateToolURL and package updatetool), and
+	// UpdateToolToken the bearer token sent with it, empty for none. The
+	// token is a secret, like PublicMetaDBKey.
+	UpdateToolURL   string
+	UpdateToolToken string
 	// LocalDiscovery answers the discovery messages Jellyfin apps
 	// broadcast on the local network (see package discovery).
 	LocalDiscovery bool
@@ -1761,7 +1806,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
 	"metrics, metrics_token, " +
-	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_wireguard, torrent_download_mbps, torrent_upload_mbps"
+	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_wireguard, torrent_download_mbps, torrent_upload_mbps, " +
+	"restart_confirmed, update_tool_url, update_tool_token"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1817,7 +1863,8 @@ func (settings *Settings) fields() []any {
 		&settings.ImportEveryMinutes, &settings.Metrics, &settings.MetricsToken,
 		&settings.TorrentStreams, &settings.TorrentInterface, &settings.TorrentProxy, &settings.TorrentProxyUser, &settings.TorrentProxyPassword,
 		&settings.TorrentWireGuard,
-		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps}
+		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps,
+		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -1857,6 +1904,7 @@ func (settings *Settings) secrets() []struct {
 		{"metricsToken", &settings.MetricsToken},
 		{"torrentProxyPassword", &settings.TorrentProxyPassword},
 		{"torrentWireGuard", &settings.TorrentWireGuard},
+		{"updateToolToken", &settings.UpdateToolToken},
 	}
 }
 
@@ -2271,6 +2319,13 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !validLine(settings.MetricsToken, MaxMetricsTokenBytes) {
 		return Settings{}, ErrInvalidMetricsToken
+	}
+	settings.UpdateToolURL = strings.TrimSpace(settings.UpdateToolURL)
+	if !ValidUpdateToolURL(settings.UpdateToolURL) {
+		return Settings{}, ErrInvalidUpdateToolURL
+	}
+	if !validLine(settings.UpdateToolToken, MaxUpdateToolTokenBytes) || strings.ContainsFunc(settings.UpdateToolToken, unicode.IsSpace) {
+		return Settings{}, ErrInvalidUpdateToolToken
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.
