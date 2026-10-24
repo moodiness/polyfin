@@ -126,6 +126,9 @@ type Service struct {
 	iptv IPTV
 	// local answers for Polyfin's own local folders (see UseLocal).
 	local Local
+	// refreshes are the refreshes of libraries' descriptions (see
+	// libraryrefresh.go).
+	refreshes libraryRefreshes
 	// watchlist holds the users' watchlists, which the Watchlist view
 	// lists (see watchlist.go).
 	watchlist *watchlist.Store
@@ -285,6 +288,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock)
 	s.musicCache = newMusicCaches(s)
 	s.warmed.opened = cache.New[accounts.ID, struct{}](openedLibraries, openedFor)
+	s.refreshes.pace, s.refreshes.wait = LibraryRefreshPace, waitFor
 	return s
 }
 

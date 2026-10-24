@@ -94,27 +94,41 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 	}
 	// The description is asked for again now, as apps show the title's
 	// page again after a refresh; it gives the rating again too.
-	answered, described := s.redescribe(ctx, v, title)
+	// An addon that fails leaves the title as it was: that is no failure
+	// of the refresh.
+	if described, err := s.describeAgain(ctx, v, title); described {
+		return err
+	}
+	return nil
+}
+
+// describeAgain asks the addons for a title's description again (see
+// redescribe). Once one answered, the other addons' descriptions are
+// forgotten, to be asked for again. It reports whether one answered, and
+// the first addon's failure when none did.
+func (s *Service) describeAgain(ctx context.Context, v view, title record) (bool, error) {
+	answered, described, failure := s.redescribe(ctx, v, title)
 	if !described {
-		return nil
+		return false, failure
 	}
 	for _, entry := range v.addons {
 		if entry.addon.ID == answered.addon.ID {
 			continue
 		}
 		if err := s.forgetMeta(ctx, metaKey{entry.addon.ID, title.Meta.Type, title.Meta.ID}); err != nil {
-			return err
+			return true, err
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // redescribe asks the addons that describe r for its description again,
 // in the order describeBy asks them, until one answers: its answer
 // replaces the description it kept. An addon that fails while it keeps a
 // description, the one r shows, leaves r described as it was. It returns
-// the addon that answered.
-func (s *Service) redescribe(ctx context.Context, v view, r record) (installed, bool) {
+// the addon that answered, else the first failure.
+func (s *Service) redescribe(ctx context.Context, v view, r record) (installed, bool, error) {
+	var failure error
 	for _, candidate := range describers(v, r, false) {
 		key := metaKey{candidate.addon.ID, r.Meta.Type, r.Meta.ID}
 		var kept fetched[stremio.Meta]
@@ -126,15 +140,18 @@ func (s *Service) redescribe(ctx context.Context, v view, r record) (installed, 
 		}
 		if err == nil {
 			s.completed(ctx, v, r, candidate, kept, false)
-			return candidate, true
+			return candidate, true, nil
 		}
 		if ctx.Err() != nil {
-			return installed{}, false
+			return installed{}, false, ctx.Err()
+		}
+		if failure == nil {
+			failure = err
 		}
 		if _, ok := s.keptDescription(ctx, candidate, key, inDatabase); ok {
 			s.logger.Warn("A title could not be refreshed: it keeps the description the addon gave before",
 				"item", r.ID, "addon", candidate.addon.Manifest.Name, "error", err)
-			return installed{}, false
+			return installed{}, false, failure
 		}
 		if !notOwn(candidate, err) {
 			s.logger.Debug("An addon could not describe a title", "addon", candidate.addon.Manifest.Name, "error", err)
@@ -143,7 +160,7 @@ func (s *Service) redescribe(ctx context.Context, v view, r record) (installed, 
 	if ctx.Err() == nil {
 		s.logger.Debug("No addon could describe a refreshed title", "item", r.ID)
 	}
-	return installed{}, false
+	return installed{}, false, failure
 }
 
 // videoIDs lists the videos of a series' description that r covers: all of
