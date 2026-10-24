@@ -53,13 +53,22 @@ const (
 )
 
 // How a file was matched, its matched_by; a home video is its own title.
+// A search keeps a title by a looser rule when none matches exactly (see
+// chooseItem): byYear for a title of the year before or after the name's,
+// byNumerals for one whose numerals read alike, byYearNumerals for both.
 const (
-	byName   = "name"
-	byNFO    = "nfo"
-	bySearch = "search"
-	byLink   = "link"
-	byOwn    = "own"
+	byName         = "name"
+	byNFO          = "nfo"
+	bySearch       = "search"
+	byYear         = "year"
+	byNumerals     = "numerals"
+	byYearNumerals = "year_numerals"
+	byLink         = "link"
+	byOwn          = "own"
 )
+
+// looserMethods are the matched_by of the titles a looser rule kept.
+var looserMethods = []string{byYear, byNumerals, byYearNumerals}
 
 // searchLimit bounds the titles a search reads, and maxCandidates those a
 // search for a link answers (see Search).
@@ -246,8 +255,9 @@ func titleKind(kind string) library.Kind {
 // unitMatch finds the title of a unit, e being one of its files: the IMDb
 // identifier it is linked to, else the identifier its name gives, else the
 // one its NFO file gives, else the one title the metadata addons find of
-// its name (and year, when given).
-func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link string, cache *searches) (match, error) {
+// its name (and year, when given), by the exact rule only when exact is
+// true, as for a unit unlinked from a looser match (see Unlink).
+func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link string, cache *searches, exact bool) (match, error) {
 	n := e.title
 	if link != "" {
 		return s.described(ctx, kind, link, n, byLink), nil
@@ -279,35 +289,60 @@ func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link stri
 		return match{}, ctx.Err()
 	}
 	// A title none of the addons that answered knows may be one an addon
-	// that failed knows.
-	m := chooseResult(kind, n, results)
-	if err != nil && (m.reason == reasonNotFound || m.reason == reasonOtherYear) {
+	// that failed knows; so may the title of the very name and year, which
+	// would win over one a looser rule kept.
+	m := chooseResult(kind, n, results, exact)
+	if err != nil && (m.reason == reasonNotFound || m.reason == reasonOtherYear || slices.Contains(looserMethods, m.by)) {
 		return cache.fail(err), nil
 	}
 	return m, nil
 }
 
 // chooseResult keeps the one title of results of the name and kind of n,
-// and of its year when it gives one.
-func chooseResult(kind string, n name, results []library.RemoteResult) match {
-	item, reason := chooseItem(titleKind(kind), n.title, n.year, results)
+// and of its year when it gives one, or by a looser rule unless exact (see
+// chooseItem).
+func chooseResult(kind string, n name, results []library.RemoteResult, exact bool) match {
+	item, by, reason := chooseItem(titleKind(kind), n.title, n.year, results, exact)
 	if reason != "" {
 		return match{reason: reason}
 	}
 	return match{stremioID: stremioID(item), imdb: item.ProviderIDs["Imdb"], tmdb: item.ProviderIDs["Tmdb"], name: item.Name,
-		poster: item.Images.Primary, year: item.ProductionYear, by: bySearch}
+		poster: item.Images.Primary, year: item.ProductionYear, by: by}
 }
 
 // chooseItem keeps the one title of results of kind named title, and of
-// year when it is not zero, or answers why there is none: reasonNotFound,
-// reasonOtherYear or reasonAmbiguous.
-func chooseItem(kind library.Kind, title string, year int, results []library.RemoteResult) (library.Item, string) {
+// year when it is not zero, found bySearch. When there is none and exact
+// is false, it keeps the one title a looser rule leaves: of the year
+// before or after (byYear), or named alike once numerals are read
+// (byNumerals, see numerals), and only then the one both rules leave
+// (byYearNumerals). Several titles at the first of those steps that finds
+// any leave none, as several of the very name and year do. Else it
+// answers why there is none: reasonNotFound, reasonOtherYear or
+// reasonAmbiguous.
+//
+// Jellyfin's TMDb ranking scores a year one off as the very year
+// (MediaBrowser.Providers/Plugins/Tmdb/TmdbUtils.cs, ScoreYear, lines
+// 246-255 at v12.3) and keeps the provider's first title of the best
+// score; here a title of the very year always wins, and a title is kept
+// only when it is the only one left.
+func chooseItem(kind library.Kind, title string, year int, results []library.RemoteResult, exact bool) (item library.Item, by, reason string) {
 	want := fold(title)
-	var named, dated []library.Item
+	wantNumerals := numerals(want)
+	// The titles each step finds: the very name and year, one looser
+	// rule, both.
+	var steps [3][]library.Item
+	var stepBy [3]string
+	named := false
 	seen := map[string]bool{}
 	for _, r := range results {
 		item := r.Item
-		if item.Kind != kind || item.StremioID == "" || fold(item.Name) != want {
+		if item.Kind != kind || item.StremioID == "" {
+			continue
+		}
+		folded := fold(item.Name)
+		sameName := folded == want
+		alike := !exact && !sameName && numerals(folded) == wantNumerals
+		if !sameName && !alike {
 			continue
 		}
 		id := stremioID(item)
@@ -315,31 +350,90 @@ func chooseItem(kind library.Kind, title string, year int, results []library.Rem
 			continue
 		}
 		seen[id] = true
-		named = append(named, item)
-		if year == 0 || item.ProductionYear == year {
-			dated = append(dated, item)
+		named = true
+		sameYear := year == 0 || item.ProductionYear == year
+		nearYear := !exact && year != 0 && item.ProductionYear != 0 && (item.ProductionYear == year-1 || item.ProductionYear == year+1)
+		step, how := -1, ""
+		switch {
+		case sameName && sameYear:
+			step, how = 0, bySearch
+		case sameName && nearYear:
+			step, how = 1, byYear
+		case alike && sameYear:
+			step, how = 1, byNumerals
+		case alike && nearYear:
+			step, how = 2, byYearNumerals
+		}
+		if step >= 0 {
+			steps[step] = append(steps[step], item)
+			stepBy[step] = how
 		}
 	}
-	switch {
-	case len(named) == 0:
-		return library.Item{}, reasonNotFound
-	case len(dated) == 0:
-		return library.Item{}, reasonOtherYear
-	case len(dated) > 1:
-		return library.Item{}, reasonAmbiguous
+	if !named {
+		return library.Item{}, "", reasonNotFound
 	}
-	return dated[0], ""
+	for i, found := range steps {
+		switch len(found) {
+		case 0:
+			continue
+		case 1:
+			return found[0], stepBy[i], ""
+		}
+		return library.Item{}, "", reasonAmbiguous
+	}
+	return library.Item{}, "", reasonOtherYear
+}
+
+// romanNumerals reads the Roman numerals of titles, from I to XXXIX: those
+// written with I, V and X only, so that words such as "mix", "civil" or
+// "liv" stay words.
+var romanNumerals = func() map[string]int {
+	ones := []string{"", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix"}
+	read := map[string]int{}
+	for n := 1; n < 40; n++ {
+		read[strings.Repeat("x", n/10)+ones[n%10]] = n
+	}
+	return read
+}()
+
+// partNumbers are the numbers written in words read after "part".
+var partNumbers = map[string]int{"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+	"ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+	"eighteen": 18, "nineteen": 19, "twenty": 20}
+
+// numerals is a folded title (see fold) with its numbers written in
+// figures, so that "Harbor Lights II" reads as "Harbor Lights 2" and
+// "Part One" as "Part 1": its Roman numerals (see romanNumerals), and the
+// numbers written in words after "part". A title of one word is left as it
+// is, so that "I", "X" or "XXX" is no number, nor is a number written in
+// words elsewhere ("One Day"). A single letter, "i", "v" or "x", is a
+// numeral only as the title's last word or after "part": "I Robot" and
+// "V for Vendetta" keep their words.
+func numerals(folded string) string {
+	words := strings.Split(folded, " ")
+	if len(words) < 2 {
+		return folded
+	}
+	for i, word := range words {
+		afterPart := i > 0 && words[i-1] == "part"
+		if n, ok := romanNumerals[word]; ok && (len(word) > 1 || afterPart || i == len(words)-1) {
+			words[i] = strconv.Itoa(n)
+		} else if n, ok := partNumbers[word]; ok && afterPart {
+			words[i] = strconv.Itoa(n)
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // SearchLimit is how many titles a search reads, as a scan's do.
 const SearchLimit = searchLimit
 
 // ChooseTitle keeps, of the results of a search for title, the one title
-// of kind of that name, and of year when it is not zero, by the rule a
-// scan matches files by (see local-folders.md, Matching): found is false
-// when there is none, and ambiguous true when there are several.
+// of kind of that name, and of year when it is not zero, by the exact rule
+// a scan matches files by first (see local-folders.md, Matching): found
+// is false when there is none, and ambiguous true when there are several.
 func ChooseTitle(kind library.Kind, title string, year int, results []library.RemoteResult) (item library.Item, found, ambiguous bool) {
-	item, reason := chooseItem(kind, title, year, results)
+	item, _, reason := chooseItem(kind, title, year, results, true)
 	return item, reason == "", reason == reasonAmbiguous
 }
 
@@ -539,7 +633,10 @@ func (s *Service) Link(ctx context.Context, id accounts.ID, path, imdb string) e
 // Unlink removes the link of a unit of a folder (see Link): its files are
 // matched again by their name or their NFO file. A file a scan reading
 // extras reads as one, which the link kept a title (see splitExtras), is
-// an extra again, or a lone one: the folder is scanned.
+// an extra again, or a lone one: the folder is scanned. A unit a looser
+// rule matched, without a link, is unlinked from that title for good: it
+// is matched again by the exact rule only, through every scan, and left
+// unmatched when that finds no title (see exactUnits).
 func (s *Service) Unlink(ctx context.Context, id accounts.ID, path string) error {
 	folder, unit, err := s.unit(ctx, id, path)
 	if err != nil {
@@ -550,12 +647,37 @@ func (s *Service) Unlink(ctx context.Context, id accounts.ID, path string) error
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return addons.ErrNotFound
+		tag, err = s.db.Exec(ctx, `INSERT INTO local_exact_units (addon_id, unit)
+			SELECT $1, $2 WHERE EXISTS (SELECT 1 FROM local_files WHERE addon_id = $1 AND unit = $2 AND matched_by = ANY($3))
+			ON CONFLICT DO NOTHING`, id, unit, looserMethods)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return addons.ErrNotFound
+		}
+		return s.rematch(ctx, folder, unit, "")
 	}
 	if _, how := readExtra(unit); folder.ReadExtras && how != readAsTitle {
 		return s.Scan(ctx, id)
 	}
 	return s.rematch(ctx, folder, unit, "")
+}
+
+// exactUnits reads the units of a folder unlinked from a looser match (see
+// Unlink), which only the exact rule matches.
+func (s *Service) exactUnits(ctx context.Context, id accounts.ID) (map[string]bool, error) {
+	rows, err := s.db.Query(ctx, "SELECT unit FROM local_exact_units WHERE addon_id = $1", id)
+	if err != nil {
+		return nil, err
+	}
+	exact := map[string]bool{}
+	var unit string
+	_, err = pgx.ForEachRow(rows, []any{&unit}, func() error {
+		exact[unit] = true
+		return nil
+	})
+	return exact, err
 }
 
 // unit finds the unit path names in a folder: a unit, or a file of one. A
@@ -583,7 +705,12 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 	if err != nil || len(entries) == 0 {
 		return err
 	}
-	m, err := s.unitMatch(ctx, folder.Kind, entries[0], link, newSearches())
+	var exact bool
+	if err := s.db.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM local_exact_units WHERE addon_id = $1 AND unit = $2)", folder.Addon.ID,
+		unit).Scan(&exact); err != nil {
+		return err
+	}
+	m, err := s.unitMatch(ctx, folder.Kind, entries[0], link, newSearches(), exact)
 	if err != nil {
 		return err
 	}
@@ -687,4 +814,45 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 		return cmp.Or(strings.Compare(pathA, pathB), cmp.Compare(numberA, numberB))
 	})
 	return list, total, nil
+}
+
+// Looser is a unit of a folder a looser rule matched (see chooseItem): the
+// unit Unlink names, its first file and how many it has, what its name
+// tells, the title it was matched to, named and dated as the metadata
+// addons give it, and how: byYear, byNumerals or byYearNumerals.
+type Looser struct {
+	Unit      string
+	Path      string
+	Files     int
+	Title     string
+	Year      int
+	StremioID string
+	Name      string
+	TitleYear int
+	By        string
+}
+
+// Looser lists the units of a folder a looser rule matched, by unit, at
+// most maxUnmatched, with how many there are.
+func (s *Service) Looser(ctx context.Context, id accounts.ID) ([]Looser, int, error) {
+	if _, err := s.Folder(ctx, id); err != nil {
+		return nil, 0, err
+	}
+	var total int
+	if err := s.db.QueryRow(ctx, "SELECT count(DISTINCT unit) FROM local_files WHERE addon_id = $1 AND matched_by = ANY($2)", id,
+		looserMethods).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := s.db.Query(ctx, `SELECT DISTINCT ON (unit) unit, path, count(*) OVER (PARTITION BY unit), title, coalesce(year, 0), stremio_id,
+			name, coalesce(title_year, 0), matched_by
+		FROM local_files WHERE addon_id = $1 AND matched_by = ANY($2) ORDER BY unit, path LIMIT $3`, id, looserMethods, maxUnmatched)
+	if err != nil {
+		return nil, 0, err
+	}
+	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Looser, error) {
+		var l Looser
+		err := row.Scan(&l.Unit, &l.Path, &l.Files, &l.Title, &l.Year, &l.StremioID, &l.Name, &l.TitleYear, &l.By)
+		return l, err
+	})
+	return list, total, err
 }

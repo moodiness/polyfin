@@ -411,10 +411,12 @@ type Folder struct {
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
-// identifier in their name, by their NFO file, by a search, or by a link
-// made by hand.
+// identifier in their name, by their NFO file, by a search, by a search
+// that kept a title of the year before or after (Year), named alike once
+// numerals are read (Numerals), or both (YearNumerals), or by a link made
+// by hand (see chooseItem).
 type Matches struct {
-	Name, NFO, Search, Link int
+	Name, NFO, Search, Year, Numerals, YearNumerals, Link int
 }
 
 // Dates counts home videos by where their dates come from: their NFO
@@ -673,6 +675,9 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		if _, err := tx.Exec(ctx, "DELETE FROM local_links WHERE addon_id = $1", id); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, "DELETE FROM local_exact_units WHERE addon_id = $1", id); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, "DELETE FROM local_side_files WHERE addon_id = $1", id); err != nil {
 			return err
 		}
@@ -765,6 +770,12 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			f.MatchedBy.NFO = count
 		case bySearch:
 			f.MatchedBy.Search = count
+		case byYear:
+			f.MatchedBy.Year = count
+		case byNumerals:
+			f.MatchedBy.Numerals = count
+		case byYearNumerals:
+			f.MatchedBy.YearNumerals = count
 		case byLink:
 			f.MatchedBy.Link = count
 		}

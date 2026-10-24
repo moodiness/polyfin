@@ -515,6 +515,10 @@ func (s *Service) SetEpisodes(ctx context.Context, id accounts.ID, changes []Epi
 	if err != nil {
 		return err
 	}
+	exact, err := s.exactUnits(ctx, id)
+	if err != nil {
+		return err
+	}
 	done := map[string]bool{}
 	defer s.artworkChanged()
 	for _, c := range changes {
@@ -531,7 +535,7 @@ func (s *Service) SetEpisodes(ctx context.Context, id accounts.ID, changes []Epi
 		// episodes is matched as a scan matches it.
 		m, ok := matched[unit]
 		if !ok {
-			if m, err = s.unitMatch(ctx, folder.Kind, entries[0], links[unit], newSearches()); err != nil {
+			if m, err = s.unitMatch(ctx, folder.Kind, entries[0], links[unit], newSearches(), exact[unit]); err != nil {
 				return err
 			}
 		}

@@ -438,8 +438,12 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		return err
 	}
 	var links map[string]string
+	var exact map[string]bool
 	if folder.Kind == KindMovies || folder.Kind == KindShows {
 		if links, err = s.links(ctx, id); err != nil {
+			return err
+		}
+		if exact, err = s.exactUnits(ctx, id); err != nil {
 			return err
 		}
 	}
@@ -578,7 +582,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 				m = match{reason: reasonLoneExtra}
 			case !ok || renewed[unit]:
 				var err error
-				if m, err = s.unitMatch(groupCtx, folder.Kind, entries[0], links[unit], searches); err != nil {
+				if m, err = s.unitMatch(groupCtx, folder.Kind, entries[0], links[unit], searches, exact[unit]); err != nil {
 					return err
 				}
 			}
