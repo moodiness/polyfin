@@ -17,6 +17,8 @@ Sharing is off by default. Turn it on under **Settings › DLNA**:
 
 Polyfin then announces itself over SSDP, on UDP port 1900 and the multicast group `239.255.255.250`, as a `MediaServer:1` with `ContentDirectory:1` and `ConnectionManager:1`. Devices find it within a few seconds, or the next time they look for servers.
 
+It answers devices' searches from port 1900, and sends its announcements from a port of its own, as Jellyfin did: on macOS, an interface that holds the announcements, such as a busy network interface or one up without a link, holds every other datagram of the socket they leave from, which would leave searches unanswered.
+
 ## Devices and users
 
 **Settings › DLNA** lists the devices seen: by the name and model they announce, their manufacturer and their address. A device is recorded the first time it asks Polyfin for anything, and known by its address from then on. Each one shows:

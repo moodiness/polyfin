@@ -53,7 +53,9 @@ type ssdp struct {
 	s *Service
 	// mu guards what follows.
 	mu sync.Mutex
-	// port is the UDP port listened on, or tried.
+	// port is the UDP port listened on, or tried. conn listens on it and
+	// answers the searches; packet sends the announcements, from a port
+	// of its own (see announcer).
 	port    int
 	conn    *net.UDPConn
 	packet  *ipv4.PacketConn
@@ -93,25 +95,50 @@ func (d *ssdp) apply(ctx context.Context) {
 			"Another program, such as another DLNA server, may use it", "port", d.port, "error", err)
 		return
 	}
-	packet := ipv4.NewPacketConn(conn)
-	_ = packet.SetMulticastLoopback(true)
-	_ = packet.SetMulticastTTL(2)
+	joining := ipv4.NewPacketConn(conn)
 	joined := 0
 	for _, ifi := range multicastInterfaces() {
-		if packet.JoinGroup(&ifi, &net.UDPAddr{IP: group}) == nil {
+		if joining.JoinGroup(&ifi, &net.UDPAddr{IP: group}) == nil {
 			joined++
 		}
 	}
 	if joined == 0 {
 		d.s.options.Logger.Info("DLNA joined no multicast group: only devices that search the server directly find it")
 	}
+	packet, err := announcer()
+	if err != nil {
+		d.s.options.Logger.Warn("DLNA cannot announce the server: devices find it only when they search for servers", "error", err)
+	}
 	d.conn, d.packet, d.failure = conn, packet, nil
 	d.port = conn.LocalAddr().(*net.UDPAddr).Port
 	d.s.options.Logger.Info("Sharing the libraries over DLNA", "port", d.port)
 	go d.serve(conn)
-	announcing, stop := context.WithCancel(ctx)
-	d.stopAnnouncing = stop
-	go d.announce(announcing, packet, d.port)
+	if packet != nil {
+		announcing, stop := context.WithCancel(ctx)
+		d.stopAnnouncing = stop
+		go d.announce(announcing, packet, d.port)
+	}
+}
+
+// announcer opens the socket the announcements are sent from, on a port
+// of its own. macOS holds every write of a socket while an interface's
+// output queue holds one of its datagrams, as a busy interface's may for
+// seconds: announcements sent from the port listened on would hold the
+// answers to the searches with them, which then give up after
+// ssdpWriteWait, unanswered. Jellyfin sends from sockets other than the
+// one listening on port 1900 too (RSSDP/SsdpCommunicationsServer.cs in
+// Jellyfin 10.8; its DLNA left the server in 10.9).
+func announcer() (*ipv4.PacketConn, error) {
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	if err != nil {
+		return nil, err
+	}
+	packet := ipv4.NewPacketConn(conn)
+	// Devices on the same host hear the announcements too, as does the
+	// port listened on, which leaves them out (see renderer).
+	_ = packet.SetMulticastLoopback(true)
+	_ = packet.SetMulticastTTL(2)
+	return packet, nil
 }
 
 // stop frees the port, saying goodbye to the devices.
@@ -122,15 +149,18 @@ func (d *ssdp) stop() {
 	}
 	if d.conn != nil {
 		d.notify(d.packet, "ssdp:byebye", d.port)
+		if d.packet != nil {
+			_ = d.packet.Close()
+		}
 		_ = d.conn.Close()
 		d.conn, d.packet = nil, nil
 	}
 	d.failure = nil
 }
 
-// ssdpWriteWait is how long an SSDP datagram may wait to be sent: a write
-// to the multicast group can block on macOS, which must not hold the
-// answers or the stop of DLNA.
+// ssdpWriteWait is how long an SSDP datagram may wait to be sent: macOS
+// may hold a write while an interface's output queue is full, which must
+// hold neither the next answers nor the stop of DLNA.
 const ssdpWriteWait = 2 * time.Second
 
 // serve answers the searches conn receives until it is closed, and notes
