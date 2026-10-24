@@ -746,8 +746,15 @@ export type FolderKind = 'movies' | 'shows' | 'music' | 'homevideos'
  */
 export type FolderShare = '' | 'smb' | 'webdav' | 's3' | 'sftp' | 'rclone'
 
-/** How a local file was matched to its title. */
-export type MatchMethod = 'name' | 'nfo' | 'search' | 'link'
+/**
+ * How a local file was matched to its title. A search keeps a title by a looser rule when none
+ * matches exactly: 'year' for a title of the year before or after the name's, 'numerals' for one
+ * named alike once numerals are read, 'yearNumerals' for both.
+ */
+export type MatchMethod = 'name' | 'nfo' | 'search' | 'year' | 'numerals' | 'yearNumerals' | 'link'
+
+/** The looser rule a search kept a title by, as a looser match tells it. */
+export type LooserRule = 'year' | 'numerals' | 'year_numerals'
 
 /**
  * A local folder: a folder mounted in the container, or a network share Polyfin reads itself,
@@ -776,7 +783,7 @@ export type LocalFolder = {
   matched: number
   /**
    * The matched files by how they were matched: an identifier in their name, their NFO file, a
-   * search, or a link made by hand.
+   * search, a search by a looser rule, or a link made by hand.
    */
   matchedBy: Record<MatchMethod, number>
   unmatched: number
@@ -2882,6 +2889,30 @@ export const fetchUnmatchedFiles = (id: string, signal?: AbortSignal) =>
   )
 
 /**
+ * A unit of a local folder a looser rule matched: a file, a show's folder or a disc's folder, its
+ * first file and how many it has, what its name was read as, and the title it was matched to.
+ */
+export type LooserMatch = {
+  unit: string
+  path: string
+  files: number
+  title: string
+  year: number | null
+  imdbId: string
+  name: string
+  titleYear: number | null
+  rule: LooserRule
+}
+
+export const fetchLooserMatches = (id: string, signal?: AbortSignal) =>
+  request<{ total: number; units: LooserMatch[] }>(
+    'GET',
+    `${scopePath('shared')}/folders/${seg(id)}/looser`,
+    undefined,
+    signal,
+  )
+
+/**
  * A title the metadata addons found for a local folder's unit, that a link can name: `posterId` is
  * the item whose Primary image is its poster, null without one.
  */
@@ -4093,6 +4124,8 @@ export const queryKeys = {
   sources: ['sources'] as const,
   /** The unmatched files of a local folder. */
   unmatched: (id: string) => ['unmatched', id] as const,
+  /** The units of a local folder a looser rule matched. */
+  looser: (id: string) => ['looser', id] as const,
   /** A title search for a local folder's unit. */
   folderTitles: (id: string, query: string, year: number | null) =>
     ['folder-titles', id, query, year] as const,

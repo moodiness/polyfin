@@ -393,6 +393,10 @@ const sources: typeof en = {
       name: (count: string) => `${count} por um identificador no nome`,
       nfo: (count: string) => `${count} por um arquivo NFO`,
       search: (count: string) => `${count} por uma pesquisa`,
+      year: (count: string) => `${count} por uma pesquisa, de um ano de diferença`,
+      numerals: (count: string) => `${count} por uma pesquisa, com os números lidos da mesma forma`,
+      yearNumerals: (count: string) =>
+        `${count} por uma pesquisa, de um ano de diferença e com os números lidos da mesma forma`,
       link: (count: string) => `${count} manualmente`,
     },
     holds: 'Conteúdo',
@@ -513,6 +517,20 @@ const sources: typeof en = {
     removeEpisodeLabel: (title: string) => `Remover o episódio de ${title}`,
     episodeRemoved: (title: string) =>
       `O episódio de ${title} foi removido: o nome do disco define a numeração, ou ele volta a ser sugerido.`,
+    looserTitle: 'Identificados por uma regra mais flexível',
+    looserHelp:
+      'Nenhum título tem exatamente o nome e o ano destes arquivos, então o Polyfin os identificou com o único título que uma regra mais flexível deixa: um do ano anterior ou seguinte, ou um com o mesmo nome depois de lidos os números da mesma forma, como 2 para II ou Part 1 para Part One. Confira-os. Desvincule um errado: ele passa a ser identificado só pelo nome e ano exatos, e fica sem correspondência até que você o vincule ao título.',
+    looserRules: {
+      year: 'Um título de um ano de diferença',
+      numerals: 'Números lidos da mesma forma',
+      year_numerals: 'Um título de um ano de diferença, números lidos da mesma forma',
+    } as Record<string, string>,
+    matchedTo: (title: string) => `Identificado como “${title}”`,
+    fileCount: (count: number, figure: string) =>
+      count === 1 ? '1 arquivo' : `${figure} arquivos`,
+    looserUnlinkLabel: (unit: string) => `Desvincular ${unit} do título`,
+    looserUnlinked: (unit: string) =>
+      `${unit} foi desvinculado: ele passa a ser identificado só pelo nome e ano exatos.`,
     openPage: 'Abrir a página da pasta',
   },
   mySources: {

@@ -391,6 +391,10 @@ const sources: typeof en = {
       name: (count: string) => `${count} über eine Kennung im Namen`,
       nfo: (count: string) => `${count} über eine NFO-Datei`,
       search: (count: string) => `${count} über eine Suche`,
+      year: (count: string) => `${count} über eine Suche, ein Jahr abweichend`,
+      numerals: (count: string) => `${count} über eine Suche, Zahlen gleich gelesen`,
+      yearNumerals: (count: string) =>
+        `${count} über eine Suche, ein Jahr abweichend und Zahlen gleich gelesen`,
       link: (count: string) => `${count} manuell`,
     },
     holds: 'Inhalt',
@@ -514,6 +518,19 @@ const sources: typeof en = {
     removeEpisodeLabel: (title: string) => `Folge von ${title} entfernen`,
     episodeRemoved: (title: string) =>
       `Die Folge von ${title} wurde entfernt: Sie wird über den Namen der Disc nummeriert oder erneut vorgeschlagen.`,
+    looserTitle: 'Über eine lockerere Regel zugeordnet',
+    looserHelp:
+      'Kein Titel hat genau den Namen und das Jahr dieser Dateien. Polyfin hat sie daher dem einzigen Titel zugeordnet, den eine lockerere Regel übrig lässt: einem aus dem Jahr davor oder danach, oder einem mit gleichem Namen, wenn Zahlen gleich gelesen werden, etwa 2 für II oder Part 1 für Part One. Prüfe sie. Hebe eine falsche Zuordnung auf: Die Datei wird dann nur noch nach genauem Namen und Jahr zugeordnet und bleibt nicht zugeordnet, bis du sie mit ihrem Titel verknüpfst.',
+    looserRules: {
+      year: 'Ein Titel mit einem Jahr Abweichung',
+      numerals: 'Zahlen gleich gelesen',
+      year_numerals: 'Ein Titel mit einem Jahr Abweichung, Zahlen gleich gelesen',
+    } as Record<string, string>,
+    matchedTo: (title: string) => `Zugeordnet zu „${title}“`,
+    fileCount: (count: number, figure: string) => (count === 1 ? '1 Datei' : `${figure} Dateien`),
+    looserUnlinkLabel: (unit: string) => `Zuordnung von ${unit} aufheben`,
+    looserUnlinked: (unit: string) =>
+      `Die Zuordnung von ${unit} wurde aufgehoben: Sie erfolgt nur noch nach genauem Namen und Jahr.`,
     openPage: 'Seite des Ordners öffnen',
   },
   mySources: {

@@ -397,6 +397,10 @@ const sources: typeof en = {
       name: (count: string) => `${count} par un identifiant dans le nom`,
       nfo: (count: string) => `${count} par un fichier NFO`,
       search: (count: string) => `${count} par une recherche`,
+      year: (count: string) => `${count} par une recherche, d’une année d’écart`,
+      numerals: (count: string) => `${count} par une recherche, numéros lus à l’identique`,
+      yearNumerals: (count: string) =>
+        `${count} par une recherche, d’une année d’écart et numéros lus à l’identique`,
       link: (count: string) => `${count} à la main`,
     },
     holds: 'Contenu',
@@ -519,6 +523,20 @@ const sources: typeof en = {
     removeEpisodeLabel: (title: string) => `Retirer l’épisode de ${title}`,
     episodeRemoved: (title: string) =>
       `L’épisode de ${title} a été retiré : le nom de son disque le numérote, ou il est à nouveau proposé.`,
+    looserTitle: 'Associés par une règle plus souple',
+    looserHelp:
+      'Aucun titre n’a exactement le nom et l’année de ces fichiers : Polyfin les a donc associés au seul titre qu’une règle plus souple laisse, d’une année avant ou après, ou de même nom une fois les numéros lus à l’identique, comme 2 pour II ou Part 1 pour Part One. Vérifiez-les. Dissociez celui qui est faux : il n’est alors plus associé que d’après son nom et son année exacts, et reste non associé tant que vous ne l’associez pas à son titre.',
+    looserRules: {
+      year: 'Un titre d’une année d’écart',
+      numerals: 'Numéros lus à l’identique',
+      year_numerals: 'Un titre d’une année d’écart, numéros lus à l’identique',
+    } as Record<string, string>,
+    matchedTo: (title: string) => `Associé à « ${title} »`,
+    fileCount: (count: number, figure: string) =>
+      count === 1 ? '1 fichier' : `${figure} fichiers`,
+    looserUnlinkLabel: (unit: string) => `Dissocier ${unit} de son titre`,
+    looserUnlinked: (unit: string) =>
+      `${unit} a été dissocié : il n’est plus associé que d’après son nom et son année exacts.`,
     openPage: 'Ouvrir la page du dossier',
   },
   mySources: {

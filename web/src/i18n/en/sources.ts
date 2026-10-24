@@ -378,6 +378,10 @@ const sources = {
       name: (count: string) => `${count} by an identifier in the name`,
       nfo: (count: string) => `${count} by an NFO file`,
       search: (count: string) => `${count} by a search`,
+      year: (count: string) => `${count} by a search, of a year one apart`,
+      numerals: (count: string) => `${count} by a search, with numerals read alike`,
+      yearNumerals: (count: string) =>
+        `${count} by a search, of a year one apart and with numerals read alike`,
       link: (count: string) => `${count} by hand`,
     },
     holds: 'Holds',
@@ -495,6 +499,19 @@ const sources = {
     removeEpisodeLabel: (title: string) => `Remove the episode of ${title}`,
     episodeRemoved: (title: string) =>
       `The episode of ${title} was removed: its disc’s name numbers it, or it is suggested again.`,
+    looserTitle: 'Matched by a looser rule',
+    looserHelp:
+      'No title has the exact name and year of these files, so Polyfin matched the only title a looser rule leaves: one of the year before or after, or one named alike once numerals are read, such as 2 for II or Part 1 for Part One. Check them. Unlink a wrong one: it is then matched by its exact name and year only, and stays unmatched until you link it to its title.',
+    looserRules: {
+      year: 'A title of a year one apart',
+      numerals: 'Numerals read alike',
+      year_numerals: 'A title of a year one apart, numerals read alike',
+    } as Record<string, string>,
+    matchedTo: (title: string) => `Matched to “${title}”`,
+    fileCount: (count: number, figure: string) => (count === 1 ? '1 file' : `${figure} files`),
+    looserUnlinkLabel: (unit: string) => `Unlink ${unit} from its title`,
+    looserUnlinked: (unit: string) =>
+      `${unit} was unlinked: it is matched by its exact name and year only.`,
     openPage: 'Open the folder’s page',
   },
   mySources: {

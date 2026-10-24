@@ -395,6 +395,11 @@ const sources: typeof en = {
       name: (count: string) => `${count} tramite un identificativo nel nome`,
       nfo: (count: string) => `${count} tramite un file NFO`,
       search: (count: string) => `${count} tramite una ricerca`,
+      year: (count: string) => `${count} tramite una ricerca, di un anno di differenza`,
+      numerals: (count: string) =>
+        `${count} tramite una ricerca, con i numeri letti allo stesso modo`,
+      yearNumerals: (count: string) =>
+        `${count} tramite una ricerca, di un anno di differenza e con i numeri letti allo stesso modo`,
       link: (count: string) => `${count} manualmente`,
     },
     holds: 'Contenuto',
@@ -516,6 +521,19 @@ const sources: typeof en = {
     removeEpisodeLabel: (title: string) => `Rimuovi l’episodio di ${title}`,
     episodeRemoved: (title: string) =>
       `Episodio di ${title} rimosso: viene numerato dal nome del disco oppure viene di nuovo suggerito.`,
+    looserTitle: 'Abbinati con una regola più flessibile',
+    looserHelp:
+      'Nessun titolo ha esattamente il nome e l’anno di questi file, quindi Polyfin li ha abbinati all’unico titolo che una regola più flessibile lascia: uno dell’anno prima o dopo, o uno con lo stesso nome una volta letti allo stesso modo i numeri, come 2 per II o Part 1 per Part One. Controllali. Scollega quello sbagliato: da quel momento viene abbinato solo in base al nome e all’anno esatti, e resta non abbinato finché non lo colleghi al suo titolo.',
+    looserRules: {
+      year: 'Un titolo di un anno di differenza',
+      numerals: 'Numeri letti allo stesso modo',
+      year_numerals: 'Un titolo di un anno di differenza, numeri letti allo stesso modo',
+    } as Record<string, string>,
+    matchedTo: (title: string) => `Abbinato a «${title}»`,
+    fileCount: (count: number, figure: string) => (count === 1 ? '1 file' : `${figure} file`),
+    looserUnlinkLabel: (unit: string) => `Scollega ${unit} dal suo titolo`,
+    looserUnlinked: (unit: string) =>
+      `${unit} è stato scollegato: viene abbinato solo in base al nome e all’anno esatti.`,
     openPage: 'Apri la pagina della cartella',
   },
   mySources: {

@@ -95,12 +95,18 @@ func newSearchFailureJSON(addon, failure string) *searchFailureJSON {
 }
 
 // matchedByJSON counts the matched files by how they were matched: by an
-// identifier in their name, by their NFO file, by a search, or by a link.
+// identifier in their name, by their NFO file, by a search, by a search
+// that kept a title of the year before or after the name's (year), named
+// alike once numerals are read (numerals), or both (yearNumerals), or by a
+// link.
 type matchedByJSON struct {
-	Name   int `json:"name"`
-	NFO    int `json:"nfo"`
-	Search int `json:"search"`
-	Link   int `json:"link"`
+	Name         int `json:"name"`
+	NFO          int `json:"nfo"`
+	Search       int `json:"search"`
+	Year         int `json:"year"`
+	Numerals     int `json:"numerals"`
+	YearNumerals int `json:"yearNumerals"`
+	Link         int `json:"link"`
 }
 
 // datedByJSON counts a home videos folder's videos by where their dates
@@ -140,7 +146,8 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 	}
 	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, Share: f.Share, User: f.User, PasswordSet: f.PasswordSet,
 		CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error, Scanning: f.Scanning, Files: f.Files, Matched: f.Matched,
-		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Link: f.MatchedBy.Link},
+		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Year: f.MatchedBy.Year,
+			Numerals: f.MatchedBy.Numerals, YearNumerals: f.MatchedBy.YearNumerals, Link: f.MatchedBy.Link},
 		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, Gained: f.Gained, Measured: f.Measured,
 		DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
 		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork, ReadExtras: f.ReadExtras, Extras: f.Extras,
@@ -403,6 +410,54 @@ func (h *handler) folderUnmatched(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// looserJSON is a unit of a local folder a looser rule matched: the unit
+// an unlink names, its first file and how many it has, what its name was
+// read as, the title it was matched to, its name and year, and the rule:
+// "year" for a title of the year before or after, "numerals" for one
+// named alike once numerals are read, "year_numerals" for both.
+type looserJSON struct {
+	Unit      string `json:"unit"`
+	Path      string `json:"path"`
+	Files     int    `json:"files"`
+	Title     string `json:"title"`
+	Year      *int   `json:"year"`
+	ImdbID    string `json:"imdbId"`
+	Name      string `json:"name"`
+	TitleYear *int   `json:"titleYear"`
+	Rule      string `json:"rule"`
+}
+
+// folderLooser lists the units of a local folder a looser rule matched,
+// and how many there are.
+func (h *handler) folderLooser(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.folderScope(w, r); !ok {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	list, total, err := h.Folders.Looser(r.Context(), id)
+	if h.answerFailure(w, r, err) {
+		return
+	}
+	result := struct {
+		Total int          `json:"total"`
+		Units []looserJSON `json:"units"`
+	}{Total: total, Units: make([]looserJSON, 0, len(list))}
+	year := func(y int) *int {
+		if y > 0 {
+			return new(y)
+		}
+		return nil
+	}
+	for _, l := range list {
+		result.Units = append(result.Units, looserJSON{Unit: l.Unit, Path: l.Path, Files: l.Files, Title: l.Title, Year: year(l.Year),
+			ImdbID: l.StremioID, Name: l.Name, TitleYear: year(l.TitleYear), Rule: l.By})
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 // titleJSON is a title a search found for a link: its IMDb identifier,
 // name, year, kind ("movie" or "show"), and the item whose Primary image
 // is its poster, null without one.
@@ -484,8 +539,9 @@ func (h *handler) linkFolderFile(w http.ResponseWriter, r *http.Request) {
 	h.answerFolder(w, r, scope, id, err)
 }
 
-// unlinkFolderFile removes a link made by hand: the files are matched
-// again by their name.
+// unlinkFolderFile removes a link made by hand, or the title a looser rule
+// matched: the files are matched again by their name, by the exact rule
+// only for the latter.
 func (h *handler) unlinkFolderFile(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.folderScope(w, r)
 	if !ok {

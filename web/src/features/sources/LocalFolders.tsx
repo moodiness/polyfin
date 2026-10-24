@@ -17,6 +17,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   addLocalFolder,
   fetchAddons,
+  fetchLooserMatches,
   fetchRcloneRemotes,
   fetchStatus,
   fetchUnmatchedFiles,
@@ -63,7 +64,15 @@ import { folderFailure, invalidateScope, replaceCachedAddon } from './model'
 import TitleSearch from './TitleSearch'
 
 /** The ways files are matched, in the order a folder's figures tell them. */
-const matchMethods: MatchMethod[] = ['name', 'nfo', 'search', 'link']
+const matchMethods: MatchMethod[] = [
+  'name',
+  'nfo',
+  'search',
+  'year',
+  'numerals',
+  'yearNumerals',
+  'link',
+]
 
 /**
  * Keeps the server's sources fresh while a folder's scan goes on, every 2 seconds, so that its
@@ -956,8 +965,9 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
 }
 
 /**
- * The files of a folder no title was matched to, each linkable to an IMDb identifier, and the links
- * made; a music folder's tracks left out of its albums, which no link links.
+ * The files of a folder no title was matched to, each linkable to an IMDb identifier, those a looser
+ * rule matched, and the links made; a music folder's tracks left out of its albums, which no link
+ * links.
  */
 export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalFolder }) {
   const { language, t } = useI18n()
@@ -1043,6 +1053,7 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
           </>
         )}
       </PanelSection>
+      <LooserMatches addon={addon} folder={folder} />
       {(folder.links.length > 0 || folder.episodes.length > 0) && (
         <PanelSection title={text.linksTitle}>
           <ul className="flex flex-col divide-y divide-line">
@@ -1087,6 +1098,97 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
         </PanelSection>
       )}
     </>
+  )
+}
+
+/**
+ * The units of a folder a looser rule matched, each with its rule, what its name was read as and
+ * the title it was matched to, and its unlink, which leaves it to the exact rule.
+ */
+function LooserMatches({ addon, folder }: { addon: Addon; folder: LocalFolder }) {
+  const { language, t } = useI18n()
+  const text = t.localFolders
+  const toast = useToast()
+  const count = folder.matchedBy.year + folder.matchedBy.numerals + folder.matchedBy.yearNumerals
+  const looser = useQuery({
+    // The figures key the list, as they key the unmatched files.
+    queryKey: [...queryKeys.looser(addon.id), folder.files, count, folder.scanning],
+    queryFn: ({ signal }) => fetchLooserMatches(addon.id, signal),
+    enabled: count > 0,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === addon.id ? previous : undefined,
+  })
+  const unlink = useMutation({
+    mutationFn: (unit: string) => unlinkLocalFile(addon.id, unit),
+    onSuccess: (updated, unit) => {
+      replaceCachedAddon('shared', updated)
+      toast(text.looserUnlinked(unitName(unit, folder, text.discTitle)))
+    },
+    onSettled: () => {
+      invalidateScope('shared')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unmatched(addon.id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.looser(addon.id) })
+    },
+  })
+  if (count === 0) return null
+
+  return (
+    <PanelSection title={text.looserTitle} description={text.looserHelp}>
+      {looser.isPending ? (
+        <Skeleton className="h-24 rounded-panel" />
+      ) : looser.isError ? (
+        <InlineError onRetry={() => void looser.refetch()} retrying={looser.isRefetching}>
+          {errorMessage(t, looser.error)}
+        </InlineError>
+      ) : (
+        <>
+          <ul className="flex flex-col divide-y divide-line">
+            {looser.data.units.map((match) => {
+              const name = unitName(match.unit, folder, text.discTitle)
+              const read = match.year === null ? match.title : `${match.title} (${match.year})`
+              const title =
+                match.titleYear === null ? match.name : `${match.name} (${match.titleYear})`
+              return (
+                <li key={match.unit} className="flex items-center justify-between gap-4 py-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-small break-all text-ink">{name}</p>
+                    <p className="mt-1 text-small text-ink-3">
+                      {[
+                        text.looserRules[match.rule] ?? match.rule,
+                        text.read(read),
+                        text.matchedTo(title),
+                        match.files > 1
+                          ? text.fileCount(match.files, match.files.toLocaleString(language))
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                    <Badge tone="warn">{match.imdbId}</Badge>
+                  </div>
+                  <IconButton
+                    label={text.looserUnlinkLabel(name)}
+                    icon={LinkBreakIcon}
+                    size="sm"
+                    disabled={unlink.isPending}
+                    onClick={() => unlink.mutate(match.unit)}
+                  />
+                </li>
+              )
+            })}
+          </ul>
+          {looser.data.total > looser.data.units.length && (
+            <p className="mt-3 text-small text-ink-3">
+              {text.shownOf(
+                looser.data.units.length.toLocaleString(language),
+                looser.data.total.toLocaleString(language),
+              )}
+            </p>
+          )}
+        </>
+      )}
+      {unlink.isError && <FieldError>{errorMessage(t, unlink.error)}</FieldError>}
+    </PanelSection>
   )
 }
 

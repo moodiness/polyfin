@@ -394,6 +394,10 @@ const sources: typeof en = {
       name: (count: string) => `${count} por un identificador en el nombre`,
       nfo: (count: string) => `${count} por un archivo NFO`,
       search: (count: string) => `${count} por una búsqueda`,
+      year: (count: string) => `${count} por una búsqueda, de un año de diferencia`,
+      numerals: (count: string) => `${count} por una búsqueda, con los números leídos igual`,
+      yearNumerals: (count: string) =>
+        `${count} por una búsqueda, de un año de diferencia y con los números leídos igual`,
       link: (count: string) => `${count} a mano`,
     },
     holds: 'Contenido',
@@ -517,6 +521,20 @@ const sources: typeof en = {
     removeEpisodeLabel: (title: string) => `Eliminar el episodio de ${title}`,
     episodeRemoved: (title: string) =>
       `Se ha eliminado el episodio de ${title}: el nombre de su disco lo numera, o vuelve a sugerirse.`,
+    looserTitle: 'Asociados por una regla más flexible',
+    looserHelp:
+      'Ningún título tiene exactamente el nombre y el año de estos archivos, así que Polyfin los asoció al único título que deja una regla más flexible: uno del año anterior o del siguiente, o uno con el mismo nombre una vez leídos igual los números, como 2 por II o Part 1 por Part One. Revíselos. Desvincule uno erróneo: entonces solo se asocia por su nombre y año exactos, y queda sin asociar hasta que lo vincule a su título.',
+    looserRules: {
+      year: 'Un título de un año de diferencia',
+      numerals: 'Números leídos igual',
+      year_numerals: 'Un título de un año de diferencia, números leídos igual',
+    } as Record<string, string>,
+    matchedTo: (title: string) => `Asociado a «${title}»`,
+    fileCount: (count: number, figure: string) =>
+      count === 1 ? '1 archivo' : `${figure} archivos`,
+    looserUnlinkLabel: (unit: string) => `Desvincular ${unit} de su título`,
+    looserUnlinked: (unit: string) =>
+      `${unit} se ha desvinculado: solo se asocia por su nombre y año exactos.`,
     openPage: 'Abrir la página de la carpeta',
   },
   mySources: {
