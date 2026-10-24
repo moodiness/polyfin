@@ -12,10 +12,31 @@ The Docker image includes jellyfin-web 12.3. Polyfin serves it at `/web/`, as Je
 - The web client's scripts, styles and other text files go gzip-compressed to browsers that accept it. Each file is compressed once, on its first request, and kept in memory.
 - On a title's page, the web client shows the title's IMDb rating, critics' score and audience score while the server has an **MDBList API key for ratings**, in place of the star and critic rating it shows otherwise. See [Ratings](addons-and-libraries.md#ratings).
 - On the page of a Live TV programme that has not started, the web client shows **Remind me** after the record buttons, with a menu offering **Remind me of every airing**, and **Reminder set**, which removes it, for a programme with a reminder. When no target of the user receives reminders and their apps do not show them, a line under the button says so, with a link to **My account › Notifications**. See [Programme reminders](live-tv.md#programme-reminders).
+- On the search page, while the field is empty, the web client lists the user's recent searches above the Suggestions. See [Recent searches](#recent-searches).
 
 **Compared with Jellyfin:**
 
 - Before an administrator exists, Jellyfin's web client opens its startup wizard instead.
+
+### Recent searches
+
+While the search field is empty, jellyfin-web's search page lists your last searches under "Recent searches", above the Suggestions and drawn as they are:
+
+- up to 10, newest first;
+- choosing one searches it again, in the library the search page was opened from, if any;
+- the ✕ after a search removes it, and "Clear all" removes them all.
+
+The [default theme](#default-theme) hides the Suggestions, so the searches show right under the field.
+
+A search is kept when you leave its results: you open a result or another page, clear the field, start another search, or close the tab. Only a search that found something is kept. Typing on, as from "the" to "the matrix", keeps the longer search only, and a search made again moves to the top, the same words in other capitals counting as one.
+
+The list works with the keyboard as the rest of the page does: Tab, or the arrows in the TV layout, move to the searches and their buttons, and Enter chooses. After a search is chosen, the field has the focus; after one is removed, the next ✕ has it. Its words follow the web client's language, as the script's others (see [Dashboard links and single sign-on](#dashboard-links-and-single-sign-on)).
+
+Recent searches stay in the browser, nothing goes to the server: each browser has its own, and other apps don't show them. They are kept for the server and the user signed in, so another user signing in on the same browser never sees them. **Sign out** keeps them for your next sign-in in that browser, as jellyfin-web keeps the settings it stores in the browser for each user. Clearing the site's data in the browser removes them.
+
+**Compared with Jellyfin:**
+
+- jellyfin-web on a Jellyfin server keeps no recent searches.
 
 ## Dashboard links and single sign-on
 

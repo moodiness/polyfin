@@ -80,7 +80,7 @@ All results stay within the user's libraries, parental control and blocked genre
 
 ### Search suggestions
 
-Before anything is typed, jellyfin-web's search page shows Suggestions: the user's favorite and liked titles first, then movies and series from the top of each of the user's libraries, in their catalog's order: the most popular first in a popular catalog. The libraries are mixed, one title of each in turn, and the picks change each time the page opens, each library giving one of its next two titles at random. They stay within the user's libraries, parental control and blocked genres, without the titles they hid.
+Before anything is typed, jellyfin-web's search page shows Suggestions: the user's favorite and liked titles first, then movies and series from the top of each of the user's libraries, in their catalog's order: the most popular first in a popular catalog. The libraries are mixed, one title of each in turn, and the picks change each time the page opens, each library giving one of its next two titles at random. They stay within the user's libraries, parental control and blocked genres, without the titles they hid. Above them, the web client lists the user's recent searches (see [Recent searches](web-client.md#recent-searches)).
 
 **Compared with Jellyfin:**
 
