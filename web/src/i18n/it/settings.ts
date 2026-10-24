@@ -778,12 +778,80 @@ const settings: typeof en = {
     webPlayerHelp:
       'Ciò che il lettore web (jellyfin-web, su /web/) mostra oltre alle proprie pagine. Lo script si applica al successivo caricamento di una pagina del lettore web; il lettore web conserva il CSS e il messaggio di accesso per un massimo di un minuto.',
     openWebPlayer: 'Apri il lettore web',
+    webTheme: 'Tema',
+    webThemeHelp:
+      'L’aspetto del lettore web. LumaaGlaass è il tema incluso in Polyfin. Nessuno mantiene l’aspetto di jellyfin-web, il cui tema di visualizzazione ogni utente sceglie in Impostazioni › Visualizzazione. Personalizzato usa il tuo CSS e il tuo JavaScript qui sotto, conservati mentre è scelto un altro tema.',
+    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'Nessuno', custom: 'Personalizzato' },
+    webThemeReload:
+      'Il lettore web conserva il CSS personalizzato letto fino a un minuto: dopo una modifica, ricarica le sue pagine aperte un minuto dopo.',
+    webThemeTexts: {
+      lumaaglaass:
+        'Ciò che Polyfin serve per LumaaGlaass, mostrato qui e non modificabile. Scegli Personalizzato, o «Modifica come personalizzato», per scrivere il tuo.',
+      none: 'Nessuno non serve CSS né JavaScript personalizzati. Scegli Personalizzato per scrivere il tuo.',
+    },
+    editAsCustom: 'Modifica come personalizzato',
+    editAsCustomTitle: 'Sostituire i tuoi testi personalizzati?',
+    editAsCustomConfirm:
+      'Il tuo CSS e il tuo JavaScript personalizzati vengono sostituiti da quelli di LumaaGlaass, e il tema diventa Personalizzato. Salvare la pagina conserva la modifica.',
+    themeCopy: 'Conserva una copia in Polyfin',
+    themeCopyHelp: (depth: number, file: string, total: string, files: number) =>
+      `Salva i fogli di stile, gli script, i caratteri e le immagini che i testi personalizzati caricano da altrove, come un tema su un CDN, nella cartella dei dati di Polyfin, e fa caricare i file da Polyfin: il tema funziona allora senza raggiungere il suo CDN. Segue @import, url() e gli indirizzi che gli script nominano, per ${depth} livelli, solo da indirizzi su internet, fino a ${file} per file, e ${total} e ${files} file in tutto.`,
+    themeCopySaved: (files: number, size: string, date: string) =>
+      `Una copia di ${files === 1 ? 'un file' : `${files} file`}, ${size}, salvata il ${date}.`,
+    themeCopyFiles: 'File salvati',
+    themeCopyUnsaved: (count: number) =>
+      count === 1
+        ? 'Non è stato possibile salvare un indirizzo; viene ancora caricato da altrove:'
+        : `Non è stato possibile salvare ${count} indirizzi; vengono ancora caricati da altrove:`,
+    themeCopyMissing: (count: number) =>
+      count === 1
+        ? 'Un file della copia manca nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema. Aggiorna la copia per scaricarlo di nuovo.'
+        : `${count} file della copia mancano nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema. Aggiorna la copia per scaricarli di nuovo.`,
+    themeCopyOutside: (count: number) =>
+      count === 1
+        ? 'I testi personalizzati caricano un indirizzo da altrove:'
+        : `I testi personalizzati caricano ${count} indirizzi da altrove:`,
+    themeCopyStillOutside: (count: number) =>
+      count === 1
+        ? 'Un indirizzo aggiunto dopo la copia è caricato da altrove; aggiorna la copia per salvare anche quello:'
+        : `${count} indirizzi aggiunti dopo la copia sono caricati da altrove; aggiorna la copia per salvare anche quelli:`,
+    themeCopyNothing: 'I testi personalizzati non caricano nulla da altrove.',
+    themeCopyKeep: 'Conserva una copia in Polyfin',
+    themeCopyUpdate: 'Aggiorna la copia',
+    themeCopyRemove: 'Rimuovi la copia',
+    themeCopyRemoveTitle: 'Rimuovere la copia?',
+    themeCopyRemoveConfirm:
+      'I suoi file vengono eliminati, e i testi personalizzati li caricano di nuovo dai loro indirizzi originali.',
+    themeCopyKept: 'Copia salvata. Ricarica le pagine aperte del lettore web tra un minuto.',
+    themeCopyRemoved: 'Copia rimossa. Ricarica le pagine aperte del lettore web tra un minuto.',
+    themeCopyFailed:
+      'Non è stato possibile salvare alcun file, quindi nessuna copia è stata fatta:',
+    themeCopySaveFirst: 'Salva prima le modifiche: la copia viene fatta dai testi salvati.',
+    themeCopyKinds: {
+      stylesheet: 'foglio di stile',
+      script: 'script',
+      font: 'carattere',
+      image: 'immagine',
+    },
+    themeCopyReasons: {
+      private_address: 'su una rete locale, o reindirizzato lì',
+      not_http: 'reindirizzato a un indirizzo né http né https',
+      unavailable: 'non disponibile',
+      timeout: 'ha impiegato troppo tempo',
+      wrong_type: 'non è un file del tipo con cui è caricato',
+      too_large: 'più grande del limite per un file',
+      total_too_large: 'oltre il limite dell’intera copia',
+      too_many_files: 'oltre il numero di file consentito',
+      too_deep: 'nominato troppi livelli più in basso',
+      built_at_run_time:
+        'completato da uno script quando viene eseguito, cosa che nessuna copia può seguire',
+    },
     customCss: 'CSS personalizzato',
     customCssHelp:
-      'Applicato a ogni pagina del lettore web, per ogni utente, come CSS personalizzato di Jellyfin. Gli utenti possono disattivarlo in Impostazioni › Visualizzazione. Per impostazione predefinita contiene il foglio di stile del tema LumaaGlaass, abbinato al JavaScript personalizzato predefinito: svuota entrambi per mantenere l’aspetto originale del lettore web.',
+      'Applicato a ogni pagina del lettore web, per ogni utente, come CSS personalizzato di Jellyfin. Gli utenti possono disattivarlo in Impostazioni › Visualizzazione.',
     customJs: 'JavaScript personalizzato',
     customJsHelp:
-      'Caricato da ogni pagina del lettore web, dopo i suoi script. Se vuoto, non viene caricato nulla. Per impostazione predefinita carica lo script del tema LumaaGlaass, abbinato al CSS personalizzato predefinito.',
+      'Caricato da ogni pagina del lettore web, dopo i suoi script. Se vuoto, non viene caricato nulla.',
     customJsWarningTitle: 'Incolla solo codice di cui ti fidi',
     customJsWarning:
       'Questo script viene eseguito nel browser di ogni utente che apre il lettore web su questo server, con il suo account. Può leggere ciò che vede e agire al suo posto.',

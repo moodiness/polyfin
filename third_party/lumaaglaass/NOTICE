@@ -9,7 +9,7 @@ its repository, at internal/webtheme/lumaaglaass, with Polyfin's patches
 - 0002-loader-defaults.patch
 
 The web client serves them at /web/polyfin/themes/lumaaglaass/, where the
-default Custom CSS and Custom JavaScript load them: nothing is loaded from
-elsewhere.
+custom CSS and script Polyfin serves for the LumaaGlaass theme load them:
+nothing is loaded from elsewhere.
 
 Source: https://github.com/Dyhlio/LumaaGlaass/tree/43dc3e0b886a6ecae0f5e53e210dc6f8c7b2eda1

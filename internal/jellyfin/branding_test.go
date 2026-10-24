@@ -29,16 +29,18 @@ func TestBrandingComesFromTheSettings(t *testing.T) {
 	t.Parallel()
 	s, _, member := administrated(t)
 	settings := s.store.Settings()
-	settings.CustomCss = ""
+	settings.WebTheme = accounts.WebThemeNone
+	settings.CustomCss = ".kept { color: red; }"
 	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}
-	// No CSS: what a new Jellyfin answers.
+	// No CSS, jellyfin-web's own look: what a new Jellyfin answers.
 	for _, path := range []string{"/Branding/Css", "/Branding/Css.css"} {
 		if status, contentType, body := s.css(path); status != http.StatusOK || contentType != "text/css; charset=utf-8" || body != "" {
 			t.Errorf("%s with no CSS: %d %q %q", path, status, contentType, body)
 		}
 	}
+	settings.WebTheme = accounts.WebThemeCustom
 	settings.CustomCss = ".skinHeader { background: teal; }"
 	settings.LoginDisclaimer = "Private server: **members only**. <a href=\"https://example.com\">Rules</a>"
 	settings.CustomJs = "console.log('not branding')"
@@ -84,6 +86,7 @@ func TestBrandingIsSavedByAdministratorsOnly(t *testing.T) {
 	t.Parallel()
 	s, admin, member := administrated(t)
 	settings := s.store.Settings()
+	settings.WebTheme = accounts.WebThemeCustom
 	settings.CustomJs = "console.log('kept')"
 	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
@@ -137,5 +140,40 @@ func TestBrandingIsSavedByAdministratorsOnly(t *testing.T) {
 	// Other parts of the configuration stay read only.
 	if status, _ := s.call(http.MethodPost, "/System/Configuration/encoding", admin, map[string]any{}); status != http.StatusMethodNotAllowed {
 		t.Errorf("encoding: %d", status)
+	}
+}
+
+// jellyfin-web's branding page posts back the CSS it read, the theme's:
+// the theme stays, and the Custom texts kept while it is shown stay as
+// they were. Another CSS becomes the Custom CSS, and the page keeps the
+// script it had, which Jellyfin's branding knows nothing of.
+func TestBrandingKeepsTheThemeItsCssNames(t *testing.T) {
+	t.Parallel()
+	s, admin, _ := administrated(t)
+	settings := s.store.Settings()
+	settings.WebTheme = accounts.WebThemeLumaaGlaass
+	settings.CustomCss, settings.CustomJs = ".mine {}", "console.log('mine')"
+	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	_, body := s.call(http.MethodGet, "/System/Configuration/branding", admin, nil)
+	var read BrandingOptions
+	if err := json.Unmarshal(body, &read); err != nil || read.CustomCss != accounts.LumaaGlaassCss {
+		t.Fatalf("the branding read: %s", body)
+	}
+	read.LoginDisclaimer = "Welcome"
+	if status, body := s.call(http.MethodPost, "/System/Configuration/branding", admin, read); status != http.StatusNoContent {
+		t.Fatalf("posted back: %d %s", status, body)
+	}
+	got := s.store.Settings()
+	if got.WebTheme != accounts.WebThemeLumaaGlaass || got.CustomCss != ".mine {}" || got.CustomJs != "console.log('mine')" || got.LoginDisclaimer != "Welcome" {
+		t.Errorf("after the theme's CSS came back: theme %q, texts %q and %q, disclaimer %q", got.WebTheme, got.CustomCss, got.CustomJs, got.LoginDisclaimer)
+	}
+	if status, body := s.call(http.MethodPost, "/System/Configuration/branding", admin, map[string]any{"CustomCss": "body { color: red; }"}); status != http.StatusNoContent {
+		t.Fatalf("another CSS: %d %s", status, body)
+	}
+	got = s.store.Settings()
+	if got.WebTheme != accounts.WebThemeCustom || got.CustomCss != "body { color: red; }" || got.CustomJs != accounts.LumaaGlaassJs {
+		t.Errorf("after another CSS: theme %q, texts %q and %q", got.WebTheme, got.CustomCss, got.CustomJs)
 	}
 }

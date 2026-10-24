@@ -10,6 +10,8 @@ import {
   type Settings,
   type VersionCodec,
   type VersionCriterion,
+  type WebTheme,
+  webThemes,
 } from '@/api'
 import type { SettingsSectionId } from '@/app/navigation'
 import { formatHour } from '@/format'
@@ -41,6 +43,7 @@ import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
 import VersionOrder, { CodecOrder, SourceOrder } from './VersionOrder'
+import { EditAsCustom, shownTexts, ThemeCopyPanel } from './WebTheme'
 
 /** The redirect URI of a Trakt or Simkl app whose users enter a code instead of being redirected. */
 const oobRedirectUri = 'urn:ietf:wg:oauth:2.0:oob'
@@ -1502,13 +1505,15 @@ function Backups({ form, update, error, number, range, limits }: SectionFormApi)
   )
 }
 
-function WebPlayer({ form, update, error, limits }: SectionFormApi) {
+function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
   const status = useQuery({
     queryKey: queryKeys.status,
     queryFn: ({ signal }) => fetchStatus(signal),
   })
+  const custom = form.webTheme === 'custom'
+  const shown = shownTexts(form)
   return (
     <>
       <SettingsGroup>
@@ -1525,30 +1530,55 @@ function WebPlayer({ form, update, error, limits }: SectionFormApi) {
             </ExternalButtonLink>
           </SettingRow>
         )}
+        <FieldRow
+          anchor="web-theme"
+          label={s.webTheme}
+          help={s.webThemeHelp}
+          error={error('web-theme')}
+          aside={form.webTheme === 'lumaaglaass' && <EditAsCustom form={form} update={update} />}
+        >
+          <Select
+            value={form.webTheme}
+            options={webThemes.map((value) => ({ value, label: s.webThemeChoices[value] }))}
+            onValue={(webTheme: WebTheme) => update({ webTheme })}
+            className="max-w-xs"
+          />
+          <p className="mt-2 max-w-[60ch] text-small text-ink-3">{s.webThemeReload}</p>
+        </FieldRow>
         <SettingRow anchor="custom-css">
           <CodeEditor
             label={s.customCss}
-            help={s.customCssHelp}
-            value={form.customCss}
+            help={form.webTheme === 'custom' ? s.customCssHelp : s.webThemeTexts[form.webTheme]}
+            value={shown.css}
             onValue={(customCss) => update({ customCss })}
             maxBytes={limits('customCss').max ?? 0}
+            readOnly={!custom}
             error={error('custom-css')}
           />
         </SettingRow>
         <SettingRow anchor="custom-js">
           <CodeEditor
             label={s.customJs}
-            help={s.customJsHelp}
-            value={form.customJs}
+            help={form.webTheme === 'custom' ? s.customJsHelp : s.webThemeTexts[form.webTheme]}
+            value={shown.js}
             onValue={(customJs) => update({ customJs })}
             maxBytes={limits('customJs').max ?? 0}
+            readOnly={!custom}
             error={error('custom-js')}
           >
-            <Notice tone="warn">
-              <strong className="font-medium">{s.customJsWarningTitle}.</strong> {s.customJsWarning}
-            </Notice>
+            {custom && (
+              <Notice tone="warn">
+                <strong className="font-medium">{s.customJsWarningTitle}.</strong>{' '}
+                {s.customJsWarning}
+              </Notice>
+            )}
           </CodeEditor>
         </SettingRow>
+        {custom && (
+          <SettingRow anchor="theme-copy">
+            <ThemeCopyPanel dirty={dirty} adopt={adopt} />
+          </SettingRow>
+        )}
         <SettingRow anchor="login-disclaimer">
           <CodeEditor
             label={s.loginDisclaimer}

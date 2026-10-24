@@ -22,6 +22,7 @@ export default function CodeEditor({
   maxBytes,
   rows = 19,
   error,
+  readOnly = false,
   children,
 }: {
   label: string
@@ -31,6 +32,8 @@ export default function CodeEditor({
   maxBytes: number
   rows?: number
   error?: string
+  /** Shows the code without letting it be edited, such as a theme's that Polyfin writes. */
+  readOnly?: boolean
   /** Shown between the help and the field, such as a warning. */
   children?: ReactNode
 }) {
@@ -94,6 +97,7 @@ export default function CodeEditor({
           id={id}
           value={value}
           wrap="off"
+          readOnly={readOnly}
           spellCheck={false}
           autoCapitalize="off"
           autoComplete="off"
@@ -104,7 +108,10 @@ export default function CodeEditor({
           }}
           aria-describedby={`${id}-help ${id}-size${error ? ` ${id}-error` : ''}`}
           aria-invalid={tooLarge || error ? true : undefined}
-          className="block h-full min-w-0 flex-1 resize-none overflow-auto bg-transparent px-3 py-2.5 text-ink outline-none scrollbar-thin"
+          className={cx(
+            'block h-full min-w-0 flex-1 resize-none overflow-auto bg-transparent px-3 py-2.5 outline-none scrollbar-thin',
+            readOnly ? 'text-ink-3' : 'text-ink',
+          )}
         />
       </div>
       <p

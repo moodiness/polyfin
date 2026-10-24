@@ -646,10 +646,48 @@ const (
 	DefaultLocalScanHours = 6
 )
 
+// The web player's looks, Settings.WebTheme: the LumaaGlaass theme Polyfin
+// bundles (LumaaGlaassCss and LumaaGlaassJs), jellyfin-web's own look, with
+// no custom CSS or script, and the administrator's CustomCss and CustomJs.
+const (
+	WebThemeLumaaGlaass = "lumaaglaass"
+	WebThemeNone        = "none"
+	WebThemeCustom      = "custom"
+)
+
+// WebThemes are the values of Settings.WebTheme, the default first.
+var WebThemes = []string{WebThemeLumaaGlaass, WebThemeNone, WebThemeCustom}
+
+// ServedCss is the custom CSS the web player gets for WebTheme: Jellyfin's
+// branding CSS.
+func (settings Settings) ServedCss() string {
+	switch settings.WebTheme {
+	case WebThemeLumaaGlaass:
+		return LumaaGlaassCss
+	case WebThemeCustom:
+		return settings.CustomCss
+	}
+	return ""
+}
+
+// ServedJs is the script Polyfin adds to the web player's page for
+// WebTheme.
+func (settings Settings) ServedJs() string {
+	switch settings.WebTheme {
+	case WebThemeLumaaGlaass:
+		return LumaaGlaassJs
+	case WebThemeCustom:
+		return settings.CustomJs
+	}
+	return ""
+}
+
+// ErrInvalidWebTheme reports a Settings.WebTheme not in WebThemes.
 // ErrInvalidCustomCss, ErrInvalidCustomJs and ErrInvalidLoginDisclaimer
 // report a Settings.CustomCss, CustomJs or LoginDisclaimer longer than its
 // maximum, or holding a NUL character, which no web page has.
 var (
+	ErrInvalidWebTheme        = errors.New("invalid web player theme")
 	ErrInvalidCustomCss       = errors.New("invalid custom CSS")
 	ErrInvalidCustomJs        = errors.New("invalid custom JavaScript")
 	ErrInvalidLoginDisclaimer = errors.New("invalid login disclaimer")
@@ -1407,13 +1445,19 @@ type Settings struct {
 	// after an SMB server tells of a change, or once a listing made every
 	// few minutes changed.
 	WatchLocalFolders bool
-	// CustomCss and LoginDisclaimer are Jellyfin's branding: the CSS
-	// jellyfin-web applies to every page, unless a user turns it off in
-	// their display settings, and the text, Markdown or HTML it shows
-	// under its sign-in form. CustomJs is a script Polyfin adds to
-	// jellyfin-web's page, which Jellyfin has no setting for. CustomCss and
-	// CustomJs load the LumaaGlaass theme by default (see DefaultCustomCss);
-	// LoginDisclaimer is empty by default, which shows nothing.
+	// WebTheme is the web player's look, one of WebThemes: the LumaaGlaass
+	// theme Polyfin bundles, the default, jellyfin-web's own look, or the
+	// administrator's CustomCss and CustomJs. ServedCss and ServedJs are
+	// what the web player gets for it.
+	WebTheme string
+	// CustomCss and CustomJs are the administrator's own theme, served
+	// while WebTheme is WebThemeCustom and kept while another is chosen:
+	// the CSS jellyfin-web applies to every page, unless a user turns it
+	// off in their display settings, which is Jellyfin's branding, and a
+	// script Polyfin adds to jellyfin-web's page, which Jellyfin has no
+	// setting for. Both are empty by default. LoginDisclaimer, Jellyfin's
+	// branding too, is the text, Markdown or HTML jellyfin-web shows under
+	// its sign-in form, empty by default, which shows nothing.
 	CustomCss       string
 	CustomJs        string
 	LoginDisclaimer string
@@ -1710,7 +1754,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"recording_commercials, " +
 	"live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
 	"convert_recordings, convert_recordings_from, convert_recordings_until, convert_recordings_on_processor, " +
-	"custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
+	"web_theme, custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, collection_library_apps, remuxdb, remuxdb_url, " +
 	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
@@ -1761,7 +1805,7 @@ func (settings *Settings) fields() []any {
 		&settings.LiveTvRefreshHours, &settings.LocalScanHours,
 		&settings.WatchLocalFolders,
 		&settings.ConvertRecordings, &settings.ConvertRecordingsFrom, &settings.ConvertRecordingsUntil, &settings.ConvertRecordingsOnProcessor,
-		&settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
+		&settings.WebTheme, &settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
 		&settings.TraktClientID, &settings.TraktClientSecret, &settings.SimklClientID,
 		&settings.LastFMAPIKey, &settings.LastFMSecret,
 		&settings.AniListClientID, &settings.AniListClientSecret, &settings.MyAnimeListClientID, &settings.MyAnimeListClientSecret,
@@ -2126,6 +2170,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.LocalScanHours < 0 || settings.LocalScanHours > MaxLocalScanHours {
 		return Settings{}, ErrInvalidLocalScanHours
+	}
+	if !slices.Contains(WebThemes, settings.WebTheme) {
+		return Settings{}, ErrInvalidWebTheme
 	}
 	if !validWebText(settings.CustomCss, MaxCustomCodeBytes) {
 		return Settings{}, ErrInvalidCustomCss

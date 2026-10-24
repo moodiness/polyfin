@@ -114,6 +114,7 @@ The data folder is Polyfin's `POLYFIN_DATA_DIR` (see [Configuration](configurati
 | `backups` | The database backups, while **Back up the database every day** is on, unless **Backups folder** names another (see [Backups](backups.md)) |
 | `recordings` | The Live TV recordings, unless **Recordings folder** names another (see [Live TV](live-tv.md)) |
 | `cache` | The parts of the files being read, emptied at each start |
+| `themes` | The copy of a web player theme's files, when one is kept (see [Keeping a copy of a theme](web-client.md#keeping-a-copy-of-a-theme)) |
 | `desktop.json` | The app's choice of Start with the computer |
 
 Uninstalling the app leaves the data folder: remove it to remove everything Polyfin kept. The database listens on `127.0.0.1` alone, on a port chosen at the first start and kept while it stays free; its port is in `postgresql/polyfin.port`, and its user is `polyfin`, with the password of `polyfin.password`, to reach it with your own tools.

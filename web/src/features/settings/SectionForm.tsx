@@ -32,6 +32,13 @@ export type SectionFormApi = {
   range: (name: keyof Settings, scale?: number) => RangeText
   /** The smallest and largest values of a setting's number field, from the server's bounds. */
   limits: (name: keyof Settings, scale?: number) => { min?: number; max?: number }
+  /** Whether the form holds changes not saved yet. */
+  dirty: boolean
+  /**
+   * Takes settings the server changed itself, outside the form, such as texts an action
+   * rewrote, as saved, keeping the other changes not saved yet.
+   */
+  adopt: (patch: Partial<Settings>) => void
 }
 
 /**
@@ -138,6 +145,14 @@ export default function SectionForm({
         }),
         range: (name, scale) => rangeText(form.bounds[name], language, scale),
         limits: (name, scale) => numberLimits(form.bounds[name], scale),
+        dirty,
+        adopt: (patch) => {
+          setSaved((current) => ({ ...current, ...patch }))
+          setForm((current) => ({ ...current, ...patch }))
+          queryClient.setQueryData<Settings>(queryKeys.settings, (current) =>
+            current === undefined ? current : { ...current, ...patch },
+          )
+        },
       })}
       <SaveBar
         dirty={dirty}

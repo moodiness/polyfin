@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	// loaderAddress finds what the default Custom CSS imports and what the
-	// default Custom JavaScript loads.
+	// loaderAddress finds what the LumaaGlaass theme's custom CSS imports
+	// and what its custom script loads.
 	loaderAddress = regexp.MustCompile(`(?:url\(|\.src = )'([^']+)'`)
 	// extensionAddress finds the files the theme's script and its
 	// extensions load beside it.
@@ -36,14 +36,14 @@ type themeFile struct {
 	response *httptest.ResponseRecorder
 }
 
-// defaultThemeFiles are the files the default Custom CSS and JavaScript
-// load from the web client of h, and those the theme's script loads in
+// defaultThemeFiles are the files the LumaaGlaass theme's custom CSS and
+// script load from the web client of h, and those the theme's script loads in
 // turn, each as served; it fails when the defaults load anything from
 // outside Polyfin.
 func defaultThemeFiles(t *testing.T, h http.Handler) []themeFile {
 	t.Helper()
 	var targets []string
-	for _, code := range []string{accounts.DefaultCustomCss, accounts.DefaultCustomJs} {
+	for _, code := range []string{accounts.LumaaGlaassCss, accounts.LumaaGlaassJs} {
 		for _, match := range loaderAddress.FindAllStringSubmatch(code, -1) {
 			address, err := url.Parse(match[1])
 			if err != nil || address.Scheme != "" || address.Host != "" || strings.HasPrefix(match[1], "/") {
@@ -145,11 +145,11 @@ func TestDefaultThemeIsServedByPolyfin(t *testing.T) {
 }
 
 // Nothing of the default theme comes from outside Polyfin: neither the
-// default Custom CSS and JavaScript, nor any file of the theme they load,
+// custom CSS and script Polyfin serves for it, nor any file they load,
 // names an address elsewhere.
 func TestDefaultThemeLoadsNothingFromOutside(t *testing.T) {
 	h := webHandler(setupState{})
-	sources := map[string]string{"Custom CSS": accounts.DefaultCustomCss, "Custom JavaScript": accounts.DefaultCustomJs}
+	sources := map[string]string{"Custom CSS": accounts.LumaaGlaassCss, "Custom JavaScript": accounts.LumaaGlaassJs}
 	for _, file := range defaultThemeFiles(t, h) {
 		if file.response.Code != http.StatusOK {
 			t.Fatalf("%s: %d", file.target, file.response.Code)
@@ -253,7 +253,7 @@ const run = async ({ script, saved }) => {
 		"without options":  {want: settings{true, true, true}},
 		"saved, no option": {Saved: map[string]any{"homeCarousel": false}, want: settings{false, true, true}},
 	}
-	input, _ := json.Marshal(map[string]any{"loader": accounts.DefaultCustomJs, "extension": extension, "cases": cases})
+	input, _ := json.Marshal(map[string]any{"loader": accounts.LumaaGlaassJs, "extension": extension, "cases": cases})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)
 	command.Stdin = strings.NewReader(string(input))
 	output, err := command.Output()

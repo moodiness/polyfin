@@ -1,7 +1,9 @@
 // Package webtheme holds the web player's default theme, LumaaGlaass,
 // bundled with Polyfin (see third_party/lumaaglaass): the web client serves
-// its files from Polyfin itself, and the default Custom CSS and JavaScript
-// load them, so no browser loads the theme from elsewhere. Its files are
+// its files from Polyfin itself, and the custom CSS and script Polyfin
+// serves while LumaaGlaass is the web player's theme (see
+// accounts.LumaaGlaassCss) load them, so no browser loads the theme from
+// elsewhere. Its files are
 // refreshed from a commit of the theme's repository, with Polyfin's
 // patches, by scripts/lumaaglaass.sh.
 package webtheme

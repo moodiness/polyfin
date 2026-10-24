@@ -26,7 +26,7 @@ While the search field is empty, jellyfin-web's search page lists your last sear
 - choosing one searches it again, in the library the search page was opened from, if any;
 - the ✕ after a search removes it, and "Clear all" removes them all.
 
-The [default theme](#default-theme) hides the Suggestions, so the searches show right under the field.
+The [default theme](#lumaaglaass) hides the Suggestions, so the searches show right under the field.
 
 A search is kept when you leave its results: you open a result or another page, clear the field, start another search, or close the tab. Only a search that found something is kept. Typing on, as from "the" to "the matrix", keeps the longer search only, and a search made again moves to the top, the same words in other capitals counting as one.
 
@@ -110,7 +110,8 @@ A user signed in to the web client, administrator or member, arrives in the admi
 - The page itself is never cached.
 - Files whose name or query carries a build hash are cached for a year.
 - The other files are revalidated.
-- The files of the [default theme](#default-theme), at `/web/polyfin/themes/lumaaglaass/<version>/assets/`, are Polyfin's own: cached for a year at the version of the bundled files, `text/css` and `text/javascript`. Any other version, such as `latest`, is redirected to the current one, and revalidated.
+- The files of the [default theme](#lumaaglaass), at `/web/polyfin/themes/lumaaglaass/<version>/assets/`, are Polyfin's own: cached for a year at the version of the bundled files, `text/css` and `text/javascript`. Any other version, such as `latest`, is redirected to the current one, and revalidated.
+- The files of a [copy of a theme](#keeping-a-copy-of-a-theme), at `/web/polyfin/themes/saved/<id>/`, are cached for a year, as `<id>` changes with each copy, with the type of their extension and a `Content-Security-Policy` that keeps them from running anything when opened on their own.
 - `/web/` gets no Content-Security-Policy, as from Jellyfin: the admin app's would stop jellyfin-web from working. The other security headers stay.
 
 **Compared with Jellyfin:**
@@ -119,13 +120,14 @@ A user signed in to the web client, administrator or member, arrives in the admi
 
 ## Customizing the web client
 
-**Settings › Web player** in the admin app holds three texts for the web client: **Custom CSS**, **Sign-in message** and **Custom JavaScript**, one switch, **Add versions to an open title's page**, and the [home rows](#home-rows). By default, **Custom CSS** and **Custom JavaScript** load the LumaaGlaass theme (see [Default theme](#default-theme)), and **Sign-in message** is empty. **Open the web player** shows the result.
+**Settings › Web player** in the admin app holds the web client's **Theme**, two texts that are the **Custom** theme, **Custom CSS** and **Custom JavaScript**, the **Sign-in message**, one switch, **Add versions to an open title's page**, and the [home rows](#home-rows). By default, the theme is LumaaGlaass (see [Themes](#themes)), and **Sign-in message** is empty. **Open the web player** shows the result.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Custom CSS** | **Settings › Web player** | The theme's stylesheet | CSS applied to every page of the web client. Up to 2 MB. |
+| **Theme** | **Settings › Web player** | LumaaGlaass | The web client's look: **LumaaGlaass**, the theme Polyfin bundles, **None**, jellyfin-web's own look, or **Custom**, the two texts below. |
+| **Custom CSS** | **Settings › Web player** | Empty | CSS applied to every page of the web client while the theme is **Custom**. Up to 2 MB. |
+| **Custom JavaScript** | **Settings › Web player** | Empty | Script run on every page of the web client while the theme is **Custom**. Up to 2 MB. |
 | **Sign-in message** | **Settings › Web player** | Empty | Text shown under the sign-in form. Plain text, Markdown or HTML. Up to 8 KB. |
-| **Custom JavaScript** | **Settings › Web player** | The theme's script | Script run on every page of the web client. Up to 2 MB. |
 | **Add versions to an open title's page** | **Settings › Web player** | On | Adds the versions the addons find to a title's page while it is open. Off, a page opened before any version was found still lists the first ones, and the play buttons still wait for a version; the others show when the page is opened again. See [Title pages](playback.md#title-pages). |
 
 ### Home rows
@@ -150,37 +152,48 @@ No app can be given a new kind of home section. With **Also a library in other a
 
 **For app developers:** `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do. A row's `Id` is a folder: `/Items?ParentId=` lists the whole row, up to 500 titles, and `/Items/{Id}` describes it.
 
-### Default theme
+### Themes
 
-By default, **Custom CSS** imports the stylesheet of [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web, and **Custom JavaScript** loads its script. Polyfin bundles the theme: its files at commit `43dc3e0` of its repository (October 11, 2026, after its version 1.1.0), with two patches of Polyfin's. The theme is updated with Polyfin's releases.
+**Theme**, under **Settings › Web player**, is one of three:
 
-- The web client serves the theme's files itself, under `/web/polyfin/themes/lumaaglaass/`: no browser loads them from elsewhere, and the theme works on a server cut off from the internet.
-- Their address carries a version that changes with them, so a browser keeps each file for a year, and gets the new ones with the Polyfin release that brings them.
-- Each user chooses the theme's appearance and features on the LumaaGlaass page of the web client's settings menu. The choices are saved with their account, on every device.
-- The theme's home carousel, the large rotating artwork above the home rows, is off by default: the home starts with its rows, over a still background. A user turns it on with "Home carousel" on the LumaaGlaass page, then "Save". An administrator can do it for another user from that user's settings.
-  - The page starts from the options of **Custom JavaScript**: `homeCarousel: false` there is its default for every user who never saved it. The options it leaves out keep the theme's own recommended values.
-  - "Delete saved settings", and "Reset to defaults" or the "Recommended" profile followed by "Save", bring back these defaults, carousel off. The settings a user saved stay theirs.
-- The theme needs jellyfin-web's Dark theme, the default.
-- To keep the web client's own look, empty both fields: emptying one leaves half the theme. See [Use another theme](#use-another-theme).
-- Polyfin's patches, in [`third_party/lumaaglaass`](../third_party/lumaaglaass) with the theme's license:
-  - the LumaaGlaass page takes the options of **Custom JavaScript** as its defaults, where the theme's own page ignores them;
-  - the theme's script, pasted rather than loaded, takes its extensions from Polyfin, where it would take them from the main branch of the theme's repository.
-- `scripts/lumaaglaass.sh` makes the bundled copy from a commit of the theme's repository and applies the patches again, so that each update is a change to review.
-- A server upgraded from an earlier version gets the theme at its first start if both fields were empty. A server whose two fields still held an earlier default moves to the bundled copy, with the carousel off. A server whose fields hold its own CSS or script, or an edited default, keeps both as they are.
+- **LumaaGlaass**, the default: the theme Polyfin bundles (see [LumaaGlaass](#lumaaglaass)). Polyfin serves its CSS and its script itself, and the two fields show them without letting them be edited.
+- **None**: jellyfin-web's own look, with no custom CSS or script. Each user then picks one of jellyfin-web's display themes, such as Light or Blue Radiance, under the web client's "Settings › Display › Theme". With LumaaGlaass, only Dark fits.
+- **Custom**: **Custom CSS** and **Custom JavaScript**, your own theme (see [Use another theme](#use-another-theme)).
+
+Choosing a theme keeps the **Custom** texts as they are, so choosing **Custom** again brings them back. **Edit as Custom**, beside the choice while it is **LumaaGlaass**, copies its two texts into **Custom CSS** and **Custom JavaScript** and chooses **Custom**, to change its options; it asks first when the **Custom** texts are not empty. The change applies when the page is saved.
+
+jellyfin-web keeps the custom CSS it read for up to a minute, in the browser (its query cache), and the script changes at the next page load: after changing the theme, reload the web client's open pages a minute later, as the admin app says.
 
 **Compared with Jellyfin:**
 
-- Jellyfin's custom CSS is empty by default, and Jellyfin has no custom JavaScript.
+- Jellyfin has no theme choice: its custom CSS is empty by default, and it has no custom JavaScript.
+
+#### LumaaGlaass
+
+The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web: its stylesheet and its script. Polyfin bundles the theme: its files at commit `43dc3e0` of its repository (October 11, 2026, after its version 1.1.0), with two patches of Polyfin's. The theme is updated with Polyfin's releases.
+
+- The web client serves the theme's files itself, under `/web/polyfin/themes/lumaaglaass/`: no browser loads them from elsewhere, and the theme works on a server cut off from the internet.
+- Their address carries a version that changes with them, so a browser keeps each file for a year, and gets the new ones with the Polyfin release that brings them. The CSS and script that load them are made by Polyfin, not stored: a new copy of the theme changes them by itself.
+- Each user chooses the theme's appearance and features on the LumaaGlaass page of the web client's settings menu. The choices are saved with their account, on every device.
+- The theme's home carousel, the large rotating artwork above the home rows, is off by default: the home starts with its rows, over a still background. A user turns it on with "Home carousel" on the LumaaGlaass page, then "Save". An administrator can do it for another user from that user's settings.
+  - The page starts from the options of the theme's script, `window.LumaaGlaassOptions`: `homeCarousel: false` there is its default for every user who never saved it. The options it leaves out keep the theme's own recommended values. To change them for the whole server, use **Edit as Custom** and change them in **Custom JavaScript**.
+  - "Delete saved settings", and "Reset to defaults" or the "Recommended" profile followed by "Save", bring back these defaults, carousel off. The settings a user saved stay theirs.
+- The theme needs jellyfin-web's Dark theme, the default.
+- Polyfin's patches, in [`third_party/lumaaglaass`](../third_party/lumaaglaass) with the theme's license:
+  - the LumaaGlaass page takes the options of the script's loader as its defaults, where the theme's own page ignores them;
+  - the theme's script, pasted rather than loaded, takes its extensions from Polyfin, where it would take them from the main branch of the theme's repository.
+- `scripts/lumaaglaass.sh` makes the bundled copy from a commit of the theme's repository and applies the patches again, so that each update is a change to review.
+- A server upgraded from a version without **Theme** chooses it from its two texts: **LumaaGlaass** when they still loaded the bundled theme, which empties them; **None** when both were empty; otherwise **Custom**, with the texts as they were, an edited LumaaGlaass included.
 
 #### Follow the theme's repository
 
-To get the theme's changes as soon as they are published, rather than with Polyfin's releases, load it from a CDN that serves its repository, as Polyfin did until version 0.44. In **Custom CSS**:
+To get LumaaGlaass's changes as soon as they are published, rather than with Polyfin's releases, choose **Custom** and load the theme from a CDN that serves its repository, as Polyfin did until version 0.44. In **Custom CSS**:
 
 ```css
 @import url('https://cdn.jsdelivr.net/gh/Dyhlio/LumaaGlaass@main/assets/lumaaglaass.css');
 ```
 
-In **Custom JavaScript**, the default script with the address of the theme's script:
+In **Custom JavaScript**, the bundled theme's loader with the address of the theme's script:
 
 ```js
 (() => {
@@ -209,15 +222,14 @@ In **Custom JavaScript**, the default script with the address of the theme's scr
 - The CDN sees the address of every browser that opens the web client. A browser that cannot reach it shows the web client's own look.
 - The CDN takes up to 12 hours to serve a change to the theme, and a browser keeps the files it loaded for up to 7 days.
 - Without Polyfin's patches, the LumaaGlaass page ignores `homeCarousel` in the options: users who never saved it get the carousel on. `homeCarousel: false` hides it for every user only with `preferences: false`, which also removes the LumaaGlaass page.
-- To come back to the bundled copy, paste the defaults back in both fields. The admin API gives them in its answer to `GET /admin/api/settings`, as `bounds.customCss.default` and `bounds.customJs.default`.
+- To come back to the bundled copy, choose **LumaaGlaass**: the **Custom** texts stay for later.
 
 ### Use another theme
 
-**Settings › Web player** has no list of themes: **Custom CSS** and **Custom JavaScript** hold the theme, and any theme made for jellyfin-web can go there instead of LumaaGlaass. Both are server settings, the same with Polyfin Desktop and with Docker: there is no folder of themes to fill, and Polyfin runs no Jellyfin plugins.
+Any theme made for jellyfin-web can be the **Custom** theme: choose **Custom**, and put it in **Custom CSS** and **Custom JavaScript**. Both are server settings, the same with Polyfin Desktop and with Docker, and Polyfin runs no Jellyfin plugins.
 
-- **jellyfin-web's own look:** empty both fields. Each user can then pick one of jellyfin-web's display themes, such as Light or Blue Radiance, under the web client's "Settings › Display › Theme". With LumaaGlaass, only Dark fits.
-- **A theme made of CSS only:** empty **Custom JavaScript**, and put the theme in **Custom CSS**: its stylesheet pasted whole, up to 2 MB, or an `@import` of its address, such as `@import url('https://themes.example/theme.css');`. Emptying only one field leaves half of LumaaGlaass.
-- **A theme with a script:** its stylesheet in **Custom CSS**, as above, and in **Custom JavaScript** its script pasted whole, or a loader like the default one, which adds it to the page once:
+- **A theme made of CSS only:** put the theme in **Custom CSS**, its stylesheet pasted whole, up to 2 MB, or an `@import` of its address, such as `@import url('https://themes.example/theme.css');`, and leave **Custom JavaScript** empty.
+- **A theme with a script:** its stylesheet in **Custom CSS**, as above, and in **Custom JavaScript** its script pasted whole, or a loader like LumaaGlaass's, which adds it to the page once:
 
   ```js
   (() => {
@@ -231,14 +243,76 @@ In **Custom JavaScript**, the default script with the address of the theme's scr
   })();
   ```
 
-  Set the options the theme's documentation gives before the script loads, as the default one does with `window.LumaaGlaassOptions`.
-- **Hosting a theme's files yourself:** so that browsers load nothing from elsewhere, and the theme changes only when you update it, serve its files from a web server of your own, such as the reverse proxy in front of Polyfin, and use their addresses in both fields. Keep the theme's folder as it is, as a script often loads more files from beside it. Serve stylesheets as `text/css` and scripts as `text/javascript`: browsers refuse them as anything else. Pasting a theme whole needs no server at all.
+  Set the options the theme's documentation gives before the script loads, as LumaaGlaass's loader does with `window.LumaaGlaassOptions`.
+- **A theme loaded from a CDN, kept in Polyfin:** **Keep a copy in Polyfin** saves the files the two texts load from elsewhere in Polyfin's data folder, so that browsers load them from Polyfin, and the theme works offline. See [Keeping a copy of a theme](#keeping-a-copy-of-a-theme).
+- **Hosting a theme's files yourself:** you can also serve them from a web server of your own, such as the reverse proxy in front of Polyfin, and use their addresses in both fields. Keep the theme's folder as it is, as a script often loads more files from beside it. Serve stylesheets as `text/css` and scripts as `text/javascript`: browsers refuse them as anything else. Pasting a theme whole needs no server at all.
 - **One user's own look:** each user can add CSS of their own under the web client's "Settings › Display", in "Custom CSS code". It applies for them only, along with the server's.
-- **Security:** **Custom JavaScript** runs in the browser of every user who opens the web client, with their account. **Disable server-provided custom CSS code**, in a user's display settings, turns off the server's **Custom CSS** only: a theme's script keeps running. Load or paste only code you trust, and pin a theme loaded from its repository to a commit or a tag.
+- **Security:** **Custom JavaScript** runs in the browser of every user who opens the web client, with their account. **Disable server-provided custom CSS code**, in a user's display settings, turns off the server's custom CSS only: a theme's script keeps running. Load or paste only code you trust, and pin a theme loaded from its repository to a commit or a tag.
+
+### Keeping a copy of a theme
+
+While the theme is **Custom**, **Keep a copy in Polyfin**, under **Custom JavaScript**, saves the files **Custom CSS** and **Custom JavaScript** load from elsewhere, such as a theme on a CDN, and rewrites both texts to load them from Polyfin. The theme then works on a server cut off from the internet, and browsers no longer reach its CDN. It is offered once the texts load something from elsewhere, and the texts must be saved first: the copy is made from the saved texts.
+
+**What it saves:**
+
+- the stylesheets **Custom CSS** imports (`@import`), and the fonts and images it names (`url()`);
+- the http and https addresses **Custom JavaScript** names, in its code or in an HTML tag it writes (`src`, `href`), when they answer a stylesheet, a script, a font or an image;
+- in what it saves, the stylesheets' own `@import` and `url()`, relative ones included, and the addresses scripts name, down to 4 levels below the texts.
+
+Each address is asked once, from the internet only. A file kept is named after its address, numbered, in a folder of its own for the copy. The stylesheets saved name the other files saved beside them; the texts and the scripts saved name them at `polyfin/themes/saved/<id>/`, relative to the web client's address, as LumaaGlaass's are.
+
+**What it cannot save:** these are listed under the copy with why, and still loaded from elsewhere:
+
+- an address a script builds when it runs, such as a folder it adds file names to (`'https://themes.example/extensions/' + name`, or a template with `${...}`): no copy can follow it. A theme whose script loads its parts this way keeps loading them from its CDN, or does not find them offline;
+- a file that is not a stylesheet, script, font or image, or not the kind its place loads, such as a page where a stylesheet is imported;
+- an address on a local network, or one redirected there;
+- a file past the limits below, or an address that answered an error or nothing.
+
+**The admin app** shows what the copy holds, its size and when it was saved, each file with the address it came from, and each address it could not save with why; it never leaves one out. A copy that saved no file is not made, and the texts are left as they were.
+
+- **Update the copy** downloads the files again from the addresses they came from, as a new copy under a new folder, so that browsers take the new files, and deletes the former one. It also saves addresses added to the texts since.
+- **Remove the copy** puts the original addresses back in the texts, and deletes the files.
+- Editing the texts keeps the copy: the addresses of its files stay in them, and **Update the copy** and **Remove the copy** still find their originals.
+- Reload the web client's open pages a minute after any of these (see [Themes](#themes)).
+
+**Limits:** they leave room above the largest themes made for jellyfin-web (an icon font of 5.3 MB, about 6 MB and 31 files for a whole theme, three levels of `@import`), and keep a copy far from filling the data folder.
+
+| Limit | Value |
+|---|---|
+| One file | 10 MB |
+| The whole copy | 32 MB |
+| Files | 100 |
+| Levels followed below the texts | 4 |
+| Time for one file | 30 seconds |
+| Time for the whole copy | 2 minutes |
+| Redirects of one file | 5 |
+
+**Safety:**
+
+- Only administrators can keep, update or remove a copy.
+- Polyfin asks http and https addresses on the internet only, checked at each connection, as for a user's own addons: an address, or a redirect, to a local network, the loopback, or the shared address space of carrier-grade NAT is refused, and so is a redirect to another scheme. No proxy is used.
+- It keeps stylesheets (`text/css`), scripts (`text/javascript`), fonts (WOFF2, WOFF, TrueType, OpenType, EOT) and images (PNG, JPEG, GIF, WebP, AVIF, SVG, ICO), by the type the server sends, or by the file's extension when it sends plain text or bytes.
+- The web client serves only the files of a copy's folder, by the names a copy gives, never a path out of it. They are cached for a year, as their folder changes with each copy, with the type of their extension, and with a policy that keeps a file opened on its own, such as an SVG image, from running a script.
+- The script a copy saves runs as **Custom JavaScript** does: in the browser of every user, with their account. Keep a copy only of a theme you trust.
+
+**Where the files are:** in `themes` in Polyfin's data folder: `/data/themes` in the Docker image's volume, and with Polyfin Desktop `themes` in its data folder, such as `~/Library/Application Support/Polyfin/themes` (see [Folders](desktop.md#folders)). Polyfin removes, at start, the folders of copies it no longer keeps, as a stop in the middle of a copy can leave.
+
+**Backups:** a database backup holds the texts and the list of the copy's files with their original addresses, not the files. Restored on a server without them, such as another system, the theme's files are missing until **Update the copy** downloads them again from their addresses; the admin app says how many are missing. **Remove the copy** works without them too.
+
+**Compared with Jellyfin:**
+
+- Jellyfin serves the custom CSS as it is written and saves nothing of what it loads: every browser loads a theme's files from wherever the CSS names them.
+
+**For app developers:**
+
+- `GET /admin/api/settings/theme-copy` answers the copy, `copy`, null for none, with its `savedAt`, `size` in bytes, `files` (each with its `address`, the `text` that named it in the texts, its `name`, `kind` and `size`) and `unsaved` (each with its `address`, `reason` and a `detail` for some); `missing`, the names of its files not in its folder; `outside`, the addresses the texts load from elsewhere; and `limits`.
+- `POST` keeps a copy, or makes it again, and `DELETE` removes it, both answering the same.
+- Refusals: `409 theme_copy_running` while another copy is being made; `400 theme_copy_nothing` when the texts load nothing from elsewhere; `422 theme_copy_failed`, with `unsaved`, when no file could be saved; `409 custom_texts_changed` when the texts changed while the files were downloaded; `404 not_found` to remove no copy.
+- The reasons are `private_address`, `not_http`, `unavailable` (with the HTTP status), `timeout`, `wrong_type` (with the type sent), `too_large`, `total_too_large`, `too_many_files`, `too_deep` and `built_at_run_time`.
 
 ### Custom CSS
 
-**Custom CSS** is Jellyfin's branding CSS. jellyfin-web applies it to every page, unless a user ticks **Disable server-provided custom CSS code** in their display settings. jellyfin-web keeps it for up to a minute before asking again.
+The theme's CSS, LumaaGlaass's or **Custom CSS**, is Jellyfin's branding CSS. jellyfin-web applies it to every page, unless a user ticks **Disable server-provided custom CSS code** in their display settings. jellyfin-web keeps it for up to a minute before asking again.
 
 **For app developers:**
 
@@ -250,11 +324,15 @@ In **Custom JavaScript**, the default script with the address of the theme's scr
 
 ### Branding through the Jellyfin API
 
-Administrators can also set the custom CSS and sign-in message through Jellyfin's branding configuration. Saving replaces the branding whole, as in Jellyfin: a text left out is cleared. Anyone signed in can read it.
+Administrators can also set the custom CSS and sign-in message through Jellyfin's branding configuration, which jellyfin-web's own branding page uses. Saving replaces the branding whole, as in Jellyfin: a text left out is cleared. Anyone signed in can read it. The CSS read is the theme's.
+
+- Posting back the theme's CSS unchanged, as that page does when only the sign-in message changes, keeps the theme.
+- Posting another CSS makes it **Custom CSS** and chooses **Custom**. When the theme was LumaaGlaass, its script becomes **Custom JavaScript**, so that the page keeps it; when it was None, **Custom JavaScript** becomes empty.
 
 **Compared with Jellyfin:**
 
 - Polyfin has no splash screen, so `SplashscreenEnabled` stays false whatever is posted.
+- Jellyfin stores the CSS as posted, with no theme to keep ([`ConfigurationController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.3/Jellyfin.Api/Controllers/ConfigurationController.cs#L138) and [`BrandingController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.3/Jellyfin.Api/Controllers/BrandingController.cs#L63), Jellyfin 12.3).
 - An empty text is left out of the answer, where Jellyfin sends it as `""`.
 
 **For app developers:**
@@ -263,7 +341,7 @@ Administrators can also set the custom CSS and sign-in message through Jellyfin'
 
 ### Custom JavaScript
 
-When **Custom JavaScript** is set, Polyfin adds a script tag to jellyfin-web's `index.html`, after its own script. The script runs on every page of the web client, after jellyfin-web's scripts. It is never added to the admin app.
+When the theme has a script, LumaaGlaass's or a **Custom JavaScript** that is not empty, Polyfin adds a script tag to jellyfin-web's `index.html`, after its own script. The script runs on every page of the web client, after jellyfin-web's scripts. It is never added to the admin app.
 
 The script runs in the browser of every user who opens the web client, with their account. The display setting does not turn it off. Paste only code you trust.
 
@@ -287,4 +365,6 @@ jellyfin-web is free software by the Jellyfin contributors, and a separate progr
 - Its complete source code is attached to every Polyfin release on GitHub as `jellyfin-web-12.3-source.tar.gz`, and is also at <https://github.com/jellyfin/jellyfin-web/tree/v12.3>.
 - The Dockerfile pins both, side by side, to be changed together when the client is updated.
 
-The default theme, LumaaGlaass by Om Gupta and Dyhlio, is under the MIT License. Polyfin embeds its files, with two patches, and serves them to the web client (see [Default theme](#default-theme)). Its license and a notice naming the commit are in `/usr/share/doc/lumaaglaass` (from [`third_party/lumaaglaass`](../third_party/lumaaglaass)), and in `licenses/lumaaglaass` with Polyfin Desktop.
+The default theme, LumaaGlaass by Om Gupta and Dyhlio, is under the MIT License. Polyfin embeds its files, with two patches, and serves them to the web client (see [LumaaGlaass](#lumaaglaass)). Its license and a notice naming the commit are in `/usr/share/doc/lumaaglaass` (from [`third_party/lumaaglaass`](../third_party/lumaaglaass)), and in `licenses/lumaaglaass` with Polyfin Desktop.
+
+A copy of another theme's files, kept with **Keep a copy in Polyfin**, stays under that theme's own license: Polyfin saves it for your server only, and does not distribute it.

@@ -9,10 +9,9 @@
 # made again on the new files. The result is a diff to review.
 #
 # The bundled files are served under a version made from their content, which
-# the default Custom CSS and JavaScript name (internal/accounts): a new copy
-# takes a migration replacing the column defaults and the values still equal
-# to the previous ones, as the theme_bundled migration does, or the settings
-# tests fail.
+# the custom CSS and script Polyfin serves for the theme name
+# (accounts.LumaaGlaassCss and LumaaGlaassJs). They are made at start, not
+# stored, so a new copy takes no migration.
 #
 # Requirements: curl, tar, git. Usage: scripts/lumaaglaass.sh COMMIT (the
 # full hash of a commit of the theme's repository).
@@ -72,9 +71,9 @@ done
 cat >>"$third/NOTICE" <<EOF
 
 The web client serves them at /web/polyfin/themes/lumaaglaass/, where the
-default Custom CSS and Custom JavaScript load them: nothing is loaded from
-elsewhere.
+custom CSS and script Polyfin serves for the LumaaGlaass theme load them:
+nothing is loaded from elsewhere.
 
 Source: $repository/tree/$commit
 EOF
-echo "LumaaGlaass $commit bundled. The default Custom CSS and JavaScript need a migration when its files changed."
+echo "LumaaGlaass $commit bundled."

@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/themecopy"
 	"github.com/moodiness/polyfin/internal/webtheme"
 )
 
@@ -114,10 +115,12 @@ func (c *customScripts) current() hashedScript {
 // build or content hash are cached for good. Other files are revalidated
 // (Jellyfin sends no Cache-Control for them, which leaves browsers guessing
 // a lifetime for config.json and the like). The default theme's files are
-// Polyfin's own, under webtheme.Path (see serveTheme). Text files go
+// Polyfin's own, under webtheme.Path (see serveTheme), and the copy of a
+// theme's files kept in savedThemes under themecopy.Path (see
+// serveSavedTheme). Text files go
 // compressed to clients that take gzip, compressed once each (see
 // gzipFiles).
-func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() string, api http.Handler, logger *slog.Logger) http.Handler {
+func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() string, savedThemes string, api http.Handler, logger *slog.Logger) http.Handler {
 	custom := &customScripts{get: customJs}
 	compressed := newGzipFiles(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -166,6 +169,10 @@ func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() st
 			serveTheme(w, r, rest, logger)
 			return
 		}
+		if rest, ok := strings.CutPrefix(name, themecopy.Path); ok {
+			serveSavedTheme(w, r, savedThemes, rest)
+			return
+		}
 		info, err := fs.Stat(files, name)
 		if err != nil || !info.Mode().IsRegular() {
 			api.ServeHTTP(w, r)
@@ -208,6 +215,35 @@ func serveFile(w http.ResponseWriter, r *http.Request, files fs.FS, name string,
 		content = bytes.NewReader(data)
 	}
 	http.ServeContent(w, r, name, info.ModTime(), content)
+}
+
+// savedThemePolicy keeps a file of a theme's copy from running anything
+// when it is opened on its own, such as an SVG image with a script, which
+// would run at Polyfin's address: a stylesheet, script, font or image a
+// page loads ignores it.
+const savedThemePolicy = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox"
+
+// serveSavedTheme serves the file rest names of the copy of a theme's files
+// kept in dir (see themecopy): a copy's id changes with each copy, so its
+// files are cached for good, served with the type of their extension.
+// Only the files of a copy's folder are served, never a path out of dir.
+func serveSavedTheme(w http.ResponseWriter, r *http.Request, dir, rest string) {
+	file, err := themecopy.OpenFile(dir, rest)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		http.NotFound(w, r)
+		return
+	}
+	header := w.Header()
+	header.Set("Cache-Control", immutableCache)
+	header.Set("Content-Type", themecopy.ContentTypes[path.Ext(rest)])
+	header.Set("Content-Security-Policy", savedThemePolicy)
+	http.ServeContent(w, r, path.Base(rest), info.ModTime(), file)
 }
 
 // serveTheme serves the bundled theme's file at rest, a version then the

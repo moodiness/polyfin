@@ -1203,6 +1203,21 @@ export const settingEntries: readonly SettingEntry[] = [
   // Web player
   {
     section: 'web-player',
+    anchor: 'web-theme',
+    label: (t) => s(t).webTheme,
+    help: (t) => s(t).webThemeHelp,
+    keywords: ['theme', 'LumaaGlaass', 'css', 'jellyfin-web'],
+    codes: ['invalid_web_theme'],
+  },
+  {
+    section: 'web-player',
+    anchor: 'theme-copy',
+    label: (t) => s(t).themeCopy,
+    help: (t) => s(t).themeCopyHelp(4, '10 MB', '32 MB', 100),
+    keywords: ['theme', 'offline', 'cdn', 'copy'],
+  },
+  {
+    section: 'web-player',
     anchor: 'custom-css',
     label: (t) => s(t).customCss,
     help: (t) => s(t).customCssHelp,

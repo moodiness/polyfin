@@ -234,6 +234,12 @@ const common: typeof en = {
       'O intervalo de rastreamento deve ser um número inteiro de horas de 0 a 168.',
     invalid_custom_css: 'O CSS personalizado deve ter no máximo 2 MB.',
     invalid_custom_js: 'O JavaScript personalizado deve ter no máximo 2 MB.',
+    invalid_web_theme: 'Escolha LumaaGlaass, Nenhum ou Personalizado.',
+    theme_copy_running: 'Uma cópia do tema já está sendo feita. Tente de novo em um instante.',
+    theme_copy_nothing: 'Os textos personalizados salvos não carregam nada de outro lugar.',
+    theme_copy_failed: 'Nenhum arquivo pôde ser salvo, então nenhuma cópia foi feita.',
+    custom_texts_changed:
+      'Os textos personalizados mudaram enquanto a cópia era feita. Tente de novo.',
     invalid_login_disclaimer: 'A mensagem de login deve ter no máximo 8 KB.',
     invalid_publicmetadb_key:
       'O PublicMetaDB não aceitou esta chave. Copie-a novamente da sua conta PublicMetaDB. Nada foi salvo.',

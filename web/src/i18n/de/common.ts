@@ -248,6 +248,13 @@ const common: typeof en = {
     invalid_local_scan_hours: 'Das Scan-Intervall muss eine ganze Zahl von 0 bis 168 Stunden sein.',
     invalid_custom_css: 'Das benutzerdefinierte CSS darf höchstens 2 MB groß sein.',
     invalid_custom_js: 'Das benutzerdefinierte JavaScript darf höchstens 2 MB groß sein.',
+    invalid_web_theme: 'Wähle LumaaGlaass, Keines oder Benutzerdefiniert.',
+    theme_copy_running:
+      'Eine Kopie des Themes wird bereits angelegt. Versuche es gleich noch einmal.',
+    theme_copy_nothing: 'Die gespeicherten benutzerdefinierten Texte laden nichts von anderswo.',
+    theme_copy_failed: 'Keine Datei konnte gespeichert werden, daher wurde keine Kopie angelegt.',
+    custom_texts_changed:
+      'Die benutzerdefinierten Texte haben sich während der Kopie geändert. Versuche es erneut.',
     invalid_login_disclaimer: 'Die Anmeldenachricht darf höchstens 8 KB groß sein.',
     invalid_publicmetadb_key:
       'PublicMetaDB hat diesen Schlüssel nicht akzeptiert. Kopiere ihn erneut aus deinem PublicMetaDB-Konto. Es wurde nichts gespeichert.',

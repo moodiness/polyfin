@@ -65,6 +65,7 @@ import (
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
+	"github.com/moodiness/polyfin/internal/themecopy"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 	"github.com/moodiness/polyfin/internal/tmdb"
@@ -566,6 +567,13 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Version:  version,
 		Logger:   logger,
 	})
+	// The copy of the files the web player's Custom texts load from
+	// elsewhere, kept in the data folder's themes.
+	themesDir := filepath.Join(cfg.DataDir, "themes")
+	themeCopier, err := themecopy.New(ctx, themecopy.Options{DB: pool, Accounts: store, Dir: themesDir, UserAgent: "Polyfin/" + version, Logger: logger})
+	if err != nil {
+		return fmt.Errorf("theme copy: %w", err)
+	}
 	adminOptions := admin.Options{
 		Version:       version,
 		ServerID:      serverID,
@@ -585,6 +593,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Activity:      activityLog,
 		DataDir:       cfg.DataDir,
 		WebClient:     webClient != nil,
+		ThemeCopier:   themeCopier,
 		InContainer:   discovery.InContainer(),
 		Sessions:      jellyfinAPI,
 		Watching:      jellyfinAPI,
@@ -663,7 +672,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			DLNA:          sharing.Handler(),
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,
-			CustomJs:      func() string { return store.Settings().CustomJs },
+			CustomJs:      func() string { return store.Settings().ServedJs() },
+			SavedThemes:   themesDir,
 			Proxies:       proxies,
 			HTTPS:         secure.Handler,
 			Metrics: metrics.Handler(func() (bool, string) {

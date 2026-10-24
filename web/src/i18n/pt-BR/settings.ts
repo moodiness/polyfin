@@ -767,12 +767,81 @@ const settings: typeof en = {
     webPlayerHelp:
       'O que o player web (jellyfin-web, em /web/) mostra além das próprias páginas. O script é aplicado na próxima vez que uma página do player web for carregada; o player web mantém o CSS e a mensagem de login por até um minuto.',
     openWebPlayer: 'Abrir o player web',
+    webTheme: 'Tema',
+    webThemeHelp:
+      'A aparência do player web. LumaaGlaass é o tema que acompanha o Polyfin. Nenhum mantém a aparência do jellyfin-web, cujo tema de exibição cada usuário escolhe em Configurações › Exibição. Personalizado usa o seu CSS e o seu JavaScript abaixo, mantidos enquanto outro tema é escolhido.',
+    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'Nenhum', custom: 'Personalizado' },
+    webThemeReload:
+      'O player web guarda o CSS personalizado que leu por até um minuto: depois de uma alteração, recarregue as páginas abertas dele um minuto depois.',
+    webThemeTexts: {
+      lumaaglaass:
+        'O que o Polyfin serve para LumaaGlaass, mostrado aqui e não editável. Escolha Personalizado, ou “Editar como personalizado”, para escrever o seu.',
+      none: 'Nenhum não serve CSS nem JavaScript personalizado. Escolha Personalizado para escrever o seu.',
+    },
+    editAsCustom: 'Editar como personalizado',
+    editAsCustomTitle: 'Substituir seus textos personalizados?',
+    editAsCustomConfirm:
+      'Seu CSS e seu JavaScript personalizados são substituídos pelos do LumaaGlaass, e o tema passa a Personalizado. Salvar a página mantém a alteração.',
+    themeCopy: 'Manter uma cópia no Polyfin',
+    themeCopyHelp: (depth: number, file: string, total: string, files: number) =>
+      `Salva as folhas de estilos, scripts, fontes e imagens que os textos personalizados carregam de outro lugar, como um tema em um CDN, na pasta de dados do Polyfin, e faz os textos carregarem esses arquivos do Polyfin: o tema funciona então sem acessar o CDN dele. Segue @import, url() e os endereços que os scripts citam, ${depth} níveis abaixo, só de endereços na internet, até ${file} por arquivo, e ${total} e ${files} arquivos no total.`,
+    themeCopySaved: (files: number, size: string, date: string) =>
+      `Uma cópia de ${files === 1 ? 'um arquivo' : `${files} arquivos`}, ${size}, salva em ${date}.`,
+    themeCopyFiles: 'Arquivos salvos',
+    themeCopyUnsaved: (count: number) =>
+      count === 1
+        ? 'Não foi possível salvar um endereço; ele ainda é carregado de outro lugar:'
+        : `Não foi possível salvar ${count} endereços; eles ainda são carregados de outro lugar:`,
+    themeCopyMissing: (count: number) =>
+      count === 1
+        ? 'Falta um arquivo da cópia na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema. Atualize a cópia para baixá-lo de novo.'
+        : `Faltam ${count} arquivos da cópia na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema. Atualize a cópia para baixá-los de novo.`,
+    themeCopyOutside: (count: number) =>
+      count === 1
+        ? 'Os textos personalizados carregam um endereço de outro lugar:'
+        : `Os textos personalizados carregam ${count} endereços de outro lugar:`,
+    themeCopyStillOutside: (count: number) =>
+      count === 1
+        ? 'Um endereço adicionado depois da cópia é carregado de outro lugar; atualize a cópia para salvá-lo também:'
+        : `${count} endereços adicionados depois da cópia são carregados de outro lugar; atualize a cópia para salvá-los também:`,
+    themeCopyNothing: 'Os textos personalizados não carregam nada de outro lugar.',
+    themeCopyKeep: 'Manter uma cópia no Polyfin',
+    themeCopyUpdate: 'Atualizar a cópia',
+    themeCopyRemove: 'Remover a cópia',
+    themeCopyRemoveTitle: 'Remover a cópia?',
+    themeCopyRemoveConfirm:
+      'Os arquivos dela são apagados, e os textos personalizados voltam a carregá-los dos endereços originais.',
+    themeCopyKept: 'Cópia salva. Recarregue as páginas abertas do player web daqui a um minuto.',
+    themeCopyRemoved:
+      'Cópia removida. Recarregue as páginas abertas do player web daqui a um minuto.',
+    themeCopyFailed: 'Nenhum arquivo pôde ser salvo, então nenhuma cópia foi feita:',
+    themeCopySaveFirst:
+      'Salve primeiro suas alterações: a cópia é feita a partir dos textos salvos.',
+    themeCopyKinds: {
+      stylesheet: 'folha de estilos',
+      script: 'script',
+      font: 'fonte',
+      image: 'imagem',
+    },
+    themeCopyReasons: {
+      private_address: 'em uma rede local, ou redirecionado para ela',
+      not_http: 'redirecionado para um endereço que não é http nem https',
+      unavailable: 'indisponível',
+      timeout: 'demorou demais',
+      wrong_type: 'não é um arquivo do tipo com que é carregado',
+      too_large: 'maior que o limite de um arquivo',
+      total_too_large: 'além do limite da cópia inteira',
+      too_many_files: 'além do número de arquivos permitido',
+      too_deep: 'citado níveis demais abaixo',
+      built_at_run_time:
+        'completado por um script quando ele roda, o que nenhuma cópia consegue seguir',
+    },
     customCss: 'CSS personalizado',
     customCssHelp:
-      'Aplicado a todas as páginas do player web, para todos os usuários, como o CSS personalizado do Jellyfin. Os usuários podem desativá-lo em Configurações › Exibição. Por padrão, contém a folha de estilos do tema LumaaGlaass, que acompanha o JavaScript personalizado padrão: esvazie os dois para manter a aparência original do player web.',
+      'Aplicado a todas as páginas do player web, para todos os usuários, como o CSS personalizado do Jellyfin. Os usuários podem desativá-lo em Configurações › Exibição.',
     customJs: 'JavaScript personalizado',
     customJsHelp:
-      'Carregado por todas as páginas do player web, após os scripts dele. Vazio, nada é carregado. Por padrão, carrega o script do tema LumaaGlaass, que acompanha o CSS personalizado padrão.',
+      'Carregado por todas as páginas do player web, após os scripts dele. Vazio, nada é carregado.',
     customJsWarningTitle: 'Cole apenas código em que você confia',
     customJsWarning:
       'Este script é executado no navegador de todos os usuários que abrem o player web neste servidor, com a conta deles. Ele pode ler o que eles veem e agir por eles.',

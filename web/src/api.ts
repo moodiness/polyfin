@@ -488,10 +488,23 @@ export type Settings = {
   localScanHours: number
   /** Whether the local folders, in the container and network shares, are watched for changes. */
   watchLocalFolders: boolean
-  /** CSS jellyfin-web applies to every page, unless a user turns it off (Jellyfin's branding). */
+  /**
+   * The web player's look: the bundled LumaaGlaass theme, jellyfin-web's own look, or the
+   * Custom texts below.
+   */
+  webTheme: WebTheme
+  /**
+   * Custom CSS jellyfin-web applies to every page while the theme is Custom, unless a user turns
+   * it off (Jellyfin's branding); kept while another theme is chosen.
+   */
   customCss: string
-  /** Script Polyfin adds to jellyfin-web's page; it runs in every user's browser. */
+  /**
+   * Custom script Polyfin adds to jellyfin-web's page while the theme is Custom; it runs in every
+   * user's browser. Kept while another theme is chosen.
+   */
   customJs: string
+  /** The CSS and script Polyfin serves for the LumaaGlaass theme (read-only). */
+  lumaaGlaass: { css: string; js: string }
   /** Text, Markdown or HTML jellyfin-web shows under its sign-in form (Jellyfin's branding). */
   loginDisclaimer: string
   /** Whether the web player adds the versions that come to a title's page while it is open. */
@@ -1484,6 +1497,8 @@ export class ApiError extends Error {
   readonly detail: string | null
   /** Why a WireGuard configuration was refused, for invalid_wireguard_config. */
   readonly wireGuard: WireGuardConfigProblem | null
+  /** The addresses no copy of the theme could save, for theme_copy_failed. */
+  readonly unsaved: ThemeCopyUnsaved[] | null
 
   constructor(
     status: number,
@@ -1491,6 +1506,7 @@ export class ApiError extends Error {
     jellyfinId: string | null = null,
     detail: string | null = null,
     wireGuard: WireGuardConfigProblem | null = null,
+    unsaved: ThemeCopyUnsaved[] | null = null,
   ) {
     super(`Admin API error ${status}: ${code}`)
     this.name = 'ApiError'
@@ -1499,6 +1515,7 @@ export class ApiError extends Error {
     this.jellyfinId = jellyfinId
     this.detail = detail
     this.wireGuard = wireGuard
+    this.unsaved = unsaved
   }
 }
 
@@ -1532,6 +1549,7 @@ async function apiError(response: Response): Promise<ApiError> {
   let jellyfinId: string | null = null
   let detail: string | null = null
   let wireGuard: WireGuardConfigProblem | null = null
+  let unsaved: ThemeCopyUnsaved[] | null = null
   try {
     const payload = (await response.json()) as {
       error?: unknown
@@ -1540,6 +1558,7 @@ async function apiError(response: Response): Promise<ApiError> {
       line?: unknown
       key?: unknown
       reason?: unknown
+      unsaved?: unknown
     }
     if (typeof payload.error === 'string') code = payload.error
     if (typeof payload.jellyfinId === 'string') jellyfinId = payload.jellyfinId
@@ -1556,10 +1575,13 @@ async function apiError(response: Response): Promise<ApiError> {
         reason: payload.reason as WireGuardConfigProblem['reason'],
       }
     }
+    if (code === 'theme_copy_failed' && Array.isArray(payload.unsaved)) {
+      unsaved = payload.unsaved as ThemeCopyUnsaved[]
+    }
   } catch {
     // Non-JSON error body (proxy page, empty response): keep the generic code.
   }
-  return new ApiError(response.status, code, jellyfinId, detail, wireGuard)
+  return new ApiError(response.status, code, jellyfinId, detail, wireGuard, unsaved)
 }
 
 const seg = encodeURIComponent
@@ -2815,6 +2837,63 @@ export const revealServerSecret = async (name: ServerSecretName) =>
 /** Makes a new metrics token, which ends the former one; answers the settings. */
 export const newMetricsToken = () => request<Settings>('POST', '/settings/metrics-token')
 
+/** The web player's looks: the bundled LumaaGlaass, jellyfin-web's own, or the Custom texts. */
+export const webThemes = ['lumaaglaass', 'none', 'custom'] as const
+export type WebTheme = (typeof webThemes)[number]
+
+/** A file of the copy Polyfin keeps of a theme's files. */
+export type ThemeCopyFile = {
+  /** The address it came from. */
+  address: string
+  /** How the Custom texts named it, for the files they name. */
+  text?: string
+  name: string
+  kind: 'stylesheet' | 'script' | 'font' | 'image'
+  /** Size in bytes. */
+  size: number
+}
+
+/** Why an address could not be saved in the copy. */
+export type ThemeCopyReason =
+  | 'private_address'
+  | 'not_http'
+  | 'unavailable'
+  | 'timeout'
+  | 'wrong_type'
+  | 'too_large'
+  | 'total_too_large'
+  | 'too_many_files'
+  | 'too_deep'
+  | 'built_at_run_time'
+
+/** An address the copy could not save; `detail` is an HTTP status or the type a file came as. */
+export type ThemeCopyUnsaved = { address: string; reason: ThemeCopyReason; detail?: string }
+
+/** The copy Polyfin keeps of the files the Custom texts load from elsewhere. */
+export type ThemeCopy = {
+  /** The copy kept, null for none. */
+  copy: {
+    savedAt: string
+    /** Size of its files, in bytes. */
+    size: number
+    files: ThemeCopyFile[]
+    unsaved: ThemeCopyUnsaved[]
+  } | null
+  /** Names of the copy's files missing from its folder, such as after a restore elsewhere. */
+  missing: string[]
+  /** Addresses the Custom texts still load from elsewhere. */
+  outside: string[]
+  /** The limits of a copy: bytes of a file and in all, files, and levels followed. */
+  limits: { fileBytes: number; totalBytes: number; files: number; depth: number }
+}
+
+export const fetchThemeCopy = (signal?: AbortSignal) =>
+  request<ThemeCopy>('GET', '/settings/theme-copy', undefined, signal)
+/** Keeps a copy of the theme's files, or makes the copy again from where its files came from. */
+export const keepThemeCopy = () => request<ThemeCopy>('POST', '/settings/theme-copy')
+/** Removes the copy: the Custom texts name again the addresses its files came from. */
+export const removeThemeCopy = () => request<ThemeCopy>('DELETE', '/settings/theme-copy')
+
 /** The apps users are signed in with, by the name they send, each once whatever its case, sorted. */
 export const fetchSettingsApps = async (signal?: AbortSignal) =>
   (await request<{ apps: string[] }>('GET', '/settings/apps', undefined, signal)).apps
@@ -4059,6 +4138,7 @@ export const fetchVariables = (signal?: AbortSignal) =>
 
 export const queryKeys = {
   status: ['status'] as const,
+  themeCopy: ['settings', 'theme-copy'] as const,
   session: ['session'] as const,
   myDevices: ['account', 'devices'] as const,
   ownTwoStep: ['account', 'two-step'] as const,

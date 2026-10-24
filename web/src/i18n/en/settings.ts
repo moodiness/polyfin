@@ -755,12 +755,71 @@ const settings = {
     webPlayerHelp:
       'What the web player (jellyfin-web, at /web/) shows besides its own pages. The script applies the next time a page of the web player is loaded; the web player keeps the CSS and the sign-in message for up to a minute.',
     openWebPlayer: 'Open the web player',
+    webTheme: 'Theme',
+    webThemeHelp:
+      'The web player’s look. LumaaGlaass is the theme Polyfin bundles. None keeps jellyfin-web’s own look, whose display themes each user picks under Settings › Display. Custom uses your own CSS and JavaScript below, which are kept while another theme is chosen.',
+    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'None', custom: 'Custom' },
+    webThemeReload:
+      'The web player keeps the custom CSS it read for up to a minute: after a change, reload its open pages a minute later.',
+    webThemeTexts: {
+      lumaaglaass:
+        'What Polyfin serves for LumaaGlaass, shown here and not editable. Choose Custom, or Edit as Custom, to write your own.',
+      none: 'None serves no custom CSS or JavaScript. Choose Custom to write your own.',
+    },
+    editAsCustom: 'Edit as Custom',
+    editAsCustomTitle: 'Replace your Custom texts?',
+    editAsCustomConfirm:
+      'Your Custom CSS and JavaScript are replaced with LumaaGlaass’s, and the theme becomes Custom. Saving the page keeps the change.',
+    themeCopy: 'Keep a copy in Polyfin',
+    themeCopyHelp: (depth: number, file: string, total: string, files: number) =>
+      `Saves the stylesheets, scripts, fonts and images the Custom texts load from elsewhere, such as a theme on a CDN, in Polyfin’s data folder, and has the texts load them from Polyfin: the theme then works without reaching its CDN. It follows @import, url() and the addresses scripts name, ${depth} levels down, from addresses on the internet only, up to ${file} a file, and ${total} and ${files} files in all.`,
+    themeCopySaved: (files: number, size: string, date: string) =>
+      `A copy of ${files === 1 ? 'one file' : `${files} files`}, ${size}, saved ${date}.`,
+    themeCopyFiles: 'Files saved',
+    themeCopyUnsaved: (count: number) =>
+      count === 1
+        ? 'One address could not be saved; it is still loaded from elsewhere:'
+        : `${count} addresses could not be saved; they are still loaded from elsewhere:`,
+    themeCopyMissing: (count: number) =>
+      `${count === 1 ? 'One file' : `${count} files`} of the copy ${count === 1 ? 'is' : 'are'} missing from Polyfin’s data folder, as after restoring a backup on another system. Update the copy to download ${count === 1 ? 'it' : 'them'} again.`,
+    themeCopyOutside: (count: number) =>
+      count === 1
+        ? 'The Custom texts load one address from elsewhere:'
+        : `The Custom texts load ${count} addresses from elsewhere:`,
+    themeCopyStillOutside: (count: number) =>
+      count === 1
+        ? 'One address added since the copy is loaded from elsewhere; update the copy to save it too:'
+        : `${count} addresses added since the copy are loaded from elsewhere; update the copy to save them too:`,
+    themeCopyNothing: 'The Custom texts load nothing from elsewhere.',
+    themeCopyKeep: 'Keep a copy in Polyfin',
+    themeCopyUpdate: 'Update the copy',
+    themeCopyRemove: 'Remove the copy',
+    themeCopyRemoveTitle: 'Remove the copy?',
+    themeCopyRemoveConfirm:
+      'Its files are deleted, and the Custom texts load them from their original addresses again.',
+    themeCopyKept: 'Copy saved. Reload the web player’s open pages a minute from now.',
+    themeCopyRemoved: 'Copy removed. Reload the web player’s open pages a minute from now.',
+    themeCopyFailed: 'No file could be saved, so no copy was made:',
+    themeCopySaveFirst: 'Save your changes first: the copy is made from the saved texts.',
+    themeCopyKinds: { stylesheet: 'stylesheet', script: 'script', font: 'font', image: 'image' },
+    themeCopyReasons: {
+      private_address: 'on a local network, or redirected there',
+      not_http: 'redirected to an address neither http nor https',
+      unavailable: 'not available',
+      timeout: 'took too long',
+      wrong_type: 'not a file of the kind it is loaded as',
+      too_large: 'larger than the limit for one file',
+      total_too_large: 'past the limit for the whole copy',
+      too_many_files: 'past the limit of files',
+      too_deep: 'named too many levels down',
+      built_at_run_time: 'completed by a script when it runs, which no copy can follow',
+    },
     customCss: 'Custom CSS',
     customCssHelp:
-      'Applied to every page of the web player, for every user, as Jellyfin’s custom CSS. Users can turn it off under Settings › Display. By default, it holds the LumaaGlaass theme’s stylesheet, which goes with the default Custom JavaScript: empty both to keep the web player’s own look.',
+      'Applied to every page of the web player, for every user, as Jellyfin’s custom CSS. Users can turn it off under Settings › Display.',
     customJs: 'Custom JavaScript',
     customJsHelp:
-      'Loaded by every page of the web player, after its own scripts. Empty loads nothing. By default, it loads the LumaaGlaass theme’s script, which goes with the default Custom CSS.',
+      'Loaded by every page of the web player, after its own scripts. Empty loads nothing.',
     customJsWarningTitle: 'Only paste code you trust',
     customJsWarning:
       'This script runs in the browser of every user who opens the web player on this server, with their account. It can read what they see and act for them.',

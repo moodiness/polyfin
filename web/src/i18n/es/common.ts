@@ -244,6 +244,13 @@ const common: typeof en = {
       'El intervalo de escaneo debe ser un número entero de horas de 0 a 168.',
     invalid_custom_css: 'El CSS personalizado no debe superar los 2 MB.',
     invalid_custom_js: 'El JavaScript personalizado no debe superar los 2 MB.',
+    invalid_web_theme: 'Elija LumaaGlaass, Ninguno o Personalizado.',
+    theme_copy_running:
+      'Ya se está haciendo una copia del tema. Vuelva a intentarlo en un momento.',
+    theme_copy_nothing: 'Los textos personalizados guardados no cargan nada desde otro sitio.',
+    theme_copy_failed: 'No se pudo guardar ningún archivo, así que no se hizo ninguna copia.',
+    custom_texts_changed:
+      'Los textos personalizados cambiaron mientras se hacía la copia. Vuelva a intentarlo.',
     invalid_login_disclaimer: 'El mensaje de inicio de sesión no debe superar los 8 KB.',
     invalid_publicmetadb_key:
       'PublicMetaDB no ha aceptado esta clave. Cópiela de nuevo desde su cuenta de PublicMetaDB. No se ha guardado nada.',

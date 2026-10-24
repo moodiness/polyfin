@@ -775,12 +775,82 @@ const settings: typeof en = {
     webPlayerHelp:
       'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le script s’applique au prochain chargement d’une page du lecteur web ; le lecteur web garde le CSS et le message de connexion jusqu’à une minute.',
     openWebPlayer: 'Ouvrir le lecteur web',
+    webTheme: 'Thème',
+    webThemeHelp:
+      'L’apparence du lecteur web. LumaaGlaass est le thème fourni avec Polyfin. Aucun garde l’apparence de jellyfin-web, dont chacun choisit le thème d’affichage dans Paramètres › Affichage. Personnalisé utilise votre CSS et votre JavaScript ci-dessous, conservés pendant qu’un autre thème est choisi.',
+    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'Aucun', custom: 'Personnalisé' },
+    webThemeReload:
+      'Le lecteur web garde le CSS personnalisé lu pendant une minute au plus : après un changement, rechargez ses pages ouvertes une minute plus tard.',
+    webThemeTexts: {
+      lumaaglaass:
+        'Ce que Polyfin sert pour LumaaGlaass, affiché ici sans pouvoir être modifié. Choisissez Personnalisé, ou « Modifier comme personnalisé », pour écrire le vôtre.',
+      none: 'Aucun ne sert ni CSS ni JavaScript personnalisé. Choisissez Personnalisé pour écrire le vôtre.',
+    },
+    editAsCustom: 'Modifier comme personnalisé',
+    editAsCustomTitle: 'Remplacer vos textes personnalisés ?',
+    editAsCustomConfirm:
+      'Votre CSS et votre JavaScript personnalisés sont remplacés par ceux de LumaaGlaass, et le thème devient Personnalisé. Enregistrer la page garde le changement.',
+    themeCopy: 'Garder une copie dans Polyfin',
+    themeCopyHelp: (depth: number, file: string, total: string, files: number) =>
+      `Enregistre les feuilles de style, scripts, polices et images que les textes personnalisés chargent d’ailleurs, comme un thème sur un CDN, dans le dossier de données de Polyfin, et fait charger ces fichiers depuis Polyfin : le thème fonctionne alors sans joindre son CDN. Suit @import, url() et les adresses que nomment les scripts, sur ${depth} niveaux, depuis des adresses d’internet uniquement, jusqu’à ${file} par fichier, et ${total} et ${files} fichiers en tout.`,
+    themeCopySaved: (files: number, size: string, date: string) =>
+      `Une copie de ${files === 1 ? 'un fichier' : `${files} fichiers`}, ${size}, enregistrée le ${date}.`,
+    themeCopyFiles: 'Fichiers enregistrés',
+    themeCopyUnsaved: (count: number) =>
+      count === 1
+        ? 'Une adresse n’a pas pu être enregistrée ; elle reste chargée d’ailleurs :'
+        : `${count} adresses n’ont pas pu être enregistrées ; elles restent chargées d’ailleurs :`,
+    themeCopyMissing: (count: number) =>
+      count === 1
+        ? 'Un fichier de la copie manque dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système. Mettez la copie à jour pour le télécharger de nouveau.'
+        : `${count} fichiers de la copie manquent dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système. Mettez la copie à jour pour les télécharger de nouveau.`,
+    themeCopyOutside: (count: number) =>
+      count === 1
+        ? 'Les textes personnalisés chargent une adresse d’ailleurs :'
+        : `Les textes personnalisés chargent ${count} adresses d’ailleurs :`,
+    themeCopyStillOutside: (count: number) =>
+      count === 1
+        ? 'Une adresse ajoutée depuis la copie est chargée d’ailleurs ; mettez la copie à jour pour l’enregistrer aussi :'
+        : `${count} adresses ajoutées depuis la copie sont chargées d’ailleurs ; mettez la copie à jour pour les enregistrer aussi :`,
+    themeCopyNothing: 'Les textes personnalisés ne chargent rien d’ailleurs.',
+    themeCopyKeep: 'Garder une copie dans Polyfin',
+    themeCopyUpdate: 'Mettre la copie à jour',
+    themeCopyRemove: 'Supprimer la copie',
+    themeCopyRemoveTitle: 'Supprimer la copie ?',
+    themeCopyRemoveConfirm:
+      'Ses fichiers sont effacés, et les textes personnalisés les chargent de nouveau depuis leurs adresses d’origine.',
+    themeCopyKept:
+      'Copie enregistrée. Rechargez les pages ouvertes du lecteur web dans une minute.',
+    themeCopyRemoved:
+      'Copie supprimée. Rechargez les pages ouvertes du lecteur web dans une minute.',
+    themeCopyFailed: 'Aucun fichier n’a pu être enregistré, donc aucune copie n’a été faite :',
+    themeCopySaveFirst:
+      'Enregistrez d’abord vos changements : la copie est faite à partir des textes enregistrés.',
+    themeCopyKinds: {
+      stylesheet: 'feuille de style',
+      script: 'script',
+      font: 'police',
+      image: 'image',
+    },
+    themeCopyReasons: {
+      private_address: 'sur un réseau local, ou redirigée vers lui',
+      not_http: 'redirigée vers une adresse ni http ni https',
+      unavailable: 'indisponible',
+      timeout: 'trop longue à répondre',
+      wrong_type: 'pas un fichier du genre sous lequel elle est chargée',
+      too_large: 'plus grande que la limite d’un fichier',
+      total_too_large: 'au-delà de la limite de la copie entière',
+      too_many_files: 'au-delà du nombre de fichiers permis',
+      too_deep: 'nommée trop de niveaux plus bas',
+      built_at_run_time:
+        'complétée par un script quand il s’exécute, ce qu’aucune copie ne peut suivre',
+    },
     customCss: 'CSS personnalisé',
     customCssHelp:
-      'Appliqué à toutes les pages du lecteur web, pour tous les utilisateurs, comme le CSS personnalisé de Jellyfin. Chacun peut le désactiver dans Paramètres › Affichage. Par défaut, il contient la feuille de style du thème LumaaGlaass, qui va avec le JavaScript personnalisé par défaut : videz les deux pour garder l’apparence d’origine du lecteur web.',
+      'Appliqué à toutes les pages du lecteur web, pour tous les utilisateurs, comme le CSS personnalisé de Jellyfin. Chacun peut le désactiver dans Paramètres › Affichage.',
     customJs: 'JavaScript personnalisé',
     customJsHelp:
-      'Chargé par toutes les pages du lecteur web, après ses propres scripts. Vide, rien n’est chargé. Par défaut, il charge le script du thème LumaaGlaass, qui va avec le CSS personnalisé par défaut.',
+      'Chargé par toutes les pages du lecteur web, après ses propres scripts. Vide, rien n’est chargé.',
     customJsWarningTitle: 'Ne collez que du code de confiance',
     customJsWarning:
       'Ce script s’exécute dans le navigateur de chaque utilisateur qui ouvre le lecteur web de ce serveur, avec son compte. Il peut lire ce qu’il voit et agir à sa place.',

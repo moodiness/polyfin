@@ -35,7 +35,7 @@ func TestThemeMigrationFillsOnlyServersWithoutCustomCode(t *testing.T) {
 		return css, js
 	}
 	fresh := testdb.New(t)
-	if err := migrate(t.Context(), fresh, migrations); err != nil {
+	if err := migrate(t.Context(), fresh, beforeThemeChoice(t, migrations)); err != nil {
 		t.Fatal(err)
 	}
 	themeCss, themeJs := read(t, fresh)
@@ -57,7 +57,7 @@ func TestThemeMigrationFillsOnlyServersWithoutCustomCode(t *testing.T) {
 			if _, err := pool.Exec(ctx, "UPDATE settings SET custom_css = $1, custom_js = $2", tc.css, tc.js); err != nil {
 				t.Fatal(err)
 			}
-			if err := migrate(ctx, pool, migrations); err != nil {
+			if err := migrate(ctx, pool, beforeThemeChoice(t, migrations)); err != nil {
 				t.Fatal(err)
 			}
 			if css, js := read(t, pool); css != tc.wantCss || js != tc.wantJs {
@@ -97,7 +97,7 @@ func TestThemeMainBranchMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
 	}
 	pinnedCss, pinnedJs := read(t, pinned)
 	fresh := testdb.New(t)
-	if err := migrate(t.Context(), fresh, migrations); err != nil {
+	if err := migrate(t.Context(), fresh, beforeThemeChoice(t, migrations)); err != nil {
 		t.Fatal(err)
 	}
 	mainCss, mainJs := read(t, fresh)
@@ -119,7 +119,7 @@ func TestThemeMainBranchMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
 			if _, err := pool.Exec(ctx, "UPDATE settings SET custom_css = $1, custom_js = $2", tc.css, tc.js); err != nil {
 				t.Fatal(err)
 			}
-			if err := migrate(ctx, pool, migrations); err != nil {
+			if err := migrate(ctx, pool, beforeThemeChoice(t, migrations)); err != nil {
 				t.Fatal(err)
 			}
 			if css, js := read(t, pool); css != tc.wantCss || js != tc.wantJs {
@@ -260,6 +260,84 @@ func TestThemeBundledMigrationMovesOnlyTheUnchangedTheme(t *testing.T) {
 			}
 			if css, js := read(t, pool); css != tc.wantCss || js != tc.wantJs {
 				t.Errorf("the custom code became %q and %q, want %q and %q", css, js, tc.wantCss, tc.wantJs)
+			}
+		})
+	}
+}
+
+// beforeThemeChoice returns the migrations before theme_choice, after
+// which the custom code no longer holds the bundled theme: the tests of
+// the migrations that moved it look at what they left.
+func beforeThemeChoice(t *testing.T, migrations []migration) []migration {
+	t.Helper()
+	at := slices.IndexFunc(migrations, func(m migration) bool { return m.name == "theme_choice" })
+	if at < 0 {
+		t.Fatal("no theme_choice migration")
+	}
+	return migrations[:at]
+}
+
+// The theme becomes a choice: a server whose two texts still loaded the
+// bundled theme chooses it, with both texts emptied, one with both empty
+// chooses jellyfin-web's own look, and any other keeps its texts as
+// Custom, the theme it had.
+func TestThemeChoiceMigrationChoosesWhatTheTextsLoaded(t *testing.T) {
+	files, err := fs.Sub(embedded, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrations, err := loadMigrations(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := slices.IndexFunc(migrations, func(m migration) bool { return m.name == "theme_choice" })
+	if at < 0 {
+		t.Fatal("no theme_choice migration")
+	}
+	read := func(t *testing.T, pool *pgxpool.Pool) (theme, css, js string) {
+		t.Helper()
+		if err := pool.QueryRow(t.Context(), "SELECT web_theme, custom_css, custom_js FROM settings").Scan(&theme, &css, &js); err != nil {
+			t.Fatal(err)
+		}
+		return theme, css, js
+	}
+	before := testdb.New(t)
+	if err := migrate(t.Context(), before, migrations[:at]); err != nil {
+		t.Fatal(err)
+	}
+	var bundledCss, bundledJs string
+	if err := before.QueryRow(t.Context(), "SELECT custom_css, custom_js FROM settings").Scan(&bundledCss, &bundledJs); err != nil {
+		t.Fatal(err)
+	}
+	fresh := testdb.New(t)
+	if err := migrate(t.Context(), fresh, migrations[:at+1]); err != nil {
+		t.Fatal(err)
+	}
+	if theme, css, js := read(t, fresh); theme != "lumaaglaass" || css != "" || js != "" {
+		t.Fatalf("a new server: %q, %q, %q", theme, css, js)
+	}
+	edited := strings.Replace(bundledJs, "homeCarousel: false", "homeCarousel: true", 1)
+	for name, tc := range map[string]struct{ css, js, wantTheme, wantCss, wantJs string }{
+		"bundled theme": {bundledCss, bundledJs, "lumaaglaass", "", ""},
+		"emptied":       {"", "", "none", "", ""},
+		"edited script": {bundledCss, edited, "custom", bundledCss, edited},
+		"own CSS only":  {"a {}", "", "custom", "a {}", ""},
+		"own theme":     {"@import url('https://themes.example/a.css');", "b()", "custom", "@import url('https://themes.example/a.css');", "b()"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			pool := testdb.New(t)
+			ctx := t.Context()
+			if err := migrate(ctx, pool, migrations[:at]); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, "UPDATE settings SET custom_css = $1, custom_js = $2", tc.css, tc.js); err != nil {
+				t.Fatal(err)
+			}
+			if err := migrate(ctx, pool, migrations[:at+1]); err != nil {
+				t.Fatal(err)
+			}
+			if theme, css, js := read(t, pool); theme != tc.wantTheme || css != tc.wantCss || js != tc.wantJs {
+				t.Errorf("became %q with %q and %q, want %q with %q and %q", theme, css, js, tc.wantTheme, tc.wantCss, tc.wantJs)
 			}
 		})
 	}

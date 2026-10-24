@@ -55,9 +55,13 @@ type Options struct {
 	// SetupRequired reports whether no administrator exists yet. Needed
 	// with Web only.
 	SetupRequired func(context.Context) (bool, error)
-	// CustomJs returns the administrator's script for the web client,
-	// empty for none; nil is none.
+	// CustomJs returns the script the web client gets, empty for none;
+	// nil is none.
 	CustomJs func() string
+	// SavedThemes is the folder of the copy of a theme's files Polyfin
+	// keeps (see themecopy), served under /web/polyfin/themes/saved/;
+	// empty serves none.
+	SavedThemes string
 	// Proxies tells every route the client of requests that come through
 	// a known proxy (see forwarded.Client); nil reads the connection's
 	// address alone.
@@ -117,7 +121,7 @@ func New(options Options) http.Handler {
 	if options.Web != nil {
 		mux.Handle(webPrefix, webClient(options.Web, func(ctx context.Context) bool {
 			return setUp(ctx, options.SetupRequired)
-		}, options.CustomJs, options.Jellyfin, options.Logger))
+		}, options.CustomJs, options.SavedThemes, options.Jellyfin, options.Logger))
 		// Permanently, as Jellyfin does; the mux's own redirect is a 307.
 		mux.HandleFunc("/web", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, basePath(r)+webPrefix, http.StatusMovedPermanently)

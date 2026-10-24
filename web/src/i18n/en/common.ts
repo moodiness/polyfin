@@ -224,6 +224,11 @@ const common = {
     invalid_local_scan_hours: 'The scan interval must be a whole number of hours from 0 to 168.',
     invalid_custom_css: 'The custom CSS must take at most 2 MB.',
     invalid_custom_js: 'The custom JavaScript must take at most 2 MB.',
+    invalid_web_theme: 'Choose LumaaGlaass, None or Custom.',
+    theme_copy_running: 'A copy of the theme is being made already. Try again in a moment.',
+    theme_copy_nothing: 'The saved Custom texts load nothing from elsewhere.',
+    theme_copy_failed: 'No file could be saved, so no copy was made.',
+    custom_texts_changed: 'The Custom texts changed while the copy was made. Try again.',
     invalid_login_disclaimer: 'The sign-in message must take at most 8 KB.',
     invalid_publicmetadb_key:
       'PublicMetaDB did not accept this key. Copy it again from your PublicMetaDB account. Nothing was saved.',

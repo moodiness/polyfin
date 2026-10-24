@@ -591,8 +591,11 @@ type settingsJSON struct {
 	ConvertRecordingsFrom        *int  `json:"convertRecordingsFrom"`
 	ConvertRecordingsUntil       *int  `json:"convertRecordingsUntil"`
 	ConvertRecordingsOnProcessor *bool `json:"convertRecordingsOnProcessor"`
-	// CustomCss, CustomJs and LoginDisclaimer, for jellyfin-web, keep their
-	// current values when a PUT leaves them out; empty clears them.
+	// WebTheme, CustomCss, CustomJs and LoginDisclaimer, for jellyfin-web,
+	// keep their current values when a PUT leaves them out; empty clears
+	// the texts. CustomCss and CustomJs are the Custom theme's, kept while
+	// another is chosen.
+	WebTheme        *string `json:"webTheme"`
 	CustomCss       *string `json:"customCss"`
 	CustomJs        *string `json:"customJs"`
 	LoginDisclaimer *string `json:"loginDisclaimer"`
@@ -703,9 +706,19 @@ type settingsJSON struct {
 	TorrentDownloadMbps     *int           `json:"torrentDownloadMbps"`
 	TorrentUploadMbps       *int           `json:"torrentUploadMbps"`
 	InterfaceRoutes         bool           `json:"interfaceRoutes"`
+	// LumaaGlaass is the custom CSS and script the web player gets for
+	// the theme Polyfin bundles, which the admin app shows; a PUT ignores
+	// it.
+	LumaaGlaass *webThemeTextsJSON `json:"lumaaGlaass,omitempty"`
 	// Bounds are what each setting accepts, and its default, by its name
 	// here; a PUT ignores them.
 	Bounds map[string]settingBoundsJSON `json:"bounds,omitempty"`
+}
+
+// webThemeTextsJSON is the custom CSS and script of a theme.
+type webThemeTextsJSON struct {
+	Css string `json:"css"`
+	Js  string `json:"js"`
 }
 
 // settingBoundsJSON is what a setting accepts, and its default (see
@@ -844,8 +857,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		ConvertRecordingsUntil:       &settings.ConvertRecordingsUntil,
 		ConvertRecordingsOnProcessor: &settings.ConvertRecordingsOnProcessor,
 
+		WebTheme:              &settings.WebTheme,
 		CustomCss:             &settings.CustomCss,
 		CustomJs:              &settings.CustomJs,
+		LumaaGlaass:           &webThemeTextsJSON{Css: accounts.LumaaGlaassCss, Js: accounts.LumaaGlaassJs},
 		LoginDisclaimer:       &settings.LoginDisclaimer,
 		AddVersionsToOpenPage: &settings.AddVersionsToOpenPage,
 
@@ -1546,6 +1561,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ConvertRecordingsUntil:       valueOr(body.ConvertRecordingsUntil, current.ConvertRecordingsUntil),
 		ConvertRecordingsOnProcessor: valueOr(body.ConvertRecordingsOnProcessor, current.ConvertRecordingsOnProcessor),
 
+		WebTheme:              valueOr(body.WebTheme, current.WebTheme),
 		CustomCss:             valueOr(body.CustomCss, current.CustomCss),
 		CustomJs:              valueOr(body.CustomJs, current.CustomJs),
 		LoginDisclaimer:       valueOr(body.LoginDisclaimer, current.LoginDisclaimer),

@@ -9,17 +9,17 @@ import (
 	"github.com/moodiness/polyfin/internal/webtheme"
 )
 
-// DefaultCustomCss and DefaultCustomJs are the web player's custom CSS and
-// script on a new server: they load the LumaaGlaass theme Polyfin bundles
-// (see webtheme), from the web client's own address, with its settings
-// page for each user and its home carousel off. The page takes the
-// script's options as its defaults. Their addresses carry the version of
-// the bundled files, which changes with them: changing these, or the
-// files, takes a migration replacing the column defaults and the values
-// still equal to the previous ones.
-var DefaultCustomCss = `@import url('` + webtheme.Address("assets/lumaaglaass.css") + `');`
+// LumaaGlaassCss and LumaaGlaassJs are the custom CSS and script Polyfin
+// serves to the web player when its theme is WebThemeLumaaGlaass, the
+// default: they load the LumaaGlaass theme Polyfin bundles (see webtheme),
+// from the web client's own address, with its settings page for each user
+// and its home carousel off. The page takes the script's options as its
+// defaults. Their addresses carry the version of the bundled files, which
+// changes with them; they are not stored, so a new copy of the theme takes
+// no migration.
+var LumaaGlaassCss = `@import url('` + webtheme.Address("assets/lumaaglaass.css") + `');`
 
-var DefaultCustomJs = `(() => {
+var LumaaGlaassJs = `(() => {
     window.LumaaGlaassOptions = {
         preferences: true,
         homeCarousel: false,
@@ -148,8 +148,9 @@ func DefaultSettings() Settings {
 		ConvertRecordingsUntil:       DefaultConvertRecordingsUntil,
 		ConvertRecordingsOnProcessor: false,
 
-		CustomCss:             DefaultCustomCss,
-		CustomJs:              DefaultCustomJs,
+		WebTheme:              WebThemeLumaaGlaass,
+		CustomCss:             "",
+		CustomJs:              "",
 		AddVersionsToOpenPage: true,
 
 		LastFMAPIKey: "",
@@ -357,6 +358,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"convertRecordingsUntil":       between(0, 23, d.ConvertRecordingsUntil),
 		"convertRecordingsOnProcessor": is(d.ConvertRecordingsOnProcessor),
 
+		"webTheme":                choice(d.WebTheme, anys(WebThemes)),
 		"customCss":               text(MaxCustomCodeBytes, d.CustomCss),
 		"customJs":                text(MaxCustomCodeBytes, d.CustomJs),
 		"loginDisclaimer":         text(MaxLoginDisclaimerBytes, d.LoginDisclaimer),

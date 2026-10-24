@@ -28,10 +28,11 @@ type BrandingOptions struct {
 
 // brandingConfiguration answers /Branding/Configuration, to anyone, and
 // /System/Configuration/branding, to signed-in users, from the same
-// settings.
+// settings: the CSS is the one the web player's theme gets (see
+// accounts.Settings.ServedCss).
 func (h *Handler) brandingConfiguration(w http.ResponseWriter, _ *http.Request) {
 	settings := h.Accounts.Settings()
-	writeJSON(w, http.StatusOK, BrandingOptions{LoginDisclaimer: settings.LoginDisclaimer, CustomCss: settings.CustomCss})
+	writeJSON(w, http.StatusOK, BrandingOptions{LoginDisclaimer: settings.LoginDisclaimer, CustomCss: settings.ServedCss()})
 }
 
 // brandingCSS answers the server's CSS, empty when there is none, as
@@ -39,14 +40,18 @@ func (h *Handler) brandingConfiguration(w http.ResponseWriter, _ *http.Request) 
 func (h *Handler) brandingCSS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(h.Accounts.Settings().CustomCss))
+	_, _ = w.Write([]byte(h.Accounts.Settings().ServedCss()))
 }
 
 // updateBranding saves the branding jellyfin-web's dashboard posts to
 // /System/Configuration/branding. As in Jellyfin, the body replaces the
 // branding whole: a text left out is cleared. SplashscreenEnabled is read
-// and ignored, as Polyfin has no splash screen; the custom script, which is
-// not Jellyfin's, is kept. Texts above Polyfin's limits are refused.
+// and ignored, as Polyfin has no splash screen. The CSS the web player's
+// theme gets, posted back unchanged as jellyfin-web's branding page does,
+// keeps the theme; another becomes the Custom CSS, and the theme Custom,
+// with the script it had as the Custom script when it was another theme,
+// so that the page keeps it: Jellyfin has no script. Texts above Polyfin's
+// limits are refused.
 func (h *Handler) updateBranding(w http.ResponseWriter, r *http.Request) {
 	errs := bindErrors{}
 	raw, ok := requestBodyUpTo(w, r, "configuration", errs, maxBrandingBody)
@@ -67,12 +72,19 @@ func (h *Handler) updateBranding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings := h.Accounts.Settings()
-	settings.LoginDisclaimer, settings.CustomCss = "", ""
+	settings.LoginDisclaimer = ""
 	if body.LoginDisclaimer != nil {
 		settings.LoginDisclaimer = *body.LoginDisclaimer
 	}
+	css := ""
 	if body.CustomCss != nil {
-		settings.CustomCss = *body.CustomCss
+		css = *body.CustomCss
+	}
+	if css != settings.ServedCss() {
+		if settings.WebTheme != accounts.WebThemeCustom {
+			settings.WebTheme, settings.CustomJs = accounts.WebThemeCustom, settings.ServedJs()
+		}
+		settings.CustomCss = css
 	}
 	if _, err := h.Accounts.UpdateSettings(r.Context(), settings); err != nil {
 		switch {

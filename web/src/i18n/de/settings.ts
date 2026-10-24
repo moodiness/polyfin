@@ -766,12 +766,77 @@ const settings: typeof en = {
     webPlayerHelp:
       'Was der Web-Player (jellyfin-web, unter /web/) zusätzlich zu seinen eigenen Seiten anzeigt. Das Skript wirkt beim nächsten Laden einer Seite des Web-Players; der Web-Player behält CSS und Anmeldenachricht bis zu einer Minute.',
     openWebPlayer: 'Web-Player öffnen',
+    webTheme: 'Theme',
+    webThemeHelp:
+      'Das Aussehen des Web-Players. LumaaGlaass ist das Theme, das Polyfin mitbringt. Keines behält das Aussehen von jellyfin-web, dessen Anzeige-Theme jeder Benutzer unter Einstellungen › Darstellung wählt. Benutzerdefiniert verwendet dein eigenes CSS und JavaScript unten, die erhalten bleiben, während ein anderes Theme gewählt ist.',
+    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'Keines', custom: 'Benutzerdefiniert' },
+    webThemeReload:
+      'Der Web-Player behält das gelesene benutzerdefinierte CSS bis zu einer Minute: Lade seine offenen Seiten nach einer Änderung eine Minute später neu.',
+    webThemeTexts: {
+      lumaaglaass:
+        'Was Polyfin für LumaaGlaass ausliefert, hier angezeigt und nicht bearbeitbar. Wähle Benutzerdefiniert oder „Als benutzerdefiniert bearbeiten“, um dein eigenes zu schreiben.',
+      none: 'Keines liefert weder benutzerdefiniertes CSS noch JavaScript aus. Wähle Benutzerdefiniert, um dein eigenes zu schreiben.',
+    },
+    editAsCustom: 'Als benutzerdefiniert bearbeiten',
+    editAsCustomTitle: 'Deine benutzerdefinierten Texte ersetzen?',
+    editAsCustomConfirm:
+      'Dein benutzerdefiniertes CSS und JavaScript werden durch die von LumaaGlaass ersetzt, und das Theme wird Benutzerdefiniert. Speichern der Seite übernimmt die Änderung.',
+    themeCopy: 'Eine Kopie in Polyfin behalten',
+    themeCopyHelp: (depth: number, file: string, total: string, files: number) =>
+      `Speichert die Stylesheets, Skripte, Schriften und Bilder, die die benutzerdefinierten Texte von anderswo laden, etwa ein Theme auf einem CDN, im Datenordner von Polyfin und lässt die Texte sie von Polyfin laden: Das Theme funktioniert dann, ohne sein CDN zu erreichen. Folgt @import, url() und den Adressen, die Skripte nennen, ${depth} Ebenen tief, nur von Adressen im Internet, bis ${file} pro Datei und insgesamt ${total} und ${files} Dateien.`,
+    themeCopySaved: (files: number, size: string, date: string) =>
+      `Eine Kopie von ${files === 1 ? 'einer Datei' : `${files} Dateien`}, ${size}, gespeichert am ${date}.`,
+    themeCopyFiles: 'Gespeicherte Dateien',
+    themeCopyUnsaved: (count: number) =>
+      count === 1
+        ? 'Eine Adresse konnte nicht gespeichert werden; sie wird weiter von anderswo geladen:'
+        : `${count} Adressen konnten nicht gespeichert werden; sie werden weiter von anderswo geladen:`,
+    themeCopyMissing: (count: number) =>
+      count === 1
+        ? 'Eine Datei der Kopie fehlt im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System. Aktualisiere die Kopie, um sie erneut herunterzuladen.'
+        : `${count} Dateien der Kopie fehlen im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System. Aktualisiere die Kopie, um sie erneut herunterzuladen.`,
+    themeCopyOutside: (count: number) =>
+      count === 1
+        ? 'Die benutzerdefinierten Texte laden eine Adresse von anderswo:'
+        : `Die benutzerdefinierten Texte laden ${count} Adressen von anderswo:`,
+    themeCopyStillOutside: (count: number) =>
+      count === 1
+        ? 'Eine seit der Kopie hinzugefügte Adresse wird von anderswo geladen; aktualisiere die Kopie, um sie auch zu speichern:'
+        : `${count} seit der Kopie hinzugefügte Adressen werden von anderswo geladen; aktualisiere die Kopie, um sie auch zu speichern:`,
+    themeCopyNothing: 'Die benutzerdefinierten Texte laden nichts von anderswo.',
+    themeCopyKeep: 'Eine Kopie in Polyfin behalten',
+    themeCopyUpdate: 'Kopie aktualisieren',
+    themeCopyRemove: 'Kopie entfernen',
+    themeCopyRemoveTitle: 'Kopie entfernen?',
+    themeCopyRemoveConfirm:
+      'Ihre Dateien werden gelöscht, und die benutzerdefinierten Texte laden sie wieder von ihren ursprünglichen Adressen.',
+    themeCopyKept:
+      'Kopie gespeichert. Lade die offenen Seiten des Web-Players in einer Minute neu.',
+    themeCopyRemoved:
+      'Kopie entfernt. Lade die offenen Seiten des Web-Players in einer Minute neu.',
+    themeCopyFailed: 'Keine Datei konnte gespeichert werden, daher wurde keine Kopie angelegt:',
+    themeCopySaveFirst:
+      'Speichere zuerst deine Änderungen: Die Kopie wird aus den gespeicherten Texten erstellt.',
+    themeCopyKinds: { stylesheet: 'Stylesheet', script: 'Skript', font: 'Schrift', image: 'Bild' },
+    themeCopyReasons: {
+      private_address: 'in einem lokalen Netz oder dorthin umgeleitet',
+      not_http: 'zu einer Adresse umgeleitet, die weder http noch https ist',
+      unavailable: 'nicht verfügbar',
+      timeout: 'hat zu lange gedauert',
+      wrong_type: 'keine Datei der Art, als die sie geladen wird',
+      too_large: 'größer als die Grenze für eine Datei',
+      total_too_large: 'über der Grenze für die ganze Kopie',
+      too_many_files: 'über der Anzahl erlaubter Dateien',
+      too_deep: 'zu viele Ebenen tiefer genannt',
+      built_at_run_time:
+        'wird von einem Skript erst beim Ausführen vervollständigt, was keine Kopie verfolgen kann',
+    },
     customCss: 'Benutzerdefiniertes CSS',
     customCssHelp:
-      'Wird auf jede Seite des Web-Players angewendet, für jeden Benutzer, als benutzerdefiniertes CSS von Jellyfin. Benutzer können es unter Einstellungen › Darstellung deaktivieren. Standardmäßig enthält es das Stylesheet des LumaaGlaass-Themes, das zum standardmäßigen benutzerdefinierten JavaScript gehört: Leere beide, um das ursprüngliche Aussehen des Web-Players zu behalten.',
+      'Wird auf jede Seite des Web-Players angewendet, für jeden Benutzer, als benutzerdefiniertes CSS von Jellyfin. Benutzer können es unter Einstellungen › Darstellung deaktivieren.',
     customJs: 'Benutzerdefiniertes JavaScript',
     customJsHelp:
-      'Wird von jeder Seite des Web-Players nach dessen eigenen Skripten geladen. Leer lädt nichts. Standardmäßig lädt es das Skript des LumaaGlaass-Themes, das zum standardmäßigen benutzerdefinierten CSS gehört.',
+      'Wird von jeder Seite des Web-Players nach dessen eigenen Skripten geladen. Leer lädt nichts.',
     customJsWarningTitle: 'Füge nur Code ein, dem du vertraust',
     customJsWarning:
       'Dieses Skript läuft im Browser jedes Benutzers, der den Web-Player auf diesem Server öffnet, mit dessen Konto. Es kann lesen, was er sieht, und in seinem Namen handeln.',

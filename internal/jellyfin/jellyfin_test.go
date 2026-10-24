@@ -480,7 +480,7 @@ func TestResponsesMatchJellyfin(t *testing.T) {
 	_, user := s.call(http.MethodGet, "/Users/Me", signedIn, nil)
 	// A new Jellyfin has no custom CSS; a new Polyfin's loads a theme.
 	settings := s.store.Settings()
-	settings.CustomCss = ""
+	settings.WebTheme = accounts.WebThemeNone
 	if _, err := s.store.UpdateSettings(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}

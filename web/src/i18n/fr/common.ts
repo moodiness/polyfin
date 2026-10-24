@@ -245,6 +245,11 @@ const common: typeof en = {
       'L’intervalle d’analyse doit être un nombre entier d’heures de 0 à 168.',
     invalid_custom_css: 'Le CSS personnalisé ne doit pas dépasser 2 Mo.',
     invalid_custom_js: 'Le JavaScript personnalisé ne doit pas dépasser 2 Mo.',
+    invalid_web_theme: 'Choisissez LumaaGlaass, Aucun ou Personnalisé.',
+    theme_copy_running: 'Une copie du thème est déjà en cours. Réessayez dans un instant.',
+    theme_copy_nothing: 'Les textes personnalisés enregistrés ne chargent rien d’ailleurs.',
+    theme_copy_failed: 'Aucun fichier n’a pu être enregistré, donc aucune copie n’a été faite.',
+    custom_texts_changed: 'Les textes personnalisés ont changé pendant la copie. Réessayez.',
     invalid_login_disclaimer: 'Le message de connexion ne doit pas dépasser 8 Ko.',
     invalid_publicmetadb_key:
       'PublicMetaDB n’a pas accepté cette clé. Copiez-la de nouveau depuis votre compte PublicMetaDB. Rien n’a été enregistré.',

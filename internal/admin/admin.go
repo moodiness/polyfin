@@ -38,6 +38,7 @@ import (
 	"github.com/moodiness/polyfin/internal/reminders"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/tasks"
+	"github.com/moodiness/polyfin/internal/themecopy"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/tmdb"
 	"github.com/moodiness/polyfin/internal/trackers"
@@ -102,6 +103,9 @@ type Options struct {
 	TMDB *tmdb.Client
 	// WebClient tells whether Polyfin serves jellyfin-web at /web/.
 	WebClient bool
+	// ThemeCopier keeps a copy of the files the web player's Custom texts
+	// load from elsewhere; nil offers none.
+	ThemeCopier *themecopy.Copier
 	// InContainer tells whether Polyfin runs in a container, as the Docker
 	// image does: the status tells the admin app where local folders are.
 	InContainer bool
@@ -295,6 +299,9 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/settings/apps", h.administrator(h.settingsApps))
 	mux.Handle("POST /admin/api/settings/secrets/{name}/reveal", h.administrator(h.revealServerSecret))
 	mux.Handle("POST /admin/api/settings/metrics-token", h.administrator(h.newMetricsToken))
+	mux.Handle("GET /admin/api/settings/theme-copy", h.administrator(h.themeCopy))
+	mux.Handle("POST /admin/api/settings/theme-copy", h.administrator(h.keepThemeCopy))
+	mux.Handle("DELETE /admin/api/settings/theme-copy", h.administrator(h.removeThemeCopy))
 	mux.Handle("POST /admin/api/users/{id}/unblock", h.administrator(h.unblockUser))
 	mux.Handle("POST /admin/api/users/{id}/two-step/off", h.administrator(h.turnOffUserTwoStep))
 	mux.Handle("POST /admin/api/users/downloads/off", h.administrator(h.turnOffDownloads))
@@ -590,6 +597,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidPlaybackHistoryDays, http.StatusBadRequest, "invalid_playback_history_days"},
 		{accounts.ErrInvalidLiveTvRefreshHours, http.StatusBadRequest, "invalid_live_tv_refresh_hours"},
 		{accounts.ErrInvalidLocalScanHours, http.StatusBadRequest, "invalid_local_scan_hours"},
+		{accounts.ErrInvalidWebTheme, http.StatusBadRequest, "invalid_web_theme"},
 		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},
 		{accounts.ErrInvalidCustomJs, http.StatusBadRequest, "invalid_custom_js"},
 		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},
