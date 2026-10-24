@@ -113,7 +113,7 @@ A WireGuard tunnel to a far server adds delay, and a delay that varies. LEDBAT t
 
 ## Only while playing
 
-Only a playback starts a torrent. Preparing playback in advance, thumbnails and downloads do not: a torrent version cannot be downloaded, and has no thumbnails. When the playback ends, after 30 seconds without a read, as when a player pauses or between its requests, the torrent stops: no more sharing, no more peers, and its pieces are removed. The trackers are told it stopped.
+Only a playback starts a torrent, and a subtitle file inside it that a user picks before it was fetched (see [Subtitle files inside the torrent](#subtitle-files-inside-the-torrent)). Preparing playback in advance, thumbnails and downloads do not: a torrent version cannot be downloaded, and has no thumbnails. When the playback ends, after 30 seconds without a read, as when a player pauses or between its requests, the torrent stops: no more sharing, no more peers, and its pieces are removed. The trackers are told it stopped.
 
 A playback of another title ends that wait at once. When a device reports that it plays another title, a torrent's or not, the torrents it played before stop then, and so do those its user played on another device that stopped since:
 
@@ -129,15 +129,33 @@ Once no playback reads a torrent's file any longer, Polyfin stops reading ahead 
 
 The subtitle files an addon lists with a torrent stream are that version's own, listed from the title's page on, before any play. Polyfin downloads them from their links, without joining the swarm (see [Subtitles](subtitles.md#subtitle-files-listed-with-a-stream)).
 
+### Subtitle files inside the torrent
+
+The text subtitle files of the torrent that go with the video played, such as `Movie.fr.srt` beside it or `Subs/English.srt`, are listed for its version from its first play, once the torrent tells its files, and kept with it (see [Subtitles](subtitles.md#subtitle-files-inside-torrents)). Their text comes from the swarm:
+
+- A file costs the pieces that hold it, whole, whatever its size: one piece, or two when it lies across them, of up to 16 MiB each in the torrents of movies and episodes. Only those pieces are fetched: none past the file, nor the start and end of a file that a video's read fetches for its index. Files that share a piece, as small files next to each other often do, cost it once while the torrent runs.
+- So the file in the user's preferred subtitle language alone is fetched as the play starts, beside the video's first pieces; each other file is fetched when a user picks it, and the app waits for it. Once fetched, a file is kept, and costs nothing more.
+- A fetch joins the torrent as a playback does, through the route and under the kill switch. A file picked once the torrent stopped starts it again, for that fetch alone; the torrent then stops 30 seconds later, as after a playback. The fetch runs to its end, for up to 105 seconds, the torrent's start and a piece's wait, even when the app stops waiting.
+
+Measured on a Mac with an Apple M1 Max, on the local test swarm, one peer sending a block of 16 KiB every 10 ms (about 1.6 MB/s), fetching a SubRip file of 60 KB once the torrent started, 3 runs each (`go test -run '^$' -bench SubtitleFetch -benchtime 3x ./internal/torrent`):
+
+| Piece length | Downloaded | Time |
+| --- | --- | --- |
+| 1 MiB | 1 MiB | 0.73 s |
+| 4 MiB | 4 MiB | 2.96 s |
+| 16 MiB | 16 MiB | 11.92 s |
+
+The time is the piece's at the swarm's speed; the playback shares that speed while the file comes.
+
 ## How a torrent starts
 
 1. Opening a title's page lists its torrent versions. Nothing reads them yet: preparing playback ahead leaves them alone, and a torrent version that was never played has no analysis.
 2. Pressing **Play** sends PlaybackInfo. Among the versions it tries (**Versions tried when one does not work**, see [Playback](playback.md)), each torrent version is tried as the play's own, even when it is not the first: the play joins its swarm before anything reads it, through the route.
 3. The torrent asks its trackers and the DHT for peers, connects to them, and receives its info dictionary from one of them. The pieces at the start and the end of the file come first.
-4. The version is analyzed inside that playback: its first bytes are waited for, then ffprobe reads it within **Maximum time to analyze a version** as it reads any file, and the analysis is kept for later plays. PlaybackInfo then answers the version as the app plays it: as it is, remuxed, or converted.
+4. The version is analyzed inside that playback: its first bytes are waited for, then ffprobe reads it within **Maximum time to analyze a version** as it reads any file, and the analysis is kept for later plays. The subtitle files inside the torrent that go with the file are listed and kept too. PlaybackInfo then answers the version as the app plays it: as it is, remuxed, or converted.
 5. The stream or HLS requests the app sends next read the torrent as the same playback.
 
-A torrent version analyzed once plays at once the next time: its analysis is kept, and only the stream joins the swarm.
+A torrent version analyzed once plays at once the next time: its analysis and its subtitle files are kept, and only the stream joins the swarm. A version analyzed before Polyfin 0.46 has its subtitle files listed at its next play, whose PlaybackInfo waits for the torrent's files, within the same deadlines.
 
 ### Deadlines
 
