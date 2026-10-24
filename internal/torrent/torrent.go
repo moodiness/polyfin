@@ -1001,7 +1001,8 @@ func (t *torrent) chooseUnchoked() {
 }
 
 // wanted lists the pieces to fetch, most urgent first: those at and after
-// each read, nearest first, then the start and end of each file read.
+// each read, nearest first, then the start and end of each file read. A
+// whole file's read (see Engine.ReadFile) fetches its own pieces alone.
 // The lock is held.
 func (t *torrent) wanted() []int {
 	if t.info == nil {
@@ -1019,8 +1020,12 @@ func (t *torrent) wanted() []int {
 	}
 	window := t.window()
 	for d := range window {
-		for _, span := range t.reads {
-			add(int(span.at/length) + d)
+		for r, span := range t.reads {
+			i := int(span.at/length) + d
+			if r.whole && (span.end <= span.at || int64(i)*length >= span.end) {
+				continue
+			}
+			add(i)
 		}
 	}
 	for _, f := range t.files {
@@ -1389,12 +1394,14 @@ func (t *torrent) receivedMetadata(index int64, data []byte) {
 }
 
 // Reader reads a file of a torrent being played, as a source of the
-// source cache: each read asks for its pieces first.
+// source cache: each read asks for its pieces first. whole marks a read
+// of a file whole (see Engine.ReadFile), which fetches its pieces alone.
 type Reader struct {
-	t    *torrent
-	file File
-	ctx  context.Context
-	size int64
+	t     *torrent
+	file  File
+	ctx   context.Context
+	size  int64
+	whole bool
 }
 
 // Size is the file's size.
@@ -1469,36 +1476,22 @@ func (r *Reader) Close() error {
 	return nil
 }
 
-// open waits for the torrent's info, and returns a reader of the file
-// spec plays (see Info.File). Past the engine's StartTimeout without it,
-// the torrent did not start: a *StartError tells what came of the search
-// for its peers. The reader reads under ctx, the wait being bounded alone.
-func (t *torrent) open(ctx context.Context, spec Spec) (*Reader, error) {
+// waitInfo waits for the torrent's info dictionary. Past the engine's
+// StartTimeout without it, the torrent did not start: a *StartError tells
+// what came of the search for its peers.
+func (t *torrent) waitInfo(ctx context.Context) (*Info, error) {
 	started := time.Now()
 	deadline := time.NewTimer(t.engine.config.StartTimeout)
 	defer deadline.Stop()
 	for {
 		t.mu.Lock()
 		info, err, changed := t.info, t.err, t.changed
-		if info != nil && err == nil {
-			file, err := info.File(spec)
-			if err != nil {
-				t.mu.Unlock()
-				return nil, err
-			}
-			if !slices.Contains(t.files, file) {
-				t.files = append(t.files, file)
-				for _, p := range t.peers {
-					t.fill(p)
-				}
-			}
-			t.mu.Unlock()
-			t.engine.startedOne()
-			return &Reader{t: t, file: file, ctx: ctx, size: file.Length}, nil
-		}
 		t.mu.Unlock()
 		if err != nil {
 			return nil, err
+		}
+		if info != nil {
+			return info, nil
 		}
 		select {
 		case <-ctx.Done():
@@ -1512,6 +1505,58 @@ func (t *torrent) open(ctx context.Context, spec Spec) (*Reader, error) {
 		case <-changed:
 		}
 	}
+}
+
+// open waits for the torrent's info (see waitInfo), and returns a reader
+// of the file spec plays (see Info.File). The reader reads under ctx, the
+// wait being bounded alone.
+func (t *torrent) open(ctx context.Context, spec Spec) (*Reader, error) {
+	info, err := t.waitInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	file, err := info.File(spec)
+	if err != nil {
+		return nil, err
+	}
+	t.mu.Lock()
+	if !slices.Contains(t.files, file) {
+		t.files = append(t.files, file)
+		for _, p := range t.peers {
+			t.fill(p)
+		}
+	}
+	t.mu.Unlock()
+	t.engine.startedOne()
+	return &Reader{t: t, file: file, ctx: ctx, size: file.Length}, nil
+}
+
+// readFile waits for the torrent's info (see waitInfo), and reads whole
+// its file at index, fetching its pieces alone, under ctx. A file longer
+// than limit is not read.
+func (t *torrent) readFile(ctx context.Context, index int, limit int64) ([]byte, error) {
+	info, err := t.waitInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	file, err := info.File(Spec{File: index})
+	if err != nil {
+		return nil, err
+	}
+	if file.Length > limit {
+		return nil, fmt.Errorf("the torrent's file %d is %d bytes, more than %d", index, file.Length, limit)
+	}
+	t.engine.startedOne()
+	data := make([]byte, file.Length)
+	if len(data) == 0 {
+		return data, nil
+	}
+	r := &Reader{t: t, file: file, ctx: ctx, size: file.Length, whole: true}
+	defer r.Close()
+	if n, err := r.ReadAt(data, 0); n < len(data) {
+		return nil, err
+	}
+	return data, nil
 }
 
 // failed reports whether the torrent stopped because its route failed.

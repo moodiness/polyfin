@@ -248,6 +248,19 @@ func (p *Peer) MostAsked() int {
 	return most
 }
 
+// Asked reports whether the peer was asked for a block holding any of the
+// length bytes at offset among the torrent's.
+func (p *Peer) Asked(offset, length int) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for block := offset / blockSize; block*blockSize < offset+length; block++ {
+		if p.asks[block] > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Leech starts a leecher of t: it asks for every piece of whoever connects.
 func Leech(tb testing.TB, t *Torrent, host string) *Peer {
 	return start(tb, t, host, false)

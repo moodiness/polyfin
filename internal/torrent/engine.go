@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -342,6 +343,45 @@ func (e *Engine) remove(t *torrent, err error) {
 // *StartError. A torrent no playback joined is ErrNotPlaying; one whose
 // route fails, why.
 func (e *Engine) Open(ctx context.Context, spec Spec) (*Reader, error) {
+	t, err := e.playing(ctx, spec.Hash)
+	if err != nil {
+		return nil, err
+	}
+	return t.open(ctx, spec)
+}
+
+// Files returns the files of the torrent of spec, as its info dictionary
+// lists them, and the one spec plays (see Info.File), waiting for them as
+// Open does.
+func (e *Engine) Files(ctx context.Context, spec Spec) (played File, files []File, err error) {
+	t, err := e.playing(ctx, spec.Hash)
+	if err != nil {
+		return File{}, nil, err
+	}
+	info, err := t.waitInfo(ctx)
+	if err != nil {
+		return File{}, nil, err
+	}
+	played, err = info.File(spec)
+	return played, slices.Clone(info.Files), err
+}
+
+// ReadFile reads whole the file at index among the files of the torrent
+// of spec, waiting for its info as Open does. Only that file's pieces are
+// fetched: none ahead of it, nor the start and end Open's reads fetch for
+// a video's index. A file longer than limit is not read.
+func (e *Engine) ReadFile(ctx context.Context, spec Spec, index int, limit int64) ([]byte, error) {
+	t, err := e.playing(ctx, spec.Hash)
+	if err != nil {
+		return nil, err
+	}
+	return t.readFile(ctx, index, limit)
+}
+
+// playing returns the torrent of hash once its route is checked: a
+// torrent no playback joined is ErrNotPlaying; one whose route fails,
+// why.
+func (e *Engine) playing(ctx context.Context, hash Hash) (*torrent, error) {
 	route, err := e.currentRoute()
 	if err != nil {
 		return nil, err
@@ -350,12 +390,12 @@ func (e *Engine) Open(ctx context.Context, spec Spec) (*Reader, error) {
 		return nil, err
 	}
 	e.mu.Lock()
-	t := e.torrents[spec.Hash]
+	t := e.torrents[hash]
 	e.mu.Unlock()
 	if t == nil {
 		return nil, ErrNotPlaying
 	}
-	return t.open(ctx, spec)
+	return t, nil
 }
 
 // Ready reports why torrents cannot play now: off, without a route, or
