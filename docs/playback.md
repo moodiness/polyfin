@@ -125,6 +125,22 @@ Until a version is played, Polyfin knows only what its addon says of it. With **
 
 - Item details and listings describe a version not analyzed yet with the tracks RemuxDB found, numbered as ffprobe numbers them, after the subtitle files as usual. These `MediaStreams` lack what only an analysis reads, such as `TimeBase` and `CodecTag`; the version has no chapters nor attachments yet. `PlaybackInfo` always answers from the analysis.
 
+### Live videos
+
+A video an addon lists among its titles of other types, such as a sports addon's match on now, may stream with no end: an HLS playlist without `#EXT-X-ENDLIST`, or a stream that announces no size and gives no duration. Before its first play, or as its play is prepared ahead when its details open, Polyfin reads the first bytes of its first version: a file, of a known size, plays as any video; a playlist, or a stream of no size, is analyzed as a Live TV channel's stream is (see [Live TV](live-tv.md)), and plays live when it has no duration. The analysis is kept, and later plays are told by it at once.
+
+A live video plays as a channel does:
+
+- From its live edge, with no duration and no seeking. The app gets an infinite stream (`IsInfiniteStream`, no `RunTimeTicks`), relayed as it is, or repackaged or converted by FFmpeg as it comes, as the app takes it.
+- No keyframe index is read, and no conversion waits for its end. It counts among the channels played through FFmpeg at once, as a channel does.
+- It keeps no resume point and is never marked played, as channels keep no user data, and it has no line in the activity log. Its playbacks show on Home as any other. No scrubbing thumbnails are made of it.
+
+A video whose stream ends, such as a recap's file, plays as a video, with its duration, resume point and played state.
+
+**Compared with Jellyfin:**
+
+- Jellyfin plays a live item without a duration or a resume point too (`LiveTvChannel.SupportsPositionTicksResume` is false). It marks it played as it starts, and when it stops without a runtime (`SessionManager.OnPlaybackStart`, `UserDataManager.UpdatePlayState`). Polyfin keeps no user data of a live video, as of a channel, so that a match on now does not show as watched in its library while it goes on.
+
 ## Chapters
 
 The analysis also reads the version's chapters, which apps show and let you skip through. Apps get the chapters of the version the title was opened or played as. A version never played has no chapters yet. Chapters named as an intro, a recap, a preview or credits also give that version's skip buttons (see [Segments of each version](skip-segments.md#segments-of-each-version)).

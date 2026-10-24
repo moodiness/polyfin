@@ -15,8 +15,9 @@ Polyfin gets its content from Stremio addons. Each addon has a role:
 To share an addon with every user, open **Add a source** under **Content › Sources**, keep the **Stremio addon** tab, and paste its **Manifest address** (from the addon's configure page). Then pick under **Content › Libraries** which of its catalogs become libraries in Jellyfin apps.
 
 - When an addon offers collection catalogs, those are enabled first.
-- Otherwise its first 20 movie, series and TV catalogs are enabled. Its catalogs of other types, such as a cloud store's `other` catalog, are not: enable them under **Content › Libraries** (see [What catalogs list](#what-catalogs-list)).
+- Otherwise its first 20 movie, series and TV catalogs are enabled. Its catalogs of other types, such as a cloud store's `other` catalog or a sports addon's `sport` catalogs, are not: enable them under **Content › Libraries** (see [What catalogs list](#what-catalogs-list)).
 - This is only a starting point: you can enable any number of catalogs.
+- When none of the addon's catalogs is enabled, as for an addon whose catalogs are all of other types, the message that confirms the addon was added says so, and that its catalogs can be enabled under **Content › Libraries**, rather than leaving nothing new to see in the apps. A user's own addon says the same of **My sources**.
 
 Only administrators can install addons hosted on a local network address.
 
@@ -99,19 +100,21 @@ An addon gives each catalog, and each title, a Stremio type, which decides what 
 | `other`, `channel` | Folders of videos, or videos | `homevideos` |
 | `collection` | Collections (see [Collections from addons](#collections-from-addons)) | none (mixed) |
 | `tv` | Live TV channels, not a library (see [Live TV](live-tv.md)) | |
+| `track`, `album`, `artist`, `playlist` of a music addon | Music (see [Music addons](#music-addons)) | `music` |
+| Any other type, such as `sport` or `events` | Folders of videos, or videos, as for `other` | `homevideos` |
 
-A title of another type is left out of its catalog's library.
+A type Polyfin has no particular use for is listed as `other` is: Stremio apps show such types the same way. A sports addon's `sport` catalogs, for instance, become libraries of its matches and recaps, each a video, or a folder when its details list videos. A title without a type, in a catalog without one, is left out.
 
 #### Folders of videos
 
-`other` is Stremio's type for what is neither a movie nor a series: the files of a cloud store, for instance, whose addon lists each download as a title and its files as the title's videos. `channel` is a channel's uploads, the same shape. Polyfin lists them as Stremio apps do:
+`other` is Stremio's type for what is neither a movie nor a series: the files of a cloud store, for instance, whose addon lists each download as a title and its files as the title's videos. `channel` is a channel's uploads, the same shape, and so is every type Polyfin has no particular use for, such as `sport`. Polyfin lists them as Stremio apps do:
 
 - A title whose details list videos is a folder. Apps open it to list its videos, in the order the addon gives them, each named after its video (or "Video 3" without a name), with its date and image when the addon gives them.
 - A title without videos is a video itself, which plays the streams the addon lists for the title.
 - Catalogs do not tell which titles have videos: their details do. Listing a library asks the addon for the details of the titles it does not know yet, a few at a time, for up to 5 seconds; a title still unknown then is listed as a folder, which lists itself as its one video when it turns out to have none, and is listed as it is from then on.
 - The library is a home videos library, as Jellyfin's for videos that are not movies nor shows: jellyfin-web shows it with its **Folders** view, the titles, and its **Videos** view, every video of the library, through its folders, for its first 500 titles, or its **Maximum titles** when lower (see [Genre and maximum](#genre-and-maximum)).
 - A folder shows how many of its videos are left to watch, and is played once all are. Marking it played, or unplayed, marks its videos; removing it from Continue Watching removes their resume points.
-- Videos play as movies do: directly, remuxed or converted, with their resume point and in Continue Watching. The tracking services hear nothing of them.
+- Videos play as movies do: directly, remuxed or converted, with their resume point and in Continue Watching. The tracking services hear nothing of them. A video whose stream has no end, such as a match on now, plays live (see [Live videos](playback.md#live-videos)).
 - Search finds them in the catalogs that offer it, as folders or videos. Parental control judges them as **Other**, unrated unless their details give a rating, and a video by its folder; blocked genres hide them by their details' genres. Hiding a folder, or one of its videos, hides the folder with its videos. A folder can be added to a collection.
 
 #### Streams in a title's details
