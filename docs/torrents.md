@@ -12,6 +12,7 @@ Under **Settings › Torrents**:
 - **Route** chooses between **Network interface**, **SOCKS5 proxy** and **WireGuard tunnel**. On Windows and macOS, as on Polyfin Desktop, the network interface is not offered: those systems cannot bind a socket to one.
 - **Download limit (Mbps, 0 = none)**, 0 by default.
 - **Upload limit (Mbps, 0 = no sharing)**, 0 by default. Peers favour those that share back, so a start may be slower at 0.
+- **Torrents at once (0 = no limit)**, 0 by default, from 0 to 100: how many torrents may run at once, for the whole server (see [Torrents at once](#torrents-at-once)).
 
 Each user also needs **Can play torrent streams**, in the **Access** section of their page under **Users**, next to **Can download** (see [Users](users.md#playing-torrent-streams)). It is off for every user, administrators included. Without it, or with the switch off, a user's versions hold no torrent, from the server's addons or their own. With both, torrent versions are listed like the other versions of an addon, in its order.
 
@@ -168,6 +169,27 @@ A link's host sends its headers within seconds. A torrent needs peers first, fro
 
 A torrent that does not start in time is not tried again for 15 minutes, like a version that cannot be read, and the other versions are played meanwhile.
 
+## Torrents at once
+
+On a slow link, or a route that allows few connections, torrents running at once share the bandwidth and the peers, and each starts more slowly. **Torrents at once (0 = no limit)**, under **Settings › Torrents**, bounds them for the whole server. There is no limit per user; **Playbacks at once**, on each user's page, counts their devices playing, not their torrents.
+
+What counts:
+
+- Each torrent, not each playback. Every torrent running counts once, however many devices or users play it: a title played on two devices, or two episodes of one season pack, take one place.
+- Its linger too. A torrent counts until it stops: 30 seconds after the last read of its playback, as when a player pauses, or at once when the same device or user plays another title (see [Only while playing](#only-while-playing)).
+- Whatever starts it. A playback through a Jellyfin app, a DLNA device or a share link, and the fetch of a subtitle file inside a torrent that was not fetched yet (see [Subtitle files inside the torrent](#subtitle-files-inside-the-torrent)), each start the torrent, and it counts. Converted downloads never do: a torrent version cannot be downloaded. Nor does an analysis without a play: a torrent version is analysed only inside its play (see [How a torrent starts](#how-a-torrent-starts)).
+
+At the cap:
+
+- A torrent that does not run does not start. A play passes over its torrent version, as one that did not start in time, and tries the next versions within **Versions tried when one does not work**: a version that is a link plays. With none, PlaybackInfo answers `RateLimitExceeded`, and jellyfin-web says the media cannot be played at this time (see [When torrents do not start](#when-torrents-do-not-start)). The torrent version is not kept as failed: the next play tries it again.
+- DLNA devices and guests through share links count the same, and at the cap a torrent that does not run does not start for them either.
+- A torrent already running is joined as usual: another device playing the same title takes no place more.
+- A device that left a torrent for another title, which that title's start would end at once, gives its place to that title: when its next PlaybackInfo finds the cap reached, the torrents the device or its user left are ended first, as the start would end them, and the new torrent starts in their place. Another user's torrent is never ended for it.
+- Two torrents starting at the same moment for the last place: the first to start takes it, the other is refused as at the cap.
+- The log tells it at Info level: `A torrent version is passed over: as many torrents run as Torrents at once allows`.
+
+**Can play torrent streams**, **Playbacks at once**, the version rules and the quality groups apply as before: the cap only removes torrent versions from those a play tries while it is reached.
+
 ## When torrents do not start
 
 When no version of a title plays because a torrent could not start, its route being down or no peer sending it in time, PlaybackInfo answers Jellyfin's `RateLimitExceeded` rather than `NoCompatibleStream`: jellyfin-web says the media cannot be played at this time, rather than that the app is not compatible with it. The log tells why in one line at Info level (`A torrent did not start in time`, with the peers found, how the trackers answered, and the peers not connected counted by how their last dial or connection ended), and **System › Health** too. For example, `23 peers found, 0 connected (15 timed out, 8 refused)`:
@@ -202,4 +224,4 @@ On Linux 5.7 or later, Polyfin's own container needs no added capability.
 
 ## Health
 
-**System › Health** shows a **Torrents** panel while torrents are on: the route, a WireGuard tunnel's addresses and last handshake, the torrents playing, their peers and how many of them were reached over uTP, and what was shared since the start. The **Source cache** tells the part torrent pieces take. Under **Needs attention**, an error names a route that cannot carry the torrents and why, such as a WireGuard server that does not answer the handshake, a warning a proxy without `UDP ASSOCIATE`, and a warning a torrent that did not start in time in the last 15 minutes and why, with its peers counted by how their last dial ended (see [When torrents do not start](#when-torrents-do-not-start)), until a torrent starts. Health waits 2 seconds for a route's check. A WireGuard tunnel's check runs in the background and gives the handshake its 8 seconds: past Health's 2, a server that did not answer is told as not answering, and Health then tells the tunnel's last check at once rather than waiting again. While Health is open, a tunnel found down is checked again 5 seconds after each check, so one that comes back stops being reported within 13 seconds, a few more when `Endpoint` names the server by a host name, which is then looked up again.
+**System › Health** shows a **Torrents** panel while torrents are on: the route, a WireGuard tunnel's addresses and last handshake, the torrents playing (against **Torrents at once** when it is set, such as `1 of 2`), their peers and how many of them were reached over uTP, and what was shared since the start. The **Source cache** tells the part torrent pieces take. Under **Needs attention**, an error names a route that cannot carry the torrents and why, such as a WireGuard server that does not answer the handshake, a warning a proxy without `UDP ASSOCIATE`, and a warning a torrent that did not start in time in the last 15 minutes and why, with its peers counted by how their last dial ended (see [When torrents do not start](#when-torrents-do-not-start)), until a torrent starts. Health waits 2 seconds for a route's check. A WireGuard tunnel's check runs in the background and gives the handshake its 8 seconds: past Health's 2, a server that did not answer is told as not answering, and Health then tells the tunnel's last check at once rather than waiting again. While Health is open, a tunnel found down is checked again 5 seconds after each check, so one that comes back stops being reported within 13 seconds, a few more when `Endpoint` names the server by a host name, which is then looked up again.

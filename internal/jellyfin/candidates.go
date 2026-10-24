@@ -87,6 +87,18 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 		if n > 0 && version.Torrent == nil {
 			detached = aside
 		}
+		// A torrent that may not start, as many run as Torrents at once
+		// allows, is passed over as one that did not start in time. The
+		// torrents the device or its user left for another title, which the
+		// start of this one would end (see leaveTorrents), make room for it
+		// first.
+		if err := h.Playback.TorrentAdmitted(version); err != nil {
+			h.leaveTorrents(callerFrom(r.Context()).Device.ID, user.ID, h.titleOf(p.item.ID), version.Torrent.InfoHash)
+			if err := h.Playback.TorrentAdmitted(version); err != nil {
+				h.Logger.Info("A torrent version is passed over: as many torrents run as Torrents at once allows", "addon", version.Addon)
+				return tried{n: n, unreadable: true, unstarted: true}
+			}
+		}
 		var analysis media.Analysis
 		// The subtitle files inside a torrent are listed by its version's
 		// first play, before its other streams: the tracks the app names

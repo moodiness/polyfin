@@ -551,3 +551,70 @@ func TestEndStopsATorrentAtOnceOrAsItsPlaybacksEnd(t *testing.T) {
 	}
 	waitFor(t, "the seeder's connections to close", func() bool { return seeder.Open() == 0 })
 }
+
+// With AtOnce set, no torrent more starts once as many run, those
+// lingering after their playbacks included: of two starting at once for
+// the last place, one runs and the other's reads tell it may not start; a
+// torrent running takes more playbacks. Its place frees as it stops.
+func TestNoTorrentMoreStartsThanAtOnceAllows(t *testing.T) {
+	t.Parallel()
+	one := torrenttest.Build("One", 64<<10, torrenttest.File{Name: "one.mkv", Data: torrenttest.Bytes(200 << 10)})
+	two := torrenttest.Build("Two", 64<<10, torrenttest.File{Name: "two.mkv", Data: torrenttest.Bytes(210 << 10)})
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", torrenttest.Seed(t, one, "127.0.0.1").Address(),
+		torrenttest.Seed(t, two, "127.0.0.1").Address())
+	proxy := torrenttest.StartProxy(t, true, "", "")
+	settings := proxied(proxy)
+	settings.set(func(s *Settings) { s.AtOnce = 1 })
+	e := newEngine(t, settings, 64<<20)
+	e.config.Linger = time.Hour
+	specs := make([]Spec, 2)
+	for i, tor := range []*torrenttest.Torrent{one, two} {
+		spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		specs[i] = spec
+	}
+
+	stops := make([]func(), 2)
+	var wg sync.WaitGroup
+	for i := range specs {
+		wg.Go(func() { stops[i] = e.Play(specs[i]) })
+	}
+	wg.Wait()
+	running, refused := -1, -1
+	for i, spec := range specs {
+		if e.Running(spec.Hash) {
+			running = i
+		} else {
+			refused = i
+		}
+	}
+	if running < 0 || refused < 0 {
+		t.Fatalf("running %v %v, want one of the two", e.Running(specs[0].Hash), e.Running(specs[1].Hash))
+	}
+	if _, err := e.Open(context.Background(), specs[refused]); !errors.Is(err, ErrAtCap) {
+		t.Fatalf("the torrent past the cap opened: %v", err)
+	}
+	if status := e.Status(context.Background()); status.Playing != 1 || status.AtOnce != 1 {
+		t.Fatalf("Health tells %d of %d", status.Playing, status.AtOnce)
+	}
+	// The torrent running takes another playback.
+	stop := e.Play(specs[running])
+	stop()
+
+	// Lingering, it keeps its place; once it stops, the other starts.
+	stops[running]()
+	stops[refused]()
+	if e.Admits(specs[refused].Hash) == nil {
+		t.Fatal("a lingering torrent gave its place")
+	}
+	e.End(specs[running].Hash)
+	defer e.Play(specs[refused])()
+	if !e.Running(specs[refused].Hash) {
+		t.Fatal("the torrent did not start once a place freed")
+	}
+	if got := readAll(t, e, specs[refused]); len(got) == 0 {
+		t.Fatal("the torrent started once a place freed is not read")
+	}
+}

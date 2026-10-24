@@ -22,6 +22,11 @@ var ErrDisabled = errors.New("torrent streams are turned off")
 // playback joins a torrent's swarm.
 var ErrNotPlaying = errors.New("the torrent is read only for a playback")
 
+// ErrAtCap reports a torrent that does not start, as many torrents
+// running, or lingering after their playbacks, as Settings.AtOnce allows.
+// It may start once one of them stops.
+var ErrAtCap = errors.New("as many torrents run as the server allows")
+
 // Settings are the server's settings for torrents.
 type Settings struct {
 	Enabled bool
@@ -33,6 +38,10 @@ type Settings struct {
 	Proxy, ProxyUser, ProxyPassword string
 	WireGuard                       string
 	DownloadMbps, UploadMbps        int
+	// AtOnce bounds the torrents running at once, those lingering after
+	// their playbacks included, 0 for no limit: a torrent that would be
+	// one more does not start (see ErrAtCap).
+	AtOnce int
 }
 
 // RouteOf returns the route settings describe, ErrNoRoute for none;
@@ -197,6 +206,7 @@ func (e *Engine) Play(spec Spec) (stop func()) {
 }
 
 func (e *Engine) start(spec Spec) *torrent {
+	limit := e.config.Settings().AtOnce
 	route, err := e.currentRoute()
 	if err != nil {
 		if !errors.Is(err, ErrDisabled) {
@@ -223,6 +233,11 @@ func (e *Engine) start(spec Spec) *torrent {
 		}
 		t.mu.Unlock()
 	}
+	if e.fullLocked(spec.Hash, limit) {
+		e.mu.Unlock()
+		e.capped(limit)
+		return nil
+	}
 	e.mu.Unlock()
 	udp := e.carriesUDP(ctx, route)
 	t = newTorrent(e, spec, route, udp)
@@ -241,10 +256,49 @@ func (e *Engine) start(spec Spec) *torrent {
 			return old
 		}
 	}
+	// Of two torrents starting at once for the last place, the first to
+	// get here takes it.
+	if e.fullLocked(spec.Hash, limit) {
+		e.mu.Unlock()
+		t.cancel()
+		e.capped(limit)
+		return nil
+	}
 	e.torrents[spec.Hash] = t
 	e.mu.Unlock()
 	t.start()
 	return t
+}
+
+// fullLocked reports whether the torrent of hash may not start, as many
+// others run as limit allows, 0 for no limit. e.mu is held.
+func (e *Engine) fullLocked(hash Hash, limit int) bool {
+	if limit <= 0 {
+		return false
+	}
+	others := len(e.torrents)
+	if e.torrents[hash] != nil {
+		others--
+	}
+	return others >= limit
+}
+
+// capped logs a torrent that did not start, as many ran as limit allows.
+func (e *Engine) capped(limit int) {
+	e.config.Logger.Info("A torrent did not start: as many run as Torrents at once allows", "limit", limit)
+}
+
+// Admits reports why the torrent of hash cannot start now: ErrAtCap when
+// it does not run and as many others run as the settings allow; nil
+// otherwise.
+func (e *Engine) Admits(hash Hash) error {
+	limit := e.config.Settings().AtOnce
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.torrents[hash] == nil && e.fullLocked(hash, limit) {
+		return ErrAtCap
+	}
+	return nil
 }
 
 // carriesUDP tells whether a route carries UDP, which a SOCKS5 proxy does
@@ -389,6 +443,9 @@ func (e *Engine) playing(ctx context.Context, hash Hash) (*torrent, error) {
 	if err := route.Check(ctx); err != nil {
 		return nil, err
 	}
+	if err := e.Admits(hash); err != nil {
+		return nil, err
+	}
 	e.mu.Lock()
 	t := e.torrents[hash]
 	e.mu.Unlock()
@@ -445,6 +502,8 @@ type Status struct {
 	// Playing counts the torrents running, Peers their peers, and
 	// UTPPeers those of them reached over uTP.
 	Playing, Peers, UTPPeers int
+	// AtOnce is the settings' bound on Playing, 0 for none.
+	AtOnce int
 	// Used is the bytes the pieces take on disk.
 	Used int64
 	// Failure is why a torrent last could not play, at FailedAt.
@@ -459,7 +518,8 @@ type Status struct {
 // Status checks the route and tells what runs. A WireGuard tunnel tells
 // its last check at once (see lastResult).
 func (e *Engine) Status(ctx context.Context) Status {
-	status := Status{Enabled: e.config.Settings().Enabled, Used: e.store.usage()}
+	settings := e.config.Settings()
+	status := Status{Enabled: settings.Enabled, AtOnce: settings.AtOnce, Used: e.store.usage()}
 	if status.Enabled {
 		route, err := e.currentRoute()
 		if err == nil {

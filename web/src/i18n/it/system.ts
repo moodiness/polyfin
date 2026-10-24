@@ -351,6 +351,7 @@ const system: typeof en = {
       torrentHandshake: 'Ultimo handshake',
       torrentNoHandshake: 'Ancora nessuno',
       torrentsPlaying: 'Torrent in riproduzione',
+      torrentsPlayingOf: (playing: number, atOnce: number) => `${playing} su ${atOnce}`,
       torrentPeers: 'Peer',
       torrentUTPPeers: 'Peer tramite uTP',
       torrentsShared: 'Condiviso dall’avvio',

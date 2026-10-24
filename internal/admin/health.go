@@ -250,6 +250,7 @@ type torrentHealthJSON struct {
 	Addresses     []string   `json:"addresses,omitempty"`
 	LastHandshake *time.Time `json:"lastHandshake,omitempty"`
 	Playing       int        `json:"playing"`
+	AtOnce        int        `json:"atOnce"`
 	Peers         int        `json:"peers"`
 	UTPPeers      int        `json:"utpPeers"`
 	Uploaded      int64      `json:"uploaded"`
@@ -381,7 +382,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		status := h.Health.Torrents.Status(routeCtx)
 		cancelRoute()
 		if status.Enabled {
-			result.Torrents = &torrentHealthJSON{Playing: status.Playing, Peers: status.Peers, UTPPeers: status.UTPPeers,
+			result.Torrents = &torrentHealthJSON{Playing: status.Playing, AtOnce: status.AtOnce, Peers: status.Peers, UTPPeers: status.UTPPeers,
 				Uploaded: h.Health.Torrents.Uploaded()}
 			switch settings := h.Accounts.Settings(); {
 			case settings.TorrentInterface != "":

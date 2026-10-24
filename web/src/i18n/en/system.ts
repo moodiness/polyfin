@@ -336,6 +336,7 @@ const system = {
       torrentHandshake: 'Last handshake',
       torrentNoHandshake: 'None yet',
       torrentsPlaying: 'Torrents playing',
+      torrentsPlayingOf: (playing: number, atOnce: number) => `${playing} of ${atOnce}`,
       torrentPeers: 'Peers',
       torrentUTPPeers: 'Peers over uTP',
       torrentsShared: 'Shared since the start',

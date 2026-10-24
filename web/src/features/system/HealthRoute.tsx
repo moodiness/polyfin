@@ -781,7 +781,12 @@ function Torrents({ health }: { health: Health }) {
   const rows = [
     [text.torrentRoute[torrents.route], torrents.name],
     ...tunnel,
-    [text.torrentsPlaying, String(torrents.playing)],
+    [
+      text.torrentsPlaying,
+      torrents.atOnce > 0
+        ? text.torrentsPlayingOf(torrents.playing, torrents.atOnce)
+        : String(torrents.playing),
+    ],
     [text.torrentPeers, String(torrents.peers)],
     [text.torrentUTPPeers, String(torrents.utpPeers)],
     [text.torrentsShared, formatBytes(torrents.uploaded, language)],

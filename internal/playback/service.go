@@ -272,7 +272,7 @@ func (s *Service) TorrentRunning(infoHash string) bool {
 func TorrentSettings(s accounts.Settings) torrent.Settings {
 	return torrent.Settings{Enabled: s.TorrentStreams, Interface: s.TorrentInterface, Proxy: s.TorrentProxy,
 		ProxyUser: s.TorrentProxyUser, ProxyPassword: s.TorrentProxyPassword, WireGuard: s.TorrentWireGuard,
-		DownloadMbps: s.TorrentDownloadMbps, UploadMbps: s.TorrentUploadMbps}
+		DownloadMbps: s.TorrentDownloadMbps, UploadMbps: s.TorrentUploadMbps, AtOnce: s.TorrentsAtOnce}
 }
 
 // errNoTorrents reports a torrent's file read without an engine.
@@ -297,8 +297,9 @@ func (s *Service) torrentLocation(version library.Version) source.Location {
 			}
 			r, err := engine.Open(ctx, spec)
 			var unstarted *torrent.StartError
-			if errors.As(err, &unstarted) {
-				// The swarm was waited for as long as a start may take.
+			if errors.As(err, &unstarted) || errors.Is(err, torrent.ErrAtCap) {
+				// The swarm was waited for as long as a start may take, or the
+				// torrent may not start now: trying again would not help.
 				return nil, 0, source.Final(err)
 			}
 			if err != nil {
@@ -341,12 +342,12 @@ func (s *Service) TorrentPlayWait() time.Duration {
 }
 
 // TorrentUnstarted reports whether err tells of a torrent that could not
-// start: its route cannot carry it, torrents are off, or no peer sent it
-// in time. It may play later: a play finding nothing else answers that
+// start: its route cannot carry it, torrents are off, no peer sent it in
+// time, or as many torrents run as Torrents at once allows. It may play later: a play finding nothing else answers that
 // the title cannot be played now, rather than that it suits no app.
 func TorrentUnstarted(err error) bool {
 	var unstarted *torrent.StartError
-	return torrent.RouteFailure(err) || errors.As(err, &unstarted) || errors.Is(err, errNoTorrents)
+	return torrent.RouteFailure(err) || errors.As(err, &unstarted) || errors.Is(err, errNoTorrents) || errors.Is(err, torrent.ErrAtCap)
 }
 
 // Unstarted reports whether a version is kept as failed for a torrent
@@ -369,6 +370,20 @@ func (s *Service) torrentReady() error {
 	ctx, cancel := context.WithTimeout(context.Background(), routeCheck)
 	defer cancel()
 	return s.torrents.Ready(ctx)
+}
+
+// TorrentAdmitted reports why a torrent version cannot start now:
+// torrent.ErrAtCap when its torrent does not run and as many others run
+// as Torrents at once allows; nil otherwise, and for a link.
+func (s *Service) TorrentAdmitted(version library.Version) error {
+	if version.Torrent == nil || s.torrents == nil {
+		return nil
+	}
+	hash, err := torrent.ParseHash(version.Torrent.InfoHash)
+	if err != nil {
+		return nil
+	}
+	return s.torrents.Admits(hash)
 }
 
 // ErrTorrentIdle reports background work on a torrent's file no playback
@@ -432,8 +447,12 @@ func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Anal
 func (s *Service) Analyze(ctx context.Context, version library.Version) (media.Analysis, error) {
 	if version.Torrent != nil {
 		// Over a route that cannot carry it, a torrent's file is not read:
-		// it plays again once the route is back.
+		// it plays again once the route is back. Nor while as many torrents
+		// run as the settings allow: it plays once one stops.
 		if err := s.torrentReady(); err != nil {
+			return media.Analysis{}, err
+		}
+		if err := s.TorrentAdmitted(version); err != nil {
 			return media.Analysis{}, err
 		}
 	}
@@ -659,9 +678,9 @@ type versionFailure struct {
 // not tried again for failureTTL, unless its addon changes or its item is
 // tried again (see Retry and RetryItem).
 func (s *Service) fail(version library.Version, err error) {
-	if torrent.RouteFailure(err) {
-		// The torrents' route failed, not the file: it plays once the
-		// route is back.
+	if torrent.RouteFailure(err) || errors.Is(err, torrent.ErrAtCap) {
+		// The torrents' route failed, or as many torrents ran as the
+		// settings allow, not the file: it plays once that changes.
 		return
 	}
 	s.failures.Put(version.ID, versionFailure{addon: version.Origin.Addon, item: version.Item, err: err})
