@@ -35,9 +35,10 @@ func episodeVideoID(series string, season, episode int) string {
 	return fmt.Sprintf("%s:%d:%d", series, season, episode)
 }
 
-// Catalog answers a folder's catalog: its titles, the latest found first,
-// those whose name holds search when given, from skip; a home videos
-// folder's the latest recorded first (see homeCatalog).
+// Catalog answers a folder's catalog: its titles and its plain videos (see
+// plainvideos.go), the latest found first, those whose name holds search
+// when given, from skip; a home videos folder's the latest recorded first
+// (see homeCatalog).
 func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, id string, skip int, search string) ([]stremio.Meta, error) {
 	var kind string
 	err := s.db.QueryRow(ctx, "SELECT kind FROM local_folders WHERE addon_id = $1", source).Scan(&kind)
@@ -50,9 +51,15 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 	if kind == KindHomeVideos {
 		return s.homeCatalog(ctx, source, skip, search)
 	}
-	rows, err := s.db.Query(ctx, `SELECT stremio_id, max(name), max(poster), max(title_year) FROM local_files
-		WHERE addon_id = $1 AND stremio_id IS NOT NULL AND ($2 = '' OR strpos(lower(name), lower($2)) > 0)
-		GROUP BY stremio_id ORDER BY max(modified) DESC, stremio_id OFFSET $3 LIMIT $4`, source, strings.TrimSpace(search), max(skip, 0), catalogPage)
+	rows, err := s.db.Query(ctx, `SELECT id, name, poster, year FROM (
+			SELECT stremio_id AS id, max(name) AS name, max(poster) AS poster, max(title_year) AS year, max(modified) AS modified
+			FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL GROUP BY stremio_id
+			UNION ALL
+			SELECT f.plain_id, max(`+plainName+`), '', max(f.year), max(f.modified)
+			FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id WHERE f.addon_id = $1 AND `+plainListed+`
+			GROUP BY f.plain_id) t
+		WHERE $2 = '' OR strpos(lower(name), lower($2)) > 0
+		ORDER BY modified DESC, id OFFSET $3 LIMIT $4`, source, strings.TrimSpace(search), max(skip, 0), catalogPage)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +78,8 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 
 // Meta describes a title of a folder as its files tell, for when no
 // metadata addon describes it: its name, poster and year, and a show's
-// episodes found.
+// episodes found. A plain video is described so too (see plainvideos.go),
+// without a poster, a plain series' episodes named after their files.
 func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error) {
 	var kind string
 	if err := s.db.QueryRow(ctx, "SELECT kind FROM local_folders WHERE addon_id = $1", source).Scan(&kind); err != nil {
@@ -83,8 +91,15 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 	if kind == KindHomeVideos {
 		return s.homeMeta(ctx, source, id)
 	}
-	rows, err := s.db.Query(ctx, `SELECT name, poster, coalesce(title_year, 0), season, episode, last_episode FROM local_files
-		WHERE addon_id = $1 AND stremio_id = $2 ORDER BY season, episode`, source, id)
+	plain := strings.HasPrefix(id, library.PlainIDPrefix)
+	query := `SELECT name, poster, coalesce(title_year, 0), season, episode, last_episode, path FROM local_files f
+		WHERE addon_id = $1 AND stremio_id = $2 ORDER BY season, episode, path`
+	if plain {
+		query = `SELECT ` + plainName + `, '', coalesce(f.year, 0), f.season, f.episode, f.last_episode, f.path
+			FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id
+			WHERE f.addon_id = $1 AND f.plain_id = $2 AND ` + plainListed + ` ORDER BY f.season, f.episode, f.path`
+	}
+	rows, err := s.db.Query(ctx, query, source, id)
 	if err != nil {
 		return stremio.Meta{}, err
 	}
@@ -95,7 +110,8 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 	for rows.Next() {
 		var year int
 		var season, episode, last *int
-		if err := rows.Scan(&meta.Name, &meta.Poster, &year, &season, &episode, &last); err != nil {
+		var rel string
+		if err := rows.Scan(&meta.Name, &meta.Poster, &year, &season, &episode, &last, &rel); err != nil {
 			return stremio.Meta{}, err
 		}
 		found = true
@@ -110,8 +126,12 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 				continue
 			}
 			seen[[2]int{*season, number}] = true
+			title := fmt.Sprintf("Episode %d", number)
+			if plain {
+				title = plainEpisodeName(rel, number)
+			}
 			meta.Videos = append(meta.Videos, stremio.Video{ID: episodeVideoID(id, *season, number),
-				Title: fmt.Sprintf("Episode %d", number), Season: stremio.Number(*season), Episode: stremio.Number(number)})
+				Title: title, Season: stremio.Number(*season), Episode: stremio.Number(number)})
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -149,6 +169,14 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		return s.extraStreams(ctx, source, id, folderName)
 	}
 	var rows pgx.Rows
+	// A plain video's files are those of its unit while it is listed.
+	which := func(title string) string {
+		if strings.HasPrefix(title, library.PlainIDPrefix) {
+			return "f.plain_id = $2 AND " + plainListed
+		}
+		return "f.stremio_id = $2"
+	}
+	const fileRows = "SELECT f.id, f.path, f.unit, f.size, f.height FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id WHERE f.addon_id = $1 AND "
 	if kind == KindShows {
 		m := episodeVideo.FindStringSubmatch(id)
 		if m == nil {
@@ -156,12 +184,10 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		}
 		season, _ := strconv.Atoi(m[2])
 		episode, _ := strconv.Atoi(m[3])
-		rows, err = s.db.Query(ctx, `SELECT id, path, unit, size, height FROM local_files
-			WHERE addon_id = $1 AND stremio_id = $2 AND season = $3 AND episode <= $4 AND last_episode >= $4 ORDER BY size DESC, path`,
-			source, m[1], season, episode)
+		rows, err = s.db.Query(ctx, fileRows+which(m[1])+` AND f.season = $3 AND f.episode <= $4 AND f.last_episode >= $4
+			ORDER BY f.size DESC, f.path`, source, m[1], season, episode)
 	} else {
-		rows, err = s.db.Query(ctx, `SELECT id, path, unit, size, height FROM local_files
-			WHERE addon_id = $1 AND stremio_id = $2 ORDER BY size DESC, path`, source, id)
+		rows, err = s.db.Query(ctx, fileRows+which(id)+" ORDER BY f.size DESC, f.path", source, id)
 	}
 	if err != nil {
 		return nil, err

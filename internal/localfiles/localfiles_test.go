@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -50,16 +52,23 @@ func TestFilesAreMatchedThroughTheMetadataAddons(t *testing.T) {
 		t.Errorf("unmatched: %d %+v %v", total, unmatched, err)
 	}
 	// The title matched by its identifier is named as the addon describes
-	// it, not as the file is.
+	// it, not as the file is; the files left unmatched are plain videos,
+	// named as their names read.
 	metas, err := e.service.Catalog(t.Context(), addon.ID, "movie", catalogID, 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	names := map[string]string{}
+	var plain []string
 	for _, meta := range metas {
 		names[meta.ID] = meta.Name + " " + string(meta.Year)
+		if strings.HasPrefix(meta.ID, library.PlainIDPrefix) {
+			plain = append(plain, names[meta.ID])
+		}
 	}
-	if len(metas) != 3 || names["tt0017925"] != "The General 1926" || names["tt0063350"] != "Night of the Living Dead 1968" {
+	slices.Sort(plain)
+	if len(metas) != 6 || names["tt0017925"] != "The General 1926" || names["tt0063350"] != "Night of the Living Dead 1968" ||
+		!slices.Equal(plain, []string{"An Unknown Picture 1950", "Night of the Living Dead ", "Nosferatu 1930"}) {
 		t.Errorf("catalog: %v", names)
 	}
 }

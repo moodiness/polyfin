@@ -699,7 +699,8 @@ func (s *Service) unit(ctx context.Context, id accounts.ID, path string) (Folder
 }
 
 // rematch matches a unit's files again, to link when given; the unit's
-// artwork is then its new title's.
+// artwork is then its new title's, and what users did with the plain
+// video it was follows its files (see follow).
 func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string) error {
 	entries, err := s.unitFiles(ctx, folder, unit)
 	if err != nil || len(entries) == 0 {
@@ -718,7 +719,11 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 	if err := s.store(ctx, folder.Addon.ID, folder.Kind, entries, m); err != nil {
 		return err
 	}
-	return s.retryLater(ctx, folder.Addon.ID, m)
+	if err := s.retryLater(ctx, folder.Addon.ID, m); err != nil {
+		return err
+	}
+	// The files not found are left to the scans: one may be under way.
+	return s.follow(ctx, folder.Addon.ID, []string{"."})
 }
 
 // Unmatched is a file of a folder no title was matched to: its path, the

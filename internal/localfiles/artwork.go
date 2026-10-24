@@ -541,12 +541,14 @@ func (s *Service) readArtwork(ctx context.Context) (map[accounts.ID]library.Imag
 	images := map[accounts.ID]library.Images{}
 	// The title of an image's unit is that of its files matched: a show's
 	// files at its top whose name tells no episode are not. An episode's
-	// image is that of the episodes its file holds, once matched.
+	// image is that of the episodes its file holds, once matched. A unit
+	// listed as a plain video is that video (see plainvideos.go).
 	rows, err := s.db.Query(ctx, `SELECT a.id, l.kind, f.stremio_id, coalesce(a.season, -1), a.file IS NOT NULL, coalesce(f.season, -1),
 			coalesce(f.episode, -1), coalesce(f.last_episode, f.episode, -1), a.image_type, a.path, a.size, a.modified
 		FROM local_artwork a JOIN local_folders l ON l.addon_id = a.addon_id JOIN addons d ON d.id = a.addon_id
-		CROSS JOIN LATERAL (SELECT stremio_id, season, episode, last_episode FROM local_files
-			WHERE addon_id = a.addon_id AND unit = a.unit AND (a.file IS NULL OR path = a.file) AND stremio_id IS NOT NULL LIMIT 1) f
+		CROSS JOIN LATERAL (SELECT coalesce(f.stremio_id, f.plain_id) AS stremio_id, f.season, f.episode, f.last_episode FROM local_files f
+			WHERE f.addon_id = a.addon_id AND f.unit = a.unit AND (a.file IS NULL OR f.path = a.file)
+				AND (f.stremio_id IS NOT NULL OR `+plainListed+`) LIMIT 1) f
 		WHERE (l.use_artwork AND l.kind IN ('movies', 'shows') OR l.kind = 'homevideos') AND d.enabled
 		ORDER BY d.position, d.created_at, d.id, a.unit, a.file`)
 	if err != nil {

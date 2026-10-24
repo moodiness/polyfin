@@ -161,7 +161,7 @@ func (v view) rates(r record) bool {
 		return false
 	}
 	for _, entry := range v.addons {
-		if entry.shared && entry.addon.Manifest.Serves("meta", r.Meta.Type, r.Meta.ID) && v.factual(entry, r.Meta.Type, r.Meta.ID, true) {
+		if entry.shared && serves(entry, "meta", r.Meta.Type, r.Meta.ID) && v.factual(entry, r.Meta.Type, r.Meta.ID, true) {
 			return true
 		}
 	}
@@ -176,9 +176,9 @@ func (v view) rates(r record) bool {
 // and the genres of its listing. stale is set when the traits kept are old
 // enough to be asked again.
 func (s *Service) knownTraits(ctx context.Context, v view, r record) (t traits, stale bool) {
-	// A home video has no rating nor genres: it is what its folder tells,
-	// and nothing to look up.
-	if r.homeVideo() {
+	// A home video or a plain video has no rating nor genres: it is what
+	// its folder tells, and nothing to look up.
+	if _, plain := r.plainVideo(); plain || r.homeVideo() {
 		return traits{ratingKnown: true, genresKnown: true}, false
 	}
 	if r.Rating != nil && (r.Genres != nil || !v.blocksGenres()) {

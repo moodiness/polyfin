@@ -389,7 +389,8 @@ func (s *Service) retryLater(ctx context.Context, id accounts.ID, m match) error
 }
 
 // stored is a file a scan found before, the identifier its unit's NFO
-// file gave (see nfoID), and its episodes, as formatEpisode writes them.
+// file gave (see nfoID), its episodes, as formatEpisode writes them, and
+// whether its plain video's identifier is stored (see plainID).
 type stored struct {
 	size     int64
 	modified time.Time
@@ -398,6 +399,7 @@ type stored struct {
 	reason   string
 	nfo      string
 	episodes string
+	plain    bool
 }
 
 // scan reads a folder: files gone are forgotten, new and changed ones read
@@ -534,6 +536,8 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	// again, as are the files of a unit whose NFO file gives another
 	// identifier, or none any more, and the titles of shows' discs whose
 	// episodes changed. A lone extra is unmatched, whatever it was before.
+	// A file whose name could not be read is stored again once, as a plain
+	// video, when scans before plain videos stored it.
 	units := map[string][]entry{}
 	renewed := map[string]bool{}
 	var fresh []string
@@ -553,7 +557,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 		case ok && old.nfo != e.nfo:
 			renewed[e.unit] = true
 		case changed:
-		case old.matched || old.reason == reasonUnreadableName || old.reason == reasonDiscTitle || old.reason == reasonDiscEpisode:
+		case old.matched || old.reason == reasonUnreadableName && old.plain || old.reason == reasonDiscTitle || old.reason == reasonDiscEpisode:
 			continue
 		}
 		units[e.unit] = append(units[e.unit], e)
@@ -699,8 +703,8 @@ func (s *Service) forgetAudio(ctx context.Context) error {
 
 // storedFiles reads the files a folder's scans found, by path.
 func (s *Service) storedFiles(ctx context.Context, id accounts.ID) (map[string]stored, error) {
-	rows, err := s.db.Query(ctx, `SELECT path, size, modified, unit, stremio_id IS NOT NULL, reason, nfo_id, season, episode, last_episode
-		FROM local_files WHERE addon_id = $1`, id)
+	rows, err := s.db.Query(ctx, `SELECT path, size, modified, unit, stremio_id IS NOT NULL, reason, nfo_id, season, episode, last_episode,
+		plain_id IS NOT NULL FROM local_files WHERE addon_id = $1`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -709,7 +713,7 @@ func (s *Service) storedFiles(ctx context.Context, id accounts.ID) (map[string]s
 		var rel string
 		var f stored
 		var season, episode, last *int
-		if err := rows.Scan(&rel, &f.size, &f.modified, &f.unit, &f.matched, &f.reason, &f.nfo, &season, &episode, &last); err != nil {
+		if err := rows.Scan(&rel, &f.size, &f.modified, &f.unit, &f.matched, &f.reason, &f.nfo, &season, &episode, &last, &f.plain); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -849,7 +853,9 @@ func (s *Service) moveStreamLinks(ctx context.Context, id accounts.ID, files map
 // episodes neither an administrator nor the disc's name gives. A file
 // stored for the first time is added now by the server's clock, which
 // the scans' times and the windows Added is asked for are taken from
-// too: the database's clock can be another machine's.
+// too: the database's clock can be another machine's. A file listed as a
+// plain video keeps the items it is as its former titles, so that what
+// users do with them follows it once matched (see plainvideos.go).
 func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entries []entry, m match) error {
 	batch := &pgx.Batch{}
 	added := s.now()
@@ -888,14 +894,22 @@ func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entrie
 		if height > 0 {
 			heightValue = &height
 		}
+		plain := plainID(id, e.unit)
 		batch.Queue(`INSERT INTO local_files (addon_id, path, size, modified, unit, title, year, season, episode, last_episode, height,
-				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason, nfo_id, length, search_addon, search_failure, added_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason, nfo_id, length, search_addon, search_failure, added_at,
+				plain_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, unit = $5, title = $6, year = $7, season = $8, episode = $9,
 				last_episode = $10, height = $11, stremio_id = $12, imdb_id = $13, tmdb_id = $14, name = $15, poster = $16, title_year = $17,
-				matched_by = $18, reason = $19, nfo_id = $20, length = $21, search_addon = $22, search_failure = $23`,
+				matched_by = $18, reason = $19, nfo_id = $20, length = $21, search_addon = $22, search_failure = $23, plain_id = $25`,
 			id, e.path, e.file.size, e.file.modified, e.unit, e.title.title, year, season, episode, last, heightValue,
-			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason, e.nfo, length, f.searchAddon, f.searchFailure, added)
+			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason, e.nfo, length, f.searchAddon, f.searchFailure, added, plain)
+		if !plainFile(kind, f.stremioID, f.reason, e.episode.episodic) {
+			continue
+		}
+		for _, item := range titleItems(kind, plain, season, episode, last) {
+			batch.Queue("INSERT INTO local_former_titles (addon_id, path, item_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", id, e.path, item.ID)
+		}
 	}
 	return s.db.SendBatch(ctx, batch).Close()
 }

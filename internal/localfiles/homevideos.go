@@ -727,10 +727,13 @@ func (s *Service) homeCatalog(ctx context.Context, source accounts.ID, skip int,
 // HeldVideos reports which of the home videos of the Stremio identifiers
 // ids a file of a home videos folder holds now: the others are gone, from
 // disk or as their folder holds something else, and may come back within
-// goneDays days (see recognize).
+// goneDays days (see recognize). Of the plain videos among ids, it reports
+// those a movies or shows folder lists now (see plainvideos.go).
 func (s *Service) HeldVideos(ctx context.Context, ids []string) (map[string]bool, error) {
 	rows, err := s.db.Query(ctx, `SELECT DISTINCT f.stremio_id FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id
-		WHERE l.kind = $1 AND f.stremio_id = ANY($2)`, KindHomeVideos, ids)
+		WHERE l.kind = $1 AND f.stremio_id = ANY($2)
+		UNION SELECT DISTINCT f.plain_id FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id
+		WHERE f.plain_id = ANY($2) AND `+plainListed, KindHomeVideos, ids)
 	if err != nil {
 		return nil, err
 	}

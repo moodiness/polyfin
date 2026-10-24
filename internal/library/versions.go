@@ -732,14 +732,14 @@ func streamServing(v view, t target) []installed {
 }
 
 // serves reports whether an addon serves a resource for a title: a home
-// video's are its folder's alone, whatever other addons declare, so that
-// none of them ever hears of it; an extra's stream is its local folder's,
-// which answers for its own extras only.
+// video's and a plain video's are its folder's alone, whatever other
+// addons declare, so that none of them ever hears of it; an extra's
+// stream is its local folder's, which answers for its own extras only.
 func serves(entry installed, resource, metaType, id string) bool {
 	if metaType == ExtraType || strings.HasPrefix(id, ExtraIDPrefix) {
 		return entry.addon.Local() && resource == "stream"
 	}
-	if (metaType == VideoType || strings.HasPrefix(id, VideoIDPrefix)) && !entry.addon.Local() {
+	if (metaType == VideoType || strings.HasPrefix(id, VideoIDPrefix) || strings.HasPrefix(id, PlainIDPrefix)) && !entry.addon.Local() {
 		return false
 	}
 	return entry.addon.Manifest.Serves(resource, metaType, id)

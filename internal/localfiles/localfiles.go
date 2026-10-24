@@ -846,9 +846,9 @@ func metaType(kind string) string {
 }
 
 // idPrefixes are the identifiers a folder's titles have: IMDb's, or TMDB's
-// for a title the metadata addons gave no IMDb identifier; a home video's
-// are its own (see videoID).
-var idPrefixes = []string{"tt", "tmdb:"}
+// for a title the metadata addons gave no IMDb identifier, and its plain
+// videos' (see plainID); a home video's are its own (see videoID).
+var idPrefixes = []string{"tt", "tmdb:", library.PlainIDPrefix}
 
 // manifest describes a folder as an addon: one catalog of its titles,
 // searchable, and the descriptions and streams of their identifiers. A

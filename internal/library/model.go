@@ -74,6 +74,12 @@ const (
 	VideoIDPrefix = "polyfin-video:"
 )
 
+// Plain videos are the files a local movies or shows folder leaves
+// unmatched, listed in its library as movies and series of their own,
+// named after their files: their identifiers are their folder's, which no
+// other addon is asked about (see serves), and they are unrated.
+const PlainIDPrefix = "polyfin-plain:"
+
 // Item is something a Jellyfin app can browse.
 type Item struct {
 	ID   accounts.ID

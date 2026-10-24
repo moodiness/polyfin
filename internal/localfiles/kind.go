@@ -17,7 +17,9 @@ import (
 // go to its new titles, as an import adds them (see follow). The resume
 // point moves, as it was recorded through the file: the former titles no
 // longer play it, and Continue Watching lists the file once. To or from
-// music nothing follows: songs and videos are other files.
+// music nothing follows: songs and videos are other files. The plain
+// video a file left unmatched is (see plainvideos.go) is kept so too, by
+// each scan storing it, until the file is matched.
 
 // followsKind reports whether what users did with the titles of a
 // folder's files follows them when the folder holds to instead of from.

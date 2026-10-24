@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -44,6 +45,18 @@ func (r record) otherTitle() bool {
 // homeVideo reports whether r is a video of a local home videos folder.
 func (r record) homeVideo() bool {
 	return r.Kind == KindVideo && r.Meta != nil && !otherType(r.Meta.Type)
+}
+
+// plainVideo reports whether r is a plain video of a local movies or shows
+// folder, a file or show it left unmatched (see PlainIDPrefix), or one of
+// such a show's seasons and episodes, and returns the identifier of that
+// movie or show.
+func (r record) plainVideo() (string, bool) {
+	id := r.SeriesID
+	if id == "" && r.Meta != nil {
+		id = r.Meta.ID
+	}
+	return id, strings.HasPrefix(id, PlainIDPrefix)
 }
 
 // otherKind is the kind a description gives a title of the other or

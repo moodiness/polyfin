@@ -206,8 +206,8 @@ type Local interface {
 	MusicLyrics(ctx context.Context, source accounts.ID, id string) (string, error)
 	Artwork() map[accounts.ID]Images
 	Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error)
-	// HeldVideos reports which of the home videos of the Stremio
-	// identifiers ids a file of a folder holds now.
+	// HeldVideos reports which of the home videos and plain videos of the
+	// Stremio identifiers ids a folder holds now.
 	HeldVideos(ctx context.Context, ids []string) (map[string]bool, error)
 	// Extras lists the extras of folders that belong to owner, and Extra
 	// describes one by its item, ErrNotFound when no folder holds it (see
@@ -1786,7 +1786,7 @@ func (s *Service) TitleMeta(ctx context.Context, metaType, id string) (stremio.M
 // those given one (see standIn).
 func (s *Service) serverMeta(ctx context.Context, v view, metaType, id string) (stremio.Meta, bool) {
 	for _, candidate := range v.addons {
-		if own(candidate.addon) || !v.factual(candidate, metaType, id, false) || !candidate.addon.Manifest.Serves("meta", metaType, id) {
+		if own(candidate.addon) || !v.factual(candidate, metaType, id, false) || !serves(candidate, "meta", metaType, id) {
 			continue
 		}
 		if kept, err := s.keptMeta(ctx, candidate, metaType, id); err == nil {
@@ -1909,26 +1909,35 @@ func (s *Service) itemsOf(ctx context.Context, v view, ids []accounts.ID, kinds 
 // goneVideos are the items of records that are home videos no folder
 // holds now: deleted, or their folder holding something else. Within 30
 // days, a video found again is the same title (see localfiles.recognize).
+// So are the plain videos no folder lists now, matched or gone, with
+// their seasons and episodes: what users did with them went to the title
+// they were matched to (see localfiles.follow).
 func (s *Service) goneVideos(ctx context.Context, records []record) (map[accounts.ID]bool, error) {
 	var videos []string
-	for _, r := range records {
+	held := func(r record) (string, bool) {
 		if r.homeVideo() {
-			videos = append(videos, r.Meta.ID)
+			return r.Meta.ID, true
+		}
+		return r.plainVideo()
+	}
+	for _, r := range records {
+		if id, ok := held(r); ok {
+			videos = append(videos, id)
 		}
 	}
 	if len(videos) == 0 {
 		return nil, nil
 	}
-	held := map[string]bool{}
+	holding := map[string]bool{}
 	if s.local != nil {
 		var err error
-		if held, err = s.local.HeldVideos(ctx, videos); err != nil {
+		if holding, err = s.local.HeldVideos(ctx, videos); err != nil {
 			return nil, err
 		}
 	}
 	gone := map[accounts.ID]bool{}
 	for _, r := range records {
-		if r.homeVideo() && !held[r.Meta.ID] {
+		if id, ok := held(r); ok && !holding[id] {
 			gone[r.ID] = true
 		}
 	}
@@ -1977,6 +1986,17 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	}
 	if err != nil {
 		return Item{}, err
+	}
+	// A plain video matched or gone is no more: its title has its users'
+	// data (see goneVideos).
+	if _, plain := r.plainVideo(); plain {
+		gone, err := s.goneVideos(ctx, []record{r})
+		if err != nil {
+			return Item{}, err
+		}
+		if gone[r.ID] {
+			return Item{}, ErrNotFound
+		}
 	}
 	return s.described(ctx, v, r)
 }
