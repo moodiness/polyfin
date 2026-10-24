@@ -28,6 +28,7 @@ const libraries = {
     remove: 'Remove',
     removeLabel: (name: string) => `Remove ${name}`,
     removedLive: (name: string) => `${name} removed from the libraries.`,
+    dragHandle: (name: string) => `Drag ${name}`,
     availableTitle: 'Available catalogs',
     availableHelp: 'Adding a catalog shows it as a library, at the end of the list above.',
     filter: 'Filter',

@@ -1,5 +1,6 @@
 import {
   CaretRightIcon,
+  DotsSixVerticalIcon,
   FilmStripIcon,
   FunnelSimpleIcon,
   MagnifyingGlassIcon,
@@ -59,6 +60,7 @@ import {
   MoveButtons,
 } from '@/ui'
 import { LibraryImageEditor, LibraryThumb, LiveTvThumb } from './LibraryImage'
+import { useRowDrag } from './useRowDrag'
 
 /** Above this many libraries the home screen of Jellyfin apps gets heavy; the server default. */
 const recommendedLibraries = 20
@@ -109,9 +111,9 @@ function sameEntries(a: Entry[], b: Entry[]): boolean {
 /** 52 px between the blocks of the editor (44 on a phone), as PageLayout spaces a page's. */
 const blockSpacing = '[&>*+*]:mt-block max-md:[&>*+*]:mt-11'
 
-/** The columns of a library row: position, image and catalog, name in apps, buttons. */
+/** The columns of a library row: grip and position, image and catalog, name in apps, buttons. */
 const rowGrid =
-  'grid grid-cols-[22px_minmax(0,1fr)_auto] gap-x-4 md:grid-cols-[22px_minmax(0,1fr)_minmax(0,300px)_auto]'
+  'grid grid-cols-[46px_minmax(0,1fr)_auto] gap-x-4 md:grid-cols-[46px_minmax(0,1fr)_minmax(0,300px)_auto]'
 
 /**
  * A list too long for the page scrolls in its own box, about 480 px tall, with a thin scrollbar,
@@ -220,6 +222,9 @@ function LibraryForm({
   const scrollAfterRender = useRef<string | null>(null)
   // The box of available catalogs, back at its top when the filter changes.
   const availableBox = useRef<HTMLDivElement>(null)
+  // The list of libraries shown, whose rows are dragged by their grip.
+  const shownList = useRef<HTMLOListElement>(null)
+  const rowDrag = useRowDrag({ list: shownList, onDrop: move })
   function filterBy(change: () => void) {
     change()
     availableBox.current?.scrollTo({ top: 0 })
@@ -459,12 +464,13 @@ function LibraryForm({
                 'border-b border-line px-[18px] py-2.5 text-micro font-medium text-ink-3 max-md:hidden',
               )}
             >
-              <span>#</span>
+              <span className="pl-[26px]">#</span>
               <span>{t.libraries.columnCatalog}</span>
               <span>{t.libraries.name}</span>
               <span />
             </div>
             <ol
+              ref={shownList}
               aria-label={t.libraries.listLabel}
               className={cx(entries.length > boxedLibraries && scrollBox)}
             >
@@ -483,20 +489,49 @@ function LibraryForm({
                 const tv = isTvCatalog(library)
                 const imageShown = !tv && imageOpen === entry.key
                 const narrowShown = library.filterable && narrowOpen === entry.key
+                const dragged = rowDrag.dragged === index
                 return (
                   <li
                     key={entry.key}
                     id={ids.row(entry.key)}
                     className={cx(
                       rowGrid,
-                      'items-start gap-y-3 px-[18px] py-3.5 not-first:border-t not-first:border-line max-sm:px-4',
+                      'relative items-start gap-y-3 px-[18px] py-3.5 not-first:border-t not-first:border-line max-sm:px-4',
+                      dragged && 'opacity-40',
                     )}
                   >
-                    <span
-                      aria-hidden="true"
-                      className="pt-[3px] font-mono text-small text-ink-3 tabular-nums"
-                    >
-                      {index + 1}
+                    {/* The drop place, inside the row so the list's rounded box never clips it. */}
+                    {rowDrag.dropBefore === index && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-x-0 top-0 h-0.5 bg-accent"
+                      />
+                    )}
+                    {rowDrag.dropBefore === entries.length && index === entries.length - 1 && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-x-0 bottom-0 h-0.5 bg-accent"
+                      />
+                    )}
+                    <span className="flex items-start gap-0.5">
+                      {/* Mouse, pen and touch only: keyboards and screen readers use the arrows. */}
+                      <span
+                        aria-hidden="true"
+                        title={t.libraries.dragHandle(name)}
+                        className={cx(
+                          '-ml-1 flex h-6 w-6 shrink-0 touch-none items-center justify-center rounded-md text-ink-3 select-none [-webkit-touch-callout:none] hover:text-ink',
+                          dragged ? 'cursor-grabbing' : 'cursor-grab',
+                        )}
+                        {...rowDrag.grip(index)}
+                      >
+                        <DotsSixVerticalIcon size={16} />
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="pt-[3px] font-mono text-small text-ink-3 tabular-nums"
+                      >
+                        {index + 1}
+                      </span>
                     </span>
                     <div className="flex min-w-0 items-start gap-3 sm:gap-3.5">
                       {tv ? (

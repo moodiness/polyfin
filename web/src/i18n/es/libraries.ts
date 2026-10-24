@@ -31,6 +31,7 @@ const libraries: typeof en = {
     remove: 'Eliminar',
     removeLabel: (name: string) => `Eliminar ${name}`,
     removedLive: (name: string) => `${name} se ha eliminado de las bibliotecas.`,
+    dragHandle: (name: string) => `Arrastrar ${name}`,
     availableTitle: 'Catálogos disponibles',
     availableHelp:
       'Al añadir un catálogo, se muestra como biblioteca al final de la lista anterior.',
