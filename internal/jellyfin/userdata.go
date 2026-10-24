@@ -503,8 +503,10 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 		return
 	}
 	h.followPlayback(user, device, event, state, positionKnown, playing, item)
-	// Channels have no user data, nor a place in the activity log.
-	if item.Kind == library.KindChannel {
+	// Channels, and videos that play live, have no user data, nor a place
+	// in the activity log; nothing is read from their streams for
+	// thumbnails or speech.
+	if item.Kind == library.KindChannel || h.reportedLive(ctx, user, item, mediaSource) {
 		return
 	}
 	h.recordPlayback(ctx, user, device.DeviceName, event, item)

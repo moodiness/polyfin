@@ -48,6 +48,53 @@ const (
 // tracks are known: half a second of probing instead of five.
 var shortProbe = []string{"-probesize", "500000", "-analyzeduration", "500000", "-fflags", "+nobuffer"}
 
+// Endless reports whether version streams with no end, as a live stream
+// does, which then plays as a channel's stream plays (see AnalyzeLive): an
+// HLS playlist that does not end, or a source that announces no size,
+// either without a duration once analyzed. A version analyzed before is
+// told by its analysis, without reaching its source. A file, of a known
+// size, is told at its first bytes, which its analysis reads anyway; it is
+// not analyzed here. Torrents and local files have an end.
+func (s *Service) Endless(ctx context.Context, version library.Version) (bool, error) {
+	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
+		return Endless(analysis), nil
+	}
+	if unbounded, err := s.Unbounded(ctx, version); !unbounded || err != nil {
+		return false, err
+	}
+	analysis, err := s.AnalyzeLive(ctx, version)
+	if err != nil {
+		return false, err
+	}
+	return Endless(analysis), nil
+}
+
+// Unbounded reports whether version's first bytes may be those of a stream
+// with no end: an HLS playlist, or a source that announces no size, which
+// a file's analysis would wait on until its deadline. It analyzes nothing.
+// Torrents and local files have an end.
+func (s *Service) Unbounded(ctx context.Context, version library.Version) (bool, error) {
+	if version.Torrent != nil || s.ReadsInput(version) {
+		return false, nil
+	}
+	src := s.open(version)
+	head := make([]byte, 16)
+	n, err := src.ReadAt(ctx, head, 0)
+	size, sized := src.KnownSize()
+	src.Release()
+	if n == 0 && err != nil {
+		return false, err
+	}
+	playlist := bytes.HasPrefix(bytes.TrimPrefix(head[:n], []byte("\xef\xbb\xbf")), []byte("#EXTM3U"))
+	return playlist || !sized || size <= 0, nil
+}
+
+// Endless reports whether an analysis is that of a stream with no end:
+// one whose duration is not known.
+func Endless(analysis media.Analysis) bool {
+	return analysis.Duration <= 0
+}
+
 // AnalyzeLive returns what a live stream holds: as found before, kept in
 // the database for shapeLife; else as ffprobe finds it, reading the
 // stream's shared feed (see openFeed) for a second, or an HLS playlist

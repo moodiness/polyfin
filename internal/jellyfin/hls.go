@@ -196,7 +196,6 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		return remuxRequest{}, false
 	}
 	item, err := h.played(r.Context(), user, opened)
-	live := item.Kind == library.KindChannel
 	if err != nil {
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false
@@ -206,6 +205,9 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		processingError(w, http.StatusNotFound)
 		return remuxRequest{}, false
 	}
+	// A channel's stream, and a video's with no end, are converted as they
+	// come.
+	live := h.playsLive(r.Context(), item, version)
 	format, ok := hls.ParseFormat(query(r, "segmentContainer"))
 	if !ok {
 		format = hls.TS

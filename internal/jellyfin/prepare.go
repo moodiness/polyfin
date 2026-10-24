@@ -320,6 +320,14 @@ func (h *Handler) analyzeAhead(ctx context.Context, version library.Version) {
 	}
 	ctx = playback.Background(ctx)
 	started := time.Now()
+	// A live video's stream has no end for a file's analysis to reach:
+	// Endless analyzes it as a channel's, which is all its play reads.
+	if library.AddonVideoVersion(version) {
+		if endless, err := h.Playback.Endless(ctx, version); err != nil || endless {
+			h.Logger.Debug("Prepared a live version ahead of playback", "addon", version.Addon, "live", endless, "error", err)
+			return
+		}
+	}
 	analysis, err := h.Playback.Analyze(ctx, version)
 	if err != nil {
 		h.Logger.Debug("A version could not be analyzed ahead of playback", "addon", version.Addon, "error", err)

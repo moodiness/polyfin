@@ -334,7 +334,8 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
-	if item.Kind == library.KindChannel {
+	// A channel, and a video whose stream has no end, play live.
+	if item.Kind == library.KindChannel || h.liveVideo(r.Context(), user, item) {
 		h.livePlaybackInfo(w, r, user, item, opened, request)
 		return
 	}
@@ -1048,7 +1049,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// A player that authenticates with a header might send it to the
 	// source too: relay instead of redirecting it.
 	relay := grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token=")
-	if item.Kind == library.KindChannel {
+	if h.playsLive(r.Context(), item, version) {
 		h.serveChannel(w, r, user, item, version, relay)
 		return
 	}

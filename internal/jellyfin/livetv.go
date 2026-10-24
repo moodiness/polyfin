@@ -902,12 +902,12 @@ func (h *Handler) liveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	channel, err := h.played(r.Context(), user, opened)
-	if err != nil || channel.Kind != library.KindChannel {
+	if err != nil || channel.Kind != library.KindChannel && !library.AddonVideo(channel) {
 		processingError(w, http.StatusNotFound)
 		return
 	}
 	version, err := h.Library.Version(r.Context(), user, channel.ID, grant.Version)
-	if err != nil {
+	if err != nil || !h.playsLive(r.Context(), channel, version) {
 		processingError(w, http.StatusNotFound)
 		return
 	}
