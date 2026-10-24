@@ -82,7 +82,7 @@ func newHTTPClient(confined bool) *http.Client {
 				return err
 			}
 			ip, err := netip.ParseAddr(host)
-			if err != nil || !public(ip) {
+			if err != nil || !Public(ip) {
 				return ErrPrivateNetwork
 			}
 			return nil
@@ -106,7 +106,10 @@ func newHTTPClient(confined bool) *http.Client {
 // from the internet.
 var cgnat = netip.MustParsePrefix("100.64.0.0/10")
 
-func public(ip netip.Addr) bool {
+// Public reports whether ip is an address on the internet, which confined
+// requests may reach: not loopback, link-local, private, nor in the shared
+// address space of carrier-grade NAT.
+func Public(ip netip.Addr) bool {
 	ip = ip.Unmap()
 	return ip.IsGlobalUnicast() && !ip.IsPrivate() && !cgnat.Contains(ip)
 }
@@ -117,7 +120,7 @@ func public(ip netip.Addr) bool {
 // address they connect to anyway.
 func CheckPublic(ctx context.Context, host string) error {
 	if ip, err := netip.ParseAddr(host); err == nil {
-		if !public(ip) {
+		if !Public(ip) {
 			return ErrPrivateNetwork
 		}
 		return nil
@@ -127,7 +130,7 @@ func CheckPublic(ctx context.Context, host string) error {
 		return nil
 	}
 	for _, ip := range ips {
-		if !public(ip) {
+		if !Public(ip) {
 			return ErrPrivateNetwork
 		}
 	}
