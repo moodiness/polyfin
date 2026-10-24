@@ -31,42 +31,19 @@ import (
 // file is its pair.
 var subtitleFormats = map[string]string{".srt": "srt", ".ass": "ass", ".ssa": "ssa", ".vtt": "vtt", ".sup": "sup", ".idx": "idx"}
 
-// subtitleTags is what a subtitle file's name tells past its video's: its
-// language as written ("fr", "fre", "French"), its title (the words that
-// are neither a language nor a flag), and whether it is forced, for the
-// hearing impaired, or the one to show by default.
+// subtitleTags is what a subtitle file's name tells past its video's (see
+// playback.SubtitleTags), as a scan stores it.
 type subtitleTags struct {
 	language, title                    string
 	forced, hearingImpaired, isDefault bool
 }
 
-// readSubtitleTags reads the words of a subtitle file's name past its
-// video's, separated by dots, in any order and letter case: "forced" or
-// "foreign", "sdh", "hi" or "cc" for the hearing impaired, "default", and
-// the first word naming a language; the others make its title.
+// readSubtitleTags reads a subtitle file's name past its video's as the
+// subtitle files inside torrents are read (see playback.ReadSubtitleTags).
 func readSubtitleTags(rest string) subtitleTags {
-	var tags subtitleTags
-	var title []string
-	for word := range strings.SplitSeq(rest, ".") {
-		word = strings.TrimSpace(word)
-		switch strings.ToLower(word) {
-		case "":
-		case "forced", "foreign":
-			tags.forced = true
-		case "sdh", "hi", "cc":
-			tags.hearingImpaired = true
-		case "default":
-			tags.isDefault = true
-		default:
-			if tags.language == "" && playback.KnownLanguage(word) {
-				tags.language = word
-			} else {
-				title = append(title, word)
-			}
-		}
-	}
-	tags.title = strings.Join(title, " ")
-	return tags
+	tags := playback.ReadSubtitleTags(rest)
+	return subtitleTags{language: tags.Language, title: tags.Title, forced: tags.Forced, hearingImpaired: tags.HearingImpaired,
+		isDefault: tags.Default}
 }
 
 // sidecar is a subtitle file found beside a video: the video's path, the
@@ -122,16 +99,16 @@ func sidecars(kind, root string, entries map[string]entry, sides map[string]foun
 		}
 		name := stem(rel)
 		var owner video
+		var rest string
 		for _, v := range videos[path.Dir(rel)] {
-			if len(v.name) > len(owner.name) && len(name) >= len(v.name) && strings.EqualFold(name[:len(v.name)], v.name) &&
-				(len(name) == len(v.name) || name[len(v.name)] == '.') {
-				owner = v
+			if after, ok := playback.SubtitleNamed(v.name, name); ok && len(v.name) > len(owner.name) {
+				owner, rest = v, after
 			}
 		}
 		if owner.path == "" {
 			continue
 		}
-		side := sidecar{video: owner.path, file: f, format: format, subtitleTags: readSubtitleTags(name[len(owner.name):])}
+		side := sidecar{video: owner.path, file: f, format: format, subtitleTags: readSubtitleTags(rest)}
 		if format == "idx" {
 			if side.pair = subs[strings.ToLower(strings.TrimSuffix(rel, path.Ext(rel)))]; side.pair == "" {
 				continue
