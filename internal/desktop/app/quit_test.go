@@ -80,7 +80,7 @@ func startFakeApp(t *testing.T, mode, data string) *exec.Cmd {
 func TestQuit(t *testing.T) {
 	folders := desktop.Folders{Data: t.TempDir()}
 	app := startFakeApp(t, "listen", folders.Data)
-	if pid, _, ok := readInstance(folders.Instance()); !ok || pid != app.Process.Pid {
+	if pid, _, ok := desktop.ReadInstance(folders.Instance()); !ok || pid != app.Process.Pid {
 		t.Fatalf("the app's record names %d, not %d", pid, app.Process.Pid)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -166,7 +166,7 @@ func TestQuitStaleRequest(t *testing.T) {
 	if _, err := os.Stat(folders.QuitRequest()); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the start left the old request: %v", err)
 	}
-	pid, token, ok := readInstance(folders.Instance())
+	pid, token, ok := desktop.ReadInstance(folders.Instance())
 	if !ok || pid != os.Getpid() || token == old {
 		t.Fatalf("the record names %d %q", pid, token)
 	}

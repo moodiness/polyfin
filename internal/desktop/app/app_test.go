@@ -280,7 +280,7 @@ func TestServerEnvironment(t *testing.T) {
 		"PGHOST=elsewhere", "POLYFIN_LISTEN=:19001"}, o, "postgresql://polyfin:pw@127.0.0.1:5/polyfin", "", tools.Paths{})
 	joined := strings.Join(env, "\n")
 	for _, want := range []string{"HOME=/home/a", "POLYFIN_LISTEN=:19001", "POLYFIN_DATABASE_URL=postgresql://polyfin:pw@127.0.0.1:5/polyfin",
-		"PATH=" + filepath.Join("/app", "postgresql", "bin") + string(os.PathListSeparator) + "/usr/bin"} {
+		"PATH=" + filepath.Join("/app", "postgresql", "bin") + string(os.PathListSeparator) + "/usr/bin", "POLYFIN_DESKTOP=1"} {
 		if !slices.Contains(env, want) {
 			t.Errorf("environment lacks %s:\n%s", want, joined)
 		}

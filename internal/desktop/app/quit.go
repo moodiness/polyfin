@@ -122,7 +122,7 @@ func RequestQuit(ctx context.Context, folders desktop.Folders) error {
 	for {
 		// The record is read again each time: an app that was starting
 		// writes its own after taking the lock.
-		if p, token, ok := readInstance(folders.Instance()); ok && token != sent {
+		if p, token, ok := desktop.ReadInstance(folders.Instance()); ok && token != sent {
 			if err := os.WriteFile(folders.QuitRequest(), []byte(token+"\n"), 0o600); err != nil {
 				return err
 			}
@@ -152,21 +152,45 @@ func RequestQuit(ctx context.Context, folders desktop.Folders) error {
 	}
 }
 
-// readInstance reads the record of the running app: its PID and token.
-func readInstance(path string) (pid int, token string, ok bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0, "", false
+// ListenInstall, called once ListenQuit recorded the app, forgets a
+// request to install that a crash left, and returns a channel that gets
+// the version each request of the server asks to install (see
+// desktop.RequestInstall). stop ends the listening.
+func ListenInstall(folders desktop.Folders) (requested <-chan string, stop func(), err error) {
+	_, token, ok := desktop.ReadInstance(folders.Instance())
+	if !ok {
+		return nil, nil, errors.New("the app's record cannot be read")
 	}
-	fields := strings.Fields(string(data))
-	if len(fields) != 2 {
-		return 0, "", false
-	}
-	pid, err = strconv.Atoi(fields[0])
-	if err != nil || pid <= 0 {
-		return 0, "", false
-	}
-	return pid, fields[1], true
+	_ = os.Remove(folders.InstallRequest())
+	install := make(chan string, 1)
+	done := make(chan struct{})
+	ended := make(chan struct{})
+	go func() {
+		defer close(ended)
+		ticker := time.NewTicker(quitPoll)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if version, ok := desktop.InstallRequested(folders, token); ok {
+					// A request coming while the last one waits is the same.
+					select {
+					case install <- version:
+					default:
+					}
+				}
+			}
+		}
+	}()
+	var once sync.Once
+	return install, func() {
+		once.Do(func() {
+			close(done)
+			<-ended
+		})
+	}, nil
 }
 
 // lockFree tells whether no app holds the lock of path, taking it for a

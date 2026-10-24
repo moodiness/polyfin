@@ -121,12 +121,18 @@ func run(headless, background bool) error {
 		return err
 	}
 	defer release()
-	// polyfin-desktop -quit asks this app to quit.
+	// polyfin-desktop -quit asks this app to quit, and the admin app to
+	// install the update it offers.
 	quitRequested, stopListening, err := app.ListenQuit(folders)
 	if err != nil {
 		return err
 	}
 	defer stopListening()
+	installRequested, stopInstallListening, err := app.ListenInstall(folders)
+	if err != nil {
+		return err
+	}
+	defer stopInstallListening()
 
 	manifest, err := toolsManifest()
 	if err != nil {
@@ -153,16 +159,28 @@ func run(headless, background bool) error {
 		}
 	}
 	logger.Info("Polyfin Desktop starts", "version", version, "data", folders.Data, "install", install.Dir)
+	asked := requests{quit: quitRequested, install: installRequested}
+	var relaunch *exec.Cmd
 	if headless {
-		return runHeadless(options, logger, quitRequested)
+		relaunch = runHeadless(options, logger, asked)
+	} else {
+		relaunch = runTray(options, logger, asked)
 	}
-	relaunch := runTray(options, logger, quitRequested)
+	stopInstallListening()
 	stopListening()
 	release()
 	if relaunch != nil {
 		return startAfterQuit(relaunch)
 	}
 	return nil
+}
+
+// requests are what other programs ask the app: polyfin-desktop -quit to
+// quit, and the server, for the admin app, to install the update the app
+// offers, by its version.
+type requests struct {
+	quit    <-chan struct{}
+	install <-chan string
 }
 
 // importSecretKey stores the key of file in place of the data folder's,
@@ -208,8 +226,10 @@ func toolsManifest() (tools.Manifest, error) {
 }
 
 // runHeadless runs until an interrupt, or a request to quit, then stops
-// everything.
-func runHeadless(options app.Options, logger *slog.Logger, quitRequested <-chan struct{}) error {
+// everything. An install the admin app asks for is installed as the
+// tray's Install Polyfin <version> does: it returns what to start once the
+// app has quit, nil when nothing is.
+func runHeadless(options app.Options, logger *slog.Logger, asked requests) *exec.Cmd {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var mu sync.Mutex
@@ -224,15 +244,43 @@ func runHeadless(options app.Options, logger *slog.Logger, quitRequested <-chan 
 	}
 	a := app.New(options)
 	a.Start()
-	select {
-	case <-ctx.Done():
-		logger.Info("Quitting")
-	case <-quitRequested:
-		logger.Info("Quitting, as polyfin-desktop -quit asked")
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Quitting")
+		case <-asked.quit:
+			logger.Info("Quitting, as polyfin-desktop -quit asked")
+		case version := <-asked.install:
+			if !offers(a, version, logger) {
+				continue
+			}
+			// A failure is logged, and Polyfin runs on.
+			relaunch, err := a.InstallUpdate(ctx)
+			if err != nil {
+				continue
+			}
+			quit(a)
+			logger.Info("Polyfin Desktop quit to start the new version")
+			return relaunch
+		}
+		quit(a)
+		logger.Info("Polyfin Desktop quit")
+		return nil
 	}
-	quit(a)
-	logger.Info("Polyfin Desktop quit")
-	return nil
+}
+
+// offers tells whether the app offers version while Polyfin runs, as the
+// tray's Install Polyfin <version> shows it, for an install the admin app
+// asks: one of another version, or while Polyfin does not run, is
+// ignored.
+func offers(a *app.App, version string, logger *slog.Logger) bool {
+	s := a.Status()
+	if s.Offer == nil || s.Offer.Version != version || s.Phase != app.Running {
+		logger.Warn("The admin app asked to install a version that is not offered now", "version", version)
+		return false
+	}
+	logger.Info("Installing the new version, as the admin app asked", "version", version)
+	return true
 }
 
 // logLibraries sends what libraries write with the standard log package,

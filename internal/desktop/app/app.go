@@ -136,6 +136,11 @@ type App struct {
 	done   chan struct{}
 	// opened tells that the setup was opened in the browser already.
 	opened bool
+
+	// offerMu orders the writes of the offer, and offered is the last one
+	// written.
+	offerMu sync.Mutex
+	offered *desktop.Offered
 }
 
 // New returns an app, stopped.
@@ -164,9 +169,33 @@ func (a *App) update(change func(*Status)) {
 	change(&a.status)
 	status := a.status
 	a.mu.Unlock()
+	a.publishOffer(status)
 	if a.o.Changed != nil {
 		a.o.Changed(status)
 	}
+}
+
+// publishOffer writes the update the app offers, while the server runs,
+// to Folders.Offer, for the admin app to offer it too, when it changed.
+func (a *App) publishOffer(s Status) {
+	var offered *desktop.Offered
+	if s.Offer != nil && (s.Phase == Running || s.Phase == Updating) {
+		offered = &desktop.Offered{Version: s.Offer.Version, Notes: s.Offer.Notes, Installing: s.Phase == Updating,
+			Failed: s.Has(UpdateFailed)}
+		if offered.Installing {
+			offered.Percent = s.Percent
+		}
+	}
+	a.offerMu.Lock()
+	defer a.offerMu.Unlock()
+	if offered == a.offered || offered != nil && a.offered != nil && *offered == *a.offered {
+		return
+	}
+	if err := desktop.WriteOffer(a.o.Folders, offered); err != nil {
+		a.logger.Warn("The update offered could not be told to the admin app", "error", err)
+		return
+	}
+	a.offered = offered
 }
 
 func (a *App) problem(p Problem, err error) {
@@ -365,15 +394,16 @@ func (a *App) rebuilding(on bool) {
 
 // serverEnvironment is the app's environment, without what would point
 // the server elsewhere, with the variables the server reads: its cluster,
-// the data folder, the tools, jellyfin-web, the fonts, the key, and PATH
-// starting with PostgreSQL's programs, where backups find pg_dump and
-// pg_restore.
+// the data folder, the tools, jellyfin-web, the fonts, the key, that the
+// app runs it (desktop.ServerVariable), and PATH starting with
+// PostgreSQL's programs, where backups find pg_dump and pg_restore.
 func serverEnvironment(base []string, o Options, databaseURL, key string, paths tools.Paths) []string {
 	set := map[string]string{
 		"POLYFIN_DATABASE_URL": databaseURL,
 		"POLYFIN_DATA_DIR":     o.Folders.Data,
 		"POLYFIN_WEB_DIR":      o.Install.WebDir(),
 		"POLYFIN_FONTS_DIR":    o.Install.FontsDir(),
+		desktop.ServerVariable: "1",
 	}
 	if paths.FFmpeg != "" {
 		set["POLYFIN_FFMPEG"], set["POLYFIN_FFPROBE"] = paths.FFmpeg, paths.FFprobe
