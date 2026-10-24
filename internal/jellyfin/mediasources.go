@@ -156,30 +156,43 @@ func (h *Handler) offered(ctx context.Context, user accounts.User, versions []li
 
 // externals are the subtitle files a version offers as streams: its
 // title's, then its own (see versionFiles).
-func (p playable) externals(version library.Version) []playback.ExternalSubtitle {
-	return externalStreams(versionFiles(p.subtitles, version))
+func (h *Handler) externals(ctx context.Context, p playable, version library.Version) []playback.ExternalSubtitle {
+	return externalStreams(h.versionFiles(ctx, p.subtitles, version))
 }
 
 // versionFiles lists the subtitle files of a version, which come first
 // among its streams: its title's, files, those users added then the
-// addons', followed by its own, beside a local file or listed with its
-// stream.
-func versionFiles(files []library.ExternalSubtitle, version library.Version) []library.ExternalSubtitle {
-	if len(version.Subtitles) == 0 {
+// addons', followed by its own: beside a local file or listed with its
+// stream, then inside its torrent (see playback.Service.TorrentSubtitles).
+func (h *Handler) versionFiles(ctx context.Context, files []library.ExternalSubtitle, version library.Version) []library.ExternalSubtitle {
+	inside := h.Playback.TorrentSubtitles(ctx, version)
+	if len(version.Subtitles) == 0 && len(inside) == 0 {
 		return files
 	}
-	return append(slices.Clip(files), version.Subtitles...)
+	return slices.Concat(files, version.Subtitles, inside)
 }
 
 // currentFile returns the subtitle file at index among files, version's
 // (see versionFiles), to serve now: one of the version's own as it is now,
 // as the links an addon lists with a stream expire with its version list
-// (see library.Service.VersionSubtitle).
+// (see library.Service.VersionSubtitle). A file inside a torrent is served
+// as it is.
 func (h *Handler) currentFile(ctx context.Context, version library.Version, files []library.ExternalSubtitle, index int) (library.ExternalSubtitle, error) {
-	if index < len(files)-len(version.Subtitles) {
-		return files[index], nil
+	file := files[index]
+	if file.Torrent != nil || index < len(files)-len(version.Subtitles)-insideTorrent(files) {
+		return file, nil
 	}
-	return h.Library.VersionSubtitle(ctx, version, files[index])
+	return h.Library.VersionSubtitle(ctx, version, file)
+}
+
+// insideTorrent counts the files inside a version's torrent, which come
+// last among its subtitle files.
+func insideTorrent(files []library.ExternalSubtitle) int {
+	n := 0
+	for n < len(files) && files[len(files)-1-n].Torrent != nil {
+		n++
+	}
+	return n
 }
 
 // pictureCodecs are the codecs of the picture subtitle files beside local
@@ -322,7 +335,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 	}
 	size, runtime := version.Size, version.Runtime
 	if known {
-		source.MediaStreams = playback.MediaStreams(analysis, p.externals(version), language)
+		source.MediaStreams = playback.MediaStreams(analysis, h.externals(r.Context(), p, version), language)
 		source.MediaAttachments = mediaAttachments(analysis)
 		size = cmp.Or(analysis.Size, size)
 		runtime = cmp.Or(analysis.Duration, runtime)
@@ -330,7 +343,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 			source.Bitrate = new(analysis.Bitrate)
 		}
 	} else {
-		source.MediaStreams = playback.ExternalStreams(p.externals(version), language)
+		source.MediaStreams = playback.ExternalStreams(h.externals(r.Context(), p, version), language)
 	}
 	if size > 0 {
 		source.Size = new(size)
@@ -349,7 +362,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 // They follow the version's own analysis, never RemuxDB's description.
 func (h *Handler) withTextCopies(ctx context.Context, p playable, version library.Version, analysis media.Analysis,
 	streams []playback.MediaStream) []playback.MediaStream {
-	copies := h.Playback.TextCopies(ctx, version, analysis, versionFiles(p.subtitles, version))
+	copies := h.Playback.TextCopies(ctx, version, analysis, h.versionFiles(ctx, p.subtitles, version))
 	if len(copies) == 0 {
 		return streams
 	}

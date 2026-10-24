@@ -282,7 +282,7 @@ func (h *Handler) Resource(ctx context.Context, user accounts.User, item library
 		return converted, true
 	}
 	request := h.dlnaRequest(user, profile, false)
-	streams := playback.MediaStreams(analysis, p.externals(version), h.Accounts.Settings().Language)
+	streams := playback.MediaStreams(analysis, h.externals(ctx, p, version), h.Accounts.Settings().Language)
 	allowed := h.convertible(h.Accounts.Conversions(user), user, version)
 	decision, _, _ := h.trackDecision(p, version, streams, analysis, request, allowed, false)
 	converted.Duration = analysis.Duration
@@ -761,7 +761,7 @@ func (h *Handler) Captions(w http.ResponseWriter, r *http.Request, play dlna.Pla
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	streams := playback.MediaStreams(analysis, p.externals(version), h.Accounts.Settings().Language)
+	streams := playback.MediaStreams(analysis, h.externals(r.Context(), p, version), h.Accounts.Settings().Language)
 	request := h.dlnaRequest(play.User, play.Profile, false)
 	decision, _, _ := h.trackDecision(p, version, streams, analysis, request, h.Accounts.Conversions(play.User), false)
 	if !captioned(decision, streams) {

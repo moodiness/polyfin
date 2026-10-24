@@ -85,6 +85,12 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			detached = aside
 		}
 		var analysis media.Analysis
+		// The subtitle files inside a torrent are listed by its version's
+		// first play, before its other streams: the tracks the app names
+		// were those of the version without them, as its page showed it,
+		// where it could pick no such file. They are not the version's
+		// tracks now, and the user's preferences choose instead.
+		files := len(h.Playback.TorrentSubtitles(detached.Context(), version))
 		if analyze {
 			var err error
 			if analysis, err = h.Playback.Analyze(detached.Context(), version); err != nil {
@@ -97,8 +103,9 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				return tried{n: n}
 			}
 		}
+		listed := len(h.Playback.TorrentSubtitles(detached.Context(), version)) != files
 		permits := h.convertible(allowed, user, version)
-		d, ok := h.decide(detached, p, i, version, sourceID(opened, version, i == at), analysis, request, permits, i == c.named)
+		d, ok := h.decide(detached, p, i, version, sourceID(opened, version, i == at), analysis, request, permits, i == c.named && !listed)
 		if !ok {
 			if permits != allowed {
 				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.Addon)

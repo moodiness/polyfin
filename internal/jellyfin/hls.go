@@ -221,7 +221,7 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		} else {
 			files, _ = h.Library.Subtitles(r.Context(), user, item.ID)
 		}
-		files = versionFiles(files, version)
+		files = h.versionFiles(r.Context(), files, version)
 	}
 	if err != nil {
 		processingError(w, http.StatusNotFound)

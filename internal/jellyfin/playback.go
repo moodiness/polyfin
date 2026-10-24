@@ -15,6 +15,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/subtitles"
@@ -758,6 +759,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 	h.queueTextCopies(r.Context(), p, decision, streams, version, analysis)
 	h.deliverable(r.Context(), decision, streams, version, analysis, streamed)
 	h.prefetchSubtitle(r.Context(), decision, streams, version, analysis)
+	h.prefetchTorrentSubtitle(r.Context(), p, decision, version)
 
 	source.Container = decision.Container
 	source.SupportsDirectPlay, source.SupportsDirectStream = decision.DirectPlay, decision.DirectPlay
@@ -793,7 +795,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 			stream.IsExternalUrl = new(false)
 		}
 	}
-	h.markSynced(r.Context(), version.ID, versionFiles(p.subtitles, version), source.MediaStreams, decision.SubtitleStreamIndex)
+	h.markSynced(r.Context(), version.ID, h.versionFiles(r.Context(), p.subtitles, version), source.MediaStreams, decision.SubtitleStreamIndex)
 	for i := range source.MediaAttachments {
 		attachment := &source.MediaAttachments[i]
 		attachment.DeliveryUrl = attachmentURL(r, p.item.ID, id, attachment.Index)
@@ -872,7 +874,7 @@ func (h *Handler) queueTextCopies(ctx context.Context, p playable, decision play
 	if !cannot {
 		return
 	}
-	h.Playback.QueueTextCopies(ctx, version, analysis, versionFiles(p.subtitles, version), decision.SubtitleStreamIndex)
+	h.Playback.QueueTextCopies(ctx, version, analysis, h.versionFiles(ctx, p.subtitles, version), decision.SubtitleStreamIndex)
 }
 
 // prefetchSubtitle starts reading whole the embedded track the app shows
@@ -890,6 +892,38 @@ func (h *Handler) prefetchSubtitle(ctx context.Context, decision playback.Decisi
 	}
 	if stream := decision.SubtitleStreamIndex - files; h.Playback.SubtitlesLocated(ctx, version, analysis)[stream] {
 		h.Playback.PrefetchSubtitle(version, analysis, stream)
+	}
+}
+
+// prefetchTorrentSubtitle has the subtitle file inside the version's
+// torrent in the user's preferred subtitle language fetched as the play
+// starts, so that it is ready when the app shows it: the one the app shows
+// by default when it is one of them, else the first of them that is not
+// forced, else the first. Without a preferred language, only the one the
+// app shows by default is. Each of the others costs a piece of the
+// torrent, and is fetched when a user picks it (see
+// playback.Service.TorrentSubtitle).
+func (h *Handler) prefetchTorrentSubtitle(ctx context.Context, p playable, decision playback.Decision, version library.Version) {
+	if version.Torrent == nil {
+		return
+	}
+	files := h.versionFiles(ctx, p.subtitles, version)
+	if shown := decision.SubtitleStreamIndex; shown >= 0 && shown < len(files) && files[shown].Torrent != nil {
+		h.Playback.PrefetchTorrentSubtitle(files[shown])
+		return
+	}
+	if p.tracks.subtitleLanguage == "" {
+		return
+	}
+	chosen := -1
+	for i, file := range files {
+		if file.Torrent != nil && localization.SameLanguage(file.Language, p.tracks.subtitleLanguage) &&
+			(chosen < 0 || files[chosen].Forced && !file.Forced) {
+			chosen = i
+		}
+	}
+	if chosen >= 0 {
+		h.Playback.PrefetchTorrentSubtitle(files[chosen])
 	}
 }
 
@@ -1103,7 +1137,7 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 	var version library.Version
 	if index >= len(files) {
 		if found, ok := h.sourceVersion(r, item); ok {
-			version, files = found, versionFiles(files, found)
+			version, files = found, h.versionFiles(r.Context(), files, found)
 		}
 	}
 	var text subtitleText
@@ -1305,13 +1339,20 @@ func (h *Handler) pgsFile(w http.ResponseWriter, r *http.Request, file library.E
 const maxSubtitleBytes = 8 << 20
 
 // subtitleFile reads a subtitle file, downloading an addon's, keeping it
-// for a while.
+// for a while. A file inside a torrent is fetched from its swarm once,
+// then kept (see playback.Service.TorrentSubtitle).
 func (h *Handler) subtitleFile(ctx context.Context, file library.ExternalSubtitle) (subtitleText, error) {
 	if text, ok := h.subtitleCache.Get(file.ID); ok {
 		return text, nil
 	}
-	if file.Uploaded {
-		data, err := h.Library.UploadedSubtitleText(ctx, file.ID)
+	if file.Uploaded || file.Torrent != nil {
+		var data []byte
+		var err error
+		if file.Uploaded {
+			data, err = h.Library.UploadedSubtitleText(ctx, file.ID)
+		} else {
+			data, err = h.Playback.TorrentSubtitle(ctx, file)
+		}
 		if err != nil {
 			return subtitleText{}, err
 		}
