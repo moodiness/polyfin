@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/netfail"
 )
 
 // How long a torrent may take to answer a playback. A link's host sends
@@ -115,7 +116,6 @@ func outcomeOf(err error) outcome {
 	var reply *socksReplyError
 	var route *RouteError
 	var timeout interface{ Timeout() bool }
-	is := func(target error) bool { return errors.Is(err, target) }
 	switch {
 	case errors.As(err, &reply):
 		switch reply.code {
@@ -129,14 +129,14 @@ func outcomeOf(err error) outcome {
 		return outcomeProxy
 	case errors.As(err, &route):
 		return outcomeProxy
-	case slices.ContainsFunc(refusedErrors, is):
+	case netfail.Refused(err):
 		return outcomeRefused
-	case slices.ContainsFunc(unreachableErrors, is):
+	case netfail.Unreachable(err):
 		return outcomeUnreachable
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, os.ErrDeadlineExceeded), errors.As(err, &timeout) && timeout.Timeout(),
-		slices.ContainsFunc(timedOutErrors, is):
+		netfail.TimedOut(err):
 		return outcomeTimedOut
-	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF), slices.ContainsFunc(closedErrors, is):
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF), netfail.Reset(err), netfail.BrokenPipe(err):
 		return outcomeClosed
 	}
 	// A WireGuard tunnel's network stack tells its errors by their text
