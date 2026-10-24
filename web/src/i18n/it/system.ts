@@ -328,6 +328,14 @@ const system: typeof en = {
       cacheHelp:
         'Parti dei file in riproduzione, conservate su disco fino alla dimensione impostata in Impostazioni › Riproduzione. Una cache piena è normale: le parti più vecchie lasciano spazio.',
       cacheUse: (used: string, limit: string) => `${used} di ${limit}`,
+      imagesTitle: 'Cache delle immagini',
+      imagesHelp:
+        'Le immagini inoltrate alle app, le loro copie ridimensionate e le immagini che Polyfin disegna, conservate su disco fino al suo limite, eliminando prima quelle usate meno di recente. Svuotarla fa scaricare, ridimensionare o disegnare di nuovo ogni immagine alla sua prossima richiesta. Le miniature per scorrere, le immagini caricate, le immagini delle cartelle locali e il tema del lettore web non ne fanno parte.',
+      imagesFiles: 'Immagini su disco',
+      imagesMemory: 'In memoria',
+      clearImages: 'Svuota la cache delle immagini',
+      imagesCleared: (images: string, bytes: string) =>
+        `Cache delle immagini svuotata: ${images} immagini, ${bytes} liberati su disco.`,
       sourcesOpen: 'File aperti',
       torrentPieces: 'Di cui parti di torrent',
       torrentsTitle: 'Torrent',

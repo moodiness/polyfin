@@ -602,8 +602,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Recordings:    recorder,
 		Library:       lib,
 		LibraryImages: lib,
-		SmartLists:    smartlists.New(pool),
-		SmartPreviews: lib,
+		// Refreshing a library's descriptions, paced.
+		LibraryRefreshes: lib,
+		SmartLists:       smartlists.New(pool),
+		SmartPreviews:    lib,
 		// The rows of the web player's home page, and the collections they
 		// may list as the Jellyfin API tells them.
 		HomeRows:       homeRows,
@@ -628,6 +630,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			HTTPS:            secure.Status,
 			MissingLanguages: player.MissingLanguages,
 			Torrents:         torrents,
+			Images:           jellyfinAPI,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
 		Trackers:       tracking,

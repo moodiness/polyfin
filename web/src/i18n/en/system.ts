@@ -313,6 +313,14 @@ const system = {
       cacheHelp:
         'Parts of the files being played, kept on disk up to the size set under Settings › Playback. A full cache is normal: the oldest parts make room.',
       cacheUse: (used: string, limit: string) => `${used} of ${limit}`,
+      imagesTitle: 'Image cache',
+      imagesHelp:
+        'The artwork relayed to the apps, its resized copies and the images Polyfin draws, kept on disk up to its limit, the least recently used going first. Clearing it has each image downloaded, resized or drawn again at its next request. The scrubbing thumbnails, uploaded images, the local folders’ artwork and the web player’s theme are not in it.',
+      imagesFiles: 'Images on disk',
+      imagesMemory: 'In memory',
+      clearImages: 'Clear the image cache',
+      imagesCleared: (images: string, bytes: string) =>
+        `Image cache cleared: ${images} images, ${bytes} freed on disk.`,
       sourcesOpen: 'Files open',
       torrentPieces: 'Of which torrent pieces',
       torrentsTitle: 'Torrents',

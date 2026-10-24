@@ -10,11 +10,13 @@ import {
   HardDrivesIcon,
   PuzzlePieceIcon,
   TelevisionSimpleIcon,
+  TrashIcon,
   WarningCircleIcon,
   WarningIcon,
 } from '@phosphor-icons/react'
 import {
   checkAddon,
+  clearImageCache,
   fetchSources,
   goroutinesDownloadUrl,
   queryClient,
@@ -44,6 +46,7 @@ import {
   StatusPill,
   type StatusTone,
   RelativeTime,
+  useToast,
 } from '@/ui'
 import { lineupPath } from '@/features/iptv/lineup'
 import {
@@ -102,6 +105,7 @@ export default function HealthRoute() {
               <Transcoder health={health.data} />
               <Database health={health.data} />
               <Cache health={health.data} />
+              <ImageCache health={health.data} />
               <Torrents health={health.data} />
               <Disks health={health.data} />
               <Backups health={health.data} />
@@ -677,6 +681,76 @@ function Cache({ health }: { health: Health }) {
               <span className="text-ink">{formatBytes(cache.torrents, language)}</span>
             </p>
           )}
+        </div>
+      </Panel>
+    </Anchor>
+  )
+}
+
+/**
+ * The image cache, against its limit, and in memory; clearing it tells what it freed and shows the
+ * cache empty at once.
+ */
+function ImageCache({ health }: { health: Health }) {
+  const { language, t } = useI18n()
+  const text = t.system.health
+  const toast = useToast()
+  const clear = useMutation({
+    mutationFn: clearImageCache,
+    onSuccess: (freed) => {
+      toast(
+        text.imagesCleared(freed.files.toLocaleString(language), formatBytes(freed.used, language)),
+        { tone: 'ok' },
+      )
+      queryClient.setQueryData<Health>(queryKeys.health, (current) =>
+        current === undefined
+          ? current
+          : {
+              ...current,
+              images: { files: 0, used: 0, limit: freed.limit, memoryImages: 0, memoryBytes: 0 },
+            },
+      )
+      void queryClient.invalidateQueries({ queryKey: queryKeys.health })
+    },
+  })
+  const images = health.images
+  if (images === null) return null
+  return (
+    <Anchor id="images">
+      <Panel title={text.imagesTitle} titleAs="h3" description={text.imagesHelp}>
+        <div className="space-y-4">
+          <Meter
+            label={text.imagesTitle}
+            figure={text.cacheUse(
+              formatBytes(images.used, language),
+              formatBytes(images.limit, language),
+            )}
+            value={images.used}
+            max={images.limit}
+          />
+          <p className="text-small text-ink-3 tabular-nums">
+            {text.imagesFiles}
+            {t.common.colon}{' '}
+            <span className="text-ink">{images.files.toLocaleString(language)}</span>
+          </p>
+          <p className="text-small text-ink-3 tabular-nums">
+            {text.imagesMemory}
+            {t.common.colon}{' '}
+            <span className="text-ink">
+              {images.memoryImages.toLocaleString(language)} ·{' '}
+              {formatBytes(images.memoryBytes, language)}
+            </span>
+          </p>
+          {clear.isError && <InlineError>{errorMessage(t, clear.error)}</InlineError>}
+          <Button
+            size="sm"
+            icon={TrashIcon}
+            loading={clear.isPending}
+            disabled={images.files === 0 && images.memoryImages === 0}
+            onClick={() => clear.mutate()}
+          >
+            {text.clearImages}
+          </Button>
         </div>
       </Panel>
     </Anchor>

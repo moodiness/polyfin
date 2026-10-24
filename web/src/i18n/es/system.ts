@@ -326,6 +326,14 @@ const system: typeof en = {
       cacheHelp:
         'Partes de los archivos en reproducción, guardadas en disco hasta el tamaño fijado en Ajustes › Reproducción. Es normal que la caché esté llena: las partes más antiguas dejan sitio.',
       cacheUse: (used: string, limit: string) => `${used} de ${limit}`,
+      imagesTitle: 'Caché de imágenes',
+      imagesHelp:
+        'Las imágenes que se reenvían a las aplicaciones, sus copias redimensionadas y las imágenes que dibuja Polyfin, guardadas en disco hasta su límite, primero se van las usadas hace más tiempo. Vaciarla hace que cada imagen se descargue, redimensione o dibuje de nuevo en su siguiente petición. Las miniaturas para avanzar, las imágenes subidas, las imágenes de las carpetas locales y el tema del reproductor web no forman parte de ella.',
+      imagesFiles: 'Imágenes en disco',
+      imagesMemory: 'En memoria',
+      clearImages: 'Vaciar la caché de imágenes',
+      imagesCleared: (images: string, bytes: string) =>
+        `Caché de imágenes vaciada: ${images} imágenes, ${bytes} liberados en disco.`,
       sourcesOpen: 'Archivos abiertos',
       torrentPieces: 'De ellos, piezas de torrents',
       torrentsTitle: 'Torrents',

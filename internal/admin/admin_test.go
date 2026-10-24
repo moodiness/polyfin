@@ -84,12 +84,13 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 			}
 			return time.Now()
 		},
-		Guides:        lib,
-		IPTV:          channels,
-		LibraryImages: lib,
-		SmartLists:    smartlists.New(pool),
-		SmartPreviews: lib,
-		DataDir:       t.TempDir(),
+		Guides:           lib,
+		IPTV:             channels,
+		LibraryImages:    lib,
+		LibraryRefreshes: lib,
+		SmartLists:       smartlists.New(pool),
+		SmartPreviews:    lib,
+		DataDir:          t.TempDir(),
 	}
 	for _, c := range configure {
 		c(&options, testDeps{pool: pool, client: client, addons: addonStore})

@@ -233,6 +233,11 @@ type libraryJSON struct {
 	// library.
 	Guide  *libraryGuideJSON `json:"guide"`
 	Guides []guideJSON       `json:"guides"`
+	// Refreshable tells whether an enabled library of the server's has its
+	// descriptions read again on request, and Refresh how its last
+	// refresh since the server started stands, null for none.
+	Refreshable bool                `json:"refreshable"`
+	Refresh     *libraryRefreshJSON `json:"refresh"`
 }
 
 // libraryGuideJSON describes a live TV catalog's first XMLTV guide, as
@@ -365,6 +370,19 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 			return
 		}
 	}
+	var refreshes map[accounts.ID]library.LibraryRefresh
+	kinds := map[accounts.ID]addons.Addon{}
+	if scope.Owner == nil && h.LibraryRefreshes != nil {
+		refreshes = h.LibraryRefreshes.LibraryRefreshes()
+		list, err := h.Addons.Addons(r.Context(), scope)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		for _, addon := range list {
+			kinds[addon.ID] = addon
+		}
+	}
 	result := make([]libraryJSON, 0, len(libraries))
 	for i, l := range libraries {
 		entry := libraryJSON{
@@ -392,6 +410,12 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 		}
 		if l.MaxItems > 0 {
 			entry.MaxItems = new(l.MaxItems)
+		}
+		if addon, ok := kinds[l.AddonID]; ok && l.Enabled {
+			entry.Refreshable = library.Refreshable(addon, l.Catalog)
+			if state, ok := refreshes[library.LibraryID(l)]; ok && entry.Refreshable {
+				entry.Refresh = newLibraryRefreshJSON(state)
+			}
 		}
 		if images != nil && images[i].ID != (accounts.ID{}) {
 			entry.ItemID = new(images[i].ID.String())

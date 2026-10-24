@@ -29,6 +29,22 @@ const libraries: typeof en = {
     hiddenInMenus: 'Masquée dans la barre du haut',
     remove: 'Retirer',
     removeLabel: (name: string) => `Retirer ${name}`,
+    moreActions: (name: string) => `Autres actions pour ${name}`,
+    refresh: {
+      start: 'Actualiser les descriptions',
+      stop: 'Arrêter l’actualisation',
+      queued: 'En attente d’actualiser ses descriptions',
+      running: (done: string, titles: string) =>
+        `Actualisation des descriptions : ${done} sur ${titles}`,
+      done: (done: string, failed: number, figure: string) =>
+        failed === 0
+          ? `Descriptions actualisées : ${done}`
+          : `Descriptions actualisées : ${done}, ${figure} non décrites`,
+      stopped: (done: string, titles: string) => `Actualisation arrêtée à ${done} sur ${titles}`,
+      failed: 'Ses descriptions n’ont pas pu être actualisées',
+      started: (name: string) => `${name} : ses descriptions sont relues, 30 par minute.`,
+      progress: (name: string) => `Actualisation de ${name}`,
+    },
     removedLive: (name: string) => `${name} a été retiré des bibliothèques.`,
     dragHandle: (name: string) => `Déplacer ${name}`,
     availableTitle: 'Catalogues disponibles',

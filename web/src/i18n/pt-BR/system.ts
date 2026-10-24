@@ -323,6 +323,14 @@ const system: typeof en = {
       cacheHelp:
         'Partes dos arquivos em reprodução, mantidas em disco até o tamanho definido em Configurações › Reprodução. Um cache cheio é normal: as partes mais antigas abrem espaço.',
       cacheUse: (used: string, limit: string) => `${used} de ${limit}`,
+      imagesTitle: 'Cache de imagens',
+      imagesHelp:
+        'As imagens repassadas aos aplicativos, suas cópias redimensionadas e as imagens que o Polyfin desenha, guardadas em disco até o limite, saindo primeiro as usadas há mais tempo. Esvaziá-lo faz cada imagem ser baixada, redimensionada ou desenhada de novo no próximo pedido. As miniaturas para avançar, as imagens enviadas, as imagens das pastas locais e o tema do player web não fazem parte dele.',
+      imagesFiles: 'Imagens em disco',
+      imagesMemory: 'Na memória',
+      clearImages: 'Esvaziar o cache de imagens',
+      imagesCleared: (images: string, bytes: string) =>
+        `Cache de imagens esvaziado: ${images} imagens, ${bytes} liberados em disco.`,
       sourcesOpen: 'Arquivos abertos',
       torrentPieces: 'Dos quais partes de torrents',
       torrentsTitle: 'Torrents',

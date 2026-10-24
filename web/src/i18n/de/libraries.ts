@@ -28,6 +28,23 @@ const libraries: typeof en = {
     hiddenInMenus: 'In der oberen Leiste ausgeblendet',
     remove: 'Entfernen',
     removeLabel: (name: string) => `${name} entfernen`,
+    moreActions: (name: string) => `Weitere Aktionen für ${name}`,
+    refresh: {
+      start: 'Beschreibungen aktualisieren',
+      stop: 'Aktualisierung stoppen',
+      queued: 'Wartet auf die Aktualisierung seiner Beschreibungen',
+      running: (done: string, titles: string) =>
+        `Beschreibungen werden aktualisiert: ${done} von ${titles}`,
+      done: (done: string, failed: number, figure: string) =>
+        failed === 0
+          ? `Beschreibungen aktualisiert: ${done}`
+          : `Beschreibungen aktualisiert: ${done}, ${figure} nicht beschrieben`,
+      stopped: (done: string, titles: string) =>
+        `Aktualisierung bei ${done} von ${titles} gestoppt`,
+      failed: 'Seine Beschreibungen konnten nicht aktualisiert werden',
+      started: (name: string) => `${name}: Die Beschreibungen werden neu gelesen, 30 pro Minute.`,
+      progress: (name: string) => `Aktualisierung von ${name}`,
+    },
     removedLive: (name: string) => `${name} aus den Bibliotheken entfernt.`,
     dragHandle: (name: string) => `${name} verschieben`,
     availableTitle: 'Verfügbare Kataloge',

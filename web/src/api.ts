@@ -1325,7 +1325,38 @@ export type Library = {
    * enabled library.
    */
   hideInMenus: boolean
+  /**
+   * Whether an enabled library of the server's has its descriptions read again on request: a movie
+   * or series library of a Stremio addon or a local folder. False in the users' own scopes.
+   */
+  refreshable: boolean
+  /** How the last refresh of its descriptions since the server started stands; null for none. */
+  refresh: LibraryRefresh | null
 }
+
+/**
+ * The refresh of a library's descriptions: `titles` to describe again, `done` described,
+ * `failed` that no addon described; `startedAt` and `endedAt` null until it starts and ends.
+ */
+export type LibraryRefresh = {
+  state: 'queued' | 'running' | 'done' | 'stopped' | 'failed'
+  titles: number
+  done: number
+  failed: number
+  startedAt: string | null
+  endedAt: string | null
+}
+
+/** A library of the server's, by its addon and catalog. */
+export type LibraryKey = { addonId: string; catalogType: string; catalogId: string }
+
+/** Has the descriptions of one of the server's libraries read again, paced, in the background. */
+export const refreshLibrary = (library: LibraryKey) =>
+  request<LibraryRefresh>('POST', '/scopes/shared/libraries/refresh', library)
+
+/** Stops the refresh of one of the server's libraries, running or waiting. */
+export const stopLibraryRefresh = (library: LibraryKey) =>
+  request<void>('POST', '/scopes/shared/libraries/refresh/stop', library)
 
 /** The XMLTV guide of a TV catalog and how its last fetch went. */
 export type Guide = {
@@ -3541,6 +3572,8 @@ export type Health = {
   database: { reachable: boolean; size: number | null }
   /** `torrents` is the part of `used` the pieces of torrents being played take. */
   cache: { used: number; limit: number; sources: number; torrents: number } | null
+  /** The image cache: images and bytes on disk against its limit, and in memory; null when unknown. */
+  images: ImageCacheUsage | null
   /**
    * How torrent streams play, null while they are off: their route ('' for none) and its name,
    * the WireGuard server for a tunnel, the torrents playing, their peers, those of them reached
@@ -4001,6 +4034,21 @@ export const fetchHealth = (signal?: AbortSignal) =>
   request<Health>('GET', '/health', undefined, signal)
 
 /** Asks an addon for its manifest once; allowed once a minute per addon. */
+/**
+ * What the image cache keeps, or what clearing it freed: `files` images on disk of `used` bytes,
+ * which `limit` bounds, and `memoryImages` in memory, of `memoryBytes` bytes.
+ */
+export type ImageCacheUsage = {
+  files: number
+  used: number
+  limit: number
+  memoryImages: number
+  memoryBytes: number
+}
+
+/** Empties the image cache, answering what it freed. */
+export const clearImageCache = () => request<ImageCacheUsage>('POST', '/health/images/clear')
+
 export const checkAddon = (id: string) =>
   request<AddonHealth>('POST', `/health/addons/${seg(id)}/check`)
 

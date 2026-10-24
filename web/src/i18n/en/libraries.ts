@@ -27,6 +27,21 @@ const libraries = {
     hiddenInMenus: 'Hidden from the top bar',
     remove: 'Remove',
     removeLabel: (name: string) => `Remove ${name}`,
+    moreActions: (name: string) => `More actions for ${name}`,
+    refresh: {
+      start: 'Refresh descriptions',
+      stop: 'Stop refreshing',
+      queued: 'Waiting to refresh its descriptions',
+      running: (done: string, titles: string) => `Refreshing descriptions: ${done} of ${titles}`,
+      done: (done: string, failed: number, figure: string) =>
+        failed === 0
+          ? `Descriptions refreshed: ${done}`
+          : `Descriptions refreshed: ${done}, ${figure} not described`,
+      stopped: (done: string, titles: string) => `Refresh stopped at ${done} of ${titles}`,
+      failed: 'Its descriptions could not be refreshed',
+      started: (name: string) => `${name}: its descriptions are read again, 30 a minute.`,
+      progress: (name: string) => `Refresh of ${name}`,
+    },
     removedLive: (name: string) => `${name} removed from the libraries.`,
     dragHandle: (name: string) => `Drag ${name}`,
     availableTitle: 'Available catalogs',

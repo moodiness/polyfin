@@ -126,6 +126,9 @@ type Options struct {
 	// LibraryImages finds and keeps the images of libraries; nil shows
 	// none, and refuses to choose them.
 	LibraryImages LibraryImages
+	// LibraryRefreshes reads the descriptions of the server's libraries
+	// again; nil offers it for none.
+	LibraryRefreshes LibraryRefreshes
 	// Health are what the health page reads.
 	Health HealthSources
 	// Variables are the POLYFIN_ environment variables in effect,
@@ -325,6 +328,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/health/problems", h.administrator(h.healthProblemsRoute))
 	mux.Handle("POST /admin/api/health/addons/{id}/check", h.administrator(h.checkAddon))
 	mux.Handle("GET /admin/api/health/goroutines", h.administrator(h.downloadGoroutines))
+	mux.Handle("POST /admin/api/health/images/clear", h.administrator(h.clearImageCache))
 	mux.Handle("GET /admin/api/sources", h.administrator(h.sources))
 	mux.Handle("GET /admin/api/logs", h.administrator(h.logLines))
 	mux.Handle("GET /admin/api/logs/download", h.administrator(h.downloadLog))
@@ -401,6 +405,8 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/scopes/{scope}/libraries", h.signedIn(h.listLibraries))
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries", h.signedIn(h.saveLibraries))
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries/image", h.signedIn(h.saveLibraryImage))
+	mux.Handle("POST /admin/api/scopes/shared/libraries/refresh", h.administrator(h.refreshLibrary))
+	mux.Handle("POST /admin/api/scopes/shared/libraries/refresh/stop", h.administrator(h.stopLibraryRefresh))
 	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists", h.signedIn(h.smartLists))
 	mux.Handle("POST /admin/api/scopes/{scope}/smart-lists", h.signedIn(h.createSmartList))
 	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists/catalogs", h.signedIn(h.smartCatalogs))

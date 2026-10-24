@@ -320,6 +320,14 @@ const system: typeof en = {
       cacheHelp:
         'Des morceaux des fichiers en lecture, gardés sur le disque dans la limite réglée dans Paramètres › Lecture. Un cache plein est normal : les morceaux les plus anciens laissent la place.',
       cacheUse: (used: string, limit: string) => `${used} sur ${limit}`,
+      imagesTitle: 'Cache des images',
+      imagesHelp:
+        'Les illustrations relayées aux applications, leurs copies redimensionnées et les images que Polyfin dessine, gardées sur le disque jusqu’à sa limite, les moins récemment utilisées partant les premières. Le vider fait télécharger, redimensionner ou dessiner de nouveau chaque image à sa prochaine demande. Les vignettes de défilement, les images envoyées, les illustrations des dossiers locaux et le thème du lecteur web n’en font pas partie.',
+      imagesFiles: 'Images sur le disque',
+      imagesMemory: 'En mémoire',
+      clearImages: 'Vider le cache des images',
+      imagesCleared: (images: string, bytes: string) =>
+        `Cache des images vidé : ${images} images, ${bytes} libérés sur le disque.`,
       sourcesOpen: 'Fichiers ouverts',
       torrentPieces: 'Dont morceaux de torrents',
       torrentsTitle: 'Torrents',

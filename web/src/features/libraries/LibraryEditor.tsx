@@ -1,12 +1,15 @@
 import {
+  ArrowsClockwiseIcon,
   CaretRightIcon,
   DotsSixVerticalIcon,
+  DotsThreeIcon,
   FilmStripIcon,
   FunnelSimpleIcon,
   MagnifyingGlassIcon,
   MusicNoteIcon,
   PlusIcon,
   SquaresFourIcon,
+  StopIcon,
   WarningIcon,
   XIcon,
 } from '@phosphor-icons/react'
@@ -20,9 +23,12 @@ import {
   queryClient,
   queryKeys,
   MAX_LIBRARY_ITEMS,
+  refreshLibrary,
   saveLibraries,
+  stopLibraryRefresh,
   type Addon,
   type Library,
+  type LibraryRefresh,
   type MusicContent,
   type Scope,
 } from '@/api'
@@ -57,7 +63,10 @@ import {
   TextInput,
   IconButton,
   useToast,
+  Menu,
+  MenuItem,
   MoveButtons,
+  ProgressBar,
 } from '@/ui'
 import { LibraryImageEditor, LibraryThumb, LiveTvThumb } from './LibraryImage'
 import { useRowDrag } from './useRowDrag'
@@ -137,6 +146,9 @@ export default function LibraryEditor({ scope }: { scope: Scope }) {
   const libraries = useQuery({
     queryKey: queryKeys.libraries(scope),
     queryFn: ({ signal }) => fetchLibraries(scope, signal),
+    // A refresh of descriptions under way or waiting shows its progress.
+    refetchInterval: (query) =>
+      query.state.data?.some((library) => refreshing(library.refresh)) === true ? 2000 : false,
   })
   // Only used to flag libraries of turned-off addons and music or IPTV rows; it works without.
   const addons = useQuery({
@@ -161,6 +173,51 @@ export default function LibraryEditor({ scope }: { scope: Scope }) {
     )
   }
   return <LibraryForm scope={scope} catalogs={libraries.data} addons={addons.data ?? []} />
+}
+
+/** Whether a refresh of a library's descriptions is waiting or running. */
+function refreshing(refresh: LibraryRefresh | null): boolean {
+  return refresh !== null && (refresh.state === 'queued' || refresh.state === 'running')
+}
+
+/** How the last refresh of a library's descriptions stands, under its name. */
+function RefreshStatus({ refresh, name }: { refresh: LibraryRefresh | null; name: string }) {
+  const { t, language } = useI18n()
+  const text = t.libraries.refresh
+  if (refresh === null) return null
+  const figure = (value: number) => value.toLocaleString(language)
+  switch (refresh.state) {
+    case 'queued':
+      return <p className="mt-1.5 text-small text-ink-3">{text.queued}</p>
+    case 'running':
+      return (
+        <div className="mt-1.5 max-w-[320px]">
+          <p className="text-small text-ink-3 tabular-nums">
+            {text.running(figure(refresh.done + refresh.failed), figure(refresh.titles))}
+          </p>
+          <ProgressBar
+            className="mt-1"
+            size="sm"
+            label={text.progress(name)}
+            value={refresh.titles === 0 ? 0 : (refresh.done + refresh.failed) / refresh.titles}
+          />
+        </div>
+      )
+    case 'done':
+      return (
+        <p className="mt-1.5 text-small text-ink-3 tabular-nums">
+          {text.done(figure(refresh.done), refresh.failed, figure(refresh.failed))}
+        </p>
+      )
+    case 'stopped':
+      return (
+        <p className="mt-1.5 text-small text-ink-3 tabular-nums">
+          {text.stopped(figure(refresh.done + refresh.failed), figure(refresh.titles))}
+        </p>
+      )
+    case 'failed':
+      return <p className="mt-1.5 text-small text-danger">{text.failed}</p>
+  }
 }
 
 function LibrariesSkeleton() {
@@ -248,6 +305,22 @@ function LibraryForm({
         return
       }
     }
+  })
+
+  const refresh = useMutation({
+    mutationFn: ({ library, stop }: { library: Library; name: string; stop: boolean }) => {
+      const key = {
+        addonId: library.addonId,
+        catalogType: library.catalogType,
+        catalogId: library.catalogId,
+      }
+      return stop ? stopLibraryRefresh(key) : refreshLibrary(key).then(() => undefined)
+    },
+    onSuccess: (_, { name, stop }) => {
+      if (!stop) toast(t.libraries.refresh.started(name))
+    },
+    onError: (error) => toast(errorMessage(t, error), { tone: 'danger' }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.libraries(scope) }),
   })
 
   const save = useMutation({
@@ -575,6 +648,9 @@ function LibraryForm({
                             <StatusPill tone="muted">{t.libraries.hiddenInMenus}</StatusPill>
                           )}
                         </p>
+                        {library.refreshable && (
+                          <RefreshStatus refresh={library.refresh} name={name} />
+                        )}
                       </div>
                     </div>
                     <div className="col-span-2 col-start-2 row-start-2 min-w-0 md:col-span-1 md:col-start-3 md:row-start-1">
@@ -651,6 +727,36 @@ function LibraryForm({
                         count={entries.length}
                         onMove={(to) => move(index, to)}
                       />
+                      {library.refreshable && (
+                        <Menu
+                          label={t.libraries.moreActions(name)}
+                          align="end"
+                          trigger={(props) => (
+                            <IconButton
+                              {...props}
+                              size="sm"
+                              label={t.libraries.moreActions(name)}
+                              icon={DotsThreeIcon}
+                            />
+                          )}
+                        >
+                          {refreshing(library.refresh) ? (
+                            <MenuItem
+                              icon={StopIcon}
+                              onSelect={() => refresh.mutate({ library, name, stop: true })}
+                            >
+                              {t.libraries.refresh.stop}
+                            </MenuItem>
+                          ) : (
+                            <MenuItem
+                              icon={ArrowsClockwiseIcon}
+                              onSelect={() => refresh.mutate({ library, name, stop: false })}
+                            >
+                              {t.libraries.refresh.start}
+                            </MenuItem>
+                          )}
+                        </Menu>
+                      )}
                       <IconButton
                         id={ids.remove(entry.key)}
                         size="sm"

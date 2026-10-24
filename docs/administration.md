@@ -70,6 +70,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - the **Transcoder**: GPU, encoders, and conversions against the limit (see [transcoding](transcoding.md));
   - the **Database** and its size;
   - the **Source cache**, against **Disk space for files being read (GB)**, with the part torrent pieces take;
+  - the **Image cache**, against its 1 GB on disk, with the images it keeps there and in memory, and **Clear the image cache** (see [Clearing the image cache](#clearing-the-image-cache));
   - **Torrents**, while they are on: the route, the torrents playing, their peers and those reached over uTP, and what was shared (see [Torrents](torrents.md));
   - **Disk space** for the cache, recordings and backups folders;
   - **Backups**: the last run and its result, the last backup made, its file and size, the next one, each destination's last upload, and the last restore. A failed backup, or a last backup older than two days, is a problem; so is a destination whose last upload failed (an error), or whose newest backup is older than two days (a warning). See [Backups](backups.md);
@@ -101,6 +102,26 @@ A user's app connection or tracking service that stopped, its app or service hav
 Torrent streams that cannot play are an error, naming why: the network interface missing, down or without an address, the SOCKS5 proxy not answering or refusing its user, or the WireGuard server not answering the handshake. A proxy without `UDP ASSOCIATE` is a warning: torrents play over TCP, with UDP trackers and the DHT off. Both link to **Settings › Torrents** (see [Kill switch](torrents.md#kill-switch)).
 
 Health sends no request outside the server, but for the SOCKS5 proxy and the WireGuard server of torrents, checked as their kill switch checks them. Like Schedule, it covers the server's addons, IPTV sources and guides first, then those users keep under **My sources**, each marked with its owner. Their problems count in the summary. The problems it finds, and those solved, can be sent to webhooks, Discord, ntfy, email, Telegram, Gotify or Pushover: see [Notifications](notifications.md).
+
+
+### Clearing the image cache
+
+**Clear the image cache**, under **Image cache** in **System › Health**, empties at once the cache of the images Polyfin serves to apps (see [Artwork](addons-and-libraries.md#artwork)), and tells in a message how many images and bytes it freed. It sits beside the cache's size, which then shows empty: a task under **System › Schedule** could not show what it freed, and the cache needs no schedule, as it keeps within its limit on its own.
+
+It empties:
+
+- the artwork relayed from the addons' artwork servers, IPTV channel logos and people's photos included, in memory and in the `images` folder of Polyfin's cache folder;
+- the copies resized for the apps, and the posters warmed ahead with their sizes, those of local folders included;
+- the images Polyfin draws for collections, smart lists and libraries;
+- the downloads remembered as failed, which are asked for again at once rather than after 2 minutes.
+
+Each image is downloaded, resized or drawn again at its next request, and the posters of the libraries' first pages are warmed again by the next run of "Read the libraries' first pages", within the hour. An image being downloaded or resized as the cache is cleared is kept once it ends.
+
+It leaves alone the scrubbing thumbnails and chapter images, kept in the database within **Space for images (GB)** under **Settings › Thumbnails**; the images uploaded with **Edit images** or chosen for libraries, kept in the database; the artwork files of local folders, which stay beside their files; the copy of the web player's theme kept under **Settings › Web player**; and which titles each generated image shows.
+
+**Compared with Jellyfin:** Jellyfin's "Clean Cache Directory" task (`DeleteCacheFiles`) runs every 24 hours and deletes the files of its cache folder older than 30 days, its resized images included ([DeleteCacheFileTask.cs, lines 71 to 83](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/Emby.Server.Implementations/ScheduledTasks/Tasks/DeleteCacheFileTask.cs#L71-L83)). Polyfin's image cache keeps within 1 GB instead, the least recently used going first, and is emptied whole by hand.
+
+**For app developers:** `GET /admin/api/health` gives the cache as `images`: `files` and `used` (bytes) on disk, `limit`, `memoryImages` and `memoryBytes`. `POST /admin/api/health/images/clear`, for administrators, empties it and answers what it freed in the same shape.
 
 ## New versions
 

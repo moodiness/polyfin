@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/https"
+	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -74,6 +75,16 @@ type HealthSources struct {
 	MissingLanguages func(context.Context) []string
 	// Torrents plays the torrent streams; nil tells nothing.
 	Torrents *torrent.Engine
+	// Images keeps the artwork relayed, resized and drawn for apps
+	// (jellyfin.Handler); nil tells nothing.
+	Images ImageCache
+}
+
+// ImageCache keeps the images relayed, resized and drawn for apps, and can
+// be emptied (see jellyfin.Handler.ClearImageCache).
+type ImageCache interface {
+	ImageCache() jellyfin.ImageCacheUsage
+	ClearImageCache() jellyfin.ImageCacheUsage
 }
 
 type healthJSON struct {
@@ -81,6 +92,8 @@ type healthJSON struct {
 	Process   processJSON  `json:"process"`
 	Database  databaseJSON `json:"database"`
 	Cache     *cacheJSON   `json:"cache"`
+	// Images is what the image cache keeps, null when unknown.
+	Images *imageCacheJSON `json:"images"`
 	// Torrents is how torrent streams play, null while they are off.
 	Torrents   *torrentHealthJSON   `json:"torrents"`
 	Disks      []diskJSON           `json:"disks"`
@@ -198,6 +211,30 @@ type cacheJSON struct {
 	Sources int   `json:"sources"`
 	// Torrents is the part of Used the pieces of torrents take.
 	Torrents int64 `json:"torrents"`
+}
+
+// imageCacheJSON is what the image cache keeps, or what clearing it freed:
+// Files images on disk, of Used bytes, which Limit bounds, and
+// MemoryImages in memory, of MemoryBytes bytes.
+type imageCacheJSON struct {
+	Files        int   `json:"files"`
+	Used         int64 `json:"used"`
+	Limit        int64 `json:"limit"`
+	MemoryImages int   `json:"memoryImages"`
+	MemoryBytes  int64 `json:"memoryBytes"`
+}
+
+func newImageCacheJSON(u jellyfin.ImageCacheUsage) *imageCacheJSON {
+	return &imageCacheJSON{Files: u.Files, Used: u.Bytes, Limit: u.Limit, MemoryImages: u.MemoryImages, MemoryBytes: u.MemoryBytes}
+}
+
+// clearImageCache empties the image cache, and answers what it freed.
+func (h *handler) clearImageCache(w http.ResponseWriter, r *http.Request) {
+	if h.Health.Images == nil {
+		writeError(w, http.StatusNotFound, "not_found")
+		return
+	}
+	writeJSON(w, http.StatusOK, newImageCacheJSON(h.Health.Images.ClearImageCache()))
 }
 
 // torrentHealthJSON is how torrent streams play: their route, "interface",
@@ -329,6 +366,9 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		result.Backup = &backupJSON{Folder: h.Backups.Dir()}
 	}
 
+	if h.Health.Images != nil {
+		result.Images = newImageCacheJSON(h.Health.Images.ImageCache())
+	}
 	if h.Health.Cache != nil {
 		used, sources, limit := h.Health.Cache.Usage()
 		result.Cache = &cacheJSON{Used: used, Limit: limit, Sources: sources}

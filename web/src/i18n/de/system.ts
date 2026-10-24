@@ -328,6 +328,14 @@ const system: typeof en = {
       cacheHelp:
         'Teile der gerade wiedergegebenen Dateien, auf der Festplatte gespeichert bis zur unter Einstellungen › Wiedergabe festgelegten Größe. Ein voller Cache ist normal: Die ältesten Teile machen Platz.',
       cacheUse: (used: string, limit: string) => `${used} von ${limit}`,
+      imagesTitle: 'Bild-Cache',
+      imagesHelp:
+        'Die an die Apps weitergereichten Bilder, ihre verkleinerten Kopien und die Bilder, die Polyfin zeichnet, auf der Festplatte bis zu seiner Grenze gespeichert, die am längsten ungenutzten zuerst entfernt. Ihn zu leeren lässt jedes Bild bei seiner nächsten Anfrage erneut herunterladen, verkleinern oder zeichnen. Die Vorschaubilder zum Spulen, hochgeladene Bilder, die Bilder lokaler Ordner und das Design des Webplayers gehören nicht dazu.',
+      imagesFiles: 'Bilder auf der Festplatte',
+      imagesMemory: 'Im Arbeitsspeicher',
+      clearImages: 'Bild-Cache leeren',
+      imagesCleared: (images: string, bytes: string) =>
+        `Bild-Cache geleert: ${images} Bilder, ${bytes} auf der Festplatte freigegeben.`,
       sourcesOpen: 'Geöffnete Dateien',
       torrentPieces: 'Davon Torrent-Teile',
       torrentsTitle: 'Torrents',
