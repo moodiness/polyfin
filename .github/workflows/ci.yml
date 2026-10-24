@@ -217,12 +217,15 @@ jobs:
           go vet ./...
       - name: Test the per-system code, local folders and torrents
         # Torrents run on Polyfin Desktop for Windows: their routes, the
-        # WireGuard tunnel among them, are tested here too.
+        # WireGuard tunnel among them, are tested here too, as are the
+        # socket errors by which a connection's failure is told.
         run: |
           go test -p 2 ./cmd/polyfin ./internal/process ./internal/diskspace ./internal/media ./internal/localfiles \
-            ./internal/hls ./internal/thumbnails ./internal/accounts ./internal/config ./internal/playback ./internal/torrent/...
+            ./internal/hls ./internal/thumbnails ./internal/accounts ./internal/config ./internal/playback ./internal/torrent/... \
+            ./internal/netfail
           go test ./internal/admin -run '^(TestStatusTellsTheSystem|TestUnwatchedFolderText|TestHealthTellsWhyTorrentsDoNotPlay|TestWireGuardSettingsAndHealth)$'
           go test ./internal/database -run '^TestMigrationsEndTheirLinesWithLF$'
+          go test ./internal/jellyfin -run '^TestOverloadedByAResetConnection$'
 
   macos:
     # polyfin serve on an Apple silicon Mac, as the desktop version runs it:

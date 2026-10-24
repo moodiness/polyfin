@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	xdraw "golang.org/x/image/draw"
@@ -36,6 +35,7 @@ import (
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
+	"github.com/moodiness/polyfin/internal/netfail"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 )
@@ -537,7 +537,7 @@ func overloaded(err error) bool {
 	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		return true
 	}
-	return errors.Is(err, syscall.ECONNRESET)
+	return netfail.Reset(err)
 }
 
 // downloadError is a download that failed, with the status it answers.
