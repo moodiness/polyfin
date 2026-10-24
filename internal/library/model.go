@@ -308,25 +308,28 @@ func ImageTag(url string) string {
 
 // titleKind maps a Stremio type to a playable title kind. The tv type is
 // live TV, which lists channels rather than titles (see LiveCatalog). The
-// other and channel types are videos, or folders of videos, as their
-// descriptions tell (see othervideos.go): their identifiers are those of
-// videos either way.
+// other and channel types, and every type Polyfin has no use of its own
+// for, are videos, or folders of videos, as their descriptions tell (see
+// othervideos.go): their identifiers are those of videos either way.
 func titleKind(stremioType string) (Kind, bool) {
 	switch stremioType {
 	case "movie", "anime.movie":
 		return KindMovie, true
-	case VideoType, "other", "channel":
+	case VideoType:
 		return KindVideo, true
 	case "series", "anime.series", "anime":
 		return KindSeries, true
-	default:
-		return "", false
 	}
+	if otherType(stremioType) {
+		return KindVideo, true
+	}
+	return "", false
 }
 
 // collectionType maps a catalog type to the content of its library. An
 // Eclipse addon's rows are music libraries, its audiobook rows aside (see
-// musicCollectionType).
+// musicCollectionType). Catalogs of other videos, of any type Polyfin has
+// no use of its own for, are home videos (see otherType).
 func collectionType(catalogType string) string {
 	switch catalogType {
 	case "movie", "anime.movie":
@@ -335,13 +338,15 @@ func collectionType(catalogType string) string {
 		return "tvshows"
 	case "collection":
 		return "boxsets"
-	case VideoType, "other", "channel":
+	case VideoType:
 		return "homevideos"
 	case eclipse.TypeTrack, eclipse.TypeAlbum, eclipse.TypeArtist, eclipse.TypePlaylist:
 		return "music"
-	default:
-		return ""
 	}
+	if otherType(catalogType) {
+		return "homevideos"
+	}
+	return ""
 }
 
 var (

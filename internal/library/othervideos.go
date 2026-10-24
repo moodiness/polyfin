@@ -11,11 +11,14 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // Titles of the Stremio types other and channel are neither movies nor
 // series: the files of a cloud store, a channel's uploads, a recording.
+// So are those of every type Polyfin has no use of its own for, such as
+// an addon's sport, which Stremio apps show as they show other.
 // Stremio apps open such a title to list its videos, each played by its
 // own streams, or play the title itself when it has no videos. Polyfin
 // does the same: a title whose description has videos is a folder of them
@@ -31,9 +34,36 @@ import (
 // item when its description gains or loses videos.
 
 // otherType reports whether titles of a Stremio type are videos or folders
-// of videos, as their descriptions tell.
+// of videos, as their descriptions tell: other, channel, and every type
+// Polyfin has no use of its own for (see knownType).
 func otherType(stremioType string) bool {
-	return stremioType == "other" || stremioType == "channel"
+	return stremioType == "other" || stremioType == "channel" || !knownType(stremioType)
+}
+
+// knownType reports whether Polyfin has a use of its own for a Stremio
+// type: movies, series and anime, other and channel videos, collections,
+// live TV, the rows of Eclipse music addons, and Polyfin's own types, as
+// its home videos' and extras'. A title without a type is not known
+// either way.
+func knownType(stremioType string) bool {
+	switch stremioType {
+	case "", "movie", "anime.movie", "series", "anime.series", "anime", "other", "channel", "collection", "tv":
+		return true
+	}
+	return eclipse.CatalogType(stremioType) || strings.HasPrefix(stremioType, "polyfin.")
+}
+
+// AddonVideo reports whether item is a video an addon lists as a title of
+// the other or channel type, or of a type Polyfin has no use of its own
+// for, or as one of such a title's videos (see otherType).
+func AddonVideo(item Item) bool {
+	return item.Kind == KindVideo && otherType(item.StremioType)
+}
+
+// AddonVideoVersion reports whether version is a stream of such a video,
+// listed for a title of one of those types.
+func AddonVideoVersion(version Version) bool {
+	return version.Torrent == nil && version.Origin.Type != originEclipse && otherType(version.Origin.Type)
 }
 
 // otherTitle reports whether r is a title of the other or channel type,
