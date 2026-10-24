@@ -137,6 +137,10 @@ const sources: typeof en = {
       'Copia il link di installazione dalla pagina di configurazione dell’add-on. Spesso contiene le tue impostazioni o chiavi: Polyfin lo mantiene privato e ne mostra sempre solo una forma abbreviata.',
     install: 'Installa',
     installed: (name: string) => `${name} è stato installato.`,
+    installedNoLibraries: (name: string) =>
+      `${name} è stato installato. Nessuno dei suoi cataloghi è ancora una libreria: attivali in Contenuti › Librerie.`,
+    installedNoLibrariesMine: (name: string) =>
+      `${name} è stato installato. Nessuno dei suoi cataloghi è ancora una libreria: attivali in Le mie origini.`,
     iptvHelp:
       'Importa direttamente i canali di una scaletta M3U o di un account Xtream Codes. Compaiono in Diretta TV come un catalogo TV, che puoi ordinare in Librerie. L’elenco viene scaricato di nuovo all’intervallo impostato in Impostazioni › Diretta TV.',
     steps: 'Passaggi',

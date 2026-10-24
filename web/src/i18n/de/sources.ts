@@ -137,6 +137,10 @@ const sources: typeof en = {
       'Kopiere den Installationslink von der Konfigurationsseite des Add-ons. Er enthält oft deine Einstellungen oder Schlüssel: Polyfin hält ihn privat und zeigt immer nur eine gekürzte Form an.',
     install: 'Installieren',
     installed: (name: string) => `${name} wurde installiert.`,
+    installedNoLibraries: (name: string) =>
+      `${name} wurde installiert. Noch keiner seiner Kataloge ist eine Bibliothek: Aktiviere sie unter Inhalte › Bibliotheken.`,
+    installedNoLibrariesMine: (name: string) =>
+      `${name} wurde installiert. Noch keiner seiner Kataloge ist eine Bibliothek: Aktiviere sie unter Meine Quellen.`,
     iptvHelp:
       'Importiere die Kanäle einer M3U-Wiedergabeliste oder eines Xtream-Codes-Kontos direkt. Sie erscheinen im Live-TV wie ein TV-Katalog, den du unter Bibliotheken anordnen kannst. Die Liste wird in dem Intervall neu heruntergeladen, das unter Einstellungen › Live-TV festgelegt ist.',
     steps: 'Schritte',

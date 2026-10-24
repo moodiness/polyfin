@@ -137,6 +137,10 @@ const sources: typeof en = {
       'Copie o link de instalação na página de configuração do complemento. Ele costuma conter suas configurações ou chaves: o Polyfin o mantém privado e só exibe uma forma abreviada.',
     install: 'Instalar',
     installed: (name: string) => `${name} foi instalado.`,
+    installedNoLibraries: (name: string) =>
+      `${name} foi instalado. Nenhum dos catálogos dele é uma biblioteca ainda: ative-os em Conteúdo › Bibliotecas.`,
+    installedNoLibrariesMine: (name: string) =>
+      `${name} foi instalado. Nenhum dos catálogos dele é uma biblioteca ainda: ative-os em Minhas fontes.`,
     iptvHelp:
       'Importe diretamente os canais de uma lista de reprodução M3U ou de uma conta Xtream Codes. Eles aparecem na TV ao Vivo como um catálogo de TV, que você pode ordenar em Bibliotecas. A lista é baixada novamente no intervalo definido em Configurações › TV ao Vivo.',
     steps: 'Etapas',

@@ -92,7 +92,18 @@ export function AddSourceModal({
             key={kind}
             scope={scope}
             help={kind === 'music' ? text.musicHelp : text.stremioHelp}
-            onInstalled={(added) => done(added, text.installed(added.name))}
+            onInstalled={(added) =>
+              done(
+                added,
+                // An addon none of whose catalogs became a library would show nothing: say where
+                // they are.
+                added.enabledLibraries === 0 && added.catalogCount > 0
+                  ? scope === 'shared'
+                    ? text.installedNoLibraries(added.name)
+                    : text.installedNoLibrariesMine(added.name)
+                  : text.installed(added.name),
+              )
+            }
           />
         )}
       </div>

@@ -746,6 +746,8 @@ export type Addon = {
   resources: string[]
   types: string[]
   catalogCount: number
+  /** In the answer to adding the addon only: how many of its catalogs became libraries. */
+  enabledLibraries?: number
   refreshedAt: string
   /**
    * 'stremio' for a Stremio addon; 'eclipse' for an Eclipse music addon, which `music` describes;

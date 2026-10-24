@@ -137,6 +137,10 @@ const sources: typeof en = {
       'Copiez le lien d’installation depuis la page de configuration de l’addon. Il contient souvent vos réglages ou vos clés : Polyfin le garde privé et n’en affiche jamais qu’une version abrégée.',
     install: 'Installer',
     installed: (name: string) => `${name} a été installé.`,
+    installedNoLibraries: (name: string) =>
+      `${name} a été installé. Aucun de ses catalogues n’est encore une bibliothèque : activez-les dans Contenu › Bibliothèques.`,
+    installedNoLibrariesMine: (name: string) =>
+      `${name} a été installé. Aucun de ses catalogues n’est encore une bibliothèque : activez-les dans Mes sources.`,
     iptvHelp:
       'Importez directement les chaînes d’une playlist M3U ou d’un compte Xtream Codes. Elles apparaissent dans la TV en direct comme un catalogue TV, que vous pouvez ranger dans Bibliothèques. La liste est téléchargée à nouveau selon l’intervalle choisi dans Paramètres › TV en direct.',
     steps: 'Étapes',

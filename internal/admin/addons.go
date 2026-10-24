@@ -41,6 +41,9 @@ type addonJSON struct {
 	// Language is the language of a server addon's descriptions, empty
 	// for none (see addons.Addon.Language).
 	Language string `json:"language"`
+	// EnabledLibraries is, in the answer to adding the addon only, how
+	// many of its catalogs that made libraries of.
+	EnabledLibraries *int `json:"enabledLibraries,omitempty"`
 }
 
 // sourceJSON describes an IPTV source: its address, redacted, as it holds
@@ -592,10 +595,34 @@ func (h *handler) installAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addon, err := h.Addons.Install(r.Context(), scope, body.ManifestURL, confined(r))
-	if err == nil {
-		h.Activity.AddonInstalled(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, addon.Manifest.Version, scope.Owner == nil)
+	if addonError(w, err) {
+		return
 	}
-	h.answerAddon(w, r, scope, http.StatusCreated, addon, err)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	h.Activity.AddonInstalled(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, addon.Manifest.Version, scope.Owner == nil)
+	result, err := h.addonJSON(r, scope, addon)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	// How many of its catalogs it made libraries of: none tells the admin
+	// app to say where its catalogs are.
+	libraries, err := h.Addons.Libraries(r.Context(), scope)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	enabled := 0
+	for _, l := range libraries {
+		if l.AddonID == addon.ID && l.Enabled {
+			enabled++
+		}
+	}
+	result.EnabledLibraries = &enabled
+	writeJSON(w, http.StatusCreated, result)
 }
 
 func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {

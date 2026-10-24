@@ -133,6 +133,10 @@ const sources = {
       'Copy the install link from the addon’s configure page. It often contains your settings or keys: Polyfin keeps it private and only ever shows a shortened form.',
     install: 'Install',
     installed: (name: string) => `${name} was installed.`,
+    installedNoLibraries: (name: string) =>
+      `${name} was installed. None of its catalogs is a library yet: enable them under Content › Libraries.`,
+    installedNoLibrariesMine: (name: string) =>
+      `${name} was installed. None of its catalogs is a library yet: enable them under My sources.`,
     iptvHelp:
       'Import the channels of an M3U playlist or an Xtream Codes account directly. They appear in Live TV like a TV catalog, which you can order under Libraries. The list is downloaded again at the interval set under Settings › Live TV.',
     steps: 'Steps',
