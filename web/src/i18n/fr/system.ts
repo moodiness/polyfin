@@ -429,6 +429,7 @@ const system: typeof en = {
         torrentWireGuard: 'Configuration WireGuard des torrents',
         smtpPassword: 'Mot de passe SMTP',
         metricsToken: 'Jeton des métriques',
+        updateToolToken: 'Jeton de l’outil de mise à jour',
       },
       connectionOf: (service: string, user: string) => `Connexion ${service} de ${user}`,
       targetOf: (target: string, user: string) => `Cible de notification « ${target} » de ${user}`,

@@ -588,6 +588,17 @@ export type Settings = {
   /** Whether Polyfin made the metrics token (read-only): never sent, revealed on demand. */
   metricsTokenSet: boolean
   /**
+   * Whether an administrator confirmed that Polyfin is started again when it exits, by its
+   * container's restart policy or its service manager: Restart then warns no more.
+   */
+  restartConfirmed: boolean
+  /** The update API of an update tool run beside Polyfin, which Update now asks; '' for none. */
+  updateToolUrl: string
+  /** Whether the update tool's token is saved (read-only): never sent, revealed on demand. */
+  updateToolTokenSet: boolean
+  /** The update tool's token, sent only to change it: '' removes it. */
+  updateToolToken?: string
+  /**
    * Whether torrent streams play, over one route alone: the network interface every torrent
    * socket is bound to (Linux only), a SOCKS5 proxy, host:port, or a WireGuard tunnel Polyfin runs;
    * '' for none.
@@ -2860,6 +2871,7 @@ export type ServerSecretName =
   | 'aniListClientSecret'
   | 'myAnimeListClientSecret'
   | 'metricsToken'
+  | 'updateToolToken'
 
 /** Reads one of the server's saved secrets again, for an administrator; never cached. */
 export const revealServerSecret = async (name: ServerSecretName) =>
@@ -4052,6 +4064,51 @@ export const clearImageCache = () => request<ImageCacheUsage>('POST', '/health/i
 export const checkAddon = (id: string) =>
   request<AddonHealth>('POST', `/health/addons/${seg(id)}/check`)
 
+/**
+ * What starts Polyfin again once it exits: Polyfin Desktop, a restart policy or service manager an
+ * administrator confirmed, or nothing Polyfin knows of.
+ */
+export type RestartKind = 'desktop' | 'confirmed' | 'unknown'
+
+/** The update Polyfin Desktop offers: its download's progress, and whether its last install failed. */
+export type DesktopUpdate = {
+  version: string
+  notes: string
+  installing: boolean
+  percent: number
+  failed: boolean
+}
+
+/** How the server's actions stand; `startedAt` changes once a restart has happened. */
+export type ServerActions = {
+  version: string
+  startedAt: string
+  restart: RestartKind
+  system: ServerSystem
+  desktopUpdate: DesktopUpdate | null
+  updateTool: boolean
+}
+
+export const fetchServerActions = (signal?: AbortSignal) =>
+  request<ServerActions>('GET', '/server', undefined, signal)
+
+/**
+ * Restarts Polyfin, confirmed with the password or a two-step code; `anyway` once the warning that
+ * nothing may start it again was seen. Answers when the stopping Polyfin started.
+ */
+export const restartServer = (confirmation: TwoStepConfirmation, anyway: boolean) =>
+  request<{ startedAt: string }>('POST', '/server/restart', { ...confirmation, anyway })
+
+/** Has Polyfin Desktop install the update it offers, as its tray's Install Polyfin does. */
+export const installDesktopUpdate = (confirmation: TwoStepConfirmation, version: string) =>
+  request<{ version: string }>('POST', '/server/desktop-update', { ...confirmation, version })
+
+/** What the update tool answered Update now: its HTTP status and the start of its body. */
+export type UpdateToolAnswer = { status: number; body: string }
+
+export const askUpdateTool = (confirmation: TwoStepConfirmation) =>
+  request<UpdateToolAnswer>('POST', '/server/update-tool', confirmation)
+
 /** The log lines written after the first `after`, and the `after` of the next call. */
 export const fetchLogLines = (after: number, limit: number, signal?: AbortSignal) =>
   request<{ lines: string[]; next: number }>(
@@ -4247,6 +4304,7 @@ export const queryKeys = {
   tasks: (language: Language) => ['tasks', language] as const,
   timers: ['timers'] as const,
   health: ['health'] as const,
+  serverActions: ['server', 'actions'] as const,
   /** Under the health's key: refreshing the health refreshes them too. */
   healthProblems: (language: Language) => ['health', 'problems', language] as const,
   backup: ['backup'] as const,

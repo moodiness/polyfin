@@ -332,6 +332,17 @@ const common: typeof en = {
       'Elija en la lista las aplicaciones que muestran las bibliotecas de colecciones por colección.',
     invalid_remuxdb_url:
       'La dirección de RemuxDB debe ser una dirección web que empiece por http:// o https://.',
+    invalid_update_tool_url:
+      'La dirección de la herramienta de actualización debe ser una dirección web que empiece por http:// o https://, sin nombre de usuario ni fragmento.',
+    invalid_update_tool_token:
+      'El token de la herramienta de actualización no lleva espacios y tiene 1024 caracteres como máximo.',
+    restart_unconfirmed: 'Polyfin no sabe si algo lo vuelve a iniciar: confirme antes el aviso.',
+    no_update: 'Polyfin Desktop no ofrece esa actualización ahora.',
+    not_desktop: 'Polyfin no se ejecuta en Polyfin Desktop.',
+    no_update_tool: 'No hay ninguna herramienta de actualización en los ajustes generales.',
+    update_tool_timeout:
+      'La herramienta de actualización no respondió en 50 segundos: puede que siga actualizando.',
+    update_tool_unreachable: 'No se pudo contactar con la herramienta de actualización.',
     invalid_public_address:
       'La dirección pública debe ser una dirección web que empiece por http:// o https://, sin parámetros de consulta.',
     invalid_local_address:

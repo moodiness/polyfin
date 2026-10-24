@@ -78,6 +78,64 @@ const home = {
       graphicsCpu: 'Conversions use the processor',
       toneMapping: 'tone mapping',
     },
+    /** Restart, the install of Polyfin Desktop's update, and Update now, on Home. */
+    server: {
+      restart: 'Restart',
+      updateNow: 'Update now',
+      install: (version: string) => `Install Polyfin ${version}`,
+      downloading: (percent: number) => `Downloading: ${percent}%`,
+      confirmWith: 'Confirm with',
+      withPassword: 'Password',
+      withCode: 'Two-step code',
+      password: 'Your password',
+      code: 'Code of your app, or a recovery code',
+      identityHelp: 'Each of these actions asks for it again.',
+      restartTitle: 'Restart Polyfin',
+      restartText:
+        'Polyfin stops what it is doing, playbacks and recordings included, and exits. Apps connect again once it answers.',
+      restartBy: {
+        desktop: 'Polyfin Desktop starts it again by itself.',
+        confirmed:
+          'Its container’s restart policy, or its service manager, starts it again, as confirmed under Settings › General.',
+      },
+      unknownTitle: 'Polyfin may not come back',
+      unknown: {
+        container:
+          'Polyfin cannot see its container’s restart policy. Without one that starts it again, such as unless-stopped or always, Polyfin stays stopped until it is started on the host.',
+        other:
+          'Polyfin cannot tell whether a service manager starts it again. Without one, Polyfin stays stopped until it is started on the host.',
+      },
+      unknownHelp:
+        'Once it is set, turn on “Polyfin is started again when it stops” under Settings › General, and this warning goes.',
+      restartConfirm: 'Restart',
+      restartAnyway: 'Restart anyway',
+      restarting: 'Restarting…',
+      waitingTitle: 'Polyfin is restarting',
+      waiting: 'Waiting for Polyfin to answer again…',
+      waitingLong: (seconds: number) =>
+        `Polyfin has not answered for ${seconds} seconds. If nothing starts it again, start it on the host.`,
+      installTitle: (version: string) => `Install Polyfin ${version}`,
+      installText:
+        'Polyfin Desktop downloads the new version and checks it, then stops Polyfin, installs it and starts it, as Install Polyfin does in its menu. Playbacks and recordings stop meanwhile.',
+      installConfirm: 'Install',
+      installing: 'Asking…',
+      installWaitingTitle: (version: string) => `Installing Polyfin ${version}`,
+      installStopping: 'Polyfin stops to install the new version. Waiting for it to answer again…',
+      installFailed:
+        'Polyfin Desktop could not install the update: the log folder tells why. Polyfin runs on as it was.',
+      updateTitle: 'Update now',
+      updateText:
+        'Polyfin asks the update tool set under Settings › General to update now. What the tool does next is up to it: one that replaces Polyfin’s container stops Polyfin for a moment.',
+      updateConfirm: 'Send the request',
+      sending: 'Sending…',
+      answer: (status: number) => `The update tool answered HTTP ${status}.`,
+      answerEmpty: 'Its answer holds no text.',
+      watching:
+        'If the tool replaces Polyfin’s container, this page reloads once Polyfin answers again.',
+      gone: 'Polyfin stopped before the tool answered: the tool is probably replacing it. Waiting for Polyfin to answer again…',
+      tooSoon: 'This was asked less than a minute ago. Try again in a moment.',
+      close: 'Close',
+    },
     live: {
       title: 'Now playing',
       empty: 'Nothing is playing right now.',

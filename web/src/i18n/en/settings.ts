@@ -59,6 +59,15 @@ const settings = {
     updateCheck: 'Check for new versions',
     updateCheckHelp:
       'Once a day, and shortly after startup, Polyfin asks GitHub for its latest release, sending only its version. A newer one shows on Home and under System › Health, and is sent to the New version notifications. Off, Polyfin never contacts GitHub.',
+    restartConfirmed: 'Polyfin is started again when it stops',
+    restartConfirmedHelp:
+      'Turn on once Polyfin’s container has a restart policy that starts it again, such as unless-stopped, always or on-failure, or once its service manager does. Polyfin cannot see its container’s restart policy without the Docker socket, which it is never given: while this is off, Restart on Home warns that Polyfin may not come back.',
+    updateToolUrl: 'Update tool address',
+    updateToolUrlHelp:
+      'The update API of a tool you run beside Polyfin to update its container, such as http://updater:8080/v1/update. Update now, on Home, sends it a POST request without a body. Empty hides Update now.',
+    updateToolToken: 'Update tool token',
+    updateToolTokenHelp:
+      'Sent as an Authorization: Bearer header with each request, when the tool asks for one. Stored encrypted, as the other secrets.',
     localDiscovery: 'Answer local network discovery',
     localDiscoveryHelp:
       'Jellyfin and Emby apps that look for servers on the local network find Polyfin and list it, so its address does not have to be typed. They ask on UDP port 7359, and Polyfin answers only addresses of the local network. Applies at once, without a restart. In Docker, this needs host networking or the published port 7359/udp: see the installation docs.',

@@ -330,6 +330,18 @@ const common: typeof en = {
       'Choisissez dans la liste les applis qui présentent les bibliothèques de collections par collection.',
     invalid_remuxdb_url:
       'L’adresse de RemuxDB doit être une adresse web commençant par http:// ou https://.',
+    invalid_update_tool_url:
+      'L’adresse de l’outil de mise à jour doit être une adresse web commençant par http:// ou https://, sans nom d’utilisateur ni fragment.',
+    invalid_update_tool_token:
+      'Le jeton de l’outil de mise à jour ne contient pas d’espace, et 1024 caractères au plus.',
+    restart_unconfirmed:
+      'Polyfin ne sait pas si quelque chose le relance : confirmez d’abord l’avertissement.',
+    no_update: 'Polyfin Desktop ne propose pas cette mise à jour pour le moment.',
+    not_desktop: 'Polyfin ne tourne pas dans Polyfin Desktop.',
+    no_update_tool: 'Aucun outil de mise à jour n’est réglé dans Paramètres › Général.',
+    update_tool_timeout:
+      'L’outil de mise à jour n’a pas répondu en 50 secondes : il est peut-être encore en train de mettre à jour.',
+    update_tool_unreachable: 'L’outil de mise à jour n’a pas pu être joint.',
     invalid_public_address:
       'L’adresse publique doit être une adresse web commençant par http:// ou https://, sans paramètres.',
     invalid_local_address:

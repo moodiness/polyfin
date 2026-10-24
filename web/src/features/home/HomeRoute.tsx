@@ -30,6 +30,7 @@ import {
 } from '@/ui'
 import { NowPlaying, useLiveSessions } from './NowPlaying'
 import { RecentActivity } from './RecentActivity'
+import { DesktopInstall, ServerActionBar, useServerActions } from './ServerActions'
 import { ServerStatus } from './ServerStatus'
 
 /** `/`: the administrator overview, or a member's view of the server's status. */
@@ -56,6 +57,7 @@ function Overview({ name }: { name: string }) {
   const problems = useHealthProblems()
   const transcoder = health.data?.transcoder
   const update = health.data?.update
+  const actions = useServerActions()
 
   return (
     <PageLayout
@@ -69,15 +71,20 @@ function Overview({ name }: { name: string }) {
       {update && health.data && (
         <Notice
           action={
-            <ExternalButtonLink
-              href={update.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              size="sm"
-              iconEnd={ArrowSquareOutIcon}
-            >
-              {text.releaseNotes}
-            </ExternalButtonLink>
+            <div className="flex flex-wrap items-center gap-2">
+              {actions.data?.desktopUpdate && (
+                <DesktopInstall actions={actions.data} update={actions.data.desktopUpdate} />
+              )}
+              <ExternalButtonLink
+                href={update.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                size="sm"
+                iconEnd={ArrowSquareOutIcon}
+              >
+                {text.releaseNotes}
+              </ExternalButtonLink>
+            </div>
           }
         >
           {text.update(update.version, health.data.process.version)}
@@ -200,6 +207,7 @@ function ServerFigures() {
     queryFn: ({ signal }) => fetchStatus(signal),
     refetchInterval: 10_000,
   })
+  const actions = useServerActions()
   const data = health.data
   const timeFormat = new Intl.DateTimeFormat(language, { timeStyle: 'medium' })
 
@@ -311,6 +319,7 @@ function ServerFigures() {
               <span>{t.status.updatedAt(timeFormat.format(status.dataUpdatedAt))}</span>
             </p>
           )}
+          {actions.data !== undefined && <ServerActionBar actions={actions.data} />}
         </>
       )}
     </Block>

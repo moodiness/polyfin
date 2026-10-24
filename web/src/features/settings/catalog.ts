@@ -110,6 +110,29 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => s(t).metricsTokenHelp,
     keywords: ['Prometheus', 'bearer', 'token', 'jeton'],
   },
+  {
+    section: 'general',
+    anchor: 'restart-confirmed',
+    label: (t) => s(t).restartConfirmed,
+    help: (t) => s(t).restartConfirmedHelp,
+    keywords: ['restart', 'redémarrer', 'Docker', 'restart policy', 'unless-stopped', 'systemd'],
+  },
+  {
+    section: 'general',
+    anchor: 'update-tool-url',
+    label: (t) => s(t).updateToolUrl,
+    help: (t) => s(t).updateToolUrlHelp,
+    keywords: ['update', 'mise à jour', 'Docker', 'image', 'API'],
+    codes: ['invalid_update_tool_url'],
+  },
+  {
+    section: 'general',
+    anchor: 'update-tool-token',
+    label: (t) => s(t).updateToolToken,
+    help: (t) => s(t).updateToolTokenHelp,
+    keywords: ['bearer', 'token', 'jeton'],
+    codes: ['invalid_update_tool_token'],
+  },
   // Playback
   {
     section: 'playback',

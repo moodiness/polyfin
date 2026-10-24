@@ -79,6 +79,64 @@ const home: typeof en = {
       graphicsCpu: 'Le conversioni usano il processore',
       toneMapping: 'tone mapping',
     },
+    server: {
+      restart: 'Riavvia',
+      updateNow: 'Aggiorna ora',
+      install: (version: string) => `Installa Polyfin ${version}`,
+      downloading: (percent: number) => `Download: ${percent}%`,
+      confirmWith: 'Conferma con',
+      withPassword: 'Password',
+      withCode: 'Codice in due passaggi',
+      password: 'La tua password',
+      code: 'Codice della tua app, o un codice di recupero',
+      identityHelp: 'Ognuna di queste azioni lo chiede di nuovo.',
+      restartTitle: 'Riavvia Polyfin',
+      restartText:
+        'Polyfin interrompe ciò che sta facendo, riproduzioni e registrazioni comprese, e termina. Le app si riconnettono appena risponde.',
+      restartBy: {
+        desktop: 'Polyfin Desktop lo riavvia da solo.',
+        confirmed:
+          'La politica di riavvio del suo container, o il suo gestore di servizi, lo riavvia, come confermato nelle impostazioni generali.',
+      },
+      unknownTitle: 'Polyfin potrebbe non tornare',
+      unknown: {
+        container:
+          'Polyfin non vede la politica di riavvio del suo container. Senza una politica che lo riavvii, come unless-stopped o always, Polyfin resta fermo finché non viene avviato sull’host.',
+        other:
+          'Polyfin non sa se un gestore di servizi lo riavvia. Senza, Polyfin resta fermo finché non viene avviato sull’host.',
+      },
+      unknownHelp:
+        'Una volta configurato, attiva «Polyfin viene riavviato quando si ferma» nelle impostazioni generali, e questo avviso scompare.',
+      restartConfirm: 'Riavvia',
+      restartAnyway: 'Riavvia comunque',
+      restarting: 'Riavvio…',
+      waitingTitle: 'Polyfin si sta riavviando',
+      waiting: 'In attesa che Polyfin risponda di nuovo…',
+      waitingLong: (seconds: number) =>
+        `Polyfin non risponde da ${seconds} secondi. Se niente lo riavvia, avvialo sull’host.`,
+      installTitle: (version: string) => `Installa Polyfin ${version}`,
+      installText:
+        'Polyfin Desktop scarica la nuova versione e la verifica, poi ferma Polyfin, la installa e la avvia, come Installa Polyfin nel suo menu. Riproduzioni e registrazioni si fermano nel frattempo.',
+      installConfirm: 'Installa',
+      installing: 'Richiesta…',
+      installWaitingTitle: (version: string) => `Installazione di Polyfin ${version}`,
+      installStopping:
+        'Polyfin si ferma per installare la nuova versione. In attesa che risponda di nuovo…',
+      installFailed:
+        'Polyfin Desktop non è riuscito a installare l’aggiornamento: la cartella dei log spiega perché. Polyfin continua come prima.',
+      updateTitle: 'Aggiorna ora',
+      updateText:
+        'Polyfin chiede allo strumento di aggiornamento impostato nelle impostazioni generali di aggiornare ora. Cosa fa dopo dipende dallo strumento: se sostituisce il container di Polyfin, Polyfin si ferma per un momento.',
+      updateConfirm: 'Invia la richiesta',
+      sending: 'Invio…',
+      answer: (status: number) => `Lo strumento di aggiornamento ha risposto HTTP ${status}.`,
+      answerEmpty: 'La sua risposta non contiene testo.',
+      watching:
+        'Se lo strumento sostituisce il container di Polyfin, questa pagina si ricarica appena Polyfin risponde di nuovo.',
+      gone: 'Polyfin si è fermato prima della risposta dello strumento: probabilmente lo sta sostituendo. In attesa che Polyfin risponda di nuovo…',
+      tooSoon: 'È stato chiesto meno di un minuto fa. Riprova tra un momento.',
+      close: 'Chiudi',
+    },
     live: {
       title: 'In riproduzione',
       empty: 'Nessuna riproduzione in corso.',

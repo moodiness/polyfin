@@ -80,6 +80,64 @@ const home: typeof en = {
       graphicsCpu: 'Les conversions passent par le processeur',
       toneMapping: 'tone mapping',
     },
+    server: {
+      restart: 'Redémarrer',
+      updateNow: 'Mettre à jour maintenant',
+      install: (version: string) => `Installer Polyfin ${version}`,
+      downloading: (percent: number) => `Téléchargement : ${percent} %`,
+      confirmWith: 'Confirmer avec',
+      withPassword: 'Mot de passe',
+      withCode: 'Code en deux étapes',
+      password: 'Votre mot de passe',
+      code: 'Code de votre appli, ou un code de secours',
+      identityHelp: 'Chacune de ces actions le redemande.',
+      restartTitle: 'Redémarrer Polyfin',
+      restartText:
+        'Polyfin arrête ce qu’il fait, lectures et enregistrements compris, et se termine. Les applis se reconnectent dès qu’il répond.',
+      restartBy: {
+        desktop: 'Polyfin Desktop le relance de lui-même.',
+        confirmed:
+          'La politique de redémarrage de son conteneur, ou son gestionnaire de services, le relance, comme confirmé dans Paramètres › Général.',
+      },
+      unknownTitle: 'Polyfin pourrait ne pas revenir',
+      unknown: {
+        container:
+          'Polyfin ne voit pas la politique de redémarrage de son conteneur. Sans une politique qui le relance, comme unless-stopped ou always, Polyfin reste arrêté jusqu’à ce qu’on le démarre sur l’hôte.',
+        other:
+          'Polyfin ne sait pas si un gestionnaire de services le relance. Sans lui, Polyfin reste arrêté jusqu’à ce qu’on le démarre sur l’hôte.',
+      },
+      unknownHelp:
+        'Une fois que c’est en place, activez « Polyfin est redémarré quand il s’arrête » dans Paramètres › Général, et cet avertissement disparaît.',
+      restartConfirm: 'Redémarrer',
+      restartAnyway: 'Redémarrer quand même',
+      restarting: 'Redémarrage…',
+      waitingTitle: 'Polyfin redémarre',
+      waiting: 'En attente de la réponse de Polyfin…',
+      waitingLong: (seconds: number) =>
+        `Polyfin ne répond plus depuis ${seconds} secondes. Si rien ne le relance, démarrez-le sur l’hôte.`,
+      installTitle: (version: string) => `Installer Polyfin ${version}`,
+      installText:
+        'Polyfin Desktop télécharge la nouvelle version et la vérifie, puis arrête Polyfin, l’installe et la démarre, comme « Installer Polyfin » dans son menu. Les lectures et les enregistrements s’arrêtent pendant ce temps.',
+      installConfirm: 'Installer',
+      installing: 'Demande en cours…',
+      installWaitingTitle: (version: string) => `Installation de Polyfin ${version}`,
+      installStopping:
+        'Polyfin s’arrête pour installer la nouvelle version. En attente de sa réponse…',
+      installFailed:
+        'Polyfin Desktop n’a pas pu installer la mise à jour : le dossier des journaux dit pourquoi. Polyfin continue comme avant.',
+      updateTitle: 'Mettre à jour maintenant',
+      updateText:
+        'Polyfin demande à l’outil de mise à jour réglé dans Paramètres › Général de mettre à jour maintenant. La suite dépend de l’outil : s’il remplace le conteneur de Polyfin, Polyfin s’arrête un moment.',
+      updateConfirm: 'Envoyer la demande',
+      sending: 'Envoi…',
+      answer: (status: number) => `L’outil de mise à jour a répondu HTTP ${status}.`,
+      answerEmpty: 'Sa réponse ne contient pas de texte.',
+      watching:
+        'Si l’outil remplace le conteneur de Polyfin, cette page se recharge dès que Polyfin répond de nouveau.',
+      gone: 'Polyfin s’est arrêté avant la réponse de l’outil : l’outil est sans doute en train de le remplacer. En attente de la réponse de Polyfin…',
+      tooSoon: 'Cette action a été demandée il y a moins d’une minute. Réessayez dans un instant.',
+      close: 'Fermer',
+    },
     live: {
       title: 'Lecture en cours',
       empty: 'Rien n’est en lecture pour le moment.',

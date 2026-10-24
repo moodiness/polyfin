@@ -80,6 +80,64 @@ const home: typeof en = {
       graphicsCpu: 'Las conversiones usan el procesador',
       toneMapping: 'mapeo de tonos',
     },
+    server: {
+      restart: 'Reiniciar',
+      updateNow: 'Actualizar ahora',
+      install: (version: string) => `Instalar Polyfin ${version}`,
+      downloading: (percent: number) => `Descargando: ${percent} %`,
+      confirmWith: 'Confirmar con',
+      withPassword: 'Contraseña',
+      withCode: 'Código de dos pasos',
+      password: 'Su contraseña',
+      code: 'Código de su aplicación, o un código de recuperación',
+      identityHelp: 'Cada una de estas acciones lo vuelve a pedir.',
+      restartTitle: 'Reiniciar Polyfin',
+      restartText:
+        'Polyfin detiene lo que está haciendo, reproducciones y grabaciones incluidas, y termina. Las aplicaciones se vuelven a conectar en cuanto responde.',
+      restartBy: {
+        desktop: 'Polyfin Desktop lo vuelve a iniciar por sí mismo.',
+        confirmed:
+          'La política de reinicio de su contenedor, o su gestor de servicios, lo vuelve a iniciar, como se confirmó en los ajustes generales.',
+      },
+      unknownTitle: 'Polyfin podría no volver',
+      unknown: {
+        container:
+          'Polyfin no ve la política de reinicio de su contenedor. Sin una que lo vuelva a iniciar, como unless-stopped o always, Polyfin queda detenido hasta que se inicie en el host.',
+        other:
+          'Polyfin no sabe si un gestor de servicios lo vuelve a iniciar. Sin él, Polyfin queda detenido hasta que se inicie en el host.',
+      },
+      unknownHelp:
+        'Cuando esté configurado, active «Polyfin se vuelve a iniciar cuando se detiene» en los ajustes generales, y este aviso desaparece.',
+      restartConfirm: 'Reiniciar',
+      restartAnyway: 'Reiniciar de todos modos',
+      restarting: 'Reiniciando…',
+      waitingTitle: 'Polyfin se está reiniciando',
+      waiting: 'Esperando a que Polyfin vuelva a responder…',
+      waitingLong: (seconds: number) =>
+        `Polyfin no responde desde hace ${seconds} segundos. Si nada lo vuelve a iniciar, inícielo en el host.`,
+      installTitle: (version: string) => `Instalar Polyfin ${version}`,
+      installText:
+        'Polyfin Desktop descarga la nueva versión y la comprueba, luego detiene Polyfin, la instala y la inicia, como Instalar Polyfin en su menú. Las reproducciones y grabaciones se detienen mientras tanto.',
+      installConfirm: 'Instalar',
+      installing: 'Pidiendo…',
+      installWaitingTitle: (version: string) => `Instalando Polyfin ${version}`,
+      installStopping:
+        'Polyfin se detiene para instalar la nueva versión. Esperando a que vuelva a responder…',
+      installFailed:
+        'Polyfin Desktop no pudo instalar la actualización: la carpeta de registros dice por qué. Polyfin sigue como estaba.',
+      updateTitle: 'Actualizar ahora',
+      updateText:
+        'Polyfin pide a la herramienta de actualización de los ajustes generales que actualice ahora. Lo que haga después depende de ella: si reemplaza el contenedor de Polyfin, Polyfin se detiene un momento.',
+      updateConfirm: 'Enviar la petición',
+      sending: 'Enviando…',
+      answer: (status: number) => `La herramienta de actualización respondió HTTP ${status}.`,
+      answerEmpty: 'Su respuesta no contiene texto.',
+      watching:
+        'Si la herramienta reemplaza el contenedor de Polyfin, esta página se recarga en cuanto Polyfin vuelva a responder.',
+      gone: 'Polyfin se detuvo antes de que la herramienta respondiera: probablemente lo está reemplazando. Esperando a que Polyfin vuelva a responder…',
+      tooSoon: 'Esto se pidió hace menos de un minuto. Inténtelo de nuevo en un momento.',
+      close: 'Cerrar',
+    },
     live: {
       title: 'Reproduciendo ahora',
       empty: 'No se está reproduciendo nada en este momento.',

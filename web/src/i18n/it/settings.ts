@@ -63,6 +63,15 @@ const settings: typeof en = {
     updateCheck: 'Controlla nuove versioni',
     updateCheckHelp:
       'Una volta al giorno, e poco dopo l’avvio, Polyfin chiede a GitHub la sua ultima release, inviando solo la propria versione. Una versione più recente compare nella Home e in Sistema › Stato di salute, e viene inviata alle notifiche Nuova versione. Se disattivato, Polyfin non contatta mai GitHub.',
+    restartConfirmed: 'Polyfin viene riavviato quando si ferma',
+    restartConfirmedHelp:
+      'Attivalo quando il container di Polyfin ha una politica di riavvio che lo riavvia, come unless-stopped, always o on-failure, o quando lo fa il suo gestore di servizi. Senza il socket Docker, che non riceve mai, Polyfin non vede la politica di riavvio del suo container: finché è disattivato, Riavvia nella Home avverte che Polyfin potrebbe non tornare.',
+    updateToolUrl: 'Indirizzo dello strumento di aggiornamento',
+    updateToolUrlHelp:
+      'L’API di aggiornamento di uno strumento che esegui accanto a Polyfin per aggiornarne il container, come http://updater:8080/v1/update. Aggiorna ora, nella Home, gli invia una richiesta POST senza corpo. Vuoto, il pulsante non compare.',
+    updateToolToken: 'Token dello strumento di aggiornamento',
+    updateToolTokenHelp:
+      'Inviato come intestazione Authorization: Bearer con ogni richiesta, se lo strumento ne chiede uno. Salvato cifrato, come gli altri segreti.',
     localDiscovery: 'Rispondi al rilevamento sulla rete locale',
     localDiscoveryHelp:
       'Le applicazioni Jellyfin ed Emby che cercano server sulla rete locale trovano Polyfin e lo elencano, così non serve digitarne l’indirizzo. Chiedono sulla porta UDP 7359, e Polyfin risponde solo agli indirizzi della rete locale. Si applica subito, senza riavvio. In Docker serve la rete host o la porta pubblicata 7359/udp: consulta la documentazione di installazione.',

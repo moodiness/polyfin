@@ -440,6 +440,7 @@ const system: typeof en = {
         torrentProxyPassword: 'Password del proxy SOCKS5 dei torrent',
         torrentWireGuard: 'Configurazione WireGuard dei torrent',
         metricsToken: 'Token delle metriche',
+        updateToolToken: 'Token dello strumento di aggiornamento',
       },
       connectionOf: (service: string, user: string) => `connessione ${service} di ${user}`,
       targetOf: (target: string, user: string) =>

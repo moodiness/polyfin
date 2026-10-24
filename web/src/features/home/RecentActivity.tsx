@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  ArrowClockwiseIcon,
+  CloudArrowDownIcon,
   GearIcon,
   InfoIcon,
   KeyIcon,
@@ -69,7 +71,14 @@ const filters = {
     ],
   },
   server: {
-    types: ['ServerConfigurationUpdated', 'AddonInstalled', 'AddonUninstalled', 'SecretRevealed'],
+    types: [
+      'ServerConfigurationUpdated',
+      'AddonInstalled',
+      'AddonUninstalled',
+      'SecretRevealed',
+      'ServerRestarted',
+      'ServerUpdateStarted',
+    ],
   },
   recordings: { types: ['RecordingScheduled', 'RecordingDeleted'] },
 } satisfies Record<string, Omit<ActivityQuery, 'limit'>>
@@ -103,6 +112,8 @@ const typeIcons: Record<string, Icon> = {
   AddonInstalled: PuzzlePieceIcon,
   AddonUninstalled: PuzzlePieceIcon,
   SecretRevealed: KeyIcon,
+  ServerRestarted: ArrowClockwiseIcon,
+  ServerUpdateStarted: CloudArrowDownIcon,
   RecordingScheduled: RecordIcon,
   RecordingDeleted: RecordIcon,
 }

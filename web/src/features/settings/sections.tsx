@@ -2,6 +2,7 @@ import { ArrowSquareOutIcon, PlayIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useId, useState, type ReactNode } from 'react'
 import {
+  fetchServerActions,
   fetchStatus,
   queryKeys,
   revealServerSecret,
@@ -102,6 +103,12 @@ export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => R
 function General({ form, update, error, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
+  // Polyfin Desktop starts Polyfin again itself: nothing to confirm.
+  const desktop =
+    useQuery({
+      queryKey: queryKeys.serverActions,
+      queryFn: ({ signal }) => fetchServerActions(signal),
+    }).data?.restart === 'desktop'
   return (
     <SettingsGroup>
       <FieldRow
@@ -192,6 +199,46 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
           <MetricsToken saved={form.metricsTokenSet} />
         </SettingRow>
       )}
+      {!desktop && (
+        <SwitchRow
+          anchor="restart-confirmed"
+          label={s.restartConfirmed}
+          help={s.restartConfirmedHelp}
+          checked={form.restartConfirmed}
+          onChange={(restartConfirmed) => update({ restartConfirmed })}
+        />
+      )}
+      <FieldRow
+        anchor="update-tool-url"
+        label={s.updateToolUrl}
+        help={s.updateToolUrlHelp}
+        error={error('update-tool-url')}
+      >
+        <TextInput
+          value={form.updateToolUrl}
+          onValue={(updateToolUrl) => update({ updateToolUrl })}
+          placeholder="http://updater:8080/v1/update"
+          maxLength={limits('updateToolUrl').max}
+          autoComplete="off"
+          spellCheck={false}
+          mono
+          className="max-w-md"
+        />
+      </FieldRow>
+      <SettingRow
+        anchor="update-tool-token"
+        className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+      >
+        <SecretField
+          label={s.updateToolToken}
+          help={s.updateToolTokenHelp}
+          saved={form.updateToolTokenSet}
+          value={form.updateToolToken}
+          onValue={(updateToolToken) => update({ updateToolToken })}
+          reveal={() => revealServerSecret('updateToolToken')}
+          error={error('update-tool-token')}
+        />
+      </SettingRow>
     </SettingsGroup>
   )
 }

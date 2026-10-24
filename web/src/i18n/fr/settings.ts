@@ -63,6 +63,15 @@ const settings: typeof en = {
     updateCheck: 'Rechercher les nouvelles versions',
     updateCheckHelp:
       'Une fois par jour, et peu après le démarrage, Polyfin demande à GitHub sa dernière version publiée, en n’envoyant que sa propre version. Une version plus récente s’affiche sur l’Accueil et dans Système › Santé, et est envoyée aux notifications « Nouvelle version ». Désactivé, Polyfin ne contacte jamais GitHub.',
+    restartConfirmed: 'Polyfin est redémarré quand il s’arrête',
+    restartConfirmedHelp:
+      'Activez-le une fois que le conteneur de Polyfin a une politique de redémarrage qui le relance, comme unless-stopped, always ou on-failure, ou que son gestionnaire de services le fait. Polyfin ne peut pas voir la politique de redémarrage de son conteneur sans le socket Docker, qui ne lui est jamais donné : tant que c’est désactivé, Redémarrer sur l’Accueil avertit que Polyfin pourrait ne pas revenir.',
+    updateToolUrl: 'Adresse de l’outil de mise à jour',
+    updateToolUrlHelp:
+      'L’API de mise à jour d’un outil que vous faites tourner à côté de Polyfin pour mettre à jour son conteneur, comme http://updater:8080/v1/update. « Mettre à jour maintenant », sur l’Accueil, lui envoie une requête POST sans corps. Vide, ce bouton est masqué.',
+    updateToolToken: 'Jeton de l’outil de mise à jour',
+    updateToolTokenHelp:
+      'Envoyé dans un en-tête Authorization: Bearer avec chaque requête, si l’outil en demande un. Stocké chiffré, comme les autres secrets.',
     localDiscovery: 'Répondre à la découverte sur le réseau local',
     localDiscoveryHelp:
       'Les applications Jellyfin et Emby qui cherchent des serveurs sur le réseau local trouvent Polyfin et l’affichent, sans qu’il faille saisir son adresse. Elles le demandent sur le port UDP 7359, et Polyfin ne répond qu’aux adresses du réseau local. S’applique tout de suite, sans redémarrage. Avec Docker, il faut le réseau de l’hôte ou le port 7359/udp publié : voir la documentation d’installation.',

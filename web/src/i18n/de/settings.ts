@@ -64,6 +64,15 @@ const settings: typeof en = {
     updateCheck: 'Nach neuen Versionen suchen',
     updateCheckHelp:
       'Einmal täglich und kurz nach dem Start fragt Polyfin bei GitHub die neueste Veröffentlichung ab und sendet dabei nur seine Version. Eine neuere Version wird auf der Startseite und unter System › Systemzustand angezeigt und an die Benachrichtigungen für neue Versionen gesendet. Wenn aus, kontaktiert Polyfin GitHub nie.',
+    restartConfirmed: 'Polyfin wird nach dem Beenden neu gestartet',
+    restartConfirmedHelp:
+      'Einschalten, sobald der Container von Polyfin eine Neustart-Richtlinie hat, die ihn wieder startet, etwa unless-stopped, always oder on-failure, oder sein Dienstverwalter das tut. Ohne den Docker-Socket, den Polyfin nie erhält, sieht Polyfin die Neustart-Richtlinie seines Containers nicht: Solange dies aus ist, warnt Neu starten auf der Startseite, dass Polyfin vielleicht nicht zurückkommt.',
+    updateToolUrl: 'Adresse des Update-Werkzeugs',
+    updateToolUrlHelp:
+      'Die Update-API eines Werkzeugs, das neben Polyfin läuft und seinen Container aktualisiert, etwa http://updater:8080/v1/update. Jetzt aktualisieren auf der Startseite sendet ihm eine POST-Anfrage ohne Inhalt. Leer blendet die Schaltfläche aus.',
+    updateToolToken: 'Token des Update-Werkzeugs',
+    updateToolTokenHelp:
+      'Wird bei jeder Anfrage als Authorization: Bearer gesendet, wenn das Werkzeug eines verlangt. Verschlüsselt gespeichert, wie die anderen Geheimnisse.',
     localDiscovery: 'Auf Suche im lokalen Netzwerk antworten',
     localDiscoveryHelp:
       'Jellyfin- und Emby-Apps, die im lokalen Netzwerk nach Servern suchen, finden Polyfin und listen es auf, sodass seine Adresse nicht eingetippt werden muss. Sie fragen über UDP-Port 7359, und Polyfin antwortet nur Adressen aus dem lokalen Netzwerk. Wirkt sofort, ohne Neustart. In Docker ist dafür Host-Networking oder der veröffentlichte Port 7359/udp nötig: siehe Installationsdokumentation.',

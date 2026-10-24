@@ -337,6 +337,18 @@ const common: typeof en = {
       'Wähle aus der Liste die Apps, die Sammlungsbibliotheken nach Sammlung anzeigen.',
     invalid_remuxdb_url:
       'Die RemuxDB-Adresse muss eine Webadresse sein, die mit http:// oder https:// beginnt.',
+    invalid_update_tool_url:
+      'Die Adresse des Update-Werkzeugs muss eine Webadresse sein, die mit http:// oder https:// beginnt, ohne Benutzername und Fragment.',
+    invalid_update_tool_token:
+      'Das Token des Update-Werkzeugs enthält keine Leerzeichen und höchstens 1024 Zeichen.',
+    restart_unconfirmed:
+      'Polyfin weiß nicht, ob es wieder gestartet wird: Bestätige zuerst die Warnung.',
+    no_update: 'Polyfin Desktop bietet dieses Update gerade nicht an.',
+    not_desktop: 'Polyfin läuft nicht in Polyfin Desktop.',
+    no_update_tool: 'In den allgemeinen Einstellungen ist kein Update-Werkzeug eingetragen.',
+    update_tool_timeout:
+      'Das Update-Werkzeug hat nicht innerhalb von 50 Sekunden geantwortet: Vielleicht aktualisiert es noch.',
+    update_tool_unreachable: 'Das Update-Werkzeug war nicht erreichbar.',
     invalid_public_address:
       'Die öffentliche Adresse muss eine Webadresse sein, die mit http:// oder https:// beginnt, ohne Abfrageparameter.',
     invalid_local_address:

@@ -306,6 +306,18 @@ const common = {
       'Choose the apps that show collection libraries by collection from the list.',
     invalid_remuxdb_url:
       'The RemuxDB address must be a web address starting with http:// or https://.',
+    invalid_update_tool_url:
+      'The update tool address must be a web address starting with http:// or https://, without a user name or a fragment.',
+    invalid_update_tool_token:
+      'The update tool token holds no spaces, and 1024 characters at most.',
+    restart_unconfirmed:
+      'Polyfin cannot tell whether something starts it again: confirm the warning first.',
+    no_update: 'Polyfin Desktop offers no such update now.',
+    not_desktop: 'Polyfin does not run in Polyfin Desktop.',
+    no_update_tool: 'No update tool is set under Settings › General.',
+    update_tool_timeout:
+      'The update tool did not answer within 50 seconds: it may still be updating.',
+    update_tool_unreachable: 'The update tool could not be reached.',
     invalid_public_address:
       'The public address must be a web address starting with http:// or https://, without a query.',
     invalid_local_address:

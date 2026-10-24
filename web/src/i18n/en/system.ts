@@ -424,6 +424,7 @@ const system = {
         torrentProxyPassword: 'Torrents’ SOCKS5 proxy password',
         torrentWireGuard: 'Torrents’ WireGuard configuration',
         metricsToken: 'Metrics token',
+        updateToolToken: 'Update tool token',
       },
       connectionOf: (service: string, user: string) => `${service} connection of ${user}`,
       targetOf: (target: string, user: string) => `notification target “${target}” of ${user}`,
