@@ -77,6 +77,16 @@ Stremio catalogs become Jellyfin libraries. Stremio streams become versions of t
 
 - Versions are Jellyfin media sources.
 
+### The order of libraries
+
+Jellyfin apps list the server's libraries in the order of **Content › Libraries**. To move a library, drag its row by the grip at its start, with the mouse or a finger: a line shows where it will land, and a list too long for its box scrolls while the row is held near its edge. Escape, during a drag, leaves the library where it was. The up and down arrows of the row move it too, from the keyboard as well, and screen readers announce each move. The new order is saved with the list's **Save**, like the libraries' names: until then, apps keep the order saved last.
+
+Smart lists shown as libraries, and users' own libraries, come after the server's libraries. Users order their own libraries under **My sources** the same way, by dragging or with the arrows. Each user can also order all of their libraries in the web player's **Settings › Home**: once they have saved that page, their order wins over the administrator's, as in Jellyfin.
+
+**Compared with Jellyfin:**
+
+- Jellyfin lists a user's libraries in their order from **Settings › Home**, then by name ([`UserViewManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/UserViewManager.cs#L140-L157), Jellyfin 12.3). It has no order an administrator sets for every user: in Polyfin, the order of **Content › Libraries** takes the place of the order by name.
+
 ### What catalogs list
 
 An addon gives each catalog, and each title, a Stremio type, which decides what the titles are in Jellyfin apps:
