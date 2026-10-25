@@ -72,13 +72,17 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	result := chosen{unreadable: map[int]bool{}}
 	at := openedIndex(opened, p.versions)
 	allowed := h.Accounts.Conversions(user)
-	// The analyses and keyframe indexes started are kept whatever the app
-	// does meanwhile, for the next play. The first candidate is read as the
-	// play's; the others, read alongside in case it does not play, in the
-	// background, giving way to playbacks (see playback.Background). A
+	// The analyses and keyframe indexes started run to their end whatever
+	// the app does meanwhile, for the next play (see playback.Analyze). The
+	// tries stop waiting for them once the play is decided, or gave up: no
+	// goroutine of the play is left behind. The first candidate is read as
+	// the play's; the others, read alongside in case it does not play, in
+	// the background, giving way to playbacks (see playback.Background). A
 	// torrent, which only a playback reads, is read as the play's wherever
 	// it comes: the play joins its swarm.
-	detached := r.WithContext(context.WithoutCancel(r.Context()))
+	tries, stop := context.WithCancel(context.WithoutCancel(r.Context()))
+	defer stop()
+	detached := r.WithContext(tries)
 	aside := r.WithContext(playback.Background(detached.Context()))
 	try := func(n int, analyze bool) tried {
 		i := c.order[n]
@@ -109,6 +113,10 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 		if analyze {
 			var err error
 			if analysis, err = h.Playback.Analyze(detached.Context(), version); err != nil {
+				if detached.Context().Err() != nil {
+					// The play is decided, or gave up: it waits no more.
+					return tried{n: n}
+				}
 				h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
 				return tried{n: n, unreadable: true, unstarted: version.Torrent != nil && playback.TorrentUnstarted(err)}
 			}
@@ -122,6 +130,9 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 		permits := h.convertible(allowed, user, version)
 		d, ok := h.decide(detached, p, i, version, sourceID(opened, version, i == at), analysis, request, permits, i == c.named && !listed)
 		if !ok {
+			if detached.Context().Err() != nil {
+				return tried{n: n}
+			}
 			if permits != allowed {
 				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.Addon)
 			} else {

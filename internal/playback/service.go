@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -347,7 +348,8 @@ func (s *Service) TorrentPlayWait() time.Duration {
 // the title cannot be played now, rather than that it suits no app.
 func TorrentUnstarted(err error) bool {
 	var unstarted *torrent.StartError
-	return torrent.RouteFailure(err) || errors.As(err, &unstarted) || errors.Is(err, errNoTorrents) || errors.Is(err, torrent.ErrAtCap)
+	return torrent.RouteFailure(err) || errors.As(err, &unstarted) || errors.Is(err, errNoTorrents) || errors.Is(err, torrent.ErrAtCap) ||
+		errors.Is(err, source.ErrStalled)
 }
 
 // Unstarted reports whether a version is kept as failed for a torrent
@@ -420,7 +422,7 @@ func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Anal
 	var data []byte
 	err := s.db.QueryRow(ctx, "SELECT analysis FROM media_analyses WHERE version_id = $1", version).Scan(&data)
 	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Warn("Reading a media analysis failed", "error", err)
 		}
 		return media.Analysis{}, false
@@ -465,6 +467,12 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 		}
 		return analysis, nil
 	}
+	if err := ctx.Err(); err != nil {
+		// Its caller stopped waiting, as a play decided without it: no
+		// analysis starts for it, which a lookup cut short would take for
+		// one never made.
+		return media.Analysis{}, err
+	}
 	if s.ReadsInput(version) {
 		return s.analyzeInput(ctx, version)
 	}
@@ -499,6 +507,9 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 	if analysis, ok := s.Analyzed(ctx, version.ID); ok {
 		return analysis, nil
 	}
+	if err := ctx.Err(); err != nil {
+		return media.Analysis{}, err
+	}
 	if failure, failed := s.failures.Get(version.ID); failed {
 		return media.Analysis{}, failure.err
 	}
@@ -515,11 +526,23 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		defer src.Release()
 		defer src.Urge()()
 	}
-	result, err, _ := s.flight.Do("analyze "+version.ID.String(), func() (any, error) {
+	result, err := s.shared(ctx, "analyze "+version.ID.String(), func() (any, error) {
 		// Requests for the version share this analysis, and it is kept: it
 		// runs to the end, and is saved, even once the request that started
-		// it is canceled, as when an app stops waiting.
+		// it is canceled, as when an app stops waiting. Started for a
+		// playback, it reads its source as a playback to its end, those
+		// waiting for it gone or not: a torrent stays joined meanwhile.
 		ctx := context.WithoutCancel(ctx)
+		release, held := s.Hold(ctx, version)
+		if held != nil {
+			return nil, held
+		}
+		defer release()
+		if !background(ctx) {
+			src := s.open(version)
+			defer src.Release()
+			defer src.Urge()()
+		}
 		// ffprobe reads through the source cache, so that confined sources
 		// stay confined, required headers are sent, and what it reads is
 		// kept for playback.
@@ -544,9 +567,12 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		}
 		if version.Torrent != nil {
 			// A torrent's swarm takes longer to start than ffprobe's timeout
-			// allows: its first bytes are waited for first.
+			// allows: its first bytes are waited for first, its size known
+			// or not, as when a read of it stalled before.
 			head, cancel := context.WithTimeout(probing, torrentHead)
-			_, err = src.Size(head)
+			if _, err = src.ReadAt(head, make([]byte, 1), 0); errors.Is(err, io.EOF) {
+				err = nil
+			}
 			cancel()
 		}
 		if err == nil {
@@ -653,6 +679,19 @@ func background(ctx context.Context) bool {
 	return marked
 }
 
+// shared runs fn once for the requests asking the same key at once, as
+// singleflight does, but a request whose ctx ends stops waiting for it:
+// a play that gave up leaves no goroutine behind, while fn runs to its end
+// for those still waiting and for the next play, within its own bound.
+func (s *Service) shared(ctx context.Context, key string, fn func() (any, error)) (any, error) {
+	select {
+	case result := <-s.flight.DoChan(key, fn):
+		return result.Val, result.Err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // standIn reports whether an analysis is of a clip too short to be the
 // title: under a tenth of its runtime, which leaves room for runtimes that
 // addons round or give per series rather than per episode.
@@ -678,9 +717,11 @@ type versionFailure struct {
 // not tried again for failureTTL, unless its addon changes or its item is
 // tried again (see Retry and RetryItem).
 func (s *Service) fail(version library.Version, err error) {
-	if torrent.RouteFailure(err) || errors.Is(err, torrent.ErrAtCap) {
+	if torrent.RouteFailure(err) || errors.Is(err, torrent.ErrAtCap) || version.Torrent != nil && errors.Is(err, source.ErrStalled) {
 		// The torrents' route failed, or as many torrents ran as the
-		// settings allow, not the file: it plays once that changes.
+		// settings allow, or a torrent's swarm sent nothing for a while,
+		// not the file: it plays once that changes, and the next play
+		// tries it again.
 		return
 	}
 	s.failures.Put(version.ID, versionFailure{addon: version.Origin.Addon, item: version.Item, err: err})

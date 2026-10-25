@@ -611,7 +611,9 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 	if request.DeviceProfile != nil && decision.HLS {
 		plan, err := h.Playback.Plan(r.Context(), version)
 		if err != nil {
-			h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
+			if r.Context().Err() == nil {
+				h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
+			}
 			return decided{}, false
 		}
 		if plan.Grid() && decision.Video == nil {

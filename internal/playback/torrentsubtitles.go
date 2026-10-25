@@ -271,7 +271,7 @@ func (s *Service) listTorrentSubtitles(ctx context.Context, version library.Vers
 	if err != nil {
 		return nil
 	}
-	_, err, _ = s.flight.Do("torrent subtitles "+version.ID.String(), func() (any, error) {
+	_, err = s.shared(ctx, "torrent subtitles "+version.ID.String(), func() (any, error) {
 		stop := s.torrents.Play(spec)
 		defer stop()
 		wait, cancel := context.WithTimeout(context.WithoutCancel(ctx), torrentHeaders)

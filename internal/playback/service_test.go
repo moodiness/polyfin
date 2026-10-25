@@ -274,13 +274,36 @@ func TestAnalysesAreSavedWhenTheAppStopsWaiting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, _ := fakeProbe(t, string(probe), false)
+	path, runs := fakeProbe(t, string(probe), false)
+	// ffprobe answers once released.
+	released := filepath.Join(t.TempDir(), "released")
+	script, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held := strings.Replace(string(script), "cat ", "while [ ! -f "+released+" ]; do sleep 0.05; done\ncat ", 1)
+	if err := os.WriteFile(path, []byte(held), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	s := newService(t, &fileSource{data: make([]byte, 1000)}, path, nil)
 	version := library.Version{ID: accounts.ID{8}, URL: "https://93.184.216.34/movie.mp4", Size: 1234}
-	// The app stopped waiting before the analysis ended.
+	// The app stops waiting once the analysis started, before it ended.
 	ctx, cancel := context.WithCancel(t.Context())
+	analyzed := make(chan error, 1)
+	go func() {
+		_, err := s.Analyze(ctx, version)
+		analyzed <- err
+	}()
+	for deadline := time.Now().Add(time.Minute); runs() == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("ffprobe did not start")
+		}
+	}
 	cancel()
-	if _, err := s.Analyze(ctx, version); err != nil {
+	if err := <-analyzed; !errors.Is(err, context.Canceled) {
+		t.Fatalf("the request that stopped waiting got %v", err)
+	}
+	if err := os.WriteFile(released, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// Polyfin, once restarted, finds it in the database.
@@ -289,8 +312,13 @@ func TestAnalysesAreSavedWhenTheAppStopsWaiting(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer restarted.Close()
-	if _, ok := restarted.Analyzed(t.Context(), version.ID); !ok {
-		t.Error("the analysis was not saved")
+	for deadline := time.Now().Add(time.Minute); ; time.Sleep(20 * time.Millisecond) {
+		if _, ok := restarted.Analyzed(t.Context(), version.ID); ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the analysis was not saved")
+		}
 	}
 }
 

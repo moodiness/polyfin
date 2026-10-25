@@ -110,6 +110,16 @@ func transportStream(analysis media.Analysis) bool {
 	return slices.Contains(strings.Split(analysis.Format, ","), "mpegts")
 }
 
+// keyframesTime bounds a keyframe index read, which reads the file's head
+// and its index, a few blocks of it, through the source cache. Its
+// connections fail once their source sends nothing for their stall
+// timeout (a piece's wait for a torrent) past their tries, so a read that
+// goes on ends well within it: longer than a torrent's first bytes take
+// (torrentHead) and a piece's wait more. It ends a read that would wait
+// for good, as for a block no connection fetches, which then fails and is
+// tried again at the next play.
+const keyframesTime = 3 * time.Minute
+
 // keyframes returns a version's keyframe times: remembered, saved, or read
 // from its container's index through the source cache, with where each
 // keyframe starts in the file, kept for Warm. A version whose index cannot
@@ -132,10 +142,18 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		defer src.Release()
 		defer src.Urge()()
 	}
-	result, err, _ := s.flight.Do("keyframes "+version.ID.String(), func() (any, error) {
+	result, err := s.shared(ctx, "keyframes "+version.ID.String(), func() (any, error) {
 		// Shared and kept like an analysis: read to the end, and saved, even
-		// once the request that started it is canceled.
-		ctx := context.WithoutCancel(ctx)
+		// once the request that started it is canceled, within
+		// keyframesTime. Started for a playback, it reads its source as a
+		// playback (see analyze).
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), keyframesTime)
+		defer cancel()
+		if !background(ctx) {
+			src := s.open(version)
+			defer src.Release()
+			defer src.Urge()()
+		}
 		if times, ok := s.savedKeyframes(ctx, version.ID); ok {
 			return times, nil
 		}
