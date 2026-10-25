@@ -207,6 +207,8 @@ type Handler struct {
 	dlna *dlnaPlays
 	// torrents are the torrents devices last played (see torrentswitch.go).
 	torrents *torrentPlays
+	// chosen is the version each device's last PlaybackInfo chose.
+	chosen *chosenVersions
 	// titles are the play sessions devices reported for the title they
 	// play (see leftplayback.go).
 	titles *titleSessions
@@ -233,6 +235,7 @@ func New(options Options) *Handler {
 		downloads:      newDownloadPlays(),
 		dlna:           newDLNAPlays(),
 		torrents:       newTorrentPlays(),
+		chosen:         newChosenVersions(),
 		titles:         newTitleSessions(),
 	}
 	// Sessions read the handler's clock, which tests set.

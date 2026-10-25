@@ -16,17 +16,6 @@ import (
 type torrentPlays struct {
 	mu    sync.Mutex
 	plays map[accounts.ID]deviceTorrent
-	// chosen is, by device, the version its last PlaybackInfo chose and
-	// that version's title: apps playing a title's first version as it is,
-	// as jellyfin-web does, report the title's own identifier and no play
-	// session, which name no version (see torrentOf).
-	chosen map[accounts.ID]chosenVersion
-}
-
-// chosenVersion is a version PlaybackInfo chose for a device, and its
-// title.
-type chosenVersion struct {
-	title, version accounts.ID
 }
 
 // deviceTorrent is a torrent a device played: its info hash, the user and
@@ -38,18 +27,7 @@ type deviceTorrent struct {
 }
 
 func newTorrentPlays() *torrentPlays {
-	return &torrentPlays{plays: map[accounts.ID]deviceTorrent{}, chosen: map[accounts.ID]chosenVersion{}}
-}
-
-// choseVersion notes the version PlaybackInfo chose for a device's play
-// of a title.
-func (h *Handler) choseVersion(device, title, version accounts.ID) {
-	if device == (accounts.ID{}) {
-		return
-	}
-	h.torrents.mu.Lock()
-	h.torrents.chosen[device] = chosenVersion{title: title, version: version}
-	h.torrents.mu.Unlock()
+	return &torrentPlays{plays: map[accounts.ID]deviceTorrent{}}
 }
 
 // othersRecently is how long a torrent another user stopped stays theirs:
@@ -164,25 +142,10 @@ func (h *Handler) torrentsRead(device accounts.ID) map[string]bool {
 }
 
 // torrentOf is the info hash of the torrent a device's playback reads,
-// empty for none: that of the version its play session names, else of
-// its media source when that is a version, else of the version the
-// device's PlaybackInfo chose for the title it plays. jellyfin-web
-// playing a title's first version as it is reports no play session, and
-// the title's own identifier as its media source.
+// empty for none: that of the version it plays (see playedVersion).
 func (h *Handler) torrentOf(device accounts.ID, playing playback.NowPlaying) string {
-	if grant, err := h.Playback.Signer().Verify(playing.PlaySessionID); err == nil {
-		return h.versionTorrent(grant.Version)
-	}
-	if id, err := accounts.ParseID(playing.MediaSourceID); err == nil {
-		if hash := h.versionTorrent(id); hash != "" {
-			return hash
-		}
-	}
-	h.torrents.mu.Lock()
-	chosen, ok := h.torrents.chosen[device]
-	h.torrents.mu.Unlock()
-	if ok && chosen.title == h.titleOf(playing.Item) {
-		return h.versionTorrent(chosen.version)
+	if version, ok := h.playedVersion(device, playing); ok {
+		return h.versionTorrent(version)
 	}
 	return ""
 }
