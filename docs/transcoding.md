@@ -11,7 +11,7 @@ Polyfin picks the lightest way an app can play a file:
 - **Audio conversion:** when the app cannot take the audio, Polyfin converts the audio.
 - **Video conversion:** when the app cannot take the video, or must have image subtitles (PGS, VobSub, DVB) burned in, Polyfin converts the video, HDR to SDR included. A text copy of a PGS or VobSub track, with **Turn picture subtitles into text** on, spares that conversion once it is ready. See [Subtitles](subtitles.md).
 
-Video converts on a GPU when one is available, with the methods of the system Polyfin runs on (see [GPU methods per system](#gpu-methods-per-system)): an NVIDIA GPU through NVENC, or an AMD or Intel GPU through VAAPI, on Linux. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. Converted H.264 is in the High profile the master playlist announces, from x264 on the processor as from every GPU; converted HEVC is in the Main profile. For how apps choose between versions of a title, see [Playback](playback.md).
+Video converts on a GPU when one is available, with the methods of the system Polyfin runs on (see [GPU methods per system](#gpu-methods-per-system)): an NVIDIA GPU through NVENC, or an AMD or Intel GPU through VAAPI, on Linux. Otherwise it converts on the processor. A GPU keeps the source's size, up to 4K; the processor converts to 1080p at most. Converted H.264 is in the High profile the master playlist announces, from x264 on the processor as from every GPU, unless the app's profile allows only Main or Baseline (see [What the app allows](#what-the-app-allows)); converted HEVC is in the Main profile. For how apps choose between versions of a title, see [Playback](playback.md).
 
 Converted video keeps the colors its source states: range, matrix, transfer and primaries, as Polyfin's analysis reads them, from the video track or, when only there, from its container, such as Matroska's color information. FFmpeg's encoders write the colors the decoded frames carry, and its HEVC decoder knows only those of the video track, so Polyfin tags the converted frames with the source's itself. A color the source does not state stays unstated, and apps pick their own. HDR tone mapped to SDR is tagged BT.709, by the GPU's or the processor's tone mapping.
 
@@ -26,11 +26,32 @@ Converted video is never larger than its source. It is smaller when one of these
 - **HDR converted by the processor:** up to **Maximum quality of HDR converted by the processor**, 720p or 1080p with **Automatic**, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 - **Quality group:** the user's, set on their page under **Users**.
 - **Maximum quality of converted video:** under **Settings › Conversion (transcoding)**.
+- **The app's profile:** the largest picture, or the highest codec level, the app says it decodes (see [What the app allows](#what-the-app-allows)).
 - **Bitrate:** the bitrate limit leaves too little for a taller picture. The limit is the app's, from its quality setting, or the user's **Maximum quality** when that is lower. The video gets the limit less the bitrate of the audio sent: the converted audio's (see [Audio bitrate](#audio-bitrate)), or the track's own when it is copied. A copied track whose bitrate is not known, as AC-3 or DTS in a Matroska file often is, counts as converted audio of its channels would: 128 kb/s in mono, 384 kb/s up to five channels, 640 kb/s from six. A lossless track of several Mb/s converted to stereo AAC at 384 kb/s thus leaves 1080p 9.6 Mb/s within 10 Mb/s. The `TranscodingUrl` writes the two as `VideoBitrate` and `AudioBitrate`.
 
-When two limits are equal, the user's quality group is named first, then **Maximum quality of converted video**, then the GPU or the processor. The bitrate is named only when it allows less than all of them.
+When two limits are equal, the user's quality group is named first, then **Maximum quality of converted video**, then the app's profile, then the GPU or the processor. The bitrate is named only when it allows less than all of them.
 
-On Home in the admin app, a playback's **Details** show which one limited the size, in the **Smaller than the source** row: for instance "720p at most: HDR converted by the processor", "Quality group: 720p" or "Bitrate allowed by the app: 5.6 Mbps". The row does not show when the video keeps the source's size.
+On Home in the admin app, a playback's **Details** show which one limited the size, in the **Smaller than the source** row: for instance "720p at most: HDR converted by the processor", "Quality group: 720p", "Quality allowed by the app: 720p" or "Bitrate allowed by the app: 5.6 Mbps". The row does not show when the video keeps the source's size.
+
+### What the app allows
+
+An app's device profile can limit the video it decodes, in its codec profiles: for instance, H.264 no taller than 720 lines. A source above such a limit does not play as it is, and Polyfin converts it within the limit, as Jellyfin does. It reads the conditions of the codec profiles of the codecs the app takes converted video in (its transcoding profile's `VideoCodec`), in the transcoding profile's container, whose `ApplyConditions` the source meets; and, when the video cannot play as it is or the file is above the bitrate limit, those of the transcoding profile itself. A condition applies whether `IsRequired` is set or not; one about another codec, which the app is not sent converted, does not.
+
+- **`Width` and `Height`:** the picture is scaled down to fit both, keeping its shape: a 1080p source under `Height` 720 converts to 1280×720, and under `Width` 1280 too. Its bitrate follows the smaller picture (see [Bitrate of converted video](#bitrate-of-converted-video)). The `TranscodingUrl` writes them as `MaxWidth` and `MaxHeight`.
+- **`VideoBitrate`:** the video's bitrate stays within it, and the picture is no taller than that bitrate allows, as under a bitrate limit. The `TranscodingUrl` writes the lower of the two as `VideoBitrate`.
+- **`VideoFramerate`:** a source above it is brought down to it, frames dropped, and its master playlist's `FRAME-RATE` says so. The `TranscodingUrl` writes it as `MaxFramerate`.
+- **`VideoLevel`:** Polyfin declares the lowest level that holds the picture it sends. When that is above the app's, the picture goes down the ladder until a level the app decodes holds it: under H.264 level 3.1, 1080p converts to 720p. The `TranscodingUrl` writes it as `h264-level` or `hevc-level`.
+- **`VideoProfile`:** converted H.264 is in the highest of High, Main and Baseline the condition allows, Baseline as constrained baseline, under the name each encoder gives it. A condition allowing none of the three, such as `high 10` alone, leaves High. HEVC stays in Main. The `TranscodingUrl` writes the profiles allowed as `h264-profile`.
+
+The other conditions, about reference frames, bit depth, dynamic range, codec tag, anamorphic or interlaced video, decide only whether the source plays as it is or its video is copied, as in Jellyfin, whose encoder does not read them either.
+
+**Compared with Jellyfin:**
+
+- Jellyfin applies these conditions in `StreamBuilder.BuildStreamVideoItem` and `ApplyTranscodingConditions`, its encoder scales the picture within `MaxWidth` and `MaxHeight` (`EncodingHelper.GetFixedOutputSize`), aims for the `VideoBitrate`, drops frames above `MaxFramerate` (`GetFramerateParam`, `-r`), and passes the profile and the level asked to the encoder (`GetVideoQualityParam`). Polyfin does the same, but for the level and the profile.
+- Jellyfin passes the app's level to the encoder whatever the picture, starting from the source's own level, so that a 1080p picture can be declared at a level that does not hold it. Polyfin keeps the level it computes from the picture and makes the picture smaller instead.
+- Jellyfin passes the encoder the profile the source has when the condition allows it, else the first the condition lists. Polyfin writes the highest the condition allows.
+- Jellyfin keeps the source's whole bitrate when the picture is made smaller. Polyfin keeps the share of it the smaller picture is, as for its own caps.
+- Under the app's `VideoBitrate`, Jellyfin decides the audio under the app's bitrate limit only. Polyfin counts that cap, with the audio sent, as the limit the audio is decided under too, so that PlaybackInfo and the conversion, which reads only the `TranscodingUrl`'s bitrates, agree.
 
 ### Bitrate of converted video
 
@@ -42,7 +63,7 @@ Converted video keeps about its source's bitrate, as in Jellyfin, up to what the
 - More for a low bitrate: up to two and a half times below 3 Mb/s, so that a small source loses less to a second encoding.
 - A source whose bitrate is not known gets the usual bitrate of its height: 40 Mb/s for 4K, 20 for 1440p, 10 for 1080p, 5 for 720p, 3 for 540p, 2 for 480p and 1 for 360p.
 
-A 15 Mb/s 10-bit HEVC movie in 1080p thus converts to H.264 at 26 Mb/s with no limit, and at 9.6 Mb/s within 10 Mb/s with its audio converted to stereo. The user's quality group and **Maximum quality of converted video** lower the bitrate with the picture's size.
+A 15 Mb/s 10-bit HEVC movie in 1080p thus converts to H.264 at 26 Mb/s with no limit, and at 9.6 Mb/s within 10 Mb/s with its audio converted to stereo. The user's quality group, **Maximum quality of converted video** and the app's profile lower the bitrate with the picture's size.
 
 **Peaks:** the encoder lets the video peak at one and a half times its bitrate, over a buffer of two seconds of it. Under the app's or the user's limit, the peak stays within what the limit leaves once the audio sent is taken off, so that video and audio together never go above the limit: where the limit sets the bitrate, as with 10 Mb/s above, the video peaks at its bitrate. Within 3 Mb/s, 720p H.264 aims for 2.6 Mb/s and peaks at 2.6 Mb/s, with 384 kb/s of audio. With **H.264 quality** or **HEVC quality** set, the encoder aims for that quality, and peaks as much. The master playlist's `BANDWIDTH` is that peak with the audio sent, counted as above, and its `AVERAGE-BANDWIDTH` the video's bitrate with that audio: within 3 Mb/s, both are 3000000.
 
