@@ -2,6 +2,7 @@ package playback
 
 import (
 	"math/bits"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -89,6 +90,14 @@ type Decision struct {
 	Progressive bool
 	Video       *VideoConversion
 	Audio       *AudioConversion
+	// Caps are what the app's profile allows the video converted, which
+	// the TranscodingUrl carries (see AppCaps); Limit, when the profile's
+	// bitrate cap is below what the bitrate limit leaves the video, the
+	// limit the conversion counts with: that cap with the audio sent, as
+	// HLS requests read the two back. Both are zero when the video is not
+	// converted.
+	Caps  AppCaps
+	Limit int64
 }
 
 // Streamed reports whether Polyfin streams the source, copied or
@@ -235,10 +244,17 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 	} else {
 		decision.Container = singleContainer(source.Container, nil, profile.DirectPlayProfiles)
 		if t := decision.Transcoding; t != nil {
-			streamed, video, audio := d.stream(t, options, limit, reasons&containerBitrateExceedsLimit != 0 || tall)
+			reasons |= d.transcodeReasons(t)
+			caps := d.appCaps(t, reasons)
+			streamed, video, audio, played := d.stream(t, options, limit, reasons&containerBitrateExceedsLimit != 0 || tall, caps)
 			decision.HLS, decision.Progressive = streamed && strings.EqualFold(t.Protocol, "hls"), streamed && !strings.EqualFold(t.Protocol, "hls")
 			decision.Video, decision.Audio = video, audio
-			reasons |= d.transcodeReasons(t)
+			if video != nil {
+				decision.Caps = caps
+				if played != limit {
+					decision.Limit = played
+				}
+			}
 			if reasons == 0 {
 				reasons = directPlayError
 			}
@@ -468,6 +484,120 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 	return why
 }
 
+// hlsVideoCodecs are the video codecs Jellyfin streams over HLS.
+var hlsVideoCodecs = []string{"h264", "hevc", "vp9", "av1"}
+
+// videoReasonBits are Jellyfin's VideoReasons: those about the video.
+const videoReasonBits = videoCodecNotSupported | videoResolutionNotSupported | anamorphicVideoNotSupported | interlacedVideoNotSupported |
+	videoBitDepthNotSupported | videoBitrateNotSupported | videoFramerateNotSupported | videoLevelNotSupported | refFramesNotSupported |
+	videoRangeTypeNotSupported | videoProfileNotSupported
+
+// appCaps are what the app's profile allows video converted with t, as
+// Jellyfin's StreamBuilder applies its conditions to what it converts to
+// (BuildStreamVideoItem, ApplyTranscodingConditions): the conditions of
+// the Video codec profiles naming one of the codecs t converts to, over
+// HLS those Jellyfin streams so, in t's container, whose ApplyConditions
+// the source meets, the first profile prevailing; then, when the video
+// does not play as it is or the source is above the bitrate limit (in
+// reasons), those of t itself. Width, Height, VideoBitrate and
+// VideoFramerate cap whatever the codec; VideoLevel and VideoProfile
+// apply to the codec of the profile naming them, never in t's own. Equals
+// sets the value and LessThanEqual lowers it, whether the condition is
+// required or not; other comparisons, and values that are not numbers
+// where numbers are read, are left out, as Jellyfin leaves them.
+func (d *decider) appCaps(t *TranscodingProfile, reasons reason) AppCaps {
+	var caps AppCaps
+	hlsStream := strings.EqualFold(t.Protocol, "hls")
+	var codecs []string
+	for codec := range strings.SplitSeq(t.VideoCodec, ",") {
+		if codec = strings.ToLower(strings.TrimSpace(codec)); codec != "" && (!hlsStream || slices.Contains(hlsVideoCodecs, codec)) {
+			codecs = append(codecs, codec)
+		}
+	}
+	s := d.subject()
+	for i := len(d.profile.CodecProfiles) - 1; i >= 0; i-- {
+		profile := &d.profile.CodecProfiles[i]
+		container := profile.Container
+		if hlsStream && strings.EqualFold(container, "hls") {
+			container = profile.SubContainer
+		}
+		if profile.Type != "Video" || !listMeets(container, t.Container) || !s.holdAll(profile.ApplyConditions) {
+			continue
+		}
+		for _, codec := range codecs {
+			if listHas(profile.Codec, codec) {
+				caps.apply(profile.Conditions, codec)
+			}
+		}
+	}
+	if reasons&(videoReasonBits|containerBitrateExceedsLimit) != 0 {
+		caps.apply(t.Conditions, "")
+	}
+	return caps
+}
+
+// apply applies conditions to caps, those about a codec's own properties
+// only for codec, when there is one.
+func (c *AppCaps) apply(conditions []ProfileCondition, codec string) {
+	for _, condition := range conditions {
+		value := strings.TrimSpace(condition.Value)
+		if value == "" || condition.Condition != "Equals" && condition.Condition != "LessThanEqual" && condition.Condition != "EqualsAny" {
+			continue
+		}
+		lower := func(current, n int64) int64 {
+			if condition.Condition == "Equals" || current <= 0 {
+				return n
+			}
+			return min(current, n)
+		}
+		n, err := strconv.ParseInt(value, 10, 64)
+		number := err == nil && condition.Condition != "EqualsAny"
+		switch condition.Property {
+		case "Width":
+			if number {
+				c.Width = int(lower(int64(c.Width), n))
+			}
+		case "Height":
+			if number {
+				c.Height = int(lower(int64(c.Height), n))
+			}
+		case "VideoBitrate":
+			if number {
+				c.Bitrate = lower(c.Bitrate, n)
+			}
+		case "VideoFramerate":
+			if rate, err := strconv.ParseFloat(value, 64); err == nil && condition.Condition != "EqualsAny" {
+				if condition.Condition == "Equals" || c.FrameRate <= 0 {
+					c.FrameRate = rate
+				} else {
+					c.FrameRate = min(c.FrameRate, rate)
+				}
+			}
+		case "VideoLevel":
+			if number && codec != "" {
+				if c.Levels == nil {
+					c.Levels = map[string]int{}
+				}
+				c.Levels[codec] = int(lower(int64(c.Levels[codec]), n))
+			}
+		case "VideoProfile":
+			if codec != "h264" || condition.Condition == "LessThanEqual" {
+				continue
+			}
+			var allowed []string
+			for choice := range strings.SplitSeq(value, "|") {
+				if choice = strings.ToLower(strings.ReplaceAll(choice, " ", "")); choice != "" {
+					allowed = append(allowed, choice)
+				}
+			}
+			if c.H264Profiles != nil {
+				allowed = slices.DeleteFunc(allowed, func(p string) bool { return !slices.Contains(c.H264Profiles, p) })
+			}
+			c.H264Profiles = allowed
+		}
+	}
+}
+
 // stream decides whether Polyfin can stream the source with t, over HLS,
 // or as one file when options allow it and t asks for it (Protocol http),
 // and how the video and the audio that plays then reach the app. The video
@@ -478,29 +608,51 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 // when t takes its codec and channels and the codec profiles accept it,
 // as the only audio, so never a secondary track, and, when the video is
 // converted under a limit, when it fits the audio's share of the limit
-// (see streamAudio); else it is converted to a codec t takes.
-func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mustConvert bool) (bool, *VideoConversion, *AudioConversion) {
+// (see streamAudio); else it is converted to a codec t takes. Converted
+// video keeps within caps, what the app's profile allows (see appCaps);
+// a bitrate cap below what the limit leaves the video becomes the limit,
+// with the audio sent, which the audio is then decided under too: the
+// HLS requests, which see only the bitrates the TranscodingUrl gives, so
+// decide the same. played is the limit the conversion counts with.
+func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mustConvert bool, caps AppCaps) (bool, *VideoConversion, *AudioConversion, int64) {
 	// Streamed as one file, the video goes out as fragmented MP4 or
 	// MPEG-TS, the containers hls.ParseFormat reads.
 	_, oneFile := hls.ParseFormat(t.Container)
 	hlsStream, progressive := strings.EqualFold(t.Protocol, "hls"), strings.EqualFold(t.Protocol, "http") && options.Progressive && oneFile
 	if !hlsStream && !progressive || d.video == nil {
-		return false, nil, nil
+		return false, nil, nil, limit
 	}
 	s := subject{video: d.video, codecTag: RemuxTag(d.video.Codec, t.Container)}
 	convertVideo := options.ConvertVideo || mustConvert || !listHas(t.VideoCodec, d.video.Codec) || d.remuxFails("Video", d.video, t.Container, s)
 	audio, audioStreams := d.streamAudio(t, options, limit, convertVideo, s)
+	played := limit
 	var video *VideoConversion
 	if convertVideo {
+		// Each round can only lower the audio sent: two settle it.
+		for range 3 {
+			sent := SentAudioBitrate(d.played, audio)
+			if caps.Bitrate <= 0 || played > 0 && VideoLimit(played, sent) <= caps.Bitrate {
+				break
+			}
+			played = caps.Bitrate + sent
+			audio, audioStreams = d.streamAudio(t, options, played, true, s)
+		}
+		if played != limit {
+			played = caps.Bitrate + SentAudioBitrate(d.played, audio)
+		}
 		// Converted video is scaled down to the lower of the heights it is
 		// capped at, which never prevents a conversion.
-		limits := Limits{Bitrate: limit, Video: VideoLimit(limit, SentAudioBitrate(d.played, audio)), Group: options.MaxHeight, Server: options.ConversionHeight}
-		limits.ByUser = options.UserBitrate > 0 && limit > 0 && limit >= options.UserBitrate
+		limits := Limits{Bitrate: played, Video: VideoLimit(played, SentAudioBitrate(d.played, audio)), Group: options.MaxHeight,
+			Server: options.ConversionHeight, App: caps}
+		if caps.Bitrate > 0 {
+			limits.Video = min(limits.Video, caps.Bitrate)
+		}
+		limits.ByUser = options.UserBitrate > 0 && played > 0 && played >= options.UserBitrate
 		if video = ConvertVideo(t.VideoCodec, limits, *d.video, options.Can); video == nil {
-			return false, nil, nil
+			return false, nil, nil, limit
 		}
 	}
-	return audioStreams, video, audio
+	return audioStreams, video, audio, played
 }
 
 // streamAudio decides how the audio that plays reaches the app streamed

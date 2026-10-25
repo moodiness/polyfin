@@ -55,8 +55,12 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 	}
 	// The video takes what the limit leaves once the audio sent is taken
 	// off, the audio's bitrate going with it: the HLS requests read both
-	// back (see conversionLimits).
+	// back (see conversionLimits). Under the app's bitrate cap, the limit
+	// is the one the conversion counts with (see playback.Decision.Limit).
 	audioBitrate := playback.SentAudioBitrate(audio, decision.Audio)
+	if decision.Limit > 0 {
+		limit = decision.Limit
+	}
 	if limit > 0 {
 		q.add("VideoBitrate", strconv.FormatInt(playback.VideoLimit(limit, audioBitrate), 10))
 	}
@@ -69,8 +73,23 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 			q.add("AudioSampleRate", strconv.Itoa(*audio.SampleRate))
 		}
 	}
+	// The frame rate, and the frame converted video keeps within, as the
+	// app's profile allows them, which the HLS requests read back.
+	caps := decision.Caps
 	if video, ok := videoStream(analysis); ok && video.AverageRate > 0 {
-		q.add("MaxFramerate", strconv.FormatFloat(math.Round(video.AverageRate*1000)/1000, 'f', -1, 64))
+		rate := math.Round(video.AverageRate*1000) / 1000
+		if caps.FrameRate > 0 {
+			rate = min(rate, caps.FrameRate)
+		}
+		q.add("MaxFramerate", strconv.FormatFloat(rate, 'f', -1, 64))
+	} else if caps.FrameRate > 0 {
+		q.add("MaxFramerate", strconv.FormatFloat(caps.FrameRate, 'f', -1, 64))
+	}
+	if caps.Width > 0 {
+		q.add("MaxWidth", strconv.Itoa(caps.Width))
+	}
+	if caps.Height > 0 {
+		q.add("MaxHeight", strconv.Itoa(caps.Height))
 	}
 	if !decision.Progressive {
 		q.add("SegmentContainer", t.Container)
@@ -93,6 +112,16 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 		q.add("SubtitleMethod", method)
 	case decision.SubtitleStreamIndex < 0:
 		q.add("SubtitleMethod", "Encode")
+	}
+	// The app's codec level and H.264 profiles, as Jellyfin's codec
+	// options name them, which the HLS requests read back.
+	for _, codec := range []string{"h264", "hevc"} {
+		if level := caps.Levels[codec]; level > 0 {
+			q.add(codec+"-level", strconv.Itoa(level))
+		}
+		if codec == "h264" && caps.H264Profiles != nil {
+			q.add("h264-profile", strings.Join(caps.H264Profiles, ","))
+		}
 	}
 	q.add("TranscodeReasons", strings.Join(decision.Reasons, ","))
 	// Video and audio converted rather than copied are asked as Jellyfin's
@@ -301,8 +330,10 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 // conversionLimits are what video converted for an HLS request is scaled
 // down within: the bitrate its URL gives the video, which with the audio's
 // is the limit PlaybackInfo played under, never above the user's limit
-// whatever the URL says, and the heights the user's group and the settings
-// cap it at. The limit is the user's when the app's was not lower.
+// whatever the URL says, the heights the user's group and the settings
+// cap it at, and what the app's profile allows it, as PlaybackInfo wrote
+// it (see transcodingURL). The limit is the user's when the app's was not
+// lower.
 func (h *Handler) conversionLimits(r *http.Request, user accounts.User) playback.Limits {
 	var limits playback.Limits
 	limits.Group, limits.Server = h.Accounts.ConversionCaps(user)
@@ -318,6 +349,21 @@ func (h *Handler) conversionLimits(r *http.Request, user accounts.User) playback
 		if limits.Video == most || limits.Bitrate >= most {
 			limits.Bitrate, limits.ByUser = most, true
 		}
+	}
+	app := &limits.App
+	app.Width, _ = strconv.Atoi(query(r, "maxWidth"))
+	app.Height, _ = strconv.Atoi(query(r, "maxHeight"))
+	app.FrameRate, _ = strconv.ParseFloat(query(r, "maxFramerate"), 64)
+	for _, codec := range []string{"h264", "hevc"} {
+		if level, err := strconv.Atoi(query(r, codec+"-level")); err == nil && level > 0 {
+			if app.Levels == nil {
+				app.Levels = map[string]int{}
+			}
+			app.Levels[codec] = level
+		}
+	}
+	if profiles, ok := queryParam(r, "h264-profile"); ok {
+		app.H264Profiles = strings.Split(strings.ToLower(profiles), ",")
 	}
 	return limits
 }

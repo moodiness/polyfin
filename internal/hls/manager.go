@@ -150,8 +150,13 @@ type VideoEncoding struct {
 	// times Bitrate.
 	Bitrate, MaxRate int64
 	// FrameRate is the converted video's, frames a second: the source's,
-	// twice it with DoubleRate.
-	FrameRate float64
+	// twice it with DoubleRate, or less with DropFrames, which brings the
+	// video down to it, as an app's profile asks.
+	FrameRate  float64
+	DropFrames bool
+	// Profile is the H.264 profile written, high, main or baseline; empty
+	// writes High, and HEVC Main whatever it says.
+	Profile string
 	// ToneMap converts HDR to SDR; Deinterlace, interlaced video to
 	// progressive.
 	ToneMap, Deinterlace bool
@@ -521,11 +526,20 @@ func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 	if !v.Burns() {
 		args = append(args, "-vf", skip+v.filters())
 	}
-	// Every H.264 encoder, x264 as the GPUs', encodes the High profile the
-	// master playlist announces; HEVC, Main.
+	// Every H.264 encoder, x264 as the GPUs', encodes the profile the
+	// master playlist announces, High unless an app's profile allows only
+	// Main or Baseline; HEVC, Main. Baseline is constrained, under the
+	// name each encoder gives it, as in Jellyfin's EncodingHelper.
+	h264 := v.Encoder == "libx264" || strings.HasPrefix(v.Encoder, "h264")
 	profile := "main"
-	if v.Encoder == "libx264" || strings.HasPrefix(v.Encoder, "h264") {
-		profile = "high"
+	if h264 {
+		profile = cmp.Or(v.Profile, "high")
+		if profile == "baseline" && (family == familyVAAPI || family == familyAMF || family == familyVideoToolbox) {
+			profile = "constrained_baseline"
+		}
+	}
+	if v.DropFrames && v.FrameRate > 0 {
+		args = append(args, "-r", strconv.FormatFloat(v.FrameRate, 'f', -1, 64))
 	}
 	switch {
 	case v.Encoder == "libx264":
@@ -540,7 +554,7 @@ func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 		// encoder names levels up to 5.2, and picks one itself above;
 		// its HEVC encoder takes none.
 		args = append(args, "-profile:v", profile)
-		if profile == "high" && v.Level <= "5.2" {
+		if h264 && v.Level <= "5.2" {
 			args = append(args, "-level:v", v.Level)
 		}
 		if speed := videoToolboxSpeed[v.Preset]; speed != "" {

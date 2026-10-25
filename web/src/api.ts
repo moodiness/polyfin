@@ -3402,10 +3402,10 @@ export type Delivery = 'directPlay' | 'remux' | 'conversion' | 'stream'
 /**
  * What set the size of converted video: nothing below the source's, the GPU's 4K, the
  * processor's 1080p, HDR converted by the processor, the user's quality group, the settings'
- * maximum quality of converted video, or the bitrate limit.
+ * maximum quality of converted video, the bitrate limit, or what the app's profile allows.
  */
 export type SizeLimit =
-  'source' | 'gpu' | 'processor' | 'toneMapping' | 'qualityGroup' | 'serverMax' | 'bitrate'
+  'source' | 'gpu' | 'processor' | 'toneMapping' | 'qualityGroup' | 'serverMax' | 'bitrate' | 'app'
 
 /** A device playing, as the dashboard shows it. */
 export type LiveSession = {

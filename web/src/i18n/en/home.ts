@@ -196,6 +196,7 @@ const home = {
         toneMapping: (height: string) => `${height} at most: HDR converted by the processor`,
         qualityGroup: (height: string) => `Quality group: ${height}`,
         serverMax: (height: string) => `Maximum quality of converted video: ${height}`,
+        app: (height: string) => `Quality allowed by the app: ${height}`,
         appBitrate: (rate: string) => `Bitrate allowed by the app: ${rate}`,
         userBitrate: (rate: string) => `User’s maximum quality: ${rate}`,
       },

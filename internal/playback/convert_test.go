@@ -6,14 +6,14 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 )
 
-// sizeless is a conversion without what set its size, for the tests about
-// the rest; nil stays nil.
+// sizeless is a conversion without what set its size, nor the level the
+// app decodes at most, for the tests about the rest; nil stays nil.
 func sizeless(v *VideoConversion) *VideoConversion {
 	if v == nil {
 		return nil
 	}
 	c := *v
-	c.Size = ConversionSize{}
+	c.Size, c.MaxLevel = ConversionSize{}, 0
 	return &c
 }
 

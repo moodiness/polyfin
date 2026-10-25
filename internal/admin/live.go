@@ -124,10 +124,11 @@ type videoConversionJSON struct {
 	// than the source; gpu (4K), processor (1080p) or toneMapping (HDR
 	// converted on the processor), the server's own caps; qualityGroup,
 	// the user's group; serverMax, the settings' maximum quality of
-	// converted video; bitrate, the bitrate limit. Empty when not known.
-	// On a tie the group comes first, then serverMax, then the server's
-	// caps. MaxHeight is the height that capped it, 0 for source and when
-	// not known.
+	// converted video; bitrate, the bitrate limit; app, the frame or the
+	// codec level the app's profile allows. Empty when not known.
+	// On a tie the group comes first, then serverMax, then app, then the
+	// server's caps. MaxHeight is the height that capped it, 0 for source
+	// and when not known.
 	LimitedBy string `json:"limitedBy"`
 	MaxHeight int    `json:"maxHeight"`
 	// BitrateLimit is, for bitrate, the limit in bits per second, and

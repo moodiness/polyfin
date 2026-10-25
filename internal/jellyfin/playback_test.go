@@ -496,9 +496,11 @@ func TestImageSubtitlesBrowsersCannotShowAreBurnedIn(t *testing.T) {
 		return
 	}
 	// Chrome shows no PGS: the video is converted, with the track drawn
-	// onto it.
+	// onto it. Chrome's codec options come between the subtitle method and
+	// the reasons, as in Jellyfin.
 	if source.SupportsDirectPlay || track.DeliveryMethod != "Encode" || !strings.Contains(source.TranscodingUrl, "&AudioStreamIndex=1&SubtitleStreamIndex=3&") ||
-		!strings.HasSuffix(source.TranscodingUrl, "&SubtitleMethod=Encode&TranscodeReasons=SubtitleCodecNotSupported&allowVideoStreamCopy=false") {
+		!strings.Contains(source.TranscodingUrl, "&SubtitleMethod=Encode&") ||
+		!strings.HasSuffix(source.TranscodingUrl, "&TranscodeReasons=SubtitleCodecNotSupported&allowVideoStreamCopy=false") {
 		t.Errorf("direct play %v, track %s, TranscodingUrl %s", source.SupportsDirectPlay, track.DeliveryMethod, source.TranscodingUrl)
 	}
 }

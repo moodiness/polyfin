@@ -165,6 +165,86 @@ type VideoConversion struct {
 	Hardware *hls.Hardware
 	// Size is what set Width and Height.
 	Size ConversionSize
+	// Profile is the H.264 profile written when the app's allows no High:
+	// main or baseline (see AppCaps.h264Profile). Empty writes High, and
+	// HEVC is always Main.
+	Profile string
+	// MaxLevel is the highest level the app decodes, in tenths, 0 when
+	// its profile does not say; FrameRate, the frame rate the video is
+	// brought down to, 0 to keep the source's.
+	MaxLevel  int
+	FrameRate float64
+}
+
+// AppCaps are what an app's profile allows video converted for it, read
+// as Jellyfin's StreamBuilder reads them off the conditions of the codec
+// profiles of the codecs it converts to, and of its transcoding profile
+// (see decider.appCaps): the largest frame, the most bitrate, the most
+// frames a second, the highest level of each codec, and the H.264
+// profiles allowed. Zero values and nil allow anything.
+type AppCaps struct {
+	Width, Height int
+	Bitrate       int64
+	FrameRate     float64
+	// Levels are by codec, h264 and hevc, in Jellyfin's numbers: H.264's
+	// in tenths (41 is 4.1), HEVC's in thirtieths (153 is 5.1).
+	Levels map[string]int
+	// H264Profiles are lowercased without spaces, as "constrainedbaseline".
+	H264Profiles []string
+}
+
+// framed reports whether caps limit the frame.
+func (c AppCaps) framed() bool {
+	return c.Width > 0 || c.Height > 0
+}
+
+// fit is the size of video of width by height brought within the caps'
+// frame keeping its shape, as Jellyfin's EncodingHelper.GetFixedOutputSize
+// does, in even numbers; the size itself when it fits.
+func (c AppCaps) fit(width, height int) (int, int) {
+	scale := 1.0
+	if c.Width > 0 && width > c.Width {
+		scale = float64(c.Width) / float64(width)
+	}
+	if c.Height > 0 && height > c.Height {
+		scale = min(scale, float64(c.Height)/float64(height))
+	}
+	if scale >= 1 {
+		return width / 2 * 2, height / 2 * 2
+	}
+	w, h := int(math.Round(float64(width)*scale)), int(math.Round(float64(height)*scale))
+	if c.Width > 0 {
+		w = min(w, c.Width)
+	}
+	if c.Height > 0 {
+		h = min(h, c.Height)
+	}
+	return w / 2 * 2, h / 2 * 2
+}
+
+// level is the highest level the caps allow codec, in tenths, 0 for no
+// cap.
+func (c AppCaps) level(codec string) int {
+	n := c.Levels[codec]
+	if codec == "hevc" {
+		n /= 3
+	}
+	return n
+}
+
+// h264Profile is the H.264 profile a conversion writes: the highest of
+// high, main and baseline the caps allow, baseline standing for
+// constrained baseline too; high when they set no condition, or allow none
+// of the three.
+func (c AppCaps) h264Profile() string {
+	for _, profile := range []string{"high", "main", "baseline"} {
+		for _, allowed := range c.H264Profiles {
+			if allowed == profile || profile == "baseline" && allowed == "constrainedbaseline" {
+				return profile
+			}
+		}
+	}
+	return "high"
 }
 
 // Limits are what converted video is scaled down within, beside what the
@@ -179,6 +259,8 @@ type Limits struct {
 	// Group is the user's quality group and Server the settings'
 	// MaxConversionHeight, 0 when it does not limit.
 	Group, Server int
+	// App is what the app's profile allows.
+	App AppCaps
 }
 
 // What sets the size of converted video, as ConversionSize.Reason tells
@@ -199,13 +281,17 @@ const (
 	SizeServerMax = "serverMax"
 	// SizeBitrate: the bitrate limit allows no taller rung.
 	SizeBitrate = "bitrate"
+	// SizeApp: the app's profile allows no larger frame, or no higher
+	// codec level.
+	SizeApp = "app"
 )
 
 // ConversionSize is what set the size of converted video: the lowest of
 // the caps that made it smaller than the source. On a tie, the user's
 // quality group comes first, then the settings' MaxConversionHeight, then
-// the server's own caps: the settings would hold on a stronger server. The
-// bitrate is the reason only when it allows less than all of them.
+// the app's profile, then the server's own caps: the settings would hold
+// on a stronger server. The bitrate is the reason only when it allows
+// less than all of them.
 type ConversionSize struct {
 	// Reason is one of the Size constants; MaxHeight, the height it caps
 	// video at, 0 for SizeSource.
@@ -283,6 +369,33 @@ func toneMapsOnGPU(gpu *hls.Hardware, video MediaStream, t Tuning) bool {
 		return video.ColorTransfer == "smpte2084" || video.ColorTransfer == "arib-std-b67"
 	}
 	return video.ColorTransfer == "smpte2084" && video.MasteringDisplay != nil && *video.MasteringDisplay
+}
+
+// appFrame is the size of video of width by height, 0 when not known,
+// converted to a rung's height within the app's frame: with exact, at the
+// app's cap itself, the source brought within it as Jellyfin does it, else
+// framed at the rung (see frame) then brought within it.
+func appFrame(app AppCaps, rung, width, height int, exact bool) (int, int) {
+	if exact && width > 0 && height > 0 {
+		return app.fit(width, height)
+	}
+	w, h := frame(rung, width, height)
+	if app.framed() {
+		return app.fit(w, h)
+	}
+	return w, h
+}
+
+// sourceRate is the frame rate of video, as its conversion takes it: its
+// average, else its real one, 0 when not known.
+func sourceRate(video MediaStream) float64 {
+	switch {
+	case video.AverageFrameRate != nil && *video.AverageFrameRate > 0:
+		return *video.AverageFrameRate
+	case video.RealFrameRate != nil:
+		return *video.RealFrameRate
+	}
+	return 0
 }
 
 // fits reports whether the 16:9 frame of a height holds the whole source,
@@ -364,21 +477,49 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 		}
 		conversion.ToneMap = true
 	}
+	width, height := 0, 0
+	if video.Height != nil && video.Width != nil {
+		width, height = *video.Width, *video.Height
+	}
+	// The app's frame caps the video at the height the source keeps once
+	// brought within it, which need not be a rung's.
+	if app := limits.App; app.framed() {
+		capped := app.Height
+		if width > 0 && height > 0 {
+			if _, capped = app.fit(width, height); capped >= height {
+				capped = 0
+			}
+		} else if capped == 0 {
+			capped = app.Width * 9 / 16
+		}
+		if capped > 0 && capped <= size.MaxHeight {
+			size = ConversionSize{Reason: SizeApp, MaxHeight: capped}
+		}
+	}
 	// A source no taller than a cap converts as without it. The group comes
 	// last, so that it wins a tie with the settings' cap, and both win a
-	// tie with the server's own caps.
+	// tie with the app's and the server's own caps.
 	for _, setting := range []ConversionSize{{Reason: SizeServerMax, MaxHeight: limits.Server}, {Reason: SizeQualityGroup, MaxHeight: limits.Group}} {
 		if setting.MaxHeight > 0 && setting.MaxHeight <= size.MaxHeight && (video.Height == nil || *video.Height > setting.MaxHeight) {
 			size = setting
 		}
 	}
 	conversion.Deinterlace = video.IsInterlaced
-	rung := rungs[len(rungs)-1]
+	rung, first := rungs[len(rungs)-1], true
 	for _, r := range rungs {
-		if r.height <= size.MaxHeight && (limits.Video <= 0 || limits.Video >= r.least) {
+		if r.height > size.MaxHeight {
+			continue
+		}
+		if limits.Video <= 0 || limits.Video >= r.least {
 			rung = r
 			break
 		}
+		first = false
+	}
+	// The app's cap, between two rungs or below the last, is the height
+	// itself, at the bitrates of the rung below.
+	if size.Reason == SizeApp && (first || rung.height > size.MaxHeight) {
+		rung.height = size.MaxHeight
 	}
 	if rung.height < size.MaxHeight {
 		size = ConversionSize{Reason: SizeBitrate, MaxHeight: rung.height, Bitrate: limits.Bitrate, ByUser: limits.ByUser}
@@ -386,12 +527,28 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 	if fits(video, size.MaxHeight) {
 		size = ConversionSize{Reason: SizeSource}
 	}
-	conversion.Size = size
-	width, height := 0, 0
-	if video.Height != nil && video.Width != nil {
-		width, height = *video.Width, *video.Height
+	conversion.Width, conversion.Height = appFrame(limits.App, rung.height, width, height, size.Reason == SizeApp && rung.height == size.MaxHeight)
+	if profile := limits.App.h264Profile(); conversion.Codec == "h264" && profile != "high" {
+		conversion.Profile = profile
 	}
-	conversion.Width, conversion.Height = frame(rung.height, width, height)
+	rate := sourceRate(video)
+	if most := limits.App.FrameRate; most > 0 && rate > most+0.01 {
+		conversion.FrameRate, rate = most, most
+	}
+	// A frame larger than the level the app decodes holds goes down the
+	// ladder until it fits.
+	if conversion.MaxLevel = limits.App.level(conversion.Codec); conversion.MaxLevel > 0 {
+		for _, r := range rungs {
+			if conversion.level(rate) <= conversion.MaxLevel {
+				break
+			}
+			if w, h := appFrame(limits.App, r.height, width, height, false); h < conversion.Height {
+				rung, conversion.Width, conversion.Height = r, w, h
+				size = ConversionSize{Reason: SizeApp, MaxHeight: r.height}
+			}
+		}
+	}
+	conversion.Size = size
 	conversion.Bitrate = videoBitrate(video, conversion.Codec, conversion.Width, conversion.Height, rung.usual)
 	if limits.Video > 0 {
 		conversion.Bitrate = min(conversion.Bitrate, limits.Video)
@@ -549,21 +706,23 @@ func (v *VideoConversion) Steps(width, height int) []VideoConversion {
 // for HEVC (ITU-T H.265, table A.8, main tier). Conversions are 4K at
 // most, which 5.2 holds up to 60 frames a second and 6.1 above. 6.0 is
 // left out: NVENC's H.264 calls it 6.0 and VAAPI 6, while every encoder
-// Polyfin uses takes the other levels' names.
+// Polyfin uses takes the other levels' names. Those below 4.1 serve only
+// apps that decode no higher (see level).
 var levels = map[string][]struct {
 	tenths        int
 	frame, second int64
 }{
-	"h264": {{41, 8_192, 245_760}, {42, 8_704, 522_240}, {50, 22_080, 589_824}, {51, 36_864, 983_040}, {52, 36_864, 2_073_600},
-		{61, 139_264, 8_355_840}},
-	"hevc": {{41, 2_228_224, 133_693_440}, {50, 8_912_896, 267_386_880}, {51, 8_912_896, 534_773_760}, {52, 8_912_896, 1_069_547_520},
-		{61, 35_651_584, 2_139_095_040}},
+	"h264": {{30, 1_620, 40_500}, {31, 3_600, 108_000}, {32, 5_120, 216_000}, {40, 8_192, 245_760}, {41, 8_192, 245_760},
+		{42, 8_704, 522_240}, {50, 22_080, 589_824}, {51, 36_864, 983_040}, {52, 36_864, 2_073_600}, {61, 139_264, 8_355_840}},
+	"hevc": {{30, 552_960, 16_588_800}, {31, 983_040, 33_177_600}, {40, 2_228_224, 66_846_720}, {41, 2_228_224, 133_693_440},
+		{50, 8_912_896, 267_386_880}, {51, 8_912_896, 534_773_760}, {52, 8_912_896, 1_069_547_520}, {61, 35_651_584, 2_139_095_040}},
 }
 
 // level is the codec level a conversion declares for video of a frame
 // rate, in tenths: the lowest that holds its frame and its samples a
 // second, and never below H.264 4.1 (4.2 above 30 frames a second) or HEVC
-// 4.1. An NVIDIA GPU refuses to encode at a level too low for the video.
+// 4.1, unless the app decodes no higher (MaxLevel). An NVIDIA GPU refuses
+// to encode at a level too low for the video.
 func (v *VideoConversion) level(rate float64) int {
 	frame := int64(v.Width) * int64(v.Height)
 	least := 41
@@ -572,6 +731,9 @@ func (v *VideoConversion) level(rate float64) int {
 		if rate > 30 {
 			least = 42
 		}
+	}
+	if v.MaxLevel > 0 && v.MaxLevel < least {
+		least = 0
 	}
 	highest := least
 	for _, l := range levels[v.Codec] {
@@ -594,12 +756,21 @@ func (v *VideoConversion) Level(rate float64) string {
 }
 
 // CodecString is the RFC 6381 codec string of a conversion's video: H.264
-// High or HEVC Main at its level.
+// at its profile, High unless the app's allows only Main or Baseline, or
+// HEVC Main, at its level. The constraint flags are those x264 writes:
+// Baseline as constrained (set 0 and 1), Main with set 1.
 func (v *VideoConversion) CodecString(rate float64) string {
 	tenths := v.level(rate)
 	if v.Codec == "hevc" {
 		// HEVC levels count in thirtieths: 4.1 is 123.
 		return "hvc1.1.6.L" + strconv.Itoa(tenths*3) + ".B0"
 	}
-	return "avc1.6400" + strings.ToUpper(strconv.FormatInt(int64(tenths), 16))
+	level := strings.ToUpper(strconv.FormatInt(int64(tenths), 16))
+	switch v.Profile {
+	case "main":
+		return "avc1.4D40" + level
+	case "baseline":
+		return "avc1.42C0" + level
+	}
+	return "avc1.6400" + level
 }

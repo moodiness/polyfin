@@ -314,7 +314,11 @@ func variant(analysis media.Analysis, video media.Stream, bandwidth int64, remux
 	codecs := []string{videoCodecString(video)}
 	if c := remux.conversion(video); c != nil {
 		// What the encoder writes, at most its peak rate with the audio
-		// sent, on average its bitrate with it.
+		// sent, on average its bitrate with it, at the frame rate the
+		// app's profile allows.
+		if c.FrameRate > 0 && (v.FrameRate <= 0 || c.FrameRate < v.FrameRate) {
+			v.FrameRate = math.Round(c.FrameRate*1000) / 1000
+		}
 		codecs[0] = c.CodecString(v.FrameRate)
 		v.Width, v.Height, v.Range = c.Width, c.Height, "SDR"
 		audio := sentAudio(analysis, remux)
@@ -620,18 +624,25 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 		if rate <= 0 {
 			rate = video.FrameRate
 		}
-		// Like Jellyfin, frames are doubled up to 30 a second.
-		double := c.Deinterlace && t.DoubleRate && rate > 0 && rate <= 30
+		// Like Jellyfin, frames are doubled up to 30 a second, within the
+		// frame rate the app's profile allows, which drops the frames
+		// beyond it.
+		double := c.Deinterlace && t.DoubleRate && rate > 0 && rate <= 30 && (c.FrameRate <= 0 || rate*2 <= c.FrameRate)
 		if double {
 			rate *= 2
+		}
+		drop := c.FrameRate > 0 && rate > c.FrameRate
+		if drop {
+			rate = c.FrameRate
 		}
 		// The source's colors, which video converted without tone mapping
 		// keeps (see hls.VideoEncoding.Colors).
 		colors := hls.Colors{Range: video.ColorRange, Matrix: video.ColorSpace, Transfer: video.ColorTransfer, Primaries: video.ColorPrimaries}
 		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate, MaxRate: c.Peak,
-			FrameRate: rate, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace, Burn: remux.Burn, BurnFile: remux.BurnFile,
-			Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec), ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak,
-			ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double, DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
+			FrameRate: rate, DropFrames: drop, Profile: c.Profile, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace,
+			Burn: remux.Burn, BurnFile: remux.BurnFile, Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec),
+			ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double,
+			DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
 	}
 	if c := remux.ConvertAudio; c != nil && r.Audio >= 0 {
 		r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter = c.Codec, c.Channels, c.Bitrate, c.Filter

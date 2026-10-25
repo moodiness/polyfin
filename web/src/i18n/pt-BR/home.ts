@@ -194,6 +194,7 @@ const home: typeof en = {
         toneMapping: (height: string) => `${height} no máximo: HDR convertido pelo processador`,
         qualityGroup: (height: string) => `Grupo de qualidade: ${height}`,
         serverMax: (height: string) => `Qualidade máxima do vídeo convertido: ${height}`,
+        app: (height: string) => `Qualidade permitida pelo aplicativo: ${height}`,
         appBitrate: (rate: string) => `Taxa de bits permitida pelo aplicativo: ${rate}`,
         userBitrate: (rate: string) => `Qualidade máxima do usuário: ${rate}`,
       },
