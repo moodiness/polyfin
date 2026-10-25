@@ -154,11 +154,10 @@ type Peer struct {
 	// closed; delay is how long each block asked waits, one after the
 	// other. requests and cancels count the REQUEST and CANCEL messages
 	// received.
-	released    chan struct{}
-	releaseOnce sync.Once
-	delay       time.Duration
-	requests    int
-	cancels     int
+	released chan struct{}
+	delay    time.Duration
+	requests int
+	cancels  int
 
 	// eager has the peer unchoke at once, before any INTERESTED; strict
 	// has it drop a REQUEST received before INTERESTED, as a strict
@@ -326,13 +325,17 @@ func (p *Peer) Hold() {
 	p.mu.Unlock()
 }
 
-// Release sends the blocks held, and those asked next at once.
+// Release sends the blocks held, and those asked next at once, until the
+// peer holds them again.
 func (p *Peer) Release() {
 	p.mu.Lock()
-	released := p.released
-	p.mu.Unlock()
-	if released != nil {
-		p.releaseOnce.Do(func() { close(released) })
+	defer p.mu.Unlock()
+	if p.released != nil {
+		select {
+		case <-p.released:
+		default:
+			close(p.released)
+		}
 	}
 }
 

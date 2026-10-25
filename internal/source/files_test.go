@@ -3,6 +3,7 @@ package source
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"net/http"
@@ -221,4 +222,148 @@ func TestASourceOnlyPlaybacksReadStopsWithTheLastOne(t *testing.T) {
 			t.Fatalf("%d reads of the file still run once no playback urges it", open.Load())
 		}
 	}
+}
+
+// blockHeldFile is a file whose second block is held until the read's
+// request ends; its other blocks read at once. atHeld is told as the held
+// block is asked for.
+type blockHeldFile struct {
+	data   []byte
+	ctx    context.Context
+	atHeld chan<- struct{}
+}
+
+func (f blockHeldFile) ReadAt(p []byte, off int64) (int, error) {
+	if off/blockSize == 1 {
+		select {
+		case f.atHeld <- struct{}{}:
+		default:
+		}
+		<-f.ctx.Done()
+		return 0, f.ctx.Err()
+	}
+	return copy(p, f.data[off:]), nil
+}
+
+func (blockHeldFile) Close() error { return nil }
+
+// A reader waiting for a block of a source only playbacks read, as a
+// torrent's file, gets it once the last playback stops urging it, though
+// the connection that read towards it, a block before, ends then: another
+// fetches it, rather than the reader waiting for good.
+func TestAReaderWaitingWhenThePlaybackEndsGetsItsBlock(t *testing.T) {
+	c := newCache(t, 64*blockSize)
+	// One connection per file: the one reading towards the block is the
+	// only one.
+	c.connections = 1
+	data := torrentBytes(4*blockSize + 123)
+	atHeld := make(chan struct{}, 1)
+	opener := FileOpener(func(ctx context.Context, _ string) (RandomFile, int64, error) {
+		return blockHeldFile{data: data, ctx: ctx, atHeld: atHeld}, int64(len(data)), nil
+	})
+	s := c.Open(accounts.ID{5}, Location{URL: "torrent:5", Opener: opener, StallTimeout: 10 * time.Minute,
+		Playing: func() func() { return func() {} }}, nil)
+	defer s.Release()
+	done := s.Urge()
+	r := s.NewReader()
+	if _, err := r.ReadAt(t.Context(), make([]byte, blockSize), 0); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-atHeld:
+	case <-time.After(time.Minute):
+		t.Fatal("the playback was not read ahead of")
+	}
+	// A read in the background, as of the file's index, waits for the
+	// block after the one the connection reads.
+	read := make(chan error, 1)
+	go func() {
+		got := make([]byte, blockSize)
+		_, err := s.ReadAt(t.Context(), got, 2*blockSize)
+		if err == nil && !bytes.Equal(got, data[2*blockSize:3*blockSize]) {
+			err = errors.New("not the file's bytes")
+		}
+		read <- err
+	}()
+	for deadline := time.Now().Add(time.Minute); ; time.Sleep(10 * time.Millisecond) {
+		s.mu.Lock()
+		waiting := s.wanted[2] != nil
+		s.mu.Unlock()
+		if waiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the background read does not wait for its block")
+		}
+	}
+	r.Close()
+	done()
+	select {
+	case err := <-read:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the background read still waits for its block once the playback ended")
+	}
+}
+
+// slowProgressFile is a file whose reads take whole seconds, while they
+// tell, every interval, that bytes are coming; a read ends early once its
+// request does.
+type slowProgressFile struct {
+	ctx      context.Context
+	data     []byte
+	took     time.Duration
+	interval time.Duration
+}
+
+func (f slowProgressFile) ReadAt(p []byte, off int64) (int, error) {
+	return f.ReadAtProgress(p, off, nil)
+}
+
+func (f slowProgressFile) ReadAtProgress(p []byte, off int64, progress func()) (int, error) {
+	ticker := time.NewTicker(f.interval)
+	defer ticker.Stop()
+	for end := time.Now().Add(f.took); time.Now().Before(end); {
+		select {
+		case <-f.ctx.Done():
+			return 0, f.ctx.Err()
+		case <-ticker.C:
+		}
+		if progress != nil {
+			progress()
+		}
+	}
+	return copy(p, f.data[off:]), nil
+}
+
+func (slowProgressFile) Close() error { return nil }
+
+// A file whose blocks take longer than the stall timeout to read whole,
+// while their bytes keep coming, as a slow torrent's pieces, is not taken
+// for one that stalled: it is read.
+func TestASlowFileWhoseBytesKeepComingDoesNotStall(t *testing.T) {
+	c := newCache(t, 64*blockSize)
+	data := torrentBytes(2*blockSize + 77)
+	opener := FileOpener(func(ctx context.Context, _ string) (RandomFile, int64, error) {
+		return slowProgressFile{ctx: ctx, data: data, took: 10 * time.Second, interval: 200 * time.Millisecond}, int64(len(data)), nil
+	})
+	s := c.Open(accounts.ID{6}, Location{URL: "torrent:6", Opener: opener, StallTimeout: 3 * time.Second}, nil)
+	defer s.Release()
+	got := make([]byte, blockSize)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	if _, err := s.ReadAt(ctx, got, 0); err != nil || !bytes.Equal(got, data[:blockSize]) {
+		t.Fatalf("the slow file was not read: %v", err)
+	}
+}
+
+// torrentBytes are n bytes that differ from block to block.
+func torrentBytes(n int) []byte {
+	data := make([]byte, n)
+	for i := range data {
+		data[i] = byte(i/977 + i%251)
+	}
+	return data
 }

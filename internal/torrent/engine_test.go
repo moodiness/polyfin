@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -616,5 +617,37 @@ func TestNoTorrentMoreStartsThanAtOnceAllows(t *testing.T) {
 	}
 	if got := readAll(t, e, specs[refused]); len(got) == 0 {
 		t.Fatal("the torrent started once a place freed is not read")
+	}
+}
+
+// A read waiting for a piece tells, as its blocks arrive, that bytes are
+// coming, long before the piece is whole and the read returns.
+func TestAReadTellsTheBytesComingBeforeItsPiece(t *testing.T) {
+	t.Parallel()
+	tor := torrenttest.Build("A Movie", 256<<10, torrenttest.File{Name: "a-movie.mkv", Data: torrenttest.Bytes(600 << 10)})
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	e := newEngine(t, proxied(torrenttest.StartProxy(t, true, "", "")), 64<<20)
+	spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeder.Delay(50 * time.Millisecond)
+	defer e.Play(spec)()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	r, err := e.Open(ctx, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	var told atomic.Int32
+	got := make([]byte, 256<<10)
+	if _, err := r.ReadAtProgress(got, 0, func() { told.Add(1) }); err != nil || !bytes.Equal(got, tor.Data[:len(got)]) {
+		t.Fatalf("the piece was not read: %v", err)
+	}
+	// The piece's 16 blocks came one by one.
+	if n := told.Load(); n < 8 {
+		t.Fatalf("the read told bytes coming %d times", n)
 	}
 }

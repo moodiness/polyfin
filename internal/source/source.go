@@ -95,8 +95,10 @@ var errOtherFile = errors.New("an answer of another size than the file")
 // errNoAnswer reports a source that sent no headers in time.
 var errNoAnswer = fmt.Errorf("no headers in time: %w", context.DeadlineExceeded)
 
-// errStalled reports a connection that sent no bytes for a while.
-var errStalled = errors.New("the connection stalled")
+// ErrStalled reports a connection that sent no bytes for a while, past its
+// tries. A source that only playbacks read, as a torrent's file, is tried
+// again at the next playback after it (see Urge).
+var ErrStalled = errors.New("the connection stalled")
 
 // Final marks an opener's error as the source's failure at once, without
 // the tries the cache makes: the opener already waited as long as the
@@ -126,7 +128,7 @@ func Answer(err error) string {
 		return "HTTP 206, another range than the one asked"
 	case errors.Is(err, errBroken):
 		return "an answer cut short"
-	case errors.Is(err, errStalled):
+	case errors.Is(err, ErrStalled):
 		return "an answer that stopped"
 	case errors.Is(err, errOtherFile):
 		return "an answer of another size than the file"
@@ -560,7 +562,8 @@ type Source struct {
 // background reads give way to it (see slots.go), and its location's
 // Playing runs meanwhile. Without, the source is read in the background.
 // Once Playing returns, a failure that came while no playback had it run
-// is forgotten: what reads the source next tries it again at once.
+// is forgotten, and so is a stall, a torrent's swarm that sent nothing for
+// a while: what reads the source next tries it again at once.
 func (s *Source) Urge() (done func()) {
 	s.mu.Lock()
 	s.urged++
@@ -572,7 +575,7 @@ func (s *Source) Urge() (done func()) {
 		stop = playing()
 		s.mu.Lock()
 		s.joined++
-		if s.failure != nil && s.unplayed {
+		if s.failure != nil && (s.unplayed || errors.Is(s.failure, ErrStalled)) {
 			s.failure, s.failed, s.unplayed = nil, make(chan struct{}), false
 		}
 		s.mu.Unlock()

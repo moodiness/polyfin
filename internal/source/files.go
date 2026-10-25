@@ -20,6 +20,16 @@ type RandomFile interface {
 	io.Closer
 }
 
+// ProgressFile is a RandomFile whose reads tell, before they return, that
+// the bytes they wait for are coming, as a torrent's blocks do while a
+// piece is fetched: the cache counts a connection stalled when no byte
+// arrives for its stall timeout, rather than when a whole block of it did
+// not.
+type ProgressFile interface {
+	RandomFile
+	ReadAtProgress(p []byte, off int64, progress func()) (int, error)
+}
+
 // FileOpener reads the sources whose files are not served over HTTP, such
 // as those of an SFTP server, for the cache: it answers its requests as a
 // server serving ranges does, from the file open opens at the address
@@ -126,6 +136,14 @@ type fileBody struct {
 	buffer []byte
 	// pending is what the last read gave and Read did not yet.
 	pending []byte
+	// progress, when set, is called as a ProgressFile's read is fed.
+	progress func()
+}
+
+// onProgress has progress called as the reads of a ProgressFile are fed
+// (see watched), nil for none.
+func (b *fileBody) onProgress(progress func()) {
+	b.progress = progress
 }
 
 func (b *fileBody) Read(p []byte) (int, error) {
@@ -140,7 +158,13 @@ func (b *fileBody) Read(p []byte) (int, error) {
 			b.buffer = make([]byte, fileBlock)
 		}
 		want := b.buffer[:min(int64(len(b.buffer)), b.end-b.offset)]
-		n, err := b.file.ReadAt(want, b.offset)
+		var n int
+		var err error
+		if file, ok := b.file.(ProgressFile); ok && b.progress != nil {
+			n, err = file.ReadAtProgress(want, b.offset, b.progress)
+		} else {
+			n, err = b.file.ReadAt(want, b.offset)
+		}
 		b.offset += int64(n)
 		b.pending = want[:n]
 		if n < len(want) {

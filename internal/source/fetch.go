@@ -251,8 +251,8 @@ func (s *Source) work(c *conn) {
 			// stall right after one fails at once: the host stopped
 			// answering. A pinned address breaking again sends the next
 			// connection to the origin.
-			stalledAgain := errors.Is(err, errStalled) && c.stalled
-			c.stalled = c.stalled || errors.Is(err, errStalled)
+			stalledAgain := errors.Is(err, ErrStalled) && c.stalled
+			c.stalled = c.stalled || errors.Is(err, ErrStalled)
 			if c.failures++; c.failures >= attempts || stalledAgain {
 				err := fmt.Errorf("%w: %w", ErrUnavailable, err)
 				if s.extraFailed(c, err, false) {
@@ -540,6 +540,12 @@ func (s *Source) removeConn(c *conn) {
 	s.conns = slices.DeleteFunc(s.conns, func(o *conn) bool { return o == c })
 	// The first connection now may read for a playback.
 	s.nudgeConns()
+	// A reader still waits with no connection left to fetch its block, as
+	// when the connection reading towards it was dropped: another opens,
+	// rather than the reader waiting for good.
+	if len(s.conns) == 0 && len(s.wanted) > 0 && s.failure == nil && s.ctx.Err() == nil {
+		s.kick()
+	}
 }
 
 // hold has connection c hold a slot of its host before it connects,
@@ -699,10 +705,19 @@ func (s *Source) readBlock(c *conn, p []byte) (int, error) {
 		stalled.Store(true)
 		cancel()
 	})
+	// A file read in blocks whose bytes come before the block, as a
+	// torrent's, pushes the watchdog back as they come.
+	progressing, _ := c.body.(interface{ onProgress(func()) })
+	if progressing != nil {
+		progressing.onProgress(func() { timer.Reset(stall) })
+	}
 	n, err := io.ReadFull(watched{c.body, timer, stall}, p)
 	timer.Stop()
+	if progressing != nil {
+		progressing.onProgress(nil)
+	}
 	if stalled.Load() && n < len(p) {
-		err = fmt.Errorf("%w: no byte for %s", errStalled, stall)
+		err = fmt.Errorf("%w: no byte for %s", ErrStalled, stall)
 	}
 	return n, err
 }

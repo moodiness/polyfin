@@ -109,11 +109,15 @@ type torrent struct {
 	reads      map[*Reader]readSpan
 	files      []File
 	changed    chan struct{}
-	err        error
-	upBytes    int64
-	downBytes  int64
-	refs       int
-	linger     *time.Timer
+	// flowing is closed, and replaced, as a block of a piece arrives: the
+	// reads waiting for pieces tell their callers bytes are coming (see
+	// Reader.ReadAtProgress).
+	flowing   chan struct{}
+	err       error
+	upBytes   int64
+	downBytes int64
+	refs      int
+	linger    *time.Timer
 	// ending tells that the torrent stops once its playbacks end, without
 	// the linger (see Engine.End).
 	ending bool
@@ -171,7 +175,8 @@ func newTorrent(e *Engine, spec Spec, route Route, udp bool) *torrent {
 	t := &torrent{engine: e, hash: spec.Hash, route: route, udp: udp, ctx: ctx, cancel: cancel,
 		trackers: slices.Clone(spec.Trackers), nodes: slices.Clone(spec.Nodes), dht: spec.DHT,
 		inflight: map[int]*inflightPiece{}, peers: map[netip.AddrPort]*peer{}, known: map[netip.AddrPort]candidate{},
-		flags: map[netip.AddrPort]byte{}, reads: map[*Reader]readSpan{}, changed: make(chan struct{}), announces: map[string]error{}}
+		flags: map[netip.AddrPort]byte{}, reads: map[*Reader]readSpan{}, changed: make(chan struct{}),
+		flowing: make(chan struct{}), announces: map[string]error{}}
 	return t
 }
 
@@ -1234,6 +1239,8 @@ func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inf
 	in.got[offset/blockSize] = true
 	in.left--
 	t.downBytes += int64(len(data))
+	close(t.flowing)
+	t.flowing = make(chan struct{})
 	t.cancelOthers(in, b)
 	for _, other := range t.peers {
 		delete(other.reasked, b)
@@ -1417,6 +1424,14 @@ func (r *Reader) Size() int64 { return r.size }
 // ReadAt reads the file at off, waiting for its pieces as long as the
 // reader's context allows. What it waits for is the endgame's.
 func (r *Reader) ReadAt(p []byte, off int64) (int, error) {
+	return r.ReadAtProgress(p, off, nil)
+}
+
+// ReadAtProgress is ReadAt, calling progress, when set, each time a block
+// of the torrent arrives while it waits for a piece: a piece is read only
+// once whole and checked, so a read waits for bytes long before it returns
+// any, which those calls tell.
+func (r *Reader) ReadAtProgress(p []byte, off int64, progress func()) (int, error) {
 	t := r.t
 	if off >= r.file.Length {
 		return 0, io.EOF
@@ -1439,7 +1454,7 @@ func (r *Reader) ReadAt(p []byte, off int64) (int, error) {
 		within := position - int64(index)*length
 		chunk := min(end-position, length-within)
 		has := t.have[index]
-		err, changed := t.err, t.changed
+		err, changed, flowing := t.err, t.changed, t.flowing
 		if !has {
 			for _, peer := range t.peers {
 				t.fill(peer)
@@ -1463,10 +1478,20 @@ func (r *Reader) ReadAt(p []byte, off int64) (int, error) {
 			}
 			continue
 		}
-		select {
-		case <-r.ctx.Done():
-			return n, r.ctx.Err()
-		case <-changed:
+		for waiting := true; waiting; {
+			select {
+			case <-r.ctx.Done():
+				return n, r.ctx.Err()
+			case <-changed:
+				waiting = false
+			case <-flowing:
+				if progress != nil {
+					progress()
+				}
+				t.mu.Lock()
+				flowing = t.flowing
+				t.mu.Unlock()
+			}
 		}
 	}
 	if n < len(p) {
