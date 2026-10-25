@@ -172,7 +172,7 @@ When it runs:
 
 - Reading runs in the background and never delays a playback. Until a copy is ready, the track is burned in as before. The copy is listed from the next time the app asks how to play the version, which most apps do as each playback starts.
 - Each track is read once. Its text is kept in the database, not in the `cache` folder that is emptied at startup, and survives restarts. A track inside a local file is known by the file's folder, path, size and modification time, a track of an addon's file by its version and stream, and a subtitle file beside a local file by its path, size and modification time. A file that changes is read again.
-- A track that could not be read is tried again after 6 hours. A track in which Tesseract finds no text gets no copy.
+- A track that could not be read is tried again after 6 hours; a track of a torrent version whose pieces did not come in time, at the next play (see [Torrents](torrents.md#deadlines)). A track in which Tesseract finds no text gets no copy.
 
 Languages:
 

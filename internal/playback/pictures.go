@@ -474,7 +474,11 @@ func (s *Service) runJob(job ocrJob) {
 		return
 	}
 	if err := s.readPictures(ctx, job); err != nil {
-		s.pictures.failed.Put(job.track.key, err)
+		// A torrent that did not send in time is read again when the track
+		// is next queued (see passing).
+		if !passing(job.version, err) {
+			s.pictures.failed.Put(job.track.key, err)
+		}
 		s.logger.Info("A picture subtitle track could not be read into text", "addon", job.version.Addon, "error", err)
 	}
 }

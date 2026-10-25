@@ -35,7 +35,7 @@ func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Ver
 		in, release, err := s.probeInput(ctx, version)
 		if err != nil {
 			s.logger.Info("The first frame of an HDR video could not be read: the processor tone maps it", "addon", version.Addon, "error", err)
-			s.unmastered.Put(version.ID, err)
+			s.unmaster(version, err)
 			return analysis, nil
 		}
 		defer release()
@@ -48,7 +48,7 @@ func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Ver
 			found, err := s.ffprobe().MasteringDisplay(ctx, in, stream.Index)
 			if err != nil {
 				s.logger.Info("The first frame of an HDR video could not be read: the processor tone maps it", "addon", version.Addon, "error", err)
-				s.unmastered.Put(version.ID, err)
+				s.unmaster(version, err)
 				return analysis, nil
 			}
 			learned.Streams[i].MasteringDisplay = &found
@@ -63,4 +63,13 @@ func (s *Service) LearnMasteringDisplay(ctx context.Context, version library.Ver
 	})
 	learned := result.(media.Analysis)
 	return learned, !slices.ContainsFunc(learned.Streams, media.NeedsMasteringProbe)
+}
+
+// unmaster keeps err as why the first frame of a version's HDR video could
+// not be read, so that it is not read again for a while; a torrent that
+// did not send in time is read again at the next play (see passing).
+func (s *Service) unmaster(version library.Version, err error) {
+	if !passing(version, err) {
+		s.unmastered.Put(version.ID, err)
+	}
 }

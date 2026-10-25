@@ -214,9 +214,13 @@ func (s *Service) locate(ctx context.Context, version library.Version, analysis 
 	defer cancel()
 	located, err := s.readLocations(ctx, version, analysis)
 	if err != nil {
-		// The host or the network failed: asked again a while later.
+		// The host or the network failed: asked again a while later; a
+		// torrent that did not send in time, at the next play (see
+		// passing).
 		s.logger.Info("The subtitles of a version could not be located", "addon", version.Addon, "error", err)
-		s.unlocated.Put(version.ID, err)
+		if !passing(version, err) {
+			s.unlocated.Put(version.ID, err)
+		}
 		return nil, err
 	}
 	if _, err := s.db.Exec(ctx, `INSERT INTO media_subtitle_index (version_id, located) VALUES ($1, $2)
@@ -452,7 +456,9 @@ func (s *Service) readTrack(ctx context.Context, version library.Version, analys
 	track, err := s.readBlocks(ctx, version, analysis, stream)
 	if err != nil {
 		s.logger.Info("A subtitle track could not be read through its index", "addon", version.Addon, "error", err)
-		s.untracked.Put(key, err)
+		if !passing(version, err) {
+			s.untracked.Put(key, err)
+		}
 		if lasting(err) {
 			s.unlocate(ctx, version.ID, stream)
 		}

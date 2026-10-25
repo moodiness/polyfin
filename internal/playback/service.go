@@ -813,15 +813,27 @@ type versionFailure struct {
 // not tried again for failureTTL, unless its addon changes or its item is
 // tried again (see Retry and RetryItem).
 func (s *Service) fail(version library.Version, err error) {
-	if torrent.RouteFailure(err) || errors.Is(err, torrent.ErrAtCap) ||
-		version.Torrent != nil && (errors.Is(err, source.ErrStalled) || errors.Is(err, errTorrentSlow)) {
-		// The torrents' route failed, or as many torrents ran as the
-		// settings allow, or a torrent's swarm sent nothing for a while, or
-		// too slowly for the play, not the file: it plays once that
-		// changes, and the next play tries it again.
+	if passing(version, err) {
 		return
 	}
 	s.failures.Put(version.ID, versionFailure{addon: version.Origin.Addon, item: version.Item, err: err})
+}
+
+// passing reports whether err, met reading a version, tells of the moment
+// rather than of the version: the torrents' route failed, or as many
+// torrents ran as the settings allow, or the version's torrent did not
+// send its pieces in time: its swarm sent nothing for a while, or too
+// slowly for the play, or a read's own time ran out over it, or it was
+// read while no playback played it. The version plays once that changes:
+// what failed so is not remembered as its failure, and the next play tries
+// it again. A torrent that never started (torrent.StartError) is the
+// version's failure.
+func passing(version library.Version, err error) bool {
+	if torrent.RouteFailure(err) || errors.Is(err, torrent.ErrAtCap) {
+		return true
+	}
+	return version.Torrent != nil && (errors.Is(err, source.ErrStalled) || errors.Is(err, errTorrentSlow) ||
+		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrTorrentIdle) || errors.Is(err, torrent.ErrNotPlaying))
 }
 
 // Retry forgets the failures of the versions an addon listed, so that they

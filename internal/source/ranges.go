@@ -367,7 +367,9 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 			}
 			s.unpin(to)
 			if attempt >= tries {
-				return fmt.Errorf("%w: %v", ErrUnavailable, withoutURL(err))
+				// Why, kept for what reads the source: a torrent read while
+				// no playback plays it is no failure of its file.
+				return fmt.Errorf("%w: %w", ErrUnavailable, withoutURL(err))
 			}
 			s.holdOff(backoff(attempt, ""))
 			continue
