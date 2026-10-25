@@ -295,6 +295,24 @@ func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link stri
 	if err != nil && (m.reason == reasonNotFound || m.reason == reasonOtherYear || slices.Contains(looserMethods, m.by)) {
 		return cache.fail(err), nil
 	}
+	// A search that found no title of the name, even with its numerals
+	// read alike, is made once more with them written the other way:
+	// addons that search names as they are find "Harbor Lights II" only
+	// when asked for "Harbor Lights II", not "Harbor Lights 2". What it
+	// finds is chosen by the same rules. A unit left to the exact rule
+	// needs no such search.
+	other := otherNumerals(n.title)
+	if exact || err != nil || m.reason != reasonNotFound || other == "" {
+		return m, nil
+	}
+	results, err = cache.find(ctx, s.titles, titleKind(kind), other)
+	if err != nil && ctx.Err() != nil {
+		return match{}, ctx.Err()
+	}
+	m = chooseResult(kind, n, results, exact)
+	if err != nil && (m.reason == reasonNotFound || m.reason == reasonOtherYear || slices.Contains(looserMethods, m.by)) {
+		return cache.fail(err), nil
+	}
 	return m, nil
 }
 
@@ -388,18 +406,89 @@ func chooseItem(kind library.Kind, title string, year int, results []library.Rem
 // written with I, V and X only, so that words such as "mix", "civil" or
 // "liv" stay words.
 var romanNumerals = func() map[string]int {
-	ones := []string{"", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix"}
 	read := map[string]int{}
 	for n := 1; n < 40; n++ {
-		read[strings.Repeat("x", n/10)+ones[n%10]] = n
+		read[roman(n)] = n
 	}
 	return read
 }()
 
-// partNumbers are the numbers written in words read after "part".
+// roman is n, from 1 to 39, in lower-case Roman numerals.
+func roman(n int) string {
+	ones := []string{"", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix"}
+	return strings.Repeat("x", n/10) + ones[n%10]
+}
+
+// partNumbers are the numbers written in words read after "part", and
+// partWords the same numbers, by their figures.
 var partNumbers = map[string]int{"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
 	"ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
 	"eighteen": 18, "nineteen": 19, "twenty": 20}
+
+var partWords = func() map[int]string {
+	words := make(map[int]string, len(partNumbers))
+	for word, n := range partNumbers {
+		words[n] = word
+	}
+	return words
+}()
+
+// otherNumerals is a file's title with its numerals written the other
+// way, for a second search (see unitMatch): figures from 1 to 39 in Roman
+// numerals, or in words after "Part" up to twenty, and Roman numerals and
+// numbers written in words after "Part" in figures, so that "Harbor Lights
+// 2" is searched as "Harbor Lights II", "Harbor Lights II" as "Harbor
+// Lights 2" and "Tidewater Part 1" as "Tidewater Part One". It is empty
+// when the title holds no numeral that numerals reads alike (see
+// numerals): for a title of one word, a single letter that is neither the
+// last word nor after "Part", or a number written in words elsewhere.
+func otherNumerals(title string) string {
+	words := strings.Fields(title)
+	if len(words) < 2 {
+		return ""
+	}
+	// Each word's letters and digits, without the punctuation around them.
+	starts, ends, cores := make([]int, len(words)), make([]int, len(words)), make([]string, len(words))
+	for i, word := range words {
+		starts[i] = strings.IndexFunc(word, isAlphanumeric)
+		if starts[i] >= 0 {
+			ends[i] = strings.LastIndexFunc(word, isAlphanumeric) + 1
+			cores[i] = strings.ToLower(word[starts[i]:ends[i]])
+		}
+	}
+	other := slices.Clone(words)
+	for i, core := range cores {
+		if core == "" {
+			continue
+		}
+		afterPart := i > 0 && cores[i-1] == "part"
+		written := ""
+		if n, err := strconv.Atoi(core); err == nil && core[0] != '0' && n < 40 {
+			if word, ok := partWords[n]; ok && afterPart {
+				written = strings.ToUpper(word[:1]) + word[1:]
+			} else if r := roman(n); len(r) > 1 || afterPart || i == len(words)-1 {
+				written = strings.ToUpper(r)
+			}
+		} else if n, ok := romanNumerals[core]; ok && (len(core) > 1 || afterPart || i == len(words)-1) {
+			written = strconv.Itoa(n)
+		} else if n, ok := partNumbers[core]; ok && afterPart {
+			written = strconv.Itoa(n)
+		}
+		if written != "" {
+			other[i] = words[i][:starts[i]] + written + words[i][ends[i]:]
+		}
+	}
+	searched := strings.Join(other, " ")
+	if fold(searched) == fold(title) || numerals(fold(searched)) != numerals(fold(title)) {
+		return ""
+	}
+	return searched
+}
+
+// isAlphanumeric reports whether r is an ASCII letter or digit.
+func isAlphanumeric(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+}
 
 // numerals is a folded title (see fold) with its numbers written in
 // figures, so that "Harbor Lights II" reads as "Harbor Lights 2" and
