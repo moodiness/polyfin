@@ -72,3 +72,50 @@ func TestSavedThemeIsServedFromItsFolderOnly(t *testing.T) {
 		t.Errorf("without a folder: %d", response.Code)
 	}
 }
+
+// A file of the copy kept that is missing from its folder sends the browser
+// to where it came from, without being kept; a file present is served, and
+// a name with no original answers 404.
+func TestAMissingSavedThemeFileGoesWhereItCameFrom(t *testing.T) {
+	dir := t.TempDir()
+	id := "0123456789abcdef"
+	if err := os.MkdirAll(filepath.Join(dir, id), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, id, "001-theme.css"), []byte("body {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	originals := map[string]string{
+		id + "/001-theme.css": "https://themes.example/theme.css",
+		id + "/002-x.woff2":   "https://themes.example/fonts/x.woff2",
+	}
+	h := New(Options{
+		Database:      database{},
+		Admin:         fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}},
+		AdminAPI:      owner("admin api"),
+		Jellyfin:      owner("jellyfin"),
+		Web:           webFiles,
+		SetupRequired: setupState{}.SetupRequired,
+		SavedThemes:   dir,
+		SavedThemeOriginal: func(id, name string) (string, bool) {
+			address, ok := originals[id+"/"+name]
+			return address, ok
+		},
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	if response := get(h, "/web/polyfin/themes/saved/"+id+"/001-theme.css"); response.Code != http.StatusOK || response.Body.String() != "body {}" {
+		t.Errorf("a file present: %d %q", response.Code, response.Body.String())
+	}
+	for _, prefix := range []string{"/web/", "/jellyfin/web/"} {
+		response := get(h, prefix+"polyfin/themes/saved/"+id+"/002-x.woff2")
+		if response.Code != http.StatusFound || response.Header().Get("Location") != "https://themes.example/fonts/x.woff2" ||
+			response.Header().Get("Cache-Control") != "no-store" {
+			t.Errorf("%s, a missing file: %d %v", prefix, response.Code, response.Header())
+		}
+	}
+	for _, name := range []string{"004-unknown.css"} {
+		if response := get(h, "/web/polyfin/themes/saved/"+id+"/"+name); response.Code != http.StatusNotFound {
+			t.Errorf("%s: %d %v", name, response.Code, response.Header())
+		}
+	}
+}

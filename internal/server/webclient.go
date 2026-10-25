@@ -120,7 +120,7 @@ func (c *customScripts) current() hashedScript {
 // serveSavedTheme). Text files go
 // compressed to clients that take gzip, compressed once each (see
 // gzipFiles).
-func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() string, savedThemes string, api http.Handler, logger *slog.Logger) http.Handler {
+func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() string, savedThemes string, savedOriginal func(id, name string) (string, bool), api http.Handler, logger *slog.Logger) http.Handler {
 	custom := &customScripts{get: customJs}
 	compressed := newGzipFiles(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -170,7 +170,7 @@ func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() st
 			return
 		}
 		if rest, ok := strings.CutPrefix(name, themecopy.Path); ok {
-			serveSavedTheme(w, r, savedThemes, rest)
+			serveSavedTheme(w, r, savedThemes, savedOriginal, rest)
 			return
 		}
 		info, err := fs.Stat(files, name)
@@ -227,9 +227,23 @@ const savedThemePolicy = "default-src 'none'; style-src 'unsafe-inline'; img-src
 // kept in dir (see themecopy): a copy's id changes with each copy, so its
 // files are cached for good, served with the type of their extension.
 // Only the files of a copy's folder are served, never a path out of dir.
-func serveSavedTheme(w http.ResponseWriter, r *http.Request, dir, rest string) {
+// A file of the copy kept missing from dir is redirected to the address
+// original gives it, the one it came from; nil sends none.
+func serveSavedTheme(w http.ResponseWriter, r *http.Request, dir string, original func(id, name string) (string, bool), rest string) {
 	file, err := themecopy.OpenFile(dir, rest)
 	if err != nil {
+		// A file of the copy kept that is missing, as after a backup
+		// restored on another system, is fetched by the browser from where
+		// it came, which the theme named before the copy: the theme keeps
+		// working online. The redirect is not kept, for the file may come
+		// back with the copy made again.
+		if id, name, ok := strings.Cut(rest, "/"); ok && original != nil {
+			if address, ok := original(id, name); ok {
+				w.Header().Set("Cache-Control", "no-store")
+				http.Redirect(w, r, address, http.StatusFound)
+				return
+			}
+		}
 		http.NotFound(w, r)
 		return
 	}

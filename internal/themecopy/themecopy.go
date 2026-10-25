@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -154,11 +155,13 @@ func (c Copy) Size() int64 {
 }
 
 // Status is the copy kept, nil for none, the names of its files missing
-// from its folder, such as after a restore on another system, and the
-// addresses the Custom texts load from elsewhere.
+// from its folder, such as after a restore on another system, whether the
+// Custom texts load the copy's files, and the addresses they load from
+// elsewhere.
 type Status struct {
 	Copy    *Copy
 	Missing []string
+	InUse   bool
 	Outside []string
 }
 
@@ -178,6 +181,10 @@ type Options struct {
 type Copier struct {
 	options Options
 	running sync.Mutex
+	// current is the copy kept, nil for none, which Original answers from
+	// without asking the database: it changes with Keep and Remove only,
+	// and a restored backup starts Polyfin again.
+	current atomic.Pointer[Copy]
 }
 
 // New returns a Copier, after removing the folders of copies no longer
@@ -194,6 +201,7 @@ func New(ctx context.Context, options Options) (*Copier, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.current.Store(current)
 	entries, err := os.ReadDir(options.Dir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -292,6 +300,8 @@ func (c *Copier) Status(ctx context.Context) (Status, error) {
 	settings := c.options.Accounts.Settings()
 	status := Status{Copy: current, Missing: []string{}, Outside: outside(settings.CustomCss, settings.CustomJs)}
 	if current != nil {
+		named := Path + current.ID + "/"
+		status.InUse = strings.Contains(settings.CustomCss, named) || strings.Contains(settings.CustomJs, named)
 		for _, file := range current.Files {
 			if _, err := os.Stat(filepath.Join(c.options.Dir, current.ID, file.Name)); err != nil {
 				status.Missing = append(status.Missing, file.Name)
@@ -299,6 +309,28 @@ func (c *Copier) Status(ctx context.Context) (Status, error) {
 		}
 	}
 	return status, nil
+}
+
+// Original returns the address the file name of the copy id came from,
+// for the copy kept only, and false for any other file. While a file is
+// missing from the copy's folder, as after a backup restored on another
+// system, the web client sends browsers there, so that the theme keeps
+// working while the internet is reachable.
+func (c *Copier) Original(id, name string) (string, bool) {
+	kept := c.current.Load()
+	if kept == nil || kept.ID != id {
+		return "", false
+	}
+	for _, file := range kept.Files {
+		if file.Name == name {
+			parsed, err := url.Parse(file.Address)
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+				return "", false
+			}
+			return file.Address, true
+		}
+	}
+	return "", false
 }
 
 // outside returns the addresses css and js load from elsewhere, each once,
@@ -378,6 +410,7 @@ func (c *Copier) Keep(ctx context.Context) (Status, error) {
 		_ = os.RemoveAll(dir)
 		return Status{}, err
 	}
+	c.current.Store(&made)
 	if former != nil {
 		c.removeFolder(former.ID)
 	}
@@ -408,6 +441,7 @@ func (c *Copier) Remove(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
+	c.current.Store(nil)
 	c.removeFolder(current.ID)
 	c.options.Logger.Info("The copy of the web player theme was removed", "files", len(current.Files))
 	return c.Status(ctx)

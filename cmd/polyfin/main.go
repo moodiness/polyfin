@@ -703,8 +703,11 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			SetupRequired: store.SetupRequired,
 			CustomJs:      func() string { return store.Settings().ServedJs() },
 			SavedThemes:   themesDir,
-			Proxies:       proxies,
-			HTTPS:         secure.Handler,
+			// A file of the copy kept that is missing goes to where it
+			// came from.
+			SavedThemeOriginal: themeCopier.Original,
+			Proxies:            proxies,
+			HTTPS:              secure.Handler,
 			Metrics: metrics.Handler(func() (bool, string) {
 				settings := store.Settings()
 				return settings.Metrics, settings.MetricsToken

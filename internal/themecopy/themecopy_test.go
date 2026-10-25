@@ -344,3 +344,76 @@ func TestOnlyACopysFilesAreOpened(t *testing.T) {
 		}
 	}
 }
+
+// A file of the copy missing from its folder, as after a backup restored on
+// another system, is told, with the copy in use by the texts, and the
+// address it came from is given for it, by a Copier started anew too, but
+// for no other copy, no other name, and no copy once removed.
+func TestAMissingFileOfTheCopyIsToldWithWhereItCameFrom(t *testing.T) {
+	t.Parallel()
+	c := newCDN(t)
+	css := `@import url('` + c.server.URL + `/theme/theme.css');`
+	f := newFixture(t, allowOnly(c.server), css, "")
+	status, err := f.copier.Keep(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := status.Copy
+	font := fileNamed(t, kept, c.server.URL+"/theme/fonts/x.woff2")
+	if !status.InUse || len(status.Missing) != 0 {
+		t.Fatalf("after the copy: in use %v, missing %v", status.InUse, status.Missing)
+	}
+	if err := os.Remove(filepath.Join(f.dir, kept.ID, font.Name)); err != nil {
+		t.Fatal(err)
+	}
+	status, err = f.copier.Status(t.Context())
+	if err != nil || !status.InUse || len(status.Missing) != 1 || status.Missing[0] != font.Name {
+		t.Fatalf("with the font missing: in use %v, missing %v, %v", status.InUse, status.Missing, err)
+	}
+	restarted, err := New(t.Context(), Options{DB: f.copier.options.DB, Accounts: f.store, Dir: f.dir, Client: f.copier.options.Client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, copier := range map[string]*Copier{"the copier": f.copier, "a copier started anew": restarted} {
+		if address, ok := copier.Original(kept.ID, font.Name); !ok || address != font.Address {
+			t.Errorf("%s: the font's original is %q, %v", name, address, ok)
+		}
+		if _, ok := copier.Original("0123456789abcdef", font.Name); ok {
+			t.Errorf("%s: another copy's file has an original", name)
+		}
+		if _, ok := copier.Original(kept.ID, "009-other.woff2"); ok {
+			t.Errorf("%s: a name the copy does not hold has an original", name)
+		}
+	}
+	// An address that is not http, as a backup made by hand could hold, is
+	// never given.
+	if _, err := f.copier.options.DB.Exec(t.Context(), "UPDATE theme_copy SET files = jsonb_set(files, '{0,address}', '\"javascript:alert(1)\"')"); err != nil {
+		t.Fatal(err)
+	}
+	crafted, err := New(t.Context(), Options{DB: f.copier.options.DB, Accounts: f.store, Dir: f.dir, Client: f.copier.options.Client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if address, ok := crafted.Original(kept.ID, kept.Files[0].Name); ok {
+		t.Errorf("an address that is not http was given: %q", address)
+	}
+	// Texts that no longer name the copy do not use it.
+	settings := f.store.Settings()
+	settings.CustomCss = ".mine {}"
+	if _, err := f.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := f.copier.Status(t.Context()); err != nil || status.InUse {
+		t.Errorf("texts without the copy: in use %v, %v", status.InUse, err)
+	}
+	settings.CustomCss = `@import url('` + Path + kept.ID + `/` + fileNamed(t, kept, c.server.URL+"/theme/theme.css").Name + `');`
+	if _, err := f.store.UpdateSettings(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.copier.Remove(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.copier.Original(kept.ID, font.Name); ok {
+		t.Error("a removed copy's file has an original")
+	}
+}

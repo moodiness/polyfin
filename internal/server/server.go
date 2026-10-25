@@ -62,6 +62,10 @@ type Options struct {
 	// keeps (see themecopy), served under /web/polyfin/themes/saved/;
 	// empty serves none.
 	SavedThemes string
+	// SavedThemeOriginal gives the address a file of the copy kept came
+	// from (see themecopy.Copier.Original), where a file missing from
+	// SavedThemes is redirected; nil redirects none.
+	SavedThemeOriginal func(id, name string) (string, bool)
 	// Proxies tells every route the client of requests that come through
 	// a known proxy (see forwarded.Client); nil reads the connection's
 	// address alone.
@@ -121,7 +125,7 @@ func New(options Options) http.Handler {
 	if options.Web != nil {
 		mux.Handle(webPrefix, webClient(options.Web, func(ctx context.Context) bool {
 			return setUp(ctx, options.SetupRequired)
-		}, options.CustomJs, options.SavedThemes, options.Jellyfin, options.Logger))
+		}, options.CustomJs, options.SavedThemes, options.SavedThemeOriginal, options.Jellyfin, options.Logger))
 		// Permanently, as Jellyfin does; the mux's own redirect is a 307.
 		mux.HandleFunc("/web", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, basePath(r)+webPrefix, http.StatusMovedPermanently)
