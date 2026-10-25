@@ -3,6 +3,7 @@ package admin
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -97,5 +98,95 @@ func TestThemeCopyIsForAdministratorsAndThePublicInternet(t *testing.T) {
 	}
 	if status, body, _ := administrator.call(http.MethodDelete, "/settings/theme-copy", nil); status != http.StatusNotFound {
 		t.Errorf("removing no copy: %d %v", status, body)
+	}
+}
+
+// A copy of the Custom theme's files that misses some of them, as after a
+// backup restored on another system, is a warning in System › Health,
+// leading to the copy, while the Custom theme is chosen: another theme
+// leaves it out, and the copy made again clears it.
+func TestHealthTellsAThemeCopyMissingFiles(t *testing.T) {
+	t.Parallel()
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/theme.css":
+			w.Header().Set("Content-Type", "text/css")
+			_, _ = w.Write([]byte(`body { background: url(back.png); }`))
+		case "/back.png":
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write([]byte("\x89PNG"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(cdn.Close)
+	var themes string
+	api := newTestAPI(t, 10, func(o *Options, deps testDeps) {
+		themes = filepath.Join(o.DataDir, "themes")
+		copier, err := themecopy.New(t.Context(), themecopy.Options{DB: deps.pool, Accounts: o.Accounts, Dir: themes, Client: cdn.Client()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		o.ThemeCopier = copier
+	})
+	administrator := api.signedIn("administrator", true)
+	theme := func(name string) {
+		t.Helper()
+		settings := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en", "webTheme": name}
+		if name == accounts.WebThemeCustom && api.store.Settings().CustomCss == "" {
+			settings["customCss"] = `@import url("` + cdn.URL + `/theme.css");`
+		}
+		if status, _, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK {
+			t.Fatalf("theme %s: %d", name, status)
+		}
+	}
+	missing := func() []map[string]any {
+		t.Helper()
+		_, body, _ := administrator.call(http.MethodGet, "/health/problems?language=en", nil)
+		list, _ := body["problems"].([]any)
+		var found []map[string]any
+		for _, entry := range list {
+			if problem, _ := entry.(map[string]any); problem["code"] == "theme_copy_missing" {
+				found = append(found, problem)
+			}
+		}
+		return found
+	}
+	theme(accounts.WebThemeCustom)
+	status, body, _ := administrator.call(http.MethodPost, "/settings/theme-copy", nil)
+	kept, _ := body["copy"].(map[string]any)
+	files, _ := kept["files"].([]any)
+	if status != http.StatusOK || len(files) != 2 {
+		t.Fatalf("keep: %d %v", status, body)
+	}
+	if found := missing(); len(found) != 0 {
+		t.Fatalf("a whole copy: %v", found)
+	}
+	entries, err := os.ReadDir(themes)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("the copies: %v %v", entries, err)
+	}
+	image, _ := files[1].(map[string]any)
+	if err := os.Remove(filepath.Join(themes, entries[0].Name(), image["name"].(string))); err != nil {
+		t.Fatal(err)
+	}
+	found := missing()
+	if len(found) != 1 || found[0]["missing"] != float64(1) || found[0]["files"] != float64(2) || found[0]["tone"] != "warning" ||
+		found[0]["to"] != "/settings/web-player#theme-copy" {
+		t.Fatalf("a file missing: %v", found)
+	}
+	theme(accounts.WebThemeLumaaGlaass)
+	if found := missing(); len(found) != 0 {
+		t.Errorf("with LumaaGlaass chosen: %v", found)
+	}
+	theme(accounts.WebThemeCustom)
+	if found := missing(); len(found) != 1 {
+		t.Errorf("Custom chosen again: %v", found)
+	}
+	if status, body, _ := administrator.call(http.MethodPost, "/settings/theme-copy", nil); status != http.StatusOK {
+		t.Fatalf("keep again: %d %v", status, body)
+	}
+	if found := missing(); len(found) != 0 {
+		t.Errorf("after the copy made again: %v", found)
 	}
 }

@@ -806,8 +806,8 @@ const settings: typeof en = {
         : `Não foi possível salvar ${count} endereços; eles ainda são carregados de outro lugar:`,
     themeCopyMissing: (count: number) =>
       count === 1
-        ? 'Falta um arquivo da cópia na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema. Atualize a cópia para baixá-lo de novo.'
-        : `Faltam ${count} arquivos da cópia na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema. Atualize a cópia para baixá-los de novo.`,
+        ? 'Falta um arquivo da cópia na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema. Enquanto isso, os navegadores o carregam do endereço original, o que exige internet. Atualize a cópia para baixá-lo de novo.'
+        : `Faltam ${count} arquivos da cópia na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema. Enquanto isso, os navegadores os carregam dos endereços originais, o que exige internet. Atualize a cópia para baixá-los de novo.`,
     themeCopyOutside: (count: number) =>
       count === 1
         ? 'Os textos personalizados carregam um endereço de outro lugar:'

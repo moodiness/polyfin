@@ -204,6 +204,8 @@ const system = {
           `Picture subtitles in ${name} are not read into text: Tesseract has no data for this language. Add the file ${file} to the folder POLYFIN_TESSDATA_DIR names.`,
         metadataLanguages: (name: string) =>
           `${name}: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. Keep Language of its descriptions at None on this addon, or on one more metadata addon.`,
+        themeCopyMissing: (missing: number, files: number) =>
+          `The copy of the web player theme misses ${missing} of its ${files} files in Polyfin’s data folder, as after a backup restored on another system: browsers load them from their original addresses meanwhile, which needs the internet. Update the copy under Settings › Web player, or choose another theme.`,
         nvidiaDriver: (version: string) =>
           `The NVIDIA graphics card does not convert video: its driver is older than version ${version}, which FFmpeg needs for NVENC. Update the driver to use the card.`,
         backupFailed: 'The last database backup failed.',

@@ -102,6 +102,10 @@ const (
 	// NVENC needs a newer NVIDIA driver than the GPU's: Name is the
 	// version it needs.
 	problemNVIDIADriver = "nvidia_driver"
+	// The copy kept of the Custom theme's files misses some of them, as
+	// after a backup restored on another system: Missing counts them, out
+	// of Files. While the Custom theme is chosen and loads the copy only.
+	problemThemeCopyMissing = "theme_copy_missing"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -124,7 +128,8 @@ const (
 // Error, Let's Encrypt's, for a renewal that failed; Expires for a
 // certificate close to its end, an error once it ended; Addon, with Name
 // and Failure, for a local folder whose searches failed; Peers for a
-// torrent that did not start. To is the admin app's page that describes
+// torrent that did not start; Missing and Files for a theme copy missing
+// files. To is the admin app's page that describes
 // it, with its anchor. Transient ones are not told as health problems:
 // they come and go with the load, or, for stopped connections, the
 // connection_stopped event told them already.
@@ -151,6 +156,8 @@ type healthProblemJSON struct {
 	Error     string           `json:"error,omitempty"`
 	Expires   *time.Time       `json:"expires,omitempty"`
 	Peers     *peerCountsJSON  `json:"peers,omitempty"`
+	Missing   int              `json:"missing,omitempty"`
+	Files     int              `json:"files,omitempty"`
 }
 
 // peerCountsJSON counts the peers a torrent that did not start found:
@@ -340,6 +347,17 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		if version := h.Health.NVIDIADriver(); version != "" {
 			p := warning("nvidia_driver", problemNVIDIADriver, "transcoder")
 			p.Name = version
+			add(p)
+		}
+	}
+	if h.ThemeCopier != nil && h.Accounts.Settings().WebTheme == accounts.WebThemeCustom {
+		status, err := h.ThemeCopier.Status(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if status.Copy != nil && status.InUse && len(status.Missing) > 0 {
+			p := healthProblemJSON{Key: "theme_copy_missing:" + status.Copy.ID, Code: problemThemeCopyMissing, Tone: notifications.SeverityWarning,
+				To: "/settings/web-player#theme-copy", Missing: len(status.Missing), Files: len(status.Copy.Files)}
 			add(p)
 		}
 	}
@@ -871,6 +889,13 @@ func (p healthProblemJSON) text(language string) string {
 			"Keep Language of its descriptions at None on this addon, or on one more metadata addon.",
 			"%s : chaque addon de métadonnées du serveur a une langue : ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. " +
 				"Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.", "%s: Jedes Metadaten-Add-on des Servers hat eine Sprache, daher beschreiben sie Titel für jeden Benutzer in ihrer Sprache, unabhängig von seiner Metadatensprache. Belasse „Sprache der Beschreibungen“ bei diesem Add-on oder bei einem weiteren Metadaten-Add-on auf „Keine“.", "%s: todas las extensiones de metadatos del servidor tienen un idioma, así que describen los títulos en su idioma para todos los usuarios, sea cual sea su idioma de los metadatos. Deje «Idioma de sus descripciones» en «Ninguno» en esta extensión o en otra extensión de metadatos más.", "%s: ogni add-on di metadati del server ha una lingua, quindi descrivono i titoli nella propria lingua per tutti gli utenti, qualunque sia la loro lingua dei metadati. Lascia Lingua delle descrizioni su Nessuna in questo add-on, o in un altro add-on di metadati.", "%s: todos os complementos de metadados do servidor têm um idioma, então eles descrevem os títulos no idioma deles para todos os usuários, seja qual for o idioma dos metadados de cada um. Mantenha Idioma das descrições como Nenhum neste complemento, ou em mais um complemento de metadados."}, p.Name)
+	case problemThemeCopyMissing:
+		return say(i18n.Text{"The copy of the web player theme misses %d of its %d files in Polyfin’s data folder, as after a backup restored on another system: browsers load them from their original addresses meanwhile, which needs the internet. Update the copy under Settings › Web player, or choose another theme.",
+			"La copie du thème du lecteur web n’a plus %d de ses %d fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système : les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.",
+			"Der Kopie des Web-Player-Themes fehlen %d ihrer %d Dateien im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System: Browser laden sie bis dahin von ihren ursprünglichen Adressen, was Internet braucht. Aktualisiere die Kopie unter Einstellungen › Web-Player oder wähle ein anderes Theme.",
+			"A la copia del tema del reproductor web le faltan %d de sus %d archivos en la carpeta de datos de Polyfin, como tras restaurar una copia de seguridad en otro sistema: mientras tanto, los navegadores los cargan desde sus direcciones originales, lo que requiere internet. Actualice la copia en Ajustes › Reproductor web, o elija otro tema.",
+			"Alla copia del tema del lettore web mancano %d dei suoi %d file nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema: nel frattempo i browser li caricano dai loro indirizzi originali, il che richiede internet. Aggiorna la copia in Impostazioni › Lettore web, oppure scegli un altro tema.",
+			"Faltam à cópia do tema do player web %d dos seus %d arquivos na pasta de dados do Polyfin, como depois de restaurar um backup em outro sistema: enquanto isso, os navegadores os carregam dos endereços originais, o que exige internet. Atualize a cópia em Configurações › Player web, ou escolha outro tema."}, p.Missing, p.Files)
 	case problemNVIDIADriver:
 		return say(i18n.Text{"The NVIDIA graphics card does not convert video: its driver is older than version %s, which FFmpeg needs for NVENC. Update the driver to use the card.",
 			"La carte graphique NVIDIA ne convertit pas la vidéo : son pilote est antérieur à la version %s, dont FFmpeg a besoin pour NVENC. Mettez à jour le pilote pour utiliser la carte.",

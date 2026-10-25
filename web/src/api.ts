@@ -3793,6 +3793,8 @@ export type HealthProblem = {
   | { code: 'metadata_languages'; name: string }
   /** NVENC needs a newer NVIDIA driver than the GPU's: `name` is the version it needs. */
   | { code: 'nvidia_driver'; name: string }
+  /** The copy kept of the Custom theme's files misses `missing` of its `files`. */
+  | { code: 'theme_copy_missing'; missing: number; files: number }
   | { code: 'connection_stopped'; kind: 'app'; name: AppKind; owner: NonNullable<Owner> }
   | {
       code: 'connection_stopped'

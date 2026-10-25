@@ -817,8 +817,8 @@ const settings: typeof en = {
         : `Non è stato possibile salvare ${count} indirizzi; vengono ancora caricati da altrove:`,
     themeCopyMissing: (count: number) =>
       count === 1
-        ? 'Un file della copia manca nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema. Aggiorna la copia per scaricarlo di nuovo.'
-        : `${count} file della copia mancano nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema. Aggiorna la copia per scaricarli di nuovo.`,
+        ? 'Un file della copia manca nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema. Nel frattempo i browser lo caricano dal suo indirizzo originale, il che richiede internet. Aggiorna la copia per scaricarlo di nuovo.'
+        : `${count} file della copia mancano nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema. Nel frattempo i browser li caricano dai loro indirizzi originali, il che richiede internet. Aggiorna la copia per scaricarli di nuovo.`,
     themeCopyOutside: (count: number) =>
       count === 1
         ? 'I testi personalizzati caricano un indirizzo da altrove:'

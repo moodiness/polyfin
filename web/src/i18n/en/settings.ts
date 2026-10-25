@@ -793,7 +793,7 @@ const settings = {
         ? 'One address could not be saved; it is still loaded from elsewhere:'
         : `${count} addresses could not be saved; they are still loaded from elsewhere:`,
     themeCopyMissing: (count: number) =>
-      `${count === 1 ? 'One file' : `${count} files`} of the copy ${count === 1 ? 'is' : 'are'} missing from Polyfin’s data folder, as after restoring a backup on another system. Update the copy to download ${count === 1 ? 'it' : 'them'} again.`,
+      `${count === 1 ? 'One file' : `${count} files`} of the copy ${count === 1 ? 'is' : 'are'} missing from Polyfin’s data folder, as after restoring a backup on another system: browsers load ${count === 1 ? 'it' : 'them'} from ${count === 1 ? 'its' : 'their'} original address meanwhile, which needs the internet. Update the copy to download ${count === 1 ? 'it' : 'them'} again.`,
     themeCopyOutside: (count: number) =>
       count === 1
         ? 'The Custom texts load one address from elsewhere:'

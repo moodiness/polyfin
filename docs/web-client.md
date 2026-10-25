@@ -297,7 +297,14 @@ Each address is asked once, from the internet only. A file kept is named after i
 
 **Where the files are:** in `themes` in Polyfin's data folder: `/data/themes` in the Docker image's volume, and with Polyfin Desktop `themes` in its data folder, such as `~/Library/Application Support/Polyfin/themes` (see [Folders](desktop.md#folders)). Polyfin removes, at start, the folders of copies it no longer keeps, as a stop in the middle of a copy can leave.
 
-**Backups:** a database backup holds the texts and the list of the copy's files with their original addresses, not the files. Restored on a server without them, such as another system, the theme's files are missing until **Update the copy** downloads them again from their addresses; the admin app says how many are missing. **Remove the copy** works without them too.
+**Backups:** a database backup holds the texts, which name the copy's files, and the list of those files with their original addresses, not the files themselves. Restored on a server without them, such as another system or another data folder, or after the files were deleted, the copy misses its files.
+
+**Missing files:**
+
+- The web client sends a browser that asks for a missing file of the copy to the address it came from, with a `302` that is not kept: while the internet and the theme's CDN are reachable, the theme keeps working, from its CDN, as it did before the copy. Offline, those files do not load, and the web client shows its own look where they were.
+- Only the files of the copy kept are sent there, each to its own original address, http or https; any other name answers `404`.
+- While the theme is **Custom** and its texts load the copy, **System › Health** shows a warning with how many of the copy's files are missing, linked to the copy (see [Health](administration.md#health)). The copy panel says so too.
+- **Update the copy** downloads them again from their addresses, as a new copy, which clears the warning; so does choosing another theme. **Remove the copy** works without them too, and puts the original addresses back in the texts.
 
 **Compared with Jellyfin:**
 

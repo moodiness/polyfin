@@ -814,8 +814,8 @@ const settings: typeof en = {
         : `${count} adresses n’ont pas pu être enregistrées ; elles restent chargées d’ailleurs :`,
     themeCopyMissing: (count: number) =>
       count === 1
-        ? 'Un fichier de la copie manque dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système. Mettez la copie à jour pour le télécharger de nouveau.'
-        : `${count} fichiers de la copie manquent dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système. Mettez la copie à jour pour les télécharger de nouveau.`,
+        ? 'Un fichier de la copie manque dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système. Les navigateurs le chargent en attendant depuis son adresse d’origine, ce qui demande internet. Mettez la copie à jour pour le télécharger de nouveau.'
+        : `${count} fichiers de la copie manquent dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système. Les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour pour les télécharger de nouveau.`,
     themeCopyOutside: (count: number) =>
       count === 1
         ? 'Les textes personnalisés chargent une adresse d’ailleurs :'

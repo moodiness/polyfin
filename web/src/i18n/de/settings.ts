@@ -805,8 +805,8 @@ const settings: typeof en = {
         : `${count} Adressen konnten nicht gespeichert werden; sie werden weiter von anderswo geladen:`,
     themeCopyMissing: (count: number) =>
       count === 1
-        ? 'Eine Datei der Kopie fehlt im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System. Aktualisiere die Kopie, um sie erneut herunterzuladen.'
-        : `${count} Dateien der Kopie fehlen im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System. Aktualisiere die Kopie, um sie erneut herunterzuladen.`,
+        ? 'Eine Datei der Kopie fehlt im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System. Browser laden sie bis dahin von ihrer ursprünglichen Adresse, was Internet braucht. Aktualisiere die Kopie, um sie erneut herunterzuladen.'
+        : `${count} Dateien der Kopie fehlen im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System. Browser laden sie bis dahin von ihren ursprünglichen Adressen, was Internet braucht. Aktualisiere die Kopie, um sie erneut herunterzuladen.`,
     themeCopyOutside: (count: number) =>
       count === 1
         ? 'Die benutzerdefinierten Texte laden eine Adresse von anderswo:'

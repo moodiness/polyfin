@@ -812,8 +812,8 @@ const settings: typeof en = {
         : `No se pudieron guardar ${count} direcciones; se siguen cargando desde otro sitio:`,
     themeCopyMissing: (count: number) =>
       count === 1
-        ? 'Falta un archivo de la copia en la carpeta de datos de Polyfin, como tras restaurar una copia de seguridad en otro sistema. Actualice la copia para descargarlo de nuevo.'
-        : `Faltan ${count} archivos de la copia en la carpeta de datos de Polyfin, como tras restaurar una copia de seguridad en otro sistema. Actualice la copia para descargarlos de nuevo.`,
+        ? 'Falta un archivo de la copia en la carpeta de datos de Polyfin, como tras restaurar una copia de seguridad en otro sistema. Mientras tanto, los navegadores lo cargan desde su dirección original, lo que requiere internet. Actualice la copia para descargarlo de nuevo.'
+        : `Faltan ${count} archivos de la copia en la carpeta de datos de Polyfin, como tras restaurar una copia de seguridad en otro sistema. Mientras tanto, los navegadores los cargan desde sus direcciones originales, lo que requiere internet. Actualice la copia para descargarlos de nuevo.`,
     themeCopyOutside: (count: number) =>
       count === 1
         ? 'Los textos personalizados cargan una dirección desde otro sitio:'
