@@ -60,8 +60,9 @@ import (
 const (
 	// imageCacheBytes bounds the memory used by recently relayed artwork.
 	imageCacheBytes = 128 << 20
-	// imageDiskBytes bounds the artwork kept on disk.
-	imageDiskBytes = 1 << 30
+	// imageDiskBytes bounds the artwork kept on disk: 1 GB, in the
+	// decimal units sizes are shown in, as the source cache's 10 GB.
+	imageDiskBytes = 1_000_000_000
 	// imageHostFetches bounds the downloads from one host at once, and
 	// imageSlowHostFetches those from a host to spare (see host);
 	// imageSlowDown is how long a host that showed it was overloaded is
