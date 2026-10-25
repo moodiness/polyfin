@@ -23,6 +23,10 @@ Jellyfin apps, the built-in web client among them, keep a live connection open a
 
 The admin app uses no WebSocket: it asks the server again every few seconds.
 
+## Slow answers
+
+The first play of a torrent version over a slow swarm can keep the app's PlaybackInfo request waiting for up to 3 minutes, sending nothing until it answers (see [Torrents](torrents.md#deadlines)). Traefik and Caddy wait for an answer as long as it takes by default. nginx closes a response that sends nothing for 60 seconds (`proxy_read_timeout`): set it to `180s` or more for Polyfin, or such a play fails at the proxy.
+
 ## HTTPS and the public address
 
 Get the certificate on the proxy, and have it redirect HTTP to HTTPS. Leave **Serve HTTPS**, under **Settings › Security**, off: the proxy forwards to Polyfin's HTTP port.

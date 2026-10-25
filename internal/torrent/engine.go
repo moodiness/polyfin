@@ -516,6 +516,29 @@ func (e *Engine) Running(hash Hash) bool {
 	return e.torrents[hash] != nil
 }
 
+// Received returns when the torrent of hash last received a byte of its
+// pieces from a peer, zero when it does not run or received none.
+func (e *Engine) Received(hash Hash) time.Time {
+	e.mu.Lock()
+	t := e.torrents[hash]
+	e.mu.Unlock()
+	if t == nil {
+		return time.Time{}
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	var last time.Time
+	for _, p := range t.peers {
+		if p.heard.After(last) {
+			last = p.heard
+		}
+		if at := time.Unix(0, p.received.Load()); at.After(last) {
+			last = at
+		}
+	}
+	return last
+}
+
 // Status is what Health tells of torrents.
 type Status struct {
 	Enabled bool

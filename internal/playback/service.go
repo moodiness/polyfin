@@ -333,13 +333,29 @@ const (
 
 // TorrentPlayWait is how long a play waits for the torrent versions it
 // tries: their start, then a piece. A torrent version whose analysis takes
-// longer is passed over, and goes on being analyzed for the next play
+// longer is passed over, unless its torrent keeps receiving its pieces
+// (see TorrentReceiving), and goes on being analyzed for the next play
 // (see TorrentUnstarted). 0 without torrents.
 func (s *Service) TorrentPlayWait() time.Duration {
 	if s.torrents == nil {
 		return 0
 	}
 	return s.torrents.StartTimeout() + torrent.PieceTimeout
+}
+
+// TorrentReceiving reports whether the torrent of a torrent version
+// receives its pieces: a byte of them arrived within a piece's wait, the
+// time a read waits before it is taken as stalled (see
+// torrent.PieceTimeout).
+func (s *Service) TorrentReceiving(version library.Version) bool {
+	if version.Torrent == nil || s.torrents == nil {
+		return false
+	}
+	hash, err := torrent.ParseHash(version.Torrent.InfoHash)
+	if err != nil {
+		return false
+	}
+	return time.Since(s.torrents.Received(hash)) < torrent.PieceTimeout
 }
 
 // TorrentUnstarted reports whether err tells of a torrent that could not

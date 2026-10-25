@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -61,6 +62,23 @@ func playsWaiting() int {
 	return n
 }
 
+// playHLSLeaving asks PlaybackInfo as playHLS does, from an app that
+// gives up waiting for the answer after wait.
+func (p torrentPlay) playHLSLeaving(t *testing.T, picked string, wait time.Duration) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), wait)
+	defer cancel()
+	query := url.Values{"UserId": {p.user.ID.String()}, "IsPlayback": {"true"}, "MediaSourceId": {picked}}
+	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, p.url+"/Items/"+p.movie+"/PlaybackInfo?"+query.Encode(),
+		strings.NewReader(`{"DeviceProfile":`+hlsOnlyProfile+`}`))
+	request.Header.Set("Authorization", app("web", p.token))
+	request.Header.Set("Content-Type", "application/json")
+	if response, err := http.DefaultClient.Do(request); err == nil {
+		response.Body.Close()
+		t.Fatalf("PlaybackInfo answered %d before the app gave up", response.StatusCode)
+	}
+}
+
 // A torrent read over a slow swarm, which a play stopped waiting for, goes
 // on: once the swarm sends faster, the next play starts, rather than the
 // read waiting for good and every play after it giving up.
@@ -69,15 +87,12 @@ func TestATorrentReadAPlayGaveUpOnGoesOnForTheNext(t *testing.T) {
 	ffmpeg, tor := slowTorrent(t)
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
-	// The engine's own start timeout: the analysis ends within the play's
-	// wait, and the index is read past it.
 	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 0, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
 	picked := p.details(t)
-	// One block of 16 KiB every 700 ms: the file takes a minute.
+	// One block of 16 KiB every 700 ms: the file takes a minute. The app
+	// gives up waiting while the play's reads are under way.
 	seeder.Delay(700 * time.Millisecond)
-	if code := p.playHLS(t, picked); code != "RateLimitExceeded" {
-		t.Fatalf("over the slow swarm, PlaybackInfo answered %q", code)
-	}
+	p.playHLSLeaving(t, picked, 20*time.Second)
 	seeder.Delay(0)
 	// The first play's reads end meanwhile; each play waits for them as
 	// long as the start and a piece's wait.
@@ -147,5 +162,25 @@ func TestATorrentWhosePeerHoldsItsPiecesPlaysOnceItSends(t *testing.T) {
 	seeder.Release()
 	if info, code := p.play(t, picked); code != "" || len(info.MediaSources) == 0 {
 		t.Fatalf("once the peer sends, PlaybackInfo answered %q", code)
+	}
+}
+
+// A torrent version over a slow swarm whose pieces keep coming plays at its
+// first play, once its analysis and the read of its index are in, even
+// past its start and a piece's wait: the play waits on while the torrent
+// receives, rather than telling the app to try later.
+func TestATorrentWhosePiecesKeepComingPlaysAtItsFirstPlay(t *testing.T) {
+	t.Parallel()
+	ffmpeg, tor := slowTorrent(t)
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	// A start of 2 seconds: the play's first wait ends 32 seconds in.
+	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 2*time.Second, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	picked := p.details(t)
+	// One block of 16 KiB every 400 ms, never stalling: the head and the
+	// index of the file take about a minute, longer than that first wait.
+	seeder.Delay(400 * time.Millisecond)
+	if code := p.playHLS(t, picked); code != "" {
+		t.Fatalf("over a slow swarm whose pieces keep coming, PlaybackInfo answered %q", code)
 	}
 }
