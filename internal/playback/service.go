@@ -468,9 +468,9 @@ func (s *Service) Analyze(ctx context.Context, version library.Version) (media.A
 		return analysis, nil
 	}
 	if err := ctx.Err(); err != nil {
-		// Its caller stopped waiting, as a play decided without it: no
-		// analysis starts for it, which a lookup cut short would take for
-		// one never made.
+		// Its caller stopped waiting before it started, as a play decided
+		// without it: it runs all the same, alone (see alone).
+		s.alone(ctx, func(ctx context.Context) { _, _ = s.Analyze(ctx, version) })
 		return media.Analysis{}, err
 	}
 	if s.ReadsInput(version) {
@@ -508,6 +508,7 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		return analysis, nil
 	}
 	if err := ctx.Err(); err != nil {
+		s.alone(ctx, func(ctx context.Context) { _, _ = s.analyze(ctx, version, probe) })
 		return media.Analysis{}, err
 	}
 	if failure, failed := s.failures.Get(version.ID); failed {
@@ -677,6 +678,16 @@ func Background(ctx context.Context) context.Context {
 func background(ctx context.Context) bool {
 	marked, _ := ctx.Value(backgroundKey{}).(bool)
 	return marked
+}
+
+// alone runs analysis, an analysis whose caller stopped waiting before it
+// started, as a play that decided without the version: it runs all the
+// same, as the caller would have had it run, with ctx's values but not its
+// end, under its own bounds, and no one waits for it. Run under the ended
+// ctx, its lookups cut short would take it for one never made, and its
+// failure would be kept.
+func (s *Service) alone(ctx context.Context, analysis func(context.Context)) {
+	go analysis(context.WithoutCancel(ctx))
 }
 
 // shared runs fn once for the requests asking the same key at once, as

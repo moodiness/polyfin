@@ -322,6 +322,39 @@ func TestAnalysesAreSavedWhenTheAppStopsWaiting(t *testing.T) {
 	}
 }
 
+// An analysis whose caller stopped waiting before it started, as a play
+// that answered with another version before reaching this one, still runs
+// and is kept, as the play promised: the caller is told it stopped
+// waiting, and nothing is kept as the version's failure.
+func TestAnAnalysisWhoseCallerLeftBeforeItStartedStillRuns(t *testing.T) {
+	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, runs := fakeProbe(t, string(probe), false)
+	s := newService(t, &fileSource{data: make([]byte, 1000)}, path, nil)
+	version := library.Version{ID: accounts.ID{9}, URL: "https://93.184.216.34/movie.mp4", Size: 1234}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := s.Analyze(ctx, version); !errors.Is(err, context.Canceled) {
+		t.Fatalf("the request that stopped waiting got %v", err)
+	}
+	for deadline := time.Now().Add(time.Minute); ; time.Sleep(20 * time.Millisecond) {
+		if _, ok := s.Analyzed(t.Context(), version.ID); ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the analysis did not run (ffprobe ran %d times)", runs())
+		}
+	}
+	if s.Failed(version.ID) {
+		t.Error("the version is kept as failed")
+	}
+	if _, err := s.Analyze(t.Context(), version); err != nil || runs() != 1 {
+		t.Errorf("the next play: %v, ffprobe ran %d times", err, runs())
+	}
+}
+
 func TestShortClipsStandingInForTheTitleAreRefused(t *testing.T) {
 	clip := `{"format": {"filename": "http://127.0.0.1/x", "format_name": "mov,mp4", "duration": "30.000000"},
 		"streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 3840, "height": 2160}]}`
