@@ -35,7 +35,7 @@ Each target shows its state:
 | **Not reached** | Recent messages could not be delivered: no answer, server errors, or for email no SMTP server. |
 | **Off** | **Send messages to this target** is off. |
 
-**Send a test** sends a test message at once and tells whether the target accepted it, and when it did not, the start of its answer, such as Discord's `{"message":"Cannot send an empty message","code":50006}`, up to 200 characters, without the target's address or tokens. The log tells it too. A delivered message, a test included, clears the target's problem. The list shows the HTTP status the target answered with its problem, or for email the SMTP server's code, such as `SMTP 535`.
+**Send a test** sends a test message at once and tells whether the target accepted it, and when it did not, the start of its answer, such as Discord's `{"message":"Cannot send an empty message","code":50006}`, up to 200 characters, with nothing left of the target's address, its path or tokens, or its topic, even in part: what the answer repeats of them shows as …. The log tells it too. A delivered message, a test included, clears the target's problem. The list shows the HTTP status the target answered with its problem, or for email the SMTP server's code, such as `SMTP 535`.
 
 ### Email
 

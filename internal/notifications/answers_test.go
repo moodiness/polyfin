@@ -115,3 +115,90 @@ func TestDiscordWebhook(t *testing.T) {
 		}
 	}
 }
+
+// leaked lists the pieces of secret, 6 characters or more, that text
+// still holds.
+func leaked(text, secret string) []string {
+	var found []string
+	for i := 0; i+6 <= len(secret); i++ {
+		if piece := secret[i : i+6]; strings.Contains(text, piece) {
+			found = append(found, piece)
+		}
+	}
+	return found
+}
+
+// An answer echoing the request leaves nothing of a target's secret: not
+// a piece of a Discord webhook's token split on - or _, nor of an access
+// token, whatever its characters.
+func TestARefusalKeepsNothingOfTheSecrets(t *testing.T) {
+	h := newHarness(t)
+	fake, _ := url.Parse(h.targets.url)
+	h.trusted = &http.Client{Transport: toFake{fake}}
+	h.confined = h.trusted
+	const webhookToken = "refuse_aB3dEf9GhIjK1mNoPqR-sTuVwXyZ0123456789_abcdEFGH-ijklMNOP-qrstUV_wx"
+	const webhookPath = "/api/webhooks/112233445566778899/" + webhookToken
+	const accessToken = "refuse-SecretTok3n-XYZ"
+	// Each answers 400, repeating its path and its authorization.
+	echo := func(path string) {
+		h.targets.always(path, func(w http.ResponseWriter) {
+			got := h.targets.at(path)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"message":"Cannot send an empty message","path":"`+path+`","authorization":"`+got[len(got)-1].header.Get("Authorization")+`","code":50006}`)
+		})
+	}
+	echo(webhookPath)
+	echo("/ntfy-refuse/")
+	webhook := h.add(t, nil, Draft{Kind: Webhook, Name: new("Hook"), Address: new("https://discord.com" + webhookPath), Events: []string{RecordingFinished}})
+	ntfy := h.add(t, nil, Draft{Kind: Ntfy, Name: new("Phone"), Address: new(h.targets.url + "/ntfy-refuse"), Topic: new("polyfin-alerts"),
+		Token: new(accessToken), Events: []string{RecordingFinished}})
+	for _, c := range []struct {
+		target  Target
+		secrets []string
+	}{
+		{webhook, []string{webhookToken, "112233445566778899"}},
+		{ntfy, []string{accessToken}},
+	} {
+		result, err := h.Test(t.Context(), nil, c.target.ID)
+		if err != nil || result.Delivered || !strings.Contains(result.Answer, `"message":"Cannot send an empty message"`) {
+			t.Fatalf("%s: %+v, %v", c.target.Name, result, err)
+		}
+		for _, secret := range c.secrets {
+			if pieces := leaked(result.Answer, secret); len(pieces) > 0 {
+				t.Errorf("%s: the answer %q keeps %q", c.target.Name, result.Answer, pieces)
+			}
+			if pieces := leaked(h.log.String(), secret); len(pieces) > 0 {
+				t.Errorf("%s: the log keeps %q", c.target.Name, pieces)
+			}
+		}
+	}
+}
+
+// Every kind's secrets are kept out of an answer that repeats them whole
+// or in part: a Telegram bot token, Pushover's user key and token, a
+// Gotify token, an address's path and query.
+func TestExcerptKeepsNothingOfAnyKindsSecrets(t *testing.T) {
+	for _, secrets := range [][]string{
+		// A made-up bot token, joined at run time so that no literal has
+		// the shape of a real one for secret scanners.
+		{strings.Join([]string{"123456789", "AAH-x_SecretPart0123456789_abc-DEF"}, ":")},
+		{"uQiRzpo4DXghDmr9QzzfQu27cmVRsG\nazGDORePK8gMaC0QOYAMyEEuzJnyUi"},
+		{"Ab-C_dEfGh-IjK"},
+		{"https://hooks.example.org/in/Abc123_def-456?key=s3cr_et-Value&x=1"},
+	} {
+		answer := []byte(`{"error":"no","echo":"` + strings.ReplaceAll(strings.Join(secrets, " "), "\n", " ") + `",` +
+			`"parts":"` + strings.ReplaceAll(strings.ReplaceAll(secrets[0], "_", " "), "-", " ") + `"}`)
+		got := excerpt(answer, secrets...)
+		for _, secret := range secrets {
+			for line := range strings.SplitSeq(secret, "\n") {
+				if pieces := leaked(got, line); len(pieces) > 0 {
+					t.Errorf("%q keeps %q", got, pieces)
+				}
+			}
+		}
+		if !strings.HasPrefix(got, `{"error":"no",`) {
+			t.Errorf("the answer is lost: %q", got)
+		}
+	}
+}

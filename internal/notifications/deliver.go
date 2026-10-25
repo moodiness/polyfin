@@ -221,8 +221,8 @@ func (s *Service) send(t target, ev Event, confined bool) result {
 	res := classify(t.kind, response.StatusCode, response.Header, body)
 	if res.outcome != delivered {
 		// What the target said, for the log and the admin app: never
-		// its address or tokens.
-		res.err = excerpt(body, secret, t.address)
+		// its address, tokens or topic.
+		res.err = excerpt(body, secret, t.address, t.topic)
 	}
 	return res
 }
