@@ -240,19 +240,27 @@ func (s *Service) refreshLibrary(ctx context.Context, id accounts.ID, state *Lib
 		}
 		described := false
 		for try := 0; ; try++ {
-			ok, err := s.describeAgain(ctx, v, title)
+			ok, keptBy, err := s.describeAgain(ctx, v, title)
 			if ctx.Err() != nil {
 				return nil
 			}
 			if ok || try+1 == refreshTries || stremio.StatusOf(err) != 429 {
 				described = ok
+				if !ok {
+					s.keptBefore(title, keptBy, err)
+				}
 				break
 			}
 			delay, asked := stremio.RetryAfter(err)
 			if !asked {
 				delay = refreshRateWait << try
 			}
-			if err := wait(ctx, min(delay, maxRefreshWait)); err != nil {
+			delay = min(delay, maxRefreshWait)
+			// Waited out, the title may well be described: only a title
+			// still failing after its last try is a warning.
+			s.logger.Info("An addon asked to wait: the title is asked again after the wait", "item", title.ID, "wait", delay,
+				"try", try+1)
+			if err := wait(ctx, delay); err != nil {
 				return nil
 			}
 		}
