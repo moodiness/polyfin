@@ -730,6 +730,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	go programmeReminders.Run(ctx)
 	go updateCheck.Run(ctx)
 	go playbacks.Run(ctx)
+	// Playbacks whose apps stopped reporting are stopped.
+	go jellyfinAPI.Run(ctx)
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	secure.Start(ctx, httpServer.Handler)

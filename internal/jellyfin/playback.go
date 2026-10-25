@@ -61,6 +61,18 @@ func (h *Handler) record(r *http.Request, event playbackEvent, state playback.Pl
 		h.sessions.Progress(c.Device.ID, c.User.ID, state)
 	case playbackStopped:
 		h.sessions.Stop(c.Device.ID)
+	}
+	// The report has arrived: it is recorded even when the app hangs up
+	// right after sending it, as when it closes once playback stops.
+	h.recorded(context.WithoutCancel(r.Context()), event, state, positionKnown, before, had)
+}
+
+// recorded follows a playback report the device's session took, before
+// being what the session held before it: the playbacks the device left,
+// its torrents, and the user's data.
+func (h *Handler) recorded(ctx context.Context, event playbackEvent, state playback.PlayState, positionKnown bool, before playback.NowPlaying, had bool) {
+	c := callerFrom(ctx)
+	if event == playbackStopped {
 		// Images waiting for this playback may start.
 		if h.Thumbnails != nil {
 			h.Thumbnails.Wake()
@@ -71,9 +83,7 @@ func (h *Handler) record(r *http.Request, event playbackEvent, state playback.Pl
 	}
 	current, switched := h.leaveTitle(c.Device.ID, event, state.PlaySessionID)
 	h.followTorrents(c.Device.ID, c.User.ID, event, current, switched, had)
-	// The report has arrived: it is recorded even when the app hangs up
-	// right after sending it, as when it closes once playback stops.
-	h.track(context.WithoutCancel(r.Context()), c.User, c.Device, event, state, positionKnown, before)
+	h.track(ctx, c.User, c.Device, event, state, positionKnown, before)
 }
 
 func (h *Handler) noContent(w http.ResponseWriter, _ *http.Request) {

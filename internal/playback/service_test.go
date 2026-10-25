@@ -394,8 +394,7 @@ func TestUnreadableVersionsAreNotAnalyzedAgain(t *testing.T) {
 
 func TestSessionsFollowReports(t *testing.T) {
 	now := time.Date(2026, 10, 2, 20, 0, 0, 0, time.UTC)
-	sessions := NewSessions()
-	sessions.now = func() time.Time { return now }
+	sessions := NewSessions(func() time.Time { return now })
 	device, user, item := accounts.ID{1}, accounts.ID{2}, accounts.ID{3}
 	sessions.Start(device, user, PlayState{Item: item, MediaSourceID: "source", PlayMethod: "DirectPlay", CanSeek: true, Position: time.Minute})
 

@@ -638,9 +638,12 @@ The same section also holds **Quality group**; see [Quality groups](#quality-gro
 
 Once that many of the user's other devices are playing, as **Sessions** lists them, DLNA devices showing the user's libraries included, one more device cannot start playing. jellyfin-web explains this as media that cannot be played at this time; Polyfin's web client script closes the generic error jellyfin-web shows over it (see [Web client](web-client.md#dashboard-links-and-single-sign-on)). A device already playing can go on to another title. A device making a [converted download](transcoding.md#converted-downloads) counts as playing while it runs.
 
+Apps report their playback every 10 seconds, paused too. A device whose app reported nothing for five minutes stops playing, as if the app had reported the stop at the position it last reported: a tab closed while it played, a phone that lost its network, an app that crashed. Its resume point stays at that position, and it no longer counts here, nor in **Sessions** and **Now playing**. Its conversions end, and its torrent lingers then stops as after a stop.
+
 **Compared with Jellyfin:**
 
 - PlaybackInfo from the extra device answers Jellyfin's `RateLimitExceeded`.
+- Jellyfin also stops a playback whose app reported nothing for five minutes, paused or not, at the position last reported. It checks every five minutes, so the playback stops five to ten minutes after the last report; Polyfin checks every minute, so five to six, as the playback holds a place here.
 - Jellyfin's `MaxActiveSessions` counts signed-in sessions and refuses signing in. Polyfin counts playbacks instead, on purpose, so a user stays signed in on every device.
 - Polyfin refuses a policy setting more than 20 (400).
 

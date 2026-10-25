@@ -50,9 +50,9 @@ type Sessions struct {
 	devices map[accounts.ID]*NowPlaying
 }
 
-// NewSessions returns an empty tracker.
-func NewSessions() *Sessions {
-	return &Sessions{now: time.Now, devices: map[accounts.ID]*NowPlaying{}}
+// NewSessions returns an empty tracker, on the clock now.
+func NewSessions(now func() time.Time) *Sessions {
+	return &Sessions{now: now, devices: map[accounts.ID]*NowPlaying{}}
 }
 
 // Start records that a device started playing.
@@ -98,6 +98,35 @@ func (s *Sessions) Stop(device accounts.ID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.devices, device)
+}
+
+// Idle returns what the devices that reported nothing for longer than
+// after play, by device, as last reported: the position is the one the
+// app last sent.
+func (s *Sessions) Idle(after time.Duration) map[accounts.ID]NowPlaying {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	idle := map[accounts.ID]NowPlaying{}
+	for device, playing := range s.devices {
+		if now.Sub(playing.CheckedIn) > after {
+			idle[device] = *playing
+		}
+	}
+	return idle
+}
+
+// StopIdle records that a device stopped playing, unless it reported since
+// checkedIn; it tells whether it did.
+func (s *Sessions) StopIdle(device accounts.ID, checkedIn time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, ok := s.devices[device]
+	if !ok || !current.CheckedIn.Equal(checkedIn) {
+		return false
+	}
+	delete(s.devices, device)
+	return true
 }
 
 // Playing returns what a device plays. While it is not paused, the position
