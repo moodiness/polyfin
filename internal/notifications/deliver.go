@@ -176,7 +176,8 @@ const (
 
 // result is what came of a send: the status the target answered, zero
 // when it did not, how long it asked to wait, and why it could not be
-// reached, without its address.
+// reached, or the start of an answer that did not accept the message,
+// without its address or tokens.
 type result struct {
 	outcome outcome
 	status  int
@@ -217,7 +218,13 @@ func (s *Service) send(t target, ev Event, confined bool) result {
 	}
 	body, _ := io.ReadAll(io.LimitReader(response.Body, maxReply))
 	_ = response.Body.Close()
-	return classify(t.kind, response.StatusCode, response.Header, body)
+	res := classify(t.kind, response.StatusCode, response.Header, body)
+	if res.outcome != delivered {
+		// What the target said, for the log and the admin app: never
+		// its address or tokens.
+		res.err = excerpt(body, secret, t.address)
+	}
+	return res
 }
 
 // describeError says why a request failed in a few words, never with the
@@ -352,11 +359,13 @@ func (s *Service) failing(id accounts.ID, res result) {
 }
 
 // TestResult is what came of "Send a test": whether the target accepted
-// the message, the status it answered, zero when it did not, and the
-// target as it stands after.
+// the message, the status it answered, zero when it did not, why it did
+// not accept it, the start of its answer or why it could not be reached,
+// without its address or tokens, and the target as it stands after.
 type TestResult struct {
 	Delivered bool
 	Status    int
+	Answer    string
 	Target    Target
 }
 
@@ -381,7 +390,7 @@ func (s *Service) Test(ctx context.Context, owner *accounts.User, id accounts.ID
 	if t, err = s.load(ctx, owner, id); err != nil {
 		return TestResult{}, err
 	}
-	return TestResult{Delivered: res.outcome == delivered, Status: res.status, Target: s.describe(t)}, nil
+	return TestResult{Delivered: res.outcome == delivered, Status: res.status, Answer: res.err, Target: s.describe(t)}, nil
 }
 
 // request builds the request that sends ev to t, whose secret is opened.
@@ -391,8 +400,15 @@ func (s *Service) request(t target, secret string, ev Event) (*http.Request, err
 	header := http.Header{}
 	switch t.kind {
 	case Webhook:
-		address, payload = secret, ev
-		header.Set("X-Polyfin-Event", ev.Type)
+		address = secret
+		// Discord refuses any other message: a Discord webhook pasted
+		// as a Webhook target is sent what a Discord target is.
+		if DiscordWebhook(secret) {
+			payload = discordMessage(ev)
+		} else {
+			payload = ev
+			header.Set("X-Polyfin-Event", ev.Type)
+		}
 	case Discord:
 		address, payload = secret, discordMessage(ev)
 	case Ntfy:

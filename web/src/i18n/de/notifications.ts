@@ -46,6 +46,10 @@ const notifications: typeof en = {
     nameHelp: 'Wird nur hier angezeigt, 1 bis 64 Zeichen.',
     webhookAddress: 'Webhook-Adresse',
     discordAddress: 'Discord-Webhook-Adresse',
+    discordSwitched:
+      'Das ist ein Discord-Webhook: Das Ziel wird ein Discord-Ziel, das Discords eigene Nachricht sendet.',
+    discordAsWebhook:
+      'Das ist ein Discord-Webhook: Polyfin sendet ihm Discords eigene Nachricht, wie einem Discord-Ziel.',
     addressHelp: {
       webhook: 'Sie wird verschlüsselt gespeichert und nie wieder angezeigt, nur ihr Host.',
       discord:
@@ -152,6 +156,7 @@ const notifications: typeof en = {
     testing: 'Wird gesendet…',
     testDelivered: (name: string) => `${name} hat die Testnachricht erhalten.`,
     testFailed: (name: string) => `${name} hat die Testnachricht nicht angenommen.`,
+    testAnswer: (answer: string) => `Antwort: ${answer}`,
     edit: 'Bearbeiten',
     delete: 'Löschen',
     deleteTitle: (name: string) => `${name} löschen?`,

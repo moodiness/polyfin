@@ -88,11 +88,14 @@ func (d notificationDraftJSON) draft() notifications.Draft {
 }
 
 // testResultJSON is what came of "Send a test": whether the target
-// accepted it, the status it answered, null when it did not answer, and
-// the target as it stands after.
+// accepted it, the status it answered, null when it did not answer, why it
+// did not accept it, the start of its answer or why it could not be
+// reached, without its address or tokens, null when it did, and the
+// target as it stands after.
 type testResultJSON struct {
 	Delivered bool                   `json:"delivered"`
 	Status    *int                   `json:"status"`
+	Answer    *string                `json:"answer"`
 	Target    notificationTargetJSON `json:"target"`
 }
 
@@ -250,6 +253,9 @@ func (n notificationRoutes) test(w http.ResponseWriter, r *http.Request) {
 	answer := testResultJSON{Delivered: result.Delivered, Target: newNotificationTargetJSON(result.Target)}
 	if result.Status != 0 {
 		answer.Status = &result.Status
+	}
+	if result.Answer != "" {
+		answer.Answer = &result.Answer
 	}
 	writeJSON(w, http.StatusOK, answer)
 }

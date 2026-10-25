@@ -45,6 +45,10 @@ const notifications = {
     nameHelp: 'Shown here only, 1 to 64 characters.',
     webhookAddress: 'Webhook address',
     discordAddress: 'Discord webhook address',
+    discordSwitched:
+      'This is a Discord webhook: the target is a Discord target, which sends Discord’s own message.',
+    discordAsWebhook:
+      'This is a Discord webhook: Polyfin sends it Discord’s own message, as to a Discord target.',
     addressHelp: {
       webhook: 'It is kept encrypted and never shown again: only its host is.',
       discord:
@@ -147,6 +151,7 @@ const notifications = {
     testing: 'Sending…',
     testDelivered: (name: string) => `${name} received the test message.`,
     testFailed: (name: string) => `${name} did not accept the test message.`,
+    testAnswer: (answer: string) => `It answered: ${answer}`,
     edit: 'Edit',
     delete: 'Delete',
     deleteTitle: (name: string) => `Delete ${name}?`,

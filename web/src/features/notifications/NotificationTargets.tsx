@@ -139,9 +139,14 @@ function TargetRow({
     mutationFn: () => testNotificationTarget(scope, target.id),
     onSuccess: (result) => {
       store(scope, result.target)
-      toast(result.delivered ? text.testDelivered(target.name) : text.testFailed(target.name), {
-        tone: result.delivered ? 'ok' : 'danger',
-      })
+      toast(
+        result.delivered
+          ? text.testDelivered(target.name)
+          : result.answer === null
+            ? text.testFailed(target.name)
+            : `${text.testFailed(target.name)} ${text.testAnswer(result.answer)}`,
+        { tone: result.delivered ? 'ok' : 'danger' },
+      )
     },
     onError: (error) => toast(errorMessage(t, error), { tone: 'danger' }),
   })
@@ -284,6 +289,8 @@ function TargetModal({
   const toast = useToast()
   const formId = useId()
   const [kind, setKind] = useState<NotificationKind>(target?.kind ?? 'webhook')
+  // A Discord webhook pasted in a new Webhook target makes it a Discord one.
+  const [switched, setSwitched] = useState(false)
   const [name, setName] = useState(target?.name ?? '')
   // A webhook's or Discord target's secret address: undefined keeps the saved one.
   const [secretAddress, setSecretAddress] = useState<string | undefined>(undefined)
@@ -413,7 +420,10 @@ function TargetModal({
             <Select
               value={kind}
               options={kinds.map((value) => ({ value, label: text.kinds[value] }))}
-              onValue={change(setKind)}
+              onValue={change((value: NotificationKind) => {
+                setKind(value)
+                setSwitched(false)
+              })}
               className="max-w-xs"
             />
           </Field>
@@ -435,7 +445,13 @@ function TargetModal({
             target={target}
             values={{ secretAddress, server, recipient, topic, chat, token, userKey }}
             set={{
-              secretAddress: change(setSecretAddress),
+              secretAddress: change((value: string | undefined) => {
+                setSecretAddress(value)
+                if (target === null && kind === 'webhook' && discordWebhook(value ?? '')) {
+                  setKind('discord')
+                  setSwitched(true)
+                }
+              }),
               server: change(setServer),
               recipient: change(setRecipient),
               topic: change(setTopic),
@@ -446,6 +462,13 @@ function TargetModal({
             errors={{ addressError, topicError, chatError, tokenError, userKeyError }}
           />
         )}
+        {kind === 'discord' && switched && <Notice tone="info">{text.discordSwitched}</Notice>}
+        {kind === 'webhook' &&
+          target !== null &&
+          (discordWebhook(secretAddress ?? '') ||
+            (secretAddress === undefined && discordHosts.includes(hostOf(target.address)))) && (
+            <Notice tone="info">{text.discordAsWebhook}</Notice>
+          )}
         <fieldset className="space-y-3">
           <legend className="mb-1 text-[15px] font-medium text-ink">{text.events}</legend>
           <p className="text-small text-ink-3">{text.eventsHelp[scope]}</p>
@@ -632,5 +655,41 @@ function KindFields({
           error={addressError}
         />
       )
+  }
+}
+
+/** The hosts of Discord's webhooks: its own, its former one, and their test builds'. */
+const discordHosts = [
+  'discord.com',
+  'discordapp.com',
+  'ptb.discord.com',
+  'canary.discord.com',
+  'ptb.discordapp.com',
+  'canary.discordapp.com',
+]
+
+/** The host of an address, '' when it is none. */
+function hostOf(address: string): string {
+  try {
+    return new URL(address.trim()).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Whether an address is a Discord webhook's, which Polyfin sends Discord's own message, as the
+ * server tells it (notifications.DiscordWebhook).
+ */
+function discordWebhook(address: string): boolean {
+  try {
+    const url = new URL(address.trim())
+    return (
+      url.protocol === 'https:' &&
+      discordHosts.includes(url.hostname.toLowerCase()) &&
+      url.pathname.startsWith('/api/webhooks/')
+    )
+  } catch {
+    return false
   }
 }

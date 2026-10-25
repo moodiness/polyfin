@@ -2155,10 +2155,13 @@ export const deleteNotificationTarget = (scope: NotificationScope, id: string) =
 
 /** Sends a test message at once: whether the target accepted it, and how it stands after. */
 export const testNotificationTarget = (scope: NotificationScope, id: string) =>
-  request<{ delivered: boolean; status: number | null; target: NotificationTarget }>(
-    'POST',
-    `${notificationsPath(scope)}/targets/${seg(id)}/test`,
-  )
+  request<{
+    delivered: boolean
+    status: number | null
+    /** Why it did not accept it: the start of its answer, without its address or tokens. */
+    answer: string | null
+    target: NotificationTarget
+  }>('POST', `${notificationsPath(scope)}/targets/${seg(id)}/test`)
 
 export const lookupQuickConnect = (code: string, signal?: AbortSignal) =>
   request<QuickConnectRequest>('GET', `/quick-connect/${seg(code)}`, undefined, signal)

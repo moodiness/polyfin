@@ -13,6 +13,7 @@ There are two kinds of owners:
 
 - for a **Webhook**, its address, to which Polyfin posts each event as JSON (see [The webhook event](#the-webhook-event));
 - for **Discord**, the channel webhook's address (in Discord: the channel's settings, Integrations, Webhooks, Copy Webhook URL);
+- a Discord webhook's address pasted in a new **Webhook** target, `https://discord.com/api/webhooks/…` or the same on `discordapp.com` and their `ptb.` and `canary.` hosts, makes it a **Discord** target, and the form says so; a **Webhook** target saved before with such an address is sent Discord's message, as a Discord target is, since Discord refuses any other;
 - for **ntfy**, the **ntfy server** (`https://ntfy.sh` when left empty), the **Topic**, and an **Access token** for a topic that needs signing in;
 - for **Email**, the **Email address** messages go to, through the server's SMTP server (see [Email](#email)); without one, the kind cannot be added, and the form says why;
 - for **Telegram**, the **Chat**, a chat's number such as `-1001234567890` or a public channel's `@name`, and the **Bot token** BotFather gave when the bot was created; the bot must be a member of the chat;
@@ -34,7 +35,7 @@ Each target shows its state:
 | **Not reached** | Recent messages could not be delivered: no answer, server errors, or for email no SMTP server. |
 | **Off** | **Send messages to this target** is off. |
 
-**Send a test** sends a test message at once and tells whether the target accepted it. A delivered message, a test included, clears the target's problem. The list shows the HTTP status the target answered with its problem, or for email the SMTP server's code, such as `SMTP 535`.
+**Send a test** sends a test message at once and tells whether the target accepted it, and when it did not, the start of its answer, such as Discord's `{"message":"Cannot send an empty message","code":50006}`, up to 200 characters, without the target's address or tokens. The log tells it too. A delivered message, a test included, clears the target's problem. The list shows the HTTP status the target answered with its problem, or for email the SMTP server's code, such as `SMTP 535`.
 
 ### Email
 
@@ -193,7 +194,7 @@ Nothing is sent while a request is answered. Each target has its own queue, sent
 
 ## The webhook event
 
-A webhook receives each event as JSON in a `POST`, with the headers `Content-Type: application/json`, `User-Agent: Polyfin/<version>` and `X-Polyfin-Event: <type>`. Any 2xx answer counts as delivered.
+A webhook receives each event as JSON in a `POST`, unless its address is a Discord webhook's, which receives Discord's message (see [Targets](#targets)), with the headers `Content-Type: application/json`, `User-Agent: Polyfin/<version>` and `X-Polyfin-Event: <type>`. Any 2xx answer counts as delivered.
 
 ```json
 {
