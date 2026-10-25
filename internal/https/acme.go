@@ -74,7 +74,8 @@ func (s *Service) renew(ctx context.Context, config Config) {
 		return
 	}
 	state.issuing, state.attempted = true, key
-	go s.issue(ctx, config, state.stored)
+	stored := state.stored
+	s.attempts.Go(func() { s.issue(ctx, config, stored) })
 }
 
 // loadStored reads what Store keeps, once.

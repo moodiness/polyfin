@@ -177,7 +177,10 @@ type Service struct {
 	acme   acmeState
 
 	wake chan struct{}
-	done chan struct{}
+	// attempts is the attempt with Let's Encrypt running, if any, which
+	// the service waits for as it stops (see run).
+	attempts sync.WaitGroup
+	done     chan struct{}
 }
 
 // New returns a service that serves nothing until Start.
@@ -214,7 +217,11 @@ func (s *Service) Start(ctx context.Context, handler http.Handler) {
 }
 
 // run applies the settings at each change of them, at each end of an
-// attempt with Let's Encrypt, and every checkEvery, until ctx ends.
+// attempt with Let's Encrypt, and every checkEvery, until ctx ends. It
+// then stops listening, and waits for the attempt under way, which ctx
+// cancels: what the attempt keeps or tells comes before the service has
+// stopped, never after, as while a backup is restored into the database
+// that keeps the certificate.
 func (s *Service) run(ctx context.Context, changed <-chan struct{}) {
 	defer close(s.done)
 	ticker := time.NewTicker(s.options.checkEvery)
@@ -223,6 +230,7 @@ func (s *Service) run(ctx context.Context, changed <-chan struct{}) {
 		select {
 		case <-ctx.Done():
 			s.stopListening()
+			s.attempts.Wait()
 			return
 		case <-changed:
 			changed = s.options.Changed()
@@ -234,7 +242,8 @@ func (s *Service) run(ctx context.Context, changed <-chan struct{}) {
 }
 
 // Shutdown waits until the service stops, once the context Start was
-// given ends, its server having closed its connections.
+// given ends, its server having closed its connections and its attempt
+// with Let's Encrypt ended.
 func (s *Service) Shutdown(ctx context.Context) error {
 	select {
 	case <-s.done:
