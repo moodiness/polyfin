@@ -122,6 +122,9 @@ type Engine struct {
 	// nil once another started since.
 	unstarted   *StartError
 	unstartedAt time.Time
+	// removed is closed, and replaced, as a torrent stops (see
+	// AdmitsWithin).
+	removed chan struct{}
 }
 
 // New returns an engine keeping pieces in config.Dir.
@@ -136,7 +139,7 @@ func New(config Config) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Engine{config: config, store: s, torrents: map[Hash]*torrent{}, checkEvery: checkEvery, dropWait: dropWait,
+	e := &Engine{config: config, store: s, torrents: map[Hash]*torrent{}, removed: make(chan struct{}), checkEvery: checkEvery, dropWait: dropWait,
 		idleTimeout: idleTimeout}
 	e.peerID = newPeerID()
 	mbps := func(n int) int64 { return int64(n) * 1_000_000 / 8 }
@@ -301,6 +304,30 @@ func (e *Engine) Admits(hash Hash) error {
 	return nil
 }
 
+// AdmitsWithin is Admits, waiting at most wait, or until ctx is done, for
+// torrents to stop and make room: as one asked to end does once its last
+// read ends (see End).
+func (e *Engine) AdmitsWithin(ctx context.Context, hash Hash, wait time.Duration) error {
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	for {
+		e.mu.Lock()
+		removed := e.removed
+		e.mu.Unlock()
+		err := e.Admits(hash)
+		if err == nil {
+			return nil
+		}
+		select {
+		case <-removed:
+		case <-timer.C:
+			return err
+		case <-ctx.Done():
+			return err
+		}
+	}
+}
+
 // carriesUDP tells whether a route carries UDP, which a SOCKS5 proxy does
 // only with UDP ASSOCIATE: UDP trackers and the DHT stay off otherwise.
 func (e *Engine) carriesUDP(ctx context.Context, route Route) bool {
@@ -385,6 +412,8 @@ func (e *Engine) remove(t *torrent, err error) {
 	e.mu.Lock()
 	if e.torrents[t.hash] == t {
 		delete(e.torrents, t.hash)
+		close(e.removed)
+		e.removed = make(chan struct{})
 	}
 	e.mu.Unlock()
 	t.fail(err)

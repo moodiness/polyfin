@@ -432,6 +432,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	chosen, unreadable, versions, at := choice.decided, choice.unreadable, p.versions, openedIndex(opened, p.versions)
+	h.choseVersion(callerFrom(r.Context()).Device.ID, h.titleOf(item.ID), chosen.version.ID)
 	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Relay: mustRelay(r, chosen.version)})
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
 	// Every version listed is named for the profile sent: the one chosen

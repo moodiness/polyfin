@@ -23,6 +23,13 @@ import (
 // analysis runs to its end all the same, and is kept for the next play.
 
 const (
+	// endedTorrentWait is how long a play at Torrents at once waits for a
+	// torrent it ended, the device's own left for this title, to stop: an
+	// app's player that stopped ends its last read of the file within a
+	// second, its request cut as it leaves; this leaves room for a busy
+	// machine. The cap is never passed meanwhile: the new torrent starts
+	// once the other stopped.
+	endedTorrentWait = 5 * time.Second
 	// parallelAttempts is how many versions a play analyzes at once.
 	parallelAttempts = 3
 	// versionPatience is how long a play waits for the versions before the
@@ -97,8 +104,14 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 		// start of this one would end (see leaveTorrents), make room for it
 		// first.
 		if err := h.Playback.TorrentAdmitted(version); err != nil {
-			h.leaveTorrents(callerFrom(r.Context()).Device.ID, user.ID, h.titleOf(p.item.ID), version.Torrent.InfoHash)
-			if err := h.Playback.TorrentAdmitted(version); err != nil {
+			ended := h.leaveTorrents(callerFrom(r.Context()).Device.ID, user.ID, h.titleOf(p.item.ID), version.Torrent.InfoHash)
+			wait := time.Duration(0)
+			if len(ended) > 0 {
+				// A torrent ended stops once its last read ends: the app's
+				// player, which stopped, may still read it for a moment.
+				wait = endedTorrentWait
+			}
+			if err := h.Playback.TorrentAdmittedWithin(detached.Context(), version, wait); err != nil {
 				h.Logger.Info("A torrent version is passed over: as many torrents run as Torrents at once allows", "addon", version.Addon)
 				return tried{n: n, unreadable: true, unstarted: true}
 			}

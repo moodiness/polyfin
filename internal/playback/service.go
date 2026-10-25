@@ -388,6 +388,20 @@ func (s *Service) TorrentAdmitted(version library.Version) error {
 	return s.torrents.Admits(hash)
 }
 
+// TorrentAdmittedWithin is TorrentAdmitted, waiting at most wait, or until
+// ctx is done, for the torrents running to make room (see
+// torrent.Engine.AdmitsWithin).
+func (s *Service) TorrentAdmittedWithin(ctx context.Context, version library.Version, wait time.Duration) error {
+	if version.Torrent == nil || s.torrents == nil {
+		return nil
+	}
+	hash, err := torrent.ParseHash(version.Torrent.InfoHash)
+	if err != nil {
+		return nil
+	}
+	return s.torrents.AdmitsWithin(ctx, hash, wait)
+}
+
 // ErrTorrentIdle reports background work on a torrent's file no playback
 // reads now: only a playback joins a torrent's swarm, so the version is
 // read once played. It is not the version's failure.
