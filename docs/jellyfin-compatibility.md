@@ -209,7 +209,9 @@ With **Turn picture subtitles into text** on, a PGS or VobSub track read into te
 
 **Refresh metadata** (administrators only) makes Polyfin forget the title's version and subtitle lists, expired ones included, the rating it looked up and its ratings from MDBList, and stop asking addons again for those lists. It asks the addons for the description again at once, and replaces the one it kept only when an addon answers. While the addon that described the title fails, such as when it answers `504`, the title keeps its description, cast and genres, and the log says so (`A title could not be refreshed: it keeps the description the addon gave before`). An addon still asked for one of those lists when the title is refreshed is asked again once it answers: its answer, asked for before the refresh, is not kept.
 
-**For app developers:** `POST /Items/{id}/Refresh`.
+On a server movie or series library, **Refresh metadata** queues the paced refresh of its titles' descriptions, as **Content › Libraries** does (see [Refreshing a library's descriptions](addons-and-libraries.md#refreshing-a-library-s-descriptions)), and answers at once.
+
+**For app developers:** `POST /Items/{id}/Refresh` answers `204` at once, as Jellyfin's does once it queued the refresh ([ItemRefreshController.cs, lines 58 to 92](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/Jellyfin.Api/Controllers/ItemRefreshController.cs#L58-L92); [ProviderManager.cs, lines 1136 to 1162](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/MediaBrowser.Providers/Manager/ProviderManager.cs#L1136-L1162)), and `404` for an item the user cannot reach. On a library, `metadataRefreshMode` or `imageRefreshMode` set to `Default` or `FullRefresh` starts the refresh; the replace options are ignored.
 
 ### Administration from Jellyfin apps
 

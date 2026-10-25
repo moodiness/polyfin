@@ -16,9 +16,20 @@ import (
 // episode's is their series') is replaced only once an addon answered:
 // then the other addons' are forgotten, to be asked for again. While the
 // addons fail, the title keeps the description it had. Items that are not
-// titles have nothing to forget.
-// ErrNotFound is returned for an item the user cannot reach.
+// titles have nothing to forget, but the server's libraries (see
+// RefreshItem). ErrNotFound is returned for an item the user cannot reach.
 func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.ID) error {
+	return s.RefreshItem(ctx, user, id, true)
+}
+
+// RefreshItem refreshes an item as Refresh does. A library of the server's
+// that RefreshLibrary refreshes has, when descriptions is set, the
+// descriptions of its titles read again in the background, paced, after
+// the libraries already waiting, unless it is being refreshed or waits to
+// be; it returns at once. Other libraries have nothing to refresh, nor
+// has a library without descriptions. A title is refreshed whatever
+// descriptions is.
+func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accounts.ID, descriptions bool) error {
 	v, err := s.view(ctx, user)
 	if err != nil {
 		return err
@@ -26,9 +37,21 @@ func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.I
 	if _, err := s.item(ctx, v, id); err != nil {
 		return err
 	}
+	if _, ok := v.library(id); ok {
+		if !descriptions {
+			return nil
+		}
+		_, err := s.RefreshLibrary(ctx, id)
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrNotRefreshable) {
+			// A user's own library, or one whose descriptions are not
+			// refreshed: nothing to do.
+			return nil
+		}
+		return err
+	}
 	r, err := s.load(ctx, id)
 	if errors.Is(err, ErrNotFound) {
-		// A library, which Polyfin does not record.
+		// An item Polyfin does not record, such as a smart list.
 		return nil
 	}
 	if err != nil {

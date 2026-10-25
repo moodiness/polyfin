@@ -510,9 +510,13 @@ var metadataRefreshModes = []string{"None", "ValidationOnly", "Default", "FullRe
 
 // refreshItem is Jellyfin's metadata refresh, for administrators: Polyfin
 // forgets what it keeps of the title and asks the addons to describe it
-// again (see library.Service.Refresh). The modes and replace options,
-// which choose what Jellyfin reads again from disk and providers, change
-// nothing: addons are always asked for everything.
+// again (see library.Service.Refresh). On one of the server's libraries,
+// it queues the paced refresh of its titles' descriptions, as Content ›
+// Libraries does, when a mode asks for metadata (see
+// library.Service.RefreshItem), and answers at once, as Jellyfin answers
+// once it queued the refresh. The replace options, which choose what
+// Jellyfin keeps of what it read before, change nothing: addons are always
+// asked for everything, and a description replaces the one kept.
 func (h *Handler) refreshItem(w http.ResponseWriter, r *http.Request) {
 	user := callerFrom(r.Context()).User
 	if !user.IsAdministrator {
@@ -521,9 +525,15 @@ func (h *Handler) refreshItem(w http.ResponseWriter, r *http.Request) {
 	}
 	b := bindErrors{}
 	id := b.pathID(r, "itemId")
+	// A library's titles are described again when either mode asks
+	// providers for metadata, Default or FullRefresh, as jellyfin-web's
+	// Refresh metadata does: its images come with the descriptions. None,
+	// Jellyfin's default, and ValidationOnly ask none.
+	descriptions := false
 	for _, name := range []string{"metadataRefreshMode", "imageRefreshMode"} {
 		if raw, _ := queryParam(r, name); strings.TrimSpace(raw) != "" {
-			b.enum(name, raw, metadataRefreshModes)
+			mode := b.enum(name, raw, metadataRefreshModes)
+			descriptions = descriptions || mode == "Default" || mode == "FullRefresh"
 		}
 	}
 	for _, name := range []string{"replaceAllMetadata", "replaceAllImages", "regenerateTrickplay"} {
@@ -533,7 +543,7 @@ func (h *Handler) refreshItem(w http.ResponseWriter, r *http.Request) {
 		validationProblem(w, b)
 		return
 	}
-	if err := h.Library.Refresh(r.Context(), user, id); err != nil {
+	if err := h.Library.RefreshItem(r.Context(), user, id, descriptions); err != nil {
 		h.browseError(w, r, err)
 		return
 	}
