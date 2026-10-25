@@ -35,17 +35,6 @@ const (
 	// versionPatience is how long a play waits for the versions before the
 	// one it could play once that one is ready.
 	versionPatience = 3 * time.Second
-	// torrentPlayMost bounds how long a play waits for a torrent version
-	// whose torrent keeps receiving its pieces, past its start and a
-	// piece's wait (see Service.TorrentPlayWait): its analysis and the
-	// read of its index, each bounded on its own, over a slow swarm. The
-	// web client sets no time limit on PlaybackInfo, nor do Traefik and
-	// Caddy by default; nginx's default (proxy_read_timeout, 60 seconds)
-	// is below the start's wait already.
-	torrentPlayMost = 3 * time.Minute
-	// torrentPlayCheck is how often a play waiting past TorrentPlayWait
-	// looks whether its torrent versions still receive their pieces.
-	torrentPlayCheck = 5 * time.Second
 )
 
 // candidates are the versions a play may choose, by their index among a
@@ -157,6 +146,9 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			if detached.Context().Err() != nil {
 				return tried{n: n}
 			}
+			if d.unstarted {
+				return tried{n: n, unreadable: true, unstarted: true}
+			}
 			if permits != allowed {
 				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.Addon)
 			} else {
@@ -183,7 +175,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	patient := true
 	// A torrent version is waited for as long as its start and a piece
 	// take, then as long as its torrent keeps receiving its pieces, within
-	// torrentPlayMost: past that, the torrent versions still being read
+	// Service.TorrentPlayMost: past that, the torrent versions still being read
 	// are passed over, and no candidate more is tried.
 	var late <-chan time.Time
 	var lateTimer *time.Timer
@@ -227,7 +219,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				if t != nil || version.Torrent == nil {
 					continue
 				}
-				if time.Since(waited) < torrentPlayMost && h.Playback.TorrentReceiving(version) {
+				if time.Since(waited) < h.Playback.TorrentPlayMost() && h.Playback.TorrentReceiving(version) {
 					receiving = true
 					if !waitingOn[n] {
 						waitingOn[n] = true
@@ -241,7 +233,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				h.Logger.Info("A torrent version took too long to start for the play; it is read on for the next one", "addon", version.Addon)
 			}
 			if receiving {
-				lateTimer.Reset(min(torrentPlayCheck, torrentPlayMost-time.Since(waited)))
+				lateTimer.Reset(min(playback.TorrentPlayCheck, h.Playback.TorrentPlayMost()-time.Since(waited)))
 				late = lateTimer.C
 			}
 		case <-r.Context().Done():

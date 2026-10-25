@@ -578,6 +578,10 @@ type decided struct {
 	analysis media.Analysis
 	source   MediaSourceInfo
 	decision playback.Decision
+	// unstarted tells, of a version decide refused, a torrent whose index
+	// could not be read in time for the play (see
+	// playback.TorrentUnstarted).
+	unstarted bool
 }
 
 // unconverted reports whether the app plays a version without conversion:
@@ -625,7 +629,7 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 			if r.Context().Err() == nil {
 				h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
 			}
-			return decided{}, false
+			return decided{unstarted: version.Torrent != nil && playback.TorrentUnstarted(err)}, false
 		}
 		if plan.Grid() && decision.Video == nil {
 			converted := options

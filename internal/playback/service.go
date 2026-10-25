@@ -324,12 +324,20 @@ func torrentSpec(version library.Version) (torrent.Spec, error) {
 }
 
 // torrentHeaders bounds the wait for a torrent's file to open, past the
-// engine's own bound on its start, and torrentHead the wait for its first
-// bytes, which an analysis waits for before ffprobe's timeout runs.
-const (
-	torrentHeaders = torrent.StartTimeout + 15*time.Second
-	torrentHead    = torrentHeaders + torrent.PieceTimeout
-)
+// engine's own bound on its start.
+const torrentHeaders = torrent.StartTimeout + 15*time.Second
+
+// TorrentPlayCheck is how often a wait for a torrent past its start and a
+// piece looks whether the torrent still receives its pieces (see
+// TorrentReceiving).
+const TorrentPlayCheck = 5 * time.Second
+
+// errTorrentSlow reports a torrent whose pieces did not come in time for
+// a play: it received none for a piece's wait past its start, or it still
+// had not sent what a play needs once the play's wait ran out (see
+// TorrentPlayMost). It did not start in time, as far as the play goes: the
+// next play tries it again (see TorrentUnstarted).
+var errTorrentSlow = errors.New("the torrent's pieces did not come in time for the play")
 
 // TorrentPlayWait is how long a play waits for the torrent versions it
 // tries: their start, then a piece. A torrent version whose analysis takes
@@ -341,6 +349,47 @@ func (s *Service) TorrentPlayWait() time.Duration {
 		return 0
 	}
 	return s.torrents.StartTimeout() + torrent.PieceTimeout
+}
+
+// TorrentPlayMost bounds how long a play waits for a torrent version whose
+// torrent keeps receiving its pieces: twice its start and a piece's wait,
+// 3 minutes by default, for its analysis and the read of its index over a
+// slow swarm. The web client sets no time limit on PlaybackInfo, nor do
+// Traefik and Caddy by default; nginx's default (proxy_read_timeout, 60
+// seconds) is below the start's wait already. The analysis's and the
+// index's waits for the torrent follow it (see torrentPatience). 0
+// without torrents.
+func (s *Service) TorrentPlayMost() time.Duration {
+	return 2 * s.TorrentPlayWait()
+}
+
+// torrentPatience returns ctx, canceled with errTorrentSlow once the
+// torrent of version, past its start, 15 seconds and a piece's wait,
+// receives nothing for a piece's wait, or at TorrentPlayMost: a read of it
+// waits as the play does (see TorrentReceiving). stop ends the watch.
+func (s *Service) torrentPatience(ctx context.Context, version library.Version) (patient context.Context, stop func()) {
+	patient, cancel := context.WithCancelCause(ctx)
+	if s.torrents == nil {
+		return patient, func() { cancel(nil) }
+	}
+	started, most := time.Now(), s.TorrentPlayMost()
+	go func() {
+		timer := time.NewTimer(min(s.torrents.StartTimeout()+15*time.Second+torrent.PieceTimeout, most))
+		defer timer.Stop()
+		for {
+			select {
+			case <-patient.Done():
+				return
+			case <-timer.C:
+			}
+			if time.Since(started) >= most || !s.TorrentReceiving(version) {
+				cancel(errTorrentSlow)
+				return
+			}
+			timer.Reset(min(TorrentPlayCheck, most-time.Since(started)))
+		}
+	}()
+	return patient, func() { cancel(nil) }
 }
 
 // TorrentReceiving reports whether the torrent of a torrent version
@@ -365,7 +414,7 @@ func (s *Service) TorrentReceiving(version library.Version) bool {
 func TorrentUnstarted(err error) bool {
 	var unstarted *torrent.StartError
 	return torrent.RouteFailure(err) || errors.As(err, &unstarted) || errors.Is(err, errNoTorrents) || errors.Is(err, torrent.ErrAtCap) ||
-		errors.Is(err, source.ErrStalled)
+		errors.Is(err, source.ErrStalled) || errors.Is(err, errTorrentSlow)
 }
 
 // Unstarted reports whether a version is kept as failed for a torrent
@@ -596,23 +645,29 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		if version.HoldsConnection {
 			err = notPlaylist(probing, src)
 		}
+		reading, prober := probing, s.ffprobe()
 		if version.Torrent != nil {
 			// A torrent's swarm takes longer to start than ffprobe's timeout
-			// allows: its first bytes are waited for first, its size known
-			// or not, as when a read of it stalled before.
-			head, cancel := context.WithTimeout(probing, torrentHead)
-			if _, err = src.ReadAt(head, make([]byte, 1), 0); errors.Is(err, io.EOF) {
+			// allows, and may send slowly: the analysis waits for it as the
+			// play does, its first bytes first, its size known or not, as
+			// when a read of it stalled before, then what ffprobe reads.
+			var patient func()
+			reading, patient = s.torrentPatience(probing, version)
+			defer patient()
+			prober.Timeout = max(prober.Timeout, s.TorrentPlayMost())
+			if _, err = src.ReadAt(reading, make([]byte, 1), 0); errors.Is(err, io.EOF) {
 				err = nil
 			}
-			cancel()
 		}
 		if err == nil {
-			analysis, err = probe(s.ffprobe(), probing, target)
+			analysis, err = probe(prober, reading, target)
 		}
 		stop()
 		if err != nil {
 			if failure := failureOf(src, failed); failure != nil {
 				err = failure
+			} else if cause := context.Cause(reading); errors.Is(cause, errTorrentSlow) {
+				err = cause
 			}
 		}
 		if err == nil && standIn(analysis, version.Runtime) {
@@ -758,11 +813,12 @@ type versionFailure struct {
 // not tried again for failureTTL, unless its addon changes or its item is
 // tried again (see Retry and RetryItem).
 func (s *Service) fail(version library.Version, err error) {
-	if torrent.RouteFailure(err) || errors.Is(err, torrent.ErrAtCap) || version.Torrent != nil && errors.Is(err, source.ErrStalled) {
+	if torrent.RouteFailure(err) || errors.Is(err, torrent.ErrAtCap) ||
+		version.Torrent != nil && (errors.Is(err, source.ErrStalled) || errors.Is(err, errTorrentSlow)) {
 		// The torrents' route failed, or as many torrents ran as the
-		// settings allow, or a torrent's swarm sent nothing for a while,
-		// not the file: it plays once that changes, and the next play
-		// tries it again.
+		// settings allow, or a torrent's swarm sent nothing for a while, or
+		// too slowly for the play, not the file: it plays once that
+		// changes, and the next play tries it again.
 		return
 	}
 	s.failures.Put(version.ID, versionFailure{addon: version.Origin.Addon, item: version.Item, err: err})

@@ -174,11 +174,12 @@ func TestATorrentWhosePiecesKeepComingPlaysAtItsFirstPlay(t *testing.T) {
 	ffmpeg, tor := slowTorrent(t)
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
-	// A start of 2 seconds: the play's first wait ends 32 seconds in.
-	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 2*time.Second, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	// A start of 5 seconds: the play's first wait ends 35 seconds in, and
+	// it waits at most 70 seconds.
+	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 5*time.Second, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
 	picked := p.details(t)
 	// One block of 16 KiB every 400 ms, never stalling: the head and the
-	// index of the file take about a minute, longer than that first wait.
+	// index of the file take about 55 seconds, longer than that first wait.
 	seeder.Delay(400 * time.Millisecond)
 	if code := p.playHLS(t, picked); code != "" {
 		t.Fatalf("over a slow swarm whose pieces keep coming, PlaybackInfo answered %q", code)

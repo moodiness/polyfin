@@ -114,10 +114,10 @@ func transportStream(analysis media.Analysis) bool {
 // and its index, a few blocks of it, through the source cache. Its
 // connections fail once their source sends nothing for their stall
 // timeout (a piece's wait for a torrent) past their tries, so a read that
-// goes on ends well within it: longer than a torrent's first bytes take
-// (torrentHead) and a piece's wait more. It ends a read that would wait
-// for good, as for a block no connection fetches, which then fails and is
-// tried again at the next play.
+// goes on ends well within it; a torrent's is waited for as a play waits
+// for it, at most as long (see torrentPatience). It ends a read that would
+// wait for good, as for a block no connection fetches, which then fails
+// and is tried again at the next play.
 const keyframesTime = 3 * time.Minute
 
 // keyframes returns a version's keyframe times: remembered, saved, or read
@@ -160,17 +160,27 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		src := s.open(version)
 		defer src.Release()
 		started := time.Now()
+		// A torrent's file is waited for as a play waits for it.
+		reading := ctx
+		if version.Torrent != nil {
+			var patient func()
+			reading, patient = s.torrentPatience(ctx, version)
+			defer patient()
+		}
 		var times []time.Duration
-		err := s.readSized(ctx, version, analysis, src, func(size int64) error {
+		err := s.readSized(reading, version, analysis, src, func(size int64) error {
 			var err error
-			if times, err = container.Keyframes(ctx, src, size); err == nil {
+			if times, err = container.Keyframes(reading, src, size); err == nil {
 				// From the blocks just read: no request more.
-				if offsets, err := container.KeyframeOffsets(ctx, src, size); err == nil {
+				if offsets, err := container.KeyframeOffsets(reading, src, size); err == nil {
 					s.offsets.Put(version.ID, offsets)
 				}
 			}
 			return err
 		})
+		if cause := context.Cause(reading); err != nil && errors.Is(cause, errTorrentSlow) {
+			err = cause
+		}
 		if errors.Is(err, container.ErrNoIndex) {
 			err = fmt.Errorf("%w: %w", ErrNotRemuxable, err)
 		}
