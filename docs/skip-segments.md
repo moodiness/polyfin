@@ -161,7 +161,7 @@ TheIntroDB answers without a key. With one:
 
 ### How the key is checked
 
-TheIntroDB's answers ignore a key they do not know. So Polyfin checks the key before saving it, by sending TheIntroDB an empty submission with it, which submits nothing.
+TheIntroDB's answers ignore a key they do not know. So Polyfin checks the key before saving it, by sending TheIntroDB an empty submission with it, which submits nothing: `POST /v4/submit`, as submissions belong to TheIntroDB's current API, v4. Its timestamps are still read from `GET /v3/media`, which TheIntroDB keeps answering.
 
 - The key is saved when TheIntroDB only refuses the empty submission.
 - It is refused when TheIntroDB refuses the key.

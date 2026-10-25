@@ -668,9 +668,11 @@ func (s *Service) CheckKey(ctx context.Context, database, key string) error {
 // answers ignore a key they do not know, while a submission checks the key
 // before its body: an empty body, which submits nothing, is refused as
 // invalid (400 or 422) once the key is accepted, and the key refused with
-// 401 or 403. Any other answer leaves the key unchecked.
+// 401, or 403 for a locked account. Any other answer leaves the key
+// unchecked. Submissions are /v4's alone: the frozen /v3 that base names,
+// whose media answers are still read, keeps GET /media only.
 func (s *Service) checkTheIntroDBKey(ctx context.Context, base, key string) error {
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/submit", strings.NewReader("{}"))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, theIntroDBv4(base)+"/submit", strings.NewReader("{}"))
 	if err != nil {
 		return err
 	}
@@ -692,6 +694,20 @@ func (s *Service) checkTheIntroDBKey(ctx context.Context, base, key string) erro
 	default:
 		return fmt.Errorf("HTTP %d", status)
 	}
+}
+
+// theIntroDBv4 is the /v4 address of TheIntroDB whose /v3 is base: base
+// with its version replaced, or followed by /v4 when it names none, as a
+// test's address.
+func theIntroDBv4(base string) string {
+	base = strings.TrimRight(base, "/")
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		last := base[i+1:]
+		if len(last) > 1 && last[0] == 'v' && strings.Trim(last[1:], "0123456789") == "" {
+			base = base[:i]
+		}
+	}
+	return base + "/v4"
 }
 
 // rateLimited reports a database that answered 429 with a Retry-After, and

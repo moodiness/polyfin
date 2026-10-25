@@ -105,11 +105,16 @@ func TestSettingsTheIntroDBKey(t *testing.T) {
 	var mu sync.Mutex
 	var requests []string
 	// TheIntroDB answers a submission with an empty body 400 once it
-	// accepts the key, or as status says.
+	// accepts the key, or as status says. Submissions are /v4's alone.
 	theIntroDB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		requests = append(requests, r.Method+" "+r.URL.Path+" "+r.Header.Get("Authorization"))
 		mu.Unlock()
+		if r.Method != http.MethodPost || r.URL.Path != "/v4/submit" {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.WriteString(w, "Cannot "+r.Method+" "+r.URL.Path)
+			return
+		}
 		w.WriteHeader(int(status.Load()))
 		_, _ = io.WriteString(w, `{"error":"invalid request body"}`)
 	}))
@@ -182,7 +187,7 @@ func TestSettingsTheIntroDBKey(t *testing.T) {
 		t.Fatalf("accepted: %d %v", got, body["error"])
 	}
 	mu.Lock()
-	if requests[len(requests)-1] != "POST /submit Bearer "+key || api.store.Settings().TheIntroDBKey != key {
+	if requests[len(requests)-1] != "POST /v4/submit Bearer "+key || api.store.Settings().TheIntroDBKey != key {
 		t.Error("the key checked is not the key saved")
 	}
 	mu.Unlock()

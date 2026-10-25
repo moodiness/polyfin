@@ -719,7 +719,8 @@ func TestTheIntroDBKeyIsUsedUntilRefused(t *testing.T) {
 func TestTheIntroDBKeyIsCheckedBySubmittingNothing(t *testing.T) {
 	// TheIntroDB's media answers ignore a key they do not know: only a
 	// submission tells. It refuses the key before reading the body, and
-	// an empty body once the key is accepted.
+	// an empty body once the key is accepted. Submissions are /v4's alone:
+	// the frozen /v3, the address Polyfin reads media at, answers 404.
 	var mu sync.Mutex
 	var asked []string
 	var status int
@@ -730,6 +731,9 @@ func TestTheIntroDBKeyIsCheckedBySubmittingNothing(t *testing.T) {
 		answer := status
 		mu.Unlock()
 		switch {
+		case r.Method != http.MethodPost || r.URL.Path != "/v4/submit":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.WriteString(w, "Cannot "+r.Method+" "+r.URL.Path)
 		case r.Header.Get("Authorization") != "Bearer good":
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = io.WriteString(w, `{"error":"Invalid or expired token"}`)
@@ -739,7 +743,7 @@ func TestTheIntroDBKeyIsCheckedBySubmittingNothing(t *testing.T) {
 		}
 	}))
 	t.Cleanup(theIntroDB.Close)
-	s := New(nil, []Source{{Name: TheIntroDB, URL: theIntroDB.URL}}, "test", slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	s := New(nil, []Source{{Name: TheIntroDB, URL: theIntroDB.URL + "/v3"}}, "test", slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	for _, tc := range []struct {
 		key      string
 		answer   int
@@ -765,7 +769,7 @@ func TestTheIntroDBKeyIsCheckedBySubmittingNothing(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if asked[0] != "POST /submit {} Bearer good" || asked[2] != "POST /submit {} Bearer made-up" || len(asked) != 7 {
+	if asked[0] != "POST /v4/submit {} Bearer good" || asked[2] != "POST /v4/submit {} Bearer made-up" || len(asked) != 7 {
 		t.Errorf("asked %q", asked)
 	}
 	// Unreachable, the key is not accepted either.
