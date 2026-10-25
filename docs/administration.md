@@ -155,7 +155,7 @@ Each action:
 
 - is an administrator's alone;
 - is confirmed each time with the administrator's password, or, with two-step sign-in on, a code of their app or a recovery code: wrong ones count as wrong passwords at sign-in do (see [Two-step sign-in](users.md#two-step-sign-in));
-- runs at most once a minute: another request within the minute is refused;
+- runs at most once a minute: another request within the minute is refused, and so is a restart within a minute of Polyfin starting, so that restarts cannot follow each other across the restart;
 - is recorded in the activity log, with who asked, and shows in **Recent activity** under **Server and addons**.
 
 ### Restart

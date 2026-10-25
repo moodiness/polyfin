@@ -209,6 +209,10 @@ func New(options Options) http.Handler {
 	if h.Health.Started.IsZero() {
 		h.Health.Started = time.Now()
 	}
+	// Starting counts as a restart: a restart is refused within a minute
+	// of start-up as within a minute of the last one, which the process
+	// that restarted could not tell the new one.
+	h.actions.last = map[string]time.Time{"restart": h.Health.Started}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/api/status", h.status)
 	mux.HandleFunc("POST /admin/api/setup", h.setup)

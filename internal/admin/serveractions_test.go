@@ -33,6 +33,7 @@ func TestRestartIsAnAdministratorsConfirmedAction(t *testing.T) {
 	restarts := make(chan struct{}, 10)
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
 		o.Restart = func() { restarts <- struct{}{} }
+		o.Health.Started = time.Now().Add(-time.Hour)
 	})
 	admin := api.signedIn("root", true)
 	member := api.signedIn("alice", false)
@@ -102,6 +103,7 @@ func TestRestartUnderPolyfinDesktop(t *testing.T) {
 	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
 		o.Restart = func() { restarts <- struct{}{} }
 		o.Desktop = true
+		o.Health.Started = time.Now().Add(-time.Hour)
 	})
 	admin := api.signedIn("root", true)
 	var state serverJSON
@@ -110,6 +112,48 @@ func TestRestartUnderPolyfinDesktop(t *testing.T) {
 	}
 	if status, body, _ := admin.call(http.MethodPost, "/server/restart", map[string]any{"password": "correct horse"}); status != http.StatusAccepted {
 		t.Fatalf("restart: %d %v", status, body)
+	}
+	<-restarts
+}
+
+// The limit holds across a restart: the new Polyfin refuses a restart
+// within a minute of its start as the old one did within a minute of the
+// last, while the rest of the admin app, and the other actions, work at
+// once.
+func TestRestartIsRefusedWithinAMinuteOfStart(t *testing.T) {
+	t.Parallel()
+	restarts := make(chan struct{}, 1)
+	tool, received := fakeTool(t, http.StatusOK, "ok", false)
+	started := time.Now()
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
+		o.Restart = func() { restarts <- struct{}{} }
+		o.Health.Started = started
+		o.UpdateTool = updatetool.New("Polyfin/1.2.3")
+	})
+	saveTool(t, api, tool.URL+"/v1/update", "")
+	admin := api.signedIn("root", true)
+	right := map[string]any{"password": "correct horse", "anyway": true}
+
+	status, body, response := admin.call(http.MethodPost, "/server/restart", right)
+	if status != http.StatusTooManyRequests || body["error"] != "too_soon" || response.Header.Get("Retry-After") == "" {
+		t.Errorf("restart at start-up: %d %v", status, body)
+	}
+	if len(restarts) != 0 || len(activityNames(t, admin, "ServerRestarted")) != 0 {
+		t.Fatal("Polyfin restarted at start-up")
+	}
+	for _, path := range []string{"/status", "/server", "/session", "/health", "/activity"} {
+		if status, body, _ := admin.call(http.MethodGet, path, nil); status != http.StatusOK {
+			t.Errorf("%s at start-up: %d %v", path, status, body)
+		}
+	}
+	if status, body, _ := admin.call(http.MethodPost, "/server/update-tool", map[string]any{"password": "correct horse"}); status != http.StatusOK || len(received()) != 1 {
+		t.Errorf("update now at start-up: %d %v", status, body)
+	}
+
+	later := started.Add(time.Minute + time.Second)
+	api.clock.Store(&later)
+	if status, body, _ := admin.call(http.MethodPost, "/server/restart", right); status != http.StatusAccepted {
+		t.Fatalf("restart a minute after start-up: %d %v", status, body)
 	}
 	<-restarts
 }
