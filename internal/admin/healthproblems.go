@@ -99,6 +99,11 @@ const (
 	// describes and searches titles of its kind: one is to be added under
 	// Content › Sources, a user's own addons not counting.
 	problemFolderNoSearch = "folder_no_search"
+	// A folder the settings chose for conversion, files being read or
+	// the cache could not be written into at start: Folder names it
+	// (config.ConversionFolder and the others), Path is the folder and
+	// Error why; the data folder's cache keeps its files until the next.
+	problemFolderUnwritable = "folder_unwritable"
 	// NVENC needs a newer NVIDIA driver than the GPU's: Name is the
 	// version it needs.
 	problemNVIDIADriver = "nvidia_driver"
@@ -129,7 +134,8 @@ const (
 // certificate close to its end, an error once it ended; Addon, with Name
 // and Failure, for a local folder whose searches failed; Peers for a
 // torrent that did not start; Missing and Files for a theme copy missing
-// files. To is the admin app's page that describes
+// files; Folder, Path and Error for a folder of the settings that cannot
+// be written into. To is the admin app's page that describes
 // it, with its anchor. Transient ones are not told as health problems:
 // they come and go with the load, or, for stopped connections, the
 // connection_stopped event told them already.
@@ -140,6 +146,7 @@ type healthProblemJSON struct {
 	To        string           `json:"to"`
 	Transient bool             `json:"transient"`
 	Folder    string           `json:"folder,omitempty"`
+	Path      string           `json:"path,omitempty"`
 	Free      *int64           `json:"free,omitempty"`
 	Name      string           `json:"name,omitempty"`
 	Owner     *ownerJSON       `json:"owner,omitempty"`
@@ -223,7 +230,7 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		return []healthProblemJSON{{Key: "database", Code: problemDatabase, Tone: notifications.SeverityError, To: "/system/health#database"}}, nil
 	}
 
-	for _, folder := range []struct{ name, path string }{{"cache", h.Health.CacheDir}, {"recordings", h.Recordings.Dir()}, {"backups", h.Backups.Dir()}} {
+	for _, folder := range h.measuredFolders() {
 		if folder.path == "" {
 			continue
 		}
@@ -232,6 +239,14 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			p.Folder, p.Free = folder.name, &free
 			add(p)
 		}
+	}
+	// A folder the settings chose that could not be written into at
+	// start, whose files the data folder's cache keeps until the next.
+	for _, unwritable := range h.Health.Folders.Unwritable {
+		p := warning("folder_unwritable:"+unwritable.Name, problemFolderUnwritable, "")
+		p.To = workFolderAnchors[unwritable.Name]
+		p.Folder, p.Path, p.Error = unwritable.Name, unwritable.Folder, unwritable.Err.Error()
+		add(p)
 	}
 
 	// The server's addons, sources and guides come first, then each
@@ -626,9 +641,28 @@ var searchFailures = map[string]i18n.Text{
 // diskFolders name the folders whose disks are measured.
 var diskFolders = map[string]i18n.Text{
 	"cache":      {"cache", "du cache", "den Cache", "la caché", "la cache", "o cache"},
+	"conversion": {"conversion folder", "de conversion", "den Konvertierungsordner", "la carpeta de conversión", "la cartella di conversione", "a pasta de conversão"},
+	"reading":    {"files being read", "des fichiers en cours de lecture", "die gelesenen Dateien", "los archivos en lectura", "i file in lettura", "os arquivos em leitura"},
 	"recordings": {"recordings", "des enregistrements", "die Aufnahmen", "las grabaciones", "le registrazioni", "as gravações"},
 	"backups":    {"backups", "des sauvegardes", "die Backups", "las copias de seguridad", "i backup", "os backups"},
 }
+
+// workFolders name the folders of the settings a folder_unwritable
+// problem tells, at the start of a sentence, and workFolderAnchors are
+// where the admin app sets them.
+var (
+	workFolders = map[string]i18n.Text{
+		"conversion": {"The conversion folder", "Le dossier de conversion", "Der Konvertierungsordner", "La carpeta de conversión", "La cartella di conversione", "A pasta de conversão"},
+		"reading": {"The folder for files being read", "Le dossier des fichiers en cours de lecture", "Der Ordner für gelesene Dateien", "La carpeta de archivos en lectura",
+			"La cartella dei file in lettura", "A pasta de arquivos em leitura"},
+		"cache": {"The cache folder", "Le dossier du cache", "Der Cache-Ordner", "La carpeta de caché", "La cartella della cache", "A pasta de cache"},
+	}
+	workFolderAnchors = map[string]string{
+		"conversion": "/settings/conversion#conversion-folder",
+		"reading":    "/settings/playback#reading-folder",
+		"cache":      "/settings/general#cache-folder",
+	}
+)
 
 // text tells a problem notifications send in a server language. The
 // transient ones are never sent: they have none.
@@ -889,6 +923,14 @@ func (p healthProblemJSON) text(language string) string {
 			"Keep Language of its descriptions at None on this addon, or on one more metadata addon.",
 			"%s : chaque addon de métadonnées du serveur a une langue : ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. " +
 				"Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.", "%s: Jedes Metadaten-Add-on des Servers hat eine Sprache, daher beschreiben sie Titel für jeden Benutzer in ihrer Sprache, unabhängig von seiner Metadatensprache. Belasse „Sprache der Beschreibungen“ bei diesem Add-on oder bei einem weiteren Metadaten-Add-on auf „Keine“.", "%s: todas las extensiones de metadatos del servidor tienen un idioma, así que describen los títulos en su idioma para todos los usuarios, sea cual sea su idioma de los metadatos. Deje «Idioma de sus descripciones» en «Ninguno» en esta extensión o en otra extensión de metadatos más.", "%s: ogni add-on di metadati del server ha una lingua, quindi descrivono i titoli nella propria lingua per tutti gli utenti, qualunque sia la loro lingua dei metadati. Lascia Lingua delle descrizioni su Nessuna in questo add-on, o in un altro add-on di metadati.", "%s: todos os complementos de metadados do servidor têm um idioma, então eles descrevem os títulos no idioma deles para todos os usuários, seja qual for o idioma dos metadados de cada um. Mantenha Idioma das descrições como Nenhum neste complemento, ou em mais um complemento de metadados."}, p.Name)
+	case problemFolderUnwritable:
+		return say(i18n.Text{"%s, %s, cannot be written into: Polyfin keeps these files in its data folder’s cache meanwhile. Make the folder writable or choose another, then restart Polyfin.",
+			"%s, %s, n’est pas accessible en écriture : Polyfin garde ces fichiers dans le cache de son dossier de données en attendant. Rendez le dossier accessible en écriture ou choisissez-en un autre, puis redémarrez Polyfin.",
+			"%s, %s, ist nicht beschreibbar: Polyfin legt diese Dateien bis dahin im Cache seines Datenordners ab. Mache den Ordner beschreibbar oder wähle einen anderen, und starte Polyfin dann neu.",
+			"%s, %s, no admite escritura: mientras tanto, Polyfin guarda estos archivos en la caché de su carpeta de datos. Haga que la carpeta admita escritura o elija otra, y luego reinicie Polyfin.",
+			"%s, %s, non è scrivibile: nel frattempo Polyfin tiene questi file nella cache della sua cartella dei dati. Rendi la cartella scrivibile o scegline un’altra, poi riavvia Polyfin.",
+			"%s, %s, não pode ser gravada: enquanto isso, o Polyfin guarda esses arquivos no cache da sua pasta de dados. Torne a pasta gravável ou escolha outra, depois reinicie o Polyfin."},
+			workFolders[p.Folder].In(language), p.Path)
 	case problemThemeCopyMissing:
 		return say(i18n.Text{"The copy of the web player theme misses %d of its %d files in Polyfin’s data folder, as after a backup restored on another system: browsers load them from their original addresses meanwhile, which needs the internet. Update the copy under Settings › Web player, or choose another theme.",
 			"La copie du thème du lecteur web n’a plus %d de ses %d fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système : les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.",

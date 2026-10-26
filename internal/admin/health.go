@@ -12,6 +12,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/dlna"
@@ -36,9 +37,11 @@ type HealthSources struct {
 	// catalog of an addon for now, as it did not answer a search in time
 	// (library.Service.SearchesLeaveOut); nil tells none.
 	SearchesLeaveOut func(addon accounts.ID) bool
-	// Cache keeps the sources being played, CacheDir holds it.
-	Cache    *source.Cache
-	CacheDir string
+	// Cache keeps the sources being played. Folders are the folders of
+	// the run, which keep it, the segments and the cache, those the
+	// settings chose that could not be written into at start among them.
+	Cache   *source.Cache
+	Folders config.Folders
 	// Encoder runs the remuxes and conversions.
 	Encoder *hls.Manager
 	// NVIDIADriver tells the NVIDIA driver version NVENC needs, when the
@@ -257,7 +260,8 @@ type torrentHealthJSON struct {
 }
 
 // diskJSON is the disk one of the server's folders is on: Folder is
-// "cache", "recordings" or "backups".
+// "cache", "conversion", "reading" (the files being read), "recordings"
+// or "backups".
 type diskJSON struct {
 	Folder string `json:"folder"`
 	Path   string `json:"path"`
@@ -267,6 +271,18 @@ type diskJSON struct {
 	Mount string `json:"mount"`
 	// Low tells whether the disk is short of room: a problem Health shows.
 	Low bool `json:"low"`
+}
+
+// measuredFolders are the folders whose disks Health measures, by name:
+// those of the run (see config.Folders.Disks), then the recordings' and
+// the backups', each empty while not in use.
+func (h *handler) measuredFolders() []struct{ name, path string } {
+	var folders []struct{ name, path string }
+	for _, disk := range h.Health.Folders.Disks() {
+		folders = append(folders, struct{ name, path string }{disk.Name, disk.Path})
+	}
+	return append(folders, struct{ name, path string }{"recordings", h.Recordings.Dir()},
+		struct{ name, path string }{"backups", h.Backups.Dir()})
 }
 
 type transcoderJSON struct {
@@ -400,7 +416,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	for _, folder := range []struct{ name, path string }{{"cache", h.Health.CacheDir}, {"recordings", h.Recordings.Dir()}, {"backups", h.Backups.Dir()}} {
+	for _, folder := range h.measuredFolders() {
 		if folder.path == "" {
 			continue
 		}

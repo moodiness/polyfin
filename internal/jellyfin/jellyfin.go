@@ -111,10 +111,12 @@ type Options struct {
 	Updates *updates.Checker
 	// Logs keeps the recent log lines administrators read; nil keeps none.
 	Logs *logs.Ring
-	// CacheDir is where sources and their remuxes are kept: with the
-	// current folder of Recordings, the folders storage information
-	// describes.
-	CacheDir string
+	// CacheDir is Polyfin's cache folder, which keeps the relayed images
+	// in its images folder, and SegmentsDir the folder of the segments of
+	// conversions and repackagings: with the current folder of
+	// Recordings, the folders storage information describes.
+	CacheDir    string
+	SegmentsDir string
 	// FontsDir holds the fonts apps load to render subtitles whose own
 	// fonts are missing, which also write the names of generated images;
 	// empty or missing, it offers none.

@@ -55,11 +55,9 @@ type Config struct {
 	Tesseract   string
 	TessdataDir string
 	// DataDir is the folder Polyfin keeps its files in, an absolute path:
-	// the cache, and the default recordings and backups folders.
+	// the cache, unless the settings choose other folders for what it holds
+	// (see ChooseFolders), and the default recordings and backups folders.
 	DataDir string
-	// CacheDir, <data>/cache, keeps the blocks of the sources being played,
-	// their remuxes and the guides being read; it is emptied at start.
-	CacheDir string
 	// FontsDir holds the fallback fonts apps load to render subtitles, read
 	// with the folders within, which also write the names of generated
 	// images.
@@ -217,7 +215,6 @@ func Load(getenv func(string) string) (Config, error) {
 	default:
 		cfg.DataDir = filepath.Clean(cfg.DataDir)
 	}
-	cfg.CacheDir = filepath.Join(cfg.DataDir, "cache")
 	if raw := strings.TrimSpace(getenv("POLYFIN_SECRET_KEY")); raw != "" {
 		key, err := secrets.ParseKey(raw)
 		if err != nil {

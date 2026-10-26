@@ -716,6 +716,14 @@ type settingsJSON struct {
 	TorrentUploadMbps       *int           `json:"torrentUploadMbps"`
 	TorrentsAtOnce          *int           `json:"torrentsAtOnce"`
 	InterfaceRoutes         bool           `json:"interfaceRoutes"`
+	// ConversionFolder, ReadingFolder and CacheFolder keep their current
+	// values when a PUT leaves them out; empty is the cache in the data
+	// folder, CacheFolderDefault, which a PUT ignores. Each applies at the
+	// next start.
+	ConversionFolder   *string `json:"conversionFolder"`
+	ReadingFolder      *string `json:"readingFolder"`
+	CacheFolder        *string `json:"cacheFolder"`
+	CacheFolderDefault string  `json:"cacheFolderDefault"`
 	// LumaaGlaass is the custom CSS and script the web player gets for
 	// the theme Polyfin bundles, which the admin app shows; a PUT ignores
 	// it.
@@ -934,6 +942,9 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TorrentDownloadMbps:     &settings.TorrentDownloadMbps,
 		TorrentUploadMbps:       &settings.TorrentUploadMbps,
 		TorrentsAtOnce:          &settings.TorrentsAtOnce,
+		ConversionFolder:        &settings.ConversionFolder,
+		ReadingFolder:           &settings.ReadingFolder,
+		CacheFolder:             &settings.CacheFolder,
 		InterfaceRoutes:         accounts.InterfaceRoutes,
 	}
 }
@@ -1379,6 +1390,7 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 	body.Bounds = settingsBounds
 	body.RecordingsFolderDefault = accounts.DefaultRecordingsFolder(h.DataDir)
 	body.BackupFolderDefault = accounts.DefaultBackupFolder(h.DataDir)
+	body.CacheFolderDefault = accounts.DefaultCacheFolder(h.DataDir)
 	body.RenderNodes = renderNodes()
 	body.ConversionHardware = conversionHardwareJSON{Encoders: []string{}}
 	if encoder := h.Health.Encoder; encoder != nil {
@@ -1642,6 +1654,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TorrentDownloadMbps:  valueOr(body.TorrentDownloadMbps, current.TorrentDownloadMbps),
 		TorrentUploadMbps:    valueOr(body.TorrentUploadMbps, current.TorrentUploadMbps),
 		TorrentsAtOnce:       valueOr(body.TorrentsAtOnce, current.TorrentsAtOnce),
+		ConversionFolder:     valueOr(body.ConversionFolder, current.ConversionFolder),
+		ReadingFolder:        valueOr(body.ReadingFolder, current.ReadingFolder),
+		CacheFolder:          valueOr(body.CacheFolder, current.CacheFolder),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)
@@ -1712,9 +1727,11 @@ func renderNodes() []string {
 // unwritableFolder checks the recordings and backup folders next turns to,
 // against the current settings: recording turned on, or its folder
 // changed while it is on, needs a folder Polyfin can write into, the
-// default one being created first; likewise for backups. It returns the
-// error code of the first that fails, empty when none does. A folder that
-// is not a path is left to UpdateSettings to refuse.
+// default one being created first; likewise for backups, and for the
+// conversion folder, the folder for files being read and the cache
+// folder, always in use, once changed. It returns the error code of the
+// first that fails, empty when none does. A folder that is not a path is
+// left to UpdateSettings to refuse.
 func (h *handler) unwritableFolder(next, current accounts.Settings) string {
 	for _, f := range []struct {
 		on, wasOn                bool
@@ -1725,6 +1742,9 @@ func (h *handler) unwritableFolder(next, current accounts.Settings) string {
 			"invalid_recordings_folder"},
 		{next.Backups, current.Backups, next.BackupFolder, current.BackupFolder, accounts.DefaultBackupFolder(h.DataDir),
 			"invalid_backup_folder"},
+		{true, true, next.ConversionFolder, current.ConversionFolder, accounts.DefaultCacheFolder(h.DataDir), "invalid_conversion_folder"},
+		{true, true, next.ReadingFolder, current.ReadingFolder, accounts.DefaultCacheFolder(h.DataDir), "invalid_reading_folder"},
+		{true, true, next.CacheFolder, current.CacheFolder, accounts.DefaultCacheFolder(h.DataDir), "invalid_cache_folder"},
 	} {
 		folder, ok := accounts.CleanFolder(f.folder)
 		if !f.on || !ok || f.wasOn && folder == f.was {

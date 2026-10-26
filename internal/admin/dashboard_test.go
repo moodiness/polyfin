@@ -410,7 +410,7 @@ func TestHealthDescribesTheServerFromWhatItRecords(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = sources.Close() })
-		o.Health = HealthSources{Addons: deps.client, Cache: sources, CacheDir: cacheDir, Encoder: encoder,
+		o.Health = HealthSources{Addons: deps.client, Cache: sources, Folders: config.Folders{Conversion: cacheDir, Reading: cacheDir, Cache: cacheDir}, Encoder: encoder,
 			DatabaseSize: func(ctx context.Context) (int64, error) { return database.Size(ctx, deps.pool) }}
 	})
 	admin := api.signedIn("root", true)

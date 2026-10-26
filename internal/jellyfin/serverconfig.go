@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -336,10 +335,10 @@ func folderStorage(path string) FolderStorageDto {
 }
 
 // storage describes the folders Polyfin writes to: its cache, where
-// sources and remuxes are kept, its segments, where conversions are, and,
-// when recordings are made, their folder, as a library. Polyfin keeps no
-// program data, web files, logs, metadata or artwork on disk: those
-// folders are left empty and unmeasured.
+// relayed images are kept, its segments, where conversions and
+// repackagings are, and, when recordings are made, their folder, as a
+// library. Polyfin keeps no program data, web files, logs or metadata on
+// disk: those folders are left empty and unmeasured.
 func (h *Handler) storage(w http.ResponseWriter, _ *http.Request) {
 	result := SystemStorageDto{
 		ProgramDataFolder:      folderStorage(""),
@@ -348,11 +347,8 @@ func (h *Handler) storage(w http.ResponseWriter, _ *http.Request) {
 		CacheFolder:            folderStorage(h.CacheDir),
 		LogFolder:              folderStorage(""),
 		InternalMetadataFolder: folderStorage(""),
-		TranscodingTempFolder:  folderStorage(""),
+		TranscodingTempFolder:  folderStorage(h.SegmentsDir),
 		Libraries:              []LibraryStorageDto{},
-	}
-	if h.CacheDir != "" {
-		result.TranscodingTempFolder = folderStorage(filepath.Join(h.CacheDir, "segments"))
 	}
 	if dir := h.Recordings.Dir(); dir != "" {
 		name := i18n.Text{"Recordings", "Enregistrements", "Aufnahmen", "Grabaciones", "Registrazioni", "Gravações"}.

@@ -295,13 +295,27 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	if _, err := exec.LookPath(cfg.FFmpeg); err != nil {
 		logger.Warn("FFmpeg was not found: apps that cannot play a file as it is cannot play it", "ffmpeg", cfg.FFmpeg)
 	}
+	// The segments of conversions, the files being read and the cache go
+	// in the folders the settings chose, read once, now: a folder chosen
+	// applies at the next start. One Polyfin cannot write into is told in
+	// System › Health, and the cache in the data folder takes its place
+	// meanwhile. The folders of that cache this run leaves unused are
+	// removed, those chosen before left as they are.
+	work := config.ChooseFolders(cfg.DataDir, store.Settings())
+	for _, unwritable := range work.Unwritable {
+		logger.Warn("A folder the settings choose cannot be written into: the data folder's cache is used instead until the next start",
+			"folder", unwritable.Name, "path", unwritable.Folder, "error", unwritable.Err)
+	}
+	if err := work.ClearUnused(cfg.DataDir); err != nil {
+		logger.Warn("The folders of the data folder's cache left unused could not be removed", "error", err)
+	}
 	cacheLimit := func() int64 { return int64(store.Settings().CacheSizeGB) * 1e9 }
-	sources, err := source.New(filepath.Join(cfg.CacheDir, "sources"), cacheLimit, addonClient, logger)
+	sources, err := source.New(work.Sources(), cacheLimit, addonClient, logger)
 	if err != nil {
 		return fmt.Errorf("prepare the source cache: %w", err)
 	}
 	defer sources.Close()
-	segments, err := hls.NewManager(cfg.FFmpeg, filepath.Join(cfg.CacheDir, "segments"), logger)
+	segments, err := hls.NewManager(cfg.FFmpeg, work.Segments(), logger)
 	if err != nil {
 		return fmt.Errorf("prepare the segment directory: %w", err)
 	}
@@ -335,7 +349,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	folders.UseMeter(meter)
 	folders.UseToneMapping(segments.HasFilters("zscale", "tonemap"))
 	folders.Watch()
-	if err := lib.SpoolGuidesIn(filepath.Join(cfg.CacheDir, "guides")); err != nil {
+	if err := lib.SpoolGuidesIn(work.Guides()); err != nil {
 		return fmt.Errorf("prepare the guide directory: %w", err)
 	}
 	activityLog := activity.New(pool, store.Settings, logger)
@@ -356,7 +370,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// source cache's space, which counts them. DHT lookups start from the
 	// bootstrap nodes clients use, over a route that carries UDP.
 	torrents, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(store.Settings()) },
-		Dir: filepath.Join(cfg.CacheDir, "torrents"), Budget: func() int64 { return cacheLimit() / 4 },
+		Dir: work.Torrents(), Budget: func() int64 { return cacheLimit() / 4 },
 		Bootstrap: torrent.BootstrapNodes, Logger: logger})
 	if err != nil {
 		return fmt.Errorf("prepare the torrent directory: %w", err)
@@ -375,7 +389,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// ask: those of the versions played, and of the videos scans find. The
 	// files written meanwhile go in the cache folder, emptied at start, as
 	// the system's temporary folder is read-only in the image's container.
-	ocrDir := filepath.Join(cfg.CacheDir, "ocr")
+	ocrDir := work.OCR()
 	if err := errors.Join(os.RemoveAll(ocrDir), os.MkdirAll(ocrDir, 0o700)); err != nil {
 		return fmt.Errorf("prepare the OCR directory: %w", err)
 	}
@@ -557,7 +571,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Tasks:          registry,
 		Updates:        updateCheck,
 		Logs:           recent,
-		CacheDir:       cfg.CacheDir,
+		CacheDir:       work.Cache,
+		SegmentsDir:    work.Segments(),
 		FontsDir:       cfg.FontsDir,
 		Recordings:     recorder,
 		Commercials:    breaks,
@@ -636,7 +651,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,
 			Cache:            sources,
-			CacheDir:         cfg.CacheDir,
+			Folders:          work,
 			Encoder:          segments,
 			NVIDIADriver:     segments.NVIDIADriver,
 			Thumbnails:       images,
@@ -689,8 +704,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// Playbacks under way when Polyfin stops are kept in the history, as
 	// ended at their last report.
 	defer playbacks.Close()
-	registerMetrics(addonStore, jellyfinAPI, segments, pool, []metricFolder{{"cache", func() string { return cfg.CacheDir }},
-		{"recordings", recorder.Dir}, {"backups", backups.Dir}})
+	registerMetrics(addonStore, jellyfinAPI, segments, pool, metricFolders(work, recorder.Dir, backups.Dir))
 	httpServer := &http.Server{
 		Handler: server.New(server.Options{
 			Database:      pool,

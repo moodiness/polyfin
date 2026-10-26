@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/jellyfin"
@@ -18,6 +19,32 @@ import (
 type metricFolder struct {
 	name string
 	path func() string
+}
+
+// metricFolders are the folders whose disks the metrics measure: those
+// of the run (see config.Folders.Disks), then recordings' and backups'.
+func metricFolders(work config.Folders, recordings, backups func() string) []metricFolder {
+	var folders []metricFolder
+	for _, disk := range work.Disks() {
+		folders = append(folders, metricFolder{disk.Name, func() string { return disk.Path }})
+	}
+	return append(folders, metricFolder{"recordings", recordings}, metricFolder{"backups", backups})
+}
+
+// diskFreeSamples are the bytes free on the disks of folders, by name,
+// those not in use or that cannot be measured left out.
+func diskFreeSamples(folders []metricFolder) []metrics.Sample {
+	var samples []metrics.Sample
+	for _, folder := range folders {
+		path := folder.path()
+		if path == "" {
+			continue
+		}
+		if free, _, _, ok := diskspace.Measure(path); ok {
+			samples = append(samples, metrics.Sample{Labels: []string{folder.name}, Value: float64(free)})
+		}
+	}
+	return samples
 }
 
 // registerMetrics has the metrics read, when Prometheus asks, the
@@ -40,19 +67,7 @@ func registerMetrics(installed *addons.Store, playing *jellyfin.Handler, segment
 				return []metrics.Sample{{Labels: []string{"in_use"}, Value: float64(stat.AcquiredConns())},
 					{Labels: []string{"idle"}, Value: float64(stat.IdleConns())}, {Labels: []string{"max"}, Value: float64(stat.MaxConns())}}
 			}),
-		metrics.NewGauges("polyfin_disk_free_bytes", "Bytes free to Polyfin on the disks of the folders it writes to: cache, recordings and backups.",
-			[]string{"folder"}, func(context.Context) []metrics.Sample {
-				var samples []metrics.Sample
-				for _, folder := range folders {
-					path := folder.path()
-					if path == "" {
-						continue
-					}
-					if free, _, _, ok := diskspace.Measure(path); ok {
-						samples = append(samples, metrics.Sample{Labels: []string{folder.name}, Value: float64(free)})
-					}
-				}
-				return samples
-			}),
+		metrics.NewGauges("polyfin_disk_free_bytes", "Bytes free to Polyfin on the disks of the folders it writes to: cache, conversion, reading (files being read), recordings and backups.",
+			[]string{"folder"}, func(context.Context) []metrics.Sample { return diskFreeSamples(folders) }),
 	)
 }

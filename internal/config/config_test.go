@@ -225,15 +225,15 @@ func TestLoadRejectsUnusablePorts(t *testing.T) {
 }
 
 // Polyfin keeps its files in POLYFIN_DATA_DIR, by default a folder of the
-// system's temporary folder, and its cache in a folder within.
+// system's temporary folder.
 func TestDataFolder(t *testing.T) {
 	cfg, err := Load(with(nil))
-	if want := filepath.Join(os.TempDir(), "polyfin"); err != nil || cfg.DataDir != want || cfg.CacheDir != filepath.Join(want, "cache") {
-		t.Errorf("default: %q %q %v", cfg.DataDir, cfg.CacheDir, err)
+	if want := filepath.Join(os.TempDir(), "polyfin"); err != nil || cfg.DataDir != want {
+		t.Errorf("default: %q %v", cfg.DataDir, err)
 	}
 	cfg, err = Load(with(map[string]string{"POLYFIN_DATA_DIR": " " + systemPath("/data/") + " "}))
-	if err != nil || cfg.DataDir != systemPath("/data") || cfg.CacheDir != systemPath("/data/cache") {
-		t.Errorf("set: %q %q %v", cfg.DataDir, cfg.CacheDir, err)
+	if err != nil || cfg.DataDir != systemPath("/data") {
+		t.Errorf("set: %q %v", cfg.DataDir, err)
 	}
 	for _, relative := range []string{"data", "./data"} {
 		if _, err := Load(with(map[string]string{"POLYFIN_DATA_DIR": relative})); err == nil || !strings.Contains(err.Error(), "POLYFIN_DATA_DIR") {

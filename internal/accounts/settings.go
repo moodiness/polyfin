@@ -1137,6 +1137,24 @@ func (s Settings) BackupDir(dataDir string) string {
 	return DefaultBackupFolder(dataDir)
 }
 
+// ErrInvalidConversionFolder, ErrInvalidReadingFolder and
+// ErrInvalidCacheFolder report a ConversionFolder, a ReadingFolder or a
+// CacheFolder that is not a folder's path (see CleanFolder), or, from the
+// admin API, a folder Polyfin cannot write into.
+var (
+	ErrInvalidConversionFolder = errors.New("invalid conversion folder")
+	ErrInvalidReadingFolder    = errors.New("invalid folder for files being read")
+	ErrInvalidCacheFolder      = errors.New("invalid cache folder")
+)
+
+// DefaultCacheFolder is the cache in the data folder dataDir: the folder
+// the segments of conversions, the files being read and the cache are
+// kept in when the settings name no ConversionFolder, ReadingFolder or
+// CacheFolder.
+func DefaultCacheFolder(dataDir string) string {
+	return filepath.Join(dataDir, "cache")
+}
+
 // Settings are the server-wide options set from the admin interface.
 type Settings struct {
 	// ServerName is the name Jellyfin apps show for this server.
@@ -1634,6 +1652,15 @@ type Settings struct {
 	TorrentDownloadMbps  int
 	TorrentUploadMbps    int
 	TorrentsAtOnce       int
+	// ConversionFolder keeps the segments of conversions and
+	// repackagings; ReadingFolder the files being read, the blocks of
+	// addons' files and torrents' pieces; CacheFolder the cache, relayed
+	// images, guides and picture subtitles being read. Each is empty for
+	// the cache in the data folder (see DefaultCacheFolder), and applies
+	// at the next start (see config.ChooseFolders).
+	ConversionFolder string
+	ReadingFolder    string
+	CacheFolder      string
 }
 
 // TorrentsAllowed reports whether user is offered torrents' files: the
@@ -1812,7 +1839,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
 	"metrics, metrics_token, " +
 	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_wireguard, torrent_download_mbps, torrent_upload_mbps, torrents_at_once, " +
-	"restart_confirmed, update_tool_url, update_tool_token"
+	"restart_confirmed, update_tool_url, update_tool_token, " +
+	"conversion_folder, reading_folder, cache_folder"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1869,7 +1897,8 @@ func (settings *Settings) fields() []any {
 		&settings.TorrentStreams, &settings.TorrentInterface, &settings.TorrentProxy, &settings.TorrentProxyUser, &settings.TorrentProxyPassword,
 		&settings.TorrentWireGuard,
 		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps, &settings.TorrentsAtOnce,
-		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken}
+		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken,
+		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -2277,6 +2306,15 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.BackupFolder, ok = CleanFolder(settings.BackupFolder); !ok {
 		return Settings{}, ErrInvalidBackupFolder
+	}
+	if settings.ConversionFolder, ok = CleanFolder(settings.ConversionFolder); !ok {
+		return Settings{}, ErrInvalidConversionFolder
+	}
+	if settings.ReadingFolder, ok = CleanFolder(settings.ReadingFolder); !ok {
+		return Settings{}, ErrInvalidReadingFolder
+	}
+	if settings.CacheFolder, ok = CleanFolder(settings.CacheFolder); !ok {
+		return Settings{}, ErrInvalidCacheFolder
 	}
 	// The address is kept without surrounding spaces or trailing slashes:
 	// the paths asked are added after it.

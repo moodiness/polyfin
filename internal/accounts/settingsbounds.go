@@ -210,6 +210,10 @@ func DefaultSettings() Settings {
 		TorrentDownloadMbps:  0,
 		TorrentUploadMbps:    0,
 		TorrentsAtOnce:       0,
+
+		ConversionFolder: "",
+		ReadingFolder:    "",
+		CacheFolder:      "",
 	}
 }
 
@@ -427,6 +431,10 @@ func SettingsBounds() map[string]SettingBounds {
 		"torrentDownloadMbps":  between(0, MaxTorrentMbps, d.TorrentDownloadMbps),
 		"torrentUploadMbps":    between(0, MaxTorrentMbps, d.TorrentUploadMbps),
 		"torrentsAtOnce":       between(0, MaxTorrentsAtOnce, d.TorrentsAtOnce),
+
+		"conversionFolder": text(MaxFolderBytes, d.ConversionFolder),
+		"readingFolder":    text(MaxFolderBytes, d.ReadingFolder),
+		"cacheFolder":      text(MaxFolderBytes, d.CacheFolder),
 	}
 }
 
