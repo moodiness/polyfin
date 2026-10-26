@@ -603,6 +603,19 @@ const account: typeof en = {
     copyFailed: 'Der Link konnte nicht kopiert werden. Markiere ihn und kopiere ihn manuell.',
     done: 'Fertig',
   },
+  resetPreferences: {
+    button: 'Meine Einstellungen zurücksetzen',
+    title: 'Ihre Einstellungen zurücksetzen?',
+    help: 'Was Sie selbst gewählt haben, erhält wieder die Standardwerte des Servers:',
+    metadataLanguage: 'Metadatensprache: Die des Servers',
+    homeRows: 'Startseitenzeilen: Alle Zeilen werden wieder angezeigt',
+    appPreferences:
+      'Die Einstellungen, die Jellyfin-Apps in Ihrem Konto gespeichert haben: Audio- und Untertitelsprachen und -modus, Startbildschirm- und Anzeigeeinstellungen',
+    kept: 'Was Sie angesehen haben, Ihre Favoriten, Fortsetzungspunkte, Verbindungen und Importe bleiben.',
+    confirm: 'Zurücksetzen',
+    resetting: 'Wird zurückgesetzt…',
+    done: 'Ihre Einstellungen wurden zurückgesetzt.',
+  },
 }
 
 export default account

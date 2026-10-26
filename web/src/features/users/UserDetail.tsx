@@ -1,4 +1,5 @@
 import {
+  ArrowCounterClockwiseIcon,
   ClockIcon,
   DevicesIcon,
   FilmSlateIcon,
@@ -79,6 +80,7 @@ import {
   PermissionRows,
   PlaybackAccessForm,
   VisibleLibrariesForm,
+  ResetDefaultsDialog,
   type LimitsTarget,
 } from './UserForms'
 
@@ -146,10 +148,14 @@ function UserPage({ user }: { user: User }) {
   const restrictions = useRestrictions(user)
   const current = useSectionInView(sectionIds, true)
   const [deleting, setDeleting] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  // Each reset draws the forms again from the new values.
+  const [resets, setResets] = useState(0)
   const target: LimitsTarget = { kind: 'user', user }
   // The forms keep what is typed until saved. A member's own values are only changed there, while
   // the values of a group they follow change with it: those forms are drawn again from each copy.
-  const formsKey = followedGroup(user) === null ? 'own' : `group:${JSON.stringify(user)}`
+  const followed = followedGroup(user)
+  const formsKey = followed === null ? `own:${resets}` : `group:${JSON.stringify(user)}`
 
   // The content arrives after the first render: a #section address scrolls once it is drawn.
   useEffect(() => {
@@ -254,16 +260,28 @@ function UserPage({ user }: { user: User }) {
         back={{ to: '/users', label: t.users.title }}
         nav={nav}
         actions={
-          <Button
-            variant="danger"
-            icon={TrashIcon}
-            onClick={() => {
-              remove.reset()
-              setDeleting(true)
-            }}
-          >
-            {t.users.delete}
-          </Button>
+          <>
+            {/* A member following their group has its values: the group's page resets them. */}
+            {followed === null && (
+              <Button
+                variant="secondary"
+                icon={ArrowCounterClockwiseIcon}
+                onClick={() => setResetting(true)}
+              >
+                {t.resetDefaults.button}
+              </Button>
+            )}
+            <Button
+              variant="danger"
+              icon={TrashIcon}
+              onClick={() => {
+                remove.reset()
+                setDeleting(true)
+              }}
+            >
+              {t.users.delete}
+            </Button>
+          </>
         }
       >
         <ProfilePanel user={user} />
@@ -298,6 +316,12 @@ function UserPage({ user }: { user: User }) {
       >
         {t.users.deleteConfirm(user.name)}
       </ConfirmDialog>
+      <ResetDefaultsDialog
+        target={target}
+        open={resetting}
+        onClose={() => setResetting(false)}
+        onReset={() => setResets((count) => count + 1)}
+      />
     </>
   )
 }

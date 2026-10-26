@@ -532,6 +532,30 @@ const users: typeof en = {
     allGroups: 'Todos los grupos',
     noneShown: 'No hay ningún usuario aquí.',
   },
+  resetDefaults: {
+    button: 'Restablecer los valores predeterminados',
+    title: (name: string) => `¿Restablecer los ajustes de ${name}?`,
+    groupTitle: (name: string) => `¿Restablecer los ajustes del grupo ${name}?`,
+    userHelp: (name: string) =>
+      `Los permisos de Acceso, Reproducción y acceso con el Grupo de calidad, Control parental, Bibliotecas visibles, Géneros bloqueados y Horario permitido vuelven a los ajustes de un usuario nuevo, los que da «Crear un usuario»; las aplicaciones de ${name} ya conectadas los tienen al instante. Su nombre y contraseña, Administrador, Mostrar en la pantalla de inicio de sesión, Desactivado, Finaliza el, su grupo, sus propios addons, conexiones, cuentas de seguimiento y todo lo que ha visto se mantienen.`,
+    ownSettingsHelp: (group: string) =>
+      `Sigue en el grupo ${group} con sus propios ajustes, sin seguirlo.`,
+    groupHelp:
+      'Los permisos de Acceso, Reproducción y acceso con el Grupo de calidad, Control parental, Bibliotecas visibles, Géneros bloqueados y Horario permitido vuelven a los ajustes de un usuario nuevo. El nombre y los miembros del grupo se mantienen.',
+    followers: (count: number) =>
+      count === 0
+        ? 'Ningún miembro sigue el grupo: el cambio no llega a nadie.'
+        : count === 1
+          ? '1 miembro sigue el grupo y recibe estos ajustes al instante.'
+          : `${count} miembros siguen el grupo y reciben estos ajustes al instante.`,
+    changesTitle: 'Qué cambia',
+    loading: 'Buscando qué cambia…',
+    noChange: 'No cambia nada: ya son los ajustes de un usuario nuevo.',
+    confirm: 'Restablecer',
+    resetting: 'Restableciendo…',
+    done: (name: string) => `Se han restablecido los ajustes de ${name}.`,
+    groupDone: (name: string) => `Se han restablecido los ajustes del grupo ${name}.`,
+  },
 }
 
 export default users

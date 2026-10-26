@@ -1,4 +1,5 @@
 import {
+  ArrowCounterClockwiseIcon,
   BooksIcon,
   CaretRightIcon,
   ClockIcon,
@@ -59,6 +60,7 @@ import {
   ParentalControlForm,
   PermissionRows,
   PlaybackAccessForm,
+  ResetDefaultsDialog,
   VisibleLibrariesForm,
   type LimitsTarget,
 } from './UserForms'
@@ -132,6 +134,9 @@ function GroupPage({ group }: { group: Group }) {
   const { hash } = useLocation()
   const current = useSectionInView(sectionIds, true)
   const [deleting, setDeleting] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  // The forms keep what is typed until saved: each reset draws them again from the new values.
+  const [resets, setResets] = useState(0)
   const target: LimitsTarget = { kind: 'group', group }
 
   // The content arrives after the first render: a #section address scrolls once it is drawn.
@@ -187,25 +192,34 @@ function GroupPage({ group }: { group: Group }) {
         back={{ to: '/users/groups', label: t.groups.title }}
         nav={nav}
         actions={
-          <Button
-            variant="danger"
-            icon={TrashIcon}
-            onClick={() => {
-              remove.reset()
-              setDeleting(true)
-            }}
-          >
-            {t.groups.delete}
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              icon={ArrowCounterClockwiseIcon}
+              onClick={() => setResetting(true)}
+            >
+              {t.resetDefaults.button}
+            </Button>
+            <Button
+              variant="danger"
+              icon={TrashIcon}
+              onClick={() => {
+                remove.reset()
+                setDeleting(true)
+              }}
+            >
+              {t.groups.delete}
+            </Button>
+          </>
         }
       >
         <NamePanel group={group} />
         <AccessPanel group={group} />
-        <PlaybackAccessForm id="playback" target={target} />
-        <ParentalControlForm id="parental" target={target} />
-        <VisibleLibrariesForm id="libraries" target={target} />
-        <BlockedGenresForm id="genres" target={target} />
-        <AllowedHoursForm id="hours" target={target} />
+        <PlaybackAccessForm key={`playback:${resets}`} id="playback" target={target} />
+        <ParentalControlForm key={`parental:${resets}`} id="parental" target={target} />
+        <VisibleLibrariesForm key={`libraries:${resets}`} id="libraries" target={target} />
+        <BlockedGenresForm key={`genres:${resets}`} id="genres" target={target} />
+        <AllowedHoursForm key={`hours:${resets}`} id="hours" target={target} />
         <MembersSection group={group} />
       </PageLayout>
       {/* Outside the layout, whose block spacing would push the dialog down. */}
@@ -220,6 +234,12 @@ function GroupPage({ group }: { group: Group }) {
       >
         {t.groups.deleteConfirm}
       </ConfirmDialog>
+      <ResetDefaultsDialog
+        target={target}
+        open={resetting}
+        onClose={() => setResetting(false)}
+        onReset={() => setResets((count) => count + 1)}
+      />
     </>
   )
 }

@@ -2,10 +2,16 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { PlusIcon, TrashIcon, XIcon } from '@phosphor-icons/react'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import {
+  fetchGroupDefaults,
   fetchUserContentChoices,
+  fetchUserDefaults,
+  fetchUsers,
   maxPlaybacksRange,
   qualityGroups,
+  queryClient,
   queryKeys,
+  resetGroup,
+  resetUser,
   scheduleDays,
   updateGroup,
   updateUser,
@@ -20,10 +26,11 @@ import {
 } from '@/api'
 import { useSessionUser } from '@/app/session'
 import { errorMessage } from '@/format'
-import { useI18n } from '@/i18n'
+import { useI18n, type Messages } from '@/i18n'
 import {
   Button,
   Checkbox,
+  ConfirmDialog,
   EmptyState,
   Field,
   IconButton,
@@ -658,4 +665,174 @@ export function PermissionRows({
       onChange={(checked) => onChange({ [field]: checked })}
     />
   ))
+}
+
+/** Whether a and b hold the same values, in any order. */
+function sameSet(a: readonly string[], b: readonly string[]) {
+  return a.length === b.length && a.every((value) => b.includes(value))
+}
+
+/**
+ * What Reset to defaults changes, in the order of the page: each section whose values change, with
+ * the settings that change in it for Access and Playback and access, whose settings are many.
+ */
+function resetChanges(t: Messages, current: GroupLimits, defaults: GroupLimits) {
+  const access = (
+    [
+      ['transcoding', t.users.canTranscode],
+      ['downloads', t.users.canDownload],
+      ['torrentStreams', t.users.canPlayTorrents],
+      ['personalAddons', t.users.canAddAddons],
+      ['collectionManagement', t.users.canManageCollections],
+      ['subtitleManagement', t.users.canManageSubtitles],
+      ['canShare', t.users.canShare],
+    ] as const
+  ).filter(([field]) => current[field] !== defaults[field])
+  const playback = (
+    [
+      ['maxPlaybacks', t.users.maxPlaybacks],
+      ['maxBitrate', t.users.maxBitrate],
+      ['qualityGroup', t.users.qualityGroup],
+      ['syncPlay', t.users.syncPlay],
+      ['liveTv', t.users.liveTv],
+      ['remoteControl', t.users.remoteControl],
+      ['liveTvManagement', t.users.liveTvManagement],
+    ] as const
+  ).filter(([field]) => current[field] !== defaults[field])
+  const parental = current.parentalControl
+  const sections: { title: string; settings: string[]; changed: boolean }[] = [
+    {
+      title: t.users.accessTitle,
+      settings: access.map(([, label]) => label),
+      changed: access.length > 0,
+    },
+    {
+      title: t.users.playbackAccessTitle,
+      settings: playback.map(([, label]) => label),
+      changed: playback.length > 0,
+    },
+    {
+      title: t.users.parentalTitle,
+      settings: [],
+      changed:
+        parental.maxRating !== defaults.parentalControl.maxRating ||
+        parental.maxSubRating !== defaults.parentalControl.maxSubRating ||
+        !sameSet(parental.blockUnrated, defaults.parentalControl.blockUnrated),
+    },
+    {
+      title: t.users.visibleLibrariesTitle,
+      settings: [],
+      changed: !sameSet(current.hiddenLibraries, defaults.hiddenLibraries),
+    },
+    {
+      title: t.users.blockedGenresTitle,
+      settings: [],
+      changed: !sameSet(current.blockedGenres, defaults.blockedGenres),
+    },
+    {
+      title: t.users.allowedHoursTitle,
+      settings: [],
+      changed: JSON.stringify(current.accessSchedules) !== JSON.stringify(defaults.accessSchedules),
+    },
+  ]
+  return sections.filter((section) => section.changed)
+}
+
+/**
+ * Reset to defaults, on a user's page or a group's: asks first, saying what stays and listing
+ * what changes, then puts the sections that set limits back to a new user's settings. A group's
+ * says how many members follow it, as the change reaches them. `onReset` is told once it is done,
+ * for the page to draw its forms again from the new values.
+ */
+export function ResetDefaultsDialog({
+  target,
+  open,
+  onClose,
+  onReset,
+}: {
+  target: LimitsTarget
+  open: boolean
+  onClose: () => void
+  onReset: () => void
+}) {
+  const { t } = useI18n()
+  const text = t.resetDefaults
+  const toast = useToast()
+  const self = useSessionUser()
+  const id = target.kind === 'group' ? target.group.id : target.user.id
+  const name = target.kind === 'group' ? target.group.name : target.user.name
+  const defaults = useQuery({
+    queryKey: target.kind === 'group' ? queryKeys.groupDefaults(id) : queryKeys.userDefaults(id),
+    queryFn: ({ signal }) =>
+      target.kind === 'group' ? fetchGroupDefaults(id, signal) : fetchUserDefaults(id, signal),
+    enabled: open,
+  })
+  // The members who follow the group take its values at once.
+  const users = useQuery({
+    queryKey: queryKeys.users,
+    queryFn: ({ signal }) => fetchUsers(signal),
+    enabled: open && target.kind === 'group',
+  })
+  const followers = (users.data ?? []).filter(
+    (user) => user.groupId === id && user.followGroup,
+  ).length
+  const reset = useMutation({
+    mutationFn: async () => {
+      if (target.kind === 'group') groupSaved(await resetGroup(id))
+      else userSaved(await resetUser(id), self.id)
+    },
+    onSuccess: () => {
+      if (target.kind === 'user') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.userShareLinks(id) })
+      }
+      onReset()
+      onClose()
+      toast(target.kind === 'group' ? text.groupDone(name) : text.done(name))
+    },
+    onError: target.kind === 'group' ? refreshGroupIfGone : refreshIfGone,
+  })
+  const changes =
+    defaults.data === undefined ? null : resetChanges(t, limitsOf(target), defaults.data)
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onClose={() => {
+        reset.reset()
+        onClose()
+      }}
+      onConfirm={() => reset.mutate()}
+      title={target.kind === 'group' ? text.groupTitle(name) : text.title(name)}
+      confirmLabel={reset.isPending ? text.resetting : text.confirm}
+      busy={reset.isPending}
+      error={reset.isError ? errorMessage(t, reset.error) : undefined}
+    >
+      <div className="space-y-3">
+        <p>{target.kind === 'group' ? text.groupHelp : text.userHelp(name)}</p>
+        {target.kind === 'user' && target.user.groupName !== null && (
+          <p>{text.ownSettingsHelp(target.user.groupName)}</p>
+        )}
+        {target.kind === 'group' && users.isSuccess && <p>{text.followers(followers)}</p>}
+        {defaults.isError ? (
+          <p className="text-danger">{errorMessage(t, defaults.error)}</p>
+        ) : changes === null ? (
+          <p className="text-ink-3">{text.loading}</p>
+        ) : changes.length === 0 ? (
+          <p>{text.noChange}</p>
+        ) : (
+          <div>
+            <p className="font-medium text-ink">{text.changesTitle}</p>
+            <ul className="mt-1 list-disc space-y-0.5 ps-5">
+              {changes.map((change) => (
+                <li key={change.title}>
+                  <span className="text-ink">{change.title}</span>
+                  {change.settings.length > 0 && `: ${change.settings.join(', ')}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </ConfirmDialog>
+  )
 }

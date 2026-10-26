@@ -45,6 +45,7 @@ import SharedLinks from './SharedLinks'
 import TrackingServices from './TrackingServices'
 import { ReminderList, ReminderSettingsForm } from './Reminders'
 import { OwnMetadataLanguage } from './MetadataLanguage'
+import ResetPreferences from './ResetPreferences'
 import { HiddenList, HomeRowList, ResumeList } from './WatchingLists'
 import TwoStep from './TwoStep'
 
@@ -134,6 +135,7 @@ export default function AccountRoute() {
           <span className="font-mono text-ink">{user.name}</span>.
         </>
       }
+      actions={<ResetPreferences />}
       nav={
         <SectionNav
           label={text.sectionsLabel}

@@ -592,6 +592,19 @@ const account = {
     copyFailed: 'The link could not be copied. Select it and copy it by hand.',
     done: 'Done',
   },
+  resetPreferences: {
+    button: 'Reset my preferences',
+    title: 'Reset your preferences?',
+    help: 'What you chose yourself goes back to the server’s defaults:',
+    metadataLanguage: 'Metadata language: The server’s',
+    homeRows: 'Home rows: every row is shown again',
+    appPreferences:
+      'The preferences Jellyfin apps saved in your account: audio and subtitle languages and mode, home screen and display preferences',
+    kept: 'What you watched, your favorites, your resume points, your connections and imports stay.',
+    confirm: 'Reset',
+    resetting: 'Resetting…',
+    done: 'Your preferences have been reset.',
+  },
 }
 
 export default account

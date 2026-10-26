@@ -537,6 +537,30 @@ const users: typeof en = {
     allGroups: 'Tous les groupes',
     noneShown: 'Aucun utilisateur ici.',
   },
+  resetDefaults: {
+    button: 'Rétablir les réglages par défaut',
+    title: (name: string) => `Rétablir les réglages par défaut de ${name} ?`,
+    groupTitle: (name: string) => `Rétablir les réglages par défaut du groupe ${name} ?`,
+    userHelp: (name: string) =>
+      `Les autorisations d’Accès, Lecture et accès avec le Groupe de qualité, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés reprennent les réglages d’un nouvel utilisateur, ceux que donne « Créer un utilisateur » ; les applications de ${name} déjà connectées les ont aussitôt. Son nom et son mot de passe, Administrateur, Afficher sur l’écran de connexion, Désactivé, Prend fin le, son groupe, ses propres addons, ses connexions, ses comptes de suivi et tout ce qu’il a regardé restent.`,
+    ownSettingsHelp: (group: string) =>
+      `Cet utilisateur reste dans le groupe ${group} avec ses propres réglages, sans le suivre.`,
+    groupHelp:
+      'Les autorisations d’Accès, Lecture et accès avec le Groupe de qualité, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés reprennent les réglages d’un nouvel utilisateur. Le nom et les membres du groupe restent.',
+    followers: (count: number) =>
+      count === 0
+        ? 'Aucun membre ne suit le groupe : le changement n’atteint personne.'
+        : count === 1
+          ? '1 membre suit le groupe et prend aussitôt ces réglages.'
+          : `${count} membres suivent le groupe et prennent aussitôt ces réglages.`,
+    changesTitle: 'Ce qui change',
+    loading: 'Recherche de ce qui change…',
+    noChange: 'Rien ne change : ce sont déjà les réglages d’un nouvel utilisateur.',
+    confirm: 'Rétablir',
+    resetting: 'Rétablissement…',
+    done: (name: string) => `Les réglages par défaut de ${name} ont été rétablis.`,
+    groupDone: (name: string) => `Les réglages par défaut du groupe ${name} ont été rétablis.`,
+  },
 }
 
 export default users

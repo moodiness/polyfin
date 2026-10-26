@@ -514,6 +514,30 @@ const users = {
     allGroups: 'All groups',
     noneShown: 'No user here.',
   },
+  resetDefaults: {
+    button: 'Reset to defaults',
+    title: (name: string) => `Reset the settings of ${name}?`,
+    groupTitle: (name: string) => `Reset the settings of the group ${name}?`,
+    userHelp: (name: string) =>
+      `The permissions under Access, Playback and access with the Quality group, Parental control, Visible libraries, Blocked genres and Allowed hours go back to a new user’s settings, those Create a user gives; ${name}’s apps already signed in have them at once. Their name and password, Administrator, Show on the sign-in screen, Disabled, Ends on, their group, their own addons, connections, tracking accounts and everything they watched stay.`,
+    ownSettingsHelp: (group: string) =>
+      `They stay in the group ${group} with their own settings, not following it.`,
+    groupHelp:
+      'The permissions under Access, Playback and access with the Quality group, Parental control, Visible libraries, Blocked genres and Allowed hours go back to a new user’s settings. The group’s name and members stay.',
+    followers: (count: number) =>
+      count === 0
+        ? 'No member follows the group: the change reaches no one.'
+        : count === 1
+          ? '1 member follows the group and takes these settings at once.'
+          : `${count} members follow the group and take these settings at once.`,
+    changesTitle: 'What changes',
+    loading: 'Looking for what changes…',
+    noChange: 'Nothing changes: these are already a new user’s settings.',
+    confirm: 'Reset',
+    resetting: 'Resetting…',
+    done: (name: string) => `The settings of ${name} have been reset.`,
+    groupDone: (name: string) => `The settings of the group ${name} have been reset.`,
+  },
 }
 
 export default users

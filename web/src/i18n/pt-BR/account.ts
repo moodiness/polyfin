@@ -605,6 +605,19 @@ const account: typeof en = {
     copyFailed: 'Não foi possível copiar o link. Selecione-o e copie-o manualmente.',
     done: 'Concluído',
   },
+  resetPreferences: {
+    button: 'Redefinir minhas preferências',
+    title: 'Redefinir suas preferências?',
+    help: 'O que você mesmo escolheu volta aos padrões do servidor:',
+    metadataLanguage: 'Idioma dos metadados: O do servidor',
+    homeRows: 'Fileiras do início: todas as fileiras voltam a aparecer',
+    appPreferences:
+      'As preferências que os apps Jellyfin salvaram na sua conta: idiomas e modo do áudio e das legendas, preferências da tela inicial e de exibição',
+    kept: 'O que você assistiu, seus favoritos, seus pontos de retomada, suas conexões e importações continuam.',
+    confirm: 'Redefinir',
+    resetting: 'Redefinindo…',
+    done: 'Suas preferências foram redefinidas.',
+  },
 }
 
 export default account

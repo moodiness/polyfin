@@ -6,7 +6,7 @@ This page covers user accounts: what Polyfin keeps for each user, and the limits
 
 Polyfin has separate accounts for each user, with Jellyfin authentication and Quick Connect. Watched state, favorites, resume points and Next Up are tracked per user, and each user can be limited to titles up to a rating.
 
-An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change, and its **Ends on** date with **Save date** (see [Ending an account](#ending-an-account)); each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives. To give several accounts the same limits at once, an administrator puts them in a group (see [User groups](#user-groups)).
+An administrator creates users with **Create a user** at the top of **Users**, and sets each user's limits on that user's own page, opened from the list. The page has these sections: **Name and password**, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Devices**. **Access** switches save as soon as they change, and its **Ends on** date with **Save date** (see [Ending an account](#ending-an-account)); each other section has its own save button, such as **Save playback and access**. Signing out a device asks first. Administrators' Jellyfin apps can set most of the same limits from the user's settings. Each section below says where a setting lives. To give several accounts the same limits at once, an administrator puts them in a group (see [User groups](#user-groups)). **Reset to defaults**, at the top of the page, puts the limits back to a new user's (see [Resetting settings to their defaults](#resetting-settings-to-their-defaults)).
 
 Each user can also connect their own tracking accounts; see [Tracking services](tracking.md). Moving from a Jellyfin, Emby or Plex server, an administrator can bring its accounts and what each user watched over with **Import from another server**; see [Moving from Jellyfin](#moving-from-jellyfin) and [Moving from Emby and Plex](#moving-from-emby-and-plex). Users can import their own watch history too; see [Importing your own watch history](#importing-your-own-watch-history). What users watched in an app built on addons, such as Stremio or Nuvio, comes over with **Import from an app**; see [Importing from an app](#importing-from-an-app). Rather than choosing a password for each person, an administrator can also send them an invite link, with which they create their own account; see [Invite links](#invite-links).
 
@@ -39,7 +39,7 @@ Users can also make playlists of movies and episodes from their apps. A playlist
 
 ### Home rows
 
-**My account › Home rows** lists the rows the administrator added to the web player's home page for the user (see [Home rows](web-client.md#home-rows)), each with its kind and place, and a switch. Off, the row leaves the user's home page, and, when it is also a library in other apps, their libraries there. Other users keep it. jellyfin-web's own home sections stay under its **Settings › Home**.
+**My account › Home rows** lists the rows the administrator added to the web player's home page for the user (see [Home rows](web-client.md#home-rows)), each with its kind and place, and a switch. Off, the row leaves the user's home page, and, when it is also a library in other apps, their libraries there. Other users keep it. jellyfin-web's own home sections stay under its **Settings › Home**. **Reset my preferences** turns every row on again (see [Your own preferences](#your-own-preferences)).
 
 ### Played and resume thresholds
 
@@ -367,7 +367,7 @@ To give several accounts the same limits, such as a family's children, an admini
 - **Playback and access**, with the **Quality group**;
 - **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**.
 
-Its page also lists its **Members**, with **Add members**, and **Delete group**.
+Its page also lists its **Members**, with **Add members**, and offers **Reset to defaults** (see [A group's limits](#a-group-s-limits)) and **Delete group**.
 
 ### Members
 
@@ -402,6 +402,45 @@ The activity log records groups created, changed, naming the sections changed, a
 - `GET /admin/api/groups/{id}/members` lists the members, sorted by name: `id`, `name` and `followGroup`. `POST /admin/api/groups/{id}/members` with `userIds` adds those users, all of them or none, and answers the members.
 - A user's JSON has `groupId` and `groupName`, null for none, and `followGroup`. `PATCH /admin/api/users/{id}` takes `groupId`, a group's `id` or `""` for none, and `followGroup`. A field the group holds, sent for a member who follows it without `followGroup` false in the same change, is 409 `follows_group`. `POST /admin/api/users` and `POST /admin/api/invites` take `groupId`.
 - Errors: 409 `admin_cannot_join_group` for an administrator joining, or added, or created in a group; 400 `invalid_group` for a group that does not exist; 400 `invalid_name` and 409 `name_taken` for a group's name, from 1 to 64 characters, unique without regard to case; 400 `invalid_copy_from` for a user to copy who does not exist; 404 `not_found` for a group or a user to add that does not exist.
+
+## Resetting settings to their defaults
+
+Rather than finding each value and setting it again, an administrator can put a user's limits, or a group's, back to a new user's settings, and each user can put back the server's defaults for what they chose themselves.
+
+### A user's limits
+
+**Reset to defaults**, at the top of a user's page, puts the sections that set limits back to a new user's settings, the ones **Create a user** gives: the permissions of **Access**, **Playback and access** with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**. It asks first, listing the sections that change and, for **Access** and **Playback and access**, the settings that change in them, or saying that nothing changes.
+
+- An administrator gets an administrator's settings: **Can control other users' apps**, **Can manage collections**, **Can manage subtitles** and **Can record Live TV** on, as **Create a user** gives them with **Administrator**. Any other user gets them off.
+- Kept: the name and password, **Administrator**, **Show on the sign-in screen**, **Disabled**, **Ends on**, the group, the **Metadata language**, the user's own addons, connections and tracking accounts, and everything they watched.
+- It applies as saving does: the user's apps already signed in have the new limits from their next request. A new user may not share titles, so a user who could loses their share links (see [Share links](#share-links)).
+- A member who follows their group has its values: their page does not offer the button, and the group's page resets them. A member with **Own settings** gets a new user's settings and stays in the group, still not following it.
+- The activity log records who reset whose settings, as "alex reset the settings of sam to their defaults".
+
+### A group's limits
+
+**Reset to defaults**, at the top of a group's page, does the same for the group's sections: they take the values a group starts with when **Create a group** makes it from a new user's settings. It asks first, listing what changes, and says how many members follow the group, as the change reaches them at once, as any change to the group does. Members with **Own settings** keep theirs. The group keeps its name and its members. The activity log records it as "alex reset the settings of the group Kids to their defaults".
+
+### Your own preferences
+
+**Reset my preferences**, at the top of **My account**, puts back the server's defaults for what the user chose themselves, after asking first:
+
+- the **Metadata language** goes back to **The server's** (see [Metadata language](#metadata-language));
+- every row of **Home rows** is shown again (see [Home rows](#home-rows));
+- the preferences Jellyfin apps saved in the account are forgotten: the audio and subtitle languages and the subtitle mode, the home screen (the order of the libraries and those left out), and the display preferences, such as each library's sorting and view. The user has a new user's again, which their apps already signed in read from their next request. Settings an app also keeps on the device stay there: jellyfin-web keeps a copy of its home sections in the browser, and still shows them on that browser.
+
+It never touches what the user watched, their favorites, resume points and hidden titles, their connections, tracking accounts and imports, or their limits, which are the administrator's.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no such button. jellyfin-web's only resets are a user's password, which an administrator's "Reset Password" empties ([UserPasswordForm.tsx, lines 116 to 137](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/components/dashboard/users/UserPasswordForm.tsx#L116-L137)), the filters of a library ([LibraryToolbar.tsx, lines 128 to 152](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/apps/modern/features/libraries/components/LibraryToolbar.tsx#L128-L152), and [filterdialog.js, lines 302 to 309](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/components/filterdialog/filterdialog.js#L302-L309) in the older views), and an item's metadata, whose "Reset" in the metadata editor empties the form before it is saved ([metadataEditor.js, lines 305 to 341](https://github.com/jellyfin/jellyfin-web/blob/c06cb17b274c/src/components/metadataEditor/metadataEditor.js#L305-L341)). In Jellyfin, an administrator sets each limit of a user again by hand, and a user each preference.
+- Jellyfin apps see a reset user's new policy in `GET /Users` and `GET /Users/{id}`, and the activity log's entries have Jellyfin's types: `UserPolicyUpdated`, about the user, for a user's reset, and Polyfin's `GroupChanged` for a group's.
+
+**For app developers:**
+
+- `GET /admin/api/users/{id}/defaults` answers the fields of a user's JSON a group holds (see [User groups](#user-groups)) as **Reset to defaults** would set them, changing nothing. `POST /admin/api/users/{id}/reset` sets them and answers the user. Both are 409 `follows_group` for a member who follows their group, and 404 `not_found` for a user who does not exist.
+- `GET /admin/api/groups/{id}/defaults` and `POST /admin/api/groups/{id}/reset` do the same for a group; the reset answers the group, and is 404 `not_found` for a group that does not exist.
+- `POST /admin/api/account/preferences/reset`, for any user signed in to the admin app, resets their own preferences and answers 204. Their Jellyfin apps then read a new user's `Configuration` in `GET /Users/{id}` and `GET /Users/Me`, and `GET /DisplayPreferences/{id}` answers the defaults it gives a user who never saved any.
 
 ## Ending an account
 
@@ -606,7 +645,7 @@ A user with at least one row who is outside all of them cannot sign in (403). Th
 
 ## Metadata language
 
-**Metadata language** is the language a user reads titles in: their names, overviews and images, and their episodes'. Users set it in its own section under **My account**, and administrators in its own panel on the user's page under **Users**. **The server's**, the default, shows the descriptions of the server's addons without a language. The other choices are the languages the server's addons were given (see [Languages](addons-and-libraries.md#languages)).
+**Metadata language** is the language a user reads titles in: their names, overviews and images, and their episodes'. Users set it in its own section under **My account**, and administrators in its own panel on the user's page under **Users**. **The server's**, the default, shows the descriptions of the server's addons without a language. The other choices are the languages the server's addons were given (see [Languages](addons-and-libraries.md#languages)). **Reset my preferences** puts it back to **The server's** (see [Your own preferences](#your-own-preferences)).
 
 - A user under parental control or blocking genres gets their language too.
 - A title's genres, ratings, people, versions and subtitles are the same in every language, so parental control, blocked genres, hidden titles and smart lists judge every user alike.

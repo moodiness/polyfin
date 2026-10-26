@@ -527,6 +527,30 @@ const users: typeof en = {
     allGroups: 'Todos os grupos',
     noneShown: 'Nenhum usuário aqui.',
   },
+  resetDefaults: {
+    button: 'Redefinir para o padrão',
+    title: (name: string) => `Redefinir as configurações de ${name}?`,
+    groupTitle: (name: string) => `Redefinir as configurações do grupo ${name}?`,
+    userHelp: (name: string) =>
+      `As permissões de Acesso, Reprodução e acesso com o Grupo de qualidade, Controle parental, Bibliotecas visíveis, Gêneros bloqueados e Horários permitidos voltam às configurações de um novo usuário, as que “Criar um usuário” dá; os apps de ${name} já conectados as recebem na hora. O nome e a senha, Administrador, Mostrar na tela de login, Desativado, Encerra em, o grupo, os próprios addons, as conexões, as contas de acompanhamento e tudo o que foi assistido continuam.`,
+    ownSettingsHelp: (group: string) =>
+      `Continua no grupo ${group} com as próprias configurações, sem segui-lo.`,
+    groupHelp:
+      'As permissões de Acesso, Reprodução e acesso com o Grupo de qualidade, Controle parental, Bibliotecas visíveis, Gêneros bloqueados e Horários permitidos voltam às configurações de um novo usuário. O nome e os membros do grupo continuam.',
+    followers: (count: number) =>
+      count === 0
+        ? 'Nenhum membro segue o grupo: a mudança não chega a ninguém.'
+        : count === 1
+          ? '1 membro segue o grupo e recebe essas configurações na hora.'
+          : `${count} membros seguem o grupo e recebem essas configurações na hora.`,
+    changesTitle: 'O que muda',
+    loading: 'Procurando o que muda…',
+    noChange: 'Nada muda: já são as configurações de um novo usuário.',
+    confirm: 'Redefinir',
+    resetting: 'Redefinindo…',
+    done: (name: string) => `As configurações de ${name} foram redefinidas.`,
+    groupDone: (name: string) => `As configurações do grupo ${name} foram redefinidas.`,
+  },
 }
 
 export default users

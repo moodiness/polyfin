@@ -603,6 +603,19 @@ const account: typeof en = {
     copyFailed: 'Impossibile copiare il link. Selezionalo e copialo manualmente.',
     done: 'Fatto',
   },
+  resetPreferences: {
+    button: 'Ripristina le mie preferenze',
+    title: 'Ripristinare le tue preferenze?',
+    help: 'Ciò che hai scelto tu torna ai valori predefiniti del server:',
+    metadataLanguage: 'Lingua dei metadati: Quella del server',
+    homeRows: 'Righe della Home: tutte le righe tornano visibili',
+    appPreferences:
+      'Le preferenze che le app Jellyfin hanno salvato nel tuo account: lingue e modalità di audio e sottotitoli, preferenze della schermata Home e di visualizzazione',
+    kept: 'Ciò che hai guardato, i tuoi preferiti, i punti di ripresa, le connessioni e le importazioni restano.',
+    confirm: 'Ripristina',
+    resetting: 'Ripristino…',
+    done: 'Le tue preferenze sono state ripristinate.',
+  },
 }
 
 export default account

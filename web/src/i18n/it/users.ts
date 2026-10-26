@@ -536,6 +536,30 @@ const users: typeof en = {
     allGroups: 'Tutti i gruppi',
     noneShown: 'Nessun utente qui.',
   },
+  resetDefaults: {
+    button: 'Ripristina i valori predefiniti',
+    title: (name: string) => `Ripristinare le impostazioni di ${name}?`,
+    groupTitle: (name: string) => `Ripristinare le impostazioni del gruppo ${name}?`,
+    userHelp: (name: string) =>
+      `I permessi di Accesso, Riproduzione e accesso con il Gruppo di qualità, Controllo parentale, Librerie visibili, Generi bloccati e Orari consentiti tornano alle impostazioni di un nuovo utente, quelle date da «Crea un utente»; le app di ${name} già collegate le ricevono subito. Nome e password, Amministratore, Mostra nella schermata di accesso, Disabilitato, Scade il, il gruppo, i propri addon, le connessioni, gli account di tracciamento e tutto ciò che ha guardato restano.`,
+    ownSettingsHelp: (group: string) =>
+      `Resta nel gruppo ${group} con le proprie impostazioni, senza seguirlo.`,
+    groupHelp:
+      'I permessi di Accesso, Riproduzione e accesso con il Gruppo di qualità, Controllo parentale, Librerie visibili, Generi bloccati e Orari consentiti tornano alle impostazioni di un nuovo utente. Il nome e i membri del gruppo restano.',
+    followers: (count: number) =>
+      count === 0
+        ? 'Nessun membro segue il gruppo: la modifica non raggiunge nessuno.'
+        : count === 1
+          ? '1 membro segue il gruppo e riceve subito queste impostazioni.'
+          : `${count} membri seguono il gruppo e ricevono subito queste impostazioni.`,
+    changesTitle: 'Cosa cambia',
+    loading: 'Ricerca di cosa cambia…',
+    noChange: 'Non cambia nulla: sono già le impostazioni di un nuovo utente.',
+    confirm: 'Ripristina',
+    resetting: 'Ripristino…',
+    done: (name: string) => `Le impostazioni di ${name} sono state ripristinate.`,
+    groupDone: (name: string) => `Le impostazioni del gruppo ${name} sono state ripristinate.`,
+  },
 }
 
 export default users

@@ -530,6 +530,30 @@ const users: typeof en = {
     allGroups: 'Alle Gruppen',
     noneShown: 'Hier gibt es keine Benutzer.',
   },
+  resetDefaults: {
+    button: 'Auf Standardwerte zurücksetzen',
+    title: (name: string) => `Die Einstellungen von ${name} zurücksetzen?`,
+    groupTitle: (name: string) => `Die Einstellungen der Gruppe ${name} zurücksetzen?`,
+    userHelp: (name: string) =>
+      `Die Berechtigungen unter Zugriff, Wiedergabe und Zugriff mit der Qualitätsgruppe, Kindersicherung, Sichtbare Bibliotheken, Gesperrte Genres und Erlaubte Zeiten erhalten wieder die Einstellungen eines neuen Benutzers, die „Benutzer erstellen“ vergibt; bereits angemeldete Apps von ${name} haben sie sofort. Name und Passwort, Administrator, Auf dem Anmeldebildschirm anzeigen, Deaktiviert, Endet am, die Gruppe, die eigenen Addons, Verbindungen, Tracking-Konten und alles Angesehene bleiben.`,
+    ownSettingsHelp: (group: string) =>
+      `Der Benutzer bleibt mit eigenen Einstellungen in der Gruppe ${group}, ohne ihr zu folgen.`,
+    groupHelp:
+      'Die Berechtigungen unter Zugriff, Wiedergabe und Zugriff mit der Qualitätsgruppe, Kindersicherung, Sichtbare Bibliotheken, Gesperrte Genres und Erlaubte Zeiten erhalten wieder die Einstellungen eines neuen Benutzers. Name und Mitglieder der Gruppe bleiben.',
+    followers: (count: number) =>
+      count === 0
+        ? 'Kein Mitglied folgt der Gruppe: Die Änderung erreicht niemanden.'
+        : count === 1
+          ? '1 Mitglied folgt der Gruppe und übernimmt diese Einstellungen sofort.'
+          : `${count} Mitglieder folgen der Gruppe und übernehmen diese Einstellungen sofort.`,
+    changesTitle: 'Was sich ändert',
+    loading: 'Änderungen werden ermittelt…',
+    noChange: 'Nichts ändert sich: Das sind bereits die Einstellungen eines neuen Benutzers.',
+    confirm: 'Zurücksetzen',
+    resetting: 'Wird zurückgesetzt…',
+    done: (name: string) => `Die Einstellungen von ${name} wurden zurückgesetzt.`,
+    groupDone: (name: string) => `Die Einstellungen der Gruppe ${name} wurden zurückgesetzt.`,
+  },
 }
 
 export default users

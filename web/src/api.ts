@@ -1748,6 +1748,12 @@ export const fetchOwnMetadataLanguage = (signal?: AbortSignal) =>
 export const saveOwnMetadataLanguage = (language: string) =>
   request<MetadataLanguage>('PUT', '/account/metadata-language', { language })
 
+/**
+ * Puts back the server's defaults for what the signed-in user chose: their metadata language, the
+ * home rows they turned off, and the preferences Jellyfin apps saved in their account.
+ */
+export const resetOwnPreferences = () => request<void>('POST', '/account/preferences/reset')
+
 export const fetchMyDevices = (signal?: AbortSignal) =>
   request<Device[]>('GET', '/account/devices', undefined, signal)
 
@@ -2224,6 +2230,19 @@ export const deleteGroup = (id: string) => request<void>('DELETE', `/groups/${se
 /** Puts users in a group, following it; an administrator among them refuses them all. */
 export const addGroupMembers = (id: string, userIds: string[]) =>
   request<unknown>('POST', `/groups/${seg(id)}/members`, { userIds })
+
+/** The limits Reset to defaults would give a user or a group: a new user's. */
+export const fetchUserDefaults = (id: string, signal?: AbortSignal) =>
+  request<GroupLimits>('GET', `/users/${seg(id)}/defaults`, undefined, signal)
+
+export const fetchGroupDefaults = (id: string, signal?: AbortSignal) =>
+  request<GroupLimits>('GET', `/groups/${seg(id)}/defaults`, undefined, signal)
+
+/** Puts a user's limits back to a new user's; the rest of the account stays. */
+export const resetUser = (id: string) => request<User>('POST', `/users/${seg(id)}/reset`)
+
+/** Puts a group's limits back to a new user's; its following members take them at once. */
+export const resetGroup = (id: string) => request<Group>('POST', `/groups/${seg(id)}/reset`)
 
 export type InviteState = 'active' | 'used_up' | 'expired' | 'revoked'
 
@@ -4293,6 +4312,9 @@ export const queryKeys = {
   /** Prefix of every group query: invalidating it refreshes the list and each group. */
   groups: ['groups'] as const,
   group: (id: string) => ['groups', id] as const,
+  /** What Reset to defaults would give a user or a group. */
+  userDefaults: (id: string) => ['users', id, 'defaults'] as const,
+  groupDefaults: (id: string) => ['groups', id, 'defaults'] as const,
   jellyfinImport: ['jellyfin-import'] as const,
   ownImport: ['account', 'server-import'] as const,
   ownAppImport: ['account', 'app-import'] as const,
