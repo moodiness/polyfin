@@ -49,6 +49,11 @@ type Options struct {
 	// dlna.Service.Handler); nil leaves /dlna/ to the Jellyfin API, which
 	// answers 404.
 	DLNA http.Handler
+	// Silo serves Silo's API to Silo's apps, under /api/v2/ (see package
+	// silo), which passes requests on to the Jellyfin API while the
+	// settings do not allow those apps; nil leaves /api/v2/ to the
+	// Jellyfin API, which answers 404.
+	Silo http.Handler
 	// Web holds the files of jellyfin-web, the web client served at /web/;
 	// nil serves none.
 	Web fs.FS
@@ -121,6 +126,9 @@ func New(options Options) http.Handler {
 	}
 	if options.DLNA != nil {
 		mux.Handle("/dlna/", rootOnly(options.DLNA, options.Jellyfin))
+	}
+	if options.Silo != nil {
+		mux.Handle("/api/v2/", rootOnly(options.Silo, options.Jellyfin))
 	}
 	if options.Web != nil {
 		mux.Handle(webPrefix, webClient(options.Web, func(ctx context.Context) bool {

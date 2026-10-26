@@ -62,6 +62,7 @@ import (
 	"github.com/moodiness/polyfin/internal/remuxdb"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/server"
+	"github.com/moodiness/polyfin/internal/silo"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -730,6 +731,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 				return settings.Metrics, settings.MetricsToken
 			}),
 			Logger: logger,
+			// Silo's apps, while the settings allow them, through the
+			// Jellyfin API's answers.
+			Silo: silo.New(silo.Options{ServerID: serverID, Version: version, Accounts: store, Jellyfin: jellyfinAPI,
+				DB: pool, Logger: logger}),
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
