@@ -19,6 +19,7 @@ import {
   type AppReaders,
   type NuvioSignIn,
   type StremioLink,
+  type StremioUnlock,
 } from '@/api'
 import { dateTime, errorMessage, formatEpisode } from '@/format'
 import { useI18n } from '@/i18n'
@@ -167,7 +168,9 @@ export default function AppImport({
               help={
                 chosen === undefined
                   ? undefined
-                  : text.profileCounts(chosen.played, chosen.resumes, chosen.library)
+                  : chosen.locked
+                    ? text.pinHelp
+                    : text.profileCounts(chosen.played, chosen.resumes, chosen.library)
               }
             >
               <Select
@@ -176,7 +179,9 @@ export default function AppImport({
                   value: p.id,
                   label:
                     p.name !== ''
-                      ? p.name
+                      ? p.locked
+                        ? text.lockedProfile(p.name)
+                        : p.name
                       : account.profiles.length === 1
                         ? text.wholeAccount
                         : text.profileNumber(p.id),
@@ -188,7 +193,19 @@ export default function AppImport({
                 }}
               />
             </Field>
-            {chosen !== undefined && (
+            {chosen?.locked === true && (
+              <StremioPinForm
+                key={chosen.id}
+                unlock={readers.stremio.unlock}
+                accountKey={account.key}
+                profile={chosen.id}
+                onOpened={(opened) => {
+                  begin.reset()
+                  setAccount(opened)
+                }}
+              />
+            )}
+            {chosen !== undefined && !chosen.locked && (
               <div className="flex flex-col gap-3">
                 <span className="text-control font-medium text-ink">{text.addons}</span>
                 {!addonsAllowed ? (
@@ -237,7 +254,7 @@ export default function AppImport({
               variant="primary"
               icon={ArrowSquareInIcon}
               loading={begin.isPending}
-              disabled={chosen === undefined}
+              disabled={chosen === undefined || chosen.locked}
               onClick={() => begin.mutate({ key: account.key, profile, addons })}
             >
               {begin.isPending ? text.starting : text.start}
@@ -246,6 +263,68 @@ export default function AppImport({
         </Panel>
       )}
     </div>
+  )
+}
+
+/**
+ * Asks for the PIN of a Stremio profile that has one, and opens it: the server sends the PIN to
+ * Stremio, for this request only, and never keeps it. `onOpened` gets the account with the profile
+ * read.
+ */
+function StremioPinForm({
+  unlock,
+  accountKey,
+  profile,
+  onOpened,
+}: {
+  unlock: AppReaders['stremio']['unlock']
+  accountKey: string
+  profile: string
+  onOpened: (account: AppAccount) => void
+}) {
+  const { t } = useI18n()
+  const text = t.account.appImport
+  const [pin, setPin] = useState('')
+  const opening = useMutation({
+    mutationFn: (body: StremioUnlock) => unlock(body),
+    onSuccess: (account) => {
+      setPin('')
+      onOpened(account)
+    },
+    onError: () => setPin(''),
+  })
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    opening.mutate({ key: accountKey, profile, pin: pin.trim() })
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-3">
+      <Field label={text.pin} error={opening.isError ? errorMessage(t, opening.error) : undefined}>
+        <TextInput
+          type="password"
+          value={pin}
+          onValue={(value) => {
+            opening.reset()
+            setPin(value)
+          }}
+          inputMode="numeric"
+          autoComplete="off"
+          spellCheck={false}
+          required
+        />
+      </Field>
+      <Button
+        type="submit"
+        icon={KeyIcon}
+        loading={opening.isPending}
+        disabled={pin.trim() === ''}
+        className="self-start"
+      >
+        {opening.isPending ? text.unlocking : text.unlock}
+      </Button>
+    </form>
   )
 }
 

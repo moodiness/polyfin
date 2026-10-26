@@ -2668,6 +2668,8 @@ export type AppAddon = { index: number; name: string; address: string }
 export type AppProfile = {
   id: string
   name: string
+  /** Asks for its PIN before it is read (`AppReaders.stremio.unlock`): it holds nothing until then. */
+  locked: boolean
   entries: number
   played: number
   resumes: number
@@ -2763,6 +2765,9 @@ export type StremioLinkPoll = AppAccount | { pending: true }
  */
 export type StremioSignIn = { email: string; password: string; stayConnected: boolean }
 
+/** A profile of a Stremio account held under `key`, and the PIN that opens it. */
+export type StremioUnlock = { key: string; profile: string; pin: string }
+
 /**
  * How each app's account is read, for the Polyfin account it is imported into. Passwords are used
  * for the sign-in only; the auth keys and sessions apps give are kept by the server, never answered,
@@ -2775,6 +2780,11 @@ export type AppReaders = {
     pollLink: (stayConnected: boolean) => Promise<StremioLinkPoll>
     password: (body: StremioSignIn) => Promise<AppAccount>
     key: (key: string, stayConnected: boolean) => Promise<AppAccount>
+    /**
+     * Opens, with its PIN, a profile of the account held under `key` that asks for it, and answers
+     * the account with that profile read. The PIN goes to Stremio only, and is never kept.
+     */
+    unlock: (body: StremioUnlock) => Promise<AppAccount>
   }
 }
 
@@ -2788,6 +2798,7 @@ const appReaders = (base: string): AppReaders => ({
     password: (body) => request<AppAccount>('POST', `${base}/stremio/password`, body),
     key: (key, stayConnected) =>
       request<AppAccount>('POST', `${base}/stremio/key`, { key, stayConnected }),
+    unlock: (body) => request<AppAccount>('POST', `${base}/stremio/unlock`, body),
   },
 })
 
@@ -2807,6 +2818,7 @@ export type AppConnectionImport = {
     | 'rate_limited'
     | 'unexpected'
     | 'profile_missing'
+    | 'profile_locked'
     | 'sign_in_refused'
     | 'internal'
     | null

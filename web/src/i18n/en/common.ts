@@ -461,6 +461,7 @@ const common = {
     nuvio_backup_unsupported:
       'Nuvio answered its account data in a form this version of Polyfin does not read. Polyfin reads version 1 of Nuvio’s account backup.',
     stremio_sign_in_refused: 'Stremio refused this email or password.',
+    stremio_pin_refused: 'Stremio refused this PIN.',
     stremio_key_refused:
       'Stremio refused this auth key. Copy it again from Stremio’s web app, signed in to your account.',
     stremio_link_expired: 'The link code expired, or it was used already. Ask for another.',

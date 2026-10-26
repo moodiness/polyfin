@@ -481,6 +481,7 @@ const common: typeof en = {
     nuvio_backup_unsupported:
       'O Nuvio enviou os dados da conta em um formato que esta versão do Polyfin não lê. O Polyfin lê a versão 1 do backup de conta do Nuvio.',
     stremio_sign_in_refused: 'O Stremio recusou este e-mail ou senha.',
+    stremio_pin_refused: 'O Stremio recusou este PIN.',
     stremio_key_refused:
       'O Stremio recusou esta chave de autenticação. Copie-a novamente do aplicativo web do Stremio, com sua conta conectada.',
     stremio_link_expired: 'O código de vinculação expirou ou já foi usado. Solicite outro.',

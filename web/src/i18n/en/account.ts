@@ -200,14 +200,14 @@ const account = {
         nuvio:
           'Nuvio keeps a history for each profile: choose the one to import. Polyfin keeps what it read for a few minutes only.',
         stremio:
-          'Stremio keeps one history for the whole account. Polyfin keeps what it read for a few minutes only.',
+          'Stremio keeps a history for each profile, or one for the whole account without profiles: choose the one to import. Polyfin keeps what it read for a few minutes only.',
       },
       stayConnected: 'Stay connected',
       stayConnectedHelp: {
         nuvio: (every: string) =>
           `Polyfin keeps the session, encrypted, never your password, and imports the profile you choose again ${every}. It only reads the account. You can disconnect at any time.`,
         stremio: (every: string) =>
-          `Polyfin keeps the auth key, encrypted, and imports the account again ${every}. It only reads the account. You can disconnect at any time. Stremio’s terms forbid extracting its data by automated means: reading your account ${every} makes that grey area more pronounced than a one-off import.`,
+          `Polyfin keeps the auth key, encrypted, and for a profile with a PIN that profile’s session, never the PIN, and imports the profile you choose again ${every}. It only reads the account. You can disconnect at any time. Stremio’s terms forbid extracting its data by automated means: reading your account ${every} makes that grey area more pronounced than a one-off import.`,
       },
       staysConnected: (every: string) =>
         `You stay connected: this profile is imported again ${every}, the same way. Addons are installed now only.`,
@@ -216,6 +216,12 @@ const account = {
       profileNumber: (id: string) => `Profile ${id}`,
       profileCounts: (played: number, resumes: number, library: number) =>
         `${played} watched, ${resumes === 1 ? '1 resume point' : `${resumes} resume points`}, ${library} in the library.`,
+      lockedProfile: (name: string) => `${name} (PIN)`,
+      pin: 'PIN',
+      pinHelp:
+        'This profile asks for its PIN. Polyfin sends it to Stremio only, to open the profile, and never keeps it.',
+      unlock: 'Open this profile',
+      unlocking: 'Opening…',
       addons: 'Addons',
       addonsHelp:
         'Each addon ticked becomes one of the account’s own addons, under My sources. Its address may hold settings and keys: Polyfin never shows it whole.',
@@ -323,6 +329,8 @@ const account = {
             `${app} answered the last import in a way this version of Polyfin does not read. The next one tries again.`,
           profile_missing: (app: string) =>
             `The profile imported is no longer in the ${app} account. Sign in again to choose another.`,
+          profile_locked: (app: string) =>
+            `The profile imported now asks for a PIN, or another one, in ${app}. Sign in again to choose it with its PIN.`,
           sign_in_refused: (app: string) => `${app} refused the sign-in Polyfin kept.`,
           internal: () =>
             'Polyfin ran into an error during the last import: the server log tells more. The next one tries again.',

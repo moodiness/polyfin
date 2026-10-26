@@ -196,14 +196,14 @@ const account: typeof en = {
         nuvio:
           'Nuvio führt für jedes Profil einen eigenen Verlauf: Wähle das Profil aus, das importiert werden soll. Polyfin behält das Gelesene nur wenige Minuten.',
         stremio:
-          'Stremio führt einen einzigen Verlauf für das gesamte Konto. Polyfin behält das Gelesene nur wenige Minuten.',
+          'Stremio führt für jedes Profil einen eigenen Verlauf, oder einen einzigen für das gesamte Konto ohne Profile: Wähle den, der importiert werden soll. Polyfin behält das Gelesene nur wenige Minuten.',
       },
       stayConnected: 'Verbunden bleiben',
       stayConnectedHelp: {
         nuvio: (every: string) =>
           `Polyfin speichert die Sitzung verschlüsselt, niemals dein Passwort, und importiert das gewählte Profil ${every} erneut. Das Konto wird nur gelesen. Du kannst die Verbindung jederzeit trennen.`,
         stremio: (every: string) =>
-          `Polyfin speichert den Authentifizierungsschlüssel verschlüsselt und importiert das Konto ${every} erneut. Das Konto wird nur gelesen. Du kannst die Verbindung jederzeit trennen. Die Nutzungsbedingungen von Stremio verbieten das Auslesen der Daten mit automatisierten Mitteln: Dein Konto ${every} auszulesen, macht diese Grauzone deutlicher als ein einmaliger Import.`,
+          `Polyfin speichert den Authentifizierungsschlüssel verschlüsselt, bei einem Profil mit PIN auch die Sitzung dieses Profils, niemals die PIN, und importiert das gewählte Profil ${every} erneut. Das Konto wird nur gelesen. Du kannst die Verbindung jederzeit trennen. Die Nutzungsbedingungen von Stremio verbieten das Auslesen der Daten mit automatisierten Mitteln: Dein Konto ${every} auszulesen, macht diese Grauzone deutlicher als ein einmaliger Import.`,
       },
       staysConnected: (every: string) =>
         `Du bleibst verbunden: Dieses Profil wird ${every} auf die gleiche Weise erneut importiert. Add-ons werden nur jetzt installiert.`,
@@ -212,6 +212,12 @@ const account: typeof en = {
       profileNumber: (id: string) => `Profil ${id}`,
       profileCounts: (played: number, resumes: number, library: number) =>
         `${played} gesehen, ${resumes === 1 ? '1 Fortsetzungspunkt' : `${resumes} Fortsetzungspunkte`}, ${library} in der Bibliothek.`,
+      lockedProfile: (name: string) => `${name} (PIN)`,
+      pin: 'PIN',
+      pinHelp:
+        'Dieses Profil verlangt seine PIN. Polyfin sendet sie nur an Stremio, um das Profil zu öffnen, und speichert sie nie.',
+      unlock: 'Dieses Profil öffnen',
+      unlocking: 'Wird geöffnet…',
       addons: 'Add-ons',
       addonsHelp:
         'Jedes angehakte Add-on wird zu einem eigenen Add-on des Kontos, unter „Meine Quellen“. Seine Adresse kann Einstellungen und Schlüssel enthalten: Polyfin zeigt sie nie vollständig an.',
@@ -325,6 +331,8 @@ const account: typeof en = {
             `${app} hat beim letzten Import auf eine Weise geantwortet, die diese Version von Polyfin nicht lesen kann. Der nächste versucht es erneut.`,
           profile_missing: (app: string) =>
             `Das importierte Profil ist nicht mehr im ${app}-Konto vorhanden. Melde dich erneut an, um ein anderes auszuwählen.`,
+          profile_locked: (app: string) =>
+            `Das importierte Profil verlangt in ${app} jetzt eine PIN oder eine andere. Melde dich erneut an, um es mit seiner PIN auszuwählen.`,
           sign_in_refused: (app: string) =>
             `${app} hat die von Polyfin gespeicherte Anmeldung abgelehnt.`,
           internal: () =>
