@@ -8,6 +8,7 @@ import {
   revealServerSecret,
   type AcmeChallenge,
   type HttpsMode,
+  type ReleaseKind,
   type Settings,
   type TrackLanguage,
   type VersionCodec,
@@ -443,6 +444,39 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
             onValue={(hiddenVersionWords) => update({ hiddenVersionWords })}
           />
         </FieldRow>
+        <SettingRow anchor="hidden-releases">
+          <fieldset aria-describedby="hidden-releases-help">
+            <legend className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+              {s.hiddenReleases}
+            </legend>
+            <p id="hidden-releases-help" className="mt-1 max-w-[60ch] text-small text-ink-3">
+              {s.hiddenReleasesHelp}
+            </p>
+            <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
+              {((form.bounds.hiddenReleases?.choices ?? []) as ReleaseKind[]).map(
+                (kind, _, all) => (
+                  <Checkbox
+                    key={kind}
+                    label={s.releaseKinds[kind]}
+                    checked={form.hiddenReleases.includes(kind)}
+                    onChange={(checked) =>
+                      update({
+                        hiddenReleases: all.filter((other) =>
+                          other === kind ? checked : form.hiddenReleases.includes(other),
+                        ),
+                      })
+                    }
+                  />
+                ),
+              )}
+            </div>
+            {error('hidden-releases') && (
+              <div className="mt-2">
+                <FieldError>{error('hidden-releases')}</FieldError>
+              </div>
+            )}
+          </fieldset>
+        </SettingRow>
       </SettingsGroup>
       <SettingsGroup title={s.playbackHistoryGroup}>
         <SwitchRow

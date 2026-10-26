@@ -524,6 +524,9 @@ type settingsJSON struct {
 	HideVersionsLargerGB *int                `json:"hideVersionsLargerGb"`
 	HiddenVersionCodecs  *[]string           `json:"hiddenVersionCodecs"`
 	HiddenVersionWords   *[]string           `json:"hiddenVersionWords"`
+	// HiddenReleases are kinds of accounts.ReleaseKinds, each once; it keeps
+	// its current value when a PUT leaves it out.
+	HiddenReleases *[]string `json:"hiddenReleases"`
 	// NameHowVersionsPlay keeps its current value when a PUT leaves it out.
 	NameHowVersionsPlay *bool `json:"nameHowVersionsPlay"`
 	SyncAddonSubtitles  *bool `json:"syncAddonSubtitles"`
@@ -833,6 +836,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		HiddenVersionCodecs:   &settings.HiddenVersionCodecs,
 		HiddenVersionWords:    &settings.HiddenVersionWords,
 		NameHowVersionsPlay:   &settings.NameHowVersionsPlay,
+		HiddenReleases:        &settings.HiddenReleases,
 		SyncAddonSubtitles:    &settings.SyncAddonSubtitles,
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
@@ -1550,6 +1554,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		HiddenVersionCodecs:   valueOr(body.HiddenVersionCodecs, current.HiddenVersionCodecs),
 		HiddenVersionWords:    valueOr(body.HiddenVersionWords, current.HiddenVersionWords),
 		NameHowVersionsPlay:   valueOr(body.NameHowVersionsPlay, current.NameHowVersionsPlay),
+		HiddenReleases:        valueOr(body.HiddenReleases, current.HiddenReleases),
 		SyncAddonSubtitles:    valueOr(body.SyncAddonSubtitles, current.SyncAddonSubtitles),
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),

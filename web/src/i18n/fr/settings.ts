@@ -302,6 +302,16 @@ const settings: typeof en = {
     hiddenVersionWords: 'Masquer les versions dont les libellés contiennent',
     hiddenVersionWordsHelp: (r: RangeText) =>
       `Un mot ou une expression par ligne, cherché sans tenir compte des majuscules dans le nom, la description et le nom de fichier d’une version : pour les addons qui disent dans leurs libellés qu’un fichier n’est pas encore prêt à être lu. Jusqu’à ${r.max} lignes ; aucun par défaut.`,
+    hiddenReleases: 'Masquer les sorties de mauvaise qualité',
+    hiddenReleasesHelp:
+      'Les versions que leur nom ou leur nom de fichier désigne comme l’un de ces genres ne sont listées nulle part. Une étiquette compte comme un mot entier, après les mots du titre lui-même, sans tenir compte des majuscules : un film nommé « Cam » n’est pas une copie caméra, ni un fichier .ts un telesync. Aucun par défaut.',
+    releaseKinds: {
+      cam: 'Copies caméra (CAM, HDCAM)',
+      telesync: 'Telesyncs (TS, HDTS, TELESYNC)',
+      telecine: 'Télécinés (TC, TELECINE)',
+      screener: 'Screeners (SCR, DVDSCR)',
+      early: 'Copies anticipées (R5, WORKPRINT)',
+    },
     syncAddonSubtitles: 'Recaler les sous-titres des addons',
     syncAddonSubtitlesHelp:
       'Cale les sous-titres des addons sur la version lue, quand ils arrivent trop tôt, trop tard, ou défilent plus vite ou plus lentement qu’elle. À la première lecture d’une version, Polyfin repère en arrière-plan quand on y parle : grâce à un sous-titre texte du fichier, sinon dans trois passages de son audio, en lisant au plus 300 Mo du fichier d’un addon. Les versions torrent sont laissées de côté, car il faudrait les télécharger depuis leur essaim. Ensuite, un sous-titre qui colle nettement mieux décalé ou accéléré arrive recalé, son nom finissant par « (recalé) ».',

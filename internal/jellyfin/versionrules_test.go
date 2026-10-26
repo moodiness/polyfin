@@ -275,6 +275,125 @@ func TestVersionRulesHideVersions(t *testing.T) {
 	}
 }
 
+// releasesAddon serves three movies whose versions are named One, Two and
+// Three, in that order, by their file names: Some Movie, a camera copy, a
+// telesync and an MPEG-TS file of a web release; Cam, a web release and a
+// camera copy; Early Movie, a camera copy and a screener.
+func releasesAddon(t *testing.T) string {
+	t.Helper()
+	var server *httptest.Server
+	movies := []stremio.Meta{
+		{ID: "tt9001", Type: "movie", Name: "Some Movie", Runtime: "2h", Year: "2026"},
+		{ID: "tt9002", Type: "movie", Name: "Cam", Runtime: "2h", Year: "2018"},
+		{ID: "tt9003", Type: "movie", Name: "Early Movie", Runtime: "2h", Year: "2026"},
+	}
+	files := map[string][]string{
+		"tt9001": {"Some.Movie.2026.HDCAM.x264.mkv", "Some.Movie.2026.HDTS.mkv", "Some.Movie.2026.1080p.WEB.ts"},
+		"tt9002": {"Cam.2018.1080p.WEB-DL.mkv", "Cam.2018.HDCAM.mkv"},
+		"tt9003": {"Early.Movie.2026.CAM.mkv", "Early.Movie.2026.DVDSCR.mkv"},
+	}
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.EscapedPath()
+		switch {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "releases", Name: "Releases", Version: "1",
+				Types: []string{"movie"}, IDPrefixes: []string{"tt"},
+				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}},
+				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}})
+		case strings.HasPrefix(path, "/catalog/movie/top"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": movies})
+		case strings.HasPrefix(path, "/meta/movie/"):
+			id := strings.TrimSuffix(strings.TrimPrefix(path, "/meta/movie/"), ".json")
+			for _, movie := range movies {
+				if movie.ID == id {
+					_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie})
+					return
+				}
+			}
+			http.NotFound(w, r)
+		case strings.HasPrefix(path, "/stream/movie/"):
+			var streams []stremio.Stream
+			for i, file := range files[strings.TrimSuffix(strings.TrimPrefix(path, "/stream/movie/"), ".json")] {
+				streams = append(streams, stremio.Stream{Name: []string{"One", "Two", "Three"}[i] + " 1080p", URL: server.URL + "/files/" + file,
+					BehaviorHints: stremio.StreamBehavior{Filename: file, VideoSize: 2e9}})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
+		case strings.HasPrefix(path, "/files/"):
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader("\x1a\x45\xdf\xa3 media bytes"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// Hiding low-quality releases leaves out of item details, PlaybackInfo and
+// downloads the versions their file names tag as of the kinds ticked, the
+// title's own words aside: Cam's web release stays. Nothing ticked hides
+// nothing, and when every version would be hidden, none is.
+func TestVersionRulesHideLowQualityReleases(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	user := s.user("member", func(c *accounts.UserChanges) { c.ContentDownloading = new(true) })
+	if _, err := s.addons.Install(t.Context(), addons.Shared(), releasesAddon(t), false); err != nil {
+		t.Fatal(err)
+	}
+	token := s.signIn("member", "tv")
+	var views, page QueryResult
+	s.get(t, "/UserViews", token, &views)
+	s.get(t, "/Items?ParentId="+views.Items[0].Id, token, &page)
+	movies := map[string]string{}
+	for _, item := range page.Items {
+		movies[item.Name] = item.Id
+	}
+	if len(movies) != 3 {
+		t.Fatalf("titles: %v", movies)
+	}
+	s.listed(t, user, movies["Some Movie"], movies["Cam"], movies["Early Movie"])
+	detailed := func(name string) []string {
+		t.Helper()
+		var dto BaseItemDto
+		if status := s.get(t, "/Users/"+user.ID.String()+"/Items/"+movies[name], token, &dto); status != http.StatusOK || dto.MediaSources == nil {
+			t.Fatalf("details of %s: %d", name, status)
+		}
+		return firstWords(*dto.MediaSources)
+	}
+	check := func(when string, want map[string][]string) {
+		t.Helper()
+		for name, versions := range want {
+			if got := detailed(name); !slices.Equal(got, versions) {
+				t.Errorf("%s, %s: %v, want %v", when, name, got, versions)
+			}
+		}
+	}
+	check("nothing ticked", map[string][]string{"Some Movie": {"One", "Two", "Three"}, "Cam": {"One", "Two"}, "Early Movie": {"One", "Two"}})
+	s.setting(t, func(s *accounts.Settings) { s.HiddenReleases = []string{"cam"} })
+	check("camera copies", map[string][]string{"Some Movie": {"Two", "Three"}, "Cam": {"One"}, "Early Movie": {"Two"}})
+	s.setting(t, func(s *accounts.Settings) { s.HiddenReleases = slices.Clone(accounts.ReleaseKinds) })
+	check("every kind", map[string][]string{"Some Movie": {"Three"}, "Cam": {"One"}, "Early Movie": {"One", "Two"}})
+	id, _ := accounts.ParseID(movies["Some Movie"])
+	versions, err := s.library.Versions(t.Context(), user, id)
+	if err != nil || len(versions) != 3 {
+		t.Fatalf("versions: %+v %v", versions, err)
+	}
+	// Every version plays: only the rules leave some out.
+	p := playbackSetup{testServer: s, token: token, user: user, movie: movies["Some Movie"]}
+	for _, version := range versions {
+		p.analyzed(t, version, "h264-aac-mp4")
+	}
+	chrome := p.profile(t, "jellyfin-web-chrome")
+	if answer := p.ask(t, token, p.movie, chrome, nil); !slices.Equal(firstWords(answer.MediaSources), []string{"Three"}) {
+		t.Errorf("PlaybackInfo: %v", firstWords(answer.MediaSources))
+	}
+	if answer := p.ask(t, token, p.movie, chrome, map[string]any{"MediaSourceId": versions[0].ID.String()}); !answer.refused() {
+		t.Errorf("a camera copy asked for: %+v", answer)
+	}
+	if response, _ := fetchURL(t, s.url+"/Items/"+versions[1].ID.String()+"/Download?ApiKey="+token, nil); response.StatusCode != http.StatusBadRequest {
+		t.Errorf("download of a telesync: %d", response.StatusCode)
+	}
+}
+
 // The quality group still leaves taller versions out, the rules ordering
 // those that fit; when none fits, the closest height comes first, the
 // rules ordering versions of the same height.

@@ -120,6 +120,8 @@ const common: typeof en = {
       'Diese Liste ausgeblendeter Codecs wird nicht unterstützt. Lade die Seite neu.',
     invalid_hidden_version_words:
       'Gib höchstens 50 Wörter zum Ausblenden von Versionen ein, eines pro Zeile, jedes mit höchstens 100 Zeichen.',
+    invalid_hidden_releases:
+      'Diese Liste ausgeblendeter Release-Arten wird nicht unterstützt. Lade die Seite neu.',
     invalid_max_conversions:
       'Die Anzahl gleichzeitiger Videokonvertierungen muss eine ganze Zahl von 0 bis 32 sein.',
     invalid_max_conversion_height:

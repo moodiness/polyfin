@@ -224,6 +224,7 @@ The **Version order** group of **Settings › Playback** orders a movie's or an 
 | **Hide versions larger than (GB, 0 = no limit)** | **Settings › Playback** | 0 (up to 1,000) | Hides the versions known to be larger. |
 | **Hide these video codecs** | **Settings › Playback** | None | Hides the versions known to be in these codecs. |
 | **Hide versions whose labels contain** | **Settings › Playback** | None (up to 50 lines) | Hides the versions whose name, description or file name holds one of these words, one a line, in any letter case: for addons that say in their labels that a file is not ready to play yet. |
+| **Hide low-quality releases** | **Settings › Playback** | None | Hides the versions whose labels tag them as one of the kinds ticked: **Camera copies (CAM, HDCAM)**, **Telesyncs (TS, HDTS, TELESYNC)**, **Telecines (TC, TELECINE)**, **Screeners (SCR, DVDSCR)** and **Early copies (R5, WORKPRINT)**, read as told below. |
 
 **What the rules know of a version.** Nothing is read from the source for them. For each thing they look at, they take the version's analysis when Polyfin has one, else the description of its file from [RemuxDB](#tracks-from-remuxdb) when it is on, else its addon's labels:
 
@@ -234,6 +235,14 @@ The **Version order** group of **Settings › Playback** orders a movie's or an 
 - the audio languages they name: language names in English (French, German…), some others used by releases (TRUEFRENCH, VFF, Latino, Castellano…), ISO 639-2 codes in capitals (ENG, ITA, GER…) and flags. MULTI and DUAL say a version has several languages. A word of the movie's or the series' name is never taken for a language.
 
 A version a criterion knows nothing of comes after those it knows, and a hide rule never hides it.
+
+**Hide low-quality releases** reads the stream's name, title and description as its addon gives them, and its file name, line by line. A tag counts only as a whole word, between dots, dashes, underscores, spaces, brackets or other signs, in any letter case: "Its" and "Nights" hold no `TS`, and `HDCAM` and `hdcam` are both camera copies. It counts only after the title's own words, so that a movie named Cam, or The Cam, is never taken for a camera copy:
+
+- in a line naming the movie or the series, as its addon names it, or the episode's own name, the tags count after the last of these names;
+- in a line naming none of them, after its first year (1900 to 2099) or episode number (`S01`, `S01E01`, `1x01`), which follows the title in a release's name;
+- in a line holding neither, such as an addon's "CAM 720p", every word may be a tag.
+
+A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. So, for the movie Cam, `Cam.2018.1080p.WEB-DL.mkv` is kept; `Some.Movie.2026.HDCAM.x264.mkv` is a camera copy and `Some.Movie.2026.1080p.WEB.ts` is kept; `Its.Always.Something.S01E01.1080p.mkv` is kept and `Some.Show.S01E01.TS.mkv` is a telesync; `Some Movie (2026) [HDTS]` is a telesync. A tag before the title in the same line, as in `[HDCAM] Some Movie 2026`, is not read.
 
 **Preferred audio language** is each user's own, the audio language they set in their app, else the server's [Default audio language](#default-audio-and-subtitle-languages). Versions known to carry it come first, then those that say MULTI or DUAL without naming it, then those of unknown language, then the others. For a user without a preferred language, and without a default one, it changes nothing.
 
@@ -250,6 +259,11 @@ A version a criterion knows nothing of comes after those it knows, and a hide ru
 - Hidden versions are listed nowhere: not in details, `PlaybackInfo`, downloads or trickplay. A version an app asks for by its own identifier, one it was shown before a rule hid it, is refused as if it were gone.
 - While a title's page is open, and Polyfin follows it (see [Title pages](#title-pages)), the versions it shows keep their places as long as the rules stay the same, the order of sources included, even when an analysis tells more of them; versions that come later take their places by the rules. A page opened again, or listed again once the rules changed, lists them in the rules' order.
 - Merged Live TV channels keep their own order (see [IPTV](iptv.md)).
+
+**Compared with Jellyfin:**
+
+- Jellyfin 12.3 has no setting that hides versions: it lists every version of a title, whatever its size, codec or name (its server and library options have none, [`ServerConfiguration.cs`](https://github.com/jellyfin/jellyfin/blob/v12.3/MediaBrowser.Model/Configuration/ServerConfiguration.cs), [`LibraryOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.3/MediaBrowser.Model/Configuration/LibraryOptions.cs)). The version order rules are Polyfin's own.
+- Jellyfin knows the same release tags only to cut them from a file's name when it finds a title's name: its first `CleanStrings` expression ([`NamingOptions.cs`, line 154](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Naming/Common/NamingOptions.cs#L152-L154)) ends the name at the first of `cam`, `ts`, `tc`, `r5`, `dvdscr`, `screener`, `telesync` or `telecine`, among many other tags, as a whole word after at least one word of the title, in any letter case. Polyfin reads tags the same way, after the title's words, to hide versions rather than to name titles.
 
 ### Version names
 

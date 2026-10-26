@@ -112,6 +112,8 @@ const common: typeof en = {
       'Esta lista de codecs ocultos não é suportada. Recarregue a página.',
     invalid_hidden_version_words:
       'Digite no máximo 50 palavras que ocultam versões, uma por linha, cada uma com no máximo 100 caracteres.',
+    invalid_hidden_releases:
+      'Esta lista de tipos de lançamentos ocultos não é suportada. Recarregue a página.',
     invalid_max_conversions:
       'As conversões de vídeo simultâneas devem ser um número inteiro de 0 a 32.',
     invalid_max_conversion_height: 'Escolha na lista a qualidade máxima do vídeo convertido.',

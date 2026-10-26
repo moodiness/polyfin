@@ -436,6 +436,16 @@ func canonicalHiddenVersionWords(words []string) ([]string, error) {
 	return canonical, nil
 }
 
+// ReleaseKinds are the kinds of low-quality releases the version rules may
+// hide, by the tags their names hold (see library.ReleaseKinds): camera
+// copies (CAM, HDCAM), telesyncs (TS, HDTS, TELESYNC), telecines (TC,
+// TELECINE), screeners (SCR, DVDSCR) and early copies (R5, WORKPRINT).
+var ReleaseKinds = []string{"cam", "telesync", "telecine", "screener", "early"}
+
+// ErrInvalidHiddenReleases reports a Settings.HiddenReleases holding a
+// kind that is not one of ReleaseKinds, or one twice.
+var ErrInvalidHiddenReleases = errors.New("invalid kinds of releases hidden")
+
 // The errors of the settings tuning conversions, reporting a value
 // outside the bounds or choices below.
 var (
@@ -1395,6 +1405,11 @@ type Settings struct {
 	HideVersionsLargerGB int
 	HiddenVersionCodecs  []string
 	HiddenVersionWords   []string
+	// HiddenReleases hides the versions whose labels tag them as a
+	// low-quality release of one of these kinds, of ReleaseKinds; none by
+	// default. Like the rules above, it never hides every version of a
+	// title.
+	HiddenReleases []string
 	// NameHowVersionsPlay ends the names of a movie's or an episode's
 	// versions with how the app asking plays each, as the device profile of
 	// its last PlaybackInfo decides it.
@@ -1850,6 +1865,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
 	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
+	"hidden_releases, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, " +
 	"default_audio_language, default_subtitle_language, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
@@ -1901,6 +1917,7 @@ func (settings *Settings) fields() []any {
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.VersionSourceOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs,
 		&settings.HiddenVersionWords,
 		&settings.NameHowVersionsPlay,
+		&settings.HiddenReleases,
 		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads, &settings.SubtitleOCR, &settings.SubtitleOCRTracks,
 		&settings.DefaultAudioLanguage, &settings.DefaultSubtitleLanguage,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
@@ -2241,6 +2258,20 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		}
 	}
 	settings.HiddenVersionCodecs, settings.HiddenVersionWords = hidden, words
+	// The kinds of releases hidden, like the codecs, are kept in the order
+	// of ReleaseKinds.
+	for i, kind := range settings.HiddenReleases {
+		if !slices.Contains(ReleaseKinds, kind) || slices.Contains(settings.HiddenReleases[:i], kind) {
+			return Settings{}, ErrInvalidHiddenReleases
+		}
+	}
+	releases := []string{}
+	for _, kind := range ReleaseKinds {
+		if slices.Contains(settings.HiddenReleases, kind) {
+			releases = append(releases, kind)
+		}
+	}
+	settings.HiddenReleases = releases
 	if settings.MaxConversions < MinMaxConversions || settings.MaxConversions > MaxMaxConversions {
 		return Settings{}, ErrInvalidMaxConversions
 	}

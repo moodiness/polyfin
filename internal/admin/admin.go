@@ -604,6 +604,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidHideVersionsLarger, http.StatusBadRequest, "invalid_hide_versions_larger"},
 		{accounts.ErrInvalidHiddenVersionCodecs, http.StatusBadRequest, "invalid_hidden_version_codecs"},
 		{accounts.ErrInvalidHiddenVersionWords, http.StatusBadRequest, "invalid_hidden_version_words"},
+		{accounts.ErrInvalidHiddenReleases, http.StatusBadRequest, "invalid_hidden_releases"},
 		{accounts.ErrInvalidMaxConversions, http.StatusBadRequest, "invalid_max_conversions"},
 		{accounts.ErrInvalidMaxConversionHeight, http.StatusBadRequest, "invalid_max_conversion_height"},
 		{accounts.ErrInvalidSubtitleOCR, http.StatusBadRequest, "invalid_subtitle_ocr"},

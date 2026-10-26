@@ -299,6 +299,16 @@ const settings: typeof en = {
     hiddenVersionWords: 'Ocultar versões cujos rótulos contêm',
     hiddenVersionWordsHelp: (r: RangeText) =>
       `Uma palavra ou expressão por linha, buscada sem diferenciar maiúsculas e minúsculas no nome, na descrição e no nome do arquivo de uma versão: para complementos que indicam nos rótulos que um arquivo ainda não está pronto para reprodução. Até ${r.max} linhas; nenhuma por padrão.`,
+    hiddenReleases: 'Ocultar lançamentos de baixa qualidade',
+    hiddenReleasesHelp:
+      'Versões cujo nome ou nome do arquivo as marca como um destes tipos não são listadas em lugar nenhum. Uma marca conta como palavra inteira depois das palavras do próprio título, sem diferenciar maiúsculas e minúsculas: um filme chamado Cam não é uma cópia de câmera, nem um arquivo .ts um telesync. Nenhum por padrão.',
+    releaseKinds: {
+      cam: 'Cópias de câmera (CAM, HDCAM)',
+      telesync: 'Telesyncs (TS, HDTS, TELESYNC)',
+      telecine: 'Telecines (TC, TELECINE)',
+      screener: 'Screeners (SCR, DVDSCR)',
+      early: 'Cópias antecipadas (R5, WORKPRINT)',
+    },
     syncAddonSubtitles: 'Sincronizar legendas dos complementos',
     syncAddonSubtitlesHelp:
       'Ajusta o tempo das legendas dos complementos à versão reproduzida, quando estão adiantadas, atrasadas, ou mais rápidas ou mais lentas que ela. Na primeira reprodução de uma versão, o Polyfin identifica em segundo plano quando há fala: a partir de uma legenda em texto dentro do arquivo, senão de três trechos do áudio, lendo no máximo 300 MB do arquivo de um complemento. As versões torrent ficam de fora, pois seria preciso baixá-las do swarm delas. A partir daí, uma legenda que se encaixa claramente melhor deslocada ou acelerada chega sincronizada, com o nome terminando em “(sincronizada)”.',

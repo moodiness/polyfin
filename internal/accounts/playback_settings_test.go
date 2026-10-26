@@ -177,6 +177,8 @@ func TestVersionRulesSettings(t *testing.T) {
 		{"a word too long", func(s *Settings) { s.HiddenVersionWords = []string{strings.Repeat("é", MaxHiddenVersionWordLength+1)} },
 			ErrInvalidHiddenVersionWords},
 		{"a control character", func(s *Settings) { s.HiddenVersionWords = []string{"a\tb"} }, ErrInvalidHiddenVersionWords},
+		{"an unknown kind of release", func(s *Settings) { s.HiddenReleases = []string{"bluray"} }, ErrInvalidHiddenReleases},
+		{"a kind of release twice", func(s *Settings) { s.HiddenReleases = []string{"cam", "cam"} }, ErrInvalidHiddenReleases},
 	} {
 		changed := store.Settings()
 		tc.change(&changed)
@@ -191,13 +193,14 @@ func TestVersionRulesSettings(t *testing.T) {
 	changed.HideVersionsLargerGB = 40
 	changed.HiddenVersionCodecs = []string{"mpeg4", "av1"}
 	changed.HiddenVersionWords = []string{" Downloading ", "", "downloading", "⏳ queued"}
+	changed.HiddenReleases = []string{"early", "cam"}
 	saved, err := store.UpdateSettings(ctx, changed)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(saved.HiddenVersionCodecs, []string{"av1", "mpeg4"}) || !slices.Equal(saved.HiddenVersionWords, []string{"Downloading", "⏳ queued"}) ||
-		!slices.Equal(saved.VersionSourceOrder, []ID{two, one}) {
-		t.Errorf("saved: %v %v %v", saved.HiddenVersionCodecs, saved.HiddenVersionWords, saved.VersionSourceOrder)
+		!slices.Equal(saved.VersionSourceOrder, []ID{two, one}) || !slices.Equal(saved.HiddenReleases, []string{"cam", "early"}) {
+		t.Errorf("saved: %v %v %v %v", saved.HiddenVersionCodecs, saved.HiddenVersionWords, saved.VersionSourceOrder, saved.HiddenReleases)
 	}
 	reopened, err := Open(ctx, store.db)
 	if err != nil {
@@ -209,7 +212,7 @@ func TestVersionRulesSettings(t *testing.T) {
 	for _, column := range []string{"version_order = '{bitrate}'", "version_order = '{language,codec,size-large,hdr-first,resolution-high}'",
 		"version_order = '{source,language,codec,size-large,hdr-first}'", "version_codec_order = '{theora}'",
 		"version_source_order = array_fill('00000000-0000-0000-0000-000000000001'::uuid, ARRAY[501])", "hide_versions_larger_gb = 1001",
-		"hidden_version_codecs = '{theora}'"} {
+		"hidden_version_codecs = '{theora}'", "hidden_releases = '{bluray}'"} {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
 			t.Errorf("the database took %s", column)
 		}

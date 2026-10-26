@@ -296,6 +296,16 @@ const settings = {
     hiddenVersionWords: 'Hide versions whose labels contain',
     hiddenVersionWordsHelp: (r: RangeText) =>
       `One word or phrase a line, matched in any letter case in a version’s name, description and file name: for addons that say in their labels that a file is not ready to play yet. Up to ${r.max} lines; none by default.`,
+    hiddenReleases: 'Hide low-quality releases',
+    hiddenReleasesHelp:
+      'Versions whose name or file name tags them as one of these kinds are listed nowhere. A tag counts as a whole word after the title’s own words, in any letter case: a movie named Cam is no camera copy, and a .ts file no telesync. None by default.',
+    releaseKinds: {
+      cam: 'Camera copies (CAM, HDCAM)',
+      telesync: 'Telesyncs (TS, HDTS, TELESYNC)',
+      telecine: 'Telecines (TC, TELECINE)',
+      screener: 'Screeners (SCR, DVDSCR)',
+      early: 'Early copies (R5, WORKPRINT)',
+    },
     syncAddonSubtitles: 'Sync addon subtitles',
     syncAddonSubtitlesHelp:
       'Times the addons’ subtitles to the version played, when they run early, late, or faster or slower than it. At a version’s first play, Polyfin finds in the background when it has speech: from a text subtitle inside the file, else from three stretches of its audio, reading at most 300 MB of an addon’s file. Torrent versions are left out, as that would download them from their swarm. From then on, a subtitle that fits clearly better shifted or sped up comes synced, its name ending with “(synced)”.',

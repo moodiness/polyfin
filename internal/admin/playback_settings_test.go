@@ -103,12 +103,13 @@ func TestSettingsVersionRules(t *testing.T) {
 	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
 	settings := maps.Clone(base)
 	maps.Copy(settings, map[string]any{"versionOrder": []string{"language", "resolution-high"}, "hideVersionsLargerGb": 40,
-		"hiddenVersionCodecs": []string{"av1"}, "hiddenVersionWords": []string{" Downloading", "downloading", ""}})
+		"hiddenVersionCodecs": []string{"av1"}, "hiddenVersionWords": []string{" Downloading", "downloading", ""},
+		"hiddenReleases": []string{"screener", "cam"}})
 	rules := func(body map[string]any) string {
 		return fmt.Sprint(body["versionOrder"], body["versionCodecOrder"], body["hideVersionsLargerGb"], body["hiddenVersionCodecs"],
-			body["hiddenVersionWords"])
+			body["hiddenVersionWords"], body["hiddenReleases"])
 	}
-	want := "[language resolution-high] [av1 hevc vp9 h264 vc1 mpeg4 mpeg2video] 40 [av1] [Downloading]"
+	want := "[language resolution-high] [av1 hevc vp9 h264 vc1 mpeg4 mpeg2video] 40 [av1] [Downloading] [cam screener]"
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK || rules(body) != want {
 		t.Fatalf("saving the version rules: %d %s", status, rules(body))
 	}
@@ -125,6 +126,7 @@ func TestSettingsVersionRules(t *testing.T) {
 		{"hideVersionsLargerGb", -1, "invalid_hide_versions_larger"},
 		{"hiddenVersionCodecs", []string{"theora"}, "invalid_hidden_version_codecs"},
 		{"hiddenVersionWords", []string{strings.Repeat("a", accounts.MaxHiddenVersionWordLength+1)}, "invalid_hidden_version_words"},
+		{"hiddenReleases", []string{"cam", "bluray"}, "invalid_hidden_releases"},
 	} {
 		refused := maps.Clone(base)
 		refused[tc.key] = tc.value

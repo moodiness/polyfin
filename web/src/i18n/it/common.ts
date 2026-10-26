@@ -114,6 +114,8 @@ const common: typeof en = {
       'Questo elenco di codec nascosti non è supportato. Ricarica la pagina.',
     invalid_hidden_version_words:
       'Inserisci al massimo 50 parole che nascondono le versioni, una per riga, ciascuna di al massimo 100 caratteri.',
+    invalid_hidden_releases:
+      'Questo elenco di tipi di release nascosti non è supportato. Ricarica la pagina.',
     invalid_max_conversions:
       'Le conversioni video contemporanee devono essere un numero intero da 0 a 32.',
     invalid_max_conversion_height: 'Scegli dall’elenco la qualità massima dei video convertiti.',

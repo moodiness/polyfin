@@ -303,6 +303,16 @@ const settings: typeof en = {
     hiddenVersionWords: 'Nascondi le versioni le cui etichette contengono',
     hiddenVersionWordsHelp: (r: RangeText) =>
       `Una parola o frase per riga, cercata senza distinzione tra maiuscole e minuscole nel nome, nella descrizione e nel nome del file di una versione: per gli add-on che indicano nelle etichette che un file non è ancora pronto per la riproduzione. Fino a ${r.max} righe; nessuna per impostazione predefinita.`,
+    hiddenReleases: 'Nascondi le release di bassa qualità',
+    hiddenReleasesHelp:
+      'Le versioni il cui nome o nome del file le indica come uno di questi tipi non vengono elencate da nessuna parte. Un’etichetta conta come parola intera dopo le parole del titolo stesso, senza distinzione tra maiuscole e minuscole: un film intitolato Cam non è una copia da videocamera, né un file .ts un telesync. Nessuno per impostazione predefinita.',
+    releaseKinds: {
+      cam: 'Copie da videocamera (CAM, HDCAM)',
+      telesync: 'Telesync (TS, HDTS, TELESYNC)',
+      telecine: 'Telecine (TC, TELECINE)',
+      screener: 'Screener (SCR, DVDSCR)',
+      early: 'Copie anticipate (R5, WORKPRINT)',
+    },
     syncAddonSubtitles: 'Sincronizza i sottotitoli degli add-on',
     syncAddonSubtitlesHelp:
       'Allinea i sottotitoli degli add-on alla versione riprodotta, quando sono in anticipo, in ritardo, o più veloci o più lenti. Alla prima riproduzione di una versione, Polyfin individua in background i momenti con parlato: da un sottotitolo testuale nel file, altrimenti da tre tratti del suo audio, leggendo al massimo 300 MB del file di un add-on. Le versioni torrent sono escluse, perché andrebbero scaricate dal loro swarm. Da quel momento, un sottotitolo che si adatta chiaramente meglio se spostato o accelerato viene fornito sincronizzato, con il nome che termina con «(sincronizzato)».',

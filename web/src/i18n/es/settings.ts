@@ -300,6 +300,16 @@ const settings: typeof en = {
     hiddenVersionWords: 'Ocultar las versiones cuyas etiquetas contengan',
     hiddenVersionWordsHelp: (r: RangeText) =>
       `Una palabra o frase por línea, buscada sin distinguir mayúsculas y minúsculas en el nombre, la descripción y el nombre de archivo de una versión: para extensiones que indican en sus etiquetas que un archivo aún no está listo para reproducirse. Hasta ${r.max} líneas; ninguna de forma predeterminada.`,
+    hiddenReleases: 'Ocultar las versiones de baja calidad',
+    hiddenReleasesHelp:
+      'Las versiones cuyo nombre o nombre de archivo las marca como uno de estos tipos no aparecen en ningún sitio. Una marca cuenta como palabra completa tras las palabras del propio título, sin distinguir mayúsculas y minúsculas: una película llamada Cam no es una copia de cámara, ni un archivo .ts un telesync. Ninguno de forma predeterminada.',
+    releaseKinds: {
+      cam: 'Copias de cámara (CAM, HDCAM)',
+      telesync: 'Telesyncs (TS, HDTS, TELESYNC)',
+      telecine: 'Telecines (TC, TELECINE)',
+      screener: 'Screeners (SCR, DVDSCR)',
+      early: 'Copias anticipadas (R5, WORKPRINT)',
+    },
     syncAddonSubtitles: 'Sincronizar los subtítulos de las extensiones',
     syncAddonSubtitlesHelp:
       'Ajusta los subtítulos de las extensiones a la versión reproducida cuando van adelantados, retrasados, o más rápidos o más lentos que ella. En la primera reproducción de una versión, Polyfin detecta en segundo plano cuándo se habla: a partir de un subtítulo de texto incluido en el archivo o, si no, de tres fragmentos de su audio, leyendo como máximo 300 MB del archivo de una extensión. Las versiones torrent quedan fuera, ya que habría que descargarlas de su enjambre. A partir de entonces, un subtítulo que encaja claramente mejor desplazado o acelerado llega sincronizado, con su nombre terminado en «(sincronizado)».',

@@ -267,6 +267,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'hidden-releases',
+    label: (t) => s(t).hiddenReleases,
+    help: (t) => s(t).hiddenReleasesHelp,
+    keywords: ['CAM', 'TS', 'telesync', 'screener', 'quality'],
+    codes: ['invalid_hidden_releases'],
+  },
+  {
+    section: 'playback',
     anchor: 'playback-history',
     label: (t) => s(t).playbackHistory,
     help: (t) => s(t).playbackHistoryHelp,

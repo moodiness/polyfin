@@ -36,13 +36,16 @@ type versionRules struct {
 	// words are the words hiding versions, in lower case.
 	words    []string
 	language string
+	// releases are the kinds of low-quality releases hidden (see
+	// library.Labels.Releases).
+	releases []string
 }
 
 // newVersionRules returns the rules settings set, without the user's
 // preferred audio language.
 func newVersionRules(settings accounts.Settings) versionRules {
 	rules := versionRules{order: settings.VersionOrder, codecs: settings.VersionCodecOrder, sources: settings.VersionSourceOrder,
-		larger: int64(settings.HideVersionsLargerGB) * 1e9, hiddenCodecs: settings.HiddenVersionCodecs}
+		larger: int64(settings.HideVersionsLargerGB) * 1e9, hiddenCodecs: settings.HiddenVersionCodecs, releases: settings.HiddenReleases}
 	for _, word := range settings.HiddenVersionWords {
 		rules.words = append(rules.words, strings.ToLower(word))
 	}
@@ -73,7 +76,7 @@ func (r versionRules) key() string {
 
 // hides reports whether a rule may hide versions.
 func (r versionRules) hides() bool {
-	return r.larger > 0 || len(r.hiddenCodecs) > 0 || len(r.words) > 0
+	return r.larger > 0 || len(r.hiddenCodecs) > 0 || len(r.words) > 0 || len(r.releases) > 0
 }
 
 // reordered reports whether the versions a user is offered may be ordered
@@ -183,9 +186,13 @@ func audioLanguages(analysis media.Analysis) []string {
 
 // hidden reports whether a rule hides a version: one known to be larger
 // than the limit, or in a codec hidden, or whose labels, its name and
-// description and its file name, hold a word hiding it.
+// description and its file name, hold a word hiding it, or tag it as a
+// kind of low-quality release hidden.
 func (r versionRules) hidden(version library.Version, facts versionFacts) bool {
 	if r.larger > 0 && facts.size > r.larger || facts.codec != "" && slices.Contains(r.hiddenCodecs, facts.codec) {
+		return true
+	}
+	if slices.ContainsFunc(version.Labels.Releases, func(kind string) bool { return slices.Contains(r.releases, kind) }) {
 		return true
 	}
 	if len(r.words) == 0 {

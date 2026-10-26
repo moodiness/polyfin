@@ -119,6 +119,8 @@ const common: typeof en = {
       'Cette liste de codecs masqués n’est pas prise en charge. Rechargez la page.',
     invalid_hidden_version_words:
       'Saisissez au plus 50 mots masquant des versions, un par ligne, de 100 caractères au plus chacun.',
+    invalid_hidden_releases:
+      'Cette liste de genres de sorties masqués n’est pas prise en charge. Rechargez la page.',
     invalid_max_conversions:
       'Le nombre de conversions vidéo en même temps doit être un nombre entier de 0 à 32.',
     invalid_max_conversion_height: 'Choisissez la qualité max des vidéos converties dans la liste.',

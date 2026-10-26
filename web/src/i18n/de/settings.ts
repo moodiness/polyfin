@@ -302,6 +302,16 @@ const settings: typeof en = {
     hiddenVersionWords: 'Versionen ausblenden, deren Bezeichnungen Folgendes enthalten',
     hiddenVersionWordsHelp: (r: RangeText) =>
       `Ein Wort oder eine Wortgruppe pro Zeile, unabhängig von Groß- und Kleinschreibung gesucht in Name, Beschreibung und Dateiname einer Version: für Add-ons, die in ihren Bezeichnungen angeben, dass eine Datei noch nicht abspielbereit ist. Bis zu ${r.max} Zeilen; standardmäßig keine.`,
+    hiddenReleases: 'Releases geringer Qualität ausblenden',
+    hiddenReleasesHelp:
+      'Versionen, deren Name oder Dateiname sie als eine dieser Arten kennzeichnet, werden nirgends aufgeführt. Eine Kennzeichnung zählt als ganzes Wort nach den Wörtern des Titels selbst, unabhängig von Groß- und Kleinschreibung: Ein Film namens Cam ist keine Kameraaufnahme und eine .ts-Datei kein Telesync. Standardmäßig keine.',
+    releaseKinds: {
+      cam: 'Kameraaufnahmen (CAM, HDCAM)',
+      telesync: 'Telesyncs (TS, HDTS, TELESYNC)',
+      telecine: 'Telecines (TC, TELECINE)',
+      screener: 'Screener (SCR, DVDSCR)',
+      early: 'Frühe Fassungen (R5, WORKPRINT)',
+    },
     syncAddonSubtitles: 'Add-on-Untertitel synchronisieren',
     syncAddonSubtitlesHelp:
       'Passt die Untertitel der Add-ons an die abgespielte Version an, wenn sie zu früh, zu spät, schneller oder langsamer laufen. Bei der ersten Wiedergabe einer Version ermittelt Polyfin im Hintergrund, wann gesprochen wird: anhand eines Textuntertitels in der Datei, sonst anhand von drei Abschnitten ihrer Audiospur, wobei höchstens 300 MB der Datei eines Add-ons gelesen werden. Torrent-Versionen sind ausgenommen, da sie dafür aus ihrem Schwarm heruntergeladen werden müssten. Ab dann wird ein Untertitel, der verschoben oder beschleunigt deutlich besser passt, synchronisiert geliefert, und sein Name endet mit „(synchronisiert)“.',

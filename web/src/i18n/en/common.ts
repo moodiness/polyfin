@@ -110,6 +110,8 @@ const common = {
     invalid_hidden_version_codecs: 'This list of hidden codecs is not supported. Reload the page.',
     invalid_hidden_version_words:
       'Enter at most 50 words hiding versions, one a line, each at most 100 characters.',
+    invalid_hidden_releases:
+      'This list of hidden kinds of releases is not supported. Reload the page.',
     invalid_max_conversions: 'Video conversions at once must be a whole number from 0 to 32.',
     invalid_max_conversion_height: 'Choose the maximum quality of converted video from the list.',
     invalid_subtitle_ocr: 'Choose from the list when picture subtitles are turned into text.',

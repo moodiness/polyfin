@@ -388,6 +388,11 @@ export type Settings = {
   hiddenVersionCodecs: VersionCodec[]
   /** Hides the versions whose labels hold one of these words, in any letter case. */
   hiddenVersionWords: string[]
+  /**
+   * Hides the versions whose labels tag them as low-quality releases of these kinds, by whole
+   * words after the title's own.
+   */
+  hiddenReleases: ReleaseKind[]
   /** Ends version names with how the app asking plays each, as its last playback decides it. */
   nameHowVersionsPlay: boolean
   /** Times the addons' subtitles to the version played, against when it has speech. */
@@ -671,6 +676,8 @@ export type VersionCriterion =
   | 'hdr-last'
   | 'source'
 export type VersionCodec = 'av1' | 'hevc' | 'vp9' | 'h264' | 'vc1' | 'mpeg4' | 'mpeg2video'
+/** Kinds of low-quality releases: camera copies, telesyncs, telecines, screeners, early copies. */
+export type ReleaseKind = 'cam' | 'telesync' | 'telecine' | 'screener' | 'early'
 /** A source of the server listing versions of movies and episodes, in Content › Sources order. */
 export type VersionSource = { id: string; name: string }
 /** A language of the default track languages: its ISO 639-2/B code and its English name. */
