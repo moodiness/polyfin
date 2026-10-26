@@ -36,7 +36,7 @@ A title's details list every stream the addons offer as a version (see [Title pa
 
 **Compared with Jellyfin:**
 
-- Jellyfin 12.3 lists first the version an app opens as an item. jellyfin-web's version menu does this once a version is picked, so the menu reorders itself there. Polyfin keeps the menu as it was.
+- Jellyfin 12.4 lists first the version an app opens as an item. jellyfin-web's version menu does this once a version is picked, so the menu reorders itself there. Polyfin keeps the menu as it was.
 - Jellyfin lists all versions in PlaybackInfo, including the ones that cannot be read or played.
 
 **For app developers:**
@@ -58,14 +58,14 @@ Each user chooses an audio language, a subtitle language and a subtitle mode in 
 - They offer the languages a user's own preferences offer in jellyfin-web, from `/Localization/Cultures`.
 - A user's own choice always wins: a default applies only where the user's language is empty, the audio and the subtitle language each on its own. It applies wherever Polyfin chooses the tracks, for every app and the web player alike: the default tracks of a title's details and of `PlaybackInfo`, and the **Preferred audio language** of the [version order](#version-order).
 - The subtitle mode stays the user's (`SubtitleMode`): with `Always`, full subtitles in the default language, else forced ones; with `Smart`, subtitles in the default language when the audio is in another one; with `OnlyForced`, forced subtitles in the default language or of no stated language; `Default` and `None` do not look at the language.
-- The audio track: for a user without a language of their own, the track in **Default audio language** comes first, before the track the file flags as default, even when the user plays the default track whatever its language (`PlayDefaultAudioTrack`, which every new user has on until they turn it off in their app): the administrator chose that language for them, while the app setting was never their choice. A file without a track in that language plays the track it flags as default, else its first. A user's own language keeps Jellyfin's rule: with `PlayDefaultAudioTrack` on, the flagged track comes first, then the track in their language ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L14-L29)).
+- The audio track: for a user without a language of their own, the track in **Default audio language** comes first, before the track the file flags as default, even when the user plays the default track whatever its language (`PlayDefaultAudioTrack`, which every new user has on until they turn it off in their app): the administrator chose that language for them, while the app setting was never their choice. A file without a track in that language plays the track it flags as default, else its first. A user's own language keeps Jellyfin's rule: with `PlayDefaultAudioTrack` on, the flagged track comes first, then the track in their language ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L14-L29)).
 - Apps keep showing the user's own preferences, with no language when they chose none, in `/Users/Me` and `/Users/{userId}`. An app saving its configuration back thus never makes the default the user's own choice, and a changed default reaches every user without a language at their next play.
 
 **Compared with Jellyfin:**
 
-- Jellyfin 12.3 has no server-wide default: it reads the user's own preferences alone ([MediaSourceManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaSourceManager.cs#L515), [L574-L578](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaSourceManager.cs#L574-L578)), and an empty one is no language at all ([L477-L482](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaSourceManager.cs#L477-L482)). Without a language, its audio is the track flagged default, else the first ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L14-L29)), and every subtitle counts as in the preferred language ([L154-L158](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L154-L158)). With both settings at None, as by default, Polyfin chooses as Jellyfin does; a default subtitle language makes it choose a user's subtitles as Jellyfin would for a user who chose that language.
+- Jellyfin 12.4 has no server-wide default: it reads the user's own preferences alone ([MediaSourceManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L515), [L574-L578](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L574-L578)), and an empty one is no language at all ([L477-L482](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L477-L482)). Without a language, its audio is the track flagged default, else the first ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L14-L29)), and every subtitle counts as in the preferred language ([L154-L158](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L154-L158)). With both settings at None, as by default, Polyfin chooses as Jellyfin does; a default subtitle language makes it choose a user's subtitles as Jellyfin would for a user who chose that language.
 - Polyfin's default audio language ranks above the track a file flags as default whatever `PlayDefaultAudioTrack` says, where a language a user chose in Jellyfin gives way to the flagged track while that setting is on.
-- jellyfin-web 12.3 also offers "Original language" as an audio preference. Polyfin does not offer it as a default.
+- jellyfin-web 12.4 also offers "Original language" as an audio preference. Polyfin does not offer it as a default.
 
 ### Title pages
 
@@ -210,7 +210,7 @@ Five more settings change how Polyfin picks a version and how much video the ser
 
 **Compared with Jellyfin:**
 
-- Jellyfin 12.3 keeps the version opened first however it plays, as Polyfin does with this setting off.
+- Jellyfin 12.4 keeps the version opened first however it plays, as Polyfin does with this setting off.
 
 ### Version order
 
@@ -262,8 +262,8 @@ A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. S
 
 **Compared with Jellyfin:**
 
-- Jellyfin 12.3 has no setting that hides versions: it lists every version of a title, whatever its size, codec or name (its server and library options have none, [`ServerConfiguration.cs`](https://github.com/jellyfin/jellyfin/blob/v12.3/MediaBrowser.Model/Configuration/ServerConfiguration.cs), [`LibraryOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.3/MediaBrowser.Model/Configuration/LibraryOptions.cs)). The version order rules are Polyfin's own.
-- Jellyfin knows the same release tags only to cut them from a file's name when it finds a title's name: its first `CleanStrings` expression ([`NamingOptions.cs`, line 154](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Naming/Common/NamingOptions.cs#L152-L154)) ends the name at the first of `cam`, `ts`, `tc`, `r5`, `dvdscr`, `screener`, `telesync` or `telecine`, among many other tags, as a whole word after at least one word of the title, in any letter case. Polyfin reads tags the same way, after the title's words, to hide versions rather than to name titles.
+- Jellyfin 12.4 has no setting that hides versions: it lists every version of a title, whatever its size, codec or name (its server and library options have none, [`ServerConfiguration.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/ServerConfiguration.cs), [`LibraryOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/LibraryOptions.cs)). The version order rules are Polyfin's own.
+- Jellyfin knows the same release tags only to cut them from a file's name when it finds a title's name: its first `CleanStrings` expression ([`NamingOptions.cs`, line 154](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/Common/NamingOptions.cs#L152-L154)) ends the name at the first of `cam`, `ts`, `tc`, `r5`, `dvdscr`, `screener`, `telesync` or `telecine`, among many other tags, as a whole word after at least one word of the title, in any letter case. Polyfin reads tags the same way, after the title's words, to hide versions rather than to name titles.
 
 ### Version names
 

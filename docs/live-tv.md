@@ -49,7 +49,7 @@ How each stream of an IPTV source answered is kept (see [IPTV sources](iptv.md#s
 
 An app's search finds the user's channels by name, those of TV catalogs and IPTV sources alike, as their apps list them. A search that asks for programmes also finds the programmes of their guides that have not ended, airing now or in the guide's days ahead. Case and accents do not count: "tele" finds "Télé Orbe".
 
-- Searched from the home page, jellyfin-web 12.3 lists the channels found under "Channels" and the programmes under "Programs". It asks for the channels in the same request as movies, shows, music and the other types, then lists each type found under its own heading. A user without the **Live TV** permission finds no channel or programme.
+- Searched from the home page, jellyfin-web 12.4 lists the channels found under "Channels" and the programmes under "Programs". It asks for the channels in the same request as movies, shows, music and the other types, then lists each type found under its own heading. A user without the **Live TV** permission finds no channel or programme.
 - Searched from the Live TV page, it lists the programmes under "Movies", "Episodes", "Sports", "Kids", "News" and "Programs", by their guide categories, and the channels under "Channels".
 - Selecting a channel found plays it, from either search.
 - Polyfin searches the channels it lists, not the addons' own searches: a channel no TV catalog lists, or one turned off in an IPTV line-up, is not found.

@@ -4,7 +4,7 @@ Polyfin's Docker image includes jellyfin-web, Jellyfin's own web client. This pa
 
 ## The built-in web client
 
-The Docker image includes jellyfin-web 12.3. Polyfin serves it at `/web/`, as Jellyfin does, and it connects to the server that served it.
+The Docker image includes jellyfin-web 12.4. Polyfin serves it at `/web/`, as Jellyfin does, and it connects to the server that served it.
 
 - Once an administrator exists, `http://<server>:8096/` opens the web client.
 - Before that, `/` and `/web/` lead to the setup page in the admin app, since no account could sign in yet. See [getting started](getting-started.md).
@@ -65,7 +65,7 @@ On the home page, it has the title of a collection library's "Recently Added in"
 
 It leaves out of the top bar, its **More** menu and the side menu the libraries hidden there under **Content › Libraries** or **My sources**, once a user is signed in. They keep their row on the home page (see [Libraries hidden from the top bar](addons-and-libraries.md#libraries-hidden-from-the-top-bar)). After a user's first load in a browser, a reload doesn't show them even briefly: the script keeps the last answer in the browser's storage and applies it before jellyfin-web draws its menus.
 
-When the server refuses to play a title, jellyfin-web 12.3 shows the reason, such as "This media cannot be played at this time due to rate limits." for a user playing on as many devices as allowed, then "There was an error processing the request" over it. The script closes that second, generic error as it opens, so only the reason shows. A real Jellyfin server gets the same two errors from jellyfin-web.
+When the server refuses to play a title, jellyfin-web 12.4 shows the reason, such as "This media cannot be played at this time due to rate limits." for a user playing on as many devices as allowed, then "There was an error processing the request" over it. The script closes that second, generic error as it opens, so only the reason shows. A real Jellyfin server gets the same two errors from jellyfin-web.
 
 It adds Polyfin's entries to the ⋮ menus of cards, which a right click on a card also opens, and of a title's page:
 
@@ -339,7 +339,7 @@ Administrators can also set the custom CSS and sign-in message through Jellyfin'
 **Compared with Jellyfin:**
 
 - Polyfin has no splash screen, so `SplashscreenEnabled` stays false whatever is posted.
-- Jellyfin stores the CSS as posted, with no theme to keep ([`ConfigurationController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.3/Jellyfin.Api/Controllers/ConfigurationController.cs#L138) and [`BrandingController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.3/Jellyfin.Api/Controllers/BrandingController.cs#L63), Jellyfin 12.3).
+- Jellyfin stores the CSS as posted, with no theme to keep ([`ConfigurationController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ConfigurationController.cs#L138) and [`BrandingController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/BrandingController.cs#L63), Jellyfin 12.4).
 - An empty text is left out of the answer, where Jellyfin sends it as `""`.
 
 **For app developers:**
@@ -366,10 +366,10 @@ The script runs in the browser of every user who opens the web client, with thei
 
 jellyfin-web is free software by the Jellyfin contributors, and a separate program from Polyfin. Polyfin stays under the [MIT License](../LICENSE).
 
-- The image contains jellyfin-web 12.3, unmodified, under the GNU General Public License, version 2.
-- It is copied from the official `jellyfin/jellyfin:12.3` image into `/usr/share/polyfin/jellyfin-web`.
+- The image contains jellyfin-web 12.4, unmodified, under the GNU General Public License, version 2.
+- It is copied from the official `jellyfin/jellyfin:12.4` image into `/usr/share/polyfin/jellyfin-web`.
 - Its license and a notice are in `/usr/share/doc/jellyfin-web` (from [`third_party/jellyfin-web`](../third_party/jellyfin-web)).
-- Its complete source code is attached to every Polyfin release on GitHub as `jellyfin-web-12.3-source.tar.gz`, and is also at <https://github.com/jellyfin/jellyfin-web/tree/v12.3>.
+- Its complete source code is attached to every Polyfin release on GitHub as `jellyfin-web-12.4-source.tar.gz`, and is also at <https://github.com/jellyfin/jellyfin-web/tree/v12.4>.
 - The Dockerfile pins both, side by side, to be changed together when the client is updated.
 
 The default theme, LumaaGlaass by Om Gupta and Dyhlio, is under the MIT License. Polyfin embeds its files, with two patches, and serves them to the web client (see [LumaaGlaass](#lumaaglaass)). Its license and a notice naming the commit are in `/usr/share/doc/lumaaglaass` (from [`third_party/lumaaglaass`](../third_party/lumaaglaass)), and in `licenses/lumaaglaass` with Polyfin Desktop.
