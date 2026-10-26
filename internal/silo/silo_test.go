@@ -103,6 +103,8 @@ type harness struct {
 	jellyfin *fakeJellyfin
 	clock    *time.Time
 	profile  string
+	// log is what the API logs at info and above.
+	log *bytes.Buffer
 }
 
 func newHarness(t *testing.T, answer func(w http.ResponseWriter, c call)) *harness {
@@ -111,12 +113,12 @@ func newHarness(t *testing.T, answer func(w http.ResponseWriter, c call)) *harne
 	h := &harness{t: t, accounts: &fakeAccounts{user: user, tokens: map[string]bool{testToken: true},
 		device: accounts.Device{ID: accounts.ID{2}, UserID: user.ID, DeviceInfo: accounts.DeviceInfo{DeviceID: "pixel", DeviceName: "Pixel",
 			Client: "Silo", ClientVersion: "1"}}},
-		jellyfin: &fakeJellyfin{answer: answer}, profile: user.ID.String()}
+		jellyfin: &fakeJellyfin{answer: answer}, profile: user.ID.String(), log: &bytes.Buffer{}}
 	// A Wednesday at noon.
 	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.Local)
 	h.clock = &now
 	h.server = New(Options{ServerID: "server", Version: "test", Accounts: h.accounts, Jellyfin: h.jellyfin, DB: migrated.New(t),
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), now: func() time.Time { return *h.clock }})
+		Logger: slog.New(slog.NewTextHandler(h.log, nil)), now: func() time.Time { return *h.clock }})
 	return h
 }
 
@@ -164,21 +166,33 @@ func playable(w http.ResponseWriter, c call) {
 	}
 }
 
-// start starts a playback of the test version, returning the session.
-func (h *harness) start(more map[string]any) (string, map[string]any) {
+// file is the number the apps know the test version by.
+func (h *harness) file() string {
 	h.t.Helper()
 	number, err := h.server.numbers.number(h.t.Context(), accounts.ID{0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
 		0xaa, 0xaa, 0xaa, 0xaa})
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	body := map[string]any{"protocol_version": 3, "file_id": number, "profile_id": h.profile, "installation_id": h.accounts.device.ID.String(),
+	return number
+}
+
+// startAnswer asks to start a playback of the test version.
+func (h *harness) startAnswer(more map[string]any) *httptest.ResponseRecorder {
+	h.t.Helper()
+	body := map[string]any{"protocol_version": 3, "file_id": h.file(), "profile_id": h.profile, "installation_id": h.accounts.device.ID.String(),
 		"playback_attempt_id": "attempt-1", "quality_preference": "auto",
 		"client_capabilities": map[string]any{"containers": []string{"mp4"}, "codecs_video": []string{"h264"}, "codecs_audio": []string{"aac"}}}
 	for key, value := range more {
 		body[key] = value
 	}
-	w := h.do(http.MethodPost, "/api/v2/playback/start", body)
+	return h.do(http.MethodPost, "/api/v2/playback/start", body)
+}
+
+// start starts a playback of the test version, returning the session.
+func (h *harness) start(more map[string]any) (string, map[string]any) {
+	h.t.Helper()
+	w := h.startAnswer(more)
 	var d map[string]any
 	if w.Code != http.StatusCreated || json.Unmarshal(w.Body.Bytes(), &d) != nil {
 		h.t.Fatalf("start: %d %s", w.Code, w.Body)
@@ -189,10 +203,20 @@ func (h *harness) start(more map[string]any) (string, map[string]any) {
 
 func (h *harness) replan(session, id string, tracks map[string]any) *httptest.ResponseRecorder {
 	h.t.Helper()
-	return h.do(http.MethodPost, "/api/v2/playback/"+session+"/replan", map[string]any{"installation_id": h.accounts.device.ID.String(),
-		"playback_attempt_id": "attempt-1", "replan_request_id": id, "operation": "track_change", "quality_preference": "auto",
-		"position_seconds": 10, "selected_tracks": tracks,
-		"client_capabilities": map[string]any{"containers": []string{"mp4"}, "codecs_video": []string{"h264"}, "codecs_audio": []string{"aac"}}})
+	return h.replanWith(session, id, map[string]any{"selected_tracks": tracks})
+}
+
+// replanWith asks a replan of a session, a track change unless more says
+// otherwise.
+func (h *harness) replanWith(session, id string, more map[string]any) *httptest.ResponseRecorder {
+	h.t.Helper()
+	body := map[string]any{"installation_id": h.accounts.device.ID.String(), "playback_attempt_id": "attempt-1", "replan_request_id": id,
+		"operation": "track_change", "quality_preference": "auto", "position_seconds": 10, "selected_tracks": map[string]any{},
+		"client_capabilities": map[string]any{"containers": []string{"mp4"}, "codecs_video": []string{"h264"}, "codecs_audio": []string{"aac"}}}
+	for key, value := range more {
+		body[key] = value
+	}
+	return h.do(http.MethodPost, "/api/v2/playback/"+session+"/replan", body)
 }
 
 func planID(t *testing.T, w *httptest.ResponseRecorder) string {
@@ -325,10 +349,12 @@ func TestAFailedReplanChangesNothing(t *testing.T) {
 		playable(w, c)
 	})
 	session, _ := h.start(nil)
-	if w := h.replan(session, "replan-1", map[string]any{"audio": map[string]any{"id": "2"}}); w.Code != http.StatusOK {
+	// The apps name the second audio track by its place, 1, which the
+	// Jellyfin API numbers 2.
+	if w := h.replan(session, "replan-1", map[string]any{"audio": map[string]any{"id": "file:1:audio:1"}}); w.Code != http.StatusOK {
 		t.Fatalf("replan to track 2: %d %s", w.Code, w.Body)
 	}
-	if w := h.replan(session, "replan-2", map[string]any{"audio": map[string]any{"id": "3"}}); w.Code != http.StatusInternalServerError {
+	if w := h.replan(session, "replan-2", map[string]any{"audio": map[string]any{"id": "file:1:audio:2", "index": 2}}); w.Code != http.StatusInternalServerError {
 		t.Fatalf("failing replan: %d %s", w.Code, w.Body)
 	}
 	if w := h.replan(session, "replan-3", map[string]any{}); w.Code != http.StatusOK {

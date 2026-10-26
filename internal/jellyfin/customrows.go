@@ -70,13 +70,22 @@ var customRowPlaces = map[homerows.Place]string{
 	homerows.PlaceBottom: "Bottom",
 }
 
+// customRowKinds name the kinds of rows in GET /Polyfin/HomeRows.
+var customRowKinds = map[homerows.Kind]string{
+	homerows.KindCatalog:    "Catalog",
+	homerows.KindCollection: "Collection",
+	homerows.KindBecause:    "BecauseYouWatched",
+	homerows.KindNew:        "New",
+}
+
 // CustomRowDto is a row of GET /Polyfin/HomeRows: its folder's Id, its
-// Name, its Place (Top, AfterResume, AfterNextUp or Bottom) and its first
-// Items.
+// Name, its Place (Top, AfterResume, AfterNextUp or Bottom), its Kind
+// (Catalog, Collection, BecauseYouWatched or New) and its first Items.
 type CustomRowDto struct {
 	Id    string
 	Name  string
 	Place string
+	Kind  string
 	Items []BaseItemDto
 }
 
@@ -387,7 +396,7 @@ func (h *Handler) customRowsAnswer(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		result = append(result, CustomRowDto{Id: row.id.String(), Name: row.name, Place: customRowPlaces[row.row.Place],
-			Items: h.listDtos(r, user, items, fields, state)})
+			Kind: customRowKinds[row.row.Kind], Items: h.listDtos(r, user, items, fields, state)})
 	}
 	writeJSON(w, http.StatusOK, struct{ Items []CustomRowDto }{result})
 }

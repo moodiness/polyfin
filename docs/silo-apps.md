@@ -26,30 +26,36 @@ When a source of the server fails to answer, the app is told to try again later 
 - **Connecting:** the server's information, identity and setup state.
 - **Signing in** with a name and password, staying signed in, and signing out.
 - **Profiles:** each Polyfin user is one profile, named after them, without a PIN.
-- **Home:** Continue Watching, Next Up, and the latest titles of each library.
+- **Home:** Continue Watching, Next Up, the latest titles of each library, and the home rows the administrator adds for the web player, at their places, collection rows among them; each row opens on its whole list.
 - **Libraries** of movies and series, and mixed ones, page by page, sorted by title, year, release date, date added, rating, runtime or at random; favorites; search.
+- **Collections**, read-only: a library's Collections tab lists the collections with a title in it, as the Jellyfin API lists a library's collections, and each opens on its titles. Each user sees, and counts, only the titles they may see, without those they hid.
 - **Title pages:** details, cast and crew, versions, series with their seasons and episodes, and artwork.
 - **Playback** of movies and episodes. The app sends what it plays; Polyfin answers with a plan:
   - the file as it is, when the app takes it;
   - the file repackaged to HLS, when only its container does not suit the app;
   - converted to HLS otherwise, as the user's conversion permissions allow;
   - audio tracks chosen by the app, or the user's preferred one;
-  - text subtitles as WebVTT files beside the video, picture subtitles burned in when chosen;
+  - text subtitles as WebVTT files beside the video, picture subtitles burned in when chosen. The app chooses a playback's subtitle itself, from the user's subtitle language and mode, which Polyfin tells it: a playback the app starts without a subtitle shows none;
+  - lower qualities, 1080p, 720p and 480p, below a taller file: converted to that height, at 8, 4 and 1.5 Mb/s at most;
   - another plan when the app asks for other tracks, another quality, or a conversion after the file failed to play.
-- **Progress and stop**, numbered per installation, which keep the resume point; marking a title played or unplayed.
+- **Progress and stop**, numbered per installation, which keep the resume point; marking a title played or unplayed. The diagnostics of their playbacks the apps send are accepted, and the failures they report logged.
 
 ## What does not work yet
 
 - Finding the server on the local network, and signing a TV in with a code: add the address by hand, and sign in with a password. An account with two-step sign-in cannot sign in from Silo's apps, as from Jellyfin apps.
 - Editing profiles, PINs, several profiles per user, avatars.
 - Downloads, watch-together, remote control, notifications. The account tells the apps downloads are not allowed, whatever the user's permission to download in Jellyfin apps.
-- Collections, watchlists, history, requests, recommendations, people's pages, settings synced from the app, subtitle searches, skip markers and trickplay.
+- The apps' own collections: the app lists none, and making or changing one is refused as not supported. Collections are made in Jellyfin apps or the web player.
+- Watchlists, history, requests, recommendations, people's pages, settings synced from the app, subtitle searches, skip markers and trickplay.
+- Playback features the apps can use but Polyfin does not offer, and so does not announce: the app's own player showing the file's subtitles, subtitles as tracks of the HLS stream, quality adapting itself to buffering and to the measured speed during a playback, a playback moving to another screen or output without a new plan, and the apps' device fixes chosen by the server. Their plans still play: the app keeps to what Polyfin announces.
 - Music, audiobooks, books and Live TV: Silo's apps have no Live TV, and Polyfin lists its libraries of movies and series only.
-- Operations not listed here answer 404.
+- Operations not listed here answer 404. Polyfin logs each, as it does for Jellyfin apps: "A Silo app asked for something Polyfin does not serve", with its method and path, at most once an hour each.
 
 ## The contract followed
 
 Polyfin follows Silo's published OpenAPI contract, `contracts/api/v2/openapi.json` in Silo-Server/silo-server, at commit `6de6d5e5e285a9b423e95a1122cb39e5bb9ca93b` (25 October 2026). `GET /api/v2/system/info` gives that file's SHA-256 as `contract_digest`, and the links the contract requires; Polyfin serves neither the contract file nor the list of capabilities they name. Silo has no release yet, and its contract still changes: a later version of the apps may need operations or fields Polyfin does not answer.
+
+Its tests also check every capabilities document and every plan Polyfin gives against the rules the apps apply before they play, read from their code: Silo-Server/silo-apple at commit `97fe5aacf661b92cf25bccdfb1d51c76839d54d3` (25 October 2026) and Silo-Server/silo-android at commit `88db96c280a4ce06877e2402c7c662ac3919c58e` (26 October 2026). Among them, the apps start a playback only when the server announces every feature they need, and take only playback sessions named by a UUID.
 
 Polyfin's code is its own, written from the contract's facts; no part of Silo, which is under the AGPL-3.0, is in Polyfin.
 

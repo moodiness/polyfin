@@ -18,8 +18,10 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/silo"
+	"github.com/moodiness/polyfin/internal/silo/silotest"
 )
 
 // The tests of Silo's API (package silo), which answers Silo's apps from
@@ -540,26 +542,36 @@ func (a siloApps) fileOf(t *testing.T, item, token, profile string, version int)
 	return watch.Versions[version].FileID
 }
 
+// installation is the installation the capabilities document tells,
+// which meets the rules the apps check before they start a playback.
 func (a siloApps) installation(t *testing.T, token, profile string) string {
 	t.Helper()
+	status, data := a.do(t, http.MethodGet, "/api/v2/playback/capabilities", token, profile, nil)
+	if status != http.StatusOK {
+		t.Fatalf("capabilities: %d %s", status, data)
+	}
+	if err := silotest.CheckCapabilities(data); err != nil {
+		t.Fatalf("capabilities: %v: %s", err, data)
+	}
 	var capabilities struct {
-		State          string   `json:"state"`
-		InstallationID string   `json:"installation_id"`
-		Features       []string `json:"features"`
+		InstallationID string `json:"installation_id"`
 	}
-	a.get(t, "/api/v2/playback/capabilities", token, profile, &capabilities)
-	if capabilities.State != "available" || !slices.Contains(capabilities.Features, "sequenced_progress_v1") || capabilities.InstallationID == "" {
-		t.Fatalf("capabilities: %+v", capabilities)
-	}
+	_ = json.Unmarshal(data, &capabilities)
 	return capabilities.InstallationID
 }
 
+// start starts a playback, whose decision meets the rules the apps check
+// before they play one.
 func (a siloApps) start(t *testing.T, token, profile string, body map[string]any) siloDecision {
 	t.Helper()
 	status, data := a.do(t, http.MethodPost, "/api/v2/playback/start", token, profile, body)
 	var d siloDecision
 	if status != http.StatusCreated || json.Unmarshal(data, &d) != nil {
 		t.Fatalf("start: %d %s", status, data)
+	}
+	file, _ := body["file_id"].(string)
+	if err := silotest.CheckDecision(data, []string{file}); err != nil {
+		t.Errorf("decision: %v: %s", err, data)
 	}
 	return d
 }
@@ -731,5 +743,116 @@ func TestSiloAppsPlayRepackagedOrConverted(t *testing.T) {
 		map[string]any{"playback_attempt_id": "attempt-3"}))
 	if refused.Outcome != "adaptation_unavailable" || refused.Plan != nil || refused.SessionID != "" || refused.Terminal == nil {
 		t.Errorf("without conversions allowed: %+v", refused)
+	}
+}
+
+// Silo's apps list the collections of a library on its Collections tab,
+// page through a collection's titles, and show a home row of one on Home
+// with its page: each with the titles the user may see, as Jellyfin apps
+// list them; a hidden or blocked title stays out. The apps' own
+// collections cannot be made.
+func TestSiloAppsListCollections(t *testing.T) {
+	t.Parallel()
+	p := playing(t)
+	if _, err := p.store.CreateUser(t.Context(), accounts.NewUser{Name: "admin", Password: "correct horse", IsAdministrator: true}); err != nil {
+		t.Fatal(err)
+	}
+	picks := p.createCollection(t, p.signIn("admin", "tv"), "name=Picks&ids="+p.movie+","+p.remote)
+	id, _ := accounts.ParseID(picks)
+	p.addRow(t, homerows.Row{Name: "Our picks", Kind: homerows.KindCollection, Place: homerows.PlaceBottom, Collection: id, Everyone: true})
+	allowSilo(t, p.testServer)
+	a := servingSilo(t, p.testServer)
+	token, profile := a.signIn(t, "member")
+	library := a.libraries(t, token, profile)[0].ID
+
+	type collectionCard struct {
+		ID        string `json:"id"`
+		Title     string `json:"title"`
+		ItemCount int    `json:"item_count"`
+	}
+	tab := func() []collectionCard {
+		t.Helper()
+		var answer struct {
+			LibraryID   string           `json:"library_id"`
+			Collections []collectionCard `json:"collections"`
+			Groups      []any            `json:"groups"`
+		}
+		a.get(t, "/api/v2/library/"+library+"/collections", token, profile, &answer)
+		if answer.LibraryID != library || answer.Groups == nil {
+			t.Errorf("tab: %+v", answer)
+		}
+		return answer.Collections
+	}
+	titles := func(path string) []string {
+		t.Helper()
+		var page siloPage
+		a.get(t, path, token, profile, &page)
+		return cardTitles(page.Items)
+	}
+	row := func() (string, []string) {
+		t.Helper()
+		var home struct {
+			Sections []struct {
+				ID    string     `json:"id"`
+				Type  string     `json:"section_type"`
+				Title string     `json:"title"`
+				Items []siloCard `json:"items"`
+			} `json:"sections"`
+		}
+		a.get(t, "/api/v2/home/sections", token, profile, &home)
+		for _, section := range home.Sections {
+			if section.Title == "Our picks" && section.Type == "collection" {
+				return section.ID, cardTitles(section.Items)
+			}
+		}
+		return "", nil
+	}
+	check := func(label string, want []string) {
+		t.Helper()
+		if cards := tab(); len(want) > 0 && (len(cards) != 1 || cards[0].ID != picks || cards[0].Title != "Picks" || cards[0].ItemCount != len(want)) {
+			t.Errorf("%s: the tab %+v", label, cards)
+		}
+		var listed QueryResult
+		p.get(t, "/Items?ParentId="+picks, p.token, &listed)
+		var jellyfin []string
+		for _, item := range listed.Items {
+			jellyfin = append(jellyfin, item.Name)
+		}
+		if !slices.Equal(jellyfin, want) {
+			t.Errorf("%s: Jellyfin apps list %v", label, jellyfin)
+		}
+		for _, path := range []string{"/api/v2/catalog?source=library_collection&collection_id=" + picks + "&library_id=" + library,
+			"/api/v2/library/" + library + "/collections/" + picks + "/items"} {
+			if got := titles(path); !slices.Equal(got, want) {
+				t.Errorf("%s: %s lists %v", label, path, got)
+			}
+		}
+		section, shown := row()
+		if len(want) == 0 {
+			if section != "" {
+				t.Errorf("%s: the home row shows %v", label, shown)
+			}
+			return
+		}
+		if !slices.Equal(shown, want) {
+			t.Errorf("%s: the home row %q shows %v", label, section, shown)
+		}
+		if got := titles("/api/v2/catalog?source=section&section_id=" + section); !slices.Equal(got, want) {
+			t.Errorf("%s: the home row's page lists %v", label, got)
+		}
+	}
+	check("as made", []string{"Movie", "Remote"})
+
+	if status, _ := p.call(http.MethodPost, "/Polyfin/UserItems/"+p.remote+"/Hidden", app("tv", p.token), nil); status != http.StatusNoContent &&
+		status != http.StatusOK {
+		t.Fatalf("hiding: %d", status)
+	}
+	check("with a hidden title", []string{"Movie"})
+	p.limit(t, p.user, func(c *accounts.UserChanges) { c.BlockedGenres = &[]string{"Drama"} })
+	check("with Drama blocked", nil)
+
+	if status, data := a.do(t, http.MethodPost, "/api/v2/collections", token, profile, map[string]any{"name": "Mine"}); status != http.StatusNotImplemented ||
+		problemCode(data) != "capability_unsupported" {
+		t.Errorf("making a collection: %d %s", status, data)
 	}
 }

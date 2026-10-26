@@ -68,6 +68,7 @@ type Server struct {
 	mux      *http.ServeMux
 	numbers  *numbers
 	sessions *sessions
+	unknown  *unknownOperations
 }
 
 // New returns the API's handler.
@@ -75,11 +76,14 @@ func New(options Options) *Server {
 	if options.now == nil {
 		options.now = time.Now
 	}
-	s := &Server{options: options, mux: http.NewServeMux(), numbers: newNumbers(options.DB), sessions: newSessions()}
+	s := &Server{options: options, mux: http.NewServeMux(), numbers: newNumbers(options.DB), sessions: newSessions(),
+		unknown: newUnknownOperations(options.Logger, options.now)}
 	s.accountRoutes()
 	s.browseRoutes()
 	s.playbackRoutes()
-	s.mux.HandleFunc("/api/v2/", func(w http.ResponseWriter, _ *http.Request) {
+	s.collectionRoutes()
+	s.mux.HandleFunc("/api/v2/", func(w http.ResponseWriter, r *http.Request) {
+		s.unknown.report(r)
 		problem(w, http.StatusNotFound, "not_found", "This operation does not exist on this server.")
 	})
 	return s
