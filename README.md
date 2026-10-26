@@ -21,7 +21,7 @@ See it on the [website](https://moodiness.github.io/polyfin/): the ad above, a s
 - **Playback and transcoding:** direct play when the app supports the file. Otherwise a remux or a conversion to HLS, on an NVIDIA, AMD or Intel GPU, or VideoToolbox on macOS, when there is one, with HDR tone mapped on NVIDIA and Intel GPUs and VideoToolbox, else on the processor.
 - **Subtitles:** addon subtitles, text tracks inside files, and ASS styles with their fonts. Image subtitles are burned in when an app cannot show them.
 - **Multiple users:** each user has their own watched state, resume points, favorites and Next Up, with parental control and per-user limits. Invite links let people create their own account.
-- **Skip buttons:** intros, recaps, credits and previews to skip, from three community databases.
+- **Skip buttons:** intros, recaps, credits and previews to skip, from four community databases.
 - **Tracking:** each user can send what they watch to Trakt, Simkl, MDBList and PublicMetaDB, and import what they watched there, or in their Stremio or Nuvio account.
 - **Built in:** Jellyfin's own web client at `/web/`, and an admin app at `/admin/`.
 - **Languages:** the admin app, the names and messages Polyfin writes itself, its additions to the web client and Polyfin Desktop are in English, French, German, Spanish, Italian and Brazilian Portuguese.

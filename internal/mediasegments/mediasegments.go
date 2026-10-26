@@ -1,7 +1,7 @@
 // Package mediasegments finds where the intro, recap, credits and preview of
 // a movie or an episode are, for the skip buttons of Jellyfin apps. It asks
-// community databases, TheIntroDB, IntroDB and PublicMetaDB, by the title's
-// IMDb or TMDB identifier, and keeps their answers in the database.
+// community databases, TheIntroDB, IntroDB, PublicMetaDB and SkipDB, by the
+// title's IMDb or TMDB identifier, and keeps their answers in the database.
 package mediasegments
 
 import (
@@ -35,6 +35,7 @@ const (
 	TheIntroDB   = "theintrodb"
 	IntroDB      = "introdb"
 	PublicMetaDB = "publicmetadb"
+	SkipDB       = "skipdb"
 )
 
 // publicURLs are the base URLs of the databases' APIs.
@@ -42,6 +43,7 @@ var publicURLs = map[string]string{
 	TheIntroDB:   "https://api.theintrodb.org/v3",
 	IntroDB:      "https://api.introdb.app",
 	PublicMetaDB: "https://publicmetadb.com",
+	SkipDB:       "https://api.skipdb.tv",
 }
 
 const (
@@ -407,6 +409,8 @@ func (s *Service) ask(ctx context.Context, source Source, title Title, settings 
 		return s.askIntroDB(ctx, source.URL, title)
 	case PublicMetaDB:
 		return s.askPublicMetaDB(ctx, source.URL, title, settings.PublicMetaDBKey)
+	case SkipDB:
+		return s.askSkipDB(ctx, source.URL, title)
 	default:
 		return nil, nil
 	}
@@ -627,6 +631,63 @@ func compareBool(a, b bool) int {
 	default:
 		return -1
 	}
+}
+
+// skipDBSegment is a segment as SkipDB gives it, in milliseconds, with how
+// it was matched to the duration asked with.
+type skipDBSegment struct {
+	StartMS float64 `json:"start_ms"`
+	// EndMS is nil for credits or a preview lasting until the end.
+	EndMS *float64 `json:"end_ms"`
+	Match string   `json:"match"`
+}
+
+// skipDBTypes are SkipDB's segment types, by the keys of its answers.
+var skipDBTypes = map[string]Type{"intro": Intro, "recap": Recap, "outro": Outro, "preview": Preview}
+
+// askSkipDB asks SkipDB, which knows titles by IMDb identifier only, with
+// the title's runtime in seconds when known: SkipDB then gives the segments
+// timed on the release of the closest duration, shifted earlier when it
+// differs by a few seconds. A segment whose release differs too much is
+// "out-of-range" and left out, as its times may not fit the version played.
+// SkipDB answers null for a type never submitted, and 0 to 0 for one it
+// knows the title lacks.
+func (s *Service) askSkipDB(ctx context.Context, base string, title Title) ([]mark, error) {
+	if title.IMDb == "" {
+		return nil, nil
+	}
+	query := url.Values{"imdb_id": {title.IMDb}}
+	if !title.movie() {
+		query.Set("season", strconv.Itoa(title.Season))
+		query.Set("episode", strconv.Itoa(title.Episode))
+	}
+	if seconds := math.Round(title.Runtime.Seconds()); seconds > 0 {
+		query.Set("duration", strconv.FormatFloat(seconds, 'f', 0, 64))
+	}
+	var body struct {
+		Segments map[string]*skipDBSegment `json:"segments"`
+	}
+	if found, err := s.get(ctx, base+"/api/segments?"+query.Encode(), "", &body); err != nil || !found {
+		return nil, err
+	}
+	var marks []mark
+	for key, sg := range body.Segments {
+		kind, ok := skipDBTypes[key]
+		if !ok || sg == nil || sg.Match == "out-of-range" {
+			continue
+		}
+		start := int64(math.Round(sg.StartMS))
+		if sg.EndMS == nil {
+			if (kind == Outro || kind == Preview) && start > 0 {
+				marks = append(marks, mark{Type: kind, StartMS: start})
+			}
+			continue
+		}
+		if end := int64(math.Round(*sg.EndMS)); start >= 0 && end > start {
+			marks = append(marks, mark{Type: kind, StartMS: start, EndMS: &end})
+		}
+	}
+	return marks, nil
 }
 
 // CheckKey asks database, TheIntroDB or PublicMetaDB, one question with

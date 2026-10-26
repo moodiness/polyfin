@@ -552,7 +552,7 @@ const settings: typeof en = {
       'Os aplicativos oferecem pular aberturas, recapitulações e créditos, encontrados em bancos de dados da comunidade. Quando desativado, os aplicativos não mostram botões de pular e os bancos de dados não são consultados.',
     publicMetaDbKey: 'Chave do PublicMetaDB',
     publicMetaDbKeyHelp:
-      'Opcional. Uma chave da API do PublicMetaDB adiciona uma terceira fonte de marcadores para pular.',
+      'Opcional. Uma chave da API do PublicMetaDB adiciona o PublicMetaDB como fonte de marcadores para pular.',
     theIntroDbKey: 'Chave do TheIntroDB (opcional)',
     theIntroDbKeyHelp:
       'Aumenta o limite diário do TheIntroDB e inclui seus próprios envios. A leitura funciona sem ela.',

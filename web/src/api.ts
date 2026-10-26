@@ -196,7 +196,7 @@ export type QuickConnectRequest = {
 }
 
 /** The skip marker sources, by the names the server gives them. */
-export type SegmentSource = 'theintrodb' | 'introdb' | 'publicmetadb'
+export type SegmentSource = 'theintrodb' | 'introdb' | 'publicmetadb' | 'skipdb'
 
 /** What the server accepts for a setting, and its default. */
 export type SettingBounds = {
@@ -278,7 +278,7 @@ export type Settings = {
   channelLimit: number
   /** Whether apps get skip intro, recap and credits buttons, from the segment databases. */
   skipButtons: boolean
-  /** Whether a PublicMetaDB key is saved; it adds a third source of skip markers. */
+  /** Whether a PublicMetaDB key is saved; it adds PublicMetaDB as a source of skip markers. */
   publicMetaDbKeySet: boolean
   /** Sent only to change the key: a new key, checked before it is saved, or "" to remove it. */
   publicMetaDbKey?: string
@@ -286,7 +286,7 @@ export type Settings = {
   theIntroDbKeySet: boolean
   /** Sent only to change the key: a new key, checked before it is saved, or "" to remove it. */
   theIntroDbKey?: string
-  /** The order of preference of the skip marker sources, all three. */
+  /** The order of preference of the skip marker sources, all four. */
   segmentOrder: SegmentSource[]
   /** The skip marker sources never asked, wherever they are in the order. */
   segmentSourcesOff: SegmentSource[]

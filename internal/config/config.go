@@ -317,7 +317,7 @@ func PrepareFolder(dir string, create bool) error {
 
 // segmentDatabases are the segment databases POLYFIN_SEGMENTS names, in the
 // default order of preference.
-var segmentDatabases = []string{"theintrodb", "introdb", "publicmetadb"}
+var segmentDatabases = []string{"theintrodb", "introdb", "publicmetadb", "skipdb"}
 
 // parseSegments reads the segment databases, in order of preference: nil
 // when text is empty, an empty list for none.
@@ -333,7 +333,7 @@ func parseSegments(text string) ([]string, error) {
 	for name := range strings.SplitSeq(text, ",") {
 		name = strings.TrimSpace(name)
 		if !slices.Contains(segmentDatabases, name) {
-			return nil, fmt.Errorf("%q is not a list of theintrodb, introdb and publicmetadb, or none", text)
+			return nil, fmt.Errorf("%q is not a list of theintrodb, introdb, publicmetadb and skipdb, or none", text)
 		}
 		if !slices.Contains(names, name) {
 			names = append(names, name)

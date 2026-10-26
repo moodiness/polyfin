@@ -101,7 +101,7 @@ export const extras: Extra[] = [
   },
   {
     name: 'Skip buttons',
-    text: 'Intros, recaps, credits and previews to skip, from three community databases.',
+    text: 'Intros, recaps, credits and previews to skip, from four community databases.',
     link: '/docs/skip-segments',
     icon: icons.skipForward,
   },

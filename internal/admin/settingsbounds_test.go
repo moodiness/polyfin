@@ -47,7 +47,7 @@ func TestSettingsAnswerTheirBounds(t *testing.T) {
 	if got := entry("prepareAhead"); !reflect.DeepEqual(got, map[string]any{"default": true}) {
 		t.Errorf("prepareAhead: %v", got)
 	}
-	if got := entry("segmentOrder"); !reflect.DeepEqual(got["default"], []any{"theintrodb", "introdb", "publicmetadb"}) {
+	if got := entry("segmentOrder"); !reflect.DeepEqual(got["default"], []any{"theintrodb", "introdb", "publicmetadb", "skipdb"}) {
 		t.Errorf("segmentOrder: %v", got)
 	}
 	if got := entry("customCss"); got["max"] != float64(accounts.MaxCustomCodeBytes) {

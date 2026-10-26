@@ -729,7 +729,7 @@ func ValidSegmentKey(key string) bool {
 
 // SegmentSources are the segment databases, by the names POLYFIN_SEGMENTS
 // gives them, in the default order of preference.
-var SegmentSources = []string{"theintrodb", "introdb", "publicmetadb"}
+var SegmentSources = []string{"theintrodb", "introdb", "publicmetadb", "skipdb"}
 
 // ErrInvalidSegmentOrder reports a Settings.SegmentOrder that is not every
 // one of SegmentSources once, and ErrInvalidSegmentSourcesOff a

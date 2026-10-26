@@ -559,7 +559,7 @@ const settings: typeof en = {
       'Les applications proposent de passer les intros, les résumés et les génériques, repérés dans des bases de données communautaires. Si cette option est désactivée, les applications n’affichent pas ces boutons et ces bases ne sont pas consultées.',
     publicMetaDbKey: 'Clé PublicMetaDB',
     publicMetaDbKeyHelp:
-      'Facultatif. Une clé d’API PublicMetaDB ajoute une troisième source de repères pour passer l’intro et le générique.',
+      'Facultatif. Une clé d’API PublicMetaDB ajoute PublicMetaDB aux sources de repères pour passer l’intro et le générique.',
     theIntroDbKey: 'Clé TheIntroDB (facultative)',
     theIntroDbKeyHelp:
       'Relève la limite quotidienne de TheIntroDB et inclut vos propres contributions. La lecture fonctionne sans elle.',

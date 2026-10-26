@@ -242,16 +242,16 @@ func TestEnvironmentIsAdoptedOnce(t *testing.T) {
 	}
 	// The databases POLYFIN_SEGMENTS names come first, in its order, the
 	// others after them, turned off.
-	adopted := []string{"introdb", "theintrodb", "publicmetadb"}
-	check("the first start", store, method, adopted, []string{"publicmetadb"})
+	adopted := []string{"introdb", "theintrodb", "publicmetadb", "skipdb"}
+	check("the first start", store, method, adopted, []string{"publicmetadb", "skipdb"})
 	// A start with other values changes nothing.
 	if err := store.AdoptEnvironment(ctx, Environment{Hardware: "none", Segments: []string{"publicmetadb"}}); err != nil {
 		t.Fatal(err)
 	}
-	check("a start with other values", store, method, adopted, []string{"publicmetadb"})
+	check("a start with other values", store, method, adopted, []string{"publicmetadb", "skipdb"})
 	// An administrator's choice stays chosen.
 	chosen := store.Settings()
-	chosen.HardwareAcceleration, chosen.SegmentOrder, chosen.SegmentSourcesOff = "none", []string{"publicmetadb", "theintrodb", "introdb"}, []string{}
+	chosen.HardwareAcceleration, chosen.SegmentOrder, chosen.SegmentSourcesOff = "none", []string{"publicmetadb", "skipdb", "theintrodb", "introdb"}, []string{}
 	if _, err := store.UpdateSettings(ctx, chosen); err != nil {
 		t.Fatal(err)
 	}
@@ -277,14 +277,14 @@ func TestEnvironmentFillsOnlyWhatFollowedIt(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
 	if _, err := store.db.Exec(ctx, "UPDATE settings SET hardware_acceleration = 'none', "+
-		"segment_order = '{publicmetadb,introdb,theintrodb}', environment_pending = '{segment_sources_off}'"); err != nil {
+		"segment_order = '{publicmetadb,introdb,theintrodb,skipdb}', environment_pending = '{segment_sources_off}'"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.AdoptEnvironment(ctx, Environment{Hardware: HardwareAccelerations[1], Segments: []string{}}); err != nil {
 		t.Fatal(err)
 	}
 	got := store.Settings()
-	if got.HardwareAcceleration != "none" || !slices.Equal(got.SegmentOrder, []string{"publicmetadb", "introdb", "theintrodb"}) ||
+	if got.HardwareAcceleration != "none" || !slices.Equal(got.SegmentOrder, []string{"publicmetadb", "introdb", "theintrodb", "skipdb"}) ||
 		!slices.Equal(got.SegmentSourcesOff, SegmentSources) {
 		t.Errorf("adopted: %+v", got)
 	}
@@ -299,8 +299,8 @@ func TestSegmentSourcesStayValid(t *testing.T) {
 		err        error
 	}{
 		{"no order", []string{}, []string{}, ErrInvalidSegmentOrder},
-		{"a database missing", []string{"theintrodb", "introdb"}, []string{}, ErrInvalidSegmentOrder},
-		{"a database twice", []string{"theintrodb", "introdb", "introdb"}, []string{}, ErrInvalidSegmentOrder},
+		{"a database missing", []string{"theintrodb", "introdb", "publicmetadb"}, []string{}, ErrInvalidSegmentOrder},
+		{"a database twice", []string{"theintrodb", "introdb", "publicmetadb", "introdb"}, []string{}, ErrInvalidSegmentOrder},
 		{"an unknown database turned off", SegmentSources, []string{"other"}, ErrInvalidSegmentSourcesOff},
 		{"a database turned off twice", SegmentSources, []string{"introdb", "introdb"}, ErrInvalidSegmentSourcesOff},
 	} {
@@ -313,9 +313,9 @@ func TestSegmentSourcesStayValid(t *testing.T) {
 	// The databases turned off are kept in their usual order, and none is
 	// an empty list.
 	changed := store.Settings()
-	changed.SegmentOrder, changed.SegmentSourcesOff = []string{"publicmetadb", "introdb", "theintrodb"}, []string{"publicmetadb", "theintrodb"}
+	changed.SegmentOrder, changed.SegmentSourcesOff = []string{"publicmetadb", "skipdb", "introdb", "theintrodb"}, []string{"skipdb", "publicmetadb", "theintrodb"}
 	saved, err := store.UpdateSettings(ctx, changed)
-	if err != nil || !slices.Equal(saved.SegmentSourcesOff, []string{"theintrodb", "publicmetadb"}) {
+	if err != nil || !slices.Equal(saved.SegmentSourcesOff, []string{"theintrodb", "publicmetadb", "skipdb"}) {
 		t.Errorf("saved: %v %v", saved.SegmentSourcesOff, err)
 	}
 	changed.SegmentSourcesOff = nil

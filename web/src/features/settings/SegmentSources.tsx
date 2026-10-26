@@ -9,6 +9,7 @@ const sourceNames: Record<SegmentSource, string> = {
   theintrodb: 'TheIntroDB',
   introdb: 'IntroDB',
   publicmetadb: 'PublicMetaDB',
+  skipdb: 'SkipDB',
 }
 
 /**

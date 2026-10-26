@@ -35,7 +35,7 @@ func TestSettingsSegmentSources(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 10)
 	administrator := api.signedIn("administrator", true)
-	byDefault := []string{"theintrodb", "introdb", "publicmetadb"}
+	byDefault := []string{"theintrodb", "introdb", "publicmetadb", "skipdb"}
 	sources := func(body map[string]any) ([]string, []string) {
 		return names(body["segmentOrder"]), names(body["segmentSourcesOff"])
 	}
@@ -48,7 +48,7 @@ func TestSettingsSegmentSources(t *testing.T) {
 	}
 
 	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en"}
-	saved, off := []string{"publicmetadb", "theintrodb", "introdb"}, []string{"introdb"}
+	saved, off := []string{"skipdb", "publicmetadb", "theintrodb", "introdb"}, []string{"introdb"}
 	set := maps.Clone(base)
 	set["segmentOrder"], set["segmentSourcesOff"] = saved, off
 	if status, body, _ := administrator.call(http.MethodPut, "/settings", set); status != http.StatusOK {
@@ -73,10 +73,11 @@ func TestSettingsSegmentSources(t *testing.T) {
 	for _, refused := range [][]string{
 		{"theintrodb"},
 		{"theintrodb", "introdb"},
-		{"theintrodb", "introdb", "introdb"},
+		{"theintrodb", "introdb", "publicmetadb"},
 		{"theintrodb", "introdb", "publicmetadb", "introdb"},
-		{"theintrodb", "introdb", "other"},
-		{"TheIntroDB", "introdb", "publicmetadb"},
+		{"theintrodb", "introdb", "publicmetadb", "skipdb", "introdb"},
+		{"theintrodb", "introdb", "publicmetadb", "other"},
+		{"TheIntroDB", "introdb", "publicmetadb", "skipdb"},
 	} {
 		body := maps.Clone(base)
 		body["segmentOrder"] = refused
@@ -84,7 +85,7 @@ func TestSettingsSegmentSources(t *testing.T) {
 			t.Errorf("%v: %d %v", refused, status, answer)
 		}
 	}
-	for _, refused := range [][]string{{"other"}, {"introdb", "introdb"}} {
+	for _, refused := range [][]string{{"other"}, {"introdb", "introdb"}, {"skipdb", "skipdb"}} {
 		body := maps.Clone(base)
 		body["segmentSourcesOff"] = refused
 		if status, answer, _ := administrator.call(http.MethodPut, "/settings", body); status != http.StatusBadRequest || answer["error"] != "invalid_segment_sources_off" {

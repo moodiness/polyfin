@@ -31,6 +31,7 @@ const (
 	theIntroDBPath   = "/media"
 	introDBPath      = "/segments"
 	publicMetaDBPath = "/api/external/skips"
+	skipDBPath       = "/api/segments"
 )
 
 // databases stands in for TheIntroDB (/media), IntroDB (/segments) and
@@ -776,5 +777,135 @@ func TestTheIntroDBKeyIsCheckedBySubmittingNothing(t *testing.T) {
 	theIntroDB.Close()
 	if err := s.CheckKey(t.Context(), TheIntroDB, "good"); err == nil || errors.Is(err, ErrKeyRefused) {
 		t.Errorf("unreachable: %v", err)
+	}
+}
+
+// skipDBEpisode is SkipDB's answer for the episode: an intro matched to the
+// duration asked with, credits shifted to it, a recap never submitted, a
+// preview timed on a release too far from it, and a type Polyfin does not
+// know.
+const skipDBEpisode = `{"imdb_id":"tt0903747","season":1,"episode":2,"segments":{
+	"intro":{"start_ms":61000,"end_ms":91000,"adjusted":false,"offset_ms":0,"match":"exact","confidence":0.93},
+	"recap":null,
+	"outro":{"start_ms":3420000.4,"end_ms":3540000,"adjusted":true,"offset_ms":-3000,"match":"shifted","confidence":0.8},
+	"preview":{"start_ms":3550000,"end_ms":3580000,"adjusted":false,"offset_ms":-680000,"match":"out-of-range","confidence":0.6},
+	"post_credits":{"start_ms":3590000,"end_ms":3595000,"match":"exact","confidence":1}},
+	"intro_length_estimate_ms":30000}`
+
+func TestSkipDBGivesItsSegmentsButThoseOutOfRange(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(skipDBPath, http.StatusOK, skipDBEpisode)
+	s, _ := service(t, d, SkipDB)
+	want := []Segment{
+		{Type: Intro, Start: at(61), End: at(91)},
+		{Type: Outro, Start: at(3420), End: at(3540)},
+	}
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+	// An episode is asked by its series' IMDb identifier, its numbers and
+	// the runtime in seconds, without a key.
+	if q := d.last(skipDBPath); q.Get("imdb_id") != "tt0903747" || q.Get("season") != "1" || q.Get("episode") != "2" ||
+		q.Get("duration") != "3600" || q.Has("tmdb_id") || len(q) != 4 {
+		t.Errorf("SkipDB was asked %v", q)
+	}
+	if auth := d.authorizations(skipDBPath); !slices.Equal(auth, []string{""}) {
+		t.Errorf("SkipDB was asked with %q", auth)
+	}
+
+	// A movie is asked without numbers, and without a duration when its
+	// runtime is unknown. Credits without an end last until the end, which
+	// is unknown here; a type confirmed missing (0 to 0) gives nothing.
+	d.reply(skipDBPath, http.StatusOK, `{"imdb_id":"tt0111161","season":null,"episode":null,"segments":{
+		"intro":{"start_ms":0,"end_ms":0,"match":"agnostic","confidence":1},"recap":null,
+		"outro":{"start_ms":6000000,"end_ms":null,"match":"agnostic","confidence":1},
+		"preview":{"start_ms":100000,"end_ms":160000,"match":"agnostic","confidence":0.5}}}`)
+	movie := Title{Item: accounts.ID{2}, IMDb: "tt0111161"}
+	if got := s.Segments(t.Context(), movie); !slices.Equal(got, []Segment{{Type: Preview, Start: at(100), End: at(160)}}) {
+		t.Errorf("movie: %+v", got)
+	}
+	if q := d.last(skipDBPath); q.Get("imdb_id") != "tt0111161" || len(q) != 1 {
+		t.Errorf("SkipDB was asked %v", q)
+	}
+	movie.Item, movie.Runtime = accounts.ID{3}, 6100*time.Second
+	if got := s.Segments(t.Context(), movie); !slices.Equal(got, []Segment{
+		{Type: Preview, Start: at(100), End: at(160)}, {Type: Outro, Start: at(6000), End: at(6100)},
+	}) {
+		t.Errorf("movie with its runtime: %+v", got)
+	}
+
+	// A title known by its TMDB identifier only is not asked about.
+	before := len(d.authorizations(skipDBPath))
+	if got := s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 1, Episode: 2}); got != nil {
+		t.Errorf("TMDB only: %+v", got)
+	}
+	if asked := len(d.authorizations(skipDBPath)); asked != before {
+		t.Errorf("TMDB only: SkipDB asked %d times", asked-before)
+	}
+}
+
+func TestSkipDBTakesItsPlaceInTheOrder(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
+	d.reply(skipDBPath, http.StatusOK, skipDBEpisode)
+	s, _ := service(t, d, TheIntroDB, IntroDB, PublicMetaDB, SkipDB)
+	theIntroDB := Segment{Type: Intro, Start: 0, End: at(30.5)}
+	skipDB := Segment{Type: Intro, Start: at(61), End: at(91)}
+	credits := Segment{Type: Outro, Start: at(3420), End: at(3540)}
+	// Last, SkipDB fills the gaps: the credits TheIntroDB lacks.
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{theIntroDB, credits}) {
+		t.Errorf("last: %+v", got)
+	}
+	// First, its intro wins too.
+	useSettings(s, accounts.Settings{SegmentOrder: []string{SkipDB, TheIntroDB, IntroDB, PublicMetaDB}})
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{skipDB, credits}) {
+		t.Errorf("first: %+v", got)
+	}
+	// Turned off, it gives nothing, and a title is not asked about.
+	useSettings(s, accounts.Settings{SegmentOrder: []string{SkipDB, TheIntroDB, IntroDB, PublicMetaDB}, SegmentSourcesOff: []string{SkipDB}})
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{theIntroDB}) {
+		t.Errorf("off: %+v", got)
+	}
+	s.Segments(t.Context(), Title{Item: accounts.ID{5}, IMDb: "tt0903747", Season: 1, Episode: 3})
+	if asked := len(d.authorizations(skipDBPath)); asked != 1 {
+		t.Errorf("SkipDB asked %d times", asked)
+	}
+}
+
+func TestSkipDBRateLimitIsWaitedOut(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
+	d.limit(skipDBPath, "60")
+	s, c := service(t, d, SkipDB, TheIntroDB)
+	other := Title{Item: accounts.ID{6}, IMDb: "tt0903747", Season: 1, Episode: 3}
+	// Limited, SkipDB leaves TheIntroDB's intro, and is asked about no
+	// other title until Retry-After ends; TheIntroDB is not held back.
+	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{{Type: Intro, Start: 0, End: at(30.5)}}) {
+		t.Errorf("limited: %+v", got)
+	}
+	s.Segments(t.Context(), other)
+	if asked, a := len(d.authorizations(skipDBPath)), len(d.authorizations(theIntroDBPath)); asked != 1 || a != 2 {
+		t.Errorf("during the rate limit: SkipDB asked %d times, TheIntroDB %d", asked, a)
+	}
+	// After it, the title not asked yet is; the one refused waits the hour
+	// after a failure.
+	d.reply(skipDBPath, http.StatusOK, skipDBEpisode)
+	c.advance(2 * time.Minute)
+	if got := s.Segments(t.Context(), other); len(got) != 2 || got[0] != (Segment{Type: Intro, Start: at(61), End: at(91)}) {
+		t.Errorf("after the rate limit: %+v", got)
+	}
+	s.Segments(t.Context(), episode)
+	if asked := len(d.authorizations(skipDBPath)); asked != 2 {
+		t.Errorf("after the rate limit: asked %d times", asked)
+	}
+	c.advance(time.Hour)
+	if got := s.Segments(t.Context(), episode); len(got) != 2 || len(d.authorizations(skipDBPath)) != 3 {
+		t.Errorf("an hour later: %+v, asked %d times", got, len(d.authorizations(skipDBPath)))
+	}
+	// A failure later keeps what it found before.
+	d.reply(skipDBPath, http.StatusServiceUnavailable, `{"error":"down"}`)
+	c.advance(31 * 24 * time.Hour)
+	if got := s.Segments(t.Context(), episode); len(got) != 2 || len(d.authorizations(skipDBPath)) != 4 {
+		t.Errorf("after a failure: %+v, asked %d times", got, len(d.authorizations(skipDBPath)))
 	}
 }

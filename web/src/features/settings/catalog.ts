@@ -491,7 +491,7 @@ export const settingEntries: readonly SettingEntry[] = [
     anchor: 'segment-order',
     label: (t) => s(t).segmentSources.label,
     help: (t) => s(t).segmentSources.help,
-    keywords: ['TheIntroDB', 'IntroDB', 'PublicMetaDB', 'POLYFIN_SEGMENTS'],
+    keywords: ['TheIntroDB', 'IntroDB', 'PublicMetaDB', 'SkipDB', 'POLYFIN_SEGMENTS'],
     codes: ['invalid_segment_order', 'invalid_segment_sources_off'],
   },
   {

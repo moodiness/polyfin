@@ -553,7 +553,7 @@ const settings: typeof en = {
       'Las aplicaciones ofrecen omitir introducciones, resúmenes y créditos, localizados en bases de datos comunitarias. Si se desactiva, las aplicaciones no muestran botones para omitir y no se consultan las bases de datos.',
     publicMetaDbKey: 'Clave de PublicMetaDB',
     publicMetaDbKeyHelp:
-      'Opcional. Una clave API de PublicMetaDB añade una tercera fuente de marcas para omitir.',
+      'Opcional. Una clave API de PublicMetaDB añade PublicMetaDB como fuente de marcas para omitir.',
     theIntroDbKey: 'Clave de TheIntroDB (opcional)',
     theIntroDbKeyHelp:
       'Aumenta el límite diario de TheIntroDB e incluye sus propias aportaciones. La lectura funciona sin ella.',

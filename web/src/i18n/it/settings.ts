@@ -560,7 +560,7 @@ const settings: typeof en = {
       'Le applicazioni propongono di saltare intro, riassunti e titoli di coda, individuati in database della community. Se disattivato, le applicazioni non mostrano pulsanti per saltare e i database non vengono interpellati.',
     publicMetaDbKey: 'Chiave PublicMetaDB',
     publicMetaDbKeyHelp:
-      'Facoltativa. Una chiave API PublicMetaDB aggiunge una terza origine di marcatori per saltare.',
+      'Facoltativa. Una chiave API PublicMetaDB aggiunge PublicMetaDB come origine di marcatori per saltare.',
     theIntroDbKey: 'Chiave TheIntroDB (facoltativa)',
     theIntroDbKeyHelp:
       'Aumenta il limite giornaliero di TheIntroDB e include i tuoi contributi. La lettura funziona anche senza.',

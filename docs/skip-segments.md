@@ -20,15 +20,16 @@ This page covers the buttons that let viewers skip intros, recaps, credits, prev
 - Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)), or when an intro or credits were found in the audio of an episode's local file (see [Intros and credits found in local episodes' audio](#intros-and-credits-found-in-local-episodes-audio)). The media source of a recording says it when commercial breaks were found in it (see [Commercials of recordings](#commercials-of-recordings)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
 - `/MediaSegments/{id}` answers Jellyfin's `MediaSegmentDto` list, in ticks, filtered by `includeSegmentTypes`, repeated or comma-separated. Apps choose what to do with each type; the server has no setting per type.
 
-## The three databases
+## The four databases
 
-The skip buttons come from three community databases: TheIntroDB, IntroDB and PublicMetaDB. Polyfin asks them about a title the first time an app asks for its segments.
+The skip buttons come from four community databases: TheIntroDB, IntroDB, PublicMetaDB and SkipDB. Polyfin asks them about a title the first time an app asks for its segments.
 
 For each kind of segment (intro, recap, credits, preview), the first database that has one gives it. The others fill the gaps.
 
 - PublicMetaDB also brings recap and preview markers, on episodes, along with intros and credits.
 - PublicMetaDB is asked only with an API key; see [PublicMetaDB key](#publicmetadb-key).
 - TheIntroDB answers without a key; see [TheIntroDB key](#theintrodb-key).
+- SkipDB answers without a key too, and also brings recaps and previews; see [SkipDB](#skipdb).
 
 ## Segments of each version
 
@@ -121,9 +122,11 @@ A Live TV recording is the channel's stream as it aired, commercials included (s
 
 ## Source order
 
-By default the databases are preferred in the order TheIntroDB, IntroDB, PublicMetaDB, all on. At the first start, `POLYFIN_SEGMENTS` gives the order and which are on; see [Configuration](configuration.md).
+By default the databases are preferred in the order TheIntroDB, IntroDB, PublicMetaDB, SkipDB, all on. At the first start, `POLYFIN_SEGMENTS` gives the order and which are on; see [Configuration](configuration.md).
 
-**Skip marker sources**, under **Settings › Content** below the skip buttons, lists the three databases with arrows to move them and a switch to turn each on or off. PublicMetaDB, on without a key, is marked as needing one.
+**Skip marker sources**, under **Settings › Content** below the skip buttons, lists the four databases with arrows to move them and a switch to turn each on or off. PublicMetaDB, on without a key, is marked as needing one.
+
+A server upgraded from a version without SkipDB gets it last in its order, turned on, unless every other database was turned off: it then stays off too.
 
 The order and the switches apply at once when saved, to the answers already kept too. A database turned off is never asked, wherever it is in the list.
 
@@ -168,6 +171,24 @@ TheIntroDB's answers ignore a key they do not know. So Polyfin checks the key be
 - It is not saved either when TheIntroDB cannot be asked, or answers otherwise.
 
 The key is kept secret, shown and stored like PublicMetaDB's, and applied at once. Should TheIntroDB refuse it later, Polyfin logs it once and keeps asking TheIntroDB without it until another key is saved.
+
+## SkipDB
+
+[SkipDB](https://skipdb.tv/) answers without a key. Polyfin only reads it, and has no setting for a key.
+
+### How SkipDB matches titles
+
+- SkipDB knows titles by their IMDb identifier only: a movie's, or a series' with the season and episode numbers. A title Polyfin knows only by another identifier, such as a TMDB one, is not asked about.
+- Polyfin sends the title's runtime, in seconds, when it knows it, as it does to TheIntroDB. For each kind of segment, SkipDB then gives the one timed on the release of the closest duration, moved earlier, never later, when the durations differ by a few seconds.
+- A segment SkipDB matched `out-of-range`, timed on a release whose duration differs too much, is left out: its times may not fit the version played. The next database in the order may give that kind instead.
+- Its intro, recap, outro and preview become Jellyfin's `Intro`, `Recap`, `Outro` and `Preview` segments.
+- SkipDB allows 120 requests a minute. Beyond, it answers 429 with a `Retry-After`, which Polyfin waits out (see [Caching](#caching)).
+
+### SkipDB's data license
+
+The skip segments from SkipDB are © SkipDB and its contributors, under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/) with a Service Provider Reciprocity term (see [SkipDB's licenses](https://skipdb.tv/license)). Polyfin credits them here, as the license asks.
+
+The reciprocity term covers services that build their own database of skip segments from SkipDB's data. Reading SkipDB to show skip buttons, as Polyfin does, is not affected.
 
 ## Caching
 

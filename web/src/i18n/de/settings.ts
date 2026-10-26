@@ -555,7 +555,7 @@ const settings: typeof en = {
       'Apps bieten an, Intros, Rückblicke und Abspanne zu überspringen, die in Community-Datenbanken gefunden werden. Wenn aus, zeigen Apps keine Überspringen-Schaltflächen und die Datenbanken werden nicht abgefragt.',
     publicMetaDbKey: 'PublicMetaDB-Schlüssel',
     publicMetaDbKeyHelp:
-      'Optional. Ein PublicMetaDB-API-Schlüssel fügt eine dritte Quelle für Sprungmarken hinzu.',
+      'Optional. Ein PublicMetaDB-API-Schlüssel fügt PublicMetaDB als Quelle für Sprungmarken hinzu.',
     theIntroDbKey: 'TheIntroDB-Schlüssel (optional)',
     theIntroDbKeyHelp:
       'Erhöht das tägliche Limit von TheIntroDB und bezieht deine eigenen Einreichungen ein. Lesen funktioniert auch ohne.',

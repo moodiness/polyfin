@@ -545,7 +545,8 @@ const settings = {
     skipButtonsHelp:
       'Apps offer to skip intros, recaps and credits, found in community databases. When off, apps show no skip buttons and the databases are not asked.',
     publicMetaDbKey: 'PublicMetaDB key',
-    publicMetaDbKeyHelp: 'Optional. A PublicMetaDB API key adds a third source of skip markers.',
+    publicMetaDbKeyHelp:
+      'Optional. A PublicMetaDB API key adds PublicMetaDB as a source of skip markers.',
     theIntroDbKey: 'TheIntroDB key (optional)',
     theIntroDbKeyHelp:
       'Raises TheIntroDB’s daily limit and includes your own submissions. Reading works without it.',

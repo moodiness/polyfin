@@ -105,8 +105,9 @@ func TestTheOptionsMigrationMovesTheOldDefaults(t *testing.T) {
 		t.Errorf("users who may download: %v", names)
 	}
 	// The GPU and the order hold the defaults until the environment is
-	// copied in, which they wait for, with the databases turned off.
-	if got.hardware != "auto" || !slices.Equal(got.order, []string{"theintrodb", "introdb", "publicmetadb"}) || len(got.off) != 0 ||
+	// copied in, which they wait for, with the databases turned off. A
+	// later migration adds SkipDB.
+	if got.hardware != "auto" || !slices.Equal(got.order, []string{"theintrodb", "introdb", "publicmetadb", "skipdb"}) || len(got.off) != 0 ||
 		!slices.Equal(got.pending, append([]string{"hardware_acceleration", "segment_order", "segment_sources_off"}, laterOptions...)) {
 		t.Errorf("before the environment is copied: %+v", got)
 	}
@@ -146,7 +147,7 @@ func TestTheOptionsMigrationKeepsWhatWasChosen(t *testing.T) {
 	}
 	// Only the databases turned off are still to come from the
 	// environment, which alone chose them.
-	if got.hardware != "vaapi" || !slices.Equal(got.order, []string{"publicmetadb", "introdb", "theintrodb"}) ||
+	if got.hardware != "vaapi" || !slices.Equal(got.order, []string{"publicmetadb", "introdb", "theintrodb", "skipdb"}) ||
 		!slices.Equal(got.pending, append([]string{"segment_sources_off"}, laterOptions...)) {
 		t.Errorf("chosen GPU and order: %+v", got)
 	}

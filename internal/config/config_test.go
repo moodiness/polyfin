@@ -174,6 +174,7 @@ func TestSegmentDatabasesKeepTheOrderOfPreference(t *testing.T) {
 		" IntroDB , theintrodb ":            {"introdb", "theintrodb"},
 		"PublicMetaDB,introdb,publicmetadb": {"publicmetadb", "introdb"},
 		"introdb,introdb":                   {"introdb"},
+		"SkipDB,theintrodb":                 {"skipdb", "theintrodb"},
 	} {
 		cfg, err := Load(with(map[string]string{"POLYFIN_SEGMENTS": text}))
 		if err != nil || !slices.Equal(cfg.Environment.Segments, want) {
