@@ -89,10 +89,13 @@ var kinds = map[string]string{"Movie": "movie", "Series": "series", "Season": "s
 // artworkWidths are the widths of the image sizes the apps may ask.
 var artworkWidths = map[string]int{"small": 240, "medium": 480, "large": 960}
 
+// maxArtworkWidth is the widest artwork the apps may ask.
+const maxArtworkWidth = 7680
+
 // artworkWidth is the width the request asks for a slot (poster,
-// backdrop, logo, still), 0 for the original.
+// backdrop, logo, still, photo), 0 for the original.
 func artworkWidth(r *http.Request, slot string) int {
-	if width, err := strconv.Atoi(r.URL.Query().Get(slot + "_width")); err == nil && width > 0 && width <= 7680 {
+	if width, err := strconv.Atoi(r.URL.Query().Get(slot + "_width")); err == nil && width > 0 && width <= maxArtworkWidth {
 		return width
 	}
 	if width, ok := artworkWidths[r.URL.Query().Get("image_size")]; ok {
@@ -182,7 +185,7 @@ func catalogItemOf(r *http.Request, i item) catalogItem {
 		c.PosterIsStill = new(true)
 	}
 	if i.UserData != nil {
-		c.UserState = &userState{IsFavorite: i.UserData.IsFavorite, Played: i.UserData.Played}
+		c.UserState = &userState{IsFavorite: i.UserData.IsFavorite, Played: i.UserData.Played, InWatchlist: inWatchlist(r, i)}
 		if i.UserData.PlaybackPositionTicks > 0 {
 			c.PositionSeconds = float64(i.UserData.PlaybackPositionTicks) / 1e7
 		}
@@ -639,10 +642,13 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
 		validationProblem(w, "query.sort", "unknown_sort_field", "This server sorts by title, year, release_date, added_at, rating, runtime or random.")
 		return
 	}
-	// folder is a folder listed whole, when whole: a collection, or a row
-	// of Home or of a library's landing past its first titles.
+	// folder is a folder listed whole, when whole: a collection, the
+	// Watchlist view, or a row of Home or of a library's landing past its
+	// first titles.
 	folder, whole := "", false
-	switch cmp.Or(q.Get("source"), "query") {
+	source := cmp.Or(q.Get("source"), "query")
+	var person string
+	switch source {
 	case "section":
 		id := q.Get("section_id")
 		if row, ok := strings.CutPrefix(id, rowPrefix); ok {
@@ -661,13 +667,35 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
 		return
 	case "library_collection", "user_collection":
 		folder, whole = q.Get("collection_id"), true
-	case "favorites":
-	case "query":
+	case "watchlist":
+		folder, whole = watchlistView, true
+	case "history":
+		if types, ok = historyTypes[q.Get("type")]; !ok {
+			validationProblem(w, "query.type", "unsupported", "This server's history lists movies and episodes.")
+			return
+		}
+	case "person":
+		if person, ok = s.personID(w, r, q.Get("person_id")); !ok {
+			return
+		}
+	case "favorites", "query":
 	default:
-		validationProblem(w, "query.source", "unsupported", "This server lists libraries, sections, collections, favorites and searches.")
+		validationProblem(w, "query.source", "unsupported",
+			"This server lists libraries, sections, collections, favorites, the watchlist, the history, people's titles and searches.")
 		return
 	}
 	query := url.Values{"Fields": {listFields}, "IncludeItemTypes": {types}}
+	switch source {
+	case "favorites":
+		query.Set("Filters", "IsFavorite")
+		query.Set("Recursive", "true")
+	case "history":
+		query = historyQuery(types)
+		query.Set("Fields", listFields)
+	case "person":
+		query.Set("PersonIds", person)
+		query.Set("Recursive", "true")
+	}
 	if order != "" {
 		query.Set("SortBy", order)
 		query.Set("SortOrder", "Ascending")
@@ -675,11 +703,7 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
 			query.Set("SortOrder", "Descending")
 		}
 	}
-	favorites := q.Get("source") == "favorites"
-	if favorites {
-		query.Set("Filters", "IsFavorite")
-		query.Set("Recursive", "true")
-	}
+	favorites := source == "favorites"
 	term := strings.TrimSpace(cmp.Or(q.Get("q"), q.Get("name_prefix")))
 	if term != "" {
 		query.Set("SearchTerm", term)
@@ -698,7 +722,7 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
 			return
 		}
 		query.Set("ParentId", folder)
-	case view.Id != "":
+	case view.Id != "" && (source == "query" || favorites):
 		// A library's titles, which those it gathers keep to the search.
 		keep := func(i item) bool {
 			return (term == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(term))) &&
@@ -757,13 +781,16 @@ func pageOf(all []catalogItem, start, limit, total int) catalogPage {
 }
 
 // searchCapabilities tells the apps searches are available, through the
-// catalog's q.
+// catalog's q, and people searches, among the people credited in titles
+// the user may see (people_media_scope: the Apple app searches people only
+// then).
 func (s *Server) searchCapabilities(w http.ResponseWriter, _ *http.Request, _ viewer) {
 	writeJSON(w, http.StatusOK, struct {
-		Allowed  bool   `json:"allowed"`
-		State    string `json:"state"`
-		Revision string `json:"revision"`
-	}{true, "available", "polyfin-1"})
+		Allowed          bool   `json:"allowed"`
+		State            string `json:"state"`
+		Revision         string `json:"revision"`
+		PeopleMediaScope bool   `json:"people_media_scope"`
+	}{true, "available", "polyfin-1", true})
 }
 
 // itemOf reads an item's description, answering the request when the
@@ -906,12 +933,19 @@ func (s *Server) catalogItem(w http.ResponseWriter, r *http.Request, v viewer) {
 	if len(i.Taglines) > 0 {
 		detail.Tagline = i.Taglines[0]
 	}
+	// People are numbered, as the apps open their pages.
+	numbers, err := s.personNumbers(r, i.People)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
 	for _, p := range i.People {
 		photo := artworkURL(p.Id, "Primary", p.PrimaryImageTag, artworkWidth(r, "photo"))
+		number := personNumber(numbers, p)
 		if p.Type == "Actor" || p.Type == "GuestStar" {
-			detail.Cast = append(detail.Cast, castCredit{Name: p.Name, Character: p.Role, Order: len(detail.Cast), PersonID: p.Id, PhotoURL: photo})
+			detail.Cast = append(detail.Cast, castCredit{Name: p.Name, Character: p.Role, Order: len(detail.Cast), PersonID: number, PhotoURL: photo})
 		} else {
-			detail.Crew = append(detail.Crew, crewCredit{Name: p.Name, Job: p.Type, PersonID: p.Id, PhotoURL: photo})
+			detail.Crew = append(detail.Crew, crewCredit{Name: p.Name, Job: p.Type, PersonID: number, PhotoURL: photo})
 		}
 	}
 	if i.Type == "Series" {

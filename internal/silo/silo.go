@@ -68,6 +68,7 @@ type Server struct {
 	mux      *http.ServeMux
 	numbers  *numbers
 	sessions *sessions
+	shuffles *shuffles
 	unknown  *unknownOperations
 }
 
@@ -77,12 +78,17 @@ func New(options Options) *Server {
 		options.now = time.Now
 	}
 	s := &Server{options: options, mux: http.NewServeMux(), numbers: newNumbers(options.DB), sessions: newSessions(),
-		unknown: newUnknownOperations(options.Logger, options.now)}
+		shuffles: newShuffles(), unknown: newUnknownOperations(options.Logger, options.now)}
 	s.accountRoutes()
 	s.browseRoutes()
 	s.libraryRoutes()
 	s.playbackRoutes()
 	s.collectionRoutes()
+	s.personalRoutes()
+	s.peopleRoutes()
+	s.discoverRoutes()
+	s.probeRoutes()
+	s.shuffleRoutes()
 	s.mux.HandleFunc("/api/v2/", func(w http.ResponseWriter, r *http.Request) {
 		s.unknown.report(r)
 		problem(w, http.StatusNotFound, "not_found", "This operation does not exist on this server.")
@@ -126,7 +132,7 @@ func (s *Server) signedIn(next func(http.ResponseWriter, *http.Request, viewer))
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, ok := s.session(w, r, true)
 		if ok {
-			next(w, r, v)
+			next(w, s.withWatchlist(r, v), v)
 		}
 	}
 }

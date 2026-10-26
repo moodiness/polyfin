@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -117,6 +118,30 @@ func appsAccept(path string, data []byte) error {
 		return silotest.CheckCollectionTab(data, segments[1])
 	case target.Path == "/api/v2/playback/capabilities":
 		return silotest.CheckCapabilities(data)
+	case target.Path == "/api/v2/favorites", target.Path == "/api/v2/watchlist":
+		return silotest.CheckPersonalList(data)
+	case len(segments) == 2 && (segments[0] == "favorites" || segments[0] == "watchlist"):
+		return silotest.CheckMembershipEntry(data, segments[1])
+	case len(segments) == 3 && segments[0] == "catalog" && segments[1] == "people":
+		return silotest.CheckPerson(data, segments[2])
+	case len(segments) == 3 && segments[0] == "catalog" && segments[1] == "items":
+		return silotest.CheckItemDetail(data, segments[2])
+	case len(segments) == 3 && segments[0] == "recommendations" && segments[1] == "similar":
+		limit, err := strconv.Atoi(cmp.Or(target.Query().Get("limit"), "50"))
+		if err != nil {
+			return err
+		}
+		return silotest.CheckCards(data, limit)
+	case target.Path == "/api/v2/recommendations/discover":
+		return silotest.CheckDiscover(data)
+	case target.Path == "/api/v2/calendar":
+		return silotest.CheckCalendar(data)
+	case target.Path == "/api/v2/images/capabilities":
+		return silotest.CheckImageCapabilities(data)
+	case (strings.HasSuffix(target.Path, "/capabilities") || strings.HasSuffix(target.Path, "/status")) &&
+		!slices.Contains([]string{"/api/v2/catalog/search/capabilities", "/api/v2/shuffles/capabilities",
+			"/api/v2/collections/capabilities"}, target.Path):
+		return silotest.CheckUnsupported(data, target.Path)
 	}
 	return nil
 }
