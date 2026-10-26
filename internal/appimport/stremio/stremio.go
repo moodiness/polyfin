@@ -13,6 +13,15 @@
 // for the connection to read the account again (see Reader.Reread) until
 // the user disconnects, when Polyfin signs out the session it opened.
 //
+// A supporter's account has profiles, up to six, each with its own
+// library and addons, which Stremio's apps read with a session of the
+// profile's own, opened with the account's key and the profile's PIN when
+// it has one. Polyfin reads each profile so, signing out each session it
+// opened; a profile with a PIN is read once the user gives it (see
+// Reader.Unlock). The PIN goes to Stremio only: Polyfin never keeps it,
+// and keeps, for a connection, the profile's session in its place. An
+// account without profiles is read whole, with its own key.
+//
 // The library holds, for each title, whether it was watched, the resume
 // point of the video played last, and whether it is in the user's library.
 // A series tells its episodes watched by their places in its list of
@@ -20,17 +29,19 @@
 // watched).
 //
 // The account API is not documented: Polyfin calls it as Stremio's own
-// apps do.
+// apps do, its profiles as Stremio's web app does.
 package stremio
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +71,8 @@ var (
 	ErrSignInRefused = errors.New("Stremio refuses this email and password")
 	// ErrKeyRefused reports an auth key Stremio refuses.
 	ErrKeyRefused = errors.New("Stremio refuses this auth key")
+	// ErrPinRefused reports a profile's PIN Stremio refuses.
+	ErrPinRefused = errors.New("Stremio refuses this PIN")
 	// ErrLinkPending reports a link code not approved yet.
 	ErrLinkPending = errors.New("the link code is not approved yet")
 	// ErrLinkExpired reports a link code asked for too long ago, or none
@@ -255,13 +268,15 @@ func (r *Reader) ReadKey(ctx context.Context, key string, keep bool) (appimport.
 	return r.read(ctx, key, false, keep, "")
 }
 
-// read reads the library and the addons of the account key signs in to,
-// and returns the account. When keep asks to stay connected, the account
-// holds the key, with the account's email, name when known; otherwise
-// Polyfin signs out when it obtained the key itself (owned).
+// read reads the account key signs in to, and returns it. When keep asks
+// to stay connected, the account holds the key, with the account's email,
+// name when known; so it does, while the account is held, when one of its
+// profiles asks for its PIN (see Unlock). Otherwise Polyfin signs out when
+// it obtained the key itself (owned).
 func (r *Reader) read(ctx context.Context, key string, owned, keep bool, name string) (appimport.Account, error) {
-	items, descriptors, err := r.fetch(ctx, key)
-	if owned && (!keep || err != nil) {
+	account, err := r.readAccount(ctx, key)
+	held := err == nil && (keep || slices.ContainsFunc(account.Profiles, func(p appimport.Profile) bool { return p.Locked }))
+	if owned && !held {
 		_ = r.signOut(context.Background(), key)
 	}
 	switch {
@@ -270,61 +285,311 @@ func (r *Reader) read(ctx context.Context, key string, owned, keep bool, name st
 	case err != nil:
 		return appimport.Account{}, err
 	}
-	account := r.account(ctx, items, descriptors)
-	if keep {
-		if name == "" {
-			name = r.email(ctx, key)
-		}
-		account.Name, account.SignIn = name, &appimport.SignIn{Secret: key, Owned: owned}
+	if name != "" {
+		account.Name = name
+	}
+	if held {
+		account.SignIn, account.StayConnected = &appimport.SignIn{Secret: key, Owned: owned}, keep
 	}
 	return account, nil
 }
 
-// email returns the email of the account key signs in to, empty when
-// Stremio does not tell it.
-func (r *Reader) email(ctx context.Context, key string) string {
-	var user struct {
-		Email string `json:"email"`
+// wholeAccount is the ID of the one profile of an account without
+// profiles, read with the account's session.
+const wholeAccount = "1"
+
+// readAccount reads the account key signs in to: its email, and its
+// profiles, each read with its own session but those that ask for their
+// PIN, which are listed locked; an account without profiles has one, the
+// whole account. It fails with errRefused when Stremio refuses key.
+func (r *Reader) readAccount(ctx context.Context, key string) (appimport.Account, error) {
+	u, err := r.user(ctx, key)
+	if err != nil {
+		return appimport.Account{}, err
 	}
-	if r.call(ctx, http.MethodPost, r.api+"/api/getUser", struct {
-		AuthKey string `json:"authKey"`
-	}{key}, &user) != nil {
-		return ""
+	account := appimport.Account{App: App, Name: strings.TrimSpace(u.Email)}
+	profiles := u.profiles()
+	if len(profiles) == 0 {
+		whole, err := r.readProfile(ctx, key)
+		if err != nil {
+			return appimport.Account{}, err
+		}
+		whole.ID = wholeAccount
+		account.Profiles = []appimport.Profile{whole}
+		return account, nil
 	}
-	return strings.TrimSpace(user.Email)
+	for _, p := range profiles {
+		if p.HasPin {
+			account.Profiles = append(account.Profiles, appimport.Profile{ID: p.ID, Name: p.Name, Locked: true})
+			continue
+		}
+		read, err := r.openProfile(ctx, key, p, "", false)
+		if errors.Is(err, errOpenRefused) {
+			// A profile without a PIN opens without one.
+			err = ErrUnexpected
+		}
+		if err != nil {
+			return appimport.Account{}, err
+		}
+		account.Profiles = append(account.Profiles, read)
+	}
+	return account, nil
 }
 
-// Reread reads again, for a connection, the account the auth key kept
-// signs in to, and returns it with the key, which Stremio does not renew.
-// It fails with appimport.ErrSignInRefused once Stremio refuses the key,
-// appimport.ErrAppUnreachable, or ErrUnexpected.
+// user is what Polyfin reads of the user getUser answers: the account's
+// email, and its profiles, which Stremio's supporters have.
+type user struct {
+	Email        string          `json:"email"`
+	PremiumPrefs json.RawMessage `json:"premiumPrefs"`
+}
+
+// profile is one of an account's profiles, as getUser lists them: the
+// master is the account's own.
+type profile struct {
+	ID       string `json:"_id"`
+	Name     string `json:"name"`
+	IsMaster bool   `json:"isMaster"`
+	HasPin   bool   `json:"hasPin"`
+}
+
+// profiles lists the account's profiles, in Stremio's order, those
+// without an ID left out; none for an account without profiles, or when
+// Stremio lists them in a way Polyfin does not read: the whole account is
+// read then.
+func (u user) profiles() []profile {
+	var prefs struct {
+		UserProfiles json.RawMessage `json:"userProfiles"`
+	}
+	if !present(u.PremiumPrefs) || json.Unmarshal(u.PremiumPrefs, &prefs) != nil || !present(prefs.UserProfiles) {
+		return nil
+	}
+	var listed []profile
+	if json.Unmarshal(prefs.UserProfiles, &listed) != nil {
+		// A map of the profiles, by their IDs.
+		var byID map[string]profile
+		if json.Unmarshal(prefs.UserProfiles, &byID) != nil {
+			return nil
+		}
+		for id, p := range byID {
+			if p.ID == "" {
+				p.ID = id
+			}
+			listed = append(listed, p)
+		}
+		slices.SortFunc(listed, func(a, b profile) int { return cmp.Compare(a.ID, b.ID) })
+	}
+	result := make([]profile, 0, len(listed))
+	for _, p := range listed {
+		p.ID, p.Name = strings.TrimSpace(p.ID), strings.TrimSpace(p.Name)
+		if p.ID != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// user reads the user key signs in to. It fails with errRefused when
+// Stremio refuses key.
+func (r *Reader) user(ctx context.Context, key string) (user, error) {
+	var u user
+	err := r.call(ctx, http.MethodPost, r.api+"/api/getUser", struct {
+		AuthKey string `json:"authKey"`
+	}{key}, &u)
+	return u, err
+}
+
+// errOpenRefused is a profile Stremio refused to open: with the PIN
+// given, or without one.
+var errOpenRefused = errors.New("Stremio refuses to open this profile")
+
+// openProfile reads the profile p of the account key signs in to: the
+// master without a PIN with key, as the account's own; any other with a
+// session of its own, opened with pin, empty for none, which is signed out
+// unless keep asks to stay connected, when the profile holds it. It fails
+// with errOpenRefused when Stremio refuses to open the profile.
+func (r *Reader) openProfile(ctx context.Context, key string, p profile, pin string, keep bool) (appimport.Profile, error) {
+	if p.IsMaster && !p.HasPin {
+		read, err := r.readProfile(ctx, key)
+		read.ID, read.Name = p.ID, p.Name
+		return read, err
+	}
+	session, err := r.authenticate(ctx, key, p.ID, pin)
+	if err != nil {
+		return appimport.Profile{}, err
+	}
+	read, err := r.readProfile(ctx, session)
+	if !keep || err != nil {
+		_ = r.signOut(context.Background(), session)
+	}
+	switch {
+	case errors.Is(err, errRefused):
+		// The session Stremio just opened.
+		return appimport.Profile{}, ErrUnexpected
+	case err != nil:
+		return appimport.Profile{}, err
+	}
+	read.ID, read.Name = p.ID, p.Name
+	if keep {
+		read.Session = session
+	}
+	return read, nil
+}
+
+// authenticate opens a session of the profile id of the account key signs
+// in to, with pin, empty for none, as Stremio's apps switch profiles, and
+// returns its auth key. It fails with errOpenRefused when Stremio refuses.
+// The PIN goes in the body, which errors never hold.
+func (r *Reader) authenticate(ctx context.Context, key, id, pin string) (string, error) {
+	var pinGiven *string
+	if pin != "" {
+		pinGiven = &pin
+	}
+	var opened struct {
+		AuthKey string `json:"authKey"`
+	}
+	err := r.call(ctx, http.MethodPost, r.api+"/api/premiumPrefs/authenticateProfile", struct {
+		Type      string  `json:"type"`
+		AuthKey   string  `json:"authKey"`
+		ProfileID string  `json:"profileId"`
+		Pin       *string `json:"pin"`
+	}{"AuthenticateProfile", key, id, pinGiven}, &opened)
+	switch {
+	case errors.Is(err, errRefused):
+		return "", errOpenRefused
+	case err != nil:
+		return "", err
+	case strings.TrimSpace(opened.AuthKey) == "":
+		return "", ErrUnexpected
+	}
+	return strings.TrimSpace(opened.AuthKey), nil
+}
+
+// readProfile reads what the session key reads: the library and the
+// addons of an account, or of one of its profiles. It fails with
+// errRefused when Stremio refuses key.
+func (r *Reader) readProfile(ctx context.Context, key string) (appimport.Profile, error) {
+	items, descriptors, err := r.fetch(ctx, key)
+	if err != nil {
+		return appimport.Profile{}, err
+	}
+	return r.profile(ctx, items, descriptors), nil
+}
+
+// Unlock opens, with pin, the profile id of the account signIn signs in
+// to, which asks for its PIN, and returns it read. The PIN goes to Stremio
+// only: it is never kept, nor logged. The session opened is signed out,
+// unless keep asks to stay connected: the profile holds it then, for the
+// connection to read the profile again without the PIN. It fails with
+// ErrPinRefused, ErrKeyRefused once Stremio refuses the account's key,
+// appimport.ErrUnknownProfile when the account no longer has the
+// profile, ErrUnreachable or ErrUnexpected.
+func (r *Reader) Unlock(ctx context.Context, signIn appimport.SignIn, id, pin string, keep bool) (appimport.Profile, error) {
+	if pin = strings.TrimSpace(pin); pin == "" {
+		return appimport.Profile{}, ErrPinRefused
+	}
+	u, err := r.user(ctx, signIn.Secret)
+	if errors.Is(err, errRefused) {
+		return appimport.Profile{}, ErrKeyRefused
+	}
+	if err != nil {
+		return appimport.Profile{}, err
+	}
+	profiles := u.profiles()
+	i := slices.IndexFunc(profiles, func(p profile) bool { return p.ID == id })
+	if i < 0 {
+		return appimport.Profile{}, appimport.ErrUnknownProfile
+	}
+	read, err := r.openProfile(ctx, signIn.Secret, profiles[i], pin, keep)
+	if errors.Is(err, errOpenRefused) {
+		return appimport.Profile{}, ErrPinRefused
+	}
+	return read, err
+}
+
+// Reread reads again, for a connection, the profile chosen of the account
+// the auth key kept signs in to, and returns the account with that
+// profile, and the key, which Stremio does not renew: the whole account
+// read with the key, or a profile read with the session kept of it, opened
+// with its PIN, or else a session opened without one, then signed out.
+// The account without the profile is returned when Stremio no longer
+// lists it. It fails with appimport.ErrSignInRefused once Stremio refuses
+// the key, appimport.ErrProfileLocked when the profile asks for a PIN
+// Polyfin does not have (one set since, or another, as Stremio refuses the
+// session kept), appimport.ErrAppUnreachable, or ErrUnexpected.
 func (r *Reader) Reread(ctx context.Context, signIn appimport.SignIn) (appimport.Account, appimport.SignIn, error) {
-	items, descriptors, err := r.fetch(ctx, signIn.Secret)
+	account, err := r.reread(ctx, signIn)
 	switch {
 	case errors.Is(err, errRefused):
 		return appimport.Account{}, signIn, appimport.ErrSignInRefused
+	case errors.Is(err, errOpenRefused):
+		return appimport.Account{}, signIn, appimport.ErrProfileLocked
 	case errors.Is(err, ErrUnreachable):
 		return appimport.Account{}, signIn, appimport.ErrAppUnreachable
 	case err != nil:
 		return appimport.Account{}, signIn, err
 	}
-	account := r.account(ctx, items, descriptors)
-	account.Name = r.email(ctx, signIn.Secret)
 	return account, signIn, nil
 }
 
-// SignOut ends the session of a connection's auth key when Polyfin
-// obtained it, by a link code or a password: a key the user pasted is
-// only forgotten, as signing it out would sign their own browser out.
-func (r *Reader) SignOut(ctx context.Context, signIn appimport.SignIn) error {
-	if signIn.Owned && signIn.Secret != "" {
-		return r.signOut(ctx, signIn.Secret)
+// reread reads the profile signIn chose, as Reread does. It fails with
+// errRefused when Stremio refuses the account's key, and errOpenRefused
+// when it refuses to open the profile.
+func (r *Reader) reread(ctx context.Context, signIn appimport.SignIn) (appimport.Account, error) {
+	u, err := r.user(ctx, signIn.Secret)
+	if err != nil {
+		return appimport.Account{}, err
 	}
-	return nil
+	account := appimport.Account{App: App, Name: strings.TrimSpace(u.Email)}
+	if signIn.Profile == wholeAccount {
+		whole, err := r.readProfile(ctx, signIn.Secret)
+		whole.ID = wholeAccount
+		account.Profiles = []appimport.Profile{whole}
+		return account, err
+	}
+	profiles := u.profiles()
+	i := slices.IndexFunc(profiles, func(p profile) bool { return p.ID == signIn.Profile })
+	if i < 0 {
+		return account, nil
+	}
+	p := profiles[i]
+	var read appimport.Profile
+	switch {
+	case signIn.Session != "":
+		read, err = r.readProfile(ctx, signIn.Session)
+		if errors.Is(err, errRefused) {
+			return appimport.Account{}, errOpenRefused
+		}
+		read.ID, read.Name = p.ID, p.Name
+	case p.HasPin:
+		// A PIN set since the profile was chosen.
+		return appimport.Account{}, errOpenRefused
+	default:
+		read, err = r.openProfile(ctx, signIn.Secret, p, "", false)
+	}
+	if err != nil {
+		return appimport.Account{}, err
+	}
+	account.Profiles = []appimport.Profile{read}
+	return account, nil
 }
 
-// fetch reads the account's library items and addon descriptors, as
-// Stremio answers them.
+// SignOut ends the sessions of a connection Polyfin opened: the auth key's
+// when Polyfin obtained it, by a link code or a password, and the
+// profile's it opened with its PIN. A key the user pasted is only
+// forgotten, as signing it out would sign their own browser out.
+func (r *Reader) SignOut(ctx context.Context, signIn appimport.SignIn) error {
+	var errs []error
+	if signIn.Session != "" {
+		errs = append(errs, r.signOut(ctx, signIn.Session))
+	}
+	if signIn.Owned && signIn.Secret != "" {
+		errs = append(errs, r.signOut(ctx, signIn.Secret))
+	}
+	return errors.Join(errs...)
+}
+
+// fetch reads the library items and addon descriptors the session key
+// reads, as Stremio answers them.
 func (r *Reader) fetch(ctx context.Context, key string) (items, descriptors []json.RawMessage, err error) {
 	if err := r.call(ctx, http.MethodPost, r.api+"/api/datastoreGet", struct {
 		AuthKey    string   `json:"authKey"`

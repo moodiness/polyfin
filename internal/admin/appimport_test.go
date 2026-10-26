@@ -35,12 +35,12 @@ func appImportAPI(t *testing.T) (testAPI, *library.Service, *userdata.Store, *ad
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 		lib = library.New(deps.pool, deps.addons, deps.client, logger, o.Accounts.Settings)
 		data, installed, lists = userdata.New(deps.pool), deps.addons, watchlist.New(deps.pool)
-		o.AppImport = appimport.New(appimport.Options{Settings: o.Accounts.Settings, Titles: lib, UserData: data, Addons: deps.addons,
-			Logger: logger, Watchlist: lists})
-		t.Cleanup(o.AppImport.Close)
 		o.Nuvio = nuvio.New(nuvio.Options{Version: "1.2.3"})
 		o.Stremio = stremioimport.New(stremioimport.Options{Metas: stremiotest.SampleMetas(), Version: "1.2.3", API: fake.API,
 			Link: fake.Link})
+		o.AppImport = appimport.New(appimport.Options{Settings: o.Accounts.Settings, Titles: lib, UserData: data, Addons: deps.addons,
+			Logger: logger, Watchlist: lists, Sources: map[string]appimport.Source{nuvio.App: o.Nuvio, stremioimport.App: o.Stremio}})
+		t.Cleanup(o.AppImport.Close)
 	})
 	return api, lib, data, installed, fake, lists
 }
@@ -424,4 +424,121 @@ func TestStremioImportsFollowTheirPermissions(t *testing.T) {
 		done["played"] != 5.0 {
 		t.Errorf("the administrator's import: %v", done)
 	}
+}
+
+// profileOf is the profile named name of an account read.
+func profileOf(t *testing.T, read map[string]any, name string) map[string]any {
+	t.Helper()
+	profiles, _ := read["profiles"].([]any)
+	for _, p := range profiles {
+		if p.(map[string]any)["name"] == name {
+			return p.(map[string]any)
+		}
+	}
+	t.Fatalf("no profile %q: %v", name, read)
+	return nil
+}
+
+// fakeOpen waits for the sessions open on fake to be want, and fails
+// unless they become so.
+func fakeOpen(t *testing.T, fake *stremiotest.Fake, want int) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for fake.Open() != want {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d sessions open, not %d", fake.Open(), want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestUsersImportAStremioProfileItsPinOpens(t *testing.T) {
+	t.Parallel()
+	api, lib, data, installed, fake, _ := appImportAPI(t)
+	stremioSample(fake, "https://first.example/u/secret/manifest.json")
+	fake.Set(func(f *stremiotest.Fake) { f.Profiles = stremiotest.SampleProfiles(localAddon(t)) })
+	root, carol := api.signedIn("root", true), api.signedIn("carol", false)
+
+	status, read, _ := root.call(http.MethodPost, "/account/app-import/stremio/password",
+		map[string]any{"email": "bob@example.com", "password": "bob's password"})
+	if profiles, _ := read["profiles"].([]any); status != http.StatusOK || len(profiles) != 3 || read["stayConnected"] != false {
+		t.Fatalf("the account: %d %v", status, read)
+	}
+	noStremioSecret(t, read)
+	if main := profileOf(t, read, "Main"); main["locked"] != false || main["entries"] != 11.0 || len(main["addons"].([]any)) != 2 {
+		t.Errorf("Main: %v", main)
+	}
+	if kids := profileOf(t, read, "Kids"); kids["locked"] != false || kids["played"] != 1.0 || kids["resumes"] != 0.0 || kids["library"] != 1.0 ||
+		len(kids["addons"].([]any)) != 0 {
+		t.Errorf("Kids: %v", kids)
+	}
+	alice := profileOf(t, read, "Alice")
+	if alice["locked"] != true || alice["entries"] != 0.0 || len(alice["addons"].([]any)) != 0 {
+		t.Errorf("Alice locked: %v", alice)
+	}
+	// The account's session stays open while Alice's PIN is asked for.
+	fakeOpen(t, fake, 1)
+
+	// Alice's profile is imported once her PIN opens it, by its reader
+	// only.
+	start := map[string]any{"key": read["key"], "profile": alice["id"], "addons": []int{0}}
+	if status, body, _ := root.call(http.MethodPost, "/account/app-import", start); status != http.StatusBadRequest ||
+		body["error"] != "invalid_request" {
+		t.Errorf("importing Alice locked: %d %v", status, body)
+	}
+	unlock := map[string]any{"key": read["key"], "profile": alice["id"], "pin": "0000"}
+	if status, body, _ := root.call(http.MethodPost, "/account/app-import/stremio/unlock", unlock); status != http.StatusBadRequest ||
+		body["error"] != "stremio_pin_refused" {
+		t.Errorf("a wrong PIN: %d %v", status, body)
+	}
+	unlock["pin"] = stremiotest.SamplePin
+	if status, body, _ := carol.call(http.MethodPost, "/account/app-import/stremio/unlock", unlock); status != http.StatusConflict ||
+		body["error"] != "app_import_expired" {
+		t.Errorf("Carol opening it: %d %v", status, body)
+	}
+	unlock["profile"] = profileOf(t, read, "Kids")["id"]
+	if status, body, _ := root.call(http.MethodPost, "/account/app-import/stremio/unlock", unlock); status != http.StatusBadRequest ||
+		body["error"] != "invalid_request" {
+		t.Errorf("opening Kids, who has no PIN: %d %v", status, body)
+	}
+	unlock["profile"] = alice["id"]
+	status, opened, _ := root.call(http.MethodPost, "/account/app-import/stremio/unlock", unlock)
+	if status != http.StatusOK || opened["key"] != read["key"] {
+		t.Fatalf("Alice's PIN: %d %v", status, opened)
+	}
+	noStremioSecret(t, opened)
+	if raw, _ := json.Marshal(opened); strings.Contains(string(raw), stremiotest.SamplePin) {
+		t.Errorf("the answer holds the PIN: %s", raw)
+	}
+	alice = profileOf(t, opened, "Alice")
+	if offered := alice["addons"].([]any); alice["locked"] != false || alice["resumes"] != 1.0 || alice["entries"] != 1.0 || len(offered) != 1 ||
+		offered[0].(map[string]any)["name"] != "Alice's" {
+		t.Errorf("Alice opened: %v", alice)
+	}
+	if profileOf(t, opened, "Kids")["played"] != 1.0 {
+		t.Errorf("Kids: %v", opened)
+	}
+	fakeOpen(t, fake, 1)
+
+	if status, body, _ := root.call(http.MethodPost, "/account/app-import", start); status != http.StatusOK {
+		t.Fatalf("the import: %d %v", status, body)
+	}
+	done := appImportDone(t, root, "/account/app-import")
+	if done["profile"] != "Alice" || done["read"] != 1.0 || done["resumed"] != 1.0 || done["played"] != 0.0 {
+		t.Errorf("the import: %v", done)
+	}
+	rootID := api.userID("root")
+	found, err := lib.Resolve(t.Context(), []library.TitleRef{{IMDb: "tt0000003"}})
+	if err != nil || len(found[0]) == 0 {
+		t.Fatal(err)
+	}
+	if got, err := data.Get(t.Context(), rootID, []accounts.ID{found[0][0].ID}); err != nil || got[found[0][0].ID].Position != 40*time.Minute {
+		t.Errorf("Alice's resume point: %+v %v", got, err)
+	}
+	if addons, err := installed.Addons(t.Context(), addons.Personal(rootID)); err != nil || len(addons) != 1 {
+		t.Errorf("Alice's addon: %+v %v", addons, err)
+	}
+	// Imported once, without staying connected: every session is signed
+	// out.
+	fakeOpen(t, fake, 0)
 }

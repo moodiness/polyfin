@@ -32,13 +32,15 @@ import (
 
 // The problems of a connection's import: the app did not answer, asked to
 // wait, answered what Polyfin does not read, no longer has the profile
-// chosen, or refused the sign-in kept, which stops the connection.
-// ProblemInternal is Polyfin's database failing.
+// chosen, asks for a PIN of the profile chosen that Polyfin does not have
+// (see ErrProfileLocked), or refused the sign-in kept, which stops the
+// connection. ProblemInternal is Polyfin's database failing.
 const (
 	ProblemUnreachable    = "unreachable"
 	ProblemRateLimited    = "rate_limited"
 	ProblemUnexpected     = "unexpected"
 	ProblemProfileMissing = "profile_missing"
+	ProblemProfileLocked  = "profile_locked"
 	ProblemSignInRefused  = "sign_in_refused"
 )
 
@@ -73,23 +75,37 @@ type SignIn struct {
 	Backend string `json:"backend,omitempty"`
 	// Profile is the ID of the profile imported, which Start sets.
 	Profile string `json:"profile"`
+	// Session is the session Polyfin opened with the PIN of the profile
+	// imported, to read it again without the PIN: Stremio's auth key of
+	// that profile; empty when the profile opens without one. Polyfin
+	// signs it out when it no longer keeps it, whoever opened the
+	// account's.
+	Session string `json:"session,omitempty"`
 	// Owned tells that Polyfin opened the session, by a link code or a
 	// password, rather than the user pasting a key their own app holds:
 	// Polyfin signs it out when it no longer keeps it.
 	Owned bool `json:"-"`
 }
 
+// opened reports whether signIn keeps a session Polyfin opened, which it
+// signs out when it no longer keeps it.
+func (signIn SignIn) opened() bool {
+	return signIn.Owned || signIn.Session != ""
+}
+
 // Source reads again the accounts of an app, for connections.
 type Source interface {
 	// Reread reads the account signIn signs in to, and returns it with
 	// the sign-in to keep from now on, which the app may have renewed: it
-	// is returned even when reading fails. It fails with
-	// ErrSignInRefused, ErrAppUnreachable, ErrAppRateLimited, or another
-	// error for an answer Polyfin does not read; errors never hold the
-	// sign-in.
+	// is returned even when reading fails. The account holds at least the
+	// profile signIn names, unless the account no longer has it. It fails
+	// with ErrSignInRefused, ErrProfileLocked, ErrAppUnreachable,
+	// ErrAppRateLimited, or another error for an answer Polyfin does not
+	// read; errors never hold the sign-in.
 	Reread(ctx context.Context, signIn SignIn) (Account, SignIn, error)
-	// SignOut ends the session signIn signs in to, when Polyfin opened it,
-	// as best it can within ctx. Its error never holds the sign-in.
+	// SignOut ends the sessions signIn keeps open that Polyfin opened (see
+	// SignIn.Owned and SignIn.Session), as best it can within ctx. Its
+	// error never holds the sign-in.
 	SignOut(ctx context.Context, signIn SignIn) error
 }
 
@@ -245,9 +261,13 @@ func (s *Service) connect(ctx context.Context, c *newConnection) (time.Time, err
 		s.signOut(c.signIn, c.key.app)
 		return time.Time{}, err
 	}
-	if previous.found && previous.owned {
+	if previous.found {
 		// Signing in again may give the same session: it stays.
-		if old, err := s.open(previous.stored, true); err == nil && old.Secret != c.signIn.Secret {
+		if old, err := s.open(previous.stored, previous.owned); err == nil {
+			old.Owned = old.Owned && old.Secret != c.signIn.Secret
+			if old.Session == c.signIn.Session {
+				old.Session = ""
+			}
 			s.signOut(old, c.key.app)
 		}
 	}
@@ -417,7 +437,7 @@ func (s *Service) ImportNow(ctx context.Context, user accounts.User, app string)
 }
 
 // Disconnect forgets user's connection to app, stopping its import, after
-// signing out the session Polyfin opened. A key the user pasted is only
+// signing out the sessions Polyfin opened. A key the user pasted is only
 // forgotten. The titles its library alone put on the watchlist leave it:
 // an import saves the library only while the connection exists, locking
 // it, so that it saves before the connection is deleted, and its titles
@@ -444,7 +464,7 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) 
 	if err != nil {
 		return err
 	}
-	if signIn, err := s.open(stored, owned); err == nil && owned {
+	if signIn, err := s.open(stored, owned); err == nil && signIn.opened() {
 		if source := s.sources[app]; source != nil {
 			s.signOutNow(ctx, source, signIn, app)
 		}
@@ -463,7 +483,7 @@ func (s *Service) Disconnect(ctx context.Context, user accounts.ID, app string) 
 // stops the imports of their connections. Keys the user pasted are only
 // forgotten, and sign-ins the server's key cannot open too.
 func (s *Service) Leaving(ctx context.Context, tx pgx.Tx, user accounts.ID) (func(), error) {
-	rows, err := tx.Query(ctx, "SELECT app, sign_in FROM app_connections WHERE user_id = $1 AND owned", user)
+	rows, err := tx.Query(ctx, "SELECT app, sign_in, owned FROM app_connections WHERE user_id = $1", user)
 	if err != nil {
 		return nil, err
 	}
@@ -474,11 +494,12 @@ func (s *Service) Leaving(ctx context.Context, tx pgx.Tx, user accounts.ID) (fun
 	var sessions []owned
 	for rows.Next() {
 		var app, stored string
-		if err := rows.Scan(&app, &stored); err != nil {
+		var isOwned bool
+		if err := rows.Scan(&app, &stored, &isOwned); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		if signIn, err := s.open(stored, true); err == nil {
+		if signIn, err := s.open(stored, isOwned); err == nil && signIn.opened() {
 			sessions = append(sessions, owned{app, signIn})
 		}
 	}
@@ -499,7 +520,7 @@ func (s *Service) Leaving(ctx context.Context, tx pgx.Tx, user accounts.ID) (fun
 		if h := s.held[user]; h != nil {
 			h.timer.Stop()
 			delete(s.held, user)
-			s.release(h.account.SignIn, h.account.App)
+			s.drop(h.account)
 		}
 		for _, session := range sessions {
 			s.release(&session.signIn, session.app)
@@ -649,6 +670,8 @@ func readProblem(err error) string {
 		return ""
 	case errors.Is(err, ErrSignInRefused):
 		return ProblemSignInRefused
+	case errors.Is(err, ErrProfileLocked):
+		return ProblemProfileLocked
 	case errors.Is(err, ErrAppUnreachable):
 		return ProblemUnreachable
 	case errors.Is(err, ErrAppRateLimited):

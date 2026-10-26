@@ -425,3 +425,103 @@ func TestAppConnectionsFollowTheirPermissions(t *testing.T) {
 		t.Errorf("%d sessions open", a.fake.Open())
 	}
 }
+
+func TestUsersStayConnectedToAStremioProfile(t *testing.T) {
+	t.Parallel()
+	a := newAppConnectionsAPI(t)
+	stremioSample(a.fake, "https://first.example/u/secret/manifest.json")
+	a.fake.Set(func(f *stremiotest.Fake) {
+		f.Profiles = stremiotest.SampleProfiles("https://alice.example/u/secret/manifest.json")
+	})
+	bob := a.signedIn("bob", false)
+	bobID := a.userID("bob")
+
+	// Bob opens Alice's profile with its PIN, and stays connected to it.
+	_, read, _ := bob.call(http.MethodPost, "/account/app-import/stremio/password",
+		map[string]any{"email": "bob@example.com", "password": "bob's password", "stayConnected": true})
+	alice := profileOf(t, read, "Alice")
+	status, opened, _ := bob.call(http.MethodPost, "/account/app-import/stremio/unlock",
+		map[string]any{"key": read["key"], "profile": alice["id"], "pin": stremiotest.SamplePin})
+	if status != http.StatusOK || opened["stayConnected"] != true {
+		t.Fatalf("Alice's PIN: %d %v", status, opened)
+	}
+	if status, body, _ := bob.call(http.MethodPost, "/account/app-import", map[string]any{"key": read["key"], "profile": alice["id"]}); status != http.StatusOK {
+		t.Fatalf("the import: %d %v", status, body)
+	}
+	appImportDone(t, bob, "/account/app-import")
+	c := connectionIdle(t, bob, "/account/app-import", "stremio")
+	if last, _ := c["lastImport"].(map[string]any); c["problem"] != nil || last == nil || last["read"] != 1.0 || last["resumed"] != 1.0 {
+		t.Fatalf("the connection: %v", c)
+	}
+	// The account's session and Alice's stay open: Polyfin keeps them, not
+	// the PIN.
+	fakeOpen(t, a.fake, 2)
+	var session string
+	for _, r := range a.fake.Requests() {
+		if r.Path == "/api/datastoreGet" {
+			session = r.AuthKey
+		}
+	}
+
+	// Alice watches another movie: Import now reads her profile again,
+	// with her session, without the PIN.
+	a.fake.Set(func(f *stremiotest.Fake) {
+		f.Profiles[2].Library = append(f.Profiles[2].Library.([]any), map[string]any{"_id": "tt0000077", "type": "movie", "name": "Later",
+			"removed": false, "temp": false, "_mtime": "2026-10-10T20:00:00.000Z", "state": map[string]any{
+				"lastWatched": "2026-10-10T20:00:00.000Z", "timesWatched": 1}})
+	})
+	requests := len(a.fake.Requests())
+	bob.call(http.MethodPost, "/account/app-connections/stremio/import", nil)
+	c = connectionIdle(t, bob, "/account/app-import", "stremio")
+	if last := c["lastImport"].(map[string]any); last["problem"] != nil || last["read"] != 2.0 || !playedMovie(t, a.lib, a.data, bobID, "tt0000077") {
+		t.Errorf("imported again: %v", c)
+	}
+	for _, r := range a.fake.Requests()[requests:] {
+		if r.Path == "/api/premiumPrefs/authenticateProfile" || r.Path == "/api/datastoreGet" && r.AuthKey != session {
+			t.Errorf("imported again with %s", r.Path)
+		}
+	}
+	a.checkSecrets(t, stremiotest.SamplePin, session, "bob's password")
+
+	// Alice's PIN changes, which ends her session: the connection asks to
+	// choose her again, and goes on.
+	a.fake.ChangePin(alice["id"].(string), "7391")
+	bob.call(http.MethodPost, "/account/app-connections/stremio/import", nil)
+	c = connectionIdle(t, bob, "/account/app-import", "stremio")
+	if c["problem"] != nil || c["lastImport"].(map[string]any)["problem"] != "profile_locked" || c["nextImportAt"] == nil {
+		t.Errorf("another PIN: %v", c)
+	}
+	// Alice's profile is removed.
+	a.fake.Set(func(f *stremiotest.Fake) { f.Profiles = f.Profiles[:2] })
+	bob.call(http.MethodPost, "/account/app-connections/stremio/import", nil)
+	c = connectionIdle(t, bob, "/account/app-import", "stremio")
+	if c["problem"] != nil || c["lastImport"].(map[string]any)["problem"] != "profile_missing" {
+		t.Errorf("Alice removed: %v", c)
+	}
+
+	// Choosing Kids, who has no PIN, replaces the connection: each import
+	// opens Kids' session, and signs it out.
+	_, read, _ = bob.call(http.MethodPost, "/account/app-import/stremio/password",
+		map[string]any{"email": "bob@example.com", "password": "bob's password", "stayConnected": true})
+	if status, body, _ := bob.call(http.MethodPost, "/account/app-import", map[string]any{"key": read["key"], "profile": profileOf(t, read, "Kids")["id"]}); status != http.StatusOK {
+		t.Fatalf("the import: %d %v", status, body)
+	}
+	appImportDone(t, bob, "/account/app-import")
+	c = connectionIdle(t, bob, "/account/app-import", "stremio")
+	if last := c["lastImport"].(map[string]any); last["problem"] != nil || last["read"] != 2.0 {
+		t.Errorf("Kids: %v", c)
+	}
+	bob.call(http.MethodPost, "/account/app-connections/stremio/import", nil)
+	if last := connectionIdle(t, bob, "/account/app-import", "stremio")["lastImport"].(map[string]any); last["problem"] != nil || last["read"] != 2.0 {
+		t.Errorf("Kids again: %v", last)
+	}
+	// The first connection's session was signed out as it was replaced.
+	fakeOpen(t, a.fake, 1)
+
+	// Disconnecting signs out the account's session.
+	if status, _, _ := bob.call(http.MethodDelete, "/account/app-connections/stremio", nil); status != http.StatusNoContent {
+		t.Fatalf("disconnecting: %d", status)
+	}
+	fakeOpen(t, a.fake, 0)
+	a.checkSecrets(t, stremiotest.SamplePin, "7391")
+}

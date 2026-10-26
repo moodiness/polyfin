@@ -175,7 +175,7 @@ func newConnectionHarness(t *testing.T) connectionHarness {
 // and returns user's connection.
 func (h connectionHarness) connected(t *testing.T, by, user accounts.User, account Account, signIn SignIn, choice Choice) Connection {
 	t.Helper()
-	account.App, account.SignIn = "stremio", &signIn
+	account.App, account.SignIn, account.StayConnected = "stremio", &signIn, true
 	h.imported(t, by, user, account, choice)
 	h.idle(t)
 	return h.connectionOf(t, user)
@@ -639,7 +639,7 @@ func TestTheFirstImportOfAConnectionGoneSavesNoLibrary(t *testing.T) {
 			alice := h.user(t, "alice", false)
 			const secret = "kept-secret-0123456789abcdef"
 			h.source.set(func(f *fakeSource) { f.accepted[secret] = true })
-			account := Account{App: "stremio", SignIn: &SignIn{Secret: secret, Owned: true}, Profiles: []Profile{{ID: "1", Entries: []Entry{
+			account := Account{App: "stremio", SignIn: &SignIn{Secret: secret, Owned: true}, StayConnected: true, Profiles: []Profile{{ID: "1", Entries: []Entry{
 				{Title: ref(t, "tt0000001", true, 0, 0), Watchlist: true}, {Title: ref(t, "tt0000002", true, 0, 0), Watchlist: true}}}}}
 			if _, err := h.Start(alice, alice, h.Hold(alice.ID, account), Choice{Profile: "1"}); err != nil {
 				t.Fatal(err)

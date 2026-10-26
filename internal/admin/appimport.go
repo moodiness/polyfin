@@ -349,6 +349,41 @@ func (h *handler) readStremioKey(target appImportTarget) http.HandlerFunc {
 	}
 }
 
+// unlockStremio opens, with its PIN, the profile of the Stremio account
+// the caller holds that asks for it, and answers the account held, with
+// that profile read. The PIN goes to Stremio only: it is never kept,
+// logged, nor answered.
+func (h *handler) unlockStremio(target appImportTarget) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !h.stremioReader(target, w, r) {
+			return
+		}
+		var body struct {
+			Key     string `json:"key"`
+			Profile string `json:"profile"`
+			Pin     string `json:"pin"`
+		}
+		if !decode(w, r, &body) {
+			return
+		}
+		account, err := h.AppImport.Unlock(r.Context(), sessionFrom(r.Context()).User.ID, body.Key, body.Profile, body.Pin)
+		switch {
+		case errors.Is(err, appimport.ErrExpired):
+			writeError(w, http.StatusConflict, "app_import_expired")
+			return
+		case errors.Is(err, appimport.ErrUnknownProfile):
+			writeError(w, http.StatusBadRequest, "invalid_request")
+			return
+		case errors.Is(err, stremioimport.ErrPinRefused):
+			writeError(w, http.StatusBadRequest, "stremio_pin_refused")
+			return
+		case h.stremioError(w, r, err):
+			return
+		}
+		writeJSON(w, http.StatusOK, newAppAccountJSON(body.Key, account))
+	}
+}
+
 // holdStremio holds the Stremio account read for the caller, and answers
 // it, or answers why reading it failed.
 func (h *handler) holdStremio(w http.ResponseWriter, r *http.Request, account appimport.Account, err error) {
@@ -412,6 +447,7 @@ func (h *handler) startAppImport(target appImportTarget) http.HandlerFunc {
 		}{
 			{appimport.ErrExpired, http.StatusConflict, "app_import_expired"},
 			{appimport.ErrUnknownProfile, http.StatusBadRequest, "invalid_request"},
+			{appimport.ErrProfileLocked, http.StatusBadRequest, "invalid_request"},
 			{appimport.ErrUnknownAddon, http.StatusBadRequest, "invalid_request"},
 			{appimport.ErrAddonsNotAllowed, http.StatusForbidden, "personal_addons_disabled"},
 			{appimport.ErrRunning, http.StatusConflict, "app_import_running"},
@@ -446,6 +482,7 @@ type appAccountJSON struct {
 type appProfileJSON struct {
 	ID      string         `json:"id"`
 	Name    string         `json:"name"`
+	Locked  bool           `json:"locked"`
 	Entries int            `json:"entries"`
 	Played  int            `json:"played"`
 	Resumes int            `json:"resumes"`
@@ -460,10 +497,10 @@ type appAddonJSON struct {
 }
 
 func newAppAccountJSON(key string, account appimport.Account) appAccountJSON {
-	result := appAccountJSON{Key: key, App: account.App, StayConnected: account.SignIn != nil,
+	result := appAccountJSON{Key: key, App: account.App, StayConnected: account.StayConnected,
 		Profiles: make([]appProfileJSON, 0, len(account.Profiles))}
 	for _, p := range account.Profiles {
-		profile := appProfileJSON{ID: p.ID, Name: p.Name, Entries: len(p.Entries), Addons: make([]appAddonJSON, 0, len(p.Addons))}
+		profile := appProfileJSON{ID: p.ID, Name: p.Name, Locked: p.Locked, Entries: len(p.Entries), Addons: make([]appAddonJSON, 0, len(p.Addons))}
 		for _, e := range p.Entries {
 			if e.Played {
 				profile.Played++

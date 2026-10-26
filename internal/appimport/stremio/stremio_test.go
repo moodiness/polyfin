@@ -125,7 +125,7 @@ func TestThePasswordSignsInThenOut(t *testing.T) {
 	for _, request := range f.Requests() {
 		paths = append(paths, request.Path)
 	}
-	if want := []string{"/api/login", "/api/login", "/api/datastoreGet", "/api/addonCollectionGet", "/api/logout"}; !slices.Equal(paths, want) {
+	if want := []string{"/api/login", "/api/login", "/api/getUser", "/api/datastoreGet", "/api/addonCollectionGet", "/api/logout"}; !slices.Equal(paths, want) {
 		t.Errorf("requests: %v", paths)
 	}
 }
@@ -435,7 +435,9 @@ func TestStayingConnectedKeepsTheKeyForLaterReads(t *testing.T) {
 	if account.SignIn == nil || !account.SignIn.Owned || account.SignIn.Secret == "" || account.Name != "bob@example.com" || f.Open() != 1 {
 		t.Fatalf("account: %q %+v, %d open", account.Name, account.SignIn, f.Open())
 	}
+	// As the import keeps it, with the profile chosen.
 	kept := *account.SignIn
+	kept.Profile = wholeAccount
 	for _, request := range f.Requests() {
 		if request.Path == "/api/logout" {
 			t.Error("a session kept was signed out")
@@ -495,5 +497,218 @@ func TestAPastedKeyKeptIsNeverSignedOut(t *testing.T) {
 	}
 	if _, _, err := r.Reread(t.Context(), *account.SignIn); err != nil {
 		t.Errorf("read again: %v", err)
+	}
+}
+
+// profiled is a fake Stremio whose sample account has the sample profiles
+// (see stremiotest.SampleProfiles), and a reader of it.
+func profiled(t *testing.T) (*stremiotest.Fake, *Reader) {
+	t.Helper()
+	f, r := fake(t)
+	f.Set(func(f *stremiotest.Fake) {
+		f.Profiles = stremiotest.SampleProfiles("https://alice.example/u/secret/manifest.json")
+	})
+	return f, r
+}
+
+// The IDs of the sample profiles.
+const (
+	mainProfile  = "64f0000000000000000000a1"
+	kidsProfile  = "64f0000000000000000000b2"
+	aliceProfile = "64f0000000000000000000c3"
+)
+
+// labels are the entries of profile, by the identifiers of their titles.
+func labels(profile appimport.Profile) map[string]appimport.Entry {
+	byID := map[string]appimport.Entry{}
+	for _, e := range profile.Entries {
+		byID[e.Label.ID] = e
+	}
+	return byID
+}
+
+func TestEachProfileIsReadWithItsOwnSessionAndAPinOpensItsOwn(t *testing.T) {
+	t.Parallel()
+	f, r := profiled(t)
+
+	account, err := r.SignIn(t.Context(), "bob@example.com", "bob's password", false)
+	if err != nil || len(account.Profiles) != 3 {
+		t.Fatalf("%+v %v", account, err)
+	}
+	main, kids, alice := account.Profiles[0], account.Profiles[1], account.Profiles[2]
+	// The master reads the account's own library and addons.
+	if main.ID != mainProfile || main.Name != "Main" || main.Locked || len(main.Entries) != 11 || len(main.Addons) != 2 {
+		t.Errorf("Main: %+v", main)
+	}
+	kidsEntries := labels(kids)
+	if kids.ID != kidsProfile || kids.Name != "Kids" || kids.Locked || len(kids.Entries) != 2 || len(kids.Addons) != 0 ||
+		!kidsEntries["tt0000001"].Played || kidsEntries["tt0000001"].Watchlist || !kidsEntries["tt0000002"].Watchlist {
+		t.Errorf("Kids: %+v", kids)
+	}
+	// A profile with a PIN is listed, unread, and the account's session
+	// stays open while the account is held, for the PIN to open it.
+	if alice.ID != aliceProfile || alice.Name != "Alice" || !alice.Locked || len(alice.Entries) != 0 || len(alice.Addons) != 0 {
+		t.Errorf("Alice: %+v", alice)
+	}
+	if account.SignIn == nil || !account.SignIn.Owned || account.StayConnected || f.Open() != 1 {
+		t.Fatalf("held: %+v, stay connected %v, %d open", account.SignIn, account.StayConnected, f.Open())
+	}
+	opened := 0
+	for _, request := range f.Requests() {
+		if request.Path != "/api/premiumPrefs/authenticateProfile" {
+			continue
+		}
+		opened++
+		if request.Body != `{"type":"AuthenticateProfile","authKey":"`+account.SignIn.Secret+`","profileId":"`+kidsProfile+`","pin":null}` {
+			t.Errorf("opening Kids: %s", request.Body)
+		}
+	}
+	if opened != 1 {
+		t.Errorf("%d profiles opened", opened)
+	}
+
+	if _, err := r.Unlock(t.Context(), *account.SignIn, aliceProfile, "4321", false); !errors.Is(err, ErrPinRefused) {
+		t.Errorf("a wrong PIN: %v", err)
+	}
+	if _, err := r.Unlock(t.Context(), *account.SignIn, aliceProfile, " ", false); !errors.Is(err, ErrPinRefused) {
+		t.Errorf("no PIN: %v", err)
+	}
+	if _, err := r.Unlock(t.Context(), *account.SignIn, "gone", stremiotest.SamplePin, false); !errors.Is(err, appimport.ErrUnknownProfile) {
+		t.Errorf("a profile the account does not have: %v", err)
+	}
+	read, err := r.Unlock(t.Context(), *account.SignIn, aliceProfile, stremiotest.SamplePin, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed := labels(read)["tt0000003"].Resume
+	if read.ID != aliceProfile || read.Name != "Alice" || read.Locked || read.Session != "" || len(read.Entries) != 1 || resumed == nil ||
+		resumed.Position != 40*time.Minute || len(read.Addons) != 1 || read.Addons[0].Name != "Alice's" {
+		t.Errorf("Alice opened: %+v", read)
+	}
+	// Alice's session is signed out once read; the account's, once dropped.
+	if f.Open() != 1 {
+		t.Errorf("%d sessions open", f.Open())
+	}
+	if err := r.SignOut(t.Context(), *account.SignIn); err != nil || f.Open() != 0 {
+		t.Errorf("signing out: %v, %d open", err, f.Open())
+	}
+	// The PIN went to authenticateProfile only.
+	for _, request := range f.Requests() {
+		if strings.Contains(request.Body, stremiotest.SamplePin) && request.Path != "/api/premiumPrefs/authenticateProfile" {
+			t.Errorf("the PIN went to %s", request.Path)
+		}
+	}
+
+	// A key pasted is never signed out, but the profiles' sessions Polyfin
+	// opens are.
+	var pasted string
+	f.Set(func(f *stremiotest.Fake) { pasted = f.Pasted })
+	account, err = r.ReadKey(t.Context(), pasted, false)
+	if err != nil || len(account.Profiles) != 3 || account.SignIn == nil || account.SignIn.Owned {
+		t.Fatalf("pasted: %+v %v", account.SignIn, err)
+	}
+	if _, err := r.Unlock(t.Context(), *account.SignIn, aliceProfile, stremiotest.SamplePin, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SignOut(t.Context(), *account.SignIn); err != nil || f.Open() != 0 {
+		t.Errorf("signing out: %v, %d open", err, f.Open())
+	}
+	f.Set(func(f *stremiotest.Fake) {
+		if f.Pasted != pasted {
+			t.Error("the pasted key was signed out")
+		}
+	})
+}
+
+func TestAProfileConnectionReadsItsProfileUntilItIsGoneOrItsPinChanges(t *testing.T) {
+	t.Parallel()
+	f, r := profiled(t)
+
+	account, err := r.SignIn(t.Context(), "bob@example.com", "bob's password", true)
+	if err != nil || account.SignIn == nil || !account.StayConnected || account.Name != "bob@example.com" {
+		t.Fatalf("%+v %v", account, err)
+	}
+	// Staying connected, the session Alice's PIN opens is kept, in place
+	// of the PIN.
+	alice, err := r.Unlock(t.Context(), *account.SignIn, aliceProfile, stremiotest.SamplePin, true)
+	if err != nil || alice.Session == "" || f.Open() != 2 {
+		t.Fatalf("Alice: %+v %v, %d open", alice, err, f.Open())
+	}
+	kept := func(profile, session string) appimport.SignIn {
+		signIn := *account.SignIn
+		signIn.Profile, signIn.Session = profile, session
+		return signIn
+	}
+	read := func(signIn appimport.SignIn) (appimport.Profile, error) {
+		t.Helper()
+		again, renewed, err := r.Reread(t.Context(), signIn)
+		if renewed != signIn {
+			t.Errorf("renewed: %+v", renewed)
+		}
+		if err != nil {
+			return appimport.Profile{}, err
+		}
+		if again.Name != "bob@example.com" || len(again.Profiles) > 1 {
+			t.Errorf("read again: %+v", again)
+		}
+		if len(again.Profiles) == 0 {
+			return appimport.Profile{}, nil
+		}
+		return again.Profiles[0], nil
+	}
+
+	for _, c := range []struct {
+		signIn  appimport.SignIn
+		entries int
+	}{
+		{kept(aliceProfile, alice.Session), 1},
+		{kept(kidsProfile, ""), 2},
+		{kept(mainProfile, ""), 11},
+		// A connection made before profiles reads the account's own.
+		{kept(wholeAccount, ""), 11},
+	} {
+		profile, err := read(c.signIn)
+		if err != nil || profile.ID != c.signIn.Profile || len(profile.Entries) != c.entries {
+			t.Errorf("%s: %+v %v", c.signIn.Profile, profile, err)
+		}
+	}
+	// Each read of Kids opened a session of its own, signed out since.
+	if f.Open() != 2 {
+		t.Errorf("%d sessions open", f.Open())
+	}
+
+	// A PIN set on Kids, or changed on Alice, which ends the session kept:
+	// the user chooses again.
+	f.ChangePin(kidsProfile, "0000")
+	if _, err := read(kept(kidsProfile, "")); !errors.Is(err, appimport.ErrProfileLocked) {
+		t.Errorf("Kids with a PIN: %v", err)
+	}
+	f.ChangePin(aliceProfile, "9999")
+	if _, err := read(kept(aliceProfile, alice.Session)); !errors.Is(err, appimport.ErrProfileLocked) {
+		t.Errorf("Alice with another PIN: %v", err)
+	}
+	// A profile removed is not read.
+	f.Set(func(f *stremiotest.Fake) { f.Profiles = f.Profiles[:2] })
+	if profile, err := read(kept(aliceProfile, "")); err != nil || profile.ID != "" {
+		t.Errorf("Alice removed: %+v %v", profile, err)
+	}
+
+	// Disconnecting signs out the account's session, and the profile's.
+	_, _ = r.Unlock(t.Context(), *account.SignIn, kidsProfile, "0000", true)
+	if f.Open() != 2 {
+		t.Fatalf("%d sessions open", f.Open())
+	}
+	var session string
+	for _, request := range f.Requests() {
+		if request.Path == "/api/datastoreGet" {
+			session = request.AuthKey
+		}
+	}
+	if err := r.SignOut(t.Context(), kept(kidsProfile, session)); err != nil || f.Open() != 0 {
+		t.Errorf("signing out: %v, %d open", err, f.Open())
+	}
+	// Stremio refusing the account's key stops the connection.
+	if _, err := read(kept(kidsProfile, "")); !errors.Is(err, appimport.ErrSignInRefused) {
+		t.Errorf("a key signed out: %v", err)
 	}
 }

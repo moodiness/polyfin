@@ -138,8 +138,9 @@ func (b *builder) entry(id, name, kind string, season, episode int) *appimport.E
 	return e
 }
 
-// account reads the library items and the addon descriptors of an account
-// into its one profile:
+// profile reads the library items and the addon descriptors a session
+// reads, of an account or of one of its profiles, into a profile, which
+// the caller names:
 //   - a movie watched is played, at the date it was last watched, as many
 //     times as it was;
 //   - a series' episodes watched are played, at the date the series was
@@ -150,7 +151,7 @@ func (b *builder) entry(id, name, kind string, season, episode int) *appimport.E
 //   - the titles of the user's library go on the watchlist, from the date
 //     Stremio first kept them;
 //   - the addons the user installed, Stremio's own left out, are offered.
-func (r *Reader) account(ctx context.Context, raw, descriptors []json.RawMessage) appimport.Account {
+func (r *Reader) profile(ctx context.Context, raw, descriptors []json.RawMessage) appimport.Profile {
 	list := items(raw)
 	lists := r.episodeLists(ctx, list)
 	b := &builder{r: r, entries: map[key]*appimport.Entry{}}
@@ -223,11 +224,11 @@ func (r *Reader) account(ctx context.Context, raw, descriptors []json.RawMessage
 		}
 	}
 
-	profile := appimport.Profile{ID: "1", Entries: make([]appimport.Entry, 0, len(b.order)), Addons: addons(descriptors)}
+	profile := appimport.Profile{Entries: make([]appimport.Entry, 0, len(b.order)), Addons: addons(descriptors)}
 	for _, k := range b.order {
 		profile.Entries = append(profile.Entries, *b.entries[k])
 	}
-	return appimport.Account{App: App, Profiles: []appimport.Profile{profile}}
+	return profile
 }
 
 // episodeLists returns the episodes of the series of list Polyfin needs,

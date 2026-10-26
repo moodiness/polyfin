@@ -194,7 +194,7 @@ func (r *Reader) Read(ctx context.Context, address, email, password string, keep
 	if keep && t.RefreshToken != "" {
 		kept = true
 		account.Name = strings.TrimSpace(t.User.Email)
-		account.SignIn = &appimport.SignIn{Secret: t.RefreshToken, Backend: backend, Owned: true}
+		account.SignIn, account.StayConnected = &appimport.SignIn{Secret: t.RefreshToken, Backend: backend, Owned: true}, true
 	}
 	return account, nil
 }

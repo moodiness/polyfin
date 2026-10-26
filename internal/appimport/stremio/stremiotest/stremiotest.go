@@ -1,7 +1,7 @@
 // Package stremiotest serves a fake Stremio account API and link service
 // for tests: the password sign-in, the link codes, the account, its
-// library and addons, and the sign-out, as Stremio's own client code calls
-// them.
+// library and addons, its profiles, each read with a session of its own,
+// and the sign-out, as Stremio's own client code calls them.
 package stremiotest
 
 import (
@@ -36,24 +36,68 @@ type Fake struct {
 
 	mu sync.Mutex
 	// Email and Password sign in to the account, which holds Library, the
-	// library items, and Addons, the addon descriptors.
+	// library items, and Addons, the addon descriptors: the master
+	// profile's, when it has profiles.
 	Email, Password string
 	Library, Addons any
+	// Profiles are the account's profiles, none for an account that is
+	// not a supporter's.
+	Profiles []Profile
 	// Pasted is an auth key of the account the user's browser holds.
 	Pasted   string
 	requests []Request
-	// keys are the auth keys of the sessions open; codes the link codes
-	// asked for, and whether each is approved.
-	keys     map[string]bool
+	// keys are the auth keys of the sessions open, with the ID of the
+	// profile each reads, empty for the account's own; codes the link
+	// codes asked for, and whether each is approved.
+	keys     map[string]string
 	codes    map[string]bool
 	lastCode string
 	issued   int
 }
 
+// Profile is one of the account's profiles, as Stremio's supporters have:
+// the master reads the account's library and addons; any other its own
+// Library and Addons, with a session authenticateProfile opens, given the
+// profile's Pin when it has one.
+type Profile struct {
+	ID, Name        string
+	Master          bool
+	Pin             string
+	Library, Addons any
+}
+
+// SamplePin is the PIN of the profile "Alice" of SampleProfiles.
+const SamplePin = "4826"
+
+// SampleProfiles are the profiles of a supporter's account: the master,
+// "Main"; "Kids", without a PIN, who watched the movie tt0000001 and keeps
+// tt0000002 in their library, with no addon of their own; and "Alice",
+// with the PIN SamplePin, who stopped the movie tt0000003 at 40 of 100
+// minutes on 2026-10-02 at 20:00, with the addon whose manifest is at
+// manifest.
+func SampleProfiles(manifest string) []Profile {
+	type state = map[string]any
+	return []Profile{
+		{ID: "64f0000000000000000000a1", Name: "Main", Master: true},
+		{ID: "64f0000000000000000000b2", Name: "Kids", Library: []any{
+			map[string]any{"_id": "tt0000001", "type": "movie", "name": "First movie", "removed": true, "temp": true,
+				"_mtime": "2026-09-10T20:00:00.000Z", "state": state{"lastWatched": "2026-09-10T20:00:00.000Z", "timesWatched": 1}},
+			map[string]any{"_id": "tt0000002", "type": "movie", "name": "Second movie", "removed": false, "temp": false,
+				"_ctime": "2026-09-11T20:00:00.000Z", "_mtime": "2026-09-11T20:00:00.000Z", "state": state{}},
+		}, Addons: []any{}},
+		{ID: "64f0000000000000000000c3", Name: "Alice", Pin: SamplePin, Library: []any{
+			map[string]any{"_id": "tt0000003", "type": "movie", "name": "Third movie", "removed": true, "temp": true,
+				"_mtime": "2026-10-02T20:00:00.000Z", "state": state{"lastWatched": "2026-10-02T20:00:00.000Z", "timesWatched": 0,
+					"timeOffset": 40 * 60_000, "duration": 100 * 60_000, "video_id": "tt0000003"}},
+		}, Addons: []any{map[string]any{"manifest": map[string]any{"id": "org.example.alice", "name": "Alice's", "version": "1.0.0"},
+			"transportUrl": manifest, "flags": map[string]any{"official": false, "protected": false}}}},
+	}
+}
+
 // New serves a fake account API and link service until the test ends.
 func New(t *testing.T) *Fake {
 	t.Helper()
-	f := &Fake{keys: map[string]bool{}, codes: map[string]bool{}, Pasted: "pasted-key-0123456789abcdef"}
+	f := &Fake{keys: map[string]string{}, codes: map[string]bool{}, Pasted: "pasted-key-0123456789abcdef"}
 	api := httptest.NewServer(http.HandlerFunc(f.serveAPI))
 	t.Cleanup(api.Close)
 	link := httptest.NewServer(http.HandlerFunc(f.serveLink))
@@ -76,8 +120,8 @@ func (f *Fake) Requests() []Request {
 	return append([]Request(nil), f.requests...)
 }
 
-// Open counts the sessions opened by a sign-in or a link code, and not
-// signed out.
+// Open counts the sessions opened by a sign-in, a link code or a profile's
+// authentication, and not signed out.
 func (f *Fake) Open() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -93,6 +137,24 @@ func (f *Fake) Revoke() {
 	f.Pasted = ""
 }
 
+// ChangePin sets the PIN of the profile id, empty for none, and ends the
+// sessions of that profile, as Polyfin expects Stremio to when a PIN
+// changes.
+func (f *Fake) ChangePin(id, pin string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.Profiles {
+		if f.Profiles[i].ID == id {
+			f.Profiles[i].Pin = pin
+		}
+	}
+	for key, profile := range f.keys {
+		if profile == id {
+			delete(f.keys, key)
+		}
+	}
+}
+
 // Approve approves the last link code asked for, as the user does in a
 // browser signed in to Stremio.
 func (f *Fake) Approve() {
@@ -101,11 +163,12 @@ func (f *Fake) Approve() {
 	f.codes[f.lastCode] = true
 }
 
-// issue opens a session, and returns its auth key.
-func (f *Fake) issue() string {
+// issue opens a session of the profile profile, empty for the account's
+// own, and returns its auth key.
+func (f *Fake) issue(profile string) string {
 	f.issued++
 	key := "issued-key-" + strconv.Itoa(f.issued) + "-0123456789abcdef"
-	f.keys[key] = true
+	f.keys[key] = profile
 	return key
 }
 
@@ -141,12 +204,15 @@ func (f *Fake) serveAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
+		Type       string   `json:"type"`
 		AuthKey    string   `json:"authKey"`
 		Email      string   `json:"email"`
 		Password   string   `json:"password"`
 		Collection string   `json:"collection"`
 		IDs        []string `json:"ids"`
 		All        bool     `json:"all"`
+		ProfileID  string   `json:"profileId"`
+		Pin        *string  `json:"pin"`
 	}
 	if json.Unmarshal(body, &request) != nil {
 		failure(w, 1, "Invalid request")
@@ -157,12 +223,19 @@ func (f *Fake) serveAPI(w http.ResponseWriter, r *http.Request) {
 			failure(w, 3, "Wrong passphrase")
 			return
 		}
-		result(w, map[string]any{"authKey": f.issue(), "user": map[string]any{"_id": "user", "email": f.Email}})
+		result(w, map[string]any{"authKey": f.issue(""), "user": map[string]any{"_id": "user", "email": f.Email}})
 		return
 	}
-	if !f.keys[request.AuthKey] && (f.Pasted == "" || request.AuthKey != f.Pasted) {
+	profileID, open := f.keys[request.AuthKey]
+	if !open && (f.Pasted == "" || request.AuthKey != f.Pasted) {
 		failure(w, 1, "Session not found")
 		return
+	}
+	library, addons := f.Library, f.Addons
+	for _, p := range f.Profiles {
+		if p.ID == profileID && !p.Master {
+			library, addons = p.Library, p.Addons
+		}
 	}
 	switch r.URL.Path {
 	case "/api/datastoreGet":
@@ -170,11 +243,26 @@ func (f *Fake) serveAPI(w http.ResponseWriter, r *http.Request) {
 			failure(w, 1, "Invalid request")
 			return
 		}
-		result(w, f.Library)
+		result(w, library)
 	case "/api/getUser":
-		result(w, map[string]any{"_id": "user", "email": f.Email, "fullname": ""})
+		if profileID != "" {
+			result(w, map[string]any{"_id": profileID, "email": "", "parent_id": "user"})
+			return
+		}
+		user := map[string]any{"_id": "user", "email": f.Email, "fullname": ""}
+		if len(f.Profiles) > 0 {
+			profiles := make([]any, 0, len(f.Profiles))
+			for _, p := range f.Profiles {
+				profiles = append(profiles, map[string]any{"_id": p.ID, "name": p.Name, "hasPin": p.Pin != "", "canManageAddons": true,
+					"isMaster": p.Master, "selected": p.Master, "avatar": "avatar-1", "gravatar": nil})
+			}
+			user["premiumPrefs"] = map[string]any{"catalogWeights": map[string]any{}, "userProfiles": profiles, "streamPresets": []any{}}
+		}
+		result(w, user)
 	case "/api/addonCollectionGet":
-		result(w, map[string]any{"addons": f.Addons, "lastModified": "2026-10-01T10:00:00.000Z"})
+		result(w, map[string]any{"addons": addons, "lastModified": "2026-10-01T10:00:00.000Z"})
+	case "/api/premiumPrefs/authenticateProfile":
+		f.authenticateProfile(w, request.Type, profileID, request.ProfileID, request.Pin)
 	case "/api/logout":
 		delete(f.keys, request.AuthKey)
 		if request.AuthKey == f.Pasted {
@@ -184,6 +272,28 @@ func (f *Fake) serveAPI(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// authenticateProfile opens a session of the profile id, asked for with
+// a session of the account's own (by, empty), given its PIN when it has
+// one, and answers it as Stremio does: its auth key, and its user.
+func (f *Fake) authenticateProfile(w http.ResponseWriter, kind, by, id string, pin *string) {
+	if kind != "AuthenticateProfile" || by != "" {
+		failure(w, 1, "Invalid request")
+		return
+	}
+	for _, p := range f.Profiles {
+		if p.ID != id {
+			continue
+		}
+		if p.Pin != "" && (pin == nil || *pin != p.Pin) {
+			failure(w, 2, "Wrong PIN")
+			return
+		}
+		result(w, map[string]any{"authKey": f.issue(p.ID), "user": map[string]any{"_id": p.ID, "email": "", "parent_id": "user"}})
+		return
+	}
+	failure(w, 1, "Profile not found")
 }
 
 func (f *Fake) serveLink(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +316,7 @@ func (f *Fake) serveLink(w http.ResponseWriter, r *http.Request) {
 			failure(w, 1, "No data yet")
 		default:
 			delete(f.codes, code)
-			result(w, map[string]any{"authKey": f.issue()})
+			result(w, map[string]any{"authKey": f.issue("")})
 		}
 	default:
 		w.WriteHeader(http.StatusNotFound)

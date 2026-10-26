@@ -252,6 +252,7 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/account/app-import/stremio/link/poll", h.signedIn(h.pollStremioLink(h.ownAppImportTarget)))
 	mux.Handle("POST /admin/api/account/app-import/stremio/password", h.signedIn(h.readStremioPassword(h.ownAppImportTarget)))
 	mux.Handle("POST /admin/api/account/app-import/stremio/key", h.signedIn(h.readStremioKey(h.ownAppImportTarget)))
+	mux.Handle("POST /admin/api/account/app-import/stremio/unlock", h.signedIn(h.unlockStremio(h.ownAppImportTarget)))
 	mux.Handle("POST /admin/api/account/app-connections/{app}/import", h.signedIn(h.importAppConnection(h.ownAppImportTarget)))
 	mux.Handle("DELETE /admin/api/account/app-connections/{app}", h.signedIn(h.disconnectApp(h.ownAppConnectionTarget)))
 	own := notificationRoutes{h: h, owner: ownTargets}
@@ -302,6 +303,7 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/link/poll", h.administrator(h.pollStremioLink(h.userAppImportTarget)))
 	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/password", h.administrator(h.readStremioPassword(h.userAppImportTarget)))
 	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/key", h.administrator(h.readStremioKey(h.userAppImportTarget)))
+	mux.Handle("POST /admin/api/users/{id}/app-import/stremio/unlock", h.administrator(h.unlockStremio(h.userAppImportTarget)))
 	mux.Handle("POST /admin/api/users/{id}/app-connections/{app}/import", h.administrator(h.importAppConnection(h.userAppImportTarget)))
 	mux.Handle("DELETE /admin/api/users/{id}/app-connections/{app}", h.administrator(h.disconnectApp(h.userAppImportTarget)))
 	mux.Handle("GET /admin/api/invites", h.administrator(h.invites))
