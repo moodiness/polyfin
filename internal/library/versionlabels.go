@@ -26,11 +26,16 @@ const (
 // name none, or several; its dynamic range; and its audio languages, by
 // their ISO 639-2/B codes, with Multi for labels saying it has several
 // (MULTI, DUAL) without naming them all.
+//
+// Releases are the kinds of low-quality releases, of
+// accounts.ReleaseKinds, the labels tag the stream as, in the order they
+// tag them (see ReleaseKinds); none for most.
 type Labels struct {
 	Codec     string
 	Range     DynamicRange
 	Languages []string
 	Multi     bool
+	Releases  []string
 }
 
 // labelCodecs are the video codecs labels name, by the words naming them;
@@ -195,4 +200,104 @@ func labelFlags(label string) []string {
 		first = 0
 	}
 	return codes
+}
+
+// releaseTags are the tags naming low-quality releases, in lower case, by
+// their kind of accounts.ReleaseKinds: camera copies, telesyncs,
+// telecines, screeners and early copies.
+var releaseTags = map[string]string{
+	"cam": "cam", "hdcam": "cam",
+	"ts": "telesync", "hdts": "telesync", "telesync": "telesync",
+	"tc": "telecine", "telecine": "telecine",
+	"scr": "screener", "dvdscr": "screener",
+	"r5": "early", "workprint": "early",
+}
+
+// ReleaseKinds reads the kinds of low-quality releases the labels of a
+// stream tag it as, each once, in the order they come: an addon's name,
+// title, description or file name, each line of them apart. titles are
+// the names of what the stream plays, the movie's or the series', and the
+// episode's: a tag is a whole word of a line (see labelWords), in any
+// letter case, after the title's own words, so that a title named "Cam"
+// is not a camera copy. The title's words end where the line names one of
+// titles, after the last of them it names; in a line naming none, at its
+// first year or episode number (2018, S01E01, 1x01), which follows the
+// title's words in a release's name; in a line holding neither, every
+// word may be a tag. A line ending with ".ts" names an MPEG-TS file: the
+// extension is no telesync.
+func ReleaseKinds(titles []string, labels ...string) []string {
+	var named [][]string
+	for _, title := range titles {
+		if words := lowerWords(title); len(words) > 0 {
+			named = append(named, words)
+		}
+	}
+	var kinds []string
+	for _, label := range labels {
+		for line := range strings.Lines(label) {
+			line = strings.TrimSpace(line)
+			words := lowerWords(line)
+			if len(words) > 0 && strings.HasSuffix(strings.ToLower(line), ".ts") {
+				words = words[:len(words)-1]
+			}
+			for _, word := range words[titleEnd(words, named):] {
+				if kind, ok := releaseTags[word]; ok && !slices.Contains(kinds, kind) {
+					kinds = append(kinds, kind)
+				}
+			}
+		}
+	}
+	return kinds
+}
+
+// lowerWords are the words of a label (see labelWords), in lower case.
+func lowerWords(label string) []string {
+	words := labelWords(label)
+	for i, word := range words {
+		words[i] = strings.ToLower(word)
+	}
+	return words
+}
+
+// titleEnd is where the title's words end among the words of a line (see
+// ReleaseKinds): after the last of titles the line names, each where it
+// first does; else at the line's first year or episode number; else at
+// its start.
+func titleEnd(words []string, titles [][]string) int {
+	end := -1
+	for _, title := range titles {
+		for i := 0; i+len(title) <= len(words); i++ {
+			if slices.Equal(words[i:i+len(title)], title) {
+				end = max(end, i+len(title))
+				break
+			}
+		}
+	}
+	if end >= 0 {
+		return end
+	}
+	if i := slices.IndexFunc(words, releaseMark); i >= 0 {
+		return i + 1
+	}
+	return 0
+}
+
+// releaseMark reports whether a word of a release's name, in lower case,
+// is a year, from 1900 to 2099, or an episode number: S01, S01E01,
+// S01E01E02 or 1x01.
+func releaseMark(word string) bool {
+	digits := func(s string) bool {
+		return s != "" && !strings.ContainsFunc(s, func(r rune) bool { return r < '0' || r > '9' })
+	}
+	if len(word) == 4 && digits(word) {
+		return word[:2] == "19" || word[:2] == "20"
+	}
+	if season, episode, ok := strings.Cut(word, "x"); ok {
+		return len(season) <= 2 && digits(season) && digits(episode)
+	}
+	if rest, ok := strings.CutPrefix(word, "s"); ok {
+		season, episodes, numbered := strings.Cut(rest, "e")
+		return digits(season) && (!numbered || digits(strings.ReplaceAll(episodes, "e", "")))
+	}
+	return false
 }

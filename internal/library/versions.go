@@ -168,8 +168,9 @@ type target struct {
 	id       string
 	runtime  time.Duration
 	// name is the movie's or the series' name, whose words labels may
-	// repeat (see ReadLabels).
-	name string
+	// repeat (see ReadLabels); videoName an episode's, or a folder's
+	// video's, own name (see ReleaseKinds).
+	name, videoName string
 	// season and episode are the episode's, episode 0 for another title:
 	// a torrent's file without an index is found by them.
 	season, episode int
@@ -224,7 +225,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 			return target{}, view{}, ErrNotFound
 		}
 		t := target{item: id, kind: KindVideo, metaType: folder.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
-			name: folder.Meta.Name, holder: &folder}
+			name: folder.Meta.Name, videoName: r.Video.DisplayName(), holder: &folder}
 		s.embed(ctx, v, &t, false)
 		return t, v, nil
 	case (r.Kind == KindMovie || r.Kind == KindVideo || r.Kind == KindFolder) && r.Meta != nil:
@@ -248,7 +249,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 			return target{}, view{}, ErrNotFound
 		}
 		t := target{item: id, kind: KindEpisode, metaType: series.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
-			name: series.Meta.Name, season: int(r.Video.Season), episode: r.Video.EpisodeNumber(), holder: &series}
+			name: series.Meta.Name, videoName: r.Video.DisplayName(), season: int(r.Video.Season), episode: r.Video.EpisodeNumber(), holder: &series}
 		s.embed(ctx, v, &t, false)
 		return t, v, nil
 	default:
@@ -608,6 +609,7 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		// A replay holds one of its provider's connections, as a channel does.
 		HoldsConnection: t.kind == KindReplay,
 	}
+	version.Labels.Releases = ReleaseKinds([]string{t.name, t.videoName}, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
 	if stream.Torrent() {
 		version.URL = torrentLink(stream)
 		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources),

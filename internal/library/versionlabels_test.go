@@ -37,3 +37,41 @@ func TestLabelsTellCodecRangeAndLanguages(t *testing.T) {
 		}
 	}
 }
+
+// Labels tag low-quality releases by whole words after the title's own,
+// in any letter case: a title named after a tag, a tag inside a word and
+// a .ts file are none; each kind's tags are.
+func TestReleaseKindsReadTagsAfterTheTitle(t *testing.T) {
+	for _, tc := range []struct {
+		titles []string
+		labels []string
+		want   []string
+	}{
+		// The movie Cam, its name and others'.
+		{[]string{"Cam"}, []string{"Cam.2018.1080p.WEB-DL.mkv"}, nil},
+		{[]string{"The Cam"}, []string{"The Cam (2019) 1080p", "The.Cam.2019.mkv"}, nil},
+		{[]string{"Cam"}, []string{"Cam.2018.HDCAM.mkv"}, []string{"cam"}},
+		// The title's name spelled otherwise: the year ends its words.
+		{[]string{"The Cam"}, []string{"Cam.2019.WEB.mkv"}, nil},
+		{[]string{"Some Movie"}, []string{"Some.Movie.2026.HDCAM.x264.mkv"}, []string{"cam"}},
+		{[]string{"Some Movie"}, []string{"Some.Movie.2026.1080p.WEB.ts"}, nil},
+		{[]string{"Some Movie"}, []string{"Some.Movie.2026.TS.x264.ts"}, []string{"telesync"}},
+		{[]string{"It's Always Something"}, []string{"Its.Always.Something.S01E01.1080p.mkv"}, nil},
+		{[]string{"Some Show", "Pilot"}, []string{"Some.Show.S01E01.TS.mkv"}, []string{"telesync"}},
+		// An episode's own name is the title's.
+		{[]string{"Some Show", "The Cam"}, []string{"Some.Show.S01E02.The.Cam.1080p.mkv"}, nil},
+		{[]string{"Some Movie"}, []string{"Some Movie (2026) [HDTS] [x264]"}, []string{"telesync"}},
+		{[]string{"Some Movie"}, []string{"some.movie.2026.dvdscr.mkv"}, []string{"screener"}},
+		{[]string{"Some Movie"}, []string{"Server\nCAM 720p", "Some_Movie_2026_TELECINE"}, []string{"cam", "telecine"}},
+		{[]string{"Some Movie"}, []string{"Some.Movie.2026.TC.mkv", "Some-Movie-2026-SCR"}, []string{"telecine", "screener"}},
+		{[]string{"Some Movie"}, []string{"Some.Movie.2026.R5.LiNE", "Some Movie 2026 WORKPRINT"}, []string{"early"}},
+		{[]string{"Some Movie"}, []string{"HDCAM\n1080p", "TELESYNC 720p"}, []string{"cam", "telesync"}},
+		// Tags inside words, and words like tags, are none.
+		{[]string{"Some Movie"}, []string{"Some.Movie.2026.Cameo.Nights.TSX.DTS.mkv"}, nil},
+		{[]string{"Some Movie"}, []string{"Some.Movie.2026.2160p.WEB-DL.DDP5.1.mkv"}, nil},
+	} {
+		if got := ReleaseKinds(tc.titles, tc.labels...); !slices.Equal(got, tc.want) {
+			t.Errorf("%q of %q: %q, want %q", tc.labels, tc.titles, got, tc.want)
+		}
+	}
+}
