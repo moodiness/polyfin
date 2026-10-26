@@ -59,7 +59,7 @@ const settings: typeof en = {
       'Polyfin nomme lui-même certains éléments dans les applications Jellyfin : les saisons (« Saison 1 », « Épisodes spéciaux »), les épisodes sans titre et le type ajouté aux bibliothèques de même nom (« Populaires (Films) »).',
     legacyAuthorization: 'Autoriser l’authentification héritée',
     legacyAuthorizationHelp:
-      'Accepte les anciens en-têtes X-Emby-*, le paramètre api_key et le schéma Emby pour les applications qui en ont encore besoin. Désactivé par défaut, comme dans Jellyfin 12.3.',
+      'Accepte les anciens en-têtes X-Emby-*, le paramètre api_key et le schéma Emby pour les applications qui en ont encore besoin. Désactivé par défaut, comme dans Jellyfin 12.4.',
     siloApps: 'Autoriser les applications de Silo',
     siloAppsHelp:
       'Permet aux applications de Silo pour iPhone, iPad, Apple TV, Mac et Android de se connecter et de lire, par l’API de Silo sous /api/v2, comme les applications Jellyfin, dans les limites de chaque utilisateur. Désactivé, cette API ne répond rien.',

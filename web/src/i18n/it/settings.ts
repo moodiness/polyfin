@@ -59,7 +59,7 @@ const settings: typeof en = {
       'Polyfin assegna da sé alcuni nomi nelle applicazioni Jellyfin: le stagioni («Stagione 1», «Speciali»), gli episodi senza titolo e il tipo aggiunto alle librerie con lo stesso nome («Popolari (Film)»).',
     legacyAuthorization: 'Consenti l’autorizzazione legacy',
     legacyAuthorizationHelp:
-      'Accetta le vecchie intestazioni X-Emby-*, il parametro api_key e lo schema Emby per le applicazioni che ne hanno ancora bisogno. Disattivato per impostazione predefinita, come in Jellyfin 12.3.',
+      'Accetta le vecchie intestazioni X-Emby-*, il parametro api_key e lo schema Emby per le applicazioni che ne hanno ancora bisogno. Disattivato per impostazione predefinita, come in Jellyfin 12.4.',
     siloApps: 'Consenti le app di Silo',
     siloAppsHelp:
       'Permette alle app di Silo per iPhone, iPad, Apple TV, Mac e Android di accedere e riprodurre, tramite l’API di Silo in /api/v2, come le app Jellyfin, entro i limiti di ciascun utente. Disattivato, quell’API non risponde.',

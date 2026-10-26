@@ -40,7 +40,7 @@ func unboundedAddon(t *testing.T) string {
 	return server.URL + "/manifest.json"
 }
 
-// A rating that is not a finite number is no rating, as in Jellyfin 12.3,
+// A rating that is not a finite number is no rating, as in Jellyfin 12.4,
 // which keeps none (#18267): JSON has no such numbers, and an answer that
 // held one could not be written. An addon's counts as none; one sent to the
 // metadata editor ("NaN", "Infinity", "-Infinity", or a number too large

@@ -204,7 +204,7 @@ func (h *Handler) externalIDInfos(w http.ResponseWriter, r *http.Request) {
 // flexibleNumber binds a number as Jellyfin does from the metadata editor,
 // which sends the text of its fields: a number, or text holding one, and
 // null or empty text for none. A number that is not finite ("NaN",
-// "Infinity", or one too large for a float) is none too, as Jellyfin 12.3
+// "Infinity", or one too large for a float) is none too, as Jellyfin 12.4
 // takes it: it keeps no such rating.
 type flexibleNumber struct{ value *float64 }
 

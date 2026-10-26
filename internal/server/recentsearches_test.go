@@ -201,7 +201,7 @@ async function run(scenario) {
       querySelectorAll: (selector) => body.querySelectorAll(selector),
     }
     const fire = (type) => { for (const listener of listeners[type] || []) listener({ type }) }
-    // jellyfin-web 12.3's search page: the field, then the Suggestions or
+    // jellyfin-web 12.4's search page: the field, then the Suggestions or
     // what the search found. React keeps nodes it did not make in place.
     let page = null
     const own = new WeakSet()

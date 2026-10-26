@@ -1,4 +1,4 @@
-// Package jellyfin serves the Jellyfin 12.3 HTTP API to Jellyfin apps.
+// Package jellyfin serves the Jellyfin 12.4 HTTP API to Jellyfin apps.
 package jellyfin
 
 import (
@@ -41,7 +41,7 @@ import (
 
 const (
 	// Version is the Jellyfin server version Polyfin reproduces.
-	Version = "12.3.0"
+	Version = "12.4.0"
 	// productName identifies a Jellyfin-compatible server to apps; it is a
 	// protocol value, not a claim to be Jellyfin.
 	productName = "Jellyfin Server"

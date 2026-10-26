@@ -374,7 +374,7 @@ func parseRuntime(text string) time.Duration {
 
 // parseRating reads an addon's IMDb rating, 0 for none. Text that reads as
 // a number that is not finite ("NaN", "Infinity", "1e999") is none, as
-// Jellyfin 12.3 keeps none: JSON has no such numbers.
+// Jellyfin 12.4 keeps none: JSON has no such numbers.
 func parseRating(text string) float64 {
 	rating, _ := strconv.ParseFloat(strings.TrimSpace(text), 64)
 	if math.IsNaN(rating) || math.IsInf(rating, 0) {

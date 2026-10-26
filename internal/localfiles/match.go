@@ -340,7 +340,7 @@ func chooseResult(kind string, n name, results []library.RemoteResult, exact boo
 //
 // Jellyfin's TMDb ranking scores a year one off as the very year
 // (MediaBrowser.Providers/Plugins/Tmdb/TmdbUtils.cs, ScoreYear, lines
-// 246-255 at v12.3) and keeps the provider's first title of the best
+// 246-255 at v12.4) and keeps the provider's first title of the best
 // score; here a title of the very year always wins, and a title is kept
 // only when it is the only one left.
 func chooseItem(kind library.Kind, title string, year int, results []library.RemoteResult, exact bool) (item library.Item, by, reason string) {

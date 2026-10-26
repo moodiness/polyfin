@@ -55,7 +55,7 @@ const settings = {
       'Polyfin names some things itself in Jellyfin apps: seasons (“Season 1”, “Specials”), episodes without a title, and the type added to libraries that share a name (“Popular (Movies)”).',
     legacyAuthorization: 'Allow legacy authorization',
     legacyAuthorizationHelp:
-      'Accepts the old X-Emby-* headers, the api_key parameter and the Emby scheme for apps that still need them. Off by default, like Jellyfin 12.3.',
+      'Accepts the old X-Emby-* headers, the api_key parameter and the Emby scheme for apps that still need them. Off by default, like Jellyfin 12.4.',
     siloApps: 'Allow Silo’s apps',
     siloAppsHelp:
       'Lets Silo’s apps for iPhone, iPad, Apple TV, Mac and Android sign in and play, under Silo’s API at /api/v2, as Jellyfin apps do, within each user’s limits. Off, that API answers nothing.',

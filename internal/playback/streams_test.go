@@ -321,9 +321,9 @@ func TestVideoSizes(t *testing.T) {
 }
 
 // A video track ffprobe gives no frame size, as a live stream probed early
-// (Jellyfin 12.3's test data video_ts_no_dimensions*.json), takes its aspect
+// (Jellyfin 12.4's test data video_ts_no_dimensions*.json), takes its aspect
 // ratio from the display aspect ratio alone: none without one, and none for
-// an unknown one, which Jellyfin 12.3 reports as "0:1". Its pixels are not
+// an unknown one, which Jellyfin 12.4 reports as "0:1". Its pixels are not
 // anamorphic when their shape is unknown.
 func TestVideoWithoutFrameSize(t *testing.T) {
 	for _, c := range []struct {
