@@ -9,6 +9,7 @@ import {
   type AcmeChallenge,
   type HttpsMode,
   type Settings,
+  type TrackLanguage,
   type VersionCodec,
   type VersionCriterion,
   type WebTheme,
@@ -466,8 +467,44 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
           />
         </FieldRow>
       </SettingsGroup>
+      <SettingsGroup title={s.defaultLanguagesGroup}>
+        <FieldRow
+          anchor="default-audio-language"
+          label={s.defaultAudioLanguage}
+          help={s.defaultAudioLanguageHelp}
+          error={error('default-audio-language')}
+        >
+          <Select
+            value={form.defaultAudioLanguage}
+            options={trackLanguageOptions(form.trackLanguages, s.noDefaultLanguage)}
+            onValue={(defaultAudioLanguage) => update({ defaultAudioLanguage })}
+            className="max-w-xs"
+          />
+        </FieldRow>
+        <FieldRow
+          anchor="default-subtitle-language"
+          label={s.defaultSubtitleLanguage}
+          help={s.defaultSubtitleLanguageHelp}
+          error={error('default-subtitle-language')}
+        >
+          <Select
+            value={form.defaultSubtitleLanguage}
+            options={trackLanguageOptions(form.trackLanguages, s.noDefaultLanguage)}
+            onValue={(defaultSubtitleLanguage) => update({ defaultSubtitleLanguage })}
+            className="max-w-xs"
+          />
+        </FieldRow>
+      </SettingsGroup>
     </>
   )
+}
+
+/** The choices of a default track language: none, then the languages by English name. */
+function trackLanguageOptions(languages: TrackLanguage[], none: string) {
+  return [
+    { value: '', label: none },
+    ...languages.map((language) => ({ value: language.code, label: language.name })),
+  ]
 }
 
 /**

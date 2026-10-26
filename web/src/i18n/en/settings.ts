@@ -252,7 +252,7 @@ const settings = {
     versionOrderGroup: 'Version order',
     versionOrder: {
       label: 'Order versions by',
-      help: 'Each criterion groups the versions of a movie or an episode, and the next one sorts them within each group; versions that tie keep the addons’ order. The first version is the one Play starts, and the versions tried when it does not work come next. Polyfin goes by what it knows of a version without reading the file: its analysis once played, else RemuxDB’s description, else the words of its labels. A version a criterion knows nothing of comes after the others. The preferred audio language is each user’s own, set in their app: versions known in that language come first, then those labeled MULTI or DUAL, then those of unknown language. While a title’s page is open, the versions it shows keep their places.',
+      help: 'Each criterion groups the versions of a movie or an episode, and the next one sorts them within each group; versions that tie keep the addons’ order. The first version is the one Play starts, and the versions tried when it does not work come next. Polyfin goes by what it knows of a version without reading the file: its analysis once played, else RemuxDB’s description, else the words of its labels. A version a criterion knows nothing of comes after the others. The preferred audio language is each user’s own, set in their app, else Default audio language: versions known in that language come first, then those labeled MULTI or DUAL, then those of unknown language. While a title’s page is open, the versions it shows keep their places.',
       none: 'None: versions keep the addons’ order.',
       add: 'Add a criterion',
       remove: (name: string) => `Remove ${name}`,
@@ -311,6 +311,14 @@ const settings = {
     playbackHistoryDays: 'Days to keep playback history',
     playbackHistoryDaysHelp: (r: RangeText) =>
       `Older playbacks are deleted. This is checked every day. From ${r.min} to ${r.max}, ${r.default} by default.`,
+    defaultLanguagesGroup: 'Default languages',
+    defaultAudioLanguage: 'Default audio language',
+    defaultAudioLanguageHelp:
+      'For the users who chose no audio language in their app, Polyfin plays the audio track in this language when a version has one, and puts the versions known in this language first when versions are ordered by language. A user’s own choice always wins, and their app keeps showing it as they left it. This language comes before the track the file flags as default, even for users whose app plays the default track whatever its language, a setting on until they turn it off; a file without it plays its flagged track. None by default.',
+    defaultSubtitleLanguage: 'Default subtitle language',
+    defaultSubtitleLanguageHelp:
+      'For the users who chose no subtitle language in their app, Polyfin shows subtitles in this language as each user’s subtitle mode says. A user’s own choice always wins, and their app keeps showing it as they left it. None by default.',
+    noDefaultLanguage: 'None',
     publicAddress: 'Public address',
     publicAddressHelp:
       'The address people open Polyfin at, such as https://media.example.org. Links in notifications start with it; empty, messages carry no link. When it starts with https://, Redirect HTTP to HTTPS, under Settings › Security, goes to its port, 443 when it names none.',

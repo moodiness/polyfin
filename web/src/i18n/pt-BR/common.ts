@@ -118,6 +118,7 @@ const common: typeof en = {
     invalid_subtitle_ocr: 'Escolha na lista quando as legendas em imagem são convertidas em texto.',
     invalid_subtitle_ocr_tracks:
       'As faixas de legendas em imagem lidas simultaneamente devem ser um número inteiro de 1 a 4.',
+    invalid_default_language: 'Escolha um idioma padrão da lista.',
     invalid_encoder_preset: 'Escolha uma velocidade de codificação da lista.',
     invalid_video_quality: 'A qualidade de vídeo deve ser 0, ou um número inteiro de 1 a 51.',
     invalid_hardware_acceleration: 'Escolha uma placa de vídeo da lista.',

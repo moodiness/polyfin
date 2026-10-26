@@ -534,6 +534,13 @@ type settingsJSON struct {
 	// their current values when a PUT leaves them out.
 	SubtitleOCR       *string `json:"subtitleOcr"`
 	SubtitleOCRTracks *int    `json:"subtitleOcrTracks"`
+	// DefaultAudioLanguage and DefaultSubtitleLanguage, "" or one of the
+	// ISO 639-2/B codes of TrackLanguages, keep their current values when
+	// a PUT leaves them out. TrackLanguages are the languages they offer,
+	// those of users' own preferences; a PUT ignores them.
+	DefaultAudioLanguage    *string             `json:"defaultAudioLanguage"`
+	DefaultSubtitleLanguage *string             `json:"defaultSubtitleLanguage"`
+	TrackLanguages          []trackLanguageJSON `json:"trackLanguages"`
 	// The settings tuning conversions keep their current values when a
 	// PUT leaves them out. ConversionHardware is what conversions run on;
 	// a PUT cannot change it.
@@ -832,6 +839,10 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		ConvertedDownloads:    &settings.ConvertedDownloads,
 		SubtitleOCR:           &settings.SubtitleOCR,
 		SubtitleOCRTracks:     &settings.SubtitleOCRTracks,
+
+		DefaultAudioLanguage:    &settings.DefaultAudioLanguage,
+		DefaultSubtitleLanguage: &settings.DefaultSubtitleLanguage,
+		TrackLanguages:          trackLanguages(),
 
 		EncoderPreset:              &settings.EncoderPreset,
 		H264Quality:                &settings.H264Quality,
@@ -1545,6 +1556,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ConvertedDownloads:    valueOr(body.ConvertedDownloads, current.ConvertedDownloads),
 		SubtitleOCR:           valueOr(body.SubtitleOCR, current.SubtitleOCR),
 		SubtitleOCRTracks:     valueOr(body.SubtitleOCRTracks, current.SubtitleOCRTracks),
+
+		DefaultAudioLanguage:    valueOr(body.DefaultAudioLanguage, current.DefaultAudioLanguage),
+		DefaultSubtitleLanguage: valueOr(body.DefaultSubtitleLanguage, current.DefaultSubtitleLanguage),
 
 		EncoderPreset:              valueOr(body.EncoderPreset, current.EncoderPreset),
 		H264Quality:                valueOr(body.H264Quality, current.H264Quality),

@@ -257,7 +257,7 @@ const settings: typeof en = {
     versionOrderGroup: 'Versionsreihenfolge',
     versionOrder: {
       label: 'Versionen sortieren nach',
-      help: 'Jedes Kriterium gruppiert die Versionen eines Films oder einer Folge, und das nächste sortiert sie innerhalb jeder Gruppe; gleichrangige Versionen behalten die Reihenfolge der Add-ons. Die erste Version ist die, die „Abspielen“ startet, und die Versionen, die versucht werden, wenn sie nicht funktioniert, folgen danach. Polyfin richtet sich nach dem, was es über eine Version weiß, ohne die Datei zu lesen: nach ihrer Analyse, sobald sie abgespielt wurde, sonst nach der Beschreibung von RemuxDB, sonst nach den Wörtern ihrer Bezeichnungen. Eine Version, über die ein Kriterium nichts weiß, kommt nach den anderen. Die bevorzugte Audiosprache ist die jedes einzelnen Benutzers, eingestellt in seiner App: Versionen, die bekanntermaßen in dieser Sprache sind, kommen zuerst, dann solche mit MULTI oder DUAL, dann solche mit unbekannter Sprache. Solange die Seite eines Titels geöffnet ist, behalten die dort angezeigten Versionen ihre Plätze.',
+      help: 'Jedes Kriterium gruppiert die Versionen eines Films oder einer Folge, und das nächste sortiert sie innerhalb jeder Gruppe; gleichrangige Versionen behalten die Reihenfolge der Add-ons. Die erste Version ist die, die „Abspielen“ startet, und die Versionen, die versucht werden, wenn sie nicht funktioniert, folgen danach. Polyfin richtet sich nach dem, was es über eine Version weiß, ohne die Datei zu lesen: nach ihrer Analyse, sobald sie abgespielt wurde, sonst nach der Beschreibung von RemuxDB, sonst nach den Wörtern ihrer Bezeichnungen. Eine Version, über die ein Kriterium nichts weiß, kommt nach den anderen. Die bevorzugte Audiosprache ist die jedes einzelnen Benutzers, eingestellt in seiner App, sonst die Standard-Audiosprache: Versionen, die bekanntermaßen in dieser Sprache sind, kommen zuerst, dann solche mit MULTI oder DUAL, dann solche mit unbekannter Sprache. Solange die Seite eines Titels geöffnet ist, behalten die dort angezeigten Versionen ihre Plätze.',
       none: 'Keine: Die Versionen behalten die Reihenfolge der Add-ons.',
       add: 'Kriterium hinzufügen',
       remove: (name: string) => `${name} entfernen`,
@@ -317,6 +317,14 @@ const settings: typeof en = {
     playbackHistoryDays: 'Aufbewahrungsdauer des Wiedergabeverlaufs (Tage)',
     playbackHistoryDaysHelp: (r: RangeText) =>
       `Ältere Wiedergaben werden gelöscht. Das wird täglich geprüft. Von ${r.min} bis ${r.max}, standardmäßig ${r.default}.`,
+    defaultLanguagesGroup: 'Standardsprachen',
+    defaultAudioLanguage: 'Standard-Audiosprache',
+    defaultAudioLanguageHelp:
+      'Für Benutzer, die in ihrer App keine Audiosprache gewählt haben, spielt Polyfin die Audiospur in dieser Sprache, wenn eine Version sie hat, und stellt Versionen, die bekanntermaßen in dieser Sprache sind, zuerst, wenn Versionen nach Sprache geordnet werden. Die eigene Wahl eines Benutzers hat immer Vorrang, und seine App zeigt sie weiter so, wie er sie gelassen hat. Diese Sprache kommt vor der Spur, die die Datei als Standard markiert, auch für Benutzer, deren App die Standardspur unabhängig von ihrer Sprache abspielt, eine Einstellung, die an ist, bis sie sie ausschalten; eine Datei ohne sie spielt ihre markierte Spur. Standardmäßig keine.',
+    defaultSubtitleLanguage: 'Standard-Untertitelsprache',
+    defaultSubtitleLanguageHelp:
+      'Für Benutzer, die in ihrer App keine Untertitelsprache gewählt haben, zeigt Polyfin Untertitel in dieser Sprache, wie es der Untertitelmodus jedes Benutzers vorgibt. Die eigene Wahl eines Benutzers hat immer Vorrang, und seine App zeigt sie weiter so, wie er sie gelassen hat. Standardmäßig keine.',
+    noDefaultLanguage: 'Keine',
     publicAddress: 'Öffentliche Adresse',
     publicAddressHelp:
       'Die Adresse, unter der Polyfin aufgerufen wird, etwa https://media.example.org. Links in Benachrichtigungen beginnen damit; ist sie leer, enthalten Nachrichten keinen Link. Beginnt sie mit https://, leitet „HTTP auf HTTPS umleiten“ unter Einstellungen › Sicherheit auf ihren Port um, oder auf 443, wenn sie keinen angibt.',

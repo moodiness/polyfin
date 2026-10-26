@@ -120,6 +120,7 @@ const common: typeof en = {
     invalid_subtitle_ocr: 'Scegli dall’elenco quando convertire in testo i sottotitoli grafici.',
     invalid_subtitle_ocr_tracks:
       'Le tracce di sottotitoli grafici lette contemporaneamente devono essere un numero intero da 1 a 4.',
+    invalid_default_language: 'Scegli una lingua predefinita dall’elenco.',
     invalid_encoder_preset: 'Scegli una velocità di codifica dall’elenco.',
     invalid_video_quality: 'La qualità video deve essere 0, oppure un numero intero da 1 a 51.',
     invalid_hardware_acceleration: 'Scegli una scheda grafica dall’elenco.',

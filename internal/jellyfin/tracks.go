@@ -36,7 +36,16 @@ func newTrackPreferences(configuration UserConfiguration) trackPreferences {
 
 // trackPreferences returns the track preferences of user. When they cannot
 // be read, titles are still described and played, with a new user's
-// default tracks.
+// default tracks. Where the user chose no audio or subtitle language,
+// the server's default one applies (Settings › Playback), with the user's
+// own subtitle mode; their configuration itself keeps it empty, so that an
+// app saving it back never makes the default their own choice.
+//
+// The server's audio language ranks above the track flagged default: the
+// administrator chose it for users who chose none, and
+// PlayDefaultAudioTrack, on for every new user, is an app default rather
+// than their choice. A user's own language keeps Jellyfin's rule, the
+// flagged track first while PlayDefaultAudioTrack is on.
 func (h *Handler) trackPreferences(ctx context.Context, user accounts.User) trackPreferences {
 	configuration, err := h.userConfiguration(ctx, user.ID)
 	if err != nil {
@@ -45,7 +54,16 @@ func (h *Handler) trackPreferences(ctx context.Context, user accounts.User) trac
 		}
 		configuration = defaultUserConfiguration()
 	}
-	return newTrackPreferences(configuration)
+	preferences := newTrackPreferences(configuration)
+	settings := h.Accounts.Settings()
+	if preferences.audioLanguage == "" && settings.DefaultAudioLanguage != "" {
+		preferences.audioLanguage = settings.DefaultAudioLanguage
+		preferences.playDefaultAudio = false
+	}
+	if preferences.subtitleLanguage == "" {
+		preferences.subtitleLanguage = settings.DefaultSubtitleLanguage
+	}
+	return preferences
 }
 
 // defaultAudio is the audio track a decision plays when none is asked:

@@ -115,6 +115,7 @@ const common = {
     invalid_subtitle_ocr: 'Choose from the list when picture subtitles are turned into text.',
     invalid_subtitle_ocr_tracks:
       'Picture subtitle tracks read at once must be a whole number from 1 to 4.',
+    invalid_default_language: 'Choose a default language from the list.',
     invalid_encoder_preset: 'Choose an encoding speed from the list.',
     invalid_video_quality: 'Video quality must be 0, or a whole number from 1 to 51.',
     invalid_hardware_acceleration: 'Choose a graphics card from the list.',

@@ -257,7 +257,7 @@ const settings: typeof en = {
     versionOrderGroup: 'Ordre des versions',
     versionOrder: {
       label: 'Trier les versions par',
-      help: 'Chaque critère regroupe les versions d’un film ou d’un épisode, et le suivant les trie dans chaque groupe ; les versions à égalité gardent l’ordre des addons. La première version est celle que lance « Lire », et les versions essayées quand elle ne marche pas viennent ensuite. Polyfin se fie à ce qu’il sait d’une version sans lire le fichier : son analyse une fois lue, sinon la description de RemuxDB, sinon les mots de ses libellés. Une version dont un critère ne sait rien passe après les autres. La langue audio préférée est celle de chaque utilisateur, réglée dans son appli : les versions connues dans cette langue d’abord, puis celles marquées MULTI ou DUAL, puis celles de langue inconnue. Tant que la page d’un titre est ouverte, les versions qu’elle affiche gardent leur place.',
+      help: 'Chaque critère regroupe les versions d’un film ou d’un épisode, et le suivant les trie dans chaque groupe ; les versions à égalité gardent l’ordre des addons. La première version est celle que lance « Lire », et les versions essayées quand elle ne marche pas viennent ensuite. Polyfin se fie à ce qu’il sait d’une version sans lire le fichier : son analyse une fois lue, sinon la description de RemuxDB, sinon les mots de ses libellés. Une version dont un critère ne sait rien passe après les autres. La langue audio préférée est celle de chaque utilisateur, réglée dans son appli, sinon la Langue audio par défaut : les versions connues dans cette langue d’abord, puis celles marquées MULTI ou DUAL, puis celles de langue inconnue. Tant que la page d’un titre est ouverte, les versions qu’elle affiche gardent leur place.',
       none: 'Aucun : les versions gardent l’ordre des addons.',
       add: 'Ajouter un critère',
       remove: (name: string) => `Retirer « ${name} »`,
@@ -317,6 +317,14 @@ const settings: typeof en = {
     playbackHistoryDays: 'Jours de conservation de l’historique de lecture',
     playbackHistoryDaysHelp: (r: RangeText) =>
       `Les lectures plus anciennes sont supprimées. La vérification a lieu chaque jour. De ${r.min} à ${r.max}, ${r.default} par défaut.`,
+    defaultLanguagesGroup: 'Langues par défaut',
+    defaultAudioLanguage: 'Langue audio par défaut',
+    defaultAudioLanguageHelp:
+      'Pour les utilisateurs qui n’ont choisi aucune langue audio dans leur appli, Polyfin lit la piste audio dans cette langue quand une version en a une, et place d’abord les versions connues dans cette langue quand les versions sont triées par langue. Le choix d’un utilisateur l’emporte toujours, et son appli continue de l’afficher tel qu’il l’a laissé. Cette langue passe avant la piste que le fichier marque par défaut, même pour les utilisateurs dont l’appli lit la piste par défaut quelle que soit sa langue, un réglage activé tant qu’ils ne le désactivent pas ; un fichier sans elle lit sa piste marquée. Aucune par défaut.',
+    defaultSubtitleLanguage: 'Langue des sous-titres par défaut',
+    defaultSubtitleLanguageHelp:
+      'Pour les utilisateurs qui n’ont choisi aucune langue de sous-titres dans leur appli, Polyfin affiche des sous-titres dans cette langue selon le mode de sous-titres de chacun. Le choix d’un utilisateur l’emporte toujours, et son appli continue de l’afficher tel qu’il l’a laissé. Aucune par défaut.',
+    noDefaultLanguage: 'Aucune',
     publicAddress: 'Adresse publique',
     publicAddressHelp:
       'L’adresse à laquelle on ouvre Polyfin, comme https://media.example.org. Les liens des notifications commencent par elle ; vide, les messages n’ont pas de lien. Quand elle commence par https://, « Rediriger HTTP vers HTTPS », dans Paramètres › Sécurité, mène à son port, 443 quand elle n’en indique pas.',

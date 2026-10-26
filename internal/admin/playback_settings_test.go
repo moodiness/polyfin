@@ -133,3 +133,38 @@ func TestSettingsVersionRules(t *testing.T) {
 		}
 	}
 }
+
+// The default audio and subtitle languages are none by default; a PUT
+// saves a language users' own preferences offer, or none again, one
+// leaving them out keeps them, and another code is refused.
+func TestSettingsDefaultLanguages(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	languages := func(body map[string]any) [2]any {
+		return [2]any{body["defaultAudioLanguage"], body["defaultSubtitleLanguage"]}
+	}
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); languages(body) != [2]any{"", ""} {
+		t.Errorf("default settings: %v", languages(body))
+	}
+	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "legacyAuthorization": false, "language": "en"}
+	settings := maps.Clone(base)
+	maps.Copy(settings, map[string]any{"defaultAudioLanguage": "fre", "defaultSubtitleLanguage": "ger"})
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK || languages(body) != [2]any{"fre", "ger"} {
+		t.Fatalf("saving the languages: %d %v", status, body)
+	}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK || languages(body) != [2]any{"fre", "ger"} {
+		t.Errorf("saving without them: %d %v", status, languages(body))
+	}
+	for _, code := range []string{"fra", "fr", "xx", "FRE"} {
+		refused := maps.Clone(base)
+		refused["defaultAudioLanguage"] = code
+		if status, body, _ := administrator.call(http.MethodPut, "/settings", refused); status != http.StatusBadRequest || body["error"] != "invalid_default_language" {
+			t.Errorf("%q: %d %v", code, status, body)
+		}
+	}
+	maps.Copy(settings, map[string]any{"defaultAudioLanguage": "", "defaultSubtitleLanguage": ""})
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK || languages(body) != [2]any{"", ""} {
+		t.Errorf("saving none again: %d %v", status, languages(body))
+	}
+}

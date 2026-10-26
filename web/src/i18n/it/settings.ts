@@ -258,7 +258,7 @@ const settings: typeof en = {
     versionOrderGroup: 'Ordine delle versioni',
     versionOrder: {
       label: 'Ordina le versioni per',
-      help: 'Ogni criterio raggruppa le versioni di un film o di un episodio, e quello successivo le ordina all’interno di ciascun gruppo; le versioni a pari merito mantengono l’ordine degli add-on. La prima versione è quella avviata da Riproduci, e le versioni provate quando non funziona vengono subito dopo. Polyfin si basa su ciò che sa di una versione senza leggere il file: la sua analisi dopo la riproduzione, altrimenti la descrizione di RemuxDB, altrimenti le parole delle sue etichette. Una versione di cui un criterio non sa nulla viene dopo le altre. La lingua audio preferita è quella di ciascun utente, impostata nella sua applicazione: prima le versioni note in quella lingua, poi quelle etichettate MULTI o DUAL, poi quelle di lingua sconosciuta. Finché la pagina di un titolo è aperta, le versioni mostrate mantengono la loro posizione.',
+      help: 'Ogni criterio raggruppa le versioni di un film o di un episodio, e quello successivo le ordina all’interno di ciascun gruppo; le versioni a pari merito mantengono l’ordine degli add-on. La prima versione è quella avviata da Riproduci, e le versioni provate quando non funziona vengono subito dopo. Polyfin si basa su ciò che sa di una versione senza leggere il file: la sua analisi dopo la riproduzione, altrimenti la descrizione di RemuxDB, altrimenti le parole delle sue etichette. Una versione di cui un criterio non sa nulla viene dopo le altre. La lingua audio preferita è quella di ciascun utente, impostata nella sua applicazione, altrimenti la Lingua audio predefinita: prima le versioni note in quella lingua, poi quelle etichettate MULTI o DUAL, poi quelle di lingua sconosciuta. Finché la pagina di un titolo è aperta, le versioni mostrate mantengono la loro posizione.',
       none: 'Nessuno: le versioni mantengono l’ordine degli add-on.',
       add: 'Aggiungi un criterio',
       remove: (name: string) => `Rimuovi «${name}»`,
@@ -318,6 +318,14 @@ const settings: typeof en = {
     playbackHistoryDays: 'Giorni di conservazione della cronologia di riproduzione',
     playbackHistoryDaysHelp: (r: RangeText) =>
       `Le riproduzioni più vecchie vengono eliminate. Il controllo avviene ogni giorno. Da ${r.min} a ${r.max}, ${r.default} per impostazione predefinita.`,
+    defaultLanguagesGroup: 'Lingue predefinite',
+    defaultAudioLanguage: 'Lingua audio predefinita',
+    defaultAudioLanguageHelp:
+      'Per gli utenti che non hanno scelto una lingua audio nella loro applicazione, Polyfin riproduce la traccia audio in questa lingua quando una versione ne ha una, e mette prima le versioni note in questa lingua quando le versioni sono ordinate per lingua. La scelta di un utente prevale sempre, e la sua applicazione continua a mostrarla come l’ha lasciata. Questa lingua viene prima della traccia che il file indica come predefinita, anche per gli utenti la cui applicazione riproduce la traccia predefinita qualunque sia la sua lingua, un’impostazione attiva finché non la disattivano; un file senza di essa riproduce la traccia indicata. Nessuna per impostazione predefinita.',
+    defaultSubtitleLanguage: 'Lingua dei sottotitoli predefinita',
+    defaultSubtitleLanguageHelp:
+      'Per gli utenti che non hanno scelto una lingua dei sottotitoli nella loro applicazione, Polyfin mostra i sottotitoli in questa lingua secondo la modalità sottotitoli di ciascuno. La scelta di un utente prevale sempre, e la sua applicazione continua a mostrarla come l’ha lasciata. Nessuna per impostazione predefinita.',
+    noDefaultLanguage: 'Nessuna',
     publicAddress: 'Indirizzo pubblico',
     publicAddressHelp:
       'L’indirizzo da cui si apre Polyfin, ad esempio https://media.example.org. I link nelle notifiche iniziano con questo indirizzo; se vuoto, i messaggi non contengono link. Quando inizia con https://, «Reindirizza HTTP a HTTPS», in Impostazioni › Sicurezza, punta alla sua porta, 443 se non ne indica una.',

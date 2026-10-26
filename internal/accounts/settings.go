@@ -14,11 +14,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/moodiness/polyfin/internal/i18n"
+	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/torrent"
 )
 
@@ -270,6 +272,27 @@ const (
 	MaxSubtitleOCRTracks     = 4
 	DefaultSubtitleOCRTracks = 1
 )
+
+// ErrInvalidDefaultLanguage reports a DefaultAudioLanguage or a
+// DefaultSubtitleLanguage not among TrackLanguages.
+var ErrInvalidDefaultLanguage = errors.New("invalid default track language")
+
+// TrackLanguages are the values DefaultAudioLanguage and
+// DefaultSubtitleLanguage take: "" for none, the default, then the ISO
+// 639-2/B code of each of localization.Languages, the codes jellyfin-web
+// saves as a user's own preferences (from /Localization/Cultures).
+var TrackLanguages = sync.OnceValue(func() []string {
+	codes := []string{""}
+	for _, language := range localization.Languages() {
+		codes = append(codes, language.Bibliographic)
+	}
+	return codes
+})
+
+// validTrackLanguage reports whether code is one of TrackLanguages.
+func validTrackLanguage(code string) bool {
+	return slices.Contains(TrackLanguages(), code)
+}
 
 // The bounds and defaults of Settings.AnalysisTimeout, in seconds,
 // VersionAttempts and MaxConversions. A source that does not answer within
@@ -1396,6 +1419,12 @@ type Settings struct {
 	// SubtitleOCRModes; SubtitleOCRTracks bounds the tracks read at once.
 	SubtitleOCR       string
 	SubtitleOCRTracks int
+	// DefaultAudioLanguage and DefaultSubtitleLanguage are the audio and
+	// subtitle languages of the users who chose none, ISO 639-2/B codes
+	// as their own preferences take them, empty for none (see
+	// jellyfin.trackPreferences). A user's own choice always wins.
+	DefaultAudioLanguage    string
+	DefaultSubtitleLanguage string
 	// The settings below tune the conversions of files and Live TV alike,
 	// as Jellyfin's Transcoding page does (recordings copy the stream).
 	// EncoderPreset trades encoding speed for quality, one of
@@ -1822,6 +1851,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
 	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, " +
+	"default_audio_language, default_subtitle_language, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"adaptive_quality, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
@@ -1872,6 +1902,7 @@ func (settings *Settings) fields() []any {
 		&settings.HiddenVersionWords,
 		&settings.NameHowVersionsPlay,
 		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads, &settings.SubtitleOCR, &settings.SubtitleOCRTracks,
+		&settings.DefaultAudioLanguage, &settings.DefaultSubtitleLanguage,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.AdaptiveQuality,
 		&settings.ToneMapping, &settings.ToneMappingAlgorithm, &settings.ToneMappingPeak, &settings.ToneMappingDesat, &settings.GPUToneMapping, &settings.ProcessorToneMappingHeight,
@@ -2221,6 +2252,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.SubtitleOCRTracks < MinSubtitleOCRTracks || settings.SubtitleOCRTracks > MaxSubtitleOCRTracks {
 		return Settings{}, ErrInvalidSubtitleOCRTracks
+	}
+	if !validTrackLanguage(settings.DefaultAudioLanguage) || !validTrackLanguage(settings.DefaultSubtitleLanguage) {
+		return Settings{}, ErrInvalidDefaultLanguage
 	}
 	codecs, err := validConversion(settings)
 	if err != nil {

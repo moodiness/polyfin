@@ -255,7 +255,7 @@ const settings: typeof en = {
     versionOrderGroup: 'Ordem das versões',
     versionOrder: {
       label: 'Ordenar versões por',
-      help: 'Cada critério agrupa as versões de um filme ou episódio, e o seguinte as ordena dentro de cada grupo; versões empatadas mantêm a ordem dos complementos. A primeira versão é a que “Reproduzir” inicia, e as versões tentadas quando ela não funciona vêm em seguida. O Polyfin se baseia no que sabe de uma versão sem ler o arquivo: sua análise depois de reproduzida, senão a descrição do RemuxDB, senão as palavras dos seus rótulos. Uma versão sobre a qual um critério não sabe nada fica depois das outras. O idioma de áudio preferido é o de cada usuário, definido no aplicativo dele: primeiro as versões conhecidas nesse idioma, depois as marcadas como MULTI ou DUAL, depois as de idioma desconhecido. Enquanto a página de um título estiver aberta, as versões exibidas mantêm suas posições.',
+      help: 'Cada critério agrupa as versões de um filme ou episódio, e o seguinte as ordena dentro de cada grupo; versões empatadas mantêm a ordem dos complementos. A primeira versão é a que “Reproduzir” inicia, e as versões tentadas quando ela não funciona vêm em seguida. O Polyfin se baseia no que sabe de uma versão sem ler o arquivo: sua análise depois de reproduzida, senão a descrição do RemuxDB, senão as palavras dos seus rótulos. Uma versão sobre a qual um critério não sabe nada fica depois das outras. O idioma de áudio preferido é o de cada usuário, definido no aplicativo dele, ou então o Idioma de áudio padrão: primeiro as versões conhecidas nesse idioma, depois as marcadas como MULTI ou DUAL, depois as de idioma desconhecido. Enquanto a página de um título estiver aberta, as versões exibidas mantêm suas posições.',
       none: 'Nenhum: as versões mantêm a ordem dos complementos.',
       add: 'Adicionar critério',
       remove: (name: string) => `Remover ${name}`,
@@ -314,6 +314,14 @@ const settings: typeof en = {
     playbackHistoryDays: 'Dias para manter o histórico de reprodução',
     playbackHistoryDaysHelp: (r: RangeText) =>
       `Reproduções mais antigas são excluídas. A verificação é feita todos os dias. De ${r.min} a ${r.max}, ${r.default} por padrão.`,
+    defaultLanguagesGroup: 'Idiomas padrão',
+    defaultAudioLanguage: 'Idioma de áudio padrão',
+    defaultAudioLanguageHelp:
+      'Para os usuários que não escolheram um idioma de áudio no aplicativo, o Polyfin reproduz a faixa de áudio neste idioma quando uma versão tem uma, e coloca primeiro as versões conhecidas neste idioma quando as versões são ordenadas por idioma. A escolha do próprio usuário sempre prevalece, e o aplicativo dele continua a mostrá-la como ele a deixou. Este idioma vem antes da faixa que o arquivo marca como padrão, mesmo para usuários cujo aplicativo reproduz a faixa padrão seja qual for o idioma, uma configuração ativada até que eles a desativem; um arquivo sem ele reproduz a faixa marcada. Nenhum por padrão.',
+    defaultSubtitleLanguage: 'Idioma de legendas padrão',
+    defaultSubtitleLanguageHelp:
+      'Para os usuários que não escolheram um idioma de legendas no aplicativo, o Polyfin mostra legendas neste idioma conforme o modo de legendas de cada um. A escolha do próprio usuário sempre prevalece, e o aplicativo dele continua a mostrá-la como ele a deixou. Nenhum por padrão.',
+    noDefaultLanguage: 'Nenhum',
     publicAddress: 'Endereço público',
     publicAddressHelp:
       'O endereço em que as pessoas abrem o Polyfin, como https://media.example.org. Os links nas notificações começam com ele; vazio, as mensagens não têm link. Quando começa com https://, “Redirecionar HTTP para HTTPS”, em Configurações › Segurança, leva à porta dele, ou 443 quando nenhuma é indicada.',

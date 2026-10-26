@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
@@ -166,4 +167,80 @@ func TestDefaultTracksFollowTheUsersPreferences(t *testing.T) {
 		t.Fatalf("saving: %d", status)
 	}
 	check("PlaybackInfo without subtitles", playbackInfo(), audioEnglish, -1)
+}
+
+// The server's default audio and subtitle languages apply to the users who
+// chose none, with their own subtitle mode, and never to a user's own
+// choice; their configuration keeps showing no language, so that an app
+// saving it back does not make the default theirs.
+func TestServerDefaultLanguagesApplyWhereUsersChoseNone(t *testing.T) {
+	t.Parallel()
+	p := playing(t)
+	// English (flagged) and French audio, full and forced English
+	// subtitles, after the addon's French file.
+	p.analyzed(t, p.versions[0], "h264-ac3-srt-mkv")
+	p.keyframed(t, p.versions[0])
+	const fileFrench, audioEnglish, audioFrench, fullEnglish = 0, 2, 3, 4
+	check := func(when string, audio, subtitle int) {
+		t.Helper()
+		status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token),
+			map[string]any{"UserId": p.user.ID.String(), "DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
+		var response playbackInfoResponse
+		if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) == 0 {
+			t.Fatalf("PlaybackInfo: %d %s", status, data)
+		}
+		source := response.MediaSources[0]
+		if !sameIndex(source.DefaultAudioStreamIndex, new(audio)) || !sameIndex(source.DefaultSubtitleStreamIndex, new(subtitle)) {
+			t.Errorf("%s: audio %v subtitle %v, want %d and %d", when, deref(source.DefaultAudioStreamIndex),
+				deref(source.DefaultSubtitleStreamIndex), audio, subtitle)
+		}
+	}
+	configure := func(configuration map[string]any) {
+		t.Helper()
+		if status := p.configure(t, "/Users/Configuration", p.token, configuration); status != http.StatusNoContent {
+			t.Fatalf("saving %v: %d", configuration, status)
+		}
+	}
+	p.setting(t, func(s *accounts.Settings) { s.DefaultAudioLanguage, s.DefaultSubtitleLanguage = "fre", "fre" })
+
+	// A new user plays the default track whatever its language
+	// (PlayDefaultAudioTrack), an app default: the server's language still
+	// ranks above the English track flagged default.
+	configure(map[string]any{"PlayDefaultAudioTrack": true, "SubtitleMode": "Always"})
+	check("Always, no language of their own", audioFrench, fileFrench)
+	// Smart shows subtitles in the default language when the audio is in
+	// another one, and only forced ones when it is in that language.
+	configure(map[string]any{"PlayDefaultAudioTrack": true, "AudioLanguagePreference": "eng", "SubtitleMode": "Smart"})
+	check("Smart, their own English audio", audioEnglish, fileFrench)
+	configure(map[string]any{"PlayDefaultAudioTrack": true, "SubtitleMode": "Smart"})
+	check("Smart, French audio", audioFrench, -1)
+	// OnlyForced shows no forced English track to a French default.
+	configure(map[string]any{"PlayDefaultAudioTrack": true, "SubtitleMode": "OnlyForced"})
+	check("OnlyForced", audioFrench, -1)
+
+	// The user's own languages win, under Jellyfin's rule: their own
+	// French with PlayDefaultAudioTrack plays the flagged English track.
+	configure(map[string]any{"PlayDefaultAudioTrack": true, "AudioLanguagePreference": "fre",
+		"SubtitleLanguagePreference": "eng", "SubtitleMode": "Always"})
+	check("their own languages", audioEnglish, fullEnglish)
+
+	// A server language the file lacks leaves the flagged track.
+	p.setting(t, func(s *accounts.Settings) { s.DefaultAudioLanguage = "ger" })
+	configure(map[string]any{"PlayDefaultAudioTrack": true, "SubtitleMode": "Always"})
+	check("a language the file lacks", audioEnglish, fileFrench)
+
+	// The configuration of a user who chose none shows none, and an app
+	// saving it back leaves it so: a changed default still reaches them.
+	p.setting(t, func(s *accounts.Settings) { s.DefaultAudioLanguage, s.DefaultSubtitleLanguage = "eng", "eng" })
+	configure(map[string]any{"PlayDefaultAudioTrack": false, "SubtitleMode": "Always"})
+	dto, raw := p.me(t, p.token)
+	if _, present := raw["AudioLanguagePreference"]; present || dto.Configuration.SubtitleLanguagePreference != "" {
+		t.Errorf("configuration shown: %v", raw)
+	}
+	configure(raw)
+	p.setting(t, func(s *accounts.Settings) { s.DefaultAudioLanguage, s.DefaultSubtitleLanguage = "fre", "fre" })
+	check("after the defaults changed", audioFrench, fileFrench)
+	if dto, raw = p.me(t, p.token); dto.Configuration.AudioLanguagePreference != nil || dto.Configuration.SubtitleLanguagePreference != "" {
+		t.Errorf("configuration saved back: %v", raw)
+	}
 }

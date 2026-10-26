@@ -27,7 +27,7 @@ A title's details list every stream the addons offer as a version (see [Title pa
 - A version that would play over HLS but whose keyframe index cannot be read is skipped the same way, as nothing could stream it.
 - The first versions are analyzed together, up to 3 at once, and taken in order. Once a later one is ready, Polyfin waits 3 more seconds for those before it, then plays the later one: a source that never answers delays playback by those 3 seconds rather than by the whole analysis time. The analyses still running go on in the background and are kept for the next play.
 - The title's page plays the version the app sends. Most apps (the web player, Android TV, Swiftfin) send the title's own identifier, which names the first version: Polyfin then chooses among all the versions as when the app picks none. Only a version picked in the version menu, under its own identifier, is played alone.
-- Apps can save the user's playback preferences (audio and subtitle languages, subtitle mode). These choose the default audio and subtitle tracks. See [Subtitles](subtitles.md).
+- Apps can save the user's playback preferences (audio and subtitle languages, subtitle mode). These choose the default audio and subtitle tracks, with the server's [default languages](#default-audio-and-subtitle-languages) for a user who chose none. See [Subtitles](subtitles.md).
 - Apps that keep titles for offline viewing can download the movies and episodes whose versions they were shown. A download is the version's file, under its file name, sent to the source or relayed as playback would be. With **Converted downloads** on, apps that ask for a lower quality, such as Streamyfin, get a smaller copy instead, made as they download it. See [Converted downloads](transcoding.md#converted-downloads).
 - Active playback appears in Jellyfin apps' dashboards.
 - Apps can control one another (play, pause, seek, messages) when the controlled app keeps Jellyfin's live connection (WebSocket) open.
@@ -45,6 +45,27 @@ A title's details list every stream the addons offer as a version (see [Title pa
 - A `MediaSourceId` equal to the item's own identifier picks no version: `PlaybackInfo` tries the versions in order, as without one, and answers with the version chosen alone, under its own identifier unless it is the first. Any other `MediaSourceId` plays that version or nothing.
 - Elsewhere, the item's own identifier as a media source (the `mediaSourceId` of `/Videos/{id}/stream`, subtitle and attachment URLs, playback reports) stands for the version the item's details and `PlaybackInfo` list under it: the first they list, after leaving out the versions that failed lately and those the [version order](#version-order) rules or the user's quality group leave out. A version that fails thus passes the identifier to the next one, wherever its addon is in the addons' order, and the next one's own identifier keeps naming it.
 - `StartTimeTicks` in the query or the body tells where an HLS play starts, so that Polyfin reads ahead from there.
+
+### Default audio and subtitle languages
+
+Each user chooses an audio language, a subtitle language and a subtitle mode in their app. A user who chose no language gets the audio track the file flags as default, and the subtitles their mode gives in any language. An administrator can choose languages for them:
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Default audio language** | **Settings › Playback** | None | The audio language of the users who chose none in their app. |
+| **Default subtitle language** | **Settings › Playback** | None | The subtitle language of the users who chose none in their app, shown as each user's own subtitle mode says. |
+
+- They offer the languages a user's own preferences offer in jellyfin-web, from `/Localization/Cultures`.
+- A user's own choice always wins: a default applies only where the user's language is empty, the audio and the subtitle language each on its own. It applies wherever Polyfin chooses the tracks, for every app and the web player alike: the default tracks of a title's details and of `PlaybackInfo`, and the **Preferred audio language** of the [version order](#version-order).
+- The subtitle mode stays the user's (`SubtitleMode`): with `Always`, full subtitles in the default language, else forced ones; with `Smart`, subtitles in the default language when the audio is in another one; with `OnlyForced`, forced subtitles in the default language or of no stated language; `Default` and `None` do not look at the language.
+- The audio track: for a user without a language of their own, the track in **Default audio language** comes first, before the track the file flags as default, even when the user plays the default track whatever its language (`PlayDefaultAudioTrack`, which every new user has on until they turn it off in their app): the administrator chose that language for them, while the app setting was never their choice. A file without a track in that language plays the track it flags as default, else its first. A user's own language keeps Jellyfin's rule: with `PlayDefaultAudioTrack` on, the flagged track comes first, then the track in their language ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L14-L29)).
+- Apps keep showing the user's own preferences, with no language when they chose none, in `/Users/Me` and `/Users/{userId}`. An app saving its configuration back thus never makes the default the user's own choice, and a changed default reaches every user without a language at their next play.
+
+**Compared with Jellyfin:**
+
+- Jellyfin 12.3 has no server-wide default: it reads the user's own preferences alone ([MediaSourceManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaSourceManager.cs#L515), [L574-L578](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaSourceManager.cs#L574-L578)), and an empty one is no language at all ([L477-L482](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaSourceManager.cs#L477-L482)). Without a language, its audio is the track flagged default, else the first ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L14-L29)), and every subtitle counts as in the preferred language ([L154-L158](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L154-L158)). With both settings at None, as by default, Polyfin chooses as Jellyfin does; a default subtitle language makes it choose a user's subtitles as Jellyfin would for a user who chose that language.
+- Polyfin's default audio language ranks above the track a file flags as default whatever `PlayDefaultAudioTrack` says, where a language a user chose in Jellyfin gives way to the flagged track while that setting is on.
+- jellyfin-web 12.3 also offers "Original language" as an audio preference. Polyfin does not offer it as a default.
 
 ### Title pages
 
@@ -214,7 +235,7 @@ The **Version order** group of **Settings › Playback** orders a movie's or an 
 
 A version a criterion knows nothing of comes after those it knows, and a hide rule never hides it.
 
-**Preferred audio language** is each user's own, the audio language they set in their app. Versions known to carry it come first, then those that say MULTI or DUAL without naming it, then those of unknown language, then the others. For a user without a preferred language, it changes nothing.
+**Preferred audio language** is each user's own, the audio language they set in their app, else the server's [Default audio language](#default-audio-and-subtitle-languages). Versions known to carry it come first, then those that say MULTI or DUAL without naming it, then those of unknown language, then the others. For a user without a preferred language, and without a default one, it changes nothing.
 
 **Source, in the order below** groups a title's versions by the addon or folder that gives them, the next criteria sorting each source's versions; placed after other criteria, it orders the versions they tie on. The sources **Order of sources** lists come first, in its order, then the others in the addons' order: a source added since the list was saved comes after those it lists, until it is moved there, and a user's own addons come after the server's sources. A source removed leaves the list. The list orders versions only: which addon describes a title, the order of the addons' subtitles and that of search results keep the order of **Content › Sources**, as versions do while the criterion is not chosen (see [Addons and libraries](addons-and-libraries.md)). It is how local files come first, whatever the other criteria (see [Local folders](local-folders.md#versions)).
 

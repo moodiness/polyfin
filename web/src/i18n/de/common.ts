@@ -127,6 +127,7 @@ const common: typeof en = {
     invalid_subtitle_ocr: 'Wähle aus der Liste, wann Bilduntertitel in Text umgewandelt werden.',
     invalid_subtitle_ocr_tracks:
       'Die Anzahl gleichzeitig gelesener Bilduntertitelspuren muss eine ganze Zahl von 1 bis 4 sein.',
+    invalid_default_language: 'Wähle eine Standardsprache aus der Liste.',
     invalid_encoder_preset: 'Wähle eine Kodierungsgeschwindigkeit aus der Liste.',
     invalid_video_quality: 'Die Videoqualität muss 0 oder eine ganze Zahl von 1 bis 51 sein.',
     invalid_hardware_acceleration: 'Wähle eine Grafikkarte aus der Liste.',

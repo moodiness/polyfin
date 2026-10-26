@@ -13,7 +13,7 @@ Apps get six kinds of subtitles:
 - the text tracks inside a version's file;
 - the text copies of picture subtitles, with **Turn picture subtitles into text** on (see [Picture subtitles read into text](#picture-subtitles-read-into-text)).
 
-All reach each app in the format it takes. Apps can save the user's subtitle language and subtitle mode, which choose the default subtitle track (see [Playback](playback.md#versions-and-analysis)).
+All reach each app in the format it takes. Apps can save the user's subtitle language and subtitle mode, which choose the default subtitle track (see [Playback](playback.md#versions-and-analysis)); a user who chose no language gets the server's **Default subtitle language**, under their own mode (see [Default audio and subtitle languages](playback.md#default-audio-and-subtitle-languages)).
 
 ## Addon subtitles synced to the version
 

@@ -324,6 +324,9 @@ func SettingsBounds() map[string]SettingBounds {
 		"convertedDownloads":   is(d.ConvertedDownloads),
 		"subtitleOcr":          choice(d.SubtitleOCR, anys(SubtitleOCRModes)),
 		"subtitleOcrTracks":    between(MinSubtitleOCRTracks, MaxSubtitleOCRTracks, d.SubtitleOCRTracks),
+		// "" or the ISO 639-2/B code of a language (see TrackLanguages).
+		"defaultAudioLanguage":    choice(d.DefaultAudioLanguage, anys(TrackLanguages())),
+		"defaultSubtitleLanguage": choice(d.DefaultSubtitleLanguage, anys(TrackLanguages())),
 
 		"encoderPreset":              choice(d.EncoderPreset, anys(EncoderPresets)),
 		"h264Quality":                orZero(MinVideoQuality, MaxVideoQuality, d.H264Quality),

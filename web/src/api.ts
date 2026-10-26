@@ -405,6 +405,14 @@ export type Settings = {
   subtitleOcr: SubtitleOcr
   /** Picture subtitle tracks read at once. */
   subtitleOcrTracks: number
+  /**
+   * The audio and subtitle languages of the users who chose none, ISO 639-2/B codes as their own
+   * preferences take them, or '' for none.
+   */
+  defaultAudioLanguage: string
+  defaultSubtitleLanguage: string
+  /** The languages they offer, those of users' own preferences, by English name (read-only). */
+  trackLanguages: TrackLanguage[]
   /** Encoder speed against quality: auto (Polyfin's choice), then veryslow to ultrafast. */
   encoderPreset: EncoderPreset
   /** Quality factor of H.264 and HEVC conversions (CRF, CQ or QVBR's), 0 aiming for the bitrate alone. */
@@ -665,6 +673,8 @@ export type VersionCriterion =
 export type VersionCodec = 'av1' | 'hevc' | 'vp9' | 'h264' | 'vc1' | 'mpeg4' | 'mpeg2video'
 /** A source of the server listing versions of movies and episodes, in Content › Sources order. */
 export type VersionSource = { id: string; name: string }
+/** A language of the default track languages: its ISO 639-2/B code and its English name. */
+export type TrackLanguage = { code: string; name: string }
 export type ToneMappingAlgorithm =
   'auto' | 'bt2390' | 'hable' | 'reinhard' | 'mobius' | 'clip' | 'linear'
 export type DeinterlaceMethod = 'yadif' | 'bwdif'

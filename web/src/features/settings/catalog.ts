@@ -279,6 +279,21 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t, r) => s(t).playbackHistoryDaysHelp(r('playbackHistoryDays')),
     codes: ['invalid_playback_history_days'],
   },
+  {
+    section: 'playback',
+    anchor: 'default-audio-language',
+    label: (t) => s(t).defaultAudioLanguage,
+    help: (t) => s(t).defaultAudioLanguageHelp,
+    keywords: ['language', 'langue', 'audio', 'track', 'piste'],
+    codes: ['invalid_default_language'],
+  },
+  {
+    section: 'playback',
+    anchor: 'default-subtitle-language',
+    label: (t) => s(t).defaultSubtitleLanguage,
+    help: (t) => s(t).defaultSubtitleLanguageHelp,
+    keywords: ['language', 'langue', 'subtitles', 'sous-titres'],
+  },
   // Conversion
   {
     section: 'conversion',

@@ -122,6 +122,7 @@ const common: typeof en = {
       'Elija de la lista cuándo se convierten en texto los subtítulos en imagen.',
     invalid_subtitle_ocr_tracks:
       'Las pistas de subtítulos en imagen leídas a la vez deben ser un número entero entre 1 y 4.',
+    invalid_default_language: 'Elija un idioma predeterminado de la lista.',
     invalid_encoder_preset: 'Elija una velocidad de codificación de la lista.',
     invalid_video_quality: 'La calidad de vídeo debe ser 0 o un número entero entre 1 y 51.',
     invalid_hardware_acceleration: 'Elija una tarjeta gráfica de la lista.',

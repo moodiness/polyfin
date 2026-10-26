@@ -255,7 +255,7 @@ const settings: typeof en = {
     versionOrderGroup: 'Orden de las versiones',
     versionOrder: {
       label: 'Ordenar las versiones por',
-      help: 'Cada criterio agrupa las versiones de una película o un episodio, y el siguiente las ordena dentro de cada grupo; las versiones empatadas conservan el orden de las extensiones. La primera versión es la que inicia «Reproducir», y a continuación van las versiones que se prueban cuando esta no funciona. Polyfin se basa en lo que sabe de una versión sin leer el archivo: su análisis una vez reproducida, si no, la descripción de RemuxDB, y si no, las palabras de sus etiquetas. Una versión de la que un criterio no sabe nada va detrás de las demás. El idioma de audio preferido es el de cada usuario, configurado en su aplicación: primero van las versiones que se sabe que están en ese idioma, luego las etiquetadas como MULTI o DUAL y después las de idioma desconocido. Mientras la página de un título está abierta, las versiones que muestra conservan su posición.',
+      help: 'Cada criterio agrupa las versiones de una película o un episodio, y el siguiente las ordena dentro de cada grupo; las versiones empatadas conservan el orden de las extensiones. La primera versión es la que inicia «Reproducir», y a continuación van las versiones que se prueban cuando esta no funciona. Polyfin se basa en lo que sabe de una versión sin leer el archivo: su análisis una vez reproducida, si no, la descripción de RemuxDB, y si no, las palabras de sus etiquetas. Una versión de la que un criterio no sabe nada va detrás de las demás. El idioma de audio preferido es el de cada usuario, configurado en su aplicación, o si no el Idioma de audio predeterminado: primero van las versiones que se sabe que están en ese idioma, luego las etiquetadas como MULTI o DUAL y después las de idioma desconocido. Mientras la página de un título está abierta, las versiones que muestra conservan su posición.',
       none: 'Ninguno: las versiones conservan el orden de las extensiones.',
       add: 'Añadir un criterio',
       remove: (name: string) => `Eliminar «${name}»`,
@@ -315,6 +315,14 @@ const settings: typeof en = {
     playbackHistoryDays: 'Días de conservación del historial de reproducción',
     playbackHistoryDaysHelp: (r: RangeText) =>
       `Las reproducciones más antiguas se borran. Se comprueba cada día. De ${r.min} a ${r.max}, ${r.default} de forma predeterminada.`,
+    defaultLanguagesGroup: 'Idiomas predeterminados',
+    defaultAudioLanguage: 'Idioma de audio predeterminado',
+    defaultAudioLanguageHelp:
+      'Para los usuarios que no eligieron ningún idioma de audio en su aplicación, Polyfin reproduce la pista de audio en este idioma cuando una versión la tiene, y pone primero las versiones que se sabe que están en este idioma cuando las versiones se ordenan por idioma. La elección propia de un usuario siempre prevalece, y su aplicación la sigue mostrando como la dejó. Este idioma va antes que la pista que el archivo marca como predeterminada, incluso para los usuarios cuya aplicación reproduce la pista predeterminada sea cual sea su idioma, un ajuste activado mientras no lo desactiven; un archivo sin él reproduce su pista marcada. Ninguno de forma predeterminada.',
+    defaultSubtitleLanguage: 'Idioma de subtítulos predeterminado',
+    defaultSubtitleLanguageHelp:
+      'Para los usuarios que no eligieron ningún idioma de subtítulos en su aplicación, Polyfin muestra subtítulos en este idioma según el modo de subtítulos de cada uno. La elección propia de un usuario siempre prevalece, y su aplicación la sigue mostrando como la dejó. Ninguno de forma predeterminada.',
+    noDefaultLanguage: 'Ninguno',
     publicAddress: 'Dirección pública',
     publicAddressHelp:
       'La dirección en la que se abre Polyfin, como https://media.example.org. Los enlaces de las notificaciones empiezan por ella; si está vacía, los mensajes no llevan enlace. Cuando empieza por https://, «Redirigir HTTP a HTTPS», en Ajustes › Seguridad, lleva a su puerto, o al 443 si no indica ninguno.',
