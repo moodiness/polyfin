@@ -27,20 +27,20 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags production -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /polyfin ./cmd/polyfin \
 	&& mkdir /data
 
-# jellyfin-web 12.3, the web client of the Jellyfin version Polyfin speaks.
+# jellyfin-web 12.4, the web client of the Jellyfin version Polyfin speaks.
 # Its two pins are here, to change together when the client is updated
 # (and the version in third_party/jellyfin-web/NOTICE with them):
 # - its built files, taken unmodified from the official Jellyfin image,
 #   pinned by the digest of its multi-platform index: the very files
-#   Jellyfin 12.3 serves, with no Node.js build to reproduce. They are the
+#   Jellyfin 12.4 serves, with no Node.js build to reproduce. They are the
 #   same on every platform, so the builder's are taken;
 # - its source code (GPL-2.0), which the release workflow attaches to every
 #   Polyfin release; no image build reads it.
-FROM --platform=$BUILDPLATFORM jellyfin/jellyfin:12.3@sha256:2038fe038ab3876a80f6e7b7e0aef6607b032c7dc0c9b3ad3296d0b2eba3bbb5 AS jellyfin-web
+FROM --platform=$BUILDPLATFORM jellyfin/jellyfin:12.4@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771 AS jellyfin-web
 
 FROM scratch AS jellyfin-web-source
-ADD --checksum=sha256:185a1f002b85f4bc308593cc50f7f34cb8a935352cdda1cbac3cd209ca7fed65 \
-	https://github.com/jellyfin/jellyfin-web/archive/refs/tags/v12.3.tar.gz /jellyfin-web-12.3-source.tar.gz
+ADD --checksum=sha256:2978d0fbe3bc24d3bef637473c55e2628262fa725600e55788a45d9a42a53d44 \
+	https://github.com/jellyfin/jellyfin-web/archive/refs/tags/v12.4.tar.gz /jellyfin-web-12.4-source.tar.gz
 
 # FFmpeg 9.0 built against glibc by BtbN, which can load GPU drivers at run
 # time (NVIDIA through the NVIDIA container runtime, VAAPI through libva):
