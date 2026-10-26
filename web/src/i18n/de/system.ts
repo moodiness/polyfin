@@ -218,6 +218,8 @@ const system: typeof en = {
           `${name}: Jedes Metadaten-Add-on des Servers hat eine Sprache, daher beschreiben sie Titel für jeden Benutzer in ihrer Sprache, unabhängig von seiner Metadatensprache. Belasse „Sprache der Beschreibungen“ bei diesem Add-on oder bei einem weiteren Metadaten-Add-on auf „Keine“.`,
         themeCopyMissing: (missing: number, files: number) =>
           `Der Kopie des Web-Player-Themes fehlen ${missing} ihrer ${files} Dateien im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System: Browser laden sie bis dahin von ihren ursprünglichen Adressen, was Internet braucht. Aktualisiere die Kopie unter Einstellungen › Web-Player oder wähle ein anderes Theme.`,
+        folderUnwritable: (name: string, path: string) =>
+          `${name} (${path}): Polyfin kann nicht in diesen Ordner schreiben und legt diese Dateien bis dahin im Cache seines Datenordners ab. Mache den Ordner beschreibbar oder wähle einen anderen, und starte Polyfin dann neu.`,
         nvidiaDriver: (version: string) =>
           `Die NVIDIA-Grafikkarte konvertiert keine Videos: Ihr Treiber ist älter als Version ${version}, die FFmpeg für NVENC braucht. Aktualisiere den Treiber, um die Karte zu nutzen.`,
         backupFailed: 'Das letzte Datenbank-Backup ist fehlgeschlagen.',
@@ -358,12 +360,17 @@ const system: typeof en = {
       torrentUTPPeers: 'Peers über uTP',
       torrentsShared: 'Geteilt seit dem Start',
       disksTitle: 'Speicherplatz',
-      folders: { cache: 'Cache', recordings: 'Aufnahmen', backups: 'Backups' } as Record<
-        string,
-        string
-      >,
+      folders: {
+        cache: 'Cache',
+        conversion: 'Konvertierungsordner',
+        reading: 'gelesene Dateien',
+        recordings: 'Aufnahmen',
+        backups: 'Backups',
+      } as Record<string, string>,
       folderTitle: {
         cache: 'Cache-Ordner',
+        conversion: 'Konvertierungsordner',
+        reading: 'Ordner für gelesene Dateien',
         recordings: 'Aufnahmeordner',
         backups: 'Backup-Ordner',
       } as Record<string, string>,

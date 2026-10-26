@@ -620,6 +620,15 @@ export type Settings = {
   torrentUploadMbps: number
   /** How many torrents may run at once, server-wide, 0 for no limit. */
   torrentsAtOnce: number
+  /**
+   * Folders of the segments of conversions, of the files being read, and of the cache; empty uses
+   * cacheFolderDefault, the cache in the data folder. Each applies at the next start.
+   */
+  conversionFolder: string
+  readingFolder: string
+  cacheFolder: string
+  /** The cache in the data folder, where the three folders above are when empty (read-only). */
+  cacheFolderDefault: string
   /** Whether this system binds sockets to a network interface, Linux alone (read-only). */
   interfaceRoutes: boolean
   /** What each setting accepts, and its default, by its name here (read-only). */
@@ -3578,6 +3587,9 @@ export type ShareHealth = {
   pollMinutes: number | null
 }
 
+/** The folders the settings choose for conversion, files being read and the cache. */
+export type WorkFolderName = 'conversion' | 'reading' | 'cache'
+
 export type Health = {
   checkedAt: string
   process: {
@@ -3612,7 +3624,7 @@ export type Health = {
     uploaded: number
   } | null
   disks: {
-    folder: 'cache' | 'recordings' | 'backups'
+    folder: WorkFolderName | 'recordings' | 'backups'
     path: string
     free: number
     used: number
@@ -3729,7 +3741,7 @@ export type HealthProblem = {
   transient: boolean
 } & (
   | { code: 'database' }
-  | { code: 'disk'; folder: 'cache' | 'recordings' | 'backups'; free: number }
+  | { code: 'disk'; folder: WorkFolderName | 'recordings' | 'backups'; free: number }
   | { code: 'addon'; name: string; owner?: NonNullable<Owner>; failure: string }
   /** Searches leave out the addon's search catalog for a few minutes: it did not answer in time. */
   | { code: 'search_late'; name: string; owner?: NonNullable<Owner> }
@@ -3795,6 +3807,11 @@ export type HealthProblem = {
   | { code: 'nvidia_driver'; name: string }
   /** The copy kept of the Custom theme's files misses `missing` of its `files`. */
   | { code: 'theme_copy_missing'; missing: number; files: number }
+  /**
+   * A folder the settings chose could not be written into at start: `path` is the folder, `error`
+   * why; the cache in the data folder keeps its files until the next start.
+   */
+  | { code: 'folder_unwritable'; folder: WorkFolderName; path: string; error: string }
   | { code: 'connection_stopped'; kind: 'app'; name: AppKind; owner: NonNullable<Owner> }
   | {
       code: 'connection_stopped'

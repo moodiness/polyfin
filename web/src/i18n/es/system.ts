@@ -216,6 +216,8 @@ const system: typeof en = {
           `${name}: todas las extensiones de metadatos del servidor tienen un idioma, así que describen los títulos en su idioma para todos los usuarios, sea cual sea su idioma de los metadatos. Deje «Idioma de sus descripciones» en «Ninguno» en esta extensión o en otra extensión de metadatos más.`,
         themeCopyMissing: (missing: number, files: number) =>
           `A la copia del tema del reproductor web le faltan ${missing} de sus ${files} archivos en la carpeta de datos de Polyfin, como tras restaurar una copia de seguridad en otro sistema: mientras tanto, los navegadores los cargan desde sus direcciones originales, lo que requiere internet. Actualice la copia en Ajustes › Reproductor web, o elija otro tema.`,
+        folderUnwritable: (name: string, path: string) =>
+          `${name} (${path}): Polyfin no puede escribir en esta carpeta y, mientras tanto, guarda estos archivos en la caché de su carpeta de datos. Haga que la carpeta admita escritura o elija otra, y luego reinicie Polyfin.`,
         nvidiaDriver: (version: string) =>
           `La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión ${version}, que FFmpeg necesita para NVENC. Actualice el controlador para usar la tarjeta.`,
         backupFailed: 'Ha fallado la última copia de seguridad de la base de datos.',
@@ -358,11 +360,15 @@ const system: typeof en = {
       disksTitle: 'Espacio en disco',
       folders: {
         cache: 'caché',
+        conversion: 'de conversión',
+        reading: 'de archivos en lectura',
         recordings: 'grabaciones',
         backups: 'copias de seguridad',
       } as Record<string, string>,
       folderTitle: {
         cache: 'Carpeta de caché',
+        conversion: 'Carpeta de conversión',
+        reading: 'Carpeta de archivos en lectura',
         recordings: 'Carpeta de grabaciones',
         backups: 'Carpeta de copias de seguridad',
       } as Record<string, string>,

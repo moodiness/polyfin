@@ -288,6 +288,12 @@ const common: typeof en = {
       'Le dossier des enregistrements doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
     invalid_backup_folder:
       'Le dossier des sauvegardes doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
+    invalid_conversion_folder:
+      'Le dossier de conversion doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
+    invalid_reading_folder:
+      'Le dossier des fichiers en cours de lecture doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
+    invalid_cache_folder:
+      'Le dossier du cache doit être un chemin absolu vers un dossier où Polyfin peut écrire.',
     too_many_destinations:
       'Il y a déjà 10 destinations des sauvegardes : supprimez-en une d’abord.',
     too_many_home_rows: 'Il y a déjà 20 rangées d’accueil : supprimez-en une d’abord.',

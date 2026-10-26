@@ -721,6 +721,23 @@ const settings: typeof en = {
     cacheSize: 'Espacio en disco para archivos en lectura (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Espacio que Polyfin puede usar para conservar las partes de los archivos que se están reproduciendo, para que los saltos y reinicios no vuelvan a descargarlas. Las partes leídas en los últimos 30 segundos se conservan incluso por encima de este límite. De ${r.min} a ${r.max} GB; ${r.default} de forma predeterminada.`,
+    workFolders: {
+      conversionFolder: 'Carpeta de conversión',
+      conversionFolderHelp:
+        'Donde se escriben los segmentos de los archivos convertidos o reempaquetados mientras se reproducen: las escrituras más intensas, para las que conviene un disco rápido o una carpeta en memoria. Necesita espacio para los segmentos de todas las conversiones en curso.',
+      readingFolder: 'Carpeta de archivos en lectura',
+      readingFolderHelp:
+        'Donde se conservan las partes de los archivos de las extensiones y las piezas de los torrents que se están reproduciendo, dentro del espacio en disco de arriba: a menudo varios GB, para los que conviene un disco grande.',
+      cacheFolder: 'Carpeta de caché',
+      cacheFolderHelp:
+        'Donde se conservan las imágenes retransmitidas, hasta 1 GB, de un inicio al siguiente, junto con las guías y los subtítulos en imagen que se están leyendo.',
+      where: {
+        container:
+          'Una carpeta del contenedor de Polyfin, donde se monta un disco o una carpeta en memoria; vacía, la caché de su volumen de datos, que se muestra. Polyfin debe poder escribir en ella. Una carpeta nueva se aplica cuando Polyfin vuelve a iniciarse; la anterior se deja como está.',
+        computer:
+          'Una carpeta del equipo donde se ejecuta Polyfin; vacía, la caché de su carpeta de datos, que se muestra. Polyfin debe poder escribir en ella. Una carpeta nueva se aplica cuando Polyfin vuelve a iniciarse; la anterior se deja como está.',
+      },
+    },
     recordingsTitle: 'Grabaciones',
     recordingsFolder: (folder: string) => `Las grabaciones se guardan en ${folder}.`,
     recording: 'Grabar Televisión en vivo',

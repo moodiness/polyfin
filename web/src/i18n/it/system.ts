@@ -218,6 +218,8 @@ const system: typeof en = {
           `${name}: ogni add-on di metadati del server ha una lingua, quindi descrivono i titoli nella propria lingua per tutti gli utenti, qualunque sia la loro lingua dei metadati. Lascia Lingua delle descrizioni su Nessuna in questo add-on, o in un altro add-on di metadati.`,
         themeCopyMissing: (missing: number, files: number) =>
           `Alla copia del tema del lettore web mancano ${missing} dei suoi ${files} file nella cartella dei dati di Polyfin, come dopo il ripristino di un backup su un altro sistema: nel frattempo i browser li caricano dai loro indirizzi originali, il che richiede internet. Aggiorna la copia in Impostazioni › Lettore web, oppure scegli un altro tema.`,
+        folderUnwritable: (name: string, path: string) =>
+          `${name} (${path}): Polyfin non può scrivere in questa cartella e nel frattempo tiene questi file nella cache della sua cartella dei dati. Rendi la cartella scrivibile o scegline un’altra, poi riavvia Polyfin.`,
         nvidiaDriver: (version: string) =>
           `La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione ${version}, necessaria a FFmpeg per NVENC. Aggiorna il driver per usare la scheda.`,
         backupFailed: 'L’ultimo backup del database non è riuscito.',
@@ -358,12 +360,17 @@ const system: typeof en = {
       torrentUTPPeers: 'Peer tramite uTP',
       torrentsShared: 'Condiviso dall’avvio',
       disksTitle: 'Spazio su disco',
-      folders: { cache: 'cache', recordings: 'registrazioni', backups: 'backup' } as Record<
-        string,
-        string
-      >,
+      folders: {
+        cache: 'cache',
+        conversion: 'la cartella di conversione',
+        reading: 'i file in lettura',
+        recordings: 'registrazioni',
+        backups: 'backup',
+      } as Record<string, string>,
       folderTitle: {
         cache: 'Cartella della cache',
+        conversion: 'Cartella di conversione',
+        reading: 'Cartella dei file in lettura',
         recordings: 'Cartella delle registrazioni',
         backups: 'Cartella dei backup',
       } as Record<string, string>,

@@ -706,6 +706,23 @@ const settings = {
     cacheSize: 'Disk space for files being read (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Space Polyfin may use to keep the parts of the files being played, so that seeks and restarts do not download them again. Parts read in the last 30 seconds are kept even above it. From ${r.min} to ${r.max} GB; ${r.default} by default.`,
+    workFolders: {
+      conversionFolder: 'Conversion folder',
+      conversionFolderHelp:
+        'Where the segments of the files converted or repackaged are written while they play: the busiest writes, which a fast disk or a memory folder suits. It needs room for the segments of every conversion running.',
+      readingFolder: 'Folder for files being read',
+      readingFolderHelp:
+        'Where the parts of the addons’ files and the torrents’ pieces being played are kept, within the disk space above: often several GB, which a large disk suits.',
+      cacheFolder: 'Cache folder',
+      cacheFolderHelp:
+        'Where the relayed images are kept, up to 1 GB, from one start to the next, with the guides and the picture subtitles being read.',
+      where: {
+        container:
+          'A folder of Polyfin’s container, where a disk or a memory folder is mounted; empty, the cache in its data volume, shown. Polyfin must be able to write to it. A new folder applies when Polyfin starts again; a former one is left as it is.',
+        computer:
+          'A folder of the computer Polyfin runs on; empty, the cache in its data folder, shown. Polyfin must be able to write to it. A new folder applies when Polyfin starts again; a former one is left as it is.',
+      },
+    },
     recordingsTitle: 'Recordings',
     recordingsFolder: (folder: string) => `Recordings are saved in ${folder}.`,
     recording: 'Record Live TV',

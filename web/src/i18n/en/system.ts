@@ -206,6 +206,8 @@ const system = {
           `${name}: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. Keep Language of its descriptions at None on this addon, or on one more metadata addon.`,
         themeCopyMissing: (missing: number, files: number) =>
           `The copy of the web player theme misses ${missing} of its ${files} files in Polyfin’s data folder, as after a backup restored on another system: browsers load them from their original addresses meanwhile, which needs the internet. Update the copy under Settings › Web player, or choose another theme.`,
+        folderUnwritable: (name: string, path: string) =>
+          `${name} (${path}): Polyfin cannot write into this folder, and keeps these files in its data folder’s cache meanwhile. Make the folder writable or choose another, then restart Polyfin.`,
         nvidiaDriver: (version: string) =>
           `The NVIDIA graphics card does not convert video: its driver is older than version ${version}, which FFmpeg needs for NVENC. Update the driver to use the card.`,
         backupFailed: 'The last database backup failed.',
@@ -343,12 +345,17 @@ const system = {
       torrentUTPPeers: 'Peers over uTP',
       torrentsShared: 'Shared since the start',
       disksTitle: 'Disk space',
-      folders: { cache: 'cache', recordings: 'recordings', backups: 'backups' } as Record<
-        string,
-        string
-      >,
+      folders: {
+        cache: 'cache',
+        conversion: 'conversion folder',
+        reading: 'files being read',
+        recordings: 'recordings',
+        backups: 'backups',
+      } as Record<string, string>,
       folderTitle: {
         cache: 'Cache folder',
+        conversion: 'Conversion folder',
+        reading: 'Folder for files being read',
         recordings: 'Recordings folder',
         backups: 'Backups folder',
       } as Record<string, string>,

@@ -294,6 +294,12 @@ const common: typeof en = {
       'Der Aufnahmeordner muss ein absoluter Pfad zu einem Ordner sein, in den Polyfin schreiben kann.',
     invalid_backup_folder:
       'Der Backup-Ordner muss ein absoluter Pfad zu einem Ordner sein, in den Polyfin schreiben kann.',
+    invalid_conversion_folder:
+      'Der Konvertierungsordner muss ein absoluter Pfad zu einem Ordner sein, in den Polyfin schreiben kann.',
+    invalid_reading_folder:
+      'Der Ordner für gelesene Dateien muss ein absoluter Pfad zu einem Ordner sein, in den Polyfin schreiben kann.',
+    invalid_cache_folder:
+      'Der Cache-Ordner muss ein absoluter Pfad zu einem Ordner sein, in den Polyfin schreiben kann.',
     too_many_destinations: 'Es gibt bereits 10 Backup-Ziele: Lösche zuerst eines.',
     too_many_home_rows: 'Es gibt bereits 20 Zeilen auf der Startseite: Lösche zuerst eine.',
     invalid_home_row:

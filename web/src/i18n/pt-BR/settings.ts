@@ -717,6 +717,23 @@ const settings: typeof en = {
     cacheSize: 'Espaço em disco para arquivos em leitura (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Espaço que o Polyfin pode usar para guardar as partes dos arquivos em reprodução, para que avanços, retrocessos e reinícios não as baixem novamente. As partes lidas nos últimos 30 segundos são mantidas mesmo acima desse limite. De ${r.min} a ${r.max} GB; ${r.default} por padrão.`,
+    workFolders: {
+      conversionFolder: 'Pasta de conversão',
+      conversionFolderHelp:
+        'Onde são gravados os segmentos dos arquivos convertidos ou reempacotados durante a reprodução: as gravações mais intensas, para as quais convém um disco rápido ou uma pasta em memória. Precisa de espaço para os segmentos de todas as conversões em andamento.',
+      readingFolder: 'Pasta de arquivos em leitura',
+      readingFolderHelp:
+        'Onde são guardadas as partes dos arquivos dos complementos e as peças dos torrents em reprodução, dentro do espaço em disco acima: muitas vezes vários GB, para os quais convém um disco grande.',
+      cacheFolder: 'Pasta de cache',
+      cacheFolderHelp:
+        'Onde são guardadas as imagens repassadas, até 1 GB, de uma inicialização para a outra, junto com os guias e as legendas em imagem em leitura.',
+      where: {
+        container:
+          'Uma pasta do contêiner do Polyfin, onde está montado um disco ou uma pasta em memória; vazia, o cache do seu volume de dados, mostrado. O Polyfin precisa conseguir gravar nela. Uma pasta nova vale a partir da próxima inicialização do Polyfin; a anterior fica como está.',
+        computer:
+          'Uma pasta do computador em que o Polyfin roda; vazia, o cache da sua pasta de dados, mostrado. O Polyfin precisa conseguir gravar nela. Uma pasta nova vale a partir da próxima inicialização do Polyfin; a anterior fica como está.',
+      },
+    },
     recordingsTitle: 'Gravações',
     recordingsFolder: (folder: string) => `As gravações são salvas em ${folder}.`,
     recording: 'Gravar TV ao Vivo',

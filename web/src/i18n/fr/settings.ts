@@ -724,6 +724,23 @@ const settings: typeof en = {
     cacheSize: 'Espace disque des fichiers en cours de lecture (Go)',
     cacheSizeHelp: (r: RangeText) =>
       `L’espace que Polyfin peut utiliser pour garder les parties des fichiers lus, afin que les retours en arrière et les reprises ne les téléchargent pas à nouveau. Les parties lues dans les 30 dernières secondes sont gardées même au-delà. De ${r.min} à ${r.max} Go ; ${r.default} par défaut.`,
+    workFolders: {
+      conversionFolder: 'Dossier de conversion',
+      conversionFolderHelp:
+        'Où sont écrits les segments des fichiers convertis ou présentés autrement pendant leur lecture : les écritures les plus intenses, auxquelles conviennent un disque rapide ou un dossier en mémoire. Il demande la place des segments de toutes les conversions en cours.',
+      readingFolder: 'Dossier des fichiers en cours de lecture',
+      readingFolderHelp:
+        'Où sont gardées les parties des fichiers des addons et les morceaux des torrents en cours de lecture, dans l’espace disque ci-dessus : souvent plusieurs Go, auxquels convient un grand disque.',
+      cacheFolder: 'Dossier du cache',
+      cacheFolderHelp:
+        'Où sont gardées les images relayées, jusqu’à 1 Go, d’un démarrage à l’autre, avec les guides et les sous-titres en images en cours de lecture.',
+      where: {
+        container:
+          'Un dossier du conteneur de Polyfin, où est monté un disque ou un dossier en mémoire ; vide, le cache de son volume de données, indiqué. Polyfin doit pouvoir y écrire. Un nouveau dossier s’applique au prochain démarrage de Polyfin ; l’ancien est laissé tel quel.',
+        computer:
+          'Un dossier de l’ordinateur où tourne Polyfin ; vide, le cache de son dossier de données, indiqué. Polyfin doit pouvoir y écrire. Un nouveau dossier s’applique au prochain démarrage de Polyfin ; l’ancien est laissé tel quel.',
+      },
+    },
     recordingsTitle: 'Enregistrements',
     recordingsFolder: (folder: string) => `Les enregistrements sont gardés dans ${folder}.`,
     recording: 'Enregistrer la TV en direct',

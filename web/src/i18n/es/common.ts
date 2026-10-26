@@ -290,6 +290,12 @@ const common: typeof en = {
       'La carpeta de grabaciones debe ser una ruta absoluta a una carpeta en la que Polyfin pueda escribir.',
     invalid_backup_folder:
       'La carpeta de copias de seguridad debe ser una ruta absoluta a una carpeta en la que Polyfin pueda escribir.',
+    invalid_conversion_folder:
+      'La carpeta de conversión debe ser una ruta absoluta a una carpeta en la que Polyfin pueda escribir.',
+    invalid_reading_folder:
+      'La carpeta de archivos en lectura debe ser una ruta absoluta a una carpeta en la que Polyfin pueda escribir.',
+    invalid_cache_folder:
+      'La carpeta de caché debe ser una ruta absoluta a una carpeta en la que Polyfin pueda escribir.',
     too_many_destinations: 'Ya hay 10 destinos de las copias de seguridad: borre uno primero.',
     too_many_home_rows: 'Ya hay 20 filas de inicio: borre una primero.',
     invalid_home_row:

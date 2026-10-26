@@ -277,6 +277,12 @@ const common: typeof en = {
       'A pasta de gravações deve ser um caminho absoluto para uma pasta na qual o Polyfin possa gravar.',
     invalid_backup_folder:
       'A pasta de backups deve ser um caminho absoluto para uma pasta na qual o Polyfin possa gravar.',
+    invalid_conversion_folder:
+      'A pasta de conversão deve ser um caminho absoluto para uma pasta na qual o Polyfin possa gravar.',
+    invalid_reading_folder:
+      'A pasta de arquivos em leitura deve ser um caminho absoluto para uma pasta na qual o Polyfin possa gravar.',
+    invalid_cache_folder:
+      'A pasta de cache deve ser um caminho absoluto para uma pasta na qual o Polyfin possa gravar.',
     too_many_destinations: 'Já existem 10 destinos de backup: exclua um primeiro.',
     too_many_home_rows: 'Já existem 20 linhas na tela inicial: exclua uma primeiro.',
     invalid_home_row:

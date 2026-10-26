@@ -133,6 +133,14 @@ export const settingEntries: readonly SettingEntry[] = [
     keywords: ['bearer', 'token', 'jeton'],
     codes: ['invalid_update_tool_token'],
   },
+  {
+    section: 'general',
+    anchor: 'cache-folder',
+    label: (t) => s(t).workFolders.cacheFolder,
+    help: (t) => `${s(t).workFolders.cacheFolderHelp} ${anyServer(s(t).workFolders.where)}`,
+    keywords: ['cache', 'images', 'Cache path', 'folder'],
+    codes: ['invalid_cache_folder'],
+  },
   // Playback
   {
     section: 'playback',
@@ -181,6 +189,14 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t, r) => s(t).cacheSizeHelp(r('cacheSizeGb')),
     keywords: ['cache', 'POLYFIN_CACHE_SIZE'],
     codes: ['invalid_cache_size'],
+  },
+  {
+    section: 'playback',
+    anchor: 'reading-folder',
+    label: (t) => s(t).workFolders.readingFolder,
+    help: (t) => `${s(t).workFolders.readingFolderHelp} ${anyServer(s(t).workFolders.where)}`,
+    keywords: ['cache', 'torrent', 'disk', 'folder'],
+    codes: ['invalid_reading_folder'],
   },
   {
     section: 'playback',
@@ -290,6 +306,14 @@ export const settingEntries: readonly SettingEntry[] = [
     label: (t) => s(t).convertedDownloads,
     help: (t) => s(t).convertedDownloadsHelp,
     keywords: ['download', 'offline', 'Streamyfin'],
+  },
+  {
+    section: 'conversion',
+    anchor: 'conversion-folder',
+    label: (t) => s(t).workFolders.conversionFolder,
+    help: (t) => `${s(t).workFolders.conversionFolderHelp} ${anyServer(s(t).workFolders.where)}`,
+    keywords: ['transcode', 'Transcode path', 'tmpfs', 'memory', 'RAM', 'folder'],
+    codes: ['invalid_conversion_folder'],
   },
   {
     section: 'conversion',

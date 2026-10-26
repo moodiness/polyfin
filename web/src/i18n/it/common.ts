@@ -281,6 +281,12 @@ const common: typeof en = {
       'La cartella delle registrazioni deve essere un percorso assoluto di una cartella in cui Polyfin può scrivere.',
     invalid_backup_folder:
       'La cartella dei backup deve essere un percorso assoluto di una cartella in cui Polyfin può scrivere.',
+    invalid_conversion_folder:
+      'La cartella di conversione deve essere un percorso assoluto di una cartella in cui Polyfin può scrivere.',
+    invalid_reading_folder:
+      'La cartella dei file in lettura deve essere un percorso assoluto di una cartella in cui Polyfin può scrivere.',
+    invalid_cache_folder:
+      'La cartella della cache deve essere un percorso assoluto di una cartella in cui Polyfin può scrivere.',
     too_many_destinations: 'Ci sono già 10 destinazioni del backup: eliminane prima una.',
     too_many_home_rows: 'Ci sono già 20 righe della Home: eliminane prima una.',
     invalid_home_row:

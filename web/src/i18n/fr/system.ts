@@ -216,6 +216,8 @@ const system: typeof en = {
           `${name} : chaque addon de métadonnées du serveur a une langue : ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.`,
         themeCopyMissing: (missing: number, files: number) =>
           `La copie du thème du lecteur web n’a plus ${missing} de ses ${files} fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système : les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.`,
+        folderUnwritable: (name: string, path: string) =>
+          `${name} (${path}) : Polyfin ne peut pas écrire dans ce dossier, et garde ces fichiers dans le cache de son dossier de données en attendant. Rendez le dossier accessible en écriture ou choisissez-en un autre, puis redémarrez Polyfin.`,
         nvidiaDriver: (version: string) =>
           `La carte graphique NVIDIA ne convertit pas la vidéo : son pilote est antérieur à la version ${version}, dont FFmpeg a besoin pour NVENC. Mettez à jour le pilote pour utiliser la carte.`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
@@ -350,9 +352,17 @@ const system: typeof en = {
       torrentUTPPeers: 'Pairs joints en uTP',
       torrentsShared: 'Partagé depuis le démarrage',
       disksTitle: 'Espace disque',
-      folders: { cache: 'du cache', recordings: 'des enregistrements', backups: 'des sauvegardes' },
+      folders: {
+        cache: 'du cache',
+        conversion: 'de conversion',
+        reading: 'des fichiers en cours de lecture',
+        recordings: 'des enregistrements',
+        backups: 'des sauvegardes',
+      },
       folderTitle: {
         cache: 'Dossier du cache',
+        conversion: 'Dossier de conversion',
+        reading: 'Dossier des fichiers en cours de lecture',
         recordings: 'Dossier des enregistrements',
         backups: 'Dossier des sauvegardes',
       },

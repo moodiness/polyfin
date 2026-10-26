@@ -45,6 +45,7 @@ import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
 import VersionOrder, { CodecOrder, SourceOrder } from './VersionOrder'
 import { EditAsCustom, shownTexts, ThemeCopyPanel } from './WebTheme'
+import WorkFolderRow from './WorkFolders'
 
 /** The redirect URI of a Trakt or Simkl app whose users enter a code instead of being redirected. */
 const oobRedirectUri = 'urn:ietf:wg:oauth:2.0:oob'
@@ -239,6 +240,13 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
           error={error('update-tool-token')}
         />
       </SettingRow>
+      <WorkFolderRow
+        folder="cacheFolder"
+        form={form}
+        update={update}
+        error={error}
+        limits={limits}
+      />
     </SettingsGroup>
   )
 }
@@ -319,6 +327,13 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
             )}
           />
         </FieldRow>
+        <WorkFolderRow
+          folder="readingFolder"
+          form={form}
+          update={update}
+          error={error}
+          limits={limits}
+        />
         <SwitchRow
           anchor="remuxdb"
           label={s.remuxDb}

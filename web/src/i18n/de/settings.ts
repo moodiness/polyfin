@@ -716,6 +716,23 @@ const settings: typeof en = {
     cacheSize: 'Speicherplatz für gelesene Dateien (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Speicherplatz, den Polyfin nutzen darf, um die Teile der abgespielten Dateien zu behalten, damit Spulen und Neustarts sie nicht erneut herunterladen. Teile, die in den letzten 30 Sekunden gelesen wurden, werden auch darüber hinaus behalten. Von ${r.min} bis ${r.max} GB; standardmäßig ${r.default}.`,
+    workFolders: {
+      conversionFolder: 'Konvertierungsordner',
+      conversionFolderHelp:
+        'Wohin die Segmente konvertierter oder neu verpackter Dateien während ihrer Wiedergabe geschrieben werden: die meisten Schreibzugriffe, für die sich eine schnelle Festplatte oder ein Ordner im Arbeitsspeicher eignet. Er braucht Platz für die Segmente aller laufenden Konvertierungen.',
+      readingFolder: 'Ordner für gelesene Dateien',
+      readingFolderHelp:
+        'Wo die Teile der Dateien von Add-ons und die Stücke von Torrents während der Wiedergabe behalten werden, innerhalb des Speicherplatzes oben: oft mehrere GB, für die sich eine große Festplatte eignet.',
+      cacheFolder: 'Cache-Ordner',
+      cacheFolderHelp:
+        'Wo die weitergeleiteten Bilder behalten werden, bis zu 1 GB, von einem Start zum nächsten, zusammen mit den Programmführern und den Bilduntertiteln, die gerade gelesen werden.',
+      where: {
+        container:
+          'Ein Ordner im Container von Polyfin, in dem eine Festplatte oder ein Ordner im Arbeitsspeicher eingehängt ist; leer der Cache in seinem Datenvolume, der angezeigt wird. Polyfin muss hineinschreiben können. Ein neuer Ordner gilt ab dem nächsten Start von Polyfin; der vorherige bleibt, wie er ist.',
+        computer:
+          'Ein Ordner des Computers, auf dem Polyfin läuft; leer der Cache in seinem Datenordner, der angezeigt wird. Polyfin muss hineinschreiben können. Ein neuer Ordner gilt ab dem nächsten Start von Polyfin; der vorherige bleibt, wie er ist.',
+      },
+    },
     recordingsTitle: 'Aufnahmen',
     recordingsFolder: (folder: string) => `Aufnahmen werden in ${folder} gespeichert.`,
     recording: 'Live-TV aufnehmen',

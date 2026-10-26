@@ -727,6 +727,23 @@ const settings: typeof en = {
     cacheSize: 'Spazio su disco per i file in lettura (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Spazio che Polyfin può usare per conservare le parti dei file in riproduzione, così che spostamenti e riprese non le scarichino di nuovo. Le parti lette negli ultimi 30 secondi vengono conservate anche oltre questo limite. Da ${r.min} a ${r.max} GB; ${r.default} per impostazione predefinita.`,
+    workFolders: {
+      conversionFolder: 'Cartella di conversione',
+      conversionFolderHelp:
+        'Dove vengono scritti i segmenti dei file convertiti o riconfezionati durante la riproduzione: le scritture più intense, adatte a un disco veloce o a una cartella in memoria. Richiede spazio per i segmenti di tutte le conversioni in corso.',
+      readingFolder: 'Cartella dei file in lettura',
+      readingFolderHelp:
+        'Dove vengono conservate le parti dei file degli add-on e i pezzi dei torrent in riproduzione, entro lo spazio su disco qui sopra: spesso diversi GB, adatti a un disco capiente.',
+      cacheFolder: 'Cartella della cache',
+      cacheFolderHelp:
+        'Dove vengono conservate le immagini inoltrate, fino a 1 GB, da un avvio al successivo, insieme alle guide e ai sottotitoli in immagine in lettura.',
+      where: {
+        container:
+          'Una cartella del container di Polyfin, dove è montato un disco o una cartella in memoria; vuota, la cache nel suo volume dei dati, mostrata. Polyfin deve poterci scrivere. Una nuova cartella vale dal prossimo avvio di Polyfin; quella precedente resta com’è.',
+        computer:
+          'Una cartella del computer su cui gira Polyfin; vuota, la cache nella sua cartella dei dati, mostrata. Polyfin deve poterci scrivere. Una nuova cartella vale dal prossimo avvio di Polyfin; quella precedente resta com’è.',
+      },
+    },
     recordingsTitle: 'Registrazioni',
     recordingsFolder: (folder: string) => `Le registrazioni vengono salvate in ${folder}.`,
     recording: 'Registra la Diretta TV',

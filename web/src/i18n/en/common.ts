@@ -266,6 +266,12 @@ const common = {
       'The recordings folder must be an absolute path to a folder Polyfin can write to.',
     invalid_backup_folder:
       'The backups folder must be an absolute path to a folder Polyfin can write to.',
+    invalid_conversion_folder:
+      'The conversion folder must be an absolute path to a folder Polyfin can write to.',
+    invalid_reading_folder:
+      'The folder for files being read must be an absolute path to a folder Polyfin can write to.',
+    invalid_cache_folder:
+      'The cache folder must be an absolute path to a folder Polyfin can write to.',
     too_many_destinations: 'There are already 10 backup destinations: delete one first.',
     too_many_home_rows: 'There are already 20 home rows: delete one first.',
     invalid_home_row:

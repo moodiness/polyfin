@@ -14,6 +14,7 @@ import { useI18n } from '@/i18n'
 import { Checkbox, Field, FieldError, NumberInput, Select, StatusPill } from '@/ui'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
+import WorkFolderRow from './WorkFolders'
 
 /**
  * The Conversion section: whether and how much the server converts, picture subtitles read into
@@ -99,6 +100,13 @@ export default function ConversionSection({
           help={s.convertedDownloadsHelp}
           checked={form.convertedDownloads}
           onChange={(convertedDownloads) => update({ convertedDownloads })}
+        />
+        <WorkFolderRow
+          folder="conversionFolder"
+          form={form}
+          update={update}
+          error={error}
+          limits={limits}
         />
       </SettingsGroup>
 

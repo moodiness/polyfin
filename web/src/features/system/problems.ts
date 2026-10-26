@@ -205,6 +205,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.nvidiaDriver(problem.name)
     case 'theme_copy_missing':
       return text.themeCopyMissing(problem.missing, problem.files)
+    case 'folder_unwritable':
+      return text.folderUnwritable(health.folderTitle[problem.folder], problem.path)
     case 'connection_stopped':
       return problem.kind === 'app'
         ? text.appStopped(t.account.appImport.apps[problem.name], problem.owner.name)
