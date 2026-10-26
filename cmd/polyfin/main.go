@@ -646,7 +646,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// may list as the Jellyfin API tells them.
 		HomeRows:       homeRows,
 		HomeRowChoices: jellyfinAPI,
-		Sharing:        lib,
+		// Reset my preferences forgets what Jellyfin apps saved, with what
+		// the Jellyfin API remembers of it.
+		Preferences: jellyfinAPI,
+		Sharing:     lib,
 		Health: admin.HealthSources{
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,

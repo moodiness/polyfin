@@ -187,6 +187,10 @@ type Options struct {
 	Desktop bool
 	// UpdateTool sends Update now's requests; nil sends none.
 	UpdateTool *updatetool.Client
+	// Preferences forgets the display preferences and the configuration
+	// Jellyfin apps saved for a user, for Reset my preferences; nil keeps
+	// none.
+	Preferences PreferencesReset
 }
 
 type handler struct {
@@ -273,6 +277,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/home-rows", h.signedIn(h.ownHomeRows))
 	mux.Handle("PUT /admin/api/account/home-rows/{id}", h.signedIn(h.setOwnHomeRow))
 	mux.Handle("DELETE /admin/api/account/hidden/{id}", h.signedIn(h.showOwnHidden))
+	mux.Handle("POST /admin/api/account/preferences/reset", h.signedIn(h.resetOwnPreferences))
 	mux.Handle("GET /admin/api/account/share-links", h.signedIn(h.ownShareLinks))
 	mux.Handle("POST /admin/api/account/share-links", h.signedIn(h.createShareLink))
 	mux.Handle("POST /admin/api/account/share-links/{id}/revoke", h.signedIn(h.revokeOwnShareLink))
@@ -309,6 +314,10 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/groups/{id}", h.administrator(h.deleteGroup))
 	mux.Handle("GET /admin/api/groups/{id}/members", h.administrator(h.groupMembers))
 	mux.Handle("POST /admin/api/groups/{id}/members", h.administrator(h.addGroupMembers))
+	mux.Handle("GET /admin/api/users/{id}/defaults", h.administrator(h.userDefaults))
+	mux.Handle("POST /admin/api/users/{id}/reset", h.administrator(h.resetUser))
+	mux.Handle("GET /admin/api/groups/{id}/defaults", h.administrator(h.groupDefaults))
+	mux.Handle("POST /admin/api/groups/{id}/reset", h.administrator(h.resetGroup))
 	mux.Handle("GET /admin/api/users/{id}/share-links", h.administrator(h.userShareLinks))
 	mux.Handle("POST /admin/api/share-links/{id}/revoke", h.administrator(h.revokeAnyShareLink))
 	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))

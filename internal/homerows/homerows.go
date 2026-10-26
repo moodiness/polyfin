@@ -293,6 +293,12 @@ func (s *Store) SetOff(ctx context.Context, user, id accounts.ID, off bool) erro
 	return err
 }
 
+// TurnAllOn turns every row user turned off on again.
+func (s *Store) TurnAllOn(ctx context.Context, user accounts.ID) error {
+	_, err := s.db.Exec(ctx, "DELETE FROM home_rows_off WHERE user_id = $1", user)
+	return err
+}
+
 // Shown lists, in order, the rows shown to user that they did not turn
 // off.
 func (s *Store) Shown(ctx context.Context, user accounts.ID) ([]Row, error) {

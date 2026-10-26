@@ -340,6 +340,21 @@ func (s *Store) GroupMemberDetached(ctx context.Context, user accounts.User, gro
 	s.record(ctx, Entry{Name: name, Type: "GroupMemberDetached", UserID: &user.ID})
 }
 
+// LimitsReset records that the administrator named by put the settings a
+// group holds of user back to a new user's (Reset to defaults). Jellyfin
+// has no such entry: it is a change of the user's policy.
+func (s *Store) LimitsReset(ctx context.Context, user accounts.User, by string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s reset the settings of %s to their defaults", "%s a rétabli les réglages par défaut de %s", "%s hat die Einstellungen von %s auf die Standardwerte zurückgesetzt", "%s ha restablecido los ajustes predeterminados de %s", "%s ha ripristinato le impostazioni predefinite di %s", "%s redefiniu as configurações de %s para o padrão"}, by, user.Name),
+		Type: "UserPolicyUpdated", UserID: &user.ID})
+}
+
+// GroupReset records that the administrator named by put the settings of
+// group back to a new user's.
+func (s *Store) GroupReset(ctx context.Context, group accounts.Group, by string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s reset the settings of the group %s to their defaults", "%s a rétabli les réglages par défaut du groupe %s", "%s hat die Einstellungen der Gruppe %s auf die Standardwerte zurückgesetzt", "%s ha restablecido los ajustes predeterminados del grupo %s", "%s ha ripristinato le impostazioni predefinite del gruppo %s", "%s redefiniu as configurações do grupo %s para o padrão"}, by, group.Name),
+		Type: "GroupChanged"})
+}
+
 // SettingsSaved records that administrator saved the server settings.
 func (s *Store) SettingsSaved(ctx context.Context, administrator string) {
 	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s saved the server settings", "%s a enregistré les paramètres du serveur", "%s hat die Servereinstellungen gespeichert", "%s ha guardado los ajustes del servidor", "%s ha salvato le impostazioni del server", "%s salvou as configurações do servidor"}, administrator),
