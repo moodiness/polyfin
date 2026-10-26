@@ -134,16 +134,28 @@ func versionOf(source mediaSource, number string, added time.Time) fileVersion {
 // versionsOf describes an item's versions, as the Jellyfin API describes
 // them: those the version rules and the user's quality group offer.
 func (s *Server) versionsOf(ctx context.Context, i item) ([]fileVersion, error) {
-	ids := make([]accounts.ID, 0, len(i.MediaSources))
-	for _, source := range i.MediaSources {
-		if id, err := accounts.ParseID(source.Id); err == nil {
-			ids = append(ids, id)
-		}
-	}
-	numbers, err := s.numbers.of(ctx, ids...)
+	numbers, err := s.versionNumbers(ctx, []item{i})
 	if err != nil {
 		return nil, err
 	}
+	return versionsWith(i, numbers), nil
+}
+
+// versionNumbers are the numbers of the versions of items, read at once.
+func (s *Server) versionNumbers(ctx context.Context, items []item) (map[accounts.ID]int32, error) {
+	var ids []accounts.ID
+	for _, i := range items {
+		for _, source := range i.MediaSources {
+			if id, err := accounts.ParseID(source.Id); err == nil {
+				ids = append(ids, id)
+			}
+		}
+	}
+	return s.numbers.of(ctx, ids...)
+}
+
+// versionsWith describes an item's versions, numbered as numbers says.
+func versionsWith(i item, numbers map[accounts.ID]int32) []fileVersion {
 	added := time.Unix(0, 0)
 	if i.DateCreated != nil {
 		added = *i.DateCreated
@@ -160,7 +172,7 @@ func (s *Server) versionsOf(ctx context.Context, i item) ([]fileVersion, error) 
 		}
 		versions = append(versions, version)
 	}
-	return versions, nil
+	return versions
 }
 
 // subtitlesOf are the subtitles of a title's first version.

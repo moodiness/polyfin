@@ -161,10 +161,24 @@ type session struct {
 	attempt      string
 	file         string
 	version      string
-	choice       choice
-	position     float64
-	// The current plan: the Jellyfin play session and version, how it
-	// plays, and where its stream and subtitles are.
+	playState
+	// replans are the answers of the last replans, by their identifier,
+	// in the order of replanOrder.
+	replans     map[string][]byte
+	replanOrder []string
+	// The last progress sample applied, and the stop received.
+	sequence int64
+	sample   sample
+	stopID   string
+	seen     time.Time
+}
+
+// playState is what a plan is decided from, and the current plan: the
+// Jellyfin play session and version, how it plays, and where its stream
+// and subtitles are.
+type playState struct {
+	choice      choice
+	position    float64
 	playSession string
 	source      mediaSource
 	method      string
@@ -172,12 +186,6 @@ type session struct {
 	subtitles   map[int]string
 	audio       *int
 	subtitle    *int
-	replans     map[string][]byte
-	// The last progress sample applied, and the stop received.
-	sequence int64
-	sample   sample
-	stopID   string
-	seen     time.Time
 }
 
 type sample struct {
@@ -196,15 +204,19 @@ type sessions struct {
 
 func newSessions() *sessions { return &sessions{byID: map[string]*session{}} }
 
-// get is a session of user, locked: done unlocks it. Sessions unused for
-// a day are forgotten.
-func (s *sessions) get(id string, user accounts.ID, now time.Time) (*session, func(), bool) {
-	s.mu.Lock()
+// sweep forgets the sessions unused for a day; s.mu is held.
+func (s *sessions) sweep(now time.Time) {
 	for key, other := range s.byID {
 		if now.Sub(other.seen) > sessionLifetime {
 			delete(s.byID, key)
 		}
 	}
+}
+
+// get is a session of user, locked: done unlocks it.
+func (s *sessions) get(id string, user accounts.ID, now time.Time) (*session, func(), bool) {
+	s.mu.Lock()
+	s.sweep(now)
 	found, ok := s.byID[id]
 	if ok && found.user == user {
 		found.seen = now
@@ -217,9 +229,11 @@ func (s *sessions) get(id string, user accounts.ID, now time.Time) (*session, fu
 	return found, found.mu.Unlock, true
 }
 
+// add keeps a session started at its seen time.
 func (s *sessions) add(found *session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.sweep(found.seen)
 	s.byID[found.id] = found
 }
 
@@ -463,26 +477,33 @@ func (s *Server) ask(r *http.Request, found *session) (playbackInfo, *decision, 
 	if err != nil {
 		return info, nil, err
 	}
+	var d *decision
 	switch {
 	case a.status == http.StatusNotFound:
-		d := unavailable("not_found", "This title is no longer available.", false)
-		return info, &d, nil
+		d = new(unavailable("not_found", "This title is no longer available.", false))
 	case a.status == http.StatusForbidden:
-		d := unavailable("not_allowed", "This account may not play now.", false)
-		return info, &d, nil
+		d = new(unavailable("not_allowed", "This account may not play now.", false))
 	case !a.ok():
-		d := unavailable("unavailable", "This title could not be prepared.", true)
-		return info, &d, nil
-	case len(info.MediaSources) == 0 || info.ErrorCode != "":
-		d := unavailable("no_compatible_stream", "No version of this title plays on this device for this account.", false)
-		return info, &d, nil
+		d = new(unavailable("unavailable", "This title could not be prepared.", true))
+	case len(info.MediaSources) == 0 || info.ErrorCode != "" ||
+		!info.MediaSources[0].SupportsDirectPlay && info.MediaSources[0].TranscodingUrl == "":
+		d = new(unavailable("no_compatible_stream", "No version of this title plays on this device for this account.", false))
 	}
-	source := info.MediaSources[0]
-	if !source.SupportsDirectPlay && source.TranscodingUrl == "" {
-		d := unavailable("no_compatible_stream", "No version of this title plays on this device for this account.", false)
-		return info, &d, nil
+	if d != nil {
+		// Nothing plays: what PlaybackInfo prepared for it is stopped.
+		s.stopPlaySession(r, found, info.PlaySessionId)
 	}
-	return info, nil, nil
+	return info, d, nil
+}
+
+// stopPlaySession stops the conversions of a Jellyfin play session of the
+// session's device, as a Jellyfin app does when it gives a play session up.
+func (s *Server) stopPlaySession(r *http.Request, found *session, playSession string) {
+	if playSession == "" {
+		return
+	}
+	_, _ = s.callAs(r, found.device, found.token, http.MethodDelete, "/Videos/ActiveEncodings?"+url.Values{
+		"deviceId": {found.device.DeviceID}, "playSessionId": {playSession}}.Encode(), nil, nil)
 }
 
 // trackByOrdinal is the Jellyfin index of a version's track of a kind at
@@ -508,23 +529,25 @@ func trackID(id *string) *int {
 	return &index
 }
 
-// withoutKey drops the access token from a Jellyfin address: the apps send
-// theirs in a header.
+// withoutKey drops the access token from a Jellyfin address, keeping its
+// other parameters as they are, well formed or not: the apps send their
+// token in a header.
 func withoutKey(target string) string {
 	path, query, _ := strings.Cut(target, "?")
-	values, err := url.ParseQuery(query)
-	if err != nil {
-		return path
-	}
-	for name := range values {
-		if strings.EqualFold(name, "ApiKey") || strings.EqualFold(name, "api_key") {
-			values.Del(name)
+	var kept []string
+	for _, part := range strings.FieldsFunc(query, func(r rune) bool { return r == '&' || r == ';' }) {
+		name, _, _ := strings.Cut(part, "=")
+		if unescaped, err := url.QueryUnescape(name); err == nil {
+			name = unescaped
+		}
+		if !strings.EqualFold(name, "ApiKey") && !strings.EqualFold(name, "api_key") {
+			kept = append(kept, part)
 		}
 	}
-	if len(values) == 0 {
+	if len(kept) == 0 {
 		return path
 	}
-	return path + "?" + values.Encode()
+	return path + "?" + strings.Join(kept, "&")
 }
 
 // codecsAllowed reads a codec list of a conversion's address.
@@ -732,9 +755,9 @@ func (s *Server) startPlayback(w http.ResponseWriter, r *http.Request, v viewer)
 	}
 	found := &session{id: randomID(), user: v.user.ID, device: v.device.DeviceInfo, token: v.token, installation: body.InstallationID,
 		attempt: body.PlaybackAttemptID, file: body.FileID, version: version.String(), replans: map[string][]byte{}, seen: s.options.now(),
-		choice: choice{capabilities: body.Capabilities, context: body.Context, quality: body.QualityPreference, original: true,
+		playState: playState{choice: choice{capabilities: body.Capabilities, context: body.Context, quality: body.QualityPreference, original: true,
 			bitrateKbps: bitrateOf(body.BandwidthCapKbps, body.BandwidthEstimate), audio: trackID(body.AudioTrackID),
-			subtitle: trackID(body.SubtitleTrackID), audioOrdinal: body.AudioTrackIndex, subtitleOrdinal: body.SubtitleTrackIndex}}
+			subtitle: trackID(body.SubtitleTrackID), audioOrdinal: body.AudioTrackIndex, subtitleOrdinal: body.SubtitleTrackIndex}}}
 	if body.StartPosition != nil && *body.StartPosition > 0 {
 		found.position = *body.StartPosition
 	}
@@ -791,6 +814,8 @@ func (s *Server) plan(r *http.Request, found *session) (decision, error) {
 	}
 	found.choice.audioOrdinal, found.choice.subtitleOrdinal = nil, nil
 	if again {
+		// The first play session only told the tracks' places.
+		s.stopPlaySession(r, found, info.PlaySessionId)
 		if info, refused, err = s.ask(r, found); err != nil || refused != nil {
 			if refused != nil {
 				return *refused, nil
@@ -824,11 +849,12 @@ func (s *Server) replan(w http.ResponseWriter, r *http.Request, v viewer) {
 		return
 	}
 	if previous, ok := found.replans[body.ReplanRequestID]; ok {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(previous)
+		writeRaw(w, http.StatusOK, previous)
 		return
 	}
+	// The replan is planned on the session's state, which it keeps only
+	// once a plan plays: a failed or refused replan changes nothing.
+	saved := found.playState
 	previous := found.playSession
 	found.position = body.PositionSeconds
 	c := &found.choice
@@ -852,21 +878,44 @@ func (s *Server) replan(w http.ResponseWriter, r *http.Request, v viewer) {
 		c.original = false
 	}
 	d, err := s.plan(r, found)
+	if err != nil || d.Plan == nil {
+		found.playState = saved
+	}
 	if err != nil {
 		s.internalError(w, r, err)
 		return
 	}
 	if d.Plan != nil && previous != found.playSession {
 		// The previous play session's conversion is no longer needed.
-		_, _ = s.callAs(r, found.device, found.token, http.MethodDelete, "/Videos/ActiveEncodings?"+url.Values{
-			"deviceId": {found.device.DeviceID}, "playSessionId": {previous}}.Encode(), nil, nil)
+		s.stopPlaySession(r, found, previous)
 	}
 	data, _ := json.Marshal(d)
 	if body.ReplanRequestID != "" {
-		found.replans[body.ReplanRequestID] = data
+		found.keepReplan(body.ReplanRequestID, data)
 	}
+	writeRaw(w, http.StatusOK, data)
+}
+
+// maxReplans is how many replans a session keeps the answers of, for
+// their replays.
+const maxReplans = 32
+
+// keepReplan keeps the answer of a replan, forgetting the oldest past
+// maxReplans.
+func (found *session) keepReplan(id string, data []byte) {
+	if len(found.replanOrder) >= maxReplans {
+		delete(found.replans, found.replanOrder[0])
+		found.replanOrder = found.replanOrder[1:]
+	}
+	found.replans[id] = data
+	found.replanOrder = append(found.replanOrder, id)
+}
+
+// writeRaw answers a JSON body already encoded, which no cache keeps.
+func writeRaw(w http.ResponseWriter, status int, data []byte) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
 	_, _ = w.Write(data)
 }
 
@@ -957,7 +1006,9 @@ func (s *Server) stop(w http.ResponseWriter, r *http.Request, v viewer) {
 		return
 	}
 	position := found.position
-	if body.Position != nil && (body.Sequence == nil || *body.Sequence > found.sequence) {
+	// A position goes with a sample newer than the last applied; without a
+	// sequence, it cannot be told newer, and the last sample stands.
+	if body.Position != nil && body.Sequence != nil && *body.Sequence > found.sequence {
 		position = *body.Position
 	}
 	if err := s.report(r, found, "/Sessions/Playing/Stopped", position, false); err != nil {
@@ -1006,7 +1057,7 @@ func (s *Server) original(w http.ResponseWriter, r *http.Request, v viewer) {
 		problem(w, http.StatusNotFound, "not_found", "This playback is converted.")
 		return
 	}
-	s.relay(w, r, found.stream, authorization(found.device, found.token))
+	s.relay(private(w), r, found.stream, authorization(found.device, found.token))
 }
 
 // converted serves the playlists and segments of a converted plan, which
@@ -1031,7 +1082,7 @@ func (s *Server) converted(w http.ResponseWriter, r *http.Request, v viewer) {
 	if path == "master.m3u8" {
 		target = base + "?" + query
 	}
-	s.relay(w, r, target, authorization(found.device, found.token))
+	s.relay(private(w), r, target, authorization(found.device, found.token))
 }
 
 // subtitle serves a text subtitle of a plan as WebVTT.
@@ -1047,5 +1098,38 @@ func (s *Server) subtitle(w http.ResponseWriter, r *http.Request, v viewer) {
 		problem(w, http.StatusNotFound, "not_found", "No such subtitle.")
 		return
 	}
-	s.relay(w, r, target, authorization(found.device, found.token))
+	s.relay(private(w), r, target, authorization(found.device, found.token))
+}
+
+// privateWriter answers a session's media as the user's alone: no cache
+// keeps them, whatever the Jellyfin API's answer says.
+type privateWriter struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func private(w http.ResponseWriter) http.ResponseWriter { return &privateWriter{ResponseWriter: w} }
+
+func (p *privateWriter) WriteHeader(status int) {
+	if !p.wrote {
+		p.wrote = true
+		p.Header().Set("Cache-Control", "private, no-store")
+	}
+	p.ResponseWriter.WriteHeader(status)
+}
+
+func (p *privateWriter) Write(data []byte) (int, error) {
+	if !p.wrote {
+		p.WriteHeader(http.StatusOK)
+	}
+	return p.ResponseWriter.Write(data)
+}
+
+// Unwrap lets http.ResponseController reach the connection, to flush.
+func (p *privateWriter) Unwrap() http.ResponseWriter { return p.ResponseWriter }
+
+func (p *privateWriter) Flush() {
+	if flusher, ok := p.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }

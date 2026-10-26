@@ -33,7 +33,7 @@ import (
 	"github.com/moodiness/polyfin/internal/forwarded"
 )
 
-// Accounts is what the API reads of the accounts.
+// Accounts is what the API reads and does of the accounts.
 type Accounts interface {
 	Settings() accounts.Settings
 	// DeviceByToken is the signed-in device of an access token, and its
@@ -42,6 +42,8 @@ type Accounts interface {
 	DeviceByToken(ctx context.Context, token, remoteAddress string) (accounts.Device, accounts.User, error)
 	// SetupRequired reports whether no administrator exists yet.
 	SetupRequired(ctx context.Context) (bool, error)
+	// SignOutDevice signs out the device of an access token.
+	SignOutDevice(ctx context.Context, token string) error
 }
 
 // Options configure the API.
@@ -113,10 +115,22 @@ func bearer(r *http.Request) string {
 
 // signedIn serves next for the session of the request's bearer token, a
 // session of an enabled account: one disabled or ended since is signed
-// out, as Jellyfin apps are.
+// out, and a user outside their allowed hours is refused, except
+// administrators, as Jellyfin apps are.
 func (s *Server) signedIn(next func(http.ResponseWriter, *http.Request, viewer)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		v, ok := s.session(w, r)
+		v, ok := s.session(w, r, true)
+		if ok {
+			next(w, r, v)
+		}
+	}
+}
+
+// signedInAnyHour is signedIn whatever the user's allowed hours: signing
+// out is never refused.
+func (s *Server) signedInAnyHour(next func(http.ResponseWriter, *http.Request, viewer)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		v, ok := s.session(w, r, false)
 		if ok {
 			next(w, r, v)
 		}
@@ -124,8 +138,9 @@ func (s *Server) signedIn(next func(http.ResponseWriter, *http.Request, viewer))
 }
 
 // session finds the session of the request's bearer token, answering the
-// request when there is none.
-func (s *Server) session(w http.ResponseWriter, r *http.Request) (viewer, bool) {
+// request when there is none, or when hours holds and the user is outside
+// their allowed hours.
+func (s *Server) session(w http.ResponseWriter, r *http.Request, hours bool) (viewer, bool) {
 	token := bearer(r)
 	if token == "" {
 		problem(w, http.StatusUnauthorized, "authentication_required", "Sign in first.")
@@ -138,6 +153,10 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) (viewer, bool) 
 	}
 	if err != nil {
 		s.internalError(w, r, err)
+		return viewer{}, false
+	}
+	if hours && !user.IsAdministrator && !user.AllowedAt(s.options.now()) {
+		problem(w, http.StatusForbidden, "permission_denied", "This account may not be used at this hour.")
 		return viewer{}, false
 	}
 	return viewer{user: user, device: device, token: token}, true
@@ -159,11 +178,14 @@ func (s *Server) profiled(next func(http.ResponseWriter, *http.Request, viewer))
 // did.
 func (s *Server) profileRefused(w http.ResponseWriter, r *http.Request, v viewer, required bool) bool {
 	profile := strings.TrimSpace(r.Header.Get("X-Profile-Id"))
-	switch {
-	case profile == "" && required:
-		validationProblem(w, "header.x-profile-id", "required", "The X-Profile-Id header is required.")
-		return true
-	case profile != "" && profile != v.user.ID.String():
+	if profile == "" {
+		if required {
+			validationProblem(w, "header.x-profile-id", "required", "The X-Profile-Id header is required.")
+		}
+		return required
+	}
+	// The ID is the user's, in any of the forms accounts.ParseID reads.
+	if id, err := accounts.ParseID(profile); err != nil || id != v.user.ID {
 		problem(w, http.StatusForbidden, "permission_denied", "This profile is not the account's.")
 		return true
 	}
@@ -190,14 +212,18 @@ type problemError struct {
 // read the code from the last segment of the type.
 const problemTypes = "https://siloserver.org/docs/api/v2/problems/"
 
+// problem answers an error. Its instance names the request, whose ID the
+// X-Request-ID header gives too.
 func problem(w http.ResponseWriter, status int, code, detail string, errs ...problemError) {
-	instance := make([]byte, 12)
-	_, _ = rand.Read(instance)
+	random := make([]byte, 12)
+	_, _ = rand.Read(random)
+	id := hex.EncodeToString(random)
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Request-ID", id)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(problemJSON{Type: problemTypes + code, Title: http.StatusText(status), Status: status,
-		Detail: detail, Instance: "urn:polyfin:request:" + hex.EncodeToString(instance), Errors: errs})
+		Detail: detail, Instance: "urn:silo:request:" + id, Errors: errs})
 }
 
 func validationProblem(w http.ResponseWriter, location, code, detail string) {
@@ -255,6 +281,10 @@ func (s *Server) jellyfinRefusal(w http.ResponseWriter, r *http.Request, answer 
 	case answer.status == http.StatusTooManyRequests:
 		w.Header().Set("Retry-After", cmp.Or(answer.header.Get("Retry-After"), "60"))
 		problem(w, http.StatusTooManyRequests, "rate_limited", "Too many attempts; try again later.")
+	case answer.status == http.StatusBadGateway || answer.status == http.StatusServiceUnavailable || answer.status == http.StatusGatewayTimeout:
+		// A source failed, or the server is busy: the app may try again.
+		w.Header().Set("Retry-After", cmp.Or(answer.header.Get("Retry-After"), "30"))
+		problem(w, http.StatusServiceUnavailable, "unavailable", "A source of this server does not answer; try again later.")
 	case answer.status >= http.StatusInternalServerError:
 		s.internalError(w, r, errors.New("the Jellyfin API answered "+http.StatusText(answer.status)))
 	default:

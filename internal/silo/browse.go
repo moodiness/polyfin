@@ -883,6 +883,12 @@ func (s *Server) episodesOf(w http.ResponseWriter, r *http.Request, v viewer, se
 		s.jellyfinRefusal(w, r, a)
 		return
 	}
+	// The versions of every episode are numbered at once.
+	numbers, err := s.versionNumbers(r.Context(), result.Items)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
 	episodes := []episode{}
 	for _, i := range result.Items {
 		row := episode{ContentID: i.Id, Title: i.Name, AirDate: date(i.PremiereDate), UserData: rollupOf(i),
@@ -897,12 +903,7 @@ func (s *Server) episodesOf(w http.ResponseWriter, r *http.Request, v viewer, se
 			row.Overview = *i.Overview
 		}
 		row.StillURL = artworkURL(i.Id, "Primary", i.ImageTags["Primary"], artworkWidth(r, "still"))
-		versions, err := s.versionsOf(r.Context(), i)
-		if err != nil {
-			s.internalError(w, r, err)
-			return
-		}
-		for _, version := range versions {
+		for _, version := range versionsWith(i, numbers) {
 			row.Files = append(row.Files, episodeFile{FileID: version.FileID, FileSize: version.FileSize, Container: version.Container,
 				CodecVideo: version.CodecVideo, Resolution: version.Resolution, HDR: version.HDR})
 		}

@@ -33,7 +33,7 @@ func (s *Server) accountRoutes() {
 	s.mux.HandleFunc("GET /api/v2/system/setup", s.systemSetup)
 	s.mux.HandleFunc("POST /api/v2/auth/login", s.login)
 	s.mux.HandleFunc("POST /api/v2/auth/refresh", s.refresh)
-	s.mux.HandleFunc("POST /api/v2/auth/logout", s.signedIn(s.logout))
+	s.mux.HandleFunc("POST /api/v2/auth/logout", s.signedInAnyHour(s.logout))
 	s.mux.HandleFunc("GET /api/v2/account/me", s.signedIn(s.me))
 	s.mux.HandleFunc("GET /api/v2/profiles", s.signedIn(s.profiles))
 }
@@ -45,8 +45,10 @@ type systemInfo struct {
 	Links          systemLinks `json:"links"`
 }
 
-// systemLinks name the contract and the capability documents; Polyfin
-// serves neither, only the identity.
+// systemLinks name the contract, the capability documents and the
+// identity, all three of which the contract requires. Polyfin serves the
+// identity and the capabilities of playback and search, not the contract
+// nor a list of the capabilities.
 type systemLinks struct {
 	OpenAPI      string `json:"openapi"`
 	Capabilities string `json:"capabilities"`
@@ -57,7 +59,8 @@ type systemLinks struct {
 // server speaks the API they know.
 func (s *Server) systemInfo(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, systemInfo{ServerVersion: "polyfin-" + s.options.Version, APIMajor: 2,
-		ContractDigest: ContractDigest, Links: systemLinks{Identity: "/api/v2/system/identity"}})
+		ContractDigest: ContractDigest, Links: systemLinks{OpenAPI: "/api/v2/openapi.json", Capabilities: "/api/v2/capabilities",
+			Identity: "/api/v2/system/identity"}})
 }
 
 func (s *Server) systemIdentity(w http.ResponseWriter, _ *http.Request) {
@@ -175,6 +178,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, user, err := s.options.Accounts.DeviceByToken(r.Context(), result.AccessToken, forwarded.Client(r))
+	if errors.Is(err, accounts.ErrNotFound) {
+		// The account was disabled, or ended, since it was authenticated.
+		problem(w, http.StatusUnauthorized, "invalid_token", "Invalid username or password.")
+		return
+	}
 	if err != nil {
 		s.internalError(w, r, err)
 		return
@@ -212,15 +220,11 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 	}{body.RefreshToken, int64(tokenLifetime / time.Second), body.RefreshToken})
 }
 
-// logout signs the device out, as a Jellyfin app's sign-out does.
+// logout signs the device out, as a Jellyfin app's sign-out does, at any
+// hour: the Jellyfin API's sign-out refuses a user outside their hours.
 func (s *Server) logout(w http.ResponseWriter, r *http.Request, v viewer) {
-	a, err := s.call(r, v, http.MethodPost, "/Sessions/Logout", nil, nil)
-	if err != nil {
+	if err := s.options.Accounts.SignOutDevice(r.Context(), v.token); err != nil {
 		s.internalError(w, r, err)
-		return
-	}
-	if !a.ok() {
-		s.jellyfinRefusal(w, r, a)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

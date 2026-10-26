@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,6 +29,8 @@ type numbers struct {
 	mu       sync.Mutex
 	byID     map[accounts.ID]int32
 	byNumber map[int32]accounts.ID
+	// trips counts the round trips to the database, which the tests read.
+	trips atomic.Int64
 }
 
 func newNumbers(db *pgxpool.Pool) *numbers {
@@ -46,11 +49,13 @@ func (n *numbers) keep(id accounts.ID, number int32) {
 func (n *numbers) of(ctx context.Context, ids ...accounts.ID) (map[accounts.ID]int32, error) {
 	found := make(map[accounts.ID]int32, len(ids))
 	var missing []accounts.ID
+	seen := make(map[accounts.ID]bool, len(ids))
 	n.mu.Lock()
 	for _, id := range ids {
 		if number, ok := n.byID[id]; ok {
 			found[id] = number
-		} else if !slices.Contains(missing, id) {
+		} else if !seen[id] {
+			seen[id] = true
 			missing = append(missing, id)
 		}
 	}
@@ -59,6 +64,7 @@ func (n *numbers) of(ctx context.Context, ids ...accounts.ID) (map[accounts.ID]i
 		return found, nil
 	}
 	read := func(rows pgx.Rows, err error) error {
+		n.trips.Add(1)
 		if err != nil {
 			return err
 		}
