@@ -128,6 +128,7 @@ Nothing is written to the Jellyfin server: the import only reads it. Signing in 
 - One import runs at a time. Leaving the page does not stop it, and the page shows how far it is, user by user, then what it added: titles marked played, resume points and favorites, and the titles not found.
 - **Stop import** stops it at once. What was imported stays: a user whose data was being saved is saved whole, and one whose data was being read gets nothing until the next import.
 - Jellyfin is read 200 titles at a time, one request after the other. A request that fails is tried 3 times more; a server that keeps failing, or refuses the key, ends the import, after saving what was read of the current user. A user whose data the server does not let the key read is marked so, and the import goes on with the next users.
+- An answer the import cannot read ends it with `not_jellyfin`, and Polyfin's log says where, at the warning level: `An import could not read an answer`, with the path asked and why it could not be read, never the query or the key.
 - A user signed in is signed out once their watch data is read, and the import's own session when it ends, stopped or failed. A restart during an import leaves them open: they show among the users' devices on the server, which can end them.
 - Polyfin keeps the running import and the last result in memory only: a restart stops an import under way and forgets the result. Start it again: it adds only what is missing.
 

@@ -32,6 +32,11 @@ type plexItemJSON struct {
 	Type      string `json:"type"`
 	Title     string `json:"title"`
 	Year      int    `json:"year"`
+	// PlexGUID names the item in Plex's own scheme, plex://movie/…. Plex
+	// sends it in guid beside the Guid list, and encoding/json would decode
+	// guid into Guid, whose name matches without regard to case, without a
+	// field named exactly so.
+	PlexGUID string `json:"guid"`
 	// Guid lists the item's identifiers elsewhere, such as imdb://tt…,
 	// tmdb://… and tvdb://…, with includeGuids=1.
 	Guid []struct {

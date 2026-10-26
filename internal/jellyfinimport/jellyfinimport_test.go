@@ -1,8 +1,10 @@
 package jellyfinimport
 
 import (
+	"crypto/sha1"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"maps"
@@ -1102,7 +1104,14 @@ func (f *fakePlex) serve(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			size = len(all)
 		}
-		part := all[min(start, len(all)):min(start+size, len(all))]
+		part := []map[string]any{}
+		for _, item := range all[min(start, len(all)):min(start+size, len(all))] {
+			// Plex names every item in its own scheme too, in guid, a
+			// string beside the Guid list whose key differs only by case.
+			copied := maps.Clone(item)
+			copied["guid"] = fmt.Sprintf("plex://%s/%x", item["type"], sha1.Sum([]byte(fmt.Sprint(item["ratingKey"]))))
+			part = append(part, copied)
+		}
 		answer(map[string]any{"size": len(part), "totalSize": len(all), "offset": start, "Metadata": part})
 	}
 	section, inSection := strings.CutPrefix(r.URL.Path, "/library/sections/")
@@ -1250,5 +1259,50 @@ func TestPlexImportsTheOwnersAndEachAccountsWatchData(t *testing.T) {
 		if r.Method != http.MethodGet || strings.Contains(r.URL.String(), plexToken) {
 			t.Errorf("Plex was sent %s %s", r.Method, r.URL)
 		}
+	}
+}
+
+// lockedBuffer collects what a logger writes from the import's goroutine.
+type lockedBuffer struct {
+	mu   sync.Mutex
+	text strings.Builder
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.text.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.text.String()
+}
+
+// An answer an import cannot read is logged with the path it came from and
+// why, never with its query or the token.
+func TestAnAnswerAnImportCannotReadIsLoggedWithItsPath(t *testing.T) {
+	h := newHarness(t)
+	var logged lockedBuffer
+	h.logger = slog.New(slog.NewTextHandler(&logged, nil))
+	p := newFakePlex(t)
+	owner := h.user(t, "owner")
+	p.accounts = []map[string]any{{"id": 1, "key": "/accounts/1", "name": "Owner"}}
+	p.sections = []map[string]any{{"key": "1", "type": "movie", "title": "Movies"}}
+	p.items["1"] = map[string][]map[string]any{"1": {{"ratingKey": "11", "type": "movie", "title": "Unreadable", "year": "twenty"}}}
+	plex := Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: plexToken}}
+	if _, err := h.Start(t.Context(), plex, accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
+		return []Target{{JellyfinID: "1", User: owner.ID, UserName: "owner"}}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if status := h.ended(t); status.State != StateFailed || status.Problem != ProblemNotJellyfin {
+		t.Fatalf("import: %+v", status)
+	}
+	text := logged.String()
+	if !strings.Contains(text, "level=WARN") || !strings.Contains(text, "path=/library/sections/1/all") ||
+		!strings.Contains(text, "year") || strings.Contains(text, plexToken) || strings.Contains(text, "X-Plex-Container") {
+		t.Errorf("logged: %s", text)
 	}
 }

@@ -113,7 +113,9 @@ func (c *client) send(ctx context.Context, method, path string, query url.Values
 		var wait time.Duration
 		switch {
 		case err == nil && status == http.StatusOK:
-			if json.Unmarshal(answer, into) != nil {
+			if err := json.Unmarshal(answer, into); err != nil {
+				// The path tells where, never the query or the key.
+				c.s.logger.Warn("An import could not read an answer", "kind", c.kind, "path", path, "error", err)
 				return ErrNotJellyfin
 			}
 			return nil
