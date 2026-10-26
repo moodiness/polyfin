@@ -8,8 +8,9 @@
 // what that list holds: a title it no longer holds leaves the watchlist,
 // unless another list still holds it; so does what a list held once it is
 // no longer read (see Drop). A one-off app import, which has no next
-// import, only adds (see Import). Jellyfin apps have no watchlist button:
-// the watchlist is edited where the lists live.
+// import, only adds (see Import). Jellyfin apps have no watchlist button;
+// Silo's apps have one, which adds to the user's own list (see Own) and
+// takes a title off every list.
 //
 // The titles the user started, a movie with a resume point or played, a
 // series with an episode started or played, are left out when the
@@ -37,6 +38,11 @@ func Tracking(service string) string { return "tracking:" + service }
 // Connection is the list of a user's connection to an app, such as
 // Stremio: the library of the account.
 func Connection(app string) string { return "app:" + app }
+
+// Own is the list of the titles users put on their watchlist themselves,
+// from Silo's apps: what they add stays until they start it or take it
+// off.
+const Own = "own"
 
 // Title is a movie or series a list holds, by its item, and when the list
 // added it, nil when the list does not tell.
@@ -146,4 +152,37 @@ func (s *Store) Titles(ctx context.Context, user accounts.ID) ([]accounts.ID, er
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+}
+
+// Add puts title on user's own list (see Own), unless a list already holds
+// it: adding a title already on the watchlist changes nothing.
+func (s *Store) Add(ctx context.Context, user, title accounts.ID) error {
+	_, err := s.db.Exec(ctx, `INSERT INTO watchlist (user_id, item_id, list, added_at)
+		SELECT $1, $2, $3, now() WHERE NOT EXISTS (SELECT 1 FROM watchlist WHERE user_id = $1 AND item_id = $2)
+		ON CONFLICT (user_id, item_id, list) DO NOTHING`, user, title, Own)
+	return err
+}
+
+// Remove takes title off user's watchlist, off every list holding it. A
+// list read whole that still holds it puts it back at its next import.
+func (s *Store) Remove(ctx context.Context, user, title accounts.ID) error {
+	_, err := s.db.Exec(ctx, "DELETE FROM watchlist WHERE user_id = $1 AND item_id = $2", user, title)
+	return err
+}
+
+// Held lists the titles a list of user's holds, started or not, each with
+// the latest date a list holding it gives, the latest added first.
+func (s *Store) Held(ctx context.Context, user accounts.ID) ([]Title, error) {
+	rows, err := s.db.Query(ctx, `SELECT item_id, max(added_at) FROM watchlist WHERE user_id = $1
+		GROUP BY item_id ORDER BY max(added_at) DESC, item_id`, user)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Title, error) {
+		var t Title
+		var at time.Time
+		err := row.Scan(&t.ID, &at)
+		t.AddedAt = &at
+		return t, err
+	})
 }

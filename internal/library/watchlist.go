@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 // Watchlist is a view of Polyfin's own, beside the libraries: the movies
@@ -76,4 +77,24 @@ func (s *Service) watchlistChildren(ctx context.Context, v view, start, count in
 	page := slicePage(items, start, count)
 	page.More = from < len(ids)
 	return page, nil
+}
+
+// AddToWatchlist puts a movie or a series on user's watchlist, on the list
+// of the titles they add themselves (see watchlist.Own), unless a list
+// already holds it.
+func (s *Service) AddToWatchlist(ctx context.Context, user, title accounts.ID) error {
+	return s.watchlist.Add(ctx, user, title)
+}
+
+// RemoveFromWatchlist takes a title off user's watchlist, off every list
+// holding it.
+func (s *Service) RemoveFromWatchlist(ctx context.Context, user, title accounts.ID) error {
+	return s.watchlist.Remove(ctx, user, title)
+}
+
+// WatchlistHeld lists the titles user's watchlist holds, started or not,
+// the latest added first: those started are left out of the Watchlist
+// view only.
+func (s *Service) WatchlistHeld(ctx context.Context, user accounts.ID) ([]watchlist.Title, error) {
+	return s.watchlist.Held(ctx, user)
 }
