@@ -215,6 +215,7 @@ func DefaultSettings() Settings {
 		ConversionFolder: "",
 		ReadingFolder:    "",
 		CacheFolder:      "",
+		SiloApps:         false,
 	}
 }
 
@@ -440,6 +441,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"conversionFolder": text(MaxFolderBytes, d.ConversionFolder),
 		"readingFolder":    text(MaxFolderBytes, d.ReadingFolder),
 		"cacheFolder":      text(MaxFolderBytes, d.CacheFolder),
+		"siloApps":         is(d.SiloApps),
 	}
 }
 

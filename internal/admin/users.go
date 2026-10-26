@@ -734,6 +734,8 @@ type settingsJSON struct {
 	ReadingFolder      *string `json:"readingFolder"`
 	CacheFolder        *string `json:"cacheFolder"`
 	CacheFolderDefault string  `json:"cacheFolderDefault"`
+	// SiloApps keeps its current value when a PUT leaves it out.
+	SiloApps *bool `json:"siloApps"`
 	// LumaaGlaass is the custom CSS and script the web player gets for
 	// the theme Polyfin bundles, which the admin app shows; a PUT ignores
 	// it.
@@ -961,6 +963,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		ReadingFolder:           &settings.ReadingFolder,
 		CacheFolder:             &settings.CacheFolder,
 		InterfaceRoutes:         accounts.InterfaceRoutes,
+		SiloApps:                &settings.SiloApps,
 	}
 }
 
@@ -1676,6 +1679,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ConversionFolder:     valueOr(body.ConversionFolder, current.ConversionFolder),
 		ReadingFolder:        valueOr(body.ReadingFolder, current.ReadingFolder),
 		CacheFolder:          valueOr(body.CacheFolder, current.CacheFolder),
+		SiloApps:             valueOr(body.SiloApps, current.SiloApps),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)

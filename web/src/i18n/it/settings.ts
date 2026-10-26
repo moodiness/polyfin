@@ -60,6 +60,9 @@ const settings: typeof en = {
     legacyAuthorization: 'Consenti l’autorizzazione legacy',
     legacyAuthorizationHelp:
       'Accetta le vecchie intestazioni X-Emby-*, il parametro api_key e lo schema Emby per le applicazioni che ne hanno ancora bisogno. Disattivato per impostazione predefinita, come in Jellyfin 12.3.',
+    siloApps: 'Consenti le app di Silo',
+    siloAppsHelp:
+      'Permette alle app di Silo per iPhone, iPad, Apple TV, Mac e Android di accedere e riprodurre, tramite l’API di Silo in /api/v2, come le app Jellyfin, entro i limiti di ciascun utente. Disattivato, quell’API non risponde.',
     updateCheck: 'Controlla nuove versioni',
     updateCheckHelp:
       'Una volta al giorno, e poco dopo l’avvio, Polyfin chiede a GitHub la sua ultima release, inviando solo la propria versione. Una versione più recente compare nella Home e in Sistema › Stato di salute, e viene inviata alle notifiche Nuova versione. Se disattivato, Polyfin non contatta mai GitHub.',

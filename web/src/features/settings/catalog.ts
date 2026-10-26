@@ -68,6 +68,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'general',
+    anchor: 'silo-apps',
+    label: (t) => s(t).siloApps,
+    help: (t) => s(t).siloAppsHelp,
+    keywords: ['Silo', '/api/v2'],
+  },
+  {
+    section: 'general',
     anchor: 'update-check',
     label: (t) => s(t).updateCheck,
     help: (t) => s(t).updateCheckHelp,

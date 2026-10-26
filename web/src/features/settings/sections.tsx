@@ -160,6 +160,13 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
         </Notice>
       </SwitchRow>
       <SwitchRow
+        anchor="silo-apps"
+        label={s.siloApps}
+        help={s.siloAppsHelp}
+        checked={form.siloApps}
+        onChange={(siloApps) => update({ siloApps })}
+      />
+      <SwitchRow
         anchor="update-check"
         label={s.updateCheck}
         help={s.updateCheckHelp}

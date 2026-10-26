@@ -1705,6 +1705,10 @@ type Settings struct {
 	ConversionFolder string
 	ReadingFolder    string
 	CacheFolder      string
+
+	// SiloApps lets Silo's apps sign in and play through Silo's API under
+	// /api/v2 (see package silo); off, the API answers nothing.
+	SiloApps bool
 }
 
 // TorrentsAllowed reports whether user is offered torrents' files: the
@@ -1886,7 +1890,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"metrics, metrics_token, " +
 	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_wireguard, torrent_download_mbps, torrent_upload_mbps, torrents_at_once, " +
 	"restart_confirmed, update_tool_url, update_tool_token, " +
-	"conversion_folder, reading_folder, cache_folder"
+	"conversion_folder, reading_folder, cache_folder, " +
+	"silo_apps"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1946,7 +1951,8 @@ func (settings *Settings) fields() []any {
 		&settings.TorrentWireGuard,
 		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps, &settings.TorrentsAtOnce,
 		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken,
-		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder}
+		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder,
+		&settings.SiloApps}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {

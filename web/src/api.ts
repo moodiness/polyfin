@@ -644,6 +644,8 @@ export type Settings = {
   cacheFolderDefault: string
   /** Whether this system binds sockets to a network interface, Linux alone (read-only). */
   interfaceRoutes: boolean
+  /** Whether Silo's apps may sign in and play through Silo's API under /api/v2. */
+  siloApps: boolean
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
