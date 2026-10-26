@@ -72,7 +72,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
   - the **Source cache**, against **Disk space for files being read (GB)**, with the part torrent pieces take;
   - the **Image cache**, against its 1 GB on disk, with the images it keeps there and in memory, and **Clear the image cache** (see [Clearing the image cache](#clearing-the-image-cache));
   - **Torrents**, while they are on: the route, the torrents playing, against **Torrents at once** when it is set, their peers and those reached over uTP, and what was shared (see [Torrents](torrents.md));
-  - **Disk space** for the cache, recordings and backups folders;
+  - **Disk space** for the cache, recordings and backups folders, and for the conversion folder and the folder for files being read when they are other folders than the cache's (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache));
   - **Backups**: the last run and its result, the last backup made, its file and size, the next one, each destination's last upload, and the last restore. A failed backup, or a last backup older than two days, is a problem; so is a destination whose last upload failed (an error), or whose newest backup is older than two days (a warning). See [Backups](backups.md);
   - **Thumbnails (trickplay)**: the queue and paused sources;
   - **Polyfin**: memory, goroutines, uptime and version, and **Download the goroutines**: a text file of what every goroutine of the server is doing, with its stack and how long it has waited, as Go prints it when a program crashes. When a request never answers, download it while the request still waits, and send it with the report. It holds the paths of Polyfin's source files, but no address, token or password. Only administrators may download it (`GET /admin/api/health/goroutines`);
@@ -98,6 +98,8 @@ An addon whose search catalog did not answer a search in time is a warning, with
 A local folder whose files are left unmatched because no addon of the server describes and searches titles of its kind is a warning too, with a link to **Content › Sources**, where such an addon is added: users' own addons, under **My sources**, do not count. It goes away once a scan matches those files (see [What a search needs](local-folders.md#what-a-search-needs)).
 
 A copy of the web player's **Custom** theme kept in Polyfin that misses some of its files, as after a backup restored on another system or into another data folder, is a warning with how many are missing, linked to the copy under **Settings › Web player**, while the **Custom** theme is chosen and its texts load the copy. Browsers meanwhile load those files from their original addresses, which needs the internet. **Update the copy** downloads them again and clears it; so does choosing another theme (see [Keeping a copy of a theme](web-client.md#keeping-a-copy-of-a-theme)).
+
+A **Conversion folder**, **Folder for files being read** or **Cache folder** that Polyfin could not write into when it started, such as a disk not mounted, is a warning naming the folder, with a link to its setting: the data folder's `cache` holds those files until a start finds the folder writable (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)). **For app developers:** `GET /admin/api/health/problems` lists it as `folder_unwritable`, with `folder` (`conversion`, `reading` or `cache`), `path` and `error`; `/admin/api/settings` holds the folders as `conversionFolder`, `readingFolder` and `cacheFolder`, with `cacheFolderDefault`, and a `PUT` with a folder Polyfin cannot write into answers 400 `invalid_conversion_folder`, `invalid_reading_folder` or `invalid_cache_folder`.
 
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
 
@@ -310,7 +312,7 @@ The metrics name no user, title, address, device or token. Their labels take a f
 | `polyfin_scans_running` | gauge | | Scans of local folders under way. |
 | `polyfin_scan_duration_seconds` | histogram | | Scans of local folders and how long they took. |
 | `polyfin_database_connections` | gauge | `state`: `in_use`, `idle`, `max` | Connections to PostgreSQL. |
-| `polyfin_disk_free_bytes` | gauge | `folder`: `cache`, `recordings`, `backups` | Space free on the disks Polyfin writes to, those in use, as **System › Health** checks them. |
+| `polyfin_disk_free_bytes` | gauge | `folder`: `cache`, `conversion`, `reading` (files being read), `recordings`, `backups` | Space free on the disks Polyfin writes to, those in use, as **System › Health** checks them: `conversion` and `reading` when they are other folders than the cache's. |
 
 Prometheus' own metrics of the process follow: memory, goroutines and garbage collection (`go_*`), and on Linux processor time, memory and open files (`process_*`).
 
@@ -390,7 +392,7 @@ Jellyfin apps can read and save the server configuration. It answers Polyfin's s
 
 - Configuration: `/System/Configuration`.
 - Libraries: `/Library/MediaFolders`.
-- Storage: `/System/Info/Storage` lists the cache folder and, while recording is on, the recordings folder.
+- Storage: `/System/Info/Storage` lists the cache folder, the conversion folder's segments as the transcoding folder, and, while recording is on, the recordings folder.
 - The authentication providers are available too.
 
 ### Activity log

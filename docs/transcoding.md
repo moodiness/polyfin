@@ -340,6 +340,7 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 | **Processor threads per conversion (0 = automatic)** | **Settings › Conversion (transcoding)** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
 | **Seconds prepared ahead** | **Settings › Conversion (transcoding)** | 120 (range 30 to 600) | How many seconds of picture a remux or conversion of a file makes past the last segment the app asked for, before it waits. |
 | **Keep the converted video when the audio track changes** | **Settings › Conversion (transcoding)** | Off | Converts the video apart from its audio, and keeps it 30 seconds once its play session stops, for a new session asking for another audio track to take over. Off, a track change converts the video again, as before. See [Changing the audio track](#changing-the-audio-track). |
+| **Conversion folder** | **Settings › Conversion (transcoding)** | Empty, `cache` in the data folder | The folder the segments of files converted or repackaged are written to, from the next start on. See [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache). |
 
 **Compared with Jellyfin:**
 

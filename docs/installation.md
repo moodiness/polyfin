@@ -145,6 +145,32 @@ mkdir backups && sudo chown 65532:65532 backups
 
 See [Backups](backups.md) for the schedule, the number kept, the destinations they are also sent to (S3-compatible storage, SFTP or WebDAV), and how to restore one from the admin app.
 
+### Folders for conversion, files being read and the cache
+
+The segments being played, the files being read and the cache go to Polyfin's data volume, unless **Conversion folder**, **Folder for files being read** and **Cache folder** name other folders (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)). To keep each on a disk of its own, mount a folder of the server for it in the `polyfin` service of `compose.yaml`, and the conversion folder in memory:
+
+```yaml
+    volumes:
+      - polyfin_data:/data
+      - /mnt/large/polyfin/reading:/reading
+      - /mnt/ssd/polyfin/cache:/cache
+    tmpfs:
+      - /conversion:size=4g
+```
+
+Create the folders first, writable by the container's user (UID 65532):
+
+```sh
+sudo mkdir -p /mnt/large/polyfin/reading /mnt/ssd/polyfin/cache
+sudo chown 65532:65532 /mnt/large/polyfin/reading /mnt/ssd/polyfin/cache
+```
+
+Run `docker compose up -d` for the container to get them, then set the folders in the admin app, `/conversion` under **Settings › Conversion (transcoding)**, `/reading` under **Settings › Playback** and `/cache` under **Settings › General**, and restart Polyfin (see [Restart from the admin app](#restart-from-the-admin-app)): they apply from that start on. A folder that is not mounted when Polyfin starts is told in **System › Health**, and the data volume holds its files until the next start.
+
+#### A memory folder for conversion
+
+The `tmpfs` above is a memory folder, made empty at each start of the container, writable by every user. It suits the conversion folder, the busiest one, and needs room for the segments of every conversion and repackaging running at once. Each keeps the segments of **Seconds prepared ahead** (120 by default) past the last one the app asked for, and about 24 seconds more around it (see [HLS segments](transcoding.md#hls-segments)): some 150 MB for a 1080p conversion at 8 Mbps, up to 1 GB for a 4K file repackaged at 60 Mbps. With [adaptive quality](transcoding.md#adaptive-quality), the lower qualities' segments stay until the playback ends. A `tmpfs` takes memory only as it fills, up to its `size`: 4 GB serves a few 4K playbacks at once. A conversion that finds it full cannot write its segments: give it more room, or lower **Seconds prepared ahead**.
+
 ### An rclone container
 
 Polyfin reads folders from the many storages rclone reaches through an rclone instance serving its remote control interface (see [rclone remotes](local-folders.md#addresses)). Run it next to Polyfin: add a service to `compose.yaml`, with its configuration in a folder beside the file, made with `rclone config`:
@@ -193,6 +219,8 @@ To add the template:
 3. Optionally but preferably, fill **Secret key** with the output of `openssl rand -base64 32`, run in Unraid's terminal, so that the keys and tokens Polyfin stores are encrypted. Keep a copy with your backups.
 
 To back up the database every day, set **Backups folder** to a folder of the server, such as `/mnt/user/appdata/polyfin/backups`, then turn **Back up the database every day** on in the admin app, under **Settings › Backups**. The container's user, UID 65532, must be able to write to the folder: create it first in Unraid's terminal with `mkdir -p /mnt/user/appdata/polyfin/backups && chown 65532:65532 /mnt/user/appdata/polyfin/backups`. See [Backups](backups.md). Live TV recordings work the same way, with **Recordings folder** and **Record Live TV**, under **Settings › Recordings**. Every other option is set in the admin app, under **Settings**.
+
+To keep the segments being played, the files being read or the cache on another disk, add a `Path` for each, such as `/mnt/user/polyfin-reading` to `/reading`, created with `chown 65532:65532` as above, then name the container's folder in **Folder for files being read**, **Conversion folder** or **Cache folder**, and restart Polyfin (see [Folders for conversion, files being read and the cache](#folders-for-conversion-files-being-read-and-the-cache)). For a memory folder, add `--tmpfs /conversion:size=4g` to the container's extra parameters, in the advanced view of its template.
 
 For Jellyfin apps to find Polyfin on the local network by themselves, set the container's **Network Type** to `br0`, which gives it its own address on your network, or to `Host`: on the default `bridge`, their broadcasts do not reach it, even with **Discovery port** published (see [Let apps find Polyfin on the local network](#let-apps-find-polyfin-on-the-local-network)).
 

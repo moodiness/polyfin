@@ -301,7 +301,7 @@ Apps that offer SyncPlay, jellyfin-web first, play the same titles in step acros
 
 ## Reading the sources
 
-FFmpeg, ffprobe and relayed apps read a version's file through Polyfin's source cache, as large as **Disk space for files being read (GB)** under **Settings › Playback** (10 GB by default; a lower value applies at once). It fetches the file from the source in blocks and keeps them on disk for seeks.
+FFmpeg, ffprobe and relayed apps read a version's file through Polyfin's source cache, as large as **Disk space for files being read (GB)** under **Settings › Playback** (10 GB by default; a lower value applies at once). It fetches the file from the source in blocks and keeps them on disk for seeks, in the data folder's `cache`, or in **Folder for files being read**, below it, from the start after it is set (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)).
 
 The files of local folders go through it too. Those of S3 buckets, SFTP folders and rclone remotes are fetched straight from the storage, in blocks, as addons' streams are, and count against the same disk space: S3 and rclone over HTTP with ranges, SFTP over the folder's SSH connection; the limits per host below apply to their storage. The files of folders in the container, SMB shares and WebDAV folders are read by Polyfin itself at each request, through its loopback interface (see [network shares](local-folders.md#performance)).
 
