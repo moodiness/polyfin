@@ -621,6 +621,18 @@ Seasons show their own poster when the metadata addon lists the seasons' posters
 
 That list does not name the seasons. So Polyfin reads it only when it has one poster per season of the series' episodes, with specials included or left out. Otherwise it shows the series' poster on every season, rather than risk showing one season's poster on another. Polyfin asks the addon for nothing more: the posters come with the series' description.
 
+### Poster shapes
+
+An addon may declare the shape of a title's or collection's poster, in its catalogs and descriptions, as Stremio's addon protocol defines `posterShape`: `poster` (2 by 3, also when it declares none), `landscape` (wide, about 16 by 9) or `square`. Polyfin tells apps that shape: a wide poster gets a `PrimaryImageAspectRatio` of 16:9 and a square one 1:1. Other posters keep 2:3.
+
+- A library, collection, smart list, search result or home row gives the shape the catalog declares; a title's page gives the one of the description it shows. A poster in the user's [metadata language](users.md#metadata-language) comes with the shape its description declares.
+- An image in place of the addon's poster has no shape of the addon's and shows as 2:3: one uploaded or downloaded with [Edit images](#edit-images), a local folder's poster, and the poster Polyfin draws for a collection without one.
+- Seasons and episodes keep their own shapes, 2:3 and 16:9.
+
+jellyfin-web shows a title's or collection's page with a poster of its shape ([cardImage.ts, lines 15 to 31](https://github.com/jellyfin/jellyfin-web/blob/v12.3/src/components/cardbuilder/cardImage.ts#L15-L31)). A row or grid takes one shape for all its cards, from the median ratio of its items ([imageLoader.js, lines 178 to 234](https://github.com/jellyfin/jellyfin-web/blob/v12.3/src/components/images/imageLoader.js#L178-L234), [cardBuilder.js, lines 81 to 105](https://github.com/jellyfin/jellyfin-web/blob/v12.3/src/components/cardbuilder/cardBuilder.js#L81-L105)): a catalog of wide posters shows wide cards, while one that mixes shapes shows all its cards in the shape nearest that median.
+
+**Compared with Jellyfin:** Jellyfin measures a Primary image kept on its disk, and gives a remote one the shape of the item's type ([DtoService.cs, lines 1849 to 1879](https://github.com/jellyfin/jellyfin/blob/v12.3/Emby.Server.Implementations/Dto/DtoService.cs#L1849-L1879)): 2:3 for movies, series and collections ([Movie.cs, lines 48 to 57](https://github.com/jellyfin/jellyfin/blob/v12.3/MediaBrowser.Controller/Entities/Movies/Movie.cs#L48-L57), [Series.cs, lines 71 to 77](https://github.com/jellyfin/jellyfin/blob/v12.3/MediaBrowser.Controller/Entities/TV/Series.cs#L71-L77), [BoxSet.cs, lines 78 to 79](https://github.com/jellyfin/jellyfin/blob/v12.3/MediaBrowser.Controller/Entities/Movies/BoxSet.cs#L78-L79)). Polyfin measures no image: it lists the addons' artwork without downloading it, so it takes the shape the addon declares, else that of the type, as Jellyfin does for a remote image. An uploaded poster shows as 2:3 whatever its size, where Jellyfin would measure it.
+
 ### Posters warmed ahead
 
 The first time a poster shows, it waits for the artwork server, then for its resize. So every hour, once it has read the libraries' first pages, Polyfin downloads their posters and resizes them to the sizes jellyfin-web asks for its cards: 240, 400 and 480 pixels wide for a poster of 2 by 3. A home row or a library then shows them from Polyfin's cache the first time too, and its next posters on scrolling as well.

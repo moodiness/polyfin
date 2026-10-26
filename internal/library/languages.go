@@ -241,7 +241,10 @@ func translation(base, translated stremio.Meta) stremio.Meta {
 		}
 	}
 	set(&shown.Description, translated.Description)
-	set(&shown.Poster, translated.Poster)
+	// A poster comes with its shape.
+	if translated.Poster != "" {
+		shown.Poster, shown.PosterShape = translated.Poster, translated.PosterShape
+	}
 	set(&shown.Background, translated.Background)
 	set(&shown.Logo, translated.Logo)
 	set(&shown.LandscapePoster, translated.LandscapePoster)
@@ -311,13 +314,14 @@ func (s *Service) translate(ctx context.Context, v view, items []Item) {
 func translateItem(item *Item, translated stremio.Meta) {
 	var shown Item
 	fromMeta(&shown, translation(stremio.Meta{Name: item.Name, Description: item.Overview, Poster: item.Images.Primary,
-		Background: item.Images.Backdrop, Logo: item.Images.Logo, LandscapePoster: item.Images.Thumb}, translated))
+		PosterShape: item.PosterShape, Background: item.Images.Backdrop, Logo: item.Images.Logo, LandscapePoster: item.Images.Thumb}, translated))
 	item.Name, item.Overview = shown.Name, shown.Overview
 	if item.Kind == KindMovie || item.Kind == KindSeries {
 		item.OriginalTitle = shown.Name
 	}
 	item.Images.Primary, item.Images.Backdrop, item.Images.Logo, item.Images.Thumb =
 		shown.Images.Primary, shown.Images.Backdrop, shown.Images.Logo, shown.Images.Thumb
+	item.PosterShape = shown.PosterShape
 }
 
 // TaggedArtwork returns the image of an item whose tag is tag (see

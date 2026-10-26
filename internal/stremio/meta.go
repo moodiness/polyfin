@@ -98,6 +98,7 @@ type Meta struct {
 	Background      string        `json:"background,omitempty"`
 	Logo            string        `json:"logo,omitempty"`
 	LandscapePoster string        `json:"landscapePoster,omitempty"`
+	PosterShape     string        `json:"posterShape,omitempty"` // see Shape
 	Description     string        `json:"description,omitempty"`
 	ReleaseInfo     Text          `json:"releaseInfo,omitempty"`
 	Year            Text          `json:"year,omitempty"`
@@ -126,6 +127,24 @@ type Meta struct {
 	ChannelNumber int    `json:"-"`
 	GuideID       string `json:"-"`
 	GuideNumber   string `json:"-"`
+}
+
+// The shapes of a poster an addon declares (Meta.PosterShape) other than
+// the usual 2:3.
+const (
+	ShapeLandscape = "landscape"
+	ShapeSquare    = "square"
+)
+
+// Shape is the shape of the meta's poster: ShapeLandscape, ShapeSquare,
+// or empty for a poster of 2:3, as the addon protocol takes a missing or
+// unknown shape.
+func (m Meta) Shape() string {
+	switch m.PosterShape {
+	case ShapeLandscape, ShapeSquare:
+		return m.PosterShape
+	}
+	return ""
 }
 
 // Trailer points to a YouTube video.

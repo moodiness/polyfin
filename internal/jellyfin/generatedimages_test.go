@@ -57,7 +57,8 @@ func newMosaicAddon(t *testing.T) *mosaicAddon {
 			_ = json.NewEncoder(w).Encode(map[string]any{"metas": metas})
 		case strings.HasPrefix(path, "/catalog/collection/sets"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{
-				{ID: "set:plain", Type: "collection", Name: "Été indien"},
+				// A shape without a poster: the generated one is 2:3.
+				{ID: "set:plain", Type: "collection", Name: "Été indien", PosterShape: "landscape"},
 				{ID: "set:posted", Type: "collection", Name: "Posted", Poster: a.url + "/p/99.png"}}})
 		case strings.HasPrefix(path, "/meta/collection/"):
 			id := strings.TrimSuffix(strings.TrimPrefix(path, "/meta/collection/"), ".json")
@@ -212,6 +213,12 @@ func TestCollectionsWithoutAPosterGetGeneratedImages(t *testing.T) {
 	var item BaseItemDto
 	if g.get(t, "/Items/"+plain.Id, g.member, &item); item.ImageTags["Primary"] != primary || item.ImageTags["Thumb"] != thumb {
 		t.Errorf("the collection as an item: %v", item.ImageTags)
+	}
+	// The generated poster is 2:3, whatever shape the addon declares.
+	for what, dto := range map[string]BaseItemDto{"listed": plain, "as an item": item} {
+		if ratio := aspectRatio(dto); ratio != 2.0/3.0 {
+			t.Errorf("the generated poster's ratio, %s: %v", what, ratio)
+		}
 	}
 	if posted = g.collections(t, g.member)["Posted"]; posted.ImageTags["Primary"] != library.ImageTag(g.addon.url+"/p/99.png") {
 		t.Errorf("a collection with a poster, after: %v", posted.ImageTags)

@@ -12,6 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // UserItemData is what a user did with an item: Jellyfin's
@@ -621,6 +622,15 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
 		case library.KindArtist, library.KindAlbum, library.KindTrack, library.KindAudiobook, library.KindMusicPlaylist:
 			// Covers are square.
 			ratio = 1
+		default:
+			// A title's or collection's poster has the shape its addon
+			// declares.
+			switch item.PosterShape {
+			case stremio.ShapeLandscape:
+				ratio = 16.0 / 9.0
+			case stremio.ShapeSquare:
+				ratio = 1
+			}
 		}
 		if item.WidePrimary {
 			// A library's generated image, or the backdrop it found.

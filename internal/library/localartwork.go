@@ -96,6 +96,9 @@ func applyLocal(item *Item, local map[accounts.ID]Images) {
 	own := local[item.ID]
 	seriesPoster := item.SeriesPoster
 	item.Images = withLocal(item.Images, own)
+	if own.Primary != "" {
+		item.PosterShape = ""
+	}
 	if item.SeriesID != (accounts.ID{}) {
 		series := local[item.SeriesID]
 		if series.Primary != "" {

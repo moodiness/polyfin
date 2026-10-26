@@ -350,7 +350,7 @@ func (s *Service) generate(ctx context.Context, v view, item *Item, find func() 
 	if !ok || !v.shows(choice) {
 		return
 	}
-	item.Images.Primary = choice.image(false)
+	item.Images.Primary, item.PosterShape = choice.image(false), ""
 	if item.Images.Thumb == "" {
 		item.Images.Thumb = choice.image(true)
 	}

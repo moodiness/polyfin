@@ -58,7 +58,9 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 // enriched is an IPTV title's description completed by an addon's.
 func enriched(own, addon stremio.Meta) stremio.Meta {
 	result := own
-	result.Poster = cmp.Or(addon.Poster, own.Poster)
+	if addon.Poster != "" {
+		result.Poster, result.PosterShape = addon.Poster, addon.PosterShape
+	}
 	result.Background = cmp.Or(addon.Background, own.Background)
 	result.Logo = cmp.Or(addon.Logo, own.Logo)
 	result.LandscapePoster = cmp.Or(addon.LandscapePoster, own.LandscapePoster)

@@ -124,6 +124,10 @@ type Item struct {
 	// generated image and the backdrop it finds automatically are, rather
 	// than what items of its kind usually show.
 	WidePrimary bool
+	// PosterShape is the shape the addon gives a title's or collection's
+	// poster, stremio.ShapeLandscape or stremio.ShapeSquare, empty for the
+	// usual 2:3. An image in place of the addon's poster has none.
+	PosterShape string
 	// FolderID is the folder a video of a title's description belongs to
 	// (see othervideos.go), zero for other items.
 	FolderID accounts.ID
@@ -464,6 +468,7 @@ func fromMeta(item *Item, meta stremio.Meta) {
 	}
 	item.ProviderIDs = providerIDs(meta)
 	item.Images = Images{Primary: meta.Poster, Backdrop: meta.Background, Logo: meta.Logo, Thumb: meta.LandscapePoster}
+	item.PosterShape = meta.Shape()
 	item.People = people(meta)
 	for _, trailer := range meta.Trailers {
 		if trailer.Source == "" {
