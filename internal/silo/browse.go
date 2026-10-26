@@ -3,13 +3,14 @@ package silo
 import (
 	"cmp"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 )
@@ -234,8 +235,9 @@ type userLibrary struct {
 }
 
 // libraryTypes are the types of the libraries Silo's apps list, by the
-// Jellyfin API's collection types: those of movies and series.
-var libraryTypes = map[string]string{"movies": "movies", "tvshows": "shows", "": "mixed", "homevideos": "mixed"}
+// Jellyfin API's collection types: those of movies, of series, and of
+// both, libraries of collections among them (see libraries.go).
+var libraryTypes = map[string]string{"movies": "movies", "tvshows": "shows", "": "mixed", "homevideos": "mixed", boxsets: "mixed"}
 
 // views are the user's libraries Silo's apps browse, as the Jellyfin API
 // lists them to the user, with their numbers.
@@ -379,43 +381,36 @@ func (s *Server) homeRows(r *http.Request, v viewer) ([]homeRow, answer, error) 
 
 // rowSection is the Home section of a home row.
 func rowSection(r *http.Request, row homeRow) section {
-	sec := section{ID: rowPrefix + row.Id, Title: row.Name, Type: cmp.Or(rowTypes[row.Kind], "custom"), Items: cards(r, row.Items),
+	sec := section{ID: rowPrefix + row.Id, Title: row.Name, Type: cmp.Or(rowTypes[row.Kind], "custom"), Items: sectionCards(r, row.Items),
 		ItemLimit: sectionLimit}
 	sec.TotalCount = len(sec.Items)
 	return sec
 }
 
-// sectionOf reads one Home section.
+// sectionOf reads what the user is watching, in a library when library
+// names one, or the next episodes.
 func (s *Server) sectionOf(r *http.Request, v viewer, id, title string, library string) (section, answer, error) {
-	limit := strconv.Itoa(sectionLimit)
-	sec := section{ID: id, Title: title, ItemLimit: sectionLimit}
-	var items []item
-	var a answer
-	var err error
-	switch {
-	case id == resumeSection:
-		sec.Type = resumeSection
-		var result queryResult
-		a, err = s.call(r, v, http.MethodGet, "/UserItems/Resume?MediaTypes=Video&Limit="+limit+"&Fields="+listFields, nil, &result)
-		items = result.Items
-	case id == nextUpSection:
+	query := url.Values{"Limit": {strconv.Itoa(sectionLimit)}, "Fields": {listFields}}
+	sec := section{ID: id, Title: title, ItemLimit: sectionLimit, Type: resumeSection}
+	path := "/Shows/NextUp?"
+	if id == nextUpSection {
 		sec.Type = nextUpSection
-		var result queryResult
-		a, err = s.call(r, v, http.MethodGet, "/Shows/NextUp?Limit="+limit+"&Fields="+listFields, nil, &result)
-		items = result.Items
-	default:
-		sec.Type = "recently_added"
-		a, err = s.call(r, v, http.MethodGet, "/Items/Latest?ParentId="+library+"&Limit="+limit+"&Fields="+listFields, nil, &items)
+	} else {
+		path = "/UserItems/Resume?"
+		query.Set("MediaTypes", "Video")
+		if library != "" {
+			query.Set("ParentId", library)
+		}
 	}
+	var result queryResult
+	a, err := s.call(r, v, http.MethodGet, path+query.Encode(), nil, &result)
 	if err != nil || !a.ok() {
 		return sec, a, err
 	}
-	sec.Items = cards(r, items)
+	sec.Items = sectionCards(r, result.Items)
 	for i := range sec.Items {
-		switch sec.Type {
-		case resumeSection:
-			sec.Items[i].ItemSource = "in_progress"
-		case nextUpSection:
+		sec.Items[i].ItemSource = "in_progress"
+		if sec.Type == nextUpSection {
 			sec.Items[i].ItemSource = "next_up"
 		}
 	}
@@ -423,12 +418,21 @@ func (s *Server) sectionOf(r *http.Request, v viewer, id, title string, library 
 	return sec, a, nil
 }
 
-// homeSections are the sections of the Home page: those with titles.
+// homeSections are the sections of the Home page: those with titles. The
+// row of each library follows the user's home screen settings, as
+// jellyfin-web's latest titles do: the libraries in the order they set,
+// without those they left out of their latest titles.
 func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) {
 	views, numbers, a, err := s.views(r, v)
 	var rows []homeRow
 	if err == nil && a.ok() {
 		rows, a, err = s.homeRows(r, v)
+	}
+	var me struct {
+		Configuration struct{ LatestItemsExcludes []string }
+	}
+	if err == nil && a.ok() {
+		a, err = s.call(r, v, http.MethodGet, "/Users/Me", nil, &me)
 	}
 	if err == nil && !a.ok() {
 		s.jellyfinRefusal(w, r, a)
@@ -438,24 +442,40 @@ func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) 
 		s.internalError(w, r, err)
 		return
 	}
+	views = slices.DeleteFunc(views, func(view item) bool { return slices.Contains(me.Configuration.LatestItemsExcludes, view.Id) })
+	libraries := make([]section, len(views))
+	answers := make([]answer, len(views))
+	var group errgroup.Group
+	group.SetLimit(collectionReads)
+	for i, view := range views {
+		group.Go(func() error {
+			id, _ := accounts.ParseID(view.Id)
+			var err error
+			libraries[i], answers[i], err = s.libraryRow(r, v, view, strconv.Itoa(int(numbers[id])))
+			return err
+		})
+	}
+	if err := group.Wait(); err != nil {
+		s.internalError(w, r, err)
+		return
+	}
 	sections := []section{}
+	add := func(sec section) {
+		if len(sec.Items) > 0 {
+			sections = append(sections, sec)
+		}
+	}
 	rowsAt := func(place string) {
 		for _, row := range rows {
 			if row.Place == place {
-				sections = append(sections, rowSection(r, row))
+				add(rowSection(r, row))
 			}
 		}
 	}
 	titles := s.titles()
-	type wanted struct{ id, title, library, rowsAfter string }
-	all := []wanted{{resumeSection, titles[0], "", "AfterResume"}, {nextUpSection, titles[1], "", "AfterNextUp"}}
-	for _, view := range views {
-		id, _ := accounts.ParseID(view.Id)
-		all = append(all, wanted{latestPrefix + strconv.Itoa(int(numbers[id])), fmt.Sprintf(titles[2], view.Name), view.Id, ""})
-	}
 	rowsAt("Top")
-	for _, want := range all {
-		sec, a, err := s.sectionOf(r, v, want.id, want.title, want.library)
+	for _, want := range []struct{ id, title, rowsAfter string }{{resumeSection, titles[0], "AfterResume"}, {nextUpSection, titles[1], "AfterNextUp"}} {
+		sec, a, err := s.sectionOf(r, v, want.id, want.title, "")
 		if err != nil {
 			s.internalError(w, r, err)
 			return
@@ -464,12 +484,15 @@ func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) 
 			s.jellyfinRefusal(w, r, a)
 			return
 		}
-		if len(sec.Items) > 0 {
-			sections = append(sections, sec)
+		add(sec)
+		rowsAt(want.rowsAfter)
+	}
+	for i, sec := range libraries {
+		if !answers[i].ok() {
+			s.jellyfinRefusal(w, r, answers[i])
+			return
 		}
-		if want.rowsAfter != "" {
-			rowsAt(want.rowsAfter)
-		}
+		add(sec)
 	}
 	rowsAt("Bottom")
 	writeJSON(w, http.StatusOK, struct {
@@ -485,6 +508,8 @@ func (s *Server) homeSection(w http.ResponseWriter, r *http.Request, v viewer) {
 	}
 }
 
+// namedSection reads a section of Home or of a library's landing, by its
+// identifier.
 func (s *Server) namedSection(w http.ResponseWriter, r *http.Request, v viewer, id string) (section, bool) {
 	titles := s.titles()
 	var sec section
@@ -495,12 +520,27 @@ func (s *Server) namedSection(w http.ResponseWriter, r *http.Request, v viewer, 
 		sec, a, err = s.sectionOf(r, v, id, titles[0], "")
 	case id == nextUpSection:
 		sec, a, err = s.sectionOf(r, v, id, titles[1], "")
-	case strings.HasPrefix(id, latestPrefix):
-		view, ok := s.library(w, r, v, strings.TrimPrefix(id, latestPrefix))
+	case strings.HasPrefix(id, latestPrefix), strings.HasPrefix(id, resumePrefix):
+		number := strings.TrimPrefix(strings.TrimPrefix(id, latestPrefix), resumePrefix)
+		view, ok := s.library(w, r, v, number)
 		if !ok {
 			return section{}, false
 		}
-		sec, a, err = s.sectionOf(r, v, id, fmt.Sprintf(titles[2], view.Name), view.Id)
+		if strings.HasPrefix(id, resumePrefix) {
+			sec, a, err = s.sectionOf(r, v, id, titles[0], view.Id)
+		} else {
+			sec, a, err = s.libraryRow(r, v, view, number)
+		}
+	case strings.HasPrefix(id, collectionPrefix):
+		var collection item
+		a, err = s.call(r, v, http.MethodGet, "/Items/"+url.PathEscape(strings.TrimPrefix(id, collectionPrefix)), nil, &collection)
+		if err == nil && a.ok() && collection.Type != "BoxSet" {
+			problem(w, http.StatusNotFound, "not_found", "Section not found.")
+			return section{}, false
+		}
+		if err == nil && a.ok() {
+			sec, a, err = s.collectionRow(r, v, collection)
+		}
 	case strings.HasPrefix(id, rowPrefix):
 		var rows []homeRow
 		rows, a, err = s.homeRows(r, v)
@@ -599,16 +639,21 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
 		validationProblem(w, "query.sort", "unknown_sort_field", "This server sorts by title, year, release_date, added_at, rating, runtime or random.")
 		return
 	}
-	// folder is a folder listed whole, when whole: a collection, or a home
-	// row past its first titles.
+	// folder is a folder listed whole, when whole: a collection, or a row
+	// of Home or of a library's landing past its first titles.
 	folder, whole := "", false
 	switch cmp.Or(q.Get("source"), "query") {
 	case "section":
-		if row, ok := strings.CutPrefix(q.Get("section_id"), rowPrefix); ok {
+		id := q.Get("section_id")
+		if row, ok := strings.CutPrefix(id, rowPrefix); ok {
 			folder, whole = row, true
 			break
 		}
-		sec, ok := s.namedSection(w, r, v, q.Get("section_id"))
+		if collection, ok := strings.CutPrefix(id, collectionPrefix); ok {
+			folder, whole = collection, true
+			break
+		}
+		sec, ok := s.namedSection(w, r, v, id)
 		if !ok {
 			return
 		}
@@ -622,8 +667,7 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
 		validationProblem(w, "query.source", "unsupported", "This server lists libraries, sections, collections, favorites and searches.")
 		return
 	}
-	query := url.Values{"Fields": {listFields}, "IncludeItemTypes": {types}, "StartIndex": {strconv.Itoa(start)},
-		"Limit": {strconv.Itoa(limit)}, "EnableTotalRecordCount": {"true"}}
+	query := url.Values{"Fields": {listFields}, "IncludeItemTypes": {types}}
 	if order != "" {
 		query.Set("SortBy", order)
 		query.Set("SortOrder", "Ascending")
@@ -631,45 +675,53 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
 			query.Set("SortOrder", "Descending")
 		}
 	}
+	favorites := q.Get("source") == "favorites"
+	if favorites {
+		query.Set("Filters", "IsFavorite")
+		query.Set("Recursive", "true")
+	}
+	term := strings.TrimSpace(cmp.Or(q.Get("q"), q.Get("name_prefix")))
+	if term != "" {
+		query.Set("SearchTerm", term)
+		query.Set("Recursive", "true")
+	}
+	var view item
 	if library := q.Get("library_id"); library != "" {
-		view, ok := s.library(w, r, v, library)
-		if !ok {
+		if view, ok = s.library(w, r, v, library); !ok {
 			return
 		}
-		query.Set("ParentId", view.Id)
 	}
-	if whole {
+	switch {
+	case whole:
 		if _, err := accounts.ParseID(folder); err != nil {
 			problem(w, http.StatusNotFound, "not_found", "Not found.")
 			return
 		}
 		query.Set("ParentId", folder)
+	case view.Id != "":
+		// A library's titles, which those it gathers keep to the search.
+		keep := func(i item) bool {
+			return (term == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(term))) &&
+				(!favorites || i.UserData != nil && i.UserData.IsFavorite)
+		}
+		page, a, err := s.libraryPage(r, v, view, query, start, limit, keep)
+		s.writePage(w, r, page, a, err)
+		return
 	}
-	if q.Get("source") == "favorites" {
-		query.Set("Filters", "IsFavorite")
-		query.Set("Recursive", "true")
-	}
-	if term := strings.TrimSpace(cmp.Or(q.Get("q"), q.Get("name_prefix"))); term != "" {
-		query.Set("SearchTerm", term)
-		query.Set("Recursive", "true")
-	}
-	if page, ok := s.listing(w, r, v, query, start); ok {
-		writeJSON(w, http.StatusOK, page)
-	}
+	query.Set("StartIndex", strconv.Itoa(start))
+	query.Set("Limit", strconv.Itoa(limit))
+	query.Set("EnableTotalRecordCount", "true")
+	page, a, err := s.listPage(r, v, query, start)
+	s.writePage(w, r, page, a, err)
 }
 
-// listing reads a page of the Jellyfin API's listing query, which starts
-// at start. It answers the request when it cannot.
-func (s *Server) listing(w http.ResponseWriter, r *http.Request, v viewer, query url.Values, start int) (catalogPage, bool) {
+// listPage reads a page of the Jellyfin API's listing query, which starts
+// at start.
+func (s *Server) listPage(r *http.Request, v viewer, query url.Values, start int) (catalogPage, answer, error) {
 	var result queryResult
 	a, err := s.call(r, v, http.MethodGet, "/Items?"+query.Encode(), nil, &result)
-	if err != nil {
-		s.internalError(w, r, err)
-		return catalogPage{}, false
-	}
-	if !a.ok() {
-		s.jellyfinRefusal(w, r, a)
-		return catalogPage{}, false
+	if err != nil || !a.ok() {
+		return catalogPage{}, a, err
 	}
 	items := cards(r, result.Items)
 	total := max(result.TotalRecordCount, start+len(result.Items))
@@ -677,7 +729,19 @@ func (s *Server) listing(w http.ResponseWriter, r *http.Request, v viewer, query
 	if next := start + len(result.Items); len(result.Items) > 0 && next < total {
 		page.Page = pageInfo{HasMore: true, NextCursor: cursor(next)}
 	}
-	return page, true
+	return page, a, nil
+}
+
+// writePage answers a page read, or why it could not be.
+func (s *Server) writePage(w http.ResponseWriter, r *http.Request, page catalogPage, a answer, err error) {
+	switch {
+	case err != nil:
+		s.internalError(w, r, err)
+	case !a.ok():
+		s.jellyfinRefusal(w, r, a)
+	default:
+		writeJSON(w, http.StatusOK, page)
+	}
 }
 
 // pageOf is a page of a list read whole.

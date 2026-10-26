@@ -1,9 +1,11 @@
 // Package silotest checks answers of Silo's API as Silo's apps accept
 // them: the rules their code applies to a playback's capabilities and
-// decisions, at the commits AppleCommit and AndroidCommit of the apps'
-// repositories (silo-apple and silo-android), each rule noted with the
-// code it comes from. An answer that breaks one fails in the app, with a
-// message that asks to update the server or that the title cannot play.
+// decisions, to the libraries, Home and library sections, catalog pages
+// and Collections tabs they show, at the commits AppleCommit and
+// AndroidCommit of the apps' repositories (silo-apple and silo-android),
+// each rule noted with the code it comes from. An answer that breaks one
+// fails in the app, with a message that asks to update the server or that
+// the title cannot play, or leaves what it describes out of sight.
 package silotest
 
 import (
@@ -19,8 +21,8 @@ import (
 
 // The commits of the apps whose rules these are.
 const (
-	AppleCommit   = "97fe5aacf661b92cf25bccdfb1d51c76839d54d3"
-	AndroidCommit = "88db96c280a4ce06877e2402c7c662ac3919c58e"
+	AppleCommit   = "2c8f2e1b70b7de6f3edefb01ecd51074924381a9"
+	AndroidCommit = "9867edfa4500ab962d4abf72341e76596fe595b8"
 )
 
 // RequiredFeatures are the features the capabilities document names
@@ -151,10 +153,10 @@ func mediaPath(address string) bool {
 	return true
 }
 
-// fileID reports whether a file identifier is one the apps take: a
-// positive integer, written plainly (APIv2PlaybackModels.swift,
-// APIv2PlaybackID; PlaybackDecisionV2.kt).
-func fileID(value any) bool {
+// positiveID reports whether an identifier is one the apps take as a
+// number: a positive integer, written plainly (Apple APIv2PlaybackID and
+// catalogLegacyID; Android PlaybackDecisionV2.kt and checkedPositiveId).
+func positiveID(value any) bool {
 	text, _ := value.(string)
 	n, err := strconv.Atoi(text)
 	return err == nil && n > 0 && strconv.Itoa(n) == text
@@ -229,7 +231,7 @@ func checkPlan(c *checker, p object, session string, files []string) {
 		c.fail("plan session_id %q is not the decision's %q", id, session)
 	}
 	for _, key := range []string{"requested_media_file_id", "effective_media_file_id"} {
-		if !fileID(p[key]) {
+		if !positiveID(p[key]) {
 			c.fail("%s %v is not a positive integer", key, p[key])
 		}
 	}
@@ -291,7 +293,7 @@ func checkPlan(c *checker, p object, session string, files []string) {
 	}
 	if source, ok := p["source"].(object); ok {
 		c.has(source, "source", map[string]string{"media_file_id": "s", "hdr10_plus": "b", "dv_enhancement_layer": "s"})
-		if !fileID(source["media_file_id"]) {
+		if !positiveID(source["media_file_id"]) {
 			c.fail("source media_file_id %v", source["media_file_id"])
 		}
 	}

@@ -3,8 +3,11 @@ package silo
 import (
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 )
@@ -65,7 +68,8 @@ type curatedCollection struct {
 }
 
 // libraryCollections is a library's Collections tab: the collections with
-// a title in it, by name, without groups.
+// a title in it, by name, or for a library of collections its own, in its
+// order, without groups.
 func (s *Server) libraryCollections(w http.ResponseWriter, r *http.Request, v viewer) {
 	number := r.PathValue("id")
 	view, ok := s.library(w, r, v, number)
@@ -83,18 +87,21 @@ func (s *Server) libraryCollections(w http.ResponseWriter, r *http.Request, v vi
 		s.jellyfinRefusal(w, r, a)
 		return
 	}
+	collections := slices.DeleteFunc(result.Items, func(i item) bool { return i.Type != "BoxSet" })
+	counts, err := s.collectionCounts(r, v, collections)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
 	tab := struct {
 		LibraryID   string              `json:"library_id"`
 		Collections []curatedCollection `json:"collections"`
 		Groups      []struct{}          `json:"groups"`
 	}{number, []curatedCollection{}, []struct{}{}}
-	for _, i := range result.Items {
-		if i.Type != "BoxSet" {
-			continue
-		}
+	for n, i := range collections {
 		poster, backdrop, _ := artworkOf(r, i)
 		c := curatedCollection{ID: i.Id, Title: i.Name, Slug: i.Id, CollectionType: "manual", LibraryID: number, LibraryIDs: []string{number},
-			ItemCount: intOf(i.ChildCount), SortOrder: len(tab.Collections), PosterURL: poster, BackdropURL: backdrop}
+			ItemCount: counts[n], SortOrder: n, PosterURL: poster, BackdropURL: backdrop}
 		if i.Overview != nil {
 			c.Description = *i.Overview
 		}
@@ -106,6 +113,32 @@ func (s *Server) libraryCollections(w http.ResponseWriter, r *http.Request, v vi
 		tab.Collections = append(tab.Collections, c)
 	}
 	writeJSON(w, http.StatusOK, tab)
+}
+
+// collectionCounts are the numbers of titles of collections the user may
+// see: those the Jellyfin API counts, users' collections, and for an
+// addon's collections, which it does not count, the total of their first
+// page of titles, which counts them all unless they are many.
+func (s *Server) collectionCounts(r *http.Request, v viewer, collections []item) ([]int, error) {
+	counts := make([]int, len(collections))
+	var group errgroup.Group
+	group.SetLimit(collectionReads)
+	for n, collection := range collections {
+		if collection.ChildCount != nil {
+			counts[n] = *collection.ChildCount
+			continue
+		}
+		group.Go(func() error {
+			var listed queryResult
+			a, err := s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {collection.Id}, "IncludeItemTypes": {titleTypes},
+				"Limit": {strconv.Itoa(sectionLimit)}, "EnableTotalRecordCount": {"true"}}.Encode(), nil, &listed)
+			if a.ok() {
+				counts[n] = max(listed.TotalRecordCount, len(listed.Items))
+			}
+			return err
+		})
+	}
+	return counts, group.Wait()
 }
 
 // libraryCollectionItems pages through the titles of a collection of a
@@ -124,9 +157,14 @@ func (s *Server) libraryCollectionItems(w http.ResponseWriter, r *http.Request, 
 		problem(w, http.StatusNotFound, "not_found", "Collection not found.")
 		return
 	}
-	page, ok := s.listing(w, r, v, url.Values{"ParentId": {collection}, "Fields": {listFields}, "StartIndex": {strconv.Itoa(start)},
+	page, a, err := s.listPage(r, v, url.Values{"ParentId": {collection}, "Fields": {listFields}, "StartIndex": {strconv.Itoa(start)},
 		"Limit": {strconv.Itoa(limit)}, "EnableTotalRecordCount": {"true"}}, start)
-	if ok {
+	switch {
+	case err != nil:
+		s.internalError(w, r, err)
+	case !a.ok():
+		s.jellyfinRefusal(w, r, a)
+	default:
 		writeJSON(w, http.StatusOK, struct {
 			Items []catalogItem `json:"items"`
 			Page  pageInfo      `json:"page"`

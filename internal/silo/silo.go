@@ -80,6 +80,7 @@ func New(options Options) *Server {
 		unknown: newUnknownOperations(options.Logger, options.now)}
 	s.accountRoutes()
 	s.browseRoutes()
+	s.libraryRoutes()
 	s.playbackRoutes()
 	s.collectionRoutes()
 	s.mux.HandleFunc("/api/v2/", func(w http.ResponseWriter, r *http.Request) {

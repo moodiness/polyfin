@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -22,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/silo"
 	"github.com/moodiness/polyfin/internal/silo/silotest"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // The tests of Silo's API (package silo), which answers Silo's apps from
@@ -81,13 +84,41 @@ func (a siloApps) do(t *testing.T, method, path, token, profile string, body any
 	return response.StatusCode, data
 }
 
-// get decodes a successful answer into into.
+// get decodes a successful answer into into, once it met the rules the
+// apps apply to the answers of its operation.
 func (a siloApps) get(t *testing.T, path, token, profile string, into any) {
 	t.Helper()
 	status, data := a.do(t, http.MethodGet, path, token, profile, nil)
 	if status != http.StatusOK || json.Unmarshal(data, into) != nil {
 		t.Fatalf("%s: %d %s", path, status, data)
 	}
+	if err := appsAccept(path, data); err != nil {
+		t.Errorf("%s: %v: %s", path, err, data)
+	}
+}
+
+// appsAccept checks an answer against the rules the apps apply to the
+// answers of its operation (see package silotest).
+func appsAccept(path string, data []byte) error {
+	target, _ := url.Parse(path)
+	segments := strings.Split(strings.TrimPrefix(target.Path, "/api/v2/"), "/")
+	switch {
+	case target.Path == "/api/v2/user/libraries":
+		return silotest.CheckLibraries(data)
+	case target.Path == "/api/v2/home/sections", len(segments) == 3 && segments[0] == "library" && segments[2] == "sections":
+		return silotest.CheckSections(data)
+	case len(segments) == 4 && segments[0] == "home" && segments[3] == "items":
+		return silotest.CheckSection(data, segments[2])
+	case len(segments) == 5 && segments[0] == "library" && segments[2] == "sections" && segments[4] == "items":
+		return silotest.CheckSection(data, segments[3])
+	case target.Path == "/api/v2/catalog":
+		return silotest.CheckCatalogPage(data)
+	case len(segments) == 3 && segments[0] == "library" && segments[2] == "collections":
+		return silotest.CheckCollectionTab(data, segments[1])
+	case target.Path == "/api/v2/playback/capabilities":
+		return silotest.CheckCapabilities(data)
+	}
+	return nil
 }
 
 // signIn signs a user in, returning the access token and the profile.
@@ -349,6 +380,30 @@ func TestSiloAppsBrowseUnderTheUsersLimits(t *testing.T) {
 	a.get(t, library+"&limit=1&cursor="+first.Page.NextCursor, token, profile, &second)
 	if all := append(cardTitles(first.Items), cardTitles(second.Items)...); !slices.Equal(all, []string{"Movie", "Remote"}) || second.Page.HasMore {
 		t.Errorf("pages: %v, more %v", all, second.Page.HasMore)
+	}
+	// The library's landing has its latest titles, also read alone; the
+	// sections of another library are not its own.
+	var landing struct {
+		Sections []struct {
+			ID    string     `json:"id"`
+			Items []siloCard `json:"items"`
+		} `json:"sections"`
+	}
+	a.get(t, "/api/v2/library/"+libraries[0].ID+"/sections", token, profile, &landing)
+	latest := "latest-" + libraries[0].ID
+	if len(landing.Sections) != 1 || landing.Sections[0].ID != latest ||
+		!slices.Equal(slices.Sorted(slices.Values(cardTitles(landing.Sections[0].Items))), []string{"Movie", "Remote"}) {
+		t.Fatalf("landing: %+v", landing.Sections)
+	}
+	var alone struct {
+		Items []siloCard `json:"items"`
+	}
+	a.get(t, "/api/v2/library/"+libraries[0].ID+"/sections/"+latest+"/items", token, profile, &alone)
+	if !slices.Equal(cardTitles(alone.Items), cardTitles(landing.Sections[0].Items)) {
+		t.Errorf("the latest alone: %v", cardTitles(alone.Items))
+	}
+	if status, _ := a.do(t, http.MethodGet, "/api/v2/library/"+libraries[0].ID+"/sections/latest-999/items", token, profile, nil); status != http.StatusNotFound {
+		t.Errorf("another library's section: %d", status)
 	}
 	var detail struct {
 		siloCard
@@ -689,6 +744,13 @@ func TestSiloAppsPlayAMovieAsItIs(t *testing.T) {
 		sections.Sections[0].Items[0].ContentID != p.movie || sections.Sections[0].Items[0].PositionSeconds != 600 {
 		t.Errorf("home: %+v", sections.Sections)
 	}
+	// The library's landing has it in its own Continue Watching.
+	number := a.libraries(t, token, profile)[0].ID
+	a.get(t, "/api/v2/library/"+number+"/sections", token, profile, &sections)
+	if len(sections.Sections) == 0 || sections.Sections[0].ID != "resume-"+number || len(sections.Sections[0].Items) != 1 ||
+		sections.Sections[0].Items[0].ContentID != p.movie {
+		t.Errorf("the library's landing: %+v", sections.Sections)
+	}
 
 	// Marked played from Silo's app, played in the Jellyfin API.
 	if status, _ := a.do(t, http.MethodPost, "/api/v2/watched/"+p.movie, token, profile, nil); status != http.StatusNoContent {
@@ -763,7 +825,19 @@ func TestSiloAppsListCollections(t *testing.T) {
 	allowSilo(t, p.testServer)
 	a := servingSilo(t, p.testServer)
 	token, profile := a.signIn(t, "member")
-	library := a.libraries(t, token, profile)[0].ID
+	libraries := a.libraries(t, token, profile)
+	library := libraries[0].ID
+	// Polyfin's Collections view is a library too, of the titles of its
+	// collections.
+	collections := ""
+	for _, l := range libraries {
+		if l.Name == "Collections" && l.Type == "mixed" {
+			collections = l.ID
+		}
+	}
+	if collections == "" {
+		t.Fatalf("libraries: %+v", libraries)
+	}
 
 	type collectionCard struct {
 		ID        string `json:"id"`
@@ -827,6 +901,27 @@ func TestSiloAppsListCollections(t *testing.T) {
 				t.Errorf("%s: %s lists %v", label, path, got)
 			}
 		}
+		if got := titles("/api/v2/catalog?library_id=" + collections); !slices.Equal(got, want) {
+			t.Errorf("%s: the Collections library lists %v", label, got)
+		}
+		var held struct {
+			Collections []collectionCard `json:"collections"`
+		}
+		a.get(t, "/api/v2/library/"+collections+"/collections", token, profile, &held)
+		if len(held.Collections) != 1 || held.Collections[0].ID != picks {
+			t.Errorf("%s: the Collections library's tab %+v", label, held.Collections)
+		}
+		var landing struct {
+			Sections []struct {
+				Title string     `json:"title"`
+				Items []siloCard `json:"items"`
+			} `json:"sections"`
+		}
+		a.get(t, "/api/v2/library/"+collections+"/sections", token, profile, &landing)
+		if len(want) > 0 && (len(landing.Sections) != 1 || landing.Sections[0].Title != "Picks" ||
+			!slices.Equal(cardTitles(landing.Sections[0].Items), want)) || len(want) == 0 && len(landing.Sections) != 0 {
+			t.Errorf("%s: the Collections library's landing %+v", label, landing.Sections)
+		}
 		section, shown := row()
 		if len(want) == 0 {
 			if section != "" {
@@ -855,4 +950,278 @@ func TestSiloAppsListCollections(t *testing.T) {
 		problemCode(data) != "capability_unsupported" {
 		t.Errorf("making a collection: %d %s", status, data)
 	}
+}
+
+// collectionCatalogs serves an addon of two catalogs of collections, of
+// the movies and the series of two other catalogs: Picks holds Action
+// picks, its Action movies, and Show picks, its series; Sagas holds
+// Everything, all of both.
+func collectionCatalogs(t *testing.T) string {
+	t.Helper()
+	movies := []stremio.Meta{
+		{ID: "tt9001", Type: "movie", Name: "Alpha", Genres: []string{"Action"}, ReleaseInfo: "2001", Released: "2001-01-01T00:00:00.000Z"},
+		{ID: "tt9002", Type: "movie", Name: "Beta", Genres: []string{"Drama"}, ReleaseInfo: "2002", Released: "2002-01-01T00:00:00.000Z"},
+		{ID: "tt9003", Type: "movie", Name: "Gamma", Genres: []string{"Action"}, ReleaseInfo: "2003", Released: "2003-01-01T00:00:00.000Z"},
+	}
+	show := stremio.Meta{ID: "tt9100", Type: "series", Name: "Show", Genres: []string{"Drama"}, ReleaseInfo: "2010",
+		Released: "2010-01-01T00:00:00.000Z", Videos: []stremio.Video{{ID: "tt9100:1:1", Title: "Pilot", Season: 1, Episode: 1,
+			Released: "2010-01-01T00:00:00.000Z"}}}
+	collection := func(id, name string, sources ...stremio.CollectionSource) stremio.Meta {
+		return stremio.Meta{ID: id, Type: "collection", Name: name, Collection: &stremio.Collection{Sources: sources}}
+	}
+	films, shows := stremio.CollectionSource{Type: "movie", CatalogID: "films"}, stremio.CollectionSource{Type: "series", CatalogID: "shows"}
+	catalogs := map[string][]stremio.Meta{
+		"picks": {collection("picks:action", "Action picks", stremio.CollectionSource{Type: "movie", CatalogID: "films", Genre: "Action"}),
+			collection("picks:shows", "Show picks", shows)},
+		"sagas": {collection("sagas:all", "Everything", films, shows)},
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.EscapedPath()
+		send := func(key string, value any) { _ = json.NewEncoder(w).Encode(map[string]any{key: value}) }
+		switch {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "collections", Name: "Collections", Version: "1",
+				Types: []string{"movie", "series", "collection"}, Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+				Catalogs: []stremio.Catalog{
+					{Type: "movie", ID: "films", Name: "Films", Extra: []stremio.Extra{{Name: "genre", Options: []string{"Action", "Drama"}}}},
+					{Type: "series", ID: "shows", Name: "Shows"},
+					{Type: "collection", ID: "picks", Name: "Picks"},
+					{Type: "collection", ID: "sagas", Name: "Sagas"},
+				}})
+		case strings.HasPrefix(path, "/catalog/movie/films"):
+			listed := movies
+			if _, genre, ok := strings.Cut(strings.TrimSuffix(path, ".json"), "genre="); ok {
+				listed = slices.DeleteFunc(slices.Clone(movies), func(m stremio.Meta) bool { return m.Genres[0] != genre })
+			}
+			send("metas", listed)
+		case strings.HasPrefix(path, "/catalog/series/shows"):
+			send("metas", []stremio.Meta{show})
+		case strings.HasPrefix(path, "/catalog/collection/"):
+			send("metas", catalogs[strings.TrimSuffix(strings.TrimPrefix(path, "/catalog/collection/"), ".json")])
+		case strings.HasPrefix(path, "/meta/collection/"):
+			id, _ := url.PathUnescape(strings.TrimSuffix(strings.TrimPrefix(path, "/meta/collection/"), ".json"))
+			for _, listed := range catalogs {
+				for _, meta := range listed {
+					if meta.ID == id {
+						send("meta", meta)
+						return
+					}
+				}
+			}
+			http.NotFound(w, r)
+		case path == "/meta/series/tt9100.json":
+			send("meta", show)
+		case strings.HasPrefix(path, "/meta/movie/"):
+			for _, meta := range movies {
+				if path == "/meta/movie/"+meta.ID+".json" {
+					send("meta", meta)
+					return
+				}
+			}
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// A server whose only libraries are catalogs of collections, hidden from
+// the web player's menus, has them listed in Silo's apps, as libraries of
+// movies and series, whether or not an administrator has the Jellyfin API
+// tell the apps that they hold collections: each opens on the titles of
+// its collections, each once, in its order, as Jellyfin apps list them,
+// its landing has a row of each collection, its Collections tab lists
+// them, each with its titles, and Home a row of each library, in the
+// user's order, without those they left out of My Media or of their
+// latest titles. A title the user hid, and a genre they may not see, stay
+// out of all of them.
+func TestSiloAppsBrowseCollectionLibraries(t *testing.T) {
+	t.Parallel()
+	for _, told := range []bool{false, true} {
+		t.Run("told collections "+strconv.FormatBool(told), func(t *testing.T) {
+			t.Parallel()
+			browseCollectionLibraries(t, told)
+		})
+	}
+}
+
+func browseCollectionLibraries(t *testing.T, told bool) {
+	s := newTestServer(t, 10)
+	member := s.user("member", nil)
+	addon, err := s.addons.Install(t.Context(), addons.Shared(), collectionCatalogs(t), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
+		{AddonID: addon.ID, CatalogType: "collection", CatalogID: "picks", HideInMenus: true},
+		{AddonID: addon.ID, CatalogType: "collection", CatalogID: "sagas", HideInMenus: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if told {
+		s.setting(t, func(settings *accounts.Settings) { settings.CollectionLibraryApps = []string{"Silo for Android"} })
+	}
+	allowSilo(t, s)
+	a := servingSilo(t, s)
+	token, profile := a.signIn(t, "member")
+	jellyfin := s.signIn("member", "tv")
+	var views QueryResult
+	s.get(t, "/UserViews", jellyfin, &views)
+	viewIDs := map[string]string{}
+	for _, view := range views.Items {
+		viewIDs[view.Name] = view.Id
+	}
+	// The Jellyfin API tells Silo's apps the libraries' type as asked.
+	status, body := s.call(http.MethodGet, "/UserViews",
+		`MediaBrowser Client="Silo for Android", Device="Pixel", DeviceId="pixel-1", Version="1.2.3", Token="`+token+`"`, nil)
+	var silos QueryResult
+	if status != http.StatusOK || json.Unmarshal(body, &silos) != nil || len(silos.Items) != 2 {
+		t.Fatalf("libraries in the Jellyfin API: %d %s", status, body)
+	}
+	for _, view := range silos.Items {
+		if want := map[bool]string{true: "boxsets"}[told]; view.CollectionType != want {
+			t.Fatalf("%s is told %q", view.Name, view.CollectionType)
+		}
+	}
+	// names lists the titles a Jellyfin listing gives Jellyfin apps.
+	names := func(path string) []string {
+		t.Helper()
+		var page QueryResult
+		s.get(t, path, jellyfin, &page)
+		return itemNames(page.Items)
+	}
+	titles := func(path string) []string {
+		t.Helper()
+		var page siloPage
+		a.get(t, path, token, profile, &page)
+		return cardTitles(page.Items)
+	}
+	type siloSection struct {
+		ID    string     `json:"id"`
+		Type  string     `json:"section_type"`
+		Title string     `json:"title"`
+		Items []siloCard `json:"items"`
+	}
+	sections := func(path string) []siloSection {
+		t.Helper()
+		var answer struct {
+			Sections []siloSection `json:"sections"`
+		}
+		a.get(t, path, token, profile, &answer)
+		return answer.Sections
+	}
+	// check checks each library against what Jellyfin apps get, wants
+	// those listed, each with the titles of its own, and Home with the rows
+	// of home.
+	check := func(label string, listed map[string][]string, home []string) {
+		t.Helper()
+		var libraries []string
+		numbers := map[string]string{}
+		for _, library := range a.libraries(t, token, profile) {
+			libraries = append(libraries, library.Name)
+			numbers[library.Name] = library.ID
+			if library.Type != "mixed" {
+				t.Errorf("%s: %s is of type %s", label, library.Name, library.Type)
+			}
+		}
+		if want := slices.Sorted(maps.Keys(listed)); !slices.Equal(slices.Sorted(slices.Values(libraries)), want) {
+			t.Fatalf("%s: libraries %v, want %v", label, libraries, want)
+		}
+		for name, want := range listed {
+			number, view := numbers[name], viewIDs[name]
+			grid := titles("/api/v2/catalog?library_id=" + number)
+			if !slices.Equal(grid, names("/Items?ParentId="+view+"&Recursive=true&IncludeItemTypes=Movie,Series")) ||
+				!slices.Equal(slices.Sorted(slices.Values(grid)), want) {
+				t.Errorf("%s: %s lists %v, want %v", label, name, grid, want)
+			}
+			var tab struct {
+				Collections []struct {
+					ID        string `json:"id"`
+					Title     string `json:"title"`
+					ItemCount int    `json:"item_count"`
+				} `json:"collections"`
+			}
+			a.get(t, "/api/v2/library/"+number+"/collections", token, profile, &tab)
+			var collections, rows []string
+			for _, collection := range tab.Collections {
+				collections = append(collections, collection.Title)
+				held := names("/Items?ParentId=" + collection.ID + "&IncludeItemTypes=Movie,Series")
+				if got := titles("/api/v2/catalog?source=library_collection&collection_id=" + collection.ID); !slices.Equal(got, held) ||
+					collection.ItemCount != len(held) {
+					t.Errorf("%s: %s lists %v of %d, Jellyfin apps %v", label, collection.Title, got, collection.ItemCount, held)
+				}
+				if len(held) > 0 {
+					rows = append(rows, collection.Title)
+				}
+			}
+			if !slices.Equal(collections, names("/Items?ParentId="+view)) {
+				t.Errorf("%s: %s's collections %v", label, name, collections)
+			}
+			var landing []string
+			for _, row := range sections("/api/v2/library/" + number + "/sections") {
+				landing = append(landing, row.Title)
+				collection := strings.TrimPrefix(row.ID, "collection-")
+				if held := names("/Items?ParentId=" + collection + "&IncludeItemTypes=Movie,Series"); !slices.Equal(cardTitles(row.Items), held) {
+					t.Errorf("%s: the row %s of %s shows %v, its collection %v", label, row.Title, name, cardTitles(row.Items), held)
+				}
+				var one siloSection
+				a.get(t, "/api/v2/library/"+number+"/sections/"+row.ID+"/items", token, profile, &one)
+				if one.Title != row.Title || !slices.Equal(cardTitles(one.Items), cardTitles(row.Items)) {
+					t.Errorf("%s: the row %s alone: %+v", label, row.Title, one)
+				}
+			}
+			if !slices.Equal(landing, rows) {
+				t.Errorf("%s: %s's landing %v, want %v", label, name, landing, rows)
+			}
+		}
+		var rows []string
+		for _, row := range sections("/api/v2/home/sections") {
+			rows = append(rows, row.Title)
+			number := numbers[row.Title]
+			if grid := titles("/api/v2/catalog?library_id=" + number); number == "" || !slices.Equal(cardTitles(row.Items), grid) {
+				t.Errorf("%s: the Home row %s shows %v", label, row.Title, cardTitles(row.Items))
+			}
+		}
+		if !slices.Equal(rows, home) {
+			t.Errorf("%s: Home %v, want %v", label, rows, home)
+		}
+	}
+	check("as made", map[string][]string{"Picks": {"Alpha", "Gamma", "Show"}, "Sagas": {"Alpha", "Beta", "Gamma", "Show"}},
+		[]string{"Picks", "Sagas"})
+
+	if status, _ := s.call(http.MethodPost, "/Polyfin/UserItems/"+itemIDOf(t, s, jellyfin, viewIDs["Sagas"], "Gamma")+"/Hidden",
+		app("tv", jellyfin), nil); status != http.StatusNoContent && status != http.StatusOK {
+		t.Fatalf("hiding: %d", status)
+	}
+	check("with a hidden title", map[string][]string{"Picks": {"Alpha", "Show"}, "Sagas": {"Alpha", "Beta", "Show"}},
+		[]string{"Picks", "Sagas"})
+	s.limit(t, member, func(c *accounts.UserChanges) { c.BlockedGenres = &[]string{"Drama"} })
+	check("with Drama blocked", map[string][]string{"Picks": {"Alpha"}, "Sagas": {"Alpha"}}, []string{"Picks", "Sagas"})
+
+	if status := s.configure(t, "/Users/Configuration", jellyfin, map[string]any{"OrderedViews": []string{viewIDs["Sagas"]},
+		"MyMediaExcludes": []string{viewIDs["Picks"]}}); status != http.StatusNoContent {
+		t.Fatalf("leaving Picks out of My Media: %d", status)
+	}
+	check("without Picks in My Media", map[string][]string{"Sagas": {"Alpha"}}, []string{"Sagas"})
+	if status := s.configure(t, "/Users/Configuration", jellyfin, map[string]any{"OrderedViews": []string{viewIDs["Sagas"]},
+		"MyMediaExcludes": []string{}, "LatestItemsExcludes": []string{viewIDs["Sagas"]}}); status != http.StatusNoContent {
+		t.Fatalf("leaving Sagas out of the latest: %d", status)
+	}
+	check("without Sagas in the latest", map[string][]string{"Picks": {"Alpha"}, "Sagas": {"Alpha"}}, []string{"Picks"})
+}
+
+// itemIDOf is the identifier of a title of a library, by its name.
+func itemIDOf(t *testing.T, s testServer, token, library, name string) string {
+	t.Helper()
+	var page QueryResult
+	s.get(t, "/Items?ParentId="+library+"&Recursive=true&IncludeItemTypes=Movie,Series", token, &page)
+	for _, item := range page.Items {
+		if item.Name == name {
+			return item.Id
+		}
+	}
+	t.Fatalf("no %s in %s", name, library)
+	return ""
 }
