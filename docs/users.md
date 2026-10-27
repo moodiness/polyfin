@@ -29,13 +29,34 @@ Polyfin keeps each user's played titles, resume points, favorites and ratings. T
 - **Continue Watching** lists what is under way. "Remove from Continue Watching" takes a title off it and changes nothing else: the title stays played or not, with its plays and the date it was last played. Polyfin remembers when: an import from a tracking service or an app brings the title back only with a resume point set after that (see [How the history merges with Polyfin's](tracking.md#how-the-history-merges-with-polyfin-s)). Playing the title again sets a resume point as usual, and nothing is sent to tracking services.
 - "Hide this title" takes a movie, a home video, a series or a folder of videos off the user's lists: libraries, home rows (Latest, Continue Watching, Next Up, Upcoming), searches, similar titles, recommendations, person pages, collections and the Watchlist. A hidden series takes its episodes with it, and a hidden folder its videos. The title still opens and plays from a link, and its page still lists its seasons and episodes. Other users are not affected. "Show this title again" brings it back.
 - In the web player, both are in the ⋮ menus (see [Web client](web-client.md#dashboard-links-and-single-sign-on)). For the other apps, which have no such buttons, **My account** in the admin app has a **Continue Watching** section, each title with **Remove**, and a **Hidden titles** section, each with **Show again**. Other apps see the change at their next refresh.
-- **Next Up** lists the next episode of each series being watched.
+- **Next Up** lists the next episode of each series being watched (see [Continue Watching and Next Up](#continue-watching-and-next-up)).
 - The **Upcoming** row lists the coming episodes of the series the user watches or marked favorite.
-- Both look at the 50 series the user played most recently, as each series asks its addon for its episodes. A history imported from a tracking service can hold hundreds of series (see [Importing your watch history](tracking.md#importing-your-watch-history)).
+- Both look at the 50 series the user watched most recently, as each series asks its addon for its episodes. A history imported from a tracking service can hold hundreds of series (see [Importing your watch history](tracking.md#importing-your-watch-history)).
 - Marking a series or a season played marks its released episodes.
 - Apps that keep Jellyfin's live connection (WebSocket) open are told of these changes as they happen, from any of the user's apps.
 
 Users can also make playlists of movies and episodes from their apps. A playlist can be private, shared with other users, or open to all.
+
+### Continue Watching and Next Up
+
+**Continue Watching** lists the movies, episodes and videos the user stopped past **Resume point kept after (%)** and before **Marked played after (%)**, 5% and 90% by default (see [Played and resume thresholds](#played-and-resume-thresholds)), the most recently played first. A 45-minute episode stopped in its first 2 minutes 15 seconds keeps no resume point, and does not show there. Whatever version plays, a torrent's or another, the resume point is the title's: the movie's or the episode's.
+
+**Next Up** lists one episode for each series the user watches:
+
+- A series is watched once the user played or started one of its episodes, even an episode stopped before the resume threshold.
+- Its episode is the first released, unplayed one after the furthest episode played, specials left out. For a series none of whose episodes is played, it is the first episode.
+- When that episode is under way, it is offered to the apps that ask for such episodes. The web player's home does not, and leaves the series out: the episode is in Continue Watching instead.
+- Series come by when their furthest played episode was played, the latest first, then the series with no episode played, the latest started first.
+- The web player's home also leaves out the series not watched for longer than its "Max days in 'Next Up'" setting, on its Display settings page: a year by default.
+
+A user who wants Continue Watching alone hides Next Up in the web player: under **Settings › Home**, the section that shows **Next Up**, the sixth by default, set to **None**. It is saved in the account, so it follows the user to other browsers. Other apps have their own home settings. Rows the administrator placed **After Next Up** then take the place before it (see [Home rows](web-client.md#home-rows)).
+
+The web player's home keeps its rows for a minute. jellyfin-web 12.4 keeps what Continue Watching and Next Up list for up to a minute after it last asked, also across a reload, and draws the rows again from it without asking: a title stopped or marked played moves in these rows only once that minute has passed. Polyfin answers the change at once, and other apps show it at their next refresh. A card taken off with "Remove from Continue Watching" leaves the row at once (see [Web client](web-client.md#dashboard-links-and-single-sign-on)).
+
+**Compared with Jellyfin:**
+
+- Next Up follows Jellyfin 12.4: a series is watched once one of its episodes has a date, played or only started ([NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L42-L70)), and a series with no episode played comes after the others, from its first unplayed episode ([NextUpService.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/NextUpService.cs#L204-L247), [TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L145-L151)). An episode under way is left out when the app asks so ([TVSeriesManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L227-L237)).
+- The web player keeps its rows for a minute on a Jellyfin server too: its queries stay fresh for a minute ([queryClient.ts](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/utils/query/queryClient.ts#L12-L50)), and the changes the server announces do not reach the rows' queries ([QueryClientEventHandler.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/QueryClientEventHandler.tsx#L20)). This is reported upstream as jellyfin/jellyfin-web#8543.
 
 ### Home rows
 
