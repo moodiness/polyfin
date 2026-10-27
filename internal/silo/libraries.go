@@ -86,13 +86,30 @@ func (s *Server) libraryPage(r *http.Request, v viewer, view item, query url.Val
 // is full and one more title tells that more follow, the total counting
 // those read.
 func (s *Server) gatheredPage(r *http.Request, v viewer, view item, query url.Values, start, count int, keep func(item) bool) (catalogPage, answer, error) {
-	var collections queryResult
-	a, err := s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {view.Id}}.Encode(), nil, &collections)
+	titles, more, a, err := s.gatheredTitles(r, v, view, query, start+count, keep)
 	if err != nil || !a.ok() {
 		return catalogPage{}, a, err
 	}
+	page := catalogPage{Items: []catalogItem{}, Total: len(titles), TotalExact: !more, WindowCursor: cursor(0)}
+	if start < len(titles) {
+		page.Items = cards(r, titles[start:min(start+count, len(titles))])
+	}
+	if more {
+		page.Page = pageInfo{HasMore: true, NextCursor: cursor(start + count)}
+	}
+	return page, a, nil
+}
+
+// gatheredTitles are the titles of a library's collections keep keeps, in
+// their order, each once, read collection by collection until more than
+// want of them are read; more reports whether there are.
+func (s *Server) gatheredTitles(r *http.Request, v viewer, view item, query url.Values, want int, keep func(item) bool) (titles []item, more bool, a answer, err error) {
+	var collections queryResult
+	a, err = s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {view.Id}}.Encode(), nil, &collections)
+	if err != nil || !a.ok() {
+		return nil, false, a, err
+	}
 	seen := map[string]bool{}
-	var titles []item
 	for _, collection := range collections.Items {
 		if collection.Type != "BoxSet" {
 			continue
@@ -102,7 +119,7 @@ func (s *Server) gatheredPage(r *http.Request, v viewer, view item, query url.Va
 		var result queryResult
 		// A collection the user may no longer open lists nothing.
 		if _, err := s.call(r, v, http.MethodGet, "/Items?"+listed.Encode(), nil, &result); err != nil {
-			return catalogPage{}, a, err
+			return nil, false, a, err
 		}
 		for _, title := range result.Items {
 			if !seen[title.Id] && slices.Contains(browsable, title.Type) && keep(title) {
@@ -110,19 +127,36 @@ func (s *Server) gatheredPage(r *http.Request, v viewer, view item, query url.Va
 				titles = append(titles, title)
 			}
 		}
-		if len(titles) > start+count {
+		if len(titles) > want {
 			break
 		}
 	}
-	more := len(titles) > start+count
-	page := catalogPage{Items: []catalogItem{}, Total: len(titles), TotalExact: !more, WindowCursor: cursor(0)}
-	if start < len(titles) {
-		page.Items = cards(r, titles[start:min(start+count, len(titles))])
+	return titles, len(titles) > want, a, nil
+}
+
+// gathers reports whether a library's titles are gathered collection by
+// collection (see libraryPage): those of a library the Jellyfin API
+// describes as boxsets that it lists none of.
+func (s *Server) gathers(r *http.Request, v viewer, view item) (bool, answer, error) {
+	if view.CollectionType != boxsets {
+		return false, answer{status: http.StatusOK}, nil
 	}
-	if more {
-		page.Page = pageInfo{HasMore: true, NextCursor: cursor(start + count)}
+	var listed queryResult
+	a, err := s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {view.Id}, "Recursive": {"true"},
+		"IncludeItemTypes": {titleTypes}, "Limit": {"1"}, "EnableTotalRecordCount": {"true"}}.Encode(), nil, &listed)
+	return err == nil && a.ok() && listed.TotalRecordCount == 0 && len(listed.Items) == 0, a, err
+}
+
+// collectionLibrary reports whether a library is a library of
+// collections: one the Jellyfin API describes as boxsets, or whose
+// listing holds collections.
+func (s *Server) collectionLibrary(r *http.Request, v viewer, view item) (bool, answer, error) {
+	if view.CollectionType == boxsets {
+		return true, answer{status: http.StatusOK}, nil
 	}
-	return page, a, nil
+	var children queryResult
+	a, err := s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {view.Id}, "Limit": {"1"}}.Encode(), nil, &children)
+	return err == nil && a.ok() && allCollections(children.Items), a, err
 }
 
 // keepAll keeps every title.

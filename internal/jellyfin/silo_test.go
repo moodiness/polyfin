@@ -114,6 +114,8 @@ func appsAccept(path string, data []byte) error {
 		return silotest.CheckSection(data, segments[3])
 	case target.Path == "/api/v2/catalog":
 		return silotest.CheckCatalogPage(data)
+	case target.Path == "/api/v2/catalog/filters":
+		return silotest.CheckCatalogFilters(data)
 	case len(segments) == 3 && segments[0] == "library" && segments[2] == "collections":
 		return silotest.CheckCollectionTab(data, segments[1])
 	case target.Path == "/api/v2/playback/capabilities":

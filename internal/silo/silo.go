@@ -85,6 +85,7 @@ func New(options Options) *Server {
 		shuffles: newShuffles(), unknown: newUnknownOperations(options.Logger, options.now)}
 	s.accountRoutes()
 	s.browseRoutes()
+	s.filterRoutes()
 	s.libraryRoutes()
 	s.playbackRoutes()
 	s.collectionRoutes()

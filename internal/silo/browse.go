@@ -623,69 +623,90 @@ func pageAsked(w http.ResponseWriter, q url.Values) (start, limit int, ok bool) 
 	return start, limit, true
 }
 
-// catalog pages through a library, a Home section, a collection or a
-// search, as the Jellyfin API lists them to Jellyfin apps.
-func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
-	q := r.URL.Query()
-	start, limit, ok := pageAsked(w, q)
-	if !ok {
-		return
-	}
+// listing is what a catalog request lists, as the Jellyfin API lists it.
+type listing struct {
+	source string
+	// query is the Jellyfin API's listing, without its paging.
+	query url.Values
+	// section is a section of Home or of a library's landing, read whole.
+	section *section
+	// whole is set for a folder listed whole, query's parent: a
+	// collection, the Watchlist view, or a row of Home or of a library's
+	// landing past its first titles.
+	whole bool
+	// view is the library asked, if any.
+	view item
+	term string
+}
+
+// libraryTitles reports whether the listing is a library's titles,
+// those of its favorites or of a search among them.
+func (l listing) libraryTitles() bool {
+	return !l.whole && l.view.Id != "" && (l.source == "query" || l.source == "favorites")
+}
+
+// keep keeps the titles of a library's collections the listing keeps:
+// those of its search, and its favorites when asked.
+func (l listing) keep(i item) bool {
+	return (l.term == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(l.term))) &&
+		(l.source != "favorites" || i.UserData != nil && i.UserData.IsFavorite)
+}
+
+// listingAsked reads what a catalog request q lists, answering the
+// request when it cannot.
+func (s *Server) listingAsked(w http.ResponseWriter, r *http.Request, v viewer, q url.Values) (listing, bool) {
 	types, ok := catalogTypes[cmp.Or(q.Get("type"), "video")]
 	if !ok {
 		validationProblem(w, "query.type", "unsupported", "This server lists movies, series and episodes.")
-		return
+		return listing{}, false
 	}
 	sort := strings.TrimPrefix(q.Get("sort"), "-")
 	order, ok := catalogSorts[sort]
 	if sort != "" && !ok {
 		validationProblem(w, "query.sort", "unknown_sort_field", "This server sorts by title, year, release_date, added_at, rating, runtime or random.")
-		return
+		return listing{}, false
 	}
-	// folder is a folder listed whole, when whole: a collection, the
-	// Watchlist view, or a row of Home or of a library's landing past its
-	// first titles.
-	folder, whole := "", false
-	source := cmp.Or(q.Get("source"), "query")
+	l := listing{source: cmp.Or(q.Get("source"), "query")}
+	folder := ""
 	var person string
-	switch source {
+	switch l.source {
 	case "section":
 		id := q.Get("section_id")
 		if row, ok := strings.CutPrefix(id, rowPrefix); ok {
-			folder, whole = row, true
+			folder, l.whole = row, true
 			break
 		}
 		if collection, ok := strings.CutPrefix(id, collectionPrefix); ok {
-			folder, whole = collection, true
+			folder, l.whole = collection, true
 			break
 		}
 		sec, ok := s.namedSection(w, r, v, id)
 		if !ok {
-			return
+			return listing{}, false
 		}
-		writeJSON(w, http.StatusOK, pageOf(sec.Items, start, limit, len(sec.Items)))
-		return
+		l.section = &sec
+		return l, true
 	case "library_collection", "user_collection":
-		folder, whole = q.Get("collection_id"), true
+		folder, l.whole = q.Get("collection_id"), true
 	case "watchlist":
-		folder, whole = watchlistView, true
+		folder, l.whole = watchlistView, true
 	case "history":
 		if types, ok = historyTypes[q.Get("type")]; !ok {
 			validationProblem(w, "query.type", "unsupported", "This server's history lists movies and episodes.")
-			return
+			return listing{}, false
 		}
 	case "person":
 		if person, ok = s.personID(w, r, q.Get("person_id")); !ok {
-			return
+			return listing{}, false
 		}
 	case "favorites", "query":
 	default:
 		validationProblem(w, "query.source", "unsupported",
 			"This server lists libraries, sections, collections, favorites, the watchlist, the history, people's titles and searches.")
-		return
+		return listing{}, false
 	}
 	query := url.Values{"Fields": {listFields}, "IncludeItemTypes": {types}}
-	switch source {
+	switch l.source {
 	case "favorites":
 		query.Set("Filters", "IsFavorite")
 		query.Set("Recursive", "true")
@@ -703,39 +724,70 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
 			query.Set("SortOrder", "Descending")
 		}
 	}
-	favorites := source == "favorites"
-	term := strings.TrimSpace(cmp.Or(q.Get("q"), q.Get("name_prefix")))
-	if term != "" {
-		query.Set("SearchTerm", term)
+	l.term = strings.TrimSpace(cmp.Or(q.Get("q"), q.Get("name_prefix")))
+	if l.term != "" {
+		query.Set("SearchTerm", l.term)
 		query.Set("Recursive", "true")
 	}
-	var view item
 	if library := q.Get("library_id"); library != "" {
-		if view, ok = s.library(w, r, v, library); !ok {
-			return
+		if l.view, ok = s.library(w, r, v, library); !ok {
+			return listing{}, false
 		}
 	}
-	switch {
-	case whole:
+	if l.whole {
 		if _, err := accounts.ParseID(folder); err != nil {
 			problem(w, http.StatusNotFound, "not_found", "Not found.")
-			return
+			return listing{}, false
 		}
 		query.Set("ParentId", folder)
-	case view.Id != "" && (source == "query" || favorites):
-		// A library's titles, which those it gathers keep to the search.
-		keep := func(i item) bool {
-			return (term == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(term))) &&
-				(!favorites || i.UserData != nil && i.UserData.IsFavorite)
+	}
+	l.query = query
+	return l, true
+}
+
+// catalog pages through a library, a Home section, a collection or a
+// search, as the Jellyfin API lists them to Jellyfin apps.
+func (s *Server) catalog(w http.ResponseWriter, r *http.Request, v viewer) {
+	s.catalogOf(w, r, v, r.URL.Query(), "query")
+}
+
+// catalogOf answers the catalog request q, sent in the request's query or
+// body (in), narrowed by the filter it asks (see filters.go).
+func (s *Server) catalogOf(w http.ResponseWriter, r *http.Request, v viewer, q url.Values, in string) {
+	start, limit, ok := pageAsked(w, q)
+	if !ok {
+		return
+	}
+	f, ok := filterAsked(w, q, in)
+	if !ok {
+		return
+	}
+	l, ok := s.listingAsked(w, r, v, q)
+	if !ok {
+		return
+	}
+	switch {
+	case l.section != nil:
+		if f.narrows() {
+			validationProblem(w, in+".groups", "unsupported", "This server does not filter the sections of Home and of a library.")
+			return
 		}
-		page, a, err := s.libraryPage(r, v, view, query, start, limit, keep)
+		writeJSON(w, http.StatusOK, pageOf(l.section.Items, start, limit, len(l.section.Items)))
+		return
+	case f.narrows():
+		page, a, err := s.filteredPage(r, v, l, f, start, limit)
+		s.writePage(w, r, page, a, err)
+		return
+	case l.libraryTitles():
+		// A library's titles, which those it gathers keep to the search.
+		page, a, err := s.libraryPage(r, v, l.view, l.query, start, limit, l.keep)
 		s.writePage(w, r, page, a, err)
 		return
 	}
-	query.Set("StartIndex", strconv.Itoa(start))
-	query.Set("Limit", strconv.Itoa(limit))
-	query.Set("EnableTotalRecordCount", "true")
-	page, a, err := s.listPage(r, v, query, start)
+	l.query.Set("StartIndex", strconv.Itoa(start))
+	l.query.Set("Limit", strconv.Itoa(limit))
+	l.query.Set("EnableTotalRecordCount", "true")
+	page, a, err := s.listPage(r, v, l.query, start)
 	s.writePage(w, r, page, a, err)
 }
 
