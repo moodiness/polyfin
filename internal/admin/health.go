@@ -346,6 +346,10 @@ type addonHealthJSON struct {
 	ResponseTime int64 `json:"responseTime"`
 	Requests     int   `json:"requests"`
 	Failures     int   `json:"failures"`
+	// CatalogsWaitUntil is when the wait the addon's server asked for ends,
+	// its catalog pages not asked for until then; nil when none runs.
+	// Failure is rate_limited meanwhile.
+	CatalogsWaitUntil *time.Time `json:"catalogsWaitUntil"`
 }
 
 // softwareEncoders are the CPU encoders conversions use.
@@ -525,6 +529,9 @@ func (h *handler) addonHealth(addon addons.Addon, owner *ownerJSON) addonHealthJ
 	}
 	result.Failure, result.ResponseTime = health.Failure, health.ResponseTime.Milliseconds()
 	result.Requests, result.Failures = health.Requests, health.Failures
+	if !health.CatalogsWaitUntil.IsZero() {
+		result.CatalogsWaitUntil = new(health.CatalogsWaitUntil)
+	}
 	return result
 }
 

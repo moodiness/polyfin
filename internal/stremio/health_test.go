@@ -2,11 +2,13 @@ package stremio
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/metrics"
 )
@@ -59,6 +61,57 @@ func TestHealthFollowsTheRequestsMadeToAnAddon(t *testing.T) {
 	_, _ = client.Catalog(t.Context(), manifest, "movie", "top", nil, false)
 	if health, _ := client.Health(manifest); health.Failure != FailureUnreachable {
 		t.Errorf("after the addon went away: %+v", health)
+	}
+}
+
+// A 503 that says how long to wait asks to wait, as a 429 does; one that
+// does not is a server error. While the addons of a host wait for their
+// catalogs, their health tells it, whatever answered since.
+func TestA503WithRetryAfterAsksToWait(t *testing.T) {
+	var retryAfter atomic.Value
+	retryAfter.Store("")
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/meta/") {
+			_, _ = w.Write([]byte(`{"meta":{"id":"tt1","type":"movie","name":"One"}}`))
+			return
+		}
+		if after := retryAfter.Load().(string); after != "" {
+			w.Header().Set("Retry-After", after)
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer addon.Close()
+	manifest := addon.URL + "/config/manifest.json"
+	client := NewClient("test")
+	_, err := client.Catalog(t.Context(), manifest, "movie", "top", nil, false)
+	if _, waits := RetryAfter(err); waits || FailureOf(err) != FailureServerError {
+		t.Errorf("a 503 without Retry-After: %v, %s", err, FailureOf(err))
+	}
+	retryAfter.Store("7")
+	_, err = client.Catalog(t.Context(), manifest, "movie", "top", nil, false)
+	if wait, waits := RetryAfter(err); !waits || wait != 7*time.Second || FailureOf(err) != FailureRateLimited || StatusOf(err) != 503 {
+		t.Errorf("a 503 with Retry-After: %v, %s", err, FailureOf(err))
+	}
+	if health, _ := client.Health(manifest); health.Failure != FailureRateLimited {
+		t.Errorf("health after a 503 with Retry-After: %+v", health)
+	}
+
+	// Another addon of the same server waits too; a description answered
+	// meanwhile leaves the wait told.
+	until := time.Now().Add(time.Minute)
+	client.CatalogsWait(manifest, until)
+	if _, err := client.Meta(t.Context(), manifest, "movie", "tt1", false); err != nil {
+		t.Fatal(err)
+	}
+	other := addon.URL + "/other/manifest.json"
+	_, _ = client.Meta(t.Context(), other, "movie", "tt1", false)
+	for _, m := range []string{manifest, other} {
+		if health, _ := client.Health(m); health.Failure != FailureRateLimited || !health.CatalogsWaitUntil.Equal(until) {
+			t.Errorf("health of %s during the wait: %+v", m, health)
+		}
+	}
+	if !errors.Is(AskedToWait(time.Second), ErrAskedToWait) || FailureOf(AskedToWait(time.Second)) != FailureRateLimited {
+		t.Error("a request not sent during a wait is not told as one")
 	}
 }
 

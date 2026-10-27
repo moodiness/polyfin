@@ -177,8 +177,16 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		c.health.record(ctx, manifestURL, target, started, failureOfStatus(response.StatusCode))
-		if wait, ok := parseRetryAfter(response.Header.Get("Retry-After"), time.Now()); ok && response.StatusCode == http.StatusTooManyRequests {
+		// An addon asks to wait with a 429, or with a 503 that says how
+		// long (Retry-After), as IPTV providers do (see iptv.RateLimited).
+		wait, waits := parseRetryAfter(response.Header.Get("Retry-After"), time.Now())
+		waits = waits && (response.StatusCode == http.StatusTooManyRequests || response.StatusCode == http.StatusServiceUnavailable)
+		failure := failureOfStatus(response.StatusCode)
+		if waits {
+			failure = FailureRateLimited
+		}
+		c.health.record(ctx, manifestURL, target, started, failure)
+		if waits {
 			return nil, fmt.Errorf("%w: %w, %w", ErrUnreachable, httpStatus(response.StatusCode), wait)
 		}
 		return nil, fmt.Errorf("%w: %w", ErrUnreachable, httpStatus(response.StatusCode))
@@ -208,17 +216,29 @@ func StatusOf(err error) int {
 	return int(status)
 }
 
-// retryAfter is how long an addon that answered 429 asked to wait before
-// it is asked again, as its Retry-After told.
+// retryAfter is how long an addon that answered 429, or 503 with
+// Retry-After, asked to wait before it is asked again.
 type retryAfter time.Duration
 
 func (r retryAfter) Error() string { return "retry after " + time.Duration(r).String() }
 
 // RetryAfter returns how long the addon whose answer err is asked to wait,
-// by the Retry-After of its 429; false when it did not say.
+// by the Retry-After of its 429 or 503, or as long as is left of a wait
+// it asked for earlier (see AskedToWait); false when it did not say.
 func RetryAfter(err error) (time.Duration, bool) {
 	wait, ok := errors.AsType[retryAfter](err)
 	return time.Duration(wait), ok
+}
+
+// ErrAskedToWait reports a request that was not sent: the addon asked to
+// wait, and the wait has not ended.
+var ErrAskedToWait = errors.New("not asked: the addon asked to wait")
+
+// AskedToWait is the error of a request not sent to an addon that asked
+// to wait, with left of the wait to go: ErrAskedToWait, and left for
+// RetryAfter.
+func AskedToWait(left time.Duration) error {
+	return fmt.Errorf("%w, %w", ErrAskedToWait, retryAfter(left))
 }
 
 // parseRetryAfter reads a Retry-After header, in seconds or as a date, as
