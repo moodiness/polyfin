@@ -734,7 +734,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			// Silo's apps, while the settings allow them, through the
 			// Jellyfin API's answers.
 			Silo: silo.New(silo.Options{ServerID: serverID, Version: version, Accounts: store, Jellyfin: jellyfinAPI,
-				DB: pool, Logger: logger}),
+				DB: pool, QuickConnect: quickConnect, Logger: logger}),
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),

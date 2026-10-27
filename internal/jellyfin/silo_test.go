@@ -41,7 +41,7 @@ type siloApps struct {
 func servingSilo(t *testing.T, s testServer) siloApps {
 	t.Helper()
 	api := silo.New(silo.Options{ServerID: testServerID, Version: "test", Accounts: s.store, Jellyfin: s.handler, DB: s.pool,
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		QuickConnect: s.handler.QuickConnect, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	site := httptest.NewServer(api)
 	t.Cleanup(site.Close)
 	return siloApps{testServer: s, site: site.URL}

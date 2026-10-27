@@ -31,6 +31,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/forwarded"
+	"github.com/moodiness/polyfin/internal/quickconnect"
 )
 
 // Accounts is what the API reads and does of the accounts.
@@ -56,7 +57,10 @@ type Options struct {
 	// allow Silo's apps, as it did before.
 	Jellyfin http.Handler
 	DB       *pgxpool.Pool
-	Logger   *slog.Logger
+	// QuickConnect holds the requests TVs sign in with a code through
+	// (see deviceLoginRoutes).
+	QuickConnect *quickconnect.Store
+	Logger       *slog.Logger
 
 	// now is the clock; time.Now by default.
 	now func() time.Time
@@ -89,6 +93,7 @@ func New(options Options) *Server {
 	s.discoverRoutes()
 	s.probeRoutes()
 	s.shuffleRoutes()
+	s.deviceLoginRoutes()
 	s.mux.HandleFunc("/api/v2/", func(w http.ResponseWriter, r *http.Request) {
 		s.unknown.report(r)
 		problem(w, http.StatusNotFound, "not_found", "This operation does not exist on this server.")

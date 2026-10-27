@@ -498,6 +498,38 @@ func TestQuickConnectApproval(t *testing.T) {
 	}
 }
 
+// A Silo TV's 8-digit code is approved on the page as a Jellyfin app's is,
+// written as the TV shows it, and once: another user then finds no device
+// waiting, and cannot take the TV for themselves.
+func TestQuickConnectApprovesASiloCodeOnce(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	member := api.signedIn("member", false)
+	other := api.signedIn("other", false)
+	request, err := api.quickConnect.InitiateSilo("tv-id", "Living room", "tvos", "Silo", "2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shown := request.Code[:4] + "-" + request.Code[4:]
+	if status, body, _ := member.call(http.MethodGet, "/quick-connect/"+request.Code, nil); status != http.StatusOK || body["deviceName"] != "Living room" {
+		t.Fatalf("lookup: %d %v", status, body)
+	}
+	if status, _, _ := member.call(http.MethodPost, "/quick-connect", map[string]string{"code": shown}); status != http.StatusNoContent {
+		t.Fatalf("approval: %d", status)
+	}
+	if status, body, _ := other.call(http.MethodGet, "/quick-connect/"+request.Code, nil); status != http.StatusNotFound || body["error"] != "unknown_code" {
+		t.Errorf("lookup once approved: %d %v", status, body)
+	}
+	if status, body, _ := other.call(http.MethodPost, "/quick-connect", map[string]string{"code": request.Code}); status != http.StatusNotFound || body["error"] != "unknown_code" {
+		t.Errorf("another approval: %d %v", status, body)
+	}
+	approved, _ := api.quickConnect.BySecret(request.Secret)
+	_, session, _ := member.call(http.MethodGet, "/session", nil)
+	if approved.User == nil || approved.User.String() != session["user"].(map[string]any)["id"] {
+		t.Errorf("request approved for %v, want the first user", approved.User)
+	}
+}
+
 func TestFailedSignInsAreThrottled(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 2)

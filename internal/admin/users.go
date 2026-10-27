@@ -1072,13 +1072,15 @@ func (h *handler) revokeOwnDevice(w http.ResponseWriter, r *http.Request) {
 	h.revokeDevice(w, r, sessionFrom(r.Context()).User.ID, "id")
 }
 
+// quickConnectRequest describes the device waiting behind a code. A code
+// already decided, or withdrawn, waits no more.
 func (h *handler) quickConnectRequest(w http.ResponseWriter, r *http.Request) {
 	if !h.Accounts.Settings().QuickConnectEnabled {
 		writeError(w, http.StatusConflict, "quick_connect_disabled")
 		return
 	}
 	request, err := h.QuickConnect.ByCode(r.PathValue("code"))
-	if errors.Is(err, quickconnect.ErrUnknown) {
+	if err != nil || request.State != quickconnect.Pending {
 		writeError(w, http.StatusNotFound, "unknown_code")
 		return
 	}

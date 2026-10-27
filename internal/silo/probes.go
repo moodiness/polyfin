@@ -54,9 +54,9 @@ const revision = "polyfin-1"
 // apps offer that Polyfin does not: downloads, AI translations and
 // subtitles, books, diagnostics uploads, push notifications and the
 // notification inbox, remote control, subtitle searches and their timing,
-// requests, external sign-in, signing a TV in with a code, invitations,
-// watch-together, theme music, settings synced from the apps and the
-// apps' onboarding tour. Each holds what the contract requires, all off.
+// requests, external sign-in, invitations, watch-together, theme music,
+// settings synced from the apps and the apps' onboarding tour. Each holds
+// what the contract requires, all off.
 var unsupportedDocuments = map[string]map[string]any{
 	"/api/v2/capabilities/downloads": {"bounded_creation": false, "subscription_mutations": false, "bounded_subscription_sync": false,
 		"subscription_reads": false, "bounded_manifests": false, "file_delivery": false, "enabled": false, "download_allowed": false,
@@ -89,9 +89,7 @@ var unsupportedDocuments = map[string]map[string]any{
 	"/api/v2/auth/external-sign-in/capabilities": {"available": false, "identities": false, "admin_identities": false, "break_glass": false,
 		"connection_test": false, "live_provider_changes": false, "provider_recheck": false, "credentials_linking": false,
 		"network_sign_in": false, "network_link_keeps_password": false},
-	"/api/v2/auth/oauth/capabilities": {"available": false, "native": false, "linking": false, "provider_logout": false, "select_account": false},
-	"/api/v2/auth/device/capability": {"remote_playback_handoff": false, "jellyfin_quick_connect": false, "protocol_versions": []any{},
-		"cancel": false, "opened_signal": false},
+	"/api/v2/auth/oauth/capabilities":  {"available": false, "native": false, "linking": false, "provider_logout": false, "select_account": false},
 	"/api/v2/invitations/capabilities": {"default_profile": false, "profileless": false},
 	"/api/v2/watch-together/capabilities": {"staged_selection": false, "lobby_ready": false, "connection_replaced": false,
 		"selection_mode_switch": false, "member_state": false, "picker": false, "vote_host_override": false, "stop_playback": false,
@@ -107,7 +105,7 @@ var unsupportedDocuments = map[string]map[string]any{
 // publicDocuments are the documents read before signing in, which carry
 // no allowed: there is no user to allow.
 var publicDocuments = []string{"/api/v2/auth/external-sign-in/capabilities", "/api/v2/auth/oauth/capabilities",
-	"/api/v2/auth/device/capability", "/api/v2/invitations/capabilities"}
+	"/api/v2/invitations/capabilities"}
 
 func init() {
 	for path, doc := range unsupportedDocuments {
@@ -199,7 +197,8 @@ func (s *Server) imageCapabilities(w http.ResponseWriter, _ *http.Request, _ vie
 }
 
 // authProviders tells the apps how users sign in: with a password, there
-// being no other way.
+// being no other provider. A TV also signs in with a code (see
+// deviceLoginRoutes).
 func (s *Server) authProviders(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Items         []struct{} `json:"items"`

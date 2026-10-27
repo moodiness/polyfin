@@ -82,6 +82,28 @@ func TestRootAndBareAdminRedirectToTheApplication(t *testing.T) {
 	}
 }
 
+// Silo's TV apps send people to /activate, with the code in the QR code's
+// address: it leads to the admin app's Quick Connect page, with the code
+// when it is one. Under /jellyfin, the Jellyfin API answers.
+func TestActivateLeadsToQuickConnect(t *testing.T) {
+	h := handler(database{})
+	for target, want := range map[string]string{
+		"/activate":                "/admin/me/quick-connect",
+		"/activate?code=48217730":  "/admin/me/quick-connect?code=48217730",
+		"/activate?code=4821-7730": "/admin/me/quick-connect?code=48217730",
+		"/activate?code=%3Cb%3E":   "/admin/me/quick-connect",
+		"/activate?code=123456789": "/admin/me/quick-connect",
+	} {
+		response := get(h, target)
+		if response.Code != http.StatusFound || response.Header().Get("Location") != want {
+			t.Errorf("%s: got %d to %q, want %q", target, response.Code, response.Header().Get("Location"), want)
+		}
+	}
+	if got := get(h, "/jellyfin/activate").Body.String(); got != "jellyfin" {
+		t.Errorf("/jellyfin/activate served by %q", got)
+	}
+}
+
 func TestReadinessFollowsTheDatabase(t *testing.T) {
 	if code := get(handler(database{}), "/readyz").Code; code != http.StatusOK {
 		t.Errorf("ready database: /readyz = %d", code)

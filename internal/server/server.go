@@ -121,6 +121,10 @@ func New(options Options) http.Handler {
 	mux.Handle("/admin/", rootOnly(adminApp(options.Admin, options.Logger), options.Jellyfin))
 	// As the mux would, but at the root only.
 	mux.Handle("/admin", rootOnly(http.RedirectHandler(adminPrefix, http.StatusMovedPermanently), options.Jellyfin))
+	// Silo's TV apps tell people to open /activate, with the code in the
+	// address of their QR code: the admin app's Quick Connect page
+	// approves it (see package silo).
+	mux.Handle("GET /activate", rootOnly(http.HandlerFunc(activate), options.Jellyfin))
 	if options.Share != nil {
 		mux.Handle("/share/", rootOnly(options.Share, options.Jellyfin))
 	}
@@ -214,6 +218,25 @@ func rootOnly(h, other http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+// quickConnectPage is the admin app's page that approves an app's code.
+const quickConnectPage = adminPrefix + "me/quick-connect"
+
+// activate leads to the admin app's Quick Connect page, with the code the
+// address names, in digits, as the page takes it.
+func activate(w http.ResponseWriter, r *http.Request) {
+	code := strings.Map(func(c rune) rune {
+		if c < '0' || c > '9' {
+			return -1
+		}
+		return c
+	}, r.URL.Query().Get("code"))
+	target := quickConnectPage
+	if code != "" && len(code) <= 8 {
+		target += "?" + url.Values{"code": {code}}.Encode()
+	}
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func databaseReady(ctx context.Context, db Pinger) bool {

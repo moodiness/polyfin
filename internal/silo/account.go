@@ -137,7 +137,8 @@ func deviceOf(r *http.Request) accounts.DeviceInfo {
 // login signs a device in with a password, as AuthenticateByName signs a
 // Jellyfin app in: the same throttle, the same refusals. An account with
 // two-step sign-in is refused as a wrong password is, as Jellyfin apps
-// are: Silo's apps have no field for the code.
+// are: Silo's apps have no field for the code. It signs a TV in with a
+// code instead (see deviceLoginRoutes).
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username string  `json:"username"`

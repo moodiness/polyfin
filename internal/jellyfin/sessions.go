@@ -13,7 +13,7 @@ const quickConnectDisabled = "Quick connect is disabled"
 
 func newQuickConnectResult(request quickconnect.Request) QuickConnectResult {
 	return QuickConnectResult{
-		Authenticated: request.User != nil,
+		Authenticated: request.State == quickconnect.Approved,
 		Secret:        request.Secret,
 		Code:          request.Code,
 		DeviceId:      request.DeviceID,
@@ -64,7 +64,10 @@ func (h *Handler) quickConnectConnect(w http.ResponseWriter, r *http.Request) {
 }
 
 // quickConnectAuthorize approves a code for the caller or, for an
-// administrator, for the user named by userId.
+// administrator, for the user named by userId. A code is approved once, as
+// Jellyfin refuses a request already authorized
+// (Emby.Server.Implementations/QuickConnect/QuickConnectManager.cs,
+// AuthorizeRequest, lines 146-149 at v12.4).
 func (h *Handler) quickConnectAuthorize(w http.ResponseWriter, r *http.Request) {
 	if !h.Accounts.Settings().QuickConnectEnabled {
 		writeJSON(w, http.StatusUnauthorized, quickConnectDisabled)
@@ -92,8 +95,10 @@ func (h *Handler) quickConnectAuthorize(w http.ResponseWriter, r *http.Request) 
 }
 
 // authenticateWithQuickConnect signs in the app holding an approved
-// request's secret. Like Jellyfin, the secret stays valid until the request
-// expires, so an app retrying after a network error is not refused.
+// request's secret. Like Jellyfin, the secret of a Jellyfin app's request
+// stays valid until the request expires, so an app retrying after a network
+// error is not refused; that of one of Silo's apps signs in once (see
+// quickconnect.Store.Redeem).
 func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Request) {
 	c := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
 	var body struct{ Secret string }
@@ -106,7 +111,7 @@ func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Re
 		return
 	}
 	request, err := h.QuickConnect.BySecret(body.Secret)
-	if err != nil || request.User == nil {
+	if err != nil || request.State != quickconnect.Approved {
 		processingError(w, http.StatusNotFound)
 		return
 	}
@@ -121,6 +126,11 @@ func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Re
 	}
 	if user.Refused(h.now()) {
 		processingError(w, http.StatusForbidden)
+		return
+	}
+	// Redeemed last, so that a refused account leaves it as it was.
+	if _, err := h.QuickConnect.Redeem(body.Secret); err != nil {
+		processingError(w, http.StatusNotFound)
 		return
 	}
 	h.signIn(w, r, user, c)
