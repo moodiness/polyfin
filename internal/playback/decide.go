@@ -472,13 +472,14 @@ func (d *decider) transcoding() *TranscodingProfile {
 }
 
 // transcodeReasons are what transcoding with t cannot keep: a video codec
-// it does not take, and audio that is not taken or not flagged.
+// it does not take, and audio that is not taken, not carried by its HLS
+// segments, or not flagged.
 func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 	var why reason
 	if d.video != nil && !listHas(t.VideoCodec, d.video.Codec) {
 		why |= videoCodecNotSupported
 	}
-	if d.hasAudio && (d.checked == nil || !listHas(t.AudioCodec, d.checked.Codec)) {
+	if d.hasAudio && (d.checked == nil || !streamCarries(t, d.checked.Codec)) {
 		why |= audioCodecNotSupported
 	}
 	return why
@@ -605,10 +606,11 @@ func (c *AppCaps) apply(conditions []ProfileCondition, codec string) {
 // accept it with the codec tag a remux writes, and the source fits the
 // bitrate limit; else it is converted, within what the limit leaves once
 // the audio sent is taken off (see SentAudioBitrate). The audio is copied
-// when t takes its codec and channels and the codec profiles accept it,
-// as the only audio, so never a secondary track, and, when the video is
-// converted under a limit, when it fits the audio's share of the limit
-// (see streamAudio); else it is converted to a codec t takes. Converted
+// when t takes its codec and channels, its HLS segments carry the codec,
+// and the codec profiles accept it, as the only audio, so never a
+// secondary track, and, when the video is converted under a limit, when
+// it fits the audio's share of the limit (see streamAudio); else it is
+// converted to a codec t takes and its segments carry. Converted
 // video keeps within caps, what the app's profile allows (see appCaps);
 // a bitrate cap below what the limit leaves the video becomes the limit,
 // with the audio sent, which the audio is then decided under too: the
@@ -658,12 +660,14 @@ func (d *decider) stream(t *TranscodingProfile, options Options, limit int64, mu
 // streamAudio decides how the audio that plays reaches the app streamed
 // with t under a bitrate limit, 0 for none: copied (nil, true), converted
 // (its conversion, true), or not at all (nil, false) when t takes no codec
-// Polyfin encodes. With the video converted under a limit, a track whose
-// bitrate is above the audio's share of the limit (see audioShare) is
-// converted, as Jellyfin's encoder refuses to copy a track above the
-// audio bitrate it counts, that share at most: copied, it would leave the
-// video too little. It is copied all the same when t takes no codec
-// Polyfin encodes. A track copied with the video fits the limit with it.
+// Polyfin encodes. Over HLS, only a codec the segments carry is copied or
+// converted to (see StreamAudioCodecs). With the video converted under a
+// limit, a track whose bitrate is above the audio's share of the limit
+// (see audioShare) is converted, as Jellyfin's encoder refuses to copy a
+// track above the audio bitrate it counts, that share at most: copied, it
+// would leave the video too little. It is copied all the same when t
+// takes no codec Polyfin encodes. A track copied with the video fits the
+// limit with it.
 func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int64, convertVideo bool, s subject) (*AudioConversion, bool) {
 	audio := d.played
 	if audio == nil {
@@ -674,7 +678,7 @@ func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int6
 	if most, err := strconv.Atoi(t.MaxAudioChannels); err == nil && audio.Channels != nil && *audio.Channels > most {
 		channelsTaken = false
 	}
-	copyable := !options.ConvertAudio && channelsTaken && listHas(t.AudioCodec, audio.Codec) && !d.remuxFails("VideoAudio", audio, t.Container, s)
+	copyable := !options.ConvertAudio && channelsTaken && streamCarries(t, audio.Codec) && !d.remuxFails("VideoAudio", audio, t.Container, s)
 	heavy := convertVideo && limit > 0 && audio.BitRate != nil && *audio.BitRate > audioShare(limit)
 	if copyable && !heavy {
 		return nil, true
@@ -683,7 +687,7 @@ func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int6
 	if audio.Channels != nil {
 		channels = *audio.Channels
 	}
-	conversion := ConvertAudio(t.AudioCodec, t.MaxAudioChannels, channels, audio.ChannelLayout, limit, options.Can.Tuning)
+	conversion := ConvertAudio(StreamAudioCodecs(t), t.MaxAudioChannels, channels, audio.ChannelLayout, limit, options.Can.Tuning)
 	if conversion == nil && copyable {
 		return nil, true
 	}

@@ -275,7 +275,8 @@ func Choose(profiles []Profile, seen Seen) Profile {
 
 // Playback is the profile as playback decides with it. Polyfin converts
 // for DLNA to MPEG-TS only, and audio to MP3: those transcoding profiles
-// are kept, marked as the ones Polyfin streams (see playback.Decide).
+// are kept, marked as the ones Polyfin streams (see playback.Decide), as
+// one file, which carries the audio codecs the device takes in MPEG-TS.
 func (p Profile) Playback() *playback.DeviceProfile {
 	profile := &playback.DeviceProfile{Name: p.Name}
 	if p.MaxStreamingBitrate > 0 {
@@ -294,7 +295,7 @@ func (p Profile) Playback() *playback.DeviceProfile {
 		}
 		profile.TranscodingProfiles = append(profile.TranscodingProfiles, playback.TranscodingProfile{
 			Container: "ts", Type: "Video", VideoCodec: t.VideoCodec, AudioCodec: t.AudioCodec, Protocol: "hls", Context: "Streaming",
-			MaxAudioChannels: t.MaxAudioChannels, Conditions: conditions(t.Conditions)})
+			MaxAudioChannels: t.MaxAudioChannels, Conditions: conditions(t.Conditions), OneFile: true})
 	}
 	for _, c := range p.ContainerProfiles {
 		profile.ContainerProfiles = append(profile.ContainerProfiles, playback.ContainerProfile{

@@ -20,6 +20,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playback"
 )
 
 const serverID = "0123456789abcdef0123456789abcdef"
@@ -203,6 +204,26 @@ func TestProfilesAreChosenByWhatDevicesSend(t *testing.T) {
 		if len(profile.TranscodingProfiles) != 1 || profile.TranscodingProfiles[0].Container != "ts" || !p.TakesAudio("mp3", "mp3") {
 			t.Errorf("%s: %+v", p.Name, profile.TranscodingProfiles)
 		}
+	}
+}
+
+// A DLNA device gets its conversion as one MPEG-TS stream, not as HLS
+// segments: the audio codecs it takes in MPEG-TS are copied, MP2 among
+// them, as Jellyfin's DLNA streams copy them.
+func TestDLNAConversionsCopyTheAudioMPEGTSCarries(t *testing.T) {
+	tv, err := ParseProfile([]byte(`<Profile><Name>Hall TV</Name><DirectPlayProfiles><DirectPlayProfile container="mp4" type="Video" videoCodec="h264" audioCodec="aac" /></DirectPlayProfiles>
+		<TranscodingProfiles><TranscodingProfile container="ts" type="Video" videoCodec="h264" audioCodec="mp2,aac" context="Streaming" /></TranscodingProfiles></Profile>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recording := playback.MediaSource{Container: "ts", Streams: []playback.MediaStream{
+		{Type: "Video", Index: 0, Codec: "mpeg2video", Width: new(720), Height: new(576)},
+		{Type: "Audio", Index: 1, Codec: "mp2", Channels: new(2), IsDefault: true},
+	}}
+	got := playback.Decide(tv.Playback(), recording, playback.Options{EnableDirectPlay: true, EnableDirectStream: true,
+		Can: playback.Capabilities{Encoders: []string{"libx264"}}})
+	if !got.HLS || got.Video == nil || got.Audio != nil {
+		t.Errorf("converted %v, video %+v, audio %+v; want the video converted and the MP2 copied", got.HLS, got.Video, got.Audio)
 	}
 }
 

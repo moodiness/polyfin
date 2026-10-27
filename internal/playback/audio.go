@@ -91,6 +91,49 @@ var hlsAudioCodecs = map[string][]string{
 	"mp4": {"aac", "ac3", "eac3", "mp3", "alac", "flac", "opus", "dts", "truehd"},
 }
 
+// segmentAudioCodecs are the codecs the HLS segments of t, a video
+// TranscodingProfile, carry, as Jellyfin's StreamBuilder keeps them
+// (BuildStreamVideoItem): MP4's in fragmented MP4, MPEG-TS's in any other
+// container. Nil means no restriction: t is not HLS, or Polyfin sends its
+// segments as one MPEG-TS stream (see TranscodingProfile.OneFile).
+func segmentAudioCodecs(t *TranscodingProfile) []string {
+	if t.OneFile || !strings.EqualFold(t.Protocol, "hls") {
+		return nil
+	}
+	if strings.EqualFold(t.Container, "mp4") {
+		return hlsAudioCodecs["mp4"]
+	}
+	return hlsAudioCodecs["ts"]
+}
+
+// streamCarries reports whether a video streamed with t may copy audio of
+// codec: t takes it, and its segments carry it.
+func streamCarries(t *TranscodingProfile, codec string) bool {
+	carried := segmentAudioCodecs(t)
+	return listHas(t.AudioCodec, codec) && (carried == nil || slices.Contains(carried, strings.ToLower(codec)))
+}
+
+// StreamAudioCodecs are the codecs, as a comma-separated list, the audio
+// of a video streamed with t is copied in or converted to: t's, less
+// those its HLS segments do not carry, as Jellyfin writes them in a
+// TranscodingUrl. A profile naming none takes those its segments carry.
+func StreamAudioCodecs(t *TranscodingProfile) string {
+	carried := segmentAudioCodecs(t)
+	switch {
+	case carried == nil:
+		return t.AudioCodec
+	case t.AudioCodec == "":
+		return strings.Join(carried, ",")
+	}
+	var kept []string
+	for codec := range strings.SplitSeq(t.AudioCodec, ",") {
+		if codec = strings.TrimSpace(codec); slices.Contains(carried, strings.ToLower(codec)) {
+			kept = append(kept, codec)
+		}
+	}
+	return strings.Join(kept, ",")
+}
+
 // lossless codecs have no bitrate to choose.
 func lossless(codec string) bool {
 	switch codec {

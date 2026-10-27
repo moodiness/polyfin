@@ -295,6 +295,65 @@ func TestRemuxesCopyTheVideoAndConvertWhatAudioTheAppCannotTake(t *testing.T) {
 	}
 }
 
+// Jellyfin 12.4 keeps the audio a video streams over HLS with to the
+// codecs its segments carry (StreamBuilder.BuildStreamVideoItem):
+// jellyfin-web's Chrome profile names MP2, which Chrome refuses in
+// fragmented MP4 and in MPEG-TS, so Jellyfin converts it, whether the
+// video is converted or copied. As one file, the profile's list applies
+// as it is.
+func TestStreamedAudioKeepsToWhatItsSegmentsCarry(t *testing.T) {
+	source := func(container, video, audio string) MediaSource {
+		return MediaSource{Container: container, Bitrate: 4_200_000, Streams: []MediaStream{
+			{Type: "Video", Index: 0, Codec: video, Profile: "Main", VideoRange: "SDR", VideoRangeType: "SDR", BitDepth: new(8),
+				Width: new(720), Height: new(576), AverageFrameRate: new(25.0)},
+			{Type: "Audio", Index: 1, Codec: audio, Channels: new(2), SampleRate: new(48000), BitRate: new(int64(192_000))},
+		}}
+	}
+	chrome := readDeviceProfile(t, "jellyfin-web-chrome")
+	// Its MPEG-TS profile alone, which takes H.264 only.
+	segmentsTS := readDeviceProfile(t, "jellyfin-web-chrome")
+	segmentsTS.TranscodingProfiles = slices.DeleteFunc(segmentsTS.TranscodingProfiles,
+		func(p TranscodingProfile) bool { return p.Type == "Video" && p.Container != "ts" })
+	oneFile := readDeviceProfile(t, "jellyfin-web-chrome")
+	for i := range oneFile.TranscodingProfiles {
+		if p := &oneFile.TranscodingProfiles[i]; p.Type == "Video" {
+			p.Container, p.Protocol, p.VideoCodec, p.AudioCodec = "ts", "http", "h264", "aac,mp2"
+		}
+	}
+	stereo := &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}
+	for _, test := range []struct {
+		name      string
+		profile   *DeviceProfile
+		source    MediaSource
+		container string
+		converted bool
+		audio     *AudioConversion
+		reasons   []string
+	}{
+		{"MPEG-2 and MP2 in fragmented MP4", chrome, source("mkv", "mpeg2video", "mp2"), "mp4", true, stereo,
+			[]string{"VideoCodecNotSupported", "AudioCodecNotSupported"}},
+		{"MPEG-2 and MP2 in MPEG-TS", segmentsTS, source("mkv", "mpeg2video", "mp2"), "ts", true, stereo,
+			[]string{"VideoCodecNotSupported", "AudioCodecNotSupported"}},
+		// A recording of a channel: the video is copied.
+		{"H.264 and MP2 from MPEG-TS", chrome, source("ts", "h264", "mp2"), "mp4", false, stereo,
+			[]string{"ContainerNotSupported", "AudioCodecNotSupported"}},
+		{"MPEG-2 and AAC", chrome, source("mkv", "mpeg2video", "aac"), "mp4", true, nil, []string{"VideoCodecNotSupported"}},
+		{"MPEG-2 and MP2 as one file", oneFile, source("mkv", "mpeg2video", "mp2"), "ts", true, nil, []string{"VideoCodecNotSupported"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options := Options{AudioStreamIndex: new(1), SubtitleStreamIndex: new(-1), EnableDirectPlay: true, EnableDirectStream: true,
+				Progressive: true, Can: Capabilities{Encoders: []string{"libx264"}}}
+			got := Decide(test.profile, test.source, options)
+			if !got.Streamed() || got.Transcoding.Container != test.container || (got.Video != nil) != test.converted {
+				t.Fatalf("streamed %v in %+v, video %+v", got.Streamed(), got.Transcoding, got.Video)
+			}
+			if !reflect.DeepEqual(got.Audio, test.audio) || !slices.Equal(got.Reasons, test.reasons) {
+				t.Errorf("audio %+v, reasons %v; want %+v, %v", got.Audio, got.Reasons, test.audio, test.reasons)
+			}
+		})
+	}
+}
+
 func TestAudioIsConvertedToTheFirstCodecFFmpegEncodes(t *testing.T) {
 	for _, test := range []struct {
 		codecs, maxChannels string

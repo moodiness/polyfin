@@ -43,6 +43,11 @@ type TranscodingProfile struct {
 	MinSegments         json.Number        `json:",omitempty"`
 	BreakOnNonKeyFrames bool               `json:",omitempty"`
 	Conditions          []ProfileCondition `json:",omitempty"`
+	// OneFile marks a profile whose conversion Polyfin sends to the
+	// device as one MPEG-TS stream rather than as HLS segments, as it
+	// does for DLNA devices: what HLS segments carry does not restrict
+	// its audio (see StreamAudioCodecs).
+	OneFile bool `json:"-"`
 }
 
 // ContainerProfile restricts a container.

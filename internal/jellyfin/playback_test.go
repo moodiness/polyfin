@@ -331,7 +331,7 @@ func TestAppsThatCannotPlayAVersionGetARemux(t *testing.T) {
 	}
 	target := source.TranscodingUrl
 	// The subtitle file comes first: the audio is stream 1.
-	for _, part := range []string{"/videos/" + hyphenated(mustID(t, p.movie)) + "/master.m3u8?DeviceId=", "&MediaSourceId=" + p.movie + "&VideoCodec=av1,hevc,h264,vp9&AudioCodec=aac,mp2,opus,flac&AudioStreamIndex=1&",
+	for _, part := range []string{"/videos/" + hyphenated(mustID(t, p.movie)) + "/master.m3u8?DeviceId=", "&MediaSourceId=" + p.movie + "&VideoCodec=av1,hevc,h264,vp9&AudioCodec=aac,opus,flac&AudioStreamIndex=1&",
 		"&SegmentContainer=mp4&MinSegments=2&PlaySessionId=" + url.QueryEscape(response.PlaySessionId) + "&ApiKey=" + p.token + "&", "&SubtitleMethod=Encode&TranscodeReasons=DirectPlayError"} {
 		if !strings.Contains(target, part) {
 			t.Errorf("TranscodingUrl lacks %q: %s", part, target)
@@ -427,6 +427,40 @@ func TestAudioTheAppCannotTakeIsConverted(t *testing.T) {
 	}
 	if converted := ask("jellyfin-web-chrome", map[string]any{"EnableDirectPlay": false, "AllowAudioStreamCopy": false}); !strings.HasSuffix(converted.TranscodingUrl, "&allowAudioStreamCopy=false") {
 		t.Errorf("copy refused: %s", converted.TranscodingUrl)
+	}
+}
+
+// jellyfin-web's Chrome profile names MP2 for its HLS streams, which Chrome
+// refuses in their segments: as Jellyfin 12.4 does, the TranscodingUrl
+// keeps to the codecs fragmented MP4 carries, and the MP2 of an MPEG-TS
+// recording is converted while its H.264 is copied.
+func TestMP2IsConvertedForHLSSegments(t *testing.T) {
+	t.Parallel()
+	p := playing(t)
+	analysis := media.Analysis{Format: "mpegts", Duration: 15008 * time.Millisecond, Bitrate: 25_000, Remote: true,
+		Streams: []media.Stream{
+			{Index: 0, Type: "audio", Codec: "mp2", Default: true, Channels: 2, SampleRate: 48000, ChannelLayout: "stereo"},
+			{Index: 1, Type: "video", Codec: "h264", Profile: "High", Level: 10, Width: 64, Height: 64, FrameRate: 24, AverageRate: 24, PixelFormat: "yuv420p", BitDepth: 8},
+		}}
+	data, _ := json.Marshal(analysis)
+	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", p.versions[0].ID, data); err != nil {
+		t.Fatal(err)
+	}
+	status, data := p.call(http.MethodPost, "/Items/"+p.movie+"/PlaybackInfo", app("tv", p.token), map[string]any{
+		"UserId": p.user.ID.String(), "MediaSourceId": p.movie, "MaxStreamingBitrate": 120_000_000, "DeviceProfile": p.profile(t, "jellyfin-web-chrome")})
+	var response playbackInfoResponse
+	if err := json.Unmarshal(data, &response); status != http.StatusOK || err != nil || len(response.MediaSources) != 1 {
+		t.Fatalf("%d %s", status, data)
+	}
+	source := response.MediaSources[0]
+	target := source.TranscodingUrl
+	if source.SupportsDirectPlay || source.TranscodingContainer != "mp4" || !strings.Contains(target, "&AudioCodec=aac,opus,flac&") ||
+		!strings.HasSuffix(target, "&TranscodeReasons=ContainerNotSupported,AudioCodecNotSupported&allowAudioStreamCopy=false") {
+		t.Fatalf("source: %+v", source)
+	}
+	base := p.url + strings.Split(target, "master.m3u8")[0]
+	if _, _, master := fetchText(t, base+"master.m3u8?"+strings.SplitN(target, "?", 2)[1]); !strings.Contains(master, `CODECS="avc1.64000A,mp4a.40.2"`) {
+		t.Errorf("master playlist:\n%s", master)
 	}
 }
 

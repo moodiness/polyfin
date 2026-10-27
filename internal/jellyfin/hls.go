@@ -40,7 +40,10 @@ func transcodingURL(r *http.Request, item, sourceID accounts.ID, version library
 	q.add("DeviceId", callerFrom(r.Context()).Device.DeviceID)
 	q.add("MediaSourceId", sourceID.String())
 	q.add("VideoCodec", t.VideoCodec)
-	q.add("AudioCodec", t.AudioCodec)
+	// The audio codecs t takes that its segments carry, as Jellyfin
+	// writes them: an HLS request converting the audio converts it to the
+	// first FFmpeg encodes (see remuxFor).
+	q.add("AudioCodec", playback.StreamAudioCodecs(t))
 	if audio != nil {
 		q.add("AudioStreamIndex", strconv.Itoa(audio.Index))
 	}
