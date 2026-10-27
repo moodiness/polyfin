@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -281,6 +282,158 @@ func TestNextUpFollowsTheFurthestPlayedEpisode(t *testing.T) {
 	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+tr.episodes[2])
 	if got := nextUp(""); len(got) != 0 {
 		t.Errorf("after the last episode: %v", got)
+	}
+}
+
+// startedAddon serves a catalog of five series of 45-minute episodes, a
+// special and three regular ones each, aired long ago: Arc, Bend, Cove
+// (the only horror one), Dune and Eden.
+func startedAddon(t *testing.T) string {
+	t.Helper()
+	var shows []stremio.Meta
+	for i, name := range []string{"Arc", "Bend", "Cove", "Dune", "Eden"} {
+		id := fmt.Sprintf("tt05%02d", i)
+		genre := "Drama"
+		if name == "Cove" {
+			genre = "Horror"
+		}
+		show := stremio.Meta{ID: id, Type: "series", Name: name, Genres: []string{genre}, Runtime: "45min"}
+		show.Videos = append(show.Videos, stremio.Video{ID: id + ":0:1", Title: name + " special", Season: 0, Episode: 1,
+			Released: "2019-12-01T00:00:00.000Z", Runtime: "45min"})
+		for episode := 1; episode <= 3; episode++ {
+			show.Videos = append(show.Videos, stremio.Video{ID: fmt.Sprintf("%s:1:%d", id, episode), Title: fmt.Sprintf("%s %d", name, episode),
+				Season: 1, Episode: stremio.Number(episode), Released: fmt.Sprintf("2020-01-%02dT00:00:00.000Z", episode), Runtime: "45min"})
+		}
+		shows = append(shows, show)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.EscapedPath()
+		switch {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "started", Name: "Started", Version: "1", Types: []string{"series"},
+				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}},
+				Catalogs:  []stremio.Catalog{{Type: "series", ID: "series", Name: "Series"}}})
+		case strings.HasPrefix(path, "/catalog/series/series"):
+			previews := make([]stremio.Meta, 0, len(shows))
+			for _, show := range shows {
+				show.Videos = nil
+				previews = append(previews, show)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": previews})
+		case strings.HasPrefix(path, "/meta/series/"):
+			id := strings.TrimSuffix(strings.TrimPrefix(path, "/meta/series/"), ".json")
+			for _, show := range shows {
+				if show.ID == id {
+					_ = json.NewEncoder(w).Encode(map[string]any{"meta": show})
+					return
+				}
+			}
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// As in Jellyfin 12.4, a series one of whose episodes was only started,
+// none played, is in Next Up with its first unplayed episode, after the
+// series with a played episode, and the cutoff looks at the latest
+// episode played or started.
+func TestNextUpTakesSeriesOnlyStarted(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	member := s.user("member", nil)
+	addon, err := s.addons.Install(t.Context(), addons.Shared(), startedAddon(t), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
+		{AddonID: addon.ID, CatalogType: "series", CatalogID: "series"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	token := s.signIn("member", "tv")
+	tr := tracking{testServer: s, token: token, user: member.ID.String(), views: map[string]string{}}
+	var page QueryResult
+	s.get(t, "/UserViews", token, &page)
+	for _, view := range page.Items {
+		tr.views[view.Name] = view.Id
+	}
+	series := map[string]string{}
+	episodes := map[string]string{}
+	s.get(t, "/Items?ParentId="+tr.views["Series"], token, &page)
+	for _, show := range page.Items {
+		series[show.Name] = show.Id
+		var listed QueryResult
+		s.get(t, "/Shows/"+show.Id+"/Episodes", token, &listed)
+		for _, episode := range listed.Items {
+			episodes[episode.Name] = episode.Id
+		}
+	}
+	if len(series) != 5 || len(episodes) != 20 {
+		t.Fatalf("series %v, episodes %d", series, len(episodes))
+	}
+	named := func(names ...string) []string {
+		ids := make([]string, 0, len(names))
+		for _, name := range names {
+			ids = append(ids, episodes[name])
+		}
+		return ids
+	}
+	minute := int64(60 * 10_000_000)
+	play := func(name string, stoppedAt int64) {
+		tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": episodes[name], "PositionTicks": 0})
+		tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": episodes[name], "PositionTicks": stoppedAt})
+	}
+	nextUp := func(query string) []string { return tr.list(t, "/Shows/NextUp?"+query) }
+
+	// Arc's first episode was played long ago.
+	tr.mark(t, http.MethodPost, "/UserPlayedItems/"+episodes["Arc 1"]+"?datePlayed=2021-01-02T03:04:05Z")
+	// Bend's second, Cove's second and Eden's first are under way; Dune's
+	// first was stopped before the resume threshold, keeping no resume
+	// point. Arc's second was just started the same way.
+	play("Bend 2", 15*minute)
+	play("Dune 1", minute)
+	play("Cove 2", 15*minute)
+	play("Eden 1", 15*minute)
+	play("Arc 2", minute)
+
+	// The series with a played episode first; then those only started, the
+	// latest first, each from its first episode. Eden's is under way: the
+	// web player's home, leaving such episodes out, leaves Eden out.
+	web := "enableResumable=false"
+	if got, want := nextUp(web), named("Arc 2", "Cove 1", "Dune 1", "Bend 1"); !slices.Equal(got, want) {
+		t.Errorf("as the web player asks: %v, want %v", got, want)
+	}
+	if got, want := nextUp(""), named("Arc 2", "Eden 1", "Cove 1", "Dune 1", "Bend 1"); !slices.Equal(got, want) {
+		t.Errorf("with episodes under way: %v, want %v", got, want)
+	}
+	// Arc was played before the cutoff, but started after it.
+	if got, want := nextUp(web+"&nextUpDateCutoff=2025-01-01"), named("Arc 2", "Cove 1", "Dune 1", "Bend 1"); !slices.Equal(got, want) {
+		t.Errorf("after a cutoff before today: %v, want %v", got, want)
+	}
+	if got := nextUp(web + "&nextUpDateCutoff=2099-01-01"); len(got) != 0 {
+		t.Errorf("after a cutoff to come: %v", got)
+	}
+
+	// A hidden series, and one of a blocked genre, are left out; the
+	// hidden one still opens on its page.
+	if status, body := s.call(http.MethodPost, "/Polyfin/UserItems/"+series["Bend"]+"/Hidden", app("tv", token), nil); status != http.StatusNoContent {
+		t.Fatalf("hiding Bend: %d %s", status, body)
+	}
+	if got, want := nextUp(web), named("Arc 2", "Cove 1", "Dune 1"); !slices.Equal(got, want) {
+		t.Errorf("with Bend hidden: %v, want %v", got, want)
+	}
+	if got, want := nextUp("seriesId="+series["Bend"]), named("Bend 1"); !slices.Equal(got, want) {
+		t.Errorf("Bend's own: %v, want %v", got, want)
+	}
+	if _, err := s.store.UpdateUser(t.Context(), member.ID, accounts.UserChanges{BlockedGenres: &[]string{"Horror"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := nextUp(web), named("Arc 2", "Dune 1"); !slices.Equal(got, want) {
+		t.Errorf("with horror blocked: %v, want %v", got, want)
 	}
 }
 

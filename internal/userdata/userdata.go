@@ -175,11 +175,12 @@ func (s *Store) Played(ctx context.Context, user accounts.ID) ([]Entry, error) {
 		ORDER BY last_played_at DESC NULLS LAST, item_id`, user)
 }
 
-// Episodes lists the data of the episodes the user played or started, of
-// every series, most recently played first.
+// Episodes lists the data of the episodes the user played, started or
+// has a resume point in, of every series, most recently played first. An
+// episode started and stopped before the resume threshold is only dated.
 func (s *Store) Episodes(ctx context.Context, user accounts.ID) ([]Entry, error) {
 	return s.entries(ctx, "SELECT "+columns+` FROM user_data
-		WHERE user_id = $1 AND series_id IS NOT NULL AND (played OR position_ticks > 0)
+		WHERE user_id = $1 AND series_id IS NOT NULL AND (played OR position_ticks > 0 OR last_played_at IS NOT NULL)
 		ORDER BY last_played_at DESC NULLS LAST, item_id`, user)
 }
 

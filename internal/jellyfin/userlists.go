@@ -190,24 +190,24 @@ func (h *Handler) playingItems(r *http.Request, user accounts.User) map[accounts
 }
 
 // watchedSeriesLimit bounds the series Next Up and Upcoming look at among
-// those the user played, the most recently played first: each needs its
-// description from its addon, and a history imported from a tracking
-// service can hold hundreds of series.
+// those the user watched (played, or for Next Up started), the most
+// recently first: each needs its description from its addon, and a
+// history imported from a tracking service can hold hundreds of series.
 const watchedSeriesLimit = 50
 
-// watching is a series the user watches: the episode furthest into it the
-// user played, as Next Up starts from it, and the latest date the user
-// played one of its episodes.
+// watching is a series the user watches, and the latest date the user
+// played or started one of its episodes.
 type watching struct {
 	series accounts.ID
 	latest *time.Time
 }
 
 // nextUp lists, for each series the user is watching, the episode to watch
-// next: the first unplayed one after the furthest episode played. Series
-// come in the order their furthest played episode was played. The series
-// the user hid are left out, unless asked for by seriesId, as their page
-// does.
+// next: the first unplayed one after the furthest episode played, or the
+// first one when the user only started episodes of it. Series come in the
+// order their furthest played episode was played, then those with no
+// episode played, the latest started first. The series the user hid are
+// left out, unless asked for by seriesId, as their page does.
 func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -255,8 +255,13 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 }
 
 // nextUpItems lists Next Up for user (see nextUp): of series alone when
-// set, of the series within parent when set, of those played after cutoff
-// when set, with the episodes they started when resumable.
+// set, of the series within parent when set, of those played or started
+// after cutoff when set, with the episodes they started when resumable.
+//
+// As in Jellyfin 12.4, a series is watched once one of its episodes has a
+// date, played or only started (NextUpService.GetNextUpSeriesKeys), and a
+// series none of whose episodes is played comes after the others, dated
+// as never played (TVSeriesManager.GetNextUpBatched).
 func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries, parent *accounts.ID, cutoff *time.Time, resumable bool) ([]library.Item, error) {
 	entries, err := h.UserData.Episodes(ctx, user.ID)
 	if err != nil {
@@ -267,9 +272,9 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 	seen := map[accounts.ID]bool{}
 	for _, e := range entries {
 		data[e.Item] = e.Data
-		// A series is watched once one of its episodes was played on a
-		// date; entries come latest first.
-		if e.Played && e.LastPlayed != nil && !seen[e.Series] {
+		// Entries come latest first: a series' first one with a date
+		// carries its latest.
+		if e.LastPlayed != nil && !seen[e.Series] {
 			seen[e.Series] = true
 			candidates = append(candidates, watching{series: e.Series, latest: e.LastPlayed})
 		}
@@ -320,6 +325,8 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 			next = append(next, *e)
 		}
 	}
+	// The latest played first; series with no episode played, without a
+	// date, last, in the order they were started.
 	slices.SortStableFunc(next, func(a, b entry) int {
 		switch {
 		case before(b.date, a.date):
@@ -426,7 +433,8 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 // order: the first released, unplayed episode after the furthest one
 // played, or the first episode when none was played. Specials are left
 // out. A next episode already started is only offered when resumable is
-// set. date is when the furthest played episode was played.
+// set. date is when the furthest played episode was played, nil when none
+// was.
 func nextEpisode(episodes []library.Item, data map[accounts.ID]userdata.Data, resumable bool) (library.Item, *time.Time, bool) {
 	regular := regularEpisodes(episodes)
 	furthest := -1
