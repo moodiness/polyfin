@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CheckCircleIcon, DeviceMobileIcon, PlusIcon } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router'
 import { approveQuickConnect, lookupQuickConnect, queryClient, queryKeys } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
@@ -18,16 +19,32 @@ import {
   TextInput,
 } from '@/ui'
 
-const codeLength = 6
+/** Jellyfin apps show 6 digits, Silo’s TV apps 8. */
+const shortLength = 6
+const longLength = 8
+/** How long 6 digits wait for more before they are looked up: they may begin 8. */
+const typingPause = 700
 
-/** `/me/quick-connect`: approving a device's Quick Connect code. */
+/**
+ * `/me/quick-connect`: approving a device's Quick Connect code. `?code=` fills it in, as `/activate`
+ * does for the QR code of Silo’s TV apps.
+ */
 export default function QuickConnectRoute() {
   const { language, t } = useI18n()
   const text = t.quickConnect
   const user = useSessionUser()
-  const [code, setCode] = useState('')
+  const [searchParams] = useSearchParams()
+  const [code, setCode] = useState(() =>
+    (searchParams.get('code') ?? '').replace(/\D/g, '').slice(0, longLength),
+  )
+  const [settled, setSettled] = useState(code)
   const [approvedDevice, setApprovedDevice] = useState<string | null>(null)
-  const complete = code.length === codeLength
+  const complete = code.length === longLength || (code.length === shortLength && settled === code)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(code), typingPause)
+    return () => clearTimeout(timer)
+  }, [code])
 
   const lookup = useQuery({
     queryKey: ['quick-connect', code],
@@ -74,12 +91,12 @@ export default function QuickConnectRoute() {
                     value={code}
                     onValue={(value) => {
                       approve.reset()
-                      setCode(value.replace(/\D/g, '').slice(0, codeLength))
+                      setCode(value.replace(/\D/g, '').slice(0, longLength))
                     }}
                     inputMode="numeric"
                     autoComplete="one-time-code"
-                    pattern="[0-9]{6}"
-                    maxLength={codeLength}
+                    pattern="[0-9]{6}([0-9]{2})?"
+                    maxLength={longLength}
                     placeholder="000000"
                     autoFocus
                     mono

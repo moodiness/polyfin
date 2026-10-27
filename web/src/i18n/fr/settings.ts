@@ -53,7 +53,7 @@ const settings: typeof en = {
       `De ${r.min} à ${r.max} caractères, affiché dans les applications Jellyfin.`,
     quickConnect: 'Autoriser Quick Connect',
     quickConnectHelp:
-      'Permet aux applications TV et mobiles de se connecter avec un code à 6 chiffres autorisé ici.',
+      'Permet aux applications TV et mobiles de se connecter avec un code autorisé ici : 6 chiffres pour les applications Jellyfin, 8 pour les applications TV de Silo tant que les applications de Silo sont autorisées.',
     language: 'Langue des noms générés',
     languageHelp:
       'Polyfin nomme lui-même certains éléments dans les applications Jellyfin : les saisons (« Saison 1 », « Épisodes spéciaux »), les épisodes sans titre et le type ajouté aux bibliothèques de même nom (« Populaires (Films) »).',

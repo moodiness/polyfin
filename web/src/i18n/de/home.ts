@@ -13,7 +13,7 @@ const home: typeof en = {
   quickConnect: {
     title: 'Quick Connect',
     description:
-      'Melde eine TV- oder Smartphone-App an, ohne dein Passwort einzugeben: Wähle in der App Quick Connect und gib dann den 6-stelligen Code ein, den sie anzeigt.',
+      'Melde eine TV- oder Smartphone-App an, ohne dein Passwort einzugeben: Wähle in einer Jellyfin-App Quick Connect oder öffne die Silo-App auf einem Fernseher und gib dann den Code ein, den sie anzeigt.',
     code: 'Quick-Connect-Code',
     codeHint: 'Codes laufen nach 10 Minuten ab.',
     lookingUp: 'Gerät wird gesucht…',
@@ -26,8 +26,8 @@ const home: typeof en = {
     approved: (device: string, user: string) => `${device} ist jetzt als ${user} angemeldet.`,
     another: 'Weiteres Gerät freigeben',
     steps: [
-      'Öffne die Jellyfin-App auf dem Gerät und wähle Quick Connect.',
-      'Gib hier den 6-stelligen Code ein, den sie anzeigt.',
+      'Wähle auf dem Gerät Quick Connect in einer Jellyfin-App oder öffne die Silo-App auf einem Fernseher.',
+      'Gib hier den Code ein, den sie anzeigt: 6 Ziffern bei Jellyfin, 8 bei Silo.',
       'Prüfe das Gerät und gib es dann frei.',
     ],
     stepsLabel: 'So funktioniert’s',

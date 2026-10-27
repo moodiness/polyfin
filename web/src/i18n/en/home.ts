@@ -12,7 +12,7 @@ const home = {
   quickConnect: {
     title: 'Quick Connect',
     description:
-      'Sign in a TV or phone app without typing your password: choose Quick Connect in the app, then enter the 6-digit code it shows.',
+      'Sign in a TV or phone app without typing your password: choose Quick Connect in a Jellyfin app, or open Silo’s app on a TV, then enter the code it shows.',
     code: 'Quick Connect code',
     codeHint: 'Codes expire after 10 minutes.',
     lookingUp: 'Looking for the device…',
@@ -25,8 +25,8 @@ const home = {
     approved: (device: string, user: string) => `${device} is now signed in as ${user}.`,
     another: 'Approve another device',
     steps: [
-      'Open the Jellyfin app on the device and choose Quick Connect.',
-      'Type the 6-digit code it shows here.',
+      'On the device, choose Quick Connect in a Jellyfin app, or open Silo’s app on a TV.',
+      'Type the code it shows here: 6 digits from Jellyfin, 8 from Silo.',
       'Check the device, then approve it.',
     ],
     stepsLabel: 'How it works',

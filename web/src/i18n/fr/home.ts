@@ -13,7 +13,7 @@ const home: typeof en = {
   quickConnect: {
     title: 'Quick Connect',
     description:
-      'Connectez une application TV ou mobile sans saisir votre mot de passe : choisissez Quick Connect dans l’application, puis saisissez le code à 6 chiffres qu’elle affiche.',
+      'Connectez une application TV ou mobile sans saisir votre mot de passe : choisissez Quick Connect dans une application Jellyfin, ou ouvrez l’application de Silo sur une TV, puis saisissez le code qu’elle affiche.',
     code: 'Code Quick Connect',
     codeHint: 'Les codes expirent au bout de 10 minutes.',
     lookingUp: 'Recherche de l’appareil…',
@@ -27,8 +27,8 @@ const home: typeof en = {
       `${device} est maintenant connecté avec le compte ${user}.`,
     another: 'Autoriser un autre appareil',
     steps: [
-      'Ouvrez l’application Jellyfin sur l’appareil et choisissez Quick Connect.',
-      'Saisissez ici le code à 6 chiffres qu’elle affiche.',
+      'Sur l’appareil, choisissez Quick Connect dans une application Jellyfin, ou ouvrez l’application de Silo sur une TV.',
+      'Saisissez ici le code qu’elle affiche : 6 chiffres pour Jellyfin, 8 pour Silo.',
       'Vérifiez l’appareil, puis autorisez-le.',
     ],
     stepsLabel: 'Comment ça marche',

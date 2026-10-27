@@ -13,7 +13,7 @@ const home: typeof en = {
   quickConnect: {
     title: 'Quick Connect',
     description:
-      'Inicie sesión en una aplicación de televisión o de móvil sin escribir su contraseña: elija Quick Connect en la aplicación y, a continuación, introduzca el código de 6 dígitos que se muestra.',
+      'Inicie sesión en una aplicación de televisión o de móvil sin escribir su contraseña: elija Quick Connect en una aplicación de Jellyfin, o abra la aplicación de Silo en un televisor, y, a continuación, introduzca el código que se muestra.',
     code: 'Código de Quick Connect',
     codeHint: 'Los códigos caducan a los 10 minutos.',
     lookingUp: 'Buscando el dispositivo…',
@@ -26,8 +26,8 @@ const home: typeof en = {
     approved: (device: string, user: string) => `${device} ha iniciado sesión como ${user}.`,
     another: 'Aprobar otro dispositivo',
     steps: [
-      'Abra la aplicación de Jellyfin en el dispositivo y elija Quick Connect.',
-      'Escriba aquí el código de 6 dígitos que se muestra.',
+      'En el dispositivo, elija Quick Connect en una aplicación de Jellyfin, o abra la aplicación de Silo en un televisor.',
+      'Escriba aquí el código que se muestra: 6 dígitos en Jellyfin, 8 en Silo.',
       'Compruebe el dispositivo y, a continuación, apruébelo.',
     ],
     stepsLabel: 'Cómo funciona',

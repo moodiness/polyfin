@@ -53,7 +53,7 @@ const settings: typeof en = {
       `De ${r.min} a ${r.max} caracteres; se muestra en las aplicaciones de Jellyfin.`,
     quickConnect: 'Permitir Quick Connect',
     quickConnectHelp:
-      'Permite que las aplicaciones de televisión y móvil inicien sesión con un código de 6 dígitos aprobado aquí.',
+      'Permite que las aplicaciones de televisión y móvil inicien sesión con un código aprobado aquí: 6 dígitos en las aplicaciones de Jellyfin, 8 en las aplicaciones de Silo para televisor mientras estén permitidas.',
     language: 'Idioma de los nombres generados',
     languageHelp:
       'Polyfin asigna él mismo algunos nombres en las aplicaciones de Jellyfin: las temporadas («Temporada 1», «Especiales»), los episodios sin título y el tipo que se añade a las bibliotecas que comparten nombre («Populares (Películas)»).',

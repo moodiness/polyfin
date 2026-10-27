@@ -49,7 +49,8 @@ const settings = {
     serverName: 'Server name',
     serverNameHelp: (r: RangeText) => `${r.min} to ${r.max} characters, shown in Jellyfin apps.`,
     quickConnect: 'Allow Quick Connect',
-    quickConnectHelp: 'Lets TV and phone apps sign in with a 6-digit code approved here.',
+    quickConnectHelp:
+      'Lets TV and phone apps sign in with a code approved here: 6 digits from Jellyfin apps, 8 from Silo’s TV apps while Silo’s apps are allowed.',
     language: 'Language of generated names',
     languageHelp:
       'Polyfin names some things itself in Jellyfin apps: seasons (“Season 1”, “Specials”), episodes without a title, and the type added to libraries that share a name (“Popular (Movies)”).',
