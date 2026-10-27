@@ -1,6 +1,6 @@
 # Development
 
-This page explains how to run Polyfin from source, run its tests, refresh the Jellyfin fixtures, and work on the website.
+This page explains how to run Polyfin from source, run its tests, refresh the Jellyfin fixtures, follow Silo's changes, and work on the website.
 
 ## Requirements
 
@@ -35,6 +35,30 @@ make check                    # formatting, vet and tests
 Jellyfin API responses are checked against the JSON structure of a real Jellyfin 12.2 server, recorded in `internal/jellyfin/testdata/`. Jellyfin 12.3 answers the same: recorded again from it with the same scripts, its answers differ only in identifiers, dates, timings and the encoded clips' bitrates, so the 12.2 recordings stand for both. Jellyfin 12.4 changes only its .NET packages and its version, so they stand for it too.
 
 `scripts/jellyfin-fixtures.sh` records them again from a disposable Jellyfin container. It requires Docker, curl and jq.
+
+## Following Silo
+
+Polyfin answers Silo's apps from Silo's contract, and from the rules its apps apply, at the commits [`internal/silo/followed.json`](../internal/silo/followed.json) records ([Silo's apps](silo-apps.md#the-contract-followed)). Each Monday, and when run by hand, the workflow `.github/workflows/silo-follow.yml` runs `scripts/silofollow`, which compares that record with the main branches of Silo-Server/silo-server, silo-apple and silo-android, keeping none of their code:
+
+- in the contract, the operations Polyfin's routes serve (`silo.Operations`), with their parameters, request bodies and answers, through the schemas they name, leaving out descriptions, summaries and examples;
+- in each app, the files the record lists, through GitHub's compare API.
+
+When something changed, the workflow opens the issue "Silo changed since the commits Polyfin follows", labelled `clients`, or updates the open one, with the report; when nothing changed, it does nothing, and on an error it fails. Its token may only read the repository and write issues.
+
+```sh
+go run ./scripts/silofollow                                 # the report for today's main branches
+go run ./scripts/silofollow -ref silo-apple=<commit>        # another commit of a repository
+DRY_RUN=1 GH_REPO=moodiness/polyfin scripts/silofollow/issue.sh report.md   # what the workflow would open or update
+```
+
+The tool exits with 0 when nothing changed, 1 when something did, and 2 on an error; `go run` turns every failure into 1, so the workflow builds it first. It reads `GITHUB_TOKEN` or `GH_TOKEN` when set, and waits out GitHub's rate limit; without a token, GitHub's 60 requests an hour are enough for a run.
+
+To follow new commits, once the issue is read:
+
+1. Read the app files that changed, and the rules of `internal/silo/silotest` that cite them. Change the rules and Polyfin's answers where the apps changed, citing the code; a rule citing a new file adds its path to the app's `files` in the record.
+2. Read the contract's changes, and change Polyfin's answers where they need it.
+3. In `followed.json`, set each `commit` to the one read, the report's "now at", and the contract's `sha256` to the new file's, which system info gives the apps as `contract_digest`: `curl -sL https://raw.githubusercontent.com/Silo-Server/silo-server/<commit>/contracts/api/v2/openapi.json | shasum -a 256`.
+4. Run the tool again: it fails when a listed file is not in its app at the commit recorded, or when the SHA-256 is not the contract's. Close the issue; the next change opens a new one.
 
 ## Website
 

@@ -1,0 +1,59 @@
+name: Follow Silo
+
+# Each week, reports what changed in Silo since the commits Polyfin
+# follows (internal/silo/followed.json): in the operations of its contract
+# Polyfin serves, and in the files of its apps the rules of
+# internal/silo/silotest cite. When something did, it opens an issue, or
+# updates the open one, so that the rules are read again.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: silo-follow
+  cancel-in-progress: false
+
+jobs:
+  follow:
+    name: Compare Silo with the commits followed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Build the comparison
+        run: go build -o "$RUNNER_TEMP/silofollow" ./scripts/silofollow
+      - name: Compare Silo's repositories with the commits followed
+        id: compare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          status=0
+          "$RUNNER_TEMP/silofollow" >"$RUNNER_TEMP/silo-report.md" || status=$?
+          case "$status" in
+            0) echo "Nothing changed since the commits followed." ;;
+            1)
+              tee -a "$GITHUB_STEP_SUMMARY" <"$RUNNER_TEMP/silo-report.md"
+              echo "changed=true" >>"$GITHUB_OUTPUT"
+              ;;
+            *) exit "$status" ;;
+          esac
+      - name: Open or update the issue
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: scripts/silofollow/issue.sh "$RUNNER_TEMP/silo-report.md"
