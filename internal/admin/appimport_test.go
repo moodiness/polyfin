@@ -507,7 +507,7 @@ func TestUsersImportAStremioProfileItsPinOpens(t *testing.T) {
 		t.Fatalf("Alice's PIN: %d %v", status, opened)
 	}
 	noStremioSecret(t, opened)
-	if raw, _ := json.Marshal(opened); strings.Contains(string(raw), stremiotest.SamplePin) {
+	if raw, _ := json.Marshal(opened); holdsSecret(string(raw), stremiotest.SamplePin) {
 		t.Errorf("the answer holds the PIN: %s", raw)
 	}
 	alice = profileOf(t, opened, "Alice")

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -128,10 +129,71 @@ func (a appConnectionsAPI) checkSecrets(t *testing.T, kept ...string) {
 			t.Errorf("a sign-in is stored unsealed: %q", signIn)
 		}
 	}
+	log := a.log.String()
 	for _, secret := range kept {
-		if secret != "" && strings.Contains(a.log.String(), secret) {
+		if secret != "" && holdsSecret(log, secret) {
 			t.Errorf("the log holds %q", secret)
 		}
+	}
+}
+
+// shortSecret is the length up to which a secret, such as a PIN, is too
+// short to be told apart from chance by a plain substring check: the
+// random user ids of the log and import keys of the answers are 32
+// hexadecimal digits, and one holds "4826" about once in 1,600 runs;
+// durations, times and ports hold digits too. A token or a key is far too
+// long for that.
+const shortSecret = 8
+
+// holdsSecret tells whether text, a log or an answer, holds secret. A
+// short secret counts only standing alone, not inside a longer number or
+// word: "pin=4826", "?pin=4826&", `"pin":"4826"`, and its URL-encoded and
+// escaped forms ("pin%3D4826", "\n4826") hold it; "user_id=…e04826a…" and
+// "took=1.248265ms" do not. A longer secret counts anywhere.
+func holdsSecret(text, secret string) bool {
+	if len(secret) > shortSecret {
+		return strings.Contains(text, secret)
+	}
+	alone := regexp.MustCompile(`(?:^|[^0-9A-Za-z]|%[0-9A-Fa-f]{2}|\\[nrt])` + regexp.QuoteMeta(secret) + `(?:[^0-9A-Za-z]|$)`)
+	return alone.MatchString(text)
+}
+
+// The secret check finds a PIN a log or an answer holds in any form, and
+// not the PIN's digits that a random number holds by chance.
+func TestTheSecretCheckTellsALeakFromChance(t *testing.T) {
+	t.Parallel()
+	pin := stremiotest.SamplePin
+	logged := func(args ...any) string {
+		var log bytes.Buffer
+		slog.New(slog.NewTextHandler(&log, nil)).Info("A line", args...)
+		return log.String()
+	}
+	for name, text := range map[string]string{
+		"a user id":  logged("user_id", "5f1c09a2b7e048269d1e3c7a0b5f2e61"),
+		"a duration": logged("took", 1248265*time.Nanosecond),
+		"a port":     logged("error", "dial tcp 127.0.0.1:54826: connect: connection refused"),
+		"a size":     logged("bytes", 148260),
+		"an answer":  `{"address":"http://127.0.0.1:54826/…/manifest.json","key":"5f1c09a2b7e048269d1e3c7a0b5f2e61"}`,
+	} {
+		if holdsSecret(text, pin) {
+			t.Errorf("%s holds the PIN: %s", name, text)
+		}
+	}
+	for name, text := range map[string]string{
+		"plain":       logged("pin", pin),
+		"a query":     logged("url", "https://app.example/api?pin="+pin+"&profile=3"),
+		"JSON":        logged("body", `{"pin":"`+pin+`"}`),
+		"URL-encoded": logged("url", "https://app.example/?next=%2Fapi%3Fpin%3D"+pin),
+		"on a line":   logged("error", "the answer:\n"+pin),
+		"an answer":   `{"key":"5f1c09a2b7e048269d1e3c7a0b5f2e61","pin":"` + pin + `"}`,
+	} {
+		if !holdsSecret(text, pin) {
+			t.Errorf("%s does not hold the PIN: %s", name, text)
+		}
+	}
+	// A long secret counts anywhere, even inside a word.
+	if !holdsSecret(logged("key", "x0123456789abcdefx"), "0123456789abcdef") {
+		t.Error("a long secret inside a word is not found")
 	}
 }
 
