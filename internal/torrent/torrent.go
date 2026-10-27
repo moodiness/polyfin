@@ -65,12 +65,18 @@ const (
 	// chokeEvery how often the peers shared with are chosen again.
 	checkEvery = 5 * time.Second
 	chokeEvery = 10 * time.Second
-	// dhtEvery is how often the DHT is looked up again, dhtAgain how soon
-	// after a lookup that found no peer or could not be made, and
-	// maxNodesLearned how many nodes peers tell are kept.
+	// dhtEvery is how often the DHT is looked up again once the torrent
+	// has a peer, dhtAgain how soon while it has none, or after a lookup
+	// that found no peer or could not be made: peers a lookup found may
+	// all be gone or unreachable, and the next lookup may find others
+	// within the torrent's start. maxNodesLearned is how many nodes peers
+	// tell are kept.
 	dhtEvery        = 5 * time.Minute
 	dhtAgain        = 15 * time.Second
 	maxNodesLearned = 50
+	// keptPeers is how many of the peers a torrent connected to it keeps
+	// for its next run (see Engine.keep).
+	keptPeers = 50
 )
 
 // errStopped reports a read of a torrent that stopped: its playback ended.
@@ -126,6 +132,20 @@ type torrent struct {
 	announces map[string]error
 	looked    bool
 
+	// extra are the trackers of the settings that no listing of the
+	// torrent named (see Settings.Trackers). A private torrent's trackers
+	// are its own (BEP 27): extraCtx, from which their announces run,
+	// ends once its info tells it is private.
+	extra     map[string]bool
+	extraCtx  context.Context
+	stopExtra context.CancelFunc
+	// reached are the peers the torrent connected to, the latest last,
+	// keptPeers at most, and closest the DHT nodes nearest the torrent
+	// that answered its last lookup: both are kept once it stops, for its
+	// next run (see Engine.keep).
+	reached []netip.AddrPort
+	closest []string
+
 	// duplicates counts the blocks asked of more than one peer, once for
 	// each peer past the first.
 	duplicates int
@@ -176,33 +196,104 @@ func newTorrent(e *Engine, spec Spec, route Route, udp bool) *torrent {
 		trackers: slices.Clone(spec.Trackers), nodes: slices.Clone(spec.Nodes), dht: spec.DHT,
 		inflight: map[int]*inflightPiece{}, peers: map[netip.AddrPort]*peer{}, known: map[netip.AddrPort]candidate{},
 		flags: map[netip.AddrPort]byte{}, reads: map[*Reader]readSpan{}, changed: make(chan struct{}),
-		flowing: make(chan struct{}), announces: map[string]error{}}
+		flowing: make(chan struct{}), announces: map[string]error{}, extra: map[string]bool{}}
+	t.extraCtx, t.stopExtra = context.WithCancel(ctx)
 	return t
 }
 
-// start runs the torrent's swarm until it stops.
-func (t *torrent) start() {
+// seed starts a new run of the torrent from what its last run learned:
+// its info dictionary, which no peer then needs to send, the peers it
+// connected to, dialed first, and the DHT nodes nearest it, which its
+// first lookup starts from. Called before start.
+func (t *torrent) seed(kept keptRun) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if kept.info != nil {
+		t.info, t.infoData = kept.info, kept.infoData
+		t.have = make([]bool, len(kept.info.Pieces))
+		if kept.info.Private {
+			t.stopExtra()
+		}
+	}
+	for _, address := range kept.peers {
+		if !t.knows(address) {
+			t.known[address] = candidate{}
+			t.queue = append(t.queue, address)
+		}
+	}
+	t.closest = slices.Clone(kept.nodes)
+}
+
+// addExtra adds the trackers of the settings that the torrent's listings
+// do not name (see Settings.Trackers), and returns those it added. A
+// private torrent takes none. The lock is held.
+func (t *torrent) addExtra(trackers []string) []string {
+	if t.extraCtx.Err() != nil {
+		return nil
+	}
+	var added []string
+	for _, tracker := range trackers {
+		if !slices.Contains(t.trackers, tracker) {
+			t.trackers = append(t.trackers, tracker)
+			t.extra[tracker] = true
+			added = append(added, tracker)
+		}
+	}
+	return added
+}
+
+// named counts the trackers the torrent's listings name, those of the
+// settings aside. The lock is held.
+func (t *torrent) named() int {
+	return len(t.trackers) - len(t.extra)
+}
+
+// start runs the torrent's swarm until it stops, with extra, the trackers
+// of the settings, besides those its listing names.
+func (t *torrent) start(extra []string) {
 	go t.watch()
 	go t.connect()
 	t.mu.Lock()
+	t.addExtra(extra)
 	trackers := slices.Clone(t.trackers)
 	t.mu.Unlock()
 	for _, tracker := range trackers {
-		go t.announce(tracker)
+		t.goAnnounce(tracker)
 	}
 	go t.lookup()
 }
 
-// merge adds the trackers and nodes of another listing of the torrent.
-func (t *torrent) merge(spec Spec) {
+// goAnnounce announces the torrent to a tracker until it stops, or, for
+// one of the settings, until its info tells it is private.
+func (t *torrent) goAnnounce(tracker string) {
+	t.mu.Lock()
+	ctx := t.ctx
+	if t.extra[tracker] {
+		ctx = t.extraCtx
+	}
+	t.mu.Unlock()
+	if ctx.Err() == nil {
+		go t.announce(ctx, tracker)
+	}
+}
+
+// merge adds the trackers and nodes of another listing of the torrent,
+// and extra, the trackers of the settings now.
+func (t *torrent) merge(spec Spec, extra []string) {
 	t.mu.Lock()
 	var added []string
 	for _, tracker := range spec.Trackers {
+		if t.extra[tracker] {
+			// Announced already, now named by a listing too.
+			delete(t.extra, tracker)
+			continue
+		}
 		if !slices.Contains(t.trackers, tracker) {
 			t.trackers = append(t.trackers, tracker)
 			added = append(added, tracker)
 		}
 	}
+	added = append(added, t.addExtra(extra)...)
 	for _, node := range spec.Nodes {
 		if !slices.Contains(t.nodes, node) {
 			t.nodes = append(t.nodes, node)
@@ -211,7 +302,7 @@ func (t *torrent) merge(spec Spec) {
 	t.dht = t.dht || spec.DHT
 	t.mu.Unlock()
 	for _, tracker := range added {
-		go t.announce(tracker)
+		t.goAnnounce(tracker)
 	}
 }
 
@@ -457,6 +548,10 @@ func (t *torrent) join(address netip.AddrPort) *peer {
 	p := newPeer(t, conn, address)
 	p.joined = time.Now()
 	t.peers[address] = p
+	t.reached = append(slices.DeleteFunc(t.reached, func(a netip.AddrPort) bool { return a == address }), address)
+	if len(t.reached) > keptPeers {
+		t.reached = slices.Delete(t.reached, 0, len(t.reached)-keptPeers)
+	}
 	over := "TCP"
 	if overUTP(p) {
 		over = "uTP"
@@ -716,18 +811,18 @@ func (t *torrent) probe(p *peer, now time.Time) bool {
 	return false
 }
 
-// announce asks a tracker for peers until the torrent stops, then tells it
-// the torrent stopped.
-func (t *torrent) announce(tracker string) {
+// announce asks a tracker for peers until ctx, the torrent's or that of
+// the settings' trackers, is done, then tells it the torrent stopped.
+func (t *torrent) announce(ctx context.Context, tracker string) {
 	defer t.recovered("tracker announce", nil)
 	event := "started"
 	failures := 0
 	for {
-		answer, err := announceTo(t.ctx, t.route, tracker, t.announced(event), t.udp)
+		answer, err := announceTo(ctx, t.route, tracker, t.announced(event), t.udp)
 		if errors.Is(err, errTrackerUDP) {
 			return
 		}
-		if t.ctx.Err() == nil {
+		if ctx.Err() == nil {
 			t.mu.Lock()
 			t.announces[tracker] = err
 			t.mu.Unlock()
@@ -736,7 +831,7 @@ func (t *torrent) announce(tracker string) {
 		if err != nil {
 			failures++
 			wait = min(time.Duration(failures)*15*time.Second, 5*time.Minute)
-			if t.ctx.Err() == nil {
+			if ctx.Err() == nil {
 				t.engine.config.Logger.Debug("A tracker could not be reached", "tracker", trackerHost(tracker), "error", err)
 			}
 		} else {
@@ -747,7 +842,7 @@ func (t *torrent) announce(tracker string) {
 		}
 		timer := time.NewTimer(wait)
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			timer.Stop()
 			if event == "" && !t.failed() {
 				// The tracker forgets Polyfin, over the route still up.
@@ -775,21 +870,33 @@ func (t *torrent) announced(event string) announce {
 
 // lookup looks the torrent's peers up on the DHT while it runs, when the
 // route carries UDP and its sources ask for it or name no tracker, from
-// the nodes they name and the engine's bootstrap nodes. It ends once the
-// torrent's info tells it is private (BEP 27).
+// the nodes nearest the torrent that answered its last lookup, the nodes
+// its sources name and the engine's bootstrap nodes. While the torrent
+// has no peer, it looks again every dhtAgain, whether the last lookup
+// found peers or not: those may all be gone or unreachable. Once it has
+// one, it looks again dhtEvery after the last lookup that found peers.
+// It ends once the torrent's info tells it is private (BEP 27).
 func (t *torrent) lookup() {
 	defer t.recovered("DHT lookup", nil)
+	var found time.Time
 	for {
 		t.mu.Lock()
 		private := t.private()
-		on, starts := t.usesDHT(), slices.Concat(t.nodes, t.engine.config.Bootstrap)
+		on, starts := t.usesDHT(), slices.Concat(t.closest, t.nodes, t.engine.config.Bootstrap)
+		connected := len(t.peers) > 0
 		t.mu.Unlock()
 		if private {
 			return
 		}
-		wait := dhtAgain
-		if on && len(starts) > 0 && t.lookupOnce(starts) {
-			wait = dhtEvery
+		wait := t.engine.lookupAgain()
+		switch {
+		case connected && !found.IsZero() && time.Since(found) < dhtEvery:
+			wait = dhtEvery - time.Since(found)
+		case on && len(starts) > 0:
+			found = time.Time{}
+			if t.lookupOnce(starts) {
+				found = time.Now()
+			}
 		}
 		timer := time.NewTimer(wait)
 		select {
@@ -829,19 +936,24 @@ func (t *torrent) lookupOnce(starts []string) bool {
 		t.mu.Unlock()
 	}()
 	found := false
-	_ = lookupPeers(ctx, conn, t.hash, starts, func(peers []netip.AddrPort) {
+	closest, _ := lookupPeers(ctx, conn, t.hash, starts, func(peers []netip.AddrPort) {
 		found = true
 		t.addPeers(peers)
 	})
+	if len(closest) > 0 {
+		t.mu.Lock()
+		t.closest = closest
+		t.mu.Unlock()
+	}
 	return found
 }
 
 // usesDHT reports whether the torrent is looked up on the DHT: its route
 // carries UDP, and its sources ask for it or name no tracker, the DHT
-// being then the only way to its peers, and it is not private. The lock
-// is held.
+// being then the only way to its peers, whatever the settings add, and it
+// is not private. The lock is held.
 func (t *torrent) usesDHT() bool {
-	return t.udp && (t.dht || len(t.trackers) == 0) && !t.private()
+	return t.udp && (t.dht || t.named() == 0) && !t.private()
 }
 
 // private reports whether the torrent's info is known and tells it is
@@ -1404,6 +1516,10 @@ func (t *torrent) receivedMetadata(index int64, data []byte) {
 		// A private torrent is not looked up on the DHT.
 		t.stopLookup()
 	}
+	if info.Private {
+		// Nor announced to the trackers of the settings.
+		t.stopExtra()
+	}
 	t.signal()
 }
 
@@ -1508,21 +1624,23 @@ func (r *Reader) Close() error {
 	return nil
 }
 
-// waitInfo waits for the torrent's info dictionary. Past the engine's
-// StartTimeout without it, the torrent did not start: a *StartError tells
-// what came of the search for its peers.
+// waitInfo waits for the torrent's start: its info dictionary, and a peer
+// connected, which sent the info or, when the torrent's last run kept it
+// (see seed), may send its pieces. Past the engine's StartTimeout
+// without them, the torrent did not start: a *StartError tells what came
+// of the search for its peers.
 func (t *torrent) waitInfo(ctx context.Context) (*Info, error) {
 	started := time.Now()
 	deadline := time.NewTimer(t.engine.config.StartTimeout)
 	defer deadline.Stop()
 	for {
 		t.mu.Lock()
-		info, err, changed := t.info, t.err, t.changed
+		info, err, changed, reached := t.info, t.err, t.changed, len(t.reached) > 0
 		t.mu.Unlock()
 		if err != nil {
 			return nil, err
 		}
-		if info != nil {
+		if info != nil && reached {
 			return info, nil
 		}
 		select {

@@ -37,8 +37,11 @@ type StartError struct {
 	// Trackers counts the trackers announced to, Answered those that
 	// answered, Refused those that refused the announce; the others did not
 	// answer. UDPOff counts the UDP trackers left out, the route carrying
-	// no UDP.
-	Trackers, Answered, Refused, UDPOff int
+	// no UDP. Added counts those of Trackers that the settings add (see
+	// Settings.Trackers), and NoneNamed tells that the addon's sources
+	// named no tracker.
+	Trackers, Answered, Refused, UDPOff, Added int
+	NoneNamed                                  bool
 	// DHT tells whether the DHT was looked up, and NoUDP that it could not
 	// be, the route carrying no UDP.
 	DHT, NoUDP bool
@@ -80,7 +83,19 @@ func (e *StartError) Error() string {
 	if unconnected := e.Unconnected.String(); unconnected != "" {
 		fmt.Fprintf(&b, " (%s)", unconnected)
 	}
-	fmt.Fprintf(&b, "; %d trackers, %d answered, %d refused the announce", e.Trackers, e.Answered, e.Refused)
+	switch {
+	case e.Trackers == 0 && e.UDPOff == 0 && e.NoneNamed:
+		b.WriteString("; no tracker: the addon named none")
+	default:
+		fmt.Fprintf(&b, "; %d trackers", e.Trackers)
+		switch {
+		case e.Added > 0 && e.NoneNamed:
+			b.WriteString(" (the addon named none, all of the settings)")
+		case e.Added > 0:
+			fmt.Fprintf(&b, " (%d of the settings)", e.Added)
+		}
+		fmt.Fprintf(&b, ", %d answered, %d refused the announce", e.Answered, e.Refused)
+	}
 	if e.UDPOff > 0 {
 		fmt.Fprintf(&b, ", %d over UDP left out", e.UDPOff)
 	}
@@ -232,13 +247,16 @@ func (e *Engine) startedOne() {
 // lock is held.
 func (t *torrent) startError(after time.Duration) *StartError {
 	err := &StartError{After: after, Found: len(t.known), Connected: len(t.peers), Unconnected: t.unconnected(), NoUDP: !t.udp,
-		DHT: t.looked}
+		DHT: t.looked, NoneNamed: t.named() == 0}
 	for _, tracker := range t.trackers {
 		if strings.HasPrefix(tracker, "udp:") && !t.udp {
 			err.UDPOff++
 			continue
 		}
 		err.Trackers++
+		if t.extra[tracker] {
+			err.Added++
+		}
 		switch outcome, asked := t.announces[tracker]; {
 		case !asked:
 		case outcome == nil:

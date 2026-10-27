@@ -1,8 +1,8 @@
 // Package torrenttest runs, on the loopback interface, what tests of
 // torrents need: a torrent built from bytes, peers seeding or leeching it
-// over TCP, or seeding it over uTP alone, HTTP and UDP trackers, a SOCKS5
-// proxy with or without UDP ASSOCIATE, and a DHT node. None of them
-// reaches anything else.
+// over TCP, or seeding it over uTP alone, peers that never answer, HTTP
+// and UDP trackers, a SOCKS5 proxy with or without UDP ASSOCIATE, and a
+// DHT node. None of them reaches anything else.
 package torrenttest
 
 import (
@@ -177,6 +177,52 @@ type Peer struct {
 	// keepAlive, when set, has the peer send a keep-alive that often.
 	keepAlive time.Duration
 	asks      map[int]int
+	// noMetadata has a seeder offer no info dictionary (BEP 9), as a
+	// client that takes no part in it: it sends pieces alone.
+	noMetadata bool
+}
+
+// HideMetadata has a seeder offer no info dictionary from its next
+// connection on: a torrent that does not know it yet cannot start from
+// this peer alone.
+func (p *Peer) HideMetadata() {
+	p.mu.Lock()
+	p.noMetadata = true
+	p.mu.Unlock()
+}
+
+// Silent returns the address of a peer on host that accepts connections
+// and never answers them, as one whose address the DHT keeps but that is
+// gone or cannot be reached: its dials time out. Nothing answers on its
+// UDP port either.
+func Silent(tb testing.TB, host string) netip.AddrPort {
+	tb.Helper()
+	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+	if err != nil {
+		tb.Fatal(err)
+	}
+	var mu sync.Mutex
+	var conns []net.Conn
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			conns = append(conns, conn)
+			mu.Unlock()
+		}
+	}()
+	tb.Cleanup(func() {
+		listener.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, conn := range conns {
+			conn.Close()
+		}
+	})
+	return netip.MustParseAddrPort(listener.Addr().String())
 }
 
 // Seed starts a seeder of t listening on host ("127.0.0.1" for most tests).
@@ -455,7 +501,10 @@ func (p *Peer) serve(conn net.Conn) {
 		return
 	}
 	metadataSize := 0
-	if p.seed {
+	p.mu.Lock()
+	hidden := p.noMetadata
+	p.mu.Unlock()
+	if p.seed && !hidden {
 		metadataSize = len(p.torrent.Info)
 	}
 	extended := map[string]any{"m": map[string]any{"ut_metadata": 3}}
@@ -700,7 +749,7 @@ func (p *Peer) serve(conn net.Conn) {
 					}
 				}
 			}
-			if len(payload) > 0 && payload[0] == 3 && p.seed {
+			if len(payload) > 0 && payload[0] == 3 && p.seed && !hidden {
 				// A metadata request: msg_type 0 and its piece.
 				piece := 0
 				if i := bytes.Index(payload, []byte("5:piecei")); i >= 0 {

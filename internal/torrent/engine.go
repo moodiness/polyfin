@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/netip"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -42,6 +43,40 @@ type Settings struct {
 	// their playbacks included, 0 for no limit: a torrent that would be
 	// one more does not start (see ErrAtCap).
 	AtOnce int
+	// Trackers are announced to for every torrent besides those its
+	// sources name, MaxTrackers at most (see ValidTracker), but for a
+	// private one, whose trackers are its own (BEP 27). They leave the
+	// DHT as it is: a torrent whose sources name no tracker is still
+	// looked up there.
+	Trackers []string
+}
+
+// routeSettings are the settings that make the route.
+type routeSettings struct {
+	Interface, Proxy, ProxyUser, ProxyPassword, WireGuard string
+}
+
+// keptFor is how long what a torrent learned is kept once it stopped,
+// for its next run (see Engine.keep): a replay after a refresh, or the
+// next play of the title within the 15 minutes a failed version is left
+// out. maxKept bounds the torrents kept, and maxKeptInfo the bytes their
+// info dictionaries take.
+const (
+	keptFor     = 15 * time.Minute
+	maxKept     = 64
+	maxKeptInfo = 64 << 20
+)
+
+// keptRun is what a stopped torrent learned, for its next run until
+// until: the peers it connected to, the latest first, its info
+// dictionary, nil when none came, and the DHT nodes nearest it that
+// answered its last lookup.
+type keptRun struct {
+	peers    []netip.AddrPort
+	info     *Info
+	infoData []byte
+	nodes    []string
+	until    time.Time
 }
 
 // RouteOf returns the route settings describe, ErrNoRoute for none;
@@ -102,15 +137,17 @@ type Engine struct {
 	// shorten them.
 	dropWait, idleTimeout time.Duration
 	// redialWait, when set, replaces how long a peer waits before it is
-	// dialed again (see torrent.redial); tests shorten it.
-	redialWait time.Duration
+	// dialed again (see torrent.redial), and dhtAgainWait how soon the
+	// DHT is looked up again while a torrent has no peer (see
+	// torrent.lookup); tests shorten them.
+	redialWait, dhtAgainWait time.Duration
 	// utpOff, set by tests, reaches peers over TCP alone.
 	utpOff bool
 
 	mu       sync.Mutex
 	torrents map[Hash]*torrent
 	// routeKey and route are the route of the settings last read.
-	routeKey Settings
+	routeKey routeSettings
 	route    Route
 	// failure is why torrents last could not play, and when.
 	failure   error
@@ -125,6 +162,8 @@ type Engine struct {
 	// removed is closed, and replaced, as a torrent stops (see
 	// AdmitsWithin).
 	removed chan struct{}
+	// kept is what stopped torrents learned, by info hash (see keep).
+	kept map[Hash]keptRun
 }
 
 // New returns an engine keeping pieces in config.Dir.
@@ -140,7 +179,7 @@ func New(config Config) (*Engine, error) {
 		return nil, err
 	}
 	e := &Engine{config: config, store: s, torrents: map[Hash]*torrent{}, removed: make(chan struct{}), checkEvery: checkEvery, dropWait: dropWait,
-		idleTimeout: idleTimeout}
+		idleTimeout: idleTimeout, kept: map[Hash]keptRun{}}
 	e.peerID = newPeerID()
 	mbps := func(n int) int64 { return int64(n) * 1_000_000 / 8 }
 	e.up = newLimiter(func() int64 { return mbps(config.Settings().UploadMbps) }, true)
@@ -161,7 +200,7 @@ func New(config Config) (*Engine, error) {
 // WireGuard tunnel stops.
 func (e *Engine) currentRoute() (Route, error) {
 	settings := e.config.Settings()
-	key := Settings{Interface: settings.Interface, Proxy: settings.Proxy, ProxyUser: settings.ProxyUser, ProxyPassword: settings.ProxyPassword,
+	key := routeSettings{Interface: settings.Interface, Proxy: settings.Proxy, ProxyUser: settings.ProxyUser, ProxyPassword: settings.ProxyPassword,
 		WireGuard: settings.WireGuard}
 	e.mu.Lock()
 	if settings.Enabled && e.route != nil && e.routeKey == key {
@@ -170,10 +209,10 @@ func (e *Engine) currentRoute() (Route, error) {
 		return route, nil
 	}
 	old := e.route
-	e.route, e.routeKey = nil, Settings{}
+	e.route, e.routeKey = nil, routeSettings{}
 	route, err := Route(nil), ErrDisabled
 	if settings.Enabled {
-		route, err = RouteOf(key, e.config.Logger)
+		route, err = RouteOf(settings, e.config.Logger)
 	}
 	if err == nil {
 		if tunnel, ok := route.(*wireGuardRoute); ok && e.tunnelFresh != 0 {
@@ -209,7 +248,8 @@ func (e *Engine) Play(spec Spec) (stop func()) {
 }
 
 func (e *Engine) start(spec Spec) *torrent {
-	limit := e.config.Settings().AtOnce
+	settings := e.config.Settings()
+	limit, extra := settings.AtOnce, settingsTrackers(settings.Trackers)
 	route, err := e.currentRoute()
 	if err != nil {
 		if !errors.Is(err, ErrDisabled) {
@@ -231,7 +271,7 @@ func (e *Engine) start(spec Spec) *torrent {
 			t.joined()
 			t.mu.Unlock()
 			e.mu.Unlock()
-			t.merge(spec)
+			t.merge(spec, extra)
 			return t
 		}
 		t.mu.Unlock()
@@ -255,7 +295,7 @@ func (e *Engine) start(spec Spec) *torrent {
 		old.mu.Unlock()
 		if running {
 			e.mu.Unlock()
-			old.merge(spec)
+			old.merge(spec, extra)
 			return old
 		}
 	}
@@ -268,9 +308,103 @@ func (e *Engine) start(spec Spec) *torrent {
 		return nil
 	}
 	e.torrents[spec.Hash] = t
+	kept, seeded := e.keptLocked(spec.Hash)
 	e.mu.Unlock()
-	t.start()
+	if seeded {
+		t.seed(kept)
+	}
+	t.start(extra)
 	return t
+}
+
+// settingsTrackers are the trackers of the settings that are valid, each
+// once, MaxTrackers at most.
+func settingsTrackers(trackers []string) []string {
+	valid := make([]string, 0, min(len(trackers), MaxTrackers))
+	for _, tracker := range trackers {
+		if len(valid) < MaxTrackers && ValidTracker(tracker) && !slices.Contains(valid, tracker) {
+			valid = append(valid, tracker)
+		}
+	}
+	return valid
+}
+
+// keptLocked returns what the last run of the torrent of hash learned,
+// while it is kept. e.mu is held.
+func (e *Engine) keptLocked(hash Hash) (keptRun, bool) {
+	kept, ok := e.kept[hash]
+	if !ok || time.Now().After(kept.until) {
+		delete(e.kept, hash)
+		return keptRun{}, false
+	}
+	return kept, true
+}
+
+// keep keeps, for keptFor, what a torrent that stopped learned, for its
+// next run (see torrent.seed): the peers it connected to, its info
+// dictionary, and the DHT nodes nearest it. A run that connected to no
+// peer and got no info learned nothing new: what an earlier run kept
+// stays as it was. The kept torrents stay within maxKept and maxKeptInfo,
+// those kept longest dropped first.
+func (e *Engine) keep(t *torrent) {
+	t.mu.Lock()
+	run := keptRun{peers: slices.Clone(t.reached), info: t.info, infoData: t.infoData, nodes: slices.Clone(t.closest)}
+	private := t.private()
+	t.mu.Unlock()
+	if len(run.peers) == 0 && run.info == nil {
+		return
+	}
+	slices.Reverse(run.peers)
+	if private {
+		// Its peers come from its trackers alone.
+		run.nodes = nil
+	}
+	now := time.Now()
+	run.until = now.Add(keptFor)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if before, ok := e.keptLocked(t.hash); ok {
+		for _, address := range before.peers {
+			if len(run.peers) < keptPeers && !slices.Contains(run.peers, address) {
+				run.peers = append(run.peers, address)
+			}
+		}
+		if run.info == nil {
+			run.info, run.infoData = before.info, before.infoData
+		}
+		if len(run.nodes) == 0 && !private {
+			run.nodes = before.nodes
+		}
+	}
+	e.kept[t.hash] = run
+	size := 0
+	for hash, kept := range e.kept {
+		if now.After(kept.until) {
+			delete(e.kept, hash)
+			continue
+		}
+		size += len(kept.infoData)
+	}
+	for len(e.kept) > maxKept || size > maxKeptInfo {
+		var oldest Hash
+		first := true
+		for hash, kept := range e.kept {
+			if first || kept.until.Before(e.kept[oldest].until) {
+				oldest, first = hash, false
+			}
+		}
+		size -= len(e.kept[oldest].infoData)
+		delete(e.kept, oldest)
+	}
+}
+
+// lookupAgain is how soon the DHT is looked up again while a torrent has
+// no peer (see torrent.lookup).
+func (e *Engine) lookupAgain() time.Duration {
+	if e != nil && e.dhtAgainWait > 0 {
+		return e.dhtAgainWait
+	}
+	return dhtAgain
 }
 
 // fullLocked reports whether the torrent of hash may not start, as many
@@ -407,7 +541,8 @@ func (e *Engine) stop(t *torrent) {
 	e.remove(t, errStopped)
 }
 
-// remove stops a torrent, telling its readers why, and removes its pieces.
+// remove stops a torrent, telling its readers why, and removes its pieces;
+// what it learned is kept for its next run (see keep).
 func (e *Engine) remove(t *torrent, err error) {
 	e.mu.Lock()
 	if e.torrents[t.hash] == t {
@@ -417,6 +552,7 @@ func (e *Engine) remove(t *torrent, err error) {
 	}
 	e.mu.Unlock()
 	t.fail(err)
+	e.keep(t)
 	e.store.drop(t.hash)
 }
 
@@ -636,7 +772,7 @@ func (e *Engine) Close() {
 	}
 	clear(e.torrents)
 	route := e.route
-	e.route, e.routeKey = nil, Settings{}
+	e.route, e.routeKey = nil, routeSettings{}
 	e.mu.Unlock()
 	// The torrents stop over their route still up, then the route closes.
 	for _, t := range torrents {

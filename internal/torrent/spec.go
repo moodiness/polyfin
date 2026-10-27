@@ -29,9 +29,11 @@ type Spec struct {
 	DHT             bool
 }
 
-// Bounds on what an addon's sources may add.
+// Bounds on what an addon's sources may add: MaxTrackers trackers, which
+// bounds those of the settings too (see Settings.Trackers), and maxNodes
+// DHT nodes.
 const (
-	maxTrackers = 30
+	MaxTrackers = 30
 	maxNodes    = 20
 )
 
@@ -55,7 +57,7 @@ func NewSpec(infoHash string, fileIdx *int, sources []string) (Spec, error) {
 		kind, value, _ := strings.Cut(strings.TrimSpace(entry), ":")
 		switch kind {
 		case "tracker":
-			if validTracker(value) && len(spec.Trackers) < maxTrackers && !contains(spec.Trackers, value) {
+			if ValidTracker(value) && len(spec.Trackers) < MaxTrackers && !contains(spec.Trackers, value) {
 				spec.Trackers = append(spec.Trackers, value)
 			}
 		case "dht":
@@ -72,7 +74,9 @@ func NewSpec(infoHash string, fileIdx *int, sources []string) (Spec, error) {
 	return spec, nil
 }
 
-func validTracker(raw string) bool {
+// ValidTracker reports whether raw is the announce URL of a tracker
+// Polyfin asks: HTTP, HTTPS, or UDP with a port, without a user.
+func ValidTracker(raw string) bool {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || u.User != nil {
 		return false

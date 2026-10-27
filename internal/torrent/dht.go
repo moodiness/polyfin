@@ -22,8 +22,11 @@ const (
 	dhtParallel = 4
 	dhtQueries  = 64
 	dhtWait     = 3 * time.Second
-	// dhtKeep is how many of the closest nodes a lookup follows.
+	// dhtKeep is how many of the closest nodes a lookup follows, and
+	// dhtKept how many of those that answered it returns, for the next
+	// lookup to start from.
 	dhtKeep = 16
+	dhtKept = 8
 )
 
 type dhtNode struct {
@@ -34,10 +37,13 @@ type dhtNode struct {
 
 // lookupPeers looks hash up on the DHT from the nodes starts, and sends the
 // peers found to found until the lookup ends or ctx is done: then no query
-// is sent, and the answer awaited is given up at once.
-func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []string, found func([]netip.AddrPort)) error {
+// is sent, and the answer awaited is given up at once. It returns the
+// addresses of the nodes that answered, the closest to hash first,
+// dhtKept at most: the next lookup starts from them, nearer the nodes
+// that keep the torrent's peers than the starting nodes are.
+func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []string, found func([]netip.AddrPort)) ([]string, error) {
 	if len(starts) == 0 {
-		return errors.New("no DHT node to start from")
+		return nil, errors.New("no DHT node to start from")
 	}
 	var self Hash
 	_, _ = rand.Read(self[:])
@@ -53,6 +59,15 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 	stop := context.AfterFunc(ctx, func() { _ = conn.SetReadDeadline(time.Now()) })
 	defer stop()
 	pending := map[string]*dhtNode{}
+	var answered []*dhtNode
+	closest := func() []string {
+		slices.SortStableFunc(answered, func(a, b *dhtNode) int { return closer(hash, a.id, b.id) })
+		addresses := make([]string, 0, min(len(answered), dhtKept))
+		for _, n := range answered[:min(len(answered), dhtKept)] {
+			addresses = append(addresses, n.address)
+		}
+		return addresses
+	}
 	sent := 0
 	var txid uint16
 	buffer := make([]byte, 4096)
@@ -70,7 +85,7 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 				break
 			}
 			if ctx.Err() != nil {
-				return ctx.Err()
+				return closest(), ctx.Err()
 			}
 			next.asked = true
 			txid++
@@ -84,7 +99,7 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 			sent++
 		}
 		if len(pending) == 0 {
-			return ctx.Err()
+			return closest(), ctx.Err()
 		}
 		deadline := time.Now().Add(dhtWait)
 		if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
@@ -93,11 +108,11 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 		_ = conn.SetReadDeadline(deadline)
 		// Checked once the deadline is set: a ctx done later sets it to now.
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return closest(), ctx.Err()
 		}
 		n, from, err := conn.ReadFrom(buffer)
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return closest(), ctx.Err()
 		}
 		if err != nil {
 			// Those that did not answer in time are given up.
@@ -115,6 +130,7 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 		delete(pending, str(message, "t"))
 		reply := dict(message, "r")
 		copy(node.id[:], str(reply, "id"))
+		answered = append(answered, node)
 		var peers []netip.AddrPort
 		for _, value := range list(reply, "values") {
 			if raw, ok := value.(string); ok {

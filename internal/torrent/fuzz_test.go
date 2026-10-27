@@ -620,7 +620,7 @@ func FuzzDHTLookup(f *testing.F) {
 	f.Fuzz(func(t *testing.T, stream []byte) {
 		conn := &datagramConn{datagrams: frames(stream), from: netip.MustParseAddrPort("127.0.0.1:6881")}
 		seen := map[netip.AddrPort]bool{}
-		err := lookupPeers(context.Background(), conn, hash, []string{"127.0.0.1:6881"}, func(peers []netip.AddrPort) {
+		closest, err := lookupPeers(context.Background(), conn, hash, []string{"127.0.0.1:6881"}, func(peers []netip.AddrPort) {
 			for _, peer := range peers {
 				if !peer.IsValid() || peer.Port() == 0 || seen[peer] {
 					t.Fatalf("a peer at %v, or found twice", peer)
@@ -633,6 +633,9 @@ func FuzzDHTLookup(f *testing.F) {
 		}
 		if conn.writes > dhtQueries {
 			t.Fatalf("%d queries, %d at most", conn.writes, dhtQueries)
+		}
+		if len(closest) > dhtKept {
+			t.Fatalf("%d nodes kept, %d at most", len(closest), dhtKept)
 		}
 	})
 }
@@ -700,11 +703,11 @@ func FuzzNewSpec(f *testing.F) {
 			}
 			return
 		}
-		if spec.File < -1 || len(spec.Trackers) > maxTrackers || len(spec.Nodes) > maxNodes {
+		if spec.File < -1 || len(spec.Trackers) > MaxTrackers || len(spec.Nodes) > maxNodes {
 			t.Fatalf("got %+v", spec)
 		}
 		for _, tracker := range spec.Trackers {
-			if !validTracker(tracker) {
+			if !ValidTracker(tracker) {
 				t.Fatalf("an invalid tracker %q", tracker)
 			}
 		}
