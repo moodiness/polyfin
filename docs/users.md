@@ -451,7 +451,7 @@ It never touches what the user watched, their favorites, resume points and hidde
 
 ## Ending an account
 
-An account made for a friend's weekend need not stay until someone remembers to delete it. **Ends on**, in the **Access** section of a user's page, takes a date, kept with **Save date**; **Never**, the default, clears it. From that date, in the server's time zone, the account is refused as a disabled one is: it cannot sign in, from a Jellyfin app, Quick Connect or the admin app, and its devices and admin sessions are refused. Unlike **Disabled**, an end signs nothing out: everything the account has stays, its devices included, and a later date, or **Never**, brings it back as it was.
+An account made for a friend's weekend need not stay until someone remembers to delete it. **Ends on**, in the **Access** section of a user's page, takes a date, kept with **Save date**; **Never**, the default, clears it. From that date, in the server's time zone, the account is refused as a disabled one is: it cannot sign in, from a Jellyfin app or Silo's apps, Quick Connect (a Silo TV's code included) or the admin app, and its devices and admin sessions are refused. Unlike **Disabled**, an end signs nothing out: everything the account has stays, its devices included, and a later date, or **Never**, brings it back as it was.
 
 - **Users** lists each account's end date, as "Ends on October 20, 2026", and shows **Ended** once it has passed, as does the user's page.
 - The activity log records each account that ends, once, as "The account of sam ended", within the hour: a scheduled task looks for them every hour (see [Scheduled tasks](administration.md#scheduled-tasks)). An account given a later date is recorded again when it reaches it.
@@ -462,7 +462,7 @@ An account made for a friend's weekend need not stay until someone remembers to 
 **For app developers:**
 
 - `GET /admin/api/users` and `PATCH /admin/api/users/{id}` answer `endsOn`, a `YYYY-MM-DD` date in the server's time zone or null for never, and `ended`, true once that date has come. `PATCH` takes `endsOn`, a date or null; anything else is 400 `invalid_ends_on`, and a date for an administrator, or for a user made one in the same change, is 409 `administrator_cannot_end`.
-- An ended account signs in as a disabled one does: 403 from `/Users/AuthenticateByName`, Quick Connect and `POST /admin/api/session` (`account_disabled`). Its access tokens answer 401, and its policy's `IsDisabled` is true.
+- An ended account signs in as a disabled one does: 403 from `/Users/AuthenticateByName`, Quick Connect and `POST /admin/api/session` (`account_disabled`), and `denied` to a Silo TV's poll. Its access tokens answer 401, and its policy's `IsDisabled` is true.
 
 ## Invite links
 
@@ -641,7 +641,7 @@ This setting only chooses the libraries shown; it blocks no title. A hidden libr
 A user with at least one row who is outside all of them cannot sign in (403). Their apps' requests are refused with an empty 403, as Jellyfin does, except reading their own user and the server's information.
 
 - As in Jellyfin, administrators are refused sign-in outside their hours, but their apps already signed in are served.
-- A Quick Connect sign-in is not checked, though the app's requests then are.
+- A Quick Connect sign-in is not checked, a Silo TV's code included, though the app's requests then are.
 - Polyfin refuses hours outside 0 to 24, or ending before they start.
 - In the admin app, nobody signs in outside their hours, and a member already signed in sees only who they are.
 
@@ -816,6 +816,10 @@ Turning it on or off keeps the sessions already open, in the admin app and in Je
 ### Jellyfin apps
 
 Jellyfin apps, the web client included, cannot ask for a code. An account with two-step sign-in signs in to them with Quick Connect, approved on the admin app's **Quick Connect** page, which itself asked for the code (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect)). The password alone is refused there as a wrong password is. API keys made by administrators work as before. The web client does not open an admin app session for such an account: the admin app asks for the password and the code (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
+
+### Silo's apps
+
+Silo's apps cannot ask for a code either. Silo's TV apps sign in with a code of their own, which is a Quick Connect request too: an account with two-step sign-in approves it on the admin app's **Quick Connect** page, which `/activate` leads to, as for Jellyfin apps (see [Signing a TV in with a code](silo-apps.md#signing-a-tv-in-with-a-code)). Silo's apps for phones, tablets and Mac take a password only, which is refused for such an account as a wrong password is.
 
 ### For administrators
 

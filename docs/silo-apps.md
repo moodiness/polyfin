@@ -6,7 +6,7 @@ Silo's native apps, for iPhone, iPad, Apple TV and Mac, and for Android phones a
 
 **Settings › General › Allow Silo's apps**, off by default. While it is off, Polyfin answers nothing under `/api/v2`: the apps report that they cannot reach a Silo server there.
 
-In the app, add the server by the address Jellyfin apps use, such as `http://192.168.1.10:8096`, and sign in with a Polyfin user's name and password. Behind a reverse proxy, `/api/v2` must reach Polyfin like the rest; a base path such as `/jellyfin` is for Jellyfin apps only.
+In the app, add the server by the address Jellyfin apps use, such as `http://192.168.1.10:8096`, and sign in with a Polyfin user's name and password, or on a TV with a code (see [Signing a TV in with a code](#signing-a-tv-in-with-a-code)). Behind a reverse proxy, `/api/v2` must reach Polyfin like the rest; a base path such as `/jellyfin` is for Jellyfin apps only.
 
 ## How it works
 
@@ -24,7 +24,7 @@ When a source of the server fails to answer, the app is told to try again later 
 ## What works
 
 - **Connecting:** the server's information, identity and setup state.
-- **Signing in** with a name and password, staying signed in, and signing out.
+- **Signing in** with a name and password, or on a TV with a code, staying signed in, and signing out.
 - **Profiles:** each Polyfin user is one profile, named after them, without a PIN.
 - **Home:** Continue Watching, Next Up, the home rows the administrator adds for the web player at their places, collection rows among them, and a row of each library, in the order the user set for their libraries, without those they left out of their latest titles: its latest titles, or for a library of collections the first of its titles, titled with its name.
 - **Libraries:** those the user sees in Jellyfin apps, in the order they set, without those they left out of My Media, whether the web player's menus show them or not. Libraries of movies, of series, and of both, libraries of collections among them: an addon's catalog of collections, and Polyfin's Collections view, the same whether or not Silo's apps are ticked under **Settings › Catalogs**, in **Apps that show collection libraries by collection**. A library opens on its titles, page by page, sorted by title, year, release date, date added, rating, runtime or at random, or narrowed to its favorites or a search; a library of collections on the titles of its collections, each once, in its order. Its first page shows what the user is watching in it and its latest titles, or, for a library of collections, a row of each of its first 24 collections.
@@ -53,7 +53,8 @@ When a source of the server fails to answer, the app is told to try again later 
 
 ## What does not work yet
 
-- Finding the server on the local network, and signing a TV in with a code: add the address by hand, and sign in with a password. An account with two-step sign-in cannot sign in from Silo's apps, as from Jellyfin apps.
+- Finding the server on the local network: add the address by hand.
+- Signing in with a code on a phone, a tablet or a Mac: there, Silo's apps take a password only, which an account with two-step sign-in cannot use. Such an account signs in to Silo's TV apps only, with a code.
 - Editing profiles, PINs, several profiles per user, avatars.
 - Downloads, watch-together, remote control, notifications and push, requests, subtitle searches and AI subtitles or translations, books, diagnostics uploads, external sign-in, settings synced from the app and the app's welcome tour: the app is told each is not supported, and hides it. The account tells the apps downloads are not allowed, whatever the user's permission to download in Jellyfin apps.
 - The apps' own collections: the app lists none, and making or changing one is refused as not supported. Collections are made in Jellyfin apps or the web player.
@@ -61,6 +62,39 @@ When a source of the server fails to answer, the app is told to try again later 
 - Playback features the apps can use but Polyfin does not offer, and so does not announce: the app's own player showing the file's subtitles, subtitles as tracks of the HLS stream, quality adapting itself to buffering and to the measured speed during a playback, a playback moving to another screen or output without a new plan, and the apps' device fixes chosen by the server. Their plans still play: the app keeps to what Polyfin announces.
 - Music, audiobooks, books and Live TV: Silo's apps have no Live TV, and Polyfin lists its libraries of movies and series only.
 - Operations not listed here answer 404. Polyfin logs each, as it does for Jellyfin apps: "A Silo app asked for something Polyfin does not serve", with its method and path, at most once an hour each.
+
+## Signing a TV in with a code
+
+Silo's apps for Apple TV and Android TV show a code of 8 digits, such as `4821 7730`, and a QR code, beside their password sign-in. The code is a Quick Connect request, as Jellyfin apps make (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect)), which a signed-in user approves:
+
+- In a browser: open `/activate` at Polyfin's address, as the TV says, or scan the QR code. It leads to the admin app's **Quick Connect** page, with the code filled in when it comes from the QR code. Sign in there if asked, check the device, and approve it.
+- On a phone signed in to Silo's app on the same server: "Sign in a TV", then the code. "Not now" turns it down, and the TV says the sign-in was declined.
+
+The TV then signs in as the user who approved it, with the session a password gives: a device of theirs, named as the TV names itself, listed and signed out as the others.
+
+- The code lasts Quick Connect's 10 minutes, after which the TV shows a new one by itself. A TV that leaves its sign-in screen withdraws its code.
+- A code is approved once, by a signed-in user, for themselves. Approved, turned down or withdrawn, nobody can approve it again, and the TV collects its session once.
+- A disabled or ended account gets no session: the TV says the sign-in was declined.
+- An account with two-step sign-in signs a TV in this way: the admin app asked for its code when it signed in.
+- The QR code and the address the TV shows start with the **Public address**, under **Settings › Notifications**, when it is set, else with the address the TV reached Polyfin at.
+- It needs **Allow Quick Connect**, under **Settings › General**, as well as **Allow Silo's apps**. With Quick Connect off, the TV asks for a password.
+
+Polyfin does not tell the TV when a phone opened its code, does not approve Jellyfin apps' 6-digit codes from Silo's app, and does not move a phone's playback to a TV: the apps are told so, and offer none of these.
+
+**For app developers:**
+
+- `GET /api/v2/auth/device/capability` answers the `state` `available` with `cancel` while Quick Connect is on, `disabled` otherwise. `remote_playback_handoff`, `jellyfin_quick_connect` and `opened_signal` are false.
+- `POST /api/v2/auth/device/start` answers 201 with a `user_code` written `4821-7730`, `verification_uri` ending in `/activate`, `verification_uri_complete` with `?code=48217730`, `expires_in` 600 and `interval` 5. A remote playback's start (`client_purpose` `remote_playback`, or `temporary`) is 501 `capability_unsupported`; with Quick Connect off, every operation below is 404.
+- `POST /api/v2/auth/device/poll` answers `pending` with `expires_at`, then `approved` with `tokens` once, `consumed` after. `denied` and `canceled` end it too; a request that expired, or never was, is 404.
+- `POST /api/v2/auth/device/cancel` withdraws a request pending or approved but not collected, and answers its state.
+- `GET /api/v2/auth/device?code=`, `POST /api/v2/auth/device/approve` and `POST /api/v2/auth/device/deny` need a signed-in session (401 without). A code no TV waits with is 404 `not_found`; one already decided, 409 `already_decided`.
+- `GET /activate?code=` leads to `/admin/me/quick-connect?code=`.
+- Polyfin's tests check these answers against the rules the apps apply to them, read from their code at the commits named below.
+
+**Compared with Jellyfin:**
+
+- Jellyfin does not answer Silo's apps. Its Quick Connect codes have 6 digits; Silo's TV apps take 8, which Polyfin gives them, from the same requests.
+- The secret a Jellyfin app polls with signs it in until its request expires, as in Jellyfin, so that an app retrying after a network error is not refused; a Silo TV's signs in once, as Silo's apps expect.
 
 ## The contract followed
 

@@ -227,6 +227,8 @@ Jellyfin apps ask for a name and a password, never for a code. An account with [
 
 Quick Connect must stay on, under **Settings › General**. Typing the password in the app is refused as a wrong password is, and counts as one toward the client's failed attempts, so that the answer never tells whether the password was right. The apps signed in before two-step sign-in was turned on stay signed in; sign them out under **My account › Devices** if needed. API keys made by administrators work as before.
 
+A code is approved once, as in Jellyfin, which refuses a request already authorized: approved, it waits no more on the **Quick Connect** page, and nobody else can take it. The page also takes the 8-digit codes of Silo's TV apps (see [Signing a TV in with a code](silo-apps.md#signing-a-tv-in-with-a-code)).
+
 **Compared with Jellyfin:**
 
 - Jellyfin has no second step of its own. Polyfin keeps Jellyfin's sign-in as it is for the apps, and asks for the code in the admin app only.

@@ -119,7 +119,7 @@ export const extras: Extra[] = [
   },
   {
     name: 'Quick Connect',
-    text: 'Sign in with a password, or approve the 6-digit code an app shows.',
+    text: 'Sign in with a password, or approve the code an app shows, from a Jellyfin app or a Silo TV.',
     link: '/docs/getting-started#sign-in-from-jellyfin-apps',
     icon: icons.key,
   },
