@@ -190,6 +190,8 @@ It costs a few more requests to the sources, also for titles opened but not play
 - a title is prepared once per user every 10 minutes, unless its preparation failed;
 - the titles of Continue Watching and Next Up are listed 2 at a time over the server, apart from the preparations above, in the order the rows asked for them. A title waiting or being listed is not queued again, and a title whose versions are still kept (**Keep version lists for (minutes)**) asks nothing.
 
+A torrent version is left out of these preparations while no playback runs its torrent: only a playback joins a torrent's swarm, and its first play analyzes it (see [How a torrent starts](torrents.md#how-a-torrent-starts)). Opening a title's page then neither reads it nor logs it.
+
 ## Choosing a version
 
 Five more settings change how Polyfin picks a version and how much video the server converts. Their defaults keep Polyfin's earlier behavior. A change applies to the next request, without a restart.

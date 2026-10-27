@@ -337,8 +337,10 @@ type torrentPlay struct {
 
 // newTorrentPlay starts a server whose analyses run ffprobe, and whose
 // addon lists tors, each announced to its tracker. A torrent's start is
-// waited for start, 0 for the engine's default.
-func newTorrentPlay(t *testing.T, ffprobe string, start time.Duration, tors []*torrenttest.Torrent, trackers []string) torrentPlay {
+// waited for start, 0 for the engine's default. configure, if any,
+// completes the handler's options.
+func newTorrentPlay(t *testing.T, ffprobe string, start time.Duration, tors []*torrenttest.Torrent, trackers []string,
+	configure ...func(*Options)) torrentPlay {
 	t.Helper()
 	p := torrentPlay{proxy: torrenttest.StartProxy(t, true, "", "")}
 	p.testServer = newProbingServer(t, 10, ffprobe, func(options *Options, _ *pgxpool.Pool) {
@@ -350,6 +352,9 @@ func newTorrentPlay(t *testing.T, ffprobe string, start time.Duration, tors []*t
 		}
 		t.Cleanup(p.engine.Close)
 		options.Playback.Torrents(p.engine)
+		for _, c := range configure {
+			c(options)
+		}
 	})
 	p.user = p.testServer.user("allowed", func(c *accounts.UserChanges) { c.TorrentStreams = new(true) })
 	if _, err := p.addons.Install(t.Context(), addons.Shared(), mediaTorrentAddon(t, tors, trackers), false); err != nil {

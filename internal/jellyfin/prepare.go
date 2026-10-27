@@ -191,9 +191,14 @@ func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item li
 }
 
 // prepareVersions queues a preparation of key that analyzes those of
-// versions not analyzed yet, at once, unless all are.
+// versions not analyzed yet, at once, unless all are. A torrent version
+// whose torrent no playback runs is left out: only a playback reads it
+// (see playback.ErrTorrentIdle), so a preparation would analyze nothing
+// and be made again at each trigger.
 func (h *Handler) prepareVersions(ctx context.Context, key preparationKey, versions []library.Version) {
-	versions = slices.DeleteFunc(slices.Clone(versions), func(v library.Version) bool { return !h.unanalyzed(ctx, v) })
+	versions = slices.DeleteFunc(slices.Clone(versions), func(v library.Version) bool {
+		return !h.unanalyzed(ctx, v) || h.idleTorrent(v)
+	})
 	if len(versions) == 0 {
 		return
 	}
@@ -273,6 +278,10 @@ func (h *Handler) prepareNearTheEnd(user accounts.User, device accounts.ID, item
 		if len(versions) == 0 {
 			return false
 		}
+		if h.idleTorrent(versions[0]) {
+			// Read once played, its torrent joined.
+			return true
+		}
 		h.analyzeAhead(ctx, versions[0])
 		// Its images too, in the background, as its play would ask,
 		// once the playback of this episode stopped.
@@ -304,6 +313,12 @@ func (h *Handler) unanalyzed(ctx context.Context, version library.Version) bool 
 	}
 	_, analyzed := h.Playback.Analyzed(ctx, version.ID)
 	return !analyzed
+}
+
+// idleTorrent reports whether a version is a torrent's file that no
+// playback reads now.
+func (h *Handler) idleTorrent(version library.Version) bool {
+	return version.Torrent != nil && !h.Playback.TorrentRunning(version.Torrent.InfoHash)
 }
 
 // analyzeAhead does before a play asks what the first play of a version
