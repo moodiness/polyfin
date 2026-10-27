@@ -1,11 +1,13 @@
 // Package silotest checks answers of Silo's API as Silo's apps accept
 // them: the rules their code applies to a playback's capabilities and
 // decisions, to the libraries, Home and library sections, catalog pages
-// and Collections tabs they show, at the commits AppleCommit and
-// AndroidCommit of the apps' repositories (silo-apple and silo-android),
-// each rule noted with the code it comes from. An answer that breaks one
-// fails in the app, with a message that asks to update the server or that
-// the title cannot play, or leaves what it describes out of sight.
+// and Collections tabs they show, at the commits of the apps' repositories
+// (silo-apple and silo-android) internal/silo/followed.json records, each
+// rule noted with the code it comes from; that record lists the files
+// the rules cite, and a rule citing a new one adds it there. An answer
+// that breaks one fails in the app, with a message that asks to update
+// the server or that the title cannot play, or leaves what it describes
+// out of sight.
 package silotest
 
 import (
@@ -19,16 +21,10 @@ import (
 	"strings"
 )
 
-// The commits of the apps whose rules these are.
-const (
-	AppleCommit   = "2c8f2e1b70b7de6f3edefb01ecd51074924381a9"
-	AndroidCommit = "9867edfa4500ab962d4abf72341e76596fe595b8"
-)
-
 // RequiredFeatures are the features the capabilities document names
 // before the apps start a playback: the Apple app's requireAvailable
 // (Networking/APIv2/APIv2PlaybackModels.swift) asks all four, the Android
-// app's sequenced playback (playback/SequencedPlayback.kt) the last.
+// app's sequenced playback (repository/SequencedPlayback.kt) the last.
 var RequiredFeatures = []string{"playback_plan_v3", "neutral_playback_v3_contract_v1", "header_authenticated_media_v1",
 	"sequenced_progress_v1"}
 
@@ -155,7 +151,7 @@ func mediaPath(address string) bool {
 
 // positiveID reports whether an identifier is one the apps take as a
 // number: a positive integer, written plainly (Apple APIv2PlaybackID and
-// catalogLegacyID; Android PlaybackDecisionV2.kt and checkedPositiveId).
+// catalogLegacyID; Android decodePlaybackDecisionV2 and checkedPositiveId).
 func positiveID(value any) bool {
 	text, _ := value.(string)
 	n, err := strconv.Atoi(text)
@@ -315,7 +311,7 @@ func checkPlan(c *checker, p object, session string, files []string) {
 
 // checkSubtitles checks a plan's subtitles as the apps show them: Apple's
 // subtitle decision decoding and plan adapter, Android's validateForMedia3
-// (PlaybackPlanV3.kt).
+// (PlaybackProtocolV3.kt).
 func checkSubtitles(c *checker, subtitle, selected object, session string) {
 	c.has(subtitle, "subtitle", map[string]string{"mode": "s", "inventory": "a"})
 	mode, _ := subtitle["mode"].(string)

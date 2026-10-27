@@ -1,0 +1,59 @@
+{
+  "contract": {
+    "repository": "Silo-Server/silo-server",
+    "path": "contracts/api/v2/openapi.json",
+    "commit": "6de6d5e5e285a9b423e95a1122cb39e5bb9ca93b",
+    "sha256": "bbb759b43ac256f37a3cddd68c1c90aedeb9f788328b7702af4616273ca3bdd6"
+  },
+  "apps": [
+    {
+      "repository": "Silo-Server/silo-apple",
+      "commit": "2c8f2e1b70b7de6f3edefb01ecd51074924381a9",
+      "files": [
+        "iosApp/iosApp/Networking/APIv2/APIv2CatalogModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2CatalogReadModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2CatalogReadProjection.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2Client+PersonalLists.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2Client+Playback.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2Client.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2DiagnosticsModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2ExternalSignInModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2PersonalListModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2PlaybackModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2PushModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2SettingsModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2SubtitleAIModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2SubtitleModels.swift",
+        "iosApp/iosApp/Networking/Models.swift",
+        "iosApp/iosApp/Networking/RequestsModels.swift",
+        "iosApp/iosApp/Screens/Calendar/CalendarModels.swift",
+        "iosApp/iosApp/Screens/Player/PlaybackSessionBridge.swift",
+        "iosApp/iosApp/Screens/Player/ProtocolV3/ApplePlaybackV3PlanAdapter.swift",
+        "iosApp/iosApp/Screens/Player/ProtocolV3/PlaybackProtocolV3Models.swift",
+        "iosApp/iosApp/Screens/Player/StreamRequest.swift",
+        "iosApp/iosApp/Shared/ImageSizeSelection.swift"
+      ]
+    },
+    {
+      "repository": "Silo-Server/silo-android",
+      "commit": "9867edfa4500ab962d4abf72341e76596fe595b8",
+      "files": [
+        "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/AppNavigation.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/model/catalog/CatalogModels.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/model/navigation/MediaMode.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/model/playback/PlaybackProtocolV3.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/model/section/SectionModels.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/network/api/CalendarApi.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/ApiV2Call.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/CatalogDetailReadV2Models.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/CatalogV2Models.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/DiscoverV2Api.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/HomeSectionsV2Api.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/MembershipV2Api.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/SimilarCardsV2Api.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/network/apiv2/UserLibrariesV2.kt",
+        "shared/src/commonMain/kotlin/org/siloserver/silo/repository/SequencedPlayback.kt"
+      ]
+    }
+  ]
+}

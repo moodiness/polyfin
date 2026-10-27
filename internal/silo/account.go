@@ -14,14 +14,6 @@ import (
 	"github.com/moodiness/polyfin/internal/forwarded"
 )
 
-// Contract is the commit of Silo-Server/silo-server whose API contract,
-// contracts/api/v2/openapi.json, Polyfin follows; ContractDigest is that
-// file's SHA-256, which system/info tells the apps.
-const (
-	Contract       = "6de6d5e5e285a9b423e95a1122cb39e5bb9ca93b"
-	ContractDigest = "bbb759b43ac256f37a3cddd68c1c90aedeb9f788328b7702af4616273ca3bdd6"
-)
-
 // tokenLifetime is the lifetime the apps are told their access token has.
 // Polyfin's sessions do not expire: the apps refresh it this often, which
 // tells them when it was signed out.
@@ -59,7 +51,7 @@ type systemLinks struct {
 // server speaks the API they know.
 func (s *Server) systemInfo(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, systemInfo{ServerVersion: "polyfin-" + s.options.Version, APIMajor: 2,
-		ContractDigest: ContractDigest, Links: systemLinks{OpenAPI: "/api/v2/openapi.json", Capabilities: "/api/v2/capabilities",
+		ContractDigest: Followed.Contract.SHA256, Links: systemLinks{OpenAPI: "/api/v2/openapi.json", Capabilities: "/api/v2/capabilities",
 			Identity: "/api/v2/system/identity"}})
 }
 

@@ -4,7 +4,7 @@
 // Silo's apps speak Silo's REST API alone, published as an OpenAPI
 // contract by Silo-Server/silo-server; Polyfin answers the operations its
 // apps need to sign in, browse and play, written from the contract's facts
-// (see docs/silo-apps.md for the commit followed). Each answer is made of
+// (followed.json records the commit followed). Each answer is made of
 // the Jellyfin API's answer for the same user and device, asked of the
 // Jellyfin API's handler in process: what Silo's apps see and play is what
 // Jellyfin apps get, under the same limits (parental control, blocked
@@ -69,7 +69,7 @@ type Options struct {
 // Server serves Silo's API.
 type Server struct {
 	options  Options
-	mux      *http.ServeMux
+	mux      *routes
 	numbers  *numbers
 	sessions *sessions
 	shuffles *shuffles
@@ -81,7 +81,7 @@ func New(options Options) *Server {
 	if options.now == nil {
 		options.now = time.Now
 	}
-	s := &Server{options: options, mux: http.NewServeMux(), numbers: newNumbers(options.DB), sessions: newSessions(),
+	s := &Server{options: options, mux: &routes{ServeMux: http.NewServeMux()}, numbers: newNumbers(options.DB), sessions: newSessions(),
 		shuffles: newShuffles(), unknown: newUnknownOperations(options.Logger, options.now)}
 	s.accountRoutes()
 	s.browseRoutes()
@@ -95,7 +95,8 @@ func New(options Options) *Server {
 	s.probeRoutes()
 	s.shuffleRoutes()
 	s.deviceLoginRoutes()
-	s.mux.HandleFunc("/api/v2/", func(w http.ResponseWriter, r *http.Request) {
+	// The fallback serves no operation: it is not one of the routes.
+	s.mux.ServeMux.HandleFunc("/api/v2/", func(w http.ResponseWriter, r *http.Request) {
 		s.unknown.report(r)
 		problem(w, http.StatusNotFound, "not_found", "This operation does not exist on this server.")
 	})
