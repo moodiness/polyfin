@@ -366,6 +366,8 @@ const common = {
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
       'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',
+    invalid_user_agent:
+      'A user agent is at most 512 characters, without line breaks or control characters.',
     tuner_added: 'This tuner is already a source of the server.',
     invalid_folder_name: 'Folder names must be 1 to 64 characters long.',
     invalid_folder_path:

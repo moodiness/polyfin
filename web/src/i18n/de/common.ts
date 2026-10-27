@@ -400,6 +400,8 @@ const common: typeof en = {
     invalid_source_name: 'Quellennamen müssen 1 bis 64 Zeichen lang sein.',
     invalid_source_address:
       'Gib eine Adresse ein, die mit https:// oder http:// beginnt, und für ein Xtream-Codes-Konto einen Benutzernamen und ein Passwort.',
+    invalid_user_agent:
+      'Ein User-Agent hat höchstens 512 Zeichen, ohne Zeilenumbrüche oder Steuerzeichen.',
     tuner_added: 'Dieser Tuner ist bereits eine Quelle des Servers.',
     invalid_folder_name: 'Ordnernamen müssen 1 bis 64 Zeichen lang sein.',
     invalid_folder_path:

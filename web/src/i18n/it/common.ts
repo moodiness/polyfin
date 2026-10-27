@@ -386,6 +386,8 @@ const common: typeof en = {
     invalid_source_name: 'I nomi delle origini devono avere da 1 a 64 caratteri.',
     invalid_source_address:
       'Inserisci un indirizzo che inizi con https:// o http:// e, per un account Xtream Codes, un nome utente e una password.',
+    invalid_user_agent:
+      'Uno user agent ha al massimo 512 caratteri, senza a capo né caratteri di controllo.',
     tuner_added: 'Questo tuner è già un’origine del server.',
     invalid_folder_name: 'I nomi delle cartelle devono avere da 1 a 64 caratteri.',
     invalid_folder_path:

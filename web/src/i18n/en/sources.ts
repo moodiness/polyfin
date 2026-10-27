@@ -155,6 +155,9 @@ const sources = {
     password: 'Password',
     keepHint: 'Leave empty to keep the current one.',
     passwordKeepHint: 'Leave empty to keep the current password.',
+    userAgent: 'User agent (optional)',
+    userAgentHint:
+      'Left empty, channels are requested as a web browser requests them. Set the one your provider asks for when it only serves certain players: the list and the channels are then requested with it. A user agent the list gives a channel comes first.',
     providerGuide: 'Use the provider’s programme guide',
     providerGuideHelp:
       'Xtream Codes servers publish a guide for the account: it fills the channels’ programmes.',

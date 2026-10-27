@@ -159,6 +159,9 @@ const sources: typeof en = {
     password: 'Mot de passe',
     keepHint: 'Laissez vide pour garder l’actuelle.',
     passwordKeepHint: 'Laissez vide pour garder le mot de passe actuel.',
+    userAgent: 'Agent utilisateur (facultatif)',
+    userAgentHint:
+      'Laissé vide, les chaînes sont demandées comme un navigateur web les demande. Saisissez celui que votre fournisseur exige quand il ne sert que certains lecteurs : la liste et les chaînes sont alors demandées avec lui. Un agent utilisateur que la liste donne à une chaîne passe en premier.',
     providerGuide: 'Utiliser le guide des programmes du fournisseur',
     providerGuideHelp:
       'Les serveurs Xtream Codes publient un guide pour le compte : il remplit les programmes des chaînes.',

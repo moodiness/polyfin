@@ -378,6 +378,8 @@ const common: typeof en = {
     invalid_source_name: 'Os nomes de fonte devem ter de 1 a 64 caracteres.',
     invalid_source_address:
       'Digite um endereço que comece com https:// ou http://, e, para uma conta Xtream Codes, um nome de usuário e uma senha.',
+    invalid_user_agent:
+      'Um user agent tem no máximo 512 caracteres, sem quebras de linha nem caracteres de controle.',
     tuner_added: 'Este sintonizador já é uma fonte do servidor.',
     invalid_folder_name: 'Os nomes de pasta devem ter de 1 a 64 caracteres.',
     invalid_folder_path:

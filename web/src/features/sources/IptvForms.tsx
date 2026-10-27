@@ -22,11 +22,20 @@ import { Button, Checkbox, cx, Field, FieldError, Segmented, TextInput } from '@
 import { invalidateScope } from './model'
 
 type Kind = 'm3u' | 'xtream'
-type Account = { url: string; server: string; username: string; password: string }
+type Account = {
+  url: string
+  server: string
+  username: string
+  password: string
+  userAgent: string
+}
 
-const emptyAccount: Account = { url: '', server: '', username: '', password: '' }
+const emptyAccount: Account = { url: '', server: '', username: '', password: '', userAgent: '' }
 
-/** The account fields of a source: a playlist address, or an Xtream server and its login. */
+/**
+ * The account fields of a source: a playlist address, or an Xtream server and its login; then
+ * the user agent its list and channels are requested with.
+ */
 function AccountFields({
   kind,
   values,
@@ -40,55 +49,66 @@ function AccountFields({
 }) {
   const { t } = useI18n()
   const text = t.sourceAdd
-  if (kind === 'm3u') {
-    return (
-      <Field label={text.playlistUrl} help={editing ? text.keepHint : text.playlistUrlHint}>
-        <TextInput
-          type="url"
-          inputMode="url"
-          value={values.url}
-          onValue={(url) => onChange({ url })}
-          placeholder="https://…/playlist.m3u"
-          autoComplete="off"
-          spellCheck={false}
-          required={!editing}
-          mono
-        />
-      </Field>
-    )
-  }
   return (
     <>
-      <Field label={text.server} help={editing ? text.keepHint : text.serverHint}>
+      {kind === 'm3u' ? (
+        <Field label={text.playlistUrl} help={editing ? text.keepHint : text.playlistUrlHint}>
+          <TextInput
+            type="url"
+            inputMode="url"
+            value={values.url}
+            onValue={(url) => onChange({ url })}
+            placeholder="https://…/playlist.m3u"
+            autoComplete="off"
+            spellCheck={false}
+            required={!editing}
+            mono
+          />
+        </Field>
+      ) : (
+        <>
+          <Field label={text.server} help={editing ? text.keepHint : text.serverHint}>
+            <TextInput
+              type="url"
+              inputMode="url"
+              value={values.server}
+              onValue={(server) => onChange({ server })}
+              placeholder="https://…:8080"
+              autoComplete="off"
+              spellCheck={false}
+              required={!editing}
+              mono
+            />
+          </Field>
+          <Field label={text.username}>
+            <TextInput
+              value={values.username}
+              onValue={(username) => onChange({ username })}
+              autoComplete="off"
+              spellCheck={false}
+              required={!editing}
+            />
+          </Field>
+          <Field label={text.password} help={editing ? text.passwordKeepHint : undefined}>
+            <TextInput
+              type="password"
+              revealable
+              value={values.password}
+              onValue={(password) => onChange({ password })}
+              autoComplete="new-password"
+              required={!editing}
+            />
+          </Field>
+        </>
+      )}
+      <Field label={text.userAgent} help={text.userAgentHint}>
         <TextInput
-          type="url"
-          inputMode="url"
-          value={values.server}
-          onValue={(server) => onChange({ server })}
-          placeholder="https://…:8080"
+          value={values.userAgent}
+          onValue={(userAgent) => onChange({ userAgent })}
+          maxLength={512}
           autoComplete="off"
           spellCheck={false}
-          required={!editing}
           mono
-        />
-      </Field>
-      <Field label={text.username}>
-        <TextInput
-          value={values.username}
-          onValue={(username) => onChange({ username })}
-          autoComplete="off"
-          spellCheck={false}
-          required={!editing}
-        />
-      </Field>
-      <Field label={text.password} help={editing ? text.passwordKeepHint : undefined}>
-        <TextInput
-          type="password"
-          revealable
-          value={values.password}
-          onValue={(password) => onChange({ password })}
-          autoComplete="new-password"
-          required={!editing}
         />
       </Field>
     </>
@@ -124,12 +144,13 @@ export function IptvAddFlow({ scope, onAdded }: { scope: Scope; onAdded: (added:
   const [previewOf, setPreviewOf] = useState(0)
   const accountJSON: IptvAccount =
     kind === 'm3u'
-      ? { kind, url: account.url.trim() }
+      ? { kind, url: account.url.trim(), userAgent: account.userAgent.trim() }
       : {
           kind,
           server: account.server.trim(),
           username: account.username,
           password: account.password,
+          userAgent: account.userAgent.trim(),
         }
   const mutation = useMutation({
     mutationFn: () =>
@@ -306,7 +327,8 @@ export function IptvEditForm({
   const { t } = useI18n()
   const kind = addon.kind as Kind | 'hdhomerun'
   const [name, setName] = useState(addon.name)
-  const [account, setAccount] = useState(emptyAccount)
+  const currentAgent = addon.source?.userAgent ?? ''
+  const [account, setAccount] = useState({ ...emptyAccount, userAgent: currentAgent })
   const mutation = useMutation({
     mutationFn: (patch: IptvSourcePatch) => updateIptvSource(scope, addon.id, patch),
     onSuccess: onSaved,
@@ -328,6 +350,9 @@ export function IptvEditForm({
         username: account.username,
         password: account.password,
       })
+    }
+    if (kind !== 'hdhomerun' && account.userAgent.trim() !== currentAgent) {
+      patch.userAgent = account.userAgent.trim()
     }
     mutation.mutate(patch)
   }

@@ -392,6 +392,8 @@ const common: typeof en = {
     invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
     invalid_source_address:
       'Saisissez une adresse commençant par https:// ou http://, et pour un compte Xtream Codes un identifiant et un mot de passe.',
+    invalid_user_agent:
+      'Un agent utilisateur fait au plus 512 caractères, sans saut de ligne ni caractère de contrôle.',
     tuner_added: 'Ce tuner est déjà une source du serveur.',
     invalid_folder_name: 'Le nom d’un dossier doit faire de 1 à 64 caractères.',
     invalid_folder_path:

@@ -159,6 +159,9 @@ const sources: typeof en = {
     password: 'Password',
     keepHint: 'Lascia vuoto per mantenere quello attuale.',
     passwordKeepHint: 'Lascia vuoto per mantenere la password attuale.',
+    userAgent: 'User agent (facoltativo)',
+    userAgentHint:
+      'Se lo lasci vuoto, i canali vengono richiesti come li richiede un browser web. Inserisci quello che il tuo provider chiede quando serve solo certi lettori: la lista e i canali vengono allora richiesti con esso. Uno user agent che la lista dà a un canale ha la precedenza.',
     providerGuide: 'Usa la guida dei programmi del provider',
     providerGuideHelp:
       'I server Xtream Codes pubblicano una guida per l’account: compila i programmi dei canali.',

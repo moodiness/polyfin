@@ -159,6 +159,9 @@ const sources: typeof en = {
     password: 'Senha',
     keepHint: 'Deixe em branco para manter o atual.',
     passwordKeepHint: 'Deixe em branco para manter a senha atual.',
+    userAgent: 'User agent (opcional)',
+    userAgentHint:
+      'Em branco, os canais são solicitados como um navegador da web os solicita. Informe o que seu provedor pede quando ele só atende certos players: a lista e os canais passam a ser solicitados com ele. Um user agent que a lista dá a um canal tem prioridade.',
     providerGuide: 'Usar o guia de programação do provedor',
     providerGuideHelp:
       'Os servidores Xtream Codes publicam um guia para a conta: ele preenche a programação dos canais.',

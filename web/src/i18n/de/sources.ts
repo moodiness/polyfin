@@ -159,6 +159,9 @@ const sources: typeof en = {
     password: 'Passwort',
     keepHint: 'Leer lassen, um die aktuelle beizubehalten.',
     passwordKeepHint: 'Leer lassen, um das aktuelle Passwort beizubehalten.',
+    userAgent: 'User-Agent (optional)',
+    userAgentHint:
+      'Leer gelassen, werden die Sender angefragt, wie ein Webbrowser sie anfragt. Gib den User-Agent ein, den dein Anbieter verlangt, wenn er nur bestimmte Player bedient: Liste und Sender werden dann damit angefragt. Ein User-Agent, den die Liste einem Sender gibt, hat Vorrang.',
     providerGuide: 'Fernsehprogramm des Anbieters verwenden',
     providerGuideHelp:
       'Xtream-Codes-Server veröffentlichen ein Fernsehprogramm für das Konto: Es füllt das Programm der Kanäle.',

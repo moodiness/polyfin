@@ -1051,6 +1051,8 @@ export type IptvSource = {
   nextAt: string | null
   /** Code of the last failure; empty after a success. */
   error: string
+  /** The user agent its administrator set for its list and streams; empty for the default. */
+  userAgent: string
   /** An HDHomeRun tuner; null for another source. */
   tuner: IptvTuner | null
 }
@@ -1167,6 +1169,7 @@ export type IptvAccount = {
   server?: string
   username?: string
   password?: string
+  userAgent?: string
 }
 
 /** A paged answer: `total` counts every row matching the filters. */
@@ -1318,6 +1321,8 @@ export type NewIptvSource = {
   server?: string
   username?: string
   password?: string
+  /** M3U and Xtream only: the user agent of its list and streams; empty for the default. */
+  userAgent?: string
   guideUrl?: string
   /** Xtream only: use the guide the server publishes for the account. */
   providerGuide?: boolean
@@ -1331,6 +1336,7 @@ export type IptvSourcePatch = Partial<{
   server: string
   username: string
   password: string
+  userAgent: string
   options: Partial<IptvOptions>
 }>
 
