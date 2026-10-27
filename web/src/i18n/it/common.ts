@@ -278,6 +278,8 @@ const common: typeof en = {
       'Gli stream torrent richiedono un solo percorso: il nome di un’interfaccia di rete (solo Linux), un proxy SOCKS5 nel formato host:porta oppure una configurazione WireGuard.',
     invalid_wireguard_config: 'La configurazione WireGuard non è valida.',
     invalid_torrent_limit: 'I limiti devono essere numeri interi di Mbps da 0 a 10.000.',
+    invalid_torrent_trackers:
+      'Inserisci al massimo 30 tracker, ognuno un URL di annuncio HTTP, HTTPS o UDP, UDP con la sua porta, di al massimo 500 caratteri.',
     invalid_cache_size: 'Lo spazio su disco deve essere un numero intero di GB da 1 a 2.000.',
     invalid_vaapi_device: 'Scegli la scheda grafica dall’elenco.',
     invalid_recordings_folder:

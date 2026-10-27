@@ -48,6 +48,7 @@ import SegmentSources from './SegmentSources'
 import VersionOrder, { CodecOrder, SourceOrder } from './VersionOrder'
 import { EditAsCustom, shownTexts, ThemeCopyPanel } from './WebTheme'
 import WorkFolderRow from './WorkFolders'
+import WordList from './WordList'
 
 /** The redirect URI of a Trakt or Simkl app whose users enter a code instead of being redirected. */
 const oobRedirectUri = 'urn:ietf:wg:oauth:2.0:oob'
@@ -546,35 +547,6 @@ function trackLanguageOptions(languages: TrackLanguage[], none: string) {
     { value: '', label: none },
     ...languages.map((language) => ({ value: language.code, label: language.name })),
   ]
-}
-
-/**
- * The words hiding versions, one a line. The text stays as typed while it lists the same words,
- * so that a new line can be started; discarding or saving writes it anew.
- */
-function WordList({ value, onValue }: { value: string[]; onValue: (value: string[]) => void }) {
-  const [text, setText] = useState(() => value.join('\n'))
-  const words = (typed: string) =>
-    typed
-      .split('\n')
-      .map((word) => word.trim())
-      .filter(Boolean)
-  if (words(text).join('\n') !== value.join('\n')) {
-    setText(value.join('\n'))
-  }
-  return (
-    <Textarea
-      rows={3}
-      value={text}
-      autoComplete="off"
-      spellCheck={false}
-      className="max-w-md"
-      onValue={(next) => {
-        setText(next)
-        onValue(words(next))
-      }}
-    />
-  )
 }
 
 function Content({ form, update, error, number, range, limits }: SectionFormApi) {

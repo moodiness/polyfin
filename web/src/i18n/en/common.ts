@@ -263,6 +263,8 @@ const common = {
       'Torrent streams need one route alone: a network interface name (Linux only), a SOCKS5 proxy as host:port, or a WireGuard configuration.',
     invalid_wireguard_config: 'The WireGuard configuration is not valid.',
     invalid_torrent_limit: 'The limits must be whole numbers of Mbps from 0 to 10000.',
+    invalid_torrent_trackers:
+      'Enter at most 30 trackers, each an HTTP, HTTPS or UDP announce URL, UDP with its port, of at most 500 characters.',
     invalid_cache_size: 'The disk space must be a whole number of GB from 1 to 2000.',
     invalid_vaapi_device: 'Choose the graphics card from the list.',
     invalid_recordings_folder:

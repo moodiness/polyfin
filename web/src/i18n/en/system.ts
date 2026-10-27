@@ -166,6 +166,7 @@ const system = {
             'no peer was found, and the route carries no UDP, which the DHT and UDP trackers need',
           refused: 'its trackers refused the announce or did not answer, and the DHT found no peer',
           no_peers: 'its trackers and the DHT found no peer',
+          no_trackers: 'the addon named no tracker, and the DHT found no peer',
           silent: 'peers were found, but none sent it',
         },
         torrentStartPeers: (found: number, why: string) =>

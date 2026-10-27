@@ -291,6 +291,8 @@ const common: typeof en = {
       'Torrent-Streams brauchen genau eine Route: einen Netzwerkschnittstellennamen (nur Linux), einen SOCKS5-Proxy als host:port oder eine WireGuard-Konfiguration.',
     invalid_wireguard_config: 'Die WireGuard-Konfiguration ist ungültig.',
     invalid_torrent_limit: 'Die Limits müssen ganze Zahlen von 0 bis 10.000 Mbit/s sein.',
+    invalid_torrent_trackers:
+      'Gib höchstens 30 Tracker ein, jeder eine HTTP-, HTTPS- oder UDP-Announce-URL, UDP mit Port, mit höchstens 500 Zeichen.',
     invalid_cache_size: 'Der Speicherplatz muss eine ganze Zahl von 1 bis 2.000 GB sein.',
     invalid_vaapi_device: 'Wähle die Grafikkarte aus der Liste.',
     invalid_recordings_folder:

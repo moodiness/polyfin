@@ -173,6 +173,8 @@ const system: typeof en = {
           refused:
             'os trackers recusaram o anúncio ou não responderam, e a DHT não encontrou nenhum peer',
           no_peers: 'os trackers e a DHT não encontraram nenhum peer',
+          no_trackers:
+            'o complemento não indicou nenhum tracker, e a DHT não encontrou nenhum peer',
           silent: 'foram encontrados peers, mas nenhum o enviou',
         },
         torrentStartPeers: (found: number, why: string) =>

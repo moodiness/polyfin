@@ -164,6 +164,9 @@ const settings: typeof en = {
       atOnce: 'Torrent contemporanei (0 = nessun limite)',
       atOnceHelp: (r: RangeText) =>
         `Quanti torrent possono essere attivi contemporaneamente, per tutti gli utenti insieme. Al limite, un titolo riproduce un’altra delle sue versioni che non sia un torrent, oppure risulta non riproducibile per ora; un posto si libera quando un torrent si ferma, 30 secondi dopo la sua riproduzione, o subito quando lo stesso dispositivo o utente riproduce un altro titolo. Da 0 a ${r.max}; ${r.default} per impostazione predefinita.`,
+      trackers: 'Tracker aggiunti a ogni torrent',
+      trackersHelp: (r: RangeText) =>
+        `URL di annuncio, uno per riga, come udp://tracker.example:1337/announce. Polyfin chiede loro i peer di ogni torrent, oltre ai tracker indicati dal suo add-on: così un torrent che l’add-on elenca senza alcun tracker non dipende solo dalla DHT. HTTP, HTTPS e UDP; al massimo ${r.max}. Un torrent privato interroga solo i propri tracker. Vuoto per impostazione predefinita: Polyfin non include alcun elenco.`,
     },
     dlna: {
       title: 'DLNA',

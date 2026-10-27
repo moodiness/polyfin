@@ -254,3 +254,66 @@ func TestWireGuardSettingsAndHealth(t *testing.T) {
 		t.Fatalf("Health's torrents: %v", torrents)
 	}
 }
+
+// A torrent whose addon named no tracker, which the DHT did not find, is
+// told as such by Health, which links to the trackers the settings add.
+func TestHealthTellsTheAddonNamedNoTracker(t *testing.T) {
+	t.Parallel()
+	proxy := torrenttest.StartProxy(t, true, "", "")
+	var engine *torrent.Engine
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
+		settings := o.Accounts.Settings()
+		settings.TorrentStreams, settings.TorrentProxy = true, proxy.Address()
+		if _, err := o.Accounts.UpdateSettings(t.Context(), settings); err != nil {
+			t.Fatal(err)
+		}
+		var err error
+		engine, err = torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(o.Accounts.Settings()) },
+			Dir: t.TempDir(), Budget: func() int64 { return 1 << 20 }, StartTimeout: time.Second, Logger: slog.New(slog.DiscardHandler)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(engine.Close)
+		o.Health = HealthSources{Torrents: engine}
+	})
+	tor := torrenttest.Build("A Movie", 32<<10, torrenttest.File{Name: "a.mkv", Data: torrenttest.Bytes(100 << 10)})
+	spec, err := torrent.NewSpec(tor.HashHex(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Play(spec)()
+	var unstarted *torrent.StartError
+	if _, err := engine.Open(t.Context(), spec); !errors.As(err, &unstarted) {
+		t.Fatalf("got %v, want a StartError", err)
+	}
+	administrator := api.signedIn("administrator", true)
+	_, body, _ := administrator.call(http.MethodGet, "/health/problems?language=en", nil)
+	found, _ := body["problems"].([]any)
+	want := map[string]any{"key": "torrents:start", "code": "torrent_start", "tone": "warning",
+		"to": "/settings/torrents#torrent-trackers", "transient": false, "failure": "no_trackers"}
+	if len(found) != 1 || !reflect.DeepEqual(found[0], want) {
+		t.Fatalf("problems: %v", found)
+	}
+}
+
+// The trackers added to every torrent are saved from the settings page,
+// sent back, and refused with their own error when one is not valid.
+func TestTorrentTrackersSettings(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("root", true)
+	status, body, _ := administrator.call(http.MethodPut, "/settings", map[string]any{"serverName": "Polyfin", "language": "en",
+		"torrentTrackers": []string{"udp://tracker.example:1337/announce", " https://tracker.example/announce "}})
+	if got, _ := body["torrentTrackers"].([]any); status != http.StatusOK || !reflect.DeepEqual(got,
+		[]any{"udp://tracker.example:1337/announce", "https://tracker.example/announce"}) {
+		t.Fatalf("save: %d %v", status, body)
+	}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", map[string]any{"serverName": "Polyfin", "language": "en",
+		"torrentTrackers": []string{"udp://tracker.example/announce"}}); status != http.StatusBadRequest || body["error"] != "invalid_torrent_trackers" {
+		t.Errorf("a UDP tracker without a port: %d %v", status, body)
+	}
+	// Left out, they are kept.
+	if _, body, _ := administrator.call(http.MethodPut, "/settings", map[string]any{"serverName": "Polyfin", "language": "en"}); len(body["torrentTrackers"].([]any)) != 2 {
+		t.Errorf("left out: %v", body["torrentTrackers"])
+	}
+}

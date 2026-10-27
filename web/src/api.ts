@@ -637,6 +637,8 @@ export type Settings = {
   torrentUploadMbps: number
   /** How many torrents may run at once, server-wide, 0 for no limit. */
   torrentsAtOnce: number
+  /** Announce URLs of trackers asked for every torrent besides those its addon names. */
+  torrentTrackers: string[]
   /**
    * Folders of the segments of conversions, of the files being read, and of the cache; empty uses
    * cacheFolderDefault, the cache in the data folder. Each applies at the next start.
@@ -3842,7 +3844,7 @@ export type HealthProblem = {
    */
   | {
       code: 'torrent_start'
-      failure: 'no_udp' | 'refused' | 'no_peers' | 'silent'
+      failure: 'no_udp' | 'refused' | 'no_trackers' | 'no_peers' | 'silent'
       peers?: TorrentPeerCounts
     }
   | { code: 'proxy_name_unresolved'; name: string }

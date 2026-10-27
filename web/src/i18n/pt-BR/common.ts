@@ -274,6 +274,8 @@ const common: typeof en = {
       'As streams de torrent precisam de uma única rota: um nome de interface de rede (somente Linux), um proxy SOCKS5 no formato host:porta ou uma configuração do WireGuard.',
     invalid_wireguard_config: 'A configuração do WireGuard não é válida.',
     invalid_torrent_limit: 'Os limites devem ser números inteiros de Mbps de 0 a 10000.',
+    invalid_torrent_trackers:
+      'Informe no máximo 30 trackers, cada um uma URL de anúncio HTTP, HTTPS ou UDP, UDP com a porta, de no máximo 500 caracteres.',
     invalid_cache_size: 'O espaço em disco deve ser um número inteiro de GB de 1 a 2000.',
     invalid_vaapi_device: 'Escolha a placa de vídeo na lista.',
     invalid_recordings_folder:

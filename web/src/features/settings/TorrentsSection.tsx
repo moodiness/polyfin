@@ -3,6 +3,7 @@ import { useI18n } from '@/i18n'
 import { NumberInput, SecretField, Select, Textarea, TextInput } from '@/ui'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
+import WordList from './WordList'
 
 type Route = 'interface' | 'proxy' | 'wireguard'
 
@@ -210,6 +211,17 @@ export default function TorrentsSection({
             update({ torrentsAtOnce: Math.trunc(value) }),
           )}
           className="max-w-[10rem]"
+        />
+      </FieldRow>
+      <FieldRow
+        anchor="torrent-trackers"
+        label={text.trackers}
+        help={text.trackersHelp(range('torrentTrackers'))}
+        error={error('torrent-trackers')}
+      >
+        <WordList
+          value={form.torrentTrackers}
+          onValue={(torrentTrackers) => update({ torrentTrackers })}
         />
       </FieldRow>
     </SettingsGroup>

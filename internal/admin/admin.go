@@ -667,6 +667,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
 		{accounts.ErrInvalidTorrentRoute, http.StatusBadRequest, "invalid_torrent_route"},
 		{accounts.ErrInvalidTorrentLimit, http.StatusBadRequest, "invalid_torrent_limit"},
+		{accounts.ErrInvalidTorrentTrackers, http.StatusBadRequest, "invalid_torrent_trackers"},
 		{accounts.ErrInvalidVAAPIDevice, http.StatusBadRequest, "invalid_vaapi_device"},
 		{accounts.ErrInvalidRecordingsFolder, http.StatusBadRequest, "invalid_recordings_folder"},
 		{accounts.ErrInvalidBackupFolder, http.StatusBadRequest, "invalid_backup_folder"},

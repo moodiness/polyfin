@@ -287,6 +287,8 @@ const common: typeof en = {
       'Las transmisiones torrent necesitan una sola ruta: un nombre de interfaz de red (solo Linux), un proxy SOCKS5 con el formato host:puerto o una configuración de WireGuard.',
     invalid_wireguard_config: 'La configuración de WireGuard no es válida.',
     invalid_torrent_limit: 'Los límites deben ser números enteros de Mbps de 0 a 10.000.',
+    invalid_torrent_trackers:
+      'Introduzca 30 trackers como máximo, cada uno una URL de anuncio HTTP, HTTPS o UDP, UDP con su puerto, de 500 caracteres como máximo.',
     invalid_cache_size: 'El espacio en disco debe ser un número entero de GB de 1 a 2000.',
     invalid_vaapi_device: 'Elija la tarjeta gráfica en la lista.',
     invalid_recordings_folder:

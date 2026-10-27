@@ -273,7 +273,8 @@ func (s *Service) TorrentRunning(infoHash string) bool {
 func TorrentSettings(s accounts.Settings) torrent.Settings {
 	return torrent.Settings{Enabled: s.TorrentStreams, Interface: s.TorrentInterface, Proxy: s.TorrentProxy,
 		ProxyUser: s.TorrentProxyUser, ProxyPassword: s.TorrentProxyPassword, WireGuard: s.TorrentWireGuard,
-		DownloadMbps: s.TorrentDownloadMbps, UploadMbps: s.TorrentUploadMbps, AtOnce: s.TorrentsAtOnce}
+		DownloadMbps: s.TorrentDownloadMbps, UploadMbps: s.TorrentUploadMbps, AtOnce: s.TorrentsAtOnce,
+		Trackers: s.TorrentTrackers}
 }
 
 // errNoTorrents reports a torrent's file read without an engine.

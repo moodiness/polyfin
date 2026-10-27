@@ -1118,6 +1118,14 @@ export const settingEntries: readonly SettingEntry[] = [
     keywords: ['torrent', 'cap', 'limit', 'swarm'],
     codes: ['invalid_torrent_limit'],
   },
+  {
+    section: 'torrents',
+    anchor: 'torrent-trackers',
+    label: (t) => s(t).torrents.trackers,
+    help: (t, r) => s(t).torrents.trackersHelp(r('torrentTrackers')),
+    keywords: ['torrent', 'tracker', 'announce', 'DHT', 'peers'],
+    codes: ['invalid_torrent_trackers'],
+  },
   // DLNA
   {
     section: 'dlna',

@@ -169,6 +169,8 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 				switch {
 				case name == "acmeHosts":
 					entries = append(entries, "host-"+strconv.Itoa(i)+".example.org")
+				case name == "torrentTrackers":
+					entries = append(entries, "udp://tracker.example:"+strconv.Itoa(1000+i)+"/announce")
 				case field.Type().Elem().Kind() == reflect.String:
 					entries = append(entries, "App "+strconv.Itoa(i))
 				case field.Type().Elem() == reflect.TypeFor[ID]():

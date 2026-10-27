@@ -438,8 +438,13 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 					To: "/settings/torrents#torrent-route", Name: h.Accounts.Settings().TorrentProxy})
 			}
 			if u := status.Unstarted; u != nil && status.RouteError == nil && h.now().Sub(status.UnstartedAt) < unstartedFor {
+				failure, to := torrentStartFailure(u), "/settings/torrents#torrent-route"
+				if failure == "no_trackers" {
+					// Trackers of the settings would be asked.
+					to = "/settings/torrents#torrent-trackers"
+				}
 				add(healthProblemJSON{Key: "torrents:start", Code: problemTorrentStart, Tone: notifications.SeverityWarning,
-					To: "/settings/torrents#torrent-route", Failure: torrentStartFailure(u), Peers: newPeerCountsJSON(u)})
+					To: to, Failure: failure, Peers: newPeerCountsJSON(u)})
 			}
 		}
 	}
@@ -867,6 +872,12 @@ func (p healthProblemJSON) text(language string) string {
 			"no_peers": {"its trackers and the DHT found no peer", "ses trackers et le DHT n’ont trouvé aucun pair",
 				"seine Tracker und das DHT haben keinen Peer gefunden", "sus trackers y la DHT no encontraron ningún par",
 				"i suoi tracker e la DHT non hanno trovato nessun peer", "os trackers e a DHT não encontraram nenhum peer"},
+			"no_trackers": {"the addon named no tracker, and the DHT found no peer",
+				"l’addon n’a indiqué aucun tracker, et le DHT n’a trouvé aucun pair",
+				"das Add-on hat keinen Tracker genannt, und das DHT hat keinen Peer gefunden",
+				"la extensión no indicó ningún tracker, y la DHT no encontró ningún par",
+				"l’add-on non ha indicato nessun tracker, e la DHT non ha trovato nessun peer",
+				"o complemento não indicou nenhum tracker, e a DHT não encontrou nenhum peer"},
 			"silent": {"peers were found, but none sent it", "des pairs ont été trouvés, mais aucun ne l’a envoyé",
 				"es wurden Peers gefunden, aber keiner hat ihn gesendet", "se encontraron pares, pero ninguno lo envió",
 				"sono stati trovati dei peer, ma nessuno l’ha inviato", "foram encontrados peers, mas nenhum o enviou"},
@@ -983,8 +994,10 @@ const unstartedFor = 15 * time.Minute
 
 // torrentStartFailure is the code of why a torrent did not start: peers
 // found that sent nothing ("silent"), none found over a route without UDP
-// ("no_udp"), trackers that all refused or did not answer ("refused"), or
-// none found where it was looked for ("no_peers").
+// ("no_udp"), trackers that all refused or did not answer ("refused"),
+// none found on the DHT, the addon having named no tracker and the
+// settings adding none ("no_trackers"), or none found where it was looked
+// for ("no_peers").
 func torrentStartFailure(err *torrent.StartError) string {
 	switch {
 	case err.Found > 0:
@@ -993,6 +1006,8 @@ func torrentStartFailure(err *torrent.StartError) string {
 		return "no_udp"
 	case err.Trackers > 0 && err.Answered == 0:
 		return "refused"
+	case err.Trackers == 0 && err.NoneNamed:
+		return "no_trackers"
 	}
 	return "no_peers"
 }

@@ -175,6 +175,7 @@ const system: typeof en = {
           refused:
             'ses trackers ont refusé l’annonce ou n’ont pas répondu, et le DHT n’a trouvé aucun pair',
           no_peers: 'ses trackers et le DHT n’ont trouvé aucun pair',
+          no_trackers: 'l’addon n’a indiqué aucun tracker, et le DHT n’a trouvé aucun pair',
           silent: 'des pairs ont été trouvés, mais aucun ne l’a envoyé',
         },
         torrentStartPeers: (found: number, why: string) =>

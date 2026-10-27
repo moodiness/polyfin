@@ -160,6 +160,9 @@ const settings = {
       atOnce: 'Torrents at once (0 = no limit)',
       atOnceHelp: (r: RangeText) =>
         `How many torrents may run at once, for every user together. At the limit, a title plays another of its versions that is not a torrent, or is said to be unplayable for now; a place frees as a torrent stops, 30 seconds after its playback, or at once when the same device or user plays another title. From 0 to ${r.max}; ${r.default} by default.`,
+      trackers: 'Trackers added to every torrent',
+      trackersHelp: (r: RangeText) =>
+        `Announce URLs, one a line, such as udp://tracker.example:1337/announce. Polyfin asks them for the peers of every torrent, besides the trackers its addon names: a torrent the addon lists without any is then not left to the DHT alone. HTTP, HTTPS and UDP; ${r.max} at most. A private torrent asks its own trackers only. Empty by default: Polyfin comes with no list.`,
     },
     dlna: {
       title: 'DLNA',

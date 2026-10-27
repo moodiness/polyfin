@@ -704,8 +704,9 @@ type settingsJSON struct {
 	UpdateToolToken    *string `json:"updateToolToken,omitempty"`
 	UpdateToolTokenSet bool    `json:"updateToolTokenSet"`
 	// TorrentStreams, TorrentInterface, TorrentProxy, TorrentProxyUser,
-	// TorrentDownloadMbps, TorrentUploadMbps and TorrentsAtOnce keep their
-	// current values when a PUT leaves them out. The proxy's password is
+	// TorrentDownloadMbps, TorrentUploadMbps, TorrentsAtOnce and
+	// TorrentTrackers, one announce URL per entry, keep their current
+	// values when a PUT leaves them out. The proxy's password is
 	// never sent back:
 	// TorrentProxyPasswordSet tells whether one is saved; a PUT leaving it
 	// out keeps it, and empty removes it. The WireGuard configuration is
@@ -725,6 +726,7 @@ type settingsJSON struct {
 	TorrentDownloadMbps     *int           `json:"torrentDownloadMbps"`
 	TorrentUploadMbps       *int           `json:"torrentUploadMbps"`
 	TorrentsAtOnce          *int           `json:"torrentsAtOnce"`
+	TorrentTrackers         *[]string      `json:"torrentTrackers"`
 	InterfaceRoutes         bool           `json:"interfaceRoutes"`
 	// ConversionFolder, ReadingFolder and CacheFolder keep their current
 	// values when a PUT leaves them out; empty is the cache in the data
@@ -959,6 +961,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TorrentDownloadMbps:     &settings.TorrentDownloadMbps,
 		TorrentUploadMbps:       &settings.TorrentUploadMbps,
 		TorrentsAtOnce:          &settings.TorrentsAtOnce,
+		TorrentTrackers:         &settings.TorrentTrackers,
 		ConversionFolder:        &settings.ConversionFolder,
 		ReadingFolder:           &settings.ReadingFolder,
 		CacheFolder:             &settings.CacheFolder,
@@ -1678,6 +1681,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TorrentDownloadMbps:  valueOr(body.TorrentDownloadMbps, current.TorrentDownloadMbps),
 		TorrentUploadMbps:    valueOr(body.TorrentUploadMbps, current.TorrentUploadMbps),
 		TorrentsAtOnce:       valueOr(body.TorrentsAtOnce, current.TorrentsAtOnce),
+		TorrentTrackers:      valueOr(body.TorrentTrackers, current.TorrentTrackers),
 		ConversionFolder:     valueOr(body.ConversionFolder, current.ConversionFolder),
 		ReadingFolder:        valueOr(body.ReadingFolder, current.ReadingFolder),
 		CacheFolder:          valueOr(body.CacheFolder, current.CacheFolder),

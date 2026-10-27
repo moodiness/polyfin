@@ -1696,6 +1696,10 @@ type Settings struct {
 	TorrentDownloadMbps  int
 	TorrentUploadMbps    int
 	TorrentsAtOnce       int
+	// TorrentTrackers are announce URLs of trackers asked for every
+	// torrent besides those its addon names (see torrent.Settings), none
+	// by default: Polyfin ships no list.
+	TorrentTrackers []string
 	// ConversionFolder keeps the segments of conversions and
 	// repackagings; ReadingFolder the files being read, the blocks of
 	// addons' files and torrents' pieces; CacheFolder the cache, relayed
@@ -1722,26 +1726,56 @@ func (s Settings) TorrentsAllowed(user User) bool {
 const InterfaceRoutes = runtime.GOOS == "linux"
 
 // The bounds of Settings.TorrentDownloadMbps and TorrentUploadMbps, and
-// of the fields of the torrents' route.
+// of the fields of the torrents' route; MaxTorrentTrackers trackers of
+// MaxTorrentTrackerBytes at most are added to every torrent.
 const (
 	MaxTorrentMbps          = 10000
 	MaxTorrentsAtOnce       = 100
 	MaxTorrentInterfaceName = 15
 	MaxTorrentProxyBytes    = 255
+	MaxTorrentTrackers      = torrent.MaxTrackers
+	MaxTorrentTrackerBytes  = 500
 )
 
 // ErrInvalidTorrentRoute reports torrent settings without a route while
 // torrents play, with more than one, with an interface name or a proxy
 // address not valid, or with an interface on a system other than Linux;
 // ErrInvalidTorrentLimit a limit outside [0, MaxTorrentMbps], or torrents
-// at once outside [0, MaxTorrentsAtOnce]; and
+// at once outside [0, MaxTorrentsAtOnce];
 // ErrInvalidWireGuardConfig a WireGuard configuration refused, wrapped
-// with the *torrent.WireGuardConfigError that tells why.
+// with the *torrent.WireGuardConfigError that tells why; and
+// ErrInvalidTorrentTrackers more than MaxTorrentTrackers trackers, or one
+// that is not an HTTP, HTTPS or UDP announce URL of
+// MaxTorrentTrackerBytes at most.
 var (
 	ErrInvalidTorrentRoute    = errors.New("invalid route for torrents")
 	ErrInvalidTorrentLimit    = errors.New("invalid limit for torrents")
 	ErrInvalidWireGuardConfig = errors.New("invalid WireGuard configuration")
+	ErrInvalidTorrentTrackers = errors.New("invalid trackers for torrents")
 )
+
+// canonicalTorrentTrackers checks the trackers added to every torrent and
+// returns them trimmed, each once, in the order given, empty lines left
+// out; empty, not nil, for none, as the column holds no NULL.
+func canonicalTorrentTrackers(trackers []string) ([]string, error) {
+	canonical := make([]string, 0, len(trackers))
+	for _, tracker := range trackers {
+		tracker = strings.TrimSpace(tracker)
+		if tracker == "" {
+			continue
+		}
+		if len(tracker) > MaxTorrentTrackerBytes || !torrent.ValidTracker(tracker) {
+			return nil, ErrInvalidTorrentTrackers
+		}
+		if !slices.Contains(canonical, tracker) {
+			canonical = append(canonical, tracker)
+		}
+	}
+	if len(canonical) > MaxTorrentTrackers {
+		return nil, ErrInvalidTorrentTrackers
+	}
+	return canonical, nil
+}
 
 // validTorrentRoute checks the torrent settings' route.
 func validTorrentRoute(s Settings) bool {
@@ -1889,6 +1923,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
 	"metrics, metrics_token, " +
 	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_wireguard, torrent_download_mbps, torrent_upload_mbps, torrents_at_once, " +
+	"torrent_trackers, " +
 	"restart_confirmed, update_tool_url, update_tool_token, " +
 	"conversion_folder, reading_folder, cache_folder, " +
 	"silo_apps"
@@ -1950,6 +1985,7 @@ func (settings *Settings) fields() []any {
 		&settings.TorrentStreams, &settings.TorrentInterface, &settings.TorrentProxy, &settings.TorrentProxyUser, &settings.TorrentProxyPassword,
 		&settings.TorrentWireGuard,
 		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps, &settings.TorrentsAtOnce,
+		&settings.TorrentTrackers,
 		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken,
 		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder,
 		&settings.SiloApps}
@@ -2471,6 +2507,11 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		settings.TorrentsAtOnce < 0 || settings.TorrentsAtOnce > MaxTorrentsAtOnce {
 		return Settings{}, ErrInvalidTorrentLimit
 	}
+	trackers, err := canonicalTorrentTrackers(settings.TorrentTrackers)
+	if err != nil {
+		return Settings{}, err
+	}
+	settings.TorrentTrackers = trackers
 	// Metrics turned on with no token, the first time or when the key
 	// cannot read the one stored, get one.
 	if settings.Metrics && settings.MetricsToken == "" {

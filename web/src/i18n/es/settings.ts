@@ -160,6 +160,9 @@ const settings: typeof en = {
       atOnce: 'Torrents a la vez (0 = sin límite)',
       atOnceHelp: (r: RangeText) =>
         `Cuántos torrents pueden funcionar a la vez, para todos los usuarios juntos. En el límite, un título reproduce otra de sus versiones que no sea un torrent, o se indica que no se puede reproducir por ahora; un lugar se libera cuando un torrent se detiene, 30 segundos después de su reproducción, o enseguida cuando el mismo dispositivo o usuario reproduce otro título. De 0 a ${r.max}; ${r.default} de forma predeterminada.`,
+      trackers: 'Trackers añadidos a cada torrent',
+      trackersHelp: (r: RangeText) =>
+        `URL de anuncio, una por línea, como udp://tracker.example:1337/announce. Polyfin les pide los pares de cada torrent, además de los trackers que indica su extensión: así, un torrent que la extensión lista sin ninguno no depende solo de la DHT. HTTP, HTTPS y UDP; ${r.max} como máximo. Un torrent privado solo pregunta a sus propios trackers. Vacío de forma predeterminada: Polyfin no incluye ninguna lista.`,
     },
     dlna: {
       title: 'DLNA',
