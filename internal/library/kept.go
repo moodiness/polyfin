@@ -37,7 +37,9 @@ import (
 //
 // A fetch is shared by every request that needs it at once, and runs on a
 // context of its own: a request that gives up stops waiting, not the
-// fetch, whose answer is kept for the next request.
+// fetch, whose answer is kept for the next request. Catalog pages wait for
+// a place among those asked of their addon's host, and are not asked of a
+// host that asked to wait (see catalogwaits.go).
 
 const (
 	// staleCatalogs is how long catalog pages and automatic images are kept
@@ -265,17 +267,50 @@ func (s *Service) refetchPage(ctx context.Context, src source, key pageKey, stal
 }
 
 // fetchPage asks the addon for a catalog page, and keeps its answer, as old
-// as the request: a slow answer is not taken for a newer one.
+// as the request: a slow answer is not taken for a newer one. It waits for
+// a place among the pages asked of the addon's host, and asks nothing of a
+// host that asked to wait: it fails at once with stremio.ErrAskedToWait.
+// A search is asked at once all the same, one request a term that its
+// callers bound and pace themselves (see RemoteSearch and localfiles'
+// searches), but its refusal starts the wait of the other pages.
 func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]stremio.Meta, error) {
 	extra, ok := src.extras(key.skip)
 	if !ok {
 		return nil, nil
 	}
+	manifest := src.addon.addon.ManifestURL
+	host := stremio.HostOf(manifest)
+	release := func() {}
+	if key.search == "" {
+		if left, waits := s.catalogWaitLeft(host); waits {
+			return nil, stremio.AskedToWait(left)
+		}
+		var err error
+		if release, err = s.catalogSlots.acquire(ctx, host); err != nil {
+			return nil, err
+		}
+		// The host may have asked to wait while this page waited for its
+		// place.
+		if left, waits := s.catalogWaitLeft(host); waits {
+			release()
+			return nil, stremio.AskedToWait(left)
+		}
+	}
 	asked := s.now()
-	metas, err := s.client.Catalog(ctx, src.addon.addon.ManifestURL, src.catalog.Type, src.catalog.ID, extra, src.addon.confined)
+	metas, err := s.client.Catalog(ctx, manifest, src.catalog.Type, src.catalog.ID, extra, src.addon.confined)
+	// A refusal is noted before the place is freed, so that the page
+	// waiting for it finds the wait.
 	if err != nil {
+		wait, started := s.catalogRefused(manifest, err)
+		release()
+		if started {
+			s.logger.Info("An addon asked to wait: no catalog page is asked of its server until the wait ends", "addon",
+				src.addon.addon.Manifest.Name, "catalog", src.catalog.ID, "skip", key.skip, "genre", key.genre, "wait", wait)
+		}
 		return nil, err
 	}
+	release()
+	s.catalogAnswered(host)
 	for i := range metas {
 		withoutGenerated(&metas[i])
 	}
@@ -298,13 +333,25 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 }
 
 // refreshPage asks the addon for a page again in the background; the page
-// kept, given at seen, stays until it answers.
+// kept, given at seen, stays until it answers. A page whose refresh failed
+// is not refreshed again for failedRefreshWait, nor any page while its
+// addon's host asked to wait.
 func (s *Service) refreshPage(ctx context.Context, src source, key pageKey, seen time.Time) {
+	if _, failed := s.failedRefreshes.Get(key); failed {
+		return
+	}
+	if _, waiting := s.catalogWaitLeft(stremio.HostOf(src.addon.addon.ManifestURL)); waiting {
+		return
+	}
 	due := func() bool { return !replacedSince(s.pagesOf(key), key, seen) }
 	s.background(ctx, fmt.Sprintf("refresh page %v", key), due, func(ctx context.Context) error {
 		_, err := s.fetchPage(ctx, src, key)
 		if err != nil {
-			s.logger.Debug("A catalog page could not be refreshed", "catalog", src.catalog.ID, "error", err)
+			s.failedRefreshes.Put(key, s.now())
+			if !errors.Is(err, stremio.ErrAskedToWait) {
+				s.logger.Debug("A catalog page could not be refreshed", "catalog", src.catalog.ID, "skip", key.skip, "genre", key.genre,
+					"error", err)
+			}
 		}
 		return err
 	})

@@ -447,6 +447,20 @@ To answer quickly:
 
 Every change to these settings applies at once, to what is already kept too.
 
+#### Addons that ask to wait
+
+Public addons limit how often one server may ask them. Polyfin keeps to what they ask:
+
+- **At most 8 pages at once:** Polyfin asks one addon's server for at most 8 catalog pages at a time, over all the listings, refreshes and users asking. The others wait their turn. Users' own copies of an addon, and the addons a server serves, share its 8. Searches are not counted: a search asks each search catalog once a term, and they are bounded where they are made.
+- **The wait it asks for:** an addon that answers a catalog page "too many requests" (HTTP 429), or 503 with `Retry-After`, is asked for no catalog page until the wait it asks for (`Retry-After`) ends, 15 minutes at most. Without `Retry-After`, it waits 5 seconds, then twice as long each time it refuses again after a wait. The requests already under way when it refused still get their answers; the others are not sent.
+- **Meanwhile:** the pages kept still show, and none is read again. A page never read, such as another genre or a page further down, cannot be listed: a listing shows the titles before it as the whole listing, and its total counts them only. A listing that would start past them, or a library whose first page was never read, fails as before, and apps show their error. Once the wait ends, the next visit reads the rest. Searches are still asked, one request a term: [local folders](local-folders.md#failed-searches) wait as the addon asks.
+- **Failed refreshes:** a page whose refresh failed, whatever the reason, is not read again for a minute: the page kept shows meanwhile.
+- **Log and Health:** the log says once, at Info, that the addon asked to wait, with the catalog, the page (`skip`, `genre`) and the wait: `An addon asked to wait: no catalog page is asked of its server until the wait ends`. With **Detailed log**, each refresh that failed otherwise says which page. **System › Health › Addons** shows the addon as "asked to slow down (too many requests)" until the wait ends, even when it answers other requests meanwhile.
+
+The same is true of a page that cannot be read for another reason, such as a server error: a listing shows the titles before it. A longer **Refresh catalogs after (minutes)** has an addon asked less often.
+
+**Compared with Jellyfin:** Jellyfin lists its own database, so a listing never lacks titles because a remote source refused it. Polyfin's `TotalRecordCount` then counts only the titles it could read, so that apps page through what is there rather than ask for titles it cannot give.
+
 
 ### Refreshing a library's descriptions
 

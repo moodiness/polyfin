@@ -63,7 +63,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 
 **System › Health** puts problems first, under **Needs attention**, followed there by a new version of Polyfin when one is out (see [New versions](#new-versions)). It then shows:
 
-- **Addons**, from the requests made for apps since start: last answer, last failure and response time. **Check** asks an addon for its manifest once, at most once a minute. For a member's own addon, it reaches only public addresses.
+- **Addons**, from the requests made for apps since start: last answer, last failure and response time. **Check** asks an addon for its manifest once, at most once a minute. For a member's own addon, it reaches only public addresses. An addon whose server asked to wait for its catalog pages shows "asked to slow down (too many requests)" until the wait ends, whatever it answered meanwhile (see [Addons that ask to wait](addons-and-libraries.md#addons-that-ask-to-wait)); `GET /admin/api/health` gives the end of the wait as the addon's `catalogsWaitUntil`, `null` when none runs.
 - **IPTV sources** and **Programme guides**.
 - **Network shares**, when there are some: whether each is **Notified** of its changes by its server, **Polled** by listing its folders again every 2 minutes, or **Not watched**, and why (see [Local folders](local-folders.md#watching-for-changes)).
 - Under **Server**:

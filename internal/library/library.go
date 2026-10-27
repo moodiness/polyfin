@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -116,6 +117,12 @@ type Service struct {
 	searchGrace  time.Duration
 	searchBound  time.Duration
 	lateSearches lateSearches
+	// catalogWaits are the waits hosts asked for, catalogSlots bound the
+	// catalog pages asked of each host at once, and failedRefreshes are
+	// the pages whose refresh failed lately (see catalogwaits.go).
+	catalogWaits    catalogWaits
+	catalogSlots    *addonSlots[string]
+	failedRefreshes *cache.Cache[pageKey, time.Time]
 	// guideDir is where XMLTV guides in ZIP archives are spooled while they
 	// are read (see SpoolGuidesIn); empty, they are not read.
 	guideDir string
@@ -281,6 +288,8 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.searchPages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](500, func() time.Duration { return searchTTL }, clock).
 		Sized(16<<20, fetchedSize[[]stremio.Meta])
 	s.libraryImages = cache.NewLasting[pageKey, fetched[foundImage]](1000, s.keptCatalogLife, clock)
+	s.catalogSlots = &addonSlots[string]{size: catalogHostFetches, slots: map[string]chan struct{}{}}
+	s.failedRefreshes = cache.NewLasting[pageKey, time.Time](4000, func() time.Duration { return failedRefreshWait }, clock)
 	s.prefetches = make(chan struct{}, prefetchLimit)
 	s.translations = make(chan struct{}, translationReaders)
 	s.readAhead = true
@@ -722,7 +731,9 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // before positions are counted. A restricted listing reads at most
 // hiddenReach times as far as an unrestricted one, and stops where titles
 // wait for their rating: it reports that more may follow, which apps ask
-// for later, once the ratings are known.
+// for later, once the ratings are known. A page the addon cannot give
+// ends the window there: it returns the items before it, counted as the
+// whole catalog, with errCutShort and why (see cutShort).
 func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
 	// An IPTV source's movies and series are paged and counted from its
 	// stored lists, whole, but for a restricted user, or one who hid
@@ -744,6 +755,7 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	if v.restricted() {
 		reach = min(limit, hiddenReach*(start+count))
 	}
+	var failed error
 	for len(collected) < start+count {
 		if received >= reach {
 			more = received < limit
@@ -775,14 +787,19 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 				offsets = append(offsets, next)
 			}
 		}
-		pages, missing, err := s.pagesAt(ctx, src, offsets)
-		if err != nil {
-			return nil, 0, err
+		pages, missing, errs := s.pagesAt(ctx, src, offsets)
+		if ctx.Err() != nil {
+			return nil, 0, ctx.Err()
 		}
 		var fresh []stremio.Meta
 		repeated, unknown := false, false
 		for i, metas := range pages {
 			if offsets[i] != received {
+				break
+			}
+			// A page the addon could not give ends what can be listed.
+			if errs[i] != nil {
+				failed = errs[i]
 				break
 			}
 			// A page not kept, read without asking the addon (see
@@ -816,6 +833,9 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 			v.held.Store(true)
 			break
 		}
+		if failed != nil {
+			break
+		}
 		if repeated || unknown {
 			more = unknown
 			break
@@ -827,6 +847,13 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	}
 	if trusted && size > remembered {
 		s.learnPageSize(ctx, src, size)
+	}
+	if failed != nil {
+		err := fmt.Errorf("%w: %w", errCutShort, failed)
+		if start >= len(collected) {
+			return nil, len(collected), err
+		}
+		return collected[start:min(start+count, len(collected))], len(collected), err
 	}
 	total := len(collected)
 	if more {
@@ -842,23 +869,35 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 // catalog's page size: the catalog may simply hold that few titles.
 const shortPage = 10
 
-// pagesAt fetches the catalog pages starting at each offset together. The
-// pages kept answer at once: reads bound the pages they fetch (see
-// window). missing tells the pages a read that asks no addon does not
-// know.
-func (s *Service) pagesAt(ctx context.Context, src source, offsets []int) (pages [][]stremio.Meta, missing []bool, err error) {
-	pages, missing = make([][]stremio.Meta, len(offsets)), make([]bool, len(offsets))
-	group, groupCtx := errgroup.WithContext(ctx)
+// errCutShort reports a window that ends at a page its addon could not
+// give (see window).
+var errCutShort = errors.New("a catalog page could not be read")
+
+// cutShort reports whether a window's err leaves its items to list: it
+// stopped at a page its addon could not give, after items of the window
+// were read. Apps then get those items as the whole listing, and the rest
+// once the addon gives its pages again.
+func cutShort(err error, items int) bool {
+	return errors.Is(err, errCutShort) && items > 0
+}
+
+// pagesAt fetches the catalog pages starting at each offset together, and
+// tells each page's error. The pages kept answer at once: reads bound the
+// pages they fetch (see window). missing tells the pages a read that asks
+// no addon does not know.
+func (s *Service) pagesAt(ctx context.Context, src source, offsets []int) (pages [][]stremio.Meta, missing []bool, errs []error) {
+	pages, missing, errs = make([][]stremio.Meta, len(offsets)), make([]bool, len(offsets)), make([]error, len(offsets))
+	var wg sync.WaitGroup
 	for i, offset := range offsets {
-		group.Go(func() (err error) {
-			pages[i], err = s.page(groupCtx, src, offset)
-			if errors.Is(err, errNotKept) {
-				missing[i], err = true, nil
+		wg.Go(func() {
+			pages[i], errs[i] = s.page(ctx, src, offset)
+			if errors.Is(errs[i], errNotKept) {
+				missing[i], errs[i] = true, nil
 			}
-			return err
 		})
 	}
-	return pages, missing, group.Wait()
+	wg.Wait()
+	return pages, missing, errs
 }
 
 // listed is a title of a catalog, with the catalog that listed it.
@@ -881,6 +920,10 @@ func (l listed) title(parent accounts.ID) (Item, record, error) {
 func (s *Service) merged(ctx context.Context, v view, sources []source, start, count int) ([]listed, int, error) {
 	if len(sources) == 1 {
 		metas, total, err := s.window(ctx, v, sources[0], start, count)
+		if cutShort(err, len(metas)) {
+			s.logger.Debug("A listing ends at a catalog page the addon could not give", "catalog", sources[0].catalog.ID, "error", err)
+			err = nil
+		}
 		result := make([]listed, 0, len(metas))
 		for _, meta := range metas {
 			result = append(result, listed{meta, sources[0]})
@@ -1115,7 +1158,9 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		return Page{}, nil
 	}
 	metas, total, err := s.window(ctx, v, src, start, count)
-	if err != nil {
+	if cutShort(err, len(metas)) {
+		s.logger.Debug("A listing ends at a catalog page the addon could not give", "catalog", src.catalog.ID, "error", err)
+	} else if err != nil {
 		return Page{}, err
 	}
 	var items []Item

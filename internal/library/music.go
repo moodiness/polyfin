@@ -408,7 +408,7 @@ type musicCaches struct {
 	artists   musicCache[eclipse.Artist]
 	playlists musicCache[eclipse.Playlist]
 	searches  musicCache[eclipse.Results]
-	fetches   *addonSlots
+	fetches   *addonSlots[accounts.ID]
 }
 
 func newMusicCaches(s *Service) musicCaches {
@@ -420,7 +420,7 @@ func newMusicCaches(s *Service) musicCaches {
 		artists:   newMusicCache(2000, 8<<20, cache.JSONSize[eclipse.Artist], fixed(metaTTL), staleMusic, clock),
 		playlists: newMusicCache(1000, 16<<20, cache.JSONSize[eclipse.Playlist], fixed(metaTTL), staleMusic, clock),
 		searches:  newMusicCache(500, 4<<20, cache.JSONSize[eclipse.Results], fixed(searchTTL), 0, clock),
-		fetches:   &addonSlots{slots: map[accounts.ID]chan struct{}{}},
+		fetches:   &addonSlots[accounts.ID]{size: addonFetches, slots: map[accounts.ID]chan struct{}{}},
 	}
 }
 
@@ -446,18 +446,20 @@ func newMusicCache[V any](capacity, maxBytes int, size func(V) int, life func() 
 	return musicCache[V]{answers: answers, life: life}
 }
 
-// addonSlots bounds the requests under way to each addon.
-type addonSlots struct {
+// addonSlots bounds the requests under way to each addon, or each host,
+// to size at once.
+type addonSlots[K comparable] struct {
+	size  int
 	mu    sync.Mutex
-	slots map[accounts.ID]chan struct{}
+	slots map[K]chan struct{}
 }
 
 // acquire waits for a place for a request to addon, which release frees.
-func (a *addonSlots) acquire(ctx context.Context, addon accounts.ID) (release func(), err error) {
+func (a *addonSlots[K]) acquire(ctx context.Context, addon K) (release func(), err error) {
 	a.mu.Lock()
 	slots, ok := a.slots[addon]
 	if !ok {
-		slots = make(chan struct{}, addonFetches)
+		slots = make(chan struct{}, a.size)
 		a.slots[addon] = slots
 	}
 	a.mu.Unlock()
