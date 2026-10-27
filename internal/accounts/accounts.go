@@ -869,7 +869,12 @@ func requireAnotherAdministrator(ctx context.Context, tx pgx.Tx, except ID) erro
 }
 
 func signOutEverywhere(ctx context.Context, tx pgx.Tx, user ID, keep signIn) ([]ID, error) {
-	devices, err := deletedDevices(tx.Query(ctx, "DELETE FROM devices WHERE user_id = $1 AND id IS DISTINCT FROM $2 RETURNING id", user, keep.device))
+	// The admin session kept keeps the web client's sign-in it was taken
+	// from, whose end would end it (see CreateDeviceAdminSession), as Jellyfin
+	// keeps the token that changed the password.
+	devices, err := deletedDevices(tx.Query(ctx, `DELETE FROM devices WHERE user_id = $1 AND id IS DISTINCT FROM $2
+		AND id IS DISTINCT FROM (SELECT device FROM admin_sessions WHERE token_hash = $3)
+		RETURNING id`, user, keep.device, keep.adminSession))
 	if err != nil {
 		return nil, err
 	}

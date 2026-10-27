@@ -77,7 +77,8 @@ func scanDevice(row pgx.Row, extra ...any) (Device, error) {
 // and resets the capabilities the app reported. The device identifiers an
 // account signed in from are kept after their devices sign out, so that
 // the device comes back Unfamiliar when the account never used it, unless
-// it is the account's first.
+// it is the account's first. Admin sessions opened with a token of the
+// device identifier, whoever's, end (see CreateDeviceAdminSession).
 func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (string, Device, error) {
 	// The device's previous token, if any, stops working.
 	defer s.forgetSignIns()
@@ -99,6 +100,13 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 			RETURNING `+deviceColumns,
 			user, hash, info.DeviceID, info.DeviceName, info.Client, info.ClientVersion, info.RemoteAddress))
 		if err != nil {
+			return err
+		}
+		// The admin sessions taken from this device's sign-ins, this user's
+		// earlier one or another user's, end: the browser's web client now
+		// holds this sign-in, which the admin app takes again if asked.
+		if _, err := tx.Exec(ctx, `DELETE FROM admin_sessions s USING devices d
+			WHERE s.device = d.id AND d.device_id = $1`, info.DeviceID); err != nil {
 			return err
 		}
 		// A device seen for the first time inserts its row, which another

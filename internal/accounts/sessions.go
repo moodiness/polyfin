@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // AdminSessionLifetime is how long the admin interface stays signed in
@@ -37,8 +38,28 @@ func HashAdminToken(token string) []byte {
 }
 
 // CreateAdminSession signs a user in to the admin interface, which counts as
-// a sign-in of the account.
+// a sign-in of the account. The session lasts until it is signed out or
+// expires.
 func (s *Store) CreateAdminSession(ctx context.Context, user ID) (string, time.Time, error) {
+	return s.createAdminSession(ctx, user, nil)
+}
+
+// CreateDeviceAdminSession signs a device's user in to the admin interface,
+// for as long as the device stays signed in: the session ends with the
+// device's sign-out, and when the device signs in again, as the same user or
+// another. So the admin app, which takes jellyfin-web's sign-in in the same
+// browser, never keeps a session the web client no longer has, as Jellyfin's
+// dashboard, part of jellyfin-web, shares its sign-in. ErrNotFound when the
+// device signed out meanwhile.
+func (s *Store) CreateDeviceAdminSession(ctx context.Context, device Device) (string, time.Time, error) {
+	token, expires, err := s.createAdminSession(ctx, device.UserID, &device.ID)
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23503" {
+		return "", time.Time{}, ErrNotFound
+	}
+	return token, expires, err
+}
+
+func (s *Store) createAdminSession(ctx context.Context, user ID, device *ID) (string, time.Time, error) {
 	// The user's last sign-in changes.
 	defer s.forgetSignIns()
 	raw := make([]byte, 32)
@@ -49,8 +70,9 @@ func (s *Store) CreateAdminSession(ctx context.Context, user ID) (string, time.T
 		if _, err := tx.Exec(ctx, "DELETE FROM admin_sessions WHERE expires_at < now()"); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, "INSERT INTO admin_sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)",
-			HashAdminToken(token), user, expires); err != nil {
+		// A device signed out meanwhile fails its reference.
+		if _, err := tx.Exec(ctx, "INSERT INTO admin_sessions (token_hash, user_id, expires_at, device) VALUES ($1, $2, $3, $4)",
+			HashAdminToken(token), user, expires, device); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, "UPDATE users SET last_login_at = now(), last_activity_at = now() WHERE id = $1", user)

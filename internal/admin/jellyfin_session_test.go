@@ -224,3 +224,148 @@ func TestJellyfinSignInRespectsTheLockout(t *testing.T) {
 		}
 	}
 }
+
+// signInOn signs user in on the device identifier deviceID, as jellyfin-web
+// does for whoever signs in in one browser, and returns the token and the
+// device.
+func (api testAPI) signInOn(user accounts.User, deviceID string) (string, accounts.Device) {
+	api.t.Helper()
+	token, device, err := api.store.SignInDevice(api.t.Context(), user.ID, accounts.DeviceInfo{
+		DeviceID: deviceID, DeviceName: "Chrome", Client: "Jellyfin Web", ClientVersion: "12.4.0",
+	})
+	if err != nil {
+		api.t.Fatal(err)
+	}
+	return token, device
+}
+
+// An administrator opens the admin app from the web client, then signs out
+// of the web client, and a member signs in there in the same browser: the
+// administrator's admin session ended with the web client's, and the
+// member's token opens only the member's pages.
+func TestWebClientSignOutEndsTheAdminSessionItOpened(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 100)
+	root := api.createUser("root", true)
+	alice := api.createUser("alice", false)
+	b := api.browser()
+	rootToken, _ := api.signInOn(root, "shared-browser")
+	if status, body := b.exchange(rootToken); status != http.StatusOK {
+		t.Fatalf("administrator's token: %d %v", status, body)
+	}
+	// jellyfin-web's Sign Out, through /Sessions/Logout.
+	if err := api.store.SignOutDevice(t.Context(), rootToken); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/session", "/users", "/settings"} {
+		if status, _, _ := b.call(http.MethodGet, path, nil); status != http.StatusUnauthorized {
+			t.Errorf("%s after the web client signed out: %d", path, status)
+		}
+	}
+	aliceToken, _ := api.signInOn(alice, "shared-browser")
+	if status, body := b.exchange(aliceToken); status != http.StatusOK || body["user"].(map[string]any)["name"] != "alice" {
+		t.Fatalf("member's token: %d %v", status, body)
+	}
+	if status, body, _ := b.call(http.MethodGet, "/users", nil); status != http.StatusForbidden {
+		t.Errorf("/users as the member: %d %v", status, body)
+	}
+}
+
+// A sign-in on the device the admin session came from ends it, whoever
+// signs in: another user, as when the web client changes user without
+// signing out, or the same user, whose former token is replaced.
+func TestASignInOnTheDeviceEndsTheAdminSessionItOpened(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 100)
+	root := api.createUser("root", true)
+	alice := api.createUser("alice", false)
+	for _, who := range []accounts.User{alice, root} {
+		b := api.browser()
+		token, _ := api.signInOn(root, "browser-"+who.Name)
+		if status, body := b.exchange(token); status != http.StatusOK {
+			t.Fatalf("administrator's token: %d %v", status, body)
+		}
+		other := api.browser()
+		otherToken, _ := api.signInOn(root, "elsewhere-"+who.Name)
+		if status, body := other.exchange(otherToken); status != http.StatusOK {
+			t.Fatalf("administrator's token elsewhere: %d %v", status, body)
+		}
+		api.signInOn(who, "browser-"+who.Name)
+		if b.hasSession() {
+			t.Errorf("%s signed in on the device: the administrator's admin session stays", who.Name)
+		}
+		if !other.hasSession() {
+			t.Errorf("%s signed in on another device: the admin session there ended", who.Name)
+		}
+	}
+}
+
+// Signing a device out from Devices, the user's own or an administrator's,
+// ends the admin session its token opened. Sessions opened with a password
+// do not depend on any device, and stay.
+func TestDeviceSignOutEndsTheAdminSessionItOpened(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 100)
+	admin := api.signedIn("admin", true)
+	alice := api.createUser("alice", false)
+	b := api.browser()
+	token, device := api.signInOn(alice, "alice-browser")
+	if status, body := b.exchange(token); status != http.StatusOK {
+		t.Fatalf("member's token: %d %v", status, body)
+	}
+	if status, body, _ := admin.call(http.MethodDelete, "/users/"+alice.ID.String()+"/devices/"+device.ID.String(), nil); status != http.StatusNoContent {
+		t.Fatalf("signing the device out: %d %v", status, body)
+	}
+	if b.hasSession() {
+		t.Error("the admin session stays after its device was signed out")
+	}
+
+	// The same from the user's own Devices, in a session opened with a
+	// password, which stays.
+	own := api.browser()
+	if status, body, _ := own.call(http.MethodPost, "/session", map[string]string{"name": "alice", "password": "correct horse"}); status != http.StatusOK {
+		t.Fatalf("password sign-in: %d %v", status, body)
+	}
+	token, device = api.signInOn(alice, "alice-browser")
+	b = api.browser()
+	if status, body := b.exchange(token); status != http.StatusOK {
+		t.Fatalf("member's token again: %d %v", status, body)
+	}
+	if status, body, _ := own.call(http.MethodDelete, "/account/devices/"+device.ID.String(), nil); status != http.StatusNoContent {
+		t.Fatalf("signing the own device out: %d %v", status, body)
+	}
+	if b.hasSession() {
+		t.Error("the admin session stays after its device was signed out from My account")
+	}
+	if !own.hasSession() || !admin.hasSession() {
+		t.Error("a password session ended with a device")
+	}
+}
+
+// Changing one's password signs the account out everywhere but where it was
+// changed: from an admin session taken from the web client, that is both the
+// session and the web client's sign-in, which the session lasts as long as.
+func TestOwnPasswordChangeKeepsTheWebClientTheSessionCameFrom(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 100)
+	alice := api.createUser("alice", false)
+	b := api.browser()
+	token, _ := api.signInOn(alice, "alice-browser")
+	if status, body := b.exchange(token); status != http.StatusOK {
+		t.Fatalf("member's token: %d %v", status, body)
+	}
+	elsewhere, _ := api.signInOn(alice, "alice-phone")
+	change := map[string]string{"currentPassword": "correct horse", "newPassword": "another horse"}
+	if status, body, _ := b.call(http.MethodPut, "/account/password", change); status != http.StatusNoContent {
+		t.Fatalf("password change: %d %v", status, body)
+	}
+	if !b.hasSession() {
+		t.Error("the admin session that changed the password ended")
+	}
+	if _, _, err := api.store.DeviceByToken(t.Context(), token, ""); err != nil {
+		t.Errorf("the web client the session came from: %v", err)
+	}
+	if _, _, err := api.store.DeviceByToken(t.Context(), elsewhere, ""); err == nil {
+		t.Error("another device of the account stays signed in")
+	}
+}

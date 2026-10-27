@@ -144,6 +144,10 @@ func (h *handler) startSession(w http.ResponseWriter, r *http.Request, status in
 		h.internalError(w, r, err)
 		return
 	}
+	sendSession(w, r, status, user, token, expires)
+}
+
+func sendSession(w http.ResponseWriter, r *http.Request, status int, user accounts.User, token string, expires time.Time) {
 	setCookie(w, r, token, expires)
 	writeJSON(w, status, map[string]sessionUser{"user": newSessionUser(user)})
 }
@@ -255,6 +259,12 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 // client's failed attempts; the token of someone who may not have a session
 // now is no wrong guess and counts toward nothing. Neither is written to
 // the activity log, as the admin app tries the token of whoever opens it.
+//
+// The session lasts as long as the device's sign-in: it ends when jellyfin-web
+// signs out, when the device is signed out from Devices, and when the device
+// signs in again, as the same user or another. A browser whose web client
+// signs out, or changes user, so keeps no admin session of the user before,
+// as with Jellyfin, whose dashboard shares jellyfin-web's sign-in.
 func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 	attempt := h.reserve(w, forwarded.Client(r))
 	if attempt == nil {
@@ -266,7 +276,7 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
 		return
 	}
-	_, user, err := h.Accounts.DeviceByToken(r.Context(), token, forwarded.Client(r))
+	device, user, err := h.Accounts.DeviceByToken(r.Context(), token, forwarded.Client(r))
 	if errors.Is(err, accounts.ErrNotFound) {
 		attempt.Fail()
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
@@ -286,9 +296,19 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "outside_allowed_hours")
 		return
 	}
+	sessionToken, expires, err := h.Accounts.CreateDeviceAdminSession(r.Context(), device)
+	if errors.Is(err, accounts.ErrNotFound) {
+		// The device signed out since its token was read: no wrong guess.
+		writeError(w, http.StatusUnauthorized, "invalid_credentials")
+		return
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	attempt.Succeed()
 	h.Activity.SignedIn(r.Context(), user, forwarded.Client(r))
-	h.startSession(w, r, http.StatusOK, user)
+	sendSession(w, r, http.StatusOK, user, sessionToken, expires)
 }
 
 // mediaBrowserToken reads the Token parameter of an Authorization header in
