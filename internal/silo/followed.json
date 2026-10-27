@@ -2,13 +2,13 @@
   "contract": {
     "repository": "Silo-Server/silo-server",
     "path": "contracts/api/v2/openapi.json",
-    "commit": "6de6d5e5e285a9b423e95a1122cb39e5bb9ca93b",
-    "sha256": "bbb759b43ac256f37a3cddd68c1c90aedeb9f788328b7702af4616273ca3bdd6"
+    "commit": "c03b2c2aaee00e9873c70ac0c31aa6b4dd99dd88",
+    "sha256": "de198769697222513c890413c8c9e0a5e0325e1fa32a3c234c7814027483145f"
   },
   "apps": [
     {
       "repository": "Silo-Server/silo-apple",
-      "commit": "2c8f2e1b70b7de6f3edefb01ecd51074924381a9",
+      "commit": "876fbd31c53c17facfb2c09049bea86013c5f80d",
       "files": [
         "iosApp/iosApp/Networking/APIv2/APIv2CatalogModels.swift",
         "iosApp/iosApp/Networking/APIv2/APIv2CatalogReadModels.swift",
@@ -36,7 +36,7 @@
     },
     {
       "repository": "Silo-Server/silo-android",
-      "commit": "9867edfa4500ab962d4abf72341e76596fe595b8",
+      "commit": "e9c410096e427ab7bba45cc89022120a35c9cfca",
       "files": [
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/AppNavigation.kt",
         "shared/src/commonMain/kotlin/org/siloserver/silo/model/catalog/CatalogModels.kt",
