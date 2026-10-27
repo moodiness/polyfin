@@ -142,6 +142,67 @@ func TestLooselyTypedTitles(t *testing.T) {
 	}
 }
 
+// The cast, directors and writers an addon gives as links, in place of the
+// lists the protocol deprecates, are read into those lists, in their order,
+// their categories in any letter case, as Stremio apps show them. A list
+// the addon gives wins over its links; links of other categories, and
+// elements that are no links, are left out.
+func TestLinksCreditPeople(t *testing.T) {
+	t.Parallel()
+	links := `"links": [
+		{"name": "Drama", "category": "Genres", "url": "stremio:///discover"},
+		{"name": "Ana Actor", "category": "Cast", "url": "stremio:///search?search=Ana"},
+		{"name": "Eve Director", "category": "Directors", "url": "stremio:///search?search=Eve"},
+		{"name": "Ben Actor", "category": "actor", "url": "stremio:///search?search=Ben"},
+		"Not a link", {"name": 7, "category": "Cast"}, {"name": " ", "category": "Cast"},
+		{"name": "Finn Writer", "category": "WRITERS", "url": "stremio:///search?search=Finn"},
+		{"name": "Gus Writer", "category": "writer", "url": "stremio:///search?search=Gus"},
+		{"name": "tt1", "category": "imdb", "url": "https://example.org/title/tt1"}]`
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/catalog/movie/top.json":
+			_, _ = w.Write([]byte(`{"metas": [{"id": "tt1", "type": "movie", "name": "Linked", ` + links + `}]}`))
+		case "/meta/movie/tt1.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "tt1", "type": "movie", "name": "Linked", ` + links + `}}`))
+		case "/meta/movie/tt2.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "tt2", "type": "movie", "name": "Listed", "cast": ["Cleo Actor"], ` + links + `}}`))
+		case "/meta/movie/tt3.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "tt3", "type": "movie", "name": "Odd", "links": {"name": "Ana Actor"}}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer addon.Close()
+	client := NewClient("test")
+	manifestURL := addon.URL + "/manifest.json"
+	credited := func(what string, meta Meta) {
+		t.Helper()
+		if !slices.Equal(meta.Cast, Names{"Ana Actor", "Ben Actor"}) || !slices.Equal(meta.Director, Names{"Eve Director"}) ||
+			!slices.Equal(meta.Writer, Names{"Finn Writer", "Gus Writer"}) || meta.Genres != nil {
+			t.Errorf("%s: cast %v, directors %v, writers %v, genres %v", what, meta.Cast, meta.Director, meta.Writer, meta.Genres)
+		}
+	}
+	meta, err := client.Meta(t.Context(), manifestURL, "movie", "tt1", false)
+	if err != nil || meta.Name != "Linked" {
+		t.Fatalf("meta: %v %+v", err, meta)
+	}
+	credited("meta", meta)
+	metas, err := client.Catalog(t.Context(), manifestURL, "movie", "top", nil, false)
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("catalog: %v %+v", err, metas)
+	}
+	credited("catalog", metas[0])
+
+	listed, err := client.Meta(t.Context(), manifestURL, "movie", "tt2", false)
+	if err != nil || !slices.Equal(listed.Cast, Names{"Cleo Actor"}) || !slices.Equal(listed.Director, Names{"Eve Director"}) {
+		t.Errorf("a list and links: %v cast %v, directors %v", err, listed.Cast, listed.Director)
+	}
+	odd, err := client.Meta(t.Context(), manifestURL, "movie", "tt3", false)
+	if err != nil || odd.Name != "Odd" || odd.Cast != nil {
+		t.Errorf("links that are no list: %v %+v", err, odd)
+	}
+}
+
 // Season posters come in the order of the seasons, a missing one as null:
 // an element that is not an image keeps its place, so that the others stay
 // with their seasons. Keyed by season number instead, they keep their

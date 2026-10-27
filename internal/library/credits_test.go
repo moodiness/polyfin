@@ -62,3 +62,35 @@ func TestTitlesDescribedAgainReplaceTheirCredits(t *testing.T) {
 		}
 	}
 }
+
+// The cast, directors and writers an addon gives only as Stremio links
+// are the title's people, in their order, as Stremio apps show them, and
+// open with the title on their page.
+func TestPeopleGivenAsLinks(t *testing.T) {
+	t.Parallel()
+	e := languageEnv{env: newEnv(t)}
+	addon := describedAddon()
+	addon.rawMetas = map[string]string{"movie/tt1": `{"id": "tt1", "type": "movie", "name": "The Heist", "links": [
+		{"name": "Drama", "category": "Genres", "url": "stremio:///discover"},
+		{"name": "Ana Actor", "category": "Cast", "url": "stremio:///search?search=Ana"},
+		{"name": "Ben Actor", "category": "Cast", "url": "stremio:///search?search=Ben"},
+		{"name": "Eve Director", "category": "Directors", "url": "stremio:///search?search=Eve"},
+		{"name": "Finn Writer", "category": "Writers", "url": "stremio:///search?search=Finn"}]}`}
+	e.install(addons.Shared(), addon)
+	id := e.titleIDs("Top (Movies)")["The Heist"]
+	item, err := e.service.Item(t.Context(), e.admin, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var people []string
+	for _, person := range item.People {
+		people = append(people, person.Name+"/"+person.Type)
+	}
+	if want := []string{"Ana Actor/Actor", "Ben Actor/Actor", "Eve Director/Director", "Finn Writer/Writer"}; !slices.Equal(people, want) {
+		t.Errorf("people %v, want %v", people, want)
+	}
+	page, err := e.service.PersonTitles(t.Context(), e.admin, PersonID("Eve Director"), []Kind{KindMovie}, 10)
+	if err != nil || !slices.Equal(names(page.Items), []string{"The Heist"}) {
+		t.Errorf("the director's titles: %v %v", names(page.Items), err)
+	}
+}

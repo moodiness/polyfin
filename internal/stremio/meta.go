@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -273,6 +274,80 @@ type CastMember struct {
 	Photo     string `json:"photo,omitempty"`
 }
 
+// described is a meta as an addon writes it, with its links, which the
+// Stremio protocol gives in place of the cast, director and writer lists
+// it deprecates. Polyfin reads the people of links into those lists (see
+// decodeMeta) and keeps no other link.
+type described struct {
+	Meta
+	Links links `json:"links"`
+}
+
+// link is one of a meta's links, which Stremio apps list by category.
+type link struct {
+	Name     string `json:"name"`
+	Category string `json:"category"`
+}
+
+// links decodes a meta's links. An element that is not a link, such as
+// one whose name is not a string, is left out rather than failing the
+// title, as is any other value.
+type links []link
+
+func (l *links) UnmarshalJSON(data []byte) error {
+	*l = nil
+	var elements []json.RawMessage
+	if json.Unmarshal(data, &elements) != nil {
+		return nil
+	}
+	for _, element := range elements {
+		var entry link
+		if json.Unmarshal(element, &entry) == nil {
+			*l = append(*l, entry)
+		}
+	}
+	return nil
+}
+
+// The categories of links that credit people, in lower case: the plural
+// ones Stremio apps show, such as "Cast" and "Directors", and the singular
+// ones the addon SDK's documentation recommends, such as "actor".
+var (
+	castCategories     = []string{"cast", "actor", "actors"}
+	directorCategories = []string{"director", "directors"}
+	writerCategories   = []string{"writer", "writers"}
+)
+
+// credit fills each of meta's cast, director and writer lists that is
+// empty with the names of the links of its categories, in any letter case,
+// in their order.
+func (l links) credit(meta *Meta) {
+	for _, list := range []struct {
+		names      *Names
+		categories []string
+	}{{&meta.Cast, castCategories}, {&meta.Director, directorCategories}, {&meta.Writer, writerCategories}} {
+		if len(*list.names) > 0 {
+			continue
+		}
+		for _, entry := range l {
+			name := strings.TrimSpace(entry.Name)
+			if name != "" && slices.Contains(list.categories, strings.ToLower(strings.TrimSpace(entry.Category))) {
+				*list.names = append(*list.names, name)
+			}
+		}
+	}
+}
+
+// decodeMeta decodes a meta an addon sends, as unmarshal does, its cast,
+// directors and writers read from its links when it gives no list of them.
+func decodeMeta(data []byte, meta *Meta) error {
+	var decoded described
+	err := unmarshal(data, &decoded)
+	*meta = decoded.Meta
+	decoded.Links.credit(meta)
+	return err
+}
+
 // MetaBehavior holds hints about how a title is played.
 type MetaBehavior struct {
 	DefaultVideoID string `json:"defaultVideoId,omitempty"`
@@ -334,7 +409,7 @@ func (c *Client) Catalog(ctx context.Context, manifestURL, catalogType, catalogI
 	// next page starts.
 	metas := make([]Meta, len(response.Metas))
 	for i, raw := range response.Metas {
-		if err := unmarshal(raw, &metas[i]); err != nil {
+		if err := decodeMeta(raw, &metas[i]); err != nil {
 			return nil, fmt.Errorf("%w: catalog: %v", ErrInvalidResponse, err)
 		}
 	}
@@ -360,7 +435,7 @@ func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, con
 		return Meta{}, err
 	}
 	var response struct {
-		Meta *Meta `json:"meta"`
+		Meta *described `json:"meta"`
 	}
 	if err := unmarshal(body, &response); err != nil {
 		return Meta{}, fmt.Errorf("%w: meta: %v", ErrInvalidResponse, err)
@@ -368,5 +443,7 @@ func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, con
 	if response.Meta == nil || response.Meta.ID == "" {
 		return Meta{}, ErrNotFound
 	}
-	return *response.Meta, nil
+	meta := response.Meta.Meta
+	response.Meta.Links.credit(&meta)
+	return meta, nil
 }

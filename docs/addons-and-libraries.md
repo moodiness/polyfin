@@ -577,6 +577,8 @@ A genre, studio or year page lists the titles of the catalogs you reach, as libr
 
 The actors, directors and writers a title credits open as people, with the photo the metadata addon gives.
 
+An addon may give them as Stremio links rather than as lists, as Stremio's protocol now advises: links of the categories `Cast`, `actor` or `actors`, `Directors` or `director`, and `Writers` or `writer`, in any letter case. Polyfin reads them in their order, as Stremio apps show them, for each kind the description gives no list of. A list the addon gives wins over its links, and Polyfin keeps no other link. A description kept from before Polyfin read links shows them once it is read again (see [Catalog pages](#catalog-pages)), or at once with **Refresh metadata**.
+
 A person's titles are:
 
 - those your addons' people-search catalogs (such as a catalog named People Search) find for their name; plus

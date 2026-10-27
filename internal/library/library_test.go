@@ -28,6 +28,9 @@ type fakeAddon struct {
 	manifest stremio.Manifest
 	catalogs map[string][]stremio.Meta // "type/id" → every item
 	metas    map[string]stremio.Meta   // "type/id" → complete meta
+	// rawMetas, "type/id" → a complete meta as the addon writes it, answers
+	// before metas, for what stremio.Meta does not keep, such as links.
+	rawMetas map[string]string
 	streams  map[string][]stremio.Stream
 	pageSize int
 	// short shortens the page at a skip by that many items, as addons that
@@ -130,11 +133,16 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		id, _ := url.PathUnescape(parts[2])
 		a.mu.Lock()
+		raw, isRaw := a.rawMetas[parts[1]+"/"+id]
 		meta, ok := a.metas[parts[1]+"/"+id]
 		fails := a.metaFails
 		a.mu.Unlock()
 		if fails {
 			http.Error(w, "failing", http.StatusInternalServerError)
+			return
+		}
+		if isRaw {
+			_, _ = w.Write([]byte(`{"meta": ` + raw + `}`))
 			return
 		}
 		if !ok {
