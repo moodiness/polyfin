@@ -3,11 +3,18 @@ package iptv
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
+	"maps"
+	"net/http"
+	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 // Entry is a channel of a provider's list, as read from an M3U playlist or
@@ -46,12 +53,15 @@ const maxLine = 1 << 20
 // the #EXTINF line's tvg-id, tvg-name, tvg-logo, tvg-chno and group-title
 // attributes (quoted with double or single quotes, or not at all) and the
 // name after its comma, its catch-up attributes over those the #EXTM3U
-// line gives every channel (see catchupOf), then the #EXTVLCOPT lines
-// giving the stream's user agent and referrer, then the stream's address.
-// A byte order mark and CRLF line ends are accepted. Headings that are not
-// channels are skipped (see heading), as are entries without an address.
-// A playlist that does not start with #EXTM3U, or whose lines are too
-// long, is not M3U.
+// line gives every channel (see catchupOf), then the headers its stream is
+// requested with, then the stream's address. The headers are those the
+// players that read such lists take: #EXTVLCOPT lines' http-user-agent,
+// http-referrer and http-origin, #EXTHTTP lines' JSON object, and the
+// Name=value pairs after a | ending the address (see cutHeaders), a later
+// one replacing an earlier one of the same name. A byte order mark and
+// CRLF line ends are accepted. Headings that are not channels are skipped
+// (see heading), as are entries without an address. A playlist that does
+// not start with #EXTM3U, or whose lines are too long, is not M3U.
 func ParseM3U(r io.Reader, entry func(Entry) error) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64<<10), maxLine)
@@ -83,12 +93,16 @@ func ParseM3U(r io.Reader, entry func(Entry) error) error {
 				continue
 			}
 			option, value, _ := strings.Cut(text[len("#EXTVLCOPT:"):], "=")
-			header := map[string]string{"http-user-agent": "User-Agent", "http-referrer": "Referer", "http-referer": "Referer"}[strings.ToLower(strings.TrimSpace(option))]
-			if value = strings.TrimSpace(value); header != "" && value != "" {
-				if current.Headers == nil {
-					current.Headers = map[string]string{}
+			current.setHeader(vlcOptions[strings.ToLower(strings.TrimSpace(option))], value)
+		case hasPrefixFold(text, "#EXTHTTP:"):
+			var fields map[string]any
+			if current == nil || json.Unmarshal([]byte(text[len("#EXTHTTP:"):]), &fields) != nil {
+				continue
+			}
+			for _, name := range slices.Sorted(maps.Keys(fields)) {
+				if value, ok := fields[name].(string); ok {
+					current.setHeader(name, value)
 				}
-				current.Headers[header] = value
 			}
 		case hasPrefixFold(text, "#EXTGRP:"):
 			if current != nil && current.Group == "" {
@@ -101,7 +115,11 @@ func ParseM3U(r io.Reader, entry func(Entry) error) error {
 			}
 			e := *current
 			current = nil
-			e.URL = text
+			address, headers := cutHeaders(text)
+			e.URL = address
+			for _, name := range slices.Sorted(maps.Keys(headers)) {
+				e.setHeader(name, headers[name])
+			}
 			if !streamAddress(e.URL) || heading(e.Name) {
 				continue
 			}
@@ -126,6 +144,51 @@ func ParseM3U(r io.Reader, entry func(Entry) error) error {
 
 func hasPrefixFold(text, prefix string) bool {
 	return len(text) >= len(prefix) && strings.EqualFold(text[:len(prefix)], prefix)
+}
+
+// vlcOptions are the #EXTVLCOPT options that name a request header.
+var vlcOptions = map[string]string{"http-user-agent": "User-Agent", "http-referrer": "Referer", "http-referer": "Referer", "http-origin": "Origin"}
+
+// unsetHeaders are the headers a list may not set: they shape the request
+// itself, or the part of the stream it reads.
+var unsetHeaders = []string{"Connection", "Content-Length", "Host", "If-Range", "Range", "Transfer-Encoding"}
+
+// setHeader sets a request header of the entry's stream, named as HTTP
+// writes it. An empty value, a name or value HTTP cannot carry, or a
+// header of unsetHeaders, is skipped.
+func (e *Entry) setHeader(name, value string) {
+	name, value = http.CanonicalHeaderKey(strings.TrimSpace(name)), strings.TrimSpace(value)
+	if value == "" || !httpguts.ValidHeaderFieldName(name) || !httpguts.ValidHeaderFieldValue(value) || slices.Contains(unsetHeaders, name) {
+		return
+	}
+	if e.Headers == nil {
+		e.Headers = map[string]string{}
+	}
+	e.Headers[name] = value
+}
+
+// cutHeaders splits a playlist's address line of the form
+// address|Name=value&Name=value, as several players read the headers of
+// a stream, into the address and those headers, each value unescaped
+// when it is percent-encoded. A line whose part after the first | is not
+// such pairs is an address whole.
+func cutHeaders(line string) (string, map[string]string) {
+	address, rest, found := strings.Cut(line, "|")
+	if !found {
+		return line, nil
+	}
+	headers := map[string]string{}
+	for pair := range strings.SplitSeq(rest, "&") {
+		name, value, ok := strings.Cut(pair, "=")
+		if name = strings.TrimSpace(name); !ok || !httpguts.ValidHeaderFieldName(name) {
+			return line, nil
+		}
+		if unescaped, err := url.PathUnescape(value); err == nil {
+			value = unescaped
+		}
+		headers[name] = value
+	}
+	return strings.TrimSpace(address), headers
 }
 
 // streamAddress reports whether a playlist line is an address Polyfin can

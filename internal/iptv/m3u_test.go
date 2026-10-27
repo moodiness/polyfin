@@ -74,6 +74,37 @@ func TestM3UPlaylistsAreRead(t *testing.T) {
 	}
 }
 
+// The headers other players read from a playlist: an #EXTHTTP line's JSON
+// object, #EXTVLCOPT:http-origin, and Name=value pairs after a | ending
+// the address, which leave the address.
+func TestM3UHeaderLinesAreRead(t *testing.T) {
+	t.Parallel()
+	entries, err := parse(t, "#EXTM3U\n"+
+		"#EXTINF:-1,Json\n"+
+		`#EXTHTTP:{"user-agent":"Player/2","referer":"https://portal.example/","Cookie":"k=v","Range":"bytes=5-","number":3}`+"\n"+
+		"#EXTVLCOPT:http-origin=https://portal.example\n"+
+		"https://live.example/json.m3u8\n"+
+		"#EXTINF:-1,Piped\n"+
+		"#EXTVLCOPT:http-user-agent=Player/1.0\n"+
+		"https://live.example/piped.m3u8|User-Agent=Player%2F3%20(TV)&Referer=https://portal.example/\n"+
+		"#EXTINF:-1,Bar In The Address\n"+
+		"https://live.example/a|b.ts\n")
+	if err != nil || len(entries) != 3 {
+		t.Fatalf("entries: %+v %v", entries, err)
+	}
+	if json := entries[0]; json.Headers["User-Agent"] != "Player/2" || json.Headers["Referer"] != "https://portal.example/" ||
+		json.Headers["Cookie"] != "k=v" || json.Headers["Origin"] != "https://portal.example" || len(json.Headers) != 4 {
+		t.Errorf("#EXTHTTP and http-origin: %v", json.Headers)
+	}
+	if piped := entries[1]; piped.URL != "https://live.example/piped.m3u8" || piped.Headers["User-Agent"] != "Player/3 (TV)" ||
+		piped.Headers["Referer"] != "https://portal.example/" || len(piped.Headers) != 2 {
+		t.Errorf("headers after a |: %q %v", piped.URL, piped.Headers)
+	}
+	if bar := entries[2]; bar.URL != "https://live.example/a|b.ts" || bar.Headers != nil {
+		t.Errorf("an address with a | and no headers: %q %v", bar.URL, bar.Headers)
+	}
+}
+
 func TestOtherDocumentsAreNotPlaylists(t *testing.T) {
 	t.Parallel()
 	for name, document := range map[string]string{
