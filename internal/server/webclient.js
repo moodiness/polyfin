@@ -21,7 +21,11 @@
 //   #/configurationpage, plugin configuration pages;
 //   #/wizard/…, the startup wizard: Polyfin is set up in its admin app.
 // A dashboard page with a match in the admin app opens that page; any other
-// opens the admin app's home.
+// opens the admin app's home. Every link of the script to the admin app,
+// these included, carries ?from=web: the admin app, opened from the web
+// client signed in as another user than its own session's, signs that
+// session out and takes the web client's sign-in, so that a browser shows
+// one user, as Jellyfin's dashboard, part of jellyfin-web, does.
 //
 // Second, on a title's page (#/details?id=…), it adds the versions of the
 // addons that answer after the page opened. Item details list the versions
@@ -377,6 +381,13 @@
       if (path === prefix || path.indexOf(prefix + '/') === 0) return pages[i][1]
     }
     return ''
+  }
+  // An address of the admin app, marked as opened from the web client
+  // (?from=web): the admin app then shows the user signed in here, and
+  // signs out a session of another user it had in this browser.
+  function fromWebClient(address) {
+    address.searchParams.set('from', 'web')
+    return address.href
   }
   // The title whose versions are followed, the next time they are asked,
   // and how many times the script began asking, the latest only going on.
@@ -975,7 +986,7 @@
   function follow() {
     if (adminRoute.test(location.hash)) {
       // Replaced, so that Back returns to the page before.
-      location.replace(new URL('../admin/' + target(location.hash), location.href).href)
+      location.replace(fromWebClient(new URL('../admin/' + target(location.hash), location.href)))
       return
     }
     try {
@@ -1222,7 +1233,7 @@
   // jellyfin-web's emby-linkbutton would open it within jellyfin-web.
   function adminLink(className, content) {
     var link = element('a', className, content)
-    link.setAttribute('href', new URL('../admin/', location.href).href)
+    link.setAttribute('href', fromWebClient(new URL('../admin/', location.href)))
     return link
   }
   function materialIcon(className) {
@@ -1257,7 +1268,7 @@
     if (!text || !path) return null
     item.classList.add(entryClass, 'polyfinMenuEntry')
     item.classList.remove('Mui-focusVisible')
-    item.setAttribute('href', new URL('../admin/', location.href).href)
+    item.setAttribute('href', fromWebClient(new URL('../admin/', location.href)))
     text.textContent = 'Polyfin'
     path.setAttribute('d', dashboardIcon)
     path.parentNode.removeAttribute('data-testid')
@@ -1804,7 +1815,7 @@
       .getJSON(api.getUrl('Polyfin/Items/' + id + '/Share'))
       .then(function (answer) {
         if (shareTitle !== id || !answer || answer.Shareable !== true || typeof answer.Url !== 'string') return
-        shareAddress = new URL(answer.Url, location.href).href
+        shareAddress = fromWebClient(new URL(answer.Url, location.href))
         showShare()
       })
       .catch(function () {})
@@ -2433,7 +2444,11 @@
       var hint = note(say('noTarget'))
       var link = document.createElement('a')
       link.className = 'polyfinReminderLink'
-      link.href = new URL('..' + (state.NotificationsUrl || '/admin/me/account#notifications'), location.href).href
+      // Marked as opened from the web client, as the script's other links
+      // to the admin app are (see fromWebClient).
+      var address = new URL('..' + (state.NotificationsUrl || '/admin/me/account#notifications'), location.href)
+      address.searchParams.set('from', 'web')
+      link.href = address.href
       link.textContent = say('notifications')
       hint.appendChild(link)
       hint.appendChild(document.createTextNode('.'))

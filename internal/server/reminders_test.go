@@ -76,7 +76,7 @@ func TestProgrammePagesGetReminders(t *testing.T) {
 		"no target": {
 			answer: with(map[string]any{"Reaches": false}), steps: []string{title, "show"},
 			want: []string{ask, "[Remind me] [more] note(No target of yours receives reminders yet: choose Programme starting for one in " +
-				"My account › Notifications <http://polyfin.test/admin/me/account#notifications>.)"},
+				"My account › Notifications <http://polyfin.test/admin/me/account?from=web#notifications>.)"},
 		},
 		"started":          {answer: with(map[string]any{"Started": true}), steps: []string{title, "show"}, want: []string{ask, "none"}},
 		"not a programme":  {steps: []string{title, "show"}, want: []string{ask, "none"}},

@@ -98,12 +98,33 @@ A user signed in to the web client, administrator or member, arrives in the admi
 - This opens a session in the admin app, logged as a sign-in. A member's session opens their own pages only, as when they sign in with their password.
 - It works only for the signed-in device of a user who may sign in now. It does not work for an API key, which has no user, for a disabled or blocked account, outside the account's allowed hours, or for an account with [two-step sign-in](users.md#two-step-sign-in), or an administrator required to set it up, which signs in with its password and its code.
 - An unknown token counts as a wrong password toward the client's failed attempts.
-- It is tried once each time the admin app is opened, so signing out of the admin app holds until then.
 - Without a token it may use, the admin app shows its sign-in page.
+
+The session lasts as long as the web client's sign-in it came from. It ends when:
+
+- the web client signs out, with **Sign out**;
+- its device is signed out, from **Devices** in **My account** or on the user's page, or for not being used (see [Signing out unused devices](users.md#signing-out-unused-devices));
+- someone signs in to the web client in that browser again, the same user or another.
+
+An admin app left open then shows, at its next request, the user the web client is signed in as now, or its sign-in page when the web client is signed out. The next person to use the browser never finds the admin app signed in as the one before.
+
+Opened from the web client (its **Dashboard**, a dashboard page, the **Polyfin** entry, **Share** or a reminder's link to **Notifications**), the admin app shows the user signed in to the web client. A session of another user in the admin app, such as one opened with a password, is signed out first.
+
+A session opened in the admin app with a password, and the code of two-step sign-in, does not depend on the web client: it lasts until **Sign out** in the admin app, or 30 days without use.
+
+**Sign out** in the admin app leaves the web client signed in. The admin app does not take the web client's sign-in again until the web client signs in anew, or the admin app is opened again.
+
+The upgrade that brought this ends every admin app session opened before, as nothing told those taken from the web client from those opened with a password: everyone signs in to the admin app once, which arriving from the web client does by itself, but for accounts with two-step sign-in.
+
+**Compared with Jellyfin:**
+
+- Jellyfin's dashboard is part of jellyfin-web and uses its sign-in ([routes.tsx, lines 18 to 20](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/routes/routes.tsx#L18-L20)): signing out of the web client signs out of the dashboard, and a user who is not an administrator is sent to the home page ([ConnectionRequired.tsx, lines 164 to 180](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/ConnectionRequired.tsx#L164-L180)). Polyfin's admin app has a session of its own, which follows the web client's in the same way when it came from it.
+- Jellyfin ends a user's earlier sign-in on a device when that user signs in there again, but keeps another user's ([SessionManager.cs, lines 1784 to 1813](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Session/SessionManager.cs#L1784-L1813)). Polyfin does the same for Jellyfin apps; only the admin session taken from the earlier sign-in ends.
 
 **For app developers:**
 
 - The token goes to `POST /admin/api/session/jellyfin`, in the `Authorization` header only, never in the URL.
+- The web client's links to the admin app carry `?from=web`, which the admin app takes out of the address as it opens.
 
 ## Caching and security headers
 

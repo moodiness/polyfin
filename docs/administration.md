@@ -4,7 +4,7 @@ This page covers Polyfin's admin app: its Home, its System pages (Health, Statis
 
 ## The admin app
 
-The admin app is at `/admin/`. From the [web client](web-client.md), the dashboard link opens it too, and jellyfin-web's dashboard pages open their counterpart: its users, libraries, logs, scheduled tasks, API keys and playback settings. Members open it from the **Polyfin** entry the web client shows them instead of **Dashboard**. Either way, a user signed in to the web client arrives signed in (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
+The admin app is at `/admin/`. From the [web client](web-client.md), the dashboard link opens it too, and jellyfin-web's dashboard pages open their counterpart: its users, libraries, logs, scheduled tasks, API keys and playback settings. Members open it from the **Polyfin** entry the web client shows them instead of **Dashboard**. Either way, a user signed in to the web client arrives signed in, as that user, and the admin app stays signed in only as long as the web client: signing out of the web client, or signing in there as someone else, signs the admin app out too (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
 
 A bar at the top holds the sections, for administrators:
 
@@ -371,7 +371,7 @@ The key is fetched from the server when the eye is clicked, and hidden again on 
 
 ### Devices
 
-Administrators get Jellyfin's device list, with custom names. Deleting a device signs out every user on it.
+Administrators get Jellyfin's device list, with custom names. Deleting a device signs out every user on it, and the admin app sessions taken from their web client there (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
 
 **For app developers:** devices are at `/Devices`.
 

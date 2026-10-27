@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { createContext, use } from 'react'
-import { queryClient, queryKeys, signOut, type SessionUser } from '@/api'
+import { queryClient, queryKeys, signOut, type SessionUser, type Status } from '@/api'
+import { declineWebClientToken } from '@/webClientSession'
 
 /** The signed-in user; the session gate provides it around every signed-in page. */
 export const SessionContext = createContext<SessionUser | null>(null)
@@ -12,17 +13,18 @@ export function useSessionUser(): SessionUser {
   return user
 }
 
-/** Signs out, then shows the sign-in page in place of the current one. */
+/**
+ * Signs out, then shows the sign-in page in place of the current one. The web client's sign-in in
+ * this browser does not sign the admin app in again, until the web client signs in anew.
+ */
 export function useSignOut() {
   return useMutation({
     mutationFn: signOut,
     onSettled: () => {
-      // Update the mounted session query in place (removing it would detach its observer and
-      // keep the signed-in screen), then forget the rest; the status query stays public.
+      declineWebClientToken(queryClient.getQueryData<Status>(queryKeys.status)?.serverId)
+      // Update the mounted session query in place: removing it would detach its observer and keep
+      // the signed-in screen. The answers kept for the user go with it (see answersFor in api.ts).
       queryClient.setQueryData(queryKeys.session, null)
-      queryClient.removeQueries({
-        predicate: (query) => query.queryKey[0] !== 'status' && query.queryKey[0] !== 'session',
-      })
     },
   })
 }

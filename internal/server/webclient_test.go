@@ -326,7 +326,11 @@ process.stdout.write(JSON.stringify(results))
 		}
 		want := ""
 		if page := routes[route]; page != "-" {
-			want = "http://polyfin.test/admin/" + page
+			// Marked as opened from the web client.
+			want = "http://polyfin.test/admin/" + page + "?from=web"
+			if strings.Contains(page, "?") {
+				want = "http://polyfin.test/admin/" + page + "&from=web"
+			}
 		}
 		if replaced != want {
 			t.Errorf("%s: went to %q, want %q", key, replaced, want)
@@ -2046,7 +2050,7 @@ async function run(scenario) {
     if (item.classList.contains('MuiDivider-root')) return '|'
     const a = item.tagName === 'A' ? item : item.querySelector('a')
     const problems = []
-    if (!a || a.getAttribute('href') !== 'http://polyfin.test/admin/' || a.hasAttribute('is')) problems.push('link')
+    if (!a || a.getAttribute('href') !== 'http://polyfin.test/admin/?from=web' || a.hasAttribute('is')) problems.push('link')
     if (item.textContent !== 'Polyfin') problems.push('text ' + item.textContent)
     if (item.querySelector('h2') || item.querySelector('h3')) problems.push('heading')
     if (item.parentNode.tagName === 'UL') {
@@ -2976,7 +2980,7 @@ func TestTitlePagesOfferShare(t *testing.T) {
 		ask    = "ask share"
 		plain  = "buttons play more"
 		shared = "buttons play share(Share, share) more"
-		opened = "open http://polyfin.test/admin/me/account?share=" + id + "#shared-links"
+		opened = "open http://polyfin.test/admin/me/account?share=" + id + "&from=web#shared-links"
 	)
 	yes := map[string]any{"Shareable": true, "Url": "/admin/me/account?share=" + id + "#shared-links"}
 	no := map[string]any{"Shareable": false}

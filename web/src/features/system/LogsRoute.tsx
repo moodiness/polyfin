@@ -7,7 +7,7 @@ import {
   PlayIcon,
   ScrollIcon,
 } from '@phosphor-icons/react'
-import { ApiError, fetchLogLines, logDownloadUrl, queryClient, queryKeys } from '@/api'
+import { ApiError, fetchLogLines, logDownloadUrl, sessionEnded } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { Button, buttonClass, cx, EmptyState, Field, InlineError, Select, TextInput } from '@/ui'
 import { errorMessage } from '@/format'
@@ -89,7 +89,7 @@ export default function LogsRoute() {
       } catch (caught) {
         if (controller.signal.aborted) return
         if (caught instanceof ApiError && caught.status === 401) {
-          queryClient.setQueryData(queryKeys.session, null)
+          sessionEnded()
           return
         }
         setError(caught)

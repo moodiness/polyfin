@@ -29,7 +29,7 @@ Jellyfin apps sign in with these accounts, in one of two ways:
 
 ### Change a password
 
-Users can change their password from Jellyfin apps, or under **My account › Password** in the admin app (**Change password**). Doing so signs their other devices out.
+Users can change their password from Jellyfin apps, or under **My account › Password** in the admin app (**Change password**). Doing so signs their other devices out. From an admin app the web client signed in, the web client in that browser stays signed in too, as the admin app's session lasts as long as its sign-in (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
 
 ## Language of generated names
 

@@ -2,24 +2,42 @@
  * jellyfin-web 12.4, which Polyfin serves at /web/ on this same origin, keeps its sign-ins in
  * localStorage under this key, as `{"Servers": [{"Id": serverId, "AccessToken": token, …}]}`.
  */
-const credentialsKey = 'jellyfin_credentials'
+export const webClientCredentialsKey = 'jellyfin_credentials'
 
 /** jellyfin-web keeps the ID of the device it names itself as under this key. */
 const deviceIdKey = '_deviceId2'
 
-let taken = false
+/**
+ * The web client's links to the admin app, its Dashboard and dashboard pages, the Polyfin entry,
+ * Share and the reminders' link, carry `?from=web` (see internal/server/webclient.js).
+ */
+const fromParameter = 'from'
+const fromWebClient = 'web'
 
 /**
- * The access token the web client keeps for this server, so that its Dashboard, and the Polyfin
- * entry members get instead, which lead to the admin app, need no second sign-in. Given once per
- * page load, so that signing out stays signed out; null when there is none.
+ * Whether this page load came from the web client. The parameter leaves the address before the
+ * router reads it, so that a reload is not taken for another arrival.
  */
-export function takeWebClientToken(serverId: string | undefined): string | null {
-  if (taken || !serverId) return null
-  taken = true
+let arrived = takeArrival()
+
+function takeArrival(): boolean {
+  const address = new URL(window.location.href)
+  if (address.searchParams.get(fromParameter) !== fromWebClient) return false
+  address.searchParams.delete(fromParameter)
+  window.history.replaceState(
+    window.history.state,
+    '',
+    address.pathname + address.search + address.hash,
+  )
+  return true
+}
+
+/** The web client's sign-in on this server: its access token and its user's ID. */
+function webClientSignIn(serverId: string | undefined): { token: string; userId: string } | null {
+  if (!serverId) return null
   let stored: unknown
   try {
-    stored = JSON.parse(localStorage.getItem(credentialsKey) ?? '{}')
+    stored = JSON.parse(localStorage.getItem(webClientCredentialsKey) ?? '{}')
   } catch {
     return null
   }
@@ -33,10 +51,44 @@ export function takeWebClientToken(serverId: string | undefined): string | null 
       typeof server.AccessToken === 'string' &&
       server.AccessToken !== ''
     ) {
-      return server.AccessToken
+      const userId = typeof server.UserId === 'string' ? server.UserId : ''
+      return { token: server.AccessToken, userId: userId.replaceAll('-', '').toLowerCase() }
     }
   }
   return null
+}
+
+/** The web client's token last handed out or turned down, which is not handed out again. */
+let tried: string | null = null
+
+/**
+ * The access token the web client keeps for this server, so that its Dashboard, and the Polyfin
+ * entry members get instead, which lead to the admin app, need no second sign-in. Each token is
+ * given once per page load, so that signing out stays signed out until the web client signs in
+ * again; null when there is none.
+ */
+export function takeWebClientToken(serverId: string | undefined): string | null {
+  const signIn = webClientSignIn(serverId)
+  if (signIn === null || signIn.token === tried) return null
+  tried = signIn.token
+  return signIn.token
+}
+
+/** Keeps the web client's current token from signing the admin app in again: it signed out. */
+export function declineWebClientToken(serverId: string | undefined) {
+  tried = webClientSignIn(serverId)?.token ?? tried
+}
+
+/**
+ * Whether this page load came from the web client signed in as another user than `userId`, whose
+ * session then gives way to the web client's: the browser is that user's now, as Jellyfin's
+ * dashboard, part of jellyfin-web, is. Asked once per page load: false afterwards.
+ */
+export function arrivedAsAnotherUser(serverId: string | undefined, userId: string): boolean {
+  if (!arrived) return false
+  arrived = false
+  const signIn = webClientSignIn(serverId)
+  return signIn !== null && signIn.userId !== '' && signIn.userId !== userId.toLowerCase()
 }
 
 /** The browser jellyfin-web names the device after, as it shows in a user's devices. */
@@ -79,7 +131,9 @@ export async function signInToWebClient(
   const result = (await response.json()) as { AccessToken: string; User: { Id: string } }
   let stored: { Servers?: unknown }
   try {
-    stored = JSON.parse(localStorage.getItem(credentialsKey) ?? '{}') as { Servers?: unknown }
+    stored = JSON.parse(localStorage.getItem(webClientCredentialsKey) ?? '{}') as {
+      Servers?: unknown
+    }
   } catch {
     stored = {}
   }
@@ -90,7 +144,7 @@ export async function signInToWebClient(
       )
     : []
   localStorage.setItem(
-    credentialsKey,
+    webClientCredentialsKey,
     JSON.stringify({
       ...stored,
       Servers: [

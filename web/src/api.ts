@@ -1,6 +1,10 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import type { Language } from '@/i18n'
-import { takeWebClientToken } from '@/webClientSession'
+import {
+  arrivedAsAnotherUser,
+  takeWebClientToken,
+  webClientCredentialsKey,
+} from '@/webClientSession'
 
 export type Status = {
   name: string
@@ -1727,14 +1731,19 @@ export const turnOffOwnTwoStep = (confirmation: TwoStepConfirmation) =>
 /**
  * Returns the signed-in user, or null when there is no valid session. Without one, the web client's
  * sign-in on this server is tried first: it opens a session for its user, administrator or member.
+ * Opened from the web client signed in as someone else, the admin app signs its session out and
+ * takes the web client's, so that it never shows another user's pages than the web client's.
  */
 export async function fetchSession(signal?: AbortSignal): Promise<SessionUser | null> {
+  const serverId = queryClient.getQueryData<Status>(queryKeys.status)?.serverId
   try {
-    return (await request<{ user: SessionUser }>('GET', '/session', undefined, signal)).user
+    const user = (await request<{ user: SessionUser }>('GET', '/session', undefined, signal)).user
+    if (!arrivedAsAnotherUser(serverId, user.id)) return user
+    await request<void>('DELETE', '/session', undefined, signal)
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 401)) throw error
   }
-  const token = takeWebClientToken(queryClient.getQueryData<Status>(queryKeys.status)?.serverId)
+  const token = takeWebClientToken(serverId)
   if (token === null) return null
   try {
     const authorization = { Authorization: `MediaBrowser Token="${token}"` }
@@ -4412,20 +4421,44 @@ export const queryKeys = {
     ['history', scope, query] as const,
 }
 
-/** Any 401 means the session is gone: drop back to the sign-in page. */
-function handleUnauthenticated(error: unknown) {
-  if (error instanceof ApiError && error.status === 401) {
-    queryClient.setQueryData(queryKeys.session, null)
-  }
+/**
+ * Asks the session again: this browser may be signed in as another user now, as when another tab
+ * of the admin app, which shares its session, or the web client changed it. Joins a session request
+ * under way rather than cancelling it, which could leave the web client's token taken without the
+ * session it opened.
+ */
+export function askSessionAgain() {
+  void queryClient.refetchQueries({ queryKey: queryKeys.session }, { cancelRefetch: false })
+}
+
+/**
+ * The session ended, as when the web client it was taken from signed out or changed user: the
+ * sign-in page shows, and the session is asked again, which takes the web client's sign-in if it is
+ * a new one.
+ */
+export function sessionEnded() {
+  if (queryClient.getQueryData(queryKeys.session) === null) return
+  queryClient.setQueryData(queryKeys.session, null)
+  askSessionAgain()
+}
+
+/**
+ * A 401 means the session is gone. A 403 "forbidden" may mean that another user signed in to this
+ * browser meanwhile: the session is asked again.
+ */
+function handleSessionErrors(error: unknown) {
+  if (!(error instanceof ApiError)) return
+  if (error.status === 401) sessionEnded()
+  else if (error.status === 403 && error.code === 'forbidden') askSessionAgain()
 }
 
 export const queryClient: QueryClient = new QueryClient({
-  queryCache: new QueryCache({ onError: handleUnauthenticated }),
+  queryCache: new QueryCache({ onError: handleSessionErrors }),
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
       // Sign-in and setup failures are credential errors, not an expired session.
       if (mutation.options.meta?.public === true) return
-      handleUnauthenticated(error)
+      handleSessionErrors(error)
     },
   }),
   defaultOptions: {
@@ -4436,4 +4469,35 @@ export const queryClient: QueryClient = new QueryClient({
         !(error instanceof ApiError && error.status < 500) && failureCount < 1,
     },
   },
+})
+
+/** The admin app's tabs in this browser, which share one session, tell each other it changed. */
+const sessionChannel =
+  typeof BroadcastChannel === 'function' ? new BroadcastChannel('polyfin-admin-session') : null
+sessionChannel?.addEventListener('message', askSessionAgain)
+
+/**
+ * The user the answers kept are for. When the session's user changes, signed out or another, they
+ * are forgotten before any page draws them, but for the public status. The other tabs are told
+ * whenever this one learns who is signed in, the first time included: the browser's session may
+ * have changed under them.
+ */
+let answersFor: string | null | undefined
+queryClient.getQueryCache().subscribe((event) => {
+  if (event.type !== 'updated' || event.action.type !== 'success') return
+  if (event.query.queryKey[0] !== queryKeys.session[0]) return
+  const user = (event.query.state.data as SessionUser | null | undefined)?.id ?? null
+  if (user === answersFor) return
+  if (answersFor !== undefined) {
+    queryClient.removeQueries({
+      predicate: (query) => query.queryKey[0] !== 'status' && query.queryKey[0] !== 'session',
+    })
+  }
+  answersFor = user
+  sessionChannel?.postMessage(null)
+})
+
+// The web client signing in or out in another tab changes the session this one may take.
+window.addEventListener('storage', (event) => {
+  if (event.key === null || event.key === webClientCredentialsKey) askSessionAgain()
 })
