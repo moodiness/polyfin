@@ -584,7 +584,7 @@ A person's titles are:
 - those your addons' people-search catalogs (such as a catalog named People Search) find for their name; plus
 - the titles of your addons that Polyfin already knows them in.
 
-Without a people-search catalog, only the second kind show. A title's people are those of the description its page shows them from: the first addon without a language that describes it, starting with the one whose catalog listed it (see [Languages](#languages)). When that description is read again, in the background or with **Refresh metadata**, someone it no longer credits loses the title on their page, as in Jellyfin. Other addons' descriptions, and those of addons given a language, change no one's titles.
+A title of the second kind that a people search also finds, under another addon's identifier (such as `tmdb:…` for the IMDb identifier a library lists), is listed once, as the title of your library. Without a people-search catalog, only the second kind show. A title's people are those of the description its page shows them from: the first addon without a language that describes it, starting with the one whose catalog listed it (see [Languages](#languages)). When that description is read again, in the background or with **Refresh metadata**, someone it no longer credits loses the title on their page, as in Jellyfin. Other addons' descriptions, and those of addons given a language, change no one's titles.
 
 The people list holds the people credited in the titles of your addons that someone opened. People credited only in other users' own addons stay hidden.
 

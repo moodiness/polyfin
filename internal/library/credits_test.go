@@ -94,3 +94,42 @@ func TestPeopleGivenAsLinks(t *testing.T) {
 		t.Errorf("the director's titles: %v %v", names(page.Items), err)
 	}
 }
+
+// A people search may find a title Polyfin knows the person in under
+// another addon's identifier, a "tmdb:" one for the "tt" of the library:
+// the person's page lists it once, as the library's title.
+func TestPersonTitlesListATitleFoundAgainOnce(t *testing.T) {
+	t.Parallel()
+	e := languageEnv{env: newEnv(t)}
+	e.install(addons.Shared(), describedAddon())
+	search := []stremio.Extra{{Name: "search", IsRequired: true}}
+	e.install(addons.Shared(), &fakeAddon{
+		manifest: stremio.Manifest{ID: "people", Name: "People", Version: "1", Types: []string{"movie"},
+			Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta", IDPrefixes: []string{"tmdb:"}}},
+			Catalogs:  []stremio.Catalog{{Type: "movie", ID: "people_search_movie", Name: "People Search", Extra: search}}},
+		catalogs: map[string][]stremio.Meta{"movie/people_search_movie": {
+			{ID: "tmdb:7", Type: "movie", Name: "The Heist", ImdbID: "tt1"},
+			{ID: "tmdb:8", Type: "movie", Name: "Another Heist", ImdbID: "tt8"},
+		}},
+		byPerson: true,
+	})
+	heist := e.titleIDs("Top (Movies)")["The Heist"]
+	// Opening the title credits Ana Actor in it.
+	if _, err := e.service.Item(t.Context(), e.admin, heist); err != nil {
+		t.Fatal(err)
+	}
+	page, err := e.service.PersonTitles(t.Context(), e.admin, PersonID("Ana Actor"), []Kind{KindMovie}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := names(page.Items)
+	slices.Sort(got)
+	if !slices.Equal(got, []string{"Another Heist", "The Heist"}) || page.Total != 2 {
+		t.Fatalf("Ana Actor's titles: %v, total %d", got, page.Total)
+	}
+	for _, item := range page.Items {
+		if item.Name == "The Heist" && item.ID != heist {
+			t.Errorf("The Heist is the people search's %v, not the library's %v", item.ID, heist)
+		}
+	}
+}

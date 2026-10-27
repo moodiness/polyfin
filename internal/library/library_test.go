@@ -33,6 +33,9 @@ type fakeAddon struct {
 	rawMetas map[string]string
 	streams  map[string][]stremio.Stream
 	pageSize int
+	// byPerson answers a search with the whole catalog, as a people search
+	// finds titles by someone's name rather than by theirs.
+	byPerson bool
 	// short shortens the page at a skip by that many items, as addons that
 	// filter their catalogs do.
 	short map[int]int
@@ -107,7 +110,7 @@ func (a *fakeAddon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if search := extra.Get("search"); search != "" {
+		if search := extra.Get("search"); search != "" && !a.byPerson {
 			items = slices.DeleteFunc(slices.Clone(items), func(m stremio.Meta) bool {
 				return !strings.Contains(strings.ToLower(m.Name), strings.ToLower(search))
 			})

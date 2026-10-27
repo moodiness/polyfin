@@ -196,9 +196,12 @@ func (s *Service) credited(ctx context.Context, v view, person record) ([]record
 // person's name, at least count of them when the catalogs have that many,
 // then the other titles of the user's addons Polyfin knows the person in.
 // A people search can miss a title, or find someone else of the same name:
-// the known titles keep the credits the user saw. Page.More tells that the
-// catalogs have more titles. A person whose people search fails still lists
-// their known titles.
+// the known titles keep the credits the user saw. A people search may also
+// find a known title under another addon's identifier, such as "tmdb:…"
+// for the "tt…" a library lists: it is listed once, as the known title,
+// which keeps its folder. Page.More tells that the catalogs have more
+// titles. A person whose people search fails still lists their known
+// titles.
 func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person accounts.ID, kinds []Kind, count int) (Page, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -221,6 +224,13 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 	sources := standInCatalogs(v, kinds, false, func(entry installed, catalog stremio.Catalog) (source, bool) {
 		return source{addon: entry, catalog: catalog, search: r.Person.Name}, searchesPeople(catalog)
 	})
+	known := s.creditedTitles(ctx, v, credited, kinds)
+	knownIMDb := map[string]accounts.ID{}
+	for _, item := range known {
+		if imdb := item.ProviderIDs["Imdb"]; imdb != "" {
+			knownIMDb[imdb] = item.ID
+		}
+	}
 	var items []Item
 	var records []record
 	seen := map[accounts.ID]bool{}
@@ -239,6 +249,9 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 			if err != nil || seen[item.ID] {
 				continue
 			}
+			if id, ok := knownIMDb[item.ProviderIDs["Imdb"]]; ok && id != item.ID {
+				continue
+			}
 			seen[item.ID] = true
 			// Like a search result, the title keeps the folder it was last
 			// listed in.
@@ -246,7 +259,7 @@ func (s *Service) PersonTitles(ctx context.Context, user accounts.User, person a
 			items, records = append(items, item), append(records, rec)
 		}
 	}
-	for _, item := range s.creditedTitles(ctx, v, credited, kinds) {
+	for _, item := range known {
 		if !seen[item.ID] {
 			items = append(items, item)
 		}
