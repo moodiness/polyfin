@@ -13,18 +13,36 @@ Adding a source takes two steps in the admin app: the **Account**, then **What t
 
 ### M3U playlists
 
-An **M3U playlist** source takes a **Name**, the **Playlist address** and, optionally, a **Programme guide address (XMLTV, optional)**.
+An **M3U playlist** source takes a **Name**, the **Playlist address** and, optionally, a **User agent** (see [Headers and user agent](#headers-and-user-agent)) and a **Programme guide address (XMLTV, optional)**.
 
 - A playlist's `#EXTINF` lines give each channel its `tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno` and `group-title` (quoted with double or single quotes, or not), and its name after the comma.
-- Its `#EXTVLCOPT` `http-user-agent` and `http-referrer` lines give the headers its stream is requested with.
+- Its `#EXTVLCOPT` and `#EXTHTTP` lines, and the `|` ending an address, give the headers its stream is requested with (see [Headers and user agent](#headers-and-user-agent)).
 - A byte order mark, CRLF line ends and `#EXTGRP` lines are accepted.
 
 ### Xtream Codes accounts
 
-An **Xtream Codes account** source takes a **Name**, the **Server address**, a **Username** and a **Password** and, optionally, the address of an XMLTV guide. By default the guide is the one the server publishes for the account (**Use the provider's programme guide**).
+An **Xtream Codes account** source takes a **Name**, the **Server address**, a **Username** and a **Password** and, optionally, a **User agent** (see [Headers and user agent](#headers-and-user-agent)) and the address of an XMLTV guide. By default the guide is the one the server publishes for the account (**Use the provider's programme guide**).
 
 - The account is read through its player API (its live categories and streams).
 - Its channels stream in MPEG-TS, or HLS when the account only allows HLS.
+
+### Headers and user agent
+
+The channels, replays, movies and episodes of an M3U playlist or an Xtream Codes account are requested with the headers below on every request Polyfin makes for them: the check of a channel's first bytes, its analysis, FFmpeg, the playlists, keys and segments of the HLS streams it relays, and the streams it relays to apps.
+
+- A playlist gives a channel's headers with:
+  - `#EXTVLCOPT:http-user-agent=`, `#EXTVLCOPT:http-referrer=` and `#EXTVLCOPT:http-origin=` lines;
+  - an `#EXTHTTP:` line holding a JSON object of headers, such as `#EXTHTTP:{"User-Agent":"…","Referer":"…"}`;
+  - a `|` after its address, then `Name=value` pairs separated by `&`, percent-encoded or not, such as `https://…/1.m3u8|User-Agent=…&Referer=…`. The pairs are not part of the address.
+- A later line replaces a header of the same name an earlier one gave. Headers that shape the request itself (`Host`, `Connection`, `Content-Length`, `Transfer-Encoding`, `Range`, `If-Range`) are skipped.
+- **User agent**, set when adding the source or with **Edit the account**, is the user agent of the streams whose list names none, and the one the list is downloaded with. Changing it downloads the list again with it, and is refused when the list cannot be read so.
+- Without either, the streams are requested with a web browser's user agent, as some providers serve only players and browsers. The list is downloaded with Polyfin's own, `Polyfin/<version>`.
+- A header that the list gives, or the user agent set on the source, is one the stream needs: the stream is then always relayed to apps. The browser's user agent is Polyfin's own: an app that can reach the source itself is still sent there, with its own (see [How a channel plays](live-tv.md#how-a-channel-plays)).
+- An HDHomeRun tuner's channels are requested with Polyfin's own user agent.
+
+**Compared with Jellyfin:**
+- Jellyfin's M3U tuners send their **User agent** setting, else the same browser user agent (Chrome 122), with their channels' streams ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L169-L177)), and download the list with that setting when it is set ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L57-L61)).
+- Jellyfin reads none of a playlist's header lines: it skips every line but `#EXTINF` and the addresses ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L72-L114)). Polyfin sends the headers they give, as other players do.
 
 ### What is read
 
@@ -178,7 +196,7 @@ A source behaves as an installed addon with one TV catalog:
 - It is listed, ordered, turned off and removed with the addons.
 - Its catalog is enabled under **Content › Libraries**, where its guide panel is, whatever the number of libraries.
 - Its channels play, record and follow the **Live TV** permission, quality groups, parental control and allowed hours as any channel (see [Users](users.md) and [Live TV](live-tv.md)).
-- **Edit the account** renames it and changes its address or login. The new address is fetched first; a password left empty keeps the current one.
+- **Edit the account** renames it and changes its address, login or user agent. A new address or user agent is fetched first; a password left empty keeps the current one.
 
 ## Replay
 

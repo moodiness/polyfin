@@ -880,10 +880,11 @@ func (s *Service) Preview(ctx context.Context, scope addons.Scope, source accoun
 
 // previewedTitles are a source's titles of a type, for a preview.
 func (s *Service) previewedTitles(ctx context.Context, source accounts.ID, typ string, o Options) ([]Title, error) {
-	var kind, address string
+	var kind, address, agent string
 	var confined bool
-	if err := s.db.QueryRow(ctx, `SELECT a.kind, a.manifest_url, a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false)
-		FROM addons a LEFT JOIN users u ON u.id = a.owner_id WHERE a.id = $1`, source).Scan(&kind, &address, &confined); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT a.kind, a.manifest_url, a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false), i.user_agent
+		FROM addons a JOIN iptv_sources i ON i.addon_id = a.id LEFT JOIN users u ON u.id = a.owner_id WHERE a.id = $1`, source).
+		Scan(&kind, &address, &confined, &agent); err != nil {
 		return nil, err
 	}
 	on := typ == typeMovie && o.Movies || typ == typeSeries && o.Series
@@ -905,7 +906,9 @@ func (s *Service) previewedTitles(ctx context.Context, source accounts.ID, typ s
 	case on:
 		return storedTitles(ctx, s.db, source, typ)
 	default:
-		list, err := s.fetchCached(ctx, accountOf(kind, address), confined, previewPart(typ), true)
+		account := accountOf(kind, address)
+		account.UserAgent = agent
+		list, err := s.fetchCached(ctx, account, confined, previewPart(typ), true)
 		if err != nil {
 			return nil, err
 		}
@@ -925,7 +928,13 @@ func (s *Service) PreviewAccount(ctx context.Context, account Account, by, q str
 	if err != nil {
 		return 0, nil, err
 	}
-	list, err := s.fetchCached(ctx, accountOf(account.Kind, address), confined, previewPart(by), true)
+	agent, err := validUserAgent(account.UserAgent)
+	if err != nil {
+		return 0, nil, err
+	}
+	stored := accountOf(account.Kind, address)
+	stored.UserAgent = agent
+	list, err := s.fetchCached(ctx, stored, confined, previewPart(by), true)
 	if err != nil {
 		return 0, nil, err
 	}

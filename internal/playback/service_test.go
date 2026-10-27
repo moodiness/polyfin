@@ -127,6 +127,10 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 		{"source needing headers", library.Version{URL: "https://93.184.216.34/movie.mkv", Headers: map[string]string{"Referer": "https://site.example/"}}, false, false},
 		{"source on the local network", library.Version{URL: "http://192.168.0.10:3000/movie.mkv"}, false, false},
 		{"player that cannot follow redirects", library.Version{URL: "https://93.184.216.34/movie.mkv"}, true, false},
+		// An IPTV source's default user agent is Polyfin's own: the player
+		// is still sent to the source, with its own.
+		{"source with Polyfin's user agent", library.Version{URL: "https://93.184.216.34/movie.mkv", UserAgent: "Browser/1"}, false, true},
+		{"source with Polyfin's user agent, relayed", library.Version{URL: "https://93.184.216.34/movie.mkv", UserAgent: "Browser/1"}, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			origin := &fakeSource{body: []byte("\x1a\x45\xdf\xa3")}
@@ -148,7 +152,7 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 					t.Fatalf("got %d to %q", response.Code, response.Header().Get("Location"))
 				}
 				// The source was checked before the player was sent to it.
-				if len(origin.requests) != 1 || origin.requests[0].Get("Range") != "bytes=0-0" {
+				if len(origin.requests) != 1 || origin.requests[0].Get("Range") != "bytes=0-0" || origin.requests[0].Get("User-Agent") != tc.version.UserAgent {
 					t.Errorf("checks: %v", origin.requests)
 				}
 				return
@@ -161,7 +165,7 @@ func TestServeRedirectsOnlyWhenThePlayerCanFetchTheSource(t *testing.T) {
 				t.Error("a source's cookie reached the player")
 			}
 			sent := origin.requests[0]
-			if sent.Get("Range") != "bytes=0-3" || sent.Get("Referer") != tc.version.Headers["Referer"] {
+			if sent.Get("Range") != "bytes=0-3" || sent.Get("Referer") != tc.version.Headers["Referer"] || sent.Get("User-Agent") != tc.version.UserAgent {
 				t.Errorf("headers sent to the source: %v", sent)
 			}
 		})

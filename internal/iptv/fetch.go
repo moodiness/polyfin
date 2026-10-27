@@ -92,11 +92,12 @@ func (d *downloaded) merge(more downloaded) {
 }
 
 // fetch downloads the parts of an account that want names: an M3U
-// playlist whole, or the Xtream player API lists of each part. confined
-// keeps the requests on public addresses. Errors never contain an address:
-// they embed credentials. Entries of a kind not wanted as titles count as
-// channels, as they become.
+// playlist whole, or the Xtream player API lists of each part, with the
+// account's User-Agent. confined keeps the requests on public addresses.
+// Errors never contain an address: they embed credentials. Entries of a
+// kind not wanted as titles count as channels, as they become.
 func fetch(ctx context.Context, client requester, account Account, confined bool, want parts) (downloaded, error) {
+	client = client.as(account)
 	var d downloaded
 	channels, titles := 0, 0
 	add := func(e Entry) error {
@@ -158,7 +159,7 @@ func downloadOnce(ctx context.Context, client requester, address string, confine
 	ctx, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 	answered := time.AfterFunc(listAnswer, cancel)
-	response, err := client.client.Open(ctx, http.MethodGet, address, nil, confined)
+	response, err := client.client.Open(ctx, http.MethodGet, address, client.header(), confined)
 	answered.Stop()
 	if err != nil {
 		return err

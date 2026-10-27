@@ -243,7 +243,7 @@ func (s *Service) storedLocation(version library.Version) (source.Location, bool
 // announced: the source cache refuses another file at the first byte once
 // the addon's sizes prove right.
 func locationOf(version library.Version) source.Location {
-	return source.Location{URL: version.URL, Headers: version.Headers, Confined: version.Confined, Size: version.Size,
+	return source.Location{URL: version.URL, Headers: version.RequestHeaders(), Confined: version.Confined, Size: version.Size,
 		Announcer: version.Addon}
 }
 
@@ -974,7 +974,7 @@ func (s *Service) check(ctx context.Context, version library.Version) (library.V
 // firstByte asks a source for its first byte and returns the status.
 func (s *Service) firstByte(ctx context.Context, version library.Version) (int, error) {
 	header := http.Header{"Range": {"bytes=0-0"}}
-	for name, value := range version.Headers {
+	for name, value := range version.RequestHeaders() {
 		header.Set(name, value)
 	}
 	response, err := s.opener.Open(ctx, http.MethodGet, version.URL, header, version.Confined)

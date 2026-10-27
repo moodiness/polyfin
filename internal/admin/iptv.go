@@ -14,9 +14,11 @@ import (
 
 // sourceRequest adds or changes an IPTV source: its name; its account,
 // a playlist address (M3U) or a server address, username and password
-// (Xtream Codes); on adding, the XMLTV guide of its catalog, or the one
-// the Xtream server publishes for the account with ProviderGuide; its
-// import options, fields left out keeping their values.
+// (Xtream Codes), and the User-Agent its list and streams are requested
+// with, empty for the default; on adding, the XMLTV guide of its catalog,
+// or the one the Xtream server publishes for the account with
+// ProviderGuide; its import options, fields left out keeping their
+// values.
 type sourceRequest struct {
 	Name          *string            `json:"name"`
 	Kind          string             `json:"kind"`
@@ -24,6 +26,7 @@ type sourceRequest struct {
 	Server        string             `json:"server"`
 	Username      string             `json:"username"`
 	Password      string             `json:"password"`
+	UserAgent     *string            `json:"userAgent"`
 	GuideURL      string             `json:"guideUrl"`
 	ProviderGuide bool               `json:"providerGuide"`
 	Options       *iptv.OptionsPatch `json:"options"`
@@ -33,7 +36,11 @@ type sourceRequest struct {
 }
 
 func (body sourceRequest) account(kind string) iptv.Account {
-	return iptv.Account{Kind: kind, URL: body.URL, Server: body.Server, Username: body.Username, Password: body.Password}
+	account := iptv.Account{Kind: kind, URL: body.URL, Server: body.Server, Username: body.Username, Password: body.Password}
+	if body.UserAgent != nil {
+		account.UserAgent = *body.UserAgent
+	}
+	return account
 }
 
 // addSource adds an IPTV source to the scope, as installing an addon does,
@@ -84,8 +91,8 @@ func (h *handler) addSource(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateSource changes an IPTV source of the scope: its name, its account,
-// fetched first, or its import options. A password left empty keeps the
-// current one.
+// fetched first, its User-Agent, or its import options. A password left
+// empty keeps the current one.
 func (h *handler) updateSource(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.scope(w, r)
 	if !ok || h.personalAddonsRefused(w, r, scope) {
@@ -103,7 +110,7 @@ func (h *handler) updateSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	changes := iptv.Changes{Name: body.Name, Options: body.Options}
+	changes := iptv.Changes{Name: body.Name, UserAgent: body.UserAgent, Options: body.Options}
 	if body.URL != "" || body.Server != "" || body.Username != "" || body.Password != "" {
 		account := body.account("")
 		changes.Account = &account

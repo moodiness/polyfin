@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -118,7 +117,8 @@ type cachedList struct {
 // fetchCached downloads the parts want names of an account, taking those
 // a preview downloaded within listCache; keep caches what it downloads.
 func (s *Service) fetchCached(ctx context.Context, account Account, confined bool, want parts, keep bool) (downloaded, error) {
-	key := fmt.Sprint(account.Kind, "\x00", account.URL, "\x00", account.Server, "\x00", account.Username, "\x00", account.Password, "\x00", confined)
+	key := fmt.Sprint(account.Kind, "\x00", account.URL, "\x00", account.Server, "\x00", account.Username, "\x00", account.Password, "\x00",
+		account.UserAgent, "\x00", confined)
 	s.mu.Lock()
 	for k, list := range s.lists {
 		if s.now().Sub(list.at) > listCache {
@@ -272,9 +272,12 @@ type Source struct {
 	// MaxConnections is how many streams the account may play at once,
 	// as an Xtream server says; nil when unknown, 0 for no limit.
 	MaxConnections *int
-	Options        Options
-	Lineup         LineupCounts
-	VOD            VODCounts
+	// UserAgent is the one its administrator set for its list and
+	// streams, empty for the default (see Account).
+	UserAgent string
+	Options   Options
+	Lineup    LineupCounts
+	VOD       VODCounts
 	// Tuner describes a tuner, nil for another source.
 	Tuner *TunerState
 }
@@ -294,6 +297,10 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	if err != nil {
 		return addons.Addon{}, err
 	}
+	agent, err := validUserAgent(source.Account.UserAgent)
+	if err != nil || tuner && agent != "" {
+		return addons.Addon{}, ErrInvalidUserAgent
+	}
 	guide := strings.TrimSpace(source.Guide)
 	if guide != "" && !webAddress(guide) {
 		return addons.Addon{}, addons.ErrInvalidGuideURL
@@ -305,7 +312,9 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	if err != nil {
 		return addons.Addon{}, err
 	}
-	list, err := s.fetchCached(ctx, accountOf(source.Account.Kind, address), confined, partsOf(options), false)
+	account := accountOf(source.Account.Kind, address)
+	account.UserAgent = agent
+	list, err := s.fetchCached(ctx, account, confined, partsOf(options), false)
 	if err != nil {
 		return addons.Addon{}, err
 	}
@@ -321,8 +330,8 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	addon, err := s.addons.Create(ctx, scope, source.Account.Kind, address,
 		func(id accounts.ID) stremio.Manifest { return manifest(id, source.Account.Kind, name, options, nil) },
 		func(tx pgx.Tx, addon addons.Addon) error {
-			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id, "+optionColumns+") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
-				append([]any{addon.ID}, options.values()...)...); err != nil {
+			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id, "+optionColumns+", user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+				append(append([]any{addon.ID}, options.values()...), agent)...); err != nil {
 				return err
 			}
 			if guide != "" {
@@ -343,17 +352,18 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	return addon, nil
 }
 
-// Changes are what Update changes of a source: its name, its account and
-// its import options.
+// Changes are what Update changes of a source: its name, its account, its
+// User-Agent (Account's is not read) and its import options.
 type Changes struct {
-	Name    *string
-	Account *Account
-	Options *OptionsPatch
+	Name      *string
+	Account   *Account
+	UserAgent *string
+	Options   *OptionsPatch
 }
 
-// Update changes a source of the scope. A new account is fetched first,
-// and kept only if its list could be read. New options, or a new list,
-// reconcile the line-up at once.
+// Update changes a source of the scope. A new account, or a new
+// User-Agent, is fetched first, and kept only if its list could be read.
+// New options, or a new list, reconcile the line-up at once.
 func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID, changes Changes, confined bool) error {
 	current, err := s.source(ctx, scope, id)
 	if err != nil {
@@ -373,18 +383,31 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 	if err != nil {
 		return err
 	}
+	agent := current.UserAgent
+	if changes.UserAgent != nil {
+		agent, err = validUserAgent(*changes.UserAgent)
+		if err != nil || addon.Tuner() && agent != "" {
+			return ErrInvalidUserAgent
+		}
+	}
 	var list downloaded
-	if changes.Account != nil {
-		account := *changes.Account
-		account.Kind = addon.Kind
-		// A password left out keeps the current one.
-		if account.Kind == addons.KindXtream && strings.TrimSpace(account.Password) == "" {
-			account.Password = accountOf(addon.Kind, addon.ManifestURL).Password
+	refetched := changes.Account != nil || agent != current.UserAgent
+	if refetched {
+		account := accountOf(addon.Kind, address)
+		if changes.Account != nil {
+			account = *changes.Account
+			account.Kind = addon.Kind
+			// A password left out keeps the current one.
+			if account.Kind == addons.KindXtream && strings.TrimSpace(account.Password) == "" {
+				account.Password = accountOf(addon.Kind, addon.ManifestURL).Password
+			}
+			if address, err = account.address(); err != nil {
+				return err
+			}
+			account = accountOf(addon.Kind, address)
 		}
-		if address, err = account.address(); err != nil {
-			return err
-		}
-		if list, err = fetch(ctx, s.requester(), accountOf(addon.Kind, address), confined, partsOf(options)); err != nil {
+		account.UserAgent = agent
+		if list, err = fetch(ctx, s.requester(), account, confined, partsOf(options)); err != nil {
 			return err
 		}
 		if list.tuner != nil {
@@ -396,26 +419,28 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 		// The parts of an Xtream account turned on are downloaded first;
 		// those of an M3U playlist were stored with it.
 		if need := partsOf(options).missing(partsOf(current.Options)); need.any() {
-			if list, err = s.fetchCached(ctx, accountOf(addon.Kind, address), confined, need, false); err != nil {
+			account := accountOf(addon.Kind, address)
+			account.UserAgent = agent
+			if list, err = s.fetchCached(ctx, account, confined, need, false); err != nil {
 				return err
 			}
 		}
 	}
 	at := s.now()
 	_, err = s.addons.Update(ctx, scope, id, addon.Kind, address, renamed(addon.Manifest, name), func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET ("+optionColumns+") = ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) WHERE addon_id = $1",
-			append([]any{id}, options.values()...)...); err != nil {
+		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET ("+optionColumns+", user_agent) = ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) WHERE addon_id = $1",
+			append(append([]any{id}, options.values()...), agent)...); err != nil {
 			return err
 		}
 		if err := storeDownload(ctx, tx, id, list, at); err != nil {
 			return err
 		}
-		if changes.Account != nil || changes.Options != nil {
+		if refetched || changes.Options != nil {
 			return reconcile(ctx, tx, id, at)
 		}
 		return nil
 	})
-	if err == nil && (changes.Account != nil || changes.Options != nil) {
+	if err == nil && (refetched || changes.Options != nil) {
 		s.lineupChanged(ctx, id)
 	}
 	s.forget(id)
@@ -537,7 +562,11 @@ func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool
 		if err != nil {
 			return nil, err
 		}
-		list, err := fetch(ctx, s.requester(), accountOf(addon.Kind, addon.ManifestURL), confined, partsOf(options))
+		account, err := s.storedAccount(ctx, addon)
+		if err != nil {
+			return nil, err
+		}
+		list, err := fetch(ctx, s.requester(), account, confined, partsOf(options))
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -569,6 +598,14 @@ func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool
 		return nil, err
 	})
 	return err
+}
+
+// storedAccount reads back a source's account: the one its address
+// stores (see accountOf), with its User-Agent.
+func (s *Service) storedAccount(ctx context.Context, addon addons.Addon) (Account, error) {
+	account := accountOf(addon.Kind, addon.ManifestURL)
+	err := s.db.QueryRow(ctx, "SELECT user_agent FROM iptv_sources WHERE addon_id = $1", addon.ID).Scan(&account.UserAgent)
+	return account, err
 }
 
 // storeDownload stores the parts a download brought: its list's entries,
@@ -707,9 +744,10 @@ func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID
 	source := Source{Addon: list[index]}
 	o := &source.Options
 	var retry *time.Time
-	err = s.db.QueryRow(ctx, `SELECT checked_at, fetched_at, error, next_try_at, max_connections, `+optionColumns+`,
+	err = s.db.QueryRow(ctx, `SELECT checked_at, fetched_at, error, next_try_at, max_connections, user_agent, `+optionColumns+`,
 		(SELECT count(*) FROM iptv_entries WHERE addon_id = $1) FROM iptv_sources WHERE addon_id = $1`, id).
-		Scan(append(append([]any{&source.CheckedAt, &source.FetchedAt, &source.Error, &retry, &source.MaxConnections}, o.fields()...), &source.Channels)...)
+		Scan(append(append([]any{&source.CheckedAt, &source.FetchedAt, &source.Error, &retry, &source.MaxConnections, &source.UserAgent}, o.fields()...),
+			&source.Channels)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Source{}, addons.ErrNotFound
 	}
@@ -872,12 +910,12 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 const streamOrder = `(s.sort IS NULL), s.sort, s.rank, s.key`
 
 // Streams lists the enabled streams of a channel that shows, best first:
-// its entries' addresses, requested with the headers their list gives, and
-// its custom streams. Each is labelled by its quality. Streams that failed
-// last (see ReportStream) come after the others, and those found dead or
-// silent are left out until their backoff ends (see hidden). A replay's
-// stream is its programme's address in the provider's archive (see
-// ReplayID).
+// its entries' addresses, requested with the headers their list gives and
+// the source's User-Agent (see streamAgent), and its custom streams. Each
+// is labelled by its quality. Streams that failed last (see ReportStream)
+// come after the others, and those found dead or silent are left out
+// until their backoff ends (see hidden). A replay's stream is its
+// programme's address in the provider's archive (see ReplayID).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if key, ok := strings.CutPrefix(id, prefix(source)); ok && (strings.HasPrefix(key, "vod:") || strings.HasPrefix(key, "ep:")) {
 		return s.vodStreams(ctx, source, key)
@@ -890,6 +928,10 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 	}
 	if err != nil {
 		return nil, fmt.Errorf("IPTV channel: %w", err)
+	}
+	agent, err := s.streamAgent(ctx, source)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := s.db.Query(ctx, `SELECT s.label, coalesce(s.custom_url, e.url), coalesce(e.headers, '{}'), coalesce(s.health_url, ''),
 		s.ok_at, s.failure, s.failed_at, s.failures FROM iptv_streams s
@@ -906,9 +948,7 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 	var h health
 	if _, err := pgx.ForEachRow(rows, []any{&label, &address, &headers, &checked, &h.okAt, &h.failure, &h.failedAt, &h.failures}, func() error {
 		stream := stremio.Stream{Name: meta.Name, Description: label, URL: address}
-		if len(headers) > 0 {
-			stream.BehaviorHints.ProxyHeaders = &stremio.ProxyHeaders{Request: maps.Clone(headers)}
-		}
+		agent.apply(&stream, headers)
 		switch {
 		case checked != addressHash(address) || h.failure == nil:
 			healthy = append(healthy, stream)

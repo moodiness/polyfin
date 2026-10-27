@@ -27,8 +27,10 @@ Stremio TV catalogs (the `tv` type) become Jellyfin Live TV. A TV catalog enable
 
 A channel plays as the addon streams it when the app takes it.
 
-- An HLS stream is relayed through Polyfin, with the headers the source needs, unless the app can reach the source itself. jellyfin-web always gets it relayed, as browsers cannot read other sites' playlists.
-- Otherwise FFmpeg remuxes the stream into HLS as it comes, or converts what the app cannot take (see [Transcoding](transcoding.md)). This runs from the moment the app opens the channel until it leaves it. A minute without requests stops it. Its first segment lasts one second, so playback starts about a second after FFmpeg does.
+- An HLS stream is relayed through Polyfin, with the headers the source needs, unless the app can reach the source itself. jellyfin-web always gets it relayed, as browsers cannot read other sites' playlists. The channels of IPTV sources are requested with the user agent and headers their list or source gives, else a web browser's user agent (see [Headers and user agent](iptv.md#headers-and-user-agent)).
+- Otherwise FFmpeg repackages the stream into HLS as it comes, or converts what the app cannot take (see [Transcoding](transcoding.md)). This runs from the moment the app opens the channel until it leaves it. A minute without requests stops it.
+  - Converted video starts with a one-second segment, so playback starts about a second after FFmpeg does.
+  - Video copied as it is can only be cut at the source's keyframes: the first segment starts at a keyframe and ends at the next one. Playback then starts up to two keyframe intervals after FFmpeg does, up to about 12 seconds for a channel with a keyframe every 6 seconds.
 - An MPEG-TS stream played as it is (apps such as Android TV) is relayed from the same connection, unless the app can reach the source itself and the source has no connection limit, in which case the app is sent to it.
 
 Each channel's stream is read through one connection to its source, whoever reads it: the check at its start, FFmpeg, apps relayed, a recording, several users watching it. The connection stays open 20 seconds after the last of them left, so a quick return to the channel starts at once. Whoever starts reading an MPEG-TS stream, first or joining, starts at its latest keyframe, after the tables that describe it, so that it decodes from its first bytes. A reader that falls more than a few seconds behind is dropped rather than holding the others back.

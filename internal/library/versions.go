@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"maps"
 	"net/url"
 	"slices"
 	"strconv"
@@ -31,9 +32,13 @@ type Version struct {
 	Name string
 	URL  string
 	// Headers must be sent with every request for the stream.
-	Headers  map[string]string
-	Filename string
-	Size     int64
+	Headers map[string]string
+	// UserAgent is the User-Agent Polyfin's own requests for the stream
+	// send when Headers name none (see RequestHeaders), empty for
+	// Polyfin's: an IPTV source's default (see stremio.Stream.UserAgent).
+	UserAgent string
+	Filename  string
+	Size      int64
 	// Addon is the name of the addon that listed the stream.
 	Addon string
 	// Origin is where the stream was listed, to ask again for it when its
@@ -68,6 +73,25 @@ type Version struct {
 	// URL is then the torrent's magnet link (see torrentLink), which
 	// identifies it, and to which no app is sent.
 	Torrent *Torrent
+}
+
+// RequestHeaders are the headers Polyfin's own requests for the stream
+// send: Headers, with UserAgent when they name no User-Agent.
+func (v Version) RequestHeaders() map[string]string {
+	if v.UserAgent == "" {
+		return v.Headers
+	}
+	for name := range v.Headers {
+		if strings.EqualFold(name, "User-Agent") {
+			return v.Headers
+		}
+	}
+	headers := maps.Clone(v.Headers)
+	if headers == nil {
+		headers = map[string]string{}
+	}
+	headers["User-Agent"] = v.UserAgent
+	return headers
 }
 
 // Torrent is a torrent's file as an addon lists it: its info hash, the
@@ -594,18 +618,20 @@ func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, o
 // newVersion describes a stream an addon listed for a target.
 func newVersion(t target, entry installed, stream stremio.Stream) Version {
 	version := Version{
-		Item:     t.item,
-		Name:     versionName(stream),
-		URL:      stream.URL,
-		Headers:  stream.RequestHeaders(),
-		Filename: stream.BehaviorHints.Filename,
-		Size:     int64(stream.BehaviorHints.VideoSize),
-		Addon:    entry.addon.Manifest.Name,
-		Origin:   Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
-		Confined: entry.confined,
-		Runtime:  t.runtime,
-		Height:   LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
-		Labels:   ReadLabels(t.name, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
+		Item:    t.item,
+		Name:    versionName(stream),
+		URL:     stream.URL,
+		Headers: stream.RequestHeaders(),
+		// An IPTV source's default User-Agent: no addon sets it.
+		UserAgent: stream.UserAgent,
+		Filename:  stream.BehaviorHints.Filename,
+		Size:      int64(stream.BehaviorHints.VideoSize),
+		Addon:     entry.addon.Manifest.Name,
+		Origin:    Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
+		Confined:  entry.confined,
+		Runtime:   t.runtime,
+		Height:    LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
+		Labels:    ReadLabels(t.name, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
 		// A replay holds one of its provider's connections, as a channel does.
 		HoldsConnection: t.kind == KindReplay,
 	}

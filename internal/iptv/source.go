@@ -29,6 +29,9 @@ var (
 	ErrTooLarge = errors.New("the channel list is too large")
 	// ErrLoginRefused reports an Xtream account the server does not accept.
 	ErrLoginRefused = errors.New("the IPTV server refused the account")
+	// ErrInvalidUserAgent reports a source's User-Agent that is longer
+	// than maxUserAgent or holds a control character.
+	ErrInvalidUserAgent = errors.New("a source's user agent is at most 512 printable characters")
 )
 
 // catalogID is the identifier of a source's one live TV catalog.
@@ -36,13 +39,41 @@ const catalogID = "channels"
 
 // Account is where a source's channels come from: a playlist address for
 // an M3U source; a server address, a username and a password for an
-// Xtream Codes account.
+// Xtream Codes account. UserAgent is what its list and streams are
+// requested with, empty for the default (see streamAgent); a tuner has
+// none.
 type Account struct {
-	Kind     string
-	URL      string
-	Server   string
-	Username string
-	Password string
+	Kind      string
+	URL       string
+	Server    string
+	Username  string
+	Password  string
+	UserAgent string
+}
+
+// BrowserUserAgent is the User-Agent the streams of M3U and Xtream sources
+// are requested with when neither their list nor their source names one:
+// Jellyfin's for M3U tuners without a user agent of their own ("make it
+// look like a browser", M3UTunerHost.CreateMediaSourceInfo, Jellyfin
+// 12.4). Providers that serve players and browsers only refuse others.
+const BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+// maxUserAgent bounds a source's User-Agent.
+const maxUserAgent = 512
+
+// validUserAgent checks and trims a source's User-Agent: empty for the
+// default, else printable characters, which a header can carry.
+func validUserAgent(agent string) (string, error) {
+	agent = strings.TrimSpace(agent)
+	if utf8.RuneCountInString(agent) > maxUserAgent {
+		return "", ErrInvalidUserAgent
+	}
+	for _, r := range agent {
+		if !unicode.IsPrint(r) {
+			return "", ErrInvalidUserAgent
+		}
+	}
+	return agent, nil
 }
 
 // maxAddress bounds an address, as the guide addresses are.

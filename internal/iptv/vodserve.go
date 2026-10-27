@@ -180,9 +180,9 @@ type storedTitle struct {
 	address *string
 	// kind, manifestAddress and manifest are the source's kind, address
 	// (holding its credentials) and name; confined keeps its requests on
-	// public addresses.
-	kind, manifestAddress, manifest string
-	confined                        bool
+	// public addresses; userAgent is the one its administrator set.
+	kind, manifestAddress, manifest, userAgent string
+	confined                                   bool
 }
 
 // scanTitle reads a title of titleColumns, then extra columns.
@@ -324,9 +324,10 @@ func (s *Service) catalogWindow(ctx context.Context, source accounts.ID, catalog
 func (s *Service) title(ctx context.Context, source accounts.ID, typ, key string) (storedTitle, error) {
 	var t storedTitle
 	err := scanTitle(s.db.QueryRow(ctx, `SELECT `+titleColumns+`, a.kind, a.manifest_url, a.manifest->>'name',
-		a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false)
+		a.owner_id IS NOT NULL AND NOT coalesce(u.is_administrator, false), i.user_agent
 		FROM iptv_titles t JOIN iptv_sources i ON i.addon_id = t.addon_id JOIN addons a ON a.id = t.addon_id LEFT JOIN users u ON u.id = a.owner_id
-		WHERE t.addon_id = $1 AND t.type = $2 AND t.key = $3 AND `+shownTitle, source, typ, key), &t, &t.kind, &t.manifestAddress, &t.manifest, &t.confined)
+		WHERE t.addon_id = $1 AND t.type = $2 AND t.key = $3 AND `+shownTitle, source, typ, key), &t, &t.kind, &t.manifestAddress, &t.manifest, &t.confined,
+		&t.userAgent)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return storedTitle{}, stremio.ErrNotFound
 	}
@@ -487,12 +488,13 @@ func (s *Service) details(ctx context.Context, source accounts.ID, t storedTitle
 	}
 	result, err, _ := s.flight.Do("details "+source.String()+" "+t.Type+" "+t.Key, func() (any, error) {
 		account := accountOf(t.kind, t.manifestAddress)
+		account.UserAgent = t.userAgent
 		action := "get_vod_info&vod_id=" + url.QueryEscape(t.Key)
 		if t.Type == typeSeries {
 			action = "get_series_info&series_id=" + url.QueryEscape(t.Key)
 		}
 		var fetched *details
-		err := download(ctx, s.requester(), account.api(action), t.confined, maxDetailSize, func(body io.Reader) error {
+		err := download(ctx, s.requester().as(account), account.api(action), t.confined, maxDetailSize, func(body io.Reader) error {
 			var err error
 			if t.Type == typeSeries {
 				fetched, err = parseSeriesInfo(body)
@@ -693,12 +695,11 @@ func (a Account) vodURL(kind, id, extension string) string {
 }
 
 // vodStream is a movie's or episode's one stream, named after its source
-// and the quality its name gives.
-func vodStream(sourceName, quality, address string, headers map[string]string) stremio.Stream {
-	stream := stremio.Stream{Name: sourceName, Description: quality, URL: address}
-	if len(headers) > 0 {
-		stream.BehaviorHints.ProxyHeaders = &stremio.ProxyHeaders{Request: headers}
-	}
+// and the quality its name gives, requested with the headers its list
+// gives and its source's User-Agent (see streamAgent).
+func (t storedTitle) vodStream(quality, address string, headers map[string]string) stremio.Stream {
+	stream := stremio.Stream{Name: t.manifest, Description: quality, URL: address}
+	streamAgent{own: t.userAgent, browser: browsed(t.kind)}.apply(&stream, headers)
 	return stream
 }
 
@@ -715,7 +716,7 @@ func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string)
 			return nil, err
 		}
 		if t.kind != addons.KindXtream {
-			return []stremio.Stream{vodStream(t.manifest, t.Quality, t.URL, t.Headers)}, nil
+			return []stremio.Stream{t.vodStream(t.Quality, t.URL, t.Headers)}, nil
 		}
 		extension := t.Extension
 		if extension == "" {
@@ -723,7 +724,7 @@ func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string)
 				extension = d.Extension
 			}
 		}
-		return []stremio.Stream{vodStream(t.manifest, t.Quality, accountOf(t.kind, t.manifestAddress).vodURL("movie", key, extension), nil)}, nil
+		return []stremio.Stream{t.vodStream(t.Quality, accountOf(t.kind, t.manifestAddress).vodURL("movie", key, extension), nil)}, nil
 	}
 	rest, ok := strings.CutPrefix(id, "ep:")
 	series, key, found := strings.Cut(rest, ":")
@@ -748,7 +749,7 @@ func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string)
 		if err != nil {
 			return nil, err
 		}
-		return []stremio.Stream{vodStream(t.manifest, quality, address, headers)}, nil
+		return []stremio.Stream{t.vodStream(quality, address, headers)}, nil
 	}
 	d, err := s.details(ctx, source, t, true)
 	if err != nil || d == nil {
@@ -759,7 +760,7 @@ func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string)
 		return nil, nil
 	}
 	e := d.Episodes[index]
-	return []stremio.Stream{vodStream(t.manifest, e.Quality, accountOf(t.kind, t.manifestAddress).vodURL("series", key, e.Extension), nil)}, nil
+	return []stremio.Stream{t.vodStream(e.Quality, accountOf(t.kind, t.manifestAddress).vodURL("series", key, e.Extension), nil)}, nil
 }
 
 // Enrichment reports whether a source describes its titles through the

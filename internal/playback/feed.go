@@ -776,7 +776,7 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 // It returns the body and the bytes already read of it.
 func (s *Service) sniff(ctx context.Context, version library.Version, times liveTimes) (io.ReadCloser, []byte, error) {
 	header := http.Header{}
-	for name, value := range version.Headers {
+	for name, value := range version.RequestHeaders() {
 		header.Set(name, value)
 	}
 	answerCtx, cancelAnswer := context.WithCancel(ctx)

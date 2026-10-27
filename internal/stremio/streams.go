@@ -33,6 +33,11 @@ type Stream struct {
 	// of the addon listed the stream as, when the stream's link or hints
 	// changed since, empty otherwise.
 	Identity string `json:"-"`
+	// UserAgent is Polyfin's, never an addon's: the User-Agent Polyfin's
+	// own requests for the stream send when its ProxyHeaders name none.
+	// Unlike those, it is no header the stream needs: an app that can
+	// reach the source itself may still be sent there.
+	UserAgent string `json:"-"`
 }
 
 // StreamBehavior holds hints about how a stream is played.

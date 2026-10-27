@@ -124,10 +124,28 @@ func RateLimited(response *http.Response) *RateLimitError {
 }
 
 // requester asks providers for lists and details through the client,
-// paced per host.
+// paced per host, with userAgent when set: the one the administrator set
+// for the source, as Jellyfin's M3U tuners download their list with
+// theirs (M3uParser.GetListingsStream, Jellyfin 12.4). Without, the
+// client's own is sent.
 type requester struct {
-	client *stremio.Client
-	pacer  *Pacer
+	client    *stremio.Client
+	pacer     *Pacer
+	userAgent string
 }
 
 func (s *Service) requester() requester { return requester{client: s.client, pacer: s.pacer} }
+
+// as is r for an account's requests, with its User-Agent.
+func (r requester) as(account Account) requester {
+	r.userAgent = account.UserAgent
+	return r
+}
+
+// header is what r's requests send besides the client's own.
+func (r requester) header() http.Header {
+	if r.userAgent == "" {
+		return nil
+	}
+	return http.Header{"User-Agent": {r.userAgent}}
+}

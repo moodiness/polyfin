@@ -50,12 +50,15 @@ type addonJSON struct {
 // credentials; how many entries its list has, how it was last fetched and
 // when it is fetched again; its import options and its line-up's counts.
 type sourceJSON struct {
-	Address   string      `json:"address"`
-	Channels  int         `json:"channels"`
-	CheckedAt *time.Time  `json:"checkedAt"`
-	FetchedAt *time.Time  `json:"fetchedAt"`
-	NextAt    *time.Time  `json:"nextAt"`
-	Error     string      `json:"error"`
+	Address   string     `json:"address"`
+	Channels  int        `json:"channels"`
+	CheckedAt *time.Time `json:"checkedAt"`
+	FetchedAt *time.Time `json:"fetchedAt"`
+	NextAt    *time.Time `json:"nextAt"`
+	Error     string     `json:"error"`
+	// UserAgent is the one its administrator set for its list and
+	// streams, empty for the default.
+	UserAgent string      `json:"userAgent"`
 	Options   optionsJSON `json:"options"`
 	Lineup    lineupJSON  `json:"lineup"`
 	VOD       vodJSON     `json:"vod"`
@@ -178,7 +181,7 @@ func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Ad
 	}
 	o, n, vod := source.Options, source.Lineup, source.VOD
 	result.Source = &sourceJSON{Address: result.ManifestURL, Channels: source.Channels, CheckedAt: source.CheckedAt, FetchedAt: source.FetchedAt,
-		NextAt: source.NextAt, Error: source.Error,
+		NextAt: source.NextAt, Error: source.Error, UserAgent: source.UserAgent,
 		Options: optionsJSON{Categories: o.Categories, Channels: o.Channels, Excluded: o.Excluded, NewChannels: o.NewChannels, Numbering: o.Numbering,
 			LiveTv: o.LiveTv, Movies: o.Movies, Series: o.Series, VODExcluded: o.VODExcluded, VODLibraries: o.VODLibraries, Enrichment: o.Enrichment,
 			FavoritesOnly: o.FavoritesOnly},
@@ -498,6 +501,7 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{eclipse.ErrInvalidSettings, http.StatusBadRequest, "invalid_addon_settings"},
 		{iptv.ErrInvalidName, http.StatusBadRequest, "invalid_source_name"},
 		{iptv.ErrInvalidAddress, http.StatusBadRequest, "invalid_source_address"},
+		{iptv.ErrInvalidUserAgent, http.StatusBadRequest, "invalid_user_agent"},
 		{localfiles.ErrInvalidName, http.StatusBadRequest, "invalid_folder_name"},
 		{localfiles.ErrInvalidPath, http.StatusBadRequest, "invalid_folder_path"},
 		{localfiles.ErrInvalidAddress, http.StatusBadRequest, "invalid_share_address"},

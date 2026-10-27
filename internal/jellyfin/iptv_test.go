@@ -143,6 +143,84 @@ func TestIPTVSourcesListAndPlayChannels(t *testing.T) {
 	}
 }
 
+// A channel whose provider serves browsers only, its list naming no user
+// agent, plays: its playlist, its key and its segments are requested with
+// a browser's user agent, as Jellyfin requests its M3U tuners' streams.
+func TestIPTVChannelsAreRequestedAsABrowser(t *testing.T) {
+	t.Parallel()
+	var refused atomic.Int32
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/get.php" {
+			_, _ = fmt.Fprintf(w, "#EXTM3U\n#EXTINF:-1 tvg-chno=\"5\",Zeb One\n%s/live/one.m3u8\n", server.URL)
+			return
+		}
+		if !strings.HasPrefix(r.Header.Get("User-Agent"), "Mozilla/5.0 ") {
+			refused.Add(1)
+			http.Error(w, "<html>Use a browser</html>", http.StatusForbidden)
+			return
+		}
+		switch r.URL.Path {
+		case "/live/one.m3u8":
+			_, _ = io.WriteString(w, "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:7\n"+
+				"#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\"\n#EXTINF:2,\nseg7.ts\n")
+		case "/live/key.bin":
+			_, _ = io.WriteString(w, "0123456789abcdef")
+		case "/live/seg7.ts":
+			http.ServeContent(w, r, "seg7.ts", time.Time{}, strings.NewReader("segment bytes"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	s := newTestServer(t, 10)
+	user := s.user("member", nil)
+	token := s.signIn("member", "tv")
+	if _, err := s.iptv.Add(t.Context(), addons.Shared(), iptv.NewSource{Name: "Provider",
+		Account: iptv.Account{Kind: addons.KindM3U, URL: server.URL + "/get.php"}}, false); err != nil {
+		t.Fatal(err)
+	}
+	var channels QueryResult
+	s.get(t, "/LiveTv/Channels", token, &channels)
+	if len(channels.Items) != 1 {
+		t.Fatalf("channels: %+v", channels.Items)
+	}
+	liveAnalysis(t, s, user, channels.Items[0].Id)
+	source := livePlaybackInfo(t, s, token, channels.Items[0].Id, "jellyfin-web-chrome")
+	get := func(address string) (int, string) {
+		t.Helper()
+		response, err := http.Get(address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, _ := io.ReadAll(response.Body)
+		return response.StatusCode, string(body)
+	}
+	status, playlist := get(source.Path)
+	key, segment := "", ""
+	for line := range strings.Lines(playlist) {
+		line = strings.TrimSpace(line)
+		if _, uri, ok := strings.Cut(line, `URI="`); ok {
+			key, _, _ = strings.Cut(uri, `"`)
+		} else if strings.HasPrefix(line, "http") {
+			segment = line
+		}
+	}
+	if status != http.StatusOK || key == "" || segment == "" {
+		t.Fatalf("relayed playlist: %d %s", status, playlist)
+	}
+	if status, body := get(key); status != http.StatusOK || body != "0123456789abcdef" {
+		t.Errorf("relayed key: %d %q", status, body)
+	}
+	if status, body := get(segment); status != http.StatusOK || body != "segment bytes" {
+		t.Errorf("relayed segment: %d %q", status, body)
+	}
+	if n := refused.Load(); n != 0 {
+		t.Errorf("%d requests without a browser's user agent", n)
+	}
+}
+
 // A source of another user is not one's own, and a user without Live TV
 // has no channels from it.
 func TestIPTVSourcesFollowScopesAndLiveTv(t *testing.T) {

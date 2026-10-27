@@ -119,7 +119,7 @@ func (s *Service) relayCached(w http.ResponseWriter, r *http.Request, version li
 // the source requires.
 func (s *Service) openForPlayer(r *http.Request, version library.Version) (*http.Response, error) {
 	header := http.Header{}
-	for name, value := range version.Headers {
+	for name, value := range version.RequestHeaders() {
 		header.Set(name, value)
 	}
 	for _, name := range forwardedRequest {

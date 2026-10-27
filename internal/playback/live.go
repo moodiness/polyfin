@@ -286,7 +286,7 @@ func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version libr
 		target = version.URL
 	}
 	header := http.Header{}
-	for name, value := range version.Headers {
+	for name, value := range version.RequestHeaders() {
 		header.Set(name, value)
 	}
 	for _, name := range forwardedRequest {
