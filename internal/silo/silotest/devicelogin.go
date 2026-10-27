@@ -13,8 +13,7 @@ import (
 // sign-in screens (Apple QRLoginViewModel, Android DeviceSignInMachine and
 // DeviceLoginRepository), and the phone apps' "Sign in a TV" (Apple
 // TVApprovalModel and PairingDeviceAPI, Android DevicePairingViewModel),
-// at the commits of the apps this package follows (silo-apple 2c8f2e1b,
-// silo-android 9867edfa).
+// at the commits of the apps internal/silo/followed.json records.
 
 // deviceStates are the states the apps know a request in: Apple
 // APIv2DevicePoll.validated and DeviceLoginStatus, Android
