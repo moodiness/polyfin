@@ -669,6 +669,8 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 				err = failure
 			} else if cause := context.Cause(reading); errors.Is(cause, errTorrentSlow) {
 				err = cause
+			} else if errors.Is(err, media.ErrUnreadable) && version.Torrent == nil {
+				err = answeredWith(ctx, src, err)
 			}
 		}
 		if err == nil && standIn(analysis, version.Runtime) {
@@ -738,6 +740,45 @@ func failureOf(src *source.Source, failed <-chan struct{}) error {
 	default:
 		return nil
 	}
+}
+
+// answerRead bounds the read of a source's first bytes, which its
+// analysis read already, to tell what it answered.
+const answerRead = 2 * time.Second
+
+// answered is an error of ffprobe that could not read a source, with what
+// the source answered (see source.Reply): a web page, JSON, an empty
+// answer, which tells why, where ffprobe only says the data is invalid.
+type answered struct {
+	err   error
+	reply source.Reply
+}
+
+func (e answered) Error() string {
+	message := e.err.Error()
+	if rest, ok := strings.CutPrefix(message, media.ErrNotMedia.Error()+": "); ok {
+		return media.ErrNotMedia.Error() + ": the source answered " + e.reply.String() + ": " + rest
+	}
+	return message + ", the source answered " + e.reply.String()
+}
+
+func (e answered) Unwrap() error { return e.err }
+
+// answeredWith is err, of ffprobe that could not read src, with what src
+// answered: its status, type and size, and what its first bytes look
+// like, never the bytes themselves.
+func answeredWith(ctx context.Context, src *source.Source, err error) error {
+	ctx, cancel := context.WithTimeout(ctx, answerRead)
+	defer cancel()
+	head := make([]byte, source.ReplyHead)
+	n, readErr := src.ReadAt(ctx, head, 0)
+	switch {
+	case n > 0 || errors.Is(readErr, io.EOF):
+		head = head[:n]
+	default:
+		head = nil
+	}
+	return answered{err: err, reply: src.Reply(head)}
 }
 
 // rateLimited reports whether err, met reading src since a time, comes of

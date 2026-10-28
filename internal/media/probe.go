@@ -18,6 +18,17 @@ import (
 // ErrNotMedia reports a source ffprobe could not read as a video.
 var ErrNotMedia = errors.New("not a playable video")
 
+// ErrUnreadable is an ErrNotMedia of a source ffprobe could not read at
+// all, as when it holds no media: ffprobe failed, where a source read
+// without a video track is only an ErrNotMedia. It reads as ErrNotMedia.
+var ErrUnreadable error = unreadable{}
+
+type unreadable struct{}
+
+func (unreadable) Error() string { return ErrNotMedia.Error() }
+
+func (unreadable) Unwrap() error { return ErrNotMedia }
+
 // Analysis is what ffprobe found in a source.
 type Analysis struct {
 	// Format is ffprobe's container name list, such as "matroska,webm" or
@@ -283,7 +294,7 @@ func (p Prober) run(ctx context.Context, url string, reconnect bool, options ...
 			message = message[i+1:]
 		}
 		message = strings.ReplaceAll(message, url, "<source>")
-		return nil, fmt.Errorf("%w: ffprobe: %v: %s", ErrNotMedia, err, message)
+		return nil, fmt.Errorf("%w: ffprobe: %v: %s", ErrUnreadable, err, message)
 	}
 	return stdout.Bytes(), nil
 }
