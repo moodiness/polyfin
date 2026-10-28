@@ -44,6 +44,11 @@ type addonJSON struct {
 	// EnabledLibraries is, in the answer to adding the addon only, how
 	// many of its catalogs that made libraries of.
 	EnabledLibraries *int `json:"enabledLibraries,omitempty"`
+	// LibraryLimit is, in the answer to adding the addon only,
+	// addons.DefaultLibraries when none of its catalogs became a library
+	// because the scope had that many already, though some would have
+	// (see addons.Addon.EnabledByDefault); 0 otherwise.
+	LibraryLimit int `json:"libraryLimit,omitempty"`
 }
 
 // sourceJSON describes an IPTV source: its address, redacted, as it holds
@@ -613,19 +618,27 @@ func (h *handler) installAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// How many of its catalogs it made libraries of: none tells the admin
-	// app to say where its catalogs are.
+	// app to say where its catalogs are, and why when the scope's
+	// libraries reached the limit of those made automatically.
 	libraries, err := h.Addons.Libraries(r.Context(), scope)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	enabled := 0
+	enabled, total := 0, 0
 	for _, l := range libraries {
-		if l.AddonID == addon.ID && l.Enabled {
+		if !l.Enabled {
+			continue
+		}
+		total++
+		if l.AddonID == addon.ID {
 			enabled++
 		}
 	}
 	result.EnabledLibraries = &enabled
+	if enabled == 0 && total >= addons.DefaultLibraries && slices.ContainsFunc(addon.Manifest.Catalogs, addon.EnabledByDefault) {
+		result.LibraryLimit = addons.DefaultLibraries
+	}
 	writeJSON(w, http.StatusCreated, result)
 }
 

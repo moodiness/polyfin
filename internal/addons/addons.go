@@ -728,12 +728,8 @@ func SyncCatalogs(ctx context.Context, tx pgx.Tx, id accounts.ID, manifest strem
 	return nil
 }
 
-// enableDefaults makes libraries of a new addon's catalogs. An addon that
-// groups its catalogs into collections already says how to organize them:
-// its browsable collection catalogs become the libraries.
-// Otherwise its browsable movie, series and live TV catalogs do, or an
-// Eclipse addon's catalog rows, else, for one declaring none, its
-// eclipse.MyMusic, until the scope has DefaultLibraries.
+// enableDefaults makes libraries of a new addon's catalogs, those
+// EnabledByDefault, until the scope has DefaultLibraries.
 func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) error {
 	var count, last int
 	err := tx.QueryRow(ctx, `SELECT count(*), coalesce(max(l.position), 0) FROM libraries l
@@ -741,22 +737,11 @@ func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) er
 	if err != nil {
 		return err
 	}
-	wanted := func(catalog stremio.Catalog) bool {
-		return catalog.Type == "movie" || catalog.Type == "series" || catalog.Type == "tv"
-	}
-	if addon.HasMusic() {
-		rowless := len(addon.Music.Catalogs) == 0
-		wanted = func(catalog stremio.Catalog) bool {
-			return eclipse.CatalogType(catalog.Type) && (catalog.ID != eclipse.MyMusic || rowless)
-		}
-	} else if slices.ContainsFunc(addon.Manifest.Catalogs, func(c stremio.Catalog) bool { return c.Type == "collection" && c.Browsable() }) {
-		wanted = func(catalog stremio.Catalog) bool { return catalog.Type == "collection" }
-	}
 	for _, catalog := range addon.Manifest.Catalogs {
 		if count >= DefaultLibraries {
 			break
 		}
-		if !catalog.Browsable() || !wanted(catalog) {
+		if !addon.EnabledByDefault(catalog) {
 			continue
 		}
 		last++
@@ -767,6 +752,24 @@ func enableDefaults(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon) er
 		}
 	}
 	return nil
+}
+
+// EnabledByDefault reports whether installing the addon makes a library of
+// catalog while its scope has fewer than DefaultLibraries. An addon that
+// groups its catalogs into collections already says how to organize them:
+// its browsable collection catalogs become the libraries. Otherwise its
+// browsable movie, series and live TV catalogs do, or an Eclipse addon's
+// catalog rows, else, for one declaring none, its eclipse.MyMusic.
+func (a Addon) EnabledByDefault(catalog stremio.Catalog) bool {
+	switch {
+	case !catalog.Browsable():
+		return false
+	case a.HasMusic():
+		return eclipse.CatalogType(catalog.Type) && (catalog.ID != eclipse.MyMusic || len(a.Music.Catalogs) == 0)
+	case slices.ContainsFunc(a.Manifest.Catalogs, func(c stremio.Catalog) bool { return c.Type == "collection" && c.Browsable() }):
+		return catalog.Type == "collection"
+	}
+	return catalog.Type == "movie" || catalog.Type == "series" || catalog.Type == "tv"
 }
 
 // lockScope serializes changes to the order of a scope's addons and

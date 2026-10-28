@@ -7,10 +7,13 @@ import (
 )
 
 // musicJSON describes what an Eclipse addon offers: the content its tracks
-// are (music, audiobook or podcast), the settings it declares, and the
-// values chosen for them, a setting left out being sent with its default.
+// are (music, audiobook or podcast), how many catalog rows of its own it
+// lists, none leaving My music as its library, the settings it declares,
+// and the values chosen for them, a setting left out being sent with its
+// default.
 type musicJSON struct {
 	ContentType string            `json:"contentType"`
+	Rows        int               `json:"rows"`
 	Settings    []settingJSON     `json:"settings"`
 	Values      map[string]string `json:"values"`
 }
@@ -39,7 +42,7 @@ func newMusicJSON(addon addons.Addon) *musicJSON {
 		return nil
 	}
 	m := addon.Music
-	result := &musicJSON{ContentType: m.ContentType, Settings: make([]settingJSON, 0, len(m.Settings)), Values: map[string]string{}}
+	result := &musicJSON{ContentType: m.ContentType, Rows: len(m.Catalogs), Settings: make([]settingJSON, 0, len(m.Settings)), Values: map[string]string{}}
 	for _, s := range m.Settings {
 		options := make([]optionJSON, 0, len(s.Options))
 		for _, o := range s.Options {
