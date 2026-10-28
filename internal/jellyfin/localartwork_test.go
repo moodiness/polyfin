@@ -212,7 +212,9 @@ func localEpisodeImages(t *testing.T, share bool) {
 
 	local := stills()
 	pilot := local["Pilot"]
-	if pilot == "" || pilot == addonStills["Pilot"] || local["Second"] != addonStills["Second"] {
+	// The second episode, without a still of the addon's or beside its
+	// file, shows a frame of its file instead.
+	if pilot == "" || pilot == addonStills["Pilot"] || addonStills["Second"] != "" || local["Second"] == "" {
 		t.Fatalf("local stills: %v, the addon's %v", local, addonStills)
 	}
 	var episodes QueryResult

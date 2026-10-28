@@ -227,6 +227,10 @@ type Images struct {
 	Banner   string
 	Art      string
 	Disc     string
+	// Frame is a frame of a local episode's file, which shows as its
+	// Primary image only when it has no other (see applyLocal); it is no
+	// image type of its own.
+	Frame string
 }
 
 // URL returns the artwork of a Jellyfin image type.

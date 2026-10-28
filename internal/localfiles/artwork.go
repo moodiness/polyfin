@@ -509,7 +509,9 @@ type artworkSet struct {
 // images Open opens, by URLs that change with their size and modification
 // time (see artworkURL). Of the images of a type several folders hold for
 // an item, the folder listed first among the server's sources gives it. A
-// home video without a poster beside it shows its frame (see storeFrames).
+// home video without a poster beside it shows its frame (see storeFrames),
+// and an episode of a shows folder has the frame of its file, which shows
+// when it has no other image (see readFrames).
 // It is read from memory, again once the artwork or the addons changed; if
 // it cannot be read, titles show the addons' artwork until it can.
 func (s *Service) Artwork() map[accounts.ID]library.Images {
@@ -606,7 +608,10 @@ func (s *Service) readArtwork(ctx context.Context) (map[accounts.ID]library.Imag
 		}
 		return nil
 	})
-	return images, err
+	if err != nil {
+		return nil, err
+	}
+	return images, s.readFrames(ctx, images)
 }
 
 // setArtwork sets the image of imageType in images to url, unless it has

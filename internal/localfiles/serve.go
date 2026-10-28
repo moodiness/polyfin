@@ -78,8 +78,8 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 
 // Meta describes a title of a folder as its files tell, for when no
 // metadata addon describes it: its name, poster and year, and a show's
-// episodes found. A plain video is described so too (see plainvideos.go),
-// without a poster, a plain series' episodes named after their files.
+// episodes found, named after their files. A plain video is described so
+// too (see plainvideos.go), without a poster.
 func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error) {
 	var kind string
 	if err := s.db.QueryRow(ctx, "SELECT kind FROM local_folders WHERE addon_id = $1", source).Scan(&kind); err != nil {
@@ -126,10 +126,9 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 				continue
 			}
 			seen[[2]int{*season, number}] = true
-			title := fmt.Sprintf("Episode %d", number)
-			if plain {
-				title = plainEpisodeName(rel, number)
-			}
+			// Named after its file, as Jellyfin names an episode its
+			// provider does not know: no addon describes the show.
+			title := plainEpisodeName(rel, number)
 			meta.Videos = append(meta.Videos, stremio.Video{ID: episodeVideoID(id, *season, number),
 				Title: title, Season: stremio.Number(*season), Episode: stremio.Number(number)})
 		}
@@ -285,11 +284,15 @@ var ErrGone = errors.New("the file is no longer in its folder")
 // title's (see Artwork), for reading, with its modification time: within
 // its folder, through no symbolic link leading out of it, or from its
 // share; a cover a track embeds or a home video's frame, from what its
-// scan kept; the title of a disc on a share, as one file (see openTitle).
+// scan kept; an episode's frame, made from its file (see episodeFrame);
+// the title of a disc on a share, as one file (see openTitle).
 // A VobSub pair is named by its .idx file, whose key with the .sub
 // extension opens its .sub file, as FFmpeg finds it. A share that cannot
 // be read fails with why (see shareFailure).
 func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time.Time, error) {
+	if file, ok := frameKey(key); ok {
+		return s.episodeFrame(ctx, file)
+	}
 	raw, extension, _ := strings.Cut(key, ".")
 	id, err := accounts.ParseID(raw)
 	if err != nil {

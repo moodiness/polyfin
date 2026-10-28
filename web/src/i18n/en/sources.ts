@@ -508,6 +508,14 @@ const sources = {
     titlesFound: (query: string) => `Titles found for “${query}”`,
     titleKinds: { movie: 'Movie', show: 'Show' },
     pickTitle: (name: string, details: string) => `Link to ${name}, ${details}`,
+    unlistedTitle: (count: number, figure: string) =>
+      count === 1 ? '1 episode is only in the files' : `${figure} episodes are only in the files`,
+    unlistedHelp:
+      'The metadata addon that describes their shows does not list them, as when it numbers seasons or specials otherwise. They are listed all the same, named after their files, and play.',
+    linkNotDescribedShow:
+      'No metadata addon of the server describes this identifier as a show. Check that it is the show’s, not an episode’s.',
+    linkNotDescribedMovie:
+      'No metadata addon of the server describes this identifier as a movie. Check that it is the movie’s.',
     linksTitle: 'Linked by hand',
     unlink: 'Remove the link',
     unlinkLabel: (unit: string) => `Remove the link of ${unit}`,

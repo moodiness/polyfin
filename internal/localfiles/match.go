@@ -83,7 +83,9 @@ var imdbPattern = regexp.MustCompile(`^tt\d{1,12}$`)
 // match is the title a unit was matched to: its Stremio identifier, its
 // IMDb and TMDB identifiers, name, poster and year, and how it was found;
 // or, without identifier, why none was, and for a failed search the addon
-// that failed it and why, as library.SearchFailure tells it.
+// that failed it and why, as library.SearchFailure tells it. Undescribed
+// tells a title found by its identifier that no metadata addon of the
+// server describes as the folder's kind (see described).
 type match struct {
 	stremioID, imdb, tmdb      string
 	name, poster               string
@@ -91,6 +93,7 @@ type match struct {
 	by                         string
 	reason                     string
 	searchAddon, searchFailure string
+	undescribed                bool
 }
 
 // searches keeps a scan's searches, so that files of the same name ask
@@ -598,6 +601,7 @@ func (s *Service) described(ctx context.Context, kind, id string, n name, by str
 		if m.name == "" {
 			m.name = id
 		}
+		m.undescribed = true
 		return m
 	}
 	if name := strings.TrimSpace(meta.Name); name != "" {
@@ -831,6 +835,9 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 	if err != nil {
 		return err
 	}
+	if err := s.noteLink(ctx, folder.Addon.ID, unit, link, m); err != nil {
+		return err
+	}
 	defer s.artworkChanged()
 	if err := s.store(ctx, folder.Addon.ID, folder.Kind, entries, m); err != nil {
 		return err
@@ -976,4 +983,18 @@ func (s *Service) Looser(ctx context.Context, id accounts.ID) ([]Looser, int, er
 		return l, err
 	})
 	return list, total, err
+}
+
+// noteLink records, for a unit linked to an identifier, whether a metadata
+// addon of the server described its title as the folder's kind when its
+// files were matched to it, m: a link to an identifier none describes,
+// such as an episode's typed for its series', is flagged on the folder's
+// page. A unit without a link has nothing to record.
+func (s *Service) noteLink(ctx context.Context, folder accounts.ID, unit, link string, m match) error {
+	if link == "" {
+		return nil
+	}
+	_, err := s.db.Exec(ctx, "UPDATE local_links SET described = $3 WHERE addon_id = $1 AND unit = $2 AND described <> $3",
+		folder, unit, !m.undescribed)
+	return err
 }

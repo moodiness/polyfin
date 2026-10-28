@@ -168,7 +168,7 @@ func TestDiscsAreOneMovie(t *testing.T) {
 		t.Errorf("another largest stream: %v", files)
 	}
 	folder, _ = e.service.Folder(t.Context(), addon.ID)
-	if !slices.Equal(folder.Links, []Link{{Unit: "Box/DISC01_xyz", IMDb: "tt0063350"}}) {
+	if !slices.Equal(folder.Links, []Link{{Unit: "Box/DISC01_xyz", IMDb: "tt0063350", Described: true}}) {
 		t.Errorf("links: %+v", folder.Links)
 	}
 	if err := e.service.Unlink(t.Context(), addon.ID, "Box/DISC01_xyz"); err != nil {
@@ -298,7 +298,7 @@ func TestDiscsReplaceTheirStreamsOnUpgrade(t *testing.T) {
 	}
 	folder, err := e.service.Folder(t.Context(), addon.ID)
 	if err != nil || folder.Files != 3 || folder.Matched != 3 ||
-		!slices.Equal(folder.Links, []Link{{Unit: "Movie (2001)", IMDb: "tt0063350"}}) {
+		!slices.Equal(folder.Links, []Link{{Unit: "Movie (2001)", IMDb: "tt0063350", Described: true}}) {
 		t.Errorf("folder: %+v %v", folder, err)
 	}
 	var by string

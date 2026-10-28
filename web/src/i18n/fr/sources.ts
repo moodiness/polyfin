@@ -532,6 +532,16 @@ const sources: typeof en = {
     titlesFound: (query: string) => `Titres trouvés pour «\u202F${query}\u202F»`,
     titleKinds: { movie: 'Film', show: 'Série' },
     pickTitle: (name: string, details: string) => `Associer à ${name}, ${details}`,
+    unlistedTitle: (count: number, figure: string) =>
+      count === 1
+        ? '1 épisode n’est que dans les fichiers'
+        : `${figure} épisodes ne sont que dans les fichiers`,
+    unlistedHelp:
+      'L’addon de métadonnées qui décrit leurs séries ne les liste pas, comme lorsqu’il numérote autrement les saisons ou les épisodes spéciaux. Ils sont listés quand même, sous le nom de leur fichier, et se lisent.',
+    linkNotDescribedShow:
+      'Aucun addon de métadonnées du serveur ne décrit cet identifiant comme une série. Vérifiez que c’est celui de la série, pas d’un épisode.',
+    linkNotDescribedMovie:
+      'Aucun addon de métadonnées du serveur ne décrit cet identifiant comme un film. Vérifiez que c’est celui du film.',
     linksTitle: 'Associés à la main',
     unlink: 'Retirer l’association',
     unlinkLabel: (unit: string) => `Retirer l’association de ${unit}`,

@@ -589,6 +589,9 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 				if m, err = s.unitMatch(groupCtx, folder.Kind, entries[0], links[unit], searches, exact[unit]); err != nil {
 					return err
 				}
+				if err = s.noteLink(groupCtx, id, unit, links[unit], m); err != nil {
+					return err
+				}
 			}
 			if m.reason == reasonSearchFailed {
 				failedFiles.Add(int64(len(entries)))

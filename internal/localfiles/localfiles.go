@@ -118,6 +118,17 @@ type Service struct {
 	// retry is told of a folder whose address, credentials or host key
 	// changed (see UseRetry), nil until set.
 	retry func(folder accounts.ID)
+	// unlisted keeps, by series, the episodes last recorded as not listed
+	// by its description (see NoteUnlisted), so that describing it again
+	// writes nothing unless they changed; unlistedMu guards it. frames
+	// bounds the episodes' frames made at once, and failedFrames keeps the
+	// files whose frame could not be made, which framesMu guards (see
+	// episodeFrame).
+	unlistedMu   sync.Mutex
+	unlisted     map[string]string
+	frames       chan struct{}
+	framesMu     sync.Mutex
+	failedFrames map[accounts.ID]failedFrame
 	// ffprobe and ffmpeg read a music folder's tracks, their tags and
 	// their embedded covers, and a home videos folder's videos, their
 	// dates and frames; toneMapping tells whether ffmpeg brings HDR to SDR
@@ -189,7 +200,8 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
 		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]scanning{},
 		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, kept: map[accounts.ID]int{},
-		shares: map[accounts.ID]*pooledRemote{}, measuring: map[accounts.ID]bool{}}
+		shares: map[accounts.ID]*pooledRemote{}, measuring: map[accounts.ID]bool{}, unlisted: map[string]string{},
+		frames: make(chan struct{}, episodeFrames), failedFrames: map[accounts.ID]failedFrame{}}
 }
 
 // UseFiles sets the address the folders' files are served at, a file's
@@ -408,6 +420,11 @@ type Folder struct {
 	// NoSearch counts the files left unmatched as no addon of the server
 	// describes and searches titles of the folder's kind.
 	NoSearch int
+	// Unlisted counts the episodes its files hold that their series'
+	// metadata addon does not list, as the series were last described:
+	// they are listed all the same, named after their files (see
+	// NoteUnlisted).
+	Unlisted int
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
@@ -431,6 +448,10 @@ type Dates struct {
 type Link struct {
 	Unit string
 	IMDb string
+	// Described tells whether a metadata addon of the server described
+	// the title, as the folder's kind, when the unit's files were last
+	// matched to it (see noteLink).
+	Described bool
 }
 
 // Add adds a folder to the server's addons, its catalog enabled as a
@@ -743,10 +764,12 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			(SELECT count(DISTINCT album_id) FROM local_tracks WHERE addon_id = $1 AND reason = ''),
 			(SELECT count(DISTINCT a) FROM local_tracks, unnest(album_artist_ids) a WHERE addon_id = $1 AND reason = ''),
 			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND (track_gain IS NOT NULL OR loudness > $2)),
-			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND loudness IS NOT NULL)
+			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND loudness IS NOT NULL),
+			`+unlistedCount+`
 		FROM local_folders WHERE addon_id = $1`, id, loudness.Silence).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password,
 		&f.UseArtwork, &f.ReadExtras, &f.Endpoint, &f.Region, &f.Remote, &f.PrivateKeySet, &f.PassphraseSet, &hostKey, &offeredKey,
-		&f.PollMinutes, &f.SearchRetryAt, &f.SearchRetries, &f.Extras, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured)
+		&f.PollMinutes, &f.SearchRetryAt, &f.SearchRetries, &f.Extras, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured,
+		&f.Unlisted)
 	f.PasswordSet = password != ""
 	f.HostKey, f.OfferedHostKey = Fingerprint(hostKey), Fingerprint(offeredKey)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -804,13 +827,13 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	if err != nil {
 		return Folder{}, err
 	}
-	rows, err = s.db.Query(ctx, "SELECT unit, imdb_id FROM local_links WHERE addon_id = $1 ORDER BY unit", id)
+	rows, err = s.db.Query(ctx, "SELECT unit, imdb_id, described FROM local_links WHERE addon_id = $1 ORDER BY unit", id)
 	if err != nil {
 		return Folder{}, err
 	}
 	f.Links, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (Link, error) {
 		var l Link
-		err := row.Scan(&l.Unit, &l.IMDb)
+		err := row.Scan(&l.Unit, &l.IMDb, &l.Described)
 		return l, err
 	})
 	if err != nil {

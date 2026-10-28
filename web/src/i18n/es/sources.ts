@@ -530,6 +530,16 @@ const sources: typeof en = {
     titlesFound: (query: string) => `Títulos encontrados para «${query}»`,
     titleKinds: { movie: 'Película', show: 'Serie' },
     pickTitle: (name: string, details: string) => `Vincular a ${name}, ${details}`,
+    unlistedTitle: (count: number, figure: string) =>
+      count === 1
+        ? '1 episodio solo está en los archivos'
+        : `${figure} episodios solo están en los archivos`,
+    unlistedHelp:
+      'El addon de metadatos que describe sus series no los incluye, como cuando numera de otra forma las temporadas o los especiales. Se muestran igualmente, con el nombre de su archivo, y se reproducen.',
+    linkNotDescribedShow:
+      'Ningún addon de metadatos del servidor describe este identificador como una serie. Comprueba que es el de la serie y no el de un episodio.',
+    linkNotDescribedMovie:
+      'Ningún addon de metadatos del servidor describe este identificador como una película. Comprueba que es el de la película.',
     linksTitle: 'Vinculados manualmente',
     unlink: 'Eliminar el vínculo',
     unlinkLabel: (unit: string) => `Eliminar el vínculo de ${unit}`,

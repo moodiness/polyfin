@@ -527,6 +527,16 @@ const sources: typeof en = {
     titlesFound: (query: string) => `Gefundene Titel für „${query}“`,
     titleKinds: { movie: 'Film', show: 'Serie' },
     pickTitle: (name: string, details: string) => `Mit ${name} verknüpfen, ${details}`,
+    unlistedTitle: (count: number, figure: string) =>
+      count === 1
+        ? '1 Folge gibt es nur in den Dateien'
+        : `${figure} Folgen gibt es nur in den Dateien`,
+    unlistedHelp:
+      'Das Metadaten-Addon, das ihre Serien beschreibt, führt sie nicht auf, etwa weil es Staffeln oder Specials anders nummeriert. Sie werden trotzdem aufgeführt, nach ihren Dateien benannt, und lassen sich abspielen.',
+    linkNotDescribedShow:
+      'Kein Metadaten-Addon des Servers beschreibt diese Kennung als Serie. Prüfen Sie, dass es die der Serie ist, nicht die einer Folge.',
+    linkNotDescribedMovie:
+      'Kein Metadaten-Addon des Servers beschreibt diese Kennung als Film. Prüfen Sie, dass es die des Films ist.',
     linksTitle: 'Manuell verknüpft',
     unlink: 'Verknüpfung entfernen',
     unlinkLabel: (unit: string) => `Verknüpfung von ${unit} entfernen`,

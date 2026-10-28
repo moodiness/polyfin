@@ -33,18 +33,27 @@ type plainSetup struct {
 	showsLibrary  string
 }
 
-func newPlainSetup(t *testing.T) plainSetup {
+// newPlainSetup starts a plainSetup. Its folders read their videos with
+// the FFmpeg and ffprobe of POLYFIN_TEST_FFMPEG, as the server is given
+// them (cmd/polyfin), or, for their episodes' frames, with folderFFmpeg
+// when it is set.
+func newPlainSetup(t *testing.T, folderFFmpeg ...string) plainSetup {
 	t.Helper()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
 		t.Skip("POLYFIN_TEST_FFMPEG is not set")
 	}
 	ffprobe := filepath.Join(filepath.Dir(ffmpeg), "ffprobe")
+	frames := ffmpeg
+	if len(folderFFmpeg) > 0 {
+		frames = folderFFmpeg[0]
+	}
 	var folders *localfiles.Service
 	s := newProbingServer(t, 10, ffprobe, func(o *Options, pool *pgxpool.Pool) {
 		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, o.Logger, o.Accounts.Settings, nil)
 		t.Cleanup(folders.Close)
 		o.Library.UseLocal(folders)
+		folders.UseTools(ffprobe, frames)
 		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
 	})
 	p := plainSetup{tracking: trackingOn(t, s), folders: folders, dir: t.TempDir()}

@@ -960,6 +960,18 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
           {text.noSearchHelp}
         </Notice>
       )}
+      {folder.unlistedEpisodes > 0 && (
+        <Notice className="mt-5">
+          <strong className="font-medium">
+            {text.unlistedTitle(
+              folder.unlistedEpisodes,
+              folder.unlistedEpisodes.toLocaleString(language),
+            )}
+            .
+          </strong>{' '}
+          {text.unlistedHelp}
+        </Notice>
+      )}
     </PanelSection>
   )
 }
@@ -1064,6 +1076,13 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
                     {unitName(link.unit, folder, text.discTitle)}
                   </span>
                   <Badge tone="accent">{link.imdbId}</Badge>
+                  {!link.described && (
+                    <span className="mt-1 block text-small text-warn">
+                      {folder.kind === 'movies'
+                        ? text.linkNotDescribedMovie
+                        : text.linkNotDescribedShow}
+                    </span>
+                  )}
                 </span>
                 <IconButton
                   label={text.unlinkLabel(unitName(link.unit, folder, text.discTitle))}

@@ -288,7 +288,7 @@ func TestDiscPlaylistsAreTitles(t *testing.T) {
 		t.Errorf("linked: %v", files)
 	}
 	folder, _ := e.service.Folder(t.Context(), addon.ID)
-	if !slices.Equal(folder.Links, []Link{{Unit: "Box/DISC02#00001", IMDb: "tt0063350"}}) {
+	if !slices.Equal(folder.Links, []Link{{Unit: "Box/DISC02#00001", IMDb: "tt0063350", Described: true}}) {
 		t.Errorf("links: %+v", folder.Links)
 	}
 	streams, err = e.service.Streams(t.Context(), addon.ID, "tt0063350")
@@ -343,7 +343,7 @@ func TestDiscStreamsBecomePlaylists(t *testing.T) {
 		t.Errorf("after: %v", got)
 	}
 	folder, _ := e.service.Folder(t.Context(), addon.ID)
-	if !slices.Equal(folder.Links, []Link{{Unit: "Box/DISC01", IMDb: "tt0017925"}}) {
+	if !slices.Equal(folder.Links, []Link{{Unit: "Box/DISC01", IMDb: "tt0017925", Described: true}}) {
 		t.Errorf("links: %+v", folder.Links)
 	}
 

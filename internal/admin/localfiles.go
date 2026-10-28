@@ -74,6 +74,10 @@ type folderJSON struct {
 	// NoSearch counts the files left unmatched as no addon of the server
 	// describes and searches titles of the folder's kind.
 	NoSearch int `json:"noSearch"`
+	// UnlistedEpisodes counts the episodes its files hold that their
+	// series' metadata addon does not list, as the series were last
+	// described; they are listed all the same, named after their files.
+	UnlistedEpisodes int `json:"unlistedEpisodes"`
 }
 
 // searchFailureJSON is a failed search of a title: the name of the addon
@@ -118,9 +122,13 @@ type datedByJSON struct {
 	File    int `json:"file"`
 }
 
+// linkJSON is a unit linked by hand to an IMDb identifier, and whether a
+// metadata addon of the server described that title, as the folder's
+// kind, when the unit's files were last matched to it.
 type linkJSON struct {
-	Unit   string `json:"unit"`
-	ImdbID string `json:"imdbId"`
+	Unit      string `json:"unit"`
+	ImdbID    string `json:"imdbId"`
+	Described bool   `json:"described"`
 }
 
 // givenEpisodeJSON is the episodes given by hand to a title of a show's
@@ -138,7 +146,7 @@ type givenEpisodeJSON struct {
 func newFolderJSON(f localfiles.Folder) *folderJSON {
 	links := make([]linkJSON, 0, len(f.Links))
 	for _, l := range f.Links {
-		links = append(links, linkJSON{Unit: l.Unit, ImdbID: l.IMDb})
+		links = append(links, linkJSON{Unit: l.Unit, ImdbID: l.IMDb, Described: l.Described})
 	}
 	episodes := make([]givenEpisodeJSON, 0, len(f.Episodes))
 	for _, e := range f.Episodes {
@@ -154,7 +162,7 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 		Endpoint: f.Endpoint, Region: f.Region, RcloneRemote: f.Remote, PrivateKeySet: f.PrivateKeySet, PassphraseSet: f.PassphraseSet,
 		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, PollMinutes: f.PollMinutes,
 		SearchFailed: f.SearchFailed, SearchFailure: newSearchFailureJSON(f.SearchAddon, f.SearchFailure), SearchRetryAt: f.SearchRetryAt,
-		NoSearch: f.NoSearch}
+		NoSearch: f.NoSearch, UnlistedEpisodes: f.Unlisted}
 }
 
 // folderScope answers the folder routes' scope: local folders are the

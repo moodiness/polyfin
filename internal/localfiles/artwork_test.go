@@ -275,8 +275,11 @@ func TestMovieArtworkIsKeptAndServed(t *testing.T) {
 	if folder, err := e.service.Folder(t.Context(), addon.ID); err != nil || folder.UseArtwork {
 		t.Errorf("folder: %+v %v", folder, err)
 	}
-	if len(e.service.Artwork()) != 0 {
-		t.Errorf("artwork with the option off: %v", e.service.Artwork())
+	// The frames stay: they are no artwork of the folder's.
+	for item, images := range e.service.Artwork() {
+		if images != (library.Images{Frame: images.Frame}) {
+			t.Errorf("artwork with the option off: %s %+v", item, images)
+		}
 	}
 	if _, err := e.service.Update(t.Context(), addon.ID, Changes{UseArtwork: new(true)}); err != nil {
 		t.Fatal(err)
@@ -361,7 +364,9 @@ func TestEpisodeArtworkIsKept(t *testing.T) {
 			t.Errorf("%s: %+v", want, images)
 		}
 	}
-	if images, ok := e.service.Artwork()[second]; ok {
+	// An episode without an image has the frame of its file, which shows
+	// when nothing else does (see readFrames), and no image.
+	if images := e.service.Artwork()[second]; images != (library.Images{Frame: images.Frame}) || images.Frame == "" {
 		t.Errorf("an episode without an image: %+v", images)
 	}
 
@@ -385,7 +390,7 @@ func TestEpisodeArtworkIsKept(t *testing.T) {
 	if err := e.service.Scan(t.Context(), addon.ID); err != nil {
 		t.Fatal(err)
 	}
-	if images, ok := e.service.Artwork()[pilot]; ok {
+	if images := e.service.Artwork()[pilot]; images != (library.Images{Frame: images.Frame}) {
 		t.Errorf("an image removed: %+v", images)
 	}
 	key, _ := library.LocalArtworkKey(replaced)
@@ -397,8 +402,11 @@ func TestEpisodeArtworkIsKept(t *testing.T) {
 	if _, err := e.service.Update(t.Context(), addon.ID, Changes{UseArtwork: new(false)}); err != nil {
 		t.Fatal(err)
 	}
-	if len(e.service.Artwork()) != 0 {
-		t.Errorf("artwork with the option off: %v", e.service.Artwork())
+	// The frames stay: they are no artwork of the folder's.
+	for item, images := range e.service.Artwork() {
+		if images != (library.Images{Frame: images.Frame}) {
+			t.Errorf("artwork with the option off: %s %+v", item, images)
+		}
 	}
 	if _, err := e.service.Update(t.Context(), addon.ID, Changes{UseArtwork: new(true)}); err != nil {
 		t.Fatal(err)

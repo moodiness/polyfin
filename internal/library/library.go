@@ -263,6 +263,13 @@ type Local interface {
 	// was matched to since, empty while it is not.
 	LinkPlain(ctx context.Context, plain, imdb string) error
 	PlainMatch(ctx context.Context, plain string) (accounts.ID, string, error)
+	// Episodes lists the episodes the files of folders hold for the
+	// series of a Stremio identifier, each named after its file, and
+	// NoteUnlisted records those of them a metadata addon's description
+	// of the series does not list, by season and number, which the
+	// folders' pages count (see fileepisodes.go).
+	Episodes(ctx context.Context, folders []accounts.ID, stremioID string) ([]stremio.Video, error)
+	NoteUnlisted(ctx context.Context, stremioID string, unlisted [][2]int) error
 }
 
 // UseLocal sets what answers for local folders; it is called before the
@@ -1770,8 +1777,9 @@ func notOwn(candidate installed, err error) bool {
 
 // completed is the description of r that candidate gave, completed as
 // describeBy returns it, an IPTV source's with the details of the
-// descriptions kept; one from one of the server's addons gives the rating
-// kept for the title.
+// descriptions kept, a series' with the episodes local folders hold that
+// it does not list (see withFileEpisodes); one from one of the server's
+// addons gives the rating kept for the title.
 func (s *Service) completed(ctx context.Context, v view, r record, candidate installed, kept fetched[stremio.Meta], shared bool) stremio.Meta {
 	meta := kept.value
 	if candidate.addon.IPTV() {
@@ -1784,7 +1792,7 @@ func (s *Service) completed(ctx context.Context, v view, r record, candidate ins
 	if candidate.shared && !candidate.addon.Local() {
 		s.learnTraits(ctx, r, meta, kept.at)
 	}
-	return meta
+	return s.withFileEpisodes(ctx, v, r, candidate, meta)
 }
 
 // describers lists the user's addons, the server's only when shared is
@@ -1847,7 +1855,7 @@ func (s *Service) describedMeta(ctx context.Context, v view, r record, shared bo
 		switch {
 		case !own(candidate.addon):
 			if meta, ok := s.keptDescription(ctx, candidate, metaKey{candidate.addon.ID, r.Meta.Type, r.Meta.ID}, how); ok {
-				return meta, candidate, true
+				return s.withFileEpisodes(ctx, v, r, candidate, meta), candidate, true
 			}
 		case r.Addon != nil && candidate.addon.ID == *r.Addon:
 			if candidate.addon.IPTV() {
@@ -2834,6 +2842,11 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		confined = series.Confined || describer.confined
 	}
 	url := images.URL(imageType)
+	if url == "" && r.Kind == KindEpisode && strings.EqualFold(imageType, "Primary") {
+		// An episode without an image shows a frame of its file (see
+		// applyLocal).
+		url = local[id].Frame
+	}
 	if url == "" && r.Kind == KindCollection && images.Primary == "" {
 		// An addon's collection without a poster shows its generated
 		// images, if any.

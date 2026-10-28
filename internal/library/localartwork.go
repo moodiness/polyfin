@@ -99,6 +99,12 @@ func applyLocal(item *Item, local map[accounts.ID]Images) {
 	if own.Primary != "" {
 		item.PosterShape = ""
 	}
+	// An episode without an image, neither its addon's still nor one
+	// beside its file, shows a frame of its file, as Jellyfin's Screen
+	// Grabber makes one.
+	if item.Kind == KindEpisode && item.Images.Primary == "" {
+		item.Images.Primary = own.Frame
+	}
 	if item.SeriesID != (accounts.ID{}) {
 		series := local[item.SeriesID]
 		if series.Primary != "" {
