@@ -98,7 +98,7 @@ func TestTVCatalogGuides(t *testing.T) {
 		t.Errorf("refreshing: %d %s after %d downloads", status, raw, downloads.Load())
 	}
 	for name, bad := range map[string]map[string]any{
-		"address": {"addonId": addonID, "catalogType": "tv", "catalogId": "channels", "url": "file:///etc/passwd"},
+		"address": {"addonId": addonID, "catalogType": "tv", "catalogId": "channels", "url": "ftp://guide.example/guide.xml"},
 		"catalog": {"addonId": addonID, "catalogType": "movie", "catalogId": "top", "url": guideURL},
 	} {
 		want := map[string]string{"address": "invalid_guide_url", "catalog": "invalid_library"}[name]

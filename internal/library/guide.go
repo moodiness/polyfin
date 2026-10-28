@@ -18,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/serverfile"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/xmltv"
 )
@@ -57,6 +58,10 @@ const (
 	// guideChannelsUnreachable is a guide fetched for a catalog whose
 	// channels could not be listed to map them.
 	guideChannelsUnreachable = "channels_unreachable"
+	// A guide that is a file of the server is missing or unreadable, or
+	// is a member's (see iptv.ErrLocalFile).
+	guideFileUnreadable = "file_unreadable"
+	guideFileRefused    = "file_refused"
 )
 
 var errTooManyProgrammes = errors.New("too many programmes")
@@ -95,7 +100,8 @@ func (s *Service) RefreshGuides(ctx context.Context, all bool) error {
 	}
 	for _, c := range catalogs {
 		due := slices.DeleteFunc(slices.Clone(c.Guides), func(g addons.Guide) bool {
-			return !all && !iptv.Due(g.CheckedAt, retries[g.ID], interval, s.now())
+			return !all && !iptv.Due(g.CheckedAt, retries[g.ID], interval, s.now()) &&
+				!serverfile.Changed(g.URL, g.CheckedAt, g.Error == guideFileUnreadable)
 		})
 		if len(due) > 0 {
 			if err := s.refreshCatalog(ctx, c, due); err != nil {
@@ -256,6 +262,10 @@ func (s *Service) fetchGuide(ctx context.Context, c addons.LiveCatalog, g addons
 			code = guideMalformed
 		case errors.Is(err, iptv.ErrRateLimited):
 			code = guideRateLimited
+		case errors.Is(err, serverfile.ErrMissing), errors.Is(err, serverfile.ErrUnreadable):
+			code = guideFileUnreadable
+		case errors.Is(err, iptv.ErrLocalFile):
+			code = guideFileRefused
 		default:
 			var pgErr interface{ SQLState() string }
 			if errors.As(err, &pgErr) {
@@ -430,9 +440,21 @@ func positive(n int) *int {
 // readGuide downloads a guide and reads it (see xmltv.Read). The address
 // never appears in errors: it may embed credentials. A provider that asks
 // to slow down fails it with an iptv.RateLimitError, retried after a
-// backoff (see RefreshGuides).
+// backoff (see RefreshGuides). A guide that is a file of the server is
+// read from it, but for a catalog confined to public addresses.
 func (s *Service) readGuide(ctx context.Context, c addons.LiveCatalog, address string, options xmltv.Options,
 	channel func(xmltv.Channel) error, programme func(xmltv.Programme) error) error {
+	if path, ok := serverfile.Path(address); ok {
+		if c.Confined {
+			return iptv.ErrLocalFile
+		}
+		file, err := serverfile.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		return xmltv.Read(file, options, channel, programme)
+	}
 	ctx, cancel := context.WithTimeout(ctx, guideTimeout)
 	defer cancel()
 	// The guide of an IPTV source is mostly its provider's, whose host its

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/serverfile"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -93,7 +94,8 @@ func (d *downloaded) merge(more downloaded) {
 
 // fetch downloads the parts of an account that want names: an M3U
 // playlist whole, or the Xtream player API lists of each part, with the
-// account's User-Agent. confined keeps the requests on public addresses.
+// account's User-Agent. confined keeps the requests on public addresses,
+// and refuses a playlist that is a file of the server (ErrLocalFile).
 // Errors never contain an address: they embed credentials. Entries of a
 // kind not wanted as titles count as channels, as they become.
 func fetch(ctx context.Context, client requester, account Account, confined bool, want parts) (downloaded, error) {
@@ -120,7 +122,12 @@ func fetch(ctx context.Context, client requester, account Account, confined bool
 		if want.movies || want.series {
 			limit = maxVODListSize
 		}
-		err = download(ctx, client, account.URL, confined, limit, func(body io.Reader) error { return ParseM3U(body, add) })
+		read := func(body io.Reader) error { return ParseM3U(body, add) }
+		if path, ok := serverfile.Path(account.URL); ok {
+			err = readFile(path, confined, limit, read)
+		} else {
+			err = download(ctx, client, account.URL, confined, limit, read)
+		}
 		d.got = parts{live: true, movies: true, series: true}
 	case addons.KindXtream:
 		d, err = fetchXtream(ctx, client, account, confined, want)
@@ -130,6 +137,21 @@ func fetch(ctx context.Context, client requester, account Account, confined bool
 		err = ErrInvalidAddress
 	}
 	return d, err
+}
+
+// readFile hands read a list that is a file of the server, bounded in size
+// (limit) as a download is; a source confined to public addresses may not
+// read one.
+func readFile(path string, confined bool, limit int64, read func(io.Reader) error) error {
+	if confined {
+		return ErrLocalFile
+	}
+	file, err := serverfile.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return read(&bounded{r: file, left: limit})
 }
 
 // download requests address in its host's turn (see Pacer) and hands its
@@ -181,7 +203,7 @@ func downloadOnce(ctx context.Context, client requester, address string, confine
 }
 
 // bounded reads at most left bytes, then fails with ErrTooLarge; each read
-// that brings something pushes the stall timer back.
+// that brings something pushes the stall timer back, when there is one.
 type bounded struct {
 	r     io.Reader
 	left  int64
@@ -201,7 +223,7 @@ func (b *bounded) Read(p []byte) (int, error) {
 	}
 	n, err := b.r.Read(p)
 	b.left -= int64(n)
-	if n > 0 {
+	if n > 0 && b.stall != nil {
 		b.stall.Reset(listStall)
 	}
 	if err != nil && !errors.Is(err, io.EOF) {

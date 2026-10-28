@@ -147,7 +147,7 @@ func TestIPTVSources(t *testing.T) {
 	}{
 		{map[string]any{"name": "Wrong", "kind": "xtream", "server": provider, "username": "user", "password": "nope"}, "iptv_login_refused"},
 		{map[string]any{"name": "Page", "kind": "m3u", "url": provider + "/xmltv.php"}, "invalid_channel_list"},
-		{map[string]any{"name": "Bad", "kind": "m3u", "url": "file:///etc/passwd"}, "invalid_source_address"},
+		{map[string]any{"name": "Bad", "kind": "m3u", "url": "ftp://lists.example/list.m3u"}, "invalid_source_address"},
 		{map[string]any{"name": "Kind", "kind": "other", "url": provider + "/get.php"}, "invalid_source_address"},
 		{map[string]any{"name": "", "kind": "m3u", "url": provider + "/get.php?x"}, "invalid_source_name"},
 		{map[string]any{"name": "Again", "kind": "m3u", "url": provider + "/get.php?username=user&password=secret-pw"}, "addon_exists"},

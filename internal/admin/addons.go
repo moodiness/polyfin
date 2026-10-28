@@ -15,6 +15,7 @@ import (
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
+	"github.com/moodiness/polyfin/internal/serverfile"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -328,10 +329,14 @@ func (h *handler) newLibraryGuideJSON(l addons.Library, refreshHours int) *libra
 }
 
 // redactGuideURL keeps a guide address's scheme and host: its path, query
-// and credentials may hold the user's.
+// and credentials may hold the user's. A file of the server is shown
+// whole: its path holds no credential.
 func redactGuideURL(guideURL string) string {
 	if guideURL == "" {
 		return ""
+	}
+	if path, ok := serverfile.Path(guideURL); ok {
+		return path
 	}
 	parsed, err := url.Parse(guideURL)
 	if err != nil {
@@ -467,6 +472,17 @@ func confined(r *http.Request) bool {
 	return !sessionFrom(r.Context()).User.IsAdministrator
 }
 
+// serverFileRefused answers 403 local_file_refused and reports true when
+// one of addresses is a file of the server and the caller is no
+// administrator: only administrators may have the server read its files.
+func serverFileRefused(w http.ResponseWriter, r *http.Request, addresses ...string) bool {
+	if !confined(r) || !slices.ContainsFunc(addresses, func(a string) bool { _, file := serverfile.Path(a); return file }) {
+		return false
+	}
+	writeError(w, http.StatusForbidden, "local_file_refused")
+	return true
+}
+
 // personalAddonsRefused answers 403 personal_addons_disabled and reports
 // true when scope is the caller's own addons and the server or the caller's
 // own permission turned them off: such addons are kept, and may be turned
@@ -507,6 +523,9 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{iptv.ErrInvalidName, http.StatusBadRequest, "invalid_source_name"},
 		{iptv.ErrInvalidAddress, http.StatusBadRequest, "invalid_source_address"},
 		{iptv.ErrInvalidUserAgent, http.StatusBadRequest, "invalid_user_agent"},
+		{iptv.ErrLocalFile, http.StatusForbidden, "local_file_refused"},
+		{serverfile.ErrMissing, http.StatusBadRequest, "file_missing"},
+		{serverfile.ErrUnreadable, http.StatusBadRequest, "file_unreadable"},
 		{localfiles.ErrInvalidName, http.StatusBadRequest, "invalid_folder_name"},
 		{localfiles.ErrInvalidPath, http.StatusBadRequest, "invalid_folder_path"},
 		{localfiles.ErrInvalidAddress, http.StatusBadRequest, "invalid_share_address"},
@@ -877,7 +896,7 @@ func (h *handler) saveGuide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key, ok := guideTarget(w, body)
-	if !ok || (body.URL != "" && h.personalAddonsRefused(w, r, scope)) {
+	if !ok || (body.URL != "" && h.personalAddonsRefused(w, r, scope)) || serverFileRefused(w, r, body.URL) {
 		return
 	}
 	_, err := h.Addons.SetGuide(r.Context(), scope, key, body.URL)

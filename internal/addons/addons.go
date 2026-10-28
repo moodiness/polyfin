@@ -23,6 +23,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/eclipse"
+	"github.com/moodiness/polyfin/internal/serverfile"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -47,7 +48,7 @@ var (
 	// ErrInvalidLibraryMaxItems reports a maximum outside 1 to
 	// MaxLibraryItems, or given to a catalog that takes none.
 	ErrInvalidLibraryMaxItems = errors.New("a library's maximum is a whole number from 1 to 20,000")
-	ErrInvalidGuideURL        = errors.New("guide addresses are http or https URLs of at most 4096 characters")
+	ErrInvalidGuideURL        = errors.New("guide addresses are http or https URLs of at most 4096 characters, or files of the server")
 	ErrTooManyGuides          = errors.New("a live TV catalog has at most 10 guides")
 	ErrInvalidGuide           = errors.New("unknown guide")
 	// ErrNotStremio reports an IPTV source asked for a manifest.
@@ -1232,10 +1233,20 @@ func (s *Store) SetLibraryImage(ctx context.Context, scope Scope, key LibraryKey
 	return nil
 }
 
-// validGuideURL checks a guide address.
-func validGuideURL(guideURL string) bool {
-	parsed, err := url.Parse(guideURL)
-	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != "" && len(guideURL) <= 4096
+// GuideSource checks a guide's address and returns the one it is kept
+// under: an http or https URL of at most 4096 characters, or a file of the
+// server by its path (see serverfile.Path), which must be readable now.
+// Only an administrator's guide may be a file (see the admin API).
+func GuideSource(address string) (string, error) {
+	address = strings.TrimSpace(address)
+	if path, ok := serverfile.Path(address); ok && len(path) <= 4096 {
+		return path, serverfile.Check(path)
+	}
+	parsed, err := url.Parse(address)
+	if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.Host == "" || len(address) > 4096 {
+		return "", ErrInvalidGuideURL
+	}
+	return address, nil
 }
 
 // lockCatalog locks one of the scope's enabled live TV catalogs in tx.
@@ -1270,8 +1281,11 @@ func catalogGuides(ctx context.Context, db queryer, key LibraryKey) ([]Guide, er
 func (s *Store) SetGuide(ctx context.Context, scope Scope, key LibraryKey, rawURL string) (bool, error) {
 	defer s.changed()
 	guideURL := strings.TrimSpace(rawURL)
-	if guideURL != "" && !validGuideURL(guideURL) {
-		return false, ErrInvalidGuideURL
+	if guideURL != "" {
+		var err error
+		if guideURL, err = GuideSource(guideURL); err != nil {
+			return false, err
+		}
 	}
 	changed := false
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
@@ -1324,9 +1338,12 @@ func (s *Store) SetGuides(ctx context.Context, scope Scope, key LibraryKey, list
 		return nil, ErrTooManyGuides
 	}
 	for i := range list {
-		list[i].URL = strings.TrimSpace(list[i].URL)
-		if list[i].ID == nil && !validGuideURL(list[i].URL) {
-			return nil, ErrInvalidGuideURL
+		if list[i].ID == nil {
+			source, err := GuideSource(list[i].URL)
+			if err != nil {
+				return nil, err
+			}
+			list[i].URL = source
 		}
 	}
 	var added []accounts.ID
