@@ -185,7 +185,7 @@ A link's host sends its headers within seconds. A torrent needs peers first, fro
 - The read of a version's index, for its HLS segments, waits for a torrent as its analysis does, and ends within 3 minutes in any case, read whole or failed: what it reads waits at most a piece's wait at a time, twice, so it ends well before; a read that would still wait then is tried again at the next play.
 - An analysis or a read of the index that gave up on a torrent's pieces, as they stopped coming or came too slowly for the play, is a torrent that did not start in time: the play answers `RateLimitExceeded` when no other version plays, never that the version suits no app, and the version is not kept as failed: the next play tries it again at once. So do the other reads of its file, which otherwise remember a failure for a while: locating its subtitle tracks through its index, reading one of them whole, reading the first frame of its HDR video, reading a picture subtitle track into text. One that gave up on the torrent's pieces, or ran while no playback played the torrent, as when the title's page opened or after a pause past the torrent's 30 seconds, is made again at the next play. A torrent that never started, and what the file itself holds, as a track the index does not list, are remembered as before.
 
-A torrent that does not start in time is not tried again for 15 minutes, like a version that cannot be read, and the other versions are played meanwhile. A torrent that started but whose peers then send nothing, as when they hold its pieces, is a torrent that did not start in time too: the play answers `RateLimitExceeded` when no other version plays, but the torrent is not kept out, and the next play tries it again at once, which plays as soon as the peers send.
+A torrent that does not start in time is not tried again for 15 minutes by a play that picks no version, and the next versions are tried meanwhile. It stays listed, in its place in the title's versions, so that the version menu keeps the addon's order (see [When torrents do not start](#when-torrents-do-not-start)). A torrent that started but whose peers then send nothing, as when they hold its pieces, is a torrent that did not start in time too: the play answers `RateLimitExceeded` when no other version plays, but the torrent is not kept out, and the next play tries it again at once, which plays as soon as the peers send.
 
 ## Torrents at once
 
@@ -222,6 +222,14 @@ When no version of a title plays because a torrent could not start, its route be
 - not dialed yet: the peer waits for a dial, or its first dial runs.
 
 A peer tried over both uTP and TCP is counted by TCP's answer.
+
+The torrent versions that did not start in time stay in the title's versions, in the addon's order: item details and the version menus list them.
+
+- **Plays that pick none:** for 15 minutes, a play that picks no version passes them over and tries the next ones, up to **Versions tried when one does not work**. jellyfin-web's Play, Android TV and Swiftfin send the title's own identifier, which picks none. When none of the others plays either, the play answers `RateLimitExceeded`.
+- **A version picked:** a version the user picks in the version menu, under its own identifier, is tried again at once, its torrent started anew. The first version carries the title's own identifier, so picking it is a play that picks none.
+- **Tried again by every play:** after 15 minutes, after a restart, or once a version picked starts.
+
+**Compared with Jellyfin:** Jellyfin lists every version of a title, also those that cannot be read (see [Playback](playback.md#versions-and-analysis)). Polyfin lists these torrents too, and only its own choice of a version for a play passes them over for a while; other failures leave the versions out for 15 minutes, as before.
 
 What to check:
 
