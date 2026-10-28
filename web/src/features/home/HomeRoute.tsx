@@ -87,55 +87,65 @@ function Overview({ name }: { name: string }) {
         )
       }
     >
-      {update && health.data && (
-        <Notice
-          action={
-            // On a phone the buttons stack, so that the notice's words keep their width.
-            <div className="flex flex-wrap items-center gap-2 max-sm:flex-col max-sm:items-stretch">
-              {actions.data?.desktopUpdate && (
-                <DesktopInstall actions={actions.data} update={actions.data.desktopUpdate} />
-              )}
-              {actions.data?.updateTool && <NoticeUpdateButton onOpen={setOpen} />}
-              <ExternalButtonLink
-                href={update.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                size="sm"
-                iconEnd={ArrowSquareOutIcon}
-              >
-                {text.releaseNotes}
-              </ExternalButtonLink>
-            </div>
-          }
-        >
-          {text.update(update.version, health.data.process.version)}
-        </Notice>
-      )}
-      <NowPlaying
-        aside={
-          transcoder ? (
-            <Link
-              to="/system/health#transcoder"
-              className="flex items-center gap-2 rounded-md transition-colors duration-160 hover:text-ink"
+      {/*
+        From xl, two columns, as Jellyfin's dashboard has: the server's state on the left, Recent
+        activity on the right from the top. Narrower, one column in the same order, as before.
+      */}
+      <div className="xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start xl:gap-x-10">
+        <div className="[&>*+*]:mt-block max-md:[&>*+*]:mt-11">
+          {update && health.data && (
+            <Notice
+              action={
+                // On a phone the buttons stack, so that the notice's words keep their width.
+                <div className="flex flex-wrap items-center gap-2 max-sm:flex-col max-sm:items-stretch">
+                  {actions.data?.desktopUpdate && (
+                    <DesktopInstall actions={actions.data} update={actions.data.desktopUpdate} />
+                  )}
+                  {actions.data?.updateTool && <NoticeUpdateButton onOpen={setOpen} />}
+                  <ExternalButtonLink
+                    href={update.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    size="sm"
+                    iconEnd={ArrowSquareOutIcon}
+                  >
+                    {text.releaseNotes}
+                  </ExternalButtonLink>
+                </div>
+              }
             >
-              <CpuIcon size={16} aria-hidden="true" />
-              {text.conversions}
-              <span className="figures text-ink-2">
-                {text.conversionsOf(transcoder.conversions, transcoder.limit)}
-              </span>
-            </Link>
-          ) : undefined
-        }
-      />
-      <Problems
-        problems={problems.data ?? []}
-        loading={problems.isPending}
-        error={problems.error}
-        retrying={problems.isFetching}
-        onRetry={() => void problems.refetch()}
-      />
-      <ServerFigures />
-      <RecentActivity />
+              {text.update(update.version, health.data.process.version)}
+            </Notice>
+          )}
+          <NowPlaying
+            aside={
+              transcoder ? (
+                <Link
+                  to="/system/health#transcoder"
+                  className="flex items-center gap-2 rounded-md transition-colors duration-160 hover:text-ink"
+                >
+                  <CpuIcon size={16} aria-hidden="true" />
+                  {text.conversions}
+                  <span className="figures text-ink-2">
+                    {text.conversionsOf(transcoder.conversions, transcoder.limit)}
+                  </span>
+                </Link>
+              ) : undefined
+            }
+          />
+          <Problems
+            problems={problems.data ?? []}
+            loading={problems.isPending}
+            error={problems.error}
+            retrying={problems.isFetching}
+            onRetry={() => void problems.refetch()}
+          />
+          <ServerFigures />
+        </div>
+        <div className="max-xl:mt-block max-md:mt-11">
+          <RecentActivity />
+        </div>
+      </div>
     </PageLayout>
   )
 }
@@ -266,7 +276,8 @@ function ServerFigures() {
         </InlineError>
       ) : (
         <>
-          <dl className="grid grid-cols-5 border-t border-line pt-[22px] pb-1 max-lg:grid-cols-3 max-lg:gap-y-6 max-sm:grid-cols-2">
+          {/* Three a row in Home's left column from xl, as below lg. */}
+          <dl className="grid grid-cols-5 border-t border-line pt-[22px] pb-1 max-lg:grid-cols-3 max-lg:gap-y-6 max-sm:grid-cols-2 xl:grid-cols-3 xl:gap-y-6">
             <Figure label={text.graphics} loading={data === undefined}>
               {data &&
                 (data.transcoder?.hardware ? (
@@ -379,7 +390,7 @@ function Figure({
   children: ReactNode
 }) {
   return (
-    <div className="min-w-0 border-line px-6 first:border-l-0 first:pl-0 not-first:border-l max-lg:[&:nth-child(3n+1)]:border-l-0 max-lg:[&:nth-child(3n+1)]:pl-0 max-sm:px-4 max-sm:[&:nth-child(odd)]:border-l-0 max-sm:[&:nth-child(odd)]:pl-0 max-sm:[&:nth-child(even)]:border-l max-sm:[&:nth-child(even)]:pl-4">
+    <div className="min-w-0 border-line px-6 first:border-l-0 first:pl-0 not-first:border-l max-lg:[&:nth-child(3n+1)]:border-l-0 max-lg:[&:nth-child(3n+1)]:pl-0 max-sm:px-4 max-sm:[&:nth-child(odd)]:border-l-0 max-sm:[&:nth-child(odd)]:pl-0 max-sm:[&:nth-child(even)]:border-l max-sm:[&:nth-child(even)]:pl-4 xl:[&:nth-child(3n+1)]:border-l-0 xl:[&:nth-child(3n+1)]:pl-0">
       <dt className="text-[12.5px] text-ink-3">{label}</dt>
       {loading ? (
         <dd className="mt-2.5 flex flex-col gap-2.5">

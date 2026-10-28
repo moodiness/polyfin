@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import {
   ArrowClockwiseIcon,
   CloudArrowDownIcon,
@@ -148,6 +148,9 @@ export function RecentActivity() {
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = activity
   const boxRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const footRef = useRef<HTMLParagraphElement>(null)
+  const listed = !activity.isPending && !activity.isError && shown.length > 0
+  const height = useWindowFill(boxRef, footRef, listed)
   // The next page loads by itself once the end of the box comes near. Observing again after
   // each page makes a sentinel that is still in view (a short or filtered list) load the next.
   useEffect(() => {
@@ -170,7 +173,8 @@ export function RecentActivity() {
       aside={<TextLink to="/system/logs">{text.openLog}</TextLink>}
       className="scroll-mt-24"
     >
-      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      {/* From xl, in Home's right column, the filters and the search stack. */}
+      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between xl:flex-col xl:items-stretch">
         <div className="-mx-5 overflow-x-auto px-5 scrollbar-none md:mx-0 md:px-0">
           <Segmented
             size="sm"
@@ -192,7 +196,7 @@ export function RecentActivity() {
           onValue={setSearch}
           aria-label={text.search}
           placeholder={text.search}
-          className="lg:w-72"
+          className="lg:w-72 xl:w-full"
         />
       </div>
       {activity.isPending ? (
@@ -229,7 +233,11 @@ export function RecentActivity() {
           role="region"
           aria-label={text.listLabel}
           aria-busy={isFetchingNextPage}
-          className="-mx-2 max-h-[420px] overflow-y-auto overscroll-contain rounded-[10px] px-2 scrollbar-thin sm:max-h-[520px]"
+          style={height === undefined ? undefined : { height }}
+          className={cx(
+            '-mx-2 overflow-y-auto overscroll-contain rounded-[10px] px-2 scrollbar-thin',
+            height === undefined && 'max-h-[420px] sm:max-h-[520px]',
+          )}
         >
           <ol>
             {shown.map((entry) => (
@@ -249,12 +257,60 @@ export function RecentActivity() {
         </div>
       )}
       {activity.data !== undefined && (
-        <p className="mt-3 border-t border-line pt-3 text-small text-ink-3">
+        <p ref={footRef} className="mt-3 border-t border-line pt-3 text-small text-ink-3">
           {text.count(entries.length, total)} {text.autoRefresh}
         </p>
       )}
     </Block>
   )
+}
+
+/** Tailwind's xl, from which Home shows Recent activity in a column of its own. */
+const columnQuery = '(min-width: 80rem)'
+/** The space left under the block when its list fills the window. */
+const bottomGap = 24
+/** The list is never shorter than on narrower screens. */
+const minHeight = 420
+
+/**
+ * From xl, the list's height, so that the block ends at the bottom of the window as the page
+ * opens: Recent activity shows whole beside the rest of Home, scrolling in its own box. Measured
+ * again when the window or the page changes size; undefined below xl, where the list keeps its
+ * maximum height.
+ */
+function useWindowFill(
+  box: RefObject<HTMLElement | null>,
+  foot: RefObject<HTMLElement | null>,
+  listed: boolean,
+): number | undefined {
+  const [height, setHeight] = useState<number>()
+  useEffect(() => {
+    const element = box.current
+    if (!listed || !element) return
+    const media = window.matchMedia(columnQuery)
+    const measure = () => {
+      if (!media.matches) {
+        setHeight(undefined)
+        return
+      }
+      const place = element.getBoundingClientRect()
+      // What follows the list in the block (the count), whatever the list's height.
+      const below = foot.current ? foot.current.getBoundingClientRect().bottom - place.bottom : 0
+      const top = place.top + window.scrollY
+      setHeight(Math.max(minHeight, Math.floor(window.innerHeight - top - below - bottomGap)))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(document.body)
+    window.addEventListener('resize', measure)
+    media.addEventListener('change', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+      media.removeEventListener('change', measure)
+    }
+  }, [box, foot, listed])
+  return height
 }
 
 function ActivityRow({ entry }: { entry: ActivityEntry }) {

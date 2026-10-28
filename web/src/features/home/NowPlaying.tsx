@@ -223,7 +223,11 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
           />
         </>
       )}
-      <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-x-7 gap-y-5 py-[18px] pr-5 pl-[18px] lg:grid-cols-[76px_minmax(0,1fr)_268px_auto] max-sm:grid-cols-[56px_minmax(0,1fr)] max-sm:gap-x-4 max-sm:p-4">
+      {/*
+        From xl, Home's left column is narrower than the row this draws from lg: How it plays goes
+        under the title, with the controls beside it, on the right.
+      */}
+      <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-x-7 gap-y-5 py-[18px] pr-5 pl-[18px] lg:grid-cols-[76px_minmax(0,1fr)_268px_auto] max-sm:grid-cols-[56px_minmax(0,1fr)] max-sm:gap-x-4 max-sm:p-4 xl:grid-cols-[76px_minmax(0,1fr)_auto]">
         {art !== null ? (
           <img
             src={posterUrl(art, 228)}
@@ -250,7 +254,7 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
           </span>
         )}
 
-        <div className="min-w-0">
+        <div className="min-w-0 xl:col-span-2">
           <p className="flex min-w-0 items-center gap-2 text-[13px] text-ink-2">
             <Avatar name={session.user.name} image={userImageUrl(session.user)} size="sm" />
             <b className="truncate font-medium text-ink">{session.user.name}</b>
@@ -310,7 +314,7 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
           </div>
         </div>
 
-        <div className="col-span-full flex flex-col justify-center gap-1 self-stretch border-line-2 lg:col-span-1 lg:border-l lg:pl-7 max-lg:border-t max-lg:pt-4">
+        <div className="col-span-full flex flex-col justify-center gap-1 self-stretch border-line-2 lg:col-span-1 lg:border-l lg:pl-7 max-lg:border-t max-lg:pt-4 xl:col-span-2 xl:border-t xl:border-l-0 xl:pt-4 xl:pl-0">
           <p className="text-[12.5px] text-ink-3">{live.howItPlays}</p>
           <p className="flex items-center gap-2 text-[14px] font-medium text-ink">
             <DeliveryIcon size={16} aria-hidden="true" className="text-link" />
@@ -334,7 +338,7 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
           </div>
         </div>
 
-        <div className="col-span-full flex items-center gap-0.5 lg:col-span-1 max-lg:-mt-2 max-lg:justify-end">
+        <div className="col-span-full flex items-center gap-0.5 lg:col-span-1 max-lg:-mt-2 max-lg:justify-end xl:col-span-1 xl:-ml-7 xl:items-end xl:self-stretch xl:justify-end xl:border-t xl:border-line-2 xl:pt-4 xl:pl-7">
           {session.controllable ? (
             <>
               <IconButton
@@ -355,7 +359,7 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
               />
             </>
           ) : (
-            <p className="text-small text-ink-3 lg:max-w-32">
+            <p className="text-small text-ink-3 lg:max-w-32 xl:max-w-40 xl:text-right">
               {session.shared
                 ? live.sharedNotControllable
                 : session.download
