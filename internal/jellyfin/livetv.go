@@ -762,7 +762,7 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		// next one is tried at once.
 		analysis, err := h.Playback.AnalyzeLive(playback.ForUser(r.Context(), user.ID), version)
 		if err != nil {
-			h.Logger.Info("A channel's stream could not be analyzed", "addon", version.Addon, "failure", playback.LiveFailure(err), "error", err)
+			h.Logger.Info("A channel's stream could not be analyzed", "addon", version.Addon, "channel", channel.Name, "failure", playback.LiveFailure(err), "error", err)
 			continue
 		}
 		manifest := playback.Manifest(analysis)
@@ -892,13 +892,14 @@ func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user acco
 }
 
 // liveLink names the files a relayed playlist refers to: Polyfin's
-// addresses, signed for the grant, so that they relay nothing else.
-func (h *Handler) liveLink(r *http.Request, channel accounts.ID, grant string) func(string) string {
+// addresses, signed for the grant, so that they relay nothing else, with
+// the file name the playlist gives (see playback.ServeLive).
+func (h *Handler) liveLink(r *http.Request, channel accounts.ID, grant string) func(target, name string) string {
 	base := baseURL(r) + "/Videos/" + channel.String() + "/live/"
-	return func(target string) string {
+	return func(target, name string) string {
 		q := url.Values{grantParameter: {grant}, "target": {base64.RawURLEncoding.EncodeToString([]byte(target))},
 			"sign": {h.Playback.Signer().Link(grant, target)}}
-		return base + url.PathEscape(playback.FileName(target)) + "?" + q.Encode()
+		return base + url.PathEscape(name) + "?" + q.Encode()
 	}
 }
 

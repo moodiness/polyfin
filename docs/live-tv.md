@@ -35,6 +35,11 @@ A channel plays as the addon streams it when the app takes it.
   - Once FFmpeg was started again (see below), a playlist is answered as soon as it lists a segment.
 - An MPEG-TS stream played as it is (apps such as Android TV) is relayed from the same connection, unless the app can reach the source itself and the source has no connection limit, in which case the app is sent to it.
 
+The files of an HLS stream reach FFmpeg, and apps relayed, through Polyfin, which takes care of what some providers do to pass their segments for something else:
+
+- Segments named oddly, such as `1234.png`, `1234.jpg`, `seg.php?n=1234` or `1234` without an extension, are named as video segments, `.ts` added: FFmpeg (since 7.0.3 and 7.1.1) refuses a segment whose name does not fit what it holds, with "Invalid data found when processing input". FFmpeg still checks what each segment holds: a picture or a web page is not read as video.
+- A picture in front of a segment, a PNG, JPEG, GIF or WebP before its MPEG-TS, is skipped, as other players do, when the MPEG-TS starts within the segment's first 64 kB. FFmpeg would read the picture instead.
+
 Each channel's stream is read through one connection to its source, whoever reads it: the check at its start, FFmpeg, apps relayed, a recording, several users watching it. The connection stays open 20 seconds after the last of them left, so a quick return to the channel starts at once. Whoever starts reading an MPEG-TS stream, first or joining, starts at its latest keyframe, after the tables that describe it, so that it decodes from its first bytes. A reader that falls more than a few seconds behind is dropped rather than holding the others back.
 
 An Xtream account tells, at its login, how many streams it plays at once. Polyfin keeps within it: opening a channel closes first a stream no one watches any more, then the user's own oldest one; when other users' channels take every connection, the new channel is refused at once (the app tells it could not play). A stream being closed, as when its 20 seconds end, still counts until its connection is closed: a channel opening meanwhile waits for it, a second at most. Right after closing a stream, a refusal from the provider is tried again for a few seconds, as providers count a connection a little while after it closed.
@@ -52,6 +57,10 @@ A live stream has no end: when its source closes the connection, or sends nothin
 How each stream of an IPTV source answered is kept (see [IPTV sources](iptv.md#stream-health)): a stream found dead is left out of its channel for a while, so the next start goes to a stream that works. A stream that failed to play in the last 15 minutes, of an IPTV source, an addon's channel or a live video, is left out of PlaybackInfo meanwhile, and the log says so (`A channel's stream is left out: it failed lately`), with why it failed.
 
 **Compared with Jellyfin:** Jellyfin waits for the segments the app asks for before it answers the first live playlist (`DynamicHlsController.GetLiveHlsStream`, which calls `HlsHelpers.WaitForMinimumSegmentCount`, [lines 325-329](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/DynamicHlsController.cs#L325-L329)). Polyfin waits for them too, and also for its own lead of two segments of 4 seconds, as jellyfin-web asks only one on most systems, which leaves the player right behind FFmpeg.
+
+When a file of an HLS stream, a playlist, a key or a segment, answers no media while the stream is analyzed (an error, a web page, JSON, text or nothing), the failure says which file, by its name only (a name without an extension, which may be a token, is not shown), and what it answered, as in `nothing came from the source in time: …; 1234.ts answered text (HTTP 404, text/plain, 4 bytes)`. When FFmpeg refuses a segment by its name, its own line is kept, the address cut to the file name. The log lines `A channel's stream failed` and `A channel's stream could not be analyzed` name the stream and the channel (`stream`, `channel`).
+
+**Compared with Jellyfin:** Jellyfin 12.4 repackages a channel's HLS stream with FFmpeg's defaults ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L161-L167)), so FFmpeg refuses its segments named oddly, or starting with a picture. Polyfin names the segments it relays, and skips the picture.
 
 ### Searching
 

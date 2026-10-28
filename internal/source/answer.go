@@ -74,6 +74,13 @@ func (a Reply) Kind() string {
 	return "an answer of an unknown kind"
 }
 
+// Text reports whether the answer's first bytes, read, are text or
+// nothing: a page, JSON, XML, a playlist, other text, or an empty body,
+// what sources answer instead of media, which is binary.
+func (a Reply) Text() bool {
+	return a.Head != nil && (len(a.Head) == 0 || headKind(a.Head) != "")
+}
+
 // headKind tells what an answer is by its first bytes, "" when they do
 // not tell.
 func headKind(head []byte) string {

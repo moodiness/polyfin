@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	neturl "net/url"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -294,9 +295,41 @@ func (p Prober) run(ctx context.Context, url string, reconnect bool, options ...
 			message = message[i+1:]
 		}
 		message = strings.ReplaceAll(message, url, "<source>")
+		if mismatch := segmentMismatch(stderr.String()); mismatch != "" {
+			message += " (" + mismatch + ")"
+		}
 		return nil, fmt.Errorf("%w: ffprobe: %v: %s", ErrUnreadable, err, message)
 	}
 	return stdout.Bytes(), nil
+}
+
+// mismatchLine is how FFmpeg's HLS demuxer says it refused a segment
+// whose name is none of those of the format it found in it.
+const mismatchLine = " mismatches allowed extensions in url "
+
+// segmentMismatch is the line of stderr in which FFmpeg's HLS demuxer
+// refused a segment by its name, its address cut to its file name, ""
+// for none: the only line that says why it found invalid data.
+func segmentMismatch(stderr string) string {
+	for line := range strings.Lines(stderr) {
+		before, address, found := strings.Cut(strings.TrimSpace(line), mismatchLine)
+		if !found {
+			continue
+		}
+		// The line starts with the demuxer, such as "[hls @ 0x7f…] ".
+		if _, rest, ok := strings.Cut(before, "] "); ok && strings.HasPrefix(before, "[") {
+			before = rest
+		}
+		if i := strings.IndexAny(address, "?#"); i >= 0 {
+			address = address[:i]
+		}
+		name := address[strings.LastIndexByte(address, '/')+1:]
+		if unescaped, err := neturl.PathUnescape(name); err == nil {
+			name = unescaped
+		}
+		return before + mismatchLine + name
+	}
+	return ""
 }
 
 // Parse reads ffprobe's JSON output of a video: one without a video track

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/source"
 )
 
 // maxPlaylist bounds the HLS playlists a live relay reads and rewrites.
@@ -169,14 +171,19 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 	prober.Timeout = min(prober.Timeout, liveProbeCap)
 	probeCtx, cancel := context.WithTimeout(ctx, prober.Timeout)
 	defer cancel()
-	target, _, release := s.loopback.registerLiveFor(version, userOf(ctx))
-	defer release()
-	analysis, err := prober.ProbeLive(probeCtx, target)
+	live := s.loopback.registerLiveFor(version, userOf(ctx))
+	defer live.release()
+	analysis, err := prober.ProbeLive(probeCtx, live.target)
 	if err != nil {
 		if probeCtx.Err() != nil {
 			err = fmt.Errorf("%w: %w", ErrLiveTimeout, err)
 		} else if LiveFailure(err) == "" {
 			err = fmt.Errorf("%w: %v", ErrLiveDead, err)
+		}
+		// A file of an HLS stream that answered no media tells why
+		// ffprobe found none.
+		if answered := live.answered(); answered != nil {
+			err = fmt.Errorf("%w; %v", err, answered)
 		}
 		// The source answered: an analysis that outlasted its time would
 		// be waited for again.
@@ -193,7 +200,7 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 // and, when kept and not a refusal, kept among the failures, which the
 // next starts skip.
 func (s *Service) liveFailed(ctx context.Context, version library.Version, err error, kept bool) {
-	s.logger.Info("A channel's stream failed", "addon", version.Addon, "failure", LiveFailure(err), "error", err)
+	s.logger.Info("A channel's stream failed", "addon", version.Addon, "stream", version.Name, "failure", LiveFailure(err), "error", err)
 	s.report(ctx, version, err)
 	if kept && LiveFailure(err) != LiveRefused {
 		s.fail(version, err)
@@ -295,13 +302,17 @@ func (s *Service) Redirectable(ctx context.Context, version library.Version) boo
 // ServeLive relays a live stream, or a file of it, to a player: target is
 // the address asked, the version's own when empty, an MPEG-TS stream read
 // from its feed (see ServeFeed). The addresses an HLS
-// playlist names are rewritten by link, so that the player fetches them
-// through Polyfin too, with the headers the source needs and within its
-// confinement; a playlist naming an address that cannot be rewritten is
-// refused. Other files are relayed as they come, byte ranges included, as
-// EXT-X-BYTERANGE asks them. When the source does not answer, the player
-// receives a 502 and the error is returned for logging.
-func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version library.Version, target string, link func(string) string) error {
+// playlist names are rewritten by link, given each address and the name
+// to give its file, so that the player fetches them through Polyfin too,
+// with the headers the source needs and within its confinement; a
+// playlist naming an address that cannot be rewritten is refused. Other
+// files are relayed as they come, byte ranges included, as EXT-X-BYTERANGE
+// asks them, but for a picture in front of a segment's MPEG-TS, which is
+// skipped (see pictureBefore). When the source does not answer, the player
+// receives a 502 and the error is returned for logging. A file that
+// answered no media, a refusal or a page, returns a fileAnswer telling
+// it, once relayed.
+func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version library.Version, target string, link func(target, name string) string) error {
 	// An MPEG-TS stream is read from its feed, shared with every other
 	// reader of the channel.
 	if target == "" && !s.manifest(version.ID) {
@@ -328,13 +339,13 @@ func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version libr
 		return err
 	}
 	defer response.Body.Close()
+	body := bufio.NewReaderSize(response.Body, 64<<10)
 	switch response.StatusCode {
 	case http.StatusOK, http.StatusPartialContent, http.StatusRequestedRangeNotSatisfiable:
 	default:
 		http.Error(w, "source unavailable", http.StatusBadGateway)
-		return fmt.Errorf("%w: HTTP %d", ErrSourceUnavailable, response.StatusCode)
+		return fileAnswer{name: FileName(target), reply: replyOf(response, body)}
 	}
-	body := bufio.NewReaderSize(response.Body, 64<<10)
 	// A playlist is rewritten however the source answered, a part of it
 	// included: FFmpeg asks for its playlists from their first byte.
 	if response.StatusCode != http.StatusRequestedRangeNotSatisfiable && playlist(response, body) {
@@ -359,16 +370,35 @@ func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version libr
 		_, err = w.Write(rewritten)
 		return err
 	}
+	// What is no media, a page or an empty answer, is relayed as it is,
+	// and told.
+	var odd error
+	if head, _ := body.Peek(source.ReplyHead); noMedia(source.Reply{Head: head}) {
+		odd = fileAnswer{name: FileName(target), reply: replyOf(response, body)}
+	}
+	skip := 0
+	if response.StatusCode == http.StatusOK {
+		skip = pictureBefore(body)
+	}
 	for _, name := range forwardedResponse {
 		if value := response.Header.Get(name); value != "" {
 			w.Header().Set(name, value)
 		}
 	}
+	if skip > 0 {
+		w.Header().Del("Content-Length")
+		if response.ContentLength > int64(skip) {
+			w.Header().Set("Content-Length", strconv.FormatInt(response.ContentLength-int64(skip), 10))
+		}
+		_, _ = body.Discard(skip)
+	}
 	w.WriteHeader(response.StatusCode)
 	buffer := copyBuffers.Get().(*[256 << 10]byte)
 	defer copyBuffers.Put(buffer)
-	_, err = io.CopyBuffer(w, body, buffer[:])
-	return err
+	if _, err = io.CopyBuffer(w, body, buffer[:]); err != nil {
+		return err
+	}
+	return odd
 }
 
 // playlist reports whether a response is an HLS playlist: by its type, or
@@ -387,14 +417,17 @@ func playlist(response *http.Response, body *bufio.Reader) bool {
 var ErrUnsafePlaylist = errors.New("the playlist names an address that cannot be relayed")
 
 // rewritePlaylist names every address of a playlist by link, resolved
-// against base, the playlist's own. It reads the playlist as FFmpeg's HLS
-// demuxer does, which reads it through Polyfin too: a line ends at a
-// carriage return, a line feed or a NUL, and a tag's URI attribute may be
-// quoted or not. Inline data: addresses stay as they are; any other address
+// against base, the playlist's own, with the name of its file: a
+// segment's as segmentName gives it, any other's its own (see FileName).
+// It reads the playlist as FFmpeg's HLS demuxer does, which reads it
+// through Polyfin too: a line ends at a carriage return, a line feed or a
+// NUL, a tag's URI attribute may be quoted or not, and an address line is
+// a segment but after #EXT-X-STREAM-INF, which names a variant's
+// playlist. Inline data: addresses stay as they are; any other address
 // that is not HTTP, or does not parse, refuses the playlist, as FFmpeg
 // would fetch it itself.
-func rewritePlaylist(data []byte, base *url.URL, link func(string) string) ([]byte, error) {
-	rewrite := func(ref string) (string, error) {
+func rewritePlaylist(data []byte, base *url.URL, link func(target, name string) string) ([]byte, error) {
+	rewrite := func(ref string, segment bool) (string, error) {
 		ref = strings.TrimSpace(ref)
 		if strings.HasPrefix(strings.ToLower(ref), "data:") {
 			return ref, nil
@@ -403,17 +436,25 @@ func rewritePlaylist(data []byte, base *url.URL, link func(string) string) ([]by
 		if err != nil || target.Scheme != "http" && target.Scheme != "https" || target.Host == "" {
 			return "", fmt.Errorf("%w: %q", ErrUnsafePlaylist, ref)
 		}
-		return link(target.String()), nil
+		address := target.String()
+		name := FileName(address)
+		if segment {
+			name = segmentName(name)
+		}
+		return link(address, name), nil
 	}
 	var out bytes.Buffer
+	variant := false
 	lines := strings.FieldsFunc(string(data), func(r rune) bool { return r == '\r' || r == '\n' || r == 0 })
 	for _, line := range lines {
 		var err error
 		switch {
 		case strings.HasPrefix(line, "#"):
-			line, err = rewriteAttributes(line, rewrite)
+			variant = variant || strings.HasPrefix(line, "#EXT-X-STREAM-INF:")
+			line, err = rewriteAttributes(line, func(ref string) (string, error) { return rewrite(ref, false) })
 		case strings.TrimSpace(line) != "":
-			line, err = rewrite(line)
+			line, err = rewrite(line, !variant)
+			variant = false
 		}
 		if err != nil {
 			return nil, err
@@ -558,8 +599,8 @@ func (s *Service) liveOpener(remux Remux) hls.Opener {
 		if !ok {
 			return hls.Remux{}, nil, ErrNotRemuxable
 		}
-		target, refused, release := s.loopback.registerLiveFor(remux.Version, remux.User)
-		r := hls.Remux{Input: target, Refused: refused, Video: video.Index, Audio: audioOf(analysis, remux.Audio), Format: remux.Format}
+		live := s.loopback.registerLiveFor(remux.Version, remux.User)
+		r := hls.Remux{Input: live.target, Refused: live.refused, Video: video.Index, Audio: audioOf(analysis, remux.Audio), Format: remux.Format}
 		switch {
 		case Manifest(analysis):
 			r.InputOptions = media.LiveOptions
@@ -571,7 +612,7 @@ func (s *Service) liveOpener(remux Remux) hls.Opener {
 			r.ADTS = true
 		}
 		remux.convert(&r, video, TuningOf(s.settings()))
-		return r, release, nil
+		return r, live.release, nil
 	}
 }
 
@@ -579,8 +620,8 @@ func (s *Service) liveOpener(remux Remux) hls.Opener {
 // interface until release is called: its playlists rewritten to name
 // their files on the loopback interface too.
 func (l *loopback) registerLive(version library.Version) (string, func()) {
-	target, _, release := l.registerLiveFor(version, accounts.ID{})
-	return target, release
+	live := l.registerLiveFor(version, accounts.ID{})
+	return live.target, live.release
 }
 
 // recordingSuffix ends the loopback key of a recording's live stream.
@@ -589,15 +630,13 @@ const recordingSuffix = "rec"
 // registerRecording registers a version's live stream read for a
 // recording, which keeps its tuner (see makeRoom).
 func (l *loopback) registerRecording(version library.Version) (string, func()) {
-	target, _, release := l.registerKey(version, randomKey()+"."+recordingSuffix)
-	return target, release
+	live := l.registerKey(version, randomKey()+"."+recordingSuffix)
+	return live.target, live.release
 }
 
 // registerLiveFor registers a version's live stream read for user, whose
 // oldest stream of the source may make room for it (see makeRoom).
-// refused tells the refusal of the source (see ErrLiveRefused) the last
-// request of the stream was answered with, nil for none.
-func (l *loopback) registerLiveFor(version library.Version, user accounts.ID) (target string, refused func() error, release func()) {
+func (l *loopback) registerLiveFor(version library.Version, user accounts.ID) liveRegistration {
 	key := randomKey()
 	if user != (accounts.ID{}) {
 		key += "." + user.String()
@@ -605,40 +644,62 @@ func (l *loopback) registerLiveFor(version library.Version, user accounts.ID) (t
 	return l.registerKey(version, key)
 }
 
+// liveRegistration is a live stream registered on the loopback interface,
+// readable at target until release is called.
+type liveRegistration struct {
+	target string
+	// refused tells the refusal of the source (see ErrLiveRefused) the
+	// last request of the stream was answered with, nil for none.
+	refused func() error
+	// answered tells the last file of the stream that answered no media
+	// (see fileAnswer), nil for none.
+	answered func() error
+	release  func()
+}
+
 // liveTarget is a live stream registered on the loopback interface.
 type liveTarget struct {
 	version library.Version
 	// refused is the refusal of the source the last request was answered
-	// with, nil for none. It is guarded by the loopback's mu.
-	refused error
+	// with, nil for none; answered the last file that answered no media.
+	// They are guarded by the loopback's mu.
+	refused  error
+	answered error
 }
 
-func (l *loopback) registerKey(version library.Version, key string) (target string, refused func() error, release func()) {
+func (l *loopback) registerKey(version library.Version, key string) liveRegistration {
 	t := &liveTarget{version: version}
 	l.mu.Lock()
 	l.feeds[key] = t
 	l.mu.Unlock()
-	refused = func() error {
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		return t.refused
+	guarded := func(field *error) func() error {
+		return func() error {
+			l.mu.Lock()
+			defer l.mu.Unlock()
+			return *field
+		}
 	}
-	release = func() {
-		l.mu.Lock()
-		delete(l.feeds, key)
-		l.mu.Unlock()
+	return liveRegistration{
+		target:   l.liveURL(key, "", FileName(version.URL)),
+		refused:  guarded(&t.refused),
+		answered: guarded(&t.answered),
+		release: func() {
+			l.mu.Lock()
+			delete(l.feeds, key)
+			l.mu.Unlock()
+		},
 	}
-	return l.liveURL(key, "", version.URL), refused, release
 }
 
 // liveURL is the loopback address of a file of a live stream, target
-// being its source's address, empty for the stream itself.
-func (l *loopback) liveURL(key, target, source string) string {
+// being its source's address, empty for the stream itself, and name the
+// name its file is given.
+func (l *loopback) liveURL(key, target, name string) string {
 	encoded := "-"
 	if target != "" {
 		encoded = base64.RawURLEncoding.EncodeToString([]byte(target))
 	}
-	return "http://" + l.listener.Addr().String() + "/live/" + key + "/" + encoded + "/" + url.PathEscape(FileName(source))
+	return "http://" + l.listener.Addr().String() + "/live/" + key + "/" + encoded + "/" + url.PathEscape(name)
 }
 
 // serveLive answers FFmpeg's and ffprobe's requests for a live stream
@@ -662,7 +723,7 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 		http.NotFound(w, r)
 		return
 	}
-	link := func(file string) string { return l.liveURL(parts[0], file, file) }
+	link := func(file, name string) string { return l.liveURL(parts[0], file, name) }
 	if _, rest, ok := strings.Cut(parts[0], "."); ok {
 		if rest == recordingSuffix {
 			r = r.WithContext(forRecording(r.Context()))
@@ -675,10 +736,15 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 	live.refused = nil
 	l.mu.Unlock()
 	err := l.live(w, r, live.version, target, link)
+	var answered fileAnswer
+	odd := errors.As(err, &answered)
 	if !errors.Is(err, ErrLiveRefused) {
 		err = nil
 	}
 	l.mu.Lock()
 	live.refused = err
+	if odd {
+		live.answered = answered
+	}
 	l.mu.Unlock()
 }

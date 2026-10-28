@@ -157,7 +157,7 @@ func expired(status int) bool {
 type loopback struct {
 	listener net.Listener
 	server   *http.Server
-	live     func(w http.ResponseWriter, r *http.Request, version library.Version, target string, link func(string) string) error
+	live     func(w http.ResponseWriter, r *http.Request, version library.Version, target string, link func(target, name string) string) error
 
 	mu      sync.Mutex
 	sources map[string]*source.Source
