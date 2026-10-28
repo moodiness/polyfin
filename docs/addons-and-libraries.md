@@ -102,11 +102,23 @@ Stremio catalogs become Jellyfin libraries. Stremio streams become versions of t
 
 Jellyfin apps list the server's libraries in the order of **Content › Libraries**. To move a library, drag its row by the grip at its start, with the mouse or a finger: a line shows where it will land, and a list too long for its box scrolls while the row is held near its edge. Escape, during a drag, leaves the library where it was. The up and down arrows of the row move it too, from the keyboard as well, and screen readers announce each move. The new order is saved with the list's **Save**, like the libraries' names: until then, apps keep the order saved last.
 
-Smart lists shown as libraries, and users' own libraries, come after the server's libraries. Users order their own libraries under **My sources** the same way, by dragging or with the arrows. Each user can also order all of their libraries in the web player's **Settings › Home**: once they have saved that page, their order wins over the administrator's, as in Jellyfin.
+Smart lists shown as libraries, and users' own libraries, come after the server's libraries. Users order their own libraries under **My sources** the same way, by dragging or with the arrows.
+
+Each user can also order all of their libraries in the web player's **Settings › Home**, with the arrows of its list, then **Save**:
+
+- An order changed there is the user's own: it wins over the administrator's, as in Jellyfin. A library added later, or removed and added again, comes after the ones the user ordered.
+- jellyfin-web saves the order of every library each time that page is saved, even when only a home section changed. An order saved as it was shown, the server's own, is not kept as the user's: they go on following **Content › Libraries**, libraries added later included.
+- The user goes back to the administrator's order by moving the libraries back to it there, or with **Reset my preferences** in **My account**, which also resets their other app preferences (see [Your own preferences](users.md#your-own-preferences)).
+
+**Apply this order to every user**, under the list of **Content › Libraries**, forgets the orders users saved, so that every user's apps list the libraries in the order of **Content › Libraries**, as saved: save the list first. It asks first, saying how many users ordered their libraries themselves, and keeps the rest of their settings. Administrators only; the activity log records who did it, as "alex applied the order of the libraries to every user (2 with an order of their own)". Users can order their libraries again afterwards.
+
+jellyfin-web keeps the list of libraries for up to a minute, also across a reload (see [Dashboard links and single sign-on](web-client.md#dashboard-links-and-single-sign-on)): a new order shows there within a minute. A user's own change in **Settings › Home** shows at once.
 
 **Compared with Jellyfin:**
 
-- Jellyfin lists a user's libraries in their order from **Settings › Home**, then by name ([`UserViewManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/UserViewManager.cs#L140-L157), Jellyfin 12.4). It has no order an administrator sets for every user: in Polyfin, the order of **Content › Libraries** takes the place of the order by name.
+- Jellyfin lists a user's libraries in their order from **Settings › Home**, then by name ([`UserViewManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/UserViewManager.cs#L140-L158), Jellyfin 12.4). It has no order an administrator sets for every user: in Polyfin, the order of **Content › Libraries** takes the place of the order by name.
+- jellyfin-web 12.4 saves every library's place in `OrderedViews` whenever **Settings › Home** is saved ([`homeScreenSettings.js`](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/homeScreenSettings/homeScreenSettings.js#L498-L506)). Jellyfin keeps it as posted, and answers it back in the user's `Configuration`; Polyfin stores an order identical to the server's own as empty, `"OrderedViews": []`, so that the user keeps following the administrator's order.
+- Jellyfin has no action that applies one order to every user.
 
 ### What catalogs list
 

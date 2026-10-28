@@ -411,7 +411,7 @@ The activity log records:
 - users created, changed or deleted, and accounts that reach their end date (see [Ending an account](users.md#ending-an-account));
 - user groups created, changed, naming the sections changed, as "Group Kids was changed: Access, Allowed hours", or deleted, and members added, removed or no longer following their group, as "sam no longer follows the group Kids: changed from Jellyfin Web" (see [User groups](users.md#user-groups));
 - the settings of a user or a group reset to their defaults, naming the administrator, as "alex reset the settings of sam to their defaults" (see [Resetting settings to their defaults](users.md#resetting-settings-to-their-defaults));
-- settings saved;
+- settings saved, and the order of the libraries applied to every user (see [The order of libraries](addons-and-libraries.md#the-order-of-libraries));
 - addons installed or removed;
 - share links made, revoked or expired, and each guest playback through one, as "A guest played Example Movie (2008) through the link shared by alex" (see [Share links](users.md#share-links)).
 
