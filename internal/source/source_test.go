@@ -1061,7 +1061,7 @@ func TestOnceTellsTheAnswer(t *testing.T) {
 	defer s.Release()
 	once := s.Once()
 	_, err := once.Fetch(t.Context(), 0, 10)
-	if !errors.Is(err, ErrExpired) || Answer(err) != "HTTP 403" || renewals != 0 {
+	if !errors.Is(err, ErrExpired) || !strings.HasPrefix(Answer(err), "HTTP 403") || renewals != 0 {
 		t.Fatalf("expired: %v, %q, %d renewals", err, Answer(err), renewals)
 	}
 	if err := once.Renew(t.Context()); err != nil || renewals != 1 {
@@ -1076,7 +1076,7 @@ func TestOnceTellsTheAnswer(t *testing.T) {
 	}
 	o.rangeless = false
 	o.busy, o.retryAfter = 1, "0"
-	if _, err := once.Fetch(t.Context(), 0, 10); Answer(err) != "HTTP 429" {
+	if _, err := once.Fetch(t.Context(), 0, 10); !strings.HasPrefix(Answer(err), "HTTP 429") {
 		t.Errorf("429: %q", Answer(err))
 	}
 	// A host that does not answer: no URL in the error.

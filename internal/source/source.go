@@ -77,9 +77,32 @@ var ErrExpired = fmt.Errorf("%w: the link expired", ErrUnavailable)
 type StatusError struct {
 	Status int
 	Kind   error
+	// Reply tells what the answer was, by its headers (see Reply), when
+	// they tell its media type or size; nil otherwise.
+	Reply *Reply
 }
 
-func (e *StatusError) Error() string { return fmt.Sprintf("%v: HTTP %d", e.Kind, e.Status) }
+func (e *StatusError) Error() string {
+	if e.Reply != nil {
+		return fmt.Sprintf("%v: HTTP %d, %s", e.Kind, e.Status, e.Reply)
+	}
+	return fmt.Sprintf("%v: HTTP %d", e.Kind, e.Status)
+}
+
+// statusError is the StatusError of an answer whose status Polyfin does
+// not read, kind telling which (see StatusError): what the answer was is
+// told by its headers, its body unread.
+func statusError(response *http.Response, kind error) *StatusError {
+	e := &StatusError{Status: response.StatusCode, Kind: kind}
+	size, err := strconv.ParseInt(response.Header.Get("Content-Length"), 10, 64)
+	if err != nil || size < 0 {
+		size = -1
+	}
+	if contentType := response.Header.Get("Content-Type"); contentType != "" || size >= 0 {
+		e.Reply = &Reply{ContentType: contentType, Size: size}
+	}
+	return e
+}
 
 func (e *StatusError) Unwrap() error { return e.Kind }
 
@@ -120,6 +143,8 @@ func (e *finalError) Unwrap() error { return e.err }
 func Answer(err error) string {
 	var status *StatusError
 	switch {
+	case errors.As(err, &status) && status.Reply != nil:
+		return "HTTP " + strconv.Itoa(status.Status) + ", " + status.Reply.String()
 	case errors.As(err, &status):
 		return "HTTP " + strconv.Itoa(status.Status)
 	case errors.Is(err, ErrRangesIgnored):
@@ -501,7 +526,10 @@ type Source struct {
 	renew       Renewer
 	size        int64
 	contentType string
-	present     []uint64
+	// status is the status of the first answer read as the source's
+	// content (200 or 206), 0 before.
+	status  int
+	present []uint64
 	// sizeChecked tells that the first answer was checked against the
 	// size the addon announced, and sizeNoted that it counted in the
 	// addon's record.
@@ -988,12 +1016,12 @@ func (s *Source) Failure() error {
 	return nil
 }
 
-// learn records what a response tells about the source: its total size,
-// when known, and its media type. errOtherFile when the size is not the
-// one an earlier response told, or the first one tells a size more than
-// 1% from the one its addon announced while that addon's sizes are
-// trusted: the response is not the file's, and nothing is recorded.
-func (s *Source) learn(total int64, contentType string) error {
+// learn records what a response tells about the source: its status, its
+// total size, when known, and its media type. errOtherFile when the size
+// is not the one an earlier response told, or the first one tells a size
+// more than 1% from the one its addon announced while that addon's sizes
+// are trusted: the response is not the file's, and nothing is recorded.
+func (s *Source) learn(status int, total int64, contentType string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if total >= 0 && s.size >= 0 && total != s.size {
@@ -1006,9 +1034,15 @@ func (s *Source) learn(total int64, contentType string) error {
 	}
 	if total >= 0 {
 		s.size = total
+		// Readers waiting past the end, as for the first bytes of an
+		// empty answer, wait for nothing that will come.
+		s.wakePastEnd()
 	}
 	if s.contentType == "" {
 		s.contentType = contentType
+	}
+	if s.status == 0 {
+		s.status = status
 	}
 	return nil
 }

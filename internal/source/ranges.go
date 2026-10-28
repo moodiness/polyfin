@@ -110,7 +110,7 @@ func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, err
 	if !ok || start != off {
 		return nil, fmt.Errorf("%w: %w %q", ErrUnavailable, errWrongRange, response.Header.Get("Content-Range"))
 	}
-	if err := s.learn(total, response.Header.Get("Content-Type")); err != nil {
+	if err := s.learn(response.StatusCode, total, response.Header.Get("Content-Type")); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	if total >= 0 && off+int64(n) > total {
@@ -229,7 +229,7 @@ type multiRange struct {
 func (m *multiRange) read(response *http.Response) error {
 	switch response.StatusCode {
 	case http.StatusOK:
-		if err := m.source.learn(response.ContentLength, response.Header.Get("Content-Type")); err != nil {
+		if err := m.source.learn(response.StatusCode, response.ContentLength, response.Header.Get("Content-Type")); err != nil {
 			return fmt.Errorf("%w: %w", ErrUnavailable, err)
 		}
 		return fmt.Errorf("%w: HTTP 200", container.ErrMultiRangeUnsupported)
@@ -284,7 +284,7 @@ func (m *multiRange) part(value string, body io.Reader, alone bool) error {
 	if !ok || end < start {
 		return fmt.Errorf("%w: a part of range %q", container.ErrMultiRangeUnsupported, value)
 	}
-	if err := m.source.learn(total, ""); err != nil {
+	if err := m.source.learn(0, total, ""); err != nil {
 		return fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	// Ranges past the end of the file, which the part tells, have no part.
@@ -408,7 +408,7 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 			cancel()
 			s.unpin(to)
 			if once {
-				return &StatusError{Status: status, Kind: ErrExpired}
+				return statusError(response, ErrExpired)
 			}
 			continue
 		case expiredStatus(status) && to.renew != nil && !renewed:
@@ -423,7 +423,7 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 		case once && expiredStatus(status) && to.renew != nil:
 			response.Body.Close()
 			cancel()
-			return &StatusError{Status: status, Kind: ErrExpired}
+			return statusError(response, ErrExpired)
 		case slowDown(status) && attempt < tries:
 			response.Body.Close()
 			cancel()
@@ -431,11 +431,11 @@ func (s *Source) exchange(ctx context.Context, ranges string, length int64, once
 		case slowDown(status):
 			response.Body.Close()
 			cancel()
-			return &StatusError{Status: status, Kind: ErrSlowDown}
+			return statusError(response, ErrSlowDown)
 		default:
 			response.Body.Close()
 			cancel()
-			return &StatusError{Status: status, Kind: ErrUnavailable}
+			return statusError(response, ErrUnavailable)
 		}
 		s.holdOff(backoff(attempt, retryAfter))
 	}
@@ -480,7 +480,7 @@ func (s *Source) renewLink(ctx context.Context) error {
 func (s *Source) unsatisfiable(response *http.Response, off int64) error {
 	response.Body.Close()
 	if _, _, total, ok := contentRange(response.Header.Get("Content-Range")); ok && total >= 0 {
-		if err := s.learn(total, ""); err != nil {
+		if err := s.learn(0, total, ""); err != nil {
 			return fmt.Errorf("%w: %w", ErrUnavailable, err)
 		}
 		if off < total {

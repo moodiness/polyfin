@@ -884,7 +884,7 @@ func (s *Source) connect(c *conn, block int64) error {
 				cancel()
 				return fmt.Errorf("%w: %w %q", ErrUnavailable, errWrongRange, response.Header.Get("Content-Range"))
 			}
-			if other = s.learn(total, response.Header.Get("Content-Type")); other == nil {
+			if other = s.learn(status, total, response.Header.Get("Content-Type")); other == nil {
 				s.mu.Lock()
 				s.ranged, s.rangeless = true, false
 				s.mu.Unlock()
@@ -905,7 +905,7 @@ func (s *Source) connect(c *conn, block int64) error {
 			// error page, which some hosts send so when they refuse a
 			// request: the size of a file is never taken from it, which
 			// would cut the file short for every reader.
-			if other = s.learn(response.ContentLength, response.Header.Get("Content-Type")); other == nil {
+			if other = s.learn(status, response.ContentLength, response.Header.Get("Content-Type")); other == nil {
 				if offset > 0 {
 					s.mu.Lock()
 					again := s.ranged && attempt < attempts
@@ -946,7 +946,7 @@ func (s *Source) connect(c *conn, block int64) error {
 			cancel()
 			switch {
 			case !alone:
-				return &StatusError{Status: status, Kind: ErrUnavailable}
+				return statusError(response, ErrUnavailable)
 			case t.pinned != nil:
 				// Where the origin redirected expired: the origin tells
 				// where the file is now.
@@ -960,7 +960,7 @@ func (s *Source) connect(c *conn, block int64) error {
 				attempt = 0
 				continue
 			}
-			return &StatusError{Status: status, Kind: ErrUnavailable}
+			return statusError(response, ErrUnavailable)
 		case status == http.StatusTooManyRequests || status >= 500:
 			response.Body.Close()
 			cancel()
@@ -975,7 +975,7 @@ func (s *Source) connect(c *conn, block int64) error {
 				go s.cache.limitHost(t.host, "HTTP "+strconv.Itoa(status))
 			}
 			if !alone || attempt >= tries {
-				return &StatusError{Status: status, Kind: kind}
+				return statusError(response, kind)
 			}
 			if attempt >= 2 && kind != ErrSlowDown {
 				s.unpin(t)
@@ -985,7 +985,7 @@ func (s *Source) connect(c *conn, block int64) error {
 		default:
 			response.Body.Close()
 			cancel()
-			return &StatusError{Status: status, Kind: ErrUnavailable}
+			return statusError(response, ErrUnavailable)
 		}
 		// Another file answered.
 		if !errors.Is(other, ErrUnavailable) {
