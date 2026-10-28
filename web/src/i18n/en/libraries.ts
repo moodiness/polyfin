@@ -28,6 +28,22 @@ const libraries = {
     remove: 'Remove',
     removeLabel: (name: string) => `Remove ${name}`,
     moreActions: (name: string) => `More actions for ${name}`,
+    userOrders: {
+      help: 'A user who ordered the libraries in the web player’s Settings › Home keeps that order, until Apply this order to every user or their own Reset my preferences.',
+      apply: 'Apply this order to every user',
+      saveFirst: 'Save the list first: the order applied is the saved one.',
+      title: 'Apply this order to every user?',
+      counting: 'Counting the users with an order of their own…',
+      none: 'Every user already follows this order: none ordered the libraries in the web player’s Settings › Home.',
+      some: (count: number) =>
+        `${count === 1 ? '1 user ordered' : `${count} users ordered`} the libraries in the web player’s Settings › Home. Their order is forgotten, and their apps list the libraries in this order, as saved; the web player within a minute. Their other settings stay.`,
+      applied: (count: number) =>
+        count === 0
+          ? 'Every user follows this order.'
+          : count === 1
+            ? 'This order now applies to every user: 1 user’s own order was forgotten.'
+            : `This order now applies to every user: ${count} users’ own orders were forgotten.`,
+    },
     refresh: {
       start: 'Refresh descriptions',
       stop: 'Stop refreshing',

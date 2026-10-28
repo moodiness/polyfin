@@ -30,6 +30,22 @@ const libraries: typeof en = {
     remove: 'Rimuovi',
     removeLabel: (name: string) => `Rimuovi ${name}`,
     moreActions: (name: string) => `Altre azioni per ${name}`,
+    userOrders: {
+      help: 'Un utente che ha ordinato le librerie nelle Impostazioni › Home del player web mantiene quell’ordine, fino a «Applica questo ordine a tutti gli utenti» o al proprio «Ripristina le mie preferenze».',
+      apply: 'Applica questo ordine a tutti gli utenti',
+      saveFirst: 'Salva prima l’elenco: viene applicato l’ordine salvato.',
+      title: 'Applicare questo ordine a tutti gli utenti?',
+      counting: 'Conteggio degli utenti con un ordine proprio…',
+      none: 'Tutti gli utenti seguono già questo ordine: nessuno ha ordinato le librerie nelle Impostazioni › Home del player web.',
+      some: (count: number) =>
+        `${count === 1 ? '1 utente ha ordinato' : `${count} utenti hanno ordinato`} le librerie nelle Impostazioni › Home del player web. Il loro ordine viene dimenticato e le loro applicazioni elencano le librerie in questo ordine, quello salvato; il player web entro un minuto. Le altre impostazioni restano.`,
+      applied: (count: number) =>
+        count === 0
+          ? 'Tutti gli utenti seguono questo ordine.'
+          : count === 1
+            ? 'Questo ordine ora vale per tutti: è stato dimenticato l’ordine proprio di 1 utente.'
+            : `Questo ordine ora vale per tutti: è stato dimenticato l’ordine proprio di ${count} utenti.`,
+    },
     refresh: {
       start: 'Aggiorna le descrizioni',
       stop: 'Interrompi l’aggiornamento',

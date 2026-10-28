@@ -191,6 +191,10 @@ type Options struct {
 	// Jellyfin apps saved for a user, for Reset my preferences; nil keeps
 	// none.
 	Preferences PreferencesReset
+	// LibraryOrders counts and clears the orders of libraries users saved
+	// from Jellyfin apps, for Apply this order to every user under Content
+	// › Libraries; nil has none.
+	LibraryOrders LibraryOrders
 }
 
 type handler struct {
@@ -438,6 +442,8 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/scopes/{scope}/libraries/image", h.signedIn(h.saveLibraryImage))
 	mux.Handle("POST /admin/api/scopes/shared/libraries/refresh", h.administrator(h.refreshLibrary))
 	mux.Handle("POST /admin/api/scopes/shared/libraries/refresh/stop", h.administrator(h.stopLibraryRefresh))
+	mux.Handle("GET /admin/api/scopes/shared/libraries/user-orders", h.administrator(h.libraryOrders))
+	mux.Handle("DELETE /admin/api/scopes/shared/libraries/user-orders", h.administrator(h.clearLibraryOrders))
 	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists", h.signedIn(h.smartLists))
 	mux.Handle("POST /admin/api/scopes/{scope}/smart-lists", h.signedIn(h.createSmartList))
 	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists/catalogs", h.signedIn(h.smartCatalogs))

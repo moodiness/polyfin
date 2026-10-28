@@ -86,3 +86,33 @@ func (s *Store) Reset(ctx context.Context, user accounts.ID) error {
 		return err
 	})
 }
+
+// ownOrder selects the configurations that keep an order of libraries of
+// their own: an OrderedViews that is not empty.
+const ownOrder = `jsonb_typeof(value->'OrderedViews') = 'array' AND value->'OrderedViews' <> '[]'::jsonb`
+
+// LibraryOrders counts the users whose configuration keeps an order of
+// libraries of their own.
+func (s *Store) LibraryOrders(ctx context.Context) (int, error) {
+	var count int
+	err := s.db.QueryRow(ctx, "SELECT count(*) FROM user_configurations WHERE "+ownOrder).Scan(&count)
+	return count, err
+}
+
+// ClearLibraryOrders empties the order of libraries every user's
+// configuration keeps, leaving the rest of it, and returns the users whose
+// order it cleared. Rows are locked in the order of their keys, as every
+// statement writing several rows takes them.
+func (s *Store) ClearLibraryOrders(ctx context.Context) ([]accounts.ID, error) {
+	rows, err := s.db.Query(ctx, `
+		WITH ordered AS (
+			SELECT user_id FROM user_configurations WHERE `+ownOrder+` ORDER BY user_id FOR UPDATE
+		)
+		UPDATE user_configurations c SET value = jsonb_set(c.value, '{OrderedViews}', '[]'::jsonb)
+		FROM ordered WHERE c.user_id = ordered.user_id
+		RETURNING c.user_id`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+}

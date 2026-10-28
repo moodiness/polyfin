@@ -1422,6 +1422,17 @@ export const refreshLibrary = (library: LibraryKey) =>
 export const stopLibraryRefresh = (library: LibraryKey) =>
   request<void>('POST', '/scopes/shared/libraries/refresh/stop', library)
 
+/** How many users keep an order of libraries of their own, saved from a Jellyfin app. */
+export type LibraryOrders = { users: number }
+
+/** Counts the users who keep an order of libraries of their own. */
+export const libraryOrders = () =>
+  request<LibraryOrders>('GET', '/scopes/shared/libraries/user-orders')
+
+/** Apply this order to every user: forgets the orders of libraries users saved. */
+export const applyLibraryOrder = () =>
+  request<LibraryOrders>('DELETE', '/scopes/shared/libraries/user-orders')
+
 /** The XMLTV guide of a TV catalog and how its last fetch went. */
 export type Guide = {
   /** Redacted address: the credentials it may embed are never returned. Empty: no guide. */

@@ -30,6 +30,22 @@ const libraries: typeof en = {
     remove: 'Retirer',
     removeLabel: (name: string) => `Retirer ${name}`,
     moreActions: (name: string) => `Autres actions pour ${name}`,
+    userOrders: {
+      help: 'Un utilisateur qui a ordonné les bibliothèques dans Paramètres › Accueil du lecteur web garde cet ordre, jusqu’à « Appliquer cet ordre à tous les utilisateurs » ou son propre « Rétablir mes préférences ».',
+      apply: 'Appliquer cet ordre à tous les utilisateurs',
+      saveFirst: 'Enregistrez d’abord la liste : c’est l’ordre enregistré qui est appliqué.',
+      title: 'Appliquer cet ordre à tous les utilisateurs ?',
+      counting: 'Décompte des utilisateurs qui ont leur propre ordre…',
+      none: 'Tous les utilisateurs suivent déjà cet ordre : aucun n’a ordonné les bibliothèques dans Paramètres › Accueil du lecteur web.',
+      some: (count: number) =>
+        `${count === 1 ? '1 utilisateur a ordonné' : `${count} utilisateurs ont ordonné`} les bibliothèques dans Paramètres › Accueil du lecteur web. Leur ordre est oublié, et leurs applis listent les bibliothèques dans cet ordre, celui enregistré ; le lecteur web en une minute au plus. Leurs autres réglages restent.`,
+      applied: (count: number) =>
+        count === 0
+          ? 'Tous les utilisateurs suivent cet ordre.'
+          : count === 1
+            ? 'Cet ordre s’applique désormais à tous : l’ordre propre d’un utilisateur a été oublié.'
+            : `Cet ordre s’applique désormais à tous : l’ordre propre de ${count} utilisateurs a été oublié.`,
+    },
     refresh: {
       start: 'Actualiser les descriptions',
       stop: 'Arrêter l’actualisation',

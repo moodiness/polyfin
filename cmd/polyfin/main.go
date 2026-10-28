@@ -651,7 +651,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// Reset my preferences forgets what Jellyfin apps saved, with what
 		// the Jellyfin API remembers of it.
 		Preferences: jellyfinAPI,
-		Sharing:     lib,
+		// Apply this order to every user clears the orders of libraries
+		// users saved, with what the Jellyfin API remembers of them.
+		LibraryOrders: jellyfinAPI,
+		Sharing:       lib,
 		Health: admin.HealthSources{
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,

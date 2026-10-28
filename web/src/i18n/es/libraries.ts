@@ -31,6 +31,22 @@ const libraries: typeof en = {
     remove: 'Eliminar',
     removeLabel: (name: string) => `Eliminar ${name}`,
     moreActions: (name: string) => `Más acciones para ${name}`,
+    userOrders: {
+      help: 'Un usuario que ordenó las bibliotecas en Ajustes › Inicio del reproductor web conserva ese orden, hasta «Aplicar este orden a todos los usuarios» o su propio «Restablecer mis preferencias».',
+      apply: 'Aplicar este orden a todos los usuarios',
+      saveFirst: 'Guarde primero la lista: se aplica el orden guardado.',
+      title: '¿Aplicar este orden a todos los usuarios?',
+      counting: 'Contando los usuarios con un orden propio…',
+      none: 'Todos los usuarios ya siguen este orden: ninguno ordenó las bibliotecas en Ajustes › Inicio del reproductor web.',
+      some: (count: number) =>
+        `${count === 1 ? '1 usuario ordenó' : `${count} usuarios ordenaron`} las bibliotecas en Ajustes › Inicio del reproductor web. Su orden se olvida, y sus aplicaciones muestran las bibliotecas en este orden, el guardado; el reproductor web, en un minuto como mucho. Sus demás ajustes se mantienen.`,
+      applied: (count: number) =>
+        count === 0
+          ? 'Todos los usuarios siguen este orden.'
+          : count === 1
+            ? 'Este orden se aplica ahora a todos: se olvidó el orden propio de 1 usuario.'
+            : `Este orden se aplica ahora a todos: se olvidó el orden propio de ${count} usuarios.`,
+    },
     refresh: {
       start: 'Actualizar las descripciones',
       stop: 'Detener la actualización',

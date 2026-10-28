@@ -361,6 +361,20 @@ func (s *Store) SettingsSaved(ctx context.Context, administrator string) {
 		Type: "ServerConfigurationUpdated"})
 }
 
+// LibraryOrderApplied records that administrator applied the order of
+// Content › Libraries to every user, clearing the orders users saved
+// themselves, users of them. Jellyfin has no such entry: it has no order
+// an administrator sets for every user.
+func (s *Store) LibraryOrderApplied(ctx context.Context, administrator string, users int) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s applied the order of the libraries to every user (%d with an order of their own)",
+		"%s a appliqué l’ordre des bibliothèques à tous les utilisateurs (%d avec un ordre à eux)",
+		"%s hat die Reihenfolge der Bibliotheken auf alle Benutzer angewendet (%d mit eigener Reihenfolge)",
+		"%s ha aplicado el orden de las bibliotecas a todos los usuarios (%d con un orden propio)",
+		"%s ha applicato l’ordine delle librerie a tutti gli utenti (%d con un ordine proprio)",
+		"%s aplicou a ordem das bibliotecas a todos os usuários (%d com uma ordem própria)"}, administrator, users),
+		Type: "ServerConfigurationUpdated"})
+}
+
 // MetricsTokenMade records that administrator made a new metrics token,
 // never the token.
 func (s *Store) MetricsTokenMade(ctx context.Context, administrator string) {

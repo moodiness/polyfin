@@ -29,6 +29,22 @@ const libraries: typeof en = {
     remove: 'Entfernen',
     removeLabel: (name: string) => `${name} entfernen`,
     moreActions: (name: string) => `Weitere Aktionen für ${name}`,
+    userOrders: {
+      help: 'Wer die Bibliotheken in den Einstellungen › Startseite des Web-Players selbst sortiert hat, behält diese Reihenfolge, bis „Diese Reihenfolge auf alle Benutzer anwenden“ oder das eigene „Meine Einstellungen zurücksetzen“.',
+      apply: 'Diese Reihenfolge auf alle Benutzer anwenden',
+      saveFirst: 'Speichere zuerst die Liste: Angewendet wird die gespeicherte Reihenfolge.',
+      title: 'Diese Reihenfolge auf alle Benutzer anwenden?',
+      counting: 'Benutzer mit eigener Reihenfolge werden gezählt…',
+      none: 'Alle Benutzer folgen bereits dieser Reihenfolge: Niemand hat die Bibliotheken in den Einstellungen › Startseite des Web-Players sortiert.',
+      some: (count: number) =>
+        `${count === 1 ? '1 Benutzer hat' : `${count} Benutzer haben`} die Bibliotheken in den Einstellungen › Startseite des Web-Players selbst sortiert. Ihre Reihenfolge wird verworfen, und ihre Apps zeigen die Bibliotheken in dieser, der gespeicherten Reihenfolge; der Web-Player spätestens nach einer Minute. Ihre übrigen Einstellungen bleiben.`,
+      applied: (count: number) =>
+        count === 0
+          ? 'Alle Benutzer folgen dieser Reihenfolge.'
+          : count === 1
+            ? 'Diese Reihenfolge gilt jetzt für alle: Die eigene Reihenfolge von 1 Benutzer wurde verworfen.'
+            : `Diese Reihenfolge gilt jetzt für alle: Die eigene Reihenfolge von ${count} Benutzern wurde verworfen.`,
+    },
     refresh: {
       start: 'Beschreibungen aktualisieren',
       stop: 'Aktualisierung stoppen',

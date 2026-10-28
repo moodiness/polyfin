@@ -70,6 +70,7 @@ import {
 } from '@/ui'
 import { LibraryImageEditor, LibraryThumb, LiveTvThumb } from './LibraryImage'
 import { useRowDrag } from './useRowDrag'
+import UserLibraryOrders from './UserLibraryOrders'
 
 /** Above this many libraries the home screen of Jellyfin apps gets heavy; the server default. */
 const recommendedLibraries = 20
@@ -803,6 +804,7 @@ function LibraryForm({
             </ol>
           </div>
         )}
+        {scope === 'shared' && <UserLibraryOrders dirty={dirty} />}
         <details className="group mt-5">
           <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md text-control font-medium text-ink-2 transition-colors duration-160 hover:text-ink [&::-webkit-details-marker]:hidden">
             <CaretRightIcon
