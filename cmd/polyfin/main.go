@@ -335,9 +335,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	titleRatings := ratings.New(pool, ratings.MDBList, version, logger, store.Settings)
 	defer titleRatings.Close()
 	lib.UseRatings(titleRatings)
-	// Edit images searches TMDB's images while the settings hold the
-	// server's TMDB key.
+	// Edit images searches TMDB's images, and people are looked up on TMDB,
+	// while the settings hold the server's TMDB key.
 	imageSearch := tmdb.New(tmdb.API, tmdb.Images, version, store.Settings)
+	lib.UseTMDB(imageSearch)
 	// Local folders match their files through the library's searches of
 	// the metadata addons.
 	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings, box)

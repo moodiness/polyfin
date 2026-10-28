@@ -44,6 +44,10 @@ type record struct {
 	GuideNumber string `json:"guideNumber,omitempty"`
 	// Person is the name and photo of a person.
 	Person *Person `json:"person,omitempty"`
+	// TMDBID is a person's TMDB identifier as an addon gave it, and TMDB
+	// what TMDB told of them (see persondetails.go).
+	TMDBID string         `json:"tmdbId,omitempty"`
+	TMDB   *personDetails `json:"tmdb,omitempty"`
 	// Credits maps the titles a person is credited in, by item identifier,
 	// to their credits there ("Actor", "Director", "Writer").
 	Credits map[string][]string `json:"credits,omitempty"`

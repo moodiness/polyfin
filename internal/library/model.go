@@ -117,9 +117,12 @@ type Item struct {
 	// Status is "Continuing" or "Ended" for series.
 	Status      string
 	ProviderIDs map[string]string
-	People      []Person
-	Trailers    []Trailer
-	Images      Images
+	// ProductionLocations is a person's place of birth, as Jellyfin gives
+	// it (see persondetails.go).
+	ProductionLocations []string
+	People              []Person
+	Trailers            []Trailer
+	Images              Images
 	// WidePrimary tells that the Primary image is wide, as a library's
 	// generated image and the backdrop it finds automatically are, rather
 	// than what items of its kind usually show.
@@ -249,13 +252,14 @@ func (i Images) URL(imageType string) string {
 }
 
 // Person is someone credited for a title. ID identifies them by name across
-// titles.
+// titles; TMDB is their TMDB identifier, when the addon gives one.
 type Person struct {
 	ID    accounts.ID `json:"-"`
 	Name  string      `json:"name"`
 	Role  string      `json:"-"`
 	Type  string      `json:"-"`
 	Image string      `json:"image,omitempty"`
+	TMDB  string      `json:"-"`
 }
 
 // Trailer is a video presenting a title.
@@ -485,23 +489,23 @@ func fromMeta(item *Item, meta stremio.Meta) {
 
 func people(meta stremio.Meta) []Person {
 	var result []Person
-	add := func(name, role, kind, image string) {
-		result = append(result, Person{ID: itemID(personKey(name)), Name: name, Role: role, Type: kind, Image: image})
+	add := func(name, role, kind, image, tmdb string) {
+		result = append(result, Person{ID: itemID(personKey(name)), Name: name, Role: role, Type: kind, Image: image, TMDB: tmdb})
 	}
 	if meta.Extras != nil && len(meta.Extras.Cast) > 0 {
 		for _, member := range meta.Extras.Cast {
-			add(member.Name, member.Character, "Actor", member.Photo)
+			add(member.Name, member.Character, "Actor", member.Photo, member.PersonTMDB())
 		}
 	} else {
 		for _, name := range meta.Cast {
-			add(name, "", "Actor", "")
+			add(name, "", "Actor", "", "")
 		}
 	}
 	for _, name := range meta.Director {
-		add(name, "Director", "Director", "")
+		add(name, "Director", "Director", "", "")
 	}
 	for _, name := range meta.Writer {
-		add(name, "Writer", "Writer", "")
+		add(name, "Writer", "Writer", "", "")
 	}
 	return result
 }

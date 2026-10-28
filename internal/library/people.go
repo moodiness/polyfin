@@ -19,11 +19,17 @@ import (
 func PersonID(name string) accounts.ID { return itemID(personKey(name)) }
 
 // mergedPerson is the record a person's upsert stores: the new one, with the
-// credits of both, and the stored photo when the new one has none.
+// credits of both, the stored photo when the new one has none, the TMDB
+// identifier an addon gave before when the new one gives none, and what
+// TMDB told of the person (see persondetails.go), which credits never
+// carry.
 const mergedPerson = `excluded.data
 	|| jsonb_build_object('credits', COALESCE(items.data->'credits', '{}'::jsonb) || COALESCE(excluded.data->'credits', '{}'::jsonb))
 	|| CASE WHEN excluded.data->'person' ? 'image' OR NOT COALESCE(items.data->'person' ? 'image', false) THEN '{}'::jsonb
-		ELSE jsonb_build_object('person', items.data->'person', 'confined', COALESCE(items.data->'confined', 'false'::jsonb)) END`
+		ELSE jsonb_build_object('person', items.data->'person', 'confined', COALESCE(items.data->'confined', 'false'::jsonb)) END
+	|| CASE WHEN excluded.data ? 'tmdbId' OR NOT items.data ? 'tmdbId' THEN '{}'::jsonb
+		ELSE jsonb_build_object('tmdbId', items.data->'tmdbId') END
+	|| CASE WHEN items.data ? 'tmdb' THEN jsonb_build_object('tmdb', items.data->'tmdb') ELSE '{}'::jsonb END`
 
 // saveCredits records the people a title credits, so that apps can open
 // them by identifier, and so that a person lists the titles Polyfin knows
@@ -47,6 +53,9 @@ func (s *Service) saveCredits(ctx context.Context, title accounts.ID, credits []
 		}
 		if r.Person.Image == "" {
 			r.Person.Image = person.Image
+		}
+		if r.TMDBID == "" {
+			r.TMDBID = person.TMDB
 		}
 		if types := r.Credits[title.String()]; !slices.Contains(types, person.Type) {
 			r.Credits[title.String()] = append(types, person.Type)
@@ -397,7 +406,7 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 			return nil, 0, err
 		}
 		if r.Person != nil {
-			people = append(people, Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.Person.Image}})
+			people = append(people, Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.personPhoto()}})
 		}
 	}
 	return s.overridden(people), total, rows.Err()

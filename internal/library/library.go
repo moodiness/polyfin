@@ -27,6 +27,7 @@ import (
 	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tmdb"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
@@ -195,6 +196,11 @@ type Service struct {
 	// warmed tells when Warm read the libraries' first pages, and opened
 	// the users' own libraries opened lately (see warmedposters.go).
 	warmed warmedPosters
+
+	// tmdb looks people up, and personLookups are the people being
+	// looked up (see persondetails.go).
+	tmdb          *tmdb.Client
+	personLookups personLookups
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
@@ -315,6 +321,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		smartCache:     cache.New[smartKey, []smartTitle](200, smartLife).Sized(smartBytes, smartTitlesSize),
 		smartFetches:   make(chan struct{}, smartFetches),
 		smartWait:      smartWait,
+		personLookups:  personLookups{slots: make(chan struct{}, personLookupsAtOnce)},
 	}
 	clock := func() time.Time { return s.now() }
 	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock).Sized(64<<20, fetchedSize[[]stremio.Meta])
@@ -424,6 +431,9 @@ type view struct {
 	language    string
 	translators []installed
 	words       words
+	// peopleLanguage is the language people's biographies are asked of
+	// TMDB in (see persondetails.go).
+	peopleLanguage string
 }
 
 // limit is how many items one read of src's catalog fetches at most: the
@@ -529,6 +539,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 		}
 	}
 	v.useLanguage(user.MetadataLanguage, settings.Language)
+	v.peopleLanguage = peopleLanguage(user, settings)
 	serverNames := LibraryNames(visible, settings.Language)
 	for i, name := range LibraryNames(visible, v.words.language) {
 		l := visible[i]
@@ -2170,7 +2181,7 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		if _, err := s.credited(ctx, v, r); err != nil {
 			return Item{}, err
 		}
-		return Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.Person.Image}}, nil
+		return personItem(id, r, v.peopleLanguage), nil
 	case KindChannel:
 		return s.channel(ctx, v, r)
 	case KindProgram:
@@ -2780,7 +2791,7 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 			confined = series.Confined
 		}
 	case r.Kind == KindPerson && r.Person != nil:
-		images.Primary = r.Person.Image
+		images.Primary = r.personPhoto()
 	case r.Kind == KindLibrary:
 		// A library's automatic or generated image, when it was last
 		// looked up.
