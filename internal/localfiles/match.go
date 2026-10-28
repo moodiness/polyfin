@@ -97,7 +97,9 @@ type match struct {
 // once, and what failed (see fail). A search an addon answered "too many
 // requests" waits, with every search of the scan, as long as the addon
 // asks, at most maxRateWait, or rateWait doubled at each try when it does
-// not say, and is tried again, rateTries times at most.
+// not say, and is tried again, rateTries times at most. A search an addon
+// failed (HTTP 5xx) is tried again after each of serverWaits, as such
+// failures are often brief; another refusal (HTTP 4xx) is not.
 type searches struct {
 	mu      sync.Mutex
 	results map[string]*search
@@ -126,6 +128,10 @@ const (
 	rateWait    = time.Second
 	maxRateWait = time.Minute
 )
+
+// serverWaits are the waits before a search an addon failed is tried
+// again, within the scan (see searches).
+var serverWaits = [...]time.Duration{time.Second, 3 * time.Second}
 
 func newSearches() *searches {
 	return &searches{results: map[string]*search{}, searchable: map[library.Kind]bool{}}
@@ -175,8 +181,10 @@ func (c *searches) find(ctx context.Context, titles Titles, kind library.Kind, t
 	}
 }
 
-// search searches titles, waiting out the addons' rate limits.
+// search searches titles, waiting out the addons' rate limits, and trying
+// again a search an addon failed (see searches).
 func (c *searches) search(ctx context.Context, titles Titles, kind library.Kind, title string) ([]library.RemoteResult, error) {
+	failures := 0
 	for try := 0; ; try++ {
 		c.mu.Lock()
 		resume := c.resume
@@ -195,6 +203,19 @@ func (c *searches) search(ctx context.Context, titles Titles, kind library.Kind,
 		c.mu.Lock()
 		c.wait = max(c.wait, wait)
 		c.mu.Unlock()
+		if !limited && serverFailed(err) && failures < len(serverWaits) {
+			timer := time.NewTimer(serverWaits[failures])
+			failures++
+			select {
+			case <-timer.C:
+				// A failure is no rate limit's try.
+				try--
+				continue
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			}
+		}
 		if !limited || try == rateTries || wait > maxRateWait {
 			return results, err
 		}
@@ -207,6 +228,12 @@ func (c *searches) search(ctx context.Context, titles Titles, kind library.Kind,
 		}
 		c.mu.Unlock()
 	}
+}
+
+// serverFailed reports whether an addon failed a search (HTTP 5xx).
+func serverFailed(err error) bool {
+	failed, ok := errors.AsType[*library.SearchError](err)
+	return ok && slices.ContainsFunc(failed.Failures, func(f library.SearchFailure) bool { return f.Failure == stremio.FailureServerError })
 }
 
 // rateLimited reports whether an addon answered a search "too many

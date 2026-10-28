@@ -115,7 +115,9 @@ func TestNumeralsSearchedTheOtherWay(t *testing.T) {
 	if got := e.matches(movies.ID); !maps.Equal(got, want) {
 		t.Errorf("matched: %v", got)
 	}
-	if got, want := addon.searched(), []string{"Broken Reel 2", "Broken Reel II", "Gull Point 2", "Gull Point II", "Harbor Lights 2",
+	// The failed search is tried twice more within the scan (see
+	// serverWaits).
+	if got, want := addon.searched(), []string{"Broken Reel 2", "Broken Reel II", "Broken Reel II", "Broken Reel II", "Gull Point 2", "Gull Point II", "Harbor Lights 2",
 		"Harbor Lights II", "Lost Reel 4", "Lost Reel IV", "Quay Street 3", "Tidewater Part 1", "Tidewater Part One", "Unknown Picture"}; !slices.Equal(got, want) {
 		t.Errorf("searched: %q", got)
 	}

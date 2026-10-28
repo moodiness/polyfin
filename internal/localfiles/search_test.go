@@ -282,11 +282,12 @@ func TestFailedSearchesAreTriedAgain(t *testing.T) {
 	if searched() != before {
 		t.Error("searched again before the retry was due")
 	}
-	// Due: searched again, failing again, then tried later.
+	// Due: searched again, failing again, then tried later. Each scan
+	// tries a failed search twice more (see serverWaits).
 	advance(searchRetry(0))
 	scanDue()
-	if searched() != before+1 {
-		t.Errorf("%d searches, want %d", searched(), before+1)
+	if want := before + 1 + len(serverWaits); searched() != want {
+		t.Errorf("%d searches, want %d", searched(), want)
 	}
 	at, retries := retry()
 	if at == nil || retries != 2 || at.Sub(now) != searchRetry(1) || searchRetry(1) <= searchRetry(0) {
