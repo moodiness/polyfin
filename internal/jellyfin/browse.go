@@ -244,6 +244,21 @@ func (h *Handler) views(w http.ResponseWriter, r *http.Request) {
 // their libraries and Polyfin's Live TV, Replay, Playlists, Collections
 // and Watchlist views, those they hide included when includeHidden is set.
 func (h *Handler) userViews(r *http.Request, user accounts.User, includeHidden bool) ([]BaseItemDto, error) {
+	items, err := h.serverOrderedViews(r, user)
+	if err != nil {
+		return nil, err
+	}
+	configuration, err := h.userConfiguration(r.Context(), user.ID)
+	if err != nil {
+		return nil, err
+	}
+	return arrangeViews(items, configuration, includeHidden), nil
+}
+
+// serverOrderedViews describes every view user sees, hidden ones included,
+// in the server's order, before their own (see arrangeViews): their
+// libraries in the order of Content › Libraries, then Polyfin's views.
+func (h *Handler) serverOrderedViews(r *http.Request, user accounts.User) ([]BaseItemDto, error) {
 	items, err := h.libraryViews(r, user)
 	if err == nil {
 		items, err = h.addLiveTvView(r, user, items)
@@ -263,14 +278,7 @@ func (h *Handler) userViews(r *http.Request, user accounts.User, includeHidden b
 	if err == nil {
 		items, err = h.addCustomRowViews(r, user, items)
 	}
-	if err != nil {
-		return nil, err
-	}
-	configuration, err := h.userConfiguration(r.Context(), user.ID)
-	if err != nil {
-		return nil, err
-	}
-	return arrangeViews(items, configuration, includeHidden), nil
+	return items, err
 }
 
 // MenuView is one of the views /UserViews lists, by its Id there, with

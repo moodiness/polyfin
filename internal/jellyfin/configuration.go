@@ -129,6 +129,10 @@ func (h *Handler) updateUserConfiguration(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
+	if configuration.OrderedViews, err = h.ownOrder(r, user, configuration.OrderedViews); err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	value, _ := json.Marshal(configuration)
 	if err := h.Preferences.PutConfiguration(r.Context(), user.ID, value); err != nil {
 		h.internalError(w, r, err)
@@ -136,6 +140,28 @@ func (h *Handler) updateUserConfiguration(w http.ResponseWriter, r *http.Request
 	}
 	h.configurations.Put(user.ID, configuration)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ownOrder is the order of views a configuration saved for user keeps:
+// none when ordered is the server's own order, every view the user sees
+// in the order the server lists them, so that the user goes on following
+// the order of Content › Libraries, libraries added later included.
+// jellyfin-web's Settings › Home saves the order of every view each time
+// it is saved, whether the user changed it or not. Any other order is the
+// user's own, kept as saved, and comes first (see arrangeViews), as in
+// Jellyfin.
+func (h *Handler) ownOrder(r *http.Request, user accounts.User, ordered []string) ([]string, error) {
+	if len(ordered) == 0 {
+		return ordered, nil
+	}
+	views, err := h.serverOrderedViews(r, user)
+	if err != nil {
+		return nil, err
+	}
+	if slices.EqualFunc(ordered, views, func(id string, view BaseItemDto) bool { return id == view.Id }) {
+		return []string{}, nil
+	}
+	return ordered, nil
 }
 
 // parseUserConfiguration reads a UserConfiguration as Jellyfin's JSON
