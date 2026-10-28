@@ -690,6 +690,32 @@ func TestReadersStartAtAKeyframe(t *testing.T) {
 	}
 }
 
+// A live stream whose audio comes most of a second after its video, as a
+// feed joined at a keyframe of a stream FFmpeg muxed gives it, is read
+// with the short probe into HLS segments at the first try: its audio is
+// found in time, where half a second of probing failed ("sample rate not
+// set") and the stream was read again.
+func TestTheShortProbeFindsLateAudio(t *testing.T) {
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	dir := t.TempDir()
+	input := filepath.Join(dir, "live.ts")
+	// Padded to 1.5 MB a second, as a 12 Mb/s stream.
+	if output, err := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=25", "-itsoffset", "0.8",
+		"-f", "lavfi", "-i", "sine=sample_rate=48000", "-t", "4", "-c:v", "libx264", "-g", "25", "-pix_fmt", "yuv420p", "-c:a", "aac",
+		"-muxrate", "12M", "-f", "mpegts", input).CombinedOutput(); err != nil {
+		t.Fatalf("encoding: %v %s", err, output)
+	}
+	args := append([]string{"-v", "error"}, shortProbe...)
+	args = append(args, "-i", input, "-map", "0:0", "-map", "0:1", "-c", "copy", "-bsf:a", "aac_adtstoasc", "-f", "hls",
+		"-hls_segment_type", "fmp4", "-hls_segment_filename", filepath.Join(dir, "%d.mp4"), filepath.Join(dir, "live.m3u8"))
+	if output, err := exec.Command(ffmpeg, args...).CombinedOutput(); err != nil {
+		t.Errorf("a stream whose audio comes late, read with the short probe: %v %s", err, output)
+	}
+}
+
 // Without a keyframe in its first keyframeWait bytes, or not MPEG-TS, a
 // feed's readers start feedJoin back, on a packet.
 func TestReadersOfStreamsWithoutKeyframesStillStart(t *testing.T) {

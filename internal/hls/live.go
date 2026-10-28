@@ -39,10 +39,16 @@ const (
 	liveQuickRun      = 10 * time.Second
 	liveRestarts      = 5
 	liveRestartWindow = 2 * time.Minute
-	// liveWait bounds how long a request waits for the first segment.
-	liveWait     = time.Minute
-	livePlaylist = "live.m3u8"
-	liveInit     = "init.mp4"
+	// liveWait bounds how long a request waits for the first segments.
+	liveWait = time.Minute
+	// liveLead and liveLeadSegments are what the first playlist of a live
+	// encoding lists at least, besides the segments the app asks for (see
+	// LivePlaylist): enough video for the player, which starts at its
+	// first segment, to stay ahead of the next one FFmpeg finishes.
+	liveLead         = (liveSegment + 1) * time.Second
+	liveLeadSegments = 2
+	livePlaylist     = "live.m3u8"
+	liveInit         = "init.mp4"
 	// userLives is how many channels one user plays at once through
 	// FFmpeg, as many as a household's screens; serverLives, how many the
 	// server runs in all.
@@ -85,6 +91,9 @@ type live struct {
 	created time.Time
 	// stopped is set once the encoding is stopped for good.
 	stopped bool
+	// answered is set once a playlist was answered: the first waits for
+	// its lead (see LivePlaylist), the next ones for a segment.
+	answered bool
 }
 
 // liveRun is one run of FFmpeg.
@@ -100,9 +109,19 @@ type liveRun struct {
 }
 
 // LivePlaylist returns the media playlist of the live encoding of key,
-// starting FFmpeg when it does not run, once the playlist lists a segment.
-// uri names each file the playlist refers to.
-func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri func(name string) string) ([]byte, error) {
+// starting FFmpeg when it does not run. uri names each file the playlist
+// refers to.
+//
+// The first playlist is answered once it lists the segments the app asks
+// for (minSegments, as Jellyfin waits for MinSegments before answering a
+// live playlist: DynamicHlsController.GetLiveHlsStream, Jellyfin 12.4),
+// and at least liveLeadSegments segments of liveLead in all. Players start
+// a live stream at the first segment its playlist lists: with only one,
+// they play right behind FFmpeg, and any pause of the source stalls them.
+// A source the encoding read ahead, as a feed opened before, fills the
+// lead at once. The next playlists are answered once they list a segment,
+// as after a restart.
+func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri func(name string) string, minSegments int) ([]byte, error) {
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
@@ -152,7 +171,7 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 			return nil, err
 		}
 		data, err := os.ReadFile(filepath.Join(l.dir, livePlaylist))
-		if err == nil && bytes.Contains(data, []byte("#EXTINF")) {
+		if err == nil && l.ready(data, minSegments) {
 			return rewriteLive(data, uri), nil
 		}
 		select {
@@ -176,6 +195,45 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
+}
+
+// ready reports whether playlist, FFmpeg's, may be answered (see
+// LivePlaylist): the first once it lists minSegments segments, and
+// liveLeadSegments of liveLead in all; the next ones once they list one,
+// and so does the first once a run ended, as a run lists its own segments
+// only and a source read again owes no lead. It records the first
+// answered.
+func (l *live) ready(playlist []byte, minSegments int) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	segments, listed := listedSegments(playlist)
+	if l.answered || l.next > 0 || len(l.restarts) > 0 {
+		l.answered = l.answered || segments > 0
+		return segments > 0
+	}
+	if segments < min(max(minSegments, liveLeadSegments), liveWindow) || listed < liveLead {
+		return false
+	}
+	l.answered = true
+	return true
+}
+
+// listedSegments counts the segments an HLS playlist lists, and how long
+// they last in all, by their #EXTINF tags.
+func listedSegments(playlist []byte) (int, time.Duration) {
+	segments, listed := 0, time.Duration(0)
+	for line := range strings.Lines(string(playlist)) {
+		value, ok := strings.CutPrefix(strings.TrimSpace(line), "#EXTINF:")
+		if !ok {
+			continue
+		}
+		segments++
+		duration, _, _ := strings.Cut(value, ",")
+		if seconds, err := strconv.ParseFloat(duration, 64); err == nil && seconds > 0 {
+			listed += time.Duration(seconds * float64(time.Second))
+		}
+	}
+	return segments, listed
 }
 
 // LiveSegment opens a file of the live encoding of key: a segment its

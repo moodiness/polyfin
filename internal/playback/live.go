@@ -45,8 +45,11 @@ const (
 )
 
 // shortProbe are FFmpeg's options for reading an MPEG-TS stream whose
-// tracks are known: half a second of probing instead of five.
-var shortProbe = []string{"-probesize", "500000", "-analyzeduration", "500000", "-fflags", "+nobuffer"}
+// tracks are known: a second and a half of probing instead of five, which
+// finds the audio of a stream whose first audio packets come up to a
+// second after its video, as FFmpeg's own MPEG-TS muxer delays them by
+// 0.7 seconds; FFmpeg stops sooner once every track is found.
+var shortProbe = []string{"-probesize", "4000000", "-analyzeduration", "1500000", "-fflags", "+nobuffer"}
 
 // Endless reports whether version streams with no end, as a live stream
 // does, which then plays as a channel's stream plays (see AnalyzeLive): an
@@ -72,20 +75,45 @@ func (s *Service) Endless(ctx context.Context, version library.Version) (bool, e
 // Unbounded reports whether version's first bytes may be those of a stream
 // with no end: an HLS playlist, or a source that announces no size, which
 // a file's analysis would wait on until its deadline. It analyzes nothing.
-// Torrents and local files have an end.
+// A source that announces no size is told as soon as it answers, without
+// waiting for the first block of its bytes, which a live stream sends in
+// real time; one that announces a size is told by its first bytes, as a
+// playlist is. Torrents and local files have an end.
 func (s *Service) Unbounded(ctx context.Context, version library.Version) (bool, error) {
 	if version.Torrent != nil || s.ReadsInput(version) {
 		return false, nil
 	}
 	src := s.open(version)
-	head := make([]byte, 16)
-	n, err := src.ReadAt(ctx, head, 0)
-	size, sized := src.KnownSize()
-	src.Release()
-	if n == 0 && err != nil {
-		return false, err
+	defer src.Release()
+	reading, stop := context.WithCancel(ctx)
+	defer stop()
+	type result struct {
+		n   int
+		err error
 	}
-	playlist := bytes.HasPrefix(bytes.TrimPrefix(head[:n], []byte("\xef\xbb\xbf")), []byte("#EXTM3U"))
+	head := make([]byte, 16)
+	read := make(chan result, 1)
+	go func() {
+		n, err := src.ReadAt(reading, head, 0)
+		read <- result{n, err}
+	}()
+	var r result
+	select {
+	case r = <-read:
+	case <-src.Learned():
+		if _, sized := src.KnownSize(); !sized {
+			// The read stops before the source is released.
+			stop()
+			<-read
+			return true, nil
+		}
+		r = <-read
+	}
+	if r.n == 0 && r.err != nil {
+		return false, r.err
+	}
+	size, sized := src.KnownSize()
+	playlist := bytes.HasPrefix(bytes.TrimPrefix(head[:r.n], []byte("\xef\xbb\xbf")), []byte("#EXTM3U"))
 	return playlist || !sized || size <= 0, nil
 }
 
@@ -498,9 +526,10 @@ func LiveVideo(analysis media.Analysis) (media.Stream, bool) {
 }
 
 // LivePlaylist returns the media playlist of a live remux, starting FFmpeg
-// when it does not run; uri names the files it lists.
+// when it does not run; uri names the files it lists. The first waits for
+// the segments the app asks for, and a lead (see hls.Manager.LivePlaylist).
 func (s *Service) LivePlaylist(ctx context.Context, remux Remux, uri func(name string) string) ([]byte, error) {
-	return s.segments.LivePlaylist(ctx, remux.key(), s.liveOpener(remux), uri)
+	return s.segments.LivePlaylist(ctx, remux.key(), s.liveOpener(remux), uri, remux.MinSegments)
 }
 
 // LiveSegment opens a file the playlist of a live remux lists.

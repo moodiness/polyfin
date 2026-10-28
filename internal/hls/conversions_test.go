@@ -33,7 +33,7 @@ func TestConversionsAreLimited(t *testing.T) {
 	}
 	live := func(key Key) bool {
 		t.Helper()
-		_, err := m.LivePlaylist(t.Context(), key, open, func(name string) string { return name })
+		_, err := m.LivePlaylist(t.Context(), key, open, func(name string) string { return name }, 1)
 		return errors.Is(err, ErrBusy)
 	}
 	converted := func(session, user, version string) Key {

@@ -172,7 +172,7 @@ Until a version is played, Polyfin knows only what its addon says of it. With **
 
 ### Live videos
 
-A video an addon lists among its titles of other types, such as a sports addon's match on now, may stream with no end: an HLS playlist without `#EXT-X-ENDLIST`, or a stream that announces no size and gives no duration. Before its first play, or as its play is prepared ahead when its details open, Polyfin reads the first bytes of its first version: a file, of a known size, plays as any video; a playlist, or a stream of no size, is analyzed as a Live TV channel's stream is (see [Live TV](live-tv.md)), and plays live when it has no duration. The analysis is kept, and later plays are told by it at once.
+A video an addon lists among its titles of other types, such as a sports addon's match on now, may stream with no end: an HLS playlist without `#EXT-X-ENDLIST`, or a stream that announces no size and gives no duration. Before its first play, or as its play is prepared ahead when its details open, Polyfin reads the first answer of its first version: a stream that announces no size is told as soon as it answers, without waiting for its bytes, which a live stream sends as they come; otherwise its first bytes tell, and a file, of a known size, plays as any video. A playlist, or a stream of no size, is analyzed as a Live TV channel's stream is (see [Live TV](live-tv.md)), and plays live when it has no duration. The analysis is kept, and later plays are told by it at once. Interlaced sports, as most TV sports in 1080i50, play at 25 frames a second converted unless **Double the frame rate** is on (see [Starting a channel](live-tv.md#starting-a-channel)).
 
 A live video plays as a channel does:
 

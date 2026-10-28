@@ -265,6 +265,11 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 	// the converted video kept for a new session of the same playback.
 	remux := playback.Remux{Session: session, User: user.ID, Device: query(r, "deviceId"), Version: version,
 		Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
+	// The segments the app asks the first live playlist to list, as the
+	// TranscodingUrl carries them from its profile.
+	if live {
+		remux.MinSegments, _ = strconv.Atoi(query(r, "minSegments"))
+	}
 	// The conversions PlaybackInfo chose follow from the URL, as they
 	// would for Jellyfin, through the same functions, under the limit it
 	// played under. Converted video is scaled down to the user's quality

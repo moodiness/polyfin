@@ -77,7 +77,7 @@ func TestRecordingsCountTowardLiveLimits(t *testing.T) {
 		m.recordings[recording("busy", n)] = func() {}
 	}
 	m.mu.Unlock()
-	if _, err := m.LivePlaylist(t.Context(), Key{Session: "watch", User: "busy"}, unopened, nil); !errors.Is(err, ErrBusy) {
+	if _, err := m.LivePlaylist(t.Context(), Key{Session: "watch", User: "busy"}, unopened, nil, 1); !errors.Is(err, ErrBusy) {
 		t.Errorf("a channel watched by a user recording %d: %v", userLives, err)
 	}
 	if err := m.Record(t.Context(), recording("busy", userLives), unopened, t.TempDir()+"/x.ts"); !errors.Is(err, ErrBusy) {
@@ -91,7 +91,7 @@ func TestRecordingsCountTowardLiveLimits(t *testing.T) {
 		m.recordings[recording("user"+strconv.Itoa(n), n)] = func() {}
 	}
 	m.mu.Unlock()
-	if _, err := m.LivePlaylist(t.Context(), Key{Session: "watch", User: "other"}, unopened, nil); !errors.Is(err, ErrBusy) {
+	if _, err := m.LivePlaylist(t.Context(), Key{Session: "watch", User: "other"}, unopened, nil, 1); !errors.Is(err, ErrBusy) {
 		t.Errorf("a channel watched while the server records %d: %v", serverLives, err)
 	}
 	if err := m.Record(t.Context(), recording("other", 0), unopened, t.TempDir()+"/x.ts"); !errors.Is(err, ErrBusy) {

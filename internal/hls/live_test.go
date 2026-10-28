@@ -28,7 +28,7 @@ func TestLiveEncodingsAreCapped(t *testing.T) {
 	uri := func(name string) string { return name }
 	start := func(user string, n int) (Key, error) {
 		key := Key{Session: user + "-" + strconv.Itoa(n), Audio: -1, Format: TS, User: user}
-		_, err := m.LivePlaylist(t.Context(), key, open, uri)
+		_, err := m.LivePlaylist(t.Context(), key, open, uri, 1)
 		return key, err
 	}
 	live := func(key Key) bool {
@@ -123,7 +123,7 @@ func TestInterruptedLiveStreamsAreReadAgain(t *testing.T) {
 	}
 	key := Key{Session: "s", Audio: -1, Format: TS, User: "alice"}
 	uri := func(name string) string { return name }
-	first, err := m.LivePlaylist(t.Context(), key, open, uri)
+	first, err := m.LivePlaylist(t.Context(), key, open, uri, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestInterruptedLiveStreamsAreReadAgain(t *testing.T) {
 			t.Fatalf("the stream was not read again: %d runs, %s", len(runs()), playlist)
 		}
 		time.Sleep(100 * time.Millisecond)
-		if playlist, err = m.LivePlaylist(t.Context(), key, open, uri); err != nil {
+		if playlist, err = m.LivePlaylist(t.Context(), key, open, uri, 1); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -151,6 +151,107 @@ func TestInterruptedLiveStreamsAreReadAgain(t *testing.T) {
 	// A clean end is no failure: the input is kept, not opened again.
 	if opens != 1 {
 		t.Errorf("the input was opened %d times", opens)
+	}
+}
+
+// heldLiveFFmpeg writes a script that runs as FFmpeg's HLS muxer does on a
+// live stream: it writes a first segment of a second, then each next one
+// of three seconds once the file release names exists, numbering them on,
+// with a playlist listing them all, until it is stopped.
+func heldLiveFFmpeg(t *testing.T) (ffmpeg, release string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake FFmpeg is a shell script")
+	}
+	dir := t.TempDir()
+	release = filepath.Join(dir, "release")
+	script := `#!/bin/sh
+case "$*" in *"-f hls"*) ;; *) exit 0 ;; esac
+for playlist; do :; done
+dir=$(dirname "$playlist")
+printf 'segment' > "$dir/0.ts"
+list='#EXTINF:1.000000,
+0.ts'
+printf '#EXTM3U\n#EXT-X-TARGETDURATION:3\n%s\n' "$list" > "$dir/tmp.m3u8"; mv "$dir/tmp.m3u8" "$playlist"
+n=1
+while :; do
+  while [ ! -f ` + release + `.$n ]; do sleep 0.05; done
+  printf 'segment' > "$dir/$n.ts"
+  list="$list
+#EXTINF:3.000000,
+$n.ts"
+  printf '#EXTM3U\n#EXT-X-TARGETDURATION:3\n%s\n' "$list" > "$dir/tmp.m3u8"; mv "$dir/tmp.m3u8" "$playlist"
+  n=$((n+1))
+done
+`
+	ffmpeg = filepath.Join(dir, "ffmpeg")
+	if err := os.WriteFile(ffmpeg, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return ffmpeg, release
+}
+
+// The first playlist of a live encoding waits for the segments the app
+// asks for, and for a lead of two segments of four seconds, so that the
+// player, which starts at its first segment, stays ahead of FFmpeg; the
+// next ones are answered at once.
+func TestTheFirstLivePlaylistWaitsForALead(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		minSegments int
+		// released is how many segments after the first FFmpeg writes;
+		// listed, how many the first playlist must list.
+		released, listed int
+	}{
+		{"an app asking for one segment", 1, 1, 2},
+		{"an app asking for three", 3, 2, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ffmpeg, release := heldLiveFFmpeg(t)
+			m, err := NewManager(ffmpeg, t.TempDir(), slog.New(slog.DiscardHandler))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(m.Close)
+			open := func(context.Context) (Remux, func(), error) {
+				return Remux{Input: "http://127.0.0.1:1/live.ts", Video: 0, Audio: -1, Format: TS}, func() {}, nil
+			}
+			key := Key{Session: "s", Audio: -1, Format: TS, User: "alice"}
+			uri := func(name string) string { return name }
+			answered := make(chan []byte, 1)
+			go func() {
+				playlist, err := m.LivePlaylist(t.Context(), key, open, uri, tc.minSegments)
+				if err != nil {
+					t.Error(err)
+				}
+				answered <- playlist
+			}()
+			// FFmpeg writes its next segments only once released: a
+			// playlist answered before lists too few. Each is released
+			// after a while unanswered, which only a playlist that waits
+			// needs.
+			var first []byte
+			for n := 1; first == nil; n++ {
+				select {
+				case first = <-answered:
+				case <-time.After(2 * time.Second):
+					if n > tc.released {
+						t.Fatalf("no playlist after %d segments", n)
+					}
+					if err := os.WriteFile(release+"."+strconv.Itoa(n), nil, 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if got := strings.Count(string(first), "#EXTINF"); got != tc.listed {
+				t.Fatalf("the first playlist lists %d segments, want %d: %s", got, tc.listed, first)
+			}
+			// The next playlist does not wait for another segment.
+			next, err := m.LivePlaylist(t.Context(), key, open, uri, tc.minSegments)
+			if err != nil || strings.Count(string(next), "#EXTINF") != tc.listed {
+				t.Errorf("the next playlist: %v %s", err, next)
+			}
+		})
 	}
 }
 

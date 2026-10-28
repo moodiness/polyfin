@@ -55,6 +55,10 @@ type Remux struct {
 	// burned in instead, which FFmpeg reads beside the version.
 	Burn     *int
 	BurnFile string
+	// MinSegments is how many segments the app asks the first playlist of
+	// a live stream to list (its TranscodingUrl's MinSegments), 0 when it
+	// asks none (see hls.Manager.LivePlaylist).
+	MinSegments int
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe
