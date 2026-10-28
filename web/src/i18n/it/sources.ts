@@ -488,6 +488,10 @@ const sources: typeof en = {
         : `Non è stato possibile cercare i titoli di ${figure} file`,
     searchRetry: (at: string) =>
       `Polyfin cerca di nuovo da solo, la prossima volta il ${at}, poi meno spesso finché la ricerca non riesce, e a ogni scansione.`,
+    searchIdentifier: (shows: boolean) =>
+      shows
+        ? 'Per associare una serie senza ricerca, aggiungi il suo identificativo IMDb al nome della sua cartella, come in «Serie (2010) [imdbid-tt0123456]», poi esegui la scansione.'
+        : 'Per associare un film senza ricerca, aggiungi il suo identificativo IMDb al nome del suo file, o della sua cartella, come in «Film (2010) [imdbid-tt0123456]», poi esegui la scansione.',
     searchHelp:
       'L’associazione richiede un add-on del server che descriva questi titoli e abbia un catalogo di ricerca. Se le sue ricerche continuano a non riuscire, controllalo in Sistema › Stato di salute, oppure associa i file a mano qui sotto.',
     read: (title: string) => `Letto come «${title}»`,

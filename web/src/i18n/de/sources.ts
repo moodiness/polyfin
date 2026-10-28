@@ -485,6 +485,10 @@ const sources: typeof en = {
         : `Die Titel von ${figure} Dateien konnten nicht gesucht werden`,
     searchRetry: (at: string) =>
       `Polyfin sucht von selbst erneut, als Nächstes am ${at}, dann seltener, solange die Suche fehlschlägt, und bei jedem Scan.`,
+    searchIdentifier: (shows: boolean) =>
+      shows
+        ? 'Um eine Serie ohne Suche zuzuordnen, ergänze ihre IMDb-Kennung im Namen ihres Ordners, etwa „Serie (2010) [imdbid-tt0123456]“, und scanne dann.'
+        : 'Um einen Film ohne Suche zuzuordnen, ergänze seine IMDb-Kennung im Namen seiner Datei oder seines eigenen Ordners, etwa „Film (2010) [imdbid-tt0123456]“, und scanne dann.',
     searchHelp:
       'Die Zuordnung braucht ein Server-Add-on, das diese Titel beschreibt und einen Suchkatalog hat. Schlagen seine Suchen weiter fehl, prüfe es unter System › Systemzustand oder ordne die Dateien unten von Hand zu.',
     read: (title: string) => `Gelesen als „${title}“`,

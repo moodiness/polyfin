@@ -466,6 +466,10 @@ const sources = {
         : `The titles of ${figure} files could not be searched`,
     searchRetry: (at: string) =>
       `Polyfin searches again on its own, next on ${at}, then less often while the search fails, and at each scan.`,
+    searchIdentifier: (shows: boolean): string =>
+      shows
+        ? 'To match a show without a search, add its IMDb identifier to its folder’s name, as in “Show (2010) [imdbid-tt0123456]”, then scan.'
+        : 'To match a movie without a search, add its IMDb identifier to its file’s name, or its own folder’s, as in “Movie (2010) [imdbid-tt0123456]”, then scan.',
     searchHelp:
       'Matching needs a server addon that describes these titles and has a search catalog. If its searches keep failing, check it under System › Health, or link the files by hand below.',
     read: (title: string) => `Read as “${title}”`,

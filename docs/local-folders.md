@@ -452,7 +452,7 @@ One addon failing fails no other: a title another addon finds is matched. A file
 
 A search an addon failed, answering with a server error (HTTP 5xx), is tried again within the scan, after 1 then 3 seconds, as such failures are often brief; one it refused otherwise (another HTTP error, "not found" included) is not. An addon that asks to slow down is waited out within the scan: as long as its `Retry-After` asks, up to a minute, else 1, 2 then 4 seconds, and the searches are tried again, three times at most. A folder whose files are left unmatched by failed searches is scanned again 5 minutes after the scan, then 10, 20, 40 minutes and so on while its searches fail, at most 6 hours apart, and never sooner than an addon's `Retry-After` asks; the scans due are looked for every 10 minutes. Once the searches go through, the files are matched without anyone acting, and the folder is scanned on its schedule again. **Scan now** searches them again at once.
 
-When searches keep failing, check the addon under **System › Health › Addons**, and that the computer running Polyfin reaches it; meanwhile, files can be linked by hand or given an NFO file.
+When searches keep failing, check the addon under **System › Health › Addons**, and that the computer running Polyfin reaches it; meanwhile, files can be linked by hand or given an NFO file, or their title's IMDb identifier can be added to their names, a show's folder or a movie's file, such as `Victorious (2010) [imdbid-tt1604099]`: an identifier in a name is matched without any search (see [Matching](#matching)). The folder's page says so beside the failed searches. Adding a second metadata addon with a search catalog under **Content › Sources** helps too: a title either finds is matched.
 
 ## Plain videos
 

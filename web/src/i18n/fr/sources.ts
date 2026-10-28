@@ -490,6 +490,10 @@ const sources: typeof en = {
         : `Les titres de ${figure} fichiers n’ont pas pu être recherchés`,
     searchRetry: (at: string) =>
       `Polyfin recherche de nouveau de lui-même, la prochaine fois le ${at}, puis moins souvent tant que la recherche échoue, et à chaque analyse.`,
+    searchIdentifier: (shows: boolean) =>
+      shows
+        ? 'Pour associer une série sans recherche, ajoutez son identifiant IMDb au nom de son dossier, comme dans « Série (2010) [imdbid-tt0123456] », puis analysez le dossier.'
+        : 'Pour associer un film sans recherche, ajoutez son identifiant IMDb au nom de son fichier, ou de son propre dossier, comme dans « Film (2010) [imdbid-tt0123456] », puis analysez le dossier.',
     searchHelp:
       'L’association demande un addon du serveur qui décrit ces titres et a un catalogue de recherche. Si ses recherches échouent toujours, vérifiez-le dans Système › Santé, ou associez les fichiers à la main ci-dessous.',
     read: (title: string) => `Lu comme « ${title} »`,

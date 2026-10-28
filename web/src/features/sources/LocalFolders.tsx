@@ -949,7 +949,7 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
           )}
           {folder.searchRetryAt !== null &&
             `${text.searchRetry(dateTime(folder.searchRetryAt, language))} `}
-          {text.searchHelp}
+          {text.searchHelp} {text.searchIdentifier(folder.kind === 'shows')}
         </Notice>
       )}
       {folder.noSearch > 0 && (
