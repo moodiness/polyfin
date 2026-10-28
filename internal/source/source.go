@@ -326,7 +326,7 @@ func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 		ctx, cancel := context.WithCancel(context.Background())
 		s = &Source{cache: c, id: id, dir: filepath.Join(c.dir, id.String()+".blocks"), ctx: ctx, cancel: cancel,
 			size: -1, wanted: map[int64]*want{}, wake: make(chan struct{}, 1), progress: make(chan struct{}),
-			failed: make(chan struct{})}
+			failed: make(chan struct{}), learned: make(chan struct{})}
 		c.sources[id] = s
 	}
 	s.mu.Lock()
@@ -527,8 +527,9 @@ type Source struct {
 	size        int64
 	contentType string
 	// status is the status of the first answer read as the source's
-	// content (200 or 206), 0 before.
+	// content (200 or 206), 0 before; learned is closed once it is set.
 	status  int
+	learned chan struct{}
 	present []uint64
 	// sizeChecked tells that the first answer was checked against the
 	// size the addon announced, and sizeNoted that it counted in the
@@ -1041,10 +1042,18 @@ func (s *Source) learn(status int, total int64, contentType string) error {
 	if s.contentType == "" {
 		s.contentType = contentType
 	}
-	if s.status == 0 {
+	if s.status == 0 && status != 0 {
 		s.status = status
+		close(s.learned)
 	}
 	return nil
+}
+
+// Learned returns a channel closed once an answer read as the source's
+// content told what it is: its size, or that it tells none (see
+// KnownSize), before any of its bytes are read.
+func (s *Source) Learned() <-chan struct{} {
+	return s.learned
 }
 
 // checkAnnounced compares the first size the source tells with the one
