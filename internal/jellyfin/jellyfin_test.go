@@ -65,18 +65,25 @@ type testServer struct {
 }
 
 // warnings keeps the messages of the records at WARN or above that a
-// logger handles, discarding the others.
+// logger handles, with their attributes, discarding the others.
 type warnings struct {
 	mu       sync.Mutex
 	messages []string
+	attrs    []map[string]string
 }
 
 func (w *warnings) Enabled(_ context.Context, level slog.Level) bool { return level >= slog.LevelWarn }
 
 func (w *warnings) Handle(_ context.Context, record slog.Record) error {
+	attrs := map[string]string{}
+	record.Attrs(func(a slog.Attr) bool {
+		attrs[a.Key] = a.Value.String()
+		return true
+	})
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.messages = append(w.messages, record.Message)
+	w.attrs = append(w.attrs, attrs)
 	return nil
 }
 
@@ -89,6 +96,19 @@ func (w *warnings) logged() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return slices.Clone(w.messages)
+}
+
+// attrsOf returns the attributes of each record logged so far with message.
+func (w *warnings) attrsOf(message string) []map[string]string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var found []map[string]string
+	for i, m := range w.messages {
+		if m == message {
+			found = append(found, w.attrs[i])
+		}
+	}
+	return found
 }
 
 func newTestServer(t *testing.T, failures int) testServer {

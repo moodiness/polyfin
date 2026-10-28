@@ -22,6 +22,7 @@ import (
 // fakeEclipse is an Eclipse addon serving two albums, one explicit track,
 // an artist page, a search, and streams of a generated FLAC tone that
 // expire once expiring is set, or fail with HTTP 502 once failing is set.
+// Once refusing is set, it answers everything but its manifest HTTP 403.
 // content, set before it is installed, is its manifest's contentType: an
 // audiobook addon's streams come with chapters; rowless, set before it is
 // installed, leaves its manifest without catalog rows. queries records the
@@ -35,6 +36,7 @@ type fakeEclipse struct {
 	catalogs atomic.Int32
 	expiring atomic.Bool
 	failing  atomic.Bool
+	refusing atomic.Bool
 	mu       sync.Mutex
 	queries  []string
 }
@@ -67,6 +69,10 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 		path := strings.TrimPrefix(r.URL.Path, "/token")
 		if strings.HasPrefix(path, "/catalog") {
 			f.catalogs.Add(1)
+		}
+		if f.refusing.Load() && path != "/manifest.json" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
 		}
 		switch {
 		case path == "/manifest.json":

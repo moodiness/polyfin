@@ -147,8 +147,15 @@ func refreshing(ctx context.Context) bool {
 	return asked
 }
 
-// page returns the catalog page starting at skip: the one kept in memory,
-// else the one kept in the database, either asked for again in the
+// page returns the catalog page starting at skip (see readPage). A failure
+// names the addon and the catalog (see AddonError).
+func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
+	metas, err := s.readPage(ctx, src, skip)
+	return metas, failedAt(src.addon, src.catalog.ID, err)
+}
+
+// readPage returns the catalog page starting at skip: the one kept in
+// memory, else the one kept in the database, either asked for again in the
 // background once past its refresh age, else the addon's answer. A read
 // that asks no addon (see keptOnly) gets errNotKept instead of the addon's
 // answer; a read that refreshes (see withRefreshing) waits for the addon's
@@ -156,7 +163,7 @@ func refreshing(ctx context.Context) bool {
 // addon fails. A search's page is kept apart, for searchTTL, and never
 // refreshed: every term is a new page, seldom read again. An empty one is
 // kept emptySearchLife only.
-func (s *Service) page(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
+func (s *Service) readPage(ctx context.Context, src source, skip int) ([]stremio.Meta, error) {
 	// An IPTV source's live TV catalog is one page, which it remembers
 	// itself until its list changes; its movie and series catalogs read
 	// pages from its stored lists.

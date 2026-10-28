@@ -50,6 +50,32 @@ var ErrNotFound = errors.New("item not found")
 // ErrSeasonNotFound reports a season that is not one of the series' seasons.
 var ErrSeasonNotFound = errors.New("season not found")
 
+// AddonError reports a failure of the addon, IPTV source or local folder a
+// library asked: its name, the catalog asked, empty for another resource,
+// and the error, whose text it keeps. Browsing logs who failed with it.
+type AddonError struct {
+	Addon   string
+	Catalog string
+	Err     error
+}
+
+func (e *AddonError) Error() string { return e.Err.Error() }
+
+func (e *AddonError) Unwrap() error { return e.Err }
+
+// failedAt names the addon of entry, and catalog, in err, a failure of a
+// request to it (see AddonError): nil stays nil, and an error naming an
+// addon already stays as it is.
+func failedAt(entry installed, catalog string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, named := errors.AsType[*AddonError](err); named {
+		return err
+	}
+	return &AddonError{Addon: entry.addon.Manifest.Name, Catalog: catalog, Err: err}
+}
+
 // Service browses the libraries of users.
 type Service struct {
 	db       *pgxpool.Pool
@@ -1674,7 +1700,7 @@ func (s *Service) fetchMeta(ctx context.Context, addon installed, metaType, id s
 	case addon.addon.Stremio():
 		meta, err := s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
 		withoutGenerated(&meta)
-		return meta, err
+		return meta, failedAt(addon, "", err)
 	case addon.addon.Local():
 		if s.local == nil {
 			return stremio.Meta{}, stremio.ErrNotFound

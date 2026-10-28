@@ -527,7 +527,7 @@ func (s *Service) musicCatalogPage(ctx context.Context, entry installed, catalog
 	}
 	return remember(ctx, s, s.musicCache.pages, entry.musicKey("catalog", catalog.ID, skip), func(ctx context.Context) (musicPage, error) {
 		items, length, err := s.music.Catalog(ctx, entry.eclipseAddon(), catalog, skip)
-		return musicPage{items: items, length: length}, err
+		return musicPage{items: items, length: length}, failedAt(entry, catalog.ID, err)
 	})
 }
 
@@ -536,7 +536,8 @@ func (s *Service) albumPage(ctx context.Context, entry installed, id string) (ec
 		return s.local.MusicAlbum(ctx, entry.addon.ID, id)
 	}
 	return remember(ctx, s, s.musicCache.albums, entry.musicKey("album", id, 0), func(ctx context.Context) (eclipse.Album, error) {
-		return s.music.Album(ctx, entry.eclipseAddon(), id)
+		album, err := s.music.Album(ctx, entry.eclipseAddon(), id)
+		return album, failedAt(entry, "", err)
 	})
 }
 
@@ -545,7 +546,8 @@ func (s *Service) artistPage(ctx context.Context, entry installed, id string) (e
 		return s.local.MusicArtist(ctx, entry.addon.ID, id)
 	}
 	return remember(ctx, s, s.musicCache.artists, entry.musicKey("artist", id, 0), func(ctx context.Context) (eclipse.Artist, error) {
-		return s.music.Artist(ctx, entry.eclipseAddon(), id)
+		artist, err := s.music.Artist(ctx, entry.eclipseAddon(), id)
+		return artist, failedAt(entry, "", err)
 	})
 }
 
@@ -554,7 +556,8 @@ func (s *Service) playlistPage(ctx context.Context, entry installed, id string) 
 		return s.local.MusicPlaylist(ctx, entry.addon.ID, id)
 	}
 	return remember(ctx, s, s.musicCache.playlists, entry.musicKey("playlist", id, 0), func(ctx context.Context) (eclipse.Playlist, error) {
-		return s.music.Playlist(ctx, entry.eclipseAddon(), id)
+		playlist, err := s.music.Playlist(ctx, entry.eclipseAddon(), id)
+		return playlist, failedAt(entry, "", err)
 	})
 }
 
@@ -563,7 +566,8 @@ func (s *Service) musicSearch(ctx context.Context, entry installed, term string)
 		return s.local.MusicSearch(ctx, entry.addon.ID, term)
 	}
 	return remember(ctx, s, s.musicCache.searches, entry.musicKey("search", musicName(term), 0), func(ctx context.Context) (eclipse.Results, error) {
-		return s.music.Search(ctx, entry.eclipseAddon(), term)
+		results, err := s.music.Search(ctx, entry.eclipseAddon(), term)
+		return results, failedAt(entry, "", err)
 	})
 }
 
