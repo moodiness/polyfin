@@ -220,7 +220,7 @@ const common: typeof en = {
     outside_allowed_hours:
       'Questo account non può essere usato in questo momento. Riprova durante gli orari consentiti.',
     invalid_guide_url:
-      'Inserisci l’indirizzo di una guida che inizi con https:// o http://, di massimo 4.096 caratteri.',
+      'Inserisci l’indirizzo di una guida che inizi con https:// o http://, di massimo 4.096 caratteri, o il percorso assoluto di un file del server.',
     invalid_app:
       'Il nome dell’applicazione deve contenere da 1 a 64 caratteri, senza caratteri speciali.',
     invalid_trickplay_interval:
@@ -387,7 +387,12 @@ const common: typeof en = {
       'Impossibile decifrare l’indirizzo o il token di questa destinazione con POLYFIN_SECRET_KEY. Inseriscilo di nuovo.',
     invalid_source_name: 'I nomi delle origini devono avere da 1 a 64 caratteri.',
     invalid_source_address:
-      'Inserisci un indirizzo che inizi con https:// o http:// e, per un account Xtream Codes, un nome utente e una password.',
+      'Inserisci un indirizzo che inizi con https:// o http://, o per una scaletta il percorso assoluto di un file del server, e, per un account Xtream Codes, un nome utente e una password.',
+    file_missing:
+      'Non c’è nessun file in questo percorso del server. Con Docker, indica il suo percorso nel container, in un volume montato.',
+    file_unreadable:
+      'Polyfin non può leggere questo file: verifica che sia un file e non una cartella, e che Polyfin possa leggerlo.',
+    local_file_refused: 'Solo gli amministratori possono usare un file del server.',
     invalid_user_agent:
       'Uno user agent ha al massimo 512 caratteri, senza a capo né caratteri di controllo.',
     tuner_added: 'Questo tuner è già un’origine del server.',

@@ -232,7 +232,7 @@ const common: typeof en = {
     outside_allowed_hours:
       'Dieses Konto kann zu dieser Zeit nicht verwendet werden. Versuche es während der erlaubten Zeiten erneut.',
     invalid_guide_url:
-      'Gib eine Adresse für das Fernsehprogramm ein, die mit https:// oder http:// beginnt und höchstens 4.096 Zeichen lang ist.',
+      'Gib eine Adresse für das Fernsehprogramm ein, die mit https:// oder http:// beginnt und höchstens 4.096 Zeichen lang ist, oder den absoluten Pfad einer Datei auf dem Server.',
     invalid_app: 'Der App-Name muss 1 bis 64 Zeichen lang sein, ohne Sonderzeichen.',
     invalid_trickplay_interval:
       'Die Zeit zwischen zwei Vorschaubildern muss eine ganze Zahl von 5 bis 60 Sekunden sein.',
@@ -401,7 +401,12 @@ const common: typeof en = {
       'Adresse oder Token dieses Ziels kann mit POLYFIN_SECRET_KEY nicht entschlüsselt werden. Gib es erneut ein.',
     invalid_source_name: 'Quellennamen müssen 1 bis 64 Zeichen lang sein.',
     invalid_source_address:
-      'Gib eine Adresse ein, die mit https:// oder http:// beginnt, und für ein Xtream-Codes-Konto einen Benutzernamen und ein Passwort.',
+      'Gib eine Adresse ein, die mit https:// oder http:// beginnt, oder für eine Wiedergabeliste den absoluten Pfad einer Datei auf dem Server, und für ein Xtream-Codes-Konto einen Benutzernamen und ein Passwort.',
+    file_missing:
+      'Unter diesem Pfad gibt es auf dem Server keine Datei. Gib mit Docker ihren Pfad im Container an, in einem eingebundenen Volume.',
+    file_unreadable:
+      'Polyfin kann diese Datei nicht lesen: Prüfe, dass es eine Datei und kein Ordner ist und dass Polyfin sie lesen darf.',
+    local_file_refused: 'Nur Administratoren können eine Datei des Servers verwenden.',
     invalid_user_agent:
       'Ein User-Agent hat höchstens 512 Zeichen, ohne Zeilenumbrüche oder Steuerzeichen.',
     tuner_added: 'Dieser Tuner ist bereits eine Quelle des Servers.',

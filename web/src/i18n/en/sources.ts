@@ -155,6 +155,9 @@ const sources = {
     playlistUrl: 'Playlist address',
     playlistUrlHint:
       'The M3U address your provider gives. It may contain your login: it is never shown in full.',
+    playlistUrlOrFile: 'Playlist address or file',
+    playlistUrlOrFileHint:
+      'The M3U address your provider gives, or the path of a file on the server, such as /iptv/custom.m3u, or C:\\IPTV\\custom.m3u on Windows. With Docker, the file must be in a mounted volume, by its path in the container. An address may contain your login: it is never shown in full.',
     server: 'Server address',
     serverHint: 'For example https://server:8080, as your provider gives it.',
     username: 'Username',
@@ -170,6 +173,9 @@ const sources = {
     guideUrl: 'Programme guide address (XMLTV, optional)',
     guideUrlHint:
       'Plain or compressed XMLTV file. You can also add or change it later under Libraries.',
+    guideUrlOrFile: 'Programme guide address or file (XMLTV, optional)',
+    guideUrlOrFileHint:
+      'Plain or compressed XMLTV file, by its address or its path on the server. You can also add or change it later under Libraries.',
     next: 'Next: choose what to import',
     back: 'Back to the account',
     import: 'Import',

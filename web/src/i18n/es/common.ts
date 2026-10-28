@@ -226,7 +226,7 @@ const common: typeof en = {
     outside_allowed_hours:
       'Esta cuenta no se puede usar en este momento. Vuelva a intentarlo durante su horario permitido.',
     invalid_guide_url:
-      'Introduzca una dirección de guía que empiece por https:// o http://, de 4096 caracteres como máximo.',
+      'Introduzca una dirección de guía que empiece por https:// o http://, de 4096 caracteres como máximo, o la ruta absoluta de un archivo del servidor.',
     invalid_app:
       'El nombre de la aplicación debe tener entre 1 y 64 caracteres, sin caracteres especiales.',
     invalid_trickplay_interval:
@@ -395,7 +395,12 @@ const common: typeof en = {
       'La dirección o el token de este destino no se pueden descifrar con POLYFIN_SECRET_KEY. Introdúzcalo de nuevo.',
     invalid_source_name: 'El nombre de una fuente debe tener de 1 a 64 caracteres.',
     invalid_source_address:
-      'Introduzca una dirección que empiece por https:// o http://, y, para una cuenta de Xtream Codes, un nombre de usuario y una contraseña.',
+      'Introduzca una dirección que empiece por https:// o http://, o, para una lista de reproducción, la ruta absoluta de un archivo del servidor, y, para una cuenta de Xtream Codes, un nombre de usuario y una contraseña.',
+    file_missing:
+      'No hay ningún archivo en esta ruta del servidor. Con Docker, indique su ruta dentro del contenedor, en un volumen montado.',
+    file_unreadable:
+      'Polyfin no puede leer este archivo: compruebe que es un archivo y no una carpeta, y que Polyfin puede leerlo.',
+    local_file_refused: 'Solo los administradores pueden usar un archivo del servidor.',
     invalid_user_agent:
       'Un agente de usuario tiene como máximo 512 caracteres, sin saltos de línea ni caracteres de control.',
     tuner_added: 'Este sintonizador ya es una fuente del servidor.',

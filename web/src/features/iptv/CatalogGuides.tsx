@@ -19,6 +19,7 @@ import {
   type CatalogTarget,
   type Scope,
 } from '@/api'
+import { useSessionUser } from '@/app/session'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -136,6 +137,8 @@ function GuideList({
   const { t } = useI18n()
   const toast = useToast()
   const text = t.lineup.guides
+  // An administrator may give a file of the server instead of an address.
+  const files = useSessionUser().isAdministrator
   const initial: Entry[] = guides.guides.map((guide) => ({ kind: 'kept', guide }))
   const [entries, setEntries] = useState<Entry[]>(initial)
   const [url, setUrl] = useState('')
@@ -282,12 +285,12 @@ function GuideList({
         )}
         <form onSubmit={add} noValidate className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <Field
-            label={text.address}
-            help={full ? text.tooMany : text.addressHint}
+            label={files ? text.addressOrFile : text.address}
+            help={full ? text.tooMany : files ? text.addressOrFileHint : text.addressHint}
             className="flex-1"
           >
             <TextInput
-              type="url"
+              type={files ? 'text' : 'url'}
               inputMode="url"
               mono
               value={url}

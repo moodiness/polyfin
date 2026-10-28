@@ -209,7 +209,7 @@ const common = {
     outside_allowed_hours:
       'This account cannot be used at this time. Try again during its allowed hours.',
     invalid_guide_url:
-      'Enter a guide address starting with https:// or http://, of at most 4,096 characters.',
+      'Enter a guide address starting with https:// or http://, of at most 4,096 characters, or the absolute path of a file on the server.',
     invalid_app: 'The app name must be 1 to 64 characters long, without special characters.',
     invalid_trickplay_interval:
       'The time between two thumbnails must be a whole number of seconds from 5 to 60.',
@@ -367,7 +367,12 @@ const common = {
       'This target’s address or token cannot be decrypted with POLYFIN_SECRET_KEY. Enter it again.',
     invalid_source_name: 'Source names must be 1 to 64 characters long.',
     invalid_source_address:
-      'Enter an address starting with https:// or http://, and for an Xtream Codes account a username and a password.',
+      'Enter an address starting with https:// or http://, or for a playlist the absolute path of a file on the server, and for an Xtream Codes account a username and a password.',
+    file_missing:
+      'There is no file at this path on the server. With Docker, give its path in the container, in a mounted volume.',
+    file_unreadable:
+      'Polyfin cannot read this file: check that it is a file, not a folder, and that Polyfin may read it.',
+    local_file_refused: 'Only administrators can use a file of the server.',
     invalid_user_agent:
       'A user agent is at most 512 characters, without line breaks or control characters.',
     tuner_added: 'This tuner is already a source of the server.',

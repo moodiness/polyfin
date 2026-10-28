@@ -24,6 +24,10 @@ const iptv = {
         'The last download failed: the server did not return a channel list, or refused the login. The previous channels are kept.',
       rate_limited:
         'The last download failed: the server asked Polyfin to slow down. It is tried again in a few minutes; the previous channels are kept.',
+      file_unreadable:
+        'The last download failed: the file is gone, or Polyfin can no longer read it. The previous channels are kept.',
+      file_refused:
+        'The last download failed: only administrators can use a file of the server. The previous channels are kept.',
     } as Record<string, string>,
   },
   lineup: {
@@ -62,6 +66,8 @@ const iptv = {
         'The last fetch failed: the addon did not list this catalog’s channels. Try again later.',
       rate_limited:
         'The last fetch failed: the server asked Polyfin to slow down. It is tried again in a few minutes.',
+      file_unreadable: 'The last fetch failed: the file is gone, or Polyfin can no longer read it.',
+      file_refused: 'The last fetch failed: only administrators can use a file of the server.',
     } as Record<string, string>,
     sectionsLabel: 'Sections',
     sections: {
@@ -370,6 +376,9 @@ const iptv = {
       none: 'No guide yet.',
       address: 'Guide address',
       addressHint: 'Plain or compressed (.gz) XMLTV file. At most 10 guides.',
+      addressOrFile: 'Guide address or file',
+      addressOrFileHint:
+        'Plain or compressed (.gz) XMLTV file, by its address or its path on the server. At most 10 guides.',
       tooMany: 'This catalog has 10 guides: remove one to add another.',
       add: 'Add',
       remove: 'Remove',

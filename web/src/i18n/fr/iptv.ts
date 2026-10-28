@@ -26,6 +26,10 @@ const iptv: typeof en = {
         'Le dernier téléchargement a échoué : le serveur n’a pas renvoyé de liste de chaînes, ou a refusé les identifiants. Les chaînes précédentes sont gardées.',
       rate_limited:
         'Le dernier téléchargement a échoué : le serveur a demandé à Polyfin de ralentir. Il est réessayé dans quelques minutes ; les chaînes précédentes sont gardées.',
+      file_unreadable:
+        'Le dernier téléchargement a échoué : le fichier a disparu, ou Polyfin ne peut plus le lire. Les chaînes précédentes sont gardées.',
+      file_refused:
+        'Le dernier téléchargement a échoué : seuls les administrateurs peuvent utiliser un fichier du serveur. Les chaînes précédentes sont gardées.',
     },
   },
   lineup: {
@@ -64,6 +68,10 @@ const iptv: typeof en = {
         'La dernière récupération a échoué : l’addon n’a pas donné les chaînes de ce catalogue. Réessayez plus tard.',
       rate_limited:
         'La dernière récupération a échoué : le serveur a demandé à Polyfin de ralentir. Elle est réessayée dans quelques minutes.',
+      file_unreadable:
+        'La dernière récupération a échoué : le fichier a disparu, ou Polyfin ne peut plus le lire.',
+      file_refused:
+        'La dernière récupération a échoué : seuls les administrateurs peuvent utiliser un fichier du serveur.',
     } as Record<string, string>,
     sectionsLabel: 'Sections',
     sections: {
@@ -386,6 +394,9 @@ const iptv: typeof en = {
       none: 'Pas encore de guide.',
       address: 'Adresse du guide',
       addressHint: 'Fichier XMLTV, compressé (.gz) ou non. 10 guides au plus.',
+      addressOrFile: 'Adresse ou fichier du guide',
+      addressOrFileHint:
+        'Fichier XMLTV, compressé (.gz) ou non, par son adresse ou son chemin sur le serveur. 10 guides au plus.',
       tooMany: 'Ce catalogue a 10 guides : retirez-en un pour en ajouter un autre.',
       add: 'Ajouter',
       remove: 'Retirer',

@@ -15,6 +15,7 @@ import {
   type Scope,
 } from '@/api'
 import { optionsValid, SourceOptions } from '@/features/iptv/ImportOptions'
+import { useSessionUser } from '@/app/session'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
@@ -49,12 +50,17 @@ function AccountFields({
 }) {
   const { t } = useI18n()
   const text = t.sourceAdd
+  // An administrator may give a file of the server instead of an address.
+  const files = useSessionUser().isAdministrator
   return (
     <>
       {kind === 'm3u' ? (
-        <Field label={text.playlistUrl} help={editing ? text.keepHint : text.playlistUrlHint}>
+        <Field
+          label={files ? text.playlistUrlOrFile : text.playlistUrl}
+          help={editing ? text.keepHint : files ? text.playlistUrlOrFileHint : text.playlistUrlHint}
+        >
           <TextInput
-            type="url"
+            type={files ? 'text' : 'url'}
             inputMode="url"
             value={values.url}
             onValue={(url) => onChange({ url })}
@@ -133,6 +139,7 @@ export function addedParts(t: Messages, language: string, source: IptvSource): s
 export function IptvAddFlow({ scope, onAdded }: { scope: Scope; onAdded: (added: Addon) => void }) {
   const { t } = useI18n()
   const text = t.sourceAdd
+  const files = useSessionUser().isAdministrator
   const [step, setStep] = useState<'account' | 'categories'>('account')
   const [name, setName] = useState('')
   const [kind, setKind] = useState<Kind>('m3u')
@@ -245,9 +252,12 @@ export function IptvAddFlow({ scope, onAdded }: { scope: Scope; onAdded: (added:
             />
           )}
           {(kind === 'm3u' || !providerGuide) && (
-            <Field label={text.guideUrl} help={text.guideUrlHint}>
+            <Field
+              label={files ? text.guideUrlOrFile : text.guideUrl}
+              help={files ? text.guideUrlOrFileHint : text.guideUrlHint}
+            >
               <TextInput
-                type="url"
+                type={files ? 'text' : 'url'}
                 inputMode="url"
                 value={guideUrl}
                 onValue={(value) => {

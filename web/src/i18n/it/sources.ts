@@ -159,6 +159,9 @@ const sources: typeof en = {
     playlistUrl: 'Indirizzo della scaletta',
     playlistUrlHint:
       'L’indirizzo M3U fornito dal tuo provider. Può contenere i tuoi dati di accesso: non viene mai mostrato per intero.',
+    playlistUrlOrFile: 'Indirizzo o file della scaletta',
+    playlistUrlOrFileHint:
+      'L’indirizzo M3U fornito dal tuo provider, o il percorso di un file del server, come /iptv/custom.m3u, o C:\\IPTV\\custom.m3u su Windows. Con Docker, il file deve trovarsi in un volume montato, con il suo percorso nel container. Un indirizzo può contenere i tuoi dati di accesso: non viene mai mostrato per intero.',
     server: 'Indirizzo del server',
     serverHint: 'Ad esempio https://server:8080, come te lo fornisce il tuo provider.',
     username: 'Nome utente',
@@ -174,6 +177,9 @@ const sources: typeof en = {
     guideUrl: 'Indirizzo della guida dei programmi (XMLTV, facoltativo)',
     guideUrlHint:
       'File XMLTV semplice o compresso. Puoi anche aggiungerlo o cambiarlo in seguito in Librerie.',
+    guideUrlOrFile: 'Indirizzo o file della guida dei programmi (XMLTV, facoltativo)',
+    guideUrlOrFileHint:
+      'File XMLTV semplice o compresso, dal suo indirizzo o dal suo percorso sul server. Puoi anche aggiungerlo o cambiarlo in seguito in Librerie.',
     next: 'Avanti: scegli cosa importare',
     back: 'Torna all’account',
     import: 'Importa',

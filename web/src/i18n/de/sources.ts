@@ -159,6 +159,9 @@ const sources: typeof en = {
     playlistUrl: 'Adresse der Wiedergabeliste',
     playlistUrlHint:
       'Die M3U-Adresse, die dein Anbieter dir gibt. Sie kann deine Zugangsdaten enthalten: Sie wird nie vollständig angezeigt.',
+    playlistUrlOrFile: 'Adresse oder Datei der Wiedergabeliste',
+    playlistUrlOrFileHint:
+      'Die M3U-Adresse, die dein Anbieter dir gibt, oder der Pfad einer Datei auf dem Server, etwa /iptv/custom.m3u oder unter Windows C:\\IPTV\\custom.m3u. Mit Docker muss die Datei in einem eingebundenen Volume liegen, mit ihrem Pfad im Container. Eine Adresse kann deine Zugangsdaten enthalten: Sie wird nie vollständig angezeigt.',
     server: 'Serveradresse',
     serverHint: 'Zum Beispiel https://server:8080, so wie dein Anbieter sie angibt.',
     username: 'Benutzername',
@@ -174,6 +177,9 @@ const sources: typeof en = {
     guideUrl: 'Adresse des Fernsehprogramms (XMLTV, optional)',
     guideUrlHint:
       'Unkomprimierte oder komprimierte XMLTV-Datei. Du kannst sie auch später unter Bibliotheken hinzufügen oder ändern.',
+    guideUrlOrFile: 'Adresse oder Datei des Fernsehprogramms (XMLTV, optional)',
+    guideUrlOrFileHint:
+      'Unkomprimierte oder komprimierte XMLTV-Datei, über ihre Adresse oder ihren Pfad auf dem Server. Du kannst sie auch später unter Bibliotheken hinzufügen oder ändern.',
     next: 'Weiter: Auswählen, was importiert wird',
     back: 'Zurück zum Konto',
     import: 'Importieren',

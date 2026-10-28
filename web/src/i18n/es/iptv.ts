@@ -26,6 +26,10 @@ const iptv: typeof en = {
         'La última descarga ha fallado: el servidor no devolvió una lista de canales o rechazó el inicio de sesión. Se conservan los canales anteriores.',
       rate_limited:
         'La última descarga ha fallado: el servidor ha pedido a Polyfin que reduzca la frecuencia. Se volverá a intentar en unos minutos; se conservan los canales anteriores.',
+      file_unreadable:
+        'La última descarga ha fallado: el archivo ya no está, o Polyfin ya no puede leerlo. Se conservan los canales anteriores.',
+      file_refused:
+        'La última descarga ha fallado: solo los administradores pueden usar un archivo del servidor. Se conservan los canales anteriores.',
     } as Record<string, string>,
   },
   lineup: {
@@ -64,6 +68,10 @@ const iptv: typeof en = {
         'La última descarga falló: la extensión no devolvió los canales de este catálogo. Inténtelo de nuevo más tarde.',
       rate_limited:
         'La última descarga falló: el servidor pidió a Polyfin que redujera el ritmo. Se volverá a intentar en unos minutos.',
+      file_unreadable:
+        'La última descarga falló: el archivo ya no está, o Polyfin ya no puede leerlo.',
+      file_refused:
+        'La última descarga falló: solo los administradores pueden usar un archivo del servidor.',
     } as Record<string, string>,
     sectionsLabel: 'Secciones',
     sections: {
@@ -385,6 +393,9 @@ const iptv: typeof en = {
       none: 'Aún no hay ninguna guía.',
       address: 'Dirección de la guía',
       addressHint: 'Archivo XMLTV sin comprimir o comprimido (.gz). Como máximo 10 guías.',
+      addressOrFile: 'Dirección o archivo de la guía',
+      addressOrFileHint:
+        'Archivo XMLTV sin comprimir o comprimido (.gz), por su dirección o su ruta en el servidor. Como máximo 10 guías.',
       tooMany: 'Este catálogo tiene 10 guías: elimine una para añadir otra.',
       add: 'Añadir',
       remove: 'Eliminar',
