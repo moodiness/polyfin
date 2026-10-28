@@ -55,13 +55,15 @@ const maxLine = 1 << 20
 // name after its comma, its catch-up attributes over those the #EXTM3U
 // line gives every channel (see catchupOf), then the headers its stream is
 // requested with, then the stream's address. The headers are those the
-// players that read such lists take: #EXTVLCOPT lines' http-user-agent,
-// http-referrer and http-origin, #EXTHTTP lines' JSON object, and the
-// Name=value pairs after a | ending the address (see cutHeaders), a later
-// one replacing an earlier one of the same name. A byte order mark and
-// CRLF line ends are accepted. Headings that are not channels are skipped
-// (see heading), as are entries without an address. A playlist that does
-// not start with #EXTM3U, or whose lines are too long, is not M3U.
+// players that read such lists take, in this order, a later one replacing
+// an earlier one of the same name: the #EXTINF line's http-user-agent,
+// http-referrer and http-origin attributes, then #EXTVLCOPT lines' options
+// of the same names and #EXTHTTP lines' JSON object, as the lines come,
+// then the Name=value pairs after a | ending the address (see cutHeaders).
+// A byte order mark and CRLF line ends are accepted. Headings that are
+// not channels are skipped (see heading), as are entries without an
+// address. A playlist that does not start with #EXTM3U, or whose lines
+// are too long, is not M3U.
 func ParseM3U(r io.Reader, entry func(Entry) error) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64<<10), maxLine)
@@ -200,7 +202,10 @@ func streamAddress(address string) bool {
 
 // parseExtinf reads what follows "#EXTINF:": a duration, attributes, then
 // the name after the first comma outside quotes. header is the catch-up
-// the playlist's #EXTM3U line gives every channel.
+// the playlist's #EXTM3U line gives every channel. The http-user-agent,
+// http-referrer and http-origin attributes give headers, as #EXTVLCOPT
+// lines do: some lists give them on the #EXTINF line only. The lines that
+// follow replace them.
 func parseExtinf(text string, header Catchup) Entry {
 	i := 0
 	// The duration, such as -1 or 0.
@@ -214,7 +219,7 @@ func parseExtinf(text string, header Catchup) Entry {
 		name = strings.TrimSpace(text[i+1:])
 	}
 	number, _ := strconv.Atoi(attributes["tvg-chno"])
-	return Entry{
+	e := Entry{
 		Name:    cmpOr(name, attributes["tvg-name"]),
 		Number:  max(number, 0),
 		Logo:    attributes["tvg-logo"],
@@ -222,6 +227,12 @@ func parseExtinf(text string, header Catchup) Entry {
 		GuideID: attributes["tvg-id"],
 		Catchup: catchupOf(attributes, header),
 	}
+	for _, option := range slices.Sorted(maps.Keys(vlcOptions)) {
+		if value, ok := attributes[option]; ok {
+			e.setHeader(vlcOptions[option], value)
+		}
+	}
+	return e
 }
 
 // readAttributes reads attributes, key=value pairs whose value is quoted

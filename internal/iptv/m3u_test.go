@@ -105,6 +105,28 @@ func TestM3UHeaderLinesAreRead(t *testing.T) {
 	}
 }
 
+// Some lists give a channel's headers as #EXTINF attributes only; the
+// lines that follow, more explicit, replace them.
+func TestM3UHeaderAttributesAreRead(t *testing.T) {
+	t.Parallel()
+	entries, err := parse(t, "#EXTM3U\n"+
+		`#EXTINF:-1 tvg-id="" http-referrer="https://portal.example/" http-user-agent="Player/1.0 (TV)" http-origin='https://portal.example',Attributes`+"\n"+
+		"https://live.example/1.m3u8\n"+
+		`#EXTINF:-1 http-user-agent="Player/1.0" http-referrer="https://portal.example/",Replaced`+"\n"+
+		"#EXTVLCOPT:http-user-agent=Player/2.0\n"+
+		"https://live.example/2.m3u8|Referer=https://other.example/\n")
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("entries: %+v %v", entries, err)
+	}
+	if got := entries[0].Headers; got["User-Agent"] != "Player/1.0 (TV)" || got["Referer"] != "https://portal.example/" ||
+		got["Origin"] != "https://portal.example" || len(got) != 3 {
+		t.Errorf("headers of #EXTINF attributes: %v", got)
+	}
+	if got := entries[1].Headers; got["User-Agent"] != "Player/2.0" || got["Referer"] != "https://other.example/" || len(got) != 2 {
+		t.Errorf("attributes replaced by the lines after them: %v", got)
+	}
+}
+
 func TestOtherDocumentsAreNotPlaylists(t *testing.T) {
 	t.Parallel()
 	for name, document := range map[string]string{
