@@ -7,17 +7,44 @@ This page explains how to import an M3U playlist or an Xtream Codes account dire
 Use **Add a source** and its **IPTV source** tab, under **Content › Sources** for the server or **My sources** for a user's own. Sources follow the same rules as addons (see [Addons and libraries](addons-and-libraries.md)):
 
 - A user's own sources follow **Allow users' own addons** and the user's **Can add their own addons** (see [Users](users.md)).
-- Only an administrator's source may reach a local network address.
+- Only an administrator's source may reach a local network address, or read a file of the server (see [Lists and guides that are files of the server](#lists-and-guides-that-are-files-of-the-server)).
 
 Adding a source takes two steps in the admin app: the **Account**, then **What to import** and its categories.
 
 ### M3U playlists
 
-An **M3U playlist** source takes a **Name**, the **Playlist address** and, optionally, a **User agent** (see [Headers and user agent](#headers-and-user-agent)) and a **Programme guide address (XMLTV, optional)**.
+An **M3U playlist** source takes a **Name**, the **Playlist address** and, optionally, a **User agent** (see [Headers and user agent](#headers-and-user-agent)) and a **Programme guide address (XMLTV, optional)**. For an administrator, they are **Playlist address or file** and **Programme guide address or file (XMLTV, optional)**: each takes a file of the server too (see below).
 
 - A playlist's `#EXTINF` lines give each channel its `tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno` and `group-title` (quoted with double or single quotes, or not), and its name after the comma.
 - The header attributes of its `#EXTINF` lines, its `#EXTVLCOPT` and `#EXTHTTP` lines, and the `|` ending an address, give the headers its stream is requested with (see [Headers and user agent](#headers-and-user-agent)).
 - A byte order mark, CRLF line ends and `#EXTGRP` lines are accepted.
+
+### Lists and guides that are files of the server
+
+An administrator may give an M3U list, and an XMLTV guide, as a file of the server instead of an address: by its absolute path, such as `/iptv/custom.m3u`, or `C:\IPTV\custom.m3u` with Polyfin Desktop on Windows, or by a `file://` address, such as `file:///iptv/custom.m3u`.
+
+- The file is read as a list or a guide from an address is: the same parsing, categories, headers and guide matching.
+- A path where there is no file, a folder, or a file Polyfin may not read, is refused when the source or the guide is added, with why. A relative path is refused too: give the whole path.
+- The file is read again at each refresh (see [Refreshing](#refreshing)), and within 5 minutes once it changed: Polyfin looks at its modification time every 5 minutes. A file modified with an older date than its last read waits for the next refresh.
+- A file that is gone, or that Polyfin can no longer read, is told within 5 minutes on the source's row, its page and **System › Health**, its channels or programmes kept. It is read again after 5 minutes, then 15 minutes, then every hour, as a download that failed.
+- Its path is shown whole: a path holds no credential.
+- Only administrators may give one, for the server's sources or their own. A member's source, and a member's guide, are refused any file of the server, whether it exists or not, and a source whose owner is no longer an administrator stops reading its file.
+
+With Docker, Polyfin only sees the files of the volumes mounted in its container, and the path to give is the one in the container. Mount the folder that holds the file, read-only, in the `polyfin` service of `compose.yaml`:
+
+```yaml
+services:
+  polyfin:
+    volumes:
+      - ./iptv:/iptv:ro
+```
+
+Run `docker compose up -d` for the container to get it, then give `/iptv/custom.m3u`. User 65532 must be able to read the file.
+
+**Compared with Jellyfin:**
+- Jellyfin's M3U tuners and XMLTV guides take a file or an address too: anything that does not start with `http` is opened as a file ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L52-L55), [XmlTvListingsProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/XmlTvListingsProvider.cs#L118-L124)), and a missing file is refused when the tuner or the guide is saved ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L133-L138), [XmlTvListingsProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/XmlTvListingsProvider.cs#L342-L346)).
+- Jellyfin also takes a path relative to its working folder; Polyfin takes absolute paths only, whose meaning does not depend on how it was started.
+- Jellyfin reads a guide file again once its copy is an hour old ([XmlTvListingsProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/XmlTvListingsProvider.cs#L30)); Polyfin reads a list or a guide file again once it changed, and at each refresh.
 
 ### Xtream Codes accounts
 
@@ -335,6 +362,7 @@ The list is downloaded:
 
 - when the source is added;
 - again, with the guides, once **Refresh Live TV lists and guides every** hours have passed (under **Settings › Live TV**, 12 by default, 1 to 168; see [When guides are fetched](live-tv.md#when-guides-are-fetched));
-- when you press **Refresh** on the source's row, or **Download again** in its page's header.
+- when you press **Refresh** on the source's row, or **Download again** in its page's header;
+- for a list that is a file of the server, within 5 minutes once the file changed, or became unreadable (see [Lists and guides that are files of the server](#lists-and-guides-that-are-files-of-the-server)).
 
 A download that fails keeps the previous channels and tells why, and is tried again after 5 minutes, then 15 minutes, then every hour (never later than the setting). After every list refresh and change of options, channels are mapped to the guides again.

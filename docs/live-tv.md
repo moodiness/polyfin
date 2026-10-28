@@ -96,7 +96,7 @@ Some IPTV addons publish no Native EPG guide, while their provider publishes one
 - Each catalog takes up to 10 guides, in order, from its **Guides** page, saved with **Save and download**. Its row shows the first one.
 - On a Stremio addon's catalog, open the page with **Guides and mapping** on its row under **Content › Live TV**. An IPTV source has the same views on [its source page](iptv.md#the-source-page).
 - An address may hold the provider's credentials. Like manifest addresses, it is never shown in full.
-- Only administrators can use a guide address on a local network address.
+- Only administrators can use a guide address on a local network address, or a guide that is a file of the server, by its path (**Guide address or file**; see [Lists and guides that are files of the server](iptv.md#lists-and-guides-that-are-files-of-the-server)). Its path is shown whole.
 - A channel with Native EPG programmes keeps them: the XMLTV guide only fills the channels without.
 - Removing a guide removes its mappings with it.
 
@@ -110,6 +110,7 @@ Polyfin fetches a guide:
 - when its address is saved;
 - again once **Refresh Live TV lists and guides every** hours have passed (Polyfin looks for the guides due every 5 minutes);
 - after a failed download, again after 5 minutes, then 15 minutes, then every hour (never later than the setting), or later when the server asked to wait;
+- for a guide that is a file of the server, within 5 minutes once the file changed, or became unreadable;
 - when you press **Download again** on the **Guides** page, which fetches every guide of the catalog.
 
 | Setting | Where | Default | What it does |
