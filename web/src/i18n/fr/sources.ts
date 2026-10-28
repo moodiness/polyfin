@@ -141,6 +141,12 @@ const sources: typeof en = {
       `${name} a été installé. Aucun de ses catalogues n’est encore une bibliothèque : activez-les dans Contenu › Bibliothèques.`,
     installedNoLibrariesMine: (name: string) =>
       `${name} a été installé. Aucun de ses catalogues n’est encore une bibliothèque : activez-les dans Mes sources.`,
+    installedLibraryLimit: (name: string, limit: number) =>
+      `${name} a été installé. Le serveur a déjà ${limit} bibliothèques, le plus que Polyfin en crée automatiquement : aucun de ses catalogues n’en est devenu une. Activez-les dans Contenu › Bibliothèques.`,
+    installedLibraryLimitMine: (name: string, limit: number) =>
+      `${name} a été installé. Vous avez déjà ${limit} bibliothèques, le plus que Polyfin en crée automatiquement : aucun de ses catalogues n’en est devenu une. Activez-les dans Mes sources.`,
+    installedMyMusic: (name: string) =>
+      `${name} a été installé. Il n’a pas de catalogue à lui : sa bibliothèque est « Ma musique », vide au départ, qui liste ce que chaque utilisateur écoute ou met en favori. Trouvez sa musique avec la recherche des applications.`,
     iptvHelp:
       'Importez directement les chaînes d’une playlist M3U ou d’un compte Xtream Codes. Elles apparaissent dans la TV en direct comme un catalogue TV, que vous pouvez ranger dans Bibliothèques. La liste est téléchargée à nouveau selon l’intervalle choisi dans Paramètres › TV en direct.',
     steps: 'Étapes',

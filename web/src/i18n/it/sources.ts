@@ -141,6 +141,12 @@ const sources: typeof en = {
       `${name} è stato installato. Nessuno dei suoi cataloghi è ancora una libreria: attivali in Contenuti › Librerie.`,
     installedNoLibrariesMine: (name: string) =>
       `${name} è stato installato. Nessuno dei suoi cataloghi è ancora una libreria: attivali in Le mie origini.`,
+    installedLibraryLimit: (name: string, limit: number) =>
+      `${name} è stato installato. Il server ha già ${limit} librerie, il massimo che Polyfin crea automaticamente, quindi nessuno dei suoi cataloghi lo è diventato: attivali in Contenuti › Librerie.`,
+    installedLibraryLimitMine: (name: string, limit: number) =>
+      `${name} è stato installato. Hai già ${limit} librerie, il massimo che Polyfin crea automaticamente, quindi nessuno dei suoi cataloghi lo è diventato: attivali in Le mie origini.`,
+    installedMyMusic: (name: string) =>
+      `${name} è stato installato. Non ha cataloghi propri, quindi la sua libreria è La mia musica, che all’inizio è vuota: elenca ciò che ogni utente ascolta o segna come preferito. Trova la sua musica con la ricerca nelle app.`,
     iptvHelp:
       'Importa direttamente i canali di una scaletta M3U o di un account Xtream Codes. Compaiono in Diretta TV come un catalogo TV, che puoi ordinare in Librerie. L’elenco viene scaricato di nuovo all’intervallo impostato in Impostazioni › Diretta TV.',
     steps: 'Passaggi',

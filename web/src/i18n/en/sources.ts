@@ -137,6 +137,12 @@ const sources = {
       `${name} was installed. None of its catalogs is a library yet: enable them under Content › Libraries.`,
     installedNoLibrariesMine: (name: string) =>
       `${name} was installed. None of its catalogs is a library yet: enable them under My sources.`,
+    installedLibraryLimit: (name: string, limit: number) =>
+      `${name} was installed. The server already has ${limit} libraries, the most Polyfin makes automatically, so none of its catalogs became one: enable them under Content › Libraries.`,
+    installedLibraryLimitMine: (name: string, limit: number) =>
+      `${name} was installed. You already have ${limit} libraries, the most Polyfin makes automatically, so none of its catalogs became one: enable them under My sources.`,
+    installedMyMusic: (name: string) =>
+      `${name} was installed. It has no catalogs of its own, so its library is My music, which starts empty: it lists what each user plays or marks favorite. Find its music with search in the apps.`,
     iptvHelp:
       'Import the channels of an M3U playlist or an Xtream Codes account directly. They appear in Live TV like a TV catalog, which you can order under Libraries. The list is downloaded again at the interval set under Settings › Live TV.',
     steps: 'Steps',

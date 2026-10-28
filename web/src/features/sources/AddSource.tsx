@@ -9,8 +9,8 @@ import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { installAddon, queryClient, queryKeys, type Addon, type Scope } from '@/api'
 import { errorMessage } from '@/format'
-import { useI18n } from '@/i18n'
-import { Button, Modal, Field, Segmented, TextInput, useToast } from '@/ui'
+import { useI18n, type Messages } from '@/i18n'
+import { Button, Modal, Field, Segmented, TextInput, useToast, type ToastOptions } from '@/ui'
 import { addedParts, IptvAddFlow } from './IptvForms'
 import { LocalFolderAddForm } from './LocalFolders'
 import { invalidateScope } from './model'
@@ -53,8 +53,8 @@ export function AddSourceModal({
     )
   }
 
-  function done(added: Addon, message: string) {
-    toast(message)
+  function done(added: Addon, message: string, options?: ToastOptions) {
+    toast(message, options)
     onAdded(added)
     setRound((n) => n + 1)
     onClose()
@@ -92,23 +92,43 @@ export function AddSourceModal({
             key={kind}
             scope={scope}
             help={kind === 'music' ? text.musicHelp : text.stremioHelp}
-            onInstalled={(added) =>
-              done(
-                added,
-                // An addon none of whose catalogs became a library would show nothing: say where
-                // they are.
-                added.enabledLibraries === 0 && added.catalogCount > 0
-                  ? scope === 'shared'
-                    ? text.installedNoLibraries(added.name)
-                    : text.installedNoLibrariesMine(added.name)
-                  : text.installed(added.name),
-              )
-            }
+            onInstalled={(added) => {
+              const note = installedNote(text, scope, added)
+              // A note tells why the apps show nothing yet: it stays long enough to be read.
+              done(added, note ?? text.installed(added.name), note ? noteToast : undefined)
+            }}
           />
         )}
       </div>
     </Modal>
   )
+}
+
+/** A note on an added addon is information, and stays long enough to be read. */
+const noteToast: ToastOptions = { tone: 'info', duration: 12000 }
+
+/**
+ * Why adding an addon leaves the apps without anything new, null when it does not. When none of its
+ * catalogs became a library: where to enable them, and why when the libraries made automatically
+ * reached their limit. A music addon without catalogs of its own has My music as its library, which
+ * starts empty: say so, and how it fills.
+ */
+function installedNote(text: Messages['sourceAdd'], scope: Scope, added: Addon): string | null {
+  const shared = scope === 'shared'
+  if (added.enabledLibraries === 0 && added.libraryLimit) {
+    return shared
+      ? text.installedLibraryLimit(added.name, added.libraryLimit)
+      : text.installedLibraryLimitMine(added.name, added.libraryLimit)
+  }
+  if (added.enabledLibraries === 0 && added.catalogCount > 0) {
+    return shared
+      ? text.installedNoLibraries(added.name)
+      : text.installedNoLibrariesMine(added.name)
+  }
+  if (added.music?.rows === 0 && (added.enabledLibraries ?? 0) > 0) {
+    return text.installedMyMusic(added.name)
+  }
+  return null
 }
 
 function InstallForm({

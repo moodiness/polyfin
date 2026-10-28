@@ -782,6 +782,11 @@ export type Addon = {
   catalogCount: number
   /** In the answer to adding the addon only: how many of its catalogs became libraries. */
   enabledLibraries?: number
+  /**
+   * In the answer to adding the addon only: the number of libraries the server, or the user, gets
+   * automatically, when none of its catalogs became a library because there were that many already.
+   */
+  libraryLimit?: number
   refreshedAt: string
   /**
    * 'stremio' for a Stremio addon; 'eclipse' for an Eclipse music addon, which `music` describes;
@@ -1031,9 +1036,13 @@ export type AddonSetting = {
   step: number | null
 }
 
-/** An Eclipse addon's content, settings, and the values chosen (a setting left out uses its default). */
+/**
+ * An Eclipse addon's content, how many catalog rows of its own it lists (none leaves My music as its
+ * library), settings, and the values chosen (a setting left out uses its default).
+ */
 export type AddonMusic = {
   contentType: MusicContent
+  rows: number
   settings: AddonSetting[]
   values: Record<string, string>
 }

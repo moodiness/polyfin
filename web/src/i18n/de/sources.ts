@@ -141,6 +141,12 @@ const sources: typeof en = {
       `${name} wurde installiert. Noch keiner seiner Kataloge ist eine Bibliothek: Aktiviere sie unter Inhalte › Bibliotheken.`,
     installedNoLibrariesMine: (name: string) =>
       `${name} wurde installiert. Noch keiner seiner Kataloge ist eine Bibliothek: Aktiviere sie unter Meine Quellen.`,
+    installedLibraryLimit: (name: string, limit: number) =>
+      `${name} wurde installiert. Der Server hat bereits ${limit} Bibliotheken, so viele, wie Polyfin automatisch anlegt, daher wurde keiner seiner Kataloge zu einer: Aktiviere sie unter Inhalte › Bibliotheken.`,
+    installedLibraryLimitMine: (name: string, limit: number) =>
+      `${name} wurde installiert. Du hast bereits ${limit} Bibliotheken, so viele, wie Polyfin automatisch anlegt, daher wurde keiner seiner Kataloge zu einer: Aktiviere sie unter Meine Quellen.`,
+    installedMyMusic: (name: string) =>
+      `${name} wurde installiert. Es hat keine eigenen Kataloge, daher ist seine Bibliothek Meine Musik, die anfangs leer ist: Sie zeigt, was jeder Benutzer hört oder als Favorit markiert. Finde seine Musik über die Suche in den Apps.`,
     iptvHelp:
       'Importiere die Kanäle einer M3U-Wiedergabeliste oder eines Xtream-Codes-Kontos direkt. Sie erscheinen im Live-TV wie ein TV-Katalog, den du unter Bibliotheken anordnen kannst. Die Liste wird in dem Intervall neu heruntergeladen, das unter Einstellungen › Live-TV festgelegt ist.',
     steps: 'Schritte',
