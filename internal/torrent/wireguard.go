@@ -417,7 +417,11 @@ func (r *wireGuardRoute) start(ctx context.Context) (*device.Peer, error) {
 	if err != nil {
 		return nil, &RouteError{Kind: WireGuardDown, Route: r.config.Endpoint, Err: err}
 	}
-	dev := device.NewDevice(tun, conn.NewDefaultBind(), &device.Logger{Verbosef: device.DiscardLogf, Errorf: r.deviceError})
+	// The tunnel runs over Go's own UDP sockets on every system. On Windows,
+	// wireguard-go's default bind uses registered I/O, which frees its
+	// buffers and closes its socket while receives are still pending, and
+	// can corrupt the process's heap when a route is closed or changed.
+	dev := device.NewDevice(tun, conn.NewStdNetBind(), &device.Logger{Verbosef: device.DiscardLogf, Errorf: r.deviceError})
 	if err := dev.IpcSet(r.config.uapi(server)); err != nil {
 		dev.Close()
 		return nil, &RouteError{Kind: WireGuardDown, Route: r.config.Endpoint, Err: err}

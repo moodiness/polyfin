@@ -90,8 +90,9 @@ func StartWireGuardServer(tb testing.TB, names map[string]netip.Addr) *WireGuard
 	ctx, cancel := context.WithCancel(context.Background())
 	events := make(chan tun.Event, 1)
 	events <- tun.EventUp
+	// Go's own UDP sockets, as the route itself uses (see wireguard.go).
 	s.dev = device.NewDevice(&stackTUN{nic: nic, stack: ip, ctx: ctx, cancel: cancel, events: events},
-		conn.NewDefaultBind(), &device.Logger{Verbosef: device.DiscardLogf, Errorf: device.DiscardLogf})
+		conn.NewStdNetBind(), &device.Logger{Verbosef: device.DiscardLogf, Errorf: device.DiscardLogf})
 	config := "private_key=" + hex.EncodeToString(s.privateKey[:]) + "\nlisten_port=0\nreplace_peers=true\n" + s.clientPeer() +
 		"replace_allowed_ips=true\nallowed_ip=" + TunnelClient.String() + "/32\n"
 	if err := s.dev.IpcSet(config); err != nil {
