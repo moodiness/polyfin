@@ -415,6 +415,8 @@ const sources: typeof en = {
       yearNumerals: (count: string) =>
         `${count} par une recherche, d’une année d’écart et numéros lus à l’identique`,
       link: (count: string) => `${count} à la main`,
+      tmdb: (count: string) =>
+        `${count} par une recherche TMDB, les recherches des addons de métadonnées ayant échoué`,
     },
     holds: 'Contenu',
     lastScan: 'Dernière analyse',

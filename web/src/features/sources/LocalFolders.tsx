@@ -72,6 +72,7 @@ const matchMethods: MatchMethod[] = [
   'numerals',
   'yearNumerals',
   'link',
+  'tmdb',
 ]
 
 /**

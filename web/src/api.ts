@@ -816,9 +816,11 @@ export type FolderShare = '' | 'smb' | 'webdav' | 's3' | 'sftp' | 'rclone'
 /**
  * How a local file was matched to its title. A search keeps a title by a looser rule when none
  * matches exactly: 'year' for a title of the year before or after the name's, 'numerals' for one
- * named alike once numerals are read, 'yearNumerals' for both.
+ * named alike once numerals are read, 'yearNumerals' for both. 'tmdb' is a title TMDB's search
+ * found when every metadata addon's search failed.
  */
-export type MatchMethod = 'name' | 'nfo' | 'search' | 'year' | 'numerals' | 'yearNumerals' | 'link'
+export type MatchMethod =
+  'name' | 'nfo' | 'search' | 'year' | 'numerals' | 'yearNumerals' | 'link' | 'tmdb'
 
 /** The looser rule a search kept a title by, as a looser match tells it. */
 export type LooserRule = 'year' | 'numerals' | 'year_numerals'

@@ -396,6 +396,7 @@ const sources = {
       yearNumerals: (count: string) =>
         `${count} by a search, of a year one apart and with numerals read alike`,
       link: (count: string) => `${count} by hand`,
+      tmdb: (count: string) => `${count} by a TMDB search, as the metadata addons’ searches failed`,
     },
     holds: 'Holds',
     lastScan: 'Last scan',
