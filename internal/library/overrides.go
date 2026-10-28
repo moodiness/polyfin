@@ -680,8 +680,16 @@ const SearchFailed = "failed"
 
 // SearchError reports the search catalogs RemoteSearch could not read, in
 // the order of their addons; what the others found is returned with it.
+// Asked counts the catalogs asked, those read included.
 type SearchError struct {
 	Failures []SearchFailure
+	Asked    int
+}
+
+// AllFailed reports whether no catalog asked could be read: the search
+// found nothing because none answered, not because none knew the name.
+func (e *SearchError) AllFailed() bool {
+	return len(e.Failures) > 0 && len(e.Failures) >= e.Asked
 }
 
 func (e *SearchError) Error() string {
@@ -758,9 +766,9 @@ func (s *Service) RemoteSearch(ctx context.Context, kind Kind, name string, limi
 	err = s.save(ctx, records)
 	switch {
 	case len(failures) > 0 && err != nil:
-		return results, errors.Join(&SearchError{Failures: failures}, err)
+		return results, errors.Join(&SearchError{Failures: failures, Asked: len(sources)}, err)
 	case len(failures) > 0:
-		return results, &SearchError{Failures: failures}
+		return results, &SearchError{Failures: failures, Asked: len(sources)}
 	}
 	return results, err
 }
