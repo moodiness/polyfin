@@ -742,14 +742,14 @@ Polyfin keeps these fields: name, original title, sort name, overview, tagline, 
 
 **Edit images** uploads a Primary, Backdrop, Logo, Thumb or Banner image in place of the addon's, or searches two image providers for one:
 
-- **TMDB**, while the server has a **TMDB API key**: a movie's or series' posters, backdrops and logos, an episode's stills, a season's posters and a person's photos, with their language, size and votes. A title is found by the TMDB identifier its addons give, else through TMDB's lookup of its IMDb identifier; a person by name, the most popular of that very name. The same key fills people's photos and biographies (see [Photos and biographies from TMDB](#photos-and-biographies-from-tmdb)).
+- **TMDB**, while the server has a **TMDB API key**: a movie's or series' posters, backdrops and logos, an episode's stills, a season's posters and a person's photos, with their language, size and votes. A title is found by the TMDB identifier its addons give, else through TMDB's lookup of its IMDb identifier; a person by name, the most popular of that very name. The same key fills people's photos and biographies (see [Photos and biographies from TMDB](#photos-and-biographies-from-tmdb)), and matches a local folder's files when every metadata addon fails to search them (see [Through TMDB, when every addon fails](local-folders.md#through-tmdb-when-every-addon-fails)).
 - **Addons**: the poster, background, logo and wide poster each of the server's metadata addons gives in its description of a movie or series, shown under the addon's name. An addon that lists the title for a user is asked too.
 
 Posters are listed for Primary, backdrops for Backdrop and Thumb (with the addons' wide posters first), logos for Logo. Banner lists nothing. TMDB's images follow the language of the user who searches: their [metadata language](users.md#metadata-language), else the server's. Unless jellyfin-web's All languages box is ticked, they are those in that language and those without text; with it, every language, that language first, then by votes. TMDB's logos given as SVG files are left out, since they cannot be kept.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Edit images searches TMDB with it, and people's photos and biographies are looked up with it. Empty, only the addons' images are listed, people show what the addons give, and TMDB is never asked. |
+| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Edit images searches TMDB with it, people's photos and biographies are looked up with it, and local folders' files are matched through TMDB's search when every metadata addon's fails. Empty, only the addons' images are listed, people show what the addons give, such files stay unmatched, and TMDB is never asked. |
 
 - Images are relayed by Polyfin, as all artwork is: apps never reach TMDB or an addon's artwork server. Polyfin relays only the images it listed for the item, and an addon's under the same limits as the addon: a user's own addon reaches public addresses only.
 - TMDB's answers are kept for 24 hours, and at most 4 requests go to TMDB at a time, its images included.

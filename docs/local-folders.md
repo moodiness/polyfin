@@ -454,6 +454,18 @@ A search an addon failed, answering with a server error (HTTP 5xx), is tried aga
 
 When searches keep failing, check the addon under **System › Health › Addons**, and that the computer running Polyfin reaches it; meanwhile, files can be linked by hand or given an NFO file, or their title's IMDb identifier can be added to their names, a show's folder or a movie's file, such as `Victorious (2010) [imdbid-tt1604099]`: an identifier in a name is matched without any search (see [Matching](#matching)). The folder's page says so beside the failed searches. Adding a second metadata addon with a search catalog under **Content › Sources** helps too: a title either finds is matched.
 
+#### Through TMDB, when every addon fails
+
+While the server has a **TMDB API key** (see [Edit images](addons-and-libraries.md#edit-images)), a file whose search every metadata addon of the server failed is searched on TMDB instead, by the name and year its name gives:
+
+- **The same strict rule:** the file is matched only to the one movie or show of that name, of the folder's kind, and of that year when the name gives one, as a search of the addons matches first (see [Matching](#matching)). TMDB's original names count as names. No looser rule applies.
+- **Its IMDb identifier:** the file is matched to the title's IMDb identifier, from TMDB's external identifiers, as a link would match it. The addons describe the title once they answer again; meanwhile it shows TMDB's name, year and poster.
+- **Told apart:** the folder's figures count such files apart, as matched "by a TMDB search, as the metadata addons' searches failed". They no longer count among the failed searches of the folder's page and of **System › Health**.
+- **Otherwise, as before:** a name TMDB does not find, finds several titles of, or whose title has no IMDb identifier, stays unmatched as a failed search, and is searched again on the schedule above. So does every such file without a key, or when TMDB cannot be reached, which the log tells as a warning.
+- **Only failures:** a search an addon answered, even finding nothing, is never asked of TMDB, nor is one only some addons failed while another answered. Files once matched keep their title, as other matches do.
+
+**Compared with Jellyfin:** Jellyfin searches TMDB for an item's title by its name and year when it has no provider identifier ([TmdbSeriesProvider.cs, lines 198 to 214](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs#L198-L214), [TmdbMovieProvider.cs, lines 160 to 176](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs#L160-L176)), and keeps the best-scored result, its IMDb identifier from TMDB's external identifiers ([TmdbSeriesProvider.cs, lines 306 to 310](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbSeriesProvider.cs#L306-L310)). Polyfin's titles come from its metadata addons: it asks TMDB only when all of them fail, and keeps a title only when it is the only one of its name and year.
+
 ## Plain videos
 
 A movies or shows folder's library lists the files it leaves unmatched, so that a folder whose files match no title does not look empty in Jellyfin apps, as Jellyfin lists the files it cannot identify. Each is a plain video: a title of the folder's own, which no metadata addon is asked about, without a description, a rating or a provider identifier.
