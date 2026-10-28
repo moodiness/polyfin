@@ -141,7 +141,9 @@ func (s *Service) AskAgain(ctx context.Context, user accounts.User, id accounts.
 		return ErrNotFound
 	}
 	serving := streamServing(v, t)
-	known, _ := s.listVersions(ctx, t, serving, knownOnly)
+	// Every version remembered is forgotten, torrents included, whoever
+	// may play them.
+	known, _ := s.listVersions(ctx, t, serving, knownOnly, true)
 	for _, version := range known {
 		s.versions.Delete(version.ID)
 	}

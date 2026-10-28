@@ -133,15 +133,6 @@ func torrentLink(stream stremio.Stream) string {
 	return link
 }
 
-// withoutTorrents leaves out of versions the torrents' files, unless the
-// server plays them and user may.
-func (s *Service) withoutTorrents(user accounts.User, versions []Version) []Version {
-	if s.settings().TorrentsAllowed(user) {
-		return versions
-	}
-	return slices.DeleteFunc(versions, func(v Version) bool { return v.Torrent != nil })
-}
-
 // Origin is the addon that listed a stream and what it listed it for.
 // Title is set for a stream a title's description embeds for its video
 // ID (see embed), the title's Stremio identifier, of type Type.
@@ -369,19 +360,28 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 		// (see FollowedProgress).
 		tracked.pages.Put(askedKey{user.ID, t.item}, titlePage{t: t, serving: serving})
 	}
-	versions, unknown := s.listVersions(ctx, t, serving, mode)
+	versions, unknown := s.listVersions(ctx, t, serving, mode, s.settings().TorrentsAllowed(user))
 	if mode == askLater || mode == staleNow {
 		s.askStreams(ctx, user, t, unknown)
 	}
-	return s.withoutTorrents(user, versions), len(unknown) == 0, nil
+	return versions, len(unknown) == 0, nil
 }
 
 // listVersions lists the versions serving list for t, as far as mode goes,
 // and returns the addons whose streams are not known, or are asked again:
 // for knownOnly, those whose lists are not remembered; for askLater, those
 // and those whose lists are stale; for staleNow, those whose lists are
-// stale; for waitAll, none.
-func (s *Service) listVersions(ctx context.Context, t target, serving []installed, mode listing) ([]Version, []installed) {
+// stale; for waitAll, none. Torrents' files are listed only with torrents
+// set, for a user who may play them (see accounts.Settings.TorrentsAllowed).
+//
+// A file listed twice, by its identity (see streamIdentity), is one
+// version, the first listed of those the user may play: a torrent left out
+// leaves its place to a link to the same file listed after it. The
+// versions remembered by identifier (see Version) are those of every
+// stream, torrents included, as a user who may play torrents gets them, so
+// that each identifier names the same version for every user; another
+// user's Version lists the title again rather than take a torrent.
+func (s *Service) listVersions(ctx context.Context, t target, serving []installed, mode listing, torrents bool) ([]Version, []installed) {
 	lists := make([][]stremio.Stream, len(serving))
 	var unknown []installed
 	var wg sync.WaitGroup
@@ -419,32 +419,29 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 	}
 	wg.Wait()
 	var versions []Version
-	seen := map[accounts.ID]bool{}
-	// A video's own streams come first (see embed).
-	for _, stream := range t.embedded {
-		if !listable(stream) {
-			continue
+	seen, remembered := map[accounts.ID]bool{}, map[accounts.ID]bool{}
+	add := func(version Version) {
+		if !remembered[version.ID] {
+			remembered[version.ID] = true
+			s.versions.Put(version.ID, version)
 		}
-		version := embeddedVersion(t, stream)
-		if seen[version.ID] {
-			continue
+		if version.Torrent != nil && !torrents || seen[version.ID] {
+			return
 		}
 		seen[version.ID] = true
 		versions = append(versions, version)
-		s.versions.Put(version.ID, version)
+	}
+	// A video's own streams come first (see embed).
+	for _, stream := range t.embedded {
+		if listable(stream) {
+			add(embeddedVersion(t, stream))
+		}
 	}
 	for i, streams := range lists {
 		for _, stream := range streams {
-			if !listable(stream) {
-				continue
+			if listable(stream) {
+				add(newVersion(t, serving[i], stream))
 			}
-			version := newVersion(t, serving[i], stream)
-			if seen[version.ID] {
-				continue
-			}
-			seen[version.ID] = true
-			versions = append(versions, version)
-			s.versions.Put(version.ID, version)
 		}
 	}
 	return versions, unknown
@@ -453,12 +450,12 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 // Version finds a version of an item, listing the item's versions again
 // when it is no longer remembered. The item's own identifier stands for its
 // first version, as Jellyfin apps name a single-version item's source after
-// the item.
+// the item. A torrent remembered under id, for a user who may not play
+// torrents, lists the versions again too: the user's version of that file
+// may be a link to it listed after the torrent (see listVersions).
 func (s *Service) Version(ctx context.Context, user accounts.User, item, id accounts.ID) (Version, error) {
-	if version, ok := s.versions.Get(id); ok && version.Item == item && version.fresh(s.now()) {
-		if version.Torrent != nil && !s.settings().TorrentsAllowed(user) {
-			return Version{}, ErrNotFound
-		}
+	if version, ok := s.versions.Get(id); ok && version.Item == item && version.fresh(s.now()) &&
+		(version.Torrent == nil || s.settings().TorrentsAllowed(user)) {
 		// A version remembered from another user's listing is no way around
 		// the user's parental control or blocked genres.
 		if user.Restricted() {
