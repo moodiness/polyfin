@@ -33,20 +33,32 @@ export function useServerActions() {
   })
 }
 
-type Action = 'restart' | 'install' | 'update'
+export type ServerAction = 'restart' | 'install' | 'update'
 
-/** Restart, and Update now while an update tool is set, under the server's figures on Home. */
-export function ServerActionBar({ actions }: { actions: ServerActions }) {
+/**
+ * At the top of Home: the version Polyfin runs, Restart, in red as on Jellyfin's dashboard, and
+ * Update now while an update tool is set. Each opens its confirmation through `onOpen`.
+ */
+export function ServerActionButtons({
+  actions,
+  onOpen,
+}: {
+  actions: ServerActions
+  onOpen: (action: ServerAction) => void
+}) {
   const { t } = useI18n()
   const text = t.dashboard.server
-  const [open, setOpen] = useState<Action | null>(null)
   return (
-    <div className="mt-6 flex flex-wrap items-center gap-2">
+    <>
+      <span className="mr-2 text-small text-ink-3">
+        {t.dashboard.overview.version}{' '}
+        <span className="font-mono text-ink-2">{actions.version}</span>
+      </span>
       <Button
         size="sm"
-        variant="secondary"
+        variant="danger"
         icon={ArrowClockwiseIcon}
-        onClick={() => setOpen('restart')}
+        onClick={() => onOpen('restart')}
       >
         {text.restart}
       </Button>
@@ -55,15 +67,22 @@ export function ServerActionBar({ actions }: { actions: ServerActions }) {
           size="sm"
           variant="secondary"
           icon={CloudArrowDownIcon}
-          onClick={() => setOpen('update')}
+          onClick={() => onOpen('update')}
         >
           {text.updateNow}
         </Button>
       )}
-      {open !== null && (
-        <ActionDialog action={open} actions={actions} onClose={() => setOpen(null)} />
-      )}
-    </div>
+    </>
+  )
+}
+
+/** Update now in the notice of a new version, beside its release notes, while an update tool is set. */
+export function NoticeUpdateButton({ onOpen }: { onOpen: (action: ServerAction) => void }) {
+  const { t } = useI18n()
+  return (
+    <Button size="sm" variant="primary" icon={CloudArrowDownIcon} onClick={() => onOpen('update')}>
+      {t.dashboard.server.updateNow}
+    </Button>
   )
 }
 
@@ -106,12 +125,12 @@ type Phase =
  * Confirms an action with the password or a two-step code, then shows what follows: Polyfin
  * stopping and answering again, which reloads the page, or the update tool's answer.
  */
-function ActionDialog({
+export function ActionDialog({
   action,
   actions,
   onClose,
 }: {
-  action: Action
+  action: ServerAction
   actions: ServerActions
   onClose: () => void
 }) {

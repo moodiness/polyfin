@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   ArrowRightIcon,
   ArrowSquareOutIcon,
@@ -8,7 +8,7 @@ import {
   WarningIcon,
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { fetchStatus, queryKeys, type HealthProblem } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
@@ -30,7 +30,14 @@ import {
 } from '@/ui'
 import { NowPlaying, useLiveSessions } from './NowPlaying'
 import { RecentActivity } from './RecentActivity'
-import { DesktopInstall, ServerActionBar, useServerActions } from './ServerActions'
+import {
+  ActionDialog,
+  DesktopInstall,
+  NoticeUpdateButton,
+  ServerActionButtons,
+  useServerActions,
+  type ServerAction,
+} from './ServerActions'
 import { ServerStatus } from './ServerStatus'
 
 /** `/`: the administrator overview, or a member's view of the server's status. */
@@ -58,6 +65,8 @@ function Overview({ name }: { name: string }) {
   const transcoder = health.data?.transcoder
   const update = health.data?.update
   const actions = useServerActions()
+  const [open, setOpen] = useState<ServerAction | null>(null)
+  useActionFromAddress(actions.data?.updateTool, setOpen)
 
   return (
     <PageLayout
@@ -67,14 +76,26 @@ function Overview({ name }: { name: string }) {
           ? text.summary(sessions.data.length, problems.data.length)
           : text.description
       }
+      actions={
+        actions.data && (
+          <>
+            <ServerActionButtons actions={actions.data} onOpen={setOpen} />
+            {open !== null && (
+              <ActionDialog action={open} actions={actions.data} onClose={() => setOpen(null)} />
+            )}
+          </>
+        )
+      }
     >
       {update && health.data && (
         <Notice
           action={
-            <div className="flex flex-wrap items-center gap-2">
+            // On a phone the buttons stack, so that the notice's words keep their width.
+            <div className="flex flex-wrap items-center gap-2 max-sm:flex-col max-sm:items-stretch">
               {actions.data?.desktopUpdate && (
                 <DesktopInstall actions={actions.data} update={actions.data.desktopUpdate} />
               )}
+              {actions.data?.updateTool && <NoticeUpdateButton onOpen={setOpen} />}
               <ExternalButtonLink
                 href={update.url}
                 target="_blank"
@@ -117,6 +138,30 @@ function Overview({ name }: { name: string }) {
       <RecentActivity />
     </PageLayout>
   )
+}
+
+/**
+ * `/?action=restart` and `/?action=update`, which the search opens, open that action's
+ * confirmation once the server's actions are known, then leave the address, so that closing it
+ * does not open it again. Update now only opens while an update tool is set.
+ */
+function useActionFromAddress(
+  updateTool: boolean | undefined,
+  open: (action: ServerAction) => void,
+) {
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('action')
+  useEffect(() => {
+    if (asked === null || updateTool === undefined) return
+    if (asked === 'restart' || (asked === 'update' && updateTool)) open(asked)
+    setParams(
+      (current) => {
+        current.delete('action')
+        return current
+      },
+      { replace: true },
+    )
+  }, [asked, updateTool, open, setParams])
 }
 
 function Problems({
@@ -207,7 +252,6 @@ function ServerFigures() {
     queryFn: ({ signal }) => fetchStatus(signal),
     refetchInterval: 10_000,
   })
-  const actions = useServerActions()
   const data = health.data
   const timeFormat = new Intl.DateTimeFormat(language, { timeStyle: 'medium' })
 
@@ -319,7 +363,6 @@ function ServerFigures() {
               <span>{t.status.updatedAt(timeFormat.format(status.dataUpdatedAt))}</span>
             </p>
           )}
-          {actions.data !== undefined && <ServerActionBar actions={actions.data} />}
         </>
       )}
     </Block>

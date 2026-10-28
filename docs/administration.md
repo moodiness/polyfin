@@ -32,10 +32,10 @@ Addresses from before this layout, such as `/admin/health` or `/admin/settings#s
 
 ## Home
 
-**Home** greets you by name and shows:
+**Home** greets you by name. At the top, on the right of the greeting, it shows the version Polyfin runs, **Restart**, in red, and **Update now** while an update tool is set (see [Restart and updates](#restart-and-updates)). Below, it shows:
 
 - **Now playing**, updated every 3 seconds. A playback whose app reported nothing for five minutes, as a tab closed while it played, leaves it (see [Playbacks at once](users.md#playbacks-at-once)). For each playback you see the user, the device and the app, the title and the position, and **How it plays**: direct play, remux or conversion. **Details** adds Jellyfin's reasons, the user's quality group, the resolution and bitrate sent, and whether the GPU or the CPU encodes. The source it describes is the version played: when the app names only the title, as jellyfin-web does when it plays a title's first version as it is, the version the app's last PlaybackInfo chose for it. When the video sent is smaller than the source, **Smaller than the source** tells what limited it: the GPU's 4K, the processor's 1080p, HDR converted by the processor, the user's quality group, **Maximum quality of converted video**, or the bitrate allowed by the app or by the user's **Maximum quality**. See [Size of converted video](transcoding.md#size-of-converted-video). A [converted download](transcoding.md#converted-downloads) shows there too, labeled "Downloading", its bar telling how far the copy is made.
-- a notice when a new version of Polyfin is out, with **Release notes** (see [New versions](#new-versions));
+- a notice when a new version of Polyfin is out, with **Release notes**, and **Update now** while an update tool is set (see [New versions](#new-versions));
 - **To look at**: the problems Health found, with a link to it.
 - **Server state**: version, database, cache and graphics card.
 - **Recent activity**, the activity log, which you can filter by kind and search. Its list scrolls in its own box and loads older events as you reach its end.
@@ -153,7 +153,7 @@ A development build, whose version is `dev`, asks nothing and never shows a new 
 
 ## Restart and updates
 
-Administrators restart Polyfin, and start its update, from **Home**, under **Server state**, without opening the host or Docker. Polyfin has no action that stops it for good: in a container with a restart policy, or in Polyfin Desktop, it would start again at once, and a remote off switch is easy to misuse from a stolen session. Polyfin is never given the Docker socket either: it is root on the host for whoever takes over a server.
+Administrators restart Polyfin, and start its update, from the top of **Home**, without opening the host or Docker. **Search** finds both, as "Restart Polyfin" and "Update now", which open **Home** with the action's confirmation. Polyfin has no action that stops it for good: in a container with a restart policy, or in Polyfin Desktop, it would start again at once, and a remote off switch is easy to misuse from a stolen session. Polyfin is never given the Docker socket either: it is root on the host for whoever takes over a server.
 
 Each action:
 
@@ -180,7 +180,7 @@ In Polyfin Desktop, the notice of a new version on **Home** offers **Install Pol
 
 ### Update now
 
-A container cannot update its own image without the Docker socket. An update tool that you run beside Polyfin can, and many offer an HTTP API that updates the containers it watches when asked. Give its address under **Settings › General**, and **Update now** shows under **Server state**. Polyfin sends this request, and nothing else:
+A container cannot update its own image without the Docker socket. An update tool that you run beside Polyfin can, and many offer an HTTP API that updates the containers it watches when asked. Give its address under **Settings › General**, and **Update now** shows at the top of **Home**, and in the notice of a new version when one is out. Polyfin sends this request, and nothing else:
 
 - method `POST`, with no body;
 - to the address exactly as given, path and query included, such as `http://updater:8080/v1/update`: match it to your tool's update endpoint;
@@ -203,6 +203,8 @@ Jellyfin's dashboard has "Restart" and "Shut down" buttons, through `POST /Syste
 - it has no shutdown;
 - its actions are the admin app's, for administrators only, never for a local address, and each asks for the password or a two-step code again;
 - `/System/Restart` and `/System/Shutdown` are not offered to Jellyfin apps.
+
+Like Jellyfin's dashboard, whose **Restart** sits in red with the server's version at the top of its first widget ([ServerInfoWidget.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/components/widgets/ServerInfoWidget.tsx#L87-L96)), **Home** shows **Restart**, in red, and the version at its top.
 
 ## Local network discovery
 
