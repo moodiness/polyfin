@@ -323,7 +323,7 @@ func (s *Service) unitMatch(ctx context.Context, kind string, e entry, link stri
 	// would win over one a looser rule kept.
 	m := chooseResult(kind, n, results, exact)
 	if err != nil && (m.reason == reasonNotFound || m.reason == reasonOtherYear || slices.Contains(looserMethods, m.by)) {
-		return cache.fail(err), nil
+		return s.searchFallback(ctx, kind, n, cache, err)
 	}
 	// A search that found no title of the name, even with its numerals
 	// read alike, is made once more with them written the other way:

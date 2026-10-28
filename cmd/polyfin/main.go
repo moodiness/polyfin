@@ -340,10 +340,11 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	imageSearch := tmdb.New(tmdb.API, tmdb.Images, version, store.Settings)
 	lib.UseTMDB(imageSearch)
 	// Local folders match their files through the library's searches of
-	// the metadata addons.
+	// the metadata addons, and TMDB's when every addon's search fails.
 	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings, box)
 	defer folders.Close()
 	lib.UseLocal(folders)
+	folders.UseTMDB(imageSearch)
 	folders.UseTools(cfg.FFprobe, cfg.FFmpeg)
 	// The loudness of songs without a gain is measured two at a time, those
 	// of local folders and those of music addons together.

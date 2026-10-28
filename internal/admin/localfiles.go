@@ -101,8 +101,8 @@ func newSearchFailureJSON(addon, failure string) *searchFailureJSON {
 // matchedByJSON counts the matched files by how they were matched: by an
 // identifier in their name, by their NFO file, by a search, by a search
 // that kept a title of the year before or after the name's (year), named
-// alike once numerals are read (numerals), or both (yearNumerals), or by a
-// link.
+// alike once numerals are read (numerals), or both (yearNumerals), by a
+// link, or by TMDB's search when the metadata addons' failed (tmdb).
 type matchedByJSON struct {
 	Name         int `json:"name"`
 	NFO          int `json:"nfo"`
@@ -111,6 +111,7 @@ type matchedByJSON struct {
 	Numerals     int `json:"numerals"`
 	YearNumerals int `json:"yearNumerals"`
 	Link         int `json:"link"`
+	TMDB         int `json:"tmdb"`
 }
 
 // datedByJSON counts a home videos folder's videos by where their dates
@@ -155,7 +156,7 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 	return &folderJSON{Kind: f.Kind, Path: f.Addon.ManifestURL, Share: f.Share, User: f.User, PasswordSet: f.PasswordSet,
 		CheckedAt: f.CheckedAt, ScannedAt: f.ScannedAt, Error: f.Error, Scanning: f.Scanning, Files: f.Files, Matched: f.Matched,
 		MatchedBy: matchedByJSON{Name: f.MatchedBy.Name, NFO: f.MatchedBy.NFO, Search: f.MatchedBy.Search, Year: f.MatchedBy.Year,
-			Numerals: f.MatchedBy.Numerals, YearNumerals: f.MatchedBy.YearNumerals, Link: f.MatchedBy.Link},
+			Numerals: f.MatchedBy.Numerals, YearNumerals: f.MatchedBy.YearNumerals, Link: f.MatchedBy.Link, TMDB: f.MatchedBy.TMDB},
 		Unmatched: f.Unmatched, Albums: f.Albums, Artists: f.Artists, Gained: f.Gained, Measured: f.Measured,
 		DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
 		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork, ReadExtras: f.ReadExtras, Extras: f.Extras,

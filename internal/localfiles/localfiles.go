@@ -62,6 +62,7 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
 // Kinds of folders: a folder holds movies, shows with their episodes,
@@ -178,6 +179,10 @@ type Service struct {
 	artwork        atomic.Pointer[artworkSet]
 	artworkChanges atomic.Uint64
 	artworkMu      sync.Mutex
+
+	// tmdb searches TMDB for a title when every metadata addon's search
+	// failed, nil until set (see tmdbmatch.go).
+	tmdb *tmdb.Client
 }
 
 // scanning is a scan under way: done is closed when it ends, and stop
@@ -430,10 +435,11 @@ type Folder struct {
 // Matches counts a folder's matched files by how they were matched: by an
 // identifier in their name, by their NFO file, by a search, by a search
 // that kept a title of the year before or after (Year), named alike once
-// numerals are read (Numerals), or both (YearNumerals), or by a link made
-// by hand (see chooseItem).
+// numerals are read (Numerals), or both (YearNumerals), by a link made by
+// hand (see chooseItem), or by TMDB's search when the metadata addons'
+// failed (see tmdbmatch.go).
 type Matches struct {
-	Name, NFO, Search, Year, Numerals, YearNumerals, Link int
+	Name, NFO, Search, Year, Numerals, YearNumerals, Link, TMDB int
 }
 
 // Dates counts home videos by where their dates come from: their NFO
@@ -801,6 +807,8 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			f.MatchedBy.YearNumerals = count
 		case byLink:
 			f.MatchedBy.Link = count
+		case byTMDB:
+			f.MatchedBy.TMDB = count
 		}
 		return nil
 	})
