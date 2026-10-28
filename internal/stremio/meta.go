@@ -267,11 +267,27 @@ func (e *Extras) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// CastMember is an actor with their role.
+// CastMember is an actor with their role. Some addons identify the actor:
+// by their TMDB identifier, as tmdb_id or as a numeric id (see
+// PersonTMDB).
 type CastMember struct {
 	Name      string `json:"name"`
 	Character string `json:"character,omitempty"`
 	Photo     string `json:"photo,omitempty"`
+	ID        Text   `json:"id,omitempty"`
+	TmdbID    Text   `json:"tmdb_id,omitempty"`
+}
+
+// PersonTMDB is the actor's TMDB identifier, a number, empty when the
+// addon gives none.
+func (m CastMember) PersonTMDB() string {
+	for _, id := range []Text{m.TmdbID, m.ID} {
+		text := strings.TrimSpace(string(id))
+		if value, err := strconv.Atoi(text); err == nil && value > 0 {
+			return strconv.Itoa(value)
+		}
+	}
+	return ""
 }
 
 // described is a meta as an addon writes it, with its links, which the

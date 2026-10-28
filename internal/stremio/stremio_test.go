@@ -243,3 +243,21 @@ func TestSeasonPostersKeepTheirPlaces(t *testing.T) {
 		t.Errorf("keyed by season number: %v %+v", err, keyed.Extras)
 	}
 }
+
+// A cast member's TMDB identifier is the one an addon gives as tmdb_id,
+// else a numeric id, as a number or a string; any other id names no one on
+// TMDB.
+func TestCastMembersTellTheirTMDBIdentifier(t *testing.T) {
+	var extras Extras
+	if err := unmarshal([]byte(`{"cast": [{"name": "A", "tmdb_id": 11, "id": 99}, {"name": "B", "id": "12"},
+		{"name": "C", "id": "nm0000001"}, {"name": "D"}]}`), &extras); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, member := range extras.Cast {
+		got = append(got, member.PersonTMDB())
+	}
+	if want := []string{"11", "12", "", ""}; !slices.Equal(got, want) {
+		t.Errorf("identifiers %q, want %q", got, want)
+	}
+}
