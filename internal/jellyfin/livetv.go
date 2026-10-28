@@ -738,7 +738,16 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		h.browseError(w, r, err)
 		return
 	}
-	versions = h.inGroup(r.Context(), user, slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) }))
+	// A stream that failed lately is left out until its failure is
+	// forgotten (see playback.Service.Failed): the log says so, as an app
+	// left with none tells only that nothing plays.
+	versions = h.inGroup(r.Context(), user, slices.DeleteFunc(versions, func(v library.Version) bool {
+		failure := h.Playback.Failure(v.ID)
+		if failure != nil {
+			h.Logger.Info("A channel's stream is left out: it failed lately", "addon", v.Addon, "error", failure)
+		}
+		return failure != nil
+	}))
 	requested, asked := parseGUID(request.MediaSourceId)
 	allowed := h.Accounts.Conversions(user)
 	attempts, tries := 0, h.Accounts.Settings().VersionAttempts

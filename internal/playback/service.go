@@ -844,6 +844,16 @@ func (s *Service) Failed(version accounts.ID) bool {
 	return failed
 }
 
+// Failure is why a version recently failed to be analyzed or reached, nil
+// when it did not (see Failed).
+func (s *Service) Failure(version accounts.ID) error {
+	failure, failed := s.failures.Get(version)
+	if !failed {
+		return nil
+	}
+	return failure.err
+}
+
 // versionFailure is why a version could not be analyzed or reached, the
 // addon that listed it and its item.
 type versionFailure struct {

@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"context"
+	"slices"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
@@ -23,7 +24,10 @@ import (
 // liveVideo reports whether item, a video of an addon's other titles,
 // plays live: its first version that plays, as PlaybackInfo offers it,
 // streams with no end. Telling it may analyze that version as a live
-// stream is analyzed, which it then plays as.
+// stream is analyzed, which it then plays as. A video whose versions all
+// failed lately plays live when one of them was found live, or failed as
+// a live stream does: its PlaybackInfo then tells in the log why it is
+// left out (see livePlaybackInfo).
 func (h *Handler) liveVideo(ctx context.Context, user accounts.User, item library.Item) bool {
 	if !library.AddonVideo(item) {
 		return false
@@ -32,14 +36,21 @@ func (h *Handler) liveVideo(ctx context.Context, user accounts.User, item librar
 	if err != nil {
 		return false
 	}
-	for _, version := range h.offered(ctx, user, versions) {
-		if h.Playback.Failed(version.ID) {
-			continue
-		}
-		endless, err := h.Playback.Endless(playback.ForUser(ctx, user.ID), version)
+	// offered drops versions in place: those it drops are read below.
+	if offered := h.offered(ctx, user, slices.Clone(versions)); len(offered) > 0 {
+		endless, err := h.Playback.Endless(playback.ForUser(ctx, user.ID), offered[0])
 		return err == nil && endless
 	}
-	return false
+	return slices.ContainsFunc(versions, func(version library.Version) bool {
+		failure := h.Playback.Failure(version.ID)
+		if failure == nil {
+			return false
+		}
+		if analysis, ok := h.Playback.Analyzed(ctx, version.ID); ok {
+			return playback.Endless(analysis)
+		}
+		return playback.LiveFailure(failure) != ""
+	})
 }
 
 // playsLive reports whether item plays version live: a channel, or a video
