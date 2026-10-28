@@ -15,9 +15,12 @@ Polyfin gets its content from Stremio addons. Each addon has a role:
 To share an addon with every user, open **Add a source** under **Content › Sources**, keep the **Stremio addon** tab, and paste its **Manifest address** (from the addon's configure page). Then pick under **Content › Libraries** which of its catalogs become libraries in Jellyfin apps.
 
 - When an addon offers collection catalogs, those are enabled first.
-- Otherwise its first 20 movie, series and TV catalogs are enabled. Its catalogs of other types, such as a cloud store's `other` catalog or a sports addon's `sport` catalogs, are not: enable them under **Content › Libraries** (see [What catalogs list](#what-catalogs-list)).
+- Otherwise its movie, series and TV catalogs are enabled. Its catalogs of other types, such as a cloud store's `other` catalog or a sports addon's `sport` catalogs, are not: enable them under **Content › Libraries** (see [What catalogs list](#what-catalogs-list)).
+- Catalogs are enabled so only until the server has 20 libraries in all, counting those of every addon, so that home screens do not fill up. A user's own addons count the user's own libraries under **My sources** the same way. An addon added past that gets no library, and the message that confirms it was added says so: the server already has 20 libraries, and its catalogs can be enabled under **Content › Libraries**.
 - This is only a starting point: you can enable any number of catalogs.
 - When none of the addon's catalogs is enabled, as for an addon whose catalogs are all of other types, the message that confirms the addon was added says so, and that its catalogs can be enabled under **Content › Libraries**, rather than leaving nothing new to see in the apps. A user's own addon says the same of **My sources**.
+
+**For app developers:** the answer to `POST /admin/api/scopes/{scope}/addons` tells `enabledLibraries`, how many of the addon's catalogs became libraries, and `libraryLimit`, 20 when none did because the scope had that many libraries already, absent otherwise. An Eclipse addon's `music.rows` counts its catalog rows: with none, "My music" is its library (see [My music](#my-music)).
 
 Only administrators can install addons hosted on a local network address.
 
@@ -34,6 +37,23 @@ A stream an addon lists plays when it is a link to a video, over `http` or `http
 Manifest addresses usually contain your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu.
 
 Each source has its own page, from **Open its page** on its row, with its details, an **Active** switch and its place in the order. **Remove** asks first.
+
+### Addons that fail
+
+Polyfin asks an addon at the address it was added with, under the header `User-Agent: Polyfin/<version>`, with an Eclipse addon's settings in the query (see [Music addon settings](#music-addon-settings)). An addon that answers with an error was reached, and the log and **System › Health** tell what it answered:
+
+| The addon | Health says | The log's error |
+|---|---|---|
+| Answers `401`, `403` or another error but `404` and `429` | refused the request | `addon refused the request: HTTP 403` |
+| Answers `429`, or `503` with `Retry-After` | asked to slow down (too many requests) | `addon asked to slow down: HTTP 429`, or `addon asked to wait: HTTP 503, retry after 30s` |
+| Answers `500` or another server error | answered with a server error | `addon failed: HTTP 502` |
+| Does not answer | could not be reached, or did not answer in time | `addon unreachable: ...` |
+
+A refusal comes from the addon, or from the site behind it, and Polyfin cannot change it. The token in the addon's address may have expired, or the addon may refuse requests from servers, or from apps other than its own. Check that the same address works in the addon's own app, on the same network as Polyfin, or ask the addon's author.
+
+- A library whose addon fails shows nothing in the apps. The log tells each such request as `Browsing failed`, with the addon's name, the catalog and the error, as in `addon=Songs catalog=top error="addon refused the request: HTTP 403"`.
+- A music addon whose search fails logs `A music addon could not search`, with its name, and the apps get the other addons' results.
+- **Check**, in **System › Health**, asks for the manifest only: an addon that answers its manifest but refuses its catalogs or searches shows as answering until the apps ask it for them again.
 
 ### The order of sources
 
@@ -282,7 +302,7 @@ Every music addon with a search also offers "My music", a catalog Polyfin makes,
 
 Asked for another kind, it lists the albums and artists its songs name (and its albums' artists), or the songs of its albums, playlists and artists, as a row does. Each kind lists at most **Titles read per movie and series catalog**. Searching from it searches the addon, as in any music library.
 
-An addon installed without catalog rows of its own gets "My music" enabled as its library, so that music apps starting from a library show something. An addon with rows keeps them as its libraries, with "My music" offered but off. Addons installed before keep their libraries: an administrator enables "My music" under **Content › Libraries** (users, under **My sources**). Polyfin never asks the addon for this catalog, and it has no automatic image, since every user sees a different list.
+An addon installed without catalog rows of its own, as many music addons that only search, gets "My music" enabled as its library, so that music apps starting from a library find the addon. It starts empty, for every user: a user's songs show up there once they found them with search and played them or marked them favorite. The message that confirms the addon was added says so. An addon with rows keeps them as its libraries, with "My music" offered but off. Like other addons' catalogs, rows and "My music" are enabled so only until the server has 20 libraries (see [Server addons](#server-addons)). Addons installed before keep their libraries: an administrator enables "My music" under **Content › Libraries** (users, under **My sources**). Polyfin never asks the addon for this catalog, and it has no automatic image, since every user sees a different list.
 
 ### Instant mixes
 
@@ -388,7 +408,7 @@ Songs from different albums and addons are mastered at very different volumes. P
 
 ### Health and parental control
 
-Music addon requests count in **System › Health** like a Stremio addon's: last answer, failures and response time, with the same manifest check (see [Administration](administration.md)).
+Music addon requests count in **System › Health** like a Stremio addon's: last answer, failures and response time, with the same manifest check (see [Administration](administration.md)). What a failure says, and what to check when an addon refuses Polyfin's requests, is in [Addons that fail](#addons-that-fail).
 
 - Explicit songs and albums are hidden from users whose parental control sets a highest rating.
 - Music has no rating, so all music (books, for audiobooks) is hidden from users who block unrated music.
