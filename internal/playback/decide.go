@@ -205,7 +205,9 @@ func (r reason) names() []string {
 // refused for another reason, as Jellyfin does. Codec, container and
 // subtitle requirements apply to the whole source; of the direct-play
 // profiles, the one with the fewest failures, first in order, gives the
-// container and codec reasons.
+// container and codec reasons. A source whose bitrate is not known, as a
+// live HLS stream's, counts against the bitrate limit as the usual
+// bitrate of its height (see countedBitrate).
 func Decide(profile *DeviceProfile, source MediaSource, options Options) Decision {
 	d := decider{profile: profile, source: source}
 	d.locate(options)
@@ -225,7 +227,7 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 	if limit <= 0 && profile.MaxStreamingBitrate != nil {
 		limit = *profile.MaxStreamingBitrate
 	}
-	if limit > 0 && source.Bitrate > limit {
+	if limit > 0 && d.countedBitrate() > limit {
 		reasons |= containerBitrateExceedsLimit
 	}
 	var matched *DirectPlayProfile
@@ -277,6 +279,26 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 		}
 	}
 	return decision
+}
+
+// countedBitrate is the bitrate the source counts as against a bitrate
+// limit: its own, else the usual bitrate of its height, which converted
+// video gets when its source's is not known (see rungs): 10 Mb/s for
+// 1080p. Jellyfin 12.4's StreamBuilder.IsBitrateLimitExceeded (lines
+// 1655-1679) never limits a remote source, and counts a local one whose
+// bitrate it does not know as 40 Mb/s: Polyfin limits every source, so
+// that a lower quality picked during a play converts a live stream too.
+func (d *decider) countedBitrate() int64 {
+	if d.source.Bitrate > 0 || d.video == nil {
+		return d.source.Bitrate
+	}
+	class := sizeClass(*d.video)
+	for _, r := range rungs {
+		if r.height == class {
+			return r.usual
+		}
+	}
+	return 0
 }
 
 // decider holds what a decision looks at.

@@ -373,6 +373,30 @@ func TestAudioIsConvertedToTheFirstCodecFFmpegEncodes(t *testing.T) {
 	}
 }
 
+// A source whose bitrate is not known, as a live HLS stream's, counts
+// against the limit as the usual bitrate of its height: a 1080p stream
+// as 10 Mb/s, played as it is within 20 Mb/s and converted within
+// 3 Mb/s, as one whose bitrate is known.
+func TestASourceWithoutBitrateCountsAsTheUsualBitrateOfItsHeight(t *testing.T) {
+	source := MediaSource{Container: "hls", Streams: []MediaStream{
+		{Type: "Video", Index: 0, Codec: "h264", Profile: "High", Level: new(40.0), VideoRange: "SDR", VideoRangeType: "SDR", BitDepth: new(8),
+			Width: new(1920), Height: new(1080), AverageFrameRate: new(25.0)},
+		{Type: "Audio", Index: 1, Codec: "aac", IsDefault: true, Channels: new(2)},
+	}}
+	chrome := readDeviceProfile(t, "jellyfin-web-chrome")
+	chrome.DirectPlayProfiles = append(chrome.DirectPlayProfiles, DirectPlayProfile{Container: "hls", Type: "Video", VideoCodec: "h264", AudioCodec: "aac"})
+	options := Options{EnableDirectPlay: true, EnableDirectStream: true, Can: Capabilities{Encoders: []string{"libx264"}}}
+	options.MaxStreamingBitrate = 20_000_000
+	if within := Decide(chrome, source, options); !within.DirectPlay {
+		t.Errorf("within 20 Mb/s: %+v", within)
+	}
+	options.MaxStreamingBitrate = 3_000_000
+	below := Decide(chrome, source, options)
+	if below.DirectPlay || !below.HLS || below.Video == nil || !slices.Contains(below.Reasons, "ContainerBitrateExceedsLimit") {
+		t.Errorf("within 3 Mb/s: %+v", below)
+	}
+}
+
 func TestVideoTheAppCannotTakeIsConverted(t *testing.T) {
 	// A 4K Dolby Vision remux over HDR10, with E-AC-3 flagged default.
 	source := MediaSource{
