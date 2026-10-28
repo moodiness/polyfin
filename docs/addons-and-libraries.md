@@ -742,12 +742,12 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 ### Identify
 
-**Identify** searches the server's addons that describe titles by name, for movies and series. It finds nothing for other types. Applying a result fails, because an item is its addon's title and cannot be bound to another.
+**Identify** searches the server's addons that describe titles by name, for movies and series. It finds nothing for other types. Applying a result to a title an addon lists fails, because an item is its addon's title and cannot be bound to another. Applying it to a file a local folder left unmatched, a plain video, links the file, or its whole show folder, to the title chosen, as **Find the title** does on the folder's page (see [Identify in the web player](local-folders.md#identify-in-the-web-player)).
 
 **Compared with Jellyfin:**
 
 - Jellyfin keeps any uploaded image file as sent; Polyfin refuses other types with 400.
-- Applying an **Identify** result fails as a failed identification does in Jellyfin (500).
+- Applying an **Identify** result to a title an addon lists fails as a failed identification does in Jellyfin (500). Applied to a plain video of a local folder, it answers 204 as Jellyfin does.
 - Jellyfin picks suggestions among everything; Polyfin picks among the first page of each library.
 
 **For app developers:**

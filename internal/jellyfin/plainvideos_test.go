@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -303,8 +304,10 @@ func TestPlainVideosRestricted(t *testing.T) {
 // A plain video leaves its library once matched, by hand or by a scan, and
 // what its user did with it goes to its title: a movie's resume point and
 // favorite, an episode's resume point to the matched show's episode.
-// Continue Watching and the favorites then list the title alone, and the
-// plain videos' items answer 404.
+// Continue Watching and the favorites then list the title alone. Asked by
+// its identifier, a plain video's item answers the title it became, under
+// the title's own identifier, as Jellyfin keeps an item identified again;
+// marking it answers 404, as Jellyfin answers for an item that is gone.
 func TestPlainVideosLeaveOnceMatched(t *testing.T) {
 	t.Parallel()
 	p := newPlainSetup(t)
@@ -375,12 +378,16 @@ func TestPlainVideosLeaveOnceMatched(t *testing.T) {
 	if !slices.Equal(resumed, want) {
 		t.Errorf("Continue Watching: %v, want %v", resumed, want)
 	}
-	// The plain videos matched are gone, as Jellyfin answers for an item
-	// that is.
-	for _, gone := range []string{harbor, plainSeries, second} {
+	// Asked by their identifiers, the plain videos matched answer the
+	// titles they became, under the titles' own identifiers; user data
+	// sent to them is refused, as for an item gone.
+	for gone, now := range map[string]string{harbor: p.movie, plainSeries: p.series, second: matched} {
 		var item BaseItemDto
-		if status := p.get(t, "/Users/"+p.user+"/Items/"+gone, p.token, &item); status != http.StatusNotFound {
-			t.Errorf("a plain video matched: %d %s", status, item.Name)
+		if status := p.get(t, "/Users/"+p.user+"/Items/"+gone, p.token, &item); status != http.StatusOK || item.Id != now {
+			t.Errorf("a plain video matched: %d %s %s, want %s", status, item.Id, item.Name, now)
+		}
+		if status, _ := p.call(http.MethodPost, "/UserFavoriteItems/"+gone, app("tv", p.token), nil); status != http.StatusNotFound {
+			t.Errorf("marking a plain video matched: %d", status)
 		}
 	}
 	var favorites QueryResult
@@ -395,5 +402,132 @@ func TestPlainVideosLeaveOnceMatched(t *testing.T) {
 	if listed := p.listed(t, p.token, p.moviesLibrary, "Movie"); slices.ContainsFunc(listed, func(i BaseItemDto) bool { return i.Id == clip }) ||
 		len(listed) != 2 {
 		t.Errorf("the movies once the other is matched: %+v", listed)
+	}
+}
+
+// jellyfin-web's Identify links a plain video to the title an
+// administrator chose, as the folder's page links it (Find the title): a
+// movie's file, or a show's whole folder from its series or from one of
+// its episodes. Apply answers 204, as Jellyfin's does; the item reopened
+// by its identifier, as jellyfin-web does after Identify, is the title it
+// became, while the libraries list the title alone. A plain video still
+// unmatched is its own item; one matched already, a result without an
+// IMDb identifier, and a member applying are refused.
+func TestIdentifyLinksPlainVideos(t *testing.T) {
+	t.Parallel()
+	p := newPlainSetup(t)
+	movies, plainSeries, plainEpisodes := p.titles(t)
+	harbor, clip := movies[0].Id, movies[1].Id
+	second := plainEpisodes[1].Id
+	var plainSeasons QueryResult
+	p.get(t, "/Shows/"+plainSeries+"/Seasons?UserId="+p.user, p.token, &plainSeasons)
+	if len(plainSeasons.Items) != 2 {
+		t.Fatalf("the plain seasons: %v", itemNames(plainSeasons.Items))
+	}
+	// A second show folder no title matches either.
+	p.write(t, "Shows/Lantern Coast/Season 01/Lantern Coast S01E01.mp4", p.video)
+	p.write(t, "Shows/Lantern Coast/Season 01/Lantern Coast S01E02.mp4", p.video)
+	p.scan(t)
+	var lantern string
+	for _, series := range p.listed(t, p.token, p.showsLibrary, "Series") {
+		if series.Name == "Lantern Coast" {
+			lantern = series.Id
+		}
+	}
+	if lantern == "" {
+		t.Fatal("no plain series Lantern Coast")
+	}
+	p.testServer.user("boss", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	admin := p.signIn("boss", "dashboard")
+	apply := func(token, item string, ids map[string]string) int {
+		t.Helper()
+		status, body := p.call(http.MethodPost, "/Items/RemoteSearch/Apply/"+item+"?ReplaceAllImages=true", app("dashboard", token),
+			map[string]any{"Name": "Chosen", "ProviderIds": ids, "SearchProviderName": "Test"})
+		if status != http.StatusNoContent && status >= 500 {
+			t.Logf("apply %s: %d %s", item, status, body)
+		}
+		return status
+	}
+	if status := apply(p.token, harbor, map[string]string{"Imdb": "tt0000"}); status != http.StatusForbidden {
+		t.Errorf("a member applying: %d", status)
+	}
+	if status := apply(admin, clip, map[string]string{"Tmdb": "10"}); status != http.StatusBadRequest {
+		t.Errorf("a result without an IMDb identifier: %d", status)
+	}
+
+	// The movie: its file is linked.
+	if status := apply(admin, harbor, map[string]string{"Imdb": "tt0000"}); status != http.StatusNoContent {
+		t.Errorf("applying to the plain movie: %d", status)
+	}
+	listed := p.listed(t, p.token, p.moviesLibrary, "Movie")
+	if len(listed) != 2 || !slices.ContainsFunc(listed, func(i BaseItemDto) bool { return i.Id == p.movie }) ||
+		!slices.ContainsFunc(listed, func(i BaseItemDto) bool { return i.Id == clip }) {
+		t.Errorf("the movies once one is identified: %v", itemNames(listed))
+	}
+	var item BaseItemDto
+	if status := p.get(t, "/Users/"+p.user+"/Items/"+harbor, p.token, &item); status != http.StatusOK || item.Id != p.movie ||
+		item.Name != "Movie 0" || item.MediaSources == nil || !slices.ContainsFunc(*item.MediaSources, func(s MediaSourceInfo) bool {
+		return strings.HasPrefix(s.Name, "Local movies")
+	}) {
+		t.Errorf("the plain movie reopened: %d %s %q %+v", status, item.Id, item.Name, item.MediaSources)
+	}
+	// The other plain movie is still itself.
+	if status := p.get(t, "/Users/"+p.user+"/Items/"+clip, p.token, &item); status != http.StatusOK || item.Id != clip || item.Name != "Unknown clip" {
+		t.Errorf("the plain movie left: %d %s %q", status, item.Id, item.Name)
+	}
+	if status := apply(admin, harbor, map[string]string{"Imdb": "tt0001"}); status != http.StatusNotFound {
+		t.Errorf("applying to a plain movie matched: %d", status)
+	}
+
+	// A show from one of its episodes: its whole folder is linked.
+	if status := apply(admin, second, map[string]string{"Imdb": "tt0100"}); status != http.StatusNoContent {
+		t.Errorf("applying to the plain episode: %d", status)
+	}
+	var episodes QueryResult
+	p.get(t, "/Shows/"+p.series+"/Episodes?UserId="+p.user, p.token, &episodes)
+	numbered := map[[2]int]BaseItemDto{}
+	for _, episode := range episodes.Items {
+		numbered[[2]int{*episode.ParentIndexNumber, *episode.IndexNumber}] = episode
+	}
+	if len(numbered) != 3 {
+		t.Fatalf("the show's episodes: %v", itemNames(episodes.Items))
+	}
+	var seasons QueryResult
+	p.get(t, "/Shows/"+p.series+"/Seasons?UserId="+p.user, p.token, &seasons)
+	reopened := map[string]string{plainSeries: p.series, second: numbered[[2]int{1, 2}].Id}
+	for _, season := range seasons.Items {
+		for _, plain := range plainSeasons.Items {
+			if *plain.IndexNumber == *season.IndexNumber {
+				reopened[plain.Id] = season.Id
+			}
+		}
+	}
+	if len(reopened) != 4 {
+		t.Fatalf("the show's seasons: %v", itemNames(seasons.Items))
+	}
+	for plain, now := range reopened {
+		if status := p.get(t, "/Users/"+p.user+"/Items/"+plain, p.token, &item); status != http.StatusOK || item.Id != now {
+			t.Errorf("a plain item of the show reopened: %d %s %q, want %s", status, item.Id, item.Name, now)
+		}
+	}
+	if status := p.get(t, "/Users/"+p.user+"/Items/"+second, p.token, &item); item.SeriesId != p.series || item.Name != "Second" {
+		t.Errorf("the plain episode reopened: %d %s %q", status, item.SeriesId, item.Name)
+	}
+
+	// A show from its series.
+	if status := apply(admin, lantern, map[string]string{"Imdb": "tt0100"}); status != http.StatusNoContent {
+		t.Errorf("applying to the plain series: %d", status)
+	}
+	if shows := p.listed(t, p.token, p.showsLibrary, "Series"); len(shows) != 1 || shows[0].Id != p.series {
+		t.Errorf("the shows once identified: %v", itemNames(shows))
+	}
+	if status := p.get(t, "/Users/"+p.user+"/Items/"+lantern, p.token, &item); status != http.StatusOK || item.Id != p.series ||
+		item.Name != "Show" {
+		t.Errorf("the plain series reopened: %d %s %q", status, item.Id, item.Name)
+	}
+	var first BaseItemDto
+	p.get(t, "/Users/"+p.user+"/Items/"+numbered[[2]int{1, 1}].Id, p.token, &first)
+	if first.MediaSources == nil || len(*first.MediaSources) != 2 {
+		t.Errorf("the first episode's versions, from both show folders: %+v", first.MediaSources)
 	}
 }

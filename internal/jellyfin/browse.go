@@ -693,6 +693,16 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	// iptv.Opening): listings never do.
 	item, err := h.Library.Item(iptv.Opening(r.Context()), user, id)
 	if errors.Is(err, library.ErrNotFound) {
+		// A plain video matched since, as by Identify, is reopened by its
+		// identifier: it answers the title it became, as Jellyfin keeps an
+		// item identified again (see library.MatchedPlain).
+		if matched, matchErr := h.Library.MatchedPlain(r.Context(), user, id); matchErr == nil {
+			item, err, id = matched, nil, matched.ID
+		} else if !errors.Is(matchErr, library.ErrNotFound) {
+			err = matchErr
+		}
+	}
+	if errors.Is(err, library.ErrNotFound) {
 		// Apps open a version as an item by its media source id.
 		item, err = h.title(r.Context(), user, id)
 	}

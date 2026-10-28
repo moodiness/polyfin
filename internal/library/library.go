@@ -250,6 +250,13 @@ type Local interface {
 	// extras.go).
 	Extras(ctx context.Context, folders []accounts.ID, owner ExtraOwner) ([]Extra, error)
 	Extra(ctx context.Context, id accounts.ID) (Extra, error)
+	// LinkPlain links the unit of a plain video still listed, by its
+	// Stremio identifier, to an IMDb identifier, as the folder's page
+	// links it; ErrNotFound when no folder lists it. PlainMatch tells the
+	// folder and the Stremio identifier of the title a plain video's unit
+	// was matched to since, empty while it is not.
+	LinkPlain(ctx context.Context, plain, imdb string) error
+	PlainMatch(ctx context.Context, plain string) (accounts.ID, string, error)
 }
 
 // UseLocal sets what answers for local folders; it is called before the
@@ -2387,6 +2394,12 @@ func (s *Service) Episodes(ctx context.Context, user accounts.User, seriesID acc
 	if err != nil {
 		return nil, err
 	}
+	return s.episodes(ctx, v, seriesID, seasonID)
+}
+
+// episodes lists a series' episodes for v, of one season when seasonID is
+// set, and records them and the series' seasons.
+func (s *Service) episodes(ctx context.Context, v view, seriesID accounts.ID, seasonID *accounts.ID) ([]Item, error) {
 	series, shown, meta, err := s.series(ctx, v, seriesID)
 	if err != nil {
 		return nil, err

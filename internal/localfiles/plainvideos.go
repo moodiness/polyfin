@@ -1,13 +1,18 @@
 package localfiles
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"path"
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -82,4 +87,37 @@ func plainEpisodeName(rel string, number int) string {
 		return "Episode " + strconv.Itoa(number)
 	}
 	return strings.TrimSuffix(path.Base(rel), path.Ext(rel))
+}
+
+// LinkPlain links the unit of the plain video plain, a movie or a series
+// still listed, to an IMDb identifier, as Link does from the folder's page
+// (Find the title): a movie's file or disc, or a show's whole folder. It
+// answers addons.ErrNotFound when no folder lists that plain video, as
+// once its unit is matched.
+func (s *Service) LinkPlain(ctx context.Context, plain, imdb string) error {
+	var folder accounts.ID
+	var unit string
+	err := s.db.QueryRow(ctx, `SELECT f.addon_id, f.unit FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id
+		WHERE f.plain_id = $1 AND `+plainListed+` ORDER BY f.path LIMIT 1`, plain).Scan(&folder, &unit)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return addons.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	return s.Link(ctx, folder, unit, imdb)
+}
+
+// PlainMatch tells the title the unit of the plain video plain was matched
+// to since, by a scan or by hand: its folder and the title's Stremio
+// identifier, empty while the unit is unmatched or gone.
+func (s *Service) PlainMatch(ctx context.Context, plain string) (accounts.ID, string, error) {
+	var folder accounts.ID
+	var stremioID string
+	err := s.db.QueryRow(ctx, `SELECT addon_id, stremio_id FROM local_files WHERE plain_id = $1 AND stremio_id IS NOT NULL
+		ORDER BY path LIMIT 1`, plain).Scan(&folder, &stremioID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return accounts.ID{}, "", nil
+	}
+	return folder, stremioID, err
 }

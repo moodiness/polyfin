@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/playlists"
 )
 
@@ -27,8 +29,9 @@ import (
 // it for every user (see library.Overrides); people and provider
 // identifiers stay the addons'. Edit images searches TMDB and the server's
 // addons for images (see remoteimages.go). Polyfin's metadata providers
-// are the server's addons: Identify searches them, but cannot bind an item
-// to another title, since an item is the addon's title.
+// are the server's addons: Identify searches them, and binds a plain video
+// of a local folder to the title chosen, but no other item, since an item
+// is the addon's title.
 
 // remoteSearchTypes are the item types Jellyfin's Identify searches for,
 // with the kind of title the server's addons are searched for, if any.
@@ -515,14 +518,51 @@ func (h *Handler) searchProviders(w http.ResponseWriter, r *http.Request, kind l
 }
 
 // applyRemoteSearch is Identify's last step, which binds an item to the
-// title chosen. An item is its addon's title: Polyfin cannot bind it to
+// title chosen, as Jellyfin 12.4 sets the item's provider identifiers to
+// the result's and refreshes it, answering 204
+// (Jellyfin.Api/Controllers/ItemLookupController.cs, ApplySearchCriteria,
+// lines 245-282 at v12.4). A plain video of a local folder, a movie, or a
+// series, season or episode of a show folder left unmatched, is linked to
+// the result's IMDb title as the folder's page links it (Find the title,
+// localfiles.Service.Link): the movie's file or disc, or the whole show
+// folder. Any other item is its addon's title: Polyfin cannot bind it to
 // another, and answers as Jellyfin does when applying fails.
 func (h *Handler) applyRemoteSearch(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	b.bool(r, "replaceAllImages")
-	if _, ok := h.editedItemWith(w, r, b); !ok {
+	item, ok := h.editedItemWith(w, r, b)
+	if !ok {
 		return
 	}
-	h.Logger.Info("An administrator asked to identify an item again, which Polyfin does not do", "item", r.PathValue("itemId"))
-	processingError(w, http.StatusInternalServerError)
+	var result struct{ ProviderIds map[string]string }
+	present, ok := readJSONBody(w, r, &result, "searchResult")
+	if !ok {
+		return
+	}
+	if !present {
+		requireBody(w, "searchResult")
+		return
+	}
+	imdb := ""
+	for key, value := range result.ProviderIds {
+		if strings.EqualFold(key, "Imdb") {
+			imdb = value
+		}
+	}
+	// The link outlives an app giving up: Jellyfin's refresh does too.
+	err := h.Library.IdentifyPlain(context.WithoutCancel(r.Context()), item.ID, imdb)
+	switch {
+	case err == nil:
+		h.Logger.Info("An administrator identified a local file", "item", item.ID.String(), "imdb", imdb)
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, library.ErrNotPlain):
+		h.Logger.Info("An administrator asked to identify an item again, which Polyfin does not do", "item", item.ID.String())
+		processingError(w, http.StatusInternalServerError)
+	case errors.Is(err, localfiles.ErrInvalidIMDb):
+		// Links are made to IMDb identifiers: a result without one cannot
+		// be applied.
+		validationProblem(w, map[string][]string{"searchResult.ProviderIds": {"The result has no IMDb identifier."}})
+	default:
+		h.browseError(w, r, err)
+	}
 }
