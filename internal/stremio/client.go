@@ -186,10 +186,7 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 			failure = FailureRateLimited
 		}
 		c.health.record(ctx, manifestURL, target, started, failure)
-		if waits {
-			return nil, fmt.Errorf("%w: %w, %w", ErrUnreachable, httpStatus(response.StatusCode), wait)
-		}
-		return nil, fmt.Errorf("%w: %w", ErrUnreachable, httpStatus(response.StatusCode))
+		return nil, answered{status: httpStatus(response.StatusCode), wait: wait, waits: waits}
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
@@ -208,6 +205,39 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 type httpStatus int
 
 func (s httpStatus) Error() string { return fmt.Sprintf("HTTP %d", int(s)) }
+
+// answered is the error of an addon's answer that is not a success. It is
+// ErrUnreachable to its callers, as no resource came of it, with its status
+// for StatusOf and, when the addon asked to wait, the wait for RetryAfter.
+// Its text tells what the addon answered, as Health names it, rather than
+// calling an addon that answered unreachable.
+type answered struct {
+	status httpStatus
+	wait   retryAfter
+	waits  bool
+}
+
+func (a answered) Error() string {
+	status := int(a.status)
+	switch {
+	case a.waits:
+		return fmt.Sprintf("addon asked to wait: %v, %v", a.status, a.wait)
+	case status == http.StatusTooManyRequests:
+		return fmt.Sprintf("addon asked to slow down: %v", a.status)
+	case status >= 500:
+		return fmt.Sprintf("addon failed: %v", a.status)
+	case status >= 400 && status != http.StatusNotFound:
+		return fmt.Sprintf("addon refused the request: %v", a.status)
+	}
+	return fmt.Sprintf("addon answered %v", a.status)
+}
+
+func (a answered) Unwrap() []error {
+	if a.waits {
+		return []error{ErrUnreachable, a.status, a.wait}
+	}
+	return []error{ErrUnreachable, a.status}
+}
 
 // StatusOf returns the HTTP status of an answer that was not a success,
 // 0 when err is not one.

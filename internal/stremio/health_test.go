@@ -115,6 +115,34 @@ func TestA503WithRetryAfterAsksToWait(t *testing.T) {
 	}
 }
 
+// An addon that answers with an error status was reached: its error tells
+// what it answered, a refusal as such, and is still ErrUnreachable to the
+// callers, with its status.
+func TestAnErrorAnswerTellsWhatTheAddonAnswered(t *testing.T) {
+	var status atomic.Int32
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(int(status.Load()))
+	}))
+	defer addon.Close()
+	manifest := addon.URL + "/secret-config/manifest.json"
+	client := NewClient("test")
+	for code, want := range map[int]string{
+		http.StatusForbidden:            "addon refused the request: HTTP 403",
+		http.StatusUnauthorized:         "addon refused the request: HTTP 401",
+		http.StatusBadGateway:           "addon failed: HTTP 502",
+		http.StatusTooManyRequests:      "addon asked to slow down: HTTP 429",
+		http.StatusServiceUnavailable:   "addon failed: HTTP 503",
+		http.StatusNonAuthoritativeInfo: "addon answered HTTP 203",
+	} {
+		status.Store(int32(code))
+		_, err := client.Fetch(t.Context(), manifest, addon.URL+"/secret-config/search?q=a", false)
+		if err == nil || err.Error() != want || !errors.Is(err, ErrUnreachable) || StatusOf(err) != code ||
+			strings.Contains(err.Error(), "secret-config") {
+			t.Errorf("HTTP %d: %v", code, err)
+		}
+	}
+}
+
 // The metrics count an addon's requests by resource and outcome, under
 // the name the addon is listed with: a failing request moves the failures.
 func TestAddonRequestsAreCountedInTheMetrics(t *testing.T) {
