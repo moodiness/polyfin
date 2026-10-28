@@ -311,6 +311,76 @@ func (c *Client) PersonDetails(ctx context.Context, id int, language string) (Pe
 	return person, err
 }
 
+// FoundTitle is a movie or series TMDB's search finds: its identifier,
+// its name and original name, its year (0 when TMDB gives no date) and
+// its poster's path.
+type FoundTitle struct {
+	ID           int
+	Name         string
+	OriginalName string
+	Year         int
+	PosterPath   string
+}
+
+// SearchTitles returns the movies or series (kind) TMDB's search finds by
+// name, the first page of them, of year when it is not zero, as Jellyfin's
+// TMDB providers search a title by its name and year.
+func (c *Client) SearchTitles(ctx context.Context, kind Kind, name string, year int) ([]FoundTitle, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrNotFound
+	}
+	query := url.Values{"query": {name}, "include_adult": {"false"}}
+	if year > 0 {
+		if kind == TV {
+			query.Set("first_air_date_year", strconv.Itoa(year))
+		} else {
+			query.Set("year", strconv.Itoa(year))
+		}
+	}
+	var found struct {
+		Results []struct {
+			ID            int    `json:"id"`
+			Title         string `json:"title"`
+			OriginalTitle string `json:"original_title"`
+			Name          string `json:"name"`
+			OriginalName  string `json:"original_name"`
+			ReleaseDate   string `json:"release_date"`
+			FirstAirDate  string `json:"first_air_date"`
+			PosterPath    string `json:"poster_path"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, "/search/"+string(kind), query, &found); err != nil {
+		return nil, err
+	}
+	titles := make([]FoundTitle, 0, len(found.Results))
+	for _, r := range found.Results {
+		if r.ID <= 0 {
+			continue
+		}
+		credit := Credit{ReleaseDate: r.ReleaseDate, FirstAirDate: r.FirstAirDate}
+		titles = append(titles, FoundTitle{ID: r.ID, Name: cmp.Or(r.Title, r.Name), OriginalName: cmp.Or(r.OriginalTitle, r.OriginalName),
+			Year: credit.Year(), PosterPath: r.PosterPath})
+	}
+	return titles, nil
+}
+
+// IMDbID returns the IMDb identifier of the movie or series (kind) TMDB
+// identifies as id, from its external identifiers; ErrNotFound when TMDB
+// gives none.
+func (c *Client) IMDbID(ctx context.Context, kind Kind, id int) (string, error) {
+	var ids struct {
+		IMDb string `json:"imdb_id"`
+	}
+	if err := c.get(ctx, "/"+string(kind)+"/"+strconv.Itoa(id)+"/external_ids", nil, &ids); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(ids.IMDb) == "" {
+		return "", ErrNotFound
+	}
+	return strings.TrimSpace(ids.IMDb), nil
+}
+
 // CheckKey asks TMDB whether it accepts key: ErrKeyRefused when it does
 // not, another error when it could not be asked.
 func (c *Client) CheckKey(ctx context.Context, key string) error {
