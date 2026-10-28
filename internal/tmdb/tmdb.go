@@ -1,7 +1,8 @@
 // Package tmdb asks TMDB for the images of titles, seasons, episodes and
 // people, with the server's own API key (Settings.TMDBKey), for
 // administrators to choose an item's artwork from (see the jellyfin
-// package's remote images).
+// package's remote images), and for the details of the people titles
+// credit (see the library package's people details).
 //
 // TMDB is asked only while a key is saved. Its answers, and the titles and
 // people it did not know, are kept in memory for answerLife; at most
@@ -11,6 +12,7 @@
 package tmdb
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -192,23 +194,13 @@ func (c *Client) EpisodeStills(ctx context.Context, id string, season, episode i
 // PersonPhotos returns the photos of the person TMDB finds by name: the
 // most popular of those of that very name, whatever the case.
 func (c *Client) PersonPhotos(ctx context.Context, name string) ([]Image, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, ErrNotFound
-	}
-	var found struct {
-		Results []struct {
-			ID         int
-			Name       string
-			Popularity float64
-		}
-	}
-	if err := c.get(ctx, "/search/person", url.Values{"query": {name}, "include_adult": {"false"}}, &found); err != nil {
+	found, err := c.SearchPeople(ctx, name)
+	if err != nil {
 		return nil, err
 	}
 	best, popularity := 0, -1.0
-	for _, result := range found.Results {
-		if strings.EqualFold(strings.TrimSpace(result.Name), name) && result.ID > 0 && result.Popularity > popularity {
+	for _, result := range found {
+		if result.Popularity > popularity {
 			best, popularity = result.ID, result.Popularity
 		}
 	}
@@ -218,8 +210,105 @@ func (c *Client) PersonPhotos(ctx context.Context, name string) ([]Image, error)
 	var images struct {
 		Profiles []Image `json:"profiles"`
 	}
-	err := c.get(ctx, "/person/"+strconv.Itoa(best)+"/images", nil, &images)
+	err = c.get(ctx, "/person/"+strconv.Itoa(best)+"/images", nil, &images)
 	return images.Profiles, err
+}
+
+// FoundPerson is a person TMDB's search finds: their identifier, name,
+// popularity, profile photo's path, and the titles they are known for.
+type FoundPerson struct {
+	ID          int      `json:"id"`
+	Name        string   `json:"name"`
+	Popularity  float64  `json:"popularity"`
+	ProfilePath string   `json:"profile_path"`
+	KnownFor    []Credit `json:"known_for"`
+}
+
+// Credit is a title a person is credited in: a movie or a series ("tv"),
+// by its identifier, its names and its release date ("2006-01-02").
+type Credit struct {
+	ID            int    `json:"id"`
+	MediaType     string `json:"media_type"`
+	Title         string `json:"title"`
+	OriginalTitle string `json:"original_title"`
+	Name          string `json:"name"`
+	OriginalName  string `json:"original_name"`
+	ReleaseDate   string `json:"release_date"`
+	FirstAirDate  string `json:"first_air_date"`
+}
+
+// Names are the credit's title and original title, those of a series
+// included.
+func (c Credit) Names() []string {
+	return slices.DeleteFunc([]string{c.Title, c.OriginalTitle, c.Name, c.OriginalName}, func(s string) bool { return s == "" })
+}
+
+// Year is the year of the credit's release, 0 when TMDB gives none.
+func (c Credit) Year() int {
+	date := cmp.Or(c.ReleaseDate, c.FirstAirDate)
+	if len(date) < 4 {
+		return 0
+	}
+	year, _ := strconv.Atoi(date[:4])
+	return year
+}
+
+// SearchPeople returns the people TMDB finds by name whose name is that
+// very name, whatever the case: TMDB's search also finds people whose
+// name merely contains the words.
+func (c *Client) SearchPeople(ctx context.Context, name string) ([]FoundPerson, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrNotFound
+	}
+	var found struct {
+		Results []FoundPerson `json:"results"`
+	}
+	if err := c.get(ctx, "/search/person", url.Values{"query": {name}, "include_adult": {"false"}}, &found); err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(found.Results, func(p FoundPerson) bool {
+		return p.ID <= 0 || !strings.EqualFold(strings.Join(strings.Fields(p.Name), " "), strings.Join(strings.Fields(name), " "))
+	}), nil
+}
+
+// PersonCredits returns the titles a person is credited in, as an actor
+// or in the crew.
+func (c *Client) PersonCredits(ctx context.Context, id int) ([]Credit, error) {
+	var credits struct {
+		Cast []Credit `json:"cast"`
+		Crew []Credit `json:"crew"`
+	}
+	err := c.get(ctx, "/person/"+strconv.Itoa(id)+"/combined_credits", nil, &credits)
+	return append(credits.Cast, credits.Crew...), err
+}
+
+// Person is a person's details: their biography, birth and death dates
+// ("2006-01-02", empty when unknown), place of birth, profile photo's
+// path and IMDb identifier.
+type Person struct {
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	Biography    string `json:"biography"`
+	Birthday     string `json:"birthday"`
+	Deathday     string `json:"deathday"`
+	PlaceOfBirth string `json:"place_of_birth"`
+	ProfilePath  string `json:"profile_path"`
+	IMDbID       string `json:"imdb_id"`
+}
+
+// PersonDetails returns the details of the person TMDB identifies as id,
+// their biography in language (an ISO 639-1 code, with a region or not,
+// such as "fr" or "pt-BR"), which TMDB leaves empty when it has none in
+// it.
+func (c *Client) PersonDetails(ctx context.Context, id int, language string) (Person, error) {
+	var person Person
+	query := url.Values{}
+	if language != "" {
+		query.Set("language", language)
+	}
+	err := c.get(ctx, "/person/"+strconv.Itoa(id), query, &person)
+	return person, err
 }
 
 // CheckKey asks TMDB whether it accepts key: ErrKeyRefused when it does
