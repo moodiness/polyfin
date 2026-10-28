@@ -15,7 +15,7 @@ Under **Settings › Torrents**:
 - **Torrents at once (0 = no limit)**, 0 by default, from 0 to 100: how many torrents may run at once, for the whole server (see [Torrents at once](#torrents-at-once)).
 - **Trackers added to every torrent**, empty by default: announce URLs, one a line, 30 at most, asked for every torrent besides the trackers its addon names (see [Trackers](#trackers)). Polyfin comes with no list.
 
-Each user also needs **Can play torrent streams**, in the **Access** section of their page under **Users**, next to **Can download** (see [Users](users.md#playing-torrent-streams)). It is off for every user, administrators included. Without it, or with the switch off, a user's versions hold no torrent, from the server's addons or their own. With both, torrent versions are listed like the other versions of an addon, in its order.
+Each user also needs **Can play torrent streams**, in the **Access** section of their page under **Users**, next to **Can download** (see [Users](users.md#playing-torrent-streams)). It is off for every user, administrators included. Without it, or with the switch off, a user's versions hold no torrent, from the server's addons or their own; a link to the same file that another addon lists after the torrent takes its place. With both, torrent versions are listed like the other versions of an addon, in its order. See [Which streams become versions](playback.md#which-streams-become-versions) for every rule between an addon's streams and the versions.
 
 ## Routes
 

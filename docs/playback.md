@@ -46,6 +46,30 @@ A title's details list every stream the addons offer as a version (see [Title pa
 - Elsewhere, the item's own identifier as a media source (the `mediaSourceId` of `/Videos/{id}/stream`, subtitle and attachment URLs, playback reports) stands for the version the item's details and `PlaybackInfo` list under it: the first they list, after leaving out the versions that failed lately and those the [version order](#version-order) rules or the user's quality group leave out. A version that fails thus passes the identifier to the next one, wherever its addon is in the addons' order, and the next one's own identifier keeps naming it.
 - `StartTimeTicks` in the query or the body tells where an HLS play starts, so that Polyfin reads ahead from there.
 
+### Which streams become versions
+
+Polyfin does nothing to an addon's streams but what this list says, in this order. By default, only steps 1 to 6 leave streams out, and the versions keep the addons' order.
+
+1. **The addons asked:** the enabled addons the user browses that list streams (`stream` in their manifest) for the title's type and identifier: the server's sources in the order of **Content › Sources**, unless the user turned **Use the server's sources** off, then the user's own addons under **My sources**, in theirs (see [Personal addons](addons-and-libraries.md#personal-addons)). A user under parental control or blocking genres gets the server's sources only. A video whose title's description carries its own streams gets those first, and the addon that gave them is not asked for them (see [Streams in a title's details](addons-and-libraries.md#streams-in-a-title-s-details)).
+2. **What is asked:** each addon is asked at the address it was installed with, its configuration included, for the title or the episode (`/stream/<type>/<id>.json`). Polyfin adds nothing to the request, and takes the streams in the order the addon gives them: what the addon's configuration filters, sorts or limits is what Polyfin gets. An addon that fails, or does not answer within 15 seconds, gives no new version; the versions Polyfin kept from its earlier answers for the title may still show (see [Title pages](#title-pages)).
+3. **Nothing to play:** a stream with nothing to play is left out. A stream plays when it is a link over `http` or `https`, or a torrent's file (an `infoHash` of 40 hexadecimal digits). A web page (`externalUrl`), a YouTube video (`ytId`), or a notice the addon lists among its streams makes no version.
+4. **Torrents:** they are left out unless **Play torrent streams** is on, under **Settings › Torrents**, and the user has **Can play torrent streams** (see [Turning torrents on](torrents.md#turning-torrents-on)). Both are off by default.
+5. **The same file twice:** two streams that give the same file name and the same size, from one addon or two, as a torrent and a link or two torrents of the same release, are one version, the first in the order above. Without both its name and its size, a stream is known by its link, a torrent by its info hash and file index. A torrent left out by the previous step leaves its place to a link to the same file listed after it.
+6. **Failed lately:** versions that failed are left out for 15 minutes: a source that could not be read or analyzed, or a torrent that did not start in time (see [Sources that fail](#sources-that-fail)). A torrent whose peers stopped sending, a route that was down, the limit of torrents at once, or a host asking to slow down leaves the version listed. A restart forgets these failures, and so does a change of a local folder's address or credentials, for its files. A failure is the file's: a torrent that did not start also leaves out, for those 15 minutes, the link to the same file that users without torrents get instead, and the other way round.
+7. **Hide rules:** when set, **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Playback**, leave out what they name. All are off by default, and none ever hides every version of a title (see [Version order](#version-order)).
+8. **Quality group:** the user's group, when set, leaves out the versions taller than it, while one fits. It is **Original (no limit)** by default (see [Quality groups](users.md#quality-groups)).
+9. **The order:** it stays the addons' unless **Order versions by**, under **Settings › Playback**, has criteria. It has none by default. Versions the criteria tie on keep the addons' order.
+10. **Plays without a pick:** when an app plays without picking a version, `PlaybackInfo` leaves out the versions it passed over because they could not be read or did not play on the app (see above).
+
+Polyfin keeps no maximum of versions, and looks at no seeders, source, size or language unless a setting above says so.
+
+**Why a stream is missing:** apps do not say why. To find out:
+
+- An addon that failed, timed out or answered only a notice logs `An addon could not list streams`, at Warn, with the addon and the error, and **System › Health › Addons** shows its last failure.
+- A version a play could not analyze logs `A version could not be analyzed`, at Info, with the addon and why; a source that fails later in a play logs why too, never its address. A torrent that did not start logs `A torrent did not start in time`, and **System › Health** shows it under **Needs attention**.
+- Streams with nothing to play, torrents left out, files listed twice, and the hide rules and quality group log nothing. Compare the addon's list with the steps above: turn the hide rules and the quality group off, and check the addon's configuration where it was installed.
+- `GET /Polyfin/Items/{id}/Versions` tells how many versions are known and how many addons are still asked (see [Title pages](#title-pages)).
+
 ### Default audio and subtitle languages
 
 Each user chooses an audio language, a subtitle language and a subtitle mode in their app. A user who chose no language gets the audio track the file flags as default, and the subtitles their mode gives in any language. An administrator can choose languages for them:
@@ -250,7 +274,7 @@ A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. S
 
 **Source, in the order below** groups a title's versions by the addon or folder that gives them, the next criteria sorting each source's versions; placed after other criteria, it orders the versions they tie on. The sources **Order of sources** lists come first, in its order, then the others in the addons' order: a source added since the list was saved comes after those it lists, until it is moved there, and a user's own addons come after the server's sources. A source removed leaves the list. The list orders versions only: which addon describes a title, the order of the addons' subtitles and that of search results keep the order of **Content › Sources**, as versions do while the criterion is not chosen (see [Addons and libraries](addons-and-libraries.md)). It is how local files come first, whatever the other criteria (see [Local folders](local-folders.md#versions)).
 
-**In what order things happen:**
+**In what order things happen:** these steps follow steps 1 to 5 of [Which streams become versions](#which-streams-become-versions).
 
 1. The versions that failed lately are left out (see [Sources that fail](#sources-that-fail)).
 2. The hide rules apply. When they would hide every version of a title, none is hidden.

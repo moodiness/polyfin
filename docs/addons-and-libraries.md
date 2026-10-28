@@ -30,7 +30,7 @@ Each user can add their own addons and libraries under **My sources**. Users can
 
 ### Which streams play
 
-A stream an addon lists plays when it is a link to a video, over `http` or `https`. A torrent's stream, an `infoHash` with its `fileIdx` and `sources`, plays only while **Play torrent streams** is on under **Settings › Torrents**, for the users with **Can play torrent streams**; otherwise it is left out of the versions, and a title whose addons list only torrents has none. See [Torrents](torrents.md). Web pages (`externalUrl`) and YouTube videos (`ytId`) never play.
+A stream an addon lists plays when it is a link to a video, over `http` or `https`. A torrent's stream, an `infoHash` with its `fileIdx` and `sources`, plays only while **Play torrent streams** is on under **Settings › Torrents**, for the users with **Can play torrent streams**; otherwise it is left out of the versions, and a title whose addons list only torrents has none. See [Torrents](torrents.md). Web pages (`externalUrl`) and YouTube videos (`ytId`) never play. Every rule between an addon's streams and a title's versions, in the order Polyfin applies them, is in [Which streams become versions](playback.md#which-streams-become-versions).
 
 ### Manifest addresses
 
