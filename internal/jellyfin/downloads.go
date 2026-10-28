@@ -118,17 +118,23 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 
 // firstWorkingVersion is the version a title's own identifier stands for:
 // its first as the user is offered them (see offered), those that failed
-// lately left out, else the title's identifier, which stands for its
-// first. PlaybackInfo and item details name that version after the title,
-// so every request naming the title's identifier as a media source finds
-// its version here, never in the addons' order, whose first may have
+// lately left out, and past the torrents that did not start lately, as a
+// play picking no version passes them over (see tryable); else the
+// title's identifier, which stands for its first. PlaybackInfo names the
+// version it chooses after the title when it is the first, so every
+// request naming the title's identifier as a media source finds a version
+// that may play here, never in the addons' order, whose first may have
 // failed and be left out of the answers.
 func (h *Handler) firstWorkingVersion(ctx context.Context, user accounts.User, item library.Item) accounts.ID {
 	versions, err := h.Library.Versions(ctx, user, item.ID)
 	if err != nil {
 		return item.ID
 	}
-	if versions = h.offered(ctx, user, versions); len(versions) > 0 {
+	versions = h.offered(ctx, user, versions)
+	if i := slices.IndexFunc(versions, func(v library.Version) bool { return !h.didNotStart(v) }); i >= 0 {
+		return versions[i].ID
+	}
+	if len(versions) > 0 {
 		return versions[0].ID
 	}
 	return item.ID

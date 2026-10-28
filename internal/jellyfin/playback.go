@@ -385,7 +385,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		if explicit {
 			for i, version := range versions {
 				if version.ID == requested || sourceID(opened, version, i == at) == requested {
-					return candidates{order: []int{i}, analyzed: 1, named: i}
+					return candidates{order: []int{i}, analyzed: 1, named: i, picked: true}
 				}
 			}
 			return candidates{named: -1}

@@ -40,11 +40,37 @@ const (
 // candidates are the versions a play may choose, by their index among a
 // title's versions, in the order they are tried. analyzed is how many of
 // the first may be analyzed now, and named the one the app asked for, -1
-// when it asked for none (see playbackInfo).
+// when it asked for none (see playbackInfo); picked tells that the app
+// asked for that one alone, by its own identifier, as a user picks it in
+// the version menu.
 type candidates struct {
 	order    []int
 	analyzed int
 	named    int
+	picked   bool
+}
+
+// tryable leaves out of c the torrents that did not start in time lately
+// (see didNotStart), which item details still list: a play that picks no
+// version tries the next ones. A version picked is tried again at once,
+// whatever happened to it before.
+func (h *Handler) tryable(p playable, c candidates) candidates {
+	if c.picked {
+		for _, i := range c.order {
+			if h.didNotStart(p.versions[i]) {
+				h.Playback.RetryUnstarted(p.versions[i])
+			}
+		}
+		return c
+	}
+	c.order = slices.DeleteFunc(slices.Clone(c.order), func(i int) bool { return h.didNotStart(p.versions[i]) })
+	return c
+}
+
+// didNotStart reports whether version is a torrent that did not start in
+// time lately (see playback.Service.Unstarted).
+func (h *Handler) didNotStart(version library.Version) bool {
+	return version.Torrent != nil && h.Playback.Unstarted(version.ID)
 }
 
 // chosen is what a play found among its candidates: the version chosen,
@@ -77,6 +103,7 @@ type tried struct {
 func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened accounts.ID, request playbackInfoRequest,
 	c candidates, prefer bool) chosen {
 	result := chosen{unreadable: map[int]bool{}}
+	c = h.tryable(p, c)
 	at := openedIndex(opened, p.versions)
 	allowed := h.Accounts.Conversions(user)
 	// The analyses and keyframe indexes started run to their end whatever
@@ -322,9 +349,9 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 // its versions are in.
 const subtitleGrace = time.Second
 
-// unstartedTorrent reports whether one of versions is a torrent left out
-// for a while, as it could not start: a play then tells that the title
-// cannot be played now.
+// unstartedTorrent reports whether one of versions is a torrent that did
+// not start lately, which a play picking no version skips: a play then
+// tells that the title cannot be played now.
 func (h *Handler) unstartedTorrent(versions []library.Version) bool {
-	return slices.ContainsFunc(versions, func(v library.Version) bool { return v.Torrent != nil && h.Playback.Unstarted(v.ID) })
+	return slices.ContainsFunc(versions, h.didNotStart)
 }
