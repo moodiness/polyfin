@@ -582,6 +582,10 @@ type decided struct {
 	// could not be read in time for the play (see
 	// playback.TorrentUnstarted).
 	unstarted bool
+	// lowerable and lowerOverHLS tell, of a version played as it is,
+	// whether a lower quality would play it converted, and over HLS (see
+	// lowerable).
+	lowerable, lowerOverHLS bool
 }
 
 // unconverted reports whether the app plays a version without conversion:
@@ -647,7 +651,11 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 	if unplayable(request, analysis, decision, allowed) {
 		return decided{}, false
 	}
-	return decided{index: index, version: version, id: id, analysis: analysis, source: source, decision: decision}, true
+	d := decided{index: index, version: version, id: id, analysis: analysis, source: source, decision: decision}
+	if decision.DirectPlay {
+		d.lowerable, d.lowerOverHLS = lowerable(request.DeviceProfile, described, options, allowed)
+	}
+	return d, true
 }
 
 // trackDecision decides how a version plays on the app, for its device
@@ -795,6 +803,14 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 		}
 		source.TranscodingContainer = decision.Transcoding.Container
 		describeConverted(request, analysis, source.MediaStreams, decision.Video)
+	}
+	// Played as it is, it offers a lower quality, as Jellyfin does, when
+	// one would play it converted: over HLS, once it is known to be cut
+	// into segments, as the conversion needs, which the play does not
+	// wait to read. It keeps no TranscodingUrl, which apps use only for a
+	// source not played as it is.
+	if decision.DirectPlay && d.lowerable {
+		source.SupportsTranscoding = !d.lowerOverHLS || h.Playback.Segmented(r.Context(), version)
 	}
 	if decision.AudioStreamIndex >= 0 {
 		source.DefaultAudioStreamIndex = new(decision.AudioStreamIndex)

@@ -820,9 +820,10 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 		ConversionHeight:    request.conversionHeight,
 		Can:                 h.Playback.Capabilities(),
 	}
+	described := playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}
 	decision := playback.Decision{DirectPlay: true, Container: container, AudioStreamIndex: -1, SubtitleStreamIndex: -1}
 	if request.DeviceProfile != nil {
-		decision = playback.Decide(request.DeviceProfile, playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}, options)
+		decision = playback.Decide(request.DeviceProfile, described, options)
 	}
 	if decision.HLS && !permitted(allowed, decision) {
 		return MediaSourceInfo{}, false
@@ -834,7 +835,14 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 	}
 	source.Container = cmp.Or(decision.Container, container)
 	source.SupportsDirectPlay, source.SupportsDirectStream = decision.DirectPlay, decision.DirectPlay
-	if _, video := playback.LiveVideo(analysis); decision.HLS && video {
+	_, video := playback.LiveVideo(analysis)
+	// Played as it is, a stream offers a lower quality when one would play
+	// it converted, which a stream with video is over HLS (see lowerable).
+	if decision.DirectPlay && video {
+		lower, overHLS := lowerable(request.DeviceProfile, described, options, allowed)
+		source.SupportsTranscoding = lower && overHLS
+	}
+	if decision.HLS && video {
 		limit := request.MaxStreamingBitrate.value
 		if limit <= 0 && request.DeviceProfile.MaxStreamingBitrate != nil {
 			limit = *request.DeviceProfile.MaxStreamingBitrate

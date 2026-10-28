@@ -77,6 +77,28 @@ func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, 
 	return plan, err
 }
 
+// Segmented reports whether a version is known to be cut into HLS
+// segments (see Plan) from what is kept alone, reading nothing from its
+// source: a version read from its input, or an MPEG-TS file, always is;
+// another once its keyframe index was read, as preparing a play or a
+// play over HLS reads it. For a version played as it is, whose
+// conversion only a later request may ask for: its play does not wait
+// for its index, nor reads a torrent's pieces for it.
+func (s *Service) Segmented(ctx context.Context, version library.Version) bool {
+	analysis, ok := s.Analyzed(ctx, version.ID)
+	if _, video := videoOf(analysis); !ok || !video || analysis.Duration <= 0 {
+		return false
+	}
+	if s.ReadsInput(version) || transportStream(analysis) {
+		return true
+	}
+	if _, ok := s.indexes.Get(version.ID); ok {
+		return true
+	}
+	_, ok = s.savedKeyframes(ctx, version.ID)
+	return ok
+}
+
 // plan is Plan, without warming.
 func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, error) {
 	analysis, err := s.Analyze(ctx, version)

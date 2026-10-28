@@ -23,6 +23,24 @@ The audio of a video repackaged or converted into HLS is copied only when the ap
 
 **Compared with Jellyfin:** Jellyfin keeps the same codecs, in `StreamBuilder.BuildStreamVideoItem`, for HLS only, as Polyfin does. Jellyfin's `TranscodingUrl` writes the codec of a copied track alone as `AudioCodec`; Polyfin writes the codecs the segments carry either way, as it does when the track is converted.
 
+### Lower quality during a play
+
+jellyfin-web's player offers **Quality** in its settings menu during a play, to lower the bitrate of a play that stutters. Picking a quality plays the version again from the same position at that bitrate: a version whose bitrate is above it is converted down to it (see [Size of converted video](#size-of-converted-video)); one within it plays as before. A version or a channel whose bitrate is not known, as a live HLS stream's, counts as the usual bitrate of its height, the one its conversion gets (see [Bitrate of converted video](#bitrate-of-converted-video)): a 1080p channel counts as 10 Mb/s, and converts at 3 Mbps. This holds for every bitrate limit, the app's and the user's **Maximum quality** too. The menu shows for a version played as it is, a movie, an episode, a recording or a channel, as for one Polyfin repackages or converts, when a lower quality would play it converted:
+
+- the server converts video (**Conversion (transcoding)**), and the user may have it converted (**Can use conversion (transcoding)**), while the server is not at its **Video conversions at once**;
+- FFmpeg can convert its video to a codec the app takes;
+- a file is known to be cut into HLS segments: it is an MPEG-TS file, or its keyframe index was read, as [Prepare playback in advance](playback.md#preparing-playback-in-advance) reads it when a title's details open, or as an earlier play over HLS did. A play as it is never waits to read the index: a version whose index is not read yet, such as a torrent's at its first play, or that has none, such as an AVI file without its index, plays without the menu. A channel's stream is converted as it comes, and needs none.
+
+**Compared with Jellyfin:**
+
+- Jellyfin offers the menu whenever the app's profile can convert video for streaming, which jellyfin-web's always can, unless the user may neither convert nor repackage (`MediaInfoHelper.SetDeviceSpecificData`). Polyfin offers it only when a lower quality would play, so that picking one never ends the play.
+- Jellyfin never lowers a remote source, such as a channel or a `.strm` stream, to the quality picked, and counts a local file whose bitrate is not known as 40 Mb/s (`StreamBuilder.IsBitrateLimitExceeded`): its menu does nothing for a channel played as it is. Polyfin lowers any version or channel, remote or not, above the quality picked, counting one whose bitrate is not known as the usual bitrate of its height.
+
+**For app developers:**
+
+- PlaybackInfo's media source says `SupportsTranscoding: true` for a version played as it is under the conditions above, with no `TranscodingUrl`, as from Jellyfin: a `TranscodingUrl` comes only with a source not played as it is.
+- A lower `MaxStreamingBitrate` in a new PlaybackInfo, as jellyfin-web sends it, gives the `TranscodingUrl` of the conversion.
+
 ## Size of converted video
 
 Converted video is never larger than its source. It is smaller when one of these limits is below the source's size, the lowest one winning:
