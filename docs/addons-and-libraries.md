@@ -595,7 +595,7 @@ A genre, studio or year page lists the titles of the catalogs you reach, as libr
 
 ## People
 
-The actors, directors and writers a title credits open as people, with the photo the metadata addon gives.
+The actors, directors and writers a title credits open as people, with the photo the metadata addon gives, and, while the server has a **TMDB API key**, what TMDB knows of them (see [Photos and biographies from TMDB](#photos-and-biographies-from-tmdb)). A person is one for every title that credits them by that name: a title's cast shows the photo Polyfin keeps of someone its own description gives none of, one another title's addon gave, else TMDB's, as Jellyfin shows a person's image wherever they are credited.
 
 An addon may give them as Stremio links rather than as lists, as Stremio's protocol now advises: links of the categories `Cast`, `actor` or `actors`, `Directors` or `director`, and `Writers` or `writer`, in any letter case. Polyfin reads them in their order, as Stremio apps show them, for each kind the description gives no list of. A list the addon gives wins over its links, and Polyfin keeps no other link. A description kept from before Polyfin read links shows them once it is read again (see [Catalog pages](#catalog-pages)), or at once with **Refresh metadata**.
 
@@ -607,6 +607,19 @@ A person's titles are:
 A title of the second kind that a people search also finds, under another addon's identifier (such as `tmdb:…` for the IMDb identifier a library lists), is listed once, as the title of your library. Without a people-search catalog, only the second kind show. A title's people are those of the description its page shows them from: the first addon without a language that describes it, starting with the one whose catalog listed it (see [Languages](#languages)). When that description is read again, in the background or with **Refresh metadata**, someone it no longer credits loses the title on their page, as in Jellyfin. Other addons' descriptions, and those of addons given a language, change no one's titles.
 
 The people list holds the people credited in the titles of your addons that someone opened. People credited only in other users' own addons stay hidden.
+
+### Photos and biographies from TMDB
+
+Metadata addons give people's names, and some their photos; none gives a biography, and few give photos of directors and writers. While the server has a **TMDB API key** (see [Edit images](#edit-images)), Polyfin looks each person up on TMDB once, for every user:
+
+- **What it takes:** their profile photo, for people the addon gives none of, and their biography, birth date, date of death and place of birth, which jellyfin-web shows on their page. A person whose addon gives a photo keeps it and gets the rest.
+- **When:** the first time their page opens, which waits up to 3 seconds for TMDB, else shows it the next time; and when a title's page shows them in its cast without a photo, which does not wait: the photo shows the next time the cast shows. Two people are looked up at a time, at most 500 wait, and nothing is asked without a key.
+- **Who they are:** the person TMDB identifies by the TMDB identifier the addon gives, when it gives one (`tmdb_id`, or a numeric `id`, in `app_extras.cast`); else the one TMDB finds by that very name, whatever the case. Of several people of the same name, Polyfin takes the one whose photo the addon gives, when it is TMDB's, else the one credited in the titles Polyfin knows the person in, matched by their TMDB identifier, or by name and year, a year apart at most. When no title tells them apart, the person gets nothing, rather than someone else's photo and life.
+- **Language:** the biography is the one in the [metadata language](users.md#metadata-language) of the user who opens the page, else in the server's, each asked once; when TMDB has none in it, its English one.
+- **What wins:** the addon's photo, then an image an administrator chose in **Edit images** or a field changed in **Edit metadata**, which TMDB never replaces.
+- **Kept:** on the person, across restarts. A person TMDB did not find is asked about again after 30 days; a lookup that failed, after 10 minutes, then twice as long each time, up to a day.
+
+**Compared with Jellyfin:** Jellyfin fills a person from TMDB the same way, by the TMDB identifier it has, else the first person TMDB's search finds by name, with their biography, birth and death dates, place of birth and photo in the server's metadata language ([TmdbPersonProvider.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/People/TmdbPersonProvider.cs#L89-L144)). Polyfin asks TMDB only for people a page shows, rather than when a library scans; of several people of the same name it takes the one credited in the person's titles, or no one, rather than the first; and it shows each user the biography in their own language, else TMDB's English one, where Jellyfin keeps one per person.
 
 ## Similar titles
 
@@ -717,14 +730,14 @@ Polyfin keeps these fields: name, original title, sort name, overview, tagline, 
 
 **Edit images** uploads a Primary, Backdrop, Logo, Thumb or Banner image in place of the addon's, or searches two image providers for one:
 
-- **TMDB**, while the server has a **TMDB API key**: a movie's or series' posters, backdrops and logos, an episode's stills, a season's posters and a person's photos, with their language, size and votes. A title is found by the TMDB identifier its addons give, else through TMDB's lookup of its IMDb identifier; a person by name, the most popular of that very name.
+- **TMDB**, while the server has a **TMDB API key**: a movie's or series' posters, backdrops and logos, an episode's stills, a season's posters and a person's photos, with their language, size and votes. A title is found by the TMDB identifier its addons give, else through TMDB's lookup of its IMDb identifier; a person by name, the most popular of that very name. The same key fills people's photos and biographies (see [Photos and biographies from TMDB](#photos-and-biographies-from-tmdb)).
 - **Addons**: the poster, background, logo and wide poster each of the server's metadata addons gives in its description of a movie or series, shown under the addon's name. An addon that lists the title for a user is asked too.
 
 Posters are listed for Primary, backdrops for Backdrop and Thumb (with the addons' wide posters first), logos for Logo. Banner lists nothing. TMDB's images follow the language of the user who searches: their [metadata language](users.md#metadata-language), else the server's. Unless jellyfin-web's All languages box is ticked, they are those in that language and those without text; with it, every language, that language first, then by votes. TMDB's logos given as SVG files are left out, since they cannot be kept.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Empty, only the addons' images are listed and TMDB is never asked. |
+| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Edit images searches TMDB with it, and people's photos and biographies are looked up with it. Empty, only the addons' images are listed, people show what the addons give, and TMDB is never asked. |
 
 - Images are relayed by Polyfin, as all artwork is: apps never reach TMDB or an addon's artwork server. Polyfin relays only the images it listed for the item, and an addon's under the same limits as the addon: a user's own addon reaches public addresses only.
 - TMDB's answers are kept for 24 hours, and at most 4 requests go to TMDB at a time, its images included.
