@@ -894,6 +894,19 @@ func (s *Service) RetryItem(addon, item accounts.ID) {
 	})
 }
 
+// RetryUnstarted forgets that a torrent version did not start (see
+// Unstarted), so that it is tried again at once, its source's cooldown
+// included: a user picked it. Other failures stay.
+func (s *Service) RetryUnstarted(version library.Version) {
+	if version.Torrent == nil || !s.Unstarted(version.ID) {
+		return
+	}
+	s.failures.Delete(version.ID)
+	src := s.open(version)
+	src.Retry()
+	src.Release()
+}
+
 // ffprobe is the prober, an analysis bounded by the settings' timeout when
 // it starts: a change applies to the next analysis.
 func (s *Service) ffprobe() media.Prober {
