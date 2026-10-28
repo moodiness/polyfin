@@ -25,8 +25,9 @@ func Video(name string) bool {
 
 var (
 	// Tag matches S01E02, s01e02, S01E01-E02, S01E01E02 and S01E01-02,
-	// Extra each episode past the first in its third group; Cross matches
-	// 1x02; Alone E02 or Episode 2, in a season folder.
+	// Extra each episode past the first in its third group, of which Last
+	// keeps those that end a range; Cross matches 1x02; Alone E02 or
+	// Episode 2, in a season folder.
 	Tag   = regexp.MustCompile(`(?i)\bs(\d{1,3})[ ._-]?e(\d{1,4})((?:(?:-e?|[ ._]?-?[ ._]?e)\d{1,4})*)`)
 	Extra = regexp.MustCompile(`(?i)(?:-e?|[ ._]?-?[ ._]?e)(\d{1,4})`)
 	Cross = regexp.MustCompile(`(?i)\b(\d{1,2})x(\d{2,3})\b`)
@@ -50,6 +51,29 @@ func (e Episodes) Holds(season, episode int) bool {
 	return e.Season == season && episode >= e.First && episode <= e.Last
 }
 
+// Last is the last episode of a name whose episode tag (see Tag) tells
+// first, its following episodes in name[from:to], Tag's third group. As
+// Jellyfin 12.4 reads a range's end
+// (Emby.Naming/TV/EpisodePathParser.cs, lines 151-167, and the
+// endingepnumber groups of Emby.Naming/Common/NamingOptions.cs, lines
+// 771-782), an episode ending it has at most 3 digits, is not followed by
+// another digit, nor by a "p" or an "i", as a resolution is, and ends no
+// range when lower than first: "S09E14-1080p" and "S01E01-2022", a year,
+// hold one episode, "S01E01-E02", "S01E01-02" and "S01E01E02" two.
+func Last(name string, first, from, to int) int {
+	last := first
+	for _, m := range Extra.FindAllStringSubmatchIndex(name[from:to], -1) {
+		start, end := from+m[2], from+m[3]
+		if end-start > 3 || end < len(name) && strings.ContainsRune("0123456789iIpP", rune(name[end])) {
+			continue
+		}
+		if number, _ := strconv.Atoi(name[start:end]); number > last {
+			last = number
+		}
+	}
+	return last
+}
+
 // Of reads the episodes a video's path tells: its name's S01E02 or 1x02,
 // else its name's E02 or Episode 2 within the season its folder tells
 // (Season 01, Specials, or a season's pack, Show.S01); false when it
@@ -62,12 +86,7 @@ func Of(rel string) (Episodes, bool) {
 		var e Episodes
 		e.Season, _ = strconv.Atoi(stem[loc[2]:loc[3]])
 		e.First, _ = strconv.Atoi(stem[loc[4]:loc[5]])
-		e.Last = e.First
-		for _, m := range Extra.FindAllStringSubmatch(stem[loc[6]:loc[7]], -1) {
-			if last, _ := strconv.Atoi(m[1]); last > e.Last {
-				e.Last = last
-			}
-		}
+		e.Last = Last(stem, e.First, loc[6], loc[7])
 		return e, true
 	}
 	if m := Cross.FindStringSubmatch(stem); m != nil {

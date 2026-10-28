@@ -123,6 +123,14 @@ func TestEpisodeNamesAreRead(t *testing.T) {
 		// At the folder's top, the file names its show and is its unit.
 		{"The.Cisco.Kid.1950.S01E03.mkv", "The Cisco Kid", 1950, "", "The.Cisco.Kid.1950.S01E03.mkv", 1, 3, 3, true},
 		{"The Lone Ranger/Bonus.mkv", "The Lone Ranger", 0, "", "The Lone Ranger", 0, 0, 0, false},
+		// A year or a resolution glued to the episode ends no range, as
+		// Jellyfin reads them; a range of 3-digit episodes does.
+		{"All of Us Are Dead/All.of.Us.Are.Dead.S01E01-2022.mkv", "All of Us Are Dead", 0, "", "All of Us Are Dead", 1, 1, 1, true},
+		{"The Lone Ranger/Show.S09E14-1080p.mkv", "The Lone Ranger", 0, "", "The Lone Ranger", 9, 14, 14, true},
+		{"The Lone Ranger/Show S01E01-E02.mkv", "The Lone Ranger", 0, "", "The Lone Ranger", 1, 1, 2, true},
+		{"The Lone Ranger/Show S01E01-02.mkv", "The Lone Ranger", 0, "", "The Lone Ranger", 1, 1, 2, true},
+		{"The Lone Ranger/Show S02E10E11.mkv", "The Lone Ranger", 0, "", "The Lone Ranger", 2, 10, 11, true},
+		{"The Lone Ranger/Show S01E99-E101.mkv", "The Lone Ranger", 0, "", "The Lone Ranger", 1, 99, 101, true},
 	} {
 		show, episode, unit := episodeName(tc.path)
 		if show.title != tc.show || show.year != tc.year || show.imdb != tc.imdb || unit != tc.unit || episode.episodic != tc.episodic ||
@@ -137,5 +145,36 @@ func TestTitlesFold(t *testing.T) {
 	if fold("Les Misérables") != fold("les miserables") || fold("Sherlock Jr.") != fold("Sherlock Jr") || fold("Mr. & Mrs.") != "mr and mrs" ||
 		fold("Night of the Living Dead") == fold("Dawn of the Dead") {
 		t.Errorf("folded: %q %q", fold("Les Misérables"), fold("Mr. & Mrs."))
+	}
+}
+
+// A file a scan stored with a range its name no longer gives, as earlier
+// versions read a year or a resolution glued to the episode, is read
+// again at the next scan: its episodes are those its name gives now.
+func TestScansReadStoredEpisodesAgain(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	ctx := t.Context()
+	rel := "The Lone Ranger (1949)/Season 01/The Lone Ranger S01E01-2022.mkv"
+	addon, _ := e.folder(KindShows, map[string]int{rel: 10})
+	// As an earlier version stored it.
+	if _, err := e.pool.Exec(ctx, "UPDATE local_files SET last_episode = 2022 WHERE addon_id = $1 AND path = $2", addon.ID, rel); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.service.Scan(ctx, addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	var first, last int
+	if err := e.pool.QueryRow(ctx, "SELECT episode, last_episode FROM local_files WHERE addon_id = $1 AND path = $2", addon.ID, rel).
+		Scan(&first, &last); err != nil || first != 1 || last != 1 {
+		t.Errorf("the stored episodes: %d to %d, %v", first, last, err)
+	}
+	if got := e.files(addon.ID)[rel]; got != "tt0041038" {
+		t.Fatalf("the file's title: %s", got)
+	}
+	for episode, want := range map[string]int{"tt0041038:1:1": 1, "tt0041038:1:2": 0} {
+		if streams, err := e.service.Streams(ctx, addon.ID, episode); err != nil || len(streams) != want {
+			t.Errorf("the streams of %s: %+v %v", episode, streams, err)
+		}
 	}
 }

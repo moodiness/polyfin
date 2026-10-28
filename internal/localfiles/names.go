@@ -146,7 +146,6 @@ var (
 	bracketed = regexp.MustCompile(`\[[^\]]*\]|\{[^}]*\}`)
 	// The episodes names tell, as the episodename package reads them.
 	episodeTag   = episodename.Tag
-	extraEpisod  = episodename.Extra
 	crossTag     = episodename.Cross
 	episodeOnly  = episodename.Alone
 	seasonFolder = episodename.SeasonFolder
@@ -183,12 +182,7 @@ func parseName(text string) name {
 		n.episodic = true
 		n.season, _ = strconv.Atoi(text[loc[2]:loc[3]])
 		n.episode, _ = strconv.Atoi(text[loc[4]:loc[5]])
-		n.lastEpisode = n.episode
-		for _, m := range extraEpisod.FindAllStringSubmatch(text[loc[6]:loc[7]], -1) {
-			if last, _ := strconv.Atoi(m[1]); last > n.lastEpisode {
-				n.lastEpisode = last
-			}
-		}
+		n.lastEpisode = episodename.Last(text, n.episode, loc[6], loc[7])
 		text = text[:loc[0]]
 	} else if loc := crossTag.FindStringSubmatchIndex(text); loc != nil {
 		n.episodic = true

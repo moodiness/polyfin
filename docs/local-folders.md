@@ -134,7 +134,7 @@ Shows, a folder per show, the season and episode in each file's name, or discs c
 /media/shows/The Lone Ranger (1949)/Season 01/The Lone Ranger - S01E03-E04.mkv
 ```
 
-`S01E02`, `s01e02`, `1x02` and, in a season folder, `E02` or `Episode 2` are read. A file holding several episodes, `S01E01-E02`, `S01E01E02` or `S01E01-02`, plays for each of them.
+`S01E02`, `s01e02`, `1x02` and, in a season folder, `E02` or `Episode 2` are read. A file holding several episodes, `S01E01-E02`, `S01E01E02` or `S01E01-02`, plays for each of them. As Jellyfin reads them, the episode ending such a range has at most 3 digits and is followed by no other digit, nor by a resolution's `p` or `i` ([`EpisodePathParser.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/TV/EpisodePathParser.cs#L151-L167)): a year or a resolution glued to the episode ends no range, so `Show.S01E01-2022.mkv` and `Show.S09E14-1080p.mkv` hold one episode each, while `S01E99-E101` holds three. A range ending lower than it starts is no range either. Each scan reads the files' names again: a file an earlier version read otherwise, such as `S01E01-2022`, which earlier versions read as episodes 1 to 2022, is read anew at the first scan, at startup, without its title being searched again.
 
 An identifier in a file's or folder's name settles its title: `{imdb-tt0063350}`, `[imdbid-tt0063350]`, `{tmdb-10331}` or `[tmdbid-10331]`.
 
