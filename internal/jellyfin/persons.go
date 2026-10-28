@@ -14,9 +14,11 @@ import (
 //
 // Titles credit actors, directors and writers by name; each is a Person
 // item, identified by their name (see library.PersonID), with the photo the
-// metadata addon gives. A person's titles are those the people-search
-// catalogs of the user's addons find for their name, plus those Polyfin
-// already knows them in (see library.Service.PersonTitles).
+// metadata addon gives, else TMDB's, and TMDB's details of them while the
+// server has a TMDB key (see library's persondetails.go). A person's titles
+// are those the people-search catalogs of the user's addons find for their
+// name, plus those Polyfin already knows them in (see
+// library.Service.PersonTitles).
 
 func (h *Handler) personRoutes(rt *router) {
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
@@ -146,14 +148,30 @@ func (h *Handler) personByName(w http.ResponseWriter, r *http.Request) {
 // they are credited in; jellyfin-web only shows the sections of a person's
 // page whose count is not zero. As on genre pages, the counts are those of
 // a first page of titles, plus one when more follow, and the listings that
-// follow read the same catalog pages again from cache. Polyfin knows no
-// biography, birth date or birthplace (Overview, PremiereDate,
-// ProductionLocations).
+// follow read the same catalog pages again from cache. A person opened the
+// first time is looked up on TMDB, waited for a moment, for their photo,
+// biography, birth and death dates and birthplace (see
+// library.Service.LookUpPerson).
 func (h *Handler) writePerson(w http.ResponseWriter, r *http.Request, user accounts.User, person library.Item) {
+	if h.Library.LookUpPerson(r.Context(), user, person.ID) {
+		if again, err := h.Library.Item(r.Context(), user, person.ID); err == nil {
+			person = again
+		}
+	}
 	dto := h.namedItem(namedPage{itemType: "Person", name: person.Name, id: person.ID.String(), sortName: strings.ToLower(person.Name)})
 	if person.Images.Primary != "" {
 		dto.ImageTags["Primary"] = library.ImageTag(person.Images.Primary)
 		dto.PrimaryImageAspectRatio = new(2.0 / 3.0)
+	}
+	dto.Overview, dto.ProductionLocations = person.Overview, person.ProductionLocations
+	if person.PremiereDate != nil {
+		dto.PremiereDate, dto.ProductionYear = new(Time(*person.PremiereDate)), new(person.PremiereDate.Year())
+	}
+	if person.EndDate != nil {
+		dto.EndDate = new(Time(*person.EndDate))
+	}
+	for provider, id := range person.ProviderIDs {
+		dto.ProviderIds[provider] = id
 	}
 	for _, count := range []struct {
 		kind  library.Kind

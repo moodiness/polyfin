@@ -23,7 +23,9 @@ import (
 // library.Service.Narrowed).
 
 // namedItemDto describes a genre, studio or year as Jellyfin does on its
-// page, in Jellyfin's key order.
+// page, in Jellyfin's key order; also a person, with the details TMDB gave
+// of them: biography (Overview), birth (PremiereDate, ProductionYear),
+// death (EndDate) and birthplace (ProductionLocations).
 type namedItemDto struct {
 	Name                     string
 	ServerId                 string
@@ -33,12 +35,16 @@ type namedItemDto struct {
 	CanDelete                bool
 	CanDownload              bool
 	SortName                 string
+	PremiereDate             *Time `json:",omitempty"`
 	ExternalUrls             []MediaUrl
+	ProductionLocations      []string `json:",omitempty"`
 	EnableMediaSourceDisplay bool
 	ChannelId                *string
+	Overview                 string `json:",omitempty"`
 	Taglines                 []string
 	Genres                   []string
 	PlayAccess               string `json:",omitempty"`
+	ProductionYear           *int   `json:",omitempty"`
 	RemoteTrailers           []MediaUrl
 	ProviderIds              map[string]string
 	ParentId                 *string
@@ -59,6 +65,7 @@ type namedItemDto struct {
 	Chapters                 []struct{}
 	LocationType             string
 	MediaType                string
+	EndDate                  *Time `json:",omitempty"`
 	LockedFields             []string
 	TrailerCount             int
 	MovieCount               int

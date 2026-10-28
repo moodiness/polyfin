@@ -746,6 +746,9 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	// The cast shows the photos Polyfin keeps of the people the title
+	// gives none of, and has those without one looked up on TMDB.
+	item.People = h.Library.CastPhotos(r.Context(), user, item.People)
 	dto := h.newItemDto(item, requestedFields(r), true, state)
 	h.addMediaSources(r, user, &dto, item, id, true)
 	h.setExtraCounts(r, user, &dto, item)

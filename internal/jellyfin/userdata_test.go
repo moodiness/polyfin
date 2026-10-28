@@ -788,5 +788,9 @@ var userDataShapes = shapeRules{
 	returned: map[string][]string{
 		// The recorded episode had no air date.
 		"PremiereDate": {"resume-items"}, "ProductionYear": {"resume-items"},
+		// The test addon gives the series' actor a photo in the movie, opened
+		// before: the series' cast shows it, as Jellyfin shows a person's
+		// image wherever they are credited. The recorded actor had none.
+		"PrimaryImageTag": {"series-in-progress"},
 	},
 }

@@ -498,9 +498,13 @@ var browseShapes = shapeRules{
 		"PrimaryImageItemId": {"virtual-folders"},
 	},
 	returned: map[string][]string{
-		// The recorded items lacked the rating and cast photo the fake addon
-		// provides.
-		"OfficialRating": {"latest"}, "PrimaryImageTag": {"movie"},
+		// The recorded items lacked the rating the fake addon provides.
+		"OfficialRating": {"latest"},
+		// The recorded actors had no photo. The test addon gives the movie's
+		// actor one, and the series' actor, the same person, none: the
+		// series' cast shows the photo kept of them, as Jellyfin shows a
+		// person's image wherever they are credited.
+		"PrimaryImageTag": {"movie", "series"},
 		// The recorded libraries and collections had no image. Polyfin's
 		// new libraries, and collections without a poster, draw one as soon
 		// as their titles are read, which may come before the listing or
@@ -535,6 +539,13 @@ func TestBrowseResponsesMatchJellyfin(t *testing.T) {
 	season := first("/Shows/"+series+"/Seasons", func(item BaseItemDto) bool { return *item.IndexNumber == 1 })
 	episode := first("/Shows/"+series+"/Episodes?seasonId="+season, nil)
 	boxset := first("/Items?ParentId="+views["Groups"], nil)
+
+	// The movie's description gives its actor a photo, which the series'
+	// cast then shows (see browseShapes): the movie is read first, so that
+	// the answers do not depend on the order the fixtures are asked in.
+	if status, body := s.call(http.MethodGet, "/Users/"+user+"/Items/"+movie, app("tv", token), nil); status != http.StatusOK {
+		t.Fatalf("the movie: %d %s", status, body)
+	}
 
 	library := "/Items?userId=" + user + "&startIndex=0&limit=100&recursive=true&sortOrder=Ascending&fields=MediaSourceCount" +
 		"&fields=PrimaryImageAspectRatio&sortBy=SortName&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop"
