@@ -1,4 +1,4 @@
-import { HouseIcon } from '@phosphor-icons/react'
+import { ArrowLeftIcon, HouseIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { Outlet, ScrollRestoration } from 'react-router'
 import { fetchSession, fetchStatus, queryKeys } from '@/api'
@@ -7,6 +7,7 @@ import SetupRoute from '@/features/auth/SetupRoute'
 import { ServerStatus } from '@/features/home/ServerStatus'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
+import { webPlayerInPlace, webPlayerLink } from '@/jellyfinApps'
 import { ButtonLink, InlineError, Spinner } from '@/ui'
 import { PageLayout } from './PageLayout'
 import { useSessionUser } from './session'
@@ -25,7 +26,9 @@ function Loading() {
 /**
  * Decides what the whole app shows: setup while no administrator exists, sign-in without a
  * session, and the requested page otherwise. The URL is left untouched so that signing in
- * lands on the page that was asked for.
+ * lands on the page that was asked for. Opened from the web player or inside a Jellyfin app,
+ * sign-in also offers the way back to the web player, the only one after Sign out or when the
+ * web player's sign-in is refused here, as for an account with two-step sign-in.
  */
 export function SessionGate() {
   const { t } = useI18n()
@@ -71,6 +74,17 @@ export function SessionGate() {
     return (
       <PublicShell>
         <LoginRoute />
+        {status.data.webClient === true && webPlayerInPlace() && (
+          <p className="mt-6 text-center">
+            <a
+              {...webPlayerLink(true)}
+              className="inline-flex items-center gap-1.5 text-control text-link hover:text-link-hover"
+            >
+              <ArrowLeftIcon size={16} aria-hidden="true" />
+              {t.nav.backToWebPlayer}
+            </a>
+          </p>
+        )}
       </PublicShell>
     )
   }

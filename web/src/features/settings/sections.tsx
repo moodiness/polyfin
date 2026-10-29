@@ -19,6 +19,7 @@ import {
 import type { SettingsSectionId } from '@/app/navigation'
 import { formatHour } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
+import { jellyfinApp, webPlayerLink } from '@/jellyfinApps'
 import {
   Button,
   Checkbox,
@@ -1744,17 +1745,18 @@ function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi
   })
   const custom = form.webTheme === 'custom'
   const shown = shownTexts(form)
+  const inApp = jellyfinApp() !== null
   return (
     <>
       <SettingsGroup>
         {status.data?.webClient === true && (
           <SettingRow anchor="open-web-player">
+            {/* A preview in a new tab, which keeps this page, but in place in a Jellyfin app: Android
+                hands a new tab to the system browser. */}
             <ExternalButtonLink
-              href="/web/"
-              target="_blank"
-              rel="noopener"
+              {...webPlayerLink(inApp)}
               icon={PlayIcon}
-              iconEnd={ArrowSquareOutIcon}
+              iconEnd={inApp ? undefined : ArrowSquareOutIcon}
             >
               {s.openWebPlayer}
             </ExternalButtonLink>
