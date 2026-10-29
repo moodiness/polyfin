@@ -787,7 +787,9 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 // liveSource describes a channel's stream with the decision for the app's
 // device profile. Subtitles in live streams are not offered. Only the
 // conversions allowed are planned: it reports false when the stream would
-// need another to play on the app.
+// need another to play on the app. A DASH stream plays only converted
+// into HLS, as Jellyfin plays a manifest (M3UTunerHost.cs, lines
+// 161-167): an app that sends no profile is offered none.
 func (h *Handler) liveSource(r *http.Request, channel library.Item, version library.Version, id accounts.ID, analysis media.Analysis,
 	request playbackInfoRequest, session string, relay bool, allowed accounts.Conversions) (MediaSourceInfo, bool) {
 	streams := slices.DeleteFunc(playback.MediaStreams(analysis, nil, h.Accounts.Settings().Language),
@@ -812,7 +814,7 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 		MaxStreamingBitrate: request.MaxStreamingBitrate.value,
 		UserBitrate:         request.userLimit,
 		SubtitleStreamIndex: new(-1),
-		EnableDirectPlay:    request.EnableDirectPlay == nil || *request.EnableDirectPlay,
+		EnableDirectPlay:    (request.EnableDirectPlay == nil || *request.EnableDirectPlay) && !playback.DASH(analysis),
 		EnableDirectStream:  request.EnableDirectStream == nil || *request.EnableDirectStream,
 		ConvertAudio:        request.AllowAudioStreamCopy != nil && !*request.AllowAudioStreamCopy,
 		ConvertVideo:        request.AllowVideoStreamCopy != nil && !*request.AllowVideoStreamCopy,
@@ -824,6 +826,9 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 	decision := playback.Decision{DirectPlay: true, Container: container, AudioStreamIndex: -1, SubtitleStreamIndex: -1}
 	if request.DeviceProfile != nil {
 		decision = playback.Decide(request.DeviceProfile, described, options)
+	}
+	if playback.DASH(analysis) && !decision.HLS {
+		return MediaSourceInfo{}, false
 	}
 	if decision.HLS && !permitted(allowed, decision) {
 		return MediaSourceInfo{}, false
@@ -863,12 +868,16 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 // is: an HLS playlist is relayed, its files named through Polyfin, unless
 // the player may be sent to the source; an MPEG-TS stream is relayed from
 // its shared feed, or redirected to when that costs no connection (see
-// playback.Service.ServeChannel).
+// playback.Service.ServeChannel). A DASH stream plays only converted.
 func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user accounts.User, channel library.Item, version library.Version, relay bool) {
 	r = r.WithContext(playback.ForUser(r.Context(), user.ID))
 	analysis, err := h.Playback.AnalyzeLive(r.Context(), version)
 	if err != nil {
 		http.Error(w, "source unavailable", http.StatusBadGateway)
+		return
+	}
+	if playback.DASH(analysis) {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
 	// PlaybackInfo never offers a stream taller than the user's quality

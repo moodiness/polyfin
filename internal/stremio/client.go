@@ -1,6 +1,7 @@
 package stremio
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -314,6 +315,22 @@ func (c *Client) Open(ctx context.Context, method, target string, header http.He
 	}
 	// Byte ranges and lengths must reach the player unchanged.
 	request.Header.Set("Accept-Encoding", "identity")
+	return c.do(request, confined)
+}
+
+// Post sends body to an address a stream needs, as a ClearKey licence
+// request goes to its licence server, through the same rules as Open:
+// header is sent as given, and the response is returned whatever its
+// status, its body to be closed by the caller.
+func (c *Client) Post(ctx context.Context, target string, header http.Header, body []byte, confined bool) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
+	if err != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") {
+		return nil, fmt.Errorf("%w: invalid URL", ErrUnreachable)
+	}
+	maps.Copy(request.Header, header)
+	if request.Header.Get("User-Agent") == "" {
+		request.Header.Set("User-Agent", c.userAgent)
+	}
 	return c.do(request, confined)
 }
 

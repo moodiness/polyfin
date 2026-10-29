@@ -88,6 +88,10 @@ const (
 	LiveRefused = "refused"
 	// LiveTimeout is a source from which nothing came in time.
 	LiveTimeout = "timeout"
+	// LiveDRM is a stream that needs a DRM Polyfin does not support, and
+	// LiveKeys one its list's ClearKey keys do not decrypt (see dash.go).
+	LiveDRM  = "drm"
+	LiveKeys = "keys"
 )
 
 var (
@@ -107,9 +111,11 @@ var (
 	ErrTunersInUse error = tunersInUse{}
 	// ErrSlowReader reports a reader that fell behind what a feed keeps.
 	ErrSlowReader = errors.New("a reader fell behind the live stream")
-	// errManifest reports a stream that is an HLS playlist, which has no
-	// feed: its files are relayed one by one.
-	errManifest = errors.New("the stream is an HLS playlist")
+	// errManifest reports a stream that is an HLS playlist or a DASH
+	// manifest, which has no feed: its files are relayed one by one.
+	// errDASH is a DASH manifest's.
+	errManifest = errors.New("the stream is an HLS playlist or a DASH manifest")
+	errDASH     = fmt.Errorf("%w: a DASH manifest", errManifest)
 )
 
 // tunersInUse is ErrTunersInUse: an ErrSlotsInUse, and an ErrLiveRefused.
@@ -124,9 +130,13 @@ func (tunersInUse) Is(target error) bool { return target == ErrSlotsInUse }
 func (tunersInUse) Unwrap() error { return ErrLiveRefused }
 
 // LiveFailure classifies an error of a live stream: LiveDead, LiveRefused,
-// LiveTimeout, or "" for none of these.
+// LiveTimeout, LiveDRM, LiveKeys, or "" for none of these.
 func LiveFailure(err error) string {
 	switch {
+	case errors.Is(err, ErrLiveDRM):
+		return LiveDRM
+	case errors.Is(err, ErrLiveKeys):
+		return LiveKeys
 	case errors.Is(err, ErrLiveRefused):
 		return LiveRefused
 	case errors.Is(err, ErrLiveTimeout), errors.Is(err, context.DeadlineExceeded):
@@ -784,8 +794,9 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 // sniff opens a live stream and checks it is one before anything reads
 // it: the source must answer within times.answer with a success, and its
 // first sniffSize bytes (times.body to come) must start an HLS playlist
-// (errManifest, the connection closed), MPEG-TS packets or an MP4 box.
-// It returns the body and the bytes already read of it.
+// (errManifest, the connection closed), a DASH manifest (errDASH, the
+// same), MPEG-TS packets or an MP4 box. It returns the body and the bytes
+// already read of it.
 func (s *Service) sniff(ctx context.Context, version library.Version, times liveTimes) (io.ReadCloser, []byte, error) {
 	header := http.Header{}
 	for name, value := range version.RequestHeaders() {
@@ -825,6 +836,10 @@ func (s *Service) sniff(ctx context.Context, version library.Version, times live
 	if bytes.HasPrefix(trimmed, []byte("#EXTM3U")) {
 		body.Close()
 		return nil, nil, errManifest
+	}
+	if dashStart(head) {
+		body.Close()
+		return nil, nil, errDASH
 	}
 	mediaType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	switch mediaType {
@@ -896,7 +911,7 @@ func readHead(body io.ReadCloser, wait time.Duration) ([]byte, io.ReadCloser, er
 		case r := <-results:
 			got += r.n
 			if r.err != nil {
-				if got >= sniffLeast || bytes.HasPrefix(head[:got], []byte("#EXTM3U")) {
+				if got >= sniffLeast || bytes.HasPrefix(head[:got], []byte("#EXTM3U")) || dashStart(head[:got]) {
 					return head[:got:got], body, nil
 				}
 				return nil, nil, fmt.Errorf("%w: %d bytes before the end", ErrLiveDead, got)

@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -65,14 +66,18 @@ type testServer struct {
 }
 
 // warnings keeps the messages of the records at WARN or above that a
-// logger handles, with their attributes, discarding the others.
+// logger handles, with their attributes, discarding the others; all of
+// them once all is set.
 type warnings struct {
 	mu       sync.Mutex
 	messages []string
 	attrs    []map[string]string
+	all      atomic.Bool
 }
 
-func (w *warnings) Enabled(_ context.Context, level slog.Level) bool { return level >= slog.LevelWarn }
+func (w *warnings) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= slog.LevelWarn || w.all.Load()
+}
 
 func (w *warnings) Handle(_ context.Context, record slog.Record) error {
 	attrs := map[string]string{}
