@@ -35,6 +35,7 @@ A channel plays as the addon streams it when the app takes it.
   - When the stream's connection is open already, as after its analysis, a play prepared ahead from the title's page, or a return to the channel within 20 seconds, FFmpeg starts from what the connection kept: the lead is there at once, and playback starts within a second or two for video copied, a few seconds sooner for video converted. The lead itself is no shorter.
   - Once FFmpeg was started again (see below), a playlist is answered as soon as it lists a segment.
 - An MPEG-TS stream played as it is (apps such as Android TV) is relayed from the same connection, unless the app can reach the source itself and the source has no connection limit, in which case the app is sent to it.
+- A DASH stream (an MPD manifest) of an IPTV source or an addon always plays converted: FFmpeg reads the manifest and its segments through Polyfin and repackages it into HLS, decrypting a ClearKey stream with the keys its list gives. An app that sends no device profile is offered no DASH stream; Widevine and PlayReady streams are not played (see [DASH channels and encryption](iptv.md#dash-channels-and-encryption)).
 
 The files of an HLS stream reach FFmpeg, and apps relayed, through Polyfin, which takes care of what some providers do to pass their segments for something else:
 
