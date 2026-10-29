@@ -13,6 +13,7 @@ The Docker image includes jellyfin-web 12.4. Polyfin serves it at `/web/`, as Je
 - On a title's page, the web client shows the title's IMDb rating, critics' score and audience score while the server has an **MDBList API key for ratings**, in place of the star and critic rating it shows otherwise. See [Ratings](addons-and-libraries.md#ratings).
 - On the page of a Live TV programme that has not started, the web client shows **Remind me** after the record buttons, with a menu offering **Remind me of every airing**, and **Reminder set**, which removes it, for a programme with a reminder. When no target of the user receives reminders and their apps do not show them, a line under the button says so, with a link to **My account › Notifications**. See [Programme reminders](live-tv.md#programme-reminders).
 - On the search page, while the field is empty, the web client lists the user's recent searches above the Suggestions. See [Recent searches](#recent-searches).
+- While **Show ratings on posters** is on, a movie's or a series' poster shows its ratings as the pointer or the focus comes to it. See [Ratings on posters](#ratings-on-posters).
 
 **Compared with Jellyfin:**
 
@@ -37,6 +38,29 @@ Recent searches stay in the browser, nothing goes to the server: each browser ha
 **Compared with Jellyfin:**
 
 - jellyfin-web on a Jellyfin server keeps no recent searches.
+
+### Ratings on posters
+
+While **Show ratings on posters**, under **Settings › Web player**, is on, the web client shows a movie's or a series' ratings over its poster as the pointer comes to its card, or the focus does, with the keyboard or a TV remote. They sit at the top, on the start side, under a count of versions when the card shows one, with an icon each and no words:
+
+- a star, with the title's star rating, the one its page shows: the addon's, or the IMDb rating while the server has an **MDBList API key for ratings** (see [Ratings](addons-and-libraries.md#ratings));
+- a review, with the critics' score, and a group of people, with the audience score, in percent, while the server has that key and MDBList gave them.
+
+A rating the title lacks is left out, and a title without any shows nothing. Other cards, such as episodes, collections and people, and the list layouts, show nothing either. The ratings follow the same rules as the listings: a title the user may not see answers nothing. They show with every theme, **LumaaGlaass**, **None** or **Custom**, and in jellyfin-web's TV layout. It is off by default, for every user; users cannot change it.
+
+The first card the pointer or the focus comes to asks the server once for the ratings of every movie and series card of the page, those of the card's row first, 100 at most. The cards answered then show theirs without asking again; the answers are kept for a minute, in the browser tab, for the user signed in. Polyfin reads them as a listing does: no addon and no MDBList request comes from them that the listing of those titles did not make. Turned off, the web client asks again a minute later at the earliest. Turning it on or off thus applies within a minute, without reloading the page.
+
+**Compared with Jellyfin:**
+
+- jellyfin-web shows no ratings on posters, on Jellyfin either: a card has its played mark, its count of unplayed episodes and, on hover, its play, played, favourite and ⋮ buttons ([cardBuilder.js, lines 997 to 1029](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/cardbuilder/cardBuilder.js#L997-L1029)). Polyfin adds them with its script, in the free corner.
+
+**For app developers:**
+
+- `GET /Polyfin/Items/Ratings?Ids=<id>,<id>…`, with the user's token, answers `{"Enabled": true, "Items": [{"Id", "CommunityRating", "CriticsScore", "AudienceScore"}]}`: for each movie or series named that the user may see and that has a rating, the scores from 0 to 10 and 0 to 100, `null` for those it lacks. It reads 100 identifiers at most. While **Show ratings on posters** is off, it answers `{"Enabled": false, "Items": []}` and reads nothing.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Show ratings on posters** | **Settings › Web player** | Off | Shows a movie's or a series' ratings over its poster in the web client as the pointer or the focus comes to it, for every user. |
 
 ## Dashboard links and single sign-on
 
@@ -141,7 +165,7 @@ The upgrade that brought this ends every admin app session opened before, as not
 
 ## Customizing the web client
 
-**Settings › Web player** in the admin app holds the web client's **Theme**, two texts that are the **Custom** theme, **Custom CSS** and **Custom JavaScript**, the **Sign-in message**, one switch, **Add versions to an open title's page**, and the [home rows](#home-rows). By default, the theme is LumaaGlaass (see [Themes](#themes)), and **Sign-in message** is empty. **Open the web player** shows the result.
+**Settings › Web player** in the admin app holds the web client's **Theme**, two texts that are the **Custom** theme, **Custom CSS** and **Custom JavaScript**, the **Sign-in message**, two switches, **Add versions to an open title's page** and **Show ratings on posters** (see [Ratings on posters](#ratings-on-posters)), and the [home rows](#home-rows). By default, the theme is LumaaGlaass (see [Themes](#themes)), and **Sign-in message** is empty. **Open the web player** shows the result.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
