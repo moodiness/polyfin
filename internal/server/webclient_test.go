@@ -227,7 +227,8 @@ func TestWebClientNeedsJellyfinWebIndex(t *testing.T) {
 // however the client gets to them: on load, through its router (history),
 // a link (hashchange) or Back (popstate). A dashboard page with a match in the
 // admin app opens that page; the others open its home. It runs in Node.js, in
-// a context that stands for the browser.
+// a context that stands for the browser, without URL: the script runs before
+// jellyfin-web's polyfills, on browsers that may lack it.
 func TestDashboardRoutesOpenTheAdminApp(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -292,7 +293,7 @@ for (const route of routes) {
       const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
       // The page's head takes the style the script adds.
       const document = { head: { appendChild: () => {} }, createElement: () => ({}) }
-      vm.runInNewContext(script, { location, history, URL, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
+      vm.runInNewContext(script, { location, history, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
       if (way === 'pushState' || way === 'replaceState') history[way](null, '', route || page)
       if (way === 'hashchange' || way === 'popstate') { go(route || page); (listeners[way] || []).forEach((listener) => listener()) }
       results[way + ' ' + page + route] = replaced
@@ -2092,7 +2093,7 @@ async function run(scenario) {
   const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
   const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
   vm.runInNewContext(script, {
-    location, history, URL, document, MutationObserver, window: { ApiClient, localStorage },
+    location, history, document, MutationObserver, window: { ApiClient, localStorage },
     Date, setTimeout: () => 0, clearTimeout: () => {},
     addEventListener: () => {},
   })
@@ -3141,7 +3142,7 @@ async function run(scenario) {
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
   class Event { constructor(type) { this.type = type } }
   vm.runInNewContext(script, {
-    location, history, URL, document, CustomEvent, Event, MutationObserver, window,
+    location, history, document, CustomEvent, Event, MutationObserver, window,
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
     clearTimeout: (id) => { if (id) timers[id - 1] = null },

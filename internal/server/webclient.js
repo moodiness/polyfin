@@ -14,6 +14,13 @@
 // offers the identity provider's sign-in on the sign-in page for an
 // eighteenth.
 //
+// It is written in ES5 and runs before jellyfin-web's scripts and their
+// polyfills, so that it works on every browser jellyfin-web 12.4 is built
+// for, down to Chrome 27: it uses no syntax newer than ES5 (a test checks
+// it), writes addresses by hand rather than with URL or URLSearchParams,
+// and falls back where a later API (WeakMap, WeakSet, isConnected) is
+// missing.
+//
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
 // watches the route only, never the page, so that a new jellyfin-web keeps
@@ -443,12 +450,74 @@
     }
     return ''
   }
+  // Addresses are read and written by hand, never with URL: the script runs
+  // before jellyfin-web's polyfills, and browsers jellyfin-web is built for
+  // lack URL (before Chrome 32) or its searchParams (before Chrome 51).
+  //
+  // webFolder is the address of the web client's folder, /web/ or a folder
+  // under Polyfin's base path, with its last slash.
+  function webFolder() {
+    var page = location.href.split('#')[0].split('?')[0]
+    return page.slice(0, page.lastIndexOf('/') + 1)
+  }
+  // resolved is address as the page resolves it: one with a scheme as it
+  // is, one from the server's root, such as /admin/…, on the page's server,
+  // and any other in the web client's folder.
+  function resolved(address) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(address)) return address
+    var root = /^([a-z][a-z0-9+.-]*:)\/\/[^/?#]*/i.exec(location.href)
+    if (root && address.indexOf('//') === 0) return root[1] + address
+    if (root && address.charAt(0) === '/') return root[0] + address
+    return webFolder() + address
+  }
+  // adminAddress is the address of the admin app's page path ("" for its
+  // home), which '../admin/' leads to from the web client's folder, never
+  // above the server's root.
+  function adminAddress(path) {
+    var folder = webFolder()
+    var root = /^[a-z][a-z0-9+.-]*:\/\/[^/]*\//i.exec(folder)
+    var above = folder.replace(/[^/]+\/$/, '')
+    return (root && above.length < root[0].length ? root[0] : above) + 'admin/' + path
+  }
   // An address of the admin app, marked as opened from the web client
   // (?from=web): the admin app then shows the user signed in here, and
   // signs out a session of another user it had in this browser.
   function fromWebClient(address) {
-    address.searchParams.set('from', 'web')
-    return address.href
+    var at = address.indexOf('#')
+    var rest = at < 0 ? address : address.slice(0, at)
+    var join = rest.indexOf('?') < 0 ? '?' : /[?&]$/.test(rest) ? '' : '&'
+    return rest + join + 'from=web' + (at < 0 ? '' : address.slice(at))
+  }
+  // marks is a WeakSet (kind "set") or a WeakMap ("map") of the page's
+  // elements, or, before Chrome 36, which has neither, the same kept on
+  // each element under a property named after name: either way, an element
+  // takes what was kept for it when it goes.
+  function marks(kind, name) {
+    if (kind === 'set' && typeof WeakSet === 'function') return new WeakSet()
+    if (kind === 'map' && typeof WeakMap === 'function') return new WeakMap()
+    var key = '__polyfin' + name
+    return {
+      has: function (element) {
+        return Object.prototype.hasOwnProperty.call(element, key)
+      },
+      get: function (element) {
+        return Object.prototype.hasOwnProperty.call(element, key) ? element[key] : undefined
+      },
+      set: function (element, value) {
+        element[key] = value
+        return this
+      },
+      add: function (element) {
+        element[key] = true
+        return this
+      },
+    }
+  }
+  // attached tells whether node is in the page, as isConnected does from
+  // Chrome 54 on.
+  function attached(node) {
+    if (typeof node.isConnected === 'boolean') return node.isConnected
+    return document.documentElement.contains(node)
   }
   // The title whose versions are followed, the next time they are asked,
   // and how many times the script began asking, the latest only going on.
@@ -472,9 +541,9 @@
   // given, the sources the script was last given by identifier, tells them
   // again for an option jellyfin-web listed under a source's identifier and
   // name.
-  var added = new WeakSet()
-  var sizes = new WeakMap()
-  var tags = new WeakMap()
+  var added = marks('set', 'Added')
+  var sizes = marks('map', 'Size')
+  var tags = marks('map', 'Tag')
   var given = {}
   // The version picked among those added, until jellyfin-web lists it: the
   // observer that waits for jellyfin-web's options, and the identifier of
@@ -1047,7 +1116,7 @@
   function follow() {
     if (adminRoute.test(location.hash)) {
       // Replaced, so that Back returns to the page before.
-      location.replace(fromWebClient(new URL('../admin/' + target(location.hash), location.href)))
+      location.replace(fromWebClient(adminAddress(target(location.hash))))
       return
     }
     try {
@@ -1260,7 +1329,7 @@
               var line = divider.cloneNode(true)
               line.classList.add(entryClass, 'polyfinMenuDivider')
               return line
-            }),
+            })
           )
         })
       }
@@ -1294,7 +1363,7 @@
   // jellyfin-web's emby-linkbutton would open it within jellyfin-web.
   function adminLink(className, content) {
     var link = element('a', className, content)
-    link.setAttribute('href', fromWebClient(new URL('../admin/', location.href)))
+    link.setAttribute('href', fromWebClient(adminAddress('')))
     return link
   }
   function materialIcon(className) {
@@ -1329,7 +1398,7 @@
     if (!text || !path) return null
     item.classList.add(entryClass, 'polyfinMenuEntry')
     item.classList.remove('Mui-focusVisible')
-    item.setAttribute('href', fromWebClient(new URL('../admin/', location.href)))
+    item.setAttribute('href', fromWebClient(adminAddress('')))
     text.textContent = 'Polyfin'
     path.setAttribute('d', dashboardIcon)
     path.parentNode.removeAttribute('data-testid')
@@ -1368,7 +1437,7 @@
     if (!title || buttons.length !== 1) return
     var shown = { container: container, title: title.textContent, at: Date.now() }
     var before = alerted
-    if (!before || !before.container.isConnected || shown.at - before.at > duplicateWithin || before.title !== shown.title) {
+    if (!before || !attached(before.container) || shown.at - before.at > duplicateWithin || before.title !== shown.title) {
       alerted = shown
       return
     }
@@ -1380,7 +1449,7 @@
     // seconds later all the same.
     var waited = 0
     ;(function close() {
-      if (!container.isConnected) return
+      if (!attached(container)) return
       if (dialog.classList.contains('opened') || waited >= 2000) {
         buttons[0].click()
         return
@@ -1405,7 +1474,7 @@
             }
           }
         }
-      }),
+      })
     ).observe(document.body, { childList: true })
   }
   // The title whose scores are asked for, its last answer holding one,
@@ -1603,7 +1672,7 @@
               return resumable[plainId(other.getAttribute('data-id'))]
             }),
         }
-      },
+      }
     )
   }
   // extendMenu adds the entries to the item menu a dialog container holds,
@@ -1617,7 +1686,7 @@
       .then(function (facts) {
         var scroller = sheet.querySelector('.actionSheetScroller')
         var model = scroller && scroller.querySelector('.actionSheetMenuItem')
-        if (!container.isConnected || !model) return
+        if (!attached(container) || !model) return
         if (facts.resume) {
           scroller.appendChild(
             menuItem(container, model, 'playlist_remove', say('removeResume'), function () {
@@ -1627,7 +1696,7 @@
                 keepDrop({ kind: 'resume', id: entry.id, last: Date.parse((data && data.LastPlayedDate) || '') || 0 })
                 dropCards(entry.card ? [entry.card] : [])
               })
-            }),
+            })
           )
         }
         if (facts.hideable && facts.hidden) {
@@ -1637,7 +1706,7 @@
                 forgetHidden([entry.id, facts.series])
                 toast(say('shown'))
               })
-            }),
+            })
           )
         } else if (facts.hideable) {
           scroller.appendChild(
@@ -1654,7 +1723,7 @@
                 dropCards(cards)
                 toast(say('hidden'))
               })
-            }),
+            })
           )
         }
         // The menu was placed for its own entries: it moves up as far as
@@ -1690,7 +1759,7 @@
         else container.remove()
         run()
       }),
-      true,
+      true
     )
     return item
   }
@@ -1778,8 +1847,8 @@
   }
   // Every row's fetchData goes through screened, as jellyfin-web sets it on
   // the row: rows are divs, and the script runs before jellyfin-web.
-  if (typeof HTMLDivElement === 'function' && typeof WeakMap === 'function') {
-    var fetchers = new WeakMap()
+  if (typeof HTMLDivElement === 'function') {
+    var fetchers = marks('map', 'Fetcher')
     Object.defineProperty(HTMLDivElement.prototype, 'fetchData', {
       configurable: true,
       get: function () {
@@ -1876,7 +1945,7 @@
       .getJSON(api.getUrl('Polyfin/Items/' + id + '/Share'))
       .then(function (answer) {
         if (shareTitle !== id || !answer || answer.Shareable !== true || typeof answer.Url !== 'string') return
-        shareAddress = fromWebClient(new URL(answer.Url, location.href))
+        shareAddress = fromWebClient(resolved(answer.Url))
         showShare()
       })
       .catch(function () {})
@@ -2139,7 +2208,7 @@
         'a',
         'more button-flat button-flat-mini sectionTitleTextButton emby-button',
         { is: 'emby-linkbutton', href: '#/list?parentId=' + encodeURIComponent(row.Id) + '&serverId=' + encodeURIComponent(server) },
-        [made('h2', 'sectionTitle sectionTitle-cards', {}, [row.Name]), icon('chevron_right')],
+        [made('h2', 'sectionTitle sectionTitle-cards', {}, [row.Name]), icon('chevron_right')]
       ),
     ])
     var cards = (row.Items || []).map(function (item, index) {
@@ -2150,7 +2219,7 @@
       'div',
       'padded-top-focusscale padded-bottom-focusscale emby-scroller',
       { is: 'emby-scroller', 'data-centerfocus': 'true' },
-      [items],
+      [items]
     )
     return made('div', 'verticalSection emby-scroller-container polyfinHomeRow', { 'data-polyfin-row': row.Id }, [title, scroller])
   }
@@ -2177,7 +2246,7 @@
           made('div', 'countIndicator indicator', {}, [
             String(Math.min(data.UnplayedItemCount, 99)) + (data.UnplayedItemCount > 99 ? '+' : ''),
           ]),
-        ]),
+        ])
       )
     } else if (data.Played) {
       image.appendChild(made('div', 'cardIndicators', {}, [made('div', 'playedIndicator indicator', {}, [icon('check', 'indicatorIcon')])]))
@@ -2186,7 +2255,7 @@
       var bar = made('div', 'itemProgressBarForeground')
       bar.style.width = data.PlayedPercentage + '%'
       image.appendChild(
-        made('div', 'innerCardFooter fullInnerCardFooter innerCardFooterClear', {}, [made('div', 'itemProgressBar', {}, [bar])]),
+        made('div', 'innerCardFooter fullInnerCardFooter innerCardFooterClear', {}, [made('div', 'itemProgressBar', {}, [bar])])
       )
     }
     var overlay = made('div', 'cardOverlayContainer itemAction', { 'data-action': 'link' }, [
@@ -2198,7 +2267,7 @@
           type: 'button',
           'data-action': 'resume',
         },
-        [icon('play_arrow', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')],
+        [icon('play_arrow', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')]
       ),
       made('div', 'cardOverlayButton-br flex', {}, [
         made(
@@ -2209,7 +2278,7 @@
             type: 'button',
             'data-action': 'menu',
           },
-          [icon('more_vert', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')],
+          [icon('more_vert', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')]
         ),
       ]),
     ])
@@ -2237,7 +2306,7 @@
           name,
           year,
         ]),
-      ],
+      ]
     )
   }
   // watch checks the page as jellyfin-web changes it, the route included.
@@ -2430,7 +2499,7 @@
         state = answer
         place()
       }),
-      function () {},
+      function () {}
     )
   }
   // button makes a button styled as jellyfin-web's record buttons.
@@ -2489,7 +2558,7 @@
           menu.classList.toggle('hide', !open)
           more.setAttribute('aria-expanded', open ? 'true' : 'false')
           if (open) every.focus()
-        }),
+        })
       )
       row.appendChild(more)
       row.appendChild(menu)
@@ -2506,10 +2575,22 @@
       var link = document.createElement('a')
       link.className = 'polyfinReminderLink'
       // Marked as opened from the web client, as the script's other links
-      // to the admin app are (see fromWebClient).
-      var address = new URL('..' + (state.NotificationsUrl || '/admin/me/account#notifications'), location.href)
-      address.searchParams.set('from', 'web')
-      link.href = address.href
+      // to the admin app are (see fromWebClient). The server names the page
+      // from its root, /admin/…: the web client's folder is one below it,
+      // or below Polyfin's base path. Written by hand, as the script writes
+      // its addresses (see adminAddress).
+      var page = location.href.split('#')[0].split('?')[0]
+      var path = (state.NotificationsUrl || '/admin/me/account#notifications').replace(/^\/+/, '')
+      var at = path.indexOf('#')
+      var rest = at < 0 ? path : path.slice(0, at)
+      var root = /^[a-z][a-z0-9+.-]*:\/\/[^/]*\//i.exec(page)
+      var above = page.slice(0, page.lastIndexOf('/') + 1).replace(/[^/]+\/$/, '')
+      link.href =
+        (root && above.length < root[0].length ? root[0] : above) +
+        rest +
+        (rest.indexOf('?') < 0 ? '?' : '&') +
+        'from=web' +
+        (at < 0 ? '' : path.slice(at))
       link.textContent = say('notifications')
       hint.appendChild(link)
       hint.appendChild(document.createTextNode('.'))
@@ -2562,7 +2643,7 @@
         busy = false
         drawnFor = null
         place()
-      }),
+      })
     )
   }
   // toast says text as jellyfin-web's toasts do, for 3.3 seconds.
@@ -2632,7 +2713,7 @@
       if (target && target.closest && target.closest('.polyfinReminderRow')) return
       menu.classList.add('hide')
     }),
-    true,
+    true
   )
   quietly(follow)()
 })()
@@ -2779,7 +2860,66 @@
   function params(hash) {
     if (!route.test(hash)) return null
     var at = hash.indexOf('?')
-    return new URLSearchParams(at < 0 ? '' : hash.slice(at + 1).split('#')[0])
+    return new RouteParams(at < 0 ? '' : hash.slice(at + 1).split('#')[0])
+  }
+  // RouteParams are a route's parameters, read and written as
+  // URLSearchParams does, which browsers before Chrome 49 lack: the script
+  // runs before jellyfin-web's polyfills. get gives a parameter's first
+  // value, set replaces its first and drops the others, and toString
+  // writes them back.
+  function RouteParams(text) {
+    this.pairs = []
+    var parts = text.split('&')
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue
+      var at = parts[i].indexOf('=')
+      this.pairs.push([decoded(at < 0 ? parts[i] : parts[i].slice(0, at)), at < 0 ? '' : decoded(parts[i].slice(at + 1))])
+    }
+  }
+  RouteParams.prototype.get = function (name) {
+    for (var i = 0; i < this.pairs.length; i++) if (this.pairs[i][0] === name) return this.pairs[i][1]
+    return null
+  }
+  RouteParams.prototype.set = function (name, value) {
+    var kept = []
+    var placed = false
+    for (var i = 0; i < this.pairs.length; i++) {
+      if (this.pairs[i][0] !== name) {
+        kept.push(this.pairs[i])
+      } else if (!placed) {
+        kept.push([name, String(value)])
+        placed = true
+      }
+    }
+    if (!placed) kept.push([name, String(value)])
+    this.pairs = kept
+  }
+  RouteParams.prototype.toString = function () {
+    return this.pairs
+      .map(function (pair) {
+        return encoded(pair[0]) + '=' + encoded(pair[1])
+      })
+      .join('&')
+  }
+  // decoded reads a parameter's name or value, + standing for a space; a
+  // malformed escape leaves it as it is.
+  function decoded(text) {
+    var plain = text.replace(/\+/g, ' ')
+    try {
+      return decodeURIComponent(plain)
+    } catch (error) {
+      return plain
+    }
+  }
+  // encoded writes a parameter's name or value as URLSearchParams does
+  // (application/x-www-form-urlencoded): a space as +, and every character
+  // but letters, digits and *-._ escaped.
+  function encoded(text) {
+    return encodeURIComponent(text)
+      .replace(/[!'()~]/g, function (character) {
+        return '%' + character.charCodeAt(0).toString(16).toUpperCase()
+      })
+      .replace(/%20/g, '+')
   }
   // recent are the searches kept for who, newest first.
   function recent(who) {
@@ -2914,7 +3054,7 @@
   // address is the route that searches query again on the search page,
   // in the page's library, if any.
   function address(query) {
-    var found = params(location.hash) || new URLSearchParams('')
+    var found = params(location.hash) || new RouteParams('')
     found.set('query', query)
     return '#/search?' + found.toString()
   }
@@ -2940,14 +3080,14 @@
         'aria-label',
         say('removeOne').replace('{0}', function () {
           return query
-        }),
+        })
       )
       remove.title = say('remove')
       remove.addEventListener(
         'click',
         quietly(function () {
           forget(who, query)
-        }),
+        })
       )
       entries.appendChild(made('div', 'polyfinRecentSearch', [made('span', 'polyfinRecentSearchItem', [link, remove])]))
     })
@@ -2957,7 +3097,7 @@
       'click',
       quietly(function () {
         forget(who, null)
-      }),
+      })
     )
     var heading = made('h2', 'sectionTitle padded-left padded-right', [say('title')])
     return made('div', 'verticalSection polyfinRecentSearches', [made('div', '', [heading]), entries, made('div', '', [clear])])
@@ -3130,7 +3270,7 @@
         }),
         function () {
           offUntil = Date.now() + offFor
-        },
+        }
       )
       .then(done, done)
   }
@@ -3354,7 +3494,7 @@
         }),
         quietly(function () {
           if (round === polling) again(round)
-        }),
+        })
       )
       .catch(function () {})
   }
@@ -3363,7 +3503,7 @@
       quietly(function () {
         ask(round)
       }),
-      1000,
+      1000
     )
   }
   // describe words how the start goes, empty when nothing starts.

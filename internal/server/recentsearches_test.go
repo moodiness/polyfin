@@ -260,7 +260,7 @@ async function run(scenario) {
       ajax: () => Promise.reject(new Error('not asked here')),
     }
     vm.runInNewContext(script, {
-      location, history, URL, URLSearchParams, document, MutationObserver, Object, JSON, String, Date,
+      location, history, document, MutationObserver, Object, JSON, String, Date,
       window: { ApiClient, localStorage, sessionStorage: localStorage },
       CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail } },
       setTimeout: () => 0, clearTimeout: () => {},
