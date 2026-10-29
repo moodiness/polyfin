@@ -174,6 +174,22 @@ A torrent version analyzed once plays at once the next time: its analysis and it
 
 Played again within 15 minutes of its stop, a torrent starts from the peers, the info dictionary and the DHT nodes its last run found (see [Only while playing](#only-while-playing)): it needs one peer connected, and no metadata from the swarm.
 
+### Watching a torrent start
+
+While a torrent starts, the web player writes how it goes under jellyfin-web's spinner, once a second:
+
+- "Finding peers…", then "Finding peers: 12 found, 3 connected" while the torrent looks for peers and receives its info dictionary;
+- "Receiving the start: 2.4 MB from 3 peers" once its pieces come: the bytes received since the torrent started, while ffprobe reads the file and the player reads its first segments;
+- "The torrent did not start:" and why, when every torrent the play tried did not start in time: no peer found, peers found that sent nothing, trackers that did not answer, no tracker named, a route that carries no UDP, a route that is down, or as many torrents playing as **Torrents at once** allows.
+
+With several torrent versions tried at once (see [How a torrent starts](#how-a-torrent-starts)), the line follows the one that got furthest. Once PlaybackInfo answers, it follows the version chosen while the spinner still turns, up to 3 minutes. It names no peer, tracker or address. A play of a link, and a page loading, show no line.
+
+It shows in the web player, and in the Jellyfin apps that show the server's web client, as Jellyfin's apps for Android and iOS do. Android TV, Swiftfin and other apps draw their own spinner, and show nothing more: the Jellyfin API gives a play no progress before it starts. Its words follow the web player's language, as the script's other words (see [Web client](web-client.md)).
+
+**Compared with Jellyfin:** jellyfin-web's spinner takes no text ([loading.ts](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/loading/loading.ts)), and Jellyfin, which has no torrents, has nothing to tell meanwhile. The line is Polyfin's own.
+
+**For app developers:** `GET /Polyfin/Playback/Starting`, signed in, tells how the start of the play of the caller's own session goes: `Stage` (`""` when its play waits for no torrent, `peers`, `details`, `pieces`, or `failed`), `PeersFound`, `PeersConnected`, `Received` and `Waiting` (bytes: those received since the torrent started, and those the reads under way still wait for), and `Failure` for `failed` (`no_peers`, `silent`, `refused`, `no_trackers`, `no_udp`, `route` or `at_cap`). It tells the torrents the session's latest PlaybackInfo tries, then the one it chose for 3 minutes; never another user's or another session's.
+
 ### Deadlines
 
 A link's host sends its headers within seconds. A torrent needs peers first, from trackers that may each take 30 seconds to answer and from DHT lookups that hop from node to node, then its info dictionary, then its first pieces. So a torrent's playback waits longer:

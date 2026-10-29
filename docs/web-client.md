@@ -85,6 +85,8 @@ Polyfin does this with one script of its own added to jellyfin-web's page, `/web
 
 Its words follow the web client's language: English, French, German, Spanish, Italian or Portuguese (in Brazilian Portuguese), English for any other. It changes nothing during a video, holds the buttons again when jellyfin-web redraws the page, and gives everything back when you leave it. A Live TV recording's page has a single source under the recording's own identifier, as a title's page has while no version is known: Polyfin answers that it has no versions to wait for, so its buttons are given back at once. See [Title pages](playback.md#title-pages).
 
+While a torrent starts, after **Play**, it writes under jellyfin-web's spinner how the start goes, such as "Finding peers: 12 found, 3 connected", then "Receiving the start: 2.4 MB from 3 peers", in the same languages (see [Watching a torrent start](torrents.md#watching-a-torrent-start)).
+
 On the home page, it has the title of a collection library's "Recently Added in" row open the library on the default screen chosen under **Settings › Home**, as its links in the header do, rather than on Suggestions (see [Collections from addons](addons-and-libraries.md#collections-from-addons)).
 
 It leaves out of the top bar, its **More** menu and the side menu the libraries hidden there under **Content › Libraries** or **My sources**, once a user is signed in. They keep their row on the home page (see [Libraries hidden from the top bar](addons-and-libraries.md#libraries-hidden-from-the-top-bar)). After a user's first load in a browser, a reload doesn't show them even briefly: the script keeps the last answer in the browser's storage and applies it before jellyfin-web draws its menus.
