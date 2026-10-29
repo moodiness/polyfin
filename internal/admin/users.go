@@ -60,6 +60,9 @@ type userJSON struct {
 	// TwoStep tells whether the user signs in with a code from an
 	// authenticator app after their password.
 	TwoStep bool `json:"twoStep"`
+	// ProviderOnly tells whether the user signs in through the identity
+	// provider only, their password refused.
+	ProviderOnly bool `json:"providerOnly"`
 }
 
 // limitsJSON are the settings a group holds, as a user's JSON and a
@@ -287,10 +290,11 @@ func newUserJSON(user accounts.User) userJSON {
 		ImageTag:         imageTag(user),
 		MetadataLanguage: user.MetadataLanguage,
 		// When the account ends.
-		EndsOn:      endsOn(user),
-		Ended:       user.Ended(time.Now()),
-		FollowGroup: user.FollowGroup || user.GroupID == nil,
-		TwoStep:     user.TwoStep,
+		EndsOn:       endsOn(user),
+		Ended:        user.Ended(time.Now()),
+		FollowGroup:  user.FollowGroup || user.GroupID == nil,
+		TwoStep:      user.TwoStep,
+		ProviderOnly: user.ProviderOnly,
 	}
 	if user.GroupID != nil {
 		result.GroupID = new(user.GroupID.String())
@@ -740,6 +744,23 @@ type settingsJSON struct {
 	SiloApps *bool `json:"siloApps"`
 	// PosterRatings keeps its current value when a PUT leaves it out.
 	PosterRatings *bool `json:"posterRatings"`
+	// The identity provider keeps its current values when a PUT leaves
+	// them out; an empty issuer or client ID turns its sign-in off. The
+	// client secret is never sent back: ProviderClientSecretSet tells
+	// whether one is saved, and a PUT ignores it; empty removes it.
+	// ProviderRedirectURI, the address the provider sends browsers back
+	// to, built from the public address, empty without one, is to be
+	// registered at the provider; a PUT ignores it.
+	ProviderIssuer          *string `json:"providerIssuer"`
+	ProviderName            *string `json:"providerName"`
+	ProviderClientID        *string `json:"providerClientId"`
+	ProviderClientSecret    *string `json:"providerClientSecret,omitempty"`
+	ProviderClientSecretSet bool    `json:"providerClientSecretSet"`
+	ProviderUserClaim       *string `json:"providerUserClaim"`
+	ProviderCreateAccounts  *bool   `json:"providerCreateAccounts"`
+	ProviderAdminClaim      *string `json:"providerAdminClaim"`
+	ProviderAdminValue      *string `json:"providerAdminValue"`
+	ProviderRedirectURI     string  `json:"providerRedirectUri"`
 	// LumaaGlaass is the custom CSS and script the web player gets for
 	// the theme Polyfin bundles, which the admin app shows; a PUT ignores
 	// it.
@@ -970,6 +991,16 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		InterfaceRoutes:         accounts.InterfaceRoutes,
 		SiloApps:                &settings.SiloApps,
 		PosterRatings:           &settings.PosterRatings,
+
+		ProviderIssuer:          &settings.ProviderIssuer,
+		ProviderName:            &settings.ProviderName,
+		ProviderClientID:        &settings.ProviderClientID,
+		ProviderClientSecretSet: settings.ProviderClientSecret != "",
+		ProviderUserClaim:       &settings.ProviderUserClaim,
+		ProviderCreateAccounts:  &settings.ProviderCreateAccounts,
+		ProviderAdminClaim:      &settings.ProviderAdminClaim,
+		ProviderAdminValue:      &settings.ProviderAdminValue,
+		ProviderRedirectURI:     providerRedirectURI(settings),
 	}
 }
 
@@ -1187,6 +1218,9 @@ func (h *handler) createUser(w http.ResponseWriter, r *http.Request) {
 		Password        string `json:"password"`
 		IsAdministrator bool   `json:"isAdministrator"`
 		IsHidden        bool   `json:"isHidden"`
+		// ProviderOnly has the account sign in through the identity
+		// provider only; it then needs no password.
+		ProviderOnly bool `json:"providerOnly"`
 		// GroupID is the group the account joins and follows, empty or
 		// left out for none.
 		GroupID *string `json:"groupId"`
@@ -1203,6 +1237,7 @@ func (h *handler) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.Accounts.CreateUser(r.Context(), accounts.NewUser{
 		Name: body.Name, Password: body.Password, IsAdministrator: body.IsAdministrator, IsHidden: body.IsHidden, Group: group,
+		ProviderOnly: body.ProviderOnly,
 	})
 	if accountError(w, err) {
 		return
@@ -1240,6 +1275,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		FollowGroup *bool   `json:"followGroup"`
 		// MetadataLanguage, see userJSON.
 		MetadataLanguage *string `json:"metadataLanguage"`
+		// ProviderOnly, see userJSON.
+		ProviderOnly *bool `json:"providerOnly"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -1263,6 +1300,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	changes.IsHidden = body.IsHidden
 	changes.IsDisabled = body.IsDisabled
 	changes.FollowGroup = body.FollowGroup
+	changes.ProviderOnly = body.ProviderOnly
 	if changes.Group, ok = groupParam(w, body.GroupID); !ok {
 		return
 	}
@@ -1690,6 +1728,15 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		CacheFolder:          valueOr(body.CacheFolder, current.CacheFolder),
 		SiloApps:             valueOr(body.SiloApps, current.SiloApps),
 		PosterRatings:        valueOr(body.PosterRatings, current.PosterRatings),
+
+		ProviderIssuer:         valueOr(body.ProviderIssuer, current.ProviderIssuer),
+		ProviderName:           valueOr(body.ProviderName, current.ProviderName),
+		ProviderClientID:       valueOr(body.ProviderClientID, current.ProviderClientID),
+		ProviderClientSecret:   valueOr(body.ProviderClientSecret, current.ProviderClientSecret),
+		ProviderUserClaim:      valueOr(body.ProviderUserClaim, current.ProviderUserClaim),
+		ProviderCreateAccounts: valueOr(body.ProviderCreateAccounts, current.ProviderCreateAccounts),
+		ProviderAdminClaim:     valueOr(body.ProviderAdminClaim, current.ProviderAdminClaim),
+		ProviderAdminValue:     valueOr(body.ProviderAdminValue, current.ProviderAdminValue),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)

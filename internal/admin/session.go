@@ -120,6 +120,8 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request) {
 		"setupRequired": setupRequired,
 		"webClient":     h.WebClient,
 		"system":        system(h.InContainer),
+		// The identity provider the sign-in pages offer, null for none.
+		"provider": offeredProvider(h.Accounts.Settings()),
 	})
 }
 
@@ -253,7 +255,10 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 // (their devices are then signed out), not blocked after wrong passwords,
 // within their allowed hours. An account that needs two-step sign-in, or
 // to set it up, is refused, as its password is: its devices may have
-// signed in before it was turned on, or through Quick Connect.
+// signed in before it was turned on, or through Quick Connect. A device
+// signed in through the identity provider is not refused for either: the
+// provider asked for its own second step, and wrong passwords block
+// passwords only (see providerCallback).
 //
 // A token that is no device's counts as a wrong password does toward the
 // client's failed attempts; the token of someone who may not have a session
@@ -288,8 +293,8 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 	}
 	now := h.now()
 	switch {
-	case h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now),
-		user.NeedsTwoStep(h.Accounts.Settings()):
+	case !device.Provider && h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now),
+		!device.Provider && user.NeedsTwoStep(h.Accounts.Settings()):
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
 		return
 	case !user.AllowedAt(now):
@@ -312,9 +317,15 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 }
 
 // mediaBrowserToken reads the Token parameter of an Authorization header in
-// Jellyfin's MediaBrowser scheme: comma-separated key=value pairs, keys in
-// any case, values quoted or not.
+// Jellyfin's MediaBrowser scheme (see mediaBrowserParam).
 func mediaBrowserToken(header string) string {
+	return mediaBrowserParam(header, "Token")
+}
+
+// mediaBrowserParam reads the parameter name of an Authorization header
+// in Jellyfin's MediaBrowser scheme: comma-separated key=value pairs, keys
+// in any case, values quoted or not, as they are sent.
+func mediaBrowserParam(header, name string) string {
 	scheme, params, _ := strings.Cut(strings.TrimSpace(header), " ")
 	if !strings.EqualFold(scheme, "MediaBrowser") {
 		return ""
@@ -332,7 +343,7 @@ func mediaBrowserToken(header string) string {
 		} else {
 			value, params, _ = strings.Cut(rest, ",")
 		}
-		if strings.EqualFold(strings.TrimSpace(key), "Token") {
+		if strings.EqualFold(strings.TrimSpace(key), name) {
 			return strings.TrimSpace(value)
 		}
 	}

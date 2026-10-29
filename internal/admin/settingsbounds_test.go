@@ -68,10 +68,11 @@ func TestSettingsAnswerTheirBounds(t *testing.T) {
 		"traktClientSecretSet": true, "lastFmSecretSet": true, "aniListClientSecretSet": true, "myAnimeListClientSecretSet": true,
 		"smtpPasswordSet": true, "metricsTokenSet": true, "versionSources": true, "torrentProxyPasswordSet": true, "torrentWireGuardSaved": true,
 		"interfaceRoutes": true, "lumaaGlaass": true, "updateToolTokenSet": true, "cacheFolderDefault": true,
-		"trackLanguages": true}
+		"trackLanguages": true, "providerClientSecretSet": true, "providerRedirectUri": true}
 	secrets := map[string]bool{"publicMetaDbKey": true, "theIntroDbKey": true, "mdblistRatingsKey": true, "tmdbKey": true,
 		"traktClientSecret": true, "lastFmSecret": true, "aniListClientSecret": true, "myAnimeListClientSecret": true,
-		"smtpPassword": true, "metricsToken": true, "torrentProxyPassword": true, "torrentWireGuard": true, "updateToolToken": true}
+		"smtpPassword": true, "metricsToken": true, "torrentProxyPassword": true, "torrentWireGuard": true, "updateToolToken": true,
+		"providerClientSecret": true}
 	for name := range body {
 		if _, found := bounds[name]; !found && !readOnly[name] {
 			t.Errorf("no bounds for %s", name)

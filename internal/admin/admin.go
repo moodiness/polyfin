@@ -31,6 +31,7 @@ import (
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/notifications"
+	"github.com/moodiness/polyfin/internal/oidc"
 	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
@@ -206,6 +207,12 @@ type handler struct {
 	actions spacing
 	// steps are the sign-ins waiting for their second step.
 	steps pendingSteps
+	// provider reaches the identity provider; providerFlows are the
+	// sign-ins under way there, by their state, and providerTickets the
+	// web client's sign-ins waiting to be traded (see providerStart).
+	provider        *oidc.Client
+	providerFlows   once[providerFlow]
+	providerTickets once[accounts.ID]
 }
 
 // New returns the handler of every /admin/api/ route.
@@ -221,6 +228,7 @@ func New(options Options) http.Handler {
 	// of start-up as within a minute of the last one, which the process
 	// that restarted could not tell the new one.
 	h.actions.last = map[string]time.Time{"restart": h.Health.Started}
+	h.provider = oidc.New(&http.Client{Timeout: providerTimeout}, h.now)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/api/status", h.status)
 	mux.HandleFunc("POST /admin/api/setup", h.setup)
@@ -229,6 +237,9 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("POST /admin/api/session/two-step", h.signInSecondStep)
 	mux.HandleFunc("GET /admin/api/invite/{token}", h.publicInvite)
 	mux.HandleFunc("POST /admin/api/invite/{token}", h.acceptInvite)
+	mux.HandleFunc("GET "+providerPath+"start", h.providerStart)
+	mux.HandleFunc("GET "+providerCallbackPath, h.providerCallback)
+	mux.HandleFunc("POST "+providerWebPath, h.providerWebSignIn)
 
 	mux.Handle("GET /admin/api/session", h.signedInAnyHour(h.session))
 	mux.Handle("DELETE /admin/api/session", h.signedInAnyHour(h.signOut))
@@ -670,6 +681,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidRemuxDBURL, http.StatusBadRequest, "invalid_remuxdb_url"},
 		{accounts.ErrInvalidUpdateToolURL, http.StatusBadRequest, "invalid_update_tool_url"},
 		{accounts.ErrInvalidUpdateToolToken, http.StatusBadRequest, "invalid_update_tool_token"},
+		{accounts.ErrInvalidProvider, http.StatusBadRequest, "invalid_provider"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
 		{accounts.ErrInvalidTorrentRoute, http.StatusBadRequest, "invalid_torrent_route"},
 		{accounts.ErrInvalidTorrentLimit, http.StatusBadRequest, "invalid_torrent_limit"},
