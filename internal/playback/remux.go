@@ -59,6 +59,9 @@ type Remux struct {
 	// a live stream to list (its TranscodingUrl's MinSegments), 0 when it
 	// asks none (see hls.Manager.LivePlaylist).
 	MinSegments int
+	// Channel names the channel, or the video of an addon, a live stream
+	// plays, in the log lines of its encoding (see hls.Remux.Channel).
+	Channel string
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe

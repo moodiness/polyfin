@@ -182,7 +182,7 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 		}
 		// A file of an HLS stream that answered no media tells why
 		// ffprobe found none.
-		if answered := live.answered(); answered != nil {
+		if answered := live.answered(time.Time{}); answered != nil {
 			err = fmt.Errorf("%w; %v", err, answered)
 		}
 		// The source answered: an analysis that outlasted its time would
@@ -600,7 +600,8 @@ func (s *Service) liveOpener(remux Remux) hls.Opener {
 			return hls.Remux{}, nil, ErrNotRemuxable
 		}
 		live := s.loopback.registerLiveFor(remux.Version, remux.User)
-		r := hls.Remux{Input: live.target, Refused: live.refused, Video: video.Index, Audio: audioOf(analysis, remux.Audio), Format: remux.Format}
+		r := hls.Remux{Input: live.target, Refused: live.refused, Answered: live.answered, Channel: remux.Channel, Video: video.Index,
+			Audio: audioOf(analysis, remux.Audio), Format: remux.Format}
 		switch {
 		case Manifest(analysis):
 			r.InputOptions = media.LiveOptions
@@ -652,8 +653,9 @@ type liveRegistration struct {
 	// last request of the stream was answered with, nil for none.
 	refused func() error
 	// answered tells the last file of the stream that answered no media
-	// (see fileAnswer), nil for none.
-	answered func() error
+	// since a time (see fileAnswer), nil for none: an encoding asks for
+	// those since it last made a segment, an analysis for any.
+	answered func(since time.Time) error
 	release  func()
 }
 
@@ -661,10 +663,11 @@ type liveRegistration struct {
 type liveTarget struct {
 	version library.Version
 	// refused is the refusal of the source the last request was answered
-	// with, nil for none; answered the last file that answered no media.
-	// They are guarded by the loopback's mu.
-	refused  error
-	answered error
+	// with, nil for none; answered the last file that answered no media,
+	// at answeredAt. They are guarded by the loopback's mu.
+	refused    error
+	answered   error
+	answeredAt time.Time
 }
 
 func (l *loopback) registerKey(version library.Version, key string) liveRegistration {
@@ -680,9 +683,16 @@ func (l *loopback) registerKey(version library.Version, key string) liveRegistra
 		}
 	}
 	return liveRegistration{
-		target:   l.liveURL(key, "", FileName(version.URL)),
-		refused:  guarded(&t.refused),
-		answered: guarded(&t.answered),
+		target:  l.liveURL(key, "", FileName(version.URL)),
+		refused: guarded(&t.refused),
+		answered: func(since time.Time) error {
+			l.mu.Lock()
+			defer l.mu.Unlock()
+			if t.answeredAt.Before(since) {
+				return nil
+			}
+			return t.answered
+		},
 		release: func() {
 			l.mu.Lock()
 			delete(l.feeds, key)
@@ -744,7 +754,7 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 	l.mu.Lock()
 	live.refused = err
 	if odd {
-		live.answered = answered
+		live.answered, live.answeredAt = answered, time.Now()
 	}
 	l.mu.Unlock()
 }
