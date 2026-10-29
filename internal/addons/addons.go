@@ -55,6 +55,9 @@ var (
 	ErrNotStremio = errors.New("not a Stremio addon")
 	// ErrNotEclipse reports settings given to an addon that has none.
 	ErrNotEclipse = errors.New("not an Eclipse addon")
+	// ErrInvalidUseSourceProxy reports a source proxy choice given to a
+	// user's addon, which the server's source proxy never reads.
+	ErrInvalidUseSourceProxy = errors.New("invalid use of the source proxy")
 	// ErrInvalidLanguage reports a language given to an addon that is no
 	// language code, or to one that takes none (see SetLanguage).
 	ErrInvalidLanguage = errors.New("invalid addon language")
@@ -106,7 +109,10 @@ type Addon struct {
 	Music       *eclipse.Manifest
 	Settings    map[string]string
 	Enabled     bool
-	RefreshedAt time.Time
+	// UseSourceProxy reads this server Stremio addon's streams through the
+	// source proxy set in Settings › Playback; off by default.
+	UseSourceProxy bool
+	RefreshedAt    time.Time
 	// LibraryKeyTypes are the catalog types the libraries of its catalogs
 	// take their identifiers from, by catalog identifier, for the catalogs
 	// whose type changed since (see Library.KeyType).
@@ -322,7 +328,7 @@ type queryer interface {
 func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	var addon Addon
 	var manifest []byte
-	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt,
+	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.UseSourceProxy, &addon.RefreshedAt,
 		&addon.LibraryKeyTypes, &addon.Language}, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
@@ -366,7 +372,7 @@ func localMusic(m stremio.Manifest) *eclipse.Manifest {
 	return music
 }
 
-const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, refreshed_at, library_key_types, language"
+const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, use_source_proxy, refreshed_at, library_key_types, language"
 
 // Addons lists the scope's addons in order. The addons, their manifests
 // and settings are shared with other callers: they must not be changed.
@@ -807,6 +813,26 @@ func (s *Store) SetLanguage(ctx context.Context, scope Scope, id accounts.ID, la
 	if errors.Is(err, ErrNotFound) && language != "" {
 		if _, findErr := s.addon(ctx, s.db, scope, id); findErr == nil {
 			return Addon{}, ErrInvalidLanguage
+		}
+	}
+	return addon, err
+}
+
+// SetUseSourceProxy turns the source proxy on or off for a server Stremio
+// addon: its streams are read through the proxy set in Settings › Playback.
+// ErrNotStremio reports another kind of addon; ErrInvalidUseSourceProxy a
+// user's addon, whose streams the server never reads through it.
+func (s *Store) SetUseSourceProxy(ctx context.Context, scope Scope, id accounts.ID, use bool) (Addon, error) {
+	if scope.Owner != nil {
+		return Addon{}, ErrInvalidUseSourceProxy
+	}
+	defer s.changed()
+	addon, err := scanAddon(s.db.QueryRow(ctx, `UPDATE addons SET use_source_proxy = $3
+		WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND kind = $4 RETURNING `+addonColumns,
+		id, scope.Owner, use, KindStremio))
+	if errors.Is(err, ErrNotFound) {
+		if _, findErr := s.addon(ctx, s.db, scope, id); findErr == nil {
+			return Addon{}, ErrNotStremio
 		}
 	}
 	return addon, err

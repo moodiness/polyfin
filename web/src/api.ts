@@ -783,6 +783,13 @@ export type Addon = {
   /** Redacted: the credentials it may embed are never returned. */
   manifestUrl: string
   enabled: boolean
+  /**
+   * Whether this server Stremio addon's streams are read through the source proxy set in
+   * Settings › Playback. Off until an administrator turns it on under Sources.
+   */
+  useSourceProxy: boolean
+  /** Whether the source proxy is set at all (read-only): the switch waits for its URL. */
+  sourceProxyAvailable: boolean
   resources: string[]
   types: string[]
   catalogCount: number
@@ -1368,7 +1375,12 @@ export type IptvSourcePatch = Partial<{
   options: Partial<IptvOptions>
 }>
 
-export type AddonPatch = Partial<{ enabled: boolean; manifestUrl: string; language: string }>
+export type AddonPatch = Partial<{
+  enabled: boolean
+  manifestUrl: string
+  language: string
+  useSourceProxy: boolean
+}>
 
 export type Library = {
   addonId: string

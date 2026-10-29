@@ -750,7 +750,7 @@ const settings: typeof en = {
       `Le miniature e le immagini dei capitoli sono conservate nel database. Oltre questa dimensione, vengono rimosse le immagini dei titoli guardati meno di recente; vengono ricreate se il titolo viene riprodotto di nuovo. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
     sourceProxy: 'Proxy SOCKS5 per i flussi degli add-on',
     sourceProxyHelp:
-      'Legge i flussi degli add-on Stremio del server attraverso questo proxy, ad esempio WARP, senza farvi passare cataloghi, metadati, IPTV o file locali. Un URL come socks5h://warp:1080; vuoto legge direttamente. Una riproduzione in corso mantiene il proxy con cui è iniziata.',
+      'Gli add-on Stremio del server che attivi in Origini leggono i loro flussi attraverso questo proxy, ad esempio WARP, senza farvi passare cataloghi, metadati, IPTV o file locali. Un URL come socks5h://warp:1080; vuoto lascia tutti gli add-on diretti. Una riproduzione in corso mantiene il proxy con cui è iniziata.',
     sourceProxyDetect: 'Rileva WARP',
     sourceProxyDetecting: 'Rilevamento…',
     sourceProxyDetected: (url: string) => `WARP rilevato: ${url}`,

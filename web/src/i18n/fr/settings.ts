@@ -747,7 +747,7 @@ const settings: typeof en = {
       `Les miniatures et les images des chapitres sont gardées dans la base de données. Au-delà de cette taille, les images des titres regardés il y a le plus longtemps sont effacées ; elles sont refaites si le titre est relu. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     sourceProxy: 'Proxy SOCKS5 pour les flux des addons',
     sourceProxyHelp:
-      'Lit les flux des addons Stremio du serveur via ce proxy, par exemple WARP, sans y faire passer les catalogues, les métadonnées, l’IPTV ni les fichiers locaux. Une URL comme socks5h://warp:1080 ; vide = lecture directe. Une lecture en cours garde le proxy avec lequel elle a commencé.',
+      'Les addons Stremio du serveur que vous activez dans Sources lisent leurs flux via ce proxy, par exemple WARP, sans y faire passer les catalogues, les métadonnées, l’IPTV ni les fichiers locaux. Une URL comme socks5h://warp:1080 ; vide laisse tous les addons en direct. Une lecture en cours garde le proxy avec lequel elle a commencé.',
     sourceProxyDetect: 'Détecter WARP',
     sourceProxyDetecting: 'Détection…',
     sourceProxyDetected: (url: string) => `WARP détecté : ${url}`,

@@ -100,6 +100,12 @@ const sources: typeof en = {
       'Laissez Aucune sur le seul addon de métadonnées du serveur, quelle que soit la langue réglée sur sa page de configuration : un addon avec une langue ne décrit les titres que pour les utilisateurs qui ont choisi cette langue, sauf si aucun addon laissé sur Aucune ne les décrit. Pour que les utilisateurs lisent les titres dans d’autres langues, ajoutez le même addon de métadonnées une fois de plus par langue, configuré dans cette langue sur sa page de configuration, et indiquez ici la langue sur ces copies supplémentaires seulement : les utilisateurs qui choisissent cette langue des métadonnées voient ses noms, ses résumés et ses images. Un addon avec une langue et sans bibliothèque à lui ne fait que décrire les titres.',
     languageNone: 'Aucune',
     languageSaved: (name: string) => `${name} : la langue de ses descriptions a été enregistrée.`,
+    sourceProxy: 'Utiliser le proxy source',
+    sourceProxyHelp:
+      'Lit les flux de cet addon via le proxy défini dans Paramètres › Lecture. Les catalogues, les métadonnées et les autres addons restent directs ; les torrents utilisent leur propre route.',
+    sourceProxyUnset: 'Définissez d’abord le proxy dans Paramètres › Lecture.',
+    sourceProxySet: 'Ouvrir les paramètres',
+    sourceProxySaved: (name: string) => `${name} : le choix du proxy source a été enregistré.`,
     edit: 'Modifier le compte',
     saved: 'Source enregistrée.',
     settings: 'Réglages',

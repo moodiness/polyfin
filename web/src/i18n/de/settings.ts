@@ -739,7 +739,7 @@ const settings: typeof en = {
       `Vorschau- und Kapitelbilder werden in der Datenbank gespeichert. Über dieser Größe werden die Bilder der am längsten nicht mehr angesehenen Titel entfernt; sie werden neu erstellt, wenn der Titel erneut abgespielt wird. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
     sourceProxy: 'SOCKS5-Proxy für Addon-Streams',
     sourceProxyHelp:
-      'Liest die Streams der Stremio-Addons des Servers über diesen Proxy, etwa WARP, ohne Kataloge, Metadaten, IP-TV oder lokale Dateien darüber zu leiten. Eine URL wie socks5h://warp:1080; leer liest direkt. Eine laufende Wiedergabe behält den Proxy, mit dem sie begonnen hat.',
+      'Die Stremio-Add-ons des Servers, die Sie unter Quellen aktivieren, lesen ihre Streams über diesen Proxy, etwa WARP, ohne Kataloge, Metadaten, IP-TV oder lokale Dateien darüber zu leiten. Eine URL wie socks5h://warp:1080; leer lässt alle Add-ons direkt. Eine laufende Wiedergabe behält den Proxy, mit dem sie begonnen hat.',
     sourceProxyDetect: 'WARP erkennen',
     sourceProxyDetecting: 'Erkennung…',
     sourceProxyDetected: (url: string) => `WARP erkannt: ${url}`,

@@ -730,7 +730,7 @@ const settings = {
       `Thumbnails and chapter images are kept in the database. Past this size, the images of the titles watched longest ago are removed; they are made again if the title is played again. From ${r.min} to ${r.max}; ${r.default} by default.`,
     sourceProxy: 'SOCKS5 proxy for addon streams',
     sourceProxyHelp:
-      'Reads the streams of the server’s Stremio addons through this proxy, such as WARP, without sending catalogs, metadata, IPTV or local files through it. A URL such as socks5h://warp:1080; empty reads them directly. A running playback keeps the proxy it started with.',
+      'The server Stremio addons you enable under Sources read their streams through this proxy, such as WARP, without sending catalogs, metadata, IPTV or local files through it. A URL such as socks5h://warp:1080; empty leaves every addon direct. A running playback keeps the proxy it started with.',
     sourceProxyDetect: 'Detect WARP',
     sourceProxyDetecting: 'Detecting…',
     sourceProxyDetected: (url: string) => `WARP detected: ${url}`,

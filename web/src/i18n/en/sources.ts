@@ -98,6 +98,12 @@ const sources = {
       'Leave it at None on the server’s only metadata addon, whatever language its configure page sets: an addon with a language describes titles for the users who chose that language only, unless no addon left at None describes them. To let users read titles in other languages, add the same metadata addon once more for each language, configured in that language on its configure page, and name the language here on each of these extra copies only: users who choose that metadata language see its names, overviews and images. An addon with a language and no library of its own only describes titles.',
     languageNone: 'None',
     languageSaved: (name: string) => `${name}: the language of its descriptions was saved.`,
+    sourceProxy: 'Use the source proxy',
+    sourceProxyHelp:
+      'Reads this addon’s streams through the proxy set in Settings › Playback. Catalogs, metadata and other addons stay direct; torrents use their own route.',
+    sourceProxyUnset: 'Set the proxy under Settings › Playback first.',
+    sourceProxySet: 'Open Settings',
+    sourceProxySaved: (name: string) => `${name}: the source proxy choice was saved.`,
     edit: 'Edit the account',
     saved: 'Source saved.',
     settings: 'Settings',

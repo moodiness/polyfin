@@ -100,6 +100,12 @@ const sources: typeof en = {
       'Lascia Nessuna sull’unico add-on di metadati del server, qualunque sia la lingua impostata nella sua pagina di configurazione: un add-on con una lingua descrive i titoli solo per gli utenti che hanno scelto quella lingua, a meno che nessun add-on lasciato su Nessuna li descriva. Per permettere agli utenti di leggere i titoli in altre lingue, aggiungi di nuovo lo stesso add-on di metadati una volta per ogni lingua, configurato in quella lingua nella sua pagina di configurazione, e indica qui la lingua solo su queste copie aggiuntive: gli utenti che scelgono quella lingua dei metadati ne vedono i nomi, le trame e le immagini. Un add-on con una lingua e senza una propria libreria si limita a descrivere i titoli.',
     languageNone: 'Nessuna',
     languageSaved: (name: string) => `${name}: lingua delle descrizioni salvata.`,
+    sourceProxy: 'Usa il proxy di origine',
+    sourceProxyHelp:
+      'Legge i flussi di questo add-on attraverso il proxy impostato in Impostazioni › Riproduzione. Cataloghi, metadati e altri add-on restano diretti; i torrent usano la propria rotta.',
+    sourceProxyUnset: 'Imposta prima il proxy in Impostazioni › Riproduzione.',
+    sourceProxySet: 'Apri impostazioni',
+    sourceProxySaved: (name: string) => `${name}: la scelta del proxy di origine è stata salvata.`,
     edit: 'Modifica l’account',
     saved: 'Origine salvata.',
     settings: 'Impostazioni',

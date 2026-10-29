@@ -316,6 +316,9 @@ export function SourceDetail({
       {scope === 'shared' && (addon.kind === 'stremio' || addon.language !== '') && (
         <PanelSection>
           <AddonLanguage addon={addon} />
+          {addon.kind === 'stremio' && addon.resources.includes('stream') && (
+            <SourceProxySwitch addon={addon} />
+          )}
         </PanelSection>
       )}
 
@@ -580,6 +583,60 @@ function AddonLanguage({ addon }: { addon: Addon }) {
         className="max-w-xs"
       />
     </Field>
+  )
+}
+
+/** The source proxy choice of a server Stremio addon: reads its streams through the proxy set in Settings › Playback. */
+function SourceProxySwitch({ addon }: { addon: Addon }) {
+  const { t } = useI18n()
+  const text = t.sources
+  const toast = useToast()
+  const id = useId()
+  const save = useMutation({
+    mutationFn: (useSourceProxy: boolean) => updateAddon('shared', addon.id, { useSourceProxy }),
+    onSuccess: (updated) => {
+      replaceCachedAddon('shared', updated)
+      toast(text.sourceProxySaved(updated.name))
+    },
+    onSettled: () => invalidateScope('shared'),
+  })
+  const unavailable = !addon.sourceProxyAvailable
+  return (
+    <div className="mt-6 border-t border-line pt-6">
+      <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+        <div className="min-w-0">
+          <p id={`${id}-label`} className="text-control font-medium text-ink">
+            {text.sourceProxy}
+          </p>
+          <p id={`${id}-help`} className="mt-1 max-w-[70ch] text-small text-ink-3">
+            {text.sourceProxyHelp}
+          </p>
+          {unavailable && (
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-small text-ink-3">
+              {text.sourceProxyUnset}
+              <ButtonLink to="/settings/playback#source-proxy" variant="secondary" size="sm">
+                {text.sourceProxySet}
+              </ButtonLink>
+            </p>
+          )}
+        </div>
+        <Switch
+          checked={addon.useSourceProxy}
+          labelledBy={`${id}-label`}
+          describedById={`${id}-help`}
+          disabled={unavailable || save.isPending}
+          onChange={(useSourceProxy) => {
+            save.reset()
+            save.mutate(useSourceProxy)
+          }}
+        />
+      </div>
+      {save.isError && (
+        <div className="mt-3">
+          <FieldError>{errorMessage(t, save.error)}</FieldError>
+        </div>
+      )}
+    </div>
   )
 }
 

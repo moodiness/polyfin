@@ -69,14 +69,17 @@ type Service struct {
 	// sourceProxy builds the opener of a server addon's stream when a
 	// source proxy is set; nil when opener reads no proxy.
 	sourceProxy func(proxy string) source.Opener
-	prober      media.Prober
-	settings    func() accounts.Settings
-	sources     *source.Cache
-	segments    *hls.Manager
-	loopback    *loopback
-	renew       Renewer
-	signer      Signer
-	logger      *slog.Logger
+	// sourceProxyForAddon tells whether a server addon uses the source
+	// proxy; nil uses it for every eligible addon.
+	sourceProxyForAddon func(accounts.ID) bool
+	prober              media.Prober
+	settings            func() accounts.Settings
+	sources             *source.Cache
+	segments            *hls.Manager
+	loopback            *loopback
+	renew               Renewer
+	signer              Signer
+	logger              *slog.Logger
 
 	flight   singleflight.Group
 	analyses *cache.Cache[accounts.ID, media.Analysis]
@@ -207,6 +210,12 @@ func (o proxyOpener) Open(ctx context.Context, method, target string, header htt
 	return o.client.OpenViaProxy(ctx, o.proxy, method, target, header, confined)
 }
 
+// UseSourceProxy has the source proxy read only the server addons allow
+// returns true for; nil reads every eligible addon through it.
+func (s *Service) UseSourceProxy(allow func(accounts.ID) bool) {
+	s.sourceProxyForAddon = allow
+}
+
 // Close stops the source server.
 func (s *Service) Close() error {
 	return s.loopback.Close()
@@ -271,21 +280,26 @@ func locationOf(version library.Version) source.Location {
 // when the version is a server addon's stream and one is set.
 func (s *Service) locationOf(version library.Version) source.Location {
 	location := locationOf(version)
-	if version.ProxySource && s.sourceProxy != nil {
-		if proxy := s.settings().SourceProxy; proxy != "" {
-			location.Opener = s.sourceProxy(proxy)
-		}
+	if s.usesSourceProxy(version) {
+		location.Opener = s.sourceProxy(s.settings().SourceProxy)
 	}
 	return location
+}
+
+// usesSourceProxy reports whether version is read through the source proxy:
+// an eligible server addon's stream, a proxy set, and that addon enabled.
+func (s *Service) usesSourceProxy(version library.Version) bool {
+	if !version.ProxySource || s.sourceProxy == nil || s.settings().SourceProxy == "" {
+		return false
+	}
+	return s.sourceProxyForAddon == nil || s.sourceProxyForAddon(version.Origin.Addon)
 }
 
 // openVersion requests a version's source, through the source proxy when
 // the version is a server addon's stream and one is set.
 func (s *Service) openVersion(ctx context.Context, version library.Version, method, target string, header http.Header) (*http.Response, error) {
-	if version.ProxySource && s.sourceProxy != nil {
-		if proxy := s.settings().SourceProxy; proxy != "" {
-			return s.sourceProxy(proxy).Open(ctx, method, target, header, version.Confined)
-		}
+	if s.usesSourceProxy(version) {
+		return s.sourceProxy(s.settings().SourceProxy).Open(ctx, method, target, header, version.Confined)
 	}
 	return s.opener.Open(ctx, method, target, header, version.Confined)
 }

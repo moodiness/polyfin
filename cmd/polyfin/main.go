@@ -362,6 +362,12 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	if err != nil {
 		return err
 	}
+	// The source proxy reads the streams of the server's Stremio addons an
+	// administrator turned it on for (see Settings › Playback and Sources).
+	player.UseSourceProxy(func(id accounts.ID) bool {
+		addon, err := addonStore.Find(context.Background(), id)
+		return err == nil && addon.UseSourceProxy
+	})
 	defer player.Close()
 	// The files of local folders are read through the loopback interface,
 	// as the addons' files are; FFmpeg reads their discs and disc images

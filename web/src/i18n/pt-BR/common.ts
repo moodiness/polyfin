@@ -276,6 +276,8 @@ const common: typeof en = {
     invalid_torrent_limit: 'Os limites devem ser números inteiros de Mbps de 0 a 10000.',
     invalid_torrent_trackers:
       'Informe no máximo 30 trackers, cada um uma URL de anúncio HTTP, HTTPS ou UDP, UDP com a porta, de no máximo 500 caracteres.',
+    invalid_use_source_proxy:
+      'O proxy de origem só pode ser escolhido para um complemento Stremio do servidor.',
     invalid_source_proxy:
       'O proxy deve ser uma URL SOCKS5 ou HTTP com host e porta, como socks5h://warp:1080.',
     invalid_cache_size: 'O espaço em disco deve ser um número inteiro de GB de 1 a 2000.',

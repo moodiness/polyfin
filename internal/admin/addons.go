@@ -20,17 +20,22 @@ import (
 )
 
 type addonJSON struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Version      string    `json:"version"`
-	Description  string    `json:"description"`
-	Logo         *string   `json:"logo"`
-	ManifestURL  string    `json:"manifestUrl"`
-	Enabled      bool      `json:"enabled"`
-	Resources    []string  `json:"resources"`
-	Types        []string  `json:"types"`
-	CatalogCount int       `json:"catalogCount"`
-	RefreshedAt  time.Time `json:"refreshedAt"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Version     string  `json:"version"`
+	Description string  `json:"description"`
+	Logo        *string `json:"logo"`
+	ManifestURL string  `json:"manifestUrl"`
+	Enabled     bool    `json:"enabled"`
+	// UseSourceProxy reads its streams through the source proxy set in
+	// Settings › Playback; SourceProxyAvailable tells whether that proxy is
+	// set at all, read-only.
+	UseSourceProxy       bool      `json:"useSourceProxy"`
+	SourceProxyAvailable bool      `json:"sourceProxyAvailable"`
+	Resources            []string  `json:"resources"`
+	Types                []string  `json:"types"`
+	CatalogCount         int       `json:"catalogCount"`
+	RefreshedAt          time.Time `json:"refreshedAt"`
 	// Kind is "stremio" for a Stremio addon, "eclipse" for an Eclipse
 	// music addon, which Music then describes, "m3u", "xtream" or
 	// "hdhomerun" for an IPTV source, which Source then describes, or
@@ -149,20 +154,21 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 		manifestURL = iptv.Redact(addon.ManifestURL)
 	}
 	return addonJSON{
-		ID:           addon.ID.String(),
-		Name:         addon.Manifest.Name,
-		Version:      addon.Manifest.Version,
-		Description:  addon.Manifest.Description,
-		Logo:         logo,
-		ManifestURL:  manifestURL,
-		Enabled:      addon.Enabled,
-		Resources:    resources,
-		Types:        types,
-		CatalogCount: len(addon.Manifest.Catalogs),
-		RefreshedAt:  addon.RefreshedAt,
-		Kind:         addon.Kind,
-		Music:        newMusicJSON(addon),
-		Language:     addon.Language,
+		ID:             addon.ID.String(),
+		Name:           addon.Manifest.Name,
+		Version:        addon.Manifest.Version,
+		Description:    addon.Manifest.Description,
+		Logo:           logo,
+		ManifestURL:    manifestURL,
+		Enabled:        addon.Enabled,
+		UseSourceProxy: addon.UseSourceProxy,
+		Resources:      resources,
+		Types:          types,
+		CatalogCount:   len(addon.Manifest.Catalogs),
+		RefreshedAt:    addon.RefreshedAt,
+		Kind:           addon.Kind,
+		Music:          newMusicJSON(addon),
+		Language:       addon.Language,
 	}
 }
 
@@ -170,6 +176,7 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 // folder's scans.
 func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Addon) (addonJSON, error) {
 	result := newAddonJSON(addon)
+	result.SourceProxyAvailable = h.Accounts.Settings().SourceProxy != ""
 	if addon.Stremio() || addon.Eclipse() {
 		return result, nil
 	}
@@ -516,6 +523,7 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{addons.ErrInvalidLibraryMaxItems, http.StatusBadRequest, "invalid_library_max_items"},
 		{addons.ErrInvalidGuideURL, http.StatusBadRequest, "invalid_guide_url"},
 		{addons.ErrNotStremio, http.StatusBadRequest, "invalid_request"},
+		{addons.ErrInvalidUseSourceProxy, http.StatusBadRequest, "invalid_use_source_proxy"},
 		{addons.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},
 		{addons.ErrNotEclipse, http.StatusBadRequest, "invalid_request"},
 		{addons.ErrKindChanged, http.StatusUnprocessableEntity, "addon_kind_changed"},
@@ -671,14 +679,15 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Enabled     *bool   `json:"enabled"`
-		ManifestURL *string `json:"manifestUrl"`
-		Language    *string `json:"language"`
+		Enabled        *bool   `json:"enabled"`
+		ManifestURL    *string `json:"manifestUrl"`
+		Language       *string `json:"language"`
+		UseSourceProxy *bool   `json:"useSourceProxy"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.ManifestURL == nil && body.Enabled == nil && body.Language == nil {
+	if body.ManifestURL == nil && body.Enabled == nil && body.Language == nil && body.UseSourceProxy == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
@@ -691,9 +700,16 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_language")
 		return
 	}
+	if body.UseSourceProxy != nil && scope.Owner != nil {
+		writeError(w, http.StatusBadRequest, "invalid_use_source_proxy")
+		return
+	}
 	var addon addons.Addon
 	var err error
-	if body.ManifestURL != nil {
+	if body.UseSourceProxy != nil {
+		addon, err = h.Addons.SetUseSourceProxy(r.Context(), scope, id, *body.UseSourceProxy)
+	}
+	if err == nil && body.ManifestURL != nil {
 		addon, err = h.Addons.Replace(r.Context(), scope, id, *body.ManifestURL, confined(r))
 	}
 	if err == nil && body.Enabled != nil {

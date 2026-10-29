@@ -377,11 +377,13 @@ The files of local folders go through it too. Those of S3 buckets, SFTP folders 
 
 ### Source proxy
 
-Under **Settings › Playback**, **SOCKS5 proxy for addon streams** reads the streams of the server's Stremio addons through a SOCKS5 or HTTP proxy, such as WARP, without sending catalogs, metadata, IPTV, local files or users' own addons through it. Leave it empty to read directly; a running playback keeps the proxy it started with.
+Under **Settings › Playback**, **SOCKS5 proxy for addon streams** sets a SOCKS5 or HTTP proxy, such as WARP, that the server's Stremio addons may read their streams through. It is the proxy's address only: each addon uses it once **Use the source proxy** is on for it under **Sources**. The choice is off by default, and a source already reading keeps the proxy it started with. Catalogs, metadata, IPTV, local files, users' own addons and torrents never go through it.
+
+Turn the choice on for an addon under **Sources**, in its detail page, beside the language of its descriptions. It is offered for the server's Stremio addons that list streams, and waits for the proxy's address: set it under Settings › Playback first, or the switch stays disabled with a link to it.
 
 A debrid host may refuse the address of a data centre while accepting a WARP one: AllDebrid answers 503 to the server's address and 206 through WARP, for example. The proxy is installed separately, by the administrator.
 
-The admin app detects a WARP container on the same Docker network and suggests `socks5h://warp:1080`. It tries the names `warp`, `warp-svc`, `cloudflare-warp` and `host.docker.internal` on port 1080; any proxy URL with a host and port works. A proxy that is down fails the version's source as unavailable, and clearing the setting reads directly again.
+The admin app detects a WARP container on the same Docker network and suggests `socks5h://warp:1080`. It tries the names `warp`, `warp-svc`, `cloudflare-warp` and `host.docker.internal` on port 1080; any proxy URL with a host and port works. A proxy that is down fails the version's source as unavailable, and clearing the URL reads directly again.
 
 ### Sources that fail
 

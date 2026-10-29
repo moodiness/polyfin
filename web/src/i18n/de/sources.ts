@@ -100,6 +100,12 @@ const sources: typeof en = {
       'Lass beim einzigen Metadaten-Add-on des Servers „Keine“ eingestellt, egal welche Sprache seine Konfigurationsseite festlegt: Ein Add-on mit einer Sprache beschreibt Titel nur für die Benutzer, die diese Sprache gewählt haben, es sei denn, kein Add-on mit „Keine“ beschreibt sie. Damit Benutzer Titel in anderen Sprachen lesen können, füge dasselbe Metadaten-Add-on für jede Sprache ein weiteres Mal hinzu, jeweils auf seiner Konfigurationsseite in dieser Sprache eingerichtet, und gib die Sprache nur bei diesen zusätzlichen Kopien hier an: Benutzer, die diese Metadatensprache wählen, sehen dessen Namen, Beschreibungen und Bilder. Ein Add-on mit einer Sprache und ohne eigene Bibliothek beschreibt nur Titel.',
     languageNone: 'Keine',
     languageSaved: (name: string) => `${name}: Die Sprache der Beschreibungen wurde gespeichert.`,
+    sourceProxy: 'Quell-Proxy verwenden',
+    sourceProxyHelp:
+      'Liest die Streams dieses Add-ons über den in Einstellungen › Wiedergabe festgelegten Proxy. Kataloge, Metadaten und andere Add-ons bleiben direkt; Torrents nutzen ihre eigene Route.',
+    sourceProxyUnset: 'Legen Sie zuerst den Proxy unter Einstellungen › Wiedergabe fest.',
+    sourceProxySet: 'Einstellungen öffnen',
+    sourceProxySaved: (name: string) => `${name}: Die Auswahl des Quell-Proxys wurde gespeichert.`,
     edit: 'Konto bearbeiten',
     saved: 'Quelle gespeichert.',
     settings: 'Einstellungen',

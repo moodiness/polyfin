@@ -265,6 +265,7 @@ const common = {
     invalid_torrent_limit: 'The limits must be whole numbers of Mbps from 0 to 10000.',
     invalid_torrent_trackers:
       'Enter at most 30 trackers, each an HTTP, HTTPS or UDP announce URL, UDP with its port, of at most 500 characters.',
+    invalid_use_source_proxy: 'The source proxy can only be chosen for a server Stremio addon.',
     invalid_source_proxy:
       'The proxy must be a SOCKS5 or HTTP URL with a host and port, such as socks5h://warp:1080.',
     invalid_cache_size: 'The disk space must be a whole number of GB from 1 to 2000.',

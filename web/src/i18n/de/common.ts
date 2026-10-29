@@ -293,6 +293,8 @@ const common: typeof en = {
     invalid_torrent_limit: 'Die Limits müssen ganze Zahlen von 0 bis 10.000 Mbit/s sein.',
     invalid_torrent_trackers:
       'Gib höchstens 30 Tracker ein, jeder eine HTTP-, HTTPS- oder UDP-Announce-URL, UDP mit Port, mit höchstens 500 Zeichen.',
+    invalid_use_source_proxy:
+      'Der Quell-Proxy kann nur für ein Stremio-Add-on des Servers gewählt werden.',
     invalid_source_proxy:
       'Der Proxy muss eine SOCKS5- oder HTTP-URL mit Host und Port sein, z. B. socks5h://warp:1080.',
     invalid_cache_size: 'Der Speicherplatz muss eine ganze Zahl von 1 bis 2.000 GB sein.',

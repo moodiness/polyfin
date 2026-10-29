@@ -42,3 +42,30 @@ func TestSourceProxyLocation(t *testing.T) {
 		t.Errorf("empty setting: %#v, %v", empty, proxies)
 	}
 }
+
+// A server addon's stream is read through the source proxy only when the
+// addon's own choice allows it.
+func TestSourceProxyPerAddon(t *testing.T) {
+	t.Parallel()
+	proxies := 0
+	s := &Service{
+		settings: func() accounts.Settings { return accounts.Settings{SourceProxy: "socks5h://warp:1080"} },
+		sourceProxy: func(string) source.Opener {
+			proxies++
+			return unusedOpener{}
+		},
+	}
+	version := library.Version{ProxySource: true, Origin: library.Origin{Addon: accounts.ID{}}}
+	s.sourceProxyForAddon = func(accounts.ID) bool { return false }
+	if location := s.locationOf(version); location.Opener != nil || proxies != 0 {
+		t.Fatalf("off: %#v, %d", location, proxies)
+	}
+	s.sourceProxyForAddon = func(accounts.ID) bool { return true }
+	if location := s.locationOf(version); location.Opener == nil || proxies != 1 {
+		t.Fatalf("on: %#v, %d", location, proxies)
+	}
+	s.settings = func() accounts.Settings { return accounts.Settings{} }
+	if location := s.locationOf(version); location.Opener != nil || proxies != 1 {
+		t.Fatalf("no proxy set: %#v, %d", location, proxies)
+	}
+}
