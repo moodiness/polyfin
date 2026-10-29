@@ -14,6 +14,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/drm"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -37,8 +38,12 @@ type Version struct {
 	// send when Headers name none (see RequestHeaders), empty for
 	// Polyfin's: an IPTV source's default (see stremio.Stream.UserAgent).
 	UserAgent string
-	Filename  string
-	Size      int64
+	// Protection is how an IPTV list says the stream is encrypted, with
+	// its ClearKey keys (see stremio.Stream.Protection); nil when it says
+	// nothing.
+	Protection *drm.Protection
+	Filename   string
+	Size       int64
 	// Addon is the name of the addon that listed the stream.
 	Addon string
 	// Origin is where the stream was listed, to ask again for it when its
@@ -620,15 +625,16 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		URL:     stream.URL,
 		Headers: stream.RequestHeaders(),
 		// An IPTV source's default User-Agent: no addon sets it.
-		UserAgent: stream.UserAgent,
-		Filename:  stream.BehaviorHints.Filename,
-		Size:      int64(stream.BehaviorHints.VideoSize),
-		Addon:     entry.addon.Manifest.Name,
-		Origin:    Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
-		Confined:  entry.confined,
-		Runtime:   t.runtime,
-		Height:    LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
-		Labels:    ReadLabels(t.name, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
+		UserAgent:  stream.UserAgent,
+		Protection: stream.Protection,
+		Filename:   stream.BehaviorHints.Filename,
+		Size:       int64(stream.BehaviorHints.VideoSize),
+		Addon:      entry.addon.Manifest.Name,
+		Origin:     Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
+		Confined:   entry.confined,
+		Runtime:    t.runtime,
+		Height:     LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
+		Labels:     ReadLabels(t.name, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
 		// A replay holds one of its provider's connections, as a channel does.
 		HoldsConnection: t.kind == KindReplay,
 	}

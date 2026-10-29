@@ -21,6 +21,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/drm"
 	"github.com/moodiness/polyfin/internal/serverfile"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -706,11 +707,11 @@ func storeList(ctx context.Context, tx pgx.Tx, source accounts.ID, entries []Ent
 			season, episode = &e.Season, &e.Episode
 		}
 		rows = append(rows, []any{source, key, len(rows) + 1, e.Name, number, e.Logo, e.Group, e.GuideID, e.URL, headers, kind, e.Series, season, episode,
-			e.Catchup.Type, e.Catchup.Days, e.Catchup.Source, e.GuideNumber, e.Favorite})
+			e.Catchup.Type, e.Catchup.Days, e.Catchup.Source, e.GuideNumber, e.Favorite, e.Protection})
 	}
 	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"iptv_entries"},
 		[]string{"addon_id", "key", "position", "name", "number", "logo", "group_title", "guide_id", "url", "headers", "kind", "series_name", "season", "episode",
-			"catchup", "catchup_days", "catchup_source", "guide_number", "favorite"},
+			"catchup", "catchup_days", "catchup_source", "guide_number", "favorite", "protection"},
 		pgx.CopyFromRows(rows)); err != nil {
 		return err
 	}
@@ -940,11 +941,12 @@ const streamOrder = `(s.sort IS NULL), s.sort, s.rank, s.key`
 
 // Streams lists the enabled streams of a channel that shows, best first:
 // its entries' addresses, requested with the headers their list gives and
-// the source's User-Agent (see streamAgent), and its custom streams. Each
-// is labelled by its quality. Streams that failed last (see ReportStream)
-// come after the others, and those found dead or silent are left out
-// until their backoff ends (see hidden). A replay's stream is its
-// programme's address in the provider's archive (see ReplayID).
+// the source's User-Agent (see streamAgent), with how their list says
+// they are encrypted, and its custom streams. Each is labelled by its
+// quality. Streams that failed last (see ReportStream) come after the
+// others, and those found dead or silent are left out until their backoff
+// ends (see hidden). A replay's stream is its programme's address in the
+// provider's archive (see ReplayID).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if key, ok := strings.CutPrefix(id, prefix(source)); ok && (strings.HasPrefix(key, "vod:") || strings.HasPrefix(key, "ep:")) {
 		return s.vodStreams(ctx, source, key)
@@ -962,8 +964,8 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.Query(ctx, `SELECT s.label, coalesce(s.custom_url, e.url), coalesce(e.headers, '{}'), coalesce(s.health_url, ''),
-		s.ok_at, s.failure, s.failed_at, s.failures FROM iptv_streams s
+	rows, err := s.db.Query(ctx, `SELECT s.label, coalesce(s.custom_url, e.url), coalesce(e.headers, '{}'), e.protection,
+		coalesce(s.health_url, ''), s.ok_at, s.failure, s.failed_at, s.failures FROM iptv_streams s
 		LEFT JOIN iptv_entries e ON e.addon_id = s.addon_id AND e.key = s.key
 		WHERE s.addon_id = $1 AND s.channel_id = $2 AND s.enabled AND (s.custom_url IS NOT NULL OR e.url IS NOT NULL)
 		ORDER BY `+streamOrder, source, strings.TrimPrefix(id, prefix(source)))
@@ -974,9 +976,10 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 	now := s.now()
 	var label, address, checked string
 	var headers map[string]string
+	var protection *drm.Protection
 	var h health
-	if _, err := pgx.ForEachRow(rows, []any{&label, &address, &headers, &checked, &h.okAt, &h.failure, &h.failedAt, &h.failures}, func() error {
-		stream := stremio.Stream{Name: meta.Name, Description: label, URL: address}
+	if _, err := pgx.ForEachRow(rows, []any{&label, &address, &headers, &protection, &checked, &h.okAt, &h.failure, &h.failedAt, &h.failures}, func() error {
+		stream := stremio.Stream{Name: meta.Name, Description: label, URL: address, Protection: protection}
 		agent.apply(&stream, headers)
 		switch {
 		case checked != addressHash(address) || h.failure == nil:
@@ -985,7 +988,7 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 			failing = append(failing, stream)
 		}
 		// pgx decodes JSON into the map given: each row starts empty.
-		headers = nil
+		headers, protection = nil, nil
 		return nil
 	}); err != nil {
 		return nil, err

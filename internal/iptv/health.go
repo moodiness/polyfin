@@ -31,6 +31,13 @@ const (
 	// left out for timeoutBackoff only once silent twice in a row, one that
 	// never played at once.
 	FailureTimeout = "timeout"
+	// FailureDRM is a stream that needs a DRM Polyfin does not support:
+	// its list names another licence than ClearKey, or it is encrypted
+	// and its list gives no keys. FailureKeys is a stream its list's
+	// ClearKey keys do not decrypt. Neither is a network failure: they are
+	// left out of their channel as a dead stream is.
+	FailureDRM  = "drm"
+	FailureKeys = "keys"
 )
 
 // timeoutBackoff is how long a silent stream is left out of its channel.
@@ -65,7 +72,7 @@ func (h health) hidden(now time.Time) bool {
 		return false
 	}
 	switch *h.failure {
-	case FailureDead:
+	case FailureDead, FailureDRM, FailureKeys:
 		return now.Before(h.failedAt.Add(deadBackoff(h.failures)))
 	case FailureTimeout:
 		return (h.okAt == nil || h.failures >= 2) && now.Before(h.failedAt.Add(timeoutBackoff))
@@ -137,7 +144,7 @@ func streamHealth(address, checked string, h health, now time.Time) StreamHealth
 		result.Failure = *h.failure
 		if h.hidden(now) {
 			until := h.failedAt.Add(timeoutBackoff)
-			if *h.failure == FailureDead {
+			if *h.failure != FailureTimeout {
 				until = h.failedAt.Add(deadBackoff(h.failures))
 			}
 			result.HiddenUntil = &until
