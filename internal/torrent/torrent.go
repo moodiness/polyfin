@@ -75,7 +75,7 @@ const (
 	dhtAgain        = 15 * time.Second
 	maxNodesLearned = 50
 	// keptPeers is how many of the peers a torrent connected to it keeps
-	// for its next run (see Engine.keep).
+	// for its next run (see Engine.keepLocked).
 	keptPeers = 50
 )
 
@@ -88,7 +88,10 @@ type torrent struct {
 	hash   Hash
 	route  Route
 	// udp tells whether the route carries UDP: UDP trackers and the DHT.
-	udp    bool
+	udp bool
+	// run is the store's number for this run of the torrent (see
+	// store.started), set as it joins the engine.
+	run    uint64
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -142,7 +145,7 @@ type torrent struct {
 	// reached are the peers the torrent connected to, the latest last,
 	// keptPeers at most, and closest the DHT nodes nearest the torrent
 	// that answered its last lookup: both are kept once it stops, for its
-	// next run (see Engine.keep).
+	// next run (see Engine.keepLocked).
 	reached []netip.AddrPort
 	closest []string
 

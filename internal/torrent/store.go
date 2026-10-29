@@ -32,6 +32,10 @@ type store struct {
 	pieces map[pieceKey]*storedPiece
 	// evicted tells a torrent that it lost a piece.
 	evicted func(pieceKey)
+	// runs is the number of the latest run of each torrent whose pieces
+	// may be kept, and run the last number given (see started).
+	runs map[Hash]uint64
+	run  uint64
 }
 
 type storedPiece struct {
@@ -48,7 +52,7 @@ func newStore(dir string, budget func() int64, logger *slog.Logger) (*store, err
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	return &store{dir: dir, budget: budget, logger: logger, pieces: map[pieceKey]*storedPiece{}}, nil
+	return &store{dir: dir, budget: budget, logger: logger, pieces: map[pieceKey]*storedPiece{}, runs: map[Hash]uint64{}}, nil
 }
 
 func (s *store) path(key pieceKey) string {
@@ -131,10 +135,26 @@ func (s *store) read(key pieceKey, p []byte, off int64) (bool, error) {
 	return true, nil
 }
 
-// drop removes the pieces of a torrent.
-func (s *store) drop(hash Hash) {
+// started numbers a run of the torrent of hash that starts: its pieces are
+// the torrent's from now on, which an earlier run that stops no longer
+// drops (see drop).
+func (s *store) started(hash Hash) uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.run++
+	s.runs[hash] = s.run
+	return s.run
+}
+
+// drop removes the pieces of a torrent whose run stopped, unless a later
+// run of the torrent started meanwhile: they are that run's.
+func (s *store) drop(hash Hash, run uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.runs[hash] != run {
+		return
+	}
+	delete(s.runs, hash)
 	for key := range s.pieces {
 		if key.hash == hash {
 			s.removeLocked(key)

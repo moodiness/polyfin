@@ -57,10 +57,10 @@ type routeSettings struct {
 }
 
 // keptFor is how long what a torrent learned is kept once it stopped,
-// for its next run (see Engine.keep): a replay after a refresh, or the
-// next play of the title within the 15 minutes a failed version is left
-// out. maxKept bounds the torrents kept, and maxKeptInfo the bytes their
-// info dictionaries take.
+// for its next run (see Engine.keepLocked): a replay after a refresh, or
+// the next play of the title within the 15 minutes a failed version is
+// left out. maxKept bounds the torrents kept, and maxKeptInfo the bytes
+// their info dictionaries take.
 const (
 	keptFor     = 15 * time.Minute
 	maxKept     = 64
@@ -143,6 +143,9 @@ type Engine struct {
 	redialWait, dhtAgainWait time.Duration
 	// utpOff, set by tests, reaches peers over TCP alone.
 	utpOff bool
+	// left, set by tests, is called once a torrent that stops has left
+	// the engine, before its peers are closed (see remove).
+	left func(Hash)
 
 	mu       sync.Mutex
 	torrents map[Hash]*torrent
@@ -162,7 +165,7 @@ type Engine struct {
 	// removed is closed, and replaced, as a torrent stops (see
 	// AdmitsWithin).
 	removed chan struct{}
-	// kept is what stopped torrents learned, by info hash (see keep).
+	// kept is what stopped torrents learned, by info hash (see keepLocked).
 	kept map[Hash]keptRun
 }
 
@@ -308,6 +311,9 @@ func (e *Engine) start(spec Spec) *torrent {
 		return nil
 	}
 	e.torrents[spec.Hash] = t
+	// No disk work: a number, so that an earlier run that stops leaves
+	// this one's pieces.
+	t.run = e.store.started(spec.Hash)
 	kept, seeded := e.keptLocked(spec.Hash)
 	e.mu.Unlock()
 	if seeded {
@@ -340,13 +346,13 @@ func (e *Engine) keptLocked(hash Hash) (keptRun, bool) {
 	return kept, true
 }
 
-// keep keeps, for keptFor, what a torrent that stopped learned, for its
-// next run (see torrent.seed): the peers it connected to, its info
+// keepLocked keeps, for keptFor, what a torrent that stops learned, for
+// its next run (see torrent.seed): the peers it connected to, its info
 // dictionary, and the DHT nodes nearest it. A run that connected to no
 // peer and got no info learned nothing new: what an earlier run kept
 // stays as it was. The kept torrents stay within maxKept and maxKeptInfo,
-// those kept longest dropped first.
-func (e *Engine) keep(t *torrent) {
+// those kept longest dropped first. e's lock is held.
+func (e *Engine) keepLocked(t *torrent) {
 	t.mu.Lock()
 	run := keptRun{peers: slices.Clone(t.reached), info: t.info, infoData: t.infoData, nodes: slices.Clone(t.closest)}
 	private := t.private()
@@ -361,8 +367,6 @@ func (e *Engine) keep(t *torrent) {
 	}
 	now := time.Now()
 	run.until = now.Add(keptFor)
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	if before, ok := e.keptLocked(t.hash); ok {
 		for _, address := range before.peers {
 			if len(run.peers) < keptPeers && !slices.Contains(run.peers, address) {
@@ -541,8 +545,9 @@ func (e *Engine) stop(t *torrent) {
 	e.remove(t, errStopped)
 }
 
-// remove stops a torrent, telling its readers why, and removes its pieces;
-// what it learned is kept for its next run (see keep).
+// remove stops a torrent, telling its readers why, and removes its pieces.
+// What it learned is kept for its next run (see keepLocked) as it leaves
+// the engine: a run started once Running tells it stopped starts from it.
 func (e *Engine) remove(t *torrent, err error) {
 	e.mu.Lock()
 	if e.torrents[t.hash] == t {
@@ -550,10 +555,13 @@ func (e *Engine) remove(t *torrent, err error) {
 		close(e.removed)
 		e.removed = make(chan struct{})
 	}
+	e.keepLocked(t)
 	e.mu.Unlock()
+	if e.left != nil {
+		e.left(t.hash)
+	}
 	t.fail(err)
-	e.keep(t)
-	e.store.drop(t.hash)
+	e.store.drop(t.hash, t.run)
 }
 
 // Open returns a reader of the file of spec, once a playback joined its
