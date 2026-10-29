@@ -126,6 +126,13 @@ type Remux struct {
 	// refusal. A live run that failed while it was refused failed for that
 	// reason, which is no fault of the encoding.
 	Refused func() error
+	// Channel names the channel a live Input plays, in the log lines of
+	// its encoding. Answered, when set, tells the last file of a live
+	// Input that answered no media since a time, an error or a page, by
+	// its file name; nil for none. A live run that fails or stalls says
+	// what was answered since it last made a segment (see live.start).
+	Channel  string
+	Answered func(since time.Time) error
 	// Lookback is how far before a segment's start FFmpeg starts reading
 	// a searched version from the encoding's first seek on, as an earlier
 	// encoding of the same file learned it (see encoding.lookback); zero
@@ -759,8 +766,8 @@ type Manager struct {
 	// FFmpeg makes segments before it waits; nil, or a value not above
 	// zero, keeps defaultAhead.
 	ahead atomic.Pointer[func() time.Duration]
-	// stall is stallTimeout, which tests shorten.
-	stall time.Duration
+	// stall is stallTimeout, and liveStall liveStall, which tests shorten.
+	stall, liveStall time.Duration
 	// grace is recordGrace, which tests lengthen.
 	grace time.Duration
 	// linger is variantLinger, in nanoseconds, which tests change.
@@ -803,7 +810,7 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), system: runtime.GOOS, arch: runtime.GOARCH,
-		stall:    stallTimeout,
+		stall: stallTimeout, liveStall: liveStall,
 		grace:    recordGrace,
 		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{},
 		kept: map[Key]*keeping{}}

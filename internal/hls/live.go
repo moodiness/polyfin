@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -54,11 +56,20 @@ const (
 	// server runs in all.
 	userLives   = 4
 	serverLives = 16
+	// liveStall ends a run that made no segment for that long, once the
+	// encoding played, while players ask for its playlist: FFmpeg's HLS
+	// demuxer skips the segments it cannot read, and waits on for good
+	// when none can be, as when the source answers each with an error or
+	// a page. The run ends with ErrLiveStalled, and is read again.
+	liveStall = 20 * time.Second
 )
 
 // ErrInterrupted reports a live stream whose input ended: a live stream
 // has no end, so it is read again.
 var ErrInterrupted = errors.New("the live stream was interrupted")
+
+// ErrLiveStalled reports a live run that made no segment for liveStall.
+var ErrLiveStalled = errors.New("FFmpeg made no segment of the live stream")
 
 // ErrBusy reports an encoding refused because the server runs as many as
 // it may: live encodings, or playbacks whose video is converted.
@@ -94,6 +105,9 @@ type live struct {
 	// answered is set once a playlist was answered: the first waits for
 	// its lead (see LivePlaylist), the next ones for a segment.
 	answered bool
+	// gaveUp is set once the encoding gave up after its restarts, and
+	// told so.
+	gaveUp bool
 }
 
 // liveRun is one run of FFmpeg.
@@ -106,6 +120,9 @@ type liveRun struct {
 	// refused tells a run that failed because its source refused the
 	// stream (see Remux.Refused).
 	refused bool
+	// stalled is why the run was ended for its stall (see watchStall),
+	// nil otherwise. It is guarded by the live's mu.
+	stalled error
 }
 
 // LivePlaylist returns the media playlist of the live encoding of key,
@@ -187,11 +204,11 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 			}
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return nil, l.late(ctx.Err())
 			case <-time.After(200 * time.Millisecond):
 			}
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, l.late(ctx.Err())
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
@@ -279,6 +296,7 @@ func (l *live) ensure(ctx context.Context, open Opener) (*liveRun, error) {
 		select {
 		case <-run.done:
 		default:
+			l.watchStall(run)
 			return run, nil
 		}
 		ended := time.Now()
@@ -290,10 +308,19 @@ func (l *live) ensure(ctx context.Context, open Opener) (*liveRun, error) {
 		}
 		l.restarts = slices.DeleteFunc(l.restarts, func(at time.Time) bool { return ended.Sub(at) > liveRestartWindow })
 		if len(l.restarts) >= liveRestarts {
-			return nil, fmt.Errorf("%w after %d restarts: %w", ErrStopped, len(l.restarts), run.err)
+			err := fmt.Errorf("%w after %d restarts: %w", ErrStopped, len(l.restarts), run.err)
+			// A source that refused the stream, as when a recording took
+			// its tuner, is a normal event: the player hears it, and the
+			// request tells it (see Remux.Refused).
+			if !l.gaveUp && !run.refused {
+				l.m.logger.Warn("A live encoding gave up: its stream failed too often", "channel", l.remux.Channel, "error", err)
+			}
+			l.gaveUp = true
+			return nil, err
 		}
+		l.gaveUp = false
 		l.restarts = append(l.restarts, ended)
-		l.m.logger.Info("A live stream is read again", "reason", run.err, "restarts", len(l.restarts))
+		l.m.logger.Info("A live stream is read again", "channel", l.remux.Channel, "reason", run.err, "restarts", len(l.restarts))
 	}
 	if reopen && l.opened {
 		l.release()
@@ -334,33 +361,43 @@ func (l *live) start() (*liveRun, error) {
 	run := &liveRun{started: time.Now(), cancel: cancel, done: make(chan struct{})}
 	l.run = run
 	args, method := l.remux.runArgs(l.dir, l.next, previous != nil), l.remux.Encode.method()
-	refused := l.remux.Refused
+	refused, answered, channel := l.remux.Refused, l.remux.Answered, l.remux.Channel
 	go func() {
 		defer cancel()
 		cmd := exec.CommandContext(ctx, l.m.ffmpeg, args...)
 		cmd.WaitDelay = 5 * time.Second
 		stderr := &tail{limit: 4096}
 		cmd.Stderr = stderr
-		l.m.logger.Debug("Started a live encoding", "from", l.next)
+		l.m.logger.Debug("Started a live encoding", "channel", channel, "from", l.next)
 		err := cmd.Run()
+		l.mu.Lock()
+		stalled := run.stalled
+		l.mu.Unlock()
 		switch {
+		case stalled != nil:
+			// Ended for its stall, which watchStall told.
+			err = stalled
 		case ctx.Err() != nil:
 			err = ErrStopped
-			l.m.logger.Debug("A live encoding was stopped")
+			l.m.logger.Debug("A live encoding was stopped", "channel", channel)
 		case err != nil && refused != nil && refused() != nil:
 			// Its source refused the stream, as when a recording took its
 			// tuner: the playlist tells the player so (see LivePlaylist).
 			err = fmt.Errorf("%w: FFmpeg failed: %w", refused(), err)
 			run.refused = true
-			l.m.logger.Info("A live encoding stopped: its source refused the stream", "error", err)
+			l.m.logger.Info("A live encoding stopped: its source refused the stream", "channel", channel, "error", err)
 		case err != nil:
-			err = fmt.Errorf("FFmpeg failed: %w: %s", err, bytes.TrimSpace(stderr.bytes()))
-			l.m.logger.Warn("A live encoding failed", "error", err)
+			// What FFmpeg writes names the files it read by their address
+			// on the loopback interface, which holds the source's: only
+			// their names are kept.
+			err = fmt.Errorf("FFmpeg failed: %w: %s", err, cutAddresses(string(bytes.TrimSpace(stderr.bytes()))))
+			err = withAnswer(err, answered, l.progressed(run))
+			l.m.logger.Warn("A live encoding failed", "channel", channel, "error", err)
 			metrics.EncodingFailed(method)
 		default:
 			// A live stream does not end: its input was interrupted.
-			err = ErrInterrupted
-			l.m.logger.Debug("A live stream was interrupted")
+			err = withAnswer(ErrInterrupted, answered, l.progressed(run))
+			l.m.logger.Debug("A live stream was interrupted", "channel", channel, "error", err)
 		}
 		l.mu.Lock()
 		l.next = max(l.next, lastSegment(l.dir)+1)
@@ -375,6 +412,87 @@ func (l *live) start() (*liveRun, error) {
 		l.mu.Unlock()
 	}()
 	return run, nil
+}
+
+// watchStall ends run, which runs, once it made no segment for the
+// manager's liveStall after the encoding played: FFmpeg waits on for good
+// for a source whose segments all answer no media. The run fails with
+// ErrLiveStalled and what the source answered since its last segment,
+// which is logged, and is read again (see ensure). The caller holds l.mu.
+func (l *live) watchStall(run *liveRun) {
+	if run.stalled != nil || !l.playedLocked() {
+		return
+	}
+	progressed := l.progressed(run)
+	stalled := time.Since(progressed)
+	if stalled < l.m.liveStall {
+		return
+	}
+	run.stalled = withAnswer(fmt.Errorf("%w for %s", ErrLiveStalled, stalled.Round(time.Second)), l.remux.Answered, progressed)
+	l.m.logger.Warn("A live encoding stalled", "channel", l.remux.Channel, "error", run.stalled)
+	run.cancel()
+}
+
+// progressed is when run last made a segment, its start for none: FFmpeg
+// writes its playlist anew with each segment it makes.
+func (l *live) progressed(run *liveRun) time.Time {
+	info, err := os.Stat(filepath.Join(l.dir, livePlaylist))
+	if err != nil || !info.ModTime().After(run.started) {
+		return run.started
+	}
+	return info.ModTime()
+}
+
+// late is err, a wait for the encoding's first segments that ran out,
+// with what its source answered, if it answered no media.
+func (l *live) late(err error) error {
+	l.mu.Lock()
+	answered := l.remux.Answered
+	l.mu.Unlock()
+	return withAnswer(err, answered, time.Time{})
+}
+
+// withAnswer is err followed by what answered tells, the last file of the
+// source that answered no media since a time; err alone when none did.
+// The answer is told, not wrapped: what failed is the encoding.
+func withAnswer(err error, answered func(since time.Time) error, since time.Time) error {
+	if answered == nil {
+		return err
+	}
+	if answer := answered(since); answer != nil {
+		return fmt.Errorf("%w; %v", err, answer)
+	}
+	return err
+}
+
+// ffmpegAddress matches an address in what FFmpeg writes, and
+// ffmpegHost a host and port it connects to, as it names them when the
+// connection fails.
+var (
+	ffmpegAddress = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s'"<>]+`)
+	ffmpegHost    = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}:\d+\b|\[[0-9a-fA-F:.]+\]:\d+`)
+)
+
+// cutAddresses replaces each address in text with the name of its file,
+// as the analysis does (see fileAnswer in package playback): a name
+// without an extension, which may be a token, is not kept. A host and
+// port, which on the loopback interface tell nothing, are left out too.
+func cutAddresses(text string) string {
+	text = ffmpegAddress.ReplaceAllStringFunc(text, func(found string) string {
+		if i := strings.IndexAny(found, "?#"); i >= 0 {
+			found = found[:i]
+		}
+		found = strings.TrimRight(found, ".,;:)")
+		name := found[strings.LastIndexByte(found, '/')+1:]
+		if unescaped, err := url.PathUnescape(name); err == nil {
+			name = unescaped
+		}
+		if path.Ext(name) == "" {
+			return "a file named without an extension"
+		}
+		return name
+	})
+	return ffmpegHost.ReplaceAllString(text, "Polyfin's relay")
 }
 
 // lastSegment is the number of the last segment in a directory, -1 for
@@ -402,6 +520,11 @@ func (l *live) reopened() bool {
 func (l *live) played() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.playedLocked()
+}
+
+// playedLocked is played, l.mu held.
+func (l *live) playedLocked() bool {
 	return l.next > 0 || lastSegment(l.dir) >= 0
 }
 
