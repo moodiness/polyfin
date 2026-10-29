@@ -836,7 +836,7 @@ Turning it on or off keeps the sessions already open, in the admin app and in Je
 
 ### Jellyfin apps
 
-Jellyfin apps, the web client included, cannot ask for a code. An account with two-step sign-in signs in to them with Quick Connect, approved on the admin app's **Quick Connect** page, which itself asked for the code (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect)). The password alone is refused there as a wrong password is. API keys made by administrators work as before. The web client does not open an admin app session for such an account: the admin app asks for the password and the code (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
+Jellyfin apps, the web client included, cannot ask for a code. An account with two-step sign-in signs in to them with Quick Connect, approved on the admin app's **Quick Connect** page, which itself asked for the code (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect)), or through an identity provider in the web client (see [Signing in with an identity provider](#signing-in-with-an-identity-provider)). The password alone is refused there as a wrong password is. API keys made by administrators work as before. The web client does not open an admin app session for such an account, unless it signed in through the identity provider: the admin app asks for the password and the code (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)).
 
 ### Silo's apps
 
@@ -865,9 +865,70 @@ A database restored under another `POLYFIN_SECRET_KEY` holds keys that the curre
 - The codes follow RFC 6238: HMAC-SHA-1, 30-second steps, 6 digits, a 160-bit key.
 - A recovery code holds 80 random bits, in lowercase Crockford base32. Polyfin stores its SHA-256 hash: at 80 bits, a copy of the database does not let anyone search it out.
 
+## Signing in with an identity provider
+
+When an administrator sets up an OpenID Connect provider under **Settings › Security** (see [Identity provider](administration.md#identity-provider)), the sign-in pages of the admin app and of the web client get a **Sign in with …** button, named after the provider. It leads to the provider's own sign-in page, which asks for its password and its own second step, then back to Polyfin, signed in:
+
+- in the admin app, the button sits under **Sign in**; the browser comes back to the admin app's home, with a session that lasts as one opened with a password does;
+- in the web client, Polyfin's script adds the button first among the buttons of jellyfin-web's sign-in page. The browser comes back to the web client, signed in as a device of its own, as a password signs it in: the device shows under **My account › Devices**, and signing out signs it out.
+
+The sign-in starts and ends at the server's **Public address**, set under **Settings › Notifications**, which must be set for the button to show: a web client opened at another address comes back at the public one.
+
+### Which account signs in
+
+The first time someone signs in through the provider, Polyfin looks for their account:
+
+1. the account whose name is the claim set under **Claim naming the user**, `preferred_username` by default, without regard to case;
+2. else the account whose name is their email, only when the ID token says the email is verified (`email_verified` true): an email the provider does not vouch for, or says nothing of, matches no account;
+3. else, with **Create accounts** on, a new account, named after the claim, or the email when the claim is no valid name. It has the permissions of an account created under **Users** without a group, and **Identity provider only** set. With **Create accounts** off, the default, the sign-in is refused.
+
+The account found is linked to the person at the provider, by the provider's issuer and their subject (`sub`), which never change there. Later sign-ins find the same account by that link, even when the claim or the email changed. An account linked to someone else at the provider, matched by name or email, is refused. Changing the issuer under **Settings › Security** starts the links over.
+
+With **Administrators' claim** and **Administrators' value** set, someone whose claim holds the value, such as a `groups` claim listing `polyfin-admins`, becomes an administrator as they sign in, unless the account is disabled. The group only grants: removing someone from the group in the provider does not demote them in Polyfin. They stay an administrator until you turn **Administrator** off on their page under **Users**.
+
+A disabled account, and one that ended, is refused as with a password, and so is a sign-in outside the account's allowed hours.
+
+### Accounts without a password
+
+**Identity provider only**, on a user's page under **Users** and when creating one, has the account sign in through the provider alone. Its password, even the right one, is refused as a wrong password is, in the admin app and in Jellyfin apps, and counts toward the client's failed attempts but not toward the account's, so that nobody can block it with passwords. An account created so needs no password: Polyfin gives it one nobody knows. Turning it off lets the account's password sign in again: set one first.
+
+### Two-step sign-in and the provider
+
+Polyfin does not ask for the code of its own two-step sign-in after the provider: the provider asked for its own second step, as Jellyfin's SSO plugins leave it to the provider. An administrator required to use two-step sign-in signs in through the provider without setting it up. The web client signed in through the provider also opens the admin app without a code (see [Signing in to the admin app](web-client.md#signing-in-to-the-admin-app)), which a web client signed in with Quick Connect does not.
+
+In the same way, the block after wrong passwords does not stop a sign-in through the provider: it blocks passwords only (see [Blocking after wrong passwords](#blocking-after-wrong-passwords)). An account blocked by someone guessing its password still signs in through the provider, which checked its own credentials, and stays blocked for passwords.
+
+### Jellyfin apps
+
+Jellyfin apps cannot open the provider's page. They sign in with Quick Connect: the app shows a code, approved on the admin app's **Quick Connect** page, or in the web client's own **Quick Connect** page, opened through the provider (see [Signing in to apps with Quick Connect](jellyfin-compatibility.md#signing-in-to-apps-with-quick-connect)). An account with a password may also type it in the app, unless it signs in through the provider only.
+
+### How the sign-in is kept safe
+
+- Polyfin uses the authorization code flow with PKCE (S256), a state and a nonce, each made of 32 random bytes. The state is given to the browser in a cookie too, and taken once, within 10 minutes: a state replayed, made up, expired, or brought back by another browser is refused.
+- The ID token must be signed with RS256 or ES256 by a key of the provider's JWKS, issued by the issuer set, exactly, for the client ID set, with the nonce of the sign-in; its expiry must not have passed and its issue time must not be to come, 2 minutes allowed either way for clocks that differ. A token naming a key the JWKS lacks has Polyfin fetch the keys again, at most once every 30 seconds.
+- The discovery document must name the issuer set, exactly. Polyfin keeps it an hour, and the keys until a token needs another.
+- The redirect URI is built from the public address, and must be registered at the provider exactly as **Settings › Security** shows it.
+- An `http://` issuer is accepted, for a provider on the local network, but over HTTP the client secret, the codes and the tokens cross the network unencrypted: use HTTPS for the provider and for the public address (see [Identity provider](administration.md#identity-provider)).
+- Each return from the provider counts toward the client's failed attempts as a sign-in with a password does: a refused state, code or token counts as a wrong password, and once too many are refused, the browser comes back with "Too many attempts". Someone whose account is refused counts as no wrong guess.
+- No token, code, state or secret is written to the log or sent back. The browser gets the Jellyfin access token of its own device, as a sign-in with a password gives it, through a one-time ticket in a cookie its page cannot read, valid 2 minutes.
+- The client secret is stored encrypted with `POLYFIN_SECRET_KEY` (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
+- The activity log records the sign-ins, the refused ones with the name the provider gave, and the accounts it created.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no OpenID Connect sign-in of its own: plugins add it, with a sign-in page of their own. Polyfin adds the button to jellyfin-web's own sign-in page, through its script, rather than sending `/web/` to the provider: jellyfin-web keeps its sign-in in the browser, which the server cannot see, so a redirect would also send to the provider people already signed in, or wishing to use their password or Quick Connect.
+- Polyfin finds accounts by the link to the provider, then by name, then by email, and makes administrators from a group; it never takes administrators back, so that a provider's change cannot leave the server without one.
+
+**For app developers:**
+
+- `GET /admin/api/status` answers `provider`, `{"name", "start"}`, or `null` without a provider or a public address. `start` is `<public address>/admin/api/provider/start`, to which the admin app adds `?app=admin` and the web client `?app=web`.
+- `GET /admin/api/provider/callback` is the redirect URI. It sends the browser to `/admin/`, signed in, or `/admin/?provider=<error>`; for the web client, to `/web/?polyfinProvider=signed-in` or `/web/?polyfinProvider=<error>`. The errors are `provider_refused`, `provider_no_account`, `account_disabled`, `outside_allowed_hours`, `too_many_attempts`, `provider_state`, `provider_failed`, `provider_off`, `provider_unreachable` and `internal`.
+- `POST /admin/api/provider/web`, with the ticket's cookie and the device in a `MediaBrowser` `Authorization` header (`Client`, `Device`, `DeviceId`, `Version`), signs that device in once and answers `{"accessToken", "userId", "serverId", "serverName"}`; 401 `invalid_credentials` without a valid ticket, 403 `account_disabled` or `outside_allowed_hours`.
+- A user's `providerOnly` tells whether they sign in through the provider only; `POST /admin/api/users` and `PATCH /admin/api/users/{id}` take it.
+
 ## Security settings
 
-**Settings › Security** gathers eight settings, and **Settings › Diagnostics** a ninth. They apply at once, without a restart.
+**Settings › Security** gathers eight settings and the identity provider, and **Settings › Diagnostics** a ninth setting. They apply at once, without a restart.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -879,6 +940,7 @@ A database restored under another `POLYFIN_SECRET_KEY` holds keys that the curre
 | **Require two-step sign-in for administrators** | **Settings › Security** | Off | Administrators must sign in with a code from an authenticator app after their password (see [Two-step sign-in](#two-step-sign-in)). |
 | **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps not used for that many days. |
 | **Known proxies** | **Settings › Security** | None (up to 64 addresses, networks or host names) | The reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names the client of their requests. |
+| **Identity provider** | **Settings › Security** | None | An OpenID Connect provider people sign in with, in the admin app and the web client (see [Signing in with an identity provider](#signing-in-with-an-identity-provider) and [Identity provider](administration.md#identity-provider)). |
 | **Detailed log** | **Settings › Diagnostics** | Off | Logs at the `debug` level until turned off. |
 
 ### Users' own addons

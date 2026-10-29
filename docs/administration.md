@@ -283,6 +283,32 @@ Over HTTPS, the stream addresses Polyfin gives apps start with `https://`, and t
 
 **For app developers:** `/admin/api/settings` holds the settings as `httpsMode` (`off`, `files` or `letsencrypt`), `httpsPort`, `httpsRedirect`, `httpsCertificate`, `httpsPrivateKey`, `acmeHosts`, `acmeEmail`, `acmeTerms` and `acmeChallenge` (`http-01` or `tls-alpn-01`). A `PUT` with files that cannot be served answers 400 `https_certificate_missing`, `https_private_key_missing`, `https_certificate_unreadable`, `https_private_key_unreadable` or `https_files_mismatch`; Let's Encrypt without a host name answers `invalid_acme_hosts`, and without the terms agreed to `acme_terms_required`. `GET /admin/api/health/problems` lists `https_port`, with `port`, `https_files`, with `failure` (`missing`, `unreadable` or `mismatch`) and `file`, `https_renewal`, with `error`, and `https_expiry`, with `expires`.
 
+## Identity provider
+
+People can sign in to the admin app and to the web client with an OpenID Connect provider, set under **Settings › Security**, in its **Identity provider** part. Changes apply at once, without a restart. Signing in through it is told in [Signing in with an identity provider](users.md#signing-in-with-an-identity-provider).
+
+To set it up:
+
+1. Set **Public address**, under **Settings › Notifications**, to the address people open Polyfin at: the sign-in starts and ends there.
+2. At the provider, register Polyfin as a client, confidential or public, with the **Redirect URI** the part shows, `<public address>/admin/api/provider/callback`, exactly, and the authorization code flow.
+3. Fill in **Issuer** and **Client ID**, and **Client secret** for a confidential client, then save. The sign-in pages show their button once the issuer, the client ID and the public address are set.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Issuer** | **Settings › Security** | Empty, off | The provider's issuer, exactly as its discovery document gives it, `http://` or `https://`, without a query or a fragment. Polyfin reads `<issuer>/.well-known/openid-configuration`. `http://` is accepted for a provider on your own network, but see the warning below. |
+| **Button name** | **Settings › Security** | Empty | What the buttons say after "Sign in with", up to 64 bytes. Empty shows the issuer's host name. |
+| **Client ID** | **Settings › Security** | Empty, off | The ID the provider gave Polyfin's client. |
+| **Client secret** | **Settings › Security** | Empty | The secret of a confidential client, sent with HTTP Basic authentication, or in the form when the provider lists only `client_secret_post`. Kept encrypted with `POLYFIN_SECRET_KEY`, and never shown again. |
+| **Claim naming the user** | **Settings › Security** | `preferred_username` | The ID token's claim compared with account names the first time someone signs in; the verified email comes next. |
+| **Create accounts** | **Settings › Security** | Off | Creates an account, signing in through the provider only, for someone no account matches. Off, they are refused. |
+| **Administrators' claim**, **Administrators' value** | **Settings › Security** | Empty | Both set, someone whose claim is the value, or a list holding it, becomes an administrator as they sign in. With the claim `groups`, Polyfin asks for the `groups` scope when the provider lists it. |
+
+**Use HTTPS.** Polyfin accepts an `http://` issuer, as self-hosted providers often sit on the local network. Over HTTP, though, the client secret, the codes and the tokens cross the network unencrypted, between Polyfin and the provider, and between browsers and both of them: anyone on the way can read them, and sign in as the people they belong to. Give the provider an `https://` address, and serve Polyfin's public address over HTTPS too, whenever the sign-in leaves a network you fully trust.
+
+Polyfin asks for the scopes `openid`, `profile` and `email`, the last two when the provider lists them or lists no scope. A provider that cannot be reached when someone starts to sign in is logged as a warning, with its issuer, and the browser comes back with an error; a refused ID token is logged with the check it failed, never with the token.
+
+**For app developers:** `/admin/api/settings` holds `providerIssuer`, `providerName`, `providerClientId`, `providerClientSecretSet` (the secret itself is only sent, never answered, empty to remove it), `providerUserClaim`, `providerCreateAccounts`, `providerAdminClaim`, `providerAdminValue`, and `providerRedirectUri`, read-only, empty without a public address. Settings refused answer 400 `invalid_provider`.
+
 ## Logs
 
 **System › Logs** follows the in-memory log, redacted as it is for Jellyfin apps (see [Server logs](#server-logs)). It has a **Level** filter, a search box, **Follow** and **Pause**, and **Download**.
