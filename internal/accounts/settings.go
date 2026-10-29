@@ -1718,6 +1718,77 @@ type Settings struct {
 	// poster as the pointer or the focus comes to it (see
 	// /Polyfin/Items/Ratings); off, it shows none there.
 	PosterRatings bool
+
+	// The OpenID Connect provider people may sign in with (see
+	// ProviderSignIn): its issuer, the name its button shows, empty for
+	// the issuer's host, and Polyfin's client at it, the secret empty for
+	// a public client. ProviderUserClaim names the claim compared with
+	// account names, the verified email after it; ProviderCreateAccounts
+	// creates an account for someone no account matches. While both
+	// ProviderAdminClaim and ProviderAdminValue are set, the people whose
+	// claim is the value, or a list holding it, become administrators.
+	ProviderIssuer         string
+	ProviderName           string
+	ProviderClientID       string
+	ProviderClientSecret   string
+	ProviderUserClaim      string
+	ProviderCreateAccounts bool
+	ProviderAdminClaim     string
+	ProviderAdminValue     string
+}
+
+// ProviderSignIn reports whether people may sign in with the provider:
+// its issuer and Polyfin's client ID are set.
+func (s Settings) ProviderSignIn() bool {
+	return s.ProviderIssuer != "" && s.ProviderClientID != ""
+}
+
+// ProviderButton is the name the button of the provider shows: its name,
+// else its issuer's host.
+func (s Settings) ProviderButton() string {
+	if s.ProviderName != "" {
+		return s.ProviderName
+	}
+	if issuer, err := url.Parse(s.ProviderIssuer); err == nil && issuer.Host != "" {
+		return issuer.Hostname()
+	}
+	return s.ProviderIssuer
+}
+
+// The bounds of the provider's settings, in bytes.
+const (
+	MaxProviderIssuerBytes = 500
+	MaxProviderNameBytes   = 64
+	MaxProviderClientBytes = 255
+	MaxProviderClaimBytes  = 64
+	MaxProviderValueBytes  = 255
+)
+
+// ErrInvalidProvider reports provider settings refused: an issuer that is
+// not an http or https address without a query, a fragment or a user, a
+// name too long or holding control characters, a client ID, a secret or
+// a claim's name too long or holding spaces or control characters, no
+// claim naming the user, or an administrators' value too long or holding
+// control characters.
+var ErrInvalidProvider = errors.New("invalid identity provider")
+
+// validProvider checks the provider's settings, trimmed.
+func validProvider(s Settings) bool {
+	if s.ProviderIssuer != "" {
+		issuer, err := url.Parse(s.ProviderIssuer)
+		if err != nil || (issuer.Scheme != "https" && issuer.Scheme != "http") || issuer.Host == "" ||
+			issuer.User != nil || strings.ContainsAny(s.ProviderIssuer, "?#") || len(s.ProviderIssuer) > MaxProviderIssuerBytes {
+			return false
+		}
+	}
+	token := func(text string, max int) bool {
+		return len(text) <= max && utf8.ValidString(text) &&
+			!strings.ContainsFunc(text, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
+	}
+	return validLine(s.ProviderName, MaxProviderNameBytes) &&
+		token(s.ProviderClientID, MaxProviderClientBytes) && token(s.ProviderClientSecret, MaxProviderClientBytes) &&
+		s.ProviderUserClaim != "" && token(s.ProviderUserClaim, MaxProviderClaimBytes) &&
+		token(s.ProviderAdminClaim, MaxProviderClaimBytes) && validLine(s.ProviderAdminValue, MaxProviderValueBytes)
 }
 
 // TorrentsAllowed reports whether user is offered torrents' files: the
@@ -1932,7 +2003,9 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"restart_confirmed, update_tool_url, update_tool_token, " +
 	"conversion_folder, reading_folder, cache_folder, " +
 	"silo_apps, " +
-	"poster_ratings"
+	"poster_ratings, " +
+	"provider_issuer, provider_name, provider_client_id, provider_client_secret, provider_user_claim, provider_create_accounts, " +
+	"provider_admin_claim, provider_admin_value"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1995,7 +2068,9 @@ func (settings *Settings) fields() []any {
 		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken,
 		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder,
 		&settings.SiloApps,
-		&settings.PosterRatings}
+		&settings.PosterRatings,
+		&settings.ProviderIssuer, &settings.ProviderName, &settings.ProviderClientID, &settings.ProviderClientSecret, &settings.ProviderUserClaim,
+		&settings.ProviderCreateAccounts, &settings.ProviderAdminClaim, &settings.ProviderAdminValue}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -2036,6 +2111,7 @@ func (settings *Settings) secrets() []struct {
 		{"torrentProxyPassword", &settings.TorrentProxyPassword},
 		{"torrentWireGuard", &settings.TorrentWireGuard},
 		{"updateToolToken", &settings.UpdateToolToken},
+		{"providerClientSecret", &settings.ProviderClientSecret},
 	}
 }
 
@@ -2483,6 +2559,13 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !validLine(settings.UpdateToolToken, MaxUpdateToolTokenBytes) || strings.ContainsFunc(settings.UpdateToolToken, unicode.IsSpace) {
 		return Settings{}, ErrInvalidUpdateToolToken
+	}
+	settings.ProviderIssuer, settings.ProviderName = strings.TrimSpace(settings.ProviderIssuer), strings.TrimSpace(settings.ProviderName)
+	settings.ProviderClientID, settings.ProviderClientSecret = strings.TrimSpace(settings.ProviderClientID), strings.TrimSpace(settings.ProviderClientSecret)
+	settings.ProviderUserClaim, settings.ProviderAdminClaim = strings.TrimSpace(settings.ProviderUserClaim), strings.TrimSpace(settings.ProviderAdminClaim)
+	settings.ProviderAdminValue = strings.TrimSpace(settings.ProviderAdminValue)
+	if !validProvider(settings) {
+		return Settings{}, ErrInvalidProvider
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.

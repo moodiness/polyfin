@@ -218,7 +218,15 @@ func DefaultSettings() Settings {
 		CacheFolder:      "",
 		SiloApps:         false,
 
-		PosterRatings: false,
+		PosterRatings:          false,
+		ProviderIssuer:         "",
+		ProviderName:           "",
+		ProviderClientID:       "",
+		ProviderClientSecret:   "",
+		ProviderUserClaim:      "preferred_username",
+		ProviderCreateAccounts: false,
+		ProviderAdminClaim:     "",
+		ProviderAdminValue:     "",
 	}
 }
 
@@ -447,7 +455,15 @@ func SettingsBounds() map[string]SettingBounds {
 		"cacheFolder":      text(MaxFolderBytes, d.CacheFolder),
 		"siloApps":         is(d.SiloApps),
 
-		"posterRatings": is(d.PosterRatings),
+		"posterRatings":          is(d.PosterRatings),
+		"providerIssuer":         text(MaxProviderIssuerBytes, d.ProviderIssuer),
+		"providerName":           text(MaxProviderNameBytes, d.ProviderName),
+		"providerClientId":       text(MaxProviderClientBytes, d.ProviderClientID),
+		"providerClientSecret":   text(MaxProviderClientBytes, d.ProviderClientSecret),
+		"providerUserClaim":      between(1, MaxProviderClaimBytes, d.ProviderUserClaim),
+		"providerCreateAccounts": is(d.ProviderCreateAccounts),
+		"providerAdminClaim":     text(MaxProviderClaimBytes, d.ProviderAdminClaim),
+		"providerAdminValue":     text(MaxProviderValueBytes, d.ProviderAdminValue),
 	}
 }
 
