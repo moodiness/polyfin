@@ -745,6 +745,15 @@ const settings: typeof en = {
     thumbnailStorage: 'Place pour les images (Go)',
     thumbnailStorageHelp: (r: RangeText) =>
       `Les miniatures et les images des chapitres sont gardées dans la base de données. Au-delà de cette taille, les images des titres regardés il y a le plus longtemps sont effacées ; elles sont refaites si le titre est relu. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    sourceProxy: 'Proxy SOCKS5 pour les flux des addons',
+    sourceProxyHelp:
+      'Lit les flux des addons Stremio du serveur via ce proxy, par exemple WARP, sans y faire passer les catalogues, les métadonnées, l’IPTV ni les fichiers locaux. Une URL comme socks5h://warp:1080 ; vide = lecture directe. Une lecture en cours garde le proxy avec lequel elle a commencé.',
+    sourceProxyDetect: 'Détecter WARP',
+    sourceProxyDetecting: 'Détection…',
+    sourceProxyDetected: (url: string) => `WARP détecté : ${url}`,
+    sourceProxyUse: 'Utiliser',
+    sourceProxyNotFound:
+      'Aucun WARP trouvé sur ce réseau ; saisissez son adresse SOCKS5 manuellement.',
     cacheSize: 'Espace disque des fichiers en cours de lecture (Go)',
     cacheSizeHelp: (r: RangeText) =>
       `L’espace que Polyfin peut utiliser pour garder les parties des fichiers lus, afin que les retours en arrière et les reprises ne les téléchargent pas à nouveau. Les parties lues dans les 30 dernières secondes sont gardées même au-delà. De ${r.min} à ${r.max} Go ; ${r.default} par défaut.`,

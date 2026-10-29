@@ -30,6 +30,7 @@ import (
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
+	"github.com/moodiness/polyfin/internal/netproxy"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/quickconnect"
@@ -77,6 +78,9 @@ type Options struct {
 	// Now tells the time users' allowed hours are checked against; nil
 	// means the system clock.
 	Now func() time.Time
+	// SourceProxyDetect finds a proxy installed beside Polyfin, such as a
+	// WARP container on the same network; nil uses netproxy.Detect.
+	SourceProxyDetect func(context.Context) (string, bool)
 	// Guides fetches the XMLTV guides of live TV catalogs and maps their
 	// channels.
 	Guides Guides
@@ -217,6 +221,9 @@ func New(options Options) http.Handler {
 	if h.Health.Started.IsZero() {
 		h.Health.Started = time.Now()
 	}
+	if h.SourceProxyDetect == nil {
+		h.SourceProxyDetect = netproxy.Detect
+	}
 	// Starting counts as a restart: a restart is refused within a minute
 	// of start-up as within a minute of the last one, which the process
 	// that restarted could not tell the new one.
@@ -328,6 +335,7 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/share-links/{id}/revoke", h.administrator(h.revokeAnyShareLink))
 	mux.Handle("GET /admin/api/parental-ratings", h.administrator(h.parentalRatings))
 	mux.Handle("GET /admin/api/settings", h.administrator(h.settings))
+	mux.Handle("GET /admin/api/settings/source-proxy", h.administrator(h.detectSourceProxy))
 	h.dlnaRoutes(mux)
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
 	mux.Handle("GET /admin/api/settings/apps", h.administrator(h.settingsApps))
@@ -596,6 +604,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidLoginAttempts, http.StatusBadRequest, "invalid_login_attempts"},
 		{accounts.ErrInvalidInactiveDeviceDays, http.StatusBadRequest, "invalid_inactive_device_days"},
 		{accounts.ErrInvalidKnownProxies, http.StatusBadRequest, "invalid_known_proxies"},
+		{accounts.ErrInvalidSourceProxy, http.StatusBadRequest, "invalid_source_proxy"},
 		{accounts.ErrInvalidHTTPSMode, http.StatusBadRequest, "invalid_https_mode"},
 		{accounts.ErrInvalidHTTPSPort, http.StatusBadRequest, "invalid_https_port"},
 		{accounts.ErrInvalidHTTPSCertificate, http.StatusBadRequest, "invalid_https_certificate"},

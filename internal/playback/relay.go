@@ -131,11 +131,11 @@ func (s *Service) openForPlayer(r *http.Request, version library.Version) (*http
 	if r.Method == http.MethodHead {
 		method = http.MethodHead
 	}
-	response, err := s.opener.Open(r.Context(), method, version.URL, header, version.Confined)
+	response, err := s.openVersion(r.Context(), version, method, version.URL, header)
 	if err == nil && method == http.MethodHead && (response.StatusCode == http.StatusMethodNotAllowed || response.StatusCode == http.StatusNotImplemented) {
 		// Some servers only answer GET: its headers are enough.
 		response.Body.Close()
-		response, err = s.opener.Open(r.Context(), http.MethodGet, version.URL, header, version.Confined)
+		response, err = s.openVersion(r.Context(), version, http.MethodGet, version.URL, header)
 	}
 	return response, err
 }

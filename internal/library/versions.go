@@ -47,6 +47,9 @@ type Version struct {
 	// Confined is true when the stream may only be fetched from public
 	// addresses.
 	Confined bool
+	// ProxySource is true when the stream is a server addon's direct link,
+	// which Polyfin reads through the source proxy when one is set.
+	ProxySource bool
 	// Runtime is the item's runtime, used until the stream is analyzed.
 	Runtime time.Duration
 	// Height is the video height the addon's labels give the stream (see
@@ -620,20 +623,22 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		URL:     stream.URL,
 		Headers: stream.RequestHeaders(),
 		// An IPTV source's default User-Agent: no addon sets it.
-		UserAgent: stream.UserAgent,
-		Filename:  stream.BehaviorHints.Filename,
-		Size:      int64(stream.BehaviorHints.VideoSize),
-		Addon:     entry.addon.Manifest.Name,
-		Origin:    Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
-		Confined:  entry.confined,
-		Runtime:   t.runtime,
-		Height:    LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
-		Labels:    ReadLabels(t.name, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
+		UserAgent:   stream.UserAgent,
+		Filename:    stream.BehaviorHints.Filename,
+		Size:        int64(stream.BehaviorHints.VideoSize),
+		Addon:       entry.addon.Manifest.Name,
+		Origin:      Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
+		Confined:    entry.confined,
+		ProxySource: entry.addon.Kind == addons.KindStremio && !entry.confined,
+		Runtime:     t.runtime,
+		Height:      LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
+		Labels:      ReadLabels(t.name, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
 		// A replay holds one of its provider's connections, as a channel does.
 		HoldsConnection: t.kind == KindReplay,
 	}
 	version.Labels.Releases = ReleaseKinds([]string{t.name, t.videoName}, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
 	if stream.Torrent() {
+		version.ProxySource = false
 		version.URL = torrentLink(stream)
 		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources),
 			Season: t.season, Episode: t.episode}

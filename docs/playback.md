@@ -375,6 +375,14 @@ The files of local folders go through it too. Those of S3 buckets, SFTP folders 
 - A file relayed to an app is served from the same cache: what was read before takes no request, and a seek reads only what is missing.
 - Before sending an app to a source for direct play, Polyfin checks that it answers, unless it answered Polyfin's own reads at that address within 2 minutes, as the analysis just did.
 
+### Source proxy
+
+Under **Settings › Playback**, **SOCKS5 proxy for addon streams** reads the streams of the server's Stremio addons through a SOCKS5 or HTTP proxy, such as WARP, without sending catalogs, metadata, IPTV, local files or users' own addons through it. Leave it empty to read directly; a running playback keeps the proxy it started with.
+
+A debrid host may refuse the address of a data centre while accepting a WARP one: AllDebrid answers 503 to the server's address and 206 through WARP, for example. The proxy is installed separately, by the administrator.
+
+The admin app detects a WARP container on the same Docker network and suggests `socks5h://warp:1080`. It tries the names `warp`, `warp-svc`, `cloudflare-warp` and `host.docker.internal` on port 1080; any proxy URL with a host and port works. A proxy that is down fails the version's source as unavailable, and clearing the setting reads directly again.
+
 ### Sources that fail
 
 - A source that sends no headers within 15 seconds fails.

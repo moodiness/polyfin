@@ -289,6 +289,8 @@ const common: typeof en = {
     invalid_torrent_limit: 'Los límites deben ser números enteros de Mbps de 0 a 10.000.',
     invalid_torrent_trackers:
       'Introduzca 30 trackers como máximo, cada uno una URL de anuncio HTTP, HTTPS o UDP, UDP con su puerto, de 500 caracteres como máximo.',
+    invalid_source_proxy:
+      'El proxy debe ser una URL SOCKS5 o HTTP con un host y un puerto, como socks5h://warp:1080.',
     invalid_cache_size: 'El espacio en disco debe ser un número entero de GB de 1 a 2000.',
     invalid_vaapi_device: 'Elija la tarjeta gráfica en la lista.',
     invalid_recordings_folder:

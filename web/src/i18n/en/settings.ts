@@ -728,6 +728,14 @@ const settings = {
     thumbnailStorage: 'Space for images (GB)',
     thumbnailStorageHelp: (r: RangeText) =>
       `Thumbnails and chapter images are kept in the database. Past this size, the images of the titles watched longest ago are removed; they are made again if the title is played again. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    sourceProxy: 'SOCKS5 proxy for addon streams',
+    sourceProxyHelp:
+      'Reads the streams of the server’s Stremio addons through this proxy, such as WARP, without sending catalogs, metadata, IPTV or local files through it. A URL such as socks5h://warp:1080; empty reads them directly. A running playback keeps the proxy it started with.',
+    sourceProxyDetect: 'Detect WARP',
+    sourceProxyDetecting: 'Detecting…',
+    sourceProxyDetected: (url: string) => `WARP detected: ${url}`,
+    sourceProxyUse: 'Use',
+    sourceProxyNotFound: 'No WARP found on this network; enter its SOCKS5 address manually.',
     cacheSize: 'Disk space for files being read (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Space Polyfin may use to keep the parts of the files being played, so that seeks and restarts do not download them again. Parts read in the last 30 seconds are kept even above it. From ${r.min} to ${r.max} GB; ${r.default} by default.`,

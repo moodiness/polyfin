@@ -727,7 +727,11 @@ type settingsJSON struct {
 	TorrentUploadMbps       *int           `json:"torrentUploadMbps"`
 	TorrentsAtOnce          *int           `json:"torrentsAtOnce"`
 	TorrentTrackers         *[]string      `json:"torrentTrackers"`
-	InterfaceRoutes         bool           `json:"interfaceRoutes"`
+	// SourceProxy is the proxy the server addons' streams are read through,
+	// a URL such as socks5h://warp:1080; empty for direct. It keeps its
+	// current value when a PUT leaves it out.
+	SourceProxy     *string `json:"sourceProxy"`
+	InterfaceRoutes bool    `json:"interfaceRoutes"`
 	// ConversionFolder, ReadingFolder and CacheFolder keep their current
 	// values when a PUT leaves them out; empty is the cache in the data
 	// folder, CacheFolderDefault, which a PUT ignores. Each applies at the
@@ -962,6 +966,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		TorrentUploadMbps:       &settings.TorrentUploadMbps,
 		TorrentsAtOnce:          &settings.TorrentsAtOnce,
 		TorrentTrackers:         &settings.TorrentTrackers,
+		SourceProxy:             &settings.SourceProxy,
 		ConversionFolder:        &settings.ConversionFolder,
 		ReadingFolder:           &settings.ReadingFolder,
 		CacheFolder:             &settings.CacheFolder,
@@ -1384,6 +1389,17 @@ func (h *handler) settings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, body)
 }
 
+// detectSourceProxy answers the URL of a proxy installed beside Polyfin,
+// such as a WARP container on the same network.
+func (h *handler) detectSourceProxy(w http.ResponseWriter, r *http.Request) {
+	url, ok := h.SourceProxyDetect(r.Context())
+	body := map[string]any{"available": ok}
+	if ok {
+		body["url"] = url
+	}
+	writeJSON(w, http.StatusOK, body)
+}
+
 // settingsApps answers the apps an administrator may choose among in the
 // settings: those every user is signed in with (see accounts.DeviceApps).
 func (h *handler) settingsApps(w http.ResponseWriter, r *http.Request) {
@@ -1682,6 +1698,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		TorrentUploadMbps:    valueOr(body.TorrentUploadMbps, current.TorrentUploadMbps),
 		TorrentsAtOnce:       valueOr(body.TorrentsAtOnce, current.TorrentsAtOnce),
 		TorrentTrackers:      valueOr(body.TorrentTrackers, current.TorrentTrackers),
+		SourceProxy:          valueOr(body.SourceProxy, current.SourceProxy),
 		ConversionFolder:     valueOr(body.ConversionFolder, current.ConversionFolder),
 		ReadingFolder:        valueOr(body.ReadingFolder, current.ReadingFolder),
 		CacheFolder:          valueOr(body.CacheFolder, current.CacheFolder),

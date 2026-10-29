@@ -2,6 +2,7 @@ import { ArrowSquareOutIcon, PlayIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useId, useState, type ReactNode } from 'react'
 import {
+  detectSourceProxy,
   fetchServerActions,
   fetchStatus,
   queryKeys,
@@ -10,6 +11,7 @@ import {
   type HttpsMode,
   type ReleaseKind,
   type Settings,
+  type SourceProxyDetection,
   type TrackLanguage,
   type VersionCodec,
   type VersionCriterion,
@@ -261,6 +263,65 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
   )
 }
 
+function SourceProxyRow({
+  value,
+  onChange,
+  maxLength,
+  error,
+}: {
+  value: string
+  onChange: (value: string) => void
+  maxLength?: number
+  error?: string
+}) {
+  const { t } = useI18n()
+  const s = t.settings
+  const [detection, setDetection] = useState<SourceProxyDetection | 'loading' | null>(null)
+  const detect = async () => {
+    setDetection('loading')
+    try {
+      setDetection(await detectSourceProxy())
+    } catch {
+      setDetection({ available: false })
+    }
+  }
+  return (
+    <FieldRow anchor="source-proxy" label={s.sourceProxy} help={s.sourceProxyHelp} error={error}>
+      <div className="flex w-full max-w-md flex-col gap-2">
+        <TextInput
+          inputMode="url"
+          value={value}
+          onValue={onChange}
+          maxLength={maxLength}
+          autoComplete="off"
+          spellCheck={false}
+          mono
+          placeholder="socks5h://warp:1080"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={detect} loading={detection === 'loading'}>
+            {detection === 'loading' ? s.sourceProxyDetecting : s.sourceProxyDetect}
+          </Button>
+          {detection !== null &&
+            detection !== 'loading' &&
+            (detection.available && detection.url ? (
+              <>
+                <span className="text-small text-ink-3">
+                  {s.sourceProxyDetected(detection.url)}
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => onChange(detection.url ?? '')}>
+                  {s.sourceProxyUse}
+                </Button>
+              </>
+            ) : (
+              <span className="text-small text-ink-3">{s.sourceProxyNotFound}</span>
+            ))}
+        </div>
+      </div>
+    </FieldRow>
+  )
+}
+
 function Playback({ form, update, error, number, range, limits }: SectionFormApi) {
   const { t } = useI18n()
   const s = t.settings
@@ -343,6 +404,12 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
           update={update}
           error={error}
           limits={limits}
+        />
+        <SourceProxyRow
+          value={form.sourceProxy}
+          onChange={(sourceProxy) => update({ sourceProxy })}
+          maxLength={limits('sourceProxy').max}
+          error={error('source-proxy')}
         />
         <SwitchRow
           anchor="remuxdb"

@@ -64,16 +64,19 @@ type Renewer func(ctx context.Context, version library.Version) (library.Version
 
 // Service plays versions.
 type Service struct {
-	db       *pgxpool.Pool
-	opener   source.Opener
-	prober   media.Prober
-	settings func() accounts.Settings
-	sources  *source.Cache
-	segments *hls.Manager
-	loopback *loopback
-	renew    Renewer
-	signer   Signer
-	logger   *slog.Logger
+	db     *pgxpool.Pool
+	opener source.Opener
+	// sourceProxy builds the opener of a server addon's stream when a
+	// source proxy is set; nil when opener reads no proxy.
+	sourceProxy func(proxy string) source.Opener
+	prober      media.Prober
+	settings    func() accounts.Settings
+	sources     *source.Cache
+	segments    *hls.Manager
+	loopback    *loopback
+	renew       Renewer
+	signer      Signer
+	logger      *slog.Logger
 
 	flight   singleflight.Group
 	analyses *cache.Cache[accounts.ID, media.Analysis]
@@ -183,8 +186,25 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		attached:    cache.New[accounts.ID, []container.Attachment](8, 10*time.Minute),
 		speech:      newSpeechState(),
 	}
+	if client, ok := opener.(interface {
+		OpenViaProxy(context.Context, string, string, string, http.Header, bool) (*http.Response, error)
+	}); ok {
+		s.sourceProxy = func(proxy string) source.Opener { return proxyOpener{client: client, proxy: proxy} }
+	}
 	server.live = s.ServeLive
 	return s, nil
+}
+
+// proxyOpener reads a source through a proxy.
+type proxyOpener struct {
+	client interface {
+		OpenViaProxy(context.Context, string, string, string, http.Header, bool) (*http.Response, error)
+	}
+	proxy string
+}
+
+func (o proxyOpener) Open(ctx context.Context, method, target string, header http.Header, confined bool) (*http.Response, error) {
+	return o.client.OpenViaProxy(ctx, o.proxy, method, target, header, confined)
 }
 
 // Close stops the source server.
@@ -208,13 +228,13 @@ func (s *Service) open(version library.Version) *source.Source {
 	if s.renew != nil {
 		renew = func(ctx context.Context) (source.Location, error) {
 			fresh, err := s.renew(ctx, version)
-			return locationOf(fresh), err
+			return s.locationOf(fresh), err
 		}
 	}
 	if location, ok := s.storedLocation(version); ok {
 		return s.sources.Open(version.ID, location, nil)
 	}
-	return s.sources.Open(version.ID, locationOf(version), renew)
+	return s.sources.Open(version.ID, s.locationOf(version), renew)
 }
 
 // storedLookup bounds finding where a local file is read from (see
@@ -245,6 +265,29 @@ func (s *Service) storedLocation(version library.Version) (source.Location, bool
 func locationOf(version library.Version) source.Location {
 	return source.Location{URL: version.URL, Headers: version.RequestHeaders(), Confined: version.Confined, Size: version.Size,
 		Announcer: version.Addon}
+}
+
+// locationOf is where a version's bytes are, read through the source proxy
+// when the version is a server addon's stream and one is set.
+func (s *Service) locationOf(version library.Version) source.Location {
+	location := locationOf(version)
+	if version.ProxySource && s.sourceProxy != nil {
+		if proxy := s.settings().SourceProxy; proxy != "" {
+			location.Opener = s.sourceProxy(proxy)
+		}
+	}
+	return location
+}
+
+// openVersion requests a version's source, through the source proxy when
+// the version is a server addon's stream and one is set.
+func (s *Service) openVersion(ctx context.Context, version library.Version, method, target string, header http.Header) (*http.Response, error) {
+	if version.ProxySource && s.sourceProxy != nil {
+		if proxy := s.settings().SourceProxy; proxy != "" {
+			return s.sourceProxy(proxy).Open(ctx, method, target, header, version.Confined)
+		}
+	}
+	return s.opener.Open(ctx, method, target, header, version.Confined)
 }
 
 // Torrents has the source cache read the versions that are torrents'
@@ -1042,7 +1085,7 @@ func (s *Service) firstByte(ctx context.Context, version library.Version) (int, 
 	for name, value := range version.RequestHeaders() {
 		header.Set(name, value)
 	}
-	response, err := s.opener.Open(ctx, http.MethodGet, version.URL, header, version.Confined)
+	response, err := s.openVersion(ctx, version, http.MethodGet, version.URL, header)
 	if err != nil {
 		return 0, err
 	}

@@ -207,6 +207,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'source-proxy',
+    label: (t) => s(t).sourceProxy,
+    help: (t) => s(t).sourceProxyHelp,
+    keywords: ['proxy', 'WARP', 'SOCKS5', 'AllDebrid', 'addon'],
+    codes: ['invalid_source_proxy'],
+  },
+  {
+    section: 'playback',
     anchor: 'remuxdb',
     label: (t) => s(t).remuxDb,
     help: (t) => s(t).remuxDbHelp,

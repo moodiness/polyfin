@@ -123,8 +123,11 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 				start = systemPath("/")
 			case "smtpFrom", "acmeEmail":
 				start = "polyfin@"
-			case "torrentProxy":
+			case "torrentProxy", "sourceProxy":
 				// A proxy is a host and a port.
+				if name == "sourceProxy" {
+					start = "socks5h://"
+				}
 				end = ":1080"
 			case "torrentWireGuard":
 				// A WireGuard configuration, a comment ending it.

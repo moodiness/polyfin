@@ -21,6 +21,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/localization"
+	"github.com/moodiness/polyfin/internal/netproxy"
 	"github.com/moodiness/polyfin/internal/torrent"
 )
 
@@ -1700,6 +1701,11 @@ type Settings struct {
 	// torrent besides those its addon names (see torrent.Settings), none
 	// by default: Polyfin ships no list.
 	TorrentTrackers []string
+	// SourceProxy is the proxy the streams of the server's addons are read
+	// through, a URL such as socks5h://warp:1080; empty for direct.
+	// Catalogs, metadata, IPTV, local files, torrents and users' own addons
+	// are never read through it.
+	SourceProxy string
 	// ConversionFolder keeps the segments of conversions and
 	// repackagings; ReadingFolder the files being read, the blocks of
 	// addons' files and torrents' pieces; CacheFolder the cache, relayed
@@ -1733,6 +1739,7 @@ const (
 	MaxTorrentsAtOnce       = 100
 	MaxTorrentInterfaceName = 15
 	MaxTorrentProxyBytes    = 255
+	MaxSourceProxyBytes     = 255
 	MaxTorrentTrackers      = torrent.MaxTrackers
 	MaxTorrentTrackerBytes  = 500
 )
@@ -1747,6 +1754,10 @@ const (
 // ErrInvalidTorrentTrackers more than MaxTorrentTrackers trackers, or one
 // that is not an HTTP, HTTPS or UDP announce URL of
 // MaxTorrentTrackerBytes at most.
+// ErrInvalidSourceProxy reports a SourceProxy that is not a SOCKS5 or
+// HTTP proxy URL with a host and a port.
+var ErrInvalidSourceProxy = errors.New("invalid source proxy")
+
 var (
 	ErrInvalidTorrentRoute    = errors.New("invalid route for torrents")
 	ErrInvalidTorrentLimit    = errors.New("invalid limit for torrents")
@@ -1923,7 +1934,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
 	"metrics, metrics_token, " +
 	"torrent_streams, torrent_interface, torrent_proxy, torrent_proxy_user, torrent_proxy_password, torrent_wireguard, torrent_download_mbps, torrent_upload_mbps, torrents_at_once, " +
-	"torrent_trackers, " +
+	"torrent_trackers, source_proxy, " +
 	"restart_confirmed, update_tool_url, update_tool_token, " +
 	"conversion_folder, reading_folder, cache_folder, " +
 	"silo_apps"
@@ -1986,6 +1997,7 @@ func (settings *Settings) fields() []any {
 		&settings.TorrentWireGuard,
 		&settings.TorrentDownloadMbps, &settings.TorrentUploadMbps, &settings.TorrentsAtOnce,
 		&settings.TorrentTrackers,
+		&settings.SourceProxy,
 		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken,
 		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder,
 		&settings.SiloApps}
@@ -2512,6 +2524,10 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		return Settings{}, err
 	}
 	settings.TorrentTrackers = trackers
+	settings.SourceProxy = strings.TrimSpace(settings.SourceProxy)
+	if len(settings.SourceProxy) > MaxSourceProxyBytes || !netproxy.Validate(settings.SourceProxy) {
+		return Settings{}, ErrInvalidSourceProxy
+	}
 	// Metrics turned on with no token, the first time or when the key
 	// cannot read the one stored, get one.
 	if settings.Metrics && settings.MetricsToken == "" {

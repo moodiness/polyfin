@@ -12,8 +12,11 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/netproxy"
 )
 
 const (
@@ -45,15 +48,19 @@ type Client struct {
 	trusted   *http.Client
 	confined  *http.Client
 	health    healthRecords
+
+	proxyMu sync.Mutex
+	proxies map[string]*http.Client
 }
 
 // NewClient returns a client identifying itself with the Polyfin version.
 func NewClient(version string) *Client {
 	return &Client{
 		userAgent: "Polyfin/" + version,
-		trusted:   newHTTPClient(false),
-		confined:  newHTTPClient(true),
+		trusted:   newHTTPClient(false, nil),
+		confined:  newHTTPClient(true, nil),
 		health:    healthRecords{byAddon: map[string]*Health{}},
+		proxies:   map[string]*http.Client{},
 	}
 }
 
@@ -68,10 +75,10 @@ const idleConnsPerHost = 32
 // that DNS answers and redirects cannot point it at the local network.
 // Other features sending requests on behalf of users use it.
 func HTTPClient(confined bool) *http.Client {
-	return newHTTPClient(confined)
+	return newHTTPClient(confined, nil)
 }
 
-func newHTTPClient(confined bool) *http.Client {
+func newHTTPClient(confined bool, proxy *url.URL) *http.Client {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConnsPerHost = idleConnsPerHost
@@ -89,6 +96,8 @@ func newHTTPClient(confined bool) *http.Client {
 		}
 		// A proxy would be the address checked instead of the addon.
 		transport.Proxy = nil
+	} else if proxy != nil {
+		transport.Proxy = http.ProxyURL(proxy)
 	}
 	transport.DialContext = dialer.DialContext
 	return &http.Client{
@@ -144,6 +153,12 @@ func (c *Client) do(request *http.Request, confined bool) (*http.Response, error
 	if confined {
 		client = c.confined
 	}
+	return c.doWith(client, request)
+}
+
+// doWith sends request with client. Errors never contain the URL, which
+// usually carries credentials.
+func (c *Client) doWith(client *http.Client, request *http.Request) (*http.Response, error) {
 	response, err := client.Do(request)
 	if err != nil {
 		var urlErr *url.Error
@@ -304,6 +319,34 @@ func (c *Client) Fetch(ctx context.Context, manifestURL, target string, confined
 // the response is returned whatever its status, its body to be closed by
 // the caller.
 func (c *Client) Open(ctx context.Context, method, target string, header http.Header, confined bool) (*http.Response, error) {
+	request, err := c.openRequest(ctx, method, target, header)
+	if err != nil {
+		return nil, err
+	}
+	return c.do(request, confined)
+}
+
+// OpenViaProxy requests a file an addon points to through proxy, a SOCKS5
+// or HTTP proxy URL, as Open does. A confined request stays direct: the
+// proxy would reach private addresses its confinement refuses.
+func (c *Client) OpenViaProxy(ctx context.Context, proxy, method, target string, header http.Header, confined bool) (*http.Response, error) {
+	if confined {
+		return c.Open(ctx, method, target, header, confined)
+	}
+	u, err := netproxy.Parse(proxy)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnreachable, err)
+	}
+	request, err := c.openRequest(ctx, method, target, header)
+	if err != nil {
+		return nil, err
+	}
+	return c.doWith(c.proxyClient(u), request)
+}
+
+// openRequest makes a request for a file an addon points to, with its
+// headers and Polyfin's User-Agent when the addon names none.
+func (c *Client) openRequest(ctx context.Context, method, target string, header http.Header) (*http.Request, error) {
 	request, err := http.NewRequestWithContext(ctx, method, target, nil)
 	if err != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") {
 		return nil, fmt.Errorf("%w: invalid URL", ErrUnreachable)
@@ -314,7 +357,21 @@ func (c *Client) Open(ctx context.Context, method, target string, header http.He
 	}
 	// Byte ranges and lengths must reach the player unchanged.
 	request.Header.Set("Accept-Encoding", "identity")
-	return c.do(request, confined)
+	return request, nil
+}
+
+// proxyClient returns the client reading files through proxy, made the
+// first time and kept.
+func (c *Client) proxyClient(proxy *url.URL) *http.Client {
+	key := proxy.String()
+	c.proxyMu.Lock()
+	defer c.proxyMu.Unlock()
+	if client := c.proxies[key]; client != nil {
+		return client
+	}
+	client := newHTTPClient(false, proxy)
+	c.proxies[key] = client
+	return client
 }
 
 // Manifest downloads and validates an addon manifest. confined restricts

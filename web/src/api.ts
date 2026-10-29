@@ -640,6 +640,12 @@ export type Settings = {
   /** Announce URLs of trackers asked for every torrent besides those its addon names. */
   torrentTrackers: string[]
   /**
+   * The SOCKS5 or HTTP proxy the server addons' streams are read through, such as
+   * socks5h://warp:1080; empty reads them directly. Catalogs, metadata, IPTV and local files
+   * are never read through it.
+   */
+  sourceProxy: string
+  /**
    * Folders of the segments of conversions, of the files being read, and of the cache; empty uses
    * cacheFolderDefault, the cache in the data folder. Each applies at the next start.
    */
@@ -2973,6 +2979,15 @@ export const fetchSettings = (signal?: AbortSignal) =>
 /** Saves the settings; their bounds are the server's, and are not sent. */
 export const saveSettings = (settings: Settings) =>
   request<Settings>('PUT', '/settings', { ...settings, bounds: undefined })
+
+/** A proxy installed beside Polyfin, such as WARP, found on the same network. */
+export interface SourceProxyDetection {
+  available: boolean
+  url?: string
+}
+
+export const detectSourceProxy = (signal?: AbortSignal) =>
+  request<SourceProxyDetection>('GET', '/settings/source-proxy', undefined, signal)
 
 /** The server's secrets an administrator can read again. */
 export type ServerSecretName =

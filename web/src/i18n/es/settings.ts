@@ -742,6 +742,15 @@ const settings: typeof en = {
     thumbnailStorage: 'Espacio para imágenes (GB)',
     thumbnailStorageHelp: (r: RangeText) =>
       `Las miniaturas y las imágenes de capítulos se guardan en la base de datos. Por encima de este tamaño, se eliminan las imágenes de los títulos vistos hace más tiempo; se vuelven a crear si el título se reproduce de nuevo. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    sourceProxy: 'Proxy SOCKS5 para los flujos de los complementos',
+    sourceProxyHelp:
+      'Lee los flujos de los complementos Stremio del servidor a través de este proxy, por ejemplo WARP, sin enviar por él catálogos, metadatos, IPTV ni archivos locales. Una URL como socks5h://warp:1080; vacío los lee directamente. Una reproducción en curso conserva el proxy con el que empezó.',
+    sourceProxyDetect: 'Detectar WARP',
+    sourceProxyDetecting: 'Detectando…',
+    sourceProxyDetected: (url: string) => `WARP detectado: ${url}`,
+    sourceProxyUse: 'Usar',
+    sourceProxyNotFound:
+      'No se encontró WARP en esta red; introduce su dirección SOCKS5 manualmente.',
     cacheSize: 'Espacio en disco para archivos en lectura (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Espacio que Polyfin puede usar para conservar las partes de los archivos que se están reproduciendo, para que los saltos y reinicios no vuelvan a descargarlas. Las partes leídas en los últimos 30 segundos se conservan incluso por encima de este límite. De ${r.min} a ${r.max} GB; ${r.default} de forma predeterminada.`,
