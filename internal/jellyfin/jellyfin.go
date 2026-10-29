@@ -179,6 +179,9 @@ type Handler struct {
 	// searches bounds how often users have titles' addons asked again
 	// (see searchVersions).
 	searches versionSearches
+	// starts are the plays whose torrents' starts the web client tells
+	// (see startprogress.go).
+	starts starts
 	// now tells the time users' allowed hours are checked against.
 	now func() time.Time
 	// newKeys remembers the API keys made from Jellyfin apps until a

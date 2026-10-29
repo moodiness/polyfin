@@ -125,6 +125,12 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 		if n > 0 && version.Torrent == nil {
 			detached = aside
 		}
+		// The web client tells how the torrents analyzed for the play start
+		// (see startprogress.go).
+		start := playStartOf(r.Context())
+		if analyze {
+			start.trying(version)
+		}
 		// A torrent that may not start, as many run as Torrents at once
 		// allows, is passed over as one that did not start in time. The
 		// torrents the device or its user left for another title, which the
@@ -140,6 +146,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			}
 			if err := h.Playback.TorrentAdmittedWithin(detached.Context(), version, wait); err != nil {
 				h.Logger.Info("A torrent version is passed over: as many torrents run as Torrents at once allows", "addon", version.Addon)
+				start.tried(version, err)
 				return tried{n: n, unreadable: true, unstarted: true}
 			}
 		}
@@ -158,6 +165,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 					return tried{n: n}
 				}
 				h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
+				start.tried(version, err)
 				return tried{n: n, unreadable: true, unstarted: version.Torrent != nil && playback.TorrentUnstarted(err)}
 			}
 		} else {

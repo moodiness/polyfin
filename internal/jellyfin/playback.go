@@ -27,6 +27,7 @@ func (h *Handler) playbackRoutes(rt *router) {
 	}
 	signedIn(http.MethodGet, "/Items/{itemId}/PlaybackInfo", h.playbackInfo)
 	signedIn(http.MethodPost, "/Items/{itemId}/PlaybackInfo", h.playbackInfo)
+	signedIn(http.MethodGet, "/Polyfin/Playback/Starting", h.playbackStarting)
 	// Players fetch media, subtitles and the fonts they use without
 	// credentials, as Jellyfin allows: see streamAccess.
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{file}", http.HandlerFunc(h.stream))
@@ -353,6 +354,12 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		h.audioPlaybackInfo(w, r, user, item, request)
 		return
 	}
+	// The web client tells how the torrents this play tries start, until it
+	// answers, then how the one it chose goes on (see startprogress.go).
+	starting, start := h.withPlayStart(r.Context())
+	r = r.WithContext(starting)
+	var picked *library.Version
+	defer func() { start.answer(picked) }()
 	// A stale list is played as it is, while its addon is asked again: the
 	// new answers are waited for only when none of its versions plays.
 	p, complete, err := h.playableToPlay(r.Context(), user, item)
@@ -442,6 +449,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	chosen, unreadable, versions, at := choice.decided, choice.unreadable, p.versions, openedIndex(opened, p.versions)
+	picked = &chosen.version
 	h.choseVersion(callerFrom(r.Context()).Device.ID, h.titleOf(item.ID), chosen.version.ID)
 	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Relay: mustRelay(r, chosen.version)})
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
