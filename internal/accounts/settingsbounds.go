@@ -217,6 +217,8 @@ func DefaultSettings() Settings {
 		ReadingFolder:    "",
 		CacheFolder:      "",
 		SiloApps:         false,
+
+		PosterRatings: false,
 	}
 }
 
@@ -444,6 +446,8 @@ func SettingsBounds() map[string]SettingBounds {
 		"readingFolder":    text(MaxFolderBytes, d.ReadingFolder),
 		"cacheFolder":      text(MaxFolderBytes, d.CacheFolder),
 		"siloApps":         is(d.SiloApps),
+
+		"posterRatings": is(d.PosterRatings),
 	}
 }
 

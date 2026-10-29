@@ -884,6 +884,9 @@ const settings = {
     addVersionsToOpenPage: 'Add versions to an open title’s page',
     addVersionsToOpenPageHelp:
       'Adds the versions the addons find to the version menu of a movie’s or an episode’s page while it is open, keeping the version picked. When off, a page opened before any version was found still lists the first ones as they come, and its play buttons still wait for a version; the others show when the page is opened again.',
+    posterRatings: 'Show ratings on posters',
+    posterRatingsHelp:
+      'Shows a movie’s or a series’ star rating over its poster in the web player as the pointer or the focus comes to it, with its critics’ and audience scores while an MDBList API key for ratings is set under Settings › Content. For every user.',
     homeRows: 'Home rows',
     homeRowsHelp:
       'Rows the web player adds to its home page, at their place, for every user or for chosen users. Each user can turn off a row under My account › Home rows; the web player’s own sections stay in its Settings › Home. Every row leaves out what the user may not see: titles above their parental control, blocked genres, hidden titles, and the libraries hidden from them.',

@@ -1342,6 +1342,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'web-player',
+    anchor: 'poster-ratings',
+    label: (t) => s(t).posterRatings,
+    help: (t) => s(t).posterRatingsHelp,
+    keywords: ['ratings', 'posters', 'cards', 'jellyfin-web'],
+  },
+  {
+    section: 'web-player',
     anchor: 'home-rows',
     label: (t) => s(t).homeRows,
     help: (t) => s(t).homeRowsHelp,

@@ -914,6 +914,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Aggiungi le versioni alla pagina aperta di un titolo',
     addVersionsToOpenPageHelp:
       'Aggiunge le versioni trovate dagli add-on al menu delle versioni della pagina di un film o di un episodio mentre è aperta, mantenendo la versione scelta. Se disattivato, una pagina aperta prima che venisse trovata una versione elenca comunque le prime man mano che arrivano, e i suoi pulsanti di riproduzione attendono comunque una versione; le altre compaiono alla successiva apertura della pagina.',
+    posterRatings: 'Mostra i voti sulle locandine',
+    posterRatingsHelp:
+      'Mostra il voto a stelle di un film o di una serie sulla sua locandina nel lettore web quando vi arriva il puntatore o il focus, con i punteggi della critica e del pubblico finché è impostata una chiave API MDBList per i voti in Impostazioni › Contenuti. Per tutti gli utenti.',
     homeRows: 'Righe della Home',
     homeRowsHelp:
       'Righe che il lettore web aggiunge alla sua pagina Home, nella loro posizione, per tutti gli utenti o per utenti scelti. Ogni utente può disattivare una riga in Il mio account › Righe della Home; le sezioni proprie del lettore web restano nelle sue Impostazioni › Home. Ogni riga esclude ciò che l’utente non può vedere: i titoli oltre il suo controllo parentale, i generi bloccati, i titoli nascosti e le librerie a lui nascoste.',

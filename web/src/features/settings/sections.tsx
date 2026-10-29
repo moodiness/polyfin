@@ -1709,6 +1709,13 @@ function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi
           checked={form.addVersionsToOpenPage}
           onChange={(addVersionsToOpenPage) => update({ addVersionsToOpenPage })}
         />
+        <SwitchRow
+          anchor="poster-ratings"
+          label={s.posterRatings}
+          help={s.posterRatingsHelp}
+          checked={form.posterRatings}
+          onChange={(posterRatings) => update({ posterRatings })}
+        />
       </SettingsGroup>
       <SettingsGroup title={s.homeRows}>
         <SettingRow anchor="home-rows">

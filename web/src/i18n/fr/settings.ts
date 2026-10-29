@@ -913,6 +913,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Ajouter les versions à la page ouverte d’un titre',
     addVersionsToOpenPageHelp:
       'Ajoute les versions trouvées par les addons au menu des versions de la page d’un film ou d’un épisode pendant qu’elle est ouverte, en gardant la version choisie. Désactivé, une page ouverte avant qu’une version soit trouvée affiche quand même les premières dès qu’elles arrivent, et ses boutons de lecture attendent toujours une version ; les autres apparaissent à la prochaine ouverture de la page.',
+    posterRatings: 'Afficher les notes sur les affiches',
+    posterRatingsHelp:
+      'Affiche la note en étoiles d’un film ou d’une série sur son affiche dans le lecteur web quand le pointeur ou le focus y arrive, avec les scores des critiques et du public tant qu’une clé d’API MDBList des notes est définie dans Paramètres › Contenu. Pour tous les utilisateurs.',
     homeRows: 'Rangées d’accueil',
     homeRowsHelp:
       'Les rangées que le lecteur web ajoute à sa page d’accueil, à leur place, pour tous les utilisateurs ou pour ceux choisis. Chaque utilisateur peut désactiver une rangée dans Mon compte › Rangées d’accueil ; les sections propres au lecteur web restent dans ses Paramètres › Accueil. Chaque rangée laisse de côté ce que l’utilisateur ne peut pas voir : les titres au-dessus de son contrôle parental, les genres bloqués, les titres masqués et les bibliothèques qui lui sont masquées.',

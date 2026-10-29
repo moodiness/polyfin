@@ -899,6 +899,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Versionen zur geöffneten Seite eines Titels hinzufügen',
     addVersionsToOpenPageHelp:
       'Fügt die von den Add-ons gefundenen Versionen dem Versionsmenü der Seite eines Films oder einer Folge hinzu, während sie geöffnet ist, und behält die gewählte Version bei. Wenn aus, zeigt eine Seite, die geöffnet wurde, bevor eine Version gefunden wurde, die ersten trotzdem an, sobald sie eintreffen, und ihre Wiedergabeschaltflächen warten weiterhin auf eine Version; die übrigen erscheinen beim erneuten Öffnen der Seite.',
+    posterRatings: 'Bewertungen auf Postern anzeigen',
+    posterRatingsHelp:
+      'Zeigt die Sternbewertung eines Films oder einer Serie im Web-Player auf dem Poster, sobald der Zeiger oder der Fokus darauf kommt, dazu die Kritiker- und Publikumswertung, solange unter Einstellungen › Inhalte ein MDBList-API-Schlüssel für Bewertungen gesetzt ist. Für alle Benutzer.',
     homeRows: 'Startseiten-Zeilen',
     homeRowsHelp:
       'Zeilen, die der Web-Player an ihrer Stelle zu seiner Startseite hinzufügt, für alle Benutzer oder für ausgewählte. Jeder Benutzer kann eine Zeile unter Mein Konto › Startseiten-Zeilen ausblenden; die eigenen Bereiche des Web-Players bleiben in dessen Einstellungen › Startseite. Jede Zeile lässt weg, was der Benutzer nicht sehen darf: Titel über seiner Kindersicherung, gesperrte Genres, ausgeblendete Titel und die für ihn ausgeblendeten Bibliotheken.',

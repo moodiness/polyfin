@@ -318,3 +318,86 @@ func TestCollectionsSortByCriticRating(t *testing.T) {
 		t.Errorf("by audience score: %v", got)
 	}
 }
+
+// describePosters describes /Polyfin/Items/Ratings's answer: whether it is
+// on, then each title's three scores, by name.
+func (r rated) describePosters(t *testing.T, names map[string]string, ids ...string) string {
+	t.Helper()
+	var answer PosterRatings
+	if status := r.get(t, "/Polyfin/Items/Ratings?Ids="+strings.Join(ids, ","), r.token, &answer); status != http.StatusOK {
+		t.Fatalf("poster ratings: %d", status)
+	}
+	number := func(value *float64) string {
+		if value == nil {
+			return "-"
+		}
+		return fmt.Sprint(*value)
+	}
+	described := []string{fmt.Sprint(answer.Enabled)}
+	for _, item := range answer.Items {
+		described = append(described, names[item.Id]+" "+number(item.CommunityRating)+" "+number(item.CriticsScore)+" "+number(item.AudienceScore))
+	}
+	slices.Sort(described[1:])
+	return strings.Join(described, ", ")
+}
+
+// Posters show their ratings once Settings › Web player turns them on: one
+// request answers the titles of a screen, their star rating and the two
+// scores MDBList keeps, as their page shows them, and leaves out what is no
+// title. It asks MDBList about nothing a listing did not; switched off, it
+// answers nothing.
+func TestPostersShowTheirRatingsWhenTurnedOn(t *testing.T) {
+	t.Parallel()
+	r := newRated(t, "server-key")
+	top, shows := "ParentId="+r.ids["Top"], "ParentId="+r.ids["Shows"]
+	want := map[string]string{"Movie 0": "8.1 97", "Movie 1": "6.2 40", "Movie 2": "7.5 -"}
+	eventually(t, "rated", func() bool { return fmt.Sprint(r.scores(t, top)) == fmt.Sprint(want) })
+	eventually(t, "the show rated", func() bool { return r.scores(t, shows)["Show"] == "8.9 88" })
+	asked := len(r.mdblist.requests())
+	names := map[string]string{}
+	var ids []string
+	for _, query := range []string{top, shows} {
+		var page QueryResult
+		r.get(t, "/Items?"+query, r.token, &page)
+		for _, item := range page.Items {
+			names[item.Id] = item.Name
+			ids = append(ids, item.Id)
+		}
+	}
+	// The library itself, an unknown identifier and a malformed one are no
+	// titles of the user's.
+	ids = append(ids, r.ids["Top"], "0123456789abcdef0123456789abcdef", "nonsense")
+
+	if got := r.describePosters(t, names, ids...); got != "false" {
+		t.Errorf("switched off: %s", got)
+	}
+	r.setting(t, func(settings *accounts.Settings) { settings.PosterRatings = true })
+	if got := r.describePosters(t, names, ids...); got != "true, Movie 0 8.1 97 60, Movie 1 6.2 40 90, Movie 2 7.5 - -, Show 8.9 88 91" {
+		t.Errorf("switched on: %s", got)
+	}
+	r.setting(t, func(settings *accounts.Settings) { settings.CriticRatingShows = "audience" })
+	if got := r.describePosters(t, names, ids...); got != "true, Movie 0 8.1 97 60, Movie 1 6.2 40 90, Movie 2 7.5 - -, Show 8.9 88 91" {
+		t.Errorf("with the audience score as critic rating: %s", got)
+	}
+	if got := r.describePosters(t, names); got != "true" {
+		t.Errorf("without identifiers: %s", got)
+	}
+	if n := len(r.mdblist.requests()); n != asked {
+		t.Errorf("MDBList was asked about %d more titles for the posters", n-asked)
+	}
+}
+
+// Without the server's MDBList key, posters show the star rating the
+// addons give, and no score.
+func TestPostersShowTheAddonsRatingWithoutAKey(t *testing.T) {
+	t.Parallel()
+	r := newRated(t, "")
+	r.setting(t, func(settings *accounts.Settings) { settings.PosterRatings = true })
+	id := r.itemID(t, "Movie 0")
+	if got := r.describePosters(t, map[string]string{id: "Movie 0"}, id); got != "true, Movie 0 7.5 - -" {
+		t.Errorf("without a key: %s", got)
+	}
+	if asked := r.mdblist.requests(); len(asked) > 0 {
+		t.Errorf("MDBList was asked without a key: %q", asked)
+	}
+}

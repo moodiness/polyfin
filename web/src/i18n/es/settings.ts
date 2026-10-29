@@ -910,6 +910,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Añadir versiones a la página abierta de un título',
     addVersionsToOpenPageHelp:
       'Añade las versiones que encuentran las extensiones al menú de versiones de la página de una película o un episodio mientras está abierta, manteniendo la versión elegida. Si está desactivado, una página abierta antes de encontrarse ninguna versión sigue mostrando las primeras a medida que llegan, y sus botones de reproducción siguen esperando una versión; las demás aparecen al volver a abrir la página.',
+    posterRatings: 'Mostrar valoraciones en los pósteres',
+    posterRatingsHelp:
+      'Muestra la valoración con estrella de una película o una serie sobre su póster en el reproductor web cuando llega el puntero o el foco, con las puntuaciones de la crítica y del público mientras haya una clave API de MDBList para valoraciones en Ajustes › Contenido. Para todos los usuarios.',
     homeRows: 'Filas de inicio',
     homeRowsHelp:
       'Filas que el reproductor web añade a su página de inicio, en su lugar, para todos los usuarios o para los usuarios elegidos. Cada usuario puede desactivar una fila en Mi cuenta › Filas de inicio; las secciones propias del reproductor web siguen en sus Ajustes › Inicio. Cada fila omite lo que el usuario no puede ver: los títulos por encima de su control parental, los géneros bloqueados, los títulos ocultos y las bibliotecas que tiene ocultas.',

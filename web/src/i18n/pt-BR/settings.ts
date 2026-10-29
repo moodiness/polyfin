@@ -904,6 +904,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Adicionar versões à página aberta de um título',
     addVersionsToOpenPageHelp:
       'Adiciona as versões que os complementos encontram ao menu de versões da página de um filme ou episódio enquanto ela está aberta, mantendo a versão escolhida. Quando desativado, uma página aberta antes de qualquer versão ser encontrada ainda lista as primeiras à medida que chegam, e os botões de reprodução dela ainda aguardam uma versão; as demais aparecem quando a página é aberta novamente.',
+    posterRatings: 'Mostrar avaliações nos pôsteres',
+    posterRatingsHelp:
+      'Mostra a avaliação em estrelas de um filme ou de uma série sobre o pôster no player web quando o ponteiro ou o foco chega nele, com as notas da crítica e do público enquanto houver uma chave da API do MDBList para avaliações em Configurações › Conteúdo. Para todos os usuários.',
     homeRows: 'Linhas da tela inicial',
     homeRowsHelp:
       'Linhas que o player web adiciona à página inicial, no lugar delas, para todos os usuários ou para usuários escolhidos. Cada usuário pode desativar uma linha em Minha conta › Linhas da tela inicial; as seções próprias do player web ficam em Configurações › Início. Cada linha deixa de fora o que o usuário não pode ver: títulos acima do controle parental dele, gêneros bloqueados, títulos ocultos e as bibliotecas ocultas para ele.',

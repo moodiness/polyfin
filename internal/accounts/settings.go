@@ -1713,6 +1713,11 @@ type Settings struct {
 	// SiloApps lets Silo's apps sign in and play through Silo's API under
 	// /api/v2 (see package silo); off, the API answers nothing.
 	SiloApps bool
+
+	// PosterRatings has the web player show a title's ratings on its
+	// poster as the pointer or the focus comes to it (see
+	// /Polyfin/Items/Ratings); off, it shows none there.
+	PosterRatings bool
 }
 
 // TorrentsAllowed reports whether user is offered torrents' files: the
@@ -1926,7 +1931,8 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"torrent_trackers, " +
 	"restart_confirmed, update_tool_url, update_tool_token, " +
 	"conversion_folder, reading_folder, cache_folder, " +
-	"silo_apps"
+	"silo_apps, " +
+	"poster_ratings"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1988,7 +1994,8 @@ func (settings *Settings) fields() []any {
 		&settings.TorrentTrackers,
 		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken,
 		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder,
-		&settings.SiloApps}
+		&settings.SiloApps,
+		&settings.PosterRatings}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {

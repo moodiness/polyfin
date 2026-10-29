@@ -526,6 +526,8 @@ export type Settings = {
   loginDisclaimer: string
   /** Whether the web player adds the versions that come to a title's page while it is open. */
   addVersionsToOpenPage: boolean
+  /** Whether the web player shows titles' ratings on their posters, as the pointer or focus comes. */
+  posterRatings: boolean
   /** Trakt app users connect through; both its client ID and secret are needed. */
   traktClientId: string
   /** Whether the Trakt client secret is saved. */
