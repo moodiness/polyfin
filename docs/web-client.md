@@ -154,6 +154,27 @@ The upgrade that brought this ends every admin app session opened before, as not
 - The token goes to `POST /admin/api/session/jellyfin`, in the `Authorization` header only, never in the URL.
 - The web client's links to the admin app carry `?from=web`, which the admin app takes out of the address as it opens.
 
+### Back to the web client
+
+Opened from the web client, the admin app leads back to it in the same tab, as Jellyfin's dashboard shares jellyfin-web's tab: its top bar, its phone menu and its sign-in page show **Back to the web player**, which opens it in that tab, also after the admin app is reloaded. In a tab opened otherwise, such as from a bookmark, the top bar's **Web player** opens the web client in a new tab. A Ctrl-click or a middle click on either still opens a new tab.
+
+In the official Jellyfin apps for Android and iOS, which show the web client inside the app, **Dashboard** and the **Polyfin** entry open the admin app inside the app too, signed in (see [Signing in to the admin app](#signing-in-to-the-admin-app)). There:
+
+- **Back to the web player** is on every page and stays in the app: a back arrow before the logo on a phone, the first entry of the menu, and a link under the sign-in form. **Open the web player**, under **Settings › Web player**, also stays in the app.
+- Android's **Back** button closes an open dialog or the menu, then goes back through the admin app's pages, then returns to the web client's page the admin app was opened from. A settings page with unsaved changes asks first.
+- On iOS, pressing the **Home** tab again returns to the web client's home page. The iOS app has no Back button or swipe in its web view, on the web client's pages either.
+
+**Compared with Jellyfin:**
+
+- Jellyfin's dashboard is a page of jellyfin-web, where the apps' Back and Home work as on its other pages. It shows a back arrow ([AppLayout.tsx, lines 73 to 88](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/AppLayout.tsx#L73-L88)), and its menu starts with the server's name, a link to the home page ([DrawerHeaderLink.tsx, line 16](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/modern/components/drawers/DrawerHeaderLink.tsx#L16)). Polyfin's admin app is a page of its own: going back loads the web client again, which takes a moment.
+
+**For app developers:**
+
+- The admin app tells it runs in a Jellyfin app by the objects the app puts on every page of its web view: `window.NativeInterface` in the Android app, `window.ExpoAppInfo` in the iOS app. Neither app names itself in its user agent.
+- In those apps, it sets what they call on the page: `window.NavigationHelper.goBack()`, which the Android app calls on **Back** ([WebappFunctionChannel.kt, line 25](https://github.com/jellyfin/jellyfin-android/blob/v2.7.3/app/src/main/java/org/jellyfin/mobile/webapp/WebappFunctionChannel.kt#L25)), and `window.Emby.Page` with `goHome()`, `back()` and `canGoBack()`, which the iOS app calls on its **Home** tab ([ExpoRouterShim.staticjs, lines 6 to 31](https://github.com/jellyfin/jellyfin-expo/blob/v1.8.0.5/assets/js/ExpoRouterShim.staticjs#L6-L31)). On the web client's pages, jellyfin-web and the Android app's own plugin set them.
+- Since version 2.7.3, the Android app hands any new tab to the system browser, the server's own pages included ([JellyfinWebChromeClient.kt, lines 40 to 67](https://github.com/jellyfin/jellyfin-android/blob/v2.7.3/app/src/main/java/org/jellyfin/mobile/webapp/JellyfinWebChromeClient.kt#L40-L67)), so links that must stay in the app open in place. The iOS app loads a new tab in its own view.
+- A tab that came from the web client keeps `polyfin.cameFromWebClient` in its session storage.
+
 ## Caching and security headers
 
 - The page itself is never cached.

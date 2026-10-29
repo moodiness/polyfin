@@ -14,7 +14,9 @@ A bar at the top holds the sections, for administrators:
 - **System**: **Health**, **Statistics**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`);
 - **Settings**, one page per section (`/admin/settings/general`, `/admin/settings/content`…).
 
-The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them. On a phone, the bar keeps the logo, the search and a menu button that opens all of these.
+The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them. On a phone, the bar keeps the logo, the search and a menu button that opens all of these, the web player first.
+
+When the server serves a web client, the bar has a link to it. Opened from the web client, or inside the Jellyfin apps for Android and iOS, it reads **Back to the web player** and opens it in place, and a phone shows it as a back arrow before the logo. In those apps, Android's **Back** button and the iOS app's **Home** tab lead back to it too. Otherwise it reads **Web player** and opens it in a new tab. See [Back to the web client](web-client.md#back-to-the-web-client).
 
 The admin app is in English, French, German, Spanish, Italian and Brazilian Portuguese. It starts in the first of these the browser prefers, any Portuguese in Brazilian Portuguese, else in English; the language list at the top of the sign-in and setup pages, and **Language** in the account menu, change it for this browser.
 
@@ -371,7 +373,7 @@ scrape_configs:
 - secrets are hidden;
 - the database URL shows its host and database only.
 
-A **Web player** link appears when the server serves a web client. See [configuration](configuration.md) for the variables and [web client](web-client.md) for **Settings › Web player**.
+The web client's link, **Back to the web player** or **Web player**, appears when the server serves one (see [The admin app](#the-admin-app)). See [configuration](configuration.md) for the variables and [web client](web-client.md) for **Settings › Web player**.
 
 ## Showing a saved key
 
