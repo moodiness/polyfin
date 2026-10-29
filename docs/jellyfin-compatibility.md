@@ -88,6 +88,24 @@ Before anything is typed, jellyfin-web's search page shows Suggestions: the user
 
 **For app developers:** `/Items` without `ParentId` answers such suggestions when it asks `Recursive=true` for `Movie`, `Series` or `MusicArtist` only, sorted by `Random`, alone or with `IsFavoriteOrLiked`, which puts favorite and liked titles first. `/Items/Suggestions` still picks at random among the first page of each library, as Jellyfin picks at random.
 
+### Titles at random
+
+An app that lists a library's titles at random, as the home carousel of the [LumaaGlaass](web-client.md#lumaaglaass) theme picks its slides, and as jellyfin-web's shuffle of a library plays, gets them drawn among the library's first 100 titles, in their catalog's order, rather than its first catalog page alone: the carousel's picks reach well past a library's first titles, and change from one page load to the next.
+
+- The titles drawn among are those the user may see: within their parental control and blocked genres, without the titles they hid, a title hidden after the draw leaving it at once. A collection library gives the titles of its collections, as its other listings of titles do.
+- A listing that asks for more than 100, from its first title, draws among as many, up to 500, the most a listing that asks for no limit gets. A library's **Maximum titles** bounds its draws too (see [Genre and maximum](addons-and-libraries.md#genre-and-maximum)).
+- A draw is kept for 2 minutes, so that the pages an app asks for one after the other follow one order and list each title once. A listing after that draws anew.
+- The listing's total is the number of titles drawn among: pages past it are empty.
+- A library's first 100 titles are read as a listing of 100 reads them, a few catalog pages, and kept with the other pages read (see [Catalog pages](addons-and-libraries.md#catalog-pages)). While they are being read, a listing waits for them at most 3 seconds, then draws among those read so far, without keeping that draw, and the rest is read in the background for the next one.
+- Smart lists keep their own sort (see [Smart lists](addons-and-libraries.md#smart-lists)).
+
+**Compared with Jellyfin:**
+
+- Jellyfin sorts the whole library at random, anew for each request ([`OrderMapper.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/OrderMapper.cs#L55), applied by [`BaseItemRepository.QueryBuilding.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/BaseItemRepository.QueryBuilding.cs#L306-L341), Jellyfin 12.4), so the pages of one listing may repeat or skip titles. Polyfin keeps each draw 2 minutes so that its pages do not.
+- Polyfin stops at a library's first 100 titles: a remote catalog is read a page at a time from its addon, and reaching its end, which may be thousands of titles away, would cost as many requests to the addon for every user's home page. 100 titles are a few pages, which listings read anyway.
+
+**For app developers:** a listing of a library with `ParentId`, `Recursive=true` and only title types, such as `IncludeItemTypes=Movie,Series`, whose first `SortBy` is `Random`, is answered from the draw; the keys after `Random` change nothing. `TotalRecordCount` is the number of titles drawn among.
+
 ### Movie recommendations
 
 For each of the last movies the user played, recommendations give the "Because you watched" titles similar to it. They come from the similar titles of title pages, without those already played. With **Similar titles** off there are none.
