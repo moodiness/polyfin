@@ -214,6 +214,9 @@ type Handler struct {
 	// titles are the play sessions devices reported for the title they
 	// play (see leftplayback.go).
 	titles *titleSessions
+	// draws are the orders listings of libraries' titles at random drew,
+	// kept for drawLife (see randomLibraryListing).
+	draws *cache.Cache[drawKey, draw]
 }
 
 // New returns the Jellyfin API handler.
@@ -242,6 +245,9 @@ func New(options Options) *Handler {
 	}
 	// Sessions read the handler's clock, which tests set.
 	h.sessions = playback.NewSessions(func() time.Time { return h.now() })
+	// So do the draws of listings at random, which hold the titles drawn.
+	h.draws = cache.NewLasting[drawKey, draw](1000, func() time.Duration { return drawLife }, func() time.Time { return h.now() }).
+		Sized(64<<20, func(d draw) int { return cache.JSONSize(d.items) })
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.listings = newListings(h.listVersions)
 	if options.Library != nil {

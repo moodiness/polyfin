@@ -502,6 +502,10 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
 		return
 	}
+	// A library's titles at random are drawn among more than a page.
+	if randomOrder(r) && h.randomLibraryListing(w, r, user, parent, genre, fields, keep, start, limit) {
+		return
+	}
 	asked := time.Now()
 	ctx := listingContext(r, keep)
 	var page library.Page
