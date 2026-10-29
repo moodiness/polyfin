@@ -200,10 +200,12 @@ jobs:
           Built by scripts/ffmpeg-nvenc13.sh; what it was built from is in the sources' pins.env and recipe.diff.
           The sources' tar file is cut into parts: join them with cat, in order, and check the whole with its .tar.sha256.
           EOF
+          # The parts' own .sha256 files are among ./*.sha256: the parts are
+          # named so that no file is given twice.
           if gh release view "$RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE" --repo "$GITHUB_REPOSITORY" --clobber ./*.tar.xz ./*.zip ./*.part* ./*.sha256
+            gh release upload "$RELEASE" --repo "$GITHUB_REPOSITORY" --clobber ./*.tar.xz ./*.zip ./*.tar.part[0-9][0-9] ./*.sha256
           else
             gh release create "$RELEASE" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
               --title "FFmpeg for NVIDIA drivers older than 610 ($RELEASE)" --notes-file notes.md \
-              ./*.tar.xz ./*.zip ./*.part* ./*.sha256
+              ./*.tar.xz ./*.zip ./*.tar.part[0-9][0-9] ./*.sha256
           fi
