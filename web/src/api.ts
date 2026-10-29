@@ -1220,8 +1220,8 @@ export type LineupCategory = {
 /** How a stream last answered when its channel was opened. */
 export type StreamHealth = {
   okAt: string | null
-  /** dead (no live stream), refused (not served now), timeout (nothing came), or empty. */
-  failure: '' | 'dead' | 'refused' | 'timeout'
+  /** dead (no live stream), refused (not served now), timeout (nothing came), drm (needs a DRM Polyfin does not support), keys (the list's keys do not decrypt it), or empty. */
+  failure: '' | 'dead' | 'refused' | 'timeout' | 'drm' | 'keys'
   failedAt: string | null
   failures: number
   /** Set while the stream is left out of its channel. */

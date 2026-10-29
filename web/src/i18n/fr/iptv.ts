@@ -379,6 +379,8 @@ const iptv: typeof en = {
         dead: 'Aucun flux en direct',
         refused: 'Refusé par le fournisseur',
         timeout: 'Rien n’est venu',
+        drm: 'Demande un DRM que Polyfin ne prend pas en charge',
+        keys: 'Les clés de la liste ne le déchiffrent pas',
       },
       leftOutUntil: 'écarté jusqu’à',
       retry: 'Réessayer tous les flux',
