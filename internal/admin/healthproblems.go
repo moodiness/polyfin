@@ -438,7 +438,7 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 					To: "/settings/torrents#torrent-route", Name: h.Accounts.Settings().TorrentProxy})
 			}
 			if u := status.Unstarted; u != nil && status.RouteError == nil && h.now().Sub(status.UnstartedAt) < unstartedFor {
-				failure, to := torrentStartFailure(u), "/settings/torrents#torrent-route"
+				failure, to := u.Why(), "/settings/torrents#torrent-route"
 				if failure == "no_trackers" {
 					// Trackers of the settings would be asked.
 					to = "/settings/torrents#torrent-trackers"
@@ -991,23 +991,3 @@ func gigabytes(bytes int64, language string) string {
 // unless a torrent starts meanwhile: as long as a play leaves its version
 // out.
 const unstartedFor = 15 * time.Minute
-
-// torrentStartFailure is the code of why a torrent did not start: peers
-// found that sent nothing ("silent"), none found over a route without UDP
-// ("no_udp"), trackers that all refused or did not answer ("refused"),
-// none found on the DHT, the addon having named no tracker and the
-// settings adding none ("no_trackers"), or none found where it was looked
-// for ("no_peers").
-func torrentStartFailure(err *torrent.StartError) string {
-	switch {
-	case err.Found > 0:
-		return "silent"
-	case err.NoUDP:
-		return "no_udp"
-	case err.Trackers > 0 && err.Answered == 0:
-		return "refused"
-	case err.Trackers == 0 && err.NoneNamed:
-		return "no_trackers"
-	}
-	return "no_peers"
-}

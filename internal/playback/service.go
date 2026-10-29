@@ -408,6 +408,20 @@ func (s *Service) TorrentReceiving(version library.Version) bool {
 	return time.Since(s.torrents.Received(hash)) < torrent.PieceTimeout
 }
 
+// TorrentProgress tells how the start of a torrent version's torrent goes
+// (see torrent.Engine.Progress); false for a link, or a torrent that does
+// not run.
+func (s *Service) TorrentProgress(version library.Version) (torrent.Progress, bool) {
+	if version.Torrent == nil || s.torrents == nil {
+		return torrent.Progress{}, false
+	}
+	hash, err := torrent.ParseHash(version.Torrent.InfoHash)
+	if err != nil {
+		return torrent.Progress{}, false
+	}
+	return s.torrents.Progress(hash)
+}
+
 // TorrentUnstarted reports whether err tells of a torrent that could not
 // start: its route cannot carry it, torrents are off, no peer sent it in
 // time, or as many torrents run as Torrents at once allows. It may play later: a play finding nothing else answers that
