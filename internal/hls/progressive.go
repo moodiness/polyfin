@@ -95,7 +95,7 @@ func (m *Manager) Progressive(ctx context.Context, key Key, open Opener, start t
 			}
 		}()
 	}
-	cmd := exec.CommandContext(ctx, m.ffmpeg, remux.progressiveArgs(start)...)
+	cmd := exec.CommandContext(ctx, m.ffmpegPath(), remux.progressiveArgs(start)...)
 	cmd.WaitDelay = 5 * time.Second
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr

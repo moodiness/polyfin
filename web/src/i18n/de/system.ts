@@ -224,6 +224,10 @@ const system: typeof en = {
           `${name} (${path}): Polyfin kann nicht in diesen Ordner schreiben und legt diese Dateien bis dahin im Cache seines Datenordners ab. Mache den Ordner beschreibbar oder wähle einen anderen, und starte Polyfin dann neu.`,
         nvidiaDriver: (version: string) =>
           `Die NVIDIA-Grafikkarte konvertiert keine Videos: Ihr Treiber ist älter als Version ${version}, die FFmpeg für NVENC braucht. Aktualisiere den Treiber, um die Karte zu nutzen.`,
+        nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>
+          failure === 'download'
+            ? `Die NVIDIA-Grafikkarte konvertiert keine Videos: Ihr Treiber ist älter als Version 610, und das FFmpeg für solche Treiber konnte nicht heruntergeladen werden: ${error}. Polyfin versucht es beim nächsten Start erneut oder wenn die Konvertierungseinstellungen gespeichert werden.`
+            : `Die NVIDIA-Grafikkarte konvertiert keine Videos, auch nicht mit dem FFmpeg für Treiber älter als Version 610: ${error}`,
         backupFailed: 'Das letzte Datenbank-Backup ist fehlgeschlagen.',
         backupStale: 'Das letzte Datenbank-Backup ist älter als zwei Tage.',
         backupDestinationFailed: (name: string) =>
@@ -321,6 +325,10 @@ const system: typeof en = {
       noGpu: 'Keine: Videos werden auf der CPU konvertiert',
       toneMapping: 'HDR zu SDR auf der GPU',
       cpuEncoders: 'CPU-Encoder',
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'Das von Polyfin mitgelieferte',
+      ffmpegOlderDrivers: 'Für NVIDIA-Treiber älter als 610',
+      ffmpegOlderDownloading: 'Das für NVIDIA-Treiber älter als 610 wird heruntergeladen',
       conversions: 'Videokonvertierungen',
       noLimit: 'unbegrenzt',
       remuxes: 'Remuxe',

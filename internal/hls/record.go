@@ -109,7 +109,7 @@ func (m *Manager) Record(ctx context.Context, key Key, open Opener, path string)
 		return err
 	}
 	defer release()
-	cmd := exec.CommandContext(ctx, m.ffmpeg, remux.recordArgs(path)...)
+	cmd := exec.CommandContext(ctx, m.ffmpegPath(), remux.recordArgs(path)...)
 	interrupt, err := process.Interruptible(cmd)
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func (m *Manager) Finish(ctx context.Context, parts []string, path string) error
 	if err := list.Close(); err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, m.ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+	cmd := exec.CommandContext(ctx, m.ffmpegPath(), "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
 		"-f", "concat", "-safe", "0", "-i", list.Name(), "-map", "0", "-c", "copy", "-f", "matroska", path)
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr

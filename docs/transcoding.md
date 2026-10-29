@@ -207,9 +207,24 @@ On arm64, VAAPI is tried only where libva is installed. The arm64 image has no l
 
 ### NVIDIA driver
 
-The FFmpeg 9.0 of the Docker image and of Polyfin Desktop needs NVIDIA driver 610.00 or newer for NVENC, on Linux and on Windows. In Docker, this is the host's driver. With an older driver, NVENC fails at startup: the log gives FFmpeg's reason, `Driver does not support the required nvenc API version`, and **System › Health** shows a warning naming the version needed. Video is then converted on another GPU of the computer if one encodes, or else on the processor.
+The FFmpeg 9.0 of the Docker image and of Polyfin Desktop is built for NVENC's API 13.1, which needs NVIDIA driver 610.00 or newer, on Linux and on Windows. In Docker, this is the host's driver. NVIDIA's R580 drivers are the last for Maxwell, Pascal and Volta cards, such as the GeForce GTX 900 and 10 series, the Quadro M and P series and the Titan V: they never reach 610.
 
-NVIDIA's R580 drivers are the last for Maxwell, Pascal and Volta cards, such as the GeForce GTX 900 and 10 series, the Quadro M and P series and the Titan V. They never reach 610, so these cards cannot use NVENC with Polyfin. Turing cards (GeForce GTX 16 and RTX 20 series) and newer ones can, once their driver is updated.
+For drivers from 570 to 609, R570 and R580 among them, Polyfin uses a second FFmpeg: the same FFmpeg 9.0, built for NVENC's API 13.0, which takes drivers from 570. API 13.1 adds nothing Polyfin uses.
+
+- **When:** NVENC's test encode at startup fails with `Driver does not support the required nvenc API version. Required: 13.1 Found: 13.0`, as it does with such a driver.
+- **Download:** Polyfin downloads that FFmpeg into the data folder, in `tools/nvenc13` (64 MB on Linux amd64, 50 MB on arm64, 86 MB on Windows), checks it against the checksum pinned in Polyfin, and keeps it. Video is converted on the processor meanwhile, a few seconds to a minute.
+- **Use:** NVENC is then tested again with it. When it encodes, Polyfin runs that FFmpeg for every conversion while the NVIDIA card is the one chosen, and its own FFmpeg otherwise.
+- **What tells it:** **Settings › Conversion (transcoding) › Detected on this server** and the transcoder of **System › Health** name the FFmpeg used: **The one Polyfin ships** or **For NVIDIA drivers older than 610**.
+- **Download failed:** **System › Health** warns, with why, and Polyfin tries again at its next start, or when the conversion settings are saved. A server without internet keeps converting on the processor until it has downloaded it once.
+- **NVENC fails with it too:** **System › Health** warns, with FFmpeg's reason.
+- **Drivers older than 570:** nothing is downloaded, and **System › Health** warns that the driver is older than version 570.0. Update the driver to use the card.
+- **Other systems:** this FFmpeg exists for Linux on amd64 and arm64 and for Windows on x64, where NVIDIA's drivers run NVENC.
+
+Turing cards (GeForce GTX 16 and RTX 20 series) and newer ones get drivers from 610 on, and convert with the FFmpeg Polyfin ships once their driver is updated.
+
+**License and source code:** this FFmpeg is free software under the GNU General Public License, version 3, a separate program from Polyfin. Its license is `LICENSE.txt` in its folder. It is built by `scripts/ffmpeg-nvenc13.sh` with the workflow `ffmpeg-nvenc13`, and published with its complete source code as the release `ffmpeg-nvenc13.0-autobuild-2026-09-30-13-08` of Polyfin's repository (see [`third_party/ffmpeg-nvenc13`](../third_party/ffmpeg-nvenc13)).
+
+**Compared with Jellyfin:** Jellyfin ships one FFmpeg, whose NVENC needs the driver its NVIDIA headers ask for. Polyfin adds the second FFmpeg so that the last drivers of older cards still convert on the card.
 
 ### Frames on the GPU
 
@@ -227,7 +242,7 @@ Frames always go through memory for burned-in subtitles (except on Intel and Vid
 
 - Docker: `--runtime=nvidia`. Compose: `runtime: nvidia`.
 - This needs the NVIDIA Container Toolkit, or Unraid's Nvidia Driver plugin.
-- The host's NVIDIA driver must be 610.00 or newer (see [NVIDIA driver](#nvidia-driver)).
+- The host's NVIDIA driver must be 610.00 or newer for the image's FFmpeg; from 570 to 609, Polyfin downloads an FFmpeg built for it (see [NVIDIA driver](#nvidia-driver)).
 - HDR is also tone mapped on the NVIDIA GPU, through Vulkan. This needs `graphics` among `NVIDIA_DRIVER_CAPABILITIES`; the image sets it.
 
 ### Giving the container an AMD or Intel GPU

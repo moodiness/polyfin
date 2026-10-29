@@ -735,6 +735,17 @@ export type ConversionGPU = {
   toneMapping: boolean
   /** Whether a VAAPI GPU takes a quality factor. */
   qvbr: boolean
+  /** Whether it encodes with the FFmpeg for NVIDIA drivers older than 610. */
+  olderDrivers: boolean
+}
+
+/**
+ * The FFmpeg for NVIDIA drivers older than 610 while NVENC waits for it, or when it could not
+ * download it (`failed`) or NVENC failed with it too (`unusable`), `error` telling why.
+ */
+export type OlderDriverFFmpeg = {
+  state: 'downloading' | 'failed' | 'unusable'
+  error?: string
 }
 
 /** What conversions run on. */
@@ -749,6 +760,8 @@ export type ConversionHardware = {
   toneMappingHeight: number
   /** Whether FFmpeg has the bwdif deinterlacer. */
   bwdif: boolean
+  /** The FFmpeg for older NVIDIA drivers, null when it is used or not needed. */
+  olderDriverFFmpeg: OlderDriverFFmpeg | null
 }
 
 export type NewUser = {
@@ -3764,13 +3777,20 @@ export type Health = {
     low: boolean
   }[]
   transcoder: {
-    hardware: { method: string; device: string; encoders: string[]; toneMapping: boolean } | null
+    hardware: {
+      method: string
+      device: string
+      encoders: string[]
+      toneMapping: boolean
+      olderDrivers: boolean
+    } | null
     encoders: string[]
     conversions: number
     limit: number
     remuxes: number
     maxHeight: number
     enabled: boolean
+    olderDriverFFmpeg: OlderDriverFFmpeg | null
   } | null
   thumbnails: {
     enabled: boolean
@@ -3936,6 +3956,8 @@ export type HealthProblem = {
   | { code: 'metadata_languages'; name: string }
   /** NVENC needs a newer NVIDIA driver than the GPU's: `name` is the version it needs. */
   | { code: 'nvidia_driver'; name: string }
+  /** NVENC cannot use the FFmpeg for older NVIDIA drivers: not downloaded, or failing too. */
+  | { code: 'nvidia_older_ffmpeg'; failure: 'download' | 'encode'; error: string }
   /** The copy kept of the Custom theme's files misses `missing` of its `files`. */
   | { code: 'theme_copy_missing'; missing: number; files: number }
   /**

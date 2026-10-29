@@ -2,6 +2,7 @@ package hls
 
 import (
 	"bytes"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -33,7 +34,7 @@ Conversion failed!`
 // failingFFmpeg is a Manager on system whose FFmpeg, a script, fails every
 // encode: NVENC's writing nvenc to its standard error, the others' that
 // no device is there. It logs into log.
-func failingFFmpeg(t *testing.T, system, nvenc string, log *bytes.Buffer) *Manager {
+func failingFFmpeg(t *testing.T, system, nvenc string, log io.Writer) *Manager {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake FFmpeg is a shell script")

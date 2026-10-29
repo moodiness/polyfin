@@ -739,6 +739,16 @@ type Manager struct {
 	detected  map[string]*Hardware
 	failed    map[string][]gpuFailure
 	failures  atomic.Pointer[[]gpuFailure]
+	// wanted and wantedDevice are the choice detected last, which the
+	// download of the FFmpeg for older NVIDIA drivers detects again; older
+	// is that FFmpeg, nil for none, and olderMu guards whether it is being
+	// downloaded and why its last download failed (see
+	// fetchOlderDriverFFmpeg).
+	wanted, wantedDevice string
+	older                OlderDriverFFmpeg
+	olderMu              sync.Mutex
+	fetching             bool
+	fetchErr             error
 	// measuring counts the timings under way (see measureLater and
 	// timeToneMappingLater), and timingGPU those of the GPU's chains; run,
 	// when set, runs FFmpeg in their place, for tests.
@@ -1516,7 +1526,7 @@ func (e *encoding) progress(j *job) {
 // run runs FFmpeg for a job and files what it writes into segments, and
 // the cues of the subtitles it extracts.
 func (e *encoding) run(ctx context.Context, j *job) {
-	cmd := exec.CommandContext(ctx, e.m.ffmpeg, e.remux.args(j.start, j.lookback)...)
+	cmd := exec.CommandContext(ctx, e.m.ffmpegPath(), e.remux.args(j.start, j.lookback)...)
 	cmd.WaitDelay = 5 * time.Second
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr

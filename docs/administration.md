@@ -95,7 +95,7 @@ A picture subtitle track that could not be read into text, its language having n
 
 When every metadata addon of the server has a language, a warning names the first one, with a link to its page: they then describe titles in their language for every user, whatever the user's metadata language. Keep **Language of its descriptions** at **None** on that addon, or on one more metadata addon (see [Languages](addons-and-libraries.md#languages)).
 
-An NVIDIA graphics card whose driver is older than the version FFmpeg needs for NVENC is a warning naming that version, with a link to **Transcoder**: video is converted on another graphics card or on the processor until the driver is updated (see [NVIDIA driver](transcoding.md#nvidia-driver)).
+An NVIDIA graphics card whose driver is older than the version FFmpeg needs for NVENC is a warning naming that version, with a link to **Transcoder**: video is converted on another graphics card or on the processor until the driver is updated. With a driver from 570 to 609, Polyfin downloads an FFmpeg built for it instead; a warning tells, with why, when it could not be downloaded, which Polyfin tries again at its next start or when the conversion settings are saved, or when NVENC fails with it too (see [NVIDIA driver](transcoding.md#nvidia-driver)).
 
 A local folder whose files are left unmatched because the search of their titles failed is a warning, naming the addon that failed most of them and why, with a link to the folder's page. It goes away once the searches go through, which Polyfin tries again on its own (see [Failed searches](local-folders.md#failed-searches)).
 

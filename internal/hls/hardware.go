@@ -68,6 +68,10 @@ type Hardware struct {
 	// libplacebo's output, at the size converted to, goes to NVENC through
 	// memory.
 	VulkanDecoding bool
+	// FFmpeg is the FFmpeg the GPU encodes with when it is not the
+	// Manager's own: the one for NVIDIA drivers older than 610 (see
+	// OlderDriverFFmpeg).
+	FFmpeg string
 }
 
 // gpuMethod is a GPU method, named as POLYFIN_HWACCEL names it, with the
@@ -124,6 +128,7 @@ func (m *Manager) methods() []gpuMethod {
 func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 	m.detecting.Lock()
 	defer m.detecting.Unlock()
+	m.wanted, m.wantedDevice = want, device
 	hw, done := m.detected[want]
 	if !done {
 		var failures []gpuFailure
@@ -139,6 +144,11 @@ func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 	m.failures.Store(&failures)
 	if !done {
 		m.measureLater(want, hw)
+	}
+	// A choice waiting for the FFmpeg for older NVIDIA drivers has it
+	// downloaded, again after a download that failed.
+	if slices.ContainsFunc(failures, func(f gpuFailure) bool { return f.pending }) {
+		m.fetchOlderDriverFFmpeg()
 	}
 	if hw == nil {
 		return Hardware{}, false
@@ -169,6 +179,9 @@ func (m *Manager) SelectHardware(want, device string) {
 		m.logger.Log(context.Background(), level, "A GPU method does not encode", attrs...)
 	}
 	switch {
+	case ok && hw.FFmpeg != "":
+		m.logger.Info("Video is converted on the GPU, with the FFmpeg for NVIDIA drivers older than 610", "method", hw.Method,
+			"encoders", hw.Encoders, "tone_mapping", hw.ToneMapping, "ffmpeg", hw.FFmpeg)
 	case ok:
 		m.logger.Info("Video is converted on the GPU", "method", hw.Method, "device", hw.Device, "encoders", hw.Encoders,
 			"tone_mapping", hw.ToneMapping, "qvbr", hw.QVBR)
@@ -184,11 +197,14 @@ func (m *Manager) SelectHardware(want, device string) {
 // FFmpeg's error with the first of its encoders that failed, or, with no
 // encoder, why the method was not tried (see vaapiOffered). driver is
 // the NVIDIA driver version NVENC needs, when FFmpeg found the GPU's
-// older, empty otherwise.
+// older and the FFmpeg for older drivers cannot help, empty otherwise.
+// pending tells NVENC waits for that FFmpeg to be downloaded, and
+// unusable that NVENC failed with it too, err telling why.
 type gpuFailure struct {
 	method, device, encoder string
 	err                     error
 	driver                  string
+	pending, unusable       bool
 }
 
 // olderDriver matches what FFmpeg writes when NVENC needs a newer NVIDIA
@@ -247,7 +263,12 @@ func (m *Manager) detect(want, device string) (*Hardware, []gpuFailure) {
 			}
 			if failure != nil {
 				if found := olderDriver.FindStringSubmatch(failure.err.Error()); found != nil && candidate.name == "nvenc" {
-					failure.driver = found[1]
+					older, why := m.olderDriverHardware(hw, candidate, *failure, found[1])
+					if older != nil {
+						older.ToneMapping = m.toneMaps(*older)
+						return older, failures
+					}
+					failure = &why
 				}
 				failures = append(failures, *failure)
 			}
@@ -329,7 +350,7 @@ func (m *Manager) placeboToneMaps(hw Hardware) bool {
 	args = append(args, "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-t", "0.25",
 		"-vf", "format=yuv420p10le,"+hdrTags+","+v.filters(),
 		"-c:v", hw.Encoders[0], "-f", "null", "-")
-	return m.succeeds(args...)
+	return m.succeeds(hw, args...)
 }
 
 // deviceToneMaps reports whether hw, Intel's GPU or VideoToolbox, tone
@@ -345,13 +366,13 @@ func (m *Manager) deviceToneMaps(hw Hardware) bool {
 	}
 	defer os.RemoveAll(dir)
 	sample := filepath.Join(dir, "hdr10.mkv")
-	if !m.succeeds(slices.Concat(probeStart, []string{"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-t", "0.25",
+	if !m.succeeds(hw, slices.Concat(probeStart, []string{"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-t", "0.25",
 		"-vf", "format=yuv420p10le," + hdrTags, "-c:v", "libx265", "-preset", "ultrafast", "-x265-params", hdr10Params, sample})...) {
 		return false
 	}
 	hw.ToneMapping = true
 	v := VideoEncoding{Width: 160, Height: 90, ToneMap: true, Hardware: &hw}
-	return m.succeeds(slices.Concat(probeStart, v.inputs(), []string{"-i", sample, "-vf", v.filters(), "-c:v", hw.Encoders[0], "-f", "null", "-"})...)
+	return m.succeeds(hw, slices.Concat(probeStart, v.inputs(), []string{"-i", sample, "-vf", v.filters(), "-c:v", hw.Encoders[0], "-f", "null", "-"})...)
 }
 
 // hdr10Params are x265's options writing the static metadata of HDR10: a
@@ -453,6 +474,7 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 		return hw
 	}
 	method := hardwareMethods[i]
+	ctx = withFFmpeg(ctx, hw.FFmpeg)
 	dir, err := os.MkdirTemp(m.dir, "measure-")
 	if err != nil {
 		m.logger.Warn("The GPU's conversions could not be timed", "error", err)
@@ -563,14 +585,19 @@ var probeStart = []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"
 
 // timed runs FFmpeg with args, within 20 s, and reports how long it took,
 // or why it failed with the end of what FFmpeg wrote, through m.run when
-// tests set it.
+// tests set it: the FFmpeg ctx names (see withFFmpeg), else the one the
+// Manager runs.
 func (m *Manager) timed(ctx context.Context, args []string) (time.Duration, error) {
 	if m.run != nil {
 		return m.run(ctx, args)
 	}
+	binary, ok := ctx.Value(ffmpegKey{}).(string)
+	if !ok {
+		binary = m.ffmpegPath()
+	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, m.ffmpeg, args...)
+	cmd := exec.CommandContext(ctx, binary, args...)
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
 	started := time.Now()
@@ -581,10 +608,10 @@ func (m *Manager) timed(ctx context.Context, args []string) (time.Duration, erro
 	return time.Since(started), err
 }
 
-// succeeds reports whether FFmpeg ends well with args within 20 s. A GPU
-// or driver that fails makes FFmpeg fail, or abort.
-func (m *Manager) succeeds(args ...string) bool {
-	_, err := m.timed(context.Background(), args)
+// succeeds reports whether the FFmpeg hw encodes with ends well with args
+// within 20 s. A GPU or driver that fails makes FFmpeg fail, or abort.
+func (m *Manager) succeeds(hw Hardware, args ...string) bool {
+	_, err := m.timed(withFFmpeg(context.Background(), hw.FFmpeg), args)
 	return err == nil
 }
 
@@ -620,7 +647,7 @@ func (m *Manager) encodes(hw Hardware, encoder string, options ...string) error 
 	args = append(args, "-c:v", encoder)
 	args = append(args, options...)
 	args = append(args, "-f", "null", "-")
-	_, err := m.timed(context.Background(), args)
+	_, err := m.timed(withFFmpeg(context.Background(), hw.FFmpeg), args)
 	return err
 }
 

@@ -48,6 +48,9 @@ type HealthSources struct {
 	// GPU's driver is older (hls.Manager.NVIDIADriver), empty otherwise;
 	// nil tells nothing.
 	NVIDIADriver func() string
+	// OlderDriverFFmpeg tells how the FFmpeg for NVIDIA drivers older than
+	// 610 stands (hls.Manager.OlderDriverFFmpeg); nil tells nothing.
+	OlderDriverFFmpeg func() hls.OlderDriverStatus
 	// Thumbnails makes the scrubbing thumbnails and chapter images.
 	Thumbnails *thumbnails.Service
 	// DatabaseSize measures the database.
@@ -301,6 +304,10 @@ type transcoderJSON struct {
 	// the original's.
 	MaxHeight int  `json:"maxHeight"`
 	Enabled   bool `json:"enabled"`
+	// OlderDriverFFmpeg tells how the FFmpeg for NVIDIA drivers older than
+	// 610 stands while NVENC waits for it, or failed with it; null when it
+	// is used (Hardware.OlderDrivers) or not needed.
+	OlderDriverFFmpeg *olderDriverJSON `json:"olderDriverFFmpeg"`
 }
 
 type hardwareJSON struct {
@@ -310,10 +317,33 @@ type hardwareJSON struct {
 	ToneMapping bool     `json:"toneMapping"`
 	// QVBR tells whether a VAAPI GPU takes a quality factor.
 	QVBR bool `json:"qvbr"`
+	// OlderDrivers tells the GPU encodes with the FFmpeg for NVIDIA
+	// drivers older than 610, not with the one Polyfin ships.
+	OlderDrivers bool `json:"olderDrivers"`
 }
 
 func newHardwareJSON(hw *hls.Hardware) *hardwareJSON {
-	return &hardwareJSON{Method: hw.Method, Device: hw.Device, Encoders: hw.Encoders, ToneMapping: hw.ToneMapping, QVBR: hw.QVBR}
+	return &hardwareJSON{Method: hw.Method, Device: hw.Device, Encoders: hw.Encoders, ToneMapping: hw.ToneMapping, QVBR: hw.QVBR,
+		OlderDrivers: hw.FFmpeg != ""}
+}
+
+// olderDriverJSON is the FFmpeg for NVIDIA drivers older than 610 while
+// NVENC waits for it, State "downloading", or could not use it: "failed"
+// to download it, or "unusable" when NVENC failed with it too, Error
+// telling why.
+type olderDriverJSON struct {
+	State string `json:"state"`
+	Error string `json:"error,omitempty"`
+}
+
+// newOlderDriverJSON is how the FFmpeg for older NVIDIA drivers stands,
+// nil when it is used or not needed.
+func newOlderDriverJSON(encoder *hls.Manager) *olderDriverJSON {
+	status := encoder.OlderDriverFFmpeg()
+	if status.State == "" || status.State == "used" {
+		return nil
+	}
+	return &olderDriverJSON{State: status.State, Error: status.Error}
 }
 
 type thumbnailHealthJSON struct {
@@ -444,6 +474,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		t.Conversions, t.Limit = encoder.Conversions()
+		t.OlderDriverFFmpeg = newOlderDriverJSON(encoder)
 		for _, running := range encoder.Running() {
 			if !running.Key.Converts {
 				t.Remuxes++

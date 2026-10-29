@@ -244,7 +244,7 @@ func (t *track) start(n int) {
 
 // run runs FFmpeg for a job and files the audio it writes into segments.
 func (t *track) run(ctx context.Context, j *trackJob) {
-	cmd := exec.CommandContext(ctx, t.m.ffmpeg, t.remux.trackArgs(j.start)...)
+	cmd := exec.CommandContext(ctx, t.m.ffmpegPath(), t.remux.trackArgs(j.start)...)
 	cmd.WaitDelay = 5 * time.Second
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr

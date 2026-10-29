@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/desktop"
+	"github.com/moodiness/polyfin/internal/desktop/tools"
 )
 
 // prefix starts the names of Polyfin's environment variables.
@@ -66,6 +67,10 @@ func Variables(environ []string, cfg Config) []Variable {
 	// Polyfin Desktop's own, listed when it runs Polyfin only.
 	if cfg.Desktop {
 		effective[desktop.ServerVariable] = "1"
+	}
+	// The FFmpeg for older NVIDIA drivers of a test, read when set only.
+	if value, ok := set[tools.OlderDriverVariable]; ok {
+		effective[tools.OlderDriverVariable] = value
 	}
 	names := make([]string, 0, len(effective)+len(set))
 	for name := range effective {

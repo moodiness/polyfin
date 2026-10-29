@@ -221,6 +221,10 @@ const system: typeof en = {
           `${name} (${path}): Polyfin no puede escribir en esta carpeta y, mientras tanto, guarda estos archivos en la caché de su carpeta de datos. Haga que la carpeta admita escritura o elija otra, y luego reinicie Polyfin.`,
         nvidiaDriver: (version: string) =>
           `La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión ${version}, que FFmpeg necesita para NVENC. Actualice el controlador para usar la tarjeta.`,
+        nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>
+          failure === 'download'
+            ? `La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión 610 y no se pudo descargar el FFmpeg para esos controladores: ${error}. Polyfin lo vuelve a intentar en su próximo inicio o cuando se guardan los ajustes de conversión.`
+            : `La tarjeta gráfica NVIDIA no convierte el vídeo, tampoco con el FFmpeg para controladores anteriores a la versión 610: ${error}`,
         backupFailed: 'Ha fallado la última copia de seguridad de la base de datos.',
         backupStale: 'La última copia de seguridad de la base de datos tiene más de dos días.',
         backupDestinationFailed: (name: string) =>
@@ -318,6 +322,10 @@ const system: typeof en = {
       noGpu: 'Ninguna: el vídeo se convierte en la CPU',
       toneMapping: 'HDR a SDR en la GPU',
       cpuEncoders: 'Codificadores de CPU',
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'El que incluye Polyfin',
+      ffmpegOlderDrivers: 'Para controladores NVIDIA anteriores a 610',
+      ffmpegOlderDownloading: 'Descargando el de controladores NVIDIA anteriores a 610',
       conversions: 'Conversiones de vídeo',
       noLimit: 'sin límite',
       remuxes: 'Remuxados',

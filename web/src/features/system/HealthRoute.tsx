@@ -610,6 +610,14 @@ function Transcoder({ health }: { health: Health }) {
                   </span>
                 ),
               },
+              {
+                label: text.ffmpeg,
+                value: hardware?.olderDrivers
+                  ? text.ffmpegOlderDrivers
+                  : transcoder.olderDriverFFmpeg?.state === 'downloading'
+                    ? text.ffmpegOlderDownloading
+                    : text.ffmpegShipped,
+              },
               { label: text.remuxes, value: transcoder.remuxes },
               {
                 label: text.maxHeight,

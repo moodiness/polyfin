@@ -441,6 +441,15 @@ const settings: typeof en = {
       qualityFactor: 'Akzeptiert einen Qualitätswert',
       processor: 'Encoder auf dem Prozessor',
       processorToneMapping: 'HDR zu SDR auf dem Prozessor',
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'Das von Polyfin mitgelieferte',
+      ffmpegOlderDrivers: 'Für NVIDIA-Treiber älter als 610',
+      ffmpegOlderDownloading:
+        'Das FFmpeg für NVIDIA-Treiber älter als 610, das NVENC hier braucht, wird heruntergeladen: Bis dahin konvertiert der Prozessor die Videos.',
+      ffmpegOlderFailed: (error: string) =>
+        `Das FFmpeg für NVIDIA-Treiber älter als 610, das NVENC hier braucht, konnte nicht heruntergeladen werden: ${error}`,
+      ffmpegOlderUnusable: (error: string) =>
+        `NVENC kodiert auch mit dem FFmpeg für NVIDIA-Treiber älter als 610 nicht: ${error}`,
       yes: 'Ja',
       no: 'Nein',
       none: 'Keine',

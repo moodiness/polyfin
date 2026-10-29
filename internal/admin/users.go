@@ -1471,6 +1471,7 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 			body.ConversionHardware.ToneMappingHeight = encoder.ToneMappedHeight()
 		}
 		body.ConversionHardware.Bwdif = encoder.HasFilters("bwdif")
+		body.ConversionHardware.OlderDriverFFmpeg = newOlderDriverJSON(encoder)
 	}
 	return body, nil
 }
@@ -1480,13 +1481,14 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 // HDR and the bwdif deinterlacer. ToneMappingHeight is the height
 // Automatic caps HDR tone mapped on the processor at, as a timing at
 // startup chose it (720 until it ends), 0 when the processor cannot tone
-// map.
+// map. OlderDriverFFmpeg is as System › Health tells it.
 type conversionHardwareJSON struct {
-	GPU               *hardwareJSON `json:"gpu"`
-	Encoders          []string      `json:"encoders"`
-	ToneMapping       bool          `json:"toneMapping"`
-	ToneMappingHeight int           `json:"toneMappingHeight"`
-	Bwdif             bool          `json:"bwdif"`
+	GPU               *hardwareJSON    `json:"gpu"`
+	Encoders          []string         `json:"encoders"`
+	ToneMapping       bool             `json:"toneMapping"`
+	ToneMappingHeight int              `json:"toneMappingHeight"`
+	Bwdif             bool             `json:"bwdif"`
+	OlderDriverFFmpeg *olderDriverJSON `json:"olderDriverFFmpeg"`
 }
 
 func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {

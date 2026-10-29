@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/moodiness/polyfin/internal/commercials"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/desktop/tools"
 	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/dlna"
 	"github.com/moodiness/polyfin/internal/forwarded"
@@ -321,6 +323,14 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		return fmt.Errorf("prepare the segment directory: %w", err)
 	}
 	defer segments.Close()
+	// NVENC with an NVIDIA driver older than 610 takes the FFmpeg built for
+	// such drivers, downloaded into the data folder's tools when it needs
+	// it, where Polyfin Desktop keeps its own FFmpeg too.
+	if manifest, ok, err := tools.OlderDriverManifest(runtime.GOOS, runtime.GOARCH); err != nil {
+		logger.Warn("The manifest of the FFmpeg for NVIDIA drivers older than 610 cannot be read", "variable", tools.OlderDriverVariable, "error", err)
+	} else if ok {
+		segments.UseOlderDriverFFmpeg(tools.OlderDriver(filepath.Join(cfg.DataDir, "tools"), manifest))
+	}
 	settings := store.Settings()
 	segments.SelectHardware(settings.HardwareAcceleration, settings.VAAPIDevice)
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
@@ -676,6 +686,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			MissingLanguages: player.MissingLanguages,
 			Torrents:         torrents,
 			Images:           jellyfinAPI,
+
+			// The FFmpeg for NVIDIA drivers older than 610 (#542).
+			OlderDriverFFmpeg: segments.OlderDriverFFmpeg,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
 		Trackers:       tracking,

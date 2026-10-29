@@ -364,7 +364,7 @@ func (l *live) start() (*liveRun, error) {
 	refused, answered, channel := l.remux.Refused, l.remux.Answered, l.remux.Channel
 	go func() {
 		defer cancel()
-		cmd := exec.CommandContext(ctx, l.m.ffmpeg, args...)
+		cmd := exec.CommandContext(ctx, l.m.ffmpegPath(), args...)
 		cmd.WaitDelay = 5 * time.Second
 		stderr := &tail{limit: 4096}
 		cmd.Stderr = stderr

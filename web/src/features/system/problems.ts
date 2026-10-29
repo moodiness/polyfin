@@ -203,6 +203,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.metadataLanguages(problem.name)
     case 'nvidia_driver':
       return text.nvidiaDriver(problem.name)
+    case 'nvidia_older_ffmpeg':
+      return text.nvidiaOlderFFmpeg(problem.failure, problem.error)
     case 'theme_copy_missing':
       return text.themeCopyMissing(problem.missing, problem.files)
     case 'folder_unwritable':

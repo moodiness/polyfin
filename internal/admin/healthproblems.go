@@ -107,6 +107,10 @@ const (
 	// NVENC needs a newer NVIDIA driver than the GPU's: Name is the
 	// version it needs.
 	problemNVIDIADriver = "nvidia_driver"
+	// NVENC cannot use the FFmpeg for NVIDIA drivers older than 610:
+	// Failure is "download" when it could not be downloaded, "encode"
+	// when NVENC failed with it too, and Error why.
+	problemOlderDriverFFmpeg = "nvidia_older_ffmpeg"
 	// The copy kept of the Custom theme's files misses some of them, as
 	// after a backup restored on another system: Missing counts them, out
 	// of Files. While the Custom theme is chosen and loads the copy only.
@@ -362,6 +366,17 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		if version := h.Health.NVIDIADriver(); version != "" {
 			p := warning("nvidia_driver", problemNVIDIADriver, "transcoder")
 			p.Name = version
+			add(p)
+		}
+	}
+	if h.Health.OlderDriverFFmpeg != nil {
+		switch status := h.Health.OlderDriverFFmpeg(); status.State {
+		case "failed", "unusable":
+			p := warning("nvidia_older_ffmpeg", problemOlderDriverFFmpeg, "transcoder")
+			p.Failure, p.Error = "download", status.Error
+			if status.State == "unusable" {
+				p.Failure = "encode"
+			}
 			add(p)
 		}
 	}
@@ -956,6 +971,21 @@ func (p healthProblemJSON) text(language string) string {
 			"La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión %s, que FFmpeg necesita para NVENC. Actualice el controlador para usar la tarjeta.",
 			"La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione %s, necessaria a FFmpeg per NVENC. Aggiorna il driver per usare la scheda.",
 			"A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão %s, de que o FFmpeg precisa para o NVENC. Atualize o driver para usar a placa."}, p.Name)
+	case problemOlderDriverFFmpeg:
+		if p.Failure == "encode" {
+			return say(i18n.Text{"The NVIDIA graphics card does not convert video, with the FFmpeg for drivers older than version 610 either: %s",
+				"La carte graphique NVIDIA ne convertit pas la vidéo, même avec le FFmpeg pour les pilotes antérieurs à la version 610 : %s",
+				"Die NVIDIA-Grafikkarte konvertiert keine Videos, auch nicht mit dem FFmpeg für Treiber älter als Version 610: %s",
+				"La tarjeta gráfica NVIDIA no convierte el vídeo, tampoco con el FFmpeg para controladores anteriores a la versión 610: %s",
+				"La scheda grafica NVIDIA non converte i video, nemmeno con l’FFmpeg per i driver precedenti alla versione 610: %s",
+				"A placa de vídeo NVIDIA não converte vídeo, nem com o FFmpeg para drivers anteriores à versão 610: %s"}, p.Error)
+		}
+		return say(i18n.Text{"The NVIDIA graphics card does not convert video: its driver is older than version 610, and the FFmpeg for such drivers could not be downloaded: %s. Polyfin tries again at its next start, or when the conversion settings are saved.",
+			"La carte graphique NVIDIA ne convertit pas la vidéo : son pilote est antérieur à la version 610, et le FFmpeg pour ces pilotes n’a pas pu être téléchargé : %s. Polyfin réessaie à son prochain démarrage, ou quand les réglages de conversion sont enregistrés.",
+			"Die NVIDIA-Grafikkarte konvertiert keine Videos: Ihr Treiber ist älter als Version 610, und das FFmpeg für solche Treiber konnte nicht heruntergeladen werden: %s. Polyfin versucht es beim nächsten Start erneut oder wenn die Konvertierungseinstellungen gespeichert werden.",
+			"La tarjeta gráfica NVIDIA no convierte el vídeo: su controlador es anterior a la versión 610 y no se pudo descargar el FFmpeg para esos controladores: %s. Polyfin lo vuelve a intentar en su próximo inicio o cuando se guardan los ajustes de conversión.",
+			"La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione 610 e non è stato possibile scaricare l’FFmpeg per questi driver: %s. Polyfin riprova al prossimo avvio o quando vengono salvate le impostazioni di conversione.",
+			"A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão 610, e não foi possível baixar o FFmpeg para esses drivers: %s. O Polyfin tenta de novo na próxima inicialização, ou quando as configurações de conversão são salvas."}, p.Error)
 	}
 	return ""
 }

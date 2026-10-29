@@ -6,11 +6,12 @@ import type {
   EncoderPreset,
   HardwareAcceleration,
   HardwareDecodingCodec,
+  OlderDriverFFmpeg,
   Settings,
   SubtitleOcr,
   ToneMappingAlgorithm,
 } from '@/api'
-import { useI18n } from '@/i18n'
+import { type Messages, useI18n } from '@/i18n'
 import { Checkbox, Field, FieldError, NumberInput, Select, StatusPill } from '@/ui'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
@@ -223,6 +224,11 @@ export default function ConversionSection({
                 <span className="text-ink-2">{c.upToHeight(toneMappedHeight)}</span>
               )}
               <YesNo value={hardware.toneMapping} />
+            </Detail>
+            <Detail term={c.ffmpeg} hint={olderDriverNote(c, hardware.olderDriverFFmpeg)}>
+              <span className="whitespace-nowrap text-ink">
+                {gpu?.olderDrivers ? c.ffmpegOlderDrivers : c.ffmpegShipped}
+              </span>
             </Detail>
           </dl>
         </SettingRow>
@@ -588,6 +594,22 @@ export default function ConversionSection({
       </SettingsGroup>
     </>
   )
+}
+
+/** What the FFmpeg for older NVIDIA drivers is doing, when NVENC waits for it or failed with it. */
+function olderDriverNote(
+  c: Messages['settings']['conversion'],
+  older: OlderDriverFFmpeg | null,
+): string | undefined {
+  switch (older?.state) {
+    case 'downloading':
+      return c.ffmpegOlderDownloading
+    case 'failed':
+      return c.ffmpegOlderFailed(older.error ?? '')
+    case 'unusable':
+      return c.ffmpegOlderUnusable(older.error ?? '')
+  }
+  return undefined
 }
 
 /** One line of what was detected, with a hint under its term when it has one. */
