@@ -1599,6 +1599,41 @@ func (s *Service) Whole(ctx context.Context, user accounts.User, parent accounts
 	if err != nil {
 		return Page{}, err
 	}
+	return s.upTo(ctx, user, parent, start, count, most, atOnce, genre)
+}
+
+// RandomPool is how many of a library's first titles a listing of them
+// at random draws among, at the least (see DrawPool).
+const RandomPool = 100
+
+// DrawPool lists the titles a listing of the titles of library parent at
+// random draws among: its first pool, at most WholeListing and the
+// library's maximum, as a whole listing reads them (see Whole), and so
+// with what the user may see only. A collection library gives the titles
+// of its collections, as its listings of titles do (see WithTitlesThrough).
+// ok is false when parent is not one of the user's libraries, such as a
+// smart list, which keeps its own order.
+func (s *Service) DrawPool(ctx context.Context, user accounts.User, parent accounts.ID, count, pool int, genre string) (page Page, ok bool, err error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return Page{}, false, err
+	}
+	l, ok := v.library(parent)
+	if !ok {
+		return Page{}, false, nil
+	}
+	most := min(max(pool, RandomPool), WholeListing)
+	if l.maxItems > 0 {
+		most = min(most, l.maxItems)
+	}
+	page, err = s.upTo(ctx, user, parent, 0, min(count, most), most, false, genre)
+	return page, true, err
+}
+
+// upTo lists the children of parent from start for a listing of count as
+// Whole does, reading up to most of them; atOnce lists them without
+// waiting for addons, for parents that read no catalog.
+func (s *Service) upTo(ctx context.Context, user accounts.User, parent accounts.ID, start, count, most int, atOnce bool, genre string) (Page, error) {
 	// Other folders list a page, and a library's maximum bounds its own
 	// listings (see withinMax).
 	if most <= count {
