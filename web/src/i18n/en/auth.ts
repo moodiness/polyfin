@@ -38,6 +38,17 @@ const auth = {
       'Administrators must use two-step sign-in on this server. Add your account to an authenticator app on your phone, then enter the code it shows.',
     recoveryTitle: 'Keep your recovery codes',
     continue: 'Continue',
+    /** The identity provider's button, and what its sign-in can come back with. */
+    providerSignIn: (name: string) => `Sign in with ${name}`,
+    providerOutcomes: {
+      provider_refused: 'The sign-in with the identity provider was cancelled.',
+      provider_no_account:
+        'No account on this server matches your account at the identity provider.',
+      account_disabled: 'This account is disabled.',
+      outside_allowed_hours: 'This account may not sign in at this time.',
+      too_many_attempts: 'Too many attempts. Try again later.',
+      provider_failed: 'The sign-in with the identity provider failed. Try again.',
+    },
   },
   invite: {
     title: (server: string) => `Join ${server}`,

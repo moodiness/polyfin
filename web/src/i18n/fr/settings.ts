@@ -684,6 +684,40 @@ const settings: typeof en = {
     knownProxies: 'Proxys connus',
     knownProxiesHelp: (r: RangeText) =>
       `Les proxys inverses placés devant Polyfin, un par ligne : une adresse IP, un réseau comme 172.18.0.0/16, ou un nom d’hôte comme le nom d’un conteneur sur un réseau Docker (traefik), jusqu’à ${r.max}. Un nom est résolu chaque minute et chaque adresse à laquelle il correspond est reconnue : ne listez que des noms que votre propre réseau résout. Une requête de l’un d’eux vient du client que nomme son en-tête X-Forwarded-For ou X-Real-IP : c’est cette adresse qui limite les connexions échouées, qui s’affiche pour les appareils et qui indique le réseau local. Les en-têtes de transfert venant de toute autre adresse sont ignorés. Laissez vide si rien ne se trouve devant Polyfin.`,
+    provider: {
+      title: 'Fournisseur d’identité',
+      intro:
+        'Les utilisateurs peuvent se connecter à cette application d’administration et au lecteur web avec un fournisseur OpenID Connect, qui demande alors sa propre connexion en deux étapes : Polyfin ne redemande pas de code. Les applications Jellyfin qui ne peuvent pas ouvrir le fournisseur se connectent avec Quick Connect, approuvé depuis une session ouverte par lui. Enregistrez Polyfin chez le fournisseur comme client confidentiel, ou comme client public sans secret, avec l’URI de redirection ci-dessous.',
+      redirectUri: 'URI de redirection',
+      redirectUriHelp:
+        'L’adresse où le fournisseur renvoie les navigateurs, construite à partir de l’adresse publique. Enregistrez-la chez le fournisseur telle quelle.',
+      noPublicAddress:
+        'Indiquez d’abord l’adresse publique dans Paramètres › Notifications : la connexion y commence et y finit, et le fournisseur y renvoie les navigateurs.',
+      issuer: 'Émetteur',
+      issuerHelp:
+        'L’émetteur (issuer) du fournisseur, exactement comme le donne son document de découverte, comme https://id.example.org ou https://id.example.org/realms/home. Polyfin lit son /.well-known/openid-configuration. Vide désactive la connexion.',
+      name: 'Nom du bouton',
+      nameHelp:
+        'Ce que disent les boutons de connexion après « Se connecter avec ». Vide affiche le nom d’hôte de l’émetteur.',
+      clientId: 'ID client',
+      clientIdHelp:
+        'L’ID que le fournisseur a donné au client de Polyfin. Vide désactive la connexion.',
+      clientSecret: 'Secret client',
+      clientSecretHelp:
+        'Le secret d’un client confidentiel ; laissez vide pour un client public. Il est conservé chiffré avec POLYFIN_SECRET_KEY et n’est plus jamais affiché.',
+      userClaim: 'Claim qui nomme l’utilisateur',
+      userClaimHelp:
+        'Le claim du jeton d’identité comparé aux noms des comptes, sans tenir compte de la casse, la première fois que quelqu’un se connecte : preferred_username par défaut. L’e-mail vérifié vient ensuite. Les connexions suivantes retrouvent le même compte, quoi que dise alors le claim.',
+      createAccounts: 'Créer les comptes',
+      createAccountsHelp:
+        'Une personne qu’aucun compte ne désigne en reçoit un, nommé d’après le claim, sinon l’e-mail, avec les permissions d’un nouveau compte, qui se connecte par le fournisseur uniquement. Désactivé, elle est refusée. Désactivé par défaut.',
+      adminClaim: 'Claim des administrateurs',
+      adminClaimHelp:
+        'Le claim qui liste les groupes ou rôles d’une personne, comme groups. Avec une valeur ci-dessous, celui dont le claim la contient devient administrateur en se connectant. Polyfin demande le scope groups quand le claim est groups et que le fournisseur le propose.',
+      adminValue: 'Valeur des administrateurs',
+      adminValueHelp:
+        'Le groupe ou rôle qui fait les administrateurs, comme polyfin-admins. Le quitter ensuite ne refait pas d’un administrateur un membre : changez-le sur la page Utilisateurs.',
+    },
     https: {
       title: 'HTTPS',
       intro:

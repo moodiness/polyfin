@@ -39,6 +39,16 @@ const auth: typeof en = {
       'Su questo server gli amministratori devono usare l’accesso in due passaggi. Aggiungi il tuo account a un’applicazione di autenticazione sul telefono, poi inserisci il codice che mostra.',
     recoveryTitle: 'Conserva i tuoi codici di recupero',
     continue: 'Continua',
+    providerSignIn: (name: string) => `Accedi con ${name}`,
+    providerOutcomes: {
+      provider_refused: 'L’accesso con il provider di identità è stato annullato.',
+      provider_no_account:
+        'Nessun account di questo server corrisponde al tuo account presso il provider di identità.',
+      account_disabled: 'Questo account è disattivato.',
+      outside_allowed_hours: 'Questo account non può accedere a quest’ora.',
+      too_many_attempts: 'Troppi tentativi. Riprova più tardi.',
+      provider_failed: 'L’accesso con il provider di identità non è riuscito. Riprova.',
+    },
   },
   invite: {
     title: (server: string) => `Unisciti a ${server}`,

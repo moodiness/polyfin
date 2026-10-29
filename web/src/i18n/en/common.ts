@@ -321,6 +321,8 @@ const common = {
       'The update tool address must be a web address starting with http:// or https://, without a user name or a fragment.',
     invalid_update_tool_token:
       'The update tool token holds no spaces, and 1024 characters at most.',
+    invalid_provider:
+      'Check the identity provider: its issuer is a web address starting with http:// or https://, without a query or a fragment; the client ID, the secret and the claims hold no spaces; a claim names the user.',
     restart_unconfirmed:
       'Polyfin cannot tell whether something starts it again: confirm the warning first.',
     no_update: 'Polyfin Desktop offers no such update now.',

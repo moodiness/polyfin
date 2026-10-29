@@ -35,6 +35,9 @@ const users: typeof en = {
     isDisabled: 'Desactivado',
     isDisabledHelp:
       'Un usuario desactivado no puede iniciar sesión y se cierra la sesión en todos sus dispositivos.',
+    providerOnly: 'Solo el proveedor de identidad',
+    providerOnlyHelp:
+      'El usuario inicia sesión con el proveedor de identidad configurado en Ajustes › Seguridad, nunca con una contraseña: la contraseña se rechaza, y una cuenta creada así no necesita ninguna. Las aplicaciones de Jellyfin que no pueden abrir el proveedor inician sesión con Quick Connect.',
     ended: 'Finalizada',
     endsOn: (date: string) => `Finaliza el ${date}`,
     endedOn: (date: string) => `Finalizó el ${date}`,

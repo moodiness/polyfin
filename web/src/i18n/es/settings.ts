@@ -681,6 +681,40 @@ const settings: typeof en = {
     knownProxies: 'Proxies conocidos',
     knownProxiesHelp: (r: RangeText) =>
       `Los proxies inversos situados delante de Polyfin, uno por línea: una dirección IP, una red como 172.18.0.0/16 o un nombre de host como el nombre de un contenedor en una red Docker (traefik), hasta ${r.max}. Un nombre se resuelve cada minuto y se confía en cada dirección a la que apunte, así que indique solo nombres que resuelva su propia red. Una solicitud de uno de ellos se atribuye al cliente que indique su cabecera X-Forwarded-For o X-Real-IP: esa dirección limita los inicios de sesión fallidos, aparece en los dispositivos e identifica la red local. Las cabeceras reenviadas desde cualquier otra dirección se ignoran. Déjelo vacío si no hay nada delante de Polyfin.`,
+    provider: {
+      title: 'Proveedor de identidad',
+      intro:
+        'Las personas pueden iniciar sesión en esta aplicación de administración y en el reproductor web con un proveedor OpenID Connect, que pide entonces su propio inicio de sesión en dos pasos: Polyfin no vuelve a pedir el código. Las aplicaciones de Jellyfin que no pueden abrir el proveedor inician sesión con Quick Connect, aprobado desde una sesión abierta con él. Registre Polyfin en el proveedor como cliente confidencial, o como cliente público sin secreto, con el URI de redirección de abajo.',
+      redirectUri: 'URI de redirección',
+      redirectUriHelp:
+        'La dirección a la que el proveedor devuelve los navegadores, construida a partir de la dirección pública. Regístrela en el proveedor tal como aparece.',
+      noPublicAddress:
+        'Indique primero la dirección pública en Ajustes › Notificaciones: el inicio de sesión empieza y termina allí, y el proveedor devuelve los navegadores a ella.',
+      issuer: 'Emisor',
+      issuerHelp:
+        'El emisor (issuer) del proveedor, tal como lo da su documento de descubrimiento, como https://id.example.org o https://id.example.org/realms/home. Polyfin lee su /.well-known/openid-configuration. Vacío desactiva el inicio de sesión.',
+      name: 'Nombre del botón',
+      nameHelp:
+        'Lo que dicen los botones de inicio de sesión después de «Iniciar sesión con». Vacío muestra el nombre de host del emisor.',
+      clientId: 'ID de cliente',
+      clientIdHelp:
+        'El ID que el proveedor dio al cliente de Polyfin. Vacío desactiva el inicio de sesión.',
+      clientSecret: 'Secreto de cliente',
+      clientSecretHelp:
+        'El secreto de un cliente confidencial; déjelo vacío para un cliente público. Se guarda cifrado con POLYFIN_SECRET_KEY y no se vuelve a mostrar.',
+      userClaim: 'Claim que nombra al usuario',
+      userClaimHelp:
+        'El claim del token de ID que se compara con los nombres de las cuentas, sin distinguir mayúsculas, la primera vez que alguien inicia sesión: preferred_username por defecto. Después viene el correo verificado. Los inicios de sesión posteriores encuentran la misma cuenta diga lo que diga el claim.',
+      createAccounts: 'Crear cuentas',
+      createAccountsHelp:
+        'Quien no corresponde a ninguna cuenta recibe una, con el nombre del claim, si no del correo, con los permisos de una cuenta nueva, que inicia sesión solo con el proveedor. Desactivado, se rechaza. Desactivado por defecto.',
+      adminClaim: 'Claim de los administradores',
+      adminClaimHelp:
+        'El claim que enumera los grupos o roles de una persona, como groups. Con un valor abajo, quien lo tenga en su claim se convierte en administrador al iniciar sesión. Polyfin pide el scope groups cuando el claim es groups y el proveedor lo ofrece.',
+      adminValue: 'Valor de los administradores',
+      adminValueHelp:
+        'El grupo o rol que hace administradores, como polyfin-admins. Dejarlo después no vuelve a hacer miembro a un administrador: cámbielo en la página Usuarios.',
+    },
     https: {
       title: 'HTTPS',
       intro:

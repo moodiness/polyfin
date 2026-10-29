@@ -40,6 +40,17 @@ const auth: typeof en = {
       'Administratoren müssen auf diesem Server die zweistufige Anmeldung verwenden. Füge dein Konto zu einer Authenticator-App auf deinem Handy hinzu und gib dann den angezeigten Code ein.',
     recoveryTitle: 'Bewahre deine Wiederherstellungscodes auf',
     continue: 'Weiter',
+    providerSignIn: (name: string) => `Mit ${name} anmelden`,
+    providerOutcomes: {
+      provider_refused: 'Die Anmeldung beim Identitätsanbieter wurde abgebrochen.',
+      provider_no_account:
+        'Kein Konto dieses Servers passt zu deinem Konto beim Identitätsanbieter.',
+      account_disabled: 'Dieses Konto ist deaktiviert.',
+      outside_allowed_hours: 'Dieses Konto darf sich zu dieser Zeit nicht anmelden.',
+      too_many_attempts: 'Zu viele Versuche. Versuche es später erneut.',
+      provider_failed:
+        'Die Anmeldung beim Identitätsanbieter ist fehlgeschlagen. Versuche es erneut.',
+    },
   },
   invite: {
     title: (server: string) => `${server} beitreten`,

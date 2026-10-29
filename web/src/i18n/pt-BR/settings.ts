@@ -677,6 +677,39 @@ const settings: typeof en = {
     knownProxies: 'Proxies conhecidos',
     knownProxiesHelp: (r: RangeText) =>
       `Os proxies reversos na frente do Polyfin, um por linha: um endereço IP, uma rede como 172.18.0.0/16 ou um nome de host como o nome de um contêiner em uma rede Docker (traefik), até ${r.max}. Um nome é resolvido a cada minuto e cada endereço para o qual ele resolve é considerado confiável, então liste apenas nomes que a sua própria rede resolve. Uma solicitação vinda de um deles vem do cliente indicado no cabeçalho X-Forwarded-For ou X-Real-IP: é esse endereço que limita as falhas de login, aparece nos dispositivos e indica a rede local. Cabeçalhos encaminhados de qualquer outro endereço são ignorados. Deixe vazio quando nada estiver na frente do Polyfin.`,
+    provider: {
+      title: 'Provedor de identidade',
+      intro:
+        'As pessoas podem entrar neste aplicativo de administração e no player web com um provedor OpenID Connect, que então pede o próprio login em duas etapas: o Polyfin não pede o código de novo. Os aplicativos Jellyfin que não conseguem abrir o provedor entram com o Quick Connect, aprovado a partir de uma sessão aberta por ele. Registre o Polyfin no provedor como cliente confidencial, ou público sem segredo, com o URI de redirecionamento abaixo.',
+      redirectUri: 'URI de redirecionamento',
+      redirectUriHelp:
+        'O endereço para o qual o provedor devolve os navegadores, montado a partir do endereço público. Registre-o no provedor exatamente assim.',
+      noPublicAddress:
+        'Defina primeiro o endereço público em Configurações › Notificações: o login começa e termina lá, e o provedor devolve os navegadores para ele.',
+      issuer: 'Emissor',
+      issuerHelp:
+        'O emissor (issuer) do provedor, exatamente como o documento de descoberta o informa, como https://id.example.org ou https://id.example.org/realms/home. O Polyfin lê o /.well-known/openid-configuration dele. Vazio desativa o login.',
+      name: 'Nome do botão',
+      nameHelp:
+        'O que os botões de login dizem depois de “Entrar com”. Vazio mostra o nome de host do emissor.',
+      clientId: 'ID do cliente',
+      clientIdHelp: 'O ID que o provedor deu ao cliente do Polyfin. Vazio desativa o login.',
+      clientSecret: 'Segredo do cliente',
+      clientSecretHelp:
+        'O segredo de um cliente confidencial; deixe vazio para um cliente público. Ele é guardado criptografado com POLYFIN_SECRET_KEY e nunca mais é exibido.',
+      userClaim: 'Claim que nomeia o usuário',
+      userClaimHelp:
+        'O claim do token de ID comparado com os nomes das contas, sem diferenciar maiúsculas, na primeira vez que alguém entra: preferred_username por padrão. Depois vem o e-mail verificado. Os logins seguintes encontram a mesma conta, diga o que disser o claim.',
+      createAccounts: 'Criar contas',
+      createAccountsHelp:
+        'Quem não corresponde a nenhuma conta recebe uma, com o nome do claim, senão do e-mail, com as permissões de uma conta nova, que entra apenas pelo provedor. Desativado, a pessoa é recusada. Desativado por padrão.',
+      adminClaim: 'Claim dos administradores',
+      adminClaimHelp:
+        'O claim que lista os grupos ou funções de uma pessoa, como groups. Com um valor abaixo, quem o tiver no claim vira administrador ao entrar. O Polyfin pede o scope groups quando o claim é groups e o provedor o oferece.',
+      adminValue: 'Valor dos administradores',
+      adminValueHelp:
+        'O grupo ou função que faz administradores, como polyfin-admins. Sair dele depois não torna um administrador membro de novo: mude isso na página Usuários.',
+    },
     https: {
       title: 'HTTPS',
       intro:

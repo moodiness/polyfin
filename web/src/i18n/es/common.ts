@@ -347,6 +347,8 @@ const common: typeof en = {
       'La dirección de la herramienta de actualización debe ser una dirección web que empiece por http:// o https://, sin nombre de usuario ni fragmento.',
     invalid_update_tool_token:
       'El token de la herramienta de actualización no lleva espacios y tiene 1024 caracteres como máximo.',
+    invalid_provider:
+      'Revise el proveedor de identidad: su emisor es una dirección web que empieza por http:// o https://, sin consulta ni fragmento; el ID de cliente, el secreto y los claims no llevan espacios; un claim nombra al usuario.',
     restart_unconfirmed: 'Polyfin no sabe si algo lo vuelve a iniciar: confirme antes el aviso.',
     no_update: 'Polyfin Desktop no ofrece esa actualización ahora.',
     not_desktop: 'Polyfin no se ejecuta en Polyfin Desktop.',

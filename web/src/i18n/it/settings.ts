@@ -686,6 +686,39 @@ const settings: typeof en = {
     knownProxies: 'Proxy conosciuti',
     knownProxiesHelp: (r: RangeText) =>
       `I reverse proxy davanti a Polyfin, uno per riga: un indirizzo IP, una rete come 172.18.0.0/16 o un nome host come il nome di un container su una rete Docker (traefik), fino a ${r.max}. Un nome viene risolto ogni minuto e ogni indirizzo a cui corrisponde è considerato attendibile, quindi elenca solo nomi risolti dalla tua rete. Una richiesta da uno di essi proviene dal client indicato dalla sua intestazione X-Forwarded-For o X-Real-IP: è quell’indirizzo che limita gli accessi non riusciti, compare nei dispositivi e determina la rete locale. Le intestazioni inoltrate da qualsiasi altro indirizzo vengono ignorate. Lascia vuoto se davanti a Polyfin non c’è nulla.`,
+    provider: {
+      title: 'Provider di identità',
+      intro:
+        'Le persone possono accedere a questa applicazione di amministrazione e al lettore web con un provider OpenID Connect, che chiede allora il proprio accesso in due passaggi: Polyfin non chiede di nuovo il codice. Le applicazioni Jellyfin che non possono aprire il provider accedono con Quick Connect, approvato da una sessione aperta con esso. Registra Polyfin presso il provider come client confidenziale, o pubblico senza segreto, con l’URI di reindirizzamento qui sotto.',
+      redirectUri: 'URI di reindirizzamento',
+      redirectUriHelp:
+        'L’indirizzo a cui il provider rimanda i browser, costruito dall’indirizzo pubblico. Registralo presso il provider esattamente così.',
+      noPublicAddress:
+        'Imposta prima l’indirizzo pubblico in Impostazioni › Notifiche: l’accesso inizia e finisce lì, e il provider vi rimanda i browser.',
+      issuer: 'Emittente',
+      issuerHelp:
+        'L’emittente (issuer) del provider, esattamente come lo dà il suo documento di discovery, come https://id.example.org o https://id.example.org/realms/home. Polyfin legge il suo /.well-known/openid-configuration. Vuoto disattiva l’accesso.',
+      name: 'Nome del pulsante',
+      nameHelp:
+        'Ciò che i pulsanti di accesso mostrano dopo «Accedi con». Vuoto mostra il nome host dell’emittente.',
+      clientId: 'ID client',
+      clientIdHelp: 'L’ID che il provider ha dato al client di Polyfin. Vuoto disattiva l’accesso.',
+      clientSecret: 'Segreto client',
+      clientSecretHelp:
+        'Il segreto di un client confidenziale; lascialo vuoto per un client pubblico. È conservato cifrato con POLYFIN_SECRET_KEY e non viene più mostrato.',
+      userClaim: 'Claim che nomina l’utente',
+      userClaimHelp:
+        'Il claim del token ID confrontato con i nomi degli account, senza distinguere maiuscole e minuscole, la prima volta che qualcuno accede: preferred_username per impostazione predefinita. Poi viene l’email verificata. Gli accessi successivi trovano lo stesso account qualunque cosa dica il claim.',
+      createAccounts: 'Crea gli account',
+      createAccountsHelp:
+        'Chi non corrisponde a nessun account ne riceve uno, con il nome del claim, altrimenti dell’email, con i permessi di un nuovo account, che accede solo tramite il provider. Disattivato, viene rifiutato. Disattivato per impostazione predefinita.',
+      adminClaim: 'Claim degli amministratori',
+      adminClaimHelp:
+        'Il claim che elenca i gruppi o i ruoli di una persona, come groups. Con un valore qui sotto, chi lo ha nel claim diventa amministratore all’accesso. Polyfin chiede lo scope groups quando il claim è groups e il provider lo offre.',
+      adminValue: 'Valore degli amministratori',
+      adminValueHelp:
+        'Il gruppo o ruolo che rende amministratori, come polyfin-admins. Lasciarlo in seguito non rende di nuovo membro un amministratore: cambialo nella pagina Utenti.',
+    },
     https: {
       title: 'HTTPS',
       intro:

@@ -35,6 +35,9 @@ const users: typeof en = {
     isDisabled: 'Disabilitato',
     isDisabledHelp:
       'Un utente disabilitato non può accedere e tutti i suoi dispositivi vengono disconnessi.',
+    providerOnly: 'Solo provider di identità',
+    providerOnlyHelp:
+      'L’utente accede con il provider di identità configurato in Impostazioni › Sicurezza, mai con una password: la password viene rifiutata, e un account creato così non ne ha bisogno. Le applicazioni Jellyfin che non possono aprire il provider accedono con Quick Connect.',
     ended: 'Scaduto',
     endsOn: (date: string) => `Scade il ${date}`,
     endedOn: (date: string) => `Scaduto il ${date}`,

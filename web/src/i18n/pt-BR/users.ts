@@ -33,6 +33,9 @@ const users: typeof en = {
     isDisabled: 'Desativado',
     isDisabledHelp:
       'Um usuário desativado não consegue entrar, e todos os seus dispositivos são desconectados.',
+    providerOnly: 'Somente provedor de identidade',
+    providerOnlyHelp:
+      'O usuário entra pelo provedor de identidade configurado em Configurações › Segurança, nunca com uma senha: a senha é recusada, e uma conta criada assim não precisa de uma. Os aplicativos Jellyfin que não conseguem abrir o provedor entram com o Quick Connect.',
     ended: 'Encerrada',
     endsOn: (date: string) => `Encerra em ${date}`,
     endedOn: (date: string) => `Encerrada em ${date}`,

@@ -16,6 +16,11 @@ export type Status = {
   webClient?: boolean
   /** Where the server runs, which names its local folders; absent from servers without it. */
   system?: ServerSystem
+  /**
+   * The identity provider the sign-in pages offer: the name its button shows, and the address, at
+   * the server's public address, that starts its sign-in, ?app=admin added. Null without one.
+   */
+  provider?: { name: string; start: string } | null
 }
 
 /** Where the server runs: in a container, as the Docker image does, else on its computer's system. */
@@ -107,6 +112,8 @@ export type User = {
   metadataLanguage: string
   /** Whether the user signs in with a code from an authenticator app after their password. */
   twoStep: boolean
+  /** Whether the user signs in through the identity provider only, their password refused. */
+  providerOnly: boolean
 }
 
 /** The fields of a user a group holds, in its sections: Access, Playback and access, and the rest. */
@@ -654,6 +661,26 @@ export type Settings = {
   interfaceRoutes: boolean
   /** Whether Silo's apps may sign in and play through Silo's API under /api/v2. */
   siloApps: boolean
+  /**
+   * The OpenID Connect provider people may sign in with: its issuer, the name its button shows
+   * (empty for the issuer's host), and the server's client at it. The client secret is never sent
+   * back: providerClientSecretSet tells whether one is saved; providerClientSecret, sent only to
+   * replace it, empty to remove it. providerUserClaim names the claim compared with account names,
+   * the verified email after it; providerCreateAccounts creates an account for someone none
+   * matches; providerAdminClaim and providerAdminValue, both set, make administrators.
+   * providerRedirectUri is the address to register at the provider, empty without a public
+   * address (read-only).
+   */
+  providerIssuer: string
+  providerName: string
+  providerClientId: string
+  providerClientSecretSet: boolean
+  providerClientSecret?: string
+  providerUserClaim: string
+  providerCreateAccounts: boolean
+  providerAdminClaim: string
+  providerAdminValue: string
+  providerRedirectUri: string
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
@@ -731,6 +758,8 @@ export type NewUser = {
   isHidden: boolean
   /** The group the account joins and follows; absent or null for none. */
   groupId?: string | null
+  /** Whether the account signs in through the identity provider only; it then needs no password. */
+  providerOnly?: boolean
 }
 
 export type UserPatch = Partial<{
@@ -765,6 +794,8 @@ export type UserPatch = Partial<{
   followGroup: boolean
   /** One of the languages the server's addons were given, or '' for the server's. */
   metadataLanguage: string
+  /** Whether the user signs in through the identity provider only, their password refused. */
+  providerOnly: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */

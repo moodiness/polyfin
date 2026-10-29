@@ -345,6 +345,8 @@ const common: typeof en = {
       'L’adresse de l’outil de mise à jour doit être une adresse web commençant par http:// ou https://, sans nom d’utilisateur ni fragment.',
     invalid_update_tool_token:
       'Le jeton de l’outil de mise à jour ne contient pas d’espace, et 1024 caractères au plus.',
+    invalid_provider:
+      'Vérifiez le fournisseur d’identité : son émetteur est une adresse web commençant par http:// ou https://, sans requête ni fragment ; l’ID client, le secret et les claims ne contiennent pas d’espace ; un claim nomme l’utilisateur.',
     restart_unconfirmed:
       'Polyfin ne sait pas si quelque chose le relance : confirmez d’abord l’avertissement.',
     no_update: 'Polyfin Desktop ne propose pas cette mise à jour pour le moment.',

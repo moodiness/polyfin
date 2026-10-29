@@ -39,6 +39,17 @@ const auth: typeof en = {
       'Los administradores deben usar el inicio de sesión en dos pasos en este servidor. Añada su cuenta a una aplicación de autenticación en su teléfono y, a continuación, introduzca el código que muestre.',
     recoveryTitle: 'Guarde sus códigos de recuperación',
     continue: 'Continuar',
+    providerSignIn: (name: string) => `Iniciar sesión con ${name}`,
+    providerOutcomes: {
+      provider_refused: 'Se canceló el inicio de sesión con el proveedor de identidad.',
+      provider_no_account:
+        'Ninguna cuenta de este servidor corresponde a su cuenta del proveedor de identidad.',
+      account_disabled: 'Esta cuenta está desactivada.',
+      outside_allowed_hours: 'Esta cuenta no puede iniciar sesión a esta hora.',
+      too_many_attempts: 'Demasiados intentos. Vuelva a intentarlo más tarde.',
+      provider_failed:
+        'El inicio de sesión con el proveedor de identidad falló. Vuelva a intentarlo.',
+    },
   },
   invite: {
     title: (server: string) => `Unirse a ${server}`,

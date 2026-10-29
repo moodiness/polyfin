@@ -39,6 +39,16 @@ const auth: typeof en = {
       'Les administrateurs doivent utiliser la connexion en deux étapes sur ce serveur. Ajoutez votre compte à une application d’authentification sur votre téléphone, puis saisissez le code qu’elle affiche.',
     recoveryTitle: 'Gardez vos codes de secours',
     continue: 'Continuer',
+    providerSignIn: (name: string) => `Se connecter avec ${name}`,
+    providerOutcomes: {
+      provider_refused: 'La connexion avec le fournisseur d’identité a été annulée.',
+      provider_no_account:
+        'Aucun compte de ce serveur ne correspond à votre compte chez le fournisseur d’identité.',
+      account_disabled: 'Ce compte est désactivé.',
+      outside_allowed_hours: 'Ce compte ne peut pas se connecter à cette heure.',
+      too_many_attempts: 'Trop de tentatives. Réessayez plus tard.',
+      provider_failed: 'La connexion avec le fournisseur d’identité a échoué. Réessayez.',
+    },
   },
   invite: {
     title: (server: string) => `Rejoindre ${server}`,

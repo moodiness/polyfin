@@ -31,6 +31,9 @@ const users = {
     accessTitle: 'Access',
     isDisabled: 'Disabled',
     isDisabledHelp: 'A disabled user cannot sign in, and all their devices are signed out.',
+    providerOnly: 'Identity provider only',
+    providerOnlyHelp:
+      'The user signs in through the identity provider set up under Settings › Security, never with a password: the password is refused, and an account created so needs none. Jellyfin apps that cannot open the provider sign in with Quick Connect.',
     ended: 'Ended',
     endsOn: (date: string) => `Ends on ${date}`,
     endedOn: (date: string) => `Ended on ${date}`,

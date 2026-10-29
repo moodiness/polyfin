@@ -39,6 +39,16 @@ const auth: typeof en = {
       'Os administradores devem usar o login em duas etapas neste servidor. Adicione sua conta a um aplicativo autenticador no seu celular e digite o código que ele mostrar.',
     recoveryTitle: 'Guarde seus códigos de recuperação',
     continue: 'Continuar',
+    providerSignIn: (name: string) => `Entrar com ${name}`,
+    providerOutcomes: {
+      provider_refused: 'O login com o provedor de identidade foi cancelado.',
+      provider_no_account:
+        'Nenhuma conta deste servidor corresponde à sua conta no provedor de identidade.',
+      account_disabled: 'Esta conta está desativada.',
+      outside_allowed_hours: 'Esta conta não pode entrar neste horário.',
+      too_many_attempts: 'Tentativas demais. Tente novamente mais tarde.',
+      provider_failed: 'O login com o provedor de identidade falhou. Tente novamente.',
+    },
   },
   invite: {
     title: (server: string) => `Entrar em ${server}`,

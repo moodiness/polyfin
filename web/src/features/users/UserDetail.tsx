@@ -570,6 +570,13 @@ function AccessPanel({ user }: { user: User }) {
             disabled={access.isPending}
             onChange={(isDisabled) => change({ isDisabled })}
           />
+          <SwitchRow
+            title={t.users.providerOnly}
+            help={t.users.providerOnlyHelp}
+            checked={user.providerOnly}
+            disabled={access.isPending}
+            onChange={(providerOnly) => change({ providerOnly })}
+          />
           <EndRow
             key={user.endsOn ?? ''}
             user={user}

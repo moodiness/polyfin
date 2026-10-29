@@ -35,6 +35,9 @@ const users: typeof en = {
     isDisabled: 'Désactivé',
     isDisabledHelp:
       'Un utilisateur désactivé ne peut plus se connecter, et tous ses appareils sont déconnectés.',
+    providerOnly: 'Fournisseur d’identité uniquement',
+    providerOnlyHelp:
+      'L’utilisateur se connecte avec le fournisseur d’identité configuré dans Paramètres › Sécurité, jamais avec un mot de passe : le mot de passe est refusé, et un compte créé ainsi n’en a pas besoin. Les applications Jellyfin qui ne peuvent pas ouvrir le fournisseur se connectent avec Quick Connect.',
     ended: 'Terminé',
     endsOn: (date: string) => `Prend fin le ${date}`,
     endedOn: (date: string) => `A pris fin le ${date}`,

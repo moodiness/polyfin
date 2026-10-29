@@ -34,6 +34,9 @@ const users: typeof en = {
     isDisabled: 'Deaktiviert',
     isDisabledHelp:
       'Ein deaktivierter Benutzer kann sich nicht anmelden, und alle seine Geräte werden abgemeldet.',
+    providerOnly: 'Nur Identitätsanbieter',
+    providerOnlyHelp:
+      'Der Benutzer meldet sich über den unter Einstellungen › Sicherheit eingerichteten Identitätsanbieter an, nie mit einem Passwort: Das Passwort wird abgelehnt, und ein so erstelltes Konto braucht keines. Jellyfin-Apps, die den Anbieter nicht öffnen können, melden sich mit Quick Connect an.',
     ended: 'Beendet',
     endsOn: (date: string) => `Endet am ${date}`,
     endedOn: (date: string) => `Beendet am ${date}`,

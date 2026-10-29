@@ -667,6 +667,40 @@ const settings = {
     knownProxies: 'Known proxies',
     knownProxiesHelp: (r: RangeText) =>
       `The reverse proxies in front of Polyfin, one a line: an IP address, a network such as 172.18.0.0/16, or a host name such as a container’s name on a Docker network (traefik), up to ${r.max}. A name is looked up every minute and each address it resolves to is trusted, so list only names your own network resolves. A request from one of them comes from the client its X-Forwarded-For or X-Real-IP header names: that address limits failed sign-ins, shows on devices and tells the local network. Forwarded headers from any other address are ignored. Leave it empty when nothing stands in front of Polyfin.`,
+    /** Settings › Security › Identity provider: signing in through an OpenID Connect provider. */
+    provider: {
+      title: 'Identity provider',
+      intro:
+        'People can sign in to this admin app and to the web player with an OpenID Connect provider, which then asks for its own two-step sign-in: Polyfin does not ask for its code again. Jellyfin apps that cannot open the provider sign in with Quick Connect, approved from a session opened through it. Register Polyfin at the provider as a confidential client, or a public one without a secret, using the redirect URI below.',
+      redirectUri: 'Redirect URI',
+      redirectUriHelp:
+        'The address the provider sends browsers back to, built from the public address. Register it at the provider exactly as shown.',
+      noPublicAddress:
+        'Set the public address under Settings › Notifications first: the sign-in starts and ends there, and the provider sends browsers back to it.',
+      issuer: 'Issuer',
+      issuerHelp:
+        'The provider’s issuer, exactly as its discovery document gives it, such as https://id.example.org or https://id.example.org/realms/home. Polyfin reads its /.well-known/openid-configuration. Empty turns the sign-in off.',
+      name: 'Button name',
+      nameHelp:
+        'What the sign-in buttons say after “Sign in with”. Empty shows the issuer’s host name.',
+      clientId: 'Client ID',
+      clientIdHelp: 'The ID the provider gave Polyfin’s client. Empty turns the sign-in off.',
+      clientSecret: 'Client secret',
+      clientSecretHelp:
+        'The secret of a confidential client; leave it empty for a public client. It is kept encrypted with POLYFIN_SECRET_KEY and never shown again.',
+      userClaim: 'Claim naming the user',
+      userClaimHelp:
+        'The claim of the ID token compared with account names, without regard to case, the first time someone signs in: preferred_username by default. The verified email comes next. Later sign-ins find the same account whatever the claim says.',
+      createAccounts: 'Create accounts',
+      createAccountsHelp:
+        'Someone no account matches gets one, named after the claim, else the email, with the permissions of a new account, signing in through the provider only. Off, they are refused. Off by default.',
+      adminClaim: 'Administrators’ claim',
+      adminClaimHelp:
+        'The claim listing someone’s groups or roles, such as groups. With a value below, someone whose claim holds it becomes an administrator as they sign in. Polyfin asks for the groups scope when the claim is groups and the provider offers it.',
+      adminValue: 'Administrators’ value',
+      adminValueHelp:
+        'The group or role that makes administrators, such as polyfin-admins. Leaving it later does not make an administrator a member again: change that on the Users page.',
+    },
     https: {
       title: 'HTTPS',
       intro:

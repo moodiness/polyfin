@@ -676,6 +676,40 @@ const settings: typeof en = {
     knownProxies: 'Bekannte Proxys',
     knownProxiesHelp: (r: RangeText) =>
       `Die Reverse-Proxys vor Polyfin, einer pro Zeile: eine IP-Adresse, ein Netzwerk wie 172.18.0.0/16 oder ein Hostname wie der Name eines Containers in einem Docker-Netzwerk (traefik), bis zu ${r.max}. Ein Name wird jede Minute aufgelöst und jeder Adresse, zu der er auflöst, wird vertraut, also trage nur Namen ein, die dein eigenes Netzwerk auflöst. Eine Anfrage von einem davon stammt von dem Client, den ihr X-Forwarded-For- oder X-Real-IP-Header nennt: Diese Adresse begrenzt fehlgeschlagene Anmeldungen, wird bei Geräten angezeigt und bestimmt das lokale Netzwerk. Weitergeleitete Header von jeder anderen Adresse werden ignoriert. Lass das Feld leer, wenn nichts vor Polyfin steht.`,
+    provider: {
+      title: 'Identitätsanbieter',
+      intro:
+        'Benutzer können sich bei dieser Admin-App und beim Web-Player über einen OpenID-Connect-Anbieter anmelden, der dann seine eigene zweistufige Anmeldung verlangt: Polyfin fragt nicht noch einmal nach dem Code. Jellyfin-Apps, die den Anbieter nicht öffnen können, melden sich mit Quick Connect an, bestätigt aus einer über ihn geöffneten Sitzung. Registriere Polyfin beim Anbieter als vertraulichen Client oder als öffentlichen ohne Geheimnis, mit der Weiterleitungs-URI unten.',
+      redirectUri: 'Weiterleitungs-URI',
+      redirectUriHelp:
+        'Die Adresse, zu der der Anbieter Browser zurückschickt, gebildet aus der öffentlichen Adresse. Registriere sie beim Anbieter genau so.',
+      noPublicAddress:
+        'Lege zuerst die öffentliche Adresse unter Einstellungen › Benachrichtigungen fest: Die Anmeldung beginnt und endet dort, und der Anbieter schickt Browser dorthin zurück.',
+      issuer: 'Aussteller',
+      issuerHelp:
+        'Der Aussteller (Issuer) des Anbieters, genau wie in seinem Discovery-Dokument, etwa https://id.example.org oder https://id.example.org/realms/home. Polyfin liest seine /.well-known/openid-configuration. Leer schaltet die Anmeldung aus.',
+      name: 'Name der Schaltfläche',
+      nameHelp:
+        'Was die Anmeldeschaltflächen nach „Mit“ anzeigen. Leer zeigt den Hostnamen des Ausstellers.',
+      clientId: 'Client-ID',
+      clientIdHelp:
+        'Die ID, die der Anbieter Polyfins Client gab. Leer schaltet die Anmeldung aus.',
+      clientSecret: 'Client-Geheimnis',
+      clientSecretHelp:
+        'Das Geheimnis eines vertraulichen Clients; leer lassen für einen öffentlichen Client. Es wird mit POLYFIN_SECRET_KEY verschlüsselt gespeichert und nie wieder angezeigt.',
+      userClaim: 'Claim mit dem Benutzernamen',
+      userClaimHelp:
+        'Der Claim des ID-Tokens, der bei der ersten Anmeldung ohne Rücksicht auf Groß- und Kleinschreibung mit den Kontonamen verglichen wird: standardmäßig preferred_username. Danach kommt die bestätigte E-Mail-Adresse. Spätere Anmeldungen finden dasselbe Konto, egal was der Claim dann sagt.',
+      createAccounts: 'Konten erstellen',
+      createAccountsHelp:
+        'Wer zu keinem Konto passt, bekommt eines, benannt nach dem Claim, sonst nach der E-Mail-Adresse, mit den Berechtigungen eines neuen Kontos, das sich nur über den Anbieter anmeldet. Aus, wird die Person abgewiesen. Standardmäßig aus.',
+      adminClaim: 'Claim der Administratoren',
+      adminClaimHelp:
+        'Der Claim mit den Gruppen oder Rollen einer Person, etwa groups. Mit einem Wert darunter wird, wessen Claim ihn enthält, bei der Anmeldung Administrator. Polyfin fragt nach dem Scope groups, wenn der Claim groups ist und der Anbieter ihn anbietet.',
+      adminValue: 'Wert der Administratoren',
+      adminValueHelp:
+        'Die Gruppe oder Rolle, die Administratoren macht, etwa polyfin-admins. Sie später zu verlassen macht einen Administrator nicht wieder zum Mitglied: Ändere das auf der Seite Benutzer.',
+    },
     https: {
       title: 'HTTPS',
       intro:
