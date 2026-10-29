@@ -637,8 +637,10 @@ func readSome(t *testing.T, r *feedReader, n int) []byte {
 }
 
 // A reader joining a running feed starts with the stream's PAT and PMT,
-// then its first keyframe within feedJoin; the first reader of a new feed
-// starts at its first keyframe, even once more came. What it reads decodes from its first bytes, with
+// then the oldest keyframe the feed keeps within feedLookback of the
+// latest, feedSlack short of being overwritten, which is further back than
+// feedJoin; the first reader of a new feed starts at its first keyframe,
+// even once more came. What it reads decodes from its first bytes, with
 // FFmpeg's short probe.
 func TestReadersStartAtAKeyframe(t *testing.T) {
 	data := generatedTS(t, "libx264", true)
@@ -646,10 +648,10 @@ func TestReadersStartAtAKeyframe(t *testing.T) {
 	f := feedOf(data, 0)
 	r := f.join(t.Context(), accounts.ID{1})
 	head := readSome(t, r, 3*tsPacket)
-	// The first keyframe within feedJoin of the end.
-	want := keys[slices.IndexFunc(keys, func(at int64) bool { return at >= int64(len(data))-feedJoin })]
-	if want == keys[0] {
-		t.Fatalf("the generated stream is too short: %d bytes", len(data))
+	// The oldest keyframe kept, feedSlack away from being overwritten.
+	want := keys[slices.IndexFunc(keys, func(at int64) bool { return at >= int64(len(data))-feedBuffer+feedSlack })]
+	if joined := keys[slices.IndexFunc(keys, func(at int64) bool { return at >= int64(len(data))-feedJoin })]; want >= joined {
+		t.Fatalf("the generated stream keeps no keyframe before feedJoin: %d bytes", len(data))
 	}
 	if tsPID(head, 0) != 0 || tsPID(head, tsPacket) != f.index.pmtPID || !bytes.Equal(head[2*tsPacket:], data[want:want+tsPacket]) {
 		t.Fatalf("a joining reader starts with PIDs %d, %d, then %x, want 0, %d, then the keyframe at %d", tsPID(head, 0),

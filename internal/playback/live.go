@@ -50,8 +50,11 @@ const (
 // tracks are known: a second and a half of probing instead of five, which
 // finds the audio of a stream whose first audio packets come up to a
 // second after its video, as FFmpeg's own MPEG-TS muxer delays them by
-// 0.7 seconds; FFmpeg stops sooner once every track is found.
-var shortProbe = []string{"-probesize", "4000000", "-analyzeduration", "1500000", "-fflags", "+nobuffer"}
+// 0.7 seconds; FFmpeg stops sooner once every track is found. What it
+// probes is kept, not dropped, as the start of the stream it writes: the
+// seconds of a feed's start (see feedReader.place) make the first live
+// playlist's lead at once.
+var shortProbe = []string{"-probesize", "4000000", "-analyzeduration", "1500000"}
 
 // Endless reports whether version streams with no end, as a live stream
 // does, which then plays as a channel's stream plays (see AnalyzeLive): an

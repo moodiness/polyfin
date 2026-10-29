@@ -24,9 +24,15 @@ const (
 	// behind is dropped rather than holding the others back.
 	feedBuffer = 6 << 20
 	// feedJoin is how far back in what it keeps a reader joining a running
-	// feed starts: at the first keyframe since (see tsIndex), or there on a
-	// packet when its keyframes are not known.
+	// feed starts at least: at the first keyframe since (see tsIndex), or
+	// there on a packet when its keyframes are not known.
 	feedJoin = 3 << 20
+	// feedLookback is how far back, in the stream's own time, a reader
+	// joining a running feed may start before feedJoin: at the oldest
+	// keyframe kept within feedLookback of the latest one, as long as
+	// feedSlack of the ring is left before the feed overwrites it.
+	feedLookback = 6 * time.Second
+	feedSlack    = 1 << 20
 	// keyframeWait is how much of an MPEG-TS stream is read for its first
 	// keyframe before readers start without one.
 	keyframeWait = 2 << 20
@@ -345,18 +351,24 @@ func (f *feed) join(ctx context.Context, user accounts.ID) *feedReader {
 	return r
 }
 
-// place sets where a reader starts, f.mu held: an MPEG-TS stream at its
-// first keyframe within feedJoin of where the reader joined, after its PAT
-// and PMT, so that a reader joining at any time, the first included,
-// decodes from its first bytes, and has a few seconds to read at once:
-// FFmpeg cuts its first segment from them without waiting for the
-// stream's next keyframe.
+// place sets where a reader starts, f.mu held: an MPEG-TS stream at a
+// keyframe, after its PAT and PMT, so that a reader joining at any time,
+// the first included, decodes from its first bytes, and has a few seconds
+// to read at once: FFmpeg cuts its first segments from them without
+// waiting for the stream's next keyframes, and the first live playlist
+// has its lead sooner (see hls.Manager.LivePlaylist). The keyframe is the
+// oldest the feed keeps within feedLookback of the latest one, when the
+// stream's times are known, else the first within feedJoin of where the
+// reader joined, whichever comes first.
 // It reports false while the first keyframe is awaited, keyframeWait at
 // most; a stream of no keyframe known starts feedJoin back, on a packet.
 func (r *feedReader) place() bool {
 	f := r.f
 	oldest := max(f.received-int64(len(f.buf)), 0)
 	if at, prefix, ok := f.index.start(oldest, max(r.from-feedJoin, oldest)); ok {
+		if kept, ok := f.index.kept(max(f.received-int64(len(f.buf))+feedSlack, 0)); ok && kept < at {
+			at = kept
+		}
 		r.pos, r.prefix, r.placed = at, prefix, true
 		return true
 	}
@@ -1044,8 +1056,11 @@ type tsIndex struct {
 	// indicated is set once the video's packets mark random access points
 	// with the adaptation field's indicator: NAL units are no longer read.
 	indicated bool
-	// keys are the random access points within the ring, oldest first.
-	keys []int64
+	// keys are the random access points within the ring, oldest first,
+	// and times their presentation times, in 90 kHz units, -1 when their
+	// packet does not tell it.
+	keys  []int64
+	times []int64
 }
 
 func newTSIndex() tsIndex {
@@ -1128,7 +1143,51 @@ func (x *tsIndex) add(at int64, data []byte, oldest int64) {
 	for drop < len(x.keys) && x.keys[drop] < oldest {
 		drop++
 	}
-	x.keys = x.keys[drop:]
+	x.keys, x.times = x.keys[drop:], x.times[drop:]
+}
+
+// kept returns the oldest keyframe at or after from within feedLookback of
+// the latest one, by their presentation times; false when either time is
+// not known, or there is none.
+func (x *tsIndex) kept(from int64) (int64, bool) {
+	if x.off || len(x.keys) == 0 || x.times[len(x.times)-1] < 0 {
+		return 0, false
+	}
+	latest := x.times[len(x.times)-1]
+	lookback := int64(feedLookback / time.Second * ptsClock)
+	for i, at := range x.keys {
+		// Presentation times wrap around at 33 bits.
+		if at >= from && x.times[i] >= 0 && (latest-x.times[i])&ptsWrap <= lookback {
+			return at, true
+		}
+	}
+	return 0, false
+}
+
+// The clock of MPEG-TS presentation times, and the mask of their 33 bits.
+const (
+	ptsClock = 90000
+	ptsWrap  = 1<<33 - 1
+)
+
+// key records a keyframe at position at, its time told by the payload of
+// its packet when it starts a PES.
+func (x *tsIndex) key(at int64, start bool, payload []byte) {
+	pts := int64(-1)
+	if start {
+		pts = pesTime(payload)
+	}
+	x.keys, x.times = append(x.keys, at), append(x.times, pts)
+}
+
+// pesTime returns the presentation time a PES header gives, in 90 kHz
+// units, -1 without one.
+func pesTime(payload []byte) int64 {
+	if len(payload) < 14 || payload[0] != 0 || payload[1] != 0 || payload[2] != 1 || payload[7]&0x80 == 0 {
+		return -1
+	}
+	p := payload[9:14]
+	return int64(p[0]>>1&7)<<30 | int64(p[1])<<22 | int64(p[2]>>1)<<15 | int64(p[3])<<7 | int64(p[4]>>1)
 }
 
 // packet indexes one packet, which starts at position at.
@@ -1136,7 +1195,7 @@ func (x *tsIndex) packet(at int64, p []byte) {
 	if p[0] != 0x47 {
 		// Lost packet boundaries: readers start as if no keyframe were known.
 		x.off = true
-		x.keys = nil
+		x.keys, x.times = nil, nil
 		return
 	}
 	pid := int(p[1]&0x1f)<<8 | int(p[2])
@@ -1159,11 +1218,11 @@ func (x *tsIndex) packet(at int64, p []byte) {
 	case pid == x.video && x.video >= 0:
 		if adaptation := p[3]&0x20 != 0; adaptation && p[4] > 0 && p[5]&0x40 != 0 {
 			x.indicated = true
-			x.keys = append(x.keys, at)
+			x.key(at, start, payload)
 			return
 		}
 		if start && !x.indicated && pesKeyframe(payload, x.videoType) {
-			x.keys = append(x.keys, at)
+			x.key(at, start, payload)
 		}
 	}
 }
