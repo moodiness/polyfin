@@ -462,12 +462,12 @@ for (const name of scenarios) {
     }
     now = until
   }
-  // The observer of the body's children; the one of its whole subtree
-  // follows the menus.
-  let observer = null
+  // The observers of the body's children, every block's that follows
+  // them; the one of its whole subtree follows the menus.
+  const observers = []
   class MutationObserver {
     constructor(callback) { this.callback = callback }
-    observe(target, options) { if (target !== body) throw new Error('not the body'); if (!options.subtree) observer = this }
+    observe(target, options) { if (target !== body) throw new Error('not the body'); if (!options.subtree) observers.push(this) }
     disconnect() {}
   }
   // A dialog as jellyfin-web's dialog helper adds it: a container after
@@ -485,7 +485,7 @@ for (const name of scenarios) {
     inner.querySelectorAll = (s) => (s === '.btnOption' ? list : [])
     return container
   }
-  const add = (container) => observer && observer.callback([{ addedNodes: [container.backdrop] }, { addedNodes: [container] }])
+  const add = (container) => observers.forEach((observer) => observer.callback([{ addedNodes: [container.backdrop] }, { addedNodes: [container] }]))
   // jellyfin-web opens a dialog with an animation.
   const open = (container) => { timers.push({ at: now + 150, run: () => { container.inner.opened = true } }) }
   const body = {}
@@ -2457,10 +2457,10 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
     let now = 0
     const listeners = {}
     const did = []
-    let observer = null
+    const observers = []
     class MutationObserver {
       constructor(callback) { this.callback = callback }
-      observe(target, options) { if (!options.subtree) observer = this }
+      observe(target, options) { if (!options.subtree) observers.push(this) }
       disconnect() {}
     }
     const classes = (initial) => {
@@ -2566,7 +2566,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
     fire(name.includes('right-clicked') ? 'contextmenu' : 'click', { type: name.includes('right-clicked') ? 'contextmenu' : 'click', target })
     if (name.includes('another click')) fire('click', { type: 'click', target: { closest: () => null } })
     if (name.includes('too late')) now += 11000
-    observer.callback([{ addedNodes: [container] }])
+    observers.forEach((observer) => observer.callback([{ addedNodes: [container] }]))
     for (let i = 0; i < 5; i++) await settle()
     const words = entries.map((e) => e.text.textContent)
     if (entries.length) {
