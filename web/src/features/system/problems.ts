@@ -207,6 +207,8 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       return text.nvidiaOlderFFmpeg(problem.failure, problem.error)
     case 'theme_copy_missing':
       return text.themeCopyMissing(problem.missing, problem.files)
+    case 'desktop_rolled_back':
+      return text.desktopRolledBack(problem.name, problem.previous, problem.error)
     case 'folder_unwritable':
       return text.folderUnwritable(health.folderTitle[problem.folder], problem.path)
     case 'connection_stopped':

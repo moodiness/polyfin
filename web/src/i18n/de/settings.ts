@@ -67,6 +67,9 @@ const settings: typeof en = {
     updateCheck: 'Nach neuen Versionen suchen',
     updateCheckHelp:
       'Einmal täglich und kurz nach dem Start fragt Polyfin bei GitHub die neueste Veröffentlichung ab und sendet dabei nur seine Version. Eine neuere Version wird auf der Startseite und unter System › Systemzustand angezeigt und an die Benachrichtigungen für neue Versionen gesendet. Wenn aus, kontaktiert Polyfin GitHub nie.',
+    includePrereleases: 'Vorabversionen einbeziehen',
+    includePrereleasesHelp:
+      'Die Suche nach neuen Versionen und die Updates von Polyfin Desktop berücksichtigen auch Vorabversionen wie 1.4.0-rc.1: Eine neuere wird auf der Startseite und unter System › Systemzustand angezeigt, und Polyfin Desktop bietet an, sie zu installieren. Vorabversionen dienen zum Ausprobieren des Kommenden und können Fehler haben. Wenn aus, zählen nur veröffentlichte Versionen.',
     restartConfirmed: 'Polyfin wird nach dem Beenden neu gestartet',
     restartConfirmedHelp:
       'Einschalten, sobald der Container von Polyfin eine Neustart-Richtlinie hat, die ihn wieder startet, etwa unless-stopped, always oder on-failure, oder sein Dienstverwalter das tut. Ohne den Docker-Socket, den Polyfin nie erhält, sieht Polyfin die Neustart-Richtlinie seines Containers nicht: Solange dies aus ist, warnt Neu starten auf der Startseite, dass Polyfin vielleicht nicht zurückkommt.',
