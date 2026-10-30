@@ -162,8 +162,8 @@ A user whose import ended without a problem and added nothing says why, under th
 - **Everything read was already in Polyfin**: an earlier import, or Polyfin itself, has it all (`up_to_date`).
 - **The server lists nothing played, in progress or favorite for this user**: Jellyfin and Emby (`nothing_played`).
 - **This Plex server has no movie or show library** (`no_sections`).
-- **The owner has nothing played or in progress** in the Plex server's movie and show libraries (`plex_owner_nothing_watched`).
-- **Plex lists no play of this account on this server** (`plex_no_history`): see [Plex](#plex) for what Plex's playback history holds.
+- **The owner has nothing played or in progress** in the Plex server's movie and show libraries (`plex_owner_nothing_watched`); a user's own Plex import says the same of their account (`plex_nothing_watched`, see [Plex, signing in](#plex-signing-in)).
+- **Plex lists no play of this account on this server** (`plex_no_history`): see [Plex](#plex) for what Plex's playback history holds. The person can bring everything over by signing in to Plex themselves.
 
 A user whose titles were read but could not be matched says nothing more: the titles not found tell why.
 
@@ -208,6 +208,7 @@ The users listed are the accounts the server knows, the owner first, marked as a
 |---|---|
 | The owner's played movies and episodes, with their play counts and the date last played | Played marks. |
 | The owner's resume points | Resume points, for titles not played. |
+| The owner's ratings of movies, shows and episodes, from 0 to 10 | Ratings, as an imported Letterboxd rating: a rating Polyfin has stays. |
 | Another account's playback history on this server: each movie and episode it played to the end there, with the number of plays and the date of the last one | Played marks. |
 
 With the owner's token, Plex gives Polyfin the owner's own watch state, but of the other accounts only their playback history on this server, and Plex's history holds only plays:
@@ -217,7 +218,7 @@ With the owner's token, Plex gives Polyfin the owner's own watch state, but of t
 - not a title synced from the account's Plex account, as Plex does when an account is given access to a new server;
 - not a resume point: those stay on Plex too.
 
-So an account that shows titles as watched in Plex may have nothing to import: the page then says that Plex lists no play of this account on this server. Plex has no favorites to import, and its watchlist is not imported. A history row of another account than the one asked is left out.
+So an account that shows titles as watched in Plex may have nothing to import: the page then says that Plex lists no play of this account on this server, and that the person can bring everything over by signing in to Plex under **My account** (see [Plex, signing in](#plex-signing-in)): their own token reads their marked and synced titles, resume points, ratings and Watchlist. Plex has no favorites to import, and the owner's Watchlist is not imported here. A history row of another account than the one asked is left out.
 
 Titles are found by the IMDb, TMDB and TVDB identifiers of their `Guid` list; an episode by its show's identifiers and its season and episode numbers. An item an older Plex agent matched has no `Guid` list: its `guid` names its identifier instead, as `com.plexapp.agents.imdb://tt…`, `com.plexapp.agents.themoviedb://…` or `com.plexapp.agents.thetvdb://…`, or after an agent's own scheme as `://tvdb-…`, `://tmdb-…` or `://imdb-tt…`. Two kinds of titles are listed as not found:
 
@@ -234,9 +235,9 @@ Plex is only read, with `GET` requests: it is never written to.
 
 ## Importing your own watch history
 
-Under **My account**, **Import from another server** lets each user bring their own watch history over from a Jellyfin or Emby server they used before, when an administrator could not: a server without API keys, or whose passwords the administrator does not know. It also takes the export file of a Letterboxd account (see [Letterboxd](#letterboxd)).
+Under **My account**, **Import from another server** lets each user bring their own watch history over from a Jellyfin, Emby or Plex server they used before, when an administrator could not: a server without API keys, or whose passwords the administrator does not know, or a Plex server whose owner's token reads only the plays of other accounts (see [Plex](#plex)). It also takes the export file of a Letterboxd account (see [Letterboxd](#letterboxd)).
 
-- **Server**: **Jellyfin**, **Emby**, or **Letterboxd (export file)**.
+- **Server**: **Jellyfin**, **Emby**, **Plex** (see [Plex, signing in](#plex-signing-in)), or **Letterboxd (export file)**.
 - **Server address**, then **Your user name there** and **Your password there**, empty if the account has none.
 
 **Import my watch history** signs in to that server as the user, as its apps do, and imports that user's played movies and episodes, resume points and favorites into their own Polyfin account only. Titles are matched and merged as an administrator's import does. The section then shows the import, and its result: what was added, and the titles not found. Polyfin never lists the server's users, which a user's session may not, and reads only the user signed in: even a server that answers every user with the session's data gives them their own. It signs out once done. The password is used for that import only, and never kept.
@@ -244,13 +245,44 @@ Under **My account**, **Import from another server** lets each user bring their 
 - One import from a server runs at a time on the whole server, and one import into an account, from a server or Letterboxd. While another runs, the import is refused (`server_import_running`): try again a few minutes later.
 - A user sees only their own imports: the section shows their latest one, from a server or Letterboxd. The administrator's **Import from another server** page shows the import from a server running or the last one, saying who started it.
 - **Users may import their watch history from another server or app**, under **Settings › Security**, on by default, turns the section off, Letterboxd included: it is hidden, and the API refuses (`server_imports_disabled`). It turns off the import from an app too (see [Importing from an app](#importing-from-an-app)).
-- Plex has no sign-in for its users: only its owner can import from it, under **Users**.
 
 **For app developers:**
 
 - `GET /admin/api/account/server-import` answers `enabled`, `letterboxd` (whether a Letterboxd export may be imported), `searchable` (whether a metadata addon of the server searches movies), and `import`, the user's latest import running or ended, from a server or Letterboxd (`kind` `letterboxd`), `null` when none.
-- `POST /admin/api/account/server-import` takes `kind` (`jellyfin` or `emby`), `address`, `name` and `password`, and answers `import`. A refused name or password is `jellyfin_sign_in_refused`, an account the server does not let sign in `jellyfin_sign_in_forbidden`; the address errors are those of the administrator's import. A Letterboxd export is sent as described below.
+- `POST /admin/api/account/server-import` takes `kind` (`jellyfin` or `emby`), `address`, `name` and `password`, and answers `import`. A refused name or password is `jellyfin_sign_in_refused`, an account the server does not let sign in `jellyfin_sign_in_forbidden`; the address errors are those of the administrator's import. For Plex it takes `kind` `plex`, `server` and `watchlist` (see [Plex, signing in](#plex-signing-in)). A Letterboxd export is sent as described below.
 - Polyfin sends the sign-in, the items requests and the sign-out of the administrator's import, never `/Users`.
+
+### Plex, signing in
+
+Choose **Plex**, then **Sign in with Plex**: **Open Plex’s sign-in page** opens Plex's own page in a new tab, where the user signs in to their Plex account as on any Plex app. Polyfin never sees the Plex password. Once Plex signed them in, the section names the account and lists the Plex servers it reaches, the server the administrators last imported from chosen first:
+
+- **Plex Home profile**, for an account in a Plex Home: the profile whose watch data comes over, the account signed in first. A managed profile has no sign-in of its own, as Plex says (see Plex's support article "Managed Accounts"): the Home's member signs in, then chooses it here, with its **Profile PIN** when it has one, and **Use this profile** switches to it as Plex's apps do.
+- **Server**: the server to import from. Polyfin reaches it at the addresses Plex gives for it, those on the local network first, then the remote ones, then those Plex relays, each an address the server's import takes; an address counts only when the server answers there with its own machine identifier.
+- **Watchlist to my Watchlist** (on by default): the movies and shows of the profile's Plex Watchlist, which Plex keeps with the account rather than on a server, go to the user's [Watchlist](tracking.md#the-watchlist), as a one-off app import's library does: they stay until started.
+
+**Import my watch history** then reads the server with the profile's own token for it, as the owner's import reads the owner's data, into the user's own Polyfin account only:
+
+| From Plex | Into Polyfin |
+|---|---|
+| The movies and episodes played, marked as watched or synced as watched, with their play counts and the date last played | Played marks. |
+| The resume points | Resume points, for titles not played. |
+| The ratings of movies, shows and episodes, from 0 to 10 | Ratings, as an imported Letterboxd rating: a rating Polyfin has stays, and apps see `Likes` for a rating of 5 or more. A season's rating has no title in Polyfin, and stays on Plex. |
+| The Watchlist, when ticked | The Watchlist. |
+
+An account that has nothing played, in progress or rated there says so (`plex_nothing_watched`). Titles are matched as the administrator's Plex import matches them; a Watchlist item whose identifiers Plex's list leaves out is asked of Plex one by one, 500 at most, and is listed as not found when it has none.
+
+About the tokens: Plex gives Polyfin a token for the account, which only lists the profiles and servers, switches profiles and reads the Watchlist, a token for the profile chosen, and one for the server. They are held in memory for the user who signed in only, never stored, logged nor answered, and dropped 10 minutes after the last choice, or once the import ends: then Polyfin signs them out of Plex, which takes Polyfin off the account's authorized devices for them. Polyfin names itself to Plex by one identifier, kept with the server's identity, so that repeated sign-ins reuse one entry. Should an entry stay, as after a restart during an import, remove Polyfin from the account's authorized devices in Plex's settings.
+
+**Compared with the administrator's Plex import:** the owner's token reads only the plays Plex recorded for other accounts on the server; the profile's own token reads its whole watched state, its resume points, its ratings and its Watchlist. The administrator's import tells each account other than the owner that gave nothing to import this way.
+
+**For app developers:**
+
+- `POST /admin/api/account/server-import/plex/sign-in` starts the caller's sign-in, dropping the one they held, and answers `link`, Plex's sign-in page with the PIN's code, and `expiresAt`.
+- `POST /admin/api/account/server-import/plex/sign-in/poll` answers 202 and `pending` until Plex signs the caller in, then the account: `name`, `profiles` (`id`, `name`, `managed`, `protected`), `profile`, the one read, and `servers` (`id`, the machine identifier, `name`, `owned`, `preselected`). An expired or ended sign-in is `plex_sign_in_ended` (409).
+- `POST /admin/api/account/server-import/plex/profile` takes `profile` and `pin`, and answers the account; a PIN Plex refuses is `plex_profile_pin_refused`.
+- `DELETE /admin/api/account/server-import/plex/sign-in` drops the sign-in and signs it out.
+- `POST /admin/api/account/server-import` with `kind` `plex`, `server` and `watchlist` (by default `true`) starts the import; a server the account does not reach is `plex_unknown_server`, one none of whose addresses answers as it `plex_server_unreachable` (the sign-in is kept), and plex.tv failing `plex_tv_failed` or `plex_tv_unreachable`.
+- Polyfin asks plex.tv, with its client identifier in `X-Plex-Client-Identifier` and `X-Plex-Product` `Polyfin`: `POST /api/v2/pins?strong=true`, `GET /api/v2/pins/{id}` once a second at most, `GET /api/v2/user`, `GET /api/v2/home/users`, `POST /api/v2/home/users/{uuid}/switch?pin=…`, `GET /api/v2/resources?includeHttps=1&includeRelay=1`, and `DELETE /api/v2/users/signout`; and Plex's Discover service `GET /library/sections/watchlist/all?includeGuids=1`, 100 items a page, and `GET /library/metadata/{ratingKey}?includeGuids=1`. The server is read as the owner's import reads it, with the server's token, but neither `/accounts` nor the history.
 
 ### Letterboxd
 
