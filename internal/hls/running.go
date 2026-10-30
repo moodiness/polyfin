@@ -65,7 +65,12 @@ func (m *Manager) Running() []Running {
 		select {
 		case <-e.opened:
 			if e.err == nil {
-				r.describe(e.remux)
+				// The input played now: another one once the first failed
+				// (see carryOn).
+				e.mu.Lock()
+				input := *e.input
+				e.mu.Unlock()
+				r.describe(input)
 			}
 		default:
 		}

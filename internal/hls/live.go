@@ -655,6 +655,9 @@ func (r Remux) audioArgs() []string {
 	if r.AudioBitrate > 0 {
 		args = append(args, "-b:a", strconv.FormatInt(r.AudioBitrate, 10))
 	}
+	if r.AudioRate > 0 {
+		args = append(args, "-ar", strconv.Itoa(r.AudioRate))
+	}
 	if r.AudioFilter != "" {
 		args = append(args, "-af", r.AudioFilter)
 	}

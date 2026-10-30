@@ -102,11 +102,13 @@ func (m *Manager) keeps(key Key) bool {
 }
 
 // videoAlone is open, the audio left out: the kept video's FFmpeg makes
-// the video alone.
+// the video alone. Its input is never switched for another (see
+// Remux.Switch): its audio's FFmpeg reads the version on its own.
 func videoAlone(open Opener) Opener {
 	return func(ctx context.Context) (Remux, func(), error) {
 		r, release, err := open(ctx)
 		r.Audio, r.ADTS, r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter = -1, false, "", 0, 0, ""
+		r.Switch = nil
 		return r, release, err
 	}
 }

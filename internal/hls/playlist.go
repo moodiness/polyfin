@@ -3,6 +3,7 @@ package hls
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -68,8 +69,10 @@ func WriteMaster(w io.Writer, variants []Variant, subtitles []Rendition) error {
 // WriteMedia writes the media playlist of a plan: every segment is listed
 // from the start, as players seek in it before FFmpeg reaches them. uri
 // gives the address of segment n, and of the initialization segment for
-// n = -1 when the segments are fragmented MP4.
-func WriteMedia(w io.Writer, plan Plan, format Format, uri func(n int) string) error {
+// n = -1 when the segments are fragmented MP4. Each segment of
+// discontinuities, where the play went on from another version (see
+// Remux.Switch), follows an EXT-X-DISCONTINUITY.
+func WriteMedia(w io.Writer, plan Plan, format Format, uri func(n int) string, discontinuities ...int) error {
 	var b strings.Builder
 	version := 3
 	if format == FMP4 {
@@ -80,6 +83,9 @@ func WriteMedia(w io.Writer, plan Plan, format Format, uri func(n int) string) e
 		fmt.Fprintf(&b, "#EXT-X-MAP:URI=\"%s\"\n", uri(-1))
 	}
 	for n := range plan.Len() {
+		if n > 0 && slices.Contains(discontinuities, n) {
+			b.WriteString("#EXT-X-DISCONTINUITY\n")
+		}
 		fmt.Fprintf(&b, "#EXTINF:%.6f, nodesc\n%s\n", (plan.End(n) - plan.Start(n)).Seconds(), uri(n))
 	}
 	b.WriteString("#EXT-X-ENDLIST\n")

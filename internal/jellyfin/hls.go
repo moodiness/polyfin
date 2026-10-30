@@ -272,6 +272,17 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 	if live {
 		remux.MinSegments, _ = strconv.Atoi(query(r, "minSegments"))
 		remux.Channel = item.Name
+	} else if item.Kind != library.KindRecording {
+		// The versions the play may go on from once its version's source
+		// fails: those the user is offered, in their order, from what is
+		// known already (see playback.Remux.Alternates).
+		remux.Alternates = func(ctx context.Context) []library.Version {
+			versions, ok := h.Library.CachedVersions(ctx, user, item.ID)
+			if !ok || !h.reordered(user) {
+				return versions
+			}
+			return h.ordered(ctx, user, versions)
+		}
 	}
 	// The conversions PlaybackInfo chose follow from the URL, as they
 	// would for Jellyfin, through the same functions, under the limit it
@@ -492,7 +503,7 @@ func (h *Handler) mediaPlaylist(w http.ResponseWriter, r *http.Request, req remu
 	extension := req.remux.Format.Extension()
 	if err := hls.WriteMedia(w, plan, req.remux.Format, func(n int) string {
 		return withQuery(prefix+strconv.Itoa(n)+"."+extension, req.uris)
-	}); err != nil {
+	}, h.Playback.Discontinuities(req.remux.Session, req.remux.Version.ID)...); err != nil {
 		h.remuxError(w, r, req.remux, err)
 	}
 }
