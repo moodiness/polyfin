@@ -104,6 +104,35 @@ Each user chooses an audio language, a subtitle language and a subtitle mode in 
 - Polyfin's default audio language ranks above the track a file flags as default whatever `PlayDefaultAudioTrack` says, where a language a user chose in Jellyfin gives way to the flagged track while that setting is on.
 - jellyfin-web 12.4 also offers "Original language" as an audio preference. Polyfin does not offer it as a default.
 
+### Regional audio
+
+French, Spanish and Portuguese are dubbed apart for some regions. Polyfin tells six regional variants apart, by their BCP 47 tags, and each user may prefer one as their **Audio region** (see [Audio region](users.md#audio-region)):
+
+| Variant | Tags that name it | Release words that name it |
+|---|---|---|
+| French (France), `fr-FR` | `fr-FR`, and `fr-BE`, `fr-CH`, `fr-LU`, `fr-MC`, which hear the same dub | VFF, TRUEFRENCH, VF2 |
+| French (Quebec), `fr-CA` | `fr-CA` | VFQ, VF2 |
+| Spanish (Spain), `es-ES` | `es-ES` | CASTELLANO |
+| Spanish (Latin America), `es-419` | `es-419`, and the tag of any Latin American country or of the United States (`es-MX`, `es-AR`, `es-US`…) | LATINO, LATAM |
+| Portuguese (Brazil), `pt-BR` | `pt-BR`, `pob` | DUBLADO, PTBR |
+| Portuguese (Portugal), `pt-PT` | `pt-PT`, and the tags of the other Portuguese-speaking countries (`pt-AO`, `pt-MZ`…) | |
+
+- A track's variant is the one its language tag names, as Matroska files keep a BCP 47 tag with its region, by any code of the language (`fr-CA`, `fre-CA`); else the one its title names: a tag (`Portuguese (PT-BR)`), the region's name or code in English or in the language (`French (Canada)`, `Français (Québec)`, `Spanish (Latin America)`, `Castellano`, `Brazilian`, `French (CA)`), or a release word of its language (`VFQ`). A track tagged `fre` and titled `VFF` is French (France).
+- A version's variants, until it is analyzed or described by RemuxDB, are those its labels name, as the [version order](#version-order) reads them: the release words above, a tag written in two words (`PT-BR`, `ES-MX`, `es-419`), and the flags of Mexico, Argentina and Colombia (Latin America) and of Brazil. Each also names the language. The flags of France, Spain and Portugal stand for the language at large, as releases show them for any dub of it.
+- Subtitled releases keep their original audio. The languages named right after a word saying subtitles (Sub, Subs, Subtitles, Subbed, VOST, VOS, VOSE, Legenda, Legendado, Subtitulado, Sottotitoli, Untertitel…) are the subtitles', as in `ENG Sub ITA` or `Audio: English | Subtitles: French, Spanish`, and so is the language named right before Subs, Subbed, Subtitles, Subtitled or Legendado when none follows, as in `French Subs` or `PT-BR Legendado`. None of these counts as the version's audio, and `MULTi-SUBS` does not say it has several audio languages. Tags such as VOSTFR and SUBFRENCH name no audio language either. A word of the title is never taken for one of these words.
+
+With an **Audio region**, among the tracks and versions in the user's audio language:
+
+- the default audio track is the one of the region, else one of no known region, else one of another region. The flagged track still comes first for a user who chose their language in their app and plays the default track whatever its language (`PlayDefaultAudioTrack`), as Jellyfin does;
+- with **Preferred audio language** in **Order versions by**, the versions carrying the language in that region come first, then those carrying it with no known region, then those carrying it only in another region, then those that say MULTI or DUAL, then those of unknown language, then the others (see [Version order](#version-order)).
+
+The region applies only to its own language: a user who chose English in their app keeps English tracks and versions first, whatever their region. A user with no audio language, their own or the server's, gets the region's language, which ranks above the flagged track as the server's **Default audio language** does.
+
+**Compared with Jellyfin:**
+
+- Jellyfin 12.4 keeps a track's language as tagged and compares it with the user's preferred language as a whole string, in any letter case ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L181-L190)): its preference has no region, a track tagged `fr-CA` does not match a preference of `fre`, and two French tracks rank alike. Polyfin compares languages by any of their codes, and the region is its own setting.
+- Jellyfin reads no language from release names. Polyfin's reading of regions and subtitled releases is its own, for the version order.
+
 ### Title pages
 
 A title's page opens as soon as its description is ready, without waiting for the stream addons, some of which are slow. It lists the versions Polyfin already knows: those of the addons that answered for the title within **Keep version lists for (minutes)**, and those of IPTV sources. Polyfin asks the other addons in the background meanwhile.
@@ -271,7 +300,7 @@ The **Version order** group of **Settings › Playback** orders a movie's or an 
 - the size the addon gives (`videoSize`);
 - the codec its labels name: HEVC, x265 or H.265; H.264, x264 or AVC; AV1; VP9; VC-1; MPEG-2; Xvid or DivX;
 - HDR when they name HDR, HDR10, HDR10+, HLG, DV, DoVi or Dolby Vision. Labels that name the height or the codec but no HDR count as SDR;
-- the audio languages they name: language names in English (French, German…), some others used by releases (TRUEFRENCH, VFF, Latino, Castellano…), ISO 639-2 codes in capitals (ENG, ITA, GER…) and flags. MULTI and DUAL say a version has several languages. A word of the movie's or the series' name is never taken for a language.
+- the audio languages they name: language names in English (French, German…), some others used by releases (TRUEFRENCH, VFF, Latino, Castellano…), ISO 639-2 codes in capitals (ENG, ITA, GER…) and flags, with their regional variants (see [Regional audio](#regional-audio)). MULTI and DUAL say a version has several languages. The languages named as the subtitles' (`Sub ITA`, `French Subs`) are not the audio's. A word of the movie's or the series' name is never taken for a language.
 
 A version a criterion knows nothing of comes after those it knows, and a hide rule never hides it.
 
@@ -283,7 +312,7 @@ A version a criterion knows nothing of comes after those it knows, and a hide ru
 
 A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. So, for the movie Cam, `Cam.2018.1080p.WEB-DL.mkv` is kept; `Some.Movie.2026.HDCAM.x264.mkv` is a camera copy and `Some.Movie.2026.1080p.WEB.ts` is kept; `Its.Always.Something.S01E01.1080p.mkv` is kept and `Some.Show.S01E01.TS.mkv` is a telesync; `Some Movie (2026) [HDTS]` is a telesync. A tag before the title in the same line, as in `[HDCAM] Some Movie 2026`, is not read.
 
-**Preferred audio language** is each user's own, the audio language they set in their app, else the server's [Default audio language](#default-audio-and-subtitle-languages). Versions known to carry it come first, then those that say MULTI or DUAL without naming it, then those of unknown language, then the others. For a user without a preferred language, and without a default one, it changes nothing.
+**Preferred audio language** is each user's own, the audio language they set in their app, else the server's [Default audio language](#default-audio-and-subtitle-languages). Versions known to carry it come first, then those that say MULTI or DUAL without naming it, then those of unknown language, then the others. For a user without a preferred language, and without a default one, it changes nothing. A user's **Audio region** orders the versions carrying the language among themselves, and gives the language to a user without one (see [Regional audio](#regional-audio)).
 
 **Source, in the order below** groups a title's versions by the addon or folder that gives them, the next criteria sorting each source's versions; placed after other criteria, it orders the versions they tie on. The sources **Order of sources** lists come first, in its order, then the others in the addons' order: a source added since the list was saved comes after those it lists, until it is moved there, and a user's own addons come after the server's sources. A source removed leaves the list. The list orders versions only: which addon describes a title, the order of the addons' subtitles and that of search results keep the order of **Content › Sources**, as versions do while the criterion is not chosen (see [Addons and libraries](addons-and-libraries.md)). It is how local files come first, whatever the other criteria (see [Local folders](local-folders.md#versions)).
 

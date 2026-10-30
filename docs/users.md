@@ -515,7 +515,7 @@ Rather than finding each value and setting it again, an administrator can put a 
 **Reset to defaults**, at the top of a user's page, puts the sections that set limits back to a new user's settings, the ones **Create a user** gives: the permissions of **Access**, **Playback and access** with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**. It asks first, listing the sections that change and, for **Access** and **Playback and access**, the settings that change in them, or saying that nothing changes.
 
 - An administrator gets an administrator's settings: **Can control other users' apps**, **Can manage collections**, **Can manage subtitles** and **Can record Live TV** on, as **Create a user** gives them with **Administrator**. Any other user gets them off.
-- Kept: the name and password, **Administrator**, **Show on the sign-in screen**, **Disabled**, **Ends on**, the group, the **Metadata language**, the **Web player theme**, the user's own addons, connections and tracking accounts, and everything they watched.
+- Kept: the name and password, **Administrator**, **Show on the sign-in screen**, **Disabled**, **Ends on**, the group, the **Metadata language**, the **Web player theme**, the **Audio region**, the user's own addons, connections and tracking accounts, and everything they watched.
 - It applies as saving does: the user's apps already signed in have the new limits from their next request. A new user may not share titles, so a user who could loses their share links (see [Share links](#share-links)).
 - A member who follows their group has its values: their page does not offer the button, and the group's page resets them. A member with **Own settings** gets a new user's settings and stays in the group, still not following it.
 - The activity log records who reset whose settings, as "alex reset the settings of sam to their defaults".
@@ -530,6 +530,7 @@ Rather than finding each value and setting it again, an administrator can put a 
 
 - the **Metadata language** goes back to **The server's** (see [Metadata language](#metadata-language));
 - the **Web player theme** goes back to the server's, unless the administrator turned off **Let them change it** (see [Web player theme](#web-player-theme));
+- the **Audio region** goes back to **None** (see [Audio region](#audio-region));
 - every row of **Home rows** is shown again (see [Home rows](#home-rows));
 - the preferences Jellyfin apps saved in the account are forgotten: the audio and subtitle languages and the subtitle mode, the home screen (the order of the libraries and those left out), and the display preferences, such as each library's sorting and view. The user has a new user's again, which their apps already signed in read from their next request. Settings an app also keeps on the device stay there: jellyfin-web keeps a copy of its home sections in the browser, and still shows them on that browser.
 
@@ -783,6 +784,21 @@ A user with at least one row who is outside all of them cannot sign in (403). Th
 - A user's JSON in the admin API has `webTheme`, `lumaaglaass`, `none` or `custom`, empty for the server's, and `webThemeLocked`, `true` while **Let them change it** is off; `PATCH /admin/api/users/{id}` sets them. A theme not offered is `400 invalid_web_theme`.
 - `GET /admin/api/web-themes`, for any user signed in to the admin app, answers `serverTheme` and `themes`, those a user may be given: `lumaaglaass` and `none`, and `custom` while the Custom theme has a text.
 - `GET /admin/api/account/web-theme` answers the caller's `webTheme`, `locked`, and the same `serverTheme` and `themes`; `PUT` with `{"webTheme": "none"}` changes it, `403 web_theme_locked` while **Let them change it** is off.
+
+## Audio region
+
+**Audio region** is the dub a user prefers where a language is dubbed apart for a region: **French (France)** or **French (Quebec)**, **Spanish (Spain)** or **Spanish (Latin America)**, **Portuguese (Brazil)** or **Portuguese (Portugal)**. Users set it in its own section under **My account**, and administrators in its own panel on the user's page under **Users**. **None**, the default, prefers no region. **Reset my preferences** puts it back to **None** (see [Your own preferences](#your-own-preferences)).
+
+- It refines the user's audio language: the one they chose in their app, else the server's **Default audio language**, when that is the region's language. A user who chose French and Quebec gets the Quebec dub first; a user who chose English keeps English, whatever their region.
+- A user with no audio language of their own and no server default gets the region's language, as the server's default would give it.
+- In that language, the audio track of the region plays by default, then one of no known region, then one of another region; and with **Preferred audio language** in the version order, the versions carrying that dub come first among those in the language. How Polyfin reads a track's or a release's region is in [Regional audio](playback.md#regional-audio).
+- An invite link's model user does not pass it on: it is the guest's own choice.
+
+**For app developers:**
+
+- The user's JSON in `/admin/api/users` holds `audioRegion`, a BCP 47 tag (`fr-CA`, `es-419`, `pt-BR`) or empty, and `audioRegions`, the tags offered; `PATCH /admin/api/users/{id}` takes `audioRegion`.
+- `GET /admin/api/account/audio-region` answers the caller's own as `{"region": "fr-CA", "regions": [...]}`, and `PUT` with `{"region": "..."}` changes it. A tag not offered is 400 `invalid_audio_region`.
+- Jellyfin's `AudioLanguagePreference` has no region, and Jellyfin apps neither show nor send this setting.
 
 ## Playback and access limits
 
