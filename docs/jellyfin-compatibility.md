@@ -322,6 +322,7 @@ The backups page of the web client's dashboard, since Jellyfin 10.11, shows the 
 - `POST /Backup/Create` runs **Back up the database** at once, sends the backup to the destinations, and answers its manifest. The options of the body are ignored.
 - `GET /Backup/Manifest?path=` answers the manifest of the backup of the folder named `path`, and 404 for any other path.
 - `POST /Backup/Restore` with `ArchiveFileName`, a file name `/Backup` lists, restores it as the admin app does, and answers 204: Polyfin backs the current database up, stops, restores it and starts again, answering 503 meanwhile. It answers 404 for a backup the folder does not have, and 400 for a file that is not a backup of Polyfin's database, a backup of a newer Polyfin, a server without `pg_restore`, a restore already under way, and a backup holding stored keys the current `POLYFIN_SECRET_KEY` cannot decrypt, as apps cannot show that warning: the admin app restores those.
+- An encrypted backup (`.dump.enc`, see [Encrypting the backups](backups.md#encrypting-the-backups)) is listed by `/Backup` like the others, but `POST /Backup/Restore` refuses it with 400 and the text `This backup is encrypted: restore it from Polyfin's admin app, which asks for its passphrase.`, as apps cannot ask for one. Jellyfin answers only 204 or 404 there ([BackupController.cs](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/Jellyfin.Api/Controllers/BackupController.cs#L57-L70)): its backups have no passphrase.
 
 ## Jellyfin features Polyfin does without
 
