@@ -21,6 +21,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/eclipse"
 	"github.com/moodiness/polyfin/internal/iptv"
@@ -160,6 +161,10 @@ type Service struct {
 	iptv IPTV
 	// local answers for Polyfin's own local folders (see UseLocal).
 	local Local
+	// anime maps anime between identifiers and numberings, for the stream
+	// addons that accept other identifiers than a title's (see
+	// streamids.go); nil, it maps nothing.
+	anime *anime.Service
 	// refreshes are the refreshes of libraries' descriptions (see
 	// libraryrefresh.go).
 	refreshes libraryRefreshes

@@ -336,6 +336,13 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
+	// Anime named by AniDB, Kitsu or MyAnimeList, as Simkl's history and
+	// anime addons name them, are mapped to IMDb and TVDB from two lists
+	// kept in the data folder. Stream addons that accept other identifiers
+	// than a title's are asked by those the mapping gives.
+	animeMapping := anime.New(anime.Options{Dir: filepath.Join(cfg.DataDir, "anime"), Version: version, Logger: logger})
+	defer animeMapping.Close()
+	lib.UseAnime(animeMapping)
 	channels.OnChange(lib.LineupChanged)
 	// Find tuners asks the local networks for HDHomeRun tuners on their
 	// port, or only the addresses POLYFIN_HDHOMERUN_ADDRESSES gives.
@@ -489,11 +496,6 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Settings: store.Settings, Logger: logger})
 	defer audioSegments.Close()
 	userData := userdata.New(pool)
-	// Anime named by AniDB, Kitsu or MyAnimeList, as Simkl's history and
-	// anime addons name them, are mapped to IMDb and TVDB from two lists
-	// kept in the data folder.
-	animeMapping := anime.New(anime.Options{Dir: filepath.Join(cfg.DataDir, "anime"), Version: version, Logger: logger})
-	defer animeMapping.Close()
 	// Imported watch histories find their titles in the library and add to
 	// the users' data. A connection a service stops is told to the
 	// notifications, made below, as recordings are.

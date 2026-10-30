@@ -15,7 +15,6 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/drm"
-	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -197,6 +196,14 @@ type target struct {
 	// year is a movie's, 0 for another title or when unknown: a version
 	// naming another year is another movie's (see OtherTitle).
 	year int
+	// ids are the identifiers a movie's, or an episode's series',
+	// description gives, under Jellyfin's names (see providerIDs): those
+	// it may be asked streams by when an addon does not accept its own
+	// (see streamRequests).
+	ids map[string]string
+	// described is an episode's series' complete description, when the
+	// caller has read it already; else streamRequests reads it.
+	described *stremio.Meta
 	// holder is the record of the title whose description holds the
 	// video: an episode's series, or a folder's video's folder. embedded
 	// are the streams it embeds for the video, described by embeddedBy,
@@ -256,7 +263,8 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		if full, _, ok := s.describedMeta(ctx, v, r, false, inDatabase); ok {
 			meta = &full
 		}
-		t := target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime)), name: meta.Name}
+		t := target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime)), name: meta.Name,
+			ids: providerIDs(*meta)}
 		if r.Kind == KindMovie {
 			t.year = metaYear(*meta)
 		}
@@ -276,7 +284,8 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 			return target{}, view{}, ErrNotFound
 		}
 		t := target{item: id, kind: KindEpisode, metaType: series.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
-			name: series.Meta.Name, videoName: r.Video.DisplayName(), season: int(r.Video.Season), episode: r.Video.EpisodeNumber(), holder: &series}
+			name: series.Meta.Name, videoName: r.Video.DisplayName(), season: int(r.Video.Season), episode: r.Video.EpisodeNumber(), holder: &series,
+			ids: providerIDs(*series.Meta)}
 		s.embed(ctx, v, &t, false)
 		return t, v, nil
 	default:
@@ -359,14 +368,20 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 	if mode == waitAll || mode == staleNow {
 		s.embed(ctx, v, &t, true)
 	}
-	serving := streamServing(v, t)
+	serving := s.streamServing(ctx, v, t)
 	if len(t.embedded) > 0 {
 		// An addon that embeds a video's streams in its description is
 		// not asked for them again, as Stremio apps do not ask it.
-		serving = slices.DeleteFunc(serving, func(entry installed) bool { return entry.addon.ID == t.embeddedBy.addon.ID })
+		serving = slices.DeleteFunc(serving, func(source streamSource) bool { return source.addon.ID == t.embeddedBy.addon.ID })
 	}
 	tracked := s.tracked()
 	tracked.titles.Put(listedTitle{t.metaType, t.id}, t.item)
+	for _, source := range serving {
+		// An addon asked by another identifier tells the item too.
+		if source.id != t.id || source.contentType != t.metaType {
+			tracked.titles.Put(listedTitle{source.contentType, source.id}, t.item)
+		}
+	}
 	if mode == askLater {
 		// Item details: the title's page follows its versions from now on
 		// (see FollowedProgress).
@@ -393,21 +408,21 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 // stream, torrents included, as a user who may play torrents gets them, so
 // that each identifier names the same version for every user; another
 // user's Version lists the title again rather than take a torrent.
-func (s *Service) listVersions(ctx context.Context, t target, serving []installed, mode listing, torrents bool) ([]Version, []installed) {
+func (s *Service) listVersions(ctx context.Context, t target, serving []streamSource, mode listing, torrents bool) ([]Version, []streamSource) {
 	lists := make([][]stremio.Stream, len(serving))
-	var unknown []installed
+	var unknown []streamSource
 	var wg sync.WaitGroup
 	for i, entry := range serving {
 		// An IPTV source's or a local folder's streams are Polyfin's own:
 		// reading them asks no addon.
 		if own(entry.addon) && mode != waitAll {
-			lists[i], _ = s.fetchStreams(ctx, entry, t.metaType, t.id)
+			lists[i], _ = s.fetchStreams(ctx, entry.installed, entry.contentType, entry.id)
 			continue
 		}
 		var l list[stremio.Stream]
 		var fresh, ok bool
 		if mode != waitAll {
-			l, fresh, ok = s.streamListOf(ctx, streamKey{entry.addon.ID, t.metaType, t.id})
+			l, fresh, ok = s.streamListOf(ctx, entry.key())
 		}
 		switch {
 		case fresh || ok && mode == knownOnly:
@@ -418,7 +433,7 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 			unknown = append(unknown, entry)
 		case mode == waitAll || mode == staleNow:
 			wg.Go(func() {
-				streams, err := s.streams(ctx, entry, t.metaType, t.id)
+				streams, err := s.streams(ctx, entry.installed, entry.contentType, entry.id)
 				// An app that stops waiting cancels ctx: nothing failed.
 				if err != nil && ctx.Err() == nil {
 					s.logger.Warn("An addon could not list streams", "addon", entry.addon.Manifest.Name, "error", err)
@@ -623,7 +638,7 @@ func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, o
 		if !listable(stream) || versionID(t.item, streamIdentity(stream)) != old.ID {
 			continue
 		}
-		version := newVersion(t, entry, stream)
+		version := newVersion(t, streamSource{entry, t.metaType, t.id}, stream)
 		version.Labels = old.Labels
 		s.versions.Put(version.ID, version)
 		return version, true
@@ -631,8 +646,11 @@ func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, o
 	return Version{}, false
 }
 
-// newVersion describes a stream an addon listed for a target.
-func newVersion(t target, entry installed, stream stremio.Stream) Version {
+// newVersion describes a stream an addon listed for a target, asked as
+// source tells (see streamServing): a version is renewed by asking the
+// addon the same again.
+func newVersion(t target, source streamSource, stream stremio.Stream) Version {
+	entry := source.installed
 	version := Version{
 		Item:    t.item,
 		Name:    versionName(stream),
@@ -644,7 +662,7 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		Filename:   stream.BehaviorHints.Filename,
 		Size:       int64(stream.BehaviorHints.VideoSize),
 		Addon:      entry.addon.Manifest.Name,
-		Origin:     Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
+		Origin:     Origin{Addon: entry.addon.ID, Type: source.contentType, ID: source.id},
 		Confined:   entry.confined,
 		Runtime:    t.runtime,
 		Height:     LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
@@ -750,6 +768,7 @@ func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamK
 	return shared(ctx, s, streamsFlight(key), func(ctx context.Context) ([]stremio.Stream, error) {
 		asked, done := s.ask(followKey{listStreams, key})
 		defer done()
+		s.logger.Debug("An addon is asked for streams", "addon", entry.addon.Manifest.Name, "type", key.contentType, "id", key.id)
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
 		if err != nil {
 			return nil, err
@@ -775,18 +794,6 @@ var errOnlyNotices = errors.New("its answer has only notices, nothing to play: t
 // title, which callers share (see streamAnswer).
 func streamsFlight(key streamKey) string {
 	return "streams " + key.addon.String() + " " + key.contentType + " " + key.id
-}
-
-// streamServing lists the addons of v that list streams for t.
-func streamServing(v view, t target) []installed {
-	var serving []installed
-	for _, entry := range v.addons {
-		// An IPTV source's channel is only its source's to play.
-		if serves(entry, "stream", t.metaType, t.id) && !(entry.addon.Stremio() && strings.HasPrefix(t.id, iptv.IDPrefix)) {
-			serving = append(serving, entry)
-		}
-	}
-	return serving
 }
 
 // serves reports whether an addon serves a resource for a title: a home

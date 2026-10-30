@@ -353,7 +353,7 @@ func (s *Service) embed(ctx context.Context, v view, t *target, ask bool) {
 
 // embeddedVersion describes a stream t's holder embeds for its video.
 func embeddedVersion(t target, stream stremio.Stream) Version {
-	version := newVersion(t, *t.embeddedBy, stream)
+	version := newVersion(t, streamSource{*t.embeddedBy, t.metaType, t.id}, stream)
 	version.Origin.Title = t.embeddedIn
 	return version
 }

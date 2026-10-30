@@ -50,13 +50,13 @@ func (a *asked) done(addon accounts.ID) {
 	a.mu.Unlock()
 }
 
-// add records the addons of entries not asked yet as asked, and returns
+// add records the addons of sources not asked yet as asked, and returns
 // them.
-func (a *asked) add(entries []installed) []installed {
+func (a *asked) add(sources []streamSource) []streamSource {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	var added []installed
-	for _, entry := range entries {
+	var added []streamSource
+	for _, entry := range sources {
 		if !a.addons[entry.addon.ID] {
 			a.addons[entry.addon.ID] = true
 			added = append(added, entry)
@@ -98,7 +98,7 @@ func (s *Service) Pending(ctx context.Context, user accounts.User, id accounts.I
 	if AudioKind(t.kind) {
 		return 0, nil
 	}
-	serving := streamServing(v, t)
+	serving := s.streamServing(ctx, v, t)
 	s.tracked().pages.Put(askedKey{user.ID, t.item}, titlePage{t: t, serving: serving})
 	return s.pendingOf(user.ID, t, serving), nil
 }
@@ -108,7 +108,7 @@ func (s *Service) Pending(ctx context.Context, user accounts.User, id accounts.I
 // follow-ups scheduled or running. Each counts once, whichever way it is
 // asked. Those asked are read first: one that answers meanwhile has its
 // follow-up scheduled before it stops being asked, so it is never missed.
-func (s *Service) pendingOf(user accounts.ID, t target, serving []installed) int {
+func (s *Service) pendingOf(user accounts.ID, t target, serving []streamSource) int {
 	var asking map[accounts.ID]bool
 	if a, ok := s.asked.Get(askedKey{user, t.item}); ok {
 		asking = a.asking()
@@ -117,7 +117,7 @@ func (s *Service) pendingOf(user accounts.ID, t target, serving []installed) int
 	defer s.followUps.mu.Unlock()
 	n := 0
 	for _, entry := range serving {
-		_, following := s.followUps.running[followKey{listStreams, streamKey{entry.addon.ID, t.metaType, t.id}}]
+		_, following := s.followUps.running[followKey{listStreams, entry.key()}]
 		if asking[entry.addon.ID] || following {
 			n++
 		}
@@ -140,7 +140,7 @@ func (s *Service) AskAgain(ctx context.Context, user accounts.User, id accounts.
 	if t.kind != KindMovie && t.kind != KindVideo && t.kind != KindEpisode {
 		return ErrNotFound
 	}
-	serving := streamServing(v, t)
+	serving := s.streamServing(ctx, v, t)
 	// Every version remembered is forgotten, torrents included, whoever
 	// may play them.
 	known, _ := s.listVersions(ctx, t, serving, knownOnly, true)
@@ -151,7 +151,7 @@ func (s *Service) AskAgain(ctx context.Context, user accounts.User, id accounts.
 		// An IPTV source's or a local folder's streams are Polyfin's own,
 		// never kept.
 		if !own(entry.addon) {
-			s.forgetStreams(ctx, streamKey{entry.addon.ID, t.metaType, t.id})
+			s.forgetStreams(ctx, entry.key())
 		}
 	}
 	if _, _, err := s.VersionsNow(ctx, user, id); err != nil {
@@ -168,7 +168,7 @@ func (s *Service) AskAgain(ctx context.Context, user accounts.User, id accounts.
 // that waits for every version, such as PlaybackInfo, joins them. Each
 // addon done, answering or not, is told to whoever follows the title's
 // versions (see OnVersionsChanged).
-func (s *Service) askStreams(ctx context.Context, user accounts.User, t target, unknown []installed) {
+func (s *Service) askStreams(ctx context.Context, user accounts.User, t target, unknown []streamSource) {
 	if len(unknown) == 0 {
 		return
 	}
@@ -184,7 +184,7 @@ func (s *Service) askStreams(ctx context.Context, user accounts.User, t target, 
 		go func() {
 			defer s.versionsChanged(t.item)
 			defer a.done(entry.addon.ID)
-			if _, err := s.streams(detached, entry, t.metaType, t.id); err != nil {
+			if _, err := s.streams(detached, entry.installed, entry.contentType, entry.id); err != nil {
 				s.logger.Warn("An addon could not list streams", "addon", entry.addon.Manifest.Name, "error", err)
 			}
 		}()
