@@ -100,6 +100,19 @@ func eventually(t *testing.T, what string, done func() bool) {
 	}
 }
 
+// logged waits, 30 s at most, for a line of log holding every part: the
+// background download and detection log after they publish their state.
+func logged(t *testing.T, log *lockedLog, parts ...string) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for logLine(log.String(), parts...) == "" {
+		if time.Now().After(deadline) {
+			t.Fatalf("no line with %q in the log: %s", parts, log.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // An NVIDIA driver that NVENC's API 13.0 takes, though the Manager's own
 // FFmpeg asks for 13.1, has the FFmpeg for older drivers downloaded,
 // video converted on the processor meanwhile, then the GPU taken with
@@ -124,9 +137,7 @@ func TestAnOlderNVIDIADriverTakesTheFFmpegForOlderDrivers(t *testing.T) {
 	if m.ffmpegPath() != older.path || m.OlderDriverFFmpeg().State != "used" || m.NVIDIADriver() != "" {
 		t.Errorf("FFmpeg %s, %+v, driver %q", m.ffmpegPath(), m.OlderDriverFFmpeg(), m.NVIDIADriver())
 	}
-	if logLine(log.String(), "level=INFO", "Video is converted on the GPU, with the FFmpeg for NVIDIA drivers older than 610", older.path) == "" {
-		t.Errorf("log: %s", log.String())
-	}
+	logged(t, &log, "level=INFO", "Video is converted on the GPU, with the FFmpeg for NVIDIA drivers older than 610", older.path)
 	// Without a GPU, the Manager runs its own FFmpeg again.
 	m.SelectHardware("none", "")
 	if m.ffmpegPath() != m.ffmpeg || m.OlderDriverFFmpeg().State != "" {
@@ -176,9 +187,7 @@ func TestAFailedDownloadIsToldAndTriedAgain(t *testing.T) {
 	if status := m.OlderDriverFFmpeg(); status.Error != older.err.Error() || m.NVIDIADriver() != "" {
 		t.Errorf("%+v, driver %q", status, m.NVIDIADriver())
 	}
-	if logLine(log.String(), "level=WARN", "could not be downloaded", "pinned checksum") == "" {
-		t.Errorf("log: %s", log.String())
-	}
+	logged(t, &log, "level=WARN", "could not be downloaded", "pinned checksum")
 	older.err = nil
 	m.SelectHardware("nvenc", "")
 	eventually(t, "the GPU's detection after the second download", func() bool { return m.Hardware() != nil })
