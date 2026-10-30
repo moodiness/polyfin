@@ -53,7 +53,7 @@ func (h *Handler) systemInfo(w http.ResponseWriter, r *http.Request) {
 // which loads the fallback fonts when they are enabled (see
 // encodingConfiguration); and livetv, which lists the tuners (see
 // liveTvConfiguration). Branding has its own routes (see
-// brandingConfiguration). Any other key is unknown.
+// serverBranding). Any other key is unknown.
 func (h *Handler) namedConfiguration(w http.ResponseWriter, r *http.Request) {
 	switch key := r.PathValue("key"); {
 	case strings.EqualFold(key, "encoding"):

@@ -65,7 +65,7 @@ func (h *Handler) administrationRoutes(rt *router) {
 	// The branding part of the configuration, which jellyfin-web's dashboard
 	// writes; the other parts are read only (see namedConfiguration), and a
 	// POST to them is not allowed.
-	signedIn(http.MethodGet, "/System/Configuration/branding", h.brandingConfiguration)
+	signedIn(http.MethodGet, "/System/Configuration/branding", h.serverBranding)
 	administrator(http.MethodPost, "/System/Configuration/branding", h.updateBranding)
 	administrator(http.MethodGet, "/System/Info/Storage", h.storage)
 	administrator(http.MethodGet, "/Library/MediaFolders", h.mediaFolders)

@@ -37,6 +37,7 @@ import (
 	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/webtheme"
 )
 
 const (
@@ -182,6 +183,9 @@ type Handler struct {
 	// starts are the plays whose torrents' starts the web client tells
 	// (see startprogress.go).
 	starts starts
+	// customCss hashes the Custom theme's CSS, for the address the web
+	// client loads it from (see brandingCss).
+	customCss webtheme.Hasher
 	// now tells the time users' allowed hours are checked against.
 	now func() time.Time
 	// newKeys remembers the API keys made from Jellyfin apps until a
@@ -280,6 +284,7 @@ func New(options Options) *Handler {
 	anonymous(http.MethodGet, "/Branding/Configuration", h.brandingConfiguration)
 	anonymous(http.MethodGet, "/Branding/Css", h.brandingCSS)
 	anonymous(http.MethodGet, "/Branding/Css.css", h.brandingCSS)
+	signedIn(http.MethodGet, "/Polyfin/WebTheme", h.webTheme)
 
 	anonymous(http.MethodGet, "/Users/Public", h.publicUsers)
 	anonymous(http.MethodPost, "/Users/AuthenticateByName", h.authenticateByName)
