@@ -583,20 +583,23 @@ func (set *overrideSet) rename(c *Credit) {
 	}
 }
 
-// overridden returns items with their local artwork (see applyLocal), the
-// ratings MDBList gives them (see keptScores), and what administrators
-// changed of them (see overrideSet.apply). Items may come from caches:
-// they are copied, never changed in place.
+// overridden returns items with the poster of the poster address template
+// (see templatePoster), their local artwork (see applyLocal), the ratings
+// MDBList gives them (see keptScores), and what administrators changed of
+// them (see overrideSet.apply). Items may come from caches: they are
+// copied, never changed in place.
 func (s *Service) overridden(items []Item) []Item {
 	set := s.overridesNow()
 	local := s.localArtwork()
 	scores := s.keptScores(items)
-	if len(set.fields) == 0 && len(set.images) == 0 && len(local) == 0 && scores == nil {
+	template := s.settings().PosterTemplate
+	if len(set.fields) == 0 && len(set.images) == 0 && len(local) == 0 && scores == nil && template == "" {
 		return items
 	}
 	audience := scores != nil && s.audienceShown()
 	result := slices.Clone(items)
 	for i := range result {
+		templatePoster(&result[i], template)
 		if len(local) > 0 {
 			applyLocal(&result[i], local)
 		}
@@ -608,9 +611,11 @@ func (s *Service) overridden(items []Item) []Item {
 	return result
 }
 
-// overriddenItem returns an item with its local artwork, its ratings from
-// MDBList and what administrators changed of it.
+// overriddenItem returns an item with the poster of the poster address
+// template, its local artwork, its ratings from MDBList and what
+// administrators changed of it.
 func (s *Service) overriddenItem(item Item) Item {
+	templatePoster(&item, s.settings().PosterTemplate)
 	if local := s.localArtwork(); len(local) > 0 {
 		applyLocal(&item, local)
 	}

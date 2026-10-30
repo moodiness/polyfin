@@ -284,6 +284,9 @@ const common: typeof en = {
     tmdb_unreachable:
       'Impossibile raggiungere TMDB per verificare la chiave. Non è stato salvato nulla: riprova più tardi.',
     invalid_critic_rating_shows: 'Scegli dall’elenco quale punteggio mostra il voto della critica.',
+    invalid_poster_badge_size: 'Scegli dall’elenco la dimensione dei badge.',
+    invalid_poster_template:
+      'Il modello di indirizzo delle locandine deve essere un indirizzo web che inizia con http:// o https:// e indica {imdb_id} o {tmdb_id}, senza spazi, nome utente né frammento.',
     invalid_measure_loudness: 'Scegli dall’elenco di quali brani misurare il volume.',
     invalid_segment_order:
       'L’ordine delle origini dei marcatori di salto deve elencare ogni origine una sola volta. Ricarica la pagina.',

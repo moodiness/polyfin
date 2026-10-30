@@ -638,6 +638,26 @@ const settings: typeof en = {
     criticRatingShowsHelp:
       'Le applicazioni Jellyfin hanno un solo campo per il voto della critica, da 0 a 100: mostra il voto della critica o quello del pubblico. Nella pagina di un titolo, il lettore web li mostra entrambi, con il voto IMDb.',
     criticRatingChoices: { critics: 'Voto della critica', audience: 'Voto del pubblico' },
+    posterBadges: 'Badge sulle locandine',
+    posterBadgesHelp:
+      'Disegna sulla locandina di un film o di una serie il suo voto a stelle, indicando IMDb quando è il voto IMDb di MDBList, i punteggi della critica e del pubblico finché è impostata una chiave API MDBList per i voti, e per una serie un nuovo episodio o una nuova stagione degli ultimi 30 giorni. Ogni app li mostra, perché fanno parte della locandina, solo con icone e numeri, per ogni lingua. Se attivato, il lettore web non mostra i voti al passaggio del puntatore. Se disattivato, le app ricevono le locandine così come sono.',
+    posterBadgeSize: 'Dimensione dei badge',
+    posterBadgeSizeHelp:
+      'Quanto sono grandi i badge rispetto alla larghezza della locandina. Sulle schede piccole mantengono una dimensione minima, e ne entrano meno.',
+    posterBadgeSizeChoices: { medium: 'Media', small: 'Piccola', large: 'Grande' },
+    posterPreview: {
+      title: 'Anteprima',
+      help: 'Titoli delle tue librerie come le app li mostrano, con la dimensione scelta, prima di salvarla, che i badge siano attivati o no.',
+      original: 'Così com’è',
+      badged: 'Con i badge',
+      card: 'Su una scheda piccola',
+      another: 'Un altro titolo',
+      none: 'Non è ancora noto nessun film né serie delle tue librerie: apri prima una libreria nel lettore web.',
+      nothing: 'Questo titolo non ha voti né nuovi episodi: la sua locandina non mostra badge.',
+    },
+    posterTemplate: 'Modello di indirizzo delle locandine',
+    posterTemplateHelp:
+      'Facoltativo. L’indirizzo da cui si scaricano le locandine di film e serie al posto di quelle degli add-on, con {imdb_id}, {tmdb_id}, {type}, movie o series, e {tmdb_type}, movie o tv, compilati. Un titolo privo di un identificatore indicato dall’indirizzo, o la cui locandina non si può scaricare lì, mantiene quella del suo add-on. Le locandine delle cartelle locali e quelle caricate hanno sempre la precedenza.',
     lyrics: 'Testi dei brani da LRCLIB',
     lyricsHelp:
       'Le applicazioni mostrano i testi dei brani, sincronizzati riga per riga quando LRCLIB, un database gratuito di testi, li ha. Polyfin cerca un brano una sola volta, per artista, titolo, album e durata, quando inizia la riproduzione o se ne aprono i dettagli o il testo. Se disattivato, i brani non hanno testi e LRCLIB non viene mai interpellato.',
@@ -987,7 +1007,7 @@ const settings: typeof en = {
       'Aggiunge le versioni trovate dagli add-on al menu delle versioni della pagina di un film o di un episodio mentre è aperta, mantenendo la versione scelta. Se disattivato, una pagina aperta prima che venisse trovata una versione elenca comunque le prime man mano che arrivano, e i suoi pulsanti di riproduzione attendono comunque una versione; le altre compaiono alla successiva apertura della pagina.',
     posterRatings: 'Mostra i voti sulle locandine',
     posterRatingsHelp:
-      'Mostra il voto a stelle di un film o di una serie sulla sua locandina nel lettore web quando vi arriva il puntatore o il focus, con i punteggi della critica e del pubblico finché è impostata una chiave API MDBList per i voti in Impostazioni › Contenuti. Per tutti gli utenti.',
+      'Mostra il voto a stelle di un film o di una serie sulla sua locandina nel lettore web quando vi arriva il puntatore o il focus, con i punteggi della critica e del pubblico finché è impostata una chiave API MDBList per i voti in Impostazioni › Contenuti. Per tutti gli utenti. Finché Badge sulle locandine è attivato in Impostazioni › Contenuti, al loro posto si vedono i badge.',
     homeRows: 'Righe della Home',
     homeRowsHelp:
       'Righe che il lettore web aggiunge alla sua pagina Home, nella loro posizione, per tutti gli utenti o per utenti scelti. Ogni utente può disattivare una riga in Il mio account › Righe della Home; le sezioni proprie del lettore web restano nelle sue Impostazioni › Home. Ogni riga esclude ciò che l’utente non può vedere: i titoli oltre il suo controllo parentale, i generi bloccati, i titoli nascosti e le librerie a lui nascoste.',
@@ -1127,6 +1147,7 @@ const settings: typeof en = {
       titlePages: 'Pagine dei titoli',
       images: 'Immagini',
       ratings: 'Voti',
+      posters: 'Locandine',
       music: 'Musica',
       thresholds: 'Soglie di riproduzione',
     },

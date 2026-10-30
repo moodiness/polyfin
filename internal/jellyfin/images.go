@@ -885,6 +885,9 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 		found = library.Artwork{}
 		found.URL, found.Confined, err = h.Library.ProgramArtwork(r.Context(), id, imageType)
 	}
+	// A badged tag stands for the image of its own tag with badges over
+	// it (see badgedTag).
+	tag, badges, preview, badged := h.badgedRequest(id, tag)
 	// Image requests come without a user: a tag that is not the image found
 	// may be that of one in a user's metadata language (see
 	// library.TaggedArtwork).
@@ -907,14 +910,26 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 		h.uploadedImage(w, r, owner, ownerType)
 		return
 	}
+	// Badges are drawn over a Primary image Polyfin does not draw, while
+	// the settings draw them, or for a preview.
+	drawn := badged && found.Generated == nil && strings.EqualFold(imageType, "Primary") &&
+		(preview || h.Accounts.Settings().PosterBadges)
 	etag := `"` + library.ImageTag(url) + `"`
+	if drawn {
+		etag = `"` + library.ImageTag(url) + "-" + badges + `"`
+	}
 	header := w.Header()
 	header.Set("ETag", etag)
 	// Tags change with the artwork, so a tagged image never changes; an
-	// app asking by tag may keep it for good.
-	if immutable {
+	// app asking by tag may keep it for good. A badged tag asked for once
+	// the badges are off answers the image without them, which the app
+	// keeps for a while only; a preview's is not kept.
+	switch {
+	case drawn && preview:
+		header.Set("Cache-Control", "no-store")
+	case immutable && (drawn || !badged):
 		header.Set("Cache-Control", immutableImage)
-	} else {
+	default:
 		header.Set("Cache-Control", taggedImage)
 	}
 	if r.Header.Get("If-None-Match") == etag {
@@ -923,13 +938,28 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 	}
 	h.images.open(h.imageDir(), h.Logger)
 	var image artwork
+	// source is the address of the image downloaded: url, else its
+	// fallback.
+	source := url
 	// Only an image Polyfin chose is drawn, whatever an artwork URL says.
 	if found.Generated != nil {
 		image, err = h.generatedArtwork(r.Context(), url, *found.Generated, found.Confined)
 	} else if key, ok := library.LocalArtworkKey(url); ok {
 		image, err = h.localArtwork(r.Context(), url, key)
 	} else {
-		image, err = h.fetchArtwork(r.Context(), url, found.Confined, h.iptvHost(r.Context(), url))
+		// The poster address template is an administrator's: its posters
+		// are not confined as the addons' may be.
+		image, err = h.fetchArtwork(r.Context(), url, found.Confined && !found.Templated, h.iptvHost(r.Context(), url))
+		// The poster address template's poster that cannot be downloaded
+		// gives way to the addon's, which apps keep for a while only.
+		if err != nil && found.Fallback != "" && r.Context().Err() == nil {
+			h.Logger.Debug("The templated poster could not be downloaded", "item", id.String(), "error", err)
+			source = found.Fallback
+			image, err = h.fetchArtwork(r.Context(), source, found.Confined, h.iptvHost(r.Context(), source))
+			if !preview {
+				header.Set("Cache-Control", taggedImage)
+			}
+		}
 	}
 	if err != nil {
 		header.Del("ETag")
@@ -944,12 +974,17 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 		w.WriteHeader(status)
 		return
 	}
+	width := 0
 	if resizable(image.contentType) {
 		if config, _, err := image.decodeConfig(); err == nil {
-			if width := resizedWidth(r.URL.Query(), config.Width, config.Height); width > 0 {
-				image = h.resized(r.Context(), url, image, width)
-			}
+			width = resizedWidth(r.URL.Query(), config.Width, config.Height)
 		}
+	}
+	switch {
+	case drawn:
+		image = h.badged(r.Context(), source, image, badges, width)
+	case width > 0:
+		image = h.resized(r.Context(), source, image, width)
 	}
 	header.Set("Content-Type", image.contentType)
 	header.Set("Content-Length", strconv.Itoa(len(image.body)))

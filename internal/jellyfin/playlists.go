@@ -948,7 +948,7 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 		if item.Overview != "" && (detail || fields.has("Overview")) {
 			dto.Overview = new(item.Overview)
 		}
-		h.setImages(&dto, item)
+		h.setImages(&dto, item, nil)
 		if detail || fields.has("Genres") {
 			dto.Genres = new(nonNil(genres))
 		}
