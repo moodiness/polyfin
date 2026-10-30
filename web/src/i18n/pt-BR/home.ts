@@ -79,6 +79,44 @@ const home: typeof en = {
       graphicsCpu: 'As conversões usam o processador',
       toneMapping: 'mapeamento de tons',
     },
+    getStarted: {
+      title: 'Primeiros passos',
+      lede: (done: number, total: number) =>
+        `${done} de ${total} etapas concluídas. Cada uma abre a página onde é configurada.`,
+      dismiss: 'Ocultar',
+      done: 'Concluído',
+      todo: 'A fazer',
+      steps: {
+        metadata: {
+          title: 'Adicionar um addon de metadados',
+          help: 'Ele dá aos títulos seus pôsteres, sinopses e episódios.',
+        },
+        library: {
+          title: 'Escolher suas bibliotecas',
+          help: 'Os catálogos das suas fontes que os aplicativos mostram como bibliotecas.',
+        },
+        users: {
+          title: 'Criar usuários ou um link de convite',
+          help: 'Uma conta para cada pessoa com quem você compartilha o Polyfin.',
+        },
+        backups: {
+          title: 'Fazer backup do banco de dados todos os dias',
+          help: 'Uma cópia das contas, das configurações e do que cada um assistiu.',
+        },
+        secretKey: {
+          title: 'Definir POLYFIN_SECRET_KEY',
+          help: 'Ela criptografa as chaves e senhas que o Polyfin armazena. Defina-a e reinicie.',
+        },
+        address: {
+          title: 'Servir HTTPS ou definir um endereço público',
+          help: 'Os aplicativos fora de casa se conectam com segurança, e as notificações levam ao Polyfin.',
+        },
+        discovery: {
+          title: 'Deixar os aplicativos da sua rede encontrarem o Polyfin',
+          help: 'Responder à descoberta na rede local com o endereço que os aplicativos alcançam.',
+        },
+      },
+    },
     server: {
       restart: 'Reiniciar',
       updateNow: 'Atualizar agora',

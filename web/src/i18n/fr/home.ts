@@ -80,6 +80,44 @@ const home: typeof en = {
       graphicsCpu: 'Les conversions passent par le processeur',
       toneMapping: 'tone mapping',
     },
+    getStarted: {
+      title: 'Bien démarrer',
+      lede: (done: number, total: number) =>
+        `${done} étape${done > 1 ? 's' : ''} sur ${total} faite${done > 1 ? 's' : ''}. Chacune ouvre la page où elle se règle.`,
+      dismiss: 'Masquer',
+      done: 'Fait',
+      todo: 'À faire',
+      steps: {
+        metadata: {
+          title: 'Ajouter un addon de métadonnées',
+          help: 'Il donne aux titres leurs affiches, leurs résumés et leurs épisodes.',
+        },
+        library: {
+          title: 'Choisir vos bibliothèques',
+          help: 'Les catalogues de vos sources que les applis montrent comme bibliothèques.',
+        },
+        users: {
+          title: 'Créer des utilisateurs ou un lien d’invitation',
+          help: 'Un compte pour chaque personne avec qui vous partagez Polyfin.',
+        },
+        backups: {
+          title: 'Sauvegarder la base de données chaque jour',
+          help: 'Une copie des comptes, des réglages et de ce que chacun a regardé.',
+        },
+        secretKey: {
+          title: 'Définir POLYFIN_SECRET_KEY',
+          help: 'Elle chiffre les clés et mots de passe que Polyfin garde. Définissez-la, puis redémarrez.',
+        },
+        address: {
+          title: 'Servir HTTPS ou indiquer une adresse publique',
+          help: 'Les applis hors de chez vous se connectent en sécurité, et les notifications mènent à Polyfin.',
+        },
+        discovery: {
+          title: 'Laisser les applis de votre réseau trouver Polyfin',
+          help: 'Répondre à la découverte sur le réseau local avec l’adresse que les applis joignent.',
+        },
+      },
+    },
     server: {
       restart: 'Redémarrer',
       updateNow: 'Mettre à jour maintenant',

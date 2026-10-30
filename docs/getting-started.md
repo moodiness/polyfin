@@ -1,6 +1,6 @@
 # Getting started
 
-This page covers what to do the first time you open Polyfin: creating the administrator and the other accounts, signing in from Jellyfin apps, and choosing the language of generated names.
+This page covers what to do the first time you open Polyfin: creating the administrator and the other accounts, the steps **Home** suggests next, signing in from Jellyfin apps, and choosing the language of generated names.
 
 ## First run
 
@@ -13,6 +13,24 @@ docker compose logs polyfin
 ```
 
 Enter the code on the setup page to create the administrator. On the [desktop version](desktop.md#first-start), the menu shows the code until then.
+
+### The Get started card
+
+Once the administrator exists, the admin app's **Home** shows **Get started**: the steps of a good setup, each marked **Done** or **To do**. Each step opens the page where it is set. The card reads the server's state each time Home loads, and again every 10 seconds for what Health tells:
+
+| Step | Done when | Opens |
+|---|---|---|
+| **Add a metadata addon** | An enabled Stremio addon of the server gives metadata (its manifest lists the `meta` resource), the addons Health's warning about metadata languages counts. | **Sources** |
+| **Choose your libraries** | At least one of the server's libraries is enabled. | **Libraries** |
+| **Create users or an invite link** | Another account than the first exists, or an invite link is active. | **Users** |
+| **Back up the database every day** | **Back up the database every day** is on, as Health's **Backups** part tells. | **Settings › Backups** |
+| **Set POLYFIN_SECRET_KEY** | `POLYFIN_SECRET_KEY` is set, as Health's **Stored keys** part tells (see [Configuration](configuration.md)). | **System › Health**, at **Stored keys** |
+| **Serve HTTPS or set a public address** | **Public address** is set, under **Settings › Notifications**, or **Serve HTTPS** is on and Health finds no problem with its port, its certificate files or Let's Encrypt. | **Settings › Security**, or the page of Health's HTTPS problem |
+| **Let apps on your network find Polyfin** | **Answer local network discovery** is on, **Address on the local network** is set, and Health finds no problem with discovery's port or the address it announces. | **Settings › General**, or the page of Health's discovery problem |
+
+Discovery asks for **Address on the local network** because, without it, each answer gives the address the system reaches the app from. In a container on a bridge network, that is the container's own, which apps cannot reach, and Health only tells it once an app has asked (see [Local network discovery](administration.md#local-network-discovery)).
+
+The card goes away once every step is done. It comes back if a step is undone later, as backups turned off. **Dismiss** hides it for good in this browser; the steps still show their state on their pages.
 
 ### Create users
 

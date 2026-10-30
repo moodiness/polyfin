@@ -28,6 +28,7 @@ import {
   StatusPill,
   TextLink,
 } from '@/ui'
+import { GetStarted } from './GetStarted'
 import { NowPlaying, useLiveSessions } from './NowPlaying'
 import { RecentActivity } from './RecentActivity'
 import {
@@ -117,6 +118,7 @@ function Overview({ name }: { name: string }) {
               {text.update(update.version, health.data.process.version)}
             </Notice>
           )}
+          <GetStarted />
           <NowPlaying
             aside={
               transcoder ? (
