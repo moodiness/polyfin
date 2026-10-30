@@ -219,6 +219,9 @@ func DefaultSettings() Settings {
 		SiloApps:         false,
 
 		PosterRatings:          false,
+		PosterBadges:           false,
+		PosterBadgeSize:        PosterBadgeSizes[0],
+		PosterTemplate:         "",
 		ProviderIssuer:         "",
 		ProviderName:           "",
 		ProviderClientID:       "",
@@ -456,6 +459,9 @@ func SettingsBounds() map[string]SettingBounds {
 		"siloApps":         is(d.SiloApps),
 
 		"posterRatings":          is(d.PosterRatings),
+		"posterBadges":           is(d.PosterBadges),
+		"posterBadgeSize":        choice(d.PosterBadgeSize, anys(PosterBadgeSizes)),
+		"posterTemplate":         text(MaxPosterTemplateBytes, d.PosterTemplate),
 		"providerIssuer":         text(MaxProviderIssuerBytes, d.ProviderIssuer),
 		"providerName":           text(MaxProviderNameBytes, d.ProviderName),
 		"providerClientId":       text(MaxProviderClientBytes, d.ProviderClientID),

@@ -271,6 +271,9 @@ const common: typeof en = {
     tmdb_unreachable:
       'TMDB n’a pas pu être joint pour vérifier la clé. Rien n’a été enregistré : réessayez plus tard.',
     invalid_critic_rating_shows: 'Choisissez dans la liste le score qu’affiche la note critique.',
+    invalid_poster_badge_size: 'Choisissez dans la liste la taille des badges.',
+    invalid_poster_template:
+      'Le modèle d’adresse des affiches doit être une adresse web commençant par http:// ou https://, nommant {imdb_id} ou {tmdb_id}, sans espace, nom d’utilisateur ni fragment.',
     invalid_measure_loudness: 'Choisissez dans la liste les chansons dont le volume est mesuré.',
     invalid_segment_order:
       'L’ordre des sources de repères doit citer chaque source une fois. Rechargez la page.',

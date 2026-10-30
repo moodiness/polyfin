@@ -164,3 +164,24 @@ func TestUserContentRangesAreCheckedByTheDatabase(t *testing.T) {
 		t.Error("too many blocked genres stored")
 	}
 }
+
+// The poster address template is an address naming an identifier to fill
+// in, as the poster of every title would otherwise be the same.
+func TestPosterTemplatesNameAnIdentifier(t *testing.T) {
+	for template, valid := range map[string]bool{
+		"": true,
+		"https://posters.example/{type}/{imdb_id}.jpg":  true,
+		"http://192.168.1.2:8080/poster?tmdb={tmdb_id}": true,
+		"https://posters.example/poster.jpg":            false,
+		"https://posters.example/{type}.jpg":            false,
+		"ftp://posters.example/{imdb_id}.jpg":           false,
+		"https://user:pass@posters.example/{imdb_id}":   false,
+		"https://posters.example/{imdb_id} .jpg":        false,
+		"https://posters.example/{imdb_id}#top":         false,
+		"/{imdb_id}.jpg":                                false,
+	} {
+		if got := ValidPosterTemplate(template); got != valid {
+			t.Errorf("%q: valid %v, want %v", template, got, valid)
+		}
+	}
+}

@@ -744,6 +744,11 @@ type settingsJSON struct {
 	SiloApps *bool `json:"siloApps"`
 	// PosterRatings keeps its current value when a PUT leaves it out.
 	PosterRatings *bool `json:"posterRatings"`
+	// PosterBadges, PosterBadgeSize and PosterTemplate keep their current
+	// values when a PUT leaves them out.
+	PosterBadges    *bool   `json:"posterBadges"`
+	PosterBadgeSize *string `json:"posterBadgeSize"`
+	PosterTemplate  *string `json:"posterTemplate"`
 	// The identity provider keeps its current values when a PUT leaves
 	// them out; an empty issuer or client ID turns its sign-in off. The
 	// client secret is never sent back: ProviderClientSecretSet tells
@@ -991,6 +996,9 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		InterfaceRoutes:         accounts.InterfaceRoutes,
 		SiloApps:                &settings.SiloApps,
 		PosterRatings:           &settings.PosterRatings,
+		PosterBadges:            &settings.PosterBadges,
+		PosterBadgeSize:         &settings.PosterBadgeSize,
+		PosterTemplate:          &settings.PosterTemplate,
 
 		ProviderIssuer:          &settings.ProviderIssuer,
 		ProviderName:            &settings.ProviderName,
@@ -1730,6 +1738,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		CacheFolder:          valueOr(body.CacheFolder, current.CacheFolder),
 		SiloApps:             valueOr(body.SiloApps, current.SiloApps),
 		PosterRatings:        valueOr(body.PosterRatings, current.PosterRatings),
+		PosterBadges:         valueOr(body.PosterBadges, current.PosterBadges),
+		PosterBadgeSize:      valueOr(body.PosterBadgeSize, current.PosterBadgeSize),
+		PosterTemplate:       valueOr(body.PosterTemplate, current.PosterTemplate),
 
 		ProviderIssuer:         valueOr(body.ProviderIssuer, current.ProviderIssuer),
 		ProviderName:           valueOr(body.ProviderName, current.ProviderName),

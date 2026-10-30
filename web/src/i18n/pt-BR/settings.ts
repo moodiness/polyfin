@@ -614,6 +614,26 @@ const settings: typeof en = {
     criticRatingShowsHelp:
       'Os aplicativos Jellyfin têm um único campo para a avaliação da crítica, de 0 a 100: ele mostra a nota da crítica ou a nota do público. Na página de um título, o player web mostra as duas, com a avaliação do IMDb.',
     criticRatingChoices: { critics: 'Nota da crítica', audience: 'Nota do público' },
+    posterBadges: 'Selos nos pôsteres',
+    posterBadgesHelp:
+      'Desenha sobre o pôster de um filme ou de uma série a avaliação em estrelas, indicando o IMDb quando é a avaliação do IMDb vinda do MDBList, as notas da crítica e do público enquanto houver uma chave da API do MDBList para avaliações, e numa série um episódio novo ou uma temporada nova dos últimos 30 dias. Todos os apps os mostram, pois fazem parte do pôster, só com ícones e números, para qualquer idioma. Enquanto ativado, o player web não mostra avaliações ao passar o ponteiro. Quando desativado, os apps recebem os pôsteres como são.',
+    posterBadgeSize: 'Tamanho dos selos',
+    posterBadgeSizeHelp:
+      'O tamanho dos selos em relação à largura do pôster. Nos cartões pequenos eles mantêm um tamanho mínimo, e cabem menos deles.',
+    posterBadgeSizeChoices: { medium: 'Médio', small: 'Pequeno', large: 'Grande' },
+    posterPreview: {
+      title: 'Prévia',
+      help: 'Títulos das suas bibliotecas como os apps os mostram, no tamanho escolhido, antes de salvar, com os selos ativados ou não.',
+      original: 'Como é',
+      badged: 'Com selos',
+      card: 'Num cartão pequeno',
+      another: 'Outro título',
+      none: 'Nenhum filme ou série das suas bibliotecas é conhecido ainda: abra primeiro uma biblioteca no player web.',
+      nothing: 'Este título não tem avaliação nem episódio novo: o pôster não mostra nenhum selo.',
+    },
+    posterTemplate: 'Modelo de endereço dos pôsteres',
+    posterTemplateHelp:
+      'Opcional. O endereço de onde os pôsteres de filmes e séries são baixados no lugar dos pôsteres dos complementos, com {imdb_id}, {tmdb_id}, {type}, movie ou series, e {tmdb_type}, movie ou tv, preenchidos. Um título sem um identificador que o endereço indica, ou cujo pôster não pode ser baixado ali, mantém o do seu complemento. Os pôsteres de pastas locais e os enviados continuam tendo prioridade.',
     lyrics: 'Letras de músicas do LRCLIB',
     lyricsHelp:
       'Os aplicativos mostram as letras das músicas, sincronizadas linha por linha quando o LRCLIB, um banco de dados gratuito de letras, as tem. O Polyfin busca uma música uma única vez, pelo artista, título, álbum e duração, quando ela começa a tocar ou quando seus detalhes ou sua letra são abertos. Quando desativado, as músicas ficam sem letra e o LRCLIB nunca é consultado.',
@@ -948,7 +968,7 @@ const settings: typeof en = {
       'Adiciona as versões que os complementos encontram ao menu de versões da página de um filme ou episódio enquanto ela está aberta, mantendo a versão escolhida. Quando desativado, uma página aberta antes de qualquer versão ser encontrada ainda lista as primeiras à medida que chegam, e os botões de reprodução dela ainda aguardam uma versão; as demais aparecem quando a página é aberta novamente.',
     posterRatings: 'Mostrar avaliações nos pôsteres',
     posterRatingsHelp:
-      'Mostra a avaliação em estrelas de um filme ou de uma série sobre o pôster no player web quando o ponteiro ou o foco chega nele, com as notas da crítica e do público enquanto houver uma chave da API do MDBList para avaliações em Configurações › Conteúdo. Para todos os usuários.',
+      'Mostra a avaliação em estrelas de um filme ou de uma série sobre o pôster no player web quando o ponteiro ou o foco chega nele, com as notas da crítica e do público enquanto houver uma chave da API do MDBList para avaliações em Configurações › Conteúdo. Para todos os usuários. Enquanto Selos nos pôsteres estiver ativado em Configurações › Conteúdo, os selos aparecem no lugar.',
     homeRows: 'Linhas da tela inicial',
     homeRowsHelp:
       'Linhas que o player web adiciona à página inicial, no lugar delas, para todos os usuários ou para usuários escolhidos. Cada usuário pode desativar uma linha em Minha conta › Linhas da tela inicial; as seções próprias do player web ficam em Configurações › Início. Cada linha deixa de fora o que o usuário não pode ver: títulos acima do controle parental dele, gêneros bloqueados, títulos ocultos e as bibliotecas ocultas para ele.',
@@ -1072,6 +1092,7 @@ const settings: typeof en = {
       titlePages: 'Páginas de títulos',
       images: 'Imagens',
       ratings: 'Avaliações',
+      posters: 'Pôsteres',
       music: 'Música',
       thresholds: 'Limites de reprodução',
     },

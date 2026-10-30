@@ -488,7 +488,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.ParentBackdropItemId = item.SeriesID.String()
 		dto.ParentBackdropImageTags = []string{}
 	}
-	h.setImages(&dto, item)
+	h.setImages(&dto, item, state.badges)
 
 	if item.Overview != "" && (detail || fields.has("Overview")) {
 		dto.Overview = new(item.Overview)
@@ -609,9 +609,15 @@ func describeEdited(dto *BaseItemDto, item library.Item, fields fieldSet, detail
 	}
 }
 
-func (h *Handler) setImages(dto *BaseItemDto, item library.Item) {
+// setImages sets the tags of an item's images on its DTO: its Primary
+// image's is the badged one (see badgedTag) when badges holds what its
+// badges show.
+func (h *Handler) setImages(dto *BaseItemDto, item library.Item, badges map[accounts.ID]string) {
 	if item.Images.Primary != "" {
 		dto.ImageTags["Primary"] = library.ImageTag(item.Images.Primary)
+		if shown, ok := badges[item.ID]; ok {
+			dto.ImageTags["Primary"] = h.badgedTag(posterBadgesPurpose, item.ID, dto.ImageTags["Primary"], shown)
+		}
 		ratio := 2.0 / 3.0
 		switch item.Kind {
 		case library.KindEpisode, library.KindVideo, library.KindProgram, library.KindRecording, library.KindReplay, library.KindExtra:
