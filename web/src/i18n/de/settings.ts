@@ -1008,6 +1008,7 @@ const settings: typeof en = {
         available: 'Jetzt verfügbar',
         waiting: 'Noch ausstehend',
         trakt: 'Empfohlen auf Trakt',
+        picks: 'Top-Tipps für dich',
       },
       kindHelp: {
         catalog:
@@ -1023,6 +1024,8 @@ const settings: typeof en = {
           'Die nicht begonnenen Titel der Merkliste des Benutzers, für die die letzte Prüfung keine Version gefunden hat oder die noch nicht erschienen sind, zuletzt hinzugefügte zuerst. Ein noch nicht geprüfter Titel steht in keiner der beiden Zeilen.',
         trakt:
           'Die Filme und Serien, die Trakt dem Benutzer empfiehlt, alle 12 Stunden über seine Trakt-Verbindung gelesen, ohne die aus seiner Trakt-Sammlung oder -Watchlist und ohne die, die er gesehen hat. Nur Benutzer, die Trakt unter Mein Konto › Tracking verbunden haben, sehen sie; beim ersten Mal erscheint sie, sobald Trakt geantwortet hat.',
+        picks:
+          'Die Filme und Serien der Bibliotheken des Benutzers, intelligente Listen eingeschlossen, die sein Geschmacksprofil am höchsten einstuft, ohne die bereits abgespielten und ohne die eines Genres, das er nicht mag. Solange das Profil ihn noch nicht gut genug kennt, die ersten Titel der Bibliotheken, die beliebtesten zuerst. Jeder Benutzer sieht sein Profil unter Mein Konto.',
       },
       defaultNames: {
         because: 'Weil du gesehen hast',
@@ -1030,6 +1033,7 @@ const settings: typeof en = {
         available: 'Jetzt verfügbar',
         waiting: 'Noch ausstehend',
         trakt: 'Empfohlen auf Trakt',
+        picks: 'Top-Tipps für dich',
       },
       catalog: 'Katalog',
       noCatalog: 'Die Server-Add-ons haben keinen Katalog zum Anzeigen.',

@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Titres masqués',
       homeRows: 'Rangées d’accueil',
       trackChoices: 'Choix des pistes',
+      taste: 'Profil de goûts',
       metadataLanguage: 'Langue des métadonnées',
       webTheme: 'Thème du lecteur web',
       audioRegion: 'Région audio',
@@ -57,6 +58,31 @@ const account: typeof en = {
         'pt-BR': 'Portugais (Brésil)',
         'pt-PT': 'Portugais (Portugal)',
       },
+    },
+    taste: {
+      help: 'Ce que Polyfin a appris de vos goûts à partir des films et des séries que vous avez terminés, revus, arrêtés tôt, aimés, pas aimés, mis en favoris et masqués, les plus récents comptant le plus. Une fois qu’il vous connaît assez, il classe Sélection pour vous et ordonne les titres similaires et les suggestions. Il reste sur le serveur : vous seul le voyez.',
+      notBuilt: 'Pas encore construit',
+      notBuiltHelp: 'Polyfin construit votre profil en arrière-plan, toutes les heures.',
+      certainty: 'À quel point il vous connaît',
+      builtFrom: (titles: number) =>
+        `Construit à partir de ${titles <= 1 ? `${titles} titre` : `${titles} titres`},`,
+      belowGate:
+        'Polyfin ne vous connaît pas encore assez : terminez ou aimez encore quelques films et séries. D’ici là, Sélection pour vous montre les titres les plus populaires, et les autres listes gardent leur ordre habituel.',
+      facets: {
+        genre: 'Genres',
+        director: 'Réalisateurs',
+        cast: 'Distribution',
+        decade: 'Décennies',
+        language: 'Langues',
+      },
+      liked: 'Vous aimez',
+      disliked: 'Vous aimez moins',
+      vetoed: 'exclu de Sélection pour vous',
+      taglines: 'Me dire pourquoi un titre est pour moi',
+      taglinesHelp:
+        'La page d’un titre commence par « 87 % pour vous · parce que vous aimez … », une fois que votre profil vous connaît assez.',
+      taglinesOn: 'Les titres disent maintenant pourquoi ils sont pour vous.',
+      taglinesOff: 'Les titres ne disent plus pourquoi ils sont pour vous.',
     },
     homeRows: {
       help: 'Les rangées que l’administrateur ajoute pour vous à la page d’accueil du lecteur web. Désactivez-en une pour la retirer de votre page d’accueil, et de vos bibliothèques dans les autres applis quand elle en est aussi une. Les sections propres au lecteur web restent dans ses Paramètres › Accueil.',

@@ -1011,6 +1011,7 @@ const settings: typeof en = {
         available: 'Já disponível',
         waiting: 'Ainda aguardando',
         trakt: 'Recomendados no Trakt',
+        picks: 'Escolhas para você',
       },
       kindHelp: {
         catalog:
@@ -1026,6 +1027,8 @@ const settings: typeof en = {
           'Os títulos não iniciados da lista “Para assistir” do usuário para os quais a última verificação não encontrou nenhuma versão, ou que ainda não foram lançados, dos últimos adicionados aos primeiros. Um título ainda não verificado não está em nenhuma das duas linhas.',
         trakt:
           'Os filmes e séries que o Trakt recomenda ao usuário, lidos com a conexão dele ao Trakt a cada 12 horas, sem os da coleção ou da Watchlist dele no Trakt nem os que ele já assistiu. Só os usuários que conectaram o Trakt em Minha conta › Acompanhamento a veem; na primeira vez, ela aparece assim que o Trakt responde.',
+        picks:
+          'Os filmes e séries das bibliotecas do usuário, listas inteligentes incluídas, que o perfil de gosto dele coloca primeiro, sem os que ele já reproduziu nem os de um gênero de que ele não gosta. Enquanto o perfil não o conhece o suficiente, os primeiros títulos das bibliotecas, os mais populares primeiro. Cada usuário vê o próprio perfil em Minha conta.',
       },
       defaultNames: {
         because: 'Porque você assistiu',
@@ -1033,6 +1036,7 @@ const settings: typeof en = {
         available: 'Já disponível',
         waiting: 'Ainda aguardando',
         trakt: 'Recomendados no Trakt',
+        picks: 'Escolhas para você',
       },
       catalog: 'Catálogo',
       noCatalog: 'Os complementos do servidor não têm nenhum catálogo para mostrar.',

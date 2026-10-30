@@ -69,6 +69,7 @@ import (
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
+	"github.com/moodiness/polyfin/internal/taste"
 	"github.com/moodiness/polyfin/internal/themecopy"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
@@ -574,6 +575,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	songLoudness := loudness.New(pool, meter, logger, store.Settings)
 	defer songLoudness.Close()
 	homeRows := homerows.New(pool)
+	// Each user's taste profile, built in the background.
+	tastes := taste.New(pool, store, userData, lib, logger)
+	registerTasteTask(registry, tastes)
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:     serverID,
 		Accounts:     store,
@@ -599,6 +603,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Playlists:      playlists.New(pool),
 		Collections:    collections.New(pool),
 		HomeRows:       homeRows,
+		Taste:          tastes,
 		Thumbnails:     images,
 		Logger:         logger,
 		Activity:       activityLog,
@@ -680,6 +685,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// may list as the Jellyfin API tells them.
 		HomeRows:       homeRows,
 		HomeRowChoices: jellyfinAPI,
+		// Each user's taste profile, which My account shows them.
+		Taste: tastes,
 		// Reset my preferences forgets what Jellyfin apps saved, with what
 		// the Jellyfin API remembers of it.
 		Preferences: jellyfinAPI,
@@ -1094,6 +1101,26 @@ func registerBackupTask(registry *tasks.Registry, backups *backup.Service) {
 		},
 		Daily: backups.Hour,
 		Run:   backups.Run,
+	})
+}
+
+// registerTasteTask registers the building of the users' taste profiles,
+// every hour and at start.
+func registerTasteTask(registry *tasks.Registry, tastes *taste.Service) {
+	registry.Register(tasks.Task{
+		Key:      "BuildTasteProfiles",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Build taste profiles", Description: "Builds each user's taste profile again from the movies and series they finished, watched again, stopped early, liked, disliked, marked as favorites and hid, for Top picks for you and the order of similar titles, suggestions and movie recommendations: every hour."},
+			"fr":    {Name: "Construire les profils de goûts", Description: "Reconstruit le profil de goûts de chaque utilisateur à partir des films et des séries qu’il a terminés, revus, arrêtés tôt, aimés, pas aimés, mis en favoris et masqués, pour Sélection pour vous et l’ordre des titres similaires, des suggestions et des recommandations de films : toutes les heures."},
+			"de":    {Name: "Geschmacksprofile erstellen", Description: "Erstellt das Geschmacksprofil jedes Benutzers neu aus den Filmen und Serien, die er zu Ende gesehen, erneut gesehen, früh abgebrochen, gemocht, nicht gemocht, zu Favoriten gemacht und ausgeblendet hat, für Top-Tipps für dich und die Reihenfolge ähnlicher Titel, Vorschläge und Filmempfehlungen: jede Stunde."},
+			"es":    {Name: "Crear los perfiles de gustos", Description: "Vuelve a crear el perfil de gustos de cada usuario a partir de las películas y series que terminó, volvió a ver, dejó pronto, le gustaron, no le gustaron, marcó como favoritas y ocultó, para Recomendados para usted y el orden de los títulos similares, las sugerencias y las recomendaciones de películas: cada hora."},
+			"it":    {Name: "Crea i profili dei gusti", Description: "Ricrea il profilo dei gusti di ogni utente dai film e dalle serie che ha finito, rivisto, interrotto presto, apprezzato, non apprezzato, messo tra i preferiti e nascosto, per Scelti per te e l’ordine dei titoli simili, dei suggerimenti e dei film consigliati: ogni ora."},
+			"pt-BR": {Name: "Criar os perfis de gosto", Description: "Cria de novo o perfil de gosto de cada usuário a partir dos filmes e séries que ele terminou, reviu, largou cedo, curtiu, não curtiu, marcou como favoritos e ocultou, para Escolhas para você e a ordem dos títulos semelhantes, das sugestões e das recomendações de filmes: a cada hora."},
+		},
+		Interval: taste.BuildInterval,
+		AtStart:  true,
+		Run:      tastes.BuildAll,
 	})
 }
 

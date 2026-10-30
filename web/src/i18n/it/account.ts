@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Titoli nascosti',
       homeRows: 'Righe della Home',
       trackChoices: 'Scelta delle tracce',
+      taste: 'Profilo dei gusti',
       metadataLanguage: 'Lingua dei metadati',
       webTheme: 'Tema del lettore web',
       audioRegion: 'Regione audio',
@@ -57,6 +58,30 @@ const account: typeof en = {
         'pt-BR': 'Portoghese (Brasile)',
         'pt-PT': 'Portoghese (Portogallo)',
       },
+    },
+    taste: {
+      help: 'Ciò che Polyfin ha imparato dei tuoi gusti dai film e dalle serie che hai finito, rivisto, interrotto presto, apprezzato, non apprezzato, messo tra i preferiti e nascosto, i più recenti contano di più. Quando ti conosce abbastanza, ordina Scelti per te, i titoli simili e i suggerimenti. Resta sul server: lo vedi solo tu.',
+      notBuilt: 'Non ancora creato',
+      notBuiltHelp: 'Polyfin crea il tuo profilo in background, ogni ora.',
+      certainty: 'Quanto ti conosce',
+      builtFrom: (titles: number) => `Creato da ${titles === 1 ? '1 titolo' : `${titles} titoli`},`,
+      belowGate:
+        'Polyfin non ti conosce ancora abbastanza: finisci o metti «Mi piace» ad altri film e serie. Fino ad allora, Scelti per te mostra i titoli più popolari, e le altre liste mantengono il loro ordine abituale.',
+      facets: {
+        genre: 'Generi',
+        director: 'Regia',
+        cast: 'Cast',
+        decade: 'Decenni',
+        language: 'Lingue',
+      },
+      liked: 'Ti piace',
+      disliked: 'Ti piace meno',
+      vetoed: 'escluso da Scelti per te',
+      taglines: 'Dimmi perché un titolo fa per me',
+      taglinesHelp:
+        'La pagina di un titolo inizia con «87% per te · perché ti piace …», quando il tuo profilo ti conosce abbastanza.',
+      taglinesOn: 'Ora i titoli dicono perché fanno per te.',
+      taglinesOff: 'I titoli non dicono più perché fanno per te.',
     },
     homeRows: {
       help: 'Le righe che l’amministratore aggiunge per te alla pagina Home del player web. Disattivane una per escluderla dalla tua pagina Home e, quando lo è anche lì, dalle tue librerie nelle altre applicazioni. Le sezioni proprie del player web restano nelle sue Impostazioni › Home.',
