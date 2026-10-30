@@ -56,18 +56,17 @@ func (t subtitleText) write(format string, start time.Duration) (data []byte, co
 }
 
 // retimed is t with its times mapped by timing: its cues, and the events
-// of its script. Those ending before the version starts are left out.
+// of its script. Those timing leaves out, ending before the version starts
+// or in a scene the version lacks, are left out.
 func (t subtitleText) retimed(timing speech.Timing) subtitleText {
 	retimed := subtitleText{cues: timing.Apply(t.cues)}
 	if t.script != nil {
 		script := &subtitles.Script{Header: t.script.Header, Footer: t.script.Footer, Events: make([]subtitles.Event, 0, len(t.script.Events))}
 		for _, event := range t.script.Events {
-			event.Start, event.End = timing.At(event.Start), timing.At(event.End)
-			if event.End <= 0 {
-				continue
+			var ok bool
+			if event.Start, event.End, ok = timing.Map(event.Start, event.End); ok {
+				script.Events = append(script.Events, event)
 			}
-			event.Start = max(event.Start, 0)
-			script.Events = append(script.Events, event)
 		}
 		retimed.script = script
 	}

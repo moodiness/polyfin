@@ -1,7 +1,8 @@
 // Package speech finds when a version has speech, from the energy of the
 // voice band in its audio, and times subtitles to it: a constant shift and
 // a speed difference between the usual frame rates, found together, as
-// subtitle aligners do.
+// subtitle aligners do, and against the whole version, a new shift after
+// each scene added or removed.
 package speech
 
 import (
@@ -43,10 +44,13 @@ type Span struct {
 }
 
 // Reference is when a version has speech: the spans of Speech, by start,
-// within the Windows that were looked at, by start too.
+// within the Windows that were looked at, by start too. Whole is set when
+// Speech is that of the whole version, the lines of a text track inside
+// it: a subtitle timed on another cut can then be fitted piece by piece.
 type Reference struct {
 	Windows []Span
 	Speech  []Span
+	Whole   bool
 }
 
 // Detect finds the speech in mono 16-bit samples at SampleRate, the first
