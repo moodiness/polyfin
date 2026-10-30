@@ -56,12 +56,13 @@ var errThumbnailSize = errors.New("the thumbnails differ in size")
 func (t *tiler) add(img *image.YCbCr) error {
 	size := img.Rect.Size()
 	if t.canvas == nil {
-		// The first thumbnail sets their height, and their width unless
-		// it was set.
+		// The first thumbnail sets their size, but what was set.
 		if t.info.Width == 0 {
 			t.info.Width = size.X
 		}
-		t.info.Height = size.Y
+		if t.info.Height == 0 {
+			t.info.Height = size.Y
+		}
 		t.canvas = blackCanvas(t.info.Width*tileColumns, t.info.Height*tileRows)
 	}
 	if size.X != t.info.Width || size.Y != t.info.Height {
@@ -84,6 +85,46 @@ func (t *tiler) finish() (Info, [][]byte, error) {
 		}
 	}
 	return t.info, t.tiles, nil
+}
+
+// resumeTiler packs the thumbnails following the placed first ones of
+// tile, a tile kept of a set described by info: its tiles are those from
+// that one on. A nil tile starts a tile of its own.
+func resumeTiler(info Info, tile []byte, placed int) (*tiler, error) {
+	t := &tiler{info: info, placed: placed}
+	if tile == nil {
+		t.placed = 0
+		return t, nil
+	}
+	canvas, err := decodeTile(tile, info)
+	if err != nil {
+		return nil, err
+	}
+	t.canvas = canvas
+	return t, nil
+}
+
+// errTile reports a tile kept that is not as its set describes it.
+var errTile = errors.New("a tile is not as its set describes it")
+
+// decodeTile decodes a tile of a set described by info.
+func decodeTile(tile []byte, info Info) (*image.YCbCr, error) {
+	img, err := jpeg.Decode(bytes.NewReader(tile))
+	if err != nil {
+		return nil, err
+	}
+	canvas, ok := img.(*image.YCbCr)
+	if !ok || canvas.SubsampleRatio != image.YCbCrSubsampleRatio420 ||
+		canvas.Rect != image.Rect(0, 0, info.Width*info.TileWidth, info.Height*info.TileHeight) {
+		return nil, errTile
+	}
+	return canvas, nil
+}
+
+// cell is the thumbnail at place of a tile's canvas.
+func cell(canvas *image.YCbCr, info Info, place int) *image.YCbCr {
+	x, y := place%info.TileWidth*info.Width, place/info.TileWidth*info.Height
+	return canvas.SubImage(image.Rect(x, y, x+info.Width, y+info.Height)).(*image.YCbCr)
 }
 
 func (t *tiler) flush() error {

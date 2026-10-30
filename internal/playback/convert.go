@@ -29,6 +29,14 @@ func (s *Service) DecodingHardware(codec string, bitDepth int) *hls.Hardware {
 	return nil
 }
 
+// ConvertsOnProcessor reports whether the video of a playback, a channel
+// or a download is converted on the processor now, or tone mapped there.
+func (s *Service) ConvertsOnProcessor() bool {
+	return slices.ContainsFunc(s.segments.Running(), func(r hls.Running) bool {
+		return r.Video != nil && (r.Video.Hardware == nil || r.Video.ToneMapOnCPU)
+	})
+}
+
 // Capabilities are what the installed FFmpeg converts with.
 type Capabilities struct {
 	// Encoders are the FFmpeg encoders present, such as libx264.

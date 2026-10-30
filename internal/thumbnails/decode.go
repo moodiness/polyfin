@@ -16,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/process"
 )
 
@@ -36,8 +37,8 @@ var errNoImage = errors.New("FFmpeg decoded no image of the keyframe")
 
 // decodeKeyframe decodes frame, a keyframe of video, on hw when not nil,
 // and returns its image through each of filters, which must end with
-// yuv420p frames.
-func decodeKeyframe(ctx context.Context, ffmpeg string, hw *hls.Hardware, video *container.Video, frame []byte, filters []string) ([]*image.YCbCr, error) {
+// yuv420p frames. FFmpeg runs at the lowest priority when idle is set.
+func decodeKeyframe(ctx context.Context, ffmpeg string, hw *hls.Hardware, video *container.Video, frame []byte, filters []string, idle bool) ([]*image.YCbCr, error) {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	args = append(args, hw.DecodeInputs()...)
 	args = append(args, "-f", "matroska", "-i", "pipe:0")
@@ -83,6 +84,9 @@ func decodeKeyframe(ctx context.Context, ffmpeg string, hw *hls.Hardware, video 
 	extra.Started(cmd, err)
 	if err != nil {
 		return nil, fmt.Errorf("start FFmpeg: %w", err)
+	}
+	if idle {
+		media.LowerPriority(cmd.Process.Pid)
 	}
 	images := make([]*image.YCbCr, len(filters))
 	errs := make([]error, len(filters))

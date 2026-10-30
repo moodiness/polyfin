@@ -16,21 +16,43 @@ import (
 // SaveTrickplay keeps a version's thumbnails at info.Width, replacing
 // those it had at that width. item is the title the version belongs to.
 func (s *Service) SaveTrickplay(ctx context.Context, version, item accounts.ID, info Info, tiles [][]byte) error {
+	return s.saveTiles(ctx, version, item, info, 0, tiles)
+}
+
+// saveTiles keeps a version's thumbnails at info.Width, described by info,
+// whose tiles from first on are tiles: those before are kept, the others
+// replaced. From the first tile, the set replaces the one it had.
+func (s *Service) saveTiles(ctx context.Context, version, item accounts.ID, info Info, first int, tiles [][]byte) error {
 	err := pgx.BeginFunc(ctx, s.DB, func(tx pgx.Tx) error {
 		if err := ensureVersion(ctx, tx, version, item); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, "DELETE FROM trickplay_sets WHERE version_id = $1 AND width = $2", version, info.Width); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO trickplay_sets (version_id, width, height, tile_width, tile_height, thumbnail_count, interval_ms, bandwidth)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-			version, info.Width, info.Height, info.TileWidth, info.TileHeight, info.ThumbnailCount, info.Interval, info.Bandwidth); err != nil {
-			return err
+		if first == 0 {
+			if _, err := tx.Exec(ctx, "DELETE FROM trickplay_sets WHERE version_id = $1 AND width = $2", version, info.Width); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO trickplay_sets (version_id, width, height, tile_width, tile_height, thumbnail_count, interval_ms, bandwidth)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+				version, info.Width, info.Height, info.TileWidth, info.TileHeight, info.ThumbnailCount, info.Interval, info.Bandwidth); err != nil {
+				return err
+			}
+		} else {
+			tag, err := tx.Exec(ctx, `UPDATE trickplay_sets SET height = $3, tile_width = $4, tile_height = $5, thumbnail_count = $6,
+				interval_ms = $7, bandwidth = $8 WHERE version_id = $1 AND width = $2`,
+				version, info.Width, info.Height, info.TileWidth, info.TileHeight, info.ThumbnailCount, info.Interval, info.Bandwidth)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() == 0 {
+				return errGone
+			}
+			if _, err := tx.Exec(ctx, "DELETE FROM trickplay_tiles WHERE version_id = $1 AND width = $2 AND tile >= $3", version, info.Width, first); err != nil {
+				return err
+			}
 		}
 		rows := make([][]any, len(tiles))
 		for i, tile := range tiles {
-			rows[i] = []any{version, info.Width, i, tile}
+			rows[i] = []any{version, info.Width, first + i, tile}
 		}
 		if _, err := tx.CopyFrom(ctx, pgx.Identifier{"trickplay_tiles"}, []string{"version_id", "width", "tile", "data"}, pgx.CopyFromRows(rows)); err != nil {
 			return err
@@ -41,6 +63,34 @@ func (s *Service) SaveTrickplay(ctx context.Context, version, item accounts.ID, 
 		return err
 	}
 	return s.evict(ctx)
+}
+
+// errGone reports a set of thumbnails dropped while it was extended, as
+// the space for images asked.
+var errGone = errors.New("the thumbnails being extended were dropped")
+
+// trickplaySet describes the thumbnails a version has at width, whatever
+// the settings, false when it has none.
+func (s *Service) trickplaySet(ctx context.Context, version accounts.ID, width int) (Info, bool, error) {
+	var info Info
+	err := s.DB.QueryRow(ctx, `SELECT width, height, tile_width, tile_height, thumbnail_count, interval_ms, bandwidth
+		FROM trickplay_sets WHERE version_id = $1 AND width = $2`, version, width).
+		Scan(&info.Width, &info.Height, &info.TileWidth, &info.TileHeight, &info.ThumbnailCount, &info.Interval, &info.Bandwidth)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Info{}, false, nil
+	}
+	return info, err == nil, err
+}
+
+// keptTile returns a tile of a version's thumbnails at width, whatever
+// the settings.
+func (s *Service) keptTile(ctx context.Context, version accounts.ID, width, index int) ([]byte, error) {
+	var data []byte
+	err := s.DB.QueryRow(ctx, "SELECT data FROM trickplay_tiles WHERE version_id = $1 AND width = $2 AND tile = $3", version, width, index).Scan(&data)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return data, err
 }
 
 // SaveChapterImages keeps the images of a version's chapters, in their

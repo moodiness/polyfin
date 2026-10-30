@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -117,13 +118,16 @@ func fixture(t *testing.T, name string) []byte {
 }
 
 // testService is a service over a fresh database, its settings changed
-// through settings.
+// through settings. Its source cache, when set, holds what plays read;
+// converting tells that a conversion runs on the processor.
 type testService struct {
 	*Service
-	mu       sync.Mutex
-	settings accounts.Settings
-	analysis media.Analysis
-	source   *countingSource
+	mu         sync.Mutex
+	settings   accounts.Settings
+	analysis   media.Analysis
+	source     *countingSource
+	cache      *source.Cache
+	converting atomic.Bool
 }
 
 func newTestService(t *testing.T, ffmpeg string) *testService {
@@ -145,9 +149,19 @@ func newTestService(t *testing.T, ffmpeg string) *testService {
 			defer ts.mu.Unlock()
 			return ts.analysis, ts.analysis.Duration > 0
 		},
-		Pace:   20 * time.Millisecond,
-		Poll:   5 * time.Millisecond,
-		Logger: slog.New(slog.DiscardHandler),
+		Cached: func(v library.Version) (Cached, bool) {
+			if ts.cache == nil {
+				return nil, false
+			}
+			cached, ok := ts.cache.Cached(v.ID)
+			return cached, ok
+		},
+		Converting: ts.converting.Load,
+		Pace:       20 * time.Millisecond,
+		Poll:       5 * time.Millisecond,
+		// Tests extend the thumbnails of plays themselves.
+		LiveEvery: time.Hour,
+		Logger:    slog.New(slog.DiscardHandler),
 	})
 	t.Cleanup(ts.Close)
 	return ts
