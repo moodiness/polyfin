@@ -83,6 +83,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'general',
+    anchor: 'include-prereleases',
+    label: (t) => s(t).includePrereleases,
+    help: (t) => s(t).includePrereleasesHelp,
+    keywords: ['pre-release', 'prerelease', 'beta', 'rc', 'préversion', 'Polyfin Desktop'],
+  },
+  {
+    section: 'general',
     anchor: 'local-discovery',
     label: (t) => s(t).localDiscovery,
     help: (t) => s(t).localDiscoveryHelp,

@@ -66,6 +66,9 @@ const settings: typeof en = {
     updateCheck: 'Buscar nuevas versiones',
     updateCheckHelp:
       'Una vez al día, y poco después del arranque, Polyfin consulta a GitHub su última versión publicada, enviando solo su propia versión. Si hay una más reciente, se muestra en Inicio y en Sistema › Estado del sistema, y se envía a las notificaciones de «Nueva versión». Si está desactivado, Polyfin nunca contacta con GitHub.',
+    includePrereleases: 'Incluir versiones preliminares',
+    includePrereleasesHelp:
+      'La búsqueda de nuevas versiones y las actualizaciones de Polyfin Desktop también tienen en cuenta las versiones preliminares, como 1.4.0-rc.1: si hay una más reciente, se muestra en Inicio y en Sistema › Estado del sistema, y Polyfin Desktop ofrece instalarla. Las versiones preliminares sirven para probar lo que viene y pueden tener errores. Si está desactivado, solo cuentan las versiones publicadas.',
     restartConfirmed: 'Polyfin se vuelve a iniciar cuando se detiene',
     restartConfirmedHelp:
       'Actívelo cuando el contenedor de Polyfin tenga una política de reinicio que lo vuelva a iniciar, como unless-stopped, always u on-failure, o cuando lo haga su gestor de servicios. Polyfin no puede ver la política de reinicio de su contenedor sin el socket de Docker, que nunca recibe: mientras esté desactivado, Reiniciar en Inicio avisa de que Polyfin podría no volver.',

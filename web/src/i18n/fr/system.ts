@@ -215,6 +215,8 @@ const system: typeof en = {
           `Les sous-titres en images en ${name} ne sont pas lus en texte : Tesseract n’a pas de données pour cette langue. Ajoutez le fichier ${file} au dossier que nomme POLYFIN_TESSDATA_DIR.`,
         metadataLanguages: (name: string) =>
           `${name} : chaque addon de métadonnées du serveur a une langue : ils décrivent donc les titres dans leur langue pour tous les utilisateurs, quelle que soit leur langue des métadonnées. Laissez Langue de ses descriptions sur Aucune pour cet addon, ou pour un addon de métadonnées de plus.`,
+        desktopRolledBack: (version: string, previous: string, error: string) =>
+          `Polyfin Desktop est revenu à la version ${previous}, car la version ${version} n’a pas démarré : ${error}. Cette version n’est plus proposée ; la suivante le sera.`,
         themeCopyMissing: (missing: number, files: number) =>
           `La copie du thème du lecteur web n’a plus ${missing} de ses ${files} fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système : les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.`,
         folderUnwritable: (name: string, path: string) =>

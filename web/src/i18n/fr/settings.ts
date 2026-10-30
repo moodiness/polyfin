@@ -66,6 +66,9 @@ const settings: typeof en = {
     updateCheck: 'Rechercher les nouvelles versions',
     updateCheckHelp:
       'Une fois par jour, et peu après le démarrage, Polyfin demande à GitHub sa dernière version publiée, en n’envoyant que sa propre version. Une version plus récente s’affiche sur l’Accueil et dans Système › Santé, et est envoyée aux notifications « Nouvelle version ». Désactivé, Polyfin ne contacte jamais GitHub.',
+    includePrereleases: 'Inclure les préversions',
+    includePrereleasesHelp:
+      'La recherche des nouvelles versions et les mises à jour de Polyfin Desktop tiennent aussi compte des préversions, comme 1.4.0-rc.1 : une préversion plus récente s’affiche sur l’Accueil et dans Système › Santé, et Polyfin Desktop propose de l’installer. Les préversions servent à essayer ce qui arrive, et peuvent avoir des bogues. Désactivé, seules les versions publiées comptent.',
     restartConfirmed: 'Polyfin est redémarré quand il s’arrête',
     restartConfirmedHelp:
       'Activez-le une fois que le conteneur de Polyfin a une politique de redémarrage qui le relance, comme unless-stopped, always ou on-failure, ou que son gestionnaire de services le fait. Polyfin ne peut pas voir la politique de redémarrage de son conteneur sans le socket Docker, qui ne lui est jamais donné : tant que c’est désactivé, Redémarrer sur l’Accueil avertit que Polyfin pourrait ne pas revenir.',

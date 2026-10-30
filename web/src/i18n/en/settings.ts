@@ -63,6 +63,9 @@ const settings = {
     updateCheck: 'Check for new versions',
     updateCheckHelp:
       'Once a day, and shortly after startup, Polyfin asks GitHub for its latest release, sending only its version. A newer one shows on Home and under System › Health, and is sent to the New version notifications. Off, Polyfin never contacts GitHub.',
+    includePrereleases: 'Include pre-releases',
+    includePrereleasesHelp:
+      'The check for new versions, and Polyfin Desktop’s updates, consider pre-releases too, such as 1.4.0-rc.1: a newer one shows on Home and under System › Health, and Polyfin Desktop offers to install it. Pre-releases are for trying what comes next, and may have bugs. Off, only releases count.',
     restartConfirmed: 'Polyfin is started again when it stops',
     restartConfirmedHelp:
       'Turn on once Polyfin’s container has a restart policy that starts it again, such as unless-stopped, always or on-failure, or once its service manager does. Polyfin cannot see its container’s restart policy without the Docker socket, which it is never given: while this is off, Restart on Home warns that Polyfin may not come back.',
