@@ -139,6 +139,11 @@ type User struct {
 	// ProviderOnly has the user sign in through the identity provider
 	// alone: their password is refused (see Authenticate).
 	ProviderOnly bool
+	// WebTheme is the user's web player theme, one of WebThemes, empty for
+	// the server's (see Settings.WebThemeOf); WebThemeLocked keeps the user
+	// from changing it themselves (see SetOwnWebTheme).
+	WebTheme       string
+	WebThemeLocked bool
 }
 
 // NewUser describes an account to create.
@@ -215,6 +220,11 @@ type UserChanges struct {
 	MetadataLanguage *string
 	// ProviderOnly, see User.
 	ProviderOnly *bool
+	// WebTheme and WebThemeLocked, see User: WebTheme is one of WebThemes
+	// or empty. Whether the Custom theme is offered is the caller's to
+	// check.
+	WebTheme       *string
+	WebThemeLocked *bool
 }
 
 // Store is the accounts repository.
@@ -307,7 +317,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
 	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language, two_step, torrent_streams, " +
-	"provider_only"
+	"provider_only, web_theme, web_theme_locked"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -320,7 +330,7 @@ func (user *User) fields() []any {
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare,
 		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
-		&user.ProviderOnly}
+		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -637,6 +647,9 @@ func (changes UserChanges) prepare() (userUpdate, error) {
 	if changes.MetadataLanguage != nil && *changes.MetadataLanguage != "" && !MetadataLanguageCode(*changes.MetadataLanguage) {
 		return u, ErrInvalidMetadataLanguage
 	}
+	if changes.WebTheme != nil && *changes.WebTheme != "" && !slices.Contains(WebThemes, *changes.WebTheme) {
+		return u, ErrInvalidWebTheme
+	}
 	if changes.Name != nil {
 		normalized, err := normalizeName(*changes.Name)
 		if err != nil {
@@ -752,7 +765,9 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 			follow_group = $31,
 			metadata_language = coalesce($32, metadata_language),
 			torrent_streams = coalesce($33, torrent_streams),
-			provider_only = coalesce($34, provider_only)
+			provider_only = coalesce($34, provider_only),
+			web_theme = coalesce($35, web_theme),
+			web_theme_locked = coalesce($36, web_theme_locked)
 		WHERE id = $1 RETURNING `+userColumns,
 		id, u.name, u.hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 		changes.Parental != nil, u.parental.MaxRating, u.parental.MaxSubRating, u.parental.BlockUnrated,
@@ -761,7 +776,8 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 		u.hidden, u.genres, u.schedules, changes.CollectionManagement,
 		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
-		membership.group, membership.follow, changes.MetadataLanguage, changes.TorrentStreams, changes.ProviderOnly))
+		membership.group, membership.follow, changes.MetadataLanguage, changes.TorrentStreams, changes.ProviderOnly,
+		changes.WebTheme, changes.WebThemeLocked))
 	if uniqueViolation(err) {
 		return User{}, nil, ErrNameTaken
 	}

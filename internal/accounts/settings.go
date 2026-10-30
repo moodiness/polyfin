@@ -688,13 +688,25 @@ const (
 	WebThemeCustom      = "custom"
 )
 
-// WebThemes are the values of Settings.WebTheme, the default first.
+// WebThemes are the values of Settings.WebTheme, the default first, and
+// those of User.WebTheme but its empty one.
 var WebThemes = []string{WebThemeLumaaGlaass, WebThemeNone, WebThemeCustom}
 
 // ServedCss is the custom CSS the web player gets for WebTheme: Jellyfin's
 // branding CSS.
 func (settings Settings) ServedCss() string {
-	switch settings.WebTheme {
+	return settings.ThemeCss(settings.WebTheme)
+}
+
+// ServedJs is the script Polyfin adds to the web player's page for
+// WebTheme.
+func (settings Settings) ServedJs() string {
+	return settings.ThemeJs(settings.WebTheme)
+}
+
+// ThemeCss is the custom CSS of theme, one of WebThemes, empty for another.
+func (settings Settings) ThemeCss(theme string) string {
+	switch theme {
 	case WebThemeLumaaGlaass:
 		return LumaaGlaassCss
 	case WebThemeCustom:
@@ -703,16 +715,30 @@ func (settings Settings) ServedCss() string {
 	return ""
 }
 
-// ServedJs is the script Polyfin adds to the web player's page for
-// WebTheme.
-func (settings Settings) ServedJs() string {
-	switch settings.WebTheme {
+// ThemeJs is the script of theme, one of WebThemes, empty for another.
+func (settings Settings) ThemeJs(theme string) string {
+	switch theme {
 	case WebThemeLumaaGlaass:
 		return LumaaGlaassJs
 	case WebThemeCustom:
 		return settings.CustomJs
 	}
 	return ""
+}
+
+// WebThemeOf is the theme the web player shows user: theirs, else the
+// server's WebTheme.
+func (settings Settings) WebThemeOf(user User) string {
+	if user.WebTheme != "" {
+		return user.WebTheme
+	}
+	return settings.WebTheme
+}
+
+// CustomThemeSet reports whether the Custom theme has a text, which a user
+// needs to be given it as their own theme.
+func (settings Settings) CustomThemeSet() bool {
+	return settings.CustomCss != "" || settings.CustomJs != ""
 }
 
 // ErrInvalidWebTheme reports a Settings.WebTheme not in WebThemes.

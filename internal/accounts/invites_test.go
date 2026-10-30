@@ -39,6 +39,8 @@ func model(t *testing.T, store *Store) User {
 		SubtitleManagement:   new(false),
 		LiveTvManagement:     new(true),
 		QualityGroup:         new(720),
+		WebTheme:             new(WebThemeNone),
+		WebThemeLocked:       new(true),
 	}
 	user, err := store.UpdateUser(t.Context(), user.ID, changes, nil)
 	if err != nil {
