@@ -1,10 +1,12 @@
 // Package smartlists keeps the smart lists: lists of titles drawn from
 // catalogs of addons, which keep the titles that match their rules over
-// what the titles are (genre, year, IMDb rating, language, movie or series,
+// what the titles are (genre, year, IMDb rating and its votes, language,
+// runtime, content rating, people, studio, release date, movie or series,
 // place in their catalog) and over what the user who opens them did with
-// them (played, unplayed, started, favorite). Apps see a list as a library
-// or as a collection. The server's lists, made by administrators, are seen
-// by every user; a user's own lists only by them.
+// them (played, unplayed, started, favorite), but those their exclusions
+// match. Apps see a list as a library or as a collection. The server's
+// lists, made by administrators, are seen by every user; a user's own
+// lists only by them.
 //
 // This package keeps the lists and judges a title by their rules (see
 // Rule.Judge); the library reads their catalogs and lists them.
@@ -38,7 +40,7 @@ var (
 	// Rule.Validate).
 	ErrInvalidRules = errors.New("a smart list's rules are not valid")
 	// ErrInvalidSort reports an unknown sort.
-	ErrInvalidSort = errors.New("a smart list's sort is catalog, premiere, rating, name or random")
+	ErrInvalidSort = errors.New("a smart list's sort is catalog, premiere, latest episode, season premiere, rating, name or random")
 	// ErrInvalidMaxItems reports a maximum outside 1 to MaxItems.
 	ErrInvalidMaxItems = errors.New("a smart list's maximum is a whole number from 1 to 20,000")
 	// ErrInvalidShownAs reports a list shown as neither a library nor a
@@ -67,15 +69,18 @@ const (
 )
 
 // How a list orders its titles: one of each catalog in turn, as an addon's
-// collection lists them; by premiere date, the latest first; by IMDb
-// rating, the highest first; by name; or at random, in an order drawn
-// again each day.
+// collection lists them; by premiere date, the latest first; by the latest
+// regular episode aired, or the latest season premiere aired, the latest
+// first, a movie by its premiere date; by IMDb rating, the highest first;
+// by name; or at random, in an order drawn again each day.
 const (
-	SortCatalog  = "catalog"
-	SortPremiere = "premiere"
-	SortRating   = "rating"
-	SortName     = "name"
-	SortRandom   = "random"
+	SortCatalog        = "catalog"
+	SortPremiere       = "premiere"
+	SortLatestEpisode  = "latestEpisode"
+	SortSeasonPremiere = "seasonPremiere"
+	SortRating         = "rating"
+	SortName           = "name"
+	SortRandom         = "random"
 )
 
 // Catalog names a catalog of an addon a list draws from.
@@ -117,12 +122,29 @@ type List struct {
 	Name     string
 	ShownAs  string
 	Catalogs []Catalog
-	// Rules is the group of rules a title must match (see Rule).
-	Rules Rule
-	Sort  string
+	// Rules is the group of rules a title must match (see Rule), and
+	// Exclude the group of rules of the titles left out all the same,
+	// none when it holds no rule (see Keeps).
+	Rules   Rule
+	Exclude Rule
+	Sort    string
 	// MaxItems is the most titles the list lists, 0 for no maximum.
 	MaxItems  int
 	UpdatedAt time.Time
+}
+
+// NoExclusions is the group of exclusions of a list that leaves no title
+// out.
+func NoExclusions() Rule { return Rule{Field: FieldGroup, Match: MatchAny} }
+
+// Uses reports whether the list's rules or exclusions look at field.
+func (l List) Uses(field string) bool {
+	return l.Rules.Uses(field) || l.Exclude.Uses(field)
+}
+
+// Keeps tells whether the list keeps a title (see Keeps).
+func (l List) Keeps(t Title) Verdict {
+	return Keeps(l.Rules, l.Exclude, t)
 }
 
 // Validate checks a list before it is saved.
@@ -144,11 +166,19 @@ func (l List) Validate() error {
 		}
 		seen[c] = true
 	}
-	if err := l.Rules.Validate(); err != nil {
+	// The rules and the exclusions count towards one bound. A list read
+	// without exclusions has none.
+	count := 0
+	if err := l.Rules.validate(&count); err != nil {
 		return err
 	}
+	if l.Exclude.Field != "" || len(l.Exclude.Rules) > 0 {
+		if err := l.Exclude.validate(&count); err != nil {
+			return err
+		}
+	}
 	switch l.Sort {
-	case SortCatalog, SortPremiere, SortRating, SortName, SortRandom:
+	case SortCatalog, SortPremiere, SortLatestEpisode, SortSeasonPremiere, SortRating, SortName, SortRandom:
 	default:
 		return ErrInvalidSort
 	}
@@ -168,7 +198,7 @@ func New(db *pgxpool.Pool) *Store {
 	return &Store{db: db}
 }
 
-const columns = "id, owner_id, name, shown_as, catalogs, rules, sort, coalesce(max_items, 0), updated_at"
+const columns = "id, owner_id, name, shown_as, catalogs, rules, exclude, sort, coalesce(max_items, 0), updated_at"
 
 // Lists returns the lists of a scope, the server's for a nil owner, in the
 // order they were made.
@@ -208,13 +238,16 @@ func (s *Store) load(ctx context.Context, where string, args ...any) ([]List, er
 	rows, _ := s.db.Query(ctx, "SELECT "+columns+" FROM smart_lists "+where, args...)
 	var result []List
 	var l List
-	var catalogs, rules []byte
-	_, err := pgx.ForEachRow(rows, []any{&l.ID, &l.Owner, &l.Name, &l.ShownAs, &catalogs, &rules, &l.Sort, &l.MaxItems, &l.UpdatedAt}, func() error {
-		l.Catalogs, l.Rules = nil, Rule{}
+	var catalogs, rules, exclude []byte
+	_, err := pgx.ForEachRow(rows, []any{&l.ID, &l.Owner, &l.Name, &l.ShownAs, &catalogs, &rules, &exclude, &l.Sort, &l.MaxItems, &l.UpdatedAt}, func() error {
+		l.Catalogs, l.Rules, l.Exclude = nil, Rule{}, Rule{}
 		if err := json.Unmarshal(catalogs, &l.Catalogs); err != nil {
 			return err
 		}
 		if err := json.Unmarshal(rules, &l.Rules); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(exclude, &l.Exclude); err != nil {
 			return err
 		}
 		result = append(result, l)
@@ -228,7 +261,7 @@ func (s *Store) Create(ctx context.Context, l List) (List, error) {
 	if err := l.Validate(); err != nil {
 		return List{}, err
 	}
-	catalogs, rules, err := encoded(l)
+	catalogs, rules, exclude, err := encoded(&l)
 	if err != nil {
 		return List{}, err
 	}
@@ -244,9 +277,9 @@ func (s *Store) Create(ctx context.Context, l List) (List, error) {
 		if count >= MaxLists {
 			return ErrTooMany
 		}
-		return tx.QueryRow(ctx, `INSERT INTO smart_lists (owner_id, name, shown_as, catalogs, rules, sort, max_items)
-			VALUES ($1, $2, $3, $4, $5, $6, nullif($7, 0)) RETURNING id, updated_at`,
-			l.Owner, strings.TrimSpace(l.Name), l.ShownAs, catalogs, rules, l.Sort, l.MaxItems).Scan(&l.ID, &l.UpdatedAt)
+		return tx.QueryRow(ctx, `INSERT INTO smart_lists (owner_id, name, shown_as, catalogs, rules, exclude, sort, max_items)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, nullif($8, 0)) RETURNING id, updated_at`,
+			l.Owner, strings.TrimSpace(l.Name), l.ShownAs, catalogs, rules, exclude, l.Sort, l.MaxItems).Scan(&l.ID, &l.UpdatedAt)
 	})
 	l.Name = strings.TrimSpace(l.Name)
 	return l, err
@@ -257,15 +290,15 @@ func (s *Store) Update(ctx context.Context, l List) (List, error) {
 	if err := l.Validate(); err != nil {
 		return List{}, err
 	}
-	catalogs, rules, err := encoded(l)
+	catalogs, rules, exclude, err := encoded(&l)
 	if err != nil {
 		return List{}, err
 	}
 	l.Name = strings.TrimSpace(l.Name)
-	err = s.db.QueryRow(ctx, `UPDATE smart_lists SET name = $3, shown_as = $4, catalogs = $5, rules = $6, sort = $7,
-		max_items = nullif($8, 0), updated_at = now()
+	err = s.db.QueryRow(ctx, `UPDATE smart_lists SET name = $3, shown_as = $4, catalogs = $5, rules = $6, exclude = $7, sort = $8,
+		max_items = nullif($9, 0), updated_at = now()
 		WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING updated_at`,
-		l.ID, l.Owner, l.Name, l.ShownAs, catalogs, rules, l.Sort, l.MaxItems).Scan(&l.UpdatedAt)
+		l.ID, l.Owner, l.Name, l.ShownAs, catalogs, rules, exclude, l.Sort, l.MaxItems).Scan(&l.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return List{}, ErrNotFound
 	}
@@ -281,10 +314,18 @@ func (s *Store) Delete(ctx context.Context, owner *accounts.ID, id accounts.ID) 
 	return err
 }
 
-func encoded(l List) (catalogs, rules []byte, err error) {
-	if catalogs, err = json.Marshal(l.Catalogs); err != nil {
-		return nil, nil, err
+// encoded encodes a list's catalogs, rules and exclusions as they are
+// kept, a list without exclusions given the group of none.
+func encoded(l *List) (catalogs, rules, exclude []byte, err error) {
+	if l.Exclude.Field == "" {
+		l.Exclude = NoExclusions()
 	}
-	rules, err = json.Marshal(l.Rules)
-	return catalogs, rules, err
+	if catalogs, err = json.Marshal(l.Catalogs); err != nil {
+		return nil, nil, nil, err
+	}
+	if rules, err = json.Marshal(l.Rules); err != nil {
+		return nil, nil, nil, err
+	}
+	exclude, err = json.Marshal(l.Exclude)
+	return catalogs, rules, exclude, err
 }

@@ -56,14 +56,31 @@ import { smartListPath } from './SmartLists'
 const fields: Exclude<SmartField, 'group'>[] = [
   'genre',
   'year',
+  'released',
   'rating',
+  'votes',
   'language',
+  'runtime',
+  'contentRating',
+  'person',
+  'studio',
   'type',
   'rank',
   'state',
 ]
-const sorts: SmartSort[] = ['catalog', 'premiere', 'rating', 'name', 'random']
+const sorts: SmartSort[] = [
+  'catalog',
+  'premiere',
+  'latestEpisode',
+  'seasonPremiere',
+  'rating',
+  'name',
+  'random',
+]
 const states = ['unplayed', 'played', 'started', 'favorite']
+
+/** The fields a title's description may have to tell, when its catalog does not. */
+const describedFields: SmartField[] = ['language', 'runtime', 'contentRating', 'person', 'released']
 
 /** Groups go this deep: the list's own, and groups within it. */
 const maxDepth = 2
@@ -73,8 +90,14 @@ const emptyDraft: SmartListDraft = {
   shownAs: 'library',
   catalogs: [],
   rules: { field: 'group', match: 'all', rules: [] },
+  exclude: noExclusions(),
   sort: 'catalog',
   maxItems: null,
+}
+
+/** The exclusions of a list that leaves no title out. */
+function noExclusions(): SmartRule {
+  return { field: 'group', match: 'any', rules: [] }
 }
 
 /** A new rule of a field, with the value it starts with. */
@@ -88,8 +111,20 @@ function newRule(field: Exclude<SmartField, 'group'>): SmartRule {
       return { field, value: 'fr' }
     case 'rank':
       return { field, max: 100 }
+    case 'runtime':
+      return { field, min: 90 }
+    case 'votes':
+      return { field, min: 1000 }
+    case 'contentRating':
+      return { field, value: 'PG-13' }
+    case 'released':
+      return { field, min: -30, max: 0 }
+    case 'genre':
+    case 'person':
+    case 'studio':
+      return { field, value: '' }
     default:
-      return { field, value: field === 'genre' ? '' : undefined }
+      return { field }
   }
 }
 
@@ -102,9 +137,15 @@ function complete(rule: SmartRule, depth = 1): boolean {
         (rule.rules ?? []).every((r) => complete(r, depth + 1))
       )
     case 'genre':
+    case 'person':
+    case 'studio':
       return (rule.value ?? '').trim() !== ''
+    case 'released':
+      return rule.min !== undefined && rule.max !== undefined && rule.min <= rule.max
     case 'year':
     case 'rating':
+    case 'runtime':
+    case 'votes':
       return (
         (rule.min !== undefined || rule.max !== undefined) &&
         (rule.min === undefined || rule.max === undefined || rule.min <= rule.max)
@@ -118,6 +159,11 @@ function complete(rule: SmartRule, depth = 1): boolean {
 
 function usesField(rule: SmartRule, field: SmartField): boolean {
   return rule.field === field || (rule.rules ?? []).some((r) => usesField(r, field))
+}
+
+/** Whether a list's rules or exclusions look at one of fields. */
+function listUses(draft: SmartListDraft, ...fields: SmartField[]): boolean {
+  return fields.some((field) => usesField(draft.rules, field) || usesField(draft.exclude, field))
 }
 
 function catalogKey(c: { addonId: string; type: string; id: string }): string {
@@ -206,6 +252,7 @@ function Editor({
           shownAs: saved.shownAs,
           catalogs: saved.catalogs,
           rules: saved.rules,
+          exclude: saved.exclude ?? noExclusions(),
           sort: saved.sort,
           maxItems: saved.maxItems,
         }
@@ -324,14 +371,28 @@ function Editor({
               depth={1}
               genres={genres}
               languages={languages}
+              contentRatings={choices.contentRatings}
               onChange={(rules) => change({ rules })}
             />
-            {usesField(draft.rules, 'language') && (
-              <Notice className="mt-4">{t.smartLists.languageHelp}</Notice>
+          </PanelSection>
+          <PanelSection title={t.smartLists.exclude} description={t.smartLists.excludeHelp}>
+            <GroupEditor
+              group={draft.exclude}
+              depth={1}
+              label={t.smartLists.excludeMatch}
+              genres={genres}
+              languages={languages}
+              contentRatings={choices.contentRatings}
+              onChange={(exclude) => change({ exclude })}
+            />
+            {listUses(draft, ...describedFields) && (
+              <Notice className="mt-4">{t.smartLists.describedHelp}</Notice>
             )}
-            {usesField(draft.rules, 'state') && (
-              <Notice className="mt-4">{t.smartLists.stateHelp}</Notice>
+            {listUses(draft, 'votes') && <Notice className="mt-4">{t.smartLists.votesHelp}</Notice>}
+            {listUses(draft, 'studio') && (
+              <Notice className="mt-4">{t.smartLists.studioHelp}</Notice>
             )}
+            {listUses(draft, 'state') && <Notice className="mt-4">{t.smartLists.stateHelp}</Notice>}
             {errorFor(['invalid_smart_list_rules']) && (
               <div className="mt-3">
                 <FieldError>{errorFor(['invalid_smart_list_rules'])}</FieldError>
@@ -340,7 +401,14 @@ function Editor({
           </PanelSection>
           <PanelSection>
             <div className="grid gap-6 md:grid-cols-2">
-              <Field label={t.smartLists.sort}>
+              <Field
+                label={t.smartLists.sort}
+                help={
+                  draft.sort === 'latestEpisode' || draft.sort === 'seasonPremiere'
+                    ? t.smartLists.episodeSortHelp
+                    : undefined
+                }
+              >
                 <Select
                   value={draft.sort}
                   onValue={(sort) => change({ sort })}
@@ -474,19 +542,25 @@ type Option = { value: string; label: string }
 function GroupEditor({
   group,
   depth,
+  label,
   genres,
   languages,
+  contentRatings,
   onChange,
   onRemove,
 }: {
   group: SmartRule
   depth: number
+  /** What the list's own group is called; groups within it are this group. */
+  label?: string
   genres: string[]
   languages: Option[]
+  contentRatings: string[]
   onChange: (group: SmartRule) => void
   onRemove?: () => void
 }) {
   const { t } = useI18n()
+  const title = depth === 1 ? (label ?? t.smartLists.match) : t.smartLists.groupMatch
   const rules = group.rules ?? []
   const set = (index: number, rule: SmartRule) =>
     onChange({ ...group, rules: rules.map((r, i) => (i === index ? rule : r)) })
@@ -499,11 +573,9 @@ function GroupEditor({
       )}
     >
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-control font-medium text-ink">
-          {depth === 1 ? t.smartLists.match : t.smartLists.groupMatch}
-        </span>
+        <span className="text-control font-medium text-ink">{title}</span>
         <Segmented
-          label={depth === 1 ? t.smartLists.match : t.smartLists.groupMatch}
+          label={title}
           size="sm"
           value={group.match ?? 'all'}
           onChange={(match) => onChange({ ...group, match })}
@@ -541,6 +613,7 @@ function GroupEditor({
             depth={depth + 1}
             genres={genres}
             languages={languages}
+            contentRatings={contentRatings}
             onChange={(next) => set(index, next)}
             onRemove={() => drop(index)}
           />
@@ -550,6 +623,7 @@ function GroupEditor({
             rule={rule}
             genres={genres}
             languages={languages}
+            contentRatings={contentRatings}
             onChange={(next) => set(index, next)}
             onRemove={() => drop(index)}
           />
@@ -591,12 +665,14 @@ function RuleEditor({
   rule,
   genres,
   languages,
+  contentRatings,
   onChange,
   onRemove,
 }: {
   rule: SmartRule
   genres: string[]
   languages: Option[]
+  contentRatings: string[]
   onChange: (rule: SmartRule) => void
   onRemove: () => void
 }) {
@@ -618,14 +694,17 @@ function RuleEditor({
       )
       break
     case 'year':
-    case 'rating': {
-      const step = rule.field === 'year' ? 1 : 0.1
+    case 'rating':
+    case 'runtime':
+    case 'votes': {
+      const step = rule.field === 'rating' ? 0.1 : 1
       value = (
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-2 text-small text-ink-2">
           <NumberInput
             aria-label={t.smartLists.from}
             placeholder={t.smartLists.from}
             value={rule.min ?? null}
+            min={0}
             step={step}
             onValue={(n) => bound('min', n)}
           />
@@ -633,13 +712,77 @@ function RuleEditor({
             aria-label={t.smartLists.to}
             placeholder={t.smartLists.to}
             value={rule.max ?? null}
+            min={0}
             step={step}
             onValue={(n) => bound('max', n)}
           />
+          {rule.field === 'runtime' && t.smartLists.minutes}
         </span>
       )
       break
     }
+    case 'released': {
+      // The rules the editor makes: the last days up to today, or the next days from today.
+      const next = (rule.min ?? 0) >= 0 && (rule.max ?? 0) > 0
+      const days = next ? (rule.max ?? 0) : -(rule.min ?? 0)
+      const set = (toNext: boolean, count: number | null) =>
+        onChange({
+          ...rule,
+          min: count === null ? undefined : toNext ? 0 : -count,
+          max: count === null ? undefined : toNext ? count : 0,
+        })
+      value = (
+        <span className="flex items-center gap-2 text-small text-ink-2">
+          <Select
+            aria-label={t.smartLists.releasedWhen}
+            className="w-[160px]"
+            value={next ? 'next' : 'last'}
+            onValue={(when) => set(when === 'next', days)}
+            options={(['last', 'next'] as const).map((v) => ({
+              value: v,
+              label: t.smartLists.releasedWithin[v],
+            }))}
+          />
+          <NumberInput
+            aria-label={t.smartLists.days}
+            value={days}
+            min={1}
+            max={36500}
+            step={1}
+            onValue={(n) => set(next, n)}
+          />
+          {t.smartLists.days}
+        </span>
+      )
+      break
+    }
+    case 'contentRating':
+      value = (
+        <span className="flex items-center gap-2 text-small text-ink-2">
+          {t.smartLists.atMost}
+          <Select
+            aria-label={t.smartLists.fields.contentRating}
+            className="w-[160px]"
+            value={rule.value ?? 'PG-13'}
+            onValue={(rating) => onChange({ ...rule, value: rating })}
+            options={contentRatings.map((v) => ({ value: v, label: v }))}
+          />
+        </span>
+      )
+      break
+    case 'person':
+    case 'studio':
+      value = (
+        <TextInput
+          aria-label={t.smartLists.fields[rule.field]}
+          placeholder={t.smartLists.namePlaceholder[rule.field]}
+          value={rule.value ?? ''}
+          maxLength={100}
+          onValue={(text) => onChange({ ...rule, value: text })}
+          className="w-[220px]"
+        />
+      )
+      break
     case 'language':
       value = (
         <Select
@@ -726,6 +869,7 @@ function Preview({ scope, draft }: { scope: Scope; draft: SmartListDraft }) {
   const ready =
     settled.catalogs.length > 0 &&
     complete(settled.rules) &&
+    complete(settled.exclude) &&
     (settled.maxItems === null ||
       (Number.isInteger(settled.maxItems) &&
         settled.maxItems >= 1 &&

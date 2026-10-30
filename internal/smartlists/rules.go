@@ -2,7 +2,9 @@ package smartlists
 
 import (
 	"math"
+	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/moodiness/polyfin/internal/localization"
@@ -31,6 +33,26 @@ const (
 	// FieldState matches what the user who opens the list did with a
 	// title: Value is one of the states (see StatePlayed).
 	FieldState = "state"
+	// FieldRuntime matches a title whose runtime is from Min to Max
+	// minutes.
+	FieldRuntime = "runtime"
+	// FieldContentRating matches a title rated at most Value, a rating
+	// localization.RatingScore knows, on the scale parental control
+	// compares ratings on: "PG-13" matches PG-13, PG and G titles.
+	FieldContentRating = "contentRating"
+	// FieldVotes matches a title whose IMDb rating counts from Min to Max
+	// votes, as MDBList tells them.
+	FieldVotes = "votes"
+	// FieldPerson matches a title that credits Value, in any letter case,
+	// as an actor or a director.
+	FieldPerson = "person"
+	// FieldStudio matches a title made by the studio or aired on the
+	// network Value, in any letter case.
+	FieldStudio = "studio"
+	// FieldReleased matches a title released from Min to Max days after
+	// today: Min -30 and Max 0 for the last 30 days, Min 0 and Max 60 for
+	// the next 60.
+	FieldReleased = "released"
 )
 
 // What a state rule matches: a title the user played (a series once every
@@ -54,10 +76,17 @@ const (
 	// maxDepth bounds how deep groups go: a list's group, groups within
 	// it, and groups within those.
 	maxDepth = 3
-	// maxRules bounds the rules and groups of a list, all levels counted.
+	// maxRules bounds the rules and groups of a list, all levels counted,
+	// its exclusions included.
 	maxRules = 100
-	// maxGenreLength bounds a genre rule's genre, in characters.
+	// maxGenreLength bounds a genre rule's genre, and a person's or a
+	// studio's name, in characters.
 	maxGenreLength = 100
+	// maxRuntime bounds a runtime rule, in minutes, maxVotes a votes
+	// rule, and maxDays a released rule, in days either way.
+	maxRuntime = 1000
+	maxVotes   = 100_000_000
+	maxDays    = 36500
 )
 
 // Rule is a condition on titles, or a group of them. Not negates it: a
@@ -76,11 +105,17 @@ type Rule struct {
 // Validate checks a list's rules: a group, which may hold no rule, when
 // the list keeps every title of its catalogs.
 func (r Rule) Validate() error {
+	count := 0
+	return r.validate(&count)
+}
+
+// validate is Validate, counting the rules into count, which the rules
+// and the exclusions of a list share.
+func (r Rule) validate(count *int) error {
 	if r.Field != FieldGroup {
 		return ErrInvalidRules
 	}
-	count := 0
-	if !r.valid(1, &count) || count > maxRules {
+	if !r.valid(1, count) || *count > maxRules {
 		return ErrInvalidRules
 	}
 	return nil
@@ -106,7 +141,7 @@ func (r Rule) valid(depth int, count *int) bool {
 			}
 		}
 		return true
-	case FieldGenre:
+	case FieldGenre, FieldPerson, FieldStudio:
 		value := strings.TrimSpace(r.Value)
 		return plain && value != "" && utf8.RuneCountInString(value) <= maxGenreLength && r.Min == nil && r.Max == nil
 	case FieldYear:
@@ -122,6 +157,15 @@ func (r Rule) valid(depth int, count *int) bool {
 	case FieldState:
 		return plain && r.Min == nil && r.Max == nil &&
 			(r.Value == StatePlayed || r.Value == StateUnplayed || r.Value == StateStarted || r.Value == StateFavorite)
+	case FieldRuntime:
+		return plain && r.Value == "" && whole(r.Min) && whole(r.Max) && bounded(1, maxRuntime)
+	case FieldVotes:
+		return plain && r.Value == "" && whole(r.Min) && whole(r.Max) && bounded(0, maxVotes)
+	case FieldReleased:
+		return plain && r.Value == "" && whole(r.Min) && whole(r.Max) && bounded(-maxDays, maxDays)
+	case FieldContentRating:
+		_, rated := localization.RatingScore(r.Value)
+		return plain && rated && r.Min == nil && r.Max == nil
 	}
 	return false
 }
@@ -191,9 +235,28 @@ type Title struct {
 	// description gives.
 	Languages []string
 	Described bool
+	// Runtime is its runtime in minutes, 0 when not known.
+	Runtime int
+	// ContentRating is its age rating, empty when not known.
+	ContentRating string
+	// People are the names of the actors and directors it credits.
+	People []string
+	// Released is the day it was released, zero when not known to the
+	// day: a year alone does not tell it.
+	Released time.Time
+	// Votes is how many votes its IMDb rating counts, once VotesKnown:
+	// MDBList answered for it, 0 when MDBList has none.
+	Votes      int
+	VotesKnown bool
+	// Studios are the studios that made it and the networks it aired on,
+	// once StudiosKnown.
+	Studios      []string
+	StudiosKnown bool
 	// Rank is its place in its catalog from 1, the best of its catalogs.
 	Rank  int
 	State State
+	// Today is the day released rules count from.
+	Today time.Time
 }
 
 // State is what the user who opens a list did with a title.
@@ -203,13 +266,17 @@ type State struct {
 
 // Verdict is whether a title matches rules: Unknown while what they look
 // at is not known yet, such as the language of a title whose description
-// was not read. A list leaves out the titles not known to match.
+// was not read, and Absent when it is known to be missing, such as the
+// language of a title whose description gives none. A list leaves out
+// the titles not known to match: what a title lacks matches no rule,
+// negated or not.
 type Verdict int8
 
 const (
 	No Verdict = iota
 	Yes
 	Unknown
+	Absent
 )
 
 func verdictOf(matches bool) Verdict {
@@ -220,13 +287,44 @@ func verdictOf(matches bool) Verdict {
 }
 
 // Judge tells whether a title matches the rule. A negated rule matches
-// what the rule does not, and is as unknown as it.
+// what the rule does not, and is as unknown, or as absent, as it.
 func (r Rule) Judge(t Title) Verdict {
 	v := r.judge(t)
-	if r.Not && v != Unknown {
+	if r.Not && (v == Yes || v == No) {
 		v = verdictOf(v == No)
 	}
 	return v
+}
+
+// Excludes tells whether exclusions, a group, leave a title out of a list:
+// Yes when the title matches them, Unknown while that is not known. A
+// group without rules excludes nothing, and a title lacking what they
+// look at is not excluded for it.
+func (r Rule) Excludes(t Title) Verdict {
+	if len(r.Rules) == 0 {
+		return No
+	}
+	switch v := r.Judge(t); v {
+	case Yes, Unknown:
+		return v
+	}
+	return No
+}
+
+// Keeps tells whether a list with rules and exclusions keeps a title: it
+// matches the rules and not the exclusions.
+func Keeps(rules, exclusions Rule, t Title) Verdict {
+	v := rules.Judge(t)
+	if v != Yes {
+		return v
+	}
+	switch exclusions.Excludes(t) {
+	case Yes:
+		return No
+	case Unknown:
+		return Unknown
+	}
+	return Yes
 }
 
 func (r Rule) judge(t Title) Verdict {
@@ -236,28 +334,21 @@ func (r Rule) judge(t Title) Verdict {
 	// What a title's description does not give, the title does not have.
 	missing := Unknown
 	if t.Described {
-		missing = No
+		missing = Absent
+	}
+	named := func(names []string) bool {
+		return slices.ContainsFunc(names, func(name string) bool {
+			return strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(r.Value))
+		})
 	}
 	switch r.Field {
 	case FieldGroup:
-		// An empty group matches every title.
-		result := verdictOf(r.Match == MatchAll || len(r.Rules) == 0)
-		for _, rule := range r.Rules {
-			switch v := rule.Judge(t); {
-			case r.Match == MatchAll && v == No, r.Match == MatchAny && v == Yes:
-				return v
-			case v == Unknown:
-				result = Unknown
-			}
-		}
-		return result
+		return r.judgeGroup(t)
 	case FieldGenre:
-		for _, genre := range t.Genres {
-			if strings.EqualFold(strings.TrimSpace(genre), strings.TrimSpace(r.Value)) {
-				return Yes
-			}
-		}
-		if t.GenresKnown {
+		switch {
+		case named(t.Genres):
+			return Yes
+		case t.GenresKnown:
 			return No
 		}
 		return missing
@@ -277,6 +368,9 @@ func (r Rule) judge(t Title) Verdict {
 				return Yes
 			}
 		}
+		if t.Described && len(t.Languages) > 0 {
+			return No
+		}
 		return missing
 	case FieldType:
 		return verdictOf(t.Series == (r.Value == "series"))
@@ -293,6 +387,100 @@ func (r Rule) judge(t Title) Verdict {
 		case StateFavorite:
 			return verdictOf(t.State.Favorite)
 		}
+	case FieldRuntime:
+		if t.Runtime <= 0 {
+			return missing
+		}
+		return verdictOf(within(float64(t.Runtime)))
+	case FieldContentRating:
+		return judgeContentRating(t.ContentRating, r.Value, missing)
+	case FieldPerson:
+		switch {
+		case named(t.People):
+			return Yes
+		case len(t.People) > 0:
+			return No
+		}
+		return missing
+	case FieldReleased:
+		if t.Released.IsZero() {
+			return missing
+		}
+		day := func(at time.Time) time.Time { return time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC) }
+		days := math.Round(day(t.Released).Sub(day(t.Today)).Hours() / 24)
+		return verdictOf(within(days))
+	case FieldVotes:
+		switch {
+		case !t.VotesKnown:
+			return Unknown
+		case t.Votes <= 0:
+			return Absent
+		}
+		return verdictOf(within(float64(t.Votes)))
+	case FieldStudio:
+		switch {
+		case !t.StudiosKnown:
+			return Unknown
+		case named(t.Studios):
+			return Yes
+		case len(t.Studios) > 0:
+			return No
+		}
+		return Absent
 	}
 	return No
+}
+
+// judgeGroup judges a group: one of its rules not matched decides a group
+// of all, one matched a group of any, else one unknown leaves it unknown,
+// else one whose data is absent leaves it absent. An empty group matches
+// every title.
+func (r Rule) judgeGroup(t Title) Verdict {
+	if len(r.Rules) == 0 {
+		return Yes
+	}
+	decides, otherwise := No, Yes
+	if r.Match == MatchAny {
+		decides, otherwise = Yes, No
+	}
+	unknown, absent := false, false
+	for _, rule := range r.Rules {
+		switch rule.Judge(t) {
+		case decides:
+			return decides
+		case Unknown:
+			unknown = true
+		case Absent:
+			absent = true
+		}
+	}
+	switch {
+	case unknown:
+		return Unknown
+	case absent:
+		return Absent
+	}
+	return otherwise
+}
+
+// judgeContentRating judges a rating against the highest one a rule
+// allows, as parental control does: below its score, or at its score up
+// to its subscore. A title without a rating known, or rated with one that
+// says it has none, is missing it.
+func judgeContentRating(rating, most string, missing Verdict) Verdict {
+	score, rated := localization.RatingScore(rating)
+	if !rated {
+		return missing
+	}
+	limit, _ := localization.RatingScore(most)
+	if score.Score != limit.Score {
+		return verdictOf(score.Score < limit.Score)
+	}
+	sub := func(s localization.Score) int {
+		if s.SubScore == nil {
+			return 0
+		}
+		return *s.SubScore
+	}
+	return verdictOf(sub(score) <= sub(limit))
 }

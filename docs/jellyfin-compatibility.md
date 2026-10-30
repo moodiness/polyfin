@@ -106,6 +106,24 @@ An app that lists a library's titles at random, as the home carousel of the [Lum
 
 **For app developers:** a listing of a library with `ParentId`, `Recursive=true` and only title types, such as `IncludeItemTypes=Movie,Series`, whose first `SortBy` is `Random`, is answered from the draw; the keys after `Random` change nothing. `TotalRecordCount` is the number of titles drawn among.
 
+### Series by their latest episode
+
+jellyfin-web's TV shows tab sorts a series library by "Date Episode Added" and "Date Played" ([`tvshows.js`, lines 249 to 268](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/legacy/controllers/shows/tvshows.js#L249-L268), jellyfin-web 12.4). Polyfin answers both:
+
+- "Date Episode Added" orders the series by their latest regular episode that has aired, as their descriptions date it, the latest first. Specials (season 0) and episodes to come do not count. A series without a dated episode comes last, the first in ascending order.
+- "Date Played" orders them by the last time the user played an episode of theirs through, the latest first; series never played come last.
+- As for a listing at random (see [Titles at random](#titles-at-random)), the series are sorted among the library's first 100, or as many as the listing asks for from its first title, up to 500, within the user's parental control and blocked genres, without the titles they hid. The order is kept 2 minutes, so that the pages of one listing follow it, and the listing's total is the number of series sorted.
+- A series whose description Polyfin does not keep yet has it read in the background, at most 50 at each listing: it comes as a series without episodes meanwhile, and the order is not kept until every description is read.
+- Smart lists keep their own sort (see [Smart lists](addons-and-libraries.md#smart-lists)), which may also be by the latest episode or the latest season premiere.
+
+**Compared with Jellyfin:**
+
+- Jellyfin orders series by `DateLastMediaAdded`, when their latest episode was added to the library ([`OrderMapper.cs`, line 61](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/OrderMapper.cs#L61), Jellyfin 12.4). An addon's episodes are never added: they air. Polyfin takes the day the latest regular episode aired in its place.
+- `SeriesDatePlayed` is, as in Jellyfin, the latest date the user played one of the series' episodes through ([`OrderMapper.cs`, lines 78 to 87](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/OrderMapper.cs#L78-L87)); `DatePlayed` the date the user last played the series itself ([lines 32 to 48](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/OrderMapper.cs#L32-L48)).
+- Jellyfin sorts the whole library; Polyfin its first titles, as for titles at random, since a remote catalog is read a page at a time.
+
+**For app developers:** a listing of a library with `ParentId`, `Recursive=true` and `IncludeItemTypes=Series` alone, whose first `SortBy` is `DateLastContentAdded`, `SeriesDatePlayed` or `DatePlayed`, is answered so. `SortOrder` applies to every key, as in Jellyfin, and the keys after the first, then the name, order the series of one date.
+
 ### Movie recommendations
 
 For each of the last movies the user played, recommendations give the "Because you watched" titles similar to it. They come from the similar titles of title pages, without those already played. With **Similar titles** off there are none.

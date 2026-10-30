@@ -1542,18 +1542,34 @@ export type LibraryImageRequest = Pick<Library, 'addonId' | 'catalogType' | 'cat
 
 /** What a rule of a smart list looks at; `group` holds rules of its own. */
 export type SmartField =
-  'group' | 'genre' | 'year' | 'rating' | 'language' | 'type' | 'rank' | 'state'
+  | 'group'
+  | 'genre'
+  | 'year'
+  | 'rating'
+  | 'votes'
+  | 'language'
+  | 'runtime'
+  | 'contentRating'
+  | 'person'
+  | 'studio'
+  | 'released'
+  | 'type'
+  | 'rank'
+  | 'state'
 
 /** What a `state` rule matches, for the user who opens the list. */
 export type SmartState = 'played' | 'unplayed' | 'started' | 'favorite'
 
 /** How a smart list orders its titles. */
-export type SmartSort = 'catalog' | 'premiere' | 'rating' | 'name' | 'random'
+export type SmartSort =
+  'catalog' | 'premiere' | 'latestEpisode' | 'seasonPremiere' | 'rating' | 'name' | 'random'
 
 /**
  * A rule of a smart list, or a group of them. `not` negates it. `value` is a genre, an ISO 639
- * language code, `movie` or `series`, or a SmartState; `min` and `max` bound a year or a rating,
- * and `max` is the place in its catalog. A group matches `all` or `any` of its `rules`.
+ * language code, the highest content rating, a person's or a studio's name, `movie` or `series`,
+ * or a SmartState; `min` and `max` bound a year, a rating, its votes, a runtime in minutes, or a
+ * release in days from today (negative: past), and `max` is the place in its catalog. A group
+ * matches `all` or `any` of its `rules`.
  */
 export type SmartRule = {
   field: SmartField
@@ -1576,6 +1592,8 @@ export type SmartList = {
   shownAs: 'library' | 'collection'
   catalogs: SmartCatalogRef[]
   rules: SmartRule
+  /** The group of rules whose titles it leaves out; one without rules leaves none out. */
+  exclude: SmartRule
   sort: SmartSort
   /** Most titles it lists; null for no maximum. */
   maxItems: number | null
@@ -1600,8 +1618,15 @@ export type SmartCatalogChoice = {
   genres: string[]
 }
 
-/** What a smart list may draw from, and the ISO 639-1 codes of the languages its rules may name. */
-export type SmartChoices = { catalogs: SmartCatalogChoice[]; languages: string[] }
+/**
+ * What a smart list may draw from, the ISO 639-1 codes of the languages its rules may name, and the
+ * content ratings a rule may set as the highest, from the youngest.
+ */
+export type SmartChoices = {
+  catalogs: SmartCatalogChoice[]
+  languages: string[]
+  contentRatings: string[]
+}
 
 /**
  * A title of a smart list's preview. `languages`: those its description gives, by their ISO 639-1

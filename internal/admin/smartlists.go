@@ -29,6 +29,7 @@ type smartListJSON struct {
 	ShownAs   string               `json:"shownAs"`
 	Catalogs  []smartlists.Catalog `json:"catalogs"`
 	Rules     smartlists.Rule      `json:"rules"`
+	Exclude   smartlists.Rule      `json:"exclude"`
 	Sort      string               `json:"sort"`
 	MaxItems  *int                 `json:"maxItems"`
 	UpdatedAt time.Time            `json:"updatedAt"`
@@ -36,9 +37,12 @@ type smartListJSON struct {
 
 func newSmartListJSON(l smartlists.List) smartListJSON {
 	result := smartListJSON{ID: l.ID.String(), ItemID: library.SmartListItemID(l.ID).String(), Name: l.Name, ShownAs: l.ShownAs,
-		Catalogs: l.Catalogs, Rules: l.Rules, Sort: l.Sort, UpdatedAt: l.UpdatedAt.UTC()}
+		Catalogs: l.Catalogs, Rules: l.Rules, Exclude: l.Exclude, Sort: l.Sort, UpdatedAt: l.UpdatedAt.UTC()}
 	if result.Catalogs == nil {
 		result.Catalogs = []smartlists.Catalog{}
+	}
+	if result.Exclude.Field == "" {
+		result.Exclude = smartlists.NoExclusions()
 	}
 	if l.MaxItems > 0 {
 		result.MaxItems = new(l.MaxItems)
@@ -48,12 +52,13 @@ func newSmartListJSON(l smartlists.List) smartListJSON {
 
 // smartListRequest is a smart list as the admin app sends it. MaxItems is
 // read as any number, so that one that is not a whole number is refused
-// as a maximum, not as a request.
+// as a maximum, not as a request. A list sent without exclusions has none.
 type smartListRequest struct {
 	Name     string               `json:"name"`
 	ShownAs  string               `json:"shownAs"`
 	Catalogs []smartlists.Catalog `json:"catalogs"`
 	Rules    smartlists.Rule      `json:"rules"`
+	Exclude  *smartlists.Rule     `json:"exclude"`
 	Sort     string               `json:"sort"`
 	MaxItems *float64             `json:"maxItems"`
 }
@@ -65,7 +70,11 @@ func smartList(w http.ResponseWriter, r *http.Request, scope addons.Scope) (smar
 	if !decode(w, r, &body) {
 		return smartlists.List{}, false
 	}
-	list := smartlists.List{Owner: scope.Owner, Name: body.Name, ShownAs: body.ShownAs, Catalogs: body.Catalogs, Rules: body.Rules, Sort: body.Sort}
+	list := smartlists.List{Owner: scope.Owner, Name: body.Name, ShownAs: body.ShownAs, Catalogs: body.Catalogs, Rules: body.Rules,
+		Exclude: smartlists.NoExclusions(), Sort: body.Sort}
+	if body.Exclude != nil {
+		list.Exclude = *body.Exclude
+	}
 	if max := body.MaxItems; max != nil {
 		if *max != math.Trunc(*max) || *max < 1 || *max > smartlists.MaxItems {
 			writeError(w, http.StatusBadRequest, "invalid_smart_list_max_items")
@@ -269,8 +278,9 @@ type smartCatalogJSON struct {
 	Genres      []string `json:"genres"`
 }
 
-// smartCatalogs answers the catalogs a scope's lists may draw from, and
-// the languages their rules may name, by ISO 639-1 code.
+// smartCatalogs answers the catalogs a scope's lists may draw from, the
+// languages their rules may name, by ISO 639-1 code, and the content
+// ratings, those apps offer as a user's limit.
 func (h *handler) smartCatalogs(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.scope(w, r)
 	if !ok {
@@ -290,8 +300,15 @@ func (h *handler) smartCatalogs(w http.ResponseWriter, r *http.Request) {
 		result = append(result, smartCatalogJSON{AddonID: c.AddonID.String(), AddonName: c.AddonName, Shared: c.Shared,
 			CatalogType: c.Catalog.Type, CatalogID: c.Catalog.ID, CatalogName: c.Catalog.Name, Genres: genres})
 	}
+	ratings := []string{}
+	for _, rating := range localization.Ratings() {
+		if rating.Score != nil {
+			ratings = append(ratings, rating.Name)
+		}
+	}
 	writeJSON(w, http.StatusOK, struct {
-		Catalogs  []smartCatalogJSON `json:"catalogs"`
-		Languages []string           `json:"languages"`
-	}{result, smartlists.Languages()})
+		Catalogs       []smartCatalogJSON `json:"catalogs"`
+		Languages      []string           `json:"languages"`
+		ContentRatings []string           `json:"contentRatings"`
+	}{result, smartlists.Languages(), ratings})
 }

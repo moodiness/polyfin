@@ -1,8 +1,10 @@
 // Package tmdb asks TMDB for the images of titles, seasons, episodes and
 // people, with the server's own API key (Settings.TMDBKey), for
 // administrators to choose an item's artwork from (see the jellyfin
-// package's remote images), and for the details of the people titles
-// credit (see the library package's people details).
+// package's remote images), for the details of the people titles credit
+// (see the library package's people details), and for the studios and
+// networks of titles, which smart lists may judge (see the library
+// package's studios.go).
 //
 // TMDB is asked only while a key is saved. Its answers, and the titles and
 // people it did not know, are kept in memory for answerLife; at most
@@ -171,6 +173,29 @@ func (c *Client) TitleImages(ctx context.Context, kind Kind, id string) (TitleIm
 	var images TitleImages
 	err := c.get(ctx, "/"+string(kind)+"/"+url.PathEscape(id)+"/images", nil, &images)
 	return images, err
+}
+
+// Studios returns the names of the networks a series of kind TMDB
+// identifies as id aired on, then of the companies that made the movie or
+// series, each once.
+func (c *Client) Studios(ctx context.Context, kind Kind, id string) ([]string, error) {
+	type named struct {
+		Name string `json:"name"`
+	}
+	var details struct {
+		Networks  []named `json:"networks"`
+		Companies []named `json:"production_companies"`
+	}
+	if err := c.get(ctx, "/"+string(kind)+"/"+url.PathEscape(id), nil, &details); err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, n := range slices.Concat(details.Networks, details.Companies) {
+		if name := strings.TrimSpace(n.Name); name != "" && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names, nil
 }
 
 // SeasonPosters returns the posters of a series' season.

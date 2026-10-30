@@ -503,7 +503,11 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
 		return
 	}
-	// A library's titles at random are drawn among more than a page.
+	// A library's series by their episodes, and its titles at random, are
+	// sorted among more than a page.
+	if key, ok := episodeOrder(r); ok && h.episodeOrderListing(w, r, user, parent, key, genre, fields, keep, start, limit) {
+		return
+	}
 	if randomOrder(r) && h.randomLibraryListing(w, r, user, parent, genre, fields, keep, start, limit) {
 		return
 	}

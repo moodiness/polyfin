@@ -19,13 +19,15 @@ const drawLife = 2 * time.Minute
 
 // drawKey names a draw: the user, with what limits what they see, the
 // library, the genre it is narrowed to and the kinds of items the listing
-// keeps.
+// keeps. order is the sort of a listing of series by their episodes (see
+// episodeOrderListing), empty for a draw at random.
 type drawKey struct {
 	user   accounts.ID
 	limits string
 	parent accounts.ID
 	genre  string
 	kinds  string
+	order  string
 }
 
 // draw is the order a listing at random drew a library's titles in, as

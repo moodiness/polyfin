@@ -246,8 +246,14 @@ A list draws from any catalog of movies or series of the server's addons, enable
 |---|---|
 | **Genre** | A title with this genre, in any letter case. |
 | **Year** | A title that came out from one year to another, either left empty for no bound. |
+| **Release date** | A title released in the last so many days, up to today, or in the next so many days, from today. A title whose catalog and description give only its year has no release date. |
 | **IMDb rating** | A title whose IMDb rating is within the bounds given. |
+| **IMDb votes** | A title whose IMDb rating counts a number of votes within the bounds given, as MDBList tells it (see [Ratings](#ratings)). Without the server's **MDBList API key for ratings**, no title has votes. |
 | **Language** | A title whose description gives this language. |
+| **Runtime** | A title whose runtime is within the bounds given, in minutes. |
+| **Content rating** | A title rated at most this rating, such as PG-13, on the scale parental control compares ratings on (see [Parental control](users.md#parental-control)): PG-13 matches PG-13, PG and G titles, and the ratings of other countries of the same ages. **is not** matches the titles rated above it. |
+| **Actor or director** | A title that credits this person, in any letter case, as an actor or a director. |
+| **Studio or network** | A title made by this studio, or a series aired on this network, in any letter case, as TMDB names them, or as an administrator set a title's studios in its metadata. Without the server's **TMDB API key**, only those set by an administrator count. |
 | **Movie or series** | Movies, or series. |
 | **Place in its catalog** | A title among the first so many of its catalog, as the catalog orders them: by popularity for a popular catalog. |
 | **Watch state** | A title the user opening the list played, did not play, started without finishing, or marked favorite. A series is played once every released episode is. |
@@ -255,19 +261,24 @@ A list draws from any catalog of movies or series of the server's addons, enable
 - Each rule can be negated with **is not**.
 - Titles match **All of the rules** or **Any of the rules**, and a group of rules inside the list matches all or any of its own.
 - A list without rules keeps every title of its catalogs.
-- **Sort**: as its catalogs list them, one of each in turn, as an addon's collection does; by premiere date, the latest first; by IMDb rating, the highest first, those without one last; by name; or at random, in an order drawn again each day.
+- **Exclusions** are rules too, in a group of their own: a title they match is left out of the list, whatever its rules say. A list without exclusions leaves no title out.
+- A title that lacks what a rule looks at matches neither the rule nor its negation: a movie whose description gives no runtime is neither in a list of movies of at least 90 minutes nor in one of movies not of at least 90 minutes. Nor do exclusions leave it out for it.
+- **Sort**: as its catalogs list them, one of each in turn, as an addon's collection does; by premiere date, the latest first; by the latest episode aired, or by the latest season premiere, the latest first; by IMDb rating, the highest first, those without one last; by name; or at random, in an order drawn again each day.
+- **Latest episode aired** orders series by their latest regular episode that has aired, and **Latest season premiere** by the first episode of their latest season that has aired, as their descriptions date them. Specials (season 0) and episodes to come do not count. A movie comes by its premiere date. A series whose description is not read yet comes last until it is, and one without a dated episode last.
 - **Maximum titles**: from 1 to 20,000, applied after the rules and the sort. Empty, the list has no maximum but its catalogs'.
 - **Shown as**: a library or a collection. A list shown as a collection shows an image Polyfin draws from its first titles, as an addon's collection without a poster does (see [Generated images](#generated-images)); one shown as a library shows none.
 
-The list's page shows a preview of its titles as they stand now, before you save. It also says how many titles still wait for their description.
+The list's page shows a preview of its titles as they stand now, before you save. It also says how many titles still wait for what their rules look at: their description, their votes or their studios.
 
 How a list is made:
 
 - Polyfin reads each catalog up to its maximum, from the catalog pages it keeps and reads again after **Refresh catalogs after (minutes)**. That maximum is the library's own when the catalog is one of the user's libraries with a maximum, else **Titles read per movie and series catalog**.
 - When the rules require a genre that a catalog offers in its genre filter, Polyfin asks the catalog for that genre's titles, as for a library's genre, rather than reading it whole. A place in that catalog is then a place among that genre's titles.
 - The rules are applied each time the list is listed. The rules on what the user did are applied for each user, so a movie leaves "not watched yet" once played. A title the user hid leaves their lists at once, and comes back as soon as they show it again; other users still see it.
-- A catalog page usually gives a title's genres, year and IMDb rating. The language comes only with the title's full description. Polyfin reads the missing descriptions in the background, a few at a time, as it looks up ratings for users under parental control. The server's lists ask the server's addons only. Once read, what a description does not give the title does not have.
+- A catalog page usually gives a title's genres, year and IMDb rating, sometimes its runtime, content rating, people and release date. The language, and a series' episodes, come only with the title's full description. Polyfin reads the missing descriptions in the background, a few at a time, as it looks up ratings for users under parental control. The server's lists ask the server's addons only. Once read, what a description does not give the title does not have.
 - Until then, a title whose rules need its description is left out, negated rules included, and the list grows as descriptions come.
+- A title's IMDb votes come with its MDBList ratings, looked up in the background in batches (see [Ratings](#ratings)); a title still waiting for MDBList is left out until it is answered.
+- Studios and networks come from TMDB, by a title's TMDB identifier, else its IMDb one: Polyfin asks TMDB in the background for at most 50 titles at each listing, through the requests to TMDB it allows at once, and keeps the answers for every user, asking again after 30 days. A title waiting for TMDB is left out until it is answered; one TMDB does not know has no studio.
 - A listing waits for the addons 3 seconds at most. Past that, it lists the titles of the pages already kept and reads the others in the background.
 
 Limits:
@@ -283,7 +294,7 @@ Limits:
 - A list shown as a library is a `CollectionFolder` in `/UserViews`, after the libraries. Its `CollectionType` is `movies` or `tvshows` when all its catalogs are of that type; otherwise it has none, as the Watchlist. `/Items?ParentId=` lists its titles and `/Items/Latest?ParentId=` gives its home row.
 - A list shown as a collection is a `BoxSet` in the **Collections** view, by name with the collections made by users. The view shows once such a list exists.
 - The collections listing across the server lists it, except for jellyfin-web's **Add to collection** dialog. `POST` and `DELETE /Collections/{id}/Items` answer an empty `403`.
-- The admin API serves the lists under `/admin/api/scopes/{scope}/smart-lists`. `.../catalogs` gives the catalogs a list may draw from and the languages its rules may name. `POST .../preview` answers `titles`, `listed`, `unknown` (titles waiting for their description) and `complete` (whether every catalog answered in time).
+- The admin API serves the lists under `/admin/api/scopes/{scope}/smart-lists`. A list's `rules` and `exclude` are each a group of rules (`{"field": "group", "match": "all" | "any", "rules": [...]}`); a list sent without `exclude` has none. A rule's `field` is `genre`, `year`, `released`, `rating`, `votes`, `language`, `runtime`, `contentRating`, `person`, `studio`, `type`, `rank` or `state`; `released` takes `min` and `max` in days from today, negative in the past. `sort` is `catalog`, `premiere`, `latestEpisode`, `seasonPremiere`, `rating`, `name` or `random`. `.../catalogs` gives the catalogs a list may draw from, the languages its rules may name and the `contentRatings` a rule may set as the highest. `POST .../preview` answers `titles`, `listed`, `unknown` (titles waiting for their description, votes or studios) and `complete` (whether every catalog answered in time).
 
 ### Libraries hidden from the top bar
 
@@ -695,6 +706,7 @@ With a server key from MDBList, movies and series show three ratings from MDBLis
 - An administrator's edit still wins (see [Edit metadata](#edit-metadata)). An edit that leaves the ratings as shown keeps following MDBList.
 - Polyfin asks MDBList when a title's page opens, or when a movie or series whose ratings it does not keep is listed, in the background, up to 100 titles a request. Listings and title pages never wait: they show what is kept, and the next listing shows the rest. Titles without an IMDb or TMDB identifier, episodes, Live TV and music are not asked about.
 - Ratings are kept in the database by identifier, for every user, and asked again after 7 days, or 30 days for a title released over a year before. A title MDBList does not know is asked about again after 30 days. **Refresh metadata** forgets a title's ratings.
+- The votes the IMDb rating counts are kept with it, for smart lists' **IMDb votes** rule (see [Smart lists](#smart-lists)). The ratings kept before Polyfin read votes are asked about again as their titles are next listed.
 - MDBList allows 1,000 requests a day on its free tier. On a `429`, Polyfin asks nothing more for as long as `Retry-After` says, and after `Daily API limit exceeded!` until MDBList's daily reset. **System › Health** shows the requests left today.
 
 ## Artwork
@@ -779,7 +791,7 @@ Posters are listed for Primary, backdrops for Backdrop and Thumb (with the addon
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Edit images searches TMDB with it, people's photos and biographies are looked up with it, and local folders' files are matched through TMDB's search when every metadata addon's fails. Empty, only the addons' images are listed, people show what the addons give, such files stay unmatched, and TMDB is never asked. |
+| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Edit images searches TMDB with it, people's photos and biographies are looked up with it, local folders' files are matched through TMDB's search when every metadata addon's fails, and smart lists' **Studio or network** rules look titles' studios and networks up with it. Empty, only the addons' images are listed, people show what the addons give, such files stay unmatched, studio rules see only those an administrator set, and TMDB is never asked. |
 
 - Images are relayed by Polyfin, as all artwork is: apps never reach TMDB or an addon's artwork server. Polyfin relays only the images it listed for the item, and an addon's under the same limits as the addon: a user's own addon reaches public addresses only.
 - TMDB's answers are kept for 24 hours, and at most 4 requests go to TMDB at a time, its images included.
