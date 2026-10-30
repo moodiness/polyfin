@@ -214,6 +214,7 @@ In the official Jellyfin apps for Android and iOS, which show the web client ins
   - **Now available**: the titles of the user's [Watchlist](tracking.md#the-watchlist) they have not started that versions were found for, the latest found first (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting));
   - **Still waiting**: the titles of the user's Watchlist they have not started that no version was found for yet, or that are not out yet, the latest added first;
   - **Recommended on Trakt**: the movies and series Trakt recommends to the user, for the users who connected Trakt only (see [Recommended on Trakt](tracking.md#recommended-on-trakt));
+  - **Top picks for you**: the movies and series of the first page of each of the user's libraries, smart lists seen as libraries included, that their taste profile ranks first, without those they played (see [Top picks for you](#top-picks-for-you));
 - a **Place**: **At the top**, **After Continue Watching**, **After Next Up** or **At the bottom**. When a user's home page doesn't show Continue Watching or Next Up, the row takes the place before: after the rows above it, or at the top;
 - **Shown to**: **Every user**, or **Chosen users**;
 - **Also a library in other apps**, off by default.
@@ -228,7 +229,29 @@ Every row leaves out, for each user, what their other lists leave out: titles ab
 
 No app can be given a new kind of home section. With **Also a library in other apps** on, the row is also a library of its own, without type, as the Watchlist is (see [Tracking](tracking.md)): other apps list it among the user's libraries and show its latest titles on their home. The web player shows it too, in its libraries and with its own "Recently Added" row. A **Because you watched** row is then one library for each title it follows.
 
-**For app developers:** `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`), its `Kind` (`Catalog`, `Collection`, `BecauseYouWatched`, `New`, `NowAvailable` or `StillWaiting`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do. A row's `Id` is a folder: `/Items?ParentId=` lists the whole row, up to 500 titles, and `/Items/{Id}` describes it. The admin API names the two watchlist kinds `available` and `waiting`.
+#### Top picks for you
+
+Polyfin builds a taste profile for each user, in the background, every hour and at start (the scheduled task "Build taste profiles"). It reads the user's watch data and hidden titles: up to their 300 latest movies and series, each weighed by what the user did with it:
+
+- a movie finished counts 1, half as much more for each time it was watched again, twice at most; a series counts 1 for its episodes finished, a quarter more for each further episode, six at most;
+- a movie, or a series whose every episode started, stopped before a tenth of it and never finished counts -1, once 3 days passed;
+- a favorite counts 1.5 more, a like 2 more, a dislike 1.6 less; a hidden title counts 1 less;
+- each weight halves every 180 days after the user's last activity with the title.
+
+The profile adds each title's weight to its genres, directors, first five actors, decade and language. It ranks a title by the values it shares with them, each value's weight brought within -1 and 1, genres and directors counting fully, actors, decade and language half.
+
+The profile is confident once the titles the user liked, three at least, weigh 2.5 together: three movies finished in the last months, say. Until then, **Top picks for you** lists the libraries' first titles as their catalogs give them, the most popular first, one library after the other, and nothing else is reordered. Once confident:
+
+- **Top picks for you** lists the titles in the order of the profile, those it ranks the same in the order above;
+- similar titles, **Because you watched** rows and [movie recommendations](jellyfin-compatibility.md#movie-recommendations) are ordered half by how close each title is and half by the profile, by the sum of the two ranks;
+- `/Items/Suggestions` puts the titles the profile ranks first first, the others at random as before;
+- a movie's or series' page starts its taglines with why it is for the user, "87% for you · because you like Thriller", in the user's metadata language when Polyfin speaks it, else the server's. The percentage goes from 60 to 98; the reason is the genre, director or actor of the title the user likes most. Each user can turn this off under **My account › Taste profile**. The metadata editor, which sends the taglines it was shown, never saves it.
+
+A genre is vetoed, confident or not, once its weight is -1.5 or less and two titles at least weigh against it, such as one the user disliked two titles of without liking others: one disliked "Horror, Drama" title vetoes neither genre. A vetoed genre's titles leave **Top picks for you**, and come last in the other lists. The profile stays on the server: only its user sees it, under **My account › Taste profile** (see [Users](users.md#taste-profile)). Addons describe titles with genres, years and sometimes their directors and cast, rarely their language: the profile weighs what they give.
+
+**Compared with Jellyfin:** Jellyfin has no taste profile. Its suggestions are at random ([SuggestionsController.cs, lines 82 to 93](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SuggestionsController.cs#L82-L93)), and its similar titles are ordered by their score alone ([SimilarItemsManager.cs, lines 245 to 249](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/SimilarItems/SimilarItemsManager.cs#L245-L249)). Polyfin orders them by the user's taste once it knows it, and the row reaches other apps through **Also a library in other apps**. jellyfin-web already shows "Ends at" on a title's page, which the tagline does not repeat.
+
+**For app developers:** `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`), its `Kind` (`Catalog`, `Collection`, `BecauseYouWatched`, `New`, `NowAvailable`, `StillWaiting` or `TopPicks`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do. A row's `Id` is a folder: `/Items?ParentId=` lists the whole row, up to 500 titles, and `/Items/{Id}` describes it. The admin API names the two watchlist kinds `available` and `waiting`.
 
 ### Themes
 

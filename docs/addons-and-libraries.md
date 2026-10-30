@@ -823,4 +823,4 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 - `/Items/Root` is the user's root folder; its children are the user's views.
 - `/Items/Counts` counts each library's first page of titles, plus one when more follow, as genre and studio pages count, as far as Polyfin keeps them: it asks the addons nothing. The user's favorites are counted exactly with `isFavorite=true`.
-- `/Items/Suggestions` returns titles picked at random among the first page of each library.
+- `/Items/Suggestions` returns titles picked at random among the first page of each library, those the user's taste profile ranks first coming first once it is confident (see [Top picks for you](web-client.md#top-picks-for-you)).
