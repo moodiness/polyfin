@@ -489,6 +489,8 @@ const common = {
     plex_profile_pin_refused: 'Plex refused this PIN. Type the profile’s PIN again.',
     plex_profile_forbidden: 'Plex does not let this account switch to this profile.',
     plex_unknown_server: 'Your Plex account does not reach this server. Choose another one.',
+    plex_not_owner:
+      'This Plex account does not own the server. Sign in with the owner’s Plex account.',
     plex_server_unreachable:
       'None of the addresses Plex gives for this server answered as that server. Check that it runs, and that Polyfin can reach it.',
     plex_tv_failed: 'plex.tv did not answer as expected. Try again later.',

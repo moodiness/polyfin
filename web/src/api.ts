@@ -2525,6 +2525,8 @@ export type JellyfinImportEntry = {
   create?: NewUser
   watchData: boolean
   jellyfinPassword?: string
+  /** A Plex Home profile's PIN, for an import the server's owner signed in to Plex for. */
+  plexPin?: string
 }
 
 /**
@@ -2651,10 +2653,16 @@ export const connectJellyfin = (
 
 /**
  * Creates the new users (all or none), then starts importing the watch data in the background;
- * `import` is null when no entry asked for watch data.
+ * `import` is null when no entry asked for watch data. `plexOwner` reads each account of a Plex
+ * server with the token Plex gives its owner, whom the administrator signed in to Plex as.
  */
 export const startJellyfinImport = (
-  body: { kind: ServerKind; address: string; users: JellyfinImportEntry[] } & JellyfinCredentials,
+  body: {
+    kind: ServerKind
+    address: string
+    plexOwner?: boolean
+    users: JellyfinImportEntry[]
+  } & JellyfinCredentials,
 ) =>
   request<{ created: User[]; import: JellyfinImportStatus | null }>(
     'POST',
@@ -2716,21 +2724,50 @@ export type PlexAccount = {
   servers: { id: string; name: string; owned: boolean; preselected: boolean }[]
 }
 
-const plexBase = '/account/server-import/plex'
+/**
+ * Whose sign-in to Plex: a user's own, under My account, or the server owner's, in the
+ * administrators' import.
+ */
+export type PlexSignInFor = 'own' | 'owner'
+
+const plexBases: Record<PlexSignInFor, string> = {
+  own: '/account/server-import/plex',
+  owner: '/jellyfin-import/plex',
+}
 
 /** Starts the user's sign-in to Plex, dropping the one held before. */
-export const startPlexSignIn = () => request<PlexSignIn>('POST', `${plexBase}/sign-in`)
+export const startPlexSignIn = (of: PlexSignInFor) =>
+  request<PlexSignIn>('POST', `${plexBases[of]}/sign-in`)
 
 /** The account once Plex signed the user in, else pending. */
-export const pollPlexSignIn = () =>
-  request<PlexAccount | { pending: true }>('POST', `${plexBase}/sign-in/poll`)
+export const pollPlexSignIn = (of: PlexSignInFor) =>
+  request<PlexAccount | { pending: true }>('POST', `${plexBases[of]}/sign-in/poll`)
 
 /** Reads the profile of the Plex Home chosen, with its PIN when it has one. */
 export const choosePlexProfile = (profile: string, pin: string) =>
-  request<PlexAccount>('POST', `${plexBase}/profile`, { profile, pin })
+  request<PlexAccount>('POST', `${plexBases.own}/profile`, { profile, pin })
 
 /** Drops the user's sign-in to Plex, signing it out. */
-export const dropPlexSignIn = () => request<void>('DELETE', `${plexBase}/sign-in`)
+export const dropPlexSignIn = (of: PlexSignInFor) =>
+  request<void>('DELETE', `${plexBases[of]}/sign-in`)
+
+/**
+ * What an administrator's import reads of a Plex account once the owner signed in to Plex: all its
+ * watch data, all of it once its Plex Home profile's PIN is given, or its plays on the server only.
+ */
+export type PlexAccess = 'all' | 'pin' | 'plays'
+
+/** What the import reads of each account of the Plex server but the owner, by its identifier. */
+export const fetchPlexOwnerAccess = async (
+  body: { kind: 'plex'; address: string } & JellyfinCredentials,
+) =>
+  (
+    await request<{ accounts: Record<string, PlexAccess> }>(
+      'POST',
+      `${plexBases.owner}/owner`,
+      body,
+    )
+  ).accounts
 
 /** Why a movie of a Letterboxd export was not found. */
 export type LetterboxdReason = 'not_found' | 'ambiguous' | 'search_failed'

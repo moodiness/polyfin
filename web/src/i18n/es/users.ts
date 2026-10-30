@@ -267,12 +267,32 @@ const users: typeof en = {
       watchData: 'Importar datos de visualización',
       watchDataHelp: 'Títulos reproducidos con sus fechas, puntos de reanudación y favoritos.',
       plexOwnerWatchDataHelp:
-        'Títulos reproducidos con sus fechas y número de reproducciones, y puntos de reanudación.',
+        'Títulos reproducidos con sus fechas y número de reproducciones, puntos de reanudación y valoraciones.',
       plexWatchDataHelp:
         'Los títulos que esta cuenta reprodujo hasta el final en este servidor, según el historial de reproducción de Plex, con sus fechas y número de reproducciones. Los títulos que marcó como vistos o sincronizó desde su cuenta de Plex, y sus puntos de reanudación, se quedan en Plex.',
       watchDataNeeded: 'Sin ellos, no se importa nada para este usuario.',
       plexNotice:
-        'Con el token del propietario, Plex permite a Polyfin leer los títulos reproducidos y los puntos de reanudación del propietario. De las demás cuentas, solo da su historial de reproducción en este servidor: los títulos que reprodujeron hasta el final aquí. Los títulos que marcaron como vistos sin reproducirlos, los sincronizados desde su cuenta de Plex y sus puntos de reanudación no figuran en él y se quedan en Plex. Plex no tiene favoritos que importar.',
+        'Con el token del propietario, Plex permite a Polyfin leer los títulos reproducidos, los puntos de reanudación y las valoraciones del propietario. De las demás cuentas, solo da su historial de reproducción en este servidor: los títulos que reprodujeron hasta el final aquí. Los títulos que marcaron como vistos sin reproducirlos, los sincronizados desde su cuenta de Plex, sus puntos de reanudación y sus valoraciones no figuran en él. Para leer los datos de visionado de cada cuenta, inicie sesión con Plex como propietario, arriba. Plex no tiene favoritos que importar.',
+      plexOwner: {
+        title: 'Leer cada cuenta con Plex',
+        help: 'Inicie sesión con Plex como propietario de este servidor. Plex da entonces a Polyfin el token de cada cuenta con la que se comparte el servidor, y Polyfin lee con él lo que la cuenta reprodujo, marcó como visto o sincronizó, sus puntos de reanudación y sus valoraciones, no solo sus reproducciones aquí. Los perfiles de su Plex Home se leen con su PIN, cuando tienen uno.',
+        signIn: 'Iniciar sesión con Plex como propietario',
+        checking: 'Se pregunta a Plex para qué cuentas da un token…',
+        signedInAs: (name: string) =>
+          `Sesión iniciada en Plex como ${name}, propietario del servidor.`,
+        signOut: 'Cerrar sesión en Plex',
+        notice:
+          'Polyfin lee cada cuenta de abajo con el token que Plex da al propietario para ella, como las aplicaciones de Plex de esa cuenta leen este servidor. Los tokens solo sirven para esta importación: nunca se guardan, y su sesión en Plex se cierra cuando la importación termina.',
+        all: 'Todo: los títulos reproducidos, marcados como vistos o sincronizados, los puntos de reanudación y las valoraciones.',
+        pin: 'Un perfil de Plex Home con PIN: todo con su PIN, sin él solo sus reproducciones en este servidor.',
+        plays:
+          'Solo sus reproducciones en este servidor, según el historial de reproducción de Plex: Plex no da ningún token para esta cuenta.',
+        everything: 'Todo',
+        playsOnly: 'Solo reproducciones',
+        pinLabel: 'PIN del perfil',
+        pinHelp: (name: string) =>
+          `El PIN que ${name} pide en Plex. Si se deja vacío, solo se leen sus reproducciones.`,
+      },
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Con la sesión iniciada como ${owner ?? 'un usuario'}, Polyfin solo lee los datos de visualización de ese usuario.` : `Esta clave es ${owner === null ? 'de un usuario' : `de ${owner}`}: solo lee los datos de visualización de ese usuario.`} Para importar los de otro usuario, escriba la contraseña de su cuenta en el servidor: Polyfin inicia sesión como ese usuario para leerlos. Sin ella, su cuenta se puede crear igualmente.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
@@ -377,7 +397,7 @@ const users: typeof en = {
         plex_nothing_watched: () =>
           'Esta cuenta no tiene nada reproducido, en curso ni valorado en las bibliotecas de películas y series de este servidor.',
         plex_no_history: () =>
-          'Plex no muestra ninguna reproducción de esta cuenta en este servidor. Su historial de reproducción solo contiene los títulos reproducidos hasta el final en este servidor: los títulos marcados como vistos sin reproducirlos, o sincronizados desde la cuenta de Plex, no figuran en él. Para traerlo todo, puntos de reanudación incluidos, la persona inicia sesión con Plex en Mi cuenta › Importar desde otro servidor.',
+          'Plex no muestra ninguna reproducción de esta cuenta en este servidor. Su historial de reproducción solo contiene los títulos reproducidos hasta el final en este servidor: los títulos marcados como vistos sin reproducirlos, o sincronizados desde la cuenta de Plex, no figuran en él. Para traerlo todo, puntos de reanudación incluidos, inicie sesión con Plex como propietario en esta importación, con el PIN de un perfil de Plex Home que lo tenga, o la persona inicia sesión con Plex en Mi cuenta › Importar desde otro servidor.',
       },
       unmatched: (count: number) =>
         count === 1 ? '1 título no encontrado' : `${count} títulos no encontrados`,

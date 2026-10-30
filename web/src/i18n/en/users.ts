@@ -257,12 +257,33 @@ const users = {
       newUser: 'New user',
       watchData: 'Import watch data',
       watchDataHelp: 'Played titles with their dates, resume points and favorites.',
-      plexOwnerWatchDataHelp: 'Played titles with their dates and play counts, and resume points.',
+      plexOwnerWatchDataHelp:
+        'Played titles with their dates and play counts, resume points and ratings.',
       plexWatchDataHelp:
         'The titles this account played to the end on this server, from Plex’s playback history, with their dates and play counts. Titles it marked as watched or synced from its Plex account, and its resume points, stay on Plex.',
       watchDataNeeded: 'Without it, nothing is imported for this user.',
       plexNotice:
-        'With the owner’s token, Plex lets Polyfin read the owner’s played titles and resume points. Of the other accounts, it gives only their playback history on this server: the titles they played to the end here. Titles they marked as watched without playing them, titles synced from their Plex account, and their resume points are not in it, and stay on Plex. Plex has no favorites to import.',
+        'With the owner’s token, Plex lets Polyfin read the owner’s played titles, resume points and ratings. Of the other accounts, it gives only their playback history on this server: the titles they played to the end here. Titles they marked as watched without playing them, titles synced from their Plex account, their resume points and their ratings are not in it. To read each account’s own watch data, sign in with Plex as the owner above. Plex has no favorites to import.',
+      /** The owner's sign-in to Plex, in the import of a Plex server. */
+      plexOwner: {
+        title: 'Read every account with Plex',
+        help: 'Sign in with Plex as this server’s owner. Plex then gives Polyfin the token of each account the server is shared with, and Polyfin reads with it what the account played, marked or synced as watched, its resume points and its ratings, not only its plays here. The profiles of your Plex Home are read with their PIN, when they have one.',
+        signIn: 'Sign in with Plex as the owner',
+        checking: 'Asking Plex which accounts it gives a token for…',
+        signedInAs: (name: string) => `Signed in to Plex as ${name}, the server’s owner.`,
+        signOut: 'Sign out of Plex',
+        notice:
+          'Polyfin reads each account below with the token Plex gives the owner for it, as that account’s own Plex apps read this server. The tokens serve this import only: they are never kept, and your sign-in is signed out of Plex once the import ends.',
+        all: 'Everything: the titles played, marked or synced as watched, the resume points and the ratings.',
+        pin: 'A Plex Home profile with a PIN: everything with its PIN, only its plays on this server without it.',
+        plays:
+          'Only its plays on this server, from Plex’s playback history: Plex gives no token for this account.',
+        everything: 'Everything',
+        playsOnly: 'Plays only',
+        pinLabel: 'Profile PIN',
+        pinHelp: (name: string) =>
+          `The PIN ${name} asks for on Plex. Left empty, only its plays are read.`,
+      },
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Signed in as ${owner ?? 'a user'}, Polyfin reads only that user’s watch data.` : `This key is ${owner === null ? 'a user’s' : `${owner}’s`}: it reads only that user’s watch data.`} To import another user’s, type the password of their account on the server: Polyfin signs in as them to read it. Without it, their account can still be created.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
@@ -367,7 +388,7 @@ const users = {
         plex_nothing_watched: () =>
           'This account has nothing played, in progress or rated in this server’s movie and show libraries.',
         plex_no_history: () =>
-          'Plex lists no play of this account on this server. Its playback history holds only the titles played to the end on this server: titles marked as watched without playing them, or synced from the Plex account, are not in it. To bring everything over, resume points included, the person signs in with Plex under My account › Import from another server.',
+          'Plex lists no play of this account on this server. Its playback history holds only the titles played to the end on this server: titles marked as watched without playing them, or synced from the Plex account, are not in it. To bring everything over, resume points included, sign in with Plex as the owner in this import, with the PIN of a Plex Home profile that has one, or the person signs in with Plex under My account › Import from another server.',
       },
       unmatched: (count: number) =>
         count === 1 ? '1 title not found' : `${count} titles not found`,

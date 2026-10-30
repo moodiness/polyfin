@@ -535,6 +535,8 @@ const common: typeof en = {
     plex_profile_pin_refused: 'Plex hat diese PIN abgelehnt. Gib die PIN des Profils erneut ein.',
     plex_profile_forbidden: 'Plex lässt dieses Konto nicht zu diesem Profil wechseln.',
     plex_unknown_server: 'Dein Plex-Konto greift nicht auf diesen Server zu. Wähle einen anderen.',
+    plex_not_owner:
+      'Dieses Plex-Konto ist nicht der Besitzer des Servers. Melde dich mit dem Plex-Konto des Besitzers an.',
     plex_server_unreachable:
       'Keine der Adressen, die Plex für diesen Server angibt, hat als dieser Server geantwortet. Prüfe, ob er läuft und Polyfin ihn erreichen kann.',
     plex_tv_failed: 'plex.tv hat nicht wie erwartet geantwortet. Versuche es später erneut.',

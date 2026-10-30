@@ -10,6 +10,7 @@ import {
   type JellyfinImportStatus,
   type PlexAccount,
   type PlexSignIn,
+  type PlexSignInFor,
 } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
@@ -28,48 +29,23 @@ import {
 const signInPollMs = 2000
 
 /**
- * The user signs in to Plex on Plex's own page, which the server asks plex.tv about every few
- * seconds; then they choose the profile of their Plex Home, when they have one, and the server,
- * and import their own watch data from it, with their Plex Watchlist unless they untick it. The
- * tokens Plex gives stay on the server: this page never sees them.
+ * A sign-in to Plex on Plex's own page, `of` the user's own import or the server owner's: `begin`
+ * asks for the page's link, then the server is asked every few seconds whether Plex signed the user
+ * in, until it hands the account to `onAccount`; `failure` is why it ended otherwise. `cancel`
+ * drops it, signing it out.
  */
-export function PlexImportForm({
-  header,
-  onStarted,
-}: {
-  /** The choice of the kind of server, shown first. */
-  header: ReactNode
-  onStarted: (started: JellyfinImportStatus) => void
-}) {
-  const { t } = useI18n()
-  const text = t.account.plexImport
+export function usePlexSignIn(of: PlexSignInFor, onAccount: (account: PlexAccount) => void) {
   const [link, setLink] = useState<PlexSignIn | null>(null)
-  const [account, setAccount] = useState<PlexAccount | null>(null)
   const [failure, setFailure] = useState<unknown>(null)
-  const [profile, setProfile] = useState('')
-  const [pin, setPin] = useState('')
-  const [server, setServer] = useState('')
-  const [watchlist, setWatchlist] = useState(true)
-
-  function show(read: PlexAccount) {
-    setAccount(read)
-    setProfile(read.profile)
-    setPin('')
-    setServer((read.servers.find((s) => s.preselected) ?? read.servers[0])?.id ?? '')
-  }
-
-  const signIn = useMutation({
-    mutationFn: startPlexSignIn,
-    onSuccess: (created) => {
-      setFailure(null)
-      setAccount(null)
-      setLink(created)
-    },
+  const begin = useMutation({
+    mutationFn: () => startPlexSignIn(of),
+    onMutate: () => setFailure(null),
+    onSuccess: setLink,
   })
-  const poll = useEffectEvent(() => pollPlexSignIn())
+  const poll = useEffectEvent(() => pollPlexSignIn(of))
   const received = useEffectEvent((read: PlexAccount) => {
     setLink(null)
-    show(read)
+    onAccount(read)
   })
 
   useEffect(() => {
@@ -98,17 +74,73 @@ export function PlexImportForm({
     }
   }, [link])
 
+  const cancel = useMutation({
+    mutationFn: () => dropPlexSignIn(of),
+    onSettled: () => {
+      setLink(null)
+      setFailure(null)
+    },
+  })
+  return { link, failure, begin, cancel }
+}
+
+/** Where the user signs in to Plex, in a new tab, while the page waits for it. */
+export function PlexSignInWaiting({ link }: { link: PlexSignIn }) {
+  const { t } = useI18n()
+  const text = t.account.plexImport
+  return (
+    <div className="flex flex-col gap-4 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:p-3.5">
+      <p className="text-control text-ink">{text.approve}</p>
+      <ExternalButtonLink
+        variant="primary"
+        href={link.link}
+        target="_blank"
+        rel="noopener noreferrer"
+        iconEnd={ArrowSquareOutIcon}
+        className="self-start"
+      >
+        {text.open}
+      </ExternalButtonLink>
+      <p role="status" className="text-small text-ink-3">
+        {text.waiting}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * The user signs in to Plex on Plex's own page, which the server asks plex.tv about every few
+ * seconds; then they choose the profile of their Plex Home, when they have one, and the server,
+ * and import their own watch data from it, with their Plex Watchlist unless they untick it. The
+ * tokens Plex gives stay on the server: this page never sees them.
+ */
+export function PlexImportForm({
+  header,
+  onStarted,
+}: {
+  /** The choice of the kind of server, shown first. */
+  header: ReactNode
+  onStarted: (started: JellyfinImportStatus) => void
+}) {
+  const { t } = useI18n()
+  const text = t.account.plexImport
+  const [account, setAccount] = useState<PlexAccount | null>(null)
+  const [profile, setProfile] = useState('')
+  const [pin, setPin] = useState('')
+  const [server, setServer] = useState('')
+  const [watchlist, setWatchlist] = useState(true)
+
+  function show(read: PlexAccount) {
+    setAccount(read)
+    setProfile(read.profile)
+    setPin('')
+    setServer((read.servers.find((s) => s.preselected) ?? read.servers[0])?.id ?? '')
+  }
+
+  const { link, failure, begin: signIn, cancel } = usePlexSignIn('own', show)
   const switchProfile = useMutation({
     mutationFn: () => choosePlexProfile(profile, pin),
     onSuccess: show,
-  })
-  const cancel = useMutation({
-    mutationFn: dropPlexSignIn,
-    onSettled: () => {
-      setLink(null)
-      setAccount(null)
-      setFailure(null)
-    },
   })
   const start = useMutation({
     mutationFn: () => startOwnImport({ kind: 'plex', server, watchlist }),
@@ -132,24 +164,7 @@ export function PlexImportForm({
       <div className="flex max-w-lg flex-col gap-5 px-6 py-6 max-sm:px-4">
         {header}
         {account === null && link === null && <p className="text-small text-ink-3">{text.help}</p>}
-        {link !== null && (
-          <div className="flex flex-col gap-4 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:p-3.5">
-            <p className="text-control text-ink">{text.approve}</p>
-            <ExternalButtonLink
-              variant="primary"
-              href={link.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              iconEnd={ArrowSquareOutIcon}
-              className="self-start"
-            >
-              {text.open}
-            </ExternalButtonLink>
-            <p role="status" className="text-small text-ink-3">
-              {text.waiting}
-            </p>
-          </div>
-        )}
+        {link !== null && <PlexSignInWaiting link={link} />}
         {account !== null && (
           <>
             <p role="status" className="text-control text-ink">
@@ -232,7 +247,7 @@ export function PlexImportForm({
             icon={SignInIcon}
             loading={signIn.isPending}
             onClick={() => {
-              setFailure(null)
+              setAccount(null)
               signIn.mutate()
             }}
           >
@@ -240,7 +255,10 @@ export function PlexImportForm({
           </Button>
         ) : (
           <>
-            <Button loading={cancel.isPending} onClick={() => cancel.mutate()}>
+            <Button
+              loading={cancel.isPending}
+              onClick={() => cancel.mutate(undefined, { onSettled: () => setAccount(null) })}
+            >
               {text.cancel}
             </Button>
             {account !== null && (

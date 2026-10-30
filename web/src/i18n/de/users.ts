@@ -266,12 +266,31 @@ const users: typeof en = {
       watchData: 'Wiedergabedaten importieren',
       watchDataHelp: 'Gesehene Titel mit ihren Daten, Fortsetzungspunkte und Favoriten.',
       plexOwnerWatchDataHelp:
-        'Gesehene Titel mit ihren Daten und Wiedergabezahlen sowie Fortsetzungspunkte.',
+        'Gesehene Titel mit ihren Daten und Wiedergabezahlen, Fortsetzungspunkte und Bewertungen.',
       plexWatchDataHelp:
         'Die Titel, die dieses Konto auf diesem Server bis zum Ende abgespielt hat, aus dem Wiedergabeverlauf von Plex, mit ihren Daten und Wiedergabezahlen. Titel, die es als gesehen markiert oder aus seinem Plex-Konto synchronisiert hat, und seine Fortsetzungspunkte bleiben bei Plex.',
       watchDataNeeded: 'Ohne sie wird für diesen Benutzer nichts importiert.',
       plexNotice:
-        'Mit dem Token des Besitzers lässt Plex Polyfin die gesehenen Titel und Fortsetzungspunkte des Besitzers lesen. Von den anderen Konten gibt es nur ihren Wiedergabeverlauf auf diesem Server: die Titel, die sie hier bis zum Ende abgespielt haben. Titel, die sie ohne Abspielen als gesehen markiert haben, aus ihrem Plex-Konto synchronisierte Titel und ihre Fortsetzungspunkte stehen nicht darin und bleiben bei Plex. Plex hat keine Favoriten zum Importieren.',
+        'Mit dem Token des Besitzers lässt Plex Polyfin die gesehenen Titel, Fortsetzungspunkte und Bewertungen des Besitzers lesen. Von den anderen Konten gibt es nur ihren Wiedergabeverlauf auf diesem Server: die Titel, die sie hier bis zum Ende abgespielt haben. Titel, die sie ohne Abspielen als gesehen markiert haben, aus ihrem Plex-Konto synchronisierte Titel, ihre Fortsetzungspunkte und ihre Bewertungen stehen nicht darin. Um die eigenen Wiedergabedaten jedes Kontos zu lesen, melde dich oben als Besitzer mit Plex an. Plex hat keine Favoriten zum Importieren.',
+      plexOwner: {
+        title: 'Jedes Konto mit Plex lesen',
+        help: 'Melde dich als Besitzer dieses Servers mit Plex an. Plex gibt Polyfin dann das Token jedes Kontos, für das der Server freigegeben ist, und Polyfin liest damit, was das Konto abgespielt, als gesehen markiert oder synchronisiert hat, seine Fortsetzungspunkte und seine Bewertungen, nicht nur seine Wiedergaben hier. Die Profile deines Plex Home werden mit ihrer PIN gelesen, wenn sie eine haben.',
+        signIn: 'Als Besitzer mit Plex anmelden',
+        checking: 'Plex wird gefragt, für welche Konten es ein Token gibt…',
+        signedInAs: (name: string) => `Bei Plex angemeldet als ${name}, Besitzer des Servers.`,
+        signOut: 'Von Plex abmelden',
+        notice:
+          'Polyfin liest jedes Konto unten mit dem Token, das Plex dem Besitzer dafür gibt, so wie die Plex-Apps dieses Kontos diesen Server lesen. Die Tokens dienen nur diesem Import: Sie werden nie gespeichert, und deine Anmeldung wird bei Plex abgemeldet, sobald der Import endet.',
+        all: 'Alles: die abgespielten, als gesehen markierten oder synchronisierten Titel, die Fortsetzungspunkte und die Bewertungen.',
+        pin: 'Ein Plex-Home-Profil mit PIN: alles mit seiner PIN, ohne sie nur seine Wiedergaben auf diesem Server.',
+        plays:
+          'Nur seine Wiedergaben auf diesem Server, aus dem Wiedergabeverlauf von Plex: Plex gibt für dieses Konto kein Token.',
+        everything: 'Alles',
+        playsOnly: 'Nur Wiedergaben',
+        pinLabel: 'PIN des Profils',
+        pinHelp: (name: string) =>
+          `Die PIN, die ${name} bei Plex verlangt. Leer gelassen werden nur seine Wiedergaben gelesen.`,
+      },
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Angemeldet als ${owner ?? 'ein Benutzer'}, liest Polyfin nur die Wiedergabedaten dieses Benutzers.` : `Dieser Schlüssel gehört ${owner ?? 'einem Benutzer'}: Er liest nur die Wiedergabedaten dieses Benutzers.`} Um die eines anderen Benutzers zu importieren, gib das Passwort seines Kontos auf dem Server ein: Polyfin meldet sich als dieser Benutzer an, um sie zu lesen. Ohne Passwort kann sein Konto trotzdem erstellt werden.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
@@ -376,7 +395,7 @@ const users: typeof en = {
         plex_nothing_watched: () =>
           'Dieses Konto hat in den Film- und Serienbibliotheken dieses Servers nichts gesehen, begonnen oder bewertet.',
         plex_no_history: () =>
-          'Plex listet keine Wiedergabe dieses Kontos auf diesem Server. Sein Wiedergabeverlauf enthält nur die Titel, die auf diesem Server bis zum Ende abgespielt wurden: Ohne Abspielen als gesehen markierte oder aus dem Plex-Konto synchronisierte Titel stehen nicht darin. Um alles zu übernehmen, Fortsetzungspunkte eingeschlossen, meldet sich die Person unter Mein Konto › Von einem anderen Server importieren mit Plex an.',
+          'Plex listet keine Wiedergabe dieses Kontos auf diesem Server. Sein Wiedergabeverlauf enthält nur die Titel, die auf diesem Server bis zum Ende abgespielt wurden: Ohne Abspielen als gesehen markierte oder aus dem Plex-Konto synchronisierte Titel stehen nicht darin. Um alles zu übernehmen, Fortsetzungspunkte eingeschlossen, melde dich in diesem Import als Besitzer mit Plex an, mit der PIN eines Plex-Home-Profils, das eine hat, oder die Person meldet sich unter Mein Konto › Von einem anderen Server importieren mit Plex an.',
       },
       unmatched: (count: number) =>
         count === 1 ? '1 Titel nicht gefunden' : `${count} Titel nicht gefunden`,

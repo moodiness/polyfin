@@ -267,12 +267,32 @@ const users: typeof en = {
       watchData: 'Importer les données de visionnage',
       watchDataHelp: 'Titres vus avec leurs dates, points de reprise et favoris.',
       plexOwnerWatchDataHelp:
-        'Titres vus avec leurs dates et leur nombre de lectures, et points de reprise.',
+        'Titres vus avec leurs dates et leur nombre de lectures, points de reprise et notes.',
       plexWatchDataHelp:
         'Les titres que ce compte a lus jusqu’au bout sur ce serveur, d’après l’historique de lecture de Plex, avec leurs dates et leur nombre de lectures. Les titres qu’il a marqués comme vus ou synchronisés depuis son compte Plex, et ses points de reprise, restent sur Plex.',
       watchDataNeeded: 'Sans elles, rien n’est importé pour cet utilisateur.',
       plexNotice:
-        'Avec le jeton du propriétaire, Plex laisse Polyfin lire les titres vus et les points de reprise du propriétaire. Des autres comptes, il ne donne que leur historique de lecture sur ce serveur : les titres qu’ils y ont lus jusqu’au bout. Les titres qu’ils ont marqués comme vus sans les lire, ceux synchronisés depuis leur compte Plex et leurs points de reprise n’y figurent pas et restent sur Plex. Plex n’a pas de favoris à importer.',
+        'Avec le jeton du propriétaire, Plex laisse Polyfin lire les titres vus, les points de reprise et les notes du propriétaire. Des autres comptes, il ne donne que leur historique de lecture sur ce serveur : les titres qu’ils y ont lus jusqu’au bout. Les titres qu’ils ont marqués comme vus sans les lire, ceux synchronisés depuis leur compte Plex, leurs points de reprise et leurs notes n’y figurent pas. Pour lire les données de visionnage de chaque compte, connectez-vous avec Plex en tant que propriétaire, ci-dessus. Plex n’a pas de favoris à importer.',
+      plexOwner: {
+        title: 'Lire chaque compte avec Plex',
+        help: 'Connectez-vous avec Plex en tant que propriétaire de ce serveur. Plex donne alors à Polyfin le jeton de chaque compte avec lequel le serveur est partagé, et Polyfin y lit ce que le compte a vu, marqué comme vu ou synchronisé, ses points de reprise et ses notes, pas seulement ses lectures ici. Les profils de votre Plex Home sont lus avec leur code PIN, quand ils en ont un.',
+        signIn: 'Se connecter avec Plex en tant que propriétaire',
+        checking: 'Plex est interrogé sur les comptes dont il donne le jeton…',
+        signedInAs: (name: string) =>
+          `Connecté à Plex en tant que ${name}, propriétaire du serveur.`,
+        signOut: 'Se déconnecter de Plex',
+        notice:
+          'Polyfin lit chaque compte ci-dessous avec le jeton que Plex donne au propriétaire pour lui, comme les applications Plex de ce compte lisent ce serveur. Les jetons ne servent qu’à cet import : ils ne sont jamais conservés, et votre connexion à Plex est fermée à la fin de l’import.',
+        all: 'Tout : les titres vus, marqués comme vus ou synchronisés, les points de reprise et les notes.',
+        pin: 'Un profil Plex Home avec un code PIN : tout avec son code PIN, seulement ses lectures sur ce serveur sans lui.',
+        plays:
+          'Seulement ses lectures sur ce serveur, d’après l’historique de lecture de Plex : Plex ne donne pas de jeton pour ce compte.',
+        everything: 'Tout',
+        playsOnly: 'Lectures seulement',
+        pinLabel: 'Code PIN du profil',
+        pinHelp: (name: string) =>
+          `Le code PIN que ${name} demande sur Plex. Laissé vide, seules ses lectures sont lues.`,
+      },
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Connecté avec le compte ${owner ?? 'd’un utilisateur'}, Polyfin ne lit que ses données de visionnage.` : `Cette clé appartient à ${owner ?? 'un utilisateur'} : elle ne lit que ses données de visionnage.`} Pour importer celles d’un autre utilisateur, saisissez le mot de passe de son compte sur le serveur : Polyfin se connecte en tant que lui pour les lire. Sans lui, son compte peut quand même être créé.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
@@ -380,7 +400,7 @@ const users: typeof en = {
         plex_nothing_watched: () =>
           'Ce compte n’a rien de vu, en cours ni noté dans les bibliothèques de films et de séries de ce serveur.',
         plex_no_history: () =>
-          'Plex ne liste aucune lecture de ce compte sur ce serveur. Son historique de lecture ne contient que les titres lus jusqu’au bout sur ce serveur : les titres marqués comme vus sans être lus, ou synchronisés depuis le compte Plex, n’y figurent pas. Pour tout reprendre, points de reprise compris, la personne se connecte avec Plex dans Mon compte › Importer depuis un autre serveur.',
+          'Plex ne liste aucune lecture de ce compte sur ce serveur. Son historique de lecture ne contient que les titres lus jusqu’au bout sur ce serveur : les titres marqués comme vus sans être lus, ou synchronisés depuis le compte Plex, n’y figurent pas. Pour tout reprendre, points de reprise compris, connectez-vous avec Plex en tant que propriétaire dans cet import, avec le code PIN d’un profil Plex Home qui en a un, ou la personne se connecte avec Plex dans Mon compte › Importer depuis un autre serveur.',
       },
       unmatched: (count: number) =>
         count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,

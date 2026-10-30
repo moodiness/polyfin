@@ -268,12 +268,32 @@ const users: typeof en = {
       watchData: 'Importa i dati di visione',
       watchDataHelp: 'Titoli visti con le relative date, punti di ripresa e preferiti.',
       plexOwnerWatchDataHelp:
-        'Titoli visti con le relative date e il numero di riproduzioni, e punti di ripresa.',
+        'Titoli visti con le relative date e il numero di riproduzioni, punti di ripresa e valutazioni.',
       plexWatchDataHelp:
         'I titoli che questo account ha riprodotto fino alla fine su questo server, dalla cronologia di riproduzione di Plex, con le relative date e il numero di riproduzioni. I titoli che ha segnato come visti o sincronizzato dal suo account Plex, e i suoi punti di ripresa, restano su Plex.',
       watchDataNeeded: 'Senza questi dati, per questo utente non viene importato nulla.',
       plexNotice:
-        'Con il token del proprietario, Plex consente a Polyfin di leggere i titoli visti e i punti di ripresa del proprietario. Degli altri account fornisce solo la cronologia di riproduzione su questo server: i titoli che vi hanno riprodotto fino alla fine. I titoli segnati come visti senza riprodurli, quelli sincronizzati dal loro account Plex e i loro punti di ripresa non vi compaiono e restano su Plex. Plex non ha preferiti da importare.',
+        'Con il token del proprietario, Plex consente a Polyfin di leggere i titoli visti, i punti di ripresa e le valutazioni del proprietario. Degli altri account fornisce solo la cronologia di riproduzione su questo server: i titoli che vi hanno riprodotto fino alla fine. I titoli segnati come visti senza riprodurli, quelli sincronizzati dal loro account Plex, i loro punti di ripresa e le loro valutazioni non vi compaiono. Per leggere i dati di visione di ogni account, accedi con Plex come proprietario, qui sopra. Plex non ha preferiti da importare.',
+      plexOwner: {
+        title: 'Leggi ogni account con Plex',
+        help: 'Accedi con Plex come proprietario di questo server. Plex fornisce allora a Polyfin il token di ogni account con cui il server è condiviso, e Polyfin vi legge ciò che l’account ha riprodotto, segnato come visto o sincronizzato, i suoi punti di ripresa e le sue valutazioni, non solo le sue riproduzioni qui. I profili del tuo Plex Home vengono letti con il loro PIN, quando ne hanno uno.',
+        signIn: 'Accedi con Plex come proprietario',
+        checking: 'Si chiede a Plex per quali account fornisce un token…',
+        signedInAs: (name: string) =>
+          `Accesso a Plex eseguito come ${name}, proprietario del server.`,
+        signOut: 'Esci da Plex',
+        notice:
+          'Polyfin legge ogni account qui sotto con il token che Plex fornisce al proprietario per quell’account, come le app Plex di quell’account leggono questo server. I token servono solo a questa importazione: non vengono mai conservati, e il tuo accesso a Plex viene chiuso al termine dell’importazione.',
+        all: 'Tutto: i titoli riprodotti, segnati come visti o sincronizzati, i punti di ripresa e le valutazioni.',
+        pin: 'Un profilo Plex Home con PIN: tutto con il suo PIN, senza solo le sue riproduzioni su questo server.',
+        plays:
+          'Solo le sue riproduzioni su questo server, dalla cronologia di riproduzione di Plex: Plex non fornisce alcun token per questo account.',
+        everything: 'Tutto',
+        playsOnly: 'Solo riproduzioni',
+        pinLabel: 'PIN del profilo',
+        pinHelp: (name: string) =>
+          `Il PIN che ${name} chiede su Plex. Se lasciato vuoto, vengono lette solo le sue riproduzioni.`,
+      },
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Con l’accesso come ${owner ?? 'un utente'}, Polyfin legge solo i dati di visione di quell’utente.` : `Questa chiave appartiene a ${owner ?? 'un utente'}: legge solo i dati di visione di quell’utente.`} Per importare quelli di un altro utente, inserisci la password del suo account sul server: Polyfin accede come quell’utente per leggerli. Senza password, il suo account può comunque essere creato.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
@@ -380,7 +400,7 @@ const users: typeof en = {
         plex_nothing_watched: () =>
           'Questo account non ha nulla di visto, in corso o valutato nelle librerie di film e serie TV di questo server.',
         plex_no_history: () =>
-          'Plex non elenca alcuna riproduzione di questo account su questo server. La sua cronologia di riproduzione contiene solo i titoli riprodotti fino alla fine su questo server: i titoli segnati come visti senza riprodurli, o sincronizzati dall’account Plex, non vi compaiono. Per portare tutto, punti di ripresa compresi, la persona accede con Plex da Il mio account › Importa da un altro server.',
+          'Plex non elenca alcuna riproduzione di questo account su questo server. La sua cronologia di riproduzione contiene solo i titoli riprodotti fino alla fine su questo server: i titoli segnati come visti senza riprodurli, o sincronizzati dall’account Plex, non vi compaiono. Per portare tutto, punti di ripresa compresi, accedi con Plex come proprietario in questa importazione, con il PIN di un profilo Plex Home che ne ha uno, oppure la persona accede con Plex da Il mio account › Importa da un altro server.',
       },
       unmatched: (count: number) =>
         count === 1 ? '1 titolo non trovato' : `${count} titoli non trovati`,
