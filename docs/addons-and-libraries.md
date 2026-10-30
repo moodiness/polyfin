@@ -32,6 +32,36 @@ Each user can add their own addons and libraries under **My sources**. Users can
 
 A stream an addon lists plays when it is a link to a video, over `http` or `https`. A torrent's stream, an `infoHash` with its `fileIdx` and `sources`, plays only while **Play torrent streams** is on under **Settings › Torrents**, for the users with **Can play torrent streams**; otherwise it is left out of the versions, and a title whose addons list only torrents has none. See [Torrents](torrents.md). Web pages (`externalUrl`) and YouTube videos (`ytId`) never play. Every rule between an addon's streams and a title's versions, in the order Polyfin applies them, is in [Which streams become versions](playback.md#which-streams-become-versions).
 
+### Identifiers addons accept
+
+A stream addon's manifest tells which identifiers it lists streams for (`idPrefixes`, for each resource and type): some take IMDb's only (`tt`), some TMDB's (`tmdb:`), some an anime database's (`kitsu:`, `mal:`, `anidb:`). A movie or an episode is asked for by its own identifier when the addon takes it. Otherwise it is asked by the first of its other identifiers the addon takes, in this order:
+
+1. its IMDb identifier;
+2. its TMDB identifier;
+3. its anime's Kitsu, MyAnimeList, then AniDB identifier, from the [anime mapping](tracking.md#anime) tracking uses.
+
+Asked by another identifier, a title's type is `movie` or `series`, even when its catalog types it otherwise, as some anime catalogs do (`anime`). Such a title is also asked by its own identifier with that type when the addon takes only that type.
+
+An episode is asked for as Stremio addons name episodes:
+
+- By IMDb or TMDB, with its season and number: `tt…:2:3`, `tmdb:…:2:3`.
+- By an anime database, with the number the anime gives it: anime databases make each season, or part of a season, an entry of its own with its episodes numbered from 1. The third episode of a series' second season may be `kitsu:<id>:3`, the id of the entry for that season.
+
+Where the other identifiers come from:
+
+- A title named by IMDb or TMDB has those its description gives (`imdb_id`, and TMDB's identifier when the addon gives it), with the same season and number. Its anime entry is the one the mapping gives for its IMDb or TMDB identifier, for a movie. For an episode, it is the entry that holds its TVDB season and number, as for [AniList and MyAnimeList](tracking.md#finding-the-entry). The series' TVDB identifier comes from its description, else from its IMDb identifier's entries when they agree.
+- A title an anime catalog names (`kitsu:<id>`, `mal:<id>`, `anidb:<id>`) has the other anime databases' identifiers of the same entry, with the same episode number. Through the mapping, a movie also has its IMDb and TMDB identifiers, and an episode its series' IMDb identifier with its season and episode on TVDB. An episode is not asked by TMDB, whose seasons may be split otherwise, nor by IMDb when the anime is numbered as TVDB's absolute numbering.
+
+Some titles are not asked by a mapped identifier:
+
+- An identifier from the mapping is used only when one entry alone matches. A movie two entries claim, or a series whose entries point to different TVDB series, is not asked by any anime identifier.
+- Specials, and episodes the mapping does not place, are asked only by the identifiers the description gives.
+- Until the mapping's lists are read, titles are asked only by their own identifiers and those of their description.
+
+Only Stremio addons are asked by other identifiers. IPTV sources and local folders list their own titles, and home videos and other videos stay their folder's alone.
+
+Each addon's streams are kept under what it was asked, so its versions are renewed by asking the same again, and **Refresh** forgets them with the title's other lists. The streams of every addon merge into the title's versions as they always do, the same file listed twice being one version (see [Which streams become versions](playback.md#which-streams-become-versions)). At the `Debug` log level, each request to an addon for streams logs `An addon is asked for streams`, with the addon, the type and the identifier asked.
+
 ### Manifest addresses
 
 Manifest addresses usually contain your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu.

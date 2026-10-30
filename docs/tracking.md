@@ -96,6 +96,8 @@ AniDB, and Simkl's and Kitsu's anime that follow it, make each season of a serie
 - [Fribb/anime-lists](https://github.com/Fribb/anime-lists) (`anime-list-full.json`) gives the AniDB, Kitsu, MyAnimeList, AniList, TVDB, TMDB and IMDb identifiers of each anime.
 - [Anime-Lists/anime-lists](https://github.com/Anime-Lists/anime-lists) (`anime-list-master.xml`) gives where each AniDB episode is on TVDB: the season of each anime and the number to add to its episodes, the episodes it maps one by one, and the series numbered as TVDB's absolute numbering.
 
+The same mapping gives the identifiers stream addons that take only an anime database's, or only IMDb's, are asked by (see [Identifiers addons accept](addons-and-libraries.md#identifiers-addons-accept)).
+
 ### How numbering is translated
 
 - An episode goes to its series' TVDB identifier, and IMDb's when the lists give the same series, with the season and episode on TVDB. For example, the first episode of an anime the lists place at the 13th episode of TVDB's first season is that episode of the series.
