@@ -23,6 +23,10 @@ var ErrInvalidAccessSchedule = errors.New("invalid access schedule")
 // language code (see MetadataLanguageCode).
 var ErrInvalidMetadataLanguage = errors.New("invalid metadata language")
 
+// ErrInvalidAudioRegion reports an audio region that is not one of
+// localization.AudioVariants (see User.AudioRegion).
+var ErrInvalidAudioRegion = errors.New("invalid audio region")
+
 // MetadataLanguageCode reports whether code names the language of
 // descriptions: an ISO 639 code of two or three lowercase letters, with
 // an optional region of two uppercase letters, as "fr" or "pt-BR". Server
