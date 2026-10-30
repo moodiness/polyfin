@@ -45,6 +45,7 @@ import (
 	"github.com/moodiness/polyfin/internal/tmdb"
 	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/updatetool"
+	"github.com/moodiness/polyfin/internal/virtualtv"
 )
 
 const (
@@ -172,6 +173,12 @@ type Options struct {
 	// they are saved.
 	SmartLists    *smartlists.Store
 	SmartPreviews SmartPreviews
+	// VirtualChannels keeps the channels Polyfin airs, which
+	// ChannelBuilder builds from the library's titles and Playouts stops
+	// when they change; nil offers none.
+	VirtualChannels *virtualtv.Store
+	ChannelBuilder  ChannelBuilder
+	Playouts        Playouts
 	// HomeRows keeps the rows of the web player's home page, and the rows
 	// each user turned off; nil keeps none. HomeRowChoices tells the
 	// collections they may list.
@@ -393,6 +400,15 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/tasks/{id}/run", h.administrator(h.runTask))
 	mux.Handle("POST /admin/api/tasks/{id}/stop", h.administrator(h.stopTask))
 	mux.Handle("GET /admin/api/timers", h.administrator(h.timers))
+	if h.VirtualChannels != nil {
+		mux.Handle("GET /admin/api/live-tv/channels", h.administrator(h.virtualChannels))
+		mux.Handle("POST /admin/api/live-tv/channels", h.administrator(h.createVirtualChannel))
+		mux.Handle("GET /admin/api/live-tv/channels/choices", h.administrator(h.virtualChannelChoices))
+		mux.Handle("GET /admin/api/live-tv/channels/titles", h.administrator(h.virtualChannelTitles))
+		mux.Handle("GET /admin/api/live-tv/channels/{id}", h.administrator(h.virtualChannel))
+		mux.Handle("PUT /admin/api/live-tv/channels/{id}", h.administrator(h.updateVirtualChannel))
+		mux.Handle("DELETE /admin/api/live-tv/channels/{id}", h.administrator(h.deleteVirtualChannel))
+	}
 	mux.Handle("GET /admin/api/health", h.administrator(h.health))
 	mux.Handle("GET /admin/api/health/problems", h.administrator(h.healthProblemsRoute))
 	mux.Handle("GET /admin/api/server", h.administrator(h.serverActions))
