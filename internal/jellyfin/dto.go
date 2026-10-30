@@ -241,7 +241,7 @@ func newUserDto(user accounts.User, serverID string) UserDto {
 			BlockUnratedItems:               append([]string{}, user.Parental.BlockUnrated...),
 			EnableRemoteControlOfOtherUsers: user.RemoteControl,
 			EnableSharedDeviceControl:       true,
-			EnableRemoteAccess:              true,
+			EnableRemoteAccess:              user.RemoteAccess,
 			EnableLiveTvAccess:              user.LiveTv,
 			EnableLiveTvManagement:          user.LiveTvManagement,
 			EnableMediaPlayback:             true,

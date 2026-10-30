@@ -1003,8 +1003,9 @@ func (h *Handler) convertible(allowed accounts.Conversions, user accounts.User, 
 // streamAccess finds who a media request plays for. Players send no
 // credentials with media URLs: a signed grant in Path URLs, a signed play
 // session, or the caller's token stands for the user. A user outside their
-// allowed hours gets nothing: Jellyfin serves direct streams without
-// checking who asks, but Polyfin knows, and keeps to the hours.
+// allowed hours, or outside the local network without remote access, gets
+// nothing: Jellyfin serves direct streams without checking who asks, but
+// Polyfin knows, and keeps to the hours and the network.
 func (h *Handler) streamAccess(r *http.Request) (accounts.User, playback.Grant, bool) {
 	for _, name := range []string{grantParameter, "playSessionId"} {
 		token := query(r, name)
@@ -1016,13 +1017,14 @@ func (h *Handler) streamAccess(r *http.Request) (accounts.User, playback.Grant, 
 			continue
 		}
 		user, err := h.Accounts.User(r.Context(), grant.User)
-		if err == nil && !user.Refused(h.now()) && !h.outsideHours(user) {
+		if err == nil && !user.Refused(h.now()) && !h.outsideHours(user) && !remoteRefused(r, user) {
 			return user, grant, true
 		}
 	}
 	credentials := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
 	if credentials.Token != "" {
-		if _, user, err := h.Accounts.DeviceByToken(r.Context(), credentials.Token, forwarded.Client(r)); err == nil && !h.outsideHours(user) {
+		if _, user, err := h.Accounts.DeviceByToken(r.Context(), credentials.Token, forwarded.Client(r)); err == nil && !h.outsideHours(user) &&
+			!remoteRefused(r, user) {
 			return user, playback.Grant{}, true
 		}
 	}

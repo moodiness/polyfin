@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 func (h *Handler) publicInfo(r *http.Request) PublicSystemInfo {
@@ -51,8 +53,10 @@ func (h *Handler) systemInfo(w http.ResponseWriter, r *http.Request) {
 // any signed-in user, as Jellyfin does: encoding, which jellyfin-web reads
 // before rendering ASS subtitles, and skips them when this fails, and
 // which loads the fallback fonts when they are enabled (see
-// encodingConfiguration); and livetv, which lists the tuners (see
-// liveTvConfiguration). Branding has its own routes (see
+// encodingConfiguration); livetv, which lists the tuners (see
+// liveTvConfiguration); and network, which jellyfin-web's user editor
+// reads before showing "Allow remote connections to this server" (see
+// networkConfiguration). Branding has its own routes (see
 // serverBranding). Any other key is unknown.
 func (h *Handler) namedConfiguration(w http.ResponseWriter, r *http.Request) {
 	switch key := r.PathValue("key"); {
@@ -60,8 +64,55 @@ func (h *Handler) namedConfiguration(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, h.encodingConfiguration())
 	case strings.EqualFold(key, "livetv"):
 		h.liveTvConfiguration(w, r)
+	case strings.EqualFold(key, "network"):
+		writeJSON(w, http.StatusOK, h.networkConfiguration())
 	default:
 		processingError(w, http.StatusNotFound)
+	}
+}
+
+// NetworkConfiguration is Jellyfin's network configuration, in its order
+// (NetworkConfiguration.cs, 12.4).
+type NetworkConfiguration struct {
+	BaseUrl                           string
+	EnableHttps                       bool
+	RequireHttps                      bool
+	CertificatePath                   string
+	CertificatePassword               string
+	InternalHttpPort                  int
+	InternalHttpsPort                 int
+	PublicHttpPort                    int
+	PublicHttpsPort                   int
+	AutoDiscovery                     bool
+	EnableUPnP                        bool
+	EnableIPv4                        bool
+	EnableIPv6                        bool
+	EnableRemoteAccess                bool
+	LocalNetworkSubnets               []string
+	LocalNetworkAddresses             []string
+	KnownProxies                      []string
+	IgnoreVirtualInterfaces           bool
+	VirtualInterfaceNames             []string
+	EnablePublishedServerUriByRequest bool
+	PublishedServerUriBySubnet        []string
+	RemoteIPFilter                    []string
+	IsRemoteIPFilterBlacklist         bool
+}
+
+// networkConfiguration is Jellyfin's defaults with the server's port,
+// local discovery and Known proxies. Polyfin answers outside the local
+// network, so EnableRemoteAccess is true, which has jellyfin-web's user
+// editor show each user's own remote access. The local network is
+// Jellyfin's default, the private ranges, so no subnet is listed.
+func (h *Handler) networkConfiguration() NetworkConfiguration {
+	settings := h.Accounts.Settings()
+	return NetworkConfiguration{
+		InternalHttpPort: h.WebSocketPort, InternalHttpsPort: 8920, PublicHttpPort: h.WebSocketPort, PublicHttpsPort: 8920,
+		AutoDiscovery: settings.LocalDiscovery, EnableIPv4: true, EnableRemoteAccess: true,
+		LocalNetworkSubnets: []string{}, LocalNetworkAddresses: []string{},
+		KnownProxies:            accounts.FormatKnownProxies(settings.KnownProxies, settings.KnownProxyNames),
+		IgnoreVirtualInterfaces: true, VirtualInterfaceNames: []string{"veth"},
+		PublishedServerUriBySubnet: []string{}, RemoteIPFilter: []string{},
 	}
 }
 

@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/forwarded"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -23,6 +25,19 @@ const (
 	lastAdministrator     = "There must be at least one user in the system with administrative access."
 	administratorDisabled = "Administrators cannot be disabled."
 )
+
+// remoteAccessSelf answers, as a JSON string in the server language, an
+// administrator who would take their own remote access away from outside
+// the local network, which would lock them out at once. Jellyfin has no
+// such guard.
+var remoteAccessSelf = i18n.Text{
+	"You cannot turn off your own connections from outside the local network while connected from outside it: you would be locked out. Do it from the local network.",
+	"Vous ne pouvez pas désactiver vos propres connexions depuis l’extérieur du réseau local en étant connecté depuis l’extérieur : vous seriez bloqué. Faites-le depuis le réseau local.",
+	"Du kannst deine eigenen Verbindungen von außerhalb des lokalen Netzwerks nicht von außerhalb ausschalten: Du würdest dich aussperren. Tu es aus dem lokalen Netzwerk.",
+	"No puede desactivar sus propias conexiones desde fuera de la red local mientras está conectado desde fuera: quedaría bloqueado. Hágalo desde la red local.",
+	"Non puoi disattivare le tue connessioni dall’esterno della rete locale mentre sei connesso dall’esterno: resteresti bloccato. Fallo dalla rete locale.",
+	"Você não pode desativar suas próprias conexões de fora da rede local enquanto está conectado de fora: ficaria bloqueado. Faça isso pela rede local.",
+}
 
 // policyUpdate is the part of Jellyfin's UserPolicy Polyfin keeps. Apps
 // post the whole policy, as they read it from the user; the capabilities
@@ -67,6 +82,10 @@ type policyUpdate struct {
 	// Whether the user may schedule and delete Live TV recordings; like
 	// Jellyfin's, a policy that leaves it out grants it.
 	EnableLiveTvManagement bool
+	// Whether the user may connect from outside the local network; like
+	// Jellyfin's, a policy that leaves it out grants it (UserPolicy.cs,
+	// line 66).
+	EnableRemoteAccess bool
 }
 
 // scheduleUpdate is an AccessSchedule as apps post it. jellyfin-web sends
@@ -146,7 +165,8 @@ func (h *Handler) hiddenLibraries(ctx context.Context, policy policyUpdate, enab
 // updatePolicy sets a user's policy from an administrator's app: whether
 // the user is an administrator, hidden or disabled, their parental control,
 // whether they may have video or audio converted, download and manage
-// subtitles, the server's libraries they see and their allowed hours. Like
+// subtitles, the server's libraries they see, their allowed hours and
+// whether they may connect from outside the local network. Like
 // Jellyfin, the policy replaces the stored one whole, and disabling a user
 // signs out their devices but the one that asked. For a member who follows
 // their group, a setting the group holds sent with another value than the
@@ -172,7 +192,7 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	id := errs.pathID(r, "userId")
 	policy := policyUpdate{EnableVideoPlaybackTranscoding: true, EnableAudioPlaybackTranscoding: true, EnableContentDownloading: true,
 		EnableLiveTvAccess: true, SyncPlayAccess: syncPlayAccessValue{access: accounts.SyncPlayCreateAndJoin, known: true},
-		EnableAllFolders: true, EnableLiveTvManagement: true}
+		EnableAllFolders: true, EnableLiveTvManagement: true, EnableRemoteAccess: true}
 	var enabled []accounts.ID
 	var schedules []accounts.AccessSchedule
 	if len(bytes.TrimSpace(raw)) == 0 {
@@ -216,6 +236,10 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	if policy.IsDisabled && user.IsAdministrator {
 		writeJSON(w, http.StatusForbidden, administratorDisabled)
+		return
+	}
+	if id == caller.User.ID && !policy.EnableRemoteAccess && !forwarded.InLocalNetwork(r) {
+		writeJSON(w, http.StatusConflict, remoteAccessSelf.In(h.Accounts.Settings().Language))
 		return
 	}
 	hidden, err := h.hiddenLibraries(r.Context(), policy, enabled)
@@ -267,6 +291,8 @@ func (h *Handler) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		SubtitleManagement: &policy.EnableSubtitleManagement,
 		// Whether they may schedule and delete recordings.
 		LiveTvManagement: &policy.EnableLiveTvManagement,
+		// Whether they may connect from outside the local network.
+		RemoteAccess: &policy.EnableRemoteAccess,
 		// A setting the user's group holds changed detaches them from it.
 		DetachFromGroup: true,
 	}, caller.Device.ID)

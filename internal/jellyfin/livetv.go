@@ -924,7 +924,7 @@ func (h *Handler) liveFile(w http.ResponseWriter, r *http.Request) {
 	}
 	opened, ok := parseGUID(r.PathValue("itemId"))
 	user, userErr := h.Accounts.User(r.Context(), grant.User)
-	if !ok || userErr != nil || user.Refused(h.now()) || h.outsideHours(user) {
+	if !ok || userErr != nil || user.Refused(h.now()) || h.outsideHours(user) || remoteRefused(r, user) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
