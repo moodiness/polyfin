@@ -158,7 +158,7 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 			return nil, ErrBusy
 		case mine >= userLives:
 			replaced = oldest
-		case len(m.lives)+len(m.recordings) >= serverLives:
+		case len(m.lives)+len(m.recordings)+len(m.playouts) >= serverLives:
 			m.mu.Unlock()
 			return nil, ErrBusy
 		}
