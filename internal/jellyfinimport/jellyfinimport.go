@@ -80,10 +80,14 @@ const (
 )
 
 // Connection is a server an import reads, and what it connects with.
+// PlexOwner has an administrator's import of a Plex server read the
+// other accounts with the tokens Plex gives the server's owner, whom the
+// administrator starting it signed in to Plex as (see PlexSignIn).
 type Connection struct {
 	Kind    Kind
 	Address string
 	Credentials
+	PlexOwner bool
 }
 
 // Titles finds the items of titles named by other services' identifiers
@@ -414,7 +418,12 @@ type Target struct {
 // SignIn signs in, while an import starts, as the user jellyfinID names,
 // with their password on the server: the import reads their watch data as
 // them. It fails as Users does, or with ErrOtherUser. Plex has no sign-in:
-// it fails with ErrNotSignedIn.
+// with the owner signed in to Plex (see Connection.PlexOwner), it takes
+// the account's own token for the server, password being a Plex Home
+// profile's PIN, and fails with ErrPlexProfilePIN or as plex.tv does;
+// an account Plex gives no token for, or a profile with a PIN without
+// it, is read from the server's playback history. Without the owner
+// signed in, it fails with ErrNotSignedIn.
 type SignIn func(jellyfinID, password string) error
 
 // Start reads the server connection leads to again, hands it and its users
@@ -427,24 +436,33 @@ type SignIn func(jellyfinID, password string) error
 // user is read, and its own at its end. by is the Polyfin user who starts
 // it. Start returns the import, nil when choose returned no one. While an
 // import runs, it fails with ErrRunning before reading anything; it fails
-// as Users does, or with choose's error.
+// as Users does, or with choose's error. With Connection.PlexOwner, it
+// fails with ErrPlexSignInEnded, ErrNotSignedIn before Plex signed by in,
+// or ErrPlexNotOwner, before choose is called; the import takes the
+// sign-in over and signs it out of Plex once it ends, and the tokens of
+// the accounts it reads are dropped.
 func (s *Service) Start(ctx context.Context, connection Connection, by accounts.User,
 	choose func(Server, []User, SignIn) ([]Target, error)) (*Status, error) {
 	if !s.claim() {
 		return nil, ErrRunning
 	}
 	// own reads with the credentials; sessions read as the users signed in
-	// as themselves, by their identifier on the server. Until the import
-	// takes them over, failing ends them.
+	// as themselves, by their identifier on the server, or, on Plex, with
+	// their own token. Until the import takes them over, failing ends
+	// them, and signs out of Plex the Home profiles switched to.
 	address, err := ParseAddress(connection.Address)
 	own := &client{s: s, kind: connection.Kind, address: address}
 	sessions := map[string]*client{}
+	var switched []string
 	started := false
 	defer func() {
 		if !started {
 			own.signOut()
 			for _, session := range sessions {
 				session.signOut()
+			}
+			for _, token := range switched {
+				s.plexSignOut(token)
 			}
 			s.release()
 		}
@@ -457,6 +475,21 @@ func (s *Service) Start(ctx context.Context, connection Connection, by accounts.
 	if err != nil {
 		return nil, err
 	}
+	var held *plexSignIn
+	var shares *plexShares
+	if connection.PlexOwner {
+		if server.Kind != Plex {
+			return nil, ErrPlexNotOwner
+		}
+		if held = s.heldPlex(by.ID); held == nil {
+			return nil, ErrPlexSignInEnded
+		}
+		held.mu.Lock()
+		defer held.mu.Unlock()
+		if shares, err = s.plexOwnerShares(ctx, held, server.MachineID); err != nil {
+			return nil, err
+		}
+	}
 	names := make(map[string]string, len(users))
 	for _, u := range users {
 		names[u.ID] = u.Name
@@ -464,12 +497,22 @@ func (s *Service) Start(ctx context.Context, connection Connection, by accounts.
 	signIn := func(jellyfinID, password string) error {
 		name, ok := names[jellyfinID]
 		switch {
-		case server.Kind == Plex:
+		case server.Kind == Plex && shares == nil:
 			return ErrNotSignedIn
 		case !ok:
 			return errors.New("not a user of the server")
-		case sessions[jellyfinID] != nil:
+		case sessions[jellyfinID] != nil || server.Kind == Plex && jellyfinID == plexOwner:
+			// The owner's token reads the owner.
 			return nil
+		case server.Kind == Plex:
+			token, signOut, err := s.plexToken(ctx, shares, jellyfinID, password)
+			if signOut != "" {
+				switched = append(switched, signOut)
+			}
+			if token != "" {
+				sessions[jellyfinID] = &client{s: s, kind: Plex, address: server.Address, key: token}
+			}
+			return err
 		}
 		session := &client{s: s, kind: server.Kind, address: server.Address}
 		signed, err := session.signIn(ctx, name, password)
@@ -510,14 +553,24 @@ func (s *Service) Start(ctx context.Context, connection Connection, by accounts.
 		status.Users = append(status.Users, UserStatus{JellyfinID: t.JellyfinID, JellyfinName: names[t.JellyfinID], User: t.User,
 			UserName: t.UserName, State: UserWaiting})
 	}
+	var taken []string
 	if server.Kind == Plex {
 		// Users signing in to Plex find this server chosen for them.
 		s.mu.Lock()
 		s.plexServer = server.MachineID
 		s.mu.Unlock()
+		if held != nil {
+			// The import holds the owner's sign-in from now on.
+			taken = s.takePlex(by.ID, held)
+		}
 	}
-	snapshot, err := s.launch(status, own, sessions, nil)
-	started = err == nil
+	snapshot, err := s.launch(status, own, sessions, nil, slices.Concat(taken, switched))
+	if started = err == nil; !started {
+		// The owner's sign-in was taken: it ends here.
+		for _, token := range taken {
+			s.plexSignOut(token)
+		}
+	}
 	return snapshot, err
 }
 
@@ -555,7 +608,7 @@ func (s *Service) ImportOwn(ctx context.Context, connection Connection, user acc
 	status := s.newStatus(server, user, true)
 	status.Users = []UserStatus{{JellyfinID: server.KeyOwner, JellyfinName: connection.Name, User: user.ID, UserName: user.Name,
 		State: UserWaiting}}
-	snapshot, err := s.launch(status, c, nil, nil)
+	snapshot, err := s.launch(status, c, nil, nil, nil)
 	started = err == nil
 	return snapshot, err
 }
@@ -588,9 +641,11 @@ func (s *Service) newStatus(server Server, by accounts.User, own bool) *Status {
 
 // launch runs the import of status in the background, reading with own and
 // the sessions of the users signed in, or, for a user's own import from
-// Plex, as plex tells, and returns a copy of status. It fails only once
-// the service is closed.
-func (s *Service) launch(status *Status, own *client, sessions map[string]*client, plex *ownPlex) (*Status, error) {
+// Plex, as plex tells, and returns a copy of status. The import signs
+// plexSignOut out of Plex once it ends. It fails only once the service is
+// closed.
+func (s *Service) launch(status *Status, own *client, sessions map[string]*client, plex *ownPlex,
+	plexSignOut []string) (*Status, error) {
 	runCtx, stop := context.WithCancel(s.ctx)
 	s.mu.Lock()
 	if s.ctx.Err() != nil {
@@ -610,7 +665,8 @@ func (s *Service) launch(status *Status, own *client, sessions map[string]*clien
 	for _, session := range sessions {
 		session.retries = s.timing.retries
 	}
-	r := &run{s: s, status: status, client: own, sessions: sessions, series: map[string]map[string]string{}, plex: plex}
+	r := &run{s: s, status: status, client: own, sessions: sessions, series: map[string]map[string]string{}, plex: plex,
+		plexSignOut: plexSignOut}
 	go func() {
 		defer s.wg.Done()
 		defer stop()

@@ -50,16 +50,17 @@ type run struct {
 	series map[string]map[string]string
 	// plex is a user's own import from Plex, nil for the others.
 	plex *ownPlex
+	// plexSignOut are the tokens of the sign-ins to Plex the import took
+	// over, signed out of Plex once it ends.
+	plexSignOut []string
 }
 
 // ownPlex is what a user's own import from Plex reads with besides the
 // server's token: the token of the Plex account or Home profile signed
-// in, which reads its Watchlist when watchlist is set, and the tokens the
-// sign-in opened, signed out of Plex once the import ends.
+// in, which reads its Watchlist when watchlist is set.
 type ownPlex struct {
 	account   string
 	watchlist bool
-	signOut   []string
 }
 
 // update changes the status of the i-th user.
@@ -92,10 +93,8 @@ func (r *run) run(ctx context.Context) {
 	for _, session := range r.sessions {
 		signingOut.Go(session.signOut)
 	}
-	if r.plex != nil {
-		for _, token := range r.plex.signOut {
-			signingOut.Go(func() { s.plexSignOut(token) })
-		}
+	for _, token := range r.plexSignOut {
+		signingOut.Go(func() { s.plexSignOut(token) })
 	}
 	signingOut.Wait()
 	s.mu.Lock()
@@ -153,11 +152,11 @@ func (r *run) user(ctx context.Context, i int) string {
 		r.s.logger.Warn("A Jellyfin user's watch data could not be saved", "error", err)
 		problem = ProblemInternal
 	}
-	// A Plex account read from the library sections, the owner's or the
-	// one a user signed in to Plex with, that has nothing says so.
+	// A Plex account read from the library sections, the owner's or one
+	// read with its own token, that has nothing says so.
 	var fromLibrary string
 	switch {
-	case c.kind == Plex && r.plex != nil:
+	case c.kind == Plex && (r.plex != nil || c != r.client):
 		fromLibrary = NothingPlexOwn
 	case c.kind == Plex && jellyfinID == plexOwner:
 		fromLibrary = NothingPlexOwner
@@ -235,12 +234,14 @@ func readProblem(err error) string {
 }
 
 // read reads, with c, the watch data of user, and the identifiers of the
-// series of its episodes. A user's own Plex import reads the account
-// signed in, and its Watchlist when asked.
+// series of its episodes. A Plex account read with its own token, a
+// user's own import's or one Plex gives the owner, and the owner read
+// with theirs, are read from the libraries; a user's own Plex import
+// reads the account's Watchlist too when asked.
 func (r *run) read(ctx context.Context, i int, c *client, user string) (history, error) {
 	if c.kind == Plex {
 		found := func() { r.update(i, func(u *UserStatus) { u.Read++ }) }
-		h, err := c.plexWatched(ctx, user, r.plex != nil || user == plexOwner, r.series, found)
+		h, err := c.plexWatched(ctx, user, r.plex != nil || c != r.client || user == plexOwner, r.series, found)
 		if err != nil || r.plex == nil || !r.plex.watchlist || r.s.watchlist == nil {
 			return h, err
 		}

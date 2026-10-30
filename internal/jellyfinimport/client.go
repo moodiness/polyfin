@@ -75,7 +75,7 @@ func ParseAddress(text string) (string, error) {
 
 // client reads one server with a key, one request at a time, spaced by the
 // service's gap: an API key of the server's dashboard, a user's own key,
-// the token of a session the client signed in, or Plex's owner's token.
+// the token of a session the client signed in, or a Plex account's token.
 type client struct {
 	s            *Service
 	kind         Kind

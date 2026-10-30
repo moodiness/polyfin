@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"cmp"
 	"errors"
 	"net/http"
 	"strings"
@@ -160,7 +161,9 @@ func (h *handler) jellyfinImportUsers(w http.ResponseWriter, r *http.Request) {
 // (UserID) or a new one (Create), and tells whether their watch data is
 // imported. JellyfinPassword, the user's password on the server, has the
 // import sign in as them to read their watch data, which a user's key or
-// account cannot read of another user.
+// account cannot read of another user. PlexPIN is a Plex Home profile's
+// PIN, which an import the owner signed in to Plex for switches to it
+// with.
 type jellyfinImportEntryJSON struct {
 	JellyfinID string  `json:"jellyfinId"`
 	UserID     *string `json:"userId"`
@@ -174,6 +177,7 @@ type jellyfinImportEntryJSON struct {
 	} `json:"create"`
 	WatchData        bool    `json:"watchData"`
 	JellyfinPassword *string `json:"jellyfinPassword"`
+	PlexPIN          *string `json:"plexPin"`
 }
 
 // jellyfinEntryError is an entry of an import that cannot be done: the
@@ -190,6 +194,9 @@ func (e *jellyfinEntryError) Error() string {
 
 // startJellyfinImport creates the Polyfin users chosen, all or none, then
 // imports the watch data of the server's users asked in the background.
+// With plexOwner, the administrator signed in to Plex as the owner of
+// the Plex server, and each account is read with the token Plex gives
+// the owner for it.
 func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 	if h.JellyfinImport == nil {
 		writeError(w, http.StatusNotFound, "not_found")
@@ -197,21 +204,26 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		jellyfinConnectionJSON
-		Users []jellyfinImportEntryJSON `json:"users"`
+		PlexOwner bool                      `json:"plexOwner"`
+		Users     []jellyfinImportEntryJSON `json:"users"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
 	connection, ok := body.connection()
-	if !ok {
+	plex := connection.Kind == jellyfinimport.Plex
+	if !ok || body.PlexOwner && !plex {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
+	connection.PlexOwner = body.PlexOwner
 	seen := map[string]bool{}
 	for _, entry := range body.Users {
-		// Plex has no sign-in: its owner's token reads every account.
+		// Plex has no sign-in: its owner's token reads every account, and
+		// the owner's sign-in to Plex the tokens of the others.
 		if entry.JellyfinID == "" || seen[entry.JellyfinID] || (entry.UserID == nil) == (entry.Create == nil) ||
-			entry.JellyfinPassword != nil && (!entry.WatchData || connection.Kind == jellyfinimport.Plex) {
+			entry.JellyfinPassword != nil && (!entry.WatchData || plex) ||
+			entry.PlexPIN != nil && (!entry.WatchData || !body.PlexOwner || len(*entry.PlexPIN) > 16) {
 			writeError(w, http.StatusBadRequest, "invalid_request")
 			return
 		}
@@ -262,12 +274,18 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 				chosen[i] = &jellyfinimport.Target{JellyfinID: entry.JellyfinID, User: user.ID, UserName: user.Name}
 			}
 			// The users read as themselves sign in before anyone is created:
-			// a wrong password creates no one.
+			// a wrong password creates no one. With the owner signed in to
+			// Plex, each account read takes its own token, a Plex Home
+			// profile's with its PIN.
 			for _, entry := range body.Users {
-				if entry.JellyfinPassword == nil {
+				password := entry.JellyfinPassword
+				if body.PlexOwner && entry.WatchData {
+					password = cmp.Or(entry.PlexPIN, new(""))
+				}
+				if password == nil {
 					continue
 				}
-				err := signIn(entry.JellyfinID, *entry.JellyfinPassword)
+				err := signIn(entry.JellyfinID, *password)
 				for _, known := range []struct {
 					err  error
 					code string
@@ -275,10 +293,15 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 					{jellyfinimport.ErrSignInRefused, "jellyfin_password_refused"},
 					{jellyfinimport.ErrSignInForbidden, "jellyfin_sign_in_forbidden"},
 					{jellyfinimport.ErrOtherUser, "jellyfin_other_user"},
+					{jellyfinimport.ErrPlexProfilePIN, "plex_profile_pin_refused"},
 				} {
 					if errors.Is(err, known.err) {
 						return nil, &jellyfinEntryError{http.StatusBadRequest, known.code, entry.JellyfinID}
 					}
+				}
+				if plex && errors.Is(err, jellyfinimport.ErrForbidden) {
+					// Plex does not let the owner switch to the profile.
+					return nil, &jellyfinEntryError{http.StatusBadRequest, "plex_profile_forbidden", entry.JellyfinID}
 				}
 				if err != nil {
 					return nil, err
@@ -325,7 +348,7 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 	for _, user := range created {
 		h.Activity.UserCreated(r.Context(), user)
 	}
-	if jellyfinError(w, err) {
+	if plexOwnerError(w, err) || jellyfinError(w, err) {
 		return
 	}
 	if err != nil {

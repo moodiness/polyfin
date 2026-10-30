@@ -3,6 +3,7 @@ package jellyfinimport
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -23,9 +24,10 @@ import (
 // fakePlexTV answers as plex.tv and Plex's Discover service do the
 // requests of a sign-in to Plex: a PIN, claimed once claimed is set, or
 // forgotten once expired; who a token is, their Plex Home and the switch
-// to its profiles; the servers each token reaches; and each token's
-// Watchlist, whose listing leaves the identifiers out, as metadata gives
-// them item by item.
+// to its profiles; the servers each token reaches; the shares of a server
+// its owner's token lists, in XML, with each account's token for it; and
+// each token's Watchlist, whose listing leaves the identifiers out, as
+// metadata gives them item by item.
 type fakePlexTV struct {
 	url string
 
@@ -39,6 +41,7 @@ type fakePlexTV struct {
 	pins      map[string]string
 	switched  map[string]string
 	resources map[string][]map[string]any
+	shared    map[string]string
 	watchlist map[string][]map[string]any
 	metadata  map[string]map[string]any
 	signedOut []string
@@ -47,7 +50,8 @@ type fakePlexTV struct {
 func newFakePlexTV(t *testing.T) *fakePlexTV {
 	t.Helper()
 	f := &fakePlexTV{expiresIn: 900, users: map[string]map[string]any{}, pins: map[string]string{}, switched: map[string]string{},
-		resources: map[string][]map[string]any{}, watchlist: map[string][]map[string]any{}, metadata: map[string]map[string]any{}}
+		resources: map[string][]map[string]any{}, shared: map[string]string{}, watchlist: map[string][]map[string]any{},
+		metadata: map[string]map[string]any{}}
 	server := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(server.Close)
 	f.url = server.URL
@@ -106,6 +110,22 @@ func (f *fakePlexTV) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		answer(http.StatusOK, f.resources[token])
+	case strings.HasPrefix(path, "/api/servers/") && strings.HasSuffix(path, "/shared_servers"):
+		machine := strings.TrimSuffix(strings.TrimPrefix(path, "/api/servers/"), "/shared_servers")
+		owns := slices.ContainsFunc(f.resources[token], func(r map[string]any) bool {
+			return r["owned"] == true && r["clientIdentifier"] == machine
+		})
+		if !owns || r.Header.Get("Accept") != "application/xml" {
+			answer(http.StatusUnauthorized, nil)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = io.WriteString(w, `<MediaContainer friendlyName="myPlex" machineIdentifier="`+machine+`">`)
+		for userID, accessToken := range f.shared {
+			_, _ = io.WriteString(w, `<SharedServer id="7`+userID+`" username="u`+userID+`" userID="`+userID+`" accessToken="`+accessToken+
+				`" acceptedAt="1700000000"><Section id="1" key="1" title="Movies" type="movie" shared="1"/></SharedServer>`)
+		}
+		_, _ = io.WriteString(w, `</MediaContainer>`)
 	case r.Method == http.MethodDelete && path == "/api/v2/users/signout":
 		f.signedOut = append(f.signedOut, token)
 		w.WriteHeader(http.StatusNoContent)
@@ -459,5 +479,190 @@ func TestTheOwnersPlexRatingsComeWithTheAdministratorsImport(t *testing.T) {
 		if d := h.dataOf(t, owner.ID, want.ref); d.Rating == nil || *d.Rating != want.rating {
 			t.Errorf("%s: %+v", name, d)
 		}
+	}
+}
+
+// ownersPlex is a server whose owner signs in to Plex as account-token,
+// with its accounts: Carol (5), whom the server is shared with; Dan (7),
+// whom Plex gives no token for; and two profiles of the owner's Plex
+// Home, Kid (9), with the PIN 1234, and Teen (11), with a PIN the
+// administrator does not give.
+func ownersPlex(t *testing.T, tv *fakePlexTV) *fakePlex {
+	t.Helper()
+	p := smallPlex(t)
+	p.accounts = append(p.accounts, map[string]any{"id": 7, "key": "/accounts/7", "name": "Dan"},
+		map[string]any{"id": 9, "key": "/accounts/9", "name": "Kid"}, map[string]any{"id": 11, "key": "/accounts/11", "name": "Teen"})
+	tv.users["account-token"] = map[string]any{"uuid": "u-owner", "title": "Owner", "home": true}
+	tv.home = []map[string]any{
+		{"id": 100, "uuid": "u-owner", "title": "Owner", "admin": true},
+		{"id": 9, "uuid": "u-kid", "title": "Kid", "restricted": true, "protected": true},
+		{"id": 11, "uuid": "u-teen", "title": "Teen", "restricted": true, "protected": true},
+	}
+	tv.pins["u-kid"], tv.pins["u-teen"] = "1234", "5678"
+	tv.switched["u-kid"] = "kid-account-token"
+	owned := plexServer(plexToken, map[string]any{"uri": p.url, "local": true})
+	owned["owned"] = true
+	tv.resources["account-token"] = []map[string]any{owned}
+	tv.resources["kid-account-token"] = []map[string]any{plexServer("kid-server-token", map[string]any{"uri": p.url, "local": true})}
+	tv.shared["5"] = "carol-server-token"
+	return p
+}
+
+// An administrator who signs in to Plex as the server's owner has each
+// account mapped read with its own token: Carol's, which Plex gives the
+// owner for the account the server is shared with, brings her marked,
+// synced, in-progress and rated titles; a Home profile's, switched to with
+// its PIN, brings its own; a wrong PIN creates no one and keeps the
+// sign-in. Dan, whom Plex gives no token for, and Teen, whose PIN is not
+// given, have their plays read, and say why nothing came. The owner's
+// sign-in and the profile's are signed out once the import ends; the
+// shared tokens are just dropped, and no token is logged or answered.
+func TestTheOwnersPlexSignInReadsEachAccountWithItsOwnToken(t *testing.T) {
+	tv := newFakePlexTV(t)
+	h, clock, logged := plexSigningIn(t, tv)
+	p := ownersPlex(t, tv)
+	viewed := at("2026-09-01T20:00:00Z").Unix()
+	p.states["carol-server-token"] = map[string]map[string]any{
+		"11": {"viewCount": 1, "lastViewedAt": viewed},
+		"12": {"viewOffset": 1800000, "lastViewedAt": viewed},
+		"20": {"userRating": 8.0},
+		"21": {"viewCount": 1, "lastViewedAt": viewed},
+	}
+	p.states["kid-server-token"] = map[string]map[string]any{"12": {"viewCount": 2, "lastViewedAt": viewed}}
+	p.history["11"] = []map[string]any{{"historyKey": "/status/sessions/history/1", "ratingKey": "11", "type": "movie", "title": "One",
+		"viewedAt": viewed, "accountID": 11}}
+	admin, carol, dan, kid, teen := h.user(t, "admin"), h.user(t, "carol"), h.user(t, "dan"), h.user(t, "kid"), h.user(t, "teen")
+	h.signedIn(t, tv, clock, admin)
+	plex := Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: plexToken}, PlexOwner: true}
+
+	access, err := h.PlexOwnerAccess(t.Context(), admin.ID, plex)
+	if err != nil || len(access) != 4 || access["5"] != PlexAccessAll || access["7"] != PlexAccessPlays || access["9"] != PlexAccessPIN ||
+		access["11"] != PlexAccessPIN {
+		t.Fatalf("access: %v %v", access, err)
+	}
+	targets := []Target{{JellyfinID: "5", User: carol.ID, UserName: "carol"}, {JellyfinID: "7", User: dan.ID, UserName: "dan"},
+		{JellyfinID: "9", User: kid.ID, UserName: "kid"}, {JellyfinID: "11", User: teen.ID, UserName: "teen"}}
+	pins := map[string]string{"9": "0000"}
+	choose := func(_ Server, _ []User, signIn SignIn) ([]Target, error) {
+		for _, target := range targets {
+			if err := signIn(target.JellyfinID, pins[target.JellyfinID]); err != nil {
+				return nil, err
+			}
+		}
+		return targets, nil
+	}
+	if _, err := h.Start(t.Context(), plex, admin, choose); !errors.Is(err, ErrPlexProfilePIN) {
+		t.Fatalf("a wrong PIN: %v", err)
+	}
+	if _, err := h.PlexAccount(t.Context(), admin.ID); err != nil {
+		t.Errorf("the sign-in is kept: %v", err)
+	}
+	pins["9"] = "1234"
+	if _, err := h.Start(t.Context(), plex, admin, choose); err != nil {
+		t.Fatal(err)
+	}
+	status := h.ended(t)
+	if status.State != StateDone {
+		t.Fatalf("import: %+v", status)
+	}
+	byID := map[string]UserStatus{}
+	for _, u := range status.Users {
+		byID[u.JellyfinID] = u
+	}
+	if got := byID["5"]; got.Played != 2 || got.Resumed != 1 || got.Ratings != 1 || got.History != 0 || got.NothingAdded != "" {
+		t.Errorf("Carol: %+v", got)
+	}
+	if got := byID["7"]; got.Read != 0 || got.NothingAdded != NothingPlexNoHistory {
+		t.Errorf("Dan: %+v", got)
+	}
+	if got := byID["9"]; got.Played != 1 || got.NothingAdded != "" {
+		t.Errorf("Kid: %+v", got)
+	}
+	if got := byID["11"]; got.Played != 1 || got.History != 1 {
+		t.Errorf("Teen: %+v", got)
+	}
+	check := func(name string, user accounts.ID, ref library.TitleRef, want func(d userDataView) bool) {
+		t.Helper()
+		d := h.dataOf(t, user, ref)
+		if !want(userDataView{played: d.Played, position: d.Position, rating: d.Rating}) {
+			t.Errorf("%s: %+v", name, d)
+		}
+	}
+	check("Carol's marked movie", carol.ID, library.TitleRef{IMDb: "tt0000011"}, func(d userDataView) bool { return d.played })
+	check("Carol's movie in progress", carol.ID, library.TitleRef{IMDb: "tt0000012"},
+		func(d userDataView) bool { return !d.played && d.position == 30*time.Minute })
+	check("Carol's synced episode", carol.ID, library.TitleRef{Episode: true, IMDb: "tt0100", Season: 1, Number: 1},
+		func(d userDataView) bool { return d.played })
+	check("Carol's rated show", carol.ID, library.TitleRef{Series: true, IMDb: "tt0100"},
+		func(d userDataView) bool { return d.rating != nil && *d.rating == 8 })
+	check("Kid's movie", kid.ID, library.TitleRef{IMDb: "tt0000012"}, func(d userDataView) bool { return d.played })
+	check("Teen's play", teen.ID, library.TitleRef{IMDb: "tt0000011"}, func(d userDataView) bool { return d.played })
+
+	out := tv.out()
+	slices.Sort(out)
+	if !slices.Equal(out, []string{"account-token", "kid-account-token"}) {
+		t.Errorf("signed out: %v", out)
+	}
+	if _, err := h.PlexAccount(t.Context(), admin.ID); !errors.Is(err, ErrPlexSignInEnded) {
+		t.Errorf("after the import: %v", err)
+	}
+	for _, r := range p.requests {
+		if token := r.Header.Get("X-Plex-Token"); token != plexToken && (r.URL.Path == "/accounts" || strings.Contains(r.URL.Path, "history")) {
+			t.Errorf("%s asked with an account's token", r.URL.Path)
+		}
+	}
+	answered, _ := json.Marshal(struct {
+		Access map[string]PlexAccess
+		Status Status
+	}{access, status})
+	for _, token := range []string{"account-token", "carol-server-token", "kid-account-token", "kid-server-token", plexToken} {
+		if strings.Contains(logged.String(), token) || strings.Contains(string(answered), token) {
+			t.Errorf("%s logged or answered: %s %s", token, logged.String(), answered)
+		}
+	}
+	text := logged.String()
+	if !strings.Contains(text, "user=5 state=done owner=false signedIn=true") || !strings.Contains(text, "user=7 state=done owner=false signedIn=false") ||
+		!strings.Contains(text, "user=9 state=done owner=false signedIn=true") || !strings.Contains(text, "user=11 state=done owner=false signedIn=false") {
+		t.Errorf("logged: %s", text)
+	}
+}
+
+// A Plex account signed in for an administrator's import that does not
+// own the server is refused, before anything is read; the sign-in is
+// kept. Without the owner's sign-in, the import reads the plays as before.
+func TestThePlexSignInOfAnAccountThatDoesNotOwnTheServerIsRefused(t *testing.T) {
+	tv := newFakePlexTV(t)
+	h, clock, _ := plexSigningIn(t, tv)
+	p := ownersPlex(t, tv)
+	tv.resources["account-token"][0]["owned"] = false
+	admin := h.user(t, "admin")
+	plex := Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: plexToken}, PlexOwner: true}
+	if _, err := h.PlexOwnerAccess(t.Context(), admin.ID, plex); !errors.Is(err, ErrPlexSignInEnded) {
+		t.Errorf("before signing in: %v", err)
+	}
+	h.signedIn(t, tv, clock, admin)
+	if _, err := h.PlexOwnerAccess(t.Context(), admin.ID, plex); !errors.Is(err, ErrPlexNotOwner) {
+		t.Errorf("access: %v", err)
+	}
+	chosen := false
+	_, err := h.Start(t.Context(), plex, admin, func(Server, []User, SignIn) ([]Target, error) {
+		chosen = true
+		return nil, nil
+	})
+	if !errors.Is(err, ErrPlexNotOwner) || chosen {
+		t.Errorf("start: %v, chosen %v", err, chosen)
+	}
+	if _, err := h.PlexAccount(t.Context(), admin.ID); err != nil {
+		t.Errorf("the sign-in is kept: %v", err)
+	}
+	if out := tv.out(); len(out) != 0 {
+		t.Errorf("signed out: %v", out)
+	}
+	plex.PlexOwner = false
+	_, err = h.Start(t.Context(), plex, admin, func(_ Server, _ []User, signIn SignIn) ([]Target, error) {
+		return nil, signIn("5", "")
+	})
+	if !errors.Is(err, ErrNotSignedIn) {
+		t.Errorf("without the owner's sign-in: %v", err)
 	}
 }

@@ -10,27 +10,32 @@ import (
 
 // Under My account, a user signs in to Plex, on Plex's own sign-in page,
 // to import their own watch data from a Plex Media Server their account
-// reaches (see jellyfinimport.Service.PlexSignIn). The import service
-// holds the sign-in for the caller only, and the tokens Plex gives are
-// never answered.
+// reaches (see jellyfinimport.Service.PlexSignIn). An administrator
+// importing a Plex server signs in the same way as its owner, to read
+// each account with its own token. The import service holds the sign-in
+// for the caller only, and the tokens Plex gives are never answered.
 
-// plexSignInAllowed tells whether the caller may sign in to Plex to import
-// their own watch data, answering 403 server_imports_disabled otherwise.
-func (h *handler) plexSignInAllowed(w http.ResponseWriter) bool {
-	if h.JellyfinImport == nil || !h.Accounts.Settings().ServerImports {
-		writeError(w, http.StatusForbidden, "server_imports_disabled")
-		return false
+// plexSignIn handles a step of a sign-in to Plex: under My account, own,
+// which the setting letting users import from another server gates,
+// answering 403 server_imports_disabled; in the administrators' import
+// otherwise.
+func (h *handler) plexSignIn(own bool, handle http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case own && (h.JellyfinImport == nil || !h.Accounts.Settings().ServerImports):
+			writeError(w, http.StatusForbidden, "server_imports_disabled")
+		case h.JellyfinImport == nil:
+			writeError(w, http.StatusNotFound, "not_found")
+		default:
+			handle(w, r)
+		}
 	}
-	return true
 }
 
 // startPlexSignIn starts the caller's sign-in to Plex, dropping the one
 // they held before, and answers the address of Plex's sign-in page to
 // open, and when it expires.
 func (h *handler) startPlexSignIn(w http.ResponseWriter, r *http.Request) {
-	if !h.plexSignInAllowed(w) {
-		return
-	}
 	link, err := h.JellyfinImport.PlexSignIn(r.Context(), sessionFrom(r.Context()).User.ID)
 	if plexSignInError(w, err) {
 		return
@@ -48,9 +53,6 @@ func (h *handler) startPlexSignIn(w http.ResponseWriter, r *http.Request) {
 // pollPlexSignIn answers 202 and pending until Plex signs the caller in,
 // then the account, its Plex Home's profiles and the servers it reaches.
 func (h *handler) pollPlexSignIn(w http.ResponseWriter, r *http.Request) {
-	if !h.plexSignInAllowed(w) {
-		return
-	}
 	account, err := h.JellyfinImport.PlexAccount(r.Context(), sessionFrom(r.Context()).User.ID)
 	h.answerPlexAccount(w, r, account, err)
 }
@@ -59,9 +61,6 @@ func (h *handler) pollPlexSignIn(w http.ResponseWriter, r *http.Request) {
 // Plex Home, with its PIN when it has one, and answers the account with
 // the servers that profile reaches.
 func (h *handler) choosePlexProfile(w http.ResponseWriter, r *http.Request) {
-	if !h.plexSignInAllowed(w) {
-		return
-	}
 	var body struct {
 		Profile string `json:"profile"`
 		PIN     string `json:"pin"`
@@ -79,9 +78,6 @@ func (h *handler) choosePlexProfile(w http.ResponseWriter, r *http.Request) {
 
 // dropPlexSignIn drops the caller's sign-in to Plex, signing it out.
 func (h *handler) dropPlexSignIn(w http.ResponseWriter, r *http.Request) {
-	if !h.plexSignInAllowed(w) {
-		return
-	}
 	h.JellyfinImport.DropPlexSignIn(sessionFrom(r.Context()).User.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -103,6 +99,47 @@ func (h *handler) answerPlexAccount(w http.ResponseWriter, r *http.Request, acco
 		return
 	}
 	writeJSON(w, http.StatusOK, newPlexAccountJSON(account))
+}
+
+// plexOwnerAccess answers, once the administrator signed in to Plex as
+// the owner of the Plex server the body connects to, what the import
+// reads of each account but the owner's, by its identifier: all of its
+// watch data, "all", all once its Plex Home profile's PIN is given,
+// "pin", or its plays on the server only, "plays".
+func (h *handler) plexOwnerAccess(w http.ResponseWriter, r *http.Request) {
+	var body jellyfinConnectionJSON
+	if !decode(w, r, &body) {
+		return
+	}
+	connection, ok := body.connection()
+	if !ok || connection.Kind != jellyfinimport.Plex {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	access, err := h.JellyfinImport.PlexOwnerAccess(r.Context(), sessionFrom(r.Context()).User.ID, connection)
+	if plexOwnerError(w, err) || jellyfinError(w, err) {
+		return
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Accounts map[string]jellyfinimport.PlexAccess `json:"accounts"`
+	}{access})
+}
+
+// plexOwnerError answers the ways the owner's sign-in to Plex fails an
+// administrator's import, and reports whether err was one; the server's
+// own failures are jellyfinError's.
+func plexOwnerError(w http.ResponseWriter, err error) bool {
+	for _, known := range []error{jellyfinimport.ErrPlexSignInEnded, jellyfinimport.ErrNotSignedIn, jellyfinimport.ErrPlexNotOwner,
+		jellyfinimport.ErrPlexTV, jellyfinimport.ErrPlexTVUnreachable} {
+		if errors.Is(err, known) {
+			return plexSignInError(w, err)
+		}
+	}
+	return false
 }
 
 // plexAccountJSON is a Plex account signed in: its name, the profiles of
@@ -156,6 +193,7 @@ func plexSignInError(w http.ResponseWriter, err error) bool {
 		{jellyfinimport.ErrPlexProfilePIN, http.StatusBadRequest, "plex_profile_pin_refused"},
 		{jellyfinimport.ErrForbidden, http.StatusBadRequest, "plex_profile_forbidden"},
 		{jellyfinimport.ErrPlexUnknownServer, http.StatusBadRequest, "plex_unknown_server"},
+		{jellyfinimport.ErrPlexNotOwner, http.StatusBadRequest, "plex_not_owner"},
 		{jellyfinimport.ErrPlexServerUnreachable, http.StatusBadGateway, "plex_server_unreachable"},
 		{jellyfinimport.ErrPlexTV, http.StatusBadGateway, "plex_tv_failed"},
 		{jellyfinimport.ErrUnreachable, http.StatusBadGateway, "plex_tv_unreachable"},
