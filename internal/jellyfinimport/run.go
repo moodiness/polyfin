@@ -13,6 +13,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
 // batch is how many items an import resolves and writes at a time.
@@ -47,6 +48,18 @@ type run struct {
 	// series are the identifiers of the series read, by their Jellyfin
 	// identifier: every user sees them the same.
 	series map[string]map[string]string
+	// plex is a user's own import from Plex, nil for the others.
+	plex *ownPlex
+}
+
+// ownPlex is what a user's own import from Plex reads with besides the
+// server's token: the token of the Plex account or Home profile signed
+// in, which reads its Watchlist when watchlist is set, and the tokens the
+// sign-in opened, signed out of Plex once the import ends.
+type ownPlex struct {
+	account   string
+	watchlist bool
+	signOut   []string
 }
 
 // update changes the status of the i-th user.
@@ -79,6 +92,11 @@ func (r *run) run(ctx context.Context) {
 	for _, session := range r.sessions {
 		signingOut.Go(session.signOut)
 	}
+	if r.plex != nil {
+		for _, token := range r.plex.signOut {
+			signingOut.Go(func() { s.plexSignOut(token) })
+		}
+	}
 	signingOut.Wait()
 	s.mu.Lock()
 	r.status.State, r.status.Problem, r.status.EndedAt = state, problem, new(s.now().UTC())
@@ -89,11 +107,11 @@ func (r *run) run(ctx context.Context) {
 }
 
 // history is what was read of a user: the items played, those with a
-// resume point, and the favorites, and what was read of a Plex server to
-// find them.
+// resume point, the favorites, the ratings and the Watchlist, and what was
+// read of a Plex server to find them.
 type history struct {
-	played, resumes, favorites []itemJSON
-	source                     plexSource
+	played, resumes, favorites, ratings, watchlist []itemJSON
+	source                                         plexSource
 }
 
 // plexSource counts what was read of a Plex server for a user (see
@@ -135,18 +153,26 @@ func (r *run) user(ctx context.Context, i int) string {
 		r.s.logger.Warn("A Jellyfin user's watch data could not be saved", "error", err)
 		problem = ProblemInternal
 	}
-	plexOwnerRead := c.kind == Plex && jellyfinID == plexOwner
+	// A Plex account read from the library sections, the owner's or the
+	// one a user signed in to Plex with, that has nothing says so.
+	var fromLibrary string
+	switch {
+	case c.kind == Plex && r.plex != nil:
+		fromLibrary = NothingPlexOwn
+	case c.kind == Plex && jellyfinID == plexOwner:
+		fromLibrary = NothingPlexOwner
+	}
 	var done UserStatus
 	r.update(i, func(u *UserStatus) {
 		u.State, u.Problem = UserDone, problem
 		if problem != "" {
 			u.State = UserFailed
 		} else {
-			u.NothingAdded = nothingAdded(c.kind, plexOwnerRead, *u)
+			u.NothingAdded = nothingAdded(c.kind, fromLibrary, *u)
 		}
 		done = *u
 	})
-	r.logRead(c.kind, plexOwnerRead, done, h.source)
+	r.logRead(c.kind, fromLibrary, done, h.source)
 	if problem == ProblemForbidden {
 		// The key may still read the next users.
 		return ""
@@ -155,12 +181,12 @@ func (r *run) user(ctx context.Context, i int) string {
 }
 
 // nothingAdded tells why the import of u, which ended without a problem,
-// added nothing, from a server of kind (from its owner's data for a Plex
-// owner): empty when it added something, or read only titles it could
-// not match, which say why.
-func nothingAdded(kind Kind, plexOwnerRead bool, u UserStatus) string {
+// added nothing, from a server of kind, fromLibrary being the reason for
+// a Plex account read from the library sections: empty when it added
+// something, or read only titles it could not match, which say why.
+func nothingAdded(kind Kind, fromLibrary string, u UserStatus) string {
 	switch {
-	case u.Played+u.Resumed+u.Favorites > 0:
+	case u.Played+u.Resumed+u.Favorites+u.Ratings+u.Watchlist > 0:
 		return ""
 	case u.UpToDate > 0:
 		return NothingUpToDate
@@ -170,24 +196,26 @@ func nothingAdded(kind Kind, plexOwnerRead bool, u UserStatus) string {
 		return NothingPlayed
 	case u.Sections == 0:
 		return NothingNoSections
-	case plexOwnerRead:
-		return NothingPlexOwner
+	case fromLibrary != "":
+		return fromLibrary
 	}
 	return NothingPlexNoHistory
 }
 
 // logRead logs, at Info, what the import of u read and did, never the
-// server's address nor a key.
-func (r *run) logRead(kind Kind, plexOwnerRead bool, u UserStatus, source plexSource) {
+// server's address nor a key; fromLibrary is as nothingAdded takes it.
+func (r *run) logRead(kind Kind, fromLibrary string, u UserStatus, source plexSource) {
 	attrs := []any{"kind", kind, "user", u.JellyfinID, "state", u.State}
 	if kind == Plex {
-		attrs = append(attrs, "owner", plexOwnerRead, "sections", u.Sections, "listed", u.Listed)
-		if !plexOwnerRead {
+		attrs = append(attrs, "owner", fromLibrary == NothingPlexOwner, "signedIn", fromLibrary == NothingPlexOwn,
+			"sections", u.Sections, "listed", u.Listed)
+		if fromLibrary == "" {
 			attrs = append(attrs, "history", u.History, "otherAccounts", source.otherAccounts)
 		}
 	}
 	attrs = append(attrs, "read", u.Read, "matched", u.Matched, "played", u.Played, "resumed", u.Resumed, "favorites", u.Favorites,
-		"upToDate", u.UpToDate, "undated", u.Undated, "unmatched", u.UnmatchedCount, "nothingAdded", u.NothingAdded, "problem", u.Problem)
+		"ratings", u.Ratings, "watchlist", u.Watchlist, "upToDate", u.UpToDate, "undated", u.Undated, "unmatched", u.UnmatchedCount,
+		"nothingAdded", u.NothingAdded, "problem", u.Problem)
 	r.s.logger.Info("An import read a user's watch data", attrs...)
 }
 
@@ -207,10 +235,17 @@ func readProblem(err error) string {
 }
 
 // read reads, with c, the watch data of user, and the identifiers of the
-// series of its episodes.
+// series of its episodes. A user's own Plex import reads the account
+// signed in, and its Watchlist when asked.
 func (r *run) read(ctx context.Context, i int, c *client, user string) (history, error) {
 	if c.kind == Plex {
-		return c.plexWatched(ctx, user, r.series, func() { r.update(i, func(u *UserStatus) { u.Read++ }) })
+		found := func() { r.update(i, func(u *UserStatus) { u.Read++ }) }
+		h, err := c.plexWatched(ctx, user, r.plex != nil || user == plexOwner, r.series, found)
+		if err != nil || r.plex == nil || !r.plex.watchlist || r.s.watchlist == nil {
+			return h, err
+		}
+		h.watchlist, err = r.s.plexWatchlist(ctx, r.plex.account, found)
+		return h, err
 	}
 	var h history
 	for _, pass := range []struct {
@@ -345,15 +380,16 @@ type point struct {
 
 // merge finds the titles of h and adds them to the data of the i-th
 // user's Polyfin account: played marks, then resume points of the titles
-// still unplayed, then favorites. It reports the titles it did not find,
-// and counts those it found, and what of theirs Polyfin already had.
+// still unplayed, favorites, ratings where Polyfin has none, and the
+// Watchlist. It reports the titles it did not find, and counts those it
+// found, and what of theirs Polyfin already had.
 func (r *run) merge(ctx context.Context, i int, h history) error {
 	user := r.status.Users[i].User
 	var refs []library.TitleRef
 	// spans are the refs of each item, in order: played, resumes,
-	// favorites.
+	// favorites, ratings, Watchlist.
 	type span struct{ start, end int }
-	lists := [][]itemJSON{h.played, h.resumes, h.favorites}
+	lists := [][]itemJSON{h.played, h.resumes, h.favorites, h.ratings, h.watchlist}
 	spans := make([][]span, len(lists))
 	var noMatch []Unmatched
 	reported := map[string]bool{}
@@ -464,6 +500,27 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 			}
 		}
 	}
+	// A title rated twice, as the files of one episode, keeps the first
+	// rating read.
+	ratings := map[accounts.ID]*rating{}
+	var ratingOrder []accounts.ID
+	for j, item := range h.ratings {
+		for _, t := range targetsOf(3, j) {
+			if _, listed := ratings[t.ID]; !listed {
+				ratings[t.ID] = &rating{item: itemOf(t), value: *item.rating}
+				ratingOrder = append(ratingOrder, t.ID)
+			}
+		}
+	}
+	// A title goes on the Watchlist once, as its first item.
+	var titles []watchlist.Title
+	listed := map[accounts.ID]bool{}
+	for j := range h.watchlist {
+		if found := targetsOf(4, j); len(found) > 0 && !listed[found[0].ID] {
+			listed[found[0].ID] = true
+			titles = append(titles, watchlist.Title{ID: found[0].ID})
+		}
+	}
 	r.update(i, func(u *UserStatus) {
 		u.UnmatchedCount = len(noMatch)
 		u.Unmatched = noMatch[:min(len(noMatch), maxUnmatched)]
@@ -498,7 +555,7 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 		}); err != nil {
 		return err
 	}
-	return r.change(ctx, i, user, favoriteOrder, func(id accounts.ID) userdata.Item { return favorites[id] },
+	if err := r.change(ctx, i, user, favoriteOrder, func(id accounts.ID) userdata.Item { return favorites[id] },
 		func(_ accounts.ID, d *userdata.Data, u *UserStatus) {
 			if !d.Favorite {
 				d.Favorite = true
@@ -506,7 +563,36 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 			} else {
 				u.UpToDate++
 			}
-		})
+		}); err != nil {
+		return err
+	}
+	// A rating Polyfin has stays, as an imported Letterboxd rating does.
+	if err := r.change(ctx, i, user, ratingOrder, func(id accounts.ID) userdata.Item { return ratings[id].item },
+		func(id accounts.ID, d *userdata.Data, u *UserStatus) {
+			if d.Rating == nil {
+				d.Rating = new(ratings[id].value)
+				u.Ratings++
+			} else {
+				u.UpToDate++
+			}
+		}); err != nil {
+		return err
+	}
+	if len(titles) == 0 || r.s.watchlist == nil {
+		return nil
+	}
+	added, err := r.s.watchlist.Save(ctx, user, watchlist.Import, titles, false)
+	if err != nil {
+		return err
+	}
+	r.update(i, func(u *UserStatus) { u.Watchlist += added })
+	return nil
+}
+
+// rating is a rating an import adds.
+type rating struct {
+	item  userdata.Item
+	value float64
 }
 
 // change applies change to the data user keeps of the items ids name,
@@ -530,6 +616,7 @@ func (r *run) change(ctx context.Context, i int, user accounts.ID, ids []account
 			u.Played += counts.Played
 			u.Resumed += counts.Resumed
 			u.Favorites += counts.Favorites
+			u.Ratings += counts.Ratings
 			u.UpToDate += counts.UpToDate
 		})
 	}

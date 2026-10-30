@@ -504,9 +504,16 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		}})
 	defer tracking.Close()
 	// Users and their watch data imported from a Jellyfin server find
-	// their titles and merge the same way.
+	// their titles and merge the same way. A user signing in to Plex to
+	// import their own watch data brings their Plex Watchlist too, and
+	// Polyfin names itself to Plex by one identifier, kept with the
+	// server's identity.
+	plexClient, err := database.PlexClient(ctx, pool)
+	if err != nil {
+		return err
+	}
 	fromJellyfin := jellyfinimport.New(jellyfinimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Version: version,
-		Logger: logger})
+		Logger: logger, Watchlist: watchlist.New(pool), PlexClient: plexClient})
 	defer fromJellyfin.Close()
 	// The watch data of accounts on apps built on addons, Nuvio's and
 	// Stremio's, finds its titles and merges the same way; the accounts'

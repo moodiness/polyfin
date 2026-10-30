@@ -53,16 +53,17 @@ type plexItemJSON struct {
 	GrandparentTitle     string `json:"grandparentTitle"`
 	ParentIndex          *int   `json:"parentIndex"`
 	Index                *int   `json:"index"`
-	// ViewCount, LastViewedAt, a time in seconds, and ViewOffset, a position
-	// in milliseconds, are the token's owner's; Duration is in
-	// milliseconds. ViewedAt dates a play of the history, and AccountID
-	// names the account that played it.
-	ViewCount    int   `json:"viewCount"`
-	LastViewedAt int64 `json:"lastViewedAt"`
-	ViewOffset   int64 `json:"viewOffset"`
-	Duration     int64 `json:"duration"`
-	ViewedAt     int64 `json:"viewedAt"`
-	AccountID    int   `json:"accountID"`
+	// ViewCount, LastViewedAt, a time in seconds, ViewOffset, a position
+	// in milliseconds, and UserRating, from 0 to 10, are the token's
+	// owner's; Duration is in milliseconds. ViewedAt dates a play of the
+	// history, and AccountID names the account that played it.
+	ViewCount    int      `json:"viewCount"`
+	LastViewedAt int64    `json:"lastViewedAt"`
+	ViewOffset   int64    `json:"viewOffset"`
+	UserRating   *float64 `json:"userRating"`
+	Duration     int64    `json:"duration"`
+	ViewedAt     int64    `json:"viewedAt"`
+	AccountID    int      `json:"accountID"`
 }
 
 // show is the rating key of an episode's show.
@@ -125,11 +126,13 @@ var (
 	plexOtherOrderGUID = regexp.MustCompile(`://tvdb[2-9]-\d`)
 )
 
-// plexContainerJSON is a page of a Plex list.
+// plexContainerJSON is a page of a Plex list. Plex's Discover service
+// lists some items under Video rather than Metadata.
 type plexContainerJSON struct {
 	MediaContainer struct {
 		TotalSize *int           `json:"totalSize"`
 		Metadata  []plexItemJSON `json:"Metadata"`
+		Video     []plexItemJSON `json:"Video"`
 		Directory []struct {
 			Key, Type string
 		} `json:"Directory"`
@@ -140,16 +143,25 @@ type plexContainerJSON struct {
 	}
 }
 
+// items are the items of the page, under Metadata or Video.
+func (p plexContainerJSON) items() []plexItemJSON {
+	if len(p.MediaContainer.Metadata) > 0 {
+		return p.MediaContainer.Metadata
+	}
+	return p.MediaContainer.Video
+}
+
 // plexLibrary is what an import reads of a Plex server's library sections
 // once: the movies and shows by their rating key, with their identifiers
-// and the owner's data, the sections of shows, and how many sections of
-// movies and shows there are.
+// and the token's account's data, the sections of shows, and how many
+// sections of movies and shows there are.
 type plexLibrary struct {
 	movies, shows map[string]plexItemJSON
-	// movieOrder lists the movies in the order read.
-	movieOrder   []string
-	showSections []string
-	sections     int
+	// movieOrder and showOrder list the movies and shows in the order
+	// read.
+	movieOrder, showOrder []string
+	showSections          []string
+	sections              int
 }
 
 // plexConnect reads which Plex Media Server the address leads to, then,
@@ -196,7 +208,8 @@ func (c *client) plexConnect(ctx context.Context, token string) (Server, []User,
 			users = append(users, user)
 		}
 	}
-	return Server{Kind: Plex, Name: root.MediaContainer.FriendlyName, Version: identity.MediaContainer.Version, Address: c.address}, users, nil
+	return Server{Kind: Plex, Name: root.MediaContainer.FriendlyName, Version: identity.MediaContainer.Version, Address: c.address,
+		MachineID: identity.MediaContainer.MachineIdentifier}, users, nil
 }
 
 // plexList reads, page by page, the items of the list at path with query,
@@ -250,6 +263,8 @@ func (c *client) library(ctx context.Context) (*plexLibrary, error) {
 			func(item plexItemJSON) {
 				if _, seen := into[item.RatingKey]; !seen && section.Type == plexMovie {
 					lib.movieOrder = append(lib.movieOrder, item.RatingKey)
+				} else if !seen {
+					lib.showOrder = append(lib.showOrder, item.RatingKey)
 				}
 				into[item.RatingKey] = item
 			})
@@ -263,20 +278,30 @@ func (c *client) library(ctx context.Context) (*plexLibrary, error) {
 
 // plexWatched reads the watch data of the Plex account user, handing each
 // item read to found, and records the identifiers of the shows of its
-// episodes in series, by the show's rating key. The owner's comes from the
-// library sections: the movies and episodes played, with their play counts
-// and the date last played, and those with a resume point. Another
+// episodes in series, by the show's rating key. The token's own account's,
+// own, comes from the library sections: the movies and episodes played,
+// marked or synced as played, with their play counts and the date last
+// played, those with a resume point, and the movies, shows and episodes
+// rated. That is the owner's with the owner's token, and a user's with
+// the token signing in to Plex gave them for the server. Another
 // account's is its playback history: the movies and episodes it played,
 // each play dated, those deleted from the libraries since included. Plex
-// does not let the owner's token read their resume points, and has no
-// favorites.
-func (c *client) plexWatched(ctx context.Context, user string, series map[string]map[string]string, found func()) (history, error) {
+// does not let the owner's token read their resume points or ratings, and
+// has no favorites.
+func (c *client) plexWatched(ctx context.Context, user string, own bool, series map[string]map[string]string, found func()) (history, error) {
 	var h history
 	lib, err := c.library(ctx)
 	if err != nil {
 		return h, err
 	}
 	h.source.sections, h.source.listed = lib.sections, len(lib.movies)+len(lib.shows)
+	rated := func(item itemJSON, rating *float64) {
+		if rating != nil {
+			item.rating = new(*rating)
+			h.ratings = append(h.ratings, item)
+			found()
+		}
+	}
 	add := func(p plexItemJSON) {
 		item := lib.item(p, series)
 		item.UserData.PlayCount = p.ViewCount
@@ -294,10 +319,18 @@ func (c *client) plexWatched(ctx context.Context, user string, series map[string
 			h.resumes = append(h.resumes, item)
 			found()
 		}
+		rated(item, p.UserRating)
 	}
-	if user == plexOwner {
+	if own {
 		for _, key := range lib.movieOrder {
 			add(lib.movies[key])
+		}
+		// A show's rating is the series'; a season's has no title in
+		// Polyfin to go to.
+		for _, key := range lib.showOrder {
+			show := lib.shows[key]
+			rated(itemJSON{ID: show.RatingKey, Name: show.Title, Type: "Series", ProductionYear: show.Year, ProviderIDs: show.providers()},
+				show.UserRating)
 		}
 		episode := func(p plexItemJSON) {
 			h.source.listed++

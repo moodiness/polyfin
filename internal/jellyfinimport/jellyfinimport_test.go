@@ -1051,7 +1051,9 @@ const plexToken = "plex-owners-token"
 // fakePlex answers as a Plex Media Server does, in JSON, to its owner's
 // token: its accounts, its library sections with their items and the
 // owner's data of them, and each account's playback history, a page at a
-// time.
+// time. Another account's own token for the server, one of states, reads
+// the library sections with that account's data instead, and neither the
+// accounts nor the history.
 type fakePlex struct {
 	url string
 
@@ -1063,11 +1065,16 @@ type fakePlex struct {
 	// shows, "4" episodes), and history each account's plays, by id.
 	items   map[string]map[string][]map[string]any
 	history map[string][]map[string]any
+	// states are other accounts' data of the items, by their token, then
+	// by rating key; machine is the server's machine identifier.
+	states  map[string]map[string]map[string]any
+	machine string
 }
 
 func newFakePlex(t *testing.T) *fakePlex {
 	t.Helper()
-	f := &fakePlex{items: map[string]map[string][]map[string]any{}, history: map[string][]map[string]any{}}
+	f := &fakePlex{items: map[string]map[string][]map[string]any{}, history: map[string][]map[string]any{},
+		states: map[string]map[string]map[string]any{}, machine: "0a1b2c"}
 	server := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(server.Close)
 	f.url = server.URL
@@ -1089,10 +1096,12 @@ func (f *fakePlex) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"MediaContainer": container})
 	}
 	if r.URL.Path == "/identity" {
-		answer(map[string]any{"machineIdentifier": "0a1b2c", "version": "1.42.2.10156"})
+		answer(map[string]any{"machineIdentifier": f.machine, "version": "1.42.2.10156"})
 		return
 	}
-	if r.Header.Get("X-Plex-Token") != plexToken {
+	token := r.Header.Get("X-Plex-Token")
+	state, other := f.states[token]
+	if token != plexToken && !other || other && (r.URL.Path == "/accounts" || r.URL.Path == "/status/sessions/history/all") {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -1127,17 +1136,23 @@ func (f *fakePlex) serve(w http.ResponseWriter, r *http.Request) {
 		answer(map[string]any{"size": len(f.sections), "Directory": f.sections})
 	case inSection && strings.HasSuffix(section, "/all"):
 		items := f.items[strings.TrimSuffix(section, "/all")][query.Get("type")]
-		if query.Get("includeGuids") != "1" {
-			// Plex leaves the identifiers out unless asked.
-			var bare []map[string]any
-			for _, item := range items {
-				copied := maps.Clone(item)
+		var shown []map[string]any
+		for _, item := range items {
+			copied := maps.Clone(item)
+			if query.Get("includeGuids") != "1" {
+				// Plex leaves the identifiers out unless asked.
 				delete(copied, "Guid")
-				bare = append(bare, copied)
 			}
-			items = bare
+			if other {
+				// Each account sees its own data of the items.
+				for _, field := range []string{"viewCount", "viewOffset", "lastViewedAt", "userRating"} {
+					delete(copied, field)
+				}
+				maps.Copy(copied, state[fmt.Sprint(item["ratingKey"])])
+			}
+			shown = append(shown, copied)
 		}
-		page(items)
+		page(shown)
 	case r.URL.Path == "/status/sessions/history/all":
 		page(f.history[query.Get("accountID")])
 	default:
@@ -1392,7 +1407,7 @@ func TestAPlexImportTellsWhatItReadAndWhyItAddedNothing(t *testing.T) {
 	}
 
 	text := logged.String()
-	if !strings.Contains(text, `msg="An import read a user's watch data" kind=plex user=5 state=done owner=false sections=2 listed=3 history=0`) ||
+	if !strings.Contains(text, `msg="An import read a user's watch data" kind=plex user=5 state=done owner=false signedIn=false sections=2 listed=3 history=0`) ||
 		!strings.Contains(text, "nothingAdded=plex_no_history") || !strings.Contains(text, "nothingAdded=up_to_date") ||
 		strings.Contains(text, plexToken) || strings.Contains(text, strings.TrimPrefix(p.url, "http://")) {
 		t.Errorf("logged: %s", text)

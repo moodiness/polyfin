@@ -399,6 +399,8 @@ type jellyfinUserImportJSON struct {
 	Played         int                     `json:"played"`
 	Resumed        int                     `json:"resumed"`
 	Favorites      int                     `json:"favorites"`
+	Ratings        int                     `json:"ratings"`
+	Watchlist      int                     `json:"watchlist"`
 	UpToDate       int                     `json:"upToDate"`
 	Undated        int                     `json:"undated"`
 	UnmatchedCount int                     `json:"unmatchedCount"`
@@ -430,7 +432,7 @@ func newJellyfinImportJSON(status *jellyfinimport.Status) *jellyfinImportJSON {
 	for _, u := range status.Users {
 		user := jellyfinUserImportJSON{JellyfinID: u.JellyfinID, JellyfinName: u.JellyfinName, UserID: u.User.String(), UserName: u.UserName,
 			State: u.State, Read: u.Read, Matched: u.Matched, Played: u.Played, Resumed: u.Resumed, Favorites: u.Favorites,
-			UpToDate: u.UpToDate, Undated: u.Undated, UnmatchedCount: u.UnmatchedCount,
+			Ratings: u.Ratings, Watchlist: u.Watchlist, UpToDate: u.UpToDate, Undated: u.Undated, UnmatchedCount: u.UnmatchedCount,
 			Unmatched: make([]jellyfinUnmatchedJSON, 0, len(u.Unmatched)), Problem: optional(u.Problem), NothingAdded: optional(u.NothingAdded)}
 		if status.Kind == jellyfinimport.Plex {
 			user.Sections, user.Listed, user.History = &u.Sections, &u.Listed, &u.History

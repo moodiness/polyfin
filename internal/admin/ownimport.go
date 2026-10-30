@@ -75,13 +75,18 @@ func (h *handler) startOwnImport(w http.ResponseWriter, r *http.Request) {
 		Address  string `json:"address"`
 		Name     string `json:"name"`
 		Password string `json:"password"`
+		// Server and Watchlist are Plex's: the server chosen among those
+		// the caller's sign-in to Plex reaches, and whether its Watchlist
+		// comes too, by default.
+		Server    string `json:"server"`
+		Watchlist *bool  `json:"watchlist"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
 	kind, ok := importKind(body.Kind)
 	name := strings.TrimSpace(body.Name)
-	if !ok || kind == jellyfinimport.Plex || name == "" {
+	if !ok || kind != jellyfinimport.Plex && name == "" || kind == jellyfinimport.Plex && body.Server == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
@@ -89,9 +94,18 @@ func (h *handler) startOwnImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server_import_running")
 		return
 	}
-	connection := jellyfinimport.Connection{Kind: kind, Address: body.Address,
-		Credentials: jellyfinimport.Credentials{Name: name, Password: body.Password}}
-	status, err := h.JellyfinImport.ImportOwn(r.Context(), connection, user)
+	var status *jellyfinimport.Status
+	var err error
+	if kind == jellyfinimport.Plex {
+		status, err = h.JellyfinImport.ImportOwnPlex(r.Context(), user, body.Server, body.Watchlist == nil || *body.Watchlist)
+		if plexSignInError(w, err) {
+			return
+		}
+	} else {
+		connection := jellyfinimport.Connection{Kind: kind, Address: body.Address,
+			Credentials: jellyfinimport.Credentials{Name: name, Password: body.Password}}
+		status, err = h.JellyfinImport.ImportOwn(r.Context(), connection, user)
+	}
 	if errors.Is(err, jellyfinimport.ErrRunning) {
 		// Another user's, or the administrator's: the caller waits for it.
 		writeError(w, http.StatusConflict, "server_import_running")
