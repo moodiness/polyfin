@@ -1698,7 +1698,7 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		})
 	}
 	started := time.Now()
-	e.m.logger.Debug("Started a remux", "from", j.start, "variant", e.key.Variant)
+	e.m.logger.Debug("Started a remux", "from", j.start, "variant", e.key.Variant, "video", e.remux.loggedVideo(), "audio", e.remux.loggedAudio())
 	take := func(p piece) error { return e.take(ctx, j, p) }
 	if e.remux.Format == TS {
 		err = splitTS(output, take)
