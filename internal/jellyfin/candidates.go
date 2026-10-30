@@ -320,7 +320,7 @@ func pick(states []*tried, prefer, patient bool) (int, bool) {
 // known now stand for them, the others reaching the next PlaybackInfo, as a
 // track switch asks.
 func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item library.Item) (playable, bool, error) {
-	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
+	p := playable{item: item, tracks: h.titleTracks(ctx, user, item)}
 	if item.Kind == library.KindRecording {
 		p.versions = h.recordingVersions(ctx, item)
 		return p, true, nil

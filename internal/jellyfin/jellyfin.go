@@ -166,6 +166,9 @@ type Handler struct {
 	// configurations remembers each user's configuration, which item
 	// listings read for every title.
 	configurations *cache.Cache[accounts.ID, UserConfiguration]
+	// trackChoices remembers the tracks each user chose on titles (see
+	// trackmemory.go).
+	trackChoices *trackChoices
 	// sockets are the WebSockets apps keep open.
 	sockets *sockets
 	// syncPlay holds the groups apps watch together in.
@@ -234,6 +237,7 @@ func New(options Options) *Handler {
 		subtitleCache:  cache.New[accounts.ID, subtitleText](200, time.Hour).Sized(32<<20, subtitleText.size),
 		runtimes:       cache.New[string, time.Duration](2000, 12*time.Hour),
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
+		trackChoices:   newTrackChoices(),
 		sockets:        newSockets(),
 		preparations:   newPreparations(options.Logger),
 		watched:        newWatchedPages(),

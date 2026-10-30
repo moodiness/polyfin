@@ -510,6 +510,12 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 	if item.Kind == library.KindChannel || h.reportedLive(ctx, user, item, mediaSource) {
 		return
 	}
+	// The tracks a report says play may be the user's choice, when they
+	// changed since the last report of the device.
+	if event == playbackStarted || playing.Item != id || !equalIndex(playing.AudioStreamIndex, state.AudioStreamIndex) ||
+		!equalIndex(playing.SubtitleStreamIndex, state.SubtitleStreamIndex) {
+		h.rememberTracks(ctx, user, item, state, mediaSource)
+	}
 	h.recordPlayback(ctx, user, device.DeviceName, event, item)
 	runtime := h.playedRuntime(ctx, user, item, mediaSource, event == playbackStarted || playing.Item != id)
 	// Videos prepare the next episode near the end, make thumbnails and

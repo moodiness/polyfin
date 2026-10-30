@@ -6,6 +6,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/preferences"
 )
 
 // trackPreferences are the settings of a user's configuration that choose
@@ -24,6 +25,11 @@ type trackPreferences struct {
 	subtitleLanguage string
 	// subtitleMode is one of subtitleModes.
 	subtitleMode string
+	// remembered is what the user chose of the title's tracks, which comes
+	// before their languages, for the kinds of selection their
+	// configuration remembers (see titleTracks).
+	remembered                       preferences.TrackChoice
+	rememberAudio, rememberSubtitles bool
 }
 
 func newTrackPreferences(configuration UserConfiguration) trackPreferences {
@@ -97,8 +103,13 @@ func defaultAudio(streams []playback.MediaStream) *int {
 // language gets the one flagged default first. Among the tracks in the
 // preferred language, those of the preferred region come first, then
 // those of no known region, then those of another. nil when there is
-// none.
+// none. A language the user chose on the title comes before all of these
+// (see rememberedAudio), as their subtitle choice does in subtitle (see
+// rememberedSubtitle).
 func (t trackPreferences) audio(streams []playback.MediaStream) *int {
+	if remembered := t.rememberedAudio(streams); remembered != nil {
+		return remembered
+	}
 	rank := func(stream playback.MediaStream) int {
 		preferred, flagged := t.audioRank(stream), 0
 		if stream.IsDefault {
@@ -187,6 +198,9 @@ func (t trackPreferences) subtitle(streams []playback.MediaStream, audio *int) *
 	}
 	if len(subtitles) == 0 {
 		return nil
+	}
+	if remembered := t.rememberedSubtitle(subtitles, audioLanguage); remembered != nil {
+		return remembered
 	}
 	ranked := func(keep func(playback.MediaStream) bool) *playback.MediaStream {
 		return bestSubtitle(subtitles, func(s playback.MediaStream) int {
