@@ -178,6 +178,9 @@ type loopback struct {
 	// inputs finds what FFmpeg reads a version of a local folder that is
 	// not one file from (see LocalInputs).
 	inputs Inputs
+	// playout serves the files of the playout of a channel Polyfin airs
+	// (see UsePlayouts), nil until set.
+	playout func(w http.ResponseWriter, r *http.Request, channel accounts.ID, file string)
 }
 
 func newLoopback() (*loopback, error) {
@@ -240,6 +243,10 @@ func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
 		l.serveLocal(w, r, rest)
 		return
 	}
+	if rest, ok := strings.CutPrefix(r.URL.Path, "/playout/"); ok {
+		l.servePlayout(w, r, rest)
+		return
+	}
 	l.mu.Lock()
 	key := strings.TrimPrefix(r.URL.Path, "/")
 	src, ok := l.sources[key]
@@ -254,6 +261,25 @@ func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	src.ServeHTTP(w, r)
+}
+
+// servePlayout answers the requests for the files of a channel's playout:
+// /playout/{fileKey}/{channel}/{file}.
+func (l *loopback) servePlayout(w http.ResponseWriter, r *http.Request, rest string) {
+	parts := strings.Split(rest, "/")
+	l.mu.Lock()
+	serve := l.playout
+	l.mu.Unlock()
+	if len(parts) != 3 || parts[0] != l.fileKey || serve == nil || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+		http.NotFound(w, r)
+		return
+	}
+	channel, err := accounts.ParseID(parts[1])
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	serve(w, r, channel, parts[2])
 }
 
 func (l *loopback) Close() error {
