@@ -72,6 +72,12 @@ const users = {
       'The language of titles’ names, overviews and images in this user’s apps, when one of the server’s addons describes them in it; titles no addon describes in it keep the server’s description. Genres, ratings and people stay the same for everyone, so parental control and blocked genres judge every user alike. The names Polyfin makes itself follow it when Polyfin speaks it: English, French, German, Spanish, Italian or Portuguese.',
     metadataLanguageNone:
       'No addon of the server has a language yet. Give one a language on its page under Content › Sources.',
+    webThemeTitle: 'Web player theme',
+    webThemeHelp:
+      'The web player’s look for this user, on every browser they sign in with: the server’s theme, LumaaGlaass, jellyfin-web’s own look, lighter, for TVs and older phones, or the Custom theme while it has a text. Browsers too old for LumaaGlaass get jellyfin-web’s own look by themselves.',
+    webThemeChange: 'Let them change it',
+    webThemeChangeHelp:
+      'Under My account › Web player theme. Off, the theme chosen here stays theirs.',
     parentalTitle: 'Parental control',
     maxRating: 'Maximum rating',
     maxRatingHelp: 'Titles rated above this limit are hidden from this user.',

@@ -75,6 +75,9 @@ export default function SectionForm({
       void queryClient.invalidateQueries({ queryKey: queryKeys.scopes })
       // Email targets can be added once an SMTP server is saved.
       void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      // The themes users are given follow the server's and its Custom texts.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.webThemes })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ownWebTheme })
     },
   })
 

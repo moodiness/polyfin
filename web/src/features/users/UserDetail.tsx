@@ -5,6 +5,7 @@ import {
   FilmSlateIcon,
   IdentificationCardIcon,
   KeyIcon,
+  PaletteIcon,
   PlayCircleIcon,
   ProhibitIcon,
   ShareNetworkIcon,
@@ -24,6 +25,7 @@ import {
   fetchUserDevices,
   fetchUserShareLinks,
   fetchMetadataLanguages,
+  fetchWebThemes,
   fetchUsers,
   queryClient,
   queryKeys,
@@ -38,6 +40,7 @@ import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { ShareLinkList } from '@/features/account/SharedLinks'
 import { MetadataLanguageSelect } from '@/features/account/MetadataLanguage'
+import { WebThemeSelect } from '@/features/account/WebTheme'
 import { errorMessage, formatDate } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -88,6 +91,7 @@ const sectionIds = [
   'profile',
   'access',
   'metadata-language',
+  'web-theme',
   'playback',
   'parental',
   'libraries',
@@ -192,6 +196,12 @@ function UserPage({ user }: { user: User }) {
           to: '#metadata-language',
         },
         {
+          id: 'web-theme',
+          label: t.users.webThemeTitle,
+          icon: PaletteIcon,
+          to: '#web-theme',
+        },
+        {
           id: 'playback',
           label: t.users.playbackAccessTitle,
           icon: PlayCircleIcon,
@@ -287,6 +297,7 @@ function UserPage({ user }: { user: User }) {
         <ProfilePanel user={user} />
         <AccessPanel user={user} />
         <MetadataLanguagePanel user={user} />
+        <WebThemePanel user={user} />
         <PlaybackAccessForm key={`playback:${formsKey}`} id="playback" target={target} />
         <ParentalControlForm key={`parental:${formsKey}`} id="parental" target={target} />
         <VisibleLibrariesForm key={`libraries:${formsKey}`} id="libraries" target={target} />
@@ -751,6 +762,66 @@ function MetadataLanguagePanel({ user }: { user: User }) {
   return (
     <div id="metadata-language" className={sectionClass}>
       <Panel title={t.users.metadataLanguageTitle} description={t.users.metadataLanguageHelp}>
+        {body}
+      </Panel>
+    </div>
+  )
+}
+
+/**
+ * The user's web player theme: The server's, or one the server offers, saved as it changes, and
+ * whether they may change it themselves under My account.
+ */
+function WebThemePanel({ user }: { user: User }) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const patch = useUserPatch(user)
+  const themes = useQuery({
+    queryKey: queryKeys.webThemes,
+    queryFn: ({ signal }) => fetchWebThemes(signal),
+  })
+
+  let body
+  if (themes.isPending) body = <SkeletonRows rows={2} label={t.common.loading} />
+  else if (themes.isError)
+    body = (
+      <InlineError onRetry={() => void themes.refetch()} retrying={themes.isFetching}>
+        {errorMessage(t, themes.error)}
+      </InlineError>
+    )
+  else
+    body = (
+      <div>
+        <Field
+          label={t.users.webThemeTitle}
+          hideLabel
+          error={patch.isError ? errorMessage(t, patch.error) : undefined}
+        >
+          <WebThemeSelect
+            value={user.webTheme}
+            themes={themes.data}
+            onValue={(webTheme) =>
+              patch.mutate({ webTheme }, { onSuccess: () => toast(t.users.updated) })
+            }
+            disabled={patch.isPending}
+          />
+        </Field>
+        <div className="mt-4">
+          <SwitchRow
+            title={t.users.webThemeChange}
+            help={t.users.webThemeChangeHelp}
+            checked={!user.webThemeLocked}
+            onChange={(change) =>
+              patch.mutate({ webThemeLocked: !change }, { onSuccess: () => toast(t.users.updated) })
+            }
+            disabled={patch.isPending}
+          />
+        </div>
+      </div>
+    )
+  return (
+    <div id="web-theme" className={sectionClass}>
+      <Panel title={t.users.webThemeTitle} description={t.users.webThemeHelp}>
         {body}
       </Panel>
     </div>

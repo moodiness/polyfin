@@ -241,7 +241,8 @@ const common: typeof en = {
       'L’intervallo di scansione deve essere un numero intero di ore da 0 a 168.',
     invalid_custom_css: 'Il CSS personalizzato non deve superare 2 MB.',
     invalid_custom_js: 'Il JavaScript personalizzato non deve superare 2 MB.',
-    invalid_web_theme: 'Scegli LumaaGlaass, Nessuno o Personalizzato.',
+    invalid_web_theme: 'Scegli un tema dall’elenco.',
+    web_theme_locked: 'Il tuo amministratore ha scelto il tema del tuo lettore web.',
     theme_copy_running: 'Una copia del tema è già in corso. Riprova tra un momento.',
     theme_copy_nothing: 'I testi personalizzati salvati non caricano nulla da altrove.',
     theme_copy_failed:

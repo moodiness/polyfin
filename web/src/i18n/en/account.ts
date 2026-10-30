@@ -11,6 +11,7 @@ const account = {
       hidden: 'Hidden titles',
       homeRows: 'Home rows',
       metadataLanguage: 'Metadata language',
+      webTheme: 'Web player theme',
       sharedLinks: 'Shared links',
       reminders: 'Reminders',
       import: 'Import from another server',
@@ -28,6 +29,15 @@ const account = {
       noLanguage:
         'No addon of the server has a language yet, so titles are described in the server’s. An administrator gives addons a language under Content › Sources.',
       saved: 'Metadata language saved.',
+    },
+    /** My account › Web player theme, and the choice of a user's on their page under Users. */
+    webTheme: {
+      help: 'The web player’s look on every browser you sign in with. jellyfin-web’s own look is lighter, for TVs and older phones; browsers too old for LumaaGlaass get it by themselves. A browser shows a change once the web player is opened again, or right after you sign in there.',
+      label: 'Web player theme',
+      server: (theme: string) => `The server’s (${theme})`,
+      choices: { lumaaglaass: 'LumaaGlaass', none: 'jellyfin-web’s own look', custom: 'Custom' },
+      locked: 'Your administrator chose your web player theme.',
+      saved: 'Web player theme saved.',
     },
     /** My account › Home rows. */
     homeRows: {
@@ -631,6 +641,7 @@ const account = {
     title: 'Reset your preferences?',
     help: 'What you chose yourself goes back to the server’s defaults:',
     metadataLanguage: 'Metadata language: The server’s',
+    webTheme: 'Web player theme: The server’s, unless your administrator chose yours',
     homeRows: 'Home rows: every row is shown again',
     appPreferences:
       'The preferences Jellyfin apps saved in your account: audio and subtitle languages and mode, home screen and display preferences',

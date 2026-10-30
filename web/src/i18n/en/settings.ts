@@ -851,18 +851,21 @@ const settings = {
     backupDestinationsHelp:
       'Each backup is also sent to these places, under the same file name, once written to the folder: S3-compatible storage, SFTP or WebDAV servers. A failed upload is tried again at the next backup.',
     webPlayerHelp:
-      'What the web player (jellyfin-web, at /web/) shows besides its own pages. The script applies the next time a page of the web player is loaded; the web player keeps the CSS and the sign-in message for up to a minute.',
+      'What the web player (jellyfin-web, at /web/) shows besides its own pages. The theme and the script apply the next time a page of the web player is loaded; the web player keeps the sign-in message for up to a minute.',
     openWebPlayer: 'Open the web player',
-    webTheme: 'Theme',
+    webTheme: 'Server theme',
     webThemeHelp:
-      'The web player’s look. LumaaGlaass is the theme Polyfin bundles. None keeps jellyfin-web’s own look, whose display themes each user picks under Settings › Display. Custom uses your own CSS and JavaScript below, which are kept while another theme is chosen.',
-    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'None', custom: 'Custom' },
-    webThemeReload:
-      'The web player keeps the custom CSS it read for up to a minute: after a change, reload its open pages a minute later.',
+      'The web player’s look for the users who keep the server’s; each user can have their own, on their page under Users. LumaaGlaass is the theme Polyfin bundles. jellyfin-web’s own look has no custom CSS or script, and each user picks its display themes under Settings › Display. Custom uses your own CSS and JavaScript below, which are kept while another theme is chosen.',
+    webThemeChoices: {
+      lumaaglaass: 'LumaaGlaass',
+      none: 'jellyfin-web’s own look',
+      custom: 'Custom',
+    },
+    webThemeReload: 'After a change, reload the web player’s open pages.',
     webThemeTexts: {
       lumaaglaass:
         'What Polyfin serves for LumaaGlaass, shown here and not editable. Choose Custom, or Edit as Custom, to write your own.',
-      none: 'None serves no custom CSS or JavaScript. Choose Custom to write your own.',
+      none: 'jellyfin-web’s own look serves no custom CSS or JavaScript. Choose Custom to write your own.',
     },
     editAsCustom: 'Edit as Custom',
     editAsCustomTitle: 'Replace your Custom texts?',

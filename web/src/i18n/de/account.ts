@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Ausgeblendete Titel',
       homeRows: 'Startseitenzeilen',
       metadataLanguage: 'Metadatensprache',
+      webTheme: 'Theme des Web-Players',
       sharedLinks: 'Freigabelinks',
       reminders: 'Erinnerungen',
       import: 'Von einem anderen Server importieren',
@@ -28,6 +29,18 @@ const account: typeof en = {
       noLanguage:
         'Noch kein Add-on des Servers hat eine Sprache, daher werden Titel in der Sprache des Servers beschrieben. Ein Administrator weist Add-ons unter Inhalte › Quellen eine Sprache zu.',
       saved: 'Metadatensprache gespeichert.',
+    },
+    webTheme: {
+      help: 'Das Aussehen des Web-Players in jedem Browser, in dem du dich anmeldest. Das Aussehen von jellyfin-web ist leichter, für Fernseher und ältere Telefone; Browser, die für LumaaGlaass zu alt sind, erhalten es von selbst. Ein Browser zeigt eine Änderung, sobald der Web-Player dort wieder geöffnet wird oder du dich dort anmeldest.',
+      label: 'Theme des Web-Players',
+      server: (theme: string) => `Das des Servers (${theme})`,
+      choices: {
+        lumaaglaass: 'LumaaGlaass',
+        none: 'Aussehen von jellyfin-web',
+        custom: 'Benutzerdefiniert',
+      },
+      locked: 'Dein Administrator hat das Theme deines Web-Players gewählt.',
+      saved: 'Theme des Web-Players gespeichert.',
     },
     homeRows: {
       help: 'Die Zeilen, die der Administrator für dich zur Startseite des Web-Players hinzufügt. Schalte eine aus, um sie von deiner Startseite zu entfernen, und auch aus deinen Bibliotheken in anderen Apps, wenn sie dort ebenfalls eine ist. Die eigenen Bereiche des Web-Players bleiben in seinen Einstellungen › Startseite.',
@@ -643,6 +656,7 @@ const account: typeof en = {
     title: 'Ihre Einstellungen zurücksetzen?',
     help: 'Was Sie selbst gewählt haben, erhält wieder die Standardwerte des Servers:',
     metadataLanguage: 'Metadatensprache: Die des Servers',
+    webTheme: 'Theme des Web-Players: Das des Servers, außer Ihr Administrator hat Ihres gewählt',
     homeRows: 'Startseitenzeilen: Alle Zeilen werden wieder angezeigt',
     appPreferences:
       'Die Einstellungen, die Jellyfin-Apps in Ihrem Konto gespeichert haben: Audio- und Untertitelsprachen und -modus, Startbildschirm- und Anzeigeeinstellungen',

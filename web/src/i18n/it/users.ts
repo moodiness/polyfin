@@ -78,6 +78,12 @@ const users: typeof en = {
       'La lingua dei nomi, delle trame e delle immagini dei titoli nelle applicazioni di questo utente, quando uno degli add-on del server li descrive in quella lingua; i titoli che nessun add-on descrive in quella lingua mantengono la descrizione del server. Generi, classificazioni e persone restano gli stessi per tutti, così il controllo parentale e i generi bloccati valutano ogni utente allo stesso modo. I nomi creati da Polyfin stesso la seguono quando Polyfin la parla: inglese, francese, tedesco, spagnolo, italiano o portoghese.',
     metadataLanguageNone:
       'Nessun add-on del server ha ancora una lingua. Assegnane una a un add-on dalla sua pagina in Contenuti › Origini.',
+    webThemeTitle: 'Tema del lettore web',
+    webThemeHelp:
+      'L’aspetto del lettore web per questo utente, in ogni browser in cui accede: il tema del server, LumaaGlaass, l’aspetto di jellyfin-web, più leggero, per televisori e telefoni meno recenti, o il tema personalizzato finché ha un testo. I browser troppo vecchi per LumaaGlaass ricevono da soli l’aspetto di jellyfin-web.',
+    webThemeChange: 'Permettigli di cambiarlo',
+    webThemeChangeHelp:
+      'In Il mio account › Tema del lettore web. Disattivato, il tema scelto qui resta il suo.',
     parentalTitle: 'Controllo parentale',
     maxRating: 'Classificazione massima',
     maxRatingHelp:

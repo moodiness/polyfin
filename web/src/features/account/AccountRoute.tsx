@@ -8,6 +8,7 @@ import {
   DevicesIcon,
   EyeSlashIcon,
   ListChecksIcon,
+  PaletteIcon,
   PasswordIcon,
   RowsIcon,
   ShareNetworkIcon,
@@ -45,6 +46,7 @@ import SharedLinks from './SharedLinks'
 import TrackingServices from './TrackingServices'
 import { ReminderList, ReminderSettingsForm } from './Reminders'
 import { OwnMetadataLanguage } from './MetadataLanguage'
+import { OwnWebTheme } from './WebTheme'
 import ResetPreferences from './ResetPreferences'
 import { HiddenList, HomeRowList, ResumeList } from './WatchingLists'
 import TwoStep from './TwoStep'
@@ -56,6 +58,7 @@ const sectionIds = [
   'hidden',
   'home-rows',
   'metadata-language',
+  'web-theme',
   'shared-links',
   'reminders',
   'import',
@@ -72,10 +75,10 @@ const ownImportPollMs = 2000
 
 /**
  * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows, the
- * metadata language, shared links (while the user may share or has links), programme reminders
- * (with the Live TV permission), importing from another server and from an app (unless the server
- * turns it off), notifications, devices, password and two-step sign-in, with a list of sections
- * beside them.
+ * metadata language, the web player theme, shared links (while the user may share or has links),
+ * programme reminders (with the Live TV permission), importing from another server and from an app
+ * (unless the server turns it off), notifications, devices, password and two-step sign-in, with a
+ * list of sections beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -172,6 +175,12 @@ export default function AccountRoute() {
               icon: TranslateIcon,
               to: '#metadata-language',
             },
+            {
+              id: 'web-theme',
+              label: text.sections.webTheme,
+              icon: PaletteIcon,
+              to: '#web-theme',
+            },
             ...(sharing
               ? [
                   {
@@ -253,6 +262,9 @@ export default function AccountRoute() {
         help={text.metadataLanguage.help}
       >
         <OwnMetadataLanguage />
+      </AccountSection>
+      <AccountSection id="web-theme" title={text.sections.webTheme} help={text.webTheme.help}>
+        <OwnWebTheme />
       </AccountSection>
       {sharing && (
         <AccountSection

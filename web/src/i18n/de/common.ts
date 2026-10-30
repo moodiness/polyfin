@@ -251,7 +251,8 @@ const common: typeof en = {
     invalid_local_scan_hours: 'Das Scan-Intervall muss eine ganze Zahl von 0 bis 168 Stunden sein.',
     invalid_custom_css: 'Das benutzerdefinierte CSS darf höchstens 2 MB groß sein.',
     invalid_custom_js: 'Das benutzerdefinierte JavaScript darf höchstens 2 MB groß sein.',
-    invalid_web_theme: 'Wähle LumaaGlaass, Keines oder Benutzerdefiniert.',
+    invalid_web_theme: 'Wähle ein Theme aus der Liste.',
+    web_theme_locked: 'Dein Administrator hat das Theme deines Web-Players gewählt.',
     theme_copy_running:
       'Eine Kopie des Themes wird bereits angelegt. Versuche es gleich noch einmal.',
     theme_copy_nothing: 'Die gespeicherten benutzerdefinierten Texte laden nichts von anderswo.',

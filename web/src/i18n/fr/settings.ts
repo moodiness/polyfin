@@ -869,18 +869,21 @@ const settings: typeof en = {
     backupDestinationsHelp:
       'Chaque sauvegarde est aussi envoyée à ces endroits, sous le même nom de fichier, une fois écrite dans le dossier : stockages compatibles S3, serveurs SFTP ou WebDAV. Un envoi qui échoue est retenté à la sauvegarde suivante.',
     webPlayerHelp:
-      'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le script s’applique au prochain chargement d’une page du lecteur web ; le lecteur web garde le CSS et le message de connexion jusqu’à une minute.',
+      'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le thème et le script s’appliquent au prochain chargement d’une page du lecteur web ; le lecteur web garde le message de connexion jusqu’à une minute.',
     openWebPlayer: 'Ouvrir le lecteur web',
-    webTheme: 'Thème',
+    webTheme: 'Thème du serveur',
     webThemeHelp:
-      'L’apparence du lecteur web. LumaaGlaass est le thème fourni avec Polyfin. Aucun garde l’apparence de jellyfin-web, dont chacun choisit le thème d’affichage dans Paramètres › Affichage. Personnalisé utilise votre CSS et votre JavaScript ci-dessous, conservés pendant qu’un autre thème est choisi.',
-    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'Aucun', custom: 'Personnalisé' },
-    webThemeReload:
-      'Le lecteur web garde le CSS personnalisé lu pendant une minute au plus : après un changement, rechargez ses pages ouvertes une minute plus tard.',
+      'L’apparence du lecteur web pour les utilisateurs qui gardent celle du serveur ; chacun peut avoir la sienne, sur sa page dans Utilisateurs. LumaaGlaass est le thème fourni avec Polyfin. L’apparence de jellyfin-web n’a ni CSS ni script personnalisé, et chacun en choisit le thème d’affichage dans Paramètres › Affichage. Personnalisé utilise votre CSS et votre JavaScript ci-dessous, conservés pendant qu’un autre thème est choisi.',
+    webThemeChoices: {
+      lumaaglaass: 'LumaaGlaass',
+      none: 'L’apparence de jellyfin-web',
+      custom: 'Personnalisé',
+    },
+    webThemeReload: 'Après un changement, rechargez les pages ouvertes du lecteur web.',
     webThemeTexts: {
       lumaaglaass:
         'Ce que Polyfin sert pour LumaaGlaass, affiché ici sans pouvoir être modifié. Choisissez Personnalisé, ou « Modifier comme personnalisé », pour écrire le vôtre.',
-      none: 'Aucun ne sert ni CSS ni JavaScript personnalisé. Choisissez Personnalisé pour écrire le vôtre.',
+      none: 'L’apparence de jellyfin-web ne sert ni CSS ni JavaScript personnalisé. Choisissez Personnalisé pour écrire le vôtre.',
     },
     editAsCustom: 'Modifier comme personnalisé',
     editAsCustomTitle: 'Remplacer vos textes personnalisés ?',

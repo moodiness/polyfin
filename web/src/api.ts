@@ -110,6 +110,10 @@ export type User = {
   followGroup: boolean
   /** The language the user's titles are described in; '' for the server's. */
   metadataLanguage: string
+  /** The user's web player theme; '' for the server's. */
+  webTheme: UserWebTheme
+  /** Whether the user is kept from changing their web player theme under My account. */
+  webThemeLocked: boolean
   /** Whether the user signs in with a code from an authenticator app after their password. */
   twoStep: boolean
   /** Whether the user signs in through the identity provider only, their password refused. */
@@ -809,6 +813,10 @@ export type UserPatch = Partial<{
   metadataLanguage: string
   /** Whether the user signs in through the identity provider only, their password refused. */
   providerOnly: boolean
+  /** One of the themes offered (see WebThemes), or '' for the server's. */
+  webTheme: UserWebTheme
+  /** True keeps the user from changing their web player theme under My account. */
+  webThemeLocked: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
@@ -1861,9 +1869,19 @@ export const fetchOwnMetadataLanguage = (signal?: AbortSignal) =>
 export const saveOwnMetadataLanguage = (language: string) =>
   request<MetadataLanguage>('PUT', '/account/metadata-language', { language })
 
+/** The signed-in user's web player theme ('' for the server's), whether the administrator keeps them from changing it, and the themes they choose among. */
+export type OwnWebTheme = WebThemes & { webTheme: UserWebTheme; locked: boolean }
+
+export const fetchOwnWebTheme = (signal?: AbortSignal) =>
+  request<OwnWebTheme>('GET', '/account/web-theme', undefined, signal)
+
+export const saveOwnWebTheme = (webTheme: UserWebTheme) =>
+  request<OwnWebTheme>('PUT', '/account/web-theme', { webTheme })
+
 /**
  * Puts back the server's defaults for what the signed-in user chose: their metadata language, the
- * home rows they turned off, and the preferences Jellyfin apps saved in their account.
+ * home rows they turned off, the preferences Jellyfin apps saved in their account, and their web
+ * player theme unless the administrator chose it.
  */
 export const resetOwnPreferences = () => request<void>('POST', '/account/preferences/reset')
 
@@ -3149,6 +3167,11 @@ export const newMetricsToken = () => request<Settings>('POST', '/settings/metric
 /** The web player's looks: the bundled LumaaGlaass, jellyfin-web's own, or the Custom texts. */
 export const webThemes = ['lumaaglaass', 'none', 'custom'] as const
 export type WebTheme = (typeof webThemes)[number]
+/** A user's web player theme: one of the server's themes, or '' for the server's own. */
+export type UserWebTheme = WebTheme | ''
+
+/** The server's theme, which users without their own get, and the themes a user may be given. */
+export type WebThemes = { serverTheme: WebTheme; themes: WebTheme[] }
 
 /** A file of the copy Polyfin keeps of a theme's files. */
 export type ThemeCopyFile = {
@@ -3211,6 +3234,10 @@ export const fetchSettingsApps = async (signal?: AbortSignal) =>
 export const fetchMetadataLanguages = async (signal?: AbortSignal) =>
   (await request<{ languages: string[] }>('GET', '/metadata-languages', undefined, signal))
     .languages
+
+/** The web player themes users choose among: Custom while it has a text. */
+export const fetchWebThemes = (signal?: AbortSignal) =>
+  request<WebThemes>('GET', '/web-themes', undefined, signal)
 
 const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
 
@@ -4547,6 +4574,9 @@ export const queryKeys = {
   ownMetadataLanguage: ['account', 'metadata-language'] as const,
   /** The languages the server's addons were given: refreshed with the server's addons. */
   metadataLanguages: ['scopes', 'shared', 'metadata-languages'] as const,
+  ownWebTheme: ['account', 'web-theme'] as const,
+  /** The server's theme and the themes offered: refreshed as the settings are saved. */
+  webThemes: ['web-themes'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   /** Prefix of every group query: invalidating it refreshes the list and each group. */

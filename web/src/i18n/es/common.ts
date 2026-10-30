@@ -247,7 +247,8 @@ const common: typeof en = {
       'El intervalo de escaneo debe ser un número entero de horas de 0 a 168.',
     invalid_custom_css: 'El CSS personalizado no debe superar los 2 MB.',
     invalid_custom_js: 'El JavaScript personalizado no debe superar los 2 MB.',
-    invalid_web_theme: 'Elija LumaaGlaass, Ninguno o Personalizado.',
+    invalid_web_theme: 'Elija un tema de la lista.',
+    web_theme_locked: 'Su administrador eligió el tema de su reproductor web.',
     theme_copy_running:
       'Ya se está haciendo una copia del tema. Vuelva a intentarlo en un momento.',
     theme_copy_nothing: 'Los textos personalizados guardados no cargan nada desde otro sitio.',

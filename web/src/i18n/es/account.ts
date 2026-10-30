@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Títulos ocultos',
       homeRows: 'Filas de inicio',
       metadataLanguage: 'Idioma de los metadatos',
+      webTheme: 'Tema del reproductor web',
       sharedLinks: 'Enlaces compartidos',
       reminders: 'Recordatorios',
       import: 'Importar desde otro servidor',
@@ -28,6 +29,18 @@ const account: typeof en = {
       noLanguage:
         'Ninguna extensión del servidor tiene idioma todavía, así que los títulos se describen en el del servidor. Un administrador asigna un idioma a las extensiones en Contenido › Fuentes.',
       saved: 'Idioma de los metadatos guardado.',
+    },
+    webTheme: {
+      help: 'El aspecto del reproductor web en cada navegador en el que inicie sesión. El aspecto propio de jellyfin-web es más ligero, para televisores y teléfonos antiguos; los navegadores demasiado antiguos para LumaaGlaass lo reciben por sí mismos. Un navegador muestra un cambio cuando se vuelve a abrir en él el reproductor web, o en cuanto inicia sesión en él.',
+      label: 'Tema del reproductor web',
+      server: (theme: string) => `El del servidor (${theme})`,
+      choices: {
+        lumaaglaass: 'LumaaGlaass',
+        none: 'Aspecto propio de jellyfin-web',
+        custom: 'Personalizado',
+      },
+      locked: 'Su administrador eligió el tema de su reproductor web.',
+      saved: 'Tema del reproductor web guardado.',
     },
     homeRows: {
       help: 'Las filas que el administrador añade para usted a la página de inicio del reproductor web. Desactive una para quitarla de su página de inicio, y de sus bibliotecas en otras aplicaciones cuando también sea una allí. Las secciones propias del reproductor web siguen en sus Ajustes › Inicio.',
@@ -647,6 +660,7 @@ const account: typeof en = {
     title: '¿Restablecer tus preferencias?',
     help: 'Lo que elegiste tú mismo vuelve a los valores predeterminados del servidor:',
     metadataLanguage: 'Idioma de los metadatos: El del servidor',
+    webTheme: 'Tema del reproductor web: El del servidor, salvo si tu administrador eligió el tuyo',
     homeRows: 'Filas de inicio: todas las filas vuelven a mostrarse',
     appPreferences:
       'Las preferencias que las aplicaciones de Jellyfin guardaron en tu cuenta: idiomas y modo del audio y los subtítulos, preferencias de la pantalla de inicio y de visualización',

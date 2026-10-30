@@ -860,18 +860,21 @@ const settings: typeof en = {
     backupDestinationsHelp:
       'Jedes Backup wird, sobald es in den Ordner geschrieben ist, unter demselben Dateinamen auch an diese Orte gesendet: S3-kompatiblen Speicher, SFTP- oder WebDAV-Server. Ein fehlgeschlagener Upload wird beim nächsten Backup erneut versucht.',
     webPlayerHelp:
-      'Was der Web-Player (jellyfin-web, unter /web/) zusätzlich zu seinen eigenen Seiten anzeigt. Das Skript wirkt beim nächsten Laden einer Seite des Web-Players; der Web-Player behält CSS und Anmeldenachricht bis zu einer Minute.',
+      'Was der Web-Player (jellyfin-web, unter /web/) zusätzlich zu seinen eigenen Seiten anzeigt. Theme und Skript wirken beim nächsten Laden einer Seite des Web-Players; der Web-Player behält die Anmeldenachricht bis zu einer Minute.',
     openWebPlayer: 'Web-Player öffnen',
-    webTheme: 'Theme',
+    webTheme: 'Theme des Servers',
     webThemeHelp:
-      'Das Aussehen des Web-Players. LumaaGlaass ist das Theme, das Polyfin mitbringt. Keines behält das Aussehen von jellyfin-web, dessen Anzeige-Theme jeder Benutzer unter Einstellungen › Darstellung wählt. Benutzerdefiniert verwendet dein eigenes CSS und JavaScript unten, die erhalten bleiben, während ein anderes Theme gewählt ist.',
-    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'Keines', custom: 'Benutzerdefiniert' },
-    webThemeReload:
-      'Der Web-Player behält das gelesene benutzerdefinierte CSS bis zu einer Minute: Lade seine offenen Seiten nach einer Änderung eine Minute später neu.',
+      'Das Aussehen des Web-Players für die Benutzer, die das des Servers behalten; jeder Benutzer kann sein eigenes haben, auf seiner Seite unter Benutzer. LumaaGlaass ist das Theme, das Polyfin mitbringt. Das Aussehen von jellyfin-web hat weder benutzerdefiniertes CSS noch Skript, und jeder Benutzer wählt seine Anzeige-Themes unter Einstellungen › Darstellung. Benutzerdefiniert verwendet dein eigenes CSS und JavaScript unten, die erhalten bleiben, während ein anderes Theme gewählt ist.',
+    webThemeChoices: {
+      lumaaglaass: 'LumaaGlaass',
+      none: 'Aussehen von jellyfin-web',
+      custom: 'Benutzerdefiniert',
+    },
+    webThemeReload: 'Lade nach einer Änderung die offenen Seiten des Web-Players neu.',
     webThemeTexts: {
       lumaaglaass:
         'Was Polyfin für LumaaGlaass ausliefert, hier angezeigt und nicht bearbeitbar. Wähle Benutzerdefiniert oder „Als benutzerdefiniert bearbeiten“, um dein eigenes zu schreiben.',
-      none: 'Keines liefert weder benutzerdefiniertes CSS noch JavaScript aus. Wähle Benutzerdefiniert, um dein eigenes zu schreiben.',
+      none: 'Das Aussehen von jellyfin-web liefert weder benutzerdefiniertes CSS noch JavaScript aus. Wähle Benutzerdefiniert, um dein eigenes zu schreiben.',
     },
     editAsCustom: 'Als benutzerdefiniert bearbeiten',
     editAsCustomTitle: 'Deine benutzerdefinierten Texte ersetzen?',

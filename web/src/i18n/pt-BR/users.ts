@@ -75,6 +75,12 @@ const users: typeof en = {
       'O idioma dos nomes, sinopses e imagens dos títulos nos aplicativos deste usuário, quando um dos complementos do servidor os descreve nesse idioma; títulos que nenhum complemento descreve nele mantêm a descrição do servidor. Gêneros, classificações etárias e pessoas continuam iguais para todos, então o controle parental e os gêneros bloqueados avaliam todos os usuários da mesma forma. Os nomes que o próprio Polyfin cria seguem esse idioma quando o Polyfin o fala: inglês, francês, alemão, espanhol, italiano ou português.',
     metadataLanguageNone:
       'Nenhum complemento do servidor tem idioma ainda. Defina um idioma para um complemento na página dele, em Conteúdo › Fontes.',
+    webThemeTitle: 'Tema do player web',
+    webThemeHelp:
+      'A aparência do player web para este usuário, em cada navegador em que ele entra: o tema do servidor, LumaaGlaass, a aparência do jellyfin-web, mais leve, para TVs e celulares antigos, ou o tema personalizado enquanto ele tiver um texto. Navegadores antigos demais para o LumaaGlaass recebem sozinhos a aparência do jellyfin-web.',
+    webThemeChange: 'Permitir que ele mude',
+    webThemeChangeHelp:
+      'Em Minha conta › Tema do player web. Desativado, o tema escolhido aqui continua sendo o dele.',
     parentalTitle: 'Controle parental',
     maxRating: 'Classificação etária máxima',
     maxRatingHelp: 'Títulos com classificação acima deste limite ficam ocultos para este usuário.',

@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Titres masqués',
       homeRows: 'Rangées d’accueil',
       metadataLanguage: 'Langue des métadonnées',
+      webTheme: 'Thème du lecteur web',
       sharedLinks: 'Liens partagés',
       reminders: 'Rappels',
       import: 'Importer depuis un autre serveur',
@@ -28,6 +29,18 @@ const account: typeof en = {
       noLanguage:
         'Aucun addon du serveur n’a encore de langue : les titres sont décrits dans celle du serveur. Un administrateur donne une langue aux addons dans Contenu › Sources.',
       saved: 'Langue des métadonnées enregistrée.',
+    },
+    webTheme: {
+      help: 'L’apparence du lecteur web sur chaque navigateur où vous vous connectez. L’apparence de jellyfin-web est plus légère, pour les téléviseurs et les téléphones anciens ; les navigateurs trop anciens pour LumaaGlaass la prennent d’eux-mêmes. Un navigateur montre un changement quand le lecteur web y est rouvert, ou dès que vous vous y connectez.',
+      label: 'Thème du lecteur web',
+      server: (theme: string) => `Celui du serveur (${theme})`,
+      choices: {
+        lumaaglaass: 'LumaaGlaass',
+        none: 'L’apparence de jellyfin-web',
+        custom: 'Personnalisé',
+      },
+      locked: 'Votre administrateur a choisi le thème de votre lecteur web.',
+      saved: 'Thème du lecteur web enregistré.',
     },
     homeRows: {
       help: 'Les rangées que l’administrateur ajoute pour vous à la page d’accueil du lecteur web. Désactivez-en une pour la retirer de votre page d’accueil, et de vos bibliothèques dans les autres applis quand elle en est aussi une. Les sections propres au lecteur web restent dans ses Paramètres › Accueil.',
@@ -644,6 +657,8 @@ const account: typeof en = {
     title: 'Rétablir vos préférences ?',
     help: 'Ce que vous avez choisi vous-même reprend les valeurs par défaut du serveur :',
     metadataLanguage: 'Langue des métadonnées : Celle du serveur',
+    webTheme:
+      'Thème du lecteur web : Celui du serveur, sauf si votre administrateur a choisi le vôtre',
     homeRows: 'Rangées d’accueil : toutes les rangées s’affichent de nouveau',
     appPreferences:
       'Les préférences que les applications Jellyfin ont enregistrées dans votre compte : langues et mode de l’audio et des sous-titres, préférences de l’écran d’accueil et d’affichage',

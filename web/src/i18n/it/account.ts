@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Titoli nascosti',
       homeRows: 'Righe della Home',
       metadataLanguage: 'Lingua dei metadati',
+      webTheme: 'Tema del lettore web',
       sharedLinks: 'Link condivisi',
       reminders: 'Promemoria',
       import: 'Importa da un altro server',
@@ -28,6 +29,18 @@ const account: typeof en = {
       noLanguage:
         'Nessun add-on del server ha ancora una lingua, quindi i titoli sono descritti in quella del server. Un amministratore assegna una lingua agli add-on in Contenuti › Origini.',
       saved: 'Lingua dei metadati salvata.',
+    },
+    webTheme: {
+      help: 'L’aspetto del lettore web in ogni browser in cui accedi. L’aspetto di jellyfin-web è più leggero, per televisori e telefoni meno recenti; i browser troppo vecchi per LumaaGlaass lo ricevono da soli. Un browser mostra una modifica quando il lettore web viene riaperto lì, o appena accedi lì.',
+      label: 'Tema del lettore web',
+      server: (theme: string) => `Quello del server (${theme})`,
+      choices: {
+        lumaaglaass: 'LumaaGlaass',
+        none: 'Aspetto di jellyfin-web',
+        custom: 'Personalizzato',
+      },
+      locked: 'Il tuo amministratore ha scelto il tema del tuo lettore web.',
+      saved: 'Tema del lettore web salvato.',
     },
     homeRows: {
       help: 'Le righe che l’amministratore aggiunge per te alla pagina Home del player web. Disattivane una per escluderla dalla tua pagina Home e, quando lo è anche lì, dalle tue librerie nelle altre applicazioni. Le sezioni proprie del player web restano nelle sue Impostazioni › Home.',
@@ -642,6 +655,8 @@ const account: typeof en = {
     title: 'Ripristinare le tue preferenze?',
     help: 'Ciò che hai scelto tu torna ai valori predefiniti del server:',
     metadataLanguage: 'Lingua dei metadati: Quella del server',
+    webTheme:
+      'Tema del lettore web: Quello del server, se il tuo amministratore non ha scelto il tuo',
     homeRows: 'Righe della Home: tutte le righe tornano visibili',
     appPreferences:
       'Le preferenze che le app Jellyfin hanno salvato nel tuo account: lingue e modalità di audio e sottotitoli, preferenze della schermata Home e di visualizzazione',

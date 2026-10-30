@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Títulos ocultos',
       homeRows: 'Fileiras do início',
       metadataLanguage: 'Idioma dos metadados',
+      webTheme: 'Tema do player web',
       sharedLinks: 'Links compartilhados',
       reminders: 'Lembretes',
       import: 'Importar de outro servidor',
@@ -28,6 +29,18 @@ const account: typeof en = {
       noLanguage:
         'Nenhum complemento do servidor tem um idioma ainda, então os títulos são descritos no idioma do servidor. Um administrador define o idioma dos complementos em Conteúdo › Fontes.',
       saved: 'Idioma dos metadados salvo.',
+    },
+    webTheme: {
+      help: 'A aparência do player web em cada navegador em que você entra. A aparência do jellyfin-web é mais leve, para TVs e celulares antigos; navegadores antigos demais para o LumaaGlaass a recebem sozinhos. Um navegador mostra uma alteração quando o player web é aberto de novo nele, ou assim que você entra nele.',
+      label: 'Tema do player web',
+      server: (theme: string) => `O do servidor (${theme})`,
+      choices: {
+        lumaaglaass: 'LumaaGlaass',
+        none: 'Aparência do jellyfin-web',
+        custom: 'Personalizado',
+      },
+      locked: 'Seu administrador escolheu o tema do seu player web.',
+      saved: 'Tema do player web salvo.',
     },
     homeRows: {
       help: 'As fileiras que o administrador adiciona para você à página inicial do player web. Desative uma para tirá-la da sua página inicial, e também das suas bibliotecas em outros aplicativos quando ela for uma biblioteca neles. As seções próprias do player web ficam em Configurações › Início dele.',
@@ -644,6 +657,8 @@ const account: typeof en = {
     title: 'Redefinir suas preferências?',
     help: 'O que você mesmo escolheu volta aos padrões do servidor:',
     metadataLanguage: 'Idioma dos metadados: O do servidor',
+    webTheme:
+      'Tema do player web: O do servidor, a menos que seu administrador tenha escolhido o seu',
     homeRows: 'Fileiras do início: todas as fileiras voltam a aparecer',
     appPreferences:
       'As preferências que os apps Jellyfin salvaram na sua conta: idiomas e modo do áudio e das legendas, preferências da tela inicial e de exibição',
