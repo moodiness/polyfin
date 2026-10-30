@@ -179,6 +179,17 @@ Sources need no opening. A title's file download serves its first working versio
 - `/Items/{id}/File` serves the first working version.
 - `/Videos/{id}/stream.mp4` and `/Videos/{id}/stream.ts` convert only for the `TranscodingUrl` of a converted download: with `static=true`, or without a play session and a `videoCodec`, or with **Converted downloads** off, they serve the version as it is, as before.
 
+### What a streamed play sends
+
+The session of a device playing a version Polyfin streams, over HLS or as one file, carries `TranscodingInfo`, as Jellyfin's does: whether the video and the audio are copied (`IsVideoDirect`, `IsAudioDirect`), the codecs, size, bitrate and audio channels sent, the container, the GPU converting the video, and `TranscodeReasons`. jellyfin-web's "Playback Info" reads it to say "Direct streaming" when only the audio is converted, rather than "Transcoding", with the target codecs and the reasons (see [Seeing how a play goes](transcoding.md#seeing-how-a-play-goes)). DLNA devices' sessions carry it too. A version played as it is has none.
+
+**Compared with Jellyfin:**
+
+- Jellyfin clears it when its transcode ends; Polyfin keeps the last one for the play session until the play stops, as its encodings stop while the player is idle and start again at its next request.
+- `Framerate` and `CompletionPercentage`, FFmpeg's progress, are left out, and `HardwareAccelerationType` only names the GPU of a video conversion, `none` for the processor.
+
+**For app developers:** `GET /Sessions` fills `TranscodingInfo` once the play session's first encoding opened its source, from the play session the app reported in `/Sessions/Playing`; nothing for a play reported as `DirectPlay`.
+
 ### Fallback fonts
 
 Fallback fonts are the fonts in `POLYFIN_FONTS_DIR`, folders within included. The image ships DejaVu (Latin, Greek and Cyrillic). Mount more fonts there for other scripts, for example CJK.

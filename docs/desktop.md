@@ -52,6 +52,8 @@ On Windows and Linux, Polyfin converts video on an NVIDIA graphics card through 
 
 With a driver older than 570, or until that FFmpeg could be downloaded, video is converted on another graphics card of the computer if one encodes, or else on the processor, and **System › Health** says why. See [NVIDIA driver](transcoding.md#nvidia-driver).
 
+Polyfin Desktop always runs the FFmpeg it downloads, or the one for these older drivers: another FFmpeg can be given only to `polyfin serve` and Docker. See [Which FFmpeg runs](transcoding.md#which-ffmpeg-runs).
+
 ## The menu
 
 The icon shows whether Polyfin runs: faded while it starts or is stopped. Its menu has:

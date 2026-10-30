@@ -23,6 +23,23 @@ The audio of a video repackaged or converted into HLS is copied only when the ap
 
 **Compared with Jellyfin:** Jellyfin keeps the same codecs, in `StreamBuilder.BuildStreamVideoItem`, for HLS only, as Polyfin does. Jellyfin's `TranscodingUrl` writes the codec of a copied track alone as `AudioCodec`; Polyfin writes the codecs the segments carry either way, as it does when the track is converted.
 
+### Dolby audio in browsers
+
+Browsers built on Chromium, such as Chrome and Android's web view, and Firefox do not decode AC-3 or E-AC-3 (Dolby Digital and Dolby Digital Plus). jellyfin-web asks the browser what it plays, so in these browsers a file with such audio is not played as it is: Polyfin repackages it into HLS, copies the video when the browser takes it, as HEVC with a GPU that decodes it, and converts only the audio, to AAC. Nothing is encoded for the video, and the graphics card does no work for it. Edge on Windows and Safari decode both, and play such a file as it is when they take its video and container.
+
+To play it without any conversion in such a browser, a version with AAC or Opus audio plays as it is, and **Prefer versions the app plays without conversion** picks one first when there is one (see [Prefer versions the app plays without conversion](playback.md#prefer-versions-the-app-plays-without-conversion)).
+
+**Compared with Jellyfin:** Jellyfin 12.4 decides the same for the same file and browser, with the same reason, `AudioCodecNotSupported` (`StreamBuilder.BuildStreamVideoItem`).
+
+### Seeing how a play goes
+
+- **In jellyfin-web:** "Playback Info", in the player's settings menu, names how the play goes: "Direct playing", "Direct streaming" when the video is copied and the audio converted, "Remuxing" when both are copied into HLS, and "Transcoding" when the video is converted. A play streamed by Polyfin adds a section with the target codecs, "(direct)" beside a copied one, and the reasons, such as "The audio codec is not supported". The section shows once the play's first segment is made, and stays while the encoding waits between requests.
+- **In the version's name:** it ends with how it plays, such as "(converted: audio)" (see [Version names](playback.md#version-names)).
+- **In the admin app:** **Home › Now playing › Details** shows the encoder, "Copied" for copied video, the audio sent, and why.
+- **In the detailed log:** one line for each play (see [Logs](administration.md#logs)), `A version plays as it is`, or `A version plays over HLS` (`A version plays as one stream` for a stream sent as one file) with `video` (`copied`, or the codec and encoder, such as `h264 with h264_nvenc`), `audio` (`copied`, `none`, or the codec and channels, such as `aac 2 ch`) and `reasons`. Each FFmpeg run then logs `Started a remux` with `video` (`copy` or the encoder) and `audio` (`copy`, `none` or the encoder). Neither names an address.
+
+**Compared with Jellyfin:** Jellyfin reports the same on the device's session, as `TranscodingInfo` ([TranscodeManager.cs, lines 343 to 366](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.MediaEncoding/Transcoding/TranscodeManager.cs#L343-L366); [SessionManager.cs, lines 2008 to 2023](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Session/SessionManager.cs#L2008-L2023)), and clears it when its transcode ends; Polyfin keeps it until the play stops, as its encodings stop and start again within a play. Jellyfin also reports the conversion's frame rate and progress, which Polyfin leaves out, and its configured hardware acceleration even for copied video, where Polyfin names the GPU of a video conversion alone. Jellyfin logs its decision at the debug level with the file's path and URL ([StreamBuilder.cs, lines 833 to 841](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L833-L841)); Polyfin's line names no address.
+
 ### Lower quality during a play
 
 jellyfin-web's player offers **Quality** in its settings menu during a play, to lower the bitrate of a play that stutters. Picking a quality plays the version again from the same position at that bitrate: a version whose bitrate is above it is converted down to it (see [Size of converted video](#size-of-converted-video)); one within it plays as before. A version or a channel whose bitrate is not known, as a live HLS stream's, counts as the usual bitrate of its height, the one its conversion gets (see [Bitrate of converted video](#bitrate-of-converted-video)): a 1080p channel counts as 10 Mb/s, and converts at 3 Mbps. This holds for every bitrate limit, the app's and the user's **Maximum quality** too. The menu shows for a version played as it is, a movie, an episode, a recording or a channel, as for one Polyfin repackages or converts, when a lower quality would play it converted:
@@ -204,6 +221,12 @@ A method whose encoders all fail is logged with FFmpeg's reason (`A GPU method d
 It then measures, in the background, which way converts faster on that GPU (see [Frames on the GPU](#frames-on-the-gpu)), in a few seconds.
 
 On arm64, VAAPI is tried only where libva is installed. The arm64 image has no libva, nor the AMD and Intel drivers VAAPI uses, so there VAAPI is not tried, and the log says `VAAPI is not offered here: libva is not installed`. On amd64, and on an arm64 system with libva, a failure gives FFmpeg's own reason.
+
+### Which FFmpeg runs
+
+- **Polyfin Desktop:** it always runs the FFmpeg it downloads, or the one for older NVIDIA drivers (see [NVIDIA driver](#nvidia-driver)), and cannot be given another: `POLYFIN_FFMPEG` and `POLYFIN_FFPROBE` in the environment it starts from are left out (see [Configuration](configuration.md)).
+- **`polyfin serve` and Docker:** they run the FFmpeg and ffprobe that `POLYFIN_FFMPEG` and `POLYFIN_FFPROBE` name, FFmpeg 9.0 or later. Polyfin does not check the version at startup: an older FFmpeg, such as Jellyfin's 8.1, starts, and may fail later on what it lacks.
+- **When it does not matter:** when the video is copied, as for audio converted alone (see [Dolby audio in browsers](#dolby-audio-in-browsers)), no video encoder runs. A conversion on a GPU uses the GPU's own encoder, such as NVENC, whichever FFmpeg drives it.
 
 ### NVIDIA driver
 
