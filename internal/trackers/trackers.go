@@ -266,6 +266,11 @@ type timing struct {
 	importGaps    map[string]time.Duration
 	importMaxWait time.Duration
 	importRetries int
+	// recommendationsEvery is how often Trakt's recommendations are read
+	// again, recommendationsRetry how soon after a failed read, and
+	// recommendationsAsked how lately a row must have asked for them for
+	// the hourly check to read them (see recommendations.go).
+	recommendationsEvery, recommendationsRetry, recommendationsAsked time.Duration
 }
 
 var defaultTiming = timing{
@@ -290,6 +295,10 @@ var defaultTiming = timing{
 	importGaps:    map[string]time.Duration{Trakt: time.Second, Simkl: 500 * time.Millisecond, MDBList: 500 * time.Millisecond, MyAnimeList: time.Second},
 	importMaxWait: 15 * time.Minute,
 	importRetries: 3,
+
+	recommendationsEvery: 12 * time.Hour,
+	recommendationsRetry: time.Hour,
+	recommendationsAsked: 7 * 24 * time.Hour,
 }
 
 // maxIntake bounds the reports and marks waiting to be looked at for one
@@ -336,6 +345,9 @@ type Service struct {
 	userData *userdata.Store
 	// importing are the imports running, by user and service.
 	importing map[laneKey]*importRun
+	// recommending are the reads of Trakt's recommendations running, by
+	// user (see recommendations.go).
+	recommending map[laneKey]bool
 	// publicMetaDBIMDb caches the IMDb identifiers PublicMetaDB maps TMDB
 	// identifiers to (see mapPublicMetaDB).
 	publicMetaDBIMDb map[string]string
@@ -389,6 +401,8 @@ func New(options Options) *Service {
 		userData:    options.UserData,
 		importing:   map[laneKey]*importRun{},
 
+		recommending: map[laneKey]bool{},
+
 		publicMetaDBIMDb: map[string]string{},
 		anime:            options.Anime,
 		stopped:          options.Stopped,
@@ -396,12 +410,14 @@ func New(options Options) *Service {
 	}
 }
 
-// Run sends the changes an earlier run left queued, keeps tokens fresh
-// and imports watch histories when due until ctx ends, then stops sending
-// and waits for the sends under way.
+// Run sends the changes an earlier run left queued, keeps tokens fresh,
+// imports watch histories and reads Trakt's recommendations again when
+// due until ctx ends, then stops sending and waits for the sends under
+// way.
 func (s *Service) Run(ctx context.Context) {
 	s.resumeQueued()
 	s.importDue()
+	s.recommendationsDue()
 	ticker := time.NewTicker(s.timing.refreshEvery)
 	defer ticker.Stop()
 	imports := time.NewTicker(s.timing.importCheck)
@@ -413,6 +429,7 @@ func (s *Service) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			s.refreshDue()
+			s.recommendationsDue()
 		case <-imports.C:
 			s.importDue()
 		}
