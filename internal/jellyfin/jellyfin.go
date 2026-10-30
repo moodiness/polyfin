@@ -31,6 +31,7 @@ import (
 	"github.com/moodiness/polyfin/internal/remuxdb"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
+	"github.com/moodiness/polyfin/internal/taste"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 	"github.com/moodiness/polyfin/internal/tmdb"
@@ -100,7 +101,11 @@ type Options struct {
 	// HomeRows keeps the rows the web player adds to its home page (see
 	// customrows.go); nil keeps none.
 	HomeRows *homerows.Store
-	Logger   *slog.Logger
+	// Taste keeps the users' taste profiles, which rank Top picks for you
+	// and reorder similar titles, suggestions and movie recommendations
+	// (see taste.go); nil keeps none.
+	Taste  *taste.Service
+	Logger *slog.Logger
 	// Activity records what happens for the activity log; nil records
 	// nothing.
 	Activity *activity.Store

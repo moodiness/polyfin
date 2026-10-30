@@ -29,13 +29,14 @@ const (
 // movieRecommendations answers Jellyfin's movie recommendations with the
 // categories jellyfin-web titles "Because you watched": for each of the
 // movies the user played last, the titles similar to it, through the
-// similar titles of title pages (see similarItems), without those the user
-// played. Jellyfin adds categories for the titles a user likes and for the
-// people of recent movies, which would each cost a search of the addons;
-// Polyfin leaves them out. With similar titles turned off in the settings,
-// there are no categories, and no addon is asked. parentId, which narrows
-// the movies played to a library's, is read and left unused: a title
-// belongs to whichever library lists it.
+// similar titles of title pages, blended with the user's taste (see
+// similarItems), without those the user played. Jellyfin adds categories
+// for the titles a user likes and for the people of recent movies, which
+// would each cost a search of the addons; Polyfin leaves them out. With
+// similar titles turned off in the settings, there are no categories, and
+// no addon is asked. parentId, which narrows the movies played to a
+// library's, is read and left unused: a title belongs to whichever library
+// lists it.
 func (h *Handler) movieRecommendations(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	b.guid(r, "parentId")
@@ -67,7 +68,7 @@ func (h *Handler) movieRecommendations(w http.ResponseWriter, r *http.Request) {
 	for i, movie := range baselines {
 		group.Go(func() error {
 			// Twice the limit leaves room for the played titles left out.
-			found, err := h.Library.Similar(r.Context(), user, movie.ID, 2*itemLimit)
+			found, err := h.similarTitles(r.Context(), user, movie.ID, 2*itemLimit)
 			if err == nil {
 				similar[i] = found
 			}

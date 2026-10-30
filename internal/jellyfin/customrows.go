@@ -36,7 +36,9 @@ import (
 //     libraries (see library.Arrivals);
 //   - Now available and Still waiting: the titles of the user's watchlist
 //     they have not started that versions were found for, and those still
-//     without (see library.WatchlistAvailable).
+//     without (see library.WatchlistAvailable);
+//   - Top picks for you: the titles of the user's libraries their taste
+//     profile ranks first (see taste.go).
 //
 // Every row leaves out what the user's listings leave out: the titles
 // parental control or blocked genres hide, the titles they hid, and the
@@ -89,12 +91,13 @@ var customRowKinds = map[homerows.Kind]string{
 	homerows.KindAvailable:  "NowAvailable",
 	homerows.KindWaiting:    "StillWaiting",
 	homerows.KindTrakt:      "Trakt",
+	homerows.KindPicks:      "TopPicks",
 }
 
 // CustomRowDto is a row of GET /Polyfin/HomeRows: its folder's Id, its
 // Name, its Place (Top, AfterResume, AfterNextUp or Bottom), its Kind
-// (Catalog, Collection, BecauseYouWatched, New, NowAvailable or
-// StillWaiting) and its first Items.
+// (Catalog, Collection, BecauseYouWatched, New, NowAvailable, StillWaiting
+// or TopPicks) and its first Items.
 // A Recommended on Trakt row's Kind is Trakt.
 type CustomRowDto struct {
 	Id    string
@@ -331,7 +334,7 @@ func (h *Handler) readCustomRow(ctx context.Context, user accounts.User, row cus
 		return h.collectionRowTitles(ctx, user, row.row.Collection, start, count, first)
 	case homerows.KindBecause:
 		// Twice as many leaves room for the played titles left out.
-		similar, err := h.Library.Similar(ctx, user, row.baseline, 2*(start+count))
+		similar, err := h.similarTitles(ctx, user, row.baseline, 2*(start+count))
 		if err != nil {
 			return library.Page{}, err
 		}
@@ -347,6 +350,8 @@ func (h *Handler) readCustomRow(ctx context.Context, user accounts.User, row cus
 		return h.Library.WatchlistAvailable(ctx, user, start, count, first)
 	case homerows.KindWaiting:
 		return h.Library.WatchlistWaiting(ctx, user, start, count, first)
+	case homerows.KindPicks:
+		return h.topPicksRow(ctx, user, start, count)
 	}
 	return library.Page{}, library.ErrNotFound
 }
