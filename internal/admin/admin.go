@@ -192,6 +192,9 @@ type Options struct {
 	// Jellyfin apps saved for a user, for Reset my preferences; nil keeps
 	// none.
 	Preferences PreferencesReset
+	// TrackChoices counts and forgets the tracks a user chose on titles,
+	// for My account; nil has none.
+	TrackChoices TrackChoices
 	// LibraryOrders counts and clears the orders of libraries users saved
 	// from Jellyfin apps, for Apply this order to every user under Content
 	// › Libraries; nil has none.
@@ -306,6 +309,8 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/account/home-rows/{id}", h.signedIn(h.setOwnHomeRow))
 	mux.Handle("DELETE /admin/api/account/hidden/{id}", h.signedIn(h.showOwnHidden))
 	mux.Handle("POST /admin/api/account/preferences/reset", h.signedIn(h.resetOwnPreferences))
+	mux.Handle("GET /admin/api/account/track-choices", h.signedIn(h.ownTrackChoices))
+	mux.Handle("DELETE /admin/api/account/track-choices", h.signedIn(h.forgetOwnTrackChoices))
 	mux.Handle("GET /admin/api/account/share-links", h.signedIn(h.ownShareLinks))
 	mux.Handle("POST /admin/api/account/share-links", h.signedIn(h.createShareLink))
 	mux.Handle("POST /admin/api/account/share-links/{id}/revoke", h.signedIn(h.revokeOwnShareLink))

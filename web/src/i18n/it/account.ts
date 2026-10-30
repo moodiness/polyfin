@@ -11,6 +11,7 @@ const account: typeof en = {
       resume: 'Continua a guardare',
       hidden: 'Titoli nascosti',
       homeRows: 'Righe della Home',
+      trackChoices: 'Scelta delle tracce',
       metadataLanguage: 'Lingua dei metadati',
       webTheme: 'Tema del lettore web',
       audioRegion: 'Regione audio',
@@ -65,6 +66,21 @@ const account: typeof en = {
       shown: (name: string) => `Mostra ${name} nella tua pagina Home`,
       on: (name: string) => `${name} è di nuovo nella tua pagina Home.`,
       off: (name: string) => `${name} è stata rimossa dalla tua pagina Home.`,
+    },
+    trackChoices: {
+      help: 'Quando scegli una traccia audio o dei sottotitoli diversi da quelli che una serie o un film riproduce in modo predefinito, le riproduzioni successive mantengono quella lingua, in ogni episodio e in qualsiasi versione, in tutte le app. Segue «Imposta la traccia audio sulla base dell’elemento precedente» e «Imposta la traccia sottotitoli sulla base dell’elemento precedente» nelle impostazioni di riproduzione del player web, attive a meno che tu non le abbia disattivate.',
+      none: 'Nessuna scelta di tracce salvata.',
+      kept: (count: number) =>
+        count === 1
+          ? 'Scelte di tracce salvate per 1 serie o film.'
+          : `Scelte di tracce salvate per ${count} serie e film.`,
+      forget: 'Dimentica le mie scelte di tracce',
+      title: 'Dimenticare le tue scelte di tracce?',
+      confirmHelp:
+        'Ogni serie e film riproduce di nuovo le tracce scelte dalle tue preferenze di lingua.',
+      confirm: 'Dimentica',
+      forgetting: 'Eliminazione…',
+      done: 'Le tue scelte di tracce sono state dimenticate.',
     },
     watching: {
       resumeHelp:
@@ -674,6 +690,7 @@ const account: typeof en = {
       'Tema del lettore web: Quello del server, se il tuo amministratore non ha scelto il tuo',
     audioRegion: 'Regione audio: Nessuna',
     homeRows: 'Righe della Home: tutte le righe tornano visibili',
+    trackChoices: 'Scelta delle tracce: dimenticata per ogni serie e film',
     appPreferences:
       'Le preferenze che le app Jellyfin hanno salvato nel tuo account: lingue e modalità di audio e sottotitoli, preferenze della schermata Home e di visualizzazione',
     kept: 'Ciò che hai guardato, i tuoi preferiti, i punti di ripresa, le connessioni e le importazioni restano.',

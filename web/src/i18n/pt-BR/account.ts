@@ -11,6 +11,7 @@ const account: typeof en = {
       resume: 'Continuar assistindo',
       hidden: 'Títulos ocultos',
       homeRows: 'Fileiras do início',
+      trackChoices: 'Escolha de faixas',
       metadataLanguage: 'Idioma dos metadados',
       webTheme: 'Tema do player web',
       audioRegion: 'Região do áudio',
@@ -65,6 +66,21 @@ const account: typeof en = {
       shown: (name: string) => `Mostrar ${name} na sua página inicial`,
       on: (name: string) => `${name} voltou à sua página inicial.`,
       off: (name: string) => `${name} foi removida da sua página inicial.`,
+    },
+    trackChoices: {
+      help: 'Quando você escolhe outra faixa de áudio ou outras legendas além das que uma série ou um filme reproduz por padrão, as próximas reproduções mantêm esse idioma, em cada episódio e em qualquer versão, em todos os apps. Isso segue “Definir faixa de áudio baseado no item anterior” e “Definir legenda baseado no item anterior” nas configurações de reprodução do player web, ativadas a menos que você as tenha desativado.',
+      none: 'Nenhuma escolha de faixas guardada.',
+      kept: (count: number) =>
+        count === 1
+          ? 'Escolhas de faixas guardadas para 1 série ou filme.'
+          : `Escolhas de faixas guardadas para ${count} séries e filmes.`,
+      forget: 'Esquecer minhas escolhas de faixas',
+      title: 'Esquecer suas escolhas de faixas?',
+      confirmHelp:
+        'Cada série e filme volta a reproduzir as faixas que suas preferências de idioma escolhem.',
+      confirm: 'Esquecer',
+      forgetting: 'Esquecendo…',
+      done: 'Suas escolhas de faixas foram esquecidas.',
     },
     watching: {
       resumeHelp:
@@ -676,6 +692,7 @@ const account: typeof en = {
       'Tema do player web: O do servidor, a menos que seu administrador tenha escolhido o seu',
     audioRegion: 'Região do áudio: Nenhuma',
     homeRows: 'Fileiras do início: todas as fileiras voltam a aparecer',
+    trackChoices: 'Escolha de faixas: esquecida para cada série e filme',
     appPreferences:
       'As preferências que os apps Jellyfin salvaram na sua conta: idiomas e modo do áudio e das legendas, preferências da tela inicial e de exibição',
     kept: 'O que você assistiu, seus favoritos, seus pontos de retomada, suas conexões e importações continuam.',

@@ -11,6 +11,7 @@ const account: typeof en = {
       resume: 'Weiterschauen',
       hidden: 'Ausgeblendete Titel',
       homeRows: 'Startseitenzeilen',
+      trackChoices: 'Spurauswahl',
       metadataLanguage: 'Metadatensprache',
       webTheme: 'Theme des Web-Players',
       audioRegion: 'Audioregion',
@@ -65,6 +66,21 @@ const account: typeof en = {
       shown: (name: string) => `${name} auf deiner Startseite anzeigen`,
       on: (name: string) => `${name} ist wieder auf deiner Startseite.`,
       off: (name: string) => `${name} ist nicht mehr auf deiner Startseite.`,
+    },
+    trackChoices: {
+      help: 'Wenn Sie eine andere Tonspur oder andere Untertitel wählen als die, die eine Serie oder ein Film standardmäßig abspielt, behalten die nächsten Wiedergaben diese Sprache bei, in jeder Folge und in jeder Version, in allen Apps. Das folgt „Tonspur auf Basis des letzten Objekt auswählen“ und „Untertitel auf Basis des letzten Objekts auswählen“ in den Wiedergabeeinstellungen des Webplayers, die eingeschaltet sind, sofern Sie sie nicht ausgeschaltet haben.',
+      none: 'Keine Spurauswahl gespeichert.',
+      kept: (count: number) =>
+        count === 1
+          ? 'Spurauswahl für 1 Serie oder Film gespeichert.'
+          : `Spurauswahl für ${count} Serien und Filme gespeichert.`,
+      forget: 'Meine Spurauswahl vergessen',
+      title: 'Ihre Spurauswahl vergessen?',
+      confirmHelp:
+        'Alle Serien und Filme spielen wieder die Spuren, die Ihre Spracheinstellungen wählen.',
+      confirm: 'Vergessen',
+      forgetting: 'Wird vergessen…',
+      done: 'Ihre Spurauswahl wurde vergessen.',
     },
     watching: {
       resumeHelp:
@@ -674,6 +690,7 @@ const account: typeof en = {
     webTheme: 'Theme des Web-Players: Das des Servers, außer Ihr Administrator hat Ihres gewählt',
     audioRegion: 'Audioregion: Keine',
     homeRows: 'Startseitenzeilen: Alle Zeilen werden wieder angezeigt',
+    trackChoices: 'Spurauswahl: für alle Serien und Filme vergessen',
     appPreferences:
       'Die Einstellungen, die Jellyfin-Apps in Ihrem Konto gespeichert haben: Audio- und Untertitelsprachen und -modus, Startbildschirm- und Anzeigeeinstellungen',
     kept: 'Was Sie angesehen haben, Ihre Favoriten, Fortsetzungspunkte, Verbindungen und Importe bleiben.',

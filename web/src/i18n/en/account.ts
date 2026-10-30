@@ -10,6 +10,7 @@ const account = {
       resume: 'Continue Watching',
       hidden: 'Hidden titles',
       homeRows: 'Home rows',
+      trackChoices: 'Track choices',
       metadataLanguage: 'Metadata language',
       webTheme: 'Web player theme',
       audioRegion: 'Audio region',
@@ -63,6 +64,22 @@ const account = {
       shown: (name: string) => `Show ${name} on your home page`,
       on: (name: string) => `${name} is back on your home page.`,
       off: (name: string) => `${name} is off your home page.`,
+    },
+    /** My account › Track choices. */
+    trackChoices: {
+      help: 'When you pick another audio track or other subtitles than those a series or a movie plays by default, its next plays keep that language, on every episode and in whichever version, in every app. This follows “Set audio track based on previous item” and “Set subtitle track based on previous item” in the web player’s playback settings, which are on unless you turned them off.',
+      none: 'No track choice is kept.',
+      kept: (count: number) =>
+        count === 1
+          ? 'Track choices are kept for 1 series or movie.'
+          : `Track choices are kept for ${count} series and movies.`,
+      forget: 'Forget my track choices',
+      title: 'Forget your track choices?',
+      confirmHelp:
+        'Every series and movie plays the tracks your language preferences choose again.',
+      confirm: 'Forget',
+      forgetting: 'Forgetting…',
+      done: 'Your track choices have been forgotten.',
     },
     /** My account › Continue Watching and Hidden titles. */
     watching: {
@@ -660,6 +677,7 @@ const account = {
     webTheme: 'Web player theme: The server’s, unless your administrator chose yours',
     audioRegion: 'Audio region: None',
     homeRows: 'Home rows: every row is shown again',
+    trackChoices: 'Track choices: forgotten for every series and movie',
     appPreferences:
       'The preferences Jellyfin apps saved in your account: audio and subtitle languages and mode, home screen and display preferences',
     kept: 'What you watched, your favorites, your resume points, your connections and imports stay.',

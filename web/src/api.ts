@@ -1924,10 +1924,20 @@ export const saveOwnAudioRegion = (region: string) =>
 
 /**
  * Puts back the server's defaults for what the signed-in user chose: their metadata language, their
- * audio region, the home rows they turned off, the preferences Jellyfin apps saved in their account,
- * and their web player theme unless the administrator chose it.
+ * audio region, the home rows they turned off, the tracks they chose on titles, the preferences
+ * Jellyfin apps saved in their account, and their web player theme unless the administrator chose
+ * it.
  */
 export const resetOwnPreferences = () => request<void>('POST', '/account/preferences/reset')
+
+/** How many series and movies the signed-in user chose audio or subtitle tracks on. */
+export type TrackChoices = { titles: number }
+
+export const fetchOwnTrackChoices = (signal?: AbortSignal) =>
+  request<TrackChoices>('GET', '/account/track-choices', undefined, signal)
+
+/** Forgets the tracks the signed-in user chose on every series and movie. */
+export const forgetOwnTrackChoices = () => request<void>('DELETE', '/account/track-choices')
 
 export const fetchMyDevices = (signal?: AbortSignal) =>
   request<Device[]>('GET', '/account/devices', undefined, signal)
@@ -4675,6 +4685,7 @@ export const queryKeys = {
   ownResume: ['account', 'resume'] as const,
   ownHidden: ['account', 'hidden'] as const,
   ownHomeRows: ['account', 'home-rows'] as const,
+  ownTrackChoices: ['account', 'track-choices'] as const,
   homeRows: ['home-rows'] as const,
   homeRowChoices: ['home-rows', 'choices'] as const,
   ownReminders: ['account', 'reminders'] as const,

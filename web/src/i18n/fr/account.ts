@@ -11,6 +11,7 @@ const account: typeof en = {
       resume: 'Continuer de regarder',
       hidden: 'Titres masqués',
       homeRows: 'Rangées d’accueil',
+      trackChoices: 'Choix des pistes',
       metadataLanguage: 'Langue des métadonnées',
       webTheme: 'Thème du lecteur web',
       audioRegion: 'Région audio',
@@ -65,6 +66,21 @@ const account: typeof en = {
       shown: (name: string) => `Afficher ${name} sur votre page d’accueil`,
       on: (name: string) => `${name} est de retour sur votre page d’accueil.`,
       off: (name: string) => `${name} est retirée de votre page d’accueil.`,
+    },
+    trackChoices: {
+      help: 'Quand vous choisissez une autre piste audio ou d’autres sous-titres que ceux qu’une série ou un film lit par défaut, ses lectures suivantes gardent cette langue, sur chaque épisode et dans n’importe quelle version, dans toutes les applications. Cela suit « Définir la piste audio en fonction de l’élément précédent » et « Définir la piste de sous-titre en fonction de l’élément précédent » dans les réglages de lecture du lecteur web, activés sauf si vous les avez désactivés.',
+      none: 'Aucun choix de piste n’est gardé.',
+      kept: (count: number) =>
+        count === 1
+          ? 'Des choix de pistes sont gardés pour 1 série ou film.'
+          : `Des choix de pistes sont gardés pour ${count} séries et films.`,
+      forget: 'Oublier mes choix de pistes',
+      title: 'Oublier vos choix de pistes ?',
+      confirmHelp:
+        'Chaque série et chaque film lit de nouveau les pistes que choisissent vos préférences de langue.',
+      confirm: 'Oublier',
+      forgetting: 'Oubli…',
+      done: 'Vos choix de pistes ont été oubliés.',
     },
     watching: {
       resumeHelp:
@@ -676,6 +692,7 @@ const account: typeof en = {
       'Thème du lecteur web : Celui du serveur, sauf si votre administrateur a choisi le vôtre',
     audioRegion: 'Région audio : Aucune',
     homeRows: 'Rangées d’accueil : toutes les rangées s’affichent de nouveau',
+    trackChoices: 'Choix des pistes : oubliés pour chaque série et chaque film',
     appPreferences:
       'Les préférences que les applications Jellyfin ont enregistrées dans votre compte : langues et mode de l’audio et des sous-titres, préférences de l’écran d’accueil et d’affichage',
     kept: 'Ce que vous avez regardé, vos favoris, vos points de reprise, vos connexions et vos imports restent.',

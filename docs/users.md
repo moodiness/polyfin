@@ -62,6 +62,12 @@ The web player's home keeps its rows for a minute. jellyfin-web 12.4 keeps what 
 
 **My account › Home rows** lists the rows the administrator added to the web player's home page for the user (see [Home rows](web-client.md#home-rows)), each with its kind and place, and a switch. Off, the row leaves the user's home page, and, when it is also a library in other apps, their libraries there. Other users keep it. jellyfin-web's own home sections stay under its **Settings › Home**. **Reset my preferences** turns every row on again (see [Your own preferences](#your-own-preferences)).
 
+### Track choices
+
+**My account › Track choices** tells for how many series and movies Polyfin keeps the audio and subtitle tracks the user chose, which their next plays show by default in every app (see [Remembered track choices](playback.md#remembered-track-choices)). **Forget my track choices** forgets them all, after asking first: every title plays the tracks the user's language preferences choose again. **Reset my preferences** forgets them too (see [Your own preferences](#your-own-preferences)).
+
+**For app developers:** `GET /admin/api/account/track-choices` answers `{"titles": n}`, the number of series and movies with a choice of the user signed in to the admin app, and `DELETE /admin/api/account/track-choices` forgets them, answering 204.
+
 ### Played and resume thresholds
 
 Two settings under **Settings › Content** decide when a title counts as played and when a resume point is kept.
@@ -532,6 +538,7 @@ Rather than finding each value and setting it again, an administrator can put a 
 - the **Web player theme** goes back to the server's, unless the administrator turned off **Let them change it** (see [Web player theme](#web-player-theme));
 - the **Audio region** goes back to **None** (see [Audio region](#audio-region));
 - every row of **Home rows** is shown again (see [Home rows](#home-rows));
+- the tracks the user chose on series and movies are forgotten (see [Track choices](#track-choices));
 - the preferences Jellyfin apps saved in the account are forgotten: the audio and subtitle languages and the subtitle mode, the home screen (the order of the libraries and those left out), and the display preferences, such as each library's sorting and view. The user has a new user's again, which their apps already signed in read from their next request. Settings an app also keeps on the device stay there: jellyfin-web keeps a copy of its home sections in the browser, and still shows them on that browser.
 
 It never touches what the user watched, their favorites, resume points and hidden titles, their connections, tracking accounts and imports, or their limits, which are the administrator's.

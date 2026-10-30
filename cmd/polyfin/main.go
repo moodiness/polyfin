@@ -676,6 +676,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// Reset my preferences forgets what Jellyfin apps saved, with what
 		// the Jellyfin API remembers of it.
 		Preferences: jellyfinAPI,
+		// My account's track choices are those the Jellyfin API remembers.
+		TrackChoices: jellyfinAPI,
 		// Apply this order to every user clears the orders of libraries
 		// users saved, with what the Jellyfin API remembers of them.
 		LibraryOrders: jellyfinAPI,

@@ -11,6 +11,7 @@ const account: typeof en = {
       resume: 'Seguir viendo',
       hidden: 'Títulos ocultos',
       homeRows: 'Filas de inicio',
+      trackChoices: 'Elección de pistas',
       metadataLanguage: 'Idioma de los metadatos',
       webTheme: 'Tema del reproductor web',
       audioRegion: 'Región de audio',
@@ -65,6 +66,21 @@ const account: typeof en = {
       shown: (name: string) => `Mostrar ${name} en su página de inicio`,
       on: (name: string) => `${name} vuelve a estar en su página de inicio.`,
       off: (name: string) => `${name} se ha quitado de su página de inicio.`,
+    },
+    trackChoices: {
+      help: 'Cuando eliges otra pista de audio u otros subtítulos distintos de los que una serie o una película reproduce de forma predeterminada, sus siguientes reproducciones mantienen ese idioma, en cada episodio y en cualquier versión, en todas las aplicaciones. Esto sigue «Establecer pista de audio basándose en el elemento anterior» y «Seleccionar la pista de subtítulos basado en el anterior ítem» en los ajustes de reproducción del reproductor web, activados salvo que los hayas desactivado.',
+      none: 'No se guarda ninguna elección de pistas.',
+      kept: (count: number) =>
+        count === 1
+          ? 'Se guardan elecciones de pistas para 1 serie o película.'
+          : `Se guardan elecciones de pistas para ${count} series y películas.`,
+      forget: 'Olvidar mis elecciones de pistas',
+      title: '¿Olvidar tus elecciones de pistas?',
+      confirmHelp:
+        'Cada serie y película vuelve a reproducir las pistas que eligen tus preferencias de idioma.',
+      confirm: 'Olvidar',
+      forgetting: 'Olvidando…',
+      done: 'Se han olvidado tus elecciones de pistas.',
     },
     watching: {
       resumeHelp:
@@ -678,6 +694,7 @@ const account: typeof en = {
     webTheme: 'Tema del reproductor web: El del servidor, salvo si tu administrador eligió el tuyo',
     audioRegion: 'Región de audio: Ninguna',
     homeRows: 'Filas de inicio: todas las filas vuelven a mostrarse',
+    trackChoices: 'Elección de pistas: olvidada para cada serie y película',
     appPreferences:
       'Las preferencias que las aplicaciones de Jellyfin guardaron en tu cuenta: idiomas y modo del audio y los subtítulos, preferencias de la pantalla de inicio y de visualización',
     kept: 'Lo que has visto, tus favoritos, tus puntos de reanudación, tus conexiones e importaciones se mantienen.',

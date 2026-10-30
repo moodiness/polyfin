@@ -133,6 +133,24 @@ The region applies only to its own language: a user who chose English in their a
 - Jellyfin 12.4 keeps a track's language as tagged and compares it with the user's preferred language as a whole string, in any letter case ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L181-L190)): its preference has no region, a track tagged `fr-CA` does not match a preference of `fre`, and two French tracks rank alike. Polyfin compares languages by any of their codes, and the region is its own setting.
 - Jellyfin reads no language from release names. Polyfin's reading of regions and subtitled releases is its own, for the version order.
 
+### Remembered track choices
+
+When a user picks an audio track or subtitles other than those a title plays by default, Polyfin remembers the choice for the series, on all its episodes, or for the movie, and plays it by default on the user's next plays, in every app.
+
+- It follows the user's **Set audio track based on previous item** (`RememberAudioSelections`) and **Set subtitle track based on previous item** (`RememberSubtitleSelections`), in jellyfin-web's playback settings, each for its own kind of track. Both are on for every new user. A setting turned off stops its choices from applying at once, and the next playback report forgets them, as in Jellyfin.
+- A choice is the track's language, with a subtitle's forced and hearing-impaired flags, or no subtitles; never the track's number, as the versions of a title, and the episodes of a series, number their tracks differently. A track of no stated language is not remembered.
+- Polyfin learns the choice from the playback reports apps send (`POST /Sessions/Playing` and `POST /Sessions/Playing/Progress`), when their tracks change: a track other than the one the title plays by default becomes the user's choice, and the track their language preferences play anyway forgets it. The text copy of a picture subtitle counts as its original.
+- On later plays, the choice comes first, before the user's languages and the server's defaults, in the default tracks of a title's details and of `PlaybackInfo`. A track the app names in `PlaybackInfo` still wins. Among the audio tracks in the chosen language, the one flagged default comes first; among the subtitles, those equally forced, a hearing-impaired one first when the choice was one.
+- A version without such a track plays as the user's preferences have it, and the choice stays for the next episodes.
+- The subtitle mode still applies: with `None`, no remembered subtitle shows, and with `OnlyForced`, only a remembered forced track, or no subtitles.
+- **My account › Track choices** counts the series and movies with a choice, and **Forget my track choices** forgets them all; **Reset my preferences** does too (see [Track choices](users.md#track-choices)).
+
+**Compared with Jellyfin:**
+
+- Jellyfin 12.4 remembers the number of the track for the item played alone, in the user's data of the item ([SessionManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Session/SessionManager.cs#L1016-L1055)), and plays that number again when the item's source has such a track ([MediaSourceManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L493-L543)). Its choice reaches neither the next episode nor another version, which numbers its tracks otherwise; Polyfin's, a language per series or movie, reaches both.
+- Jellyfin keeps every track reported, the default one included, so a later change of a user's languages does not reach an item played once. Polyfin keeps only a track other than the default.
+- With the same settings on, jellyfin-web picks the tracks of the next item of its queue to match the last ones, and names them in `PlaybackInfo`; as any track an app names, they win.
+
 ### Title pages
 
 A title's page opens as soon as its description is ready, without waiting for the stream addons, some of which are slow. It lists the versions Polyfin already knows: those of the addons that answered for the title within **Keep version lists for (minutes)**, and those of IPTV sources. Polyfin asks the other addons in the background meanwhile.
