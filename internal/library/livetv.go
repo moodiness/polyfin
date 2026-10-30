@@ -27,17 +27,18 @@ const guideDays = 7
 // channels rather than titles: the tv type, whose streams are live.
 func LiveCatalog(catalogType string) bool { return catalogType == "tv" }
 
-// HasChannels reports whether the user has live TV catalogs, without asking
-// their addons.
+// HasChannels reports whether the user has live TV catalogs, or channels
+// Polyfin airs, without asking their addons.
 func (s *Service) HasChannels(ctx context.Context, user accounts.User) (bool, error) {
 	v, err := s.view(ctx, user)
-	return len(v.channels) > 0, err
+	return len(v.channels) > 0 || len(v.virtual) > 0, err
 }
 
 // Channels lists the user's live TV channels: those of their live TV
-// catalogs, in catalog order, each once. Stremio gives channels no number:
-// a channel is numbered by its place in the list, unless its IPTV source
-// gives it one.
+// catalogs, in catalog order, each once, then the channels Polyfin airs.
+// Stremio gives channels no number: a channel is numbered by its place in
+// the list, unless its IPTV source, or the channel Polyfin airs, gives it
+// one.
 func (s *Service) Channels(ctx context.Context, user accounts.User) ([]Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -49,6 +50,7 @@ func (s *Service) Channels(ctx context.Context, user accounts.User) ([]Item, err
 
 // channels lists the channels of a view, with the records that find them
 // again. A catalog that cannot be read is left out, as from a collection.
+// The channels Polyfin airs follow those of the catalogs.
 func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 	lists := make([][]stremio.Meta, len(v.channels))
 	var group errgroup.Group
@@ -90,6 +92,11 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 				Confined: src.addon.confined})
 		}
 	}
+	for _, c := range v.virtual {
+		item := virtualChannelItem(c, len(items)+1)
+		items = append(items, item)
+		records = append(records, virtualChannelRecord(c, item, len(items)))
+	}
 	return items, records
 }
 
@@ -115,6 +122,9 @@ func channelImages(meta stremio.Meta) Images {
 // again. An IPTV source answers at once whether it still shows the
 // channel: its groups may have been chosen since.
 func (s *Service) channel(ctx context.Context, v view, r record) (Item, error) {
+	if item, ok := v.virtualChannel(r); ok {
+		return item, nil
+	}
 	index := slices.IndexFunc(v.channels, func(src source) bool {
 		return r.Addon != nil && src.addon.addon.ID == *r.Addon && src.catalog.Type == r.CatalogType && src.catalog.ID == r.CatalogID
 	})
@@ -256,6 +266,16 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 			programs = append(programs, program)
 		}
 	}
+	// The channels Polyfin airs have programmes over the days the guides
+	// span.
+	airsFrom, airsTo := from, to
+	if airsFrom.Before(first) {
+		airsFrom = first
+	}
+	if airsTo.After(last) {
+		airsTo = last
+	}
+	programs = append(programs, s.virtualPrograms(v, byStremioID, airsFrom, airsTo, keep)...)
 	slices.SortStableFunc(programs, func(a, b Item) int {
 		if c := a.StartDate.Compare(*b.StartDate); c != 0 {
 			return c
@@ -406,9 +426,13 @@ func (s *Service) unsavedProgram(ctx context.Context, v view, id accounts.ID) (I
 
 // ProgramArtwork returns the image of an XMLTV programme listed lately,
 // which no item keeps, and whether downloading it is confined, as its
-// channel's addon is. Other programmes are not searched for: images are
-// served without credentials, and apps list the programmes they show.
+// channel's addon is; that of a programme of a channel Polyfin airs is its
+// title's. Other programmes are not searched for: images are served
+// without credentials, and apps list the programmes they show.
 func (s *Service) ProgramArtwork(ctx context.Context, id accounts.ID, imageType string) (string, bool, error) {
+	if artwork, ok, err := s.virtualArtwork(ctx, id, imageType); ok {
+		return artwork.URL, artwork.Confined, err
+	}
 	ref, ok := programRefs.Get(id)
 	if !ok || !strings.EqualFold(imageType, "Primary") {
 		return "", false, ErrNotFound

@@ -347,6 +347,12 @@ const (
 // versionsOf lists an item's versions, and reports whether every addon's
 // streams are in: known, and not asked again.
 func (s *Service) versionsOf(ctx context.Context, user accounts.User, id accounts.ID, mode listing) ([]Version, bool, error) {
+	// A channel Polyfin airs has one version: its playout.
+	if version, ok, err := s.virtualVersion(ctx, user, id); err != nil {
+		return nil, false, err
+	} else if ok {
+		return []Version{version}, true, nil
+	}
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
 		return nil, false, err
