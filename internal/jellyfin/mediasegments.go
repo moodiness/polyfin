@@ -50,9 +50,10 @@ var segmentTypes = map[string]string{
 // and that version's chapters may give its own (see versionSegments). A
 // version not analyzed yet is never analyzed for this. An episode's local
 // file without an intro or credits yet may have them found in its audio
-// (see audioSegments). With the skip buttons turned off in the settings,
-// no database is asked and every item has none, as on a Jellyfin server
-// without a segment provider.
+// (see audioSegments). The credits of an analyzed version are then split
+// around the scenes within them (see splitAtStingers). With the skip
+// buttons turned off in the settings, no database is asked and every item
+// has none, as on a Jellyfin server without a segment provider.
 func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	opened := b.pathID(r, "itemId")
@@ -99,6 +100,9 @@ func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 		}
 		if item.Kind == library.KindEpisode {
 			segments = h.audioSegments(r.Context(), segments, version, analysis.Duration, item.Runtime)
+		}
+		if analyzed {
+			segments = h.splitAtStingers(r.Context(), segments, version, analysis, item.Runtime)
 		}
 	}
 	wanted := map[string]bool{}
@@ -288,12 +292,7 @@ func chapterSegments(analysis media.Analysis) []mediasegments.Segment {
 	var segments []mediasegments.Segment
 	var previous mediasegments.Type
 	for i, chapter := range chapters {
-		end := chapter.End
-		if i+1 < len(chapters) {
-			end = chapters[i+1].Start
-		} else if analysis.Duration > 0 {
-			end = analysis.Duration
-		}
+		end := chapterEnd(analysis, i)
 		kind := chapterKind(chapter.Title)
 		switch {
 		case kind == "" || end <= chapter.Start:
@@ -330,14 +329,17 @@ var chapterNames = []struct {
 
 // chapterKind tells the segment a chapter's name marks: Intro, Preview,
 // Recap or Outro, matching its whole words in any letter case, with or
-// without accents; none for other names, such as "Chapter 2". The types are
-// tried in that order, as Jellyfin's plugin tries them, so that "Opening
-// Credits" is an intro. The short forms OP and ED count only as the whole
-// name (see shortName), as words such as "Ed" in "Ed Wood" are often
-// something else.
+// without accents; none for other names, such as "Chapter 2", and for a
+// scene during or after the credits (see stingerNames), which is not to be
+// skipped with them. The types are tried in that order, as Jellyfin's
+// plugin tries them, so that "Opening Credits" is an intro. The short forms
+// OP and ED count only as the whole name (see shortName), as words such as
+// "Ed" in "Ed Wood" are often something else.
 func chapterKind(name string) mediasegments.Type {
-	words := strings.FieldsFunc(iptv.Fold(name), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
-	text := " " + strings.Join(words, " ") + " "
+	words, text := chapterWords(name)
+	if stingerText(text) {
+		return ""
+	}
 	for _, kind := range chapterNames {
 		if slices.ContainsFunc(kind.names, func(n string) bool { return strings.Contains(text, " "+n+" ") }) ||
 			kind.kind == mediasegments.Intro && shortName(words, "op") ||
@@ -346,6 +348,27 @@ func chapterKind(name string) mediasegments.Type {
 		}
 	}
 	return ""
+}
+
+// chapterWords are the words of a chapter's name, in lower case and without
+// accents, and text the same words joined by spaces, with a space before
+// and after them, so that whole words are found with " "+words+" ".
+func chapterWords(name string) (words []string, text string) {
+	words = strings.FieldsFunc(iptv.Fold(name), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	return words, " " + strings.Join(words, " ") + " "
+}
+
+// chapterEnd is where the chapter at index i of a version ends, as
+// Jellyfin's Chapter Segments Provider has it: at the next chapter's start,
+// the last at the version's end, or at its own end when that is unknown.
+func chapterEnd(analysis media.Analysis, i int) time.Duration {
+	switch {
+	case i+1 < len(analysis.Chapters):
+		return analysis.Chapters[i+1].Start
+	case analysis.Duration > 0:
+		return analysis.Duration
+	}
+	return analysis.Chapters[i].End
 }
 
 // shortName reports whether a name's words are only a short form, maybe
