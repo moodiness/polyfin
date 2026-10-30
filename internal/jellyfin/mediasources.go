@@ -147,10 +147,11 @@ func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item l
 // but the torrents that did not start in time (see playback.Unstarted),
 // which stay in place for the user to pick, a play that picks none
 // skipping them (see choose); and, with the version rules or the user's
-// quality group, those they hide, ordering the others (see ordered).
+// quality group, or versions naming another title, those they hide,
+// ordering the others (see ordered).
 func (h *Handler) offered(ctx context.Context, user accounts.User, versions []library.Version) []library.Version {
 	versions = slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) && !h.didNotStart(v) })
-	if !h.reordered(user) {
+	if !h.reordered(user) && !slices.ContainsFunc(versions, elsewhere) {
 		return versions
 	}
 	return h.ordered(ctx, user, versions)

@@ -79,6 +79,14 @@ func (r versionRules) hides() bool {
 	return r.larger > 0 || len(r.hiddenCodecs) > 0 || len(r.words) > 0 || len(r.releases) > 0
 }
 
+// elsewhere reports whether a version's labels name another title than
+// its own: another episode, a season without it, or another movie's year
+// (see library.OtherTitle). Such a version is always hidden, as a rule
+// hides one, without a setting.
+func elsewhere(version library.Version) bool {
+	return version.Labels.Elsewhere != ""
+}
+
 // reordered reports whether the versions a user is offered may be ordered
 // otherwise than by the addons, or some hidden: with the user's quality
 // group or the version rules (see offered).
@@ -92,7 +100,7 @@ func (h *Handler) reordered(user accounts.User) bool {
 // identifier, which it may have been shown before a rule hid it.
 func (h *Handler) hiddenVersion(ctx context.Context, user accounts.User, version library.Version) bool {
 	rules := newVersionRules(h.Accounts.Settings())
-	if !rules.hides() || !rules.hidden(version, h.versionFacts(ctx, version)) {
+	if !rules.hides() && !elsewhere(version) || !rules.hidden(version, h.versionFacts(ctx, version)) {
 		return false
 	}
 	versions, err := h.Library.Versions(ctx, user, version.Item)
@@ -184,11 +192,15 @@ func audioLanguages(analysis media.Analysis) []string {
 	return languages
 }
 
-// hidden reports whether a rule hides a version: one known to be larger
-// than the limit, or in a codec hidden, or whose labels, its name and
-// description and its file name, hold a word hiding it, or tag it as a
-// kind of low-quality release hidden.
+// hidden reports whether a rule hides a version: one naming another title
+// (see elsewhere), or one known to be larger than the limit, or in a codec
+// hidden, or whose labels, its name and description and its file name,
+// hold a word hiding it, or tag it as a kind of low-quality release
+// hidden.
 func (r versionRules) hidden(version library.Version, facts versionFacts) bool {
+	if elsewhere(version) {
+		return true
+	}
 	if r.larger > 0 && facts.size > r.larger || facts.codec != "" && slices.Contains(r.hiddenCodecs, facts.codec) {
 		return true
 	}
@@ -335,7 +347,7 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, versions []li
 		facts[version.ID] = known
 	}
 	kept := versions
-	if rules.hides() {
+	if rules.hides() || slices.ContainsFunc(versions, elsewhere) {
 		shown := slices.DeleteFunc(slices.Clone(versions), func(v library.Version) bool { return rules.hidden(v, facts[v.ID]) })
 		if len(shown) > 0 {
 			kept = shown

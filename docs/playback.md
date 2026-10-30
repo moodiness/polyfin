@@ -48,7 +48,7 @@ A title's details list every stream the addons offer as a version (see [Title pa
 
 ### Which streams become versions
 
-Polyfin does nothing to an addon's streams but what this list says, in this order. By default, only steps 1 to 6 leave streams out, and the versions keep the addons' order.
+Polyfin does nothing to an addon's streams but what this list says, in this order. By default, only steps 1 to 7 leave streams out, and the versions keep the addons' order.
 
 1. **The addons asked:** the enabled addons the user browses that list streams (`stream` in their manifest) for the title's type and identifier: the server's sources in the order of **Content › Sources**, unless the user turned **Use the server's sources** off, then the user's own addons under **My sources**, in theirs (see [Personal addons](addons-and-libraries.md#personal-addons)). A user under parental control or blocking genres gets the server's sources only. A video whose title's description carries its own streams gets those first, and the addon that gave them is not asked for them (see [Streams in a title's details](addons-and-libraries.md#streams-in-a-title-s-details)).
 2. **What is asked:** each addon is asked at the address it was installed with, its configuration included, for the title or the episode (`/stream/<type>/<id>.json`). Polyfin adds nothing to the request, and takes the streams in the order the addon gives them: what the addon's configuration filters, sorts or limits is what Polyfin gets. An addon that fails, or does not answer within 15 seconds, gives no new version; the versions Polyfin kept from its earlier answers for the title may still show (see [Title pages](#title-pages)).
@@ -56,10 +56,11 @@ Polyfin does nothing to an addon's streams but what this list says, in this orde
 4. **Torrents:** they are left out unless **Play torrent streams** is on, under **Settings › Torrents**, and the user has **Can play torrent streams** (see [Turning torrents on](torrents.md#turning-torrents-on)). Both are off by default.
 5. **The same file twice:** two streams that give the same file name and the same size, from one addon or two, as a torrent and a link or two torrents of the same release, are one version, the first in the order above. Without both its name and its size, a stream is known by its link, a torrent by its info hash and file index. A torrent left out by the previous step leaves its place to a link to the same file listed after it.
 6. **Failed lately:** versions that failed are left out for 15 minutes: a source that could not be read or analyzed (see [Sources that fail](#sources-that-fail)). A torrent that did not start in time stays listed, in its place: a play that picks no version passes it over for those 15 minutes and tries the next ones, and a version the user picks in the version menu is tried again at once (see [When torrents do not start](torrents.md#when-torrents-do-not-start)). A torrent whose peers stopped sending, a route that was down, the limit of torrents at once, or a host asking to slow down leaves the version listed and tried as any other. A restart forgets these failures, and so does a change of a local folder's address or credentials, for its files. A failure is the file's: a torrent that did not start leaves out, for those 15 minutes, the link to the same file that users without torrents get instead, and a link that failed leaves out the torrent of its file.
-7. **Hide rules:** when set, **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Playback**, leave out what they name. All are off by default, and none ever hides every version of a title (see [Version order](#version-order)).
-8. **Quality group:** the user's group, when set, leaves out the versions taller than it, while one fits. It is **Original (no limit)** by default (see [Quality groups](users.md#quality-groups)).
-9. **The order:** it stays the addons' unless **Order versions by**, under **Settings › Playback**, has criteria. It has none by default. Versions the criteria tie on keep the addons' order.
-10. **Plays without a pick:** when an app plays without picking a version, `PlaybackInfo` leaves out the versions it passed over: those that could not be read or did not play on the app, and the torrents that did not start lately (see above).
+7. **Another title:** a stream whose labels name another episode, a season without the episode, or another movie of the same name is left out, without a setting, as a hide rule leaves a version out: never every version of a title (see [Versions of another title](#versions-of-another-title)).
+8. **Hide rules:** when set, **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Playback**, leave out what they name. All are off by default, and none ever hides every version of a title (see [Version order](#version-order)).
+9. **Quality group:** the user's group, when set, leaves out the versions taller than it, while one fits. It is **Original (no limit)** by default (see [Quality groups](users.md#quality-groups)).
+10. **The order:** it stays the addons' unless **Order versions by**, under **Settings › Playback**, has criteria. It has none by default. Versions the criteria tie on keep the addons' order.
+11. **Plays without a pick:** when an app plays without picking a version, `PlaybackInfo` leaves out the versions it passed over: those that could not be read or did not play on the app, and the torrents that did not start lately (see above).
 
 Polyfin keeps no maximum of versions, and looks at no seeders, source, size or language unless a setting above says so.
 
@@ -67,8 +68,20 @@ Polyfin keeps no maximum of versions, and looks at no seeders, source, size or l
 
 - An addon that failed, timed out or answered only a notice logs `An addon could not list streams`, at Warn, with the addon and the error, and **System › Health › Addons** shows its last failure.
 - A version a play could not analyze logs `A version could not be analyzed`, at Info, with the addon and why; a source that fails later in a play logs why too, never its address. A torrent that did not start logs `A torrent did not start in time`, and **System › Health** shows it under **Needs attention**.
+- A stream left out as another title's logs `A version names another title`, at Debug, with the addon and the marker that names it (`S01E03`, `S02`, `1998`), once while Polyfin remembers the version.
 - Streams with nothing to play, torrents left out, files listed twice, and the hide rules and quality group log nothing. Compare the addon's list with the steps above: turn the hide rules and the quality group off, and check the addon's configuration where it was installed.
 - `GET /Polyfin/Items/{id}/Versions` tells how many versions are known and how many addons are still asked (see [Title pages](#title-pages)).
+
+#### Versions of another title
+
+Addons that gather releases from many places sometimes list, for an episode, a release of another episode, or, for a movie, another movie of the same name. Polyfin reads the stream's name, title and description as its addon gives them, and its file name, line by line, and leaves the stream out when a line contradicts the title:
+
+- **An episode:** the seasons and episodes a line names after the series' own words, written `S01E02`, `S01E02E03`, `1x02`, `S01 E02`, `Season 1 Episode 2`, a range `S01E01-E04`, `S01E01-04` or `1x01-1x04`, a season `S01` or `Season 1`, or seasons `S01-S03`, `S01-03` or `Seasons 1-3`, in any letter case. When none of them holds the episode, the stream is another title's. A season pack or a range holding it is kept: the torrent's file is picked inside it (see [Reading and storage](torrents.md#reading-and-storage)). So, for S01E02, `Some.Show.S01E03.mkv`, `Some.Show.S02.COMPLETE` and `Some.Show.S01E05-E08` are left out, and `Some.Show.S01.1080p`, `Some.Show.S01-S03` and `Some.Show.S01E01-03` are kept. A pack whose file name names another episode, as in `Some.Show.S01.1080p` with the file `Some.Show.S01E06.mkv`, is left out too.
+- **A movie:** a line naming the movie, as its addon names it, whose next word is a year more than one year from the movie's. So, for Some Movie (2008), `Some.Movie.1985.1080p` is left out, and `Some.Movie.2007`, `Some Movie (2009)` and `Some.Movie.Remastered.2020` are kept. The movie's own name may hold a year: for 1917 (2019), `1917.2019.1080p` is kept. A line that does not name the movie, such as a translated title, tells no year.
+
+Names without these markers are kept: `Some Show Complete Series`, an addon's `4K` line, or an episode numbered from the series' start, as in `Some Show - 25`. In a line naming the series, only what follows its name is read, so that a series named `1x1 Club` is not taken for its first episode; in a line that does not name it, every word is. When every version of a title names another, they are all kept, as with the hide rules: the addon may number episodes otherwise than the title's description.
+
+**Compared with Jellyfin:** Jellyfin 12.4 lists no addon's streams, so it has no such step: its versions are the files of a title it found in its folders. Polyfin's own folders are read the same way as addons' streams.
 
 ### Default audio and subtitle languages
 
@@ -277,7 +290,7 @@ A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. S
 **In what order things happen:** these steps follow steps 1 to 5 of [Which streams become versions](#which-streams-become-versions).
 
 1. The versions that failed lately are left out (see [Sources that fail](#sources-that-fail)), but the torrents that did not start in time, which stay in place (see [Which streams become versions](#which-streams-become-versions), step 6).
-2. The hide rules apply. When they would hide every version of a title, none is hidden.
+2. The hide rules apply, with the versions of [another title](#versions-of-another-title), which are hidden whatever the rules. When they would hide every version of a title, none is hidden.
 3. The user's [quality group](users.md#quality-groups) leaves out the taller versions. When no version fits, the closest height comes first, and the criteria order the versions of the same height.
 4. The criteria order the others.
 
