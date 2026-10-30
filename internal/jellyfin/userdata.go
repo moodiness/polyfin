@@ -64,6 +64,9 @@ type userState struct {
 	// library holds collections: an administrator chose the app (see
 	// appCollectionType).
 	collectionLibraries bool
+	// badges holds what the badges over the posters of movies and series
+	// show, while the settings draw them (see posterBadges).
+	badges map[accounts.ID]string
 }
 
 // userState loads what user did with items, which of its songs have
@@ -111,7 +114,7 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 		counts[item.ID] = c
 	}
 	state := userState{data: data, counts: counts, contents: map[accounts.ID]*library.Contents{}, lyrics: h.Lyrics.Known(ctx, songs),
-		gains: h.gains(ctx, items), collectionLibraries: h.collectionLibrariesByType(ctx)}
+		gains: h.gains(ctx, items), collectionLibraries: h.collectionLibrariesByType(ctx), badges: h.posterBadges(ctx, items)}
 	var incomplete []accounts.ID
 	for _, item := range items {
 		if item.Kind == library.KindSeries && item.Contents == nil && counts[item.ID].Played > 0 {

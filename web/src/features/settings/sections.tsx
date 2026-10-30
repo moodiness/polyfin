@@ -15,6 +15,7 @@ import {
   type VersionCriterion,
   type WebTheme,
   webThemes,
+  posterBadgeSizes,
 } from '@/api'
 import type { SettingsSectionId } from '@/app/navigation'
 import { formatHour } from '@/format'
@@ -38,6 +39,7 @@ import CodeEditor from './CodeEditor'
 import CollectionLibraryApps from './CollectionLibraryApps'
 import BackupDestinations from './BackupDestinations'
 import HomeRows from './HomeRows'
+import PosterPreviewPanel from './PosterPreview'
 import ConversionSection from './ConversionSection'
 import { LastBackup, Variables } from './Diagnostics'
 import DlnaSection from './DlnaSection'
@@ -678,6 +680,55 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
             }))}
             onValue={(criticRatingShows) => update({ criticRatingShows })}
             className="max-w-xs"
+          />
+        </FieldRow>
+      </SettingsGroup>
+      <SettingsGroup title={groups.posters}>
+        <SwitchRow
+          anchor="poster-badges"
+          label={s.posterBadges}
+          help={s.posterBadgesHelp}
+          checked={form.posterBadges}
+          onChange={(posterBadges) => update({ posterBadges })}
+        />
+        <FieldRow
+          anchor="poster-badge-size"
+          label={s.posterBadgeSize}
+          help={s.posterBadgeSizeHelp}
+          error={error('poster-badge-size')}
+        >
+          <Select
+            value={form.posterBadgeSize}
+            options={posterBadgeSizes.map((value) => ({
+              value,
+              label: s.posterBadgeSizeChoices[value],
+            }))}
+            onValue={(posterBadgeSize) => update({ posterBadgeSize })}
+            className="max-w-xs"
+          />
+        </FieldRow>
+        <SettingRow anchor="poster-preview">
+          <p className="text-[15px] font-medium tracking-[-0.01em] text-ink">
+            {s.posterPreview.title}
+          </p>
+          <p className="mt-1 mb-4 max-w-[60ch] text-small text-ink-3">{s.posterPreview.help}</p>
+          <PosterPreviewPanel size={form.posterBadgeSize} />
+        </SettingRow>
+        <FieldRow
+          anchor="poster-template"
+          label={s.posterTemplate}
+          help={s.posterTemplateHelp}
+          error={error('poster-template')}
+        >
+          <TextInput
+            value={form.posterTemplate}
+            onValue={(posterTemplate) => update({ posterTemplate })}
+            placeholder="https://posters.example/{type}/{imdb_id}.jpg"
+            maxLength={limits('posterTemplate').max}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            className="max-w-xl"
           />
         </FieldRow>
       </SettingsGroup>

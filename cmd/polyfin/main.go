@@ -698,6 +698,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		HomeRowChoices: jellyfinAPI,
 		// Each user's taste profile, which My account shows them.
 		Taste: tastes,
+		// Settings › Content › Posters previews the badges over real
+		// titles' posters.
+		PosterPreviews: jellyfinAPI,
 		// Reset my preferences forgets what Jellyfin apps saved, with what
 		// the Jellyfin API remembers of it.
 		Preferences: jellyfinAPI,

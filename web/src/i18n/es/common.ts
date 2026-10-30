@@ -291,6 +291,9 @@ const common: typeof en = {
       'No se pudo contactar con TMDB para comprobar la clave. No se ha guardado nada: inténtelo de nuevo más tarde.',
     invalid_critic_rating_shows:
       'Elija en la lista qué puntuación muestra la valoración de la crítica.',
+    invalid_poster_badge_size: 'Elija en la lista el tamaño de las insignias.',
+    invalid_poster_template:
+      'La plantilla de dirección de pósteres debe ser una dirección web que empiece por http:// o https:// y nombre {imdb_id} o {tmdb_id}, sin espacios, nombre de usuario ni fragmento.',
     invalid_measure_loudness: 'Elija en la lista en qué canciones se mide el volumen.',
     invalid_segment_order:
       'El orden de las fuentes de marcadores de salto debe incluir cada fuente una sola vez. Recargue la página.',

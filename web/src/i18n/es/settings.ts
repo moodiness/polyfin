@@ -634,6 +634,27 @@ const settings: typeof en = {
       critics: 'Puntuación de la crítica',
       audience: 'Puntuación del público',
     },
+    posterBadges: 'Insignias en los pósteres',
+    posterBadgesHelp:
+      'Dibuja sobre el póster de una película o una serie su valoración con estrella, con el nombre de IMDb cuando es la valoración de IMDb de MDBList, las puntuaciones de la crítica y del público mientras haya una clave API de MDBList para valoraciones, y en una serie un episodio nuevo o una temporada nueva de los últimos 30 días. Todas las aplicaciones las muestran, ya que forman parte del póster, solo con iconos y números, para cualquier idioma. Mientras está activado, el reproductor web no muestra valoraciones al pasar el puntero. Si está desactivado, las aplicaciones reciben los pósteres tal cual.',
+    posterBadgeSize: 'Tamaño de las insignias',
+    posterBadgeSizeHelp:
+      'Qué tamaño tienen las insignias según el ancho del póster. En las tarjetas pequeñas conservan un tamaño mínimo, y caben menos.',
+    posterBadgeSizeChoices: { medium: 'Mediano', small: 'Pequeño', large: 'Grande' },
+    posterPreview: {
+      title: 'Vista previa',
+      help: 'Títulos de sus bibliotecas como los muestran las aplicaciones, con el tamaño elegido, antes de guardarlo, estén las insignias activadas o no.',
+      original: 'Tal cual',
+      badged: 'Con insignias',
+      card: 'En una tarjeta pequeña',
+      another: 'Otro título',
+      none: 'Aún no se conoce ninguna película ni serie de sus bibliotecas: abra primero una biblioteca en el reproductor web.',
+      nothing:
+        'Este título no tiene valoración ni episodio nuevo: su póster no muestra ninguna insignia.',
+    },
+    posterTemplate: 'Plantilla de dirección de pósteres',
+    posterTemplateHelp:
+      'Opcional. La dirección de la que se descargan los pósteres de películas y series en lugar de los de las extensiones, con {imdb_id}, {tmdb_id}, {type}, movie o series, y {tmdb_type}, movie o tv, completados. Un título sin un identificador que nombre la dirección, o cuyo póster no pueda descargarse allí, conserva el de su extensión. Los pósteres de carpetas locales y los subidos siguen teniendo prioridad.',
     lyrics: 'Letras de canciones de LRCLIB',
     lyricsHelp:
       'Las aplicaciones muestran la letra de las canciones, sincronizada línea a línea cuando LRCLIB, una base de datos de letras gratuita, la tiene. Polyfin busca cada canción una sola vez, por su artista, título, álbum y duración, cuando empieza a reproducirse o se abren sus detalles o su letra. Si se desactiva, las canciones no tienen letra y nunca se consulta LRCLIB.',
@@ -984,7 +1005,7 @@ const settings: typeof en = {
       'Añade las versiones que encuentran las extensiones al menú de versiones de la página de una película o un episodio mientras está abierta, manteniendo la versión elegida. Si está desactivado, una página abierta antes de encontrarse ninguna versión sigue mostrando las primeras a medida que llegan, y sus botones de reproducción siguen esperando una versión; las demás aparecen al volver a abrir la página.',
     posterRatings: 'Mostrar valoraciones en los pósteres',
     posterRatingsHelp:
-      'Muestra la valoración con estrella de una película o una serie sobre su póster en el reproductor web cuando llega el puntero o el foco, con las puntuaciones de la crítica y del público mientras haya una clave API de MDBList para valoraciones en Ajustes › Contenido. Para todos los usuarios.',
+      'Muestra la valoración con estrella de una película o una serie sobre su póster en el reproductor web cuando llega el puntero o el foco, con las puntuaciones de la crítica y del público mientras haya una clave API de MDBList para valoraciones en Ajustes › Contenido. Para todos los usuarios. Mientras Insignias en los pósteres está activado en Ajustes › Contenido, se muestran las insignias en su lugar.',
     homeRows: 'Filas de inicio',
     homeRowsHelp:
       'Filas que el reproductor web añade a su página de inicio, en su lugar, para todos los usuarios o para los usuarios elegidos. Cada usuario puede desactivar una fila en Mi cuenta › Filas de inicio; las secciones propias del reproductor web siguen en sus Ajustes › Inicio. Cada fila omite lo que el usuario no puede ver: los títulos por encima de su control parental, los géneros bloqueados, los títulos ocultos y las bibliotecas que tiene ocultas.',
@@ -1125,6 +1146,7 @@ const settings: typeof en = {
       titlePages: 'Páginas de títulos',
       images: 'Imágenes',
       ratings: 'Valoraciones',
+      posters: 'Pósteres',
       music: 'Música',
       thresholds: 'Umbrales de reproducción',
     },

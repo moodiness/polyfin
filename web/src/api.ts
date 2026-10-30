@@ -551,6 +551,12 @@ export type Settings = {
   addVersionsToOpenPage: boolean
   /** Whether the web player shows titles' ratings on their posters, as the pointer or focus comes. */
   posterRatings: boolean
+  /** Whether movies' and series' posters carry their ratings and new episode or season, in every app. */
+  posterBadges: boolean
+  /** The size preset of the badges over posters. */
+  posterBadgeSize: PosterBadgeSize
+  /** The address of movies' and series' posters, with {imdb_id}, {tmdb_id}, {type} and {tmdb_type}; empty for the addons'. */
+  posterTemplate: string
   /** Trakt app users connect through; both its client ID and secret are needed. */
   traktClientId: string
   /** Whether the Trakt client secret is saved. */
@@ -3338,6 +3344,24 @@ export const removeThemeCopy = () => request<ThemeCopy>('DELETE', '/settings/the
 export const fetchSettingsApps = async (signal?: AbortSignal) =>
   (await request<{ apps: string[] }>('GET', '/settings/apps', undefined, signal)).apps
 
+/** The size presets of the badges over posters, the default first. */
+export const posterBadgeSizes = ['medium', 'small', 'large'] as const
+export type PosterBadgeSize = (typeof posterBadgeSizes)[number]
+
+/** A title whose poster previews the badges: the tags of its poster without and with them. */
+export type PosterPreview = { id: string; name: string; tag: string; badgedTag: string }
+
+/** Real titles of the administrator's libraries, with their posters' tags without and with badges at size. */
+export const fetchPosterPreviews = async (size: PosterBadgeSize, signal?: AbortSignal) =>
+  (
+    await request<{ titles: PosterPreview[] }>(
+      'GET',
+      `/settings/poster-previews?size=${encodeURIComponent(size)}`,
+      undefined,
+      signal,
+    )
+  ).titles
+
 /** The languages the server's addons were given, which users may choose as metadata language. */
 export const fetchMetadataLanguages = async (signal?: AbortSignal) =>
   (await request<{ languages: string[] }>('GET', '/metadata-languages', undefined, signal))
@@ -4876,6 +4900,7 @@ export const queryKeys = {
   userDevices: (id: string) => ['users', id, 'devices'] as const,
   settings: ['settings'] as const,
   settingsApps: ['settings', 'apps'] as const,
+  posterPreviews: (size: PosterBadgeSize) => ['settings', 'poster-previews', size] as const,
   parentalRatings: ['parental-ratings'] as const,
   /** Prefix of every scope: invalidating it refreshes all addons and libraries. */
   scopes: ['scopes'] as const,

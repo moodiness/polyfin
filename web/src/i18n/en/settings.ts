@@ -626,6 +626,26 @@ const settings = {
     criticRatingShowsHelp:
       'Jellyfin apps have a single field for a critic rating, from 0 to 100: it shows the critics’ score or the audience score. On a title’s page, the web player shows both, with the IMDb rating.',
     criticRatingChoices: { critics: 'Critics’ score', audience: 'Audience score' },
+    posterBadges: 'Badges on posters',
+    posterBadgesHelp:
+      'Draws over a movie’s or a series’ poster its star rating, naming IMDb when the rating is IMDb’s from MDBList, its critics’ and audience scores while an MDBList API key for ratings is set, and a series’ new episode or new season of the last 30 days. Every app shows them, as they are part of the poster, with icons and numbers only, for any language. While on, the web player shows no ratings on hover. When off, apps get the posters as they are.',
+    posterBadgeSize: 'Badge size',
+    posterBadgeSizeHelp:
+      'How large the badges are for the poster’s width. They keep a least size on small cards, where fewer of them fit.',
+    posterBadgeSizeChoices: { medium: 'Medium', small: 'Small', large: 'Large' },
+    posterPreview: {
+      title: 'Preview',
+      help: 'Titles of your libraries as apps show them, at the badge size chosen, before it is saved, whether the badges are on or not.',
+      original: 'As it is',
+      badged: 'With badges',
+      card: 'On a small card',
+      another: 'Another title',
+      none: 'No movie or series of your libraries is known yet: open a library in the web player first.',
+      nothing: 'This title has no rating and no new episode: its poster shows no badge.',
+    },
+    posterTemplate: 'Poster address template',
+    posterTemplateHelp:
+      'Optional. The address movies’ and series’ posters are downloaded from in place of the addons’ ones, with {imdb_id}, {tmdb_id}, {type}, movie or series, and {tmdb_type}, movie or tv, filled in. A title lacking an identifier the address names, or whose poster cannot be downloaded there, keeps its addon’s. Local folders’ posters and uploaded ones still come first.',
     lyrics: 'Song lyrics from LRCLIB',
     lyricsHelp:
       'Apps show the lyrics of songs, synced line by line when LRCLIB, a free lyrics database, has them. Polyfin looks a song up once, by its artist, title, album and length, when it starts playing or its details or lyrics open. When off, songs have no lyrics and LRCLIB is never asked.',
@@ -959,7 +979,7 @@ const settings = {
       'Adds the versions the addons find to the version menu of a movie’s or an episode’s page while it is open, keeping the version picked. When off, a page opened before any version was found still lists the first ones as they come, and its play buttons still wait for a version; the others show when the page is opened again.',
     posterRatings: 'Show ratings on posters',
     posterRatingsHelp:
-      'Shows a movie’s or a series’ star rating over its poster in the web player as the pointer or the focus comes to it, with its critics’ and audience scores while an MDBList API key for ratings is set under Settings › Content. For every user.',
+      'Shows a movie’s or a series’ star rating over its poster in the web player as the pointer or the focus comes to it, with its critics’ and audience scores while an MDBList API key for ratings is set under Settings › Content. For every user. While Badges on posters is on under Settings › Content, the badges show instead.',
     homeRows: 'Home rows',
     homeRowsHelp:
       'Rows the web player adds to its home page, at their place, for every user or for chosen users. Each user can turn off a row under My account › Home rows; the web player’s own sections stay in its Settings › Home. Every row leaves out what the user may not see: titles above their parental control, blocked genres, hidden titles, and the libraries hidden from them.',
@@ -1097,6 +1117,7 @@ const settings = {
       titlePages: 'Title pages',
       images: 'Images',
       ratings: 'Ratings',
+      posters: 'Posters',
       music: 'Music',
       thresholds: 'Playback thresholds',
     },
