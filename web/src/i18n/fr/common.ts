@@ -227,6 +227,10 @@ const common: typeof en = {
       'Les horaires vont de 00:00 à 24:00, et chaque fin doit venir après son début (50 lignes au plus).',
     outside_allowed_hours:
       'Ce compte ne peut pas être utilisé à cette heure-ci. Réessayez pendant ses horaires autorisés.',
+    outside_local_network:
+      'Ce compte ne peut être utilisé que depuis le réseau local. Connectez-vous depuis celui-ci, ou demandez à un administrateur.',
+    remote_access_self:
+      'Vous êtes connecté depuis l’extérieur du réseau local : désactiver vos propres connexions depuis l’extérieur vous bloquerait. Faites-le depuis le réseau local.',
     invalid_guide_url:
       'Saisissez une adresse de guide commençant par https:// ou http://, de 4 096 caractères au plus, ou le chemin absolu d’un fichier du serveur.',
     invalid_app:

@@ -70,6 +70,7 @@ const auth: typeof en = {
         'Nenhuma conta deste servidor corresponde à sua conta no provedor de identidade.',
       account_disabled: 'Esta conta está desativada.',
       outside_allowed_hours: 'Esta conta não pode entrar neste horário.',
+      outside_local_network: 'Esta conta só pode entrar pela rede local.',
       too_many_attempts: 'Tentativas demais. Tente novamente mais tarde.',
       provider_failed: 'O login com o provedor de identidade falhou. Tente novamente.',
     },

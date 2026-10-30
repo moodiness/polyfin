@@ -217,6 +217,10 @@ const common: typeof en = {
       'Os horários vão de 00:00 a 24:00, e cada fim deve vir depois do seu início (no máximo 50 linhas).',
     outside_allowed_hours:
       'Esta conta não pode ser usada neste horário. Tente novamente durante os horários permitidos.',
+    outside_local_network:
+      'Esta conta só pode ser usada na rede local. Conecte-se de lá ou fale com um administrador.',
+    remote_access_self:
+      'Você está conectado de fora da rede local: desativar suas próprias conexões de fora o deixaria bloqueado. Faça isso pela rede local.',
     invalid_guide_url:
       'Digite um endereço de guia que comece com https:// ou http://, de no máximo 4.096 caracteres, ou o caminho absoluto de um arquivo do servidor.',
     invalid_app: 'O nome do aplicativo deve ter de 1 a 64 caracteres, sem caracteres especiais.',

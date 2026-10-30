@@ -232,6 +232,10 @@ const common: typeof en = {
       'Uhrzeiten reichen von 00:00 bis 24:00, und jedes Ende muss nach seinem Beginn liegen (höchstens 50 Zeilen).',
     outside_allowed_hours:
       'Dieses Konto kann zu dieser Zeit nicht verwendet werden. Versuche es während der erlaubten Zeiten erneut.',
+    outside_local_network:
+      'Dieses Konto kann nur im lokalen Netzwerk verwendet werden. Verbinde dich von dort oder frage einen Administrator.',
+    remote_access_self:
+      'Du bist von außerhalb des lokalen Netzwerks verbunden: Wenn du deine eigenen Verbindungen von außerhalb ausschaltest, sperrst du dich aus. Tu es aus dem lokalen Netzwerk.',
     invalid_guide_url:
       'Gib eine Adresse für das Fernsehprogramm ein, die mit https:// oder http:// beginnt und höchstens 4.096 Zeichen lang ist, oder den absoluten Pfad einer Datei auf dem Server.',
     invalid_app: 'Der App-Name muss 1 bis 64 Zeichen lang sein, ohne Sonderzeichen.',

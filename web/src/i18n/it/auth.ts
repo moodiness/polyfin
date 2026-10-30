@@ -69,6 +69,7 @@ const auth: typeof en = {
         'Nessun account di questo server corrisponde al tuo account presso il provider di identità.',
       account_disabled: 'Questo account è disattivato.',
       outside_allowed_hours: 'Questo account non può accedere a quest’ora.',
+      outside_local_network: 'Questo account può accedere solo dalla rete locale.',
       too_many_attempts: 'Troppi tentativi. Riprova più tardi.',
       provider_failed: 'L’accesso con il provider di identità non è riuscito. Riprova.',
     },

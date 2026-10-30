@@ -209,6 +209,10 @@ const common = {
       'Hours run from 00:00 to 24:00, and each end must come after its start (50 rows at most).',
     outside_allowed_hours:
       'This account cannot be used at this time. Try again during its allowed hours.',
+    outside_local_network:
+      'This account may only be used from the local network. Connect from there, or ask an administrator.',
+    remote_access_self:
+      'You are connected from outside the local network: turning off your own remote access would lock you out. Do it from the local network.',
     invalid_guide_url:
       'Enter a guide address starting with https:// or http://, of at most 4,096 characters, or the absolute path of a file on the server.',
     invalid_app: 'The app name must be 1 to 64 characters long, without special characters.',

@@ -71,6 +71,7 @@ const auth: typeof en = {
         'Kein Konto dieses Servers passt zu deinem Konto beim Identitätsanbieter.',
       account_disabled: 'Dieses Konto ist deaktiviert.',
       outside_allowed_hours: 'Dieses Konto darf sich zu dieser Zeit nicht anmelden.',
+      outside_local_network: 'Dieses Konto darf sich nur im lokalen Netzwerk anmelden.',
       too_many_attempts: 'Zu viele Versuche. Versuche es später erneut.',
       provider_failed:
         'Die Anmeldung beim Identitätsanbieter ist fehlgeschlagen. Versuche es erneut.',

@@ -199,6 +199,12 @@ const users: typeof en = {
     canShare: 'Puede compartir títulos',
     canShareHelp:
       'Permite a este usuario dar acceso a una película o un episodio a alguien sin cuenta, mediante un enlace que caduca, desde Mi cuenta o la página de un título en el reproductor web, mientras Ajustes › Seguridad › Permitir enlaces para compartir esté activado. Al desactivarlo, se revocan sus enlaces.',
+    remoteAccess: 'Puede conectarse desde fuera de la red local',
+    remoteAccessHelp:
+      'Permite a este usuario iniciar sesión, explorar y reproducir desde cualquier lugar. Desactivado, solo puede hacerlo desde la red local, también si es administrador, tal como lo indican los Proxies conocidos de Ajustes › Seguridad. Los enlaces que comparte se siguen reproduciendo en cualquier lugar.',
+    remoteAccessUnknownProxy:
+      'Estado del sistema ve un proxy inverso que no está en Proxies conocidos: todos los que pasan por él parecen locales, así que esta limitación no se les aplica.',
+    openKnownProxies: 'Abrir Proxies conocidos',
     shareLinksTitle: 'Enlaces compartidos',
     shareLinksHelp:
       'Los enlaces que este usuario ha creado para compartir una película o un episodio. «Revocar» detiene uno al instante.',

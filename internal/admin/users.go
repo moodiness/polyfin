@@ -116,6 +116,9 @@ type limitsJSON struct {
 	// TorrentStreams offers the user the torrents' files addons list,
 	// while the server plays them.
 	TorrentStreams bool `json:"torrentStreams"`
+	// RemoteAccess lets the user sign in and use the server from outside
+	// the local network, as Known proxies tells it.
+	RemoteAccess bool `json:"remoteAccess"`
 	// QualityGroup is the tallest video the user is offered, in lines: 480,
 	// 720, 1080, 1440 or 2160, or 0 for Original, no limit.
 	QualityGroup int `json:"qualityGroup"`
@@ -144,6 +147,7 @@ func newLimitsJSON(limits accounts.Limits) limitsJSON {
 		SubtitleManagement:   limits.SubtitleManagement,
 		CanShare:             limits.CanShare,
 		TorrentStreams:       limits.TorrentStreams,
+		RemoteAccess:         limits.RemoteAccess,
 		QualityGroup:         limits.QualityGroup,
 	}
 }
@@ -168,6 +172,7 @@ type limitChanges struct {
 	SubtitleManagement   *bool                    `json:"subtitleManagement"`
 	CanShare             *bool                    `json:"canShare"`
 	TorrentStreams       *bool                    `json:"torrentStreams"`
+	RemoteAccess         *bool                    `json:"remoteAccess"`
 	LiveTvManagement     *bool                    `json:"liveTvManagement"`
 	QualityGroup         *int                     `json:"qualityGroup"`
 }
@@ -192,6 +197,7 @@ func (l limitChanges) changes(w http.ResponseWriter) (accounts.UserChanges, bool
 		QualityGroup:         l.QualityGroup,
 		CanShare:             l.CanShare,
 		TorrentStreams:       l.TorrentStreams,
+		RemoteAccess:         l.RemoteAccess,
 	}
 	if p := l.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
@@ -1313,6 +1319,10 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	changes, ok := body.changes(w)
 	if !ok {
+		return
+	}
+	if id == session.User.ID && locksOutCaller(r, changes.RemoteAccess) {
+		writeError(w, http.StatusConflict, "remote_access_self")
 		return
 	}
 	changes.MetadataLanguage = body.MetadataLanguage

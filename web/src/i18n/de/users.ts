@@ -198,6 +198,12 @@ const users: typeof en = {
     canShare: 'Darf Titel teilen',
     canShareHelp:
       'Erlaubt diesem Benutzer, einen Film oder eine Folge über einen ablaufenden Link an jemanden ohne Konto weiterzugeben, über „Mein Konto“ oder die Seite eines Titels im Web-Player, solange Einstellungen › Sicherheit › „Freigabelinks erlauben“ aktiviert ist. Beim Deaktivieren werden seine Links widerrufen.',
+    remoteAccess: 'Darf sich von außerhalb des lokalen Netzwerks verbinden',
+    remoteAccessHelp:
+      'Erlaubt diesem Benutzer, sich von überall anzumelden, zu stöbern und abzuspielen. Ausgeschaltet geht das nur aus dem lokalen Netzwerk, auch für Administratoren, so wie es die bekannten Proxys unter Einstellungen › Sicherheit bestimmen. Die Links, die er teilt, spielen weiterhin überall.',
+    remoteAccessUnknownProxy:
+      'Der Systemzustand sieht einen Reverse-Proxy, der nicht unter den bekannten Proxys steht: Alle, die über ihn kommen, wirken lokal, daher gilt diese Einschränkung für sie nicht.',
+    openKnownProxies: 'Bekannte Proxys öffnen',
     shareLinksTitle: 'Freigabelinks',
     shareLinksHelp:
       'Die Links, die dieser Benutzer erstellt hat, um einen Film oder eine Folge zu teilen. „Widerrufen“ beendet einen sofort.',

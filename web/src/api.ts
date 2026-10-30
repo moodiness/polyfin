@@ -92,6 +92,11 @@ export type User = {
    * (Settings.torrentStreams). Off for every user, administrators included, until given.
    */
   torrentStreams: boolean
+  /**
+   * Whether the user may sign in and use the server from outside the local network, Jellyfin's
+   * EnableRemoteAccess; without it, only from the local network, as Known proxies tells it.
+   */
+  remoteAccess: boolean
   /** Identifies the user's profile picture, served at /UserImage; null without one. */
   imageTag: string | null
   /** The tallest video the user is offered, in lines (480 to 2160); 0 for Original, no limit. */
@@ -134,6 +139,7 @@ export type GroupLimits = Pick<
   | 'subtitleManagement'
   | 'canShare'
   | 'torrentStreams'
+  | 'remoteAccess'
   | 'maxPlaybacks'
   | 'maxBitrate'
   | 'qualityGroup'
@@ -810,6 +816,7 @@ export type UserPatch = Partial<{
   subtitleManagement: boolean
   canShare: boolean
   torrentStreams: boolean
+  remoteAccess: boolean
   qualityGroup: QualityGroup
   /** YYYY-MM-DD, or null for never. */
   endsOn: string | null

@@ -69,6 +69,7 @@ const auth = {
         'No account on this server matches your account at the identity provider.',
       account_disabled: 'This account is disabled.',
       outside_allowed_hours: 'This account may not sign in at this time.',
+      outside_local_network: 'This account may only sign in from the local network.',
       too_many_attempts: 'Too many attempts. Try again later.',
       provider_failed: 'The sign-in with the identity provider failed. Try again.',
     },

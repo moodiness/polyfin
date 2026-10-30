@@ -317,6 +317,10 @@ func (h *handler) providerCallback(w http.ResponseWriter, r *http.Request) {
 		providerBack(w, r, app, "account_disabled")
 		return
 	}
+	if h.remoteRefused(r, user) {
+		providerBack(w, r, app, "outside_local_network")
+		return
+	}
 	if !user.AllowedAt(now) {
 		providerBack(w, r, app, "outside_allowed_hours")
 		return
@@ -363,7 +367,9 @@ func randomToken() string {
 // server's, and the server's name, which jellyfin-web keeps. A ticket
 // missing, unknown, used or expired counts as a wrong password, 401
 // invalid_credentials; an account disabled or ended since is 403
-// account_disabled, outside its allowed hours 403 outside_allowed_hours.
+// account_disabled, from outside the local network without remote access
+// 403 outside_local_network, outside its allowed hours 403
+// outside_allowed_hours.
 // The device is marked as signed in through the provider (see
 // signInWithJellyfin).
 func (h *handler) providerWebSignIn(w http.ResponseWriter, r *http.Request) {
@@ -413,6 +419,10 @@ func (h *handler) providerWebSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 	if user.Refused(now) {
 		writeError(w, http.StatusForbidden, "account_disabled")
+		return
+	}
+	if !user.AllowedFrom(forwarded.InLocalNetwork(r)) {
+		writeError(w, http.StatusForbidden, "outside_local_network")
 		return
 	}
 	if !user.AllowedAt(now) {

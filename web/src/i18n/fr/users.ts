@@ -198,6 +198,12 @@ const users: typeof en = {
     canShare: 'Peut partager des titres',
     canShareHelp:
       'Permet à cet utilisateur de donner un film ou un épisode à quelqu’un qui n’a pas de compte, grâce à un lien qui expire, depuis Mon compte ou la page d’un titre dans le lecteur web, tant que Paramètres › Sécurité › « Autoriser les liens de partage » est activé. Le désactiver révoque ses liens.',
+    remoteAccess: 'Peut se connecter depuis l’extérieur du réseau local',
+    remoteAccessHelp:
+      'Permet à cet utilisateur de se connecter, de parcourir et de lire depuis n’importe où. Désactivé, il ne le peut que depuis le réseau local, même administrateur, tel que les Proxys connus de Paramètres › Sécurité le définissent. Les liens qu’il partage restent lisibles partout.',
+    remoteAccessUnknownProxy:
+      'La page Santé voit un proxy inverse absent des Proxys connus : tous ceux qui passent par lui semblent locaux, et cette limite ne s’applique donc pas à eux.',
+    openKnownProxies: 'Ouvrir les Proxys connus',
     shareLinksTitle: 'Liens partagés',
     shareLinksHelp:
       'Les liens que cet utilisateur a créés pour partager un film ou un épisode. « Révoquer » en arrête un tout de suite.',

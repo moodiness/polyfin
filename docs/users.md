@@ -755,6 +755,41 @@ A user with at least one row who is outside all of them cannot sign in (403). Th
 - Jellyfin serves direct streams without checking who asks; Polyfin also refuses a user's media outside their hours.
 - jellyfin-web never sends hours outside 0 to 24 or ending before they start.
 
+### Connections from outside the local network
+
+**Can connect from outside the local network**, under **Users › Access** and on a group's page, is Jellyfin's "Allow remote connections to this server" (`EnableRemoteAccess`). It is on for every user and every group until an administrator turns it off. jellyfin-web's user editor sets it too, through `POST /Users/{userId}/Policy`; a policy that leaves it out turns it on, as in Jellyfin. Groups, invites' model users and **Reset to defaults** carry it like the other settings of **Access**.
+
+Turned off, the user may use the server only from the local network, administrators included:
+
+- signing in from outside is refused (403): with a password, from a Jellyfin app, Silo's apps or the admin app, through the identity provider, at the second step of two-step sign-in, and through Quick Connect;
+- each refused sign-in is a failed sign-in in the activity log, about the user, with the client's address;
+- their apps' requests from outside are refused with an empty 403, those served outside the allowed hours included, and so are their WebSockets, stream and download addresses, remuxes and Live TV relays (401 for media, as for a play session that is not theirs);
+- in the admin app, a session taken outside is refused (`outside_local_network`), but still reads and ends itself;
+- `/Users/Public` from outside leaves them out of the sign-in screen.
+
+The local network is judged as for a forgotten password's PIN: loopback, private and link-local addresses, of the client [Known proxies](#known-proxies) tells. Behind a reverse proxy missing from **Known proxies**, every client looks like the proxy, often on the local network, so the setting cannot hold; when **Health** sees such a proxy, the section warns of it while the setting is off.
+
+Some things stay allowed:
+
+- the [share links](#share-links) the user gives play anywhere: sharing is the user's choice;
+- Quick Connect checks both requests: the approval is refused from where the approver may not connect, and the app signing in from where the user may not;
+- DLNA answers the local network only anyway;
+- API keys are not users, and are never refused.
+
+An administrator connected from outside the local network cannot turn off their own remote access, in the admin app or from a Jellyfin app's user editor: they would be locked out at once. The change is refused (409, `remote_access_self` in the admin app, a message in the server language from `POST /Users/{userId}/Policy`); from the local network it goes through. A group never holds an administrator, so a group's change cannot lock its author out.
+
+**For app developers:**
+
+- jellyfin-web's user editor shows "Allow remote connections to this server" only when the server's network configuration allows remote access. `GET /System/Configuration/network` answers Jellyfin's `NetworkConfiguration` with `EnableRemoteAccess` true, the server's port, local discovery and Known proxies, and Jellyfin's defaults for the rest.
+
+**Compared with Jellyfin:**
+
+- Jellyfin refuses the sign-in ([`UserManager.cs`, lines 633 to 641](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Users/UserManager.cs#L633-L641)) and every request, administrators' too ([`DefaultAuthorizationHandler.cs`, lines 58 to 71](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Auth/DefaultAuthorizationPolicy/DefaultAuthorizationHandler.cs#L58-L71)), and leaves the user out of `/Users/Public` ([`UserController.cs`, lines 626 to 632](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/UserController.cs#L626-L632)), as Polyfin does.
+- Jellyfin refuses a password sign-in from outside before checking the password, and only logs it; Polyfin refuses it once the password is right, so that a refusal tells nothing of it, and writes it to the activity log.
+- Jellyfin lets a Quick Connect sign-in through and refuses its requests; Polyfin refuses the sign-in itself. Jellyfin serves direct streams without checking who asks; Polyfin refuses them from outside, as it does outside the allowed hours.
+- Jellyfin's local network may be set in its networking options; Polyfin's is the private, link-local and loopback ranges, Jellyfin's default.
+- Jellyfin has no guard against an administrator taking their own remote access away from outside: Polyfin refuses it, on purpose.
+
 ## Metadata language
 
 **Metadata language** is the language a user reads titles in: their names, overviews and images, and their episodes'. Users set it in its own section under **My account**, and administrators in its own panel on the user's page under **Users**. **The server's**, the default, shows the descriptions of the server's addons without a language. The other choices are the languages the server's addons were given (see [Languages](addons-and-libraries.md#languages)). **Reset my preferences** puts it back to **The server's** (see [Your own preferences](#your-own-preferences)).
@@ -1005,7 +1040,7 @@ The account found is linked to the person at the provider, by the provider's iss
 
 With **Administrators' claim** and **Administrators' value** set, someone whose claim holds the value, such as a `groups` claim listing `polyfin-admins`, becomes an administrator as they sign in, unless the account is disabled. The group only grants: removing someone from the group in the provider does not demote them in Polyfin. They stay an administrator until you turn **Administrator** off on their page under **Users**.
 
-A disabled account, and one that ended, is refused as with a password, and so is a sign-in outside the account's allowed hours.
+A disabled account, and one that ended, is refused as with a password, and so is a sign-in outside the account's allowed hours, or from outside the local network without remote access (see [Connections from outside the local network](#connections-from-outside-the-local-network)).
 
 ### Accounts without a password
 
@@ -1041,8 +1076,8 @@ Jellyfin apps cannot open the provider's page. They sign in with Quick Connect: 
 **For app developers:**
 
 - `GET /admin/api/status` answers `provider`, `{"name", "start"}`, or `null` without a provider or a public address. `start` is `<public address>/admin/api/provider/start`, to which the admin app adds `?app=admin` and the web client `?app=web`.
-- `GET /admin/api/provider/callback` is the redirect URI. It sends the browser to `/admin/`, signed in, or `/admin/?provider=<error>`; for the web client, to `/web/?polyfinProvider=signed-in` or `/web/?polyfinProvider=<error>`. The errors are `provider_refused`, `provider_no_account`, `account_disabled`, `outside_allowed_hours`, `too_many_attempts`, `provider_state`, `provider_failed`, `provider_off`, `provider_unreachable` and `internal`.
-- `POST /admin/api/provider/web`, with the ticket's cookie and the device in a `MediaBrowser` `Authorization` header (`Client`, `Device`, `DeviceId`, `Version`), signs that device in once and answers `{"accessToken", "userId", "serverId", "serverName"}`; 401 `invalid_credentials` without a valid ticket, 403 `account_disabled` or `outside_allowed_hours`.
+- `GET /admin/api/provider/callback` is the redirect URI. It sends the browser to `/admin/`, signed in, or `/admin/?provider=<error>`; for the web client, to `/web/?polyfinProvider=signed-in` or `/web/?polyfinProvider=<error>`. The errors are `provider_refused`, `provider_no_account`, `account_disabled`, `outside_allowed_hours`, `outside_local_network`, `too_many_attempts`, `provider_state`, `provider_failed`, `provider_off`, `provider_unreachable` and `internal`.
+- `POST /admin/api/provider/web`, with the ticket's cookie and the device in a `MediaBrowser` `Authorization` header (`Client`, `Device`, `DeviceId`, `Version`), signs that device in once and answers `{"accessToken", "userId", "serverId", "serverName"}`; 401 `invalid_credentials` without a valid ticket, 403 `account_disabled`, `outside_local_network` or `outside_allowed_hours`.
 - A user's `providerOnly` tells whether they sign in through the provider only; `POST /admin/api/users` and `PATCH /admin/api/users/{id}` take it.
 
 ## Security settings

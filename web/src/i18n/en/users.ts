@@ -191,6 +191,12 @@ const users = {
     canShare: 'Can share titles',
     canShareHelp:
       'Lets this user give a movie or an episode to someone without an account, through a link that expires, from My account or a title’s page in the web player, while Settings › Security › Allow share links is on. Turning it off revokes their links.',
+    remoteAccess: 'Can connect from outside the local network',
+    remoteAccessHelp:
+      'Lets this user sign in, browse and play from anywhere. Turned off, they may only from the local network, administrators included, as Known proxies under Settings › Security tells it. The links they share still play anywhere.',
+    remoteAccessUnknownProxy:
+      'Health sees a reverse proxy missing from Known proxies: everyone who comes through it looks local, so this limit does not hold for them.',
+    openKnownProxies: 'Open Known proxies',
     shareLinksTitle: 'Shared links',
     shareLinksHelp:
       'The links this user made to share a movie or an episode. Revoke stops one at once.',

@@ -43,6 +43,7 @@ function takeProviderOutcome(): ProviderOutcome | null {
     'provider_no_account',
     'account_disabled',
     'outside_allowed_hours',
+    'outside_local_network',
     'too_many_attempts',
   ]
   return known.includes(outcome) ? (outcome as ProviderOutcome) : 'provider_failed'
