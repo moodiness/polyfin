@@ -194,6 +194,9 @@ type target struct {
 	// season and episode are the episode's, episode 0 for another title:
 	// a torrent's file without an index is found by them.
 	season, episode int
+	// year is a movie's, 0 for another title or when unknown: a version
+	// naming another year is another movie's (see OtherTitle).
+	year int
 	// holder is the record of the title whose description holds the
 	// video: an episode's series, or a folder's video's folder. embedded
 	// are the streams it embeds for the video, described by embeddedBy,
@@ -253,7 +256,11 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		if full, _, ok := s.describedMeta(ctx, v, r, false, inDatabase); ok {
 			meta = &full
 		}
-		return target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime)), name: meta.Name}, v, nil
+		t := target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime)), name: meta.Name}
+		if r.Kind == KindMovie {
+			t.year = metaYear(*meta)
+		}
+		return t, v, nil
 	case r.Kind == KindChannel && r.Meta != nil:
 		return target{item: id, kind: KindChannel, metaType: r.Meta.Type, id: r.Meta.ID}, v, nil
 	case r.Kind == KindReplay:
@@ -426,6 +433,13 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 	var versions []Version
 	seen, remembered := map[accounts.ID]bool{}, map[accounts.ID]bool{}
 	add := func(version Version) {
+		// A version naming another title is hidden as the version rules
+		// hide others; it is told once, when first listed.
+		if version.Labels.Elsewhere != "" && !remembered[version.ID] {
+			if _, known := s.versions.Get(version.ID); !known {
+				s.logger.Debug("A version names another title", "addon", version.Addon, "names", version.Labels.Elsewhere)
+			}
+		}
 		if !remembered[version.ID] {
 			remembered[version.ID] = true
 			s.versions.Put(version.ID, version)
@@ -639,6 +653,7 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		HoldsConnection: t.kind == KindReplay,
 	}
 	version.Labels.Releases = ReleaseKinds([]string{t.name, t.videoName}, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
+	version.Labels.Elsewhere = OtherTitle(t.name, t.season, t.episode, t.year, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
 	if stream.Torrent() {
 		version.URL = torrentLink(stream)
 		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources),

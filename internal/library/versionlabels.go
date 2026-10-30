@@ -30,12 +30,17 @@ const (
 // Releases are the kinds of low-quality releases, of
 // accounts.ReleaseKinds, the labels tag the stream as, in the order they
 // tag them (see ReleaseKinds); none for most.
+//
+// Elsewhere is set when the labels name another title than the stream's:
+// the marker naming it, such as "S01E03", "S02" or "1998" (see
+// OtherTitle); empty for most.
 type Labels struct {
 	Codec     string
 	Range     DynamicRange
 	Languages []string
 	Multi     bool
 	Releases  []string
+	Elsewhere string
 }
 
 // labelCodecs are the video codecs labels name, by the words naming them;
