@@ -3946,6 +3946,102 @@ export const fetchTimers = (signal?: AbortSignal) =>
     signal,
   )
 
+/** What a channel Polyfin airs, or one of its time blocks, is built from. */
+export type ChannelSourceKind = 'collection' | 'smartlist' | 'series' | 'titles'
+
+/** An item a channel's source names: a collection, a smart list, a series or a movie. */
+export type ChannelSourceItem = { id: string; name: string; kind: string }
+
+export type ChannelSource = { kind: ChannelSourceKind; items: ChannelSourceItem[] }
+
+/** A daily time block, in minutes past midnight in the server's time zone. */
+export type ChannelBlock = {
+  start: number
+  end: number
+  source: ChannelSource
+  shuffle: boolean
+  /** How many movies and episodes the block airs, and how long they last in seconds. */
+  entries: number
+  runtime: number
+}
+
+/** A programme a channel airs now or next. */
+export type ChannelAiring = {
+  name: string
+  episode: string
+  season: number
+  number: number
+  start: string
+  end: string
+}
+
+/** A 24/7 channel Polyfin airs from titles of the library. */
+export type OwnChannel = {
+  id: string
+  name: string
+  /** Its number, null to follow the other channels. */
+  number: number | null
+  enabled: boolean
+  source: ChannelSource
+  shuffle: boolean
+  blocks: ChannelBlock[]
+  entries: number
+  runtime: number
+  airing: ChannelAiring[]
+  epoch: string
+  updatedAt: string
+}
+
+export type OwnChannelDraft = {
+  name: string
+  number: number | null
+  enabled: boolean
+  source: ChannelSource
+  shuffle: boolean
+  blocks: Pick<ChannelBlock, 'start' | 'end' | 'source' | 'shuffle'>[]
+  /** Freezes the sources' titles again, the schedule starting again today. */
+  rebuild?: boolean
+}
+
+/** A collection or a smart list a channel may be built from. */
+export type ChannelChoice = { id: string; name: string; source: string }
+
+export type ChannelChoices = { collections: ChannelChoice[]; smartLists: ChannelChoice[] }
+
+/** A movie or a series found for a channel. */
+export type ChannelTitle = {
+  id: string
+  name: string
+  kind: 'movie' | 'series'
+  year: number | null
+}
+
+export const fetchOwnChannels = (signal?: AbortSignal) =>
+  request<OwnChannel[]>('GET', '/live-tv/channels', undefined, signal)
+
+export const fetchOwnChannel = (id: string, signal?: AbortSignal) =>
+  request<OwnChannel>('GET', `/live-tv/channels/${seg(id)}`, undefined, signal)
+
+export const createOwnChannel = (channel: OwnChannelDraft) =>
+  request<OwnChannel>('POST', '/live-tv/channels', channel)
+
+export const saveOwnChannel = (id: string, channel: OwnChannelDraft) =>
+  request<OwnChannel>('PUT', `/live-tv/channels/${seg(id)}`, channel)
+
+export const deleteOwnChannel = (id: string) =>
+  request<void>('DELETE', `/live-tv/channels/${seg(id)}`)
+
+export const fetchChannelChoices = (signal?: AbortSignal) =>
+  request<ChannelChoices>('GET', '/live-tv/channels/choices', undefined, signal)
+
+export const searchChannelTitles = (query: string, signal?: AbortSignal) =>
+  request<ChannelTitle[]>(
+    'GET',
+    `/live-tv/channels/titles?q=${encodeURIComponent(query)}`,
+    undefined,
+    signal,
+  )
+
 /** How the requests made to one of the server's addons went since the server started. */
 /** The user whose own addon, source or guide a dashboard row is; null for the server's. */
 export type Owner = { id: string; name: string } | null
@@ -4810,6 +4906,10 @@ export const queryKeys = {
   liveSessions: ['live-sessions'] as const,
   tasks: (language: Language) => ['tasks', language] as const,
   timers: ['timers'] as const,
+  ownChannels: ['live-tv', 'channels'] as const,
+  ownChannel: (id: string) => ['live-tv', 'channels', id] as const,
+  channelChoices: ['live-tv', 'channels', 'choices'] as const,
+  channelTitles: (query: string) => ['live-tv', 'channels', 'titles', query] as const,
   health: ['health'] as const,
   serverActions: ['server', 'actions'] as const,
   /** Under the health's key: refreshing the health refreshes them too. */
