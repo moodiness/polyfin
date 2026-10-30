@@ -389,6 +389,14 @@ func (s *Store) BackupRestored(ctx context.Context, administrator, file string) 
 		administrator, file), Type: "BackupRestored", Severity: Warning})
 }
 
+// BackupRestoredAtSetup records, in the database restored, that the
+// database backup file was restored from the setup page, before any
+// administrator existed.
+func (s *Store) BackupRestoredAtSetup(ctx context.Context, file string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"The database backup %s was restored from the setup page", "La sauvegarde de la base de données %s a été restaurée depuis la page d’installation", "Das Datenbank-Backup %s wurde auf der Einrichtungsseite wiederhergestellt", "La copia de seguridad de la base de datos %s se ha restaurado desde la página de configuración", "Il backup del database %s è stato ripristinato dalla pagina di configurazione", "O backup do banco de dados %s foi restaurado na página de configuração"},
+		file), Type: "BackupRestored", Severity: Warning})
+}
+
 // ServerRestarted records that administrator restarted Polyfin from the
 // admin app, before it stops.
 func (s *Store) ServerRestarted(ctx context.Context, administrator string) {

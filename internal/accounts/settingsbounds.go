@@ -176,6 +176,7 @@ func DefaultSettings() Settings {
 		RecordingsFolder: "",
 		Backups:          false,
 		BackupFolder:     "",
+		BackupPassphrase: "",
 
 		PublicAddress: "",
 
@@ -235,9 +236,9 @@ type SettingBounds struct {
 	// Default is the setting's value on a new server.
 	Default any
 	// Min and Max bound a number, the length of a text, in characters for
-	// the server name and in bytes for the others, or the number of
-	// entries of a list of addresses or apps. Bounded tells whether they
-	// apply.
+	// the server name and the backup passphrase's Min, and in bytes for
+	// the others, or the number of entries of a list of addresses or apps.
+	// Bounded tells whether they apply.
 	Min, Max float64
 	Bounded  bool
 	// Zero tells that 0 is accepted too, below Min, turning the setting
@@ -413,6 +414,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"recordingsFolder": text(MaxFolderBytes, d.RecordingsFolder),
 		"backups":          is(d.Backups),
 		"backupFolder":     text(MaxFolderBytes, d.BackupFolder),
+		"backupPassphrase": orZero(MinBackupPassphraseRunes, MaxBackupPassphraseBytes, d.BackupPassphrase),
 
 		"publicAddress": text(MaxPublicAddressBytes, d.PublicAddress),
 

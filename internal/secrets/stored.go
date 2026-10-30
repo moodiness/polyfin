@@ -36,6 +36,7 @@ var settingSecrets = []struct{ column, name string }{
 	{"anilist_client_secret", "aniListClientSecret"},
 	{"myanimelist_client_secret", "myAnimeListClientSecret"},
 	{"smtp_password", "smtpPassword"},
+	{"backup_passphrase", "backupPassphrase"},
 	{"metrics_token", "metricsToken"},
 	{"torrent_proxy_password", "torrentProxyPassword"},
 	{"torrent_wireguard", "torrentWireGuard"},

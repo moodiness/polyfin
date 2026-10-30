@@ -3,7 +3,9 @@ package admin
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -167,6 +169,10 @@ func backupError(w http.ResponseWriter, err error) bool {
 		{backup.ErrNoPlan, http.StatusConflict, "restore_expired"},
 		{backup.ErrUnreadableSecrets, http.StatusConflict, "unreadable_secrets"},
 		{backup.ErrRestoring, http.StatusConflict, "restoring"},
+		{backup.ErrPassphraseRequired, http.StatusConflict, "passphrase_required"},
+		{backup.ErrWrongPassphrase, http.StatusBadRequest, "wrong_passphrase"},
+		{backup.ErrDamagedBackup, http.StatusBadRequest, "damaged_backup"},
+		{backup.ErrNotEncrypted, http.StatusBadRequest, "not_encrypted"},
 	} {
 		if errors.Is(err, known.err) {
 			writeError(w, known.status, known.code)
@@ -302,18 +308,20 @@ func (h *handler) testBackupDestination(w http.ResponseWriter, r *http.Request) 
 }
 
 // backupFileJSON is a backup that can be restored: Size is -1 when its
-// destination, a WebDAV server, does not tell it.
+// destination, a WebDAV server, does not tell it. Encrypted tells one
+// encrypted with a passphrase, from its name.
 type backupFileJSON struct {
 	Name          string    `json:"name"`
 	Size          int64     `json:"size"`
 	MadeAt        time.Time `json:"madeAt"`
 	BeforeRestore bool      `json:"beforeRestore"`
+	Encrypted     bool      `json:"encrypted"`
 }
 
 func newBackupFilesJSON(files []backup.File) []backupFileJSON {
 	result := make([]backupFileJSON, len(files))
 	for i, f := range files {
-		result[i] = backupFileJSON{Name: f.Name, Size: f.Size, MadeAt: f.MadeAt.UTC(), BeforeRestore: f.BeforeRestore}
+		result[i] = backupFileJSON{Name: f.Name, Size: f.Size, MadeAt: f.MadeAt.UTC(), BeforeRestore: f.BeforeRestore, Encrypted: f.Encrypted}
 	}
 	return result
 }
@@ -356,6 +364,9 @@ func (h *handler) backupFiles(w http.ResponseWriter, r *http.Request) {
 // confirmation shows. Unreadable counts, by kind, the stored secrets of
 // the backup that POLYFIN_SECRET_KEY cannot decrypt: "settings",
 // "tracking", "apps", "notifications", "shares" and "destinations".
+// Encrypted tells an encrypted backup, Locked one whose passphrase is
+// still needed: it is checked once unlocked, and Unreadable is empty
+// until then.
 type restorePlanJSON struct {
 	ID          string         `json:"id"`
 	File        string         `json:"file"`
@@ -364,12 +375,14 @@ type restorePlanJSON struct {
 	MadeAt      *time.Time     `json:"madeAt"`
 	Size        int64          `json:"size"`
 	Unreadable  map[string]int `json:"unreadable"`
+	Encrypted   bool           `json:"encrypted"`
+	Locked      bool           `json:"locked"`
 	ServerName  string         `json:"serverName"`
 }
 
 func (h *handler) newRestorePlanJSON(plan backup.Plan) restorePlanJSON {
 	result := restorePlanJSON{ID: plan.ID, File: plan.File, Uploaded: plan.Uploaded, Size: plan.Size, Unreadable: plan.Unreadable,
-		ServerName: h.Accounts.Settings().ServerName}
+		Encrypted: plan.Encrypted, Locked: plan.Locked, ServerName: h.Accounts.Settings().ServerName}
 	if plan.MadeAt != nil {
 		result.MadeAt = new(plan.MadeAt.UTC())
 	}
@@ -444,6 +457,122 @@ func (h *handler) discardRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Backups.Discard(body.ID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// unlockRestore opens the encrypted backup prepared with the passphrase
+// the administrator typed, then checks it: the plan, unlocked. A wrong
+// passphrase leaves it prepared, to try another.
+func (h *handler) unlockRestore(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID         string `json:"id"`
+		Passphrase string `json:"passphrase"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	plan, err := h.Backups.Unlock(r.Context(), body.ID, body.Passphrase)
+	h.answerUnlocked(w, r, plan, err)
+}
+
+// answerUnlocked answers the plan Unlock gave.
+func (h *handler) answerUnlocked(w http.ResponseWriter, r *http.Request, plan backup.Plan, err error) {
+	if backupError(w, err) {
+		return
+	}
+	if err != nil {
+		if r.Context().Err() == nil {
+			h.Logger.Warn("An encrypted backup could not be opened for a restore", "error", err)
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "unlock_failed", "message": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, h.newRestorePlanJSON(plan))
+}
+
+// downloadBackup sends a backup of the folder as it is, encrypted or not.
+func (h *handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
+	f, file, err := h.Backups.OpenBackup(r.PathValue("name"))
+	if backupError(w, err) {
+		return
+	} else if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	defer f.Close()
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+file.Name+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+	// A download cut short resumes where it stopped.
+	http.ServeContent(w, r, "", time.Time{}, f)
+}
+
+// decryptedDownload is a download of a backup decrypted, which
+// checkBackupPassphrase allows once, for a minute, to the administrator
+// who typed its passphrase.
+type decryptedDownload struct {
+	name, passphrase string
+	user             accounts.ID
+}
+
+// decryptedDownloadLifetime is how long a download decrypted may start.
+const decryptedDownloadLifetime = time.Minute
+
+// checkBackupPassphrase checks that a passphrase opens an encrypted backup
+// of the folder, and answers the ticket that downloads it decrypted, once,
+// within a minute (see downloadDecryptedBackup): the browser then follows
+// a plain link to it, and saves the dump as it comes, never holding it
+// whole, while the passphrase never appears in an address.
+func (h *handler) checkBackupPassphrase(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Passphrase string `json:"passphrase"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	name := r.PathValue("name")
+	dump, err := h.Backups.OpenDecrypted(name, body.Passphrase)
+	if backupError(w, err) {
+		return
+	} else if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	_ = dump.Close()
+	ticket, now := randomToken(), h.now()
+	h.decryptedDownloads.add(ticket, decryptedDownload{name: name, passphrase: body.Passphrase, user: sessionFrom(r.Context()).User.ID},
+		now.Add(decryptedDownloadLifetime), now)
+	writeJSON(w, http.StatusOK, map[string]string{"ticket": ticket})
+}
+
+// downloadDecryptedBackup sends the dump an encrypted backup of the folder
+// holds, for the ticket checkBackupPassphrase gave the same administrator.
+// The download stops at the first part of the backup changed or missing,
+// short of its length: the browser tells it failed.
+func (h *handler) downloadDecryptedBackup(w http.ResponseWriter, r *http.Request) {
+	download, ok := h.decryptedDownloads.take(r.URL.Query().Get("ticket"), h.now())
+	if !ok || download.name != r.PathValue("name") || download.user != sessionFrom(r.Context()).User.ID {
+		writeError(w, http.StatusNotFound, "download_expired")
+		return
+	}
+	dump, err := h.Backups.OpenDecrypted(download.name, download.passphrase)
+	if backupError(w, err) {
+		return
+	} else if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	defer dump.Close()
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+dump.Name+`"`)
+	w.Header().Set("Content-Length", strconv.FormatInt(dump.Size, 10))
+	w.Header().Set("Cache-Control", "no-store")
+	if _, err := io.Copy(w, dump); err != nil {
+		if r.Context().Err() == nil {
+			h.Logger.Warn("A backup downloaded decrypted stopped", "file", dump.Name, "error", err)
+		}
+		// The connection is closed without ending the answer.
+		panic(http.ErrAbortHandler)
+	}
 }
 
 // startRestore restores the backup prepared, once the administrator typed

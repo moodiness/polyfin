@@ -213,6 +213,9 @@ type handler struct {
 	provider        *oidc.Client
 	providerFlows   once[providerFlow]
 	providerTickets once[accounts.ID]
+	// decryptedDownloads are the downloads of backups decrypted that a
+	// passphrase checked allows (see checkBackupPassphrase).
+	decryptedDownloads once[decryptedDownload]
 }
 
 // New returns the handler of every /admin/api/ route.
@@ -408,10 +411,20 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/backup/destinations/{id}", backups(h.deleteBackupDestination))
 	mux.Handle("POST /admin/api/backup/destinations/{id}/test", backups(h.testBackupDestination))
 	mux.Handle("GET /admin/api/backup/files", backups(h.backupFiles))
+	mux.Handle("GET /admin/api/backup/files/{name}", backups(h.downloadBackup))
+	mux.Handle("POST /admin/api/backup/files/{name}/check", backups(h.checkBackupPassphrase))
+	mux.Handle("GET /admin/api/backup/files/{name}/decrypted", backups(h.downloadDecryptedBackup))
 	mux.Handle("POST /admin/api/backup/restore/prepare", backups(h.prepareRestore))
 	mux.Handle("POST /admin/api/backup/restore/upload", backups(h.uploadRestore))
+	mux.Handle("POST /admin/api/backup/restore/unlock", backups(h.unlockRestore))
 	mux.Handle("POST /admin/api/backup/restore/discard", backups(h.discardRestore))
 	mux.Handle("POST /admin/api/backup/restore", backups(h.startRestore))
+	// The setup page restores a backup instead of creating the first
+	// administrator: gated by the setup code, until one exists.
+	mux.HandleFunc("POST /admin/api/setup/restore/upload", h.setupRestoreUpload)
+	mux.HandleFunc("POST /admin/api/setup/restore/unlock", h.setupRestoreUnlock)
+	mux.HandleFunc("POST /admin/api/setup/restore/discard", h.setupRestoreDiscard)
+	mux.HandleFunc("POST /admin/api/setup/restore", h.setupRestoreStart)
 	mux.Handle("GET /admin/api/variables", h.administrator(h.variables))
 	// Without a store, as in tests that leave it out, there are no rows.
 	homeRows := func(next http.HandlerFunc) http.Handler {
@@ -703,6 +716,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidVAAPIDevice, http.StatusBadRequest, "invalid_vaapi_device"},
 		{accounts.ErrInvalidRecordingsFolder, http.StatusBadRequest, "invalid_recordings_folder"},
 		{accounts.ErrInvalidBackupFolder, http.StatusBadRequest, "invalid_backup_folder"},
+		{accounts.ErrInvalidBackupPassphrase, http.StatusBadRequest, "invalid_backup_passphrase"},
 		{accounts.ErrInvalidConversionFolder, http.StatusBadRequest, "invalid_conversion_folder"},
 		{accounts.ErrInvalidReadingFolder, http.StatusBadRequest, "invalid_reading_folder"},
 		{accounts.ErrInvalidCacheFolder, http.StatusBadRequest, "invalid_cache_folder"},

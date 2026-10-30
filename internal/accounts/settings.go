@@ -1143,6 +1143,25 @@ var (
 // MaxFolderBytes is the longest RecordingsFolder or BackupFolder, in bytes.
 const MaxFolderBytes = 512
 
+// The bounds of Settings.BackupPassphrase when it is set: at least
+// MinBackupPassphraseRunes characters, at most MaxBackupPassphraseBytes
+// bytes.
+const (
+	MinBackupPassphraseRunes = 12
+	MaxBackupPassphraseBytes = 256
+)
+
+// ErrInvalidBackupPassphrase reports a BackupPassphrase that is neither
+// empty nor within its bounds, or that holds control characters.
+var ErrInvalidBackupPassphrase = errors.New("invalid backup passphrase")
+
+// validBackupPassphrase reports whether passphrase may be saved as the
+// backup passphrase: empty turns encryption off.
+func validBackupPassphrase(passphrase string) bool {
+	return passphrase == "" || (utf8.RuneCountInString(passphrase) >= MinBackupPassphraseRunes &&
+		validLine(passphrase, MaxBackupPassphraseBytes))
+}
+
 // CleanFolder returns folder as Settings.RecordingsFolder and BackupFolder
 // keep it, cleaned (see filepath.Clean), and whether it may be one: empty,
 // for the default folder, or an absolute path of at most MaxFolderBytes
@@ -1659,9 +1678,11 @@ type Settings struct {
 	RecordingsFolder string
 	// Backups turns the daily database backups on. BackupFolder is the
 	// folder they are written to, empty for the default one under the data
-	// folder (see BackupDir).
-	Backups      bool
-	BackupFolder string
+	// folder (see BackupDir). BackupPassphrase, when set, encrypts them,
+	// sealed with the other secrets.
+	Backups          bool
+	BackupFolder     string
+	BackupPassphrase string
 	// PublicAddress is the address people open Polyfin at, such as
 	// https://media.example.org, without a trailing slash: links in
 	// notifications start with it. Empty, messages carry no link.
@@ -2020,7 +2041,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"web_theme, custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, collection_library_apps, remuxdb, remuxdb_url, " +
-	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
+	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, backup_passphrase, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
 	"metrics, metrics_token, " +
@@ -2083,6 +2104,7 @@ func (settings *Settings) fields() []any {
 		&settings.AniListClientID, &settings.AniListClientSecret, &settings.MyAnimeListClientID, &settings.MyAnimeListClientSecret,
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.CollectionLibraryApps, &settings.RemuxDB, &settings.RemuxDBURL,
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
+		&settings.BackupPassphrase,
 		&settings.PublicAddress,
 		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName,
 		&settings.PlaybackHistory, &settings.PlaybackHistoryDays, &settings.WeeklySummaryDay, &settings.WeeklySummaryHour,
@@ -2133,6 +2155,7 @@ func (settings *Settings) secrets() []struct {
 		{"aniListClientSecret", &settings.AniListClientSecret},
 		{"myAnimeListClientSecret", &settings.MyAnimeListClientSecret},
 		{"smtpPassword", &settings.SMTPPassword},
+		{"backupPassphrase", &settings.BackupPassphrase},
 		{"metricsToken", &settings.MetricsToken},
 		{"torrentProxyPassword", &settings.TorrentProxyPassword},
 		{"torrentWireGuard", &settings.TorrentWireGuard},
@@ -2155,6 +2178,16 @@ func (s *Store) openSecrets(settings *Settings) {
 		}
 		*secret.value = value
 	}
+}
+
+// SecretUnreadable reports whether the secret of the settings named name,
+// as the admin API names it, is stored but cannot be opened with the key:
+// it reads as not set meanwhile.
+func (s *Store) SecretUnreadable(name string) bool {
+	s.secretsMu.Lock()
+	defer s.secretsMu.Unlock()
+	_, ok := s.unreadable[name]
+	return ok
 }
 
 // sealSecrets returns settings as they are stored: their secrets sealed,
@@ -2522,6 +2555,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.BackupFolder, ok = CleanFolder(settings.BackupFolder); !ok {
 		return Settings{}, ErrInvalidBackupFolder
+	}
+	if !validBackupPassphrase(settings.BackupPassphrase) {
+		return Settings{}, ErrInvalidBackupPassphrase
 	}
 	if settings.ConversionFolder, ok = CleanFolder(settings.ConversionFolder); !ok {
 		return Settings{}, ErrInvalidConversionFolder

@@ -675,6 +675,11 @@ type settingsJSON struct {
 	RecordingsFolderDefault string   `json:"recordingsFolderDefault"`
 	BackupFolderDefault     string   `json:"backupFolderDefault"`
 	RenderNodes             []string `json:"renderNodes"`
+	// BackupPassphrase, which encrypts the backups, keeps its value when a
+	// PUT leaves it out, and "" turns encryption off; it is never sent
+	// back: BackupPassphraseSet tells whether one is saved.
+	BackupPassphrase    *string `json:"backupPassphrase,omitempty"`
+	BackupPassphraseSet bool    `json:"backupPassphraseSet"`
 	// PublicAddress keeps its current value when a PUT leaves it out; empty
 	// sends notifications without links.
 	PublicAddress *string `json:"publicAddress"`
@@ -962,6 +967,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingsFolder: &settings.RecordingsFolder,
 		Backups:          &settings.Backups,
 		BackupFolder:     &settings.BackupFolder,
+
+		BackupPassphraseSet: settings.BackupPassphrase != "",
 
 		PublicAddress: &settings.PublicAddress,
 
@@ -1712,6 +1719,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingsFolder: valueOr(body.RecordingsFolder, current.RecordingsFolder),
 		Backups:          valueOr(body.Backups, current.Backups),
 		BackupFolder:     valueOr(body.BackupFolder, current.BackupFolder),
+		BackupPassphrase: valueOr(body.BackupPassphrase, current.BackupPassphrase),
 
 		PublicAddress: valueOr(body.PublicAddress, current.PublicAddress),
 

@@ -465,9 +465,13 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Settings: store.Settings, Logger: logger})
 	defer breaks.Close()
 	registerRecordingTasks(registry, recorder, breaks)
-	// The destinations' passwords and keys are sealed as the other secrets.
+	// The destinations' passwords and keys are sealed as the other secrets,
+	// and so is the passphrase that encrypts the backups: one the key
+	// cannot open fails the backups rather than leave them unencrypted. A
+	// backup sent from the setup page is written to the default folder.
 	backups := backup.New(backup.Config{Folder: func() string { return store.Settings().BackupDir(cfg.DataDir) }, DatabaseURL: cfg.DatabaseURL,
-		DB: pool, Secrets: box, Settings: store.Settings, Logger: logger})
+		DB: pool, Secrets: box, Settings: store.Settings, PassphraseUnreadable: func() bool { return store.SecretUnreadable("backupPassphrase") },
+		SetupFolder: accounts.DefaultBackupFolder(cfg.DataDir), Logger: logger})
 	if backups.Available() {
 		logger.Info("Database backups are on", "folder", backups.Dir())
 		if _, err := exec.LookPath(backups.PgDump()); err != nil {
@@ -477,9 +481,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			logger.Warn("pg_restore was not found: backups cannot be restored from the admin app until it is installed", "pg_restore",
 				backups.PgRestore())
 		}
-		// Backups downloaded or sent to be restored, and never restored, go.
-		backups.RemoveRestoreLeftovers()
 	}
+	// Backups downloaded, sent or decrypted to be restored, and never
+	// restored, go.
+	backups.RemoveRestoreLeftovers()
 	registerBackupTask(registry, backups)
 	webClient := server.WebClientFiles(cfg.WebDir)
 	switch {

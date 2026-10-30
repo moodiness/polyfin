@@ -22,11 +22,12 @@ const password = "s3cret pa'ss@word"
 
 // fakePgDump is a pg_dump that records its arguments, one per line, and
 // its environment in the folder FAKE_PG_DUMP_RECORD names, writes part of
-// a dump to its --file, then fails when FAKE_PG_DUMP_FAIL is set, and
-// otherwise ends the dump.
+// a dump to its --file, or its standard output without one, then fails
+// when FAKE_PG_DUMP_FAIL is set, and otherwise ends the dump.
 const fakePgDump = `#!/bin/sh
 printf '%s\n' "$@" > "$FAKE_PG_DUMP_RECORD/args"
 env > "$FAKE_PG_DUMP_RECORD/env"
+file=/dev/stdout
 for arg; do
 	case $arg in --file=*) file=${arg#--file=} ;; esac
 done
@@ -45,6 +46,8 @@ type harness struct {
 	record string
 	logs   *bytes.Buffer
 	kept   int
+	// passphrase is the settings' BackupPassphrase.
+	passphrase string
 }
 
 func newHarness(t *testing.T, db DB) *harness {
@@ -60,8 +63,10 @@ func newHarness(t *testing.T, db DB) *harness {
 		DatabaseURL: "postgresql://polyfin:" + strings.ReplaceAll(strings.ReplaceAll(password, " ", "%20"), "@", "%40") + "@db.example:5432/polyfin?sslmode=disable&pool_max_conns=4",
 		PgDump:      script,
 		DB:          db,
-		Settings:    func() accounts.Settings { return accounts.Settings{BackupHour: 4, BackupsKept: h.kept} },
-		Logger:      slog.New(slog.NewTextHandler(h.logs, nil)),
+		Settings: func() accounts.Settings {
+			return accounts.Settings{BackupHour: 4, BackupsKept: h.kept, BackupPassphrase: h.passphrase}
+		},
+		Logger: slog.New(slog.NewTextHandler(h.logs, nil)),
 	})
 	return h
 }
