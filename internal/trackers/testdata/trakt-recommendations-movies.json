@@ -1,0 +1,30 @@
+[
+  {
+    "title": "Listed Under Its Own Name",
+    "year": 2019,
+    "ids": { "trakt": 101, "slug": "listed-under-its-own-name-2019", "imdb": "tt0000009", "tmdb": 9009 },
+    "favorited_by": [{ "user": { "username": "someone", "private": false }, "notes": null }],
+    "recommended_by": []
+  },
+  {
+    "title": "Known By TMDB Only",
+    "year": 2015,
+    "ids": { "trakt": 102, "slug": "known-by-tmdb-only-2015", "imdb": null, "tmdb": 550 },
+    "favorited_by": [],
+    "recommended_by": []
+  },
+  {
+    "title": "Without Any Identifier",
+    "year": 2021,
+    "ids": { "trakt": 103, "slug": "without-any-identifier-2021", "imdb": null, "tmdb": null },
+    "favorited_by": [],
+    "recommended_by": []
+  },
+  {
+    "title": "Named By IMDb",
+    "year": 2008,
+    "ids": { "trakt": 104, "slug": "named-by-imdb-2008", "imdb": "tt0000077", "tmdb": 7077 },
+    "favorited_by": [],
+    "recommended_by": []
+  }
+]
