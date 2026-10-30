@@ -301,32 +301,16 @@ func sentStream(s liveSessionJSON) *streamJSON {
 		*sent = *s.Source
 	}
 	if s.Video != nil {
-		sent.Width, sent.Height, sent.VideoCodec = s.Video.Width, s.Video.Height, videoCodecOf(s.Video.Encoder)
+		sent.Width, sent.Height, sent.VideoCodec = s.Video.Width, s.Video.Height, hls.VideoCodecOf(s.Video.Encoder)
 		sent.Bitrate = s.Video.Bitrate
 		if s.Audio != nil {
 			sent.Bitrate += s.Audio.Bitrate
 		}
 	}
 	if s.Audio != nil {
-		sent.AudioCodec = audioCodecOf(s.Audio.Codec)
+		sent.AudioCodec = hls.AudioCodecOf(s.Audio.Codec)
 	}
 	return sent
-}
-
-// videoCodecOf names the codec an FFmpeg video encoder makes.
-func videoCodecOf(encoder string) string {
-	switch {
-	case strings.Contains(encoder, "265"), strings.HasPrefix(encoder, "hevc"):
-		return "hevc"
-	case strings.Contains(encoder, "264"), strings.HasPrefix(encoder, "h264"):
-		return "h264"
-	}
-	return encoder
-}
-
-// audioCodecOf names the codec an FFmpeg audio encoder makes.
-func audioCodecOf(encoder string) string {
-	return strings.TrimPrefix(encoder, "lib")
 }
 
 // maxMessageLength bounds the messages administrators send to apps.
