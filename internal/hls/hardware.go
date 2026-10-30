@@ -68,6 +68,12 @@ type Hardware struct {
 	// libplacebo's output, at the size converted to, goes to NVENC through
 	// memory.
 	VulkanDecoding bool
+	// HDRSpeed is how many times real time the GPU of ToneMapping tone
+	// mapped a 4K HDR10 sample to 1080p at startup, through the chain
+	// conversions take; LowHDRSpeed, timed only when HDRSpeed is under
+	// real time, the same to LowToneMappedHeight. 0 when not timed, or
+	// when the timing failed. See HDRPath.
+	HDRSpeed, LowHDRSpeed float64
 	// FFmpeg is the FFmpeg the GPU encodes with when it is not the
 	// Manager's own: the one for NVIDIA drivers older than 610 (see
 	// OlderDriverFFmpeg).
@@ -435,7 +441,11 @@ func (m *Manager) measureLater(want string, hw *Hardware) {
 			m.detected[want] = &measured
 		}
 		m.detecting.Unlock()
-		m.hardware.CompareAndSwap(hw, &measured)
+		// A GPU chosen again once the processor is timed tells where HDR
+		// now goes; at startup, the processor's timing tells it.
+		if m.hardware.CompareAndSwap(hw, &measured) && m.processorTimed.Load() {
+			m.logHDRPath()
+		}
 	}()
 }
 
@@ -457,7 +467,16 @@ func speed(d time.Duration, err error) string {
 	if err != nil {
 		return "failed"
 	}
-	return strconv.FormatFloat(sampleLength.Seconds()/max(d, time.Millisecond).Seconds(), 'f', 1, 64) + "x"
+	return strconv.FormatFloat(speedOf(d, nil), 'f', 1, 64) + "x"
+}
+
+// speedOf is how many times real time a sample converted in d, 0 when it
+// failed.
+func speedOf(d time.Duration, err error) float64 {
+	if err != nil {
+		return 0
+	}
+	return sampleLength.Seconds() / max(d, time.Millisecond).Seconds()
 }
 
 // measure converts a sample through memory and on the GPU, for each kind
@@ -467,7 +486,9 @@ func speed(d time.Duration, err error) string {
 // Vulkan proved to decode it. Every failure leaves frames going through
 // memory. The deinterlacers of frames kept on the GPU are those that
 // deinterlaced a quarter of a second there: a filter FFmpeg lists may
-// still fail, or crash, on a GPU. It logs what it timed.
+// still fail, or crash, on a GPU. On every GPU that tone maps, it keeps
+// how fast the chain HDR takes converted (see HDRSpeed). It logs what it
+// timed.
 func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 	i := slices.IndexFunc(hardwareMethods, func(c gpuMethod) bool { return c.method == hw.Method })
 	if i < 0 || len(hw.Encoders) == 0 {
@@ -518,12 +539,15 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 			}
 		}
 	}
-	// Only libplacebo, on NVIDIA's GPUs, takes Vulkan frames.
-	if !hw.ToneMapping || hw.Method != "cuda" || ctx.Err() != nil {
+	if !hw.ToneMapping || ctx.Err() != nil {
 		return hw
 	}
-	// The HDR sample is HEVC in 10 bits, as HDR files are, from the GPU's
-	// encoder or else x265's.
+	if hw.Method != "cuda" {
+		return m.timeDeviceToneMapping(ctx, hw, dir, pattern, encoder)
+	}
+	// Only libplacebo, on NVIDIA's GPUs, takes Vulkan frames. The HDR
+	// sample is HEVC in 10 bits, as HDR files are, from the GPU's encoder
+	// or else x265's.
 	hdr := filepath.Join(dir, "hdr.mkv")
 	var encode []string
 	switch {
@@ -541,15 +565,50 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 	gpu.VulkanDecoding = true
 	// The frames must come from the GPU's decoder: FFmpeg would decode in
 	// software, unseen, a codec Vulkan does not, and libplacebo take the
-	// frames from memory. Only Vulkan frames can be downloaded.
+	// frames from memory. Only Vulkan frames can be downloaded. Without
+	// them, the chain through memory is timed alone.
 	check := VideoEncoding{ToneMap: true, Hardware: &gpu}
+	var t timing
 	if _, err := m.timed(ctx, slices.Concat(probeStart, check.inputs(), []string{"-i", hdr, "-vf", "hwdownload,format=p010le", "-f", "null", "-"})); err != nil {
-		m.logChoice("HDR", false, timing{gpuErr: err})
-		return hw
+		t.gpuErr = err
+		t.memory, t.memoryErr = m.timeChain(ctx, hdr, encoder, VideoEncoding{ToneMap: true, Hardware: &memory}, 1080)
+	} else {
+		t = m.timeChains(ctx, hdr, encoder, VideoEncoding{ToneMap: true, Hardware: &memory}, VideoEncoding{ToneMap: true, Hardware: &gpu})
 	}
-	t := m.timeChains(ctx, hdr, encoder, VideoEncoding{ToneMap: true, Hardware: &memory}, VideoEncoding{ToneMap: true, Hardware: &gpu})
 	hw.VulkanDecoding = t.gpuWins()
 	m.logChoice("HDR", hw.VulkanDecoding, t)
+	if hw.VulkanDecoding {
+		return m.timeLowerToneMapping(ctx, hw, hdr, encoder, t.gpu, t.gpuErr)
+	}
+	return m.timeLowerToneMapping(ctx, hw, hdr, encoder, t.memory, t.memoryErr)
+}
+
+// timeDeviceToneMapping times the tone mapping of Intel's GPU or of
+// VideoToolbox (see deviceToneMapping): a 4K HDR10 sample from x265, which
+// writes the mastering display tonemap_vaapi and vpp_qsv need, converted
+// to 1080p as conversions run, then lower when that is under real time.
+func (m *Manager) timeDeviceToneMapping(ctx context.Context, hw Hardware, dir string, pattern []string, encoder string) Hardware {
+	hdr := filepath.Join(dir, "hdr10.mkv")
+	if _, err := m.timed(ctx, slices.Concat(probeStart, pattern, []string{"-vf", "format=yuv420p10le," + hdrTags, "-c:v", "libx265", "-preset", "ultrafast",
+		"-x265-params", hdr10Params, hdr})); err != nil {
+		return hw
+	}
+	took, err := m.timeChain(ctx, hdr, encoder, VideoEncoding{ToneMap: true, Hardware: &hw}, 1080)
+	m.logger.Info("Timed the GPU's HDR tone mapping", "height", 1080, "speed", speed(took, err))
+	return m.timeLowerToneMapping(ctx, hw, hdr, encoder, took, err)
+}
+
+// timeLowerToneMapping keeps how fast hw tone mapped HDR to 1080p, in took
+// or failing with err (see HDRSpeed). When that is under real time, it
+// times the same chain to LowToneMappedHeight, and logs it.
+func (m *Manager) timeLowerToneMapping(ctx context.Context, hw Hardware, sample, encoder string, took time.Duration, err error) Hardware {
+	hw.HDRSpeed = speedOf(took, err)
+	if hw.HDRSpeed == 0 || hw.HDRSpeed >= realTime || ctx.Err() != nil {
+		return hw
+	}
+	took, err = m.timeChain(ctx, sample, encoder, VideoEncoding{ToneMap: true, Hardware: &hw}, LowToneMappedHeight)
+	hw.LowHDRSpeed = speedOf(took, err)
+	m.logger.Info("Timed the GPU's HDR tone mapping at a lower height", "height", LowToneMappedHeight, "speed", speed(took, err))
 	return hw
 }
 
@@ -557,16 +616,16 @@ func (m *Manager) measure(ctx context.Context, hw Hardware) Hardware {
 // memory then on the GPU, as the two encodings say.
 func (m *Manager) timeChains(ctx context.Context, sample, encoder string, memory, gpu VideoEncoding) timing {
 	var t timing
-	for _, run := range []struct {
-		v    VideoEncoding
-		took *time.Duration
-		err  *error
-	}{{memory, &t.memory, &t.memoryErr}, {gpu, &t.gpu, &t.gpuErr}} {
-		run.v.Encoder, run.v.Width, run.v.Height = encoder, 1920, 1080
-		*run.took, *run.err = m.timed(ctx, slices.Concat(probeStart, run.v.inputs(),
-			[]string{"-i", sample, "-vf", run.v.filters(), "-c:v", encoder, "-f", "null", "-"}))
-	}
+	t.memory, t.memoryErr = m.timeChain(ctx, sample, encoder, memory, 1080)
+	t.gpu, t.gpuErr = m.timeChain(ctx, sample, encoder, gpu, 1080)
 	return t
+}
+
+// timeChain times the conversion of sample by encoder to a 16:9 frame of
+// height, as v says.
+func (m *Manager) timeChain(ctx context.Context, sample, encoder string, v VideoEncoding, height int) (time.Duration, error) {
+	v.Encoder, v.Width, v.Height = encoder, height*16/9, height
+	return m.timed(ctx, slices.Concat(probeStart, v.inputs(), []string{"-i", sample, "-vf", v.filters(), "-c:v", encoder, "-f", "null", "-"}))
 }
 
 // logChoice logs the chain chosen for a kind of conversion, and the speed

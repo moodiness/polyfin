@@ -182,8 +182,11 @@ type VideoEncoding struct {
 	// progressive.
 	ToneMap, Deinterlace bool
 	// ToneMapOnCPU tone maps HDR on the processor even on a GPU that tone
-	// maps.
-	ToneMapOnCPU bool
+	// maps. ToneMapReason tells why, or why the GPU tone maps below the
+	// height it would convert at: one of the ToneMap reasons, empty when
+	// neither, for the log.
+	ToneMapOnCPU  bool
+	ToneMapReason string
 	// Burn is the FFmpeg index of an image subtitle stream burned into the
 	// video, nil for none; BurnFile, the address of an image subtitle file
 	// burned in instead, a PGS file or a VobSub pair's .idx file, read
@@ -778,9 +781,13 @@ type Manager struct {
 	run       func(ctx context.Context, args []string) (time.Duration, error)
 	// toneMappingTimed times HDR tone mapped on the processor once, and
 	// toneMappedHeight keeps the height it chose, 0 until then (see
-	// ToneMappedHeight).
+	// ToneMappedHeight); toneMappingSpeed, the speed it timed, as
+	// math.Float64bits, 0 until then and when it failed; processorTimed
+	// tells that timing ended, or never runs (see logHDRPath).
 	toneMappingTimed sync.Once
 	toneMappedHeight atomic.Int32
+	toneMappingSpeed atomic.Uint64
+	processorTimed   atomic.Bool
 	// vendor, when set, tells the PCI vendor of a render node in place of
 	// Linux, for tests.
 	vendor func(node string) string
@@ -1698,7 +1705,7 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		})
 	}
 	started := time.Now()
-	e.m.logger.Debug("Started a remux", "from", j.start, "variant", e.key.Variant, "video", e.remux.loggedVideo(), "audio", e.remux.loggedAudio())
+	e.m.logger.Debug("Started a remux", append([]any{"from", j.start, "variant", e.key.Variant, "video", e.remux.loggedVideo(), "audio", e.remux.loggedAudio()}, e.m.toneMapAttrs(e.remux.Encode)...)...)
 	take := func(p piece) error { return e.take(ctx, j, p) }
 	if e.remux.Format == TS {
 		err = splitTS(output, take)

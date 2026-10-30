@@ -144,7 +144,7 @@ func TestAutomaticToneMappedHeightFollowsTheTiming(t *testing.T) {
 		}}
 		m := &Manager{dir: t.TempDir(), logger: slog.New(slog.DiscardHandler), detected: map[string]*Hardware{}, run: r.run,
 			can: capabilities{encoders: []string{"libx264", "libx265"}, filters: []string{"zscale", "tonemap"}}}
-		if got := m.timeToneMapping(t.Context(), tc.hw); got != tc.want {
+		if got, _ := m.timeToneMapping(t.Context(), tc.hw); got != tc.want {
 			t.Errorf("%s: %dp, want %dp", tc.name, got, tc.want)
 		}
 		if tc.sampleErr != nil {
@@ -192,7 +192,7 @@ func TestTheHDRSampleFallsBackToX265(t *testing.T) {
 	}}
 	m := &Manager{dir: t.TempDir(), logger: slog.New(slog.DiscardHandler), detected: map[string]*Hardware{}, run: r.run,
 		can: capabilities{encoders: []string{"libx264", "libx265"}, filters: []string{"zscale", "tonemap"}}}
-	if got := m.timeToneMapping(t.Context(), vaapi); got != 1080 {
+	if got, _ := m.timeToneMapping(t.Context(), vaapi); got != 1080 {
 		t.Errorf("%dp, want 1080p", got)
 	}
 	if len(r.runs) != 3 || !contains(r.runs[1], "-c:v", "libx265") || !contains(r.runs[2], "-c:v", "h264_vaapi") {
@@ -235,7 +235,7 @@ func TestIntelToneMappingKeepsItsDeinterlacer(t *testing.T) {
 	if got.Resident || got.VulkanDecoding || !slices.Equal(got.Deinterlacers, []string{"deinterlace_vaapi"}) {
 		t.Errorf("%+v", got)
 	}
-	if f.runs["hdr sample"] != nil || f.runs["check"] != nil {
+	if f.runs["check"] != nil || f.runs["hdr gpu"] != nil || f.runs["hdr memory"] != nil {
 		t.Errorf("Vulkan timed on an Intel GPU: %q", f.runs)
 	}
 }

@@ -12,11 +12,13 @@ import (
 )
 
 // chainTimes are the injected durations of the timed conversions, by kind
-// and chain; a missing one fails. checkFails fails the Vulkan decoding
-// check, sampleFails the making of the samples, and brokenDeinterlacers
-// the check of those deinterlacers.
+// and chain; a missing one fails. hdrDevice is the tone mapping of Intel's
+// GPU or of VideoToolbox, and hdrLow any GPU's HDR chain to 720p.
+// checkFails fails the Vulkan decoding check, sampleFails the making of
+// the samples, and brokenDeinterlacers the check of those deinterlacers.
 type chainTimes struct {
 	sdrMemory, sdrGPU, hdrMemory, hdrGPU time.Duration
+	hdrDevice, hdrLow                    time.Duration
 	checkFails, sampleFails              bool
 	brokenDeinterlacers                  []string
 }
@@ -70,6 +72,10 @@ func (f *fakeRunner) run(_ context.Context, args []string) (time.Duration, error
 			return 0, failed
 		}
 		return time.Second, nil
+	case strings.Contains(vf, "h=720") && (strings.Contains(vf, "libplacebo") || deviceToneMaps(vf)):
+		return answer("hdr low", f.times.hdrLow)
+	case deviceToneMaps(vf):
+		return answer("hdr device", f.times.hdrDevice)
 	case strings.Contains(vf, "libplacebo") && contains(args, "-hwaccel_output_format", "vulkan"):
 		return answer("hdr gpu", f.times.hdrGPU)
 	case strings.Contains(vf, "libplacebo"):
@@ -82,6 +88,12 @@ func (f *fakeRunner) run(_ context.Context, args []string) (time.Duration, error
 	}
 	f.t.Errorf("an unexpected command line: %q", args)
 	return 0, failed
+}
+
+// deviceToneMaps reports whether a filter chain tone maps on Intel's GPU or
+// with VideoToolbox (see deviceToneMapping).
+func deviceToneMaps(vf string) bool {
+	return strings.Contains(vf, "tonemap_vaapi") || strings.Contains(vf, "tonemap=1") || strings.Contains(vf, "scale_vt=") && strings.Contains(vf, "color_matrix=bt709")
 }
 
 func measuringManager(t *testing.T, times chainTimes) (*Manager, *fakeRunner) {
