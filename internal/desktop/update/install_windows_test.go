@@ -31,7 +31,8 @@ func init() {
 }
 
 // The installer starts at once, its wizard shown: started hidden, it
-// would wait unseen for a click once the app has quit.
+// would wait unseen for a click once the app has quit. The install folder
+// is kept beside it first.
 func TestInstallerIsShown(t *testing.T) {
 	self, err := os.Executable()
 	if err != nil {
@@ -47,14 +48,18 @@ func TestInstallerIsShown(t *testing.T) {
 		for os.RemoveAll(dir) != nil && time.Now().Before(deadline) {
 			time.Sleep(200 * time.Millisecond)
 		}
+		_ = os.RemoveAll(dir + ".old")
 	})
 	pkg := filepath.Join(dir, fakeInstaller)
 	if err := copyFile(self, pkg); err != nil {
 		t.Fatal(err)
 	}
-	cmd, err := Install(context.Background(), pkg, Installer, filepath.Join(dir, "polyfin-desktop.exe"))
-	if err != nil || cmd != nil {
-		t.Fatalf("Install = %v, %v: the installer should have started", cmd, err)
+	installed, err := Install(context.Background(), pkg, Installer, filepath.Join(dir, "polyfin-desktop.exe"))
+	if err != nil || installed.Start != nil {
+		t.Fatalf("Install = %+v, %v: the installer should have started", installed, err)
+	}
+	if _, err := os.Stat(filepath.Join(installed.Previous, fakeInstaller)); err != nil || installed.App != dir {
+		t.Errorf("the install folder was not kept: %+v, %v", installed, err)
 	}
 	deadline := time.Now().Add(time.Minute)
 	for {

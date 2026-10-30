@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -450,5 +451,54 @@ func TestUpdateToolSettings(t *testing.T) {
 	admin.call(http.MethodPut, "/settings", map[string]any{"serverName": "Polyfin", "language": "en", "updateToolToken": ""})
 	if api.store.Settings().UpdateToolToken != "" {
 		t.Error("the token was not removed")
+	}
+}
+
+// Polyfin Desktop's return to the version that runs, from a newer one
+// that did not start, shows under System › Health while that older
+// version runs, with what the app told; not once a newer one runs.
+func TestDesktopRollbackIsAHealthProblem(t *testing.T) {
+	t.Parallel()
+	data := t.TempDir()
+	folders := desktop.Folders{Data: data}
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) {
+		o.Desktop, o.DataDir = true, data
+	})
+	admin := api.signedIn("root", true)
+	problems := func(language string) []healthProblemJSON {
+		t.Helper()
+		var answer struct {
+			Problems []healthProblemJSON `json:"problems"`
+		}
+		if status := admin.raw(http.MethodGet, "/health/problems?language="+language, "", &answer); status != http.StatusOK {
+			t.Fatalf("problems: %d", status)
+		}
+		var found []healthProblemJSON
+		for _, p := range answer.Problems {
+			if p.Code == problemDesktopRolledBack {
+				found = append(found, p)
+			}
+		}
+		return found
+	}
+	if got := problems("en"); len(got) != 0 {
+		t.Errorf("before any return: %+v", got)
+	}
+	back := desktop.RolledBack{Version: "1.3.0", Previous: "1.2.3", Reason: "its server stopped 3 times before it answered: exit status 2"}
+	if err := desktop.WriteRolledBack(folders, back); err != nil {
+		t.Fatal(err)
+	}
+	want := []healthProblemJSON{{Key: "desktop_rolled_back:1.3.0", Code: problemDesktopRolledBack, Tone: "warning", To: "/system/health#process",
+		Name: "1.3.0", Previous: "1.2.3", Error: back.Reason}}
+	if got := problems("en"); !reflect.DeepEqual(got, want) {
+		t.Errorf("problems = %+v, want %+v", got, want)
+	}
+	// A record of an older version than the running one is stale.
+	back.Version = "1.2.0"
+	if err := desktop.WriteRolledBack(folders, back); err != nil {
+		t.Fatal(err)
+	}
+	if got := problems("en"); len(got) != 0 {
+		t.Errorf("with an older version: %+v", got)
 	}
 }

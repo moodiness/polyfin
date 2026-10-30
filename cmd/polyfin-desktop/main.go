@@ -262,6 +262,10 @@ func runHeadless(options app.Options, logger *slog.Logger, asked requests) *exec
 			quit(a)
 			logger.Info("Polyfin Desktop quit to start the new version")
 			return relaunch
+		case previous := <-a.RolledBack():
+			quit(a)
+			logger.Info("Polyfin Desktop quit to start the previous version")
+			return previous
 		}
 		quit(a)
 		logger.Info("Polyfin Desktop quit")

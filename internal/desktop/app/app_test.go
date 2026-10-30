@@ -27,8 +27,10 @@ import (
 // FAKE_POLYFIN_SERVER is set: it answers the admin app's status on
 // POLYFIN_LISTEN, logs a setup code as the server does, records its
 // environment, and stops on SIGTERM or Ctrl-Break. FAKE_POLYFIN_EXIT makes
-// its first run end by itself. With FAKE_DESKTOP_APP set, it is an app
-// holding a data folder instead (see quit_test.go).
+// its first run end by itself. FAKE_POLYFIN_BROKEN makes it a broken
+// build's: it marks the database as migrated, then ends before it
+// answers. With FAKE_DESKTOP_APP set, it is an app holding a data folder
+// instead (see quit_test.go).
 func TestMain(m *testing.M) {
 	if os.Getenv("FAKE_POLYFIN_SERVER") != "" {
 		fakeServer()
@@ -51,6 +53,11 @@ func fakeServer() {
 	if os.Getenv("FAKE_POLYFIN_EXIT") != "" && len(previous) == 0 {
 		fmt.Fprintln(os.Stderr, "fake: ending by itself")
 		os.Exit(3)
+	}
+	if os.Getenv("FAKE_POLYFIN_BROKEN") != "" {
+		_ = os.WriteFile(filepath.Join(data, "postgresql", "migrated-by-the-broken-build"), nil, 0o600)
+		fmt.Fprintln(os.Stderr, "fake: a broken build ends before it answers")
+		os.Exit(2)
 	}
 	fmt.Fprintln(os.Stderr, `time=2026-10-18T10:00:00.000Z level=WARN msg="No administrator yet: open /admin/ and create one with this setup code" setup_code=AB3D-7KQ9`)
 	listener, err := net.Listen("tcp", os.Getenv("POLYFIN_LISTEN"))

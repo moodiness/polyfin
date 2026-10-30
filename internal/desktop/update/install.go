@@ -31,49 +31,69 @@ func CanInstall(kind Kind, exe string) error {
 	return nil
 }
 
+// Installed is what Install did.
+type Installed struct {
+	// Start is what to start once the app has quit, nil when nothing is.
+	Start *exec.Cmd
+	// App is where the app is, and Previous the previous app kept beside
+	// it until the new version answers (see Pending): "" for a .deb,
+	// which the system's package installer replaces.
+	App, Previous string
+}
+
 // Install installs the downloaded package pkg in place of the app whose
-// executable is exe, once the server and the database have stopped. It
-// returns what to start once the app has quit: the new app, or the
-// system's package installer. The data folder is never touched.
+// executable is exe, once the server and the database have stopped,
+// keeping the previous app beside it. The data folder is never touched.
 //
-//   - macOS: the bundle of the disk image replaces the app's bundle.
-//   - Windows: the installer starts at once, its window shown as from a
+//   - macOS: the bundle of the disk image replaces the app's bundle, kept
+//     as Polyfin.app.old.
+//   - Windows: the install folder is copied beside it, as Polyfin.old,
+//     then the installer starts at once, its window shown as from a
 //     download, and nothing is left to start: its wizard waits for a
 //     click, and asks to quit Polyfin first if it still runs, so a
 //     failure to start it is told while the app still runs.
-//   - Linux: the new AppImage replaces the one the app runs from; a .deb
-//     opens in the system's package installer.
-func Install(ctx context.Context, pkg string, kind Kind, exe string) (*exec.Cmd, error) {
+//   - Linux: the new AppImage replaces the one the app runs from, kept
+//     with .old; a .deb opens in the system's package installer, and
+//     nothing is kept.
+func Install(ctx context.Context, pkg string, kind Kind, exe string) (Installed, error) {
 	switch kind {
 	case DMG:
 		bundle := desktop.Bundle(exe)
 		if bundle == "" {
-			return nil, ErrNotPackaged
+			return Installed{}, ErrNotPackaged
 		}
 		if err := installDMG(ctx, pkg, bundle); err != nil {
-			return nil, err
+			return Installed{}, err
 		}
-		return desktop.WindowCommand(context.Background(), "/usr/bin/open", "-n", bundle), nil
+		return Installed{Start: desktop.WindowCommand(context.Background(), "/usr/bin/open", "-n", bundle), App: bundle, Previous: previous(bundle)}, nil
 	case Installer:
+		folder := filepath.Dir(exe)
+		if err := CopyTree(folder, previous(folder)); err != nil {
+			return Installed{}, fmt.Errorf("keep the previous app: %w", err)
+		}
 		cmd := desktop.WindowCommand(context.Background(), pkg)
 		if err := cmd.Start(); err != nil {
-			return nil, err
+			_ = os.RemoveAll(previous(folder))
+			return Installed{}, err
 		}
 		_ = cmd.Process.Release()
-		return nil, nil
+		return Installed{App: folder, Previous: previous(folder)}, nil
 	case AppImage:
 		image := os.Getenv("APPIMAGE")
 		if image == "" {
-			return nil, ErrNotPackaged
+			return Installed{}, ErrNotPackaged
 		}
 		if err := replaceFile(pkg, image); err != nil {
-			return nil, err
+			return Installed{}, err
 		}
-		return desktop.WindowCommand(context.Background(), image), nil
+		return Installed{Start: desktop.WindowCommand(context.Background(), image), App: image, Previous: previous(image)}, nil
 	default:
-		return desktop.WindowCommand(context.Background(), "xdg-open", pkg), nil
+		return Installed{Start: desktop.WindowCommand(context.Background(), "xdg-open", pkg)}, nil
 	}
 }
+
+// previous is where the previous app at path is kept.
+func previous(path string) string { return path + ".old" }
 
 // installDMG copies the bundle of the disk image beside bundle, then
 // swaps them.
@@ -105,10 +125,10 @@ func installDMG(ctx context.Context, pkg, bundle string) error {
 	return swap(staged, bundle)
 }
 
-// swap puts staged in place of current, which is removed: renamed aside
-// first, and put back when the new one cannot take its place.
+// swap puts staged in place of current, which is kept aside, as
+// previous(current), and put back when the new one cannot take its place.
 func swap(staged, current string) error {
-	aside := current + ".old"
+	aside := previous(current)
 	if err := os.RemoveAll(aside); err != nil {
 		return err
 	}
@@ -119,11 +139,12 @@ func swap(staged, current string) error {
 		_ = os.Rename(aside, current)
 		return err
 	}
-	return os.RemoveAll(aside)
+	return nil
 }
 
 // replaceFile puts the executable pkg in place of current, as a copy
-// beside current renamed over it, as they may be on different disks.
+// beside current, as they may be on different disks, swapped with it:
+// current is kept as previous(current).
 func replaceFile(pkg, current string) error {
 	staged := current + ".new"
 	in, err := os.Open(pkg)
@@ -149,7 +170,7 @@ func replaceFile(pkg, current string) error {
 	if err := os.Chmod(staged, 0o755); err != nil {
 		return err
 	}
-	if err := os.Rename(staged, current); err != nil {
+	if err := swap(staged, current); err != nil {
 		os.Remove(staged)
 		return err
 	}
