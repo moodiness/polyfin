@@ -170,6 +170,15 @@ const common = {
     invalid_smart_list_max_items:
       'A smart list’s maximum titles must be a whole number from 1 to 20,000, or empty.',
     too_many_smart_lists: 'There are already 100 smart lists here. Delete one to make another.',
+    invalid_own_channel_name: 'A channel’s name must be 1 to 64 characters long.',
+    invalid_channel_number: 'A channel’s number must be a whole number from 1 to 9,999, or empty.',
+    invalid_channel_source:
+      'Choose a collection, a smart list or a series, or at least one title, that still exists.',
+    channel_without_titles:
+      'The titles chosen hold no movie nor episode to air, or more than 5,000. Choose others.',
+    invalid_channel_blocks:
+      'Time blocks must end after they start, within the day, without overlapping, 12 at most.',
+    too_many_channels: 'There are already 100 channels of your titles. Delete one to make another.',
     invalid_image: 'Choose a JPEG, PNG or WebP image of at most 10 MB.',
     invalid_image_url: 'Enter an image address starting with https:// or http://.',
     image_unreachable:

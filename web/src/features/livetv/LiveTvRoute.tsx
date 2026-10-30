@@ -50,6 +50,7 @@ import {
   isTvCatalog,
 } from './catalogs'
 import { TunersShort } from './TunersShort'
+import { OwnChannels } from './OwnChannels'
 
 /**
  * `/live-tv`: the server's TV catalogs with the state of their guides, the channels of its IPTV
@@ -103,6 +104,8 @@ export default function LiveTvRoute() {
           <IptvSources addons={addons.data.filter(isIptv)} />
         )}
       </Block>
+
+      <OwnChannels />
 
       <Recordings />
     </PageLayout>

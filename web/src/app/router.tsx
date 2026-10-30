@@ -15,6 +15,7 @@ import LibrariesRoute from '@/features/libraries/LibrariesRoute'
 import SmartListRoute from '@/features/libraries/SmartListRoute'
 import CatalogGuidesRoute from '@/features/livetv/CatalogGuidesRoute'
 import LiveTvRoute from '@/features/livetv/LiveTvRoute'
+import OwnChannelRoute from '@/features/livetv/OwnChannels'
 import SettingsRoute from '@/features/settings/SettingsRoute'
 import MySourcesRoute from '@/features/sources/MySourcesRoute'
 import SourceRoute from '@/features/sources/SourceRoute'
@@ -139,6 +140,7 @@ export const router = createBrowserRouter(
                 { path: 'libraries', element: <LibrariesRoute /> },
                 { path: 'libraries/smart/:id', element: <SmartListRoute scope="shared" /> },
                 { path: 'live-tv', element: <LiveTvRoute /> },
+                { path: 'live-tv/channels/:id', element: <OwnChannelRoute /> },
               ],
             },
           ],

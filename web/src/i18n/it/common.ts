@@ -180,6 +180,17 @@ const common: typeof en = {
       'Il numero massimo di titoli di una lista intelligente deve essere un numero intero da 1 a 20.000, oppure vuoto.',
     too_many_smart_lists:
       'Ci sono già 100 liste intelligenti qui. Eliminane una per crearne un’altra.',
+    invalid_own_channel_name: 'Il nome di un canale deve avere da 1 a 64 caratteri.',
+    invalid_channel_number:
+      'Il numero di un canale deve essere un numero intero da 1 a 9.999, oppure vuoto.',
+    invalid_channel_source:
+      'Scegli una raccolta, una lista intelligente o una serie, o almeno un titolo, che esista ancora.',
+    channel_without_titles:
+      'I titoli scelti non contengono film né episodi da trasmettere, o più di 5.000. Scegline altri.',
+    invalid_channel_blocks:
+      'Le fasce orarie devono finire dopo l’inizio, entro la giornata, senza sovrapporsi, al massimo 12.',
+    too_many_channels:
+      'Ci sono già 100 canali dei tuoi titoli. Eliminane uno per crearne un altro.',
     invalid_image: 'Scegli un’immagine JPEG, PNG o WebP di massimo 10 MB.',
     invalid_image_url: 'Inserisci l’indirizzo di un’immagine che inizi con https:// o http://.',
     image_unreachable:
