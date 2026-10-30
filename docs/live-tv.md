@@ -1,6 +1,6 @@
 # Live TV
 
-This page covers Live TV in Polyfin: the channels that come from addon TV catalogs and IPTV sources, the programme guide, and recordings. To import an M3U playlist or an Xtream Codes account directly, see [IPTV sources](iptv.md). The past programmes an IPTV provider keeps play from a Replay view, described there under [Replay](iptv.md#replay).
+This page covers Live TV in Polyfin: the channels that come from addon TV catalogs and IPTV sources, the channels Polyfin airs from your own titles, the programme guide, and recordings. To import an M3U playlist or an Xtream Codes account directly, see [IPTV sources](iptv.md). The past programmes an IPTV provider keeps play from a Replay view, described there under [Replay](iptv.md#replay).
 
 ## Channels from addons
 
@@ -83,6 +83,40 @@ Polyfin adds nothing to the web client for this: jellyfin-web already asks for c
 - `/Items` with `searchTerm` finds channels asked as `TvChannel` or `LiveTvChannel`, and programmes asked as `LiveTvProgram`, `Program` or `TvProgram`, filtered by `isMovie`, `isSeries`, `isNews`, `isKids` and `isSports`. It finds at most `limit` of each.
 - A search that names no type finds channels, and programmes only when it sets one of those five filters. A search that names types finds programmes only when one of them is a programme type.
 - Search hints leave channels and programmes out.
+
+## Channels of your titles
+
+Polyfin can air channels of its own, around the clock, from the movies and episodes Jellyfin apps list: **Content › Live TV**, under **Channels of your titles**, with **Add a channel**. Under **Built from**, a channel airs one of:
+
+- **Collection**: one made in a Jellyfin app, or one of an addon, its titles listed as a collection row lists them;
+- **Smart list**: one of the server's (see [Smart lists](addons-and-libraries.md#smart-lists));
+- **Series**: its episodes, season after season, specials and episodes not aired yet left out;
+- **Titles**: movies and series you pick by searching them; a series airs its episodes.
+
+Its titles are read when the channel is saved, at most 5,000 movies and episodes, and kept as they were: titles added to the collection later are not aired until you save the channel with **Read the titles again**. The schedule is then a pure function of the channel's start, the midnight of the day it was saved, in the server's time zone, its seed and its titles. It survives restarts, gives the same guide whenever it is computed, and is stored nowhere. Each title airs for its runtime as its description gives it; a title without one is given 90 minutes for a movie, 30 for an episode.
+
+- Titles air one after the other, in their order, round after round. **Shuffle** airs them in a new order each round, the same on every computation: changing the sources or the shuffle starts the schedule again today, shuffled anew.
+- **Time blocks** air their own titles each day, from their start to their end, in the server's time zone (at most 12, apart from each other), and the channel's titles fill the rest of the day. Each block, and the channel's own titles, go on each day from where they stopped. A programme the end of its time cuts airs in full at the start of the next, unless it started that time.
+- **Number** gives the channel its number; empty, it follows the other channels. **Shown in apps** off hides it from every user.
+
+The channel is an ordinary channel for apps: listed after the channels of TV catalogs, to the users with the **Live TV** permission, with its programmes in the guide, in searches, in recommended programmes and as what airs now. Programmes are movies or series as their category, with their episode title, season and number, and their title's image. Recordings, timers, series timers and [reminders](#programme-reminders) work on them as on any channel.
+
+- A user sees the channel only when their parental control and blocked genres let them reach every movie and episode it airs, by the ratings and genres those had when it was saved: a stream other users watch cannot leave a programme out.
+- The programmes of a title a user hid are left out of their guide.
+
+### How a channel of your titles plays
+
+The programme airing when a player tunes in plays from where it is: tuned 90 seconds after a programme started, the channel starts 90 seconds into it. The next programmes follow as one live HLS stream, converted by FFmpeg in real time to H.264, at most 1080p, or what **Maximum quality of converted video** allows, and stereo AAC, with a discontinuity at each programme. The stream plays as an IPTV channel's HLS stream does (see [How a channel plays](#how-a-channel-plays)): relayed to apps, converted again only for an app that cannot take it, and recorded from the same playlist.
+
+- One FFmpeg airs a channel, whoever watches or records it, from the first player on, and stops a minute after the last left. It counts among the server's 16 live encodings and among **Video conversions at once**.
+- A user whose quality group is below the shared stream, such as 720p for a 1080p programme, gets it converted down to their group by a live encoding of their own, as for any channel taller than their group (see [Quality groups](users.md#quality-groups)); without the permission to convert video, the channel is refused to them.
+- Each programme plays from its title's versions: those of local folders first, then the others in the order of the [version rules](playback.md), at most **Versions tried when one does not work** of them. A version that fails, at its start or later, passes the programme to the next one from where it stopped.
+- When none plays, a black and silent slate airs for a minute at most, and the versions are tried again. A programme shorter than its runtime is followed by the slate until its time ends.
+- The log tells it: `A version of a programme could not air`, `No version of a programme plays: a slate airs instead`.
+
+**Compared with Jellyfin:** Jellyfin has no channels of its own titles. Apps see these channels and their programmes as Jellyfin's `TvChannel` and `Program` items, and play them as live streams.
+
+**For app developers:** the admin app's routes, for administrators: `GET` and `POST /admin/api/live-tv/channels`, `GET`, `PUT` and `DELETE /admin/api/live-tv/channels/{id}`, `GET /admin/api/live-tv/channels/choices` for the collections and smart lists, and `GET /admin/api/live-tv/channels/titles?q=` for movies and series. A `PUT` that changes the sources, the blocks or the shuffle, or sets `rebuild`, reads the titles again and starts the schedule again today.
 
 ## Programme guide
 
