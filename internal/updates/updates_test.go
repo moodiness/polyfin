@@ -2,10 +2,12 @@ package updates
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,12 +18,14 @@ import (
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 )
 
-// fakeGitHub answers the latest release of Polyfin's repository as a test
-// sets it, and records the requests it receives.
+// fakeGitHub answers the latest release of Polyfin's repository, and the
+// list of its latest releases, as a test sets them, and records the
+// requests it receives.
 type fakeGitHub struct {
 	mu       sync.Mutex
 	status   int
 	body     string
+	list     string
 	requests []*http.Request
 	url      string
 }
@@ -33,10 +37,12 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		f.mu.Lock()
 		f.requests = append(f.requests, r.Clone(context.Background()))
 		status, body := f.status, f.body
-		f.mu.Unlock()
-		if r.URL.Path != "/repos/moodiness/polyfin/releases/latest" {
+		if r.URL.Path == "/repos/moodiness/polyfin/releases" && r.URL.Query().Get("per_page") != "" {
+			status, body = http.StatusOK, f.list
+		} else if r.URL.Path != "/repos/moodiness/polyfin/releases/latest" {
 			status, body = http.StatusNotFound, `{"message":"Not Found"}`
 		}
+		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		_, _ = io.WriteString(w, body)
@@ -63,6 +69,33 @@ func (f *fakeGitHub) answer(status int, body string) {
 	f.status, f.body = status, body
 }
 
+// releases has the fake list releases, each a tag and whether GitHub
+// marks it as a pre-release, or a draft.
+func (f *fakeGitHub) releases(releases ...[3]any) {
+	var items []string
+	for _, r := range releases {
+		tag := r[0].(string)
+		items = append(items, fmt.Sprintf(`{"tag_name":%q,"html_url":"https://github.com/moodiness/polyfin/releases/tag/%s","prerelease":%v,"draft":%v}`,
+			tag, tag, r[1], r[2]))
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.list = "[" + strings.Join(items, ",") + "]"
+}
+
+// askedFor counts the requests the fake received for path.
+func (f *fakeGitHub) askedFor(path string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, r := range f.requests {
+		if r.URL.Path == "/repos/moodiness/polyfin"+path {
+			n++
+		}
+	}
+	return n
+}
+
 // asked counts the requests the fake received.
 func (f *fakeGitHub) asked() int {
 	f.mu.Lock()
@@ -74,17 +107,19 @@ func (f *fakeGitHub) asked() int {
 // fake, with the setting a test turns on or off.
 type harness struct {
 	*Checker
-	github   *fakeGitHub
-	pool     *pgxpool.Pool
-	enabled  *atomic.Bool
-	mu       *sync.Mutex
-	notified *[]Release
+	github      *fakeGitHub
+	pool        *pgxpool.Pool
+	enabled     *atomic.Bool
+	prereleases *atomic.Bool
+	mu          *sync.Mutex
+	notified    *[]Release
 }
 
 func newHarness(t *testing.T, version string) harness {
 	t.Helper()
 	pool := migrated.New(t)
-	h := harness{github: newFakeGitHub(t), pool: pool, enabled: &atomic.Bool{}, mu: &sync.Mutex{}, notified: &[]Release{}}
+	h := harness{github: newFakeGitHub(t), pool: pool, enabled: &atomic.Bool{}, prereleases: &atomic.Bool{}, mu: &sync.Mutex{},
+		notified: &[]Release{}}
 	h.enabled.Store(true)
 	h.Checker = h.restart(t, version)
 	return h
@@ -94,7 +129,7 @@ func newHarness(t *testing.T, version string) harness {
 // of Polyfin running version.
 func (h harness) restart(t *testing.T, version string) *Checker {
 	t.Helper()
-	return New(Options{DB: h.pool, Version: version, API: h.github.url, Enabled: h.enabled.Load,
+	return New(Options{DB: h.pool, Version: version, API: h.github.url, Enabled: h.enabled.Load, Prereleases: h.prereleases.Load,
 		Notify: func(release Release) {
 			h.mu.Lock()
 			defer h.mu.Unlock()
@@ -178,6 +213,81 @@ func TestPreReleasesAreIgnored(t *testing.T) {
 	check(t, h.Checker)
 	if release, _ := h.Available(); release.Version != "1.5.0" || len(h.told()) != 1 {
 		t.Errorf("after a draft: %v, told %v", release, h.told())
+	}
+}
+
+// A pre-release is offered only while Include pre-releases is on: it is
+// then told once, kept across restarts, and shows while it is newer than
+// the latest release. Turned off, the latest release shows again at once,
+// and the list of releases is no longer asked.
+func TestPreReleasesOnlyWithTheSwitch(t *testing.T) {
+	h := newHarness(t, "1.4.0")
+	h.github.release("v1.5.0", false)
+	h.github.releases([3]any{"v1.7.0", false, true}, [3]any{"v1.6.0-rc.2", true, false}, [3]any{"v1.6.0-beta.1", false, false},
+		[3]any{"v1.5.0", false, false}, [3]any{"nightly", true, false}, [3]any{"v1.4.0", false, false})
+	check(t, h.Checker)
+	if release, ok := h.Available(); !ok || release.Version != "1.5.0" || h.github.askedFor("/releases") != 0 {
+		t.Fatalf("pre-releases off: %v, list asked %d times", release, h.github.askedFor("/releases"))
+	}
+
+	h.prereleases.Store(true)
+	check(t, h.Checker)
+	want := Release{Version: "1.6.0-rc.2", URL: "https://github.com/moodiness/polyfin/releases/tag/v1.6.0-rc.2"}
+	if release, ok := h.Available(); !ok || release != want {
+		t.Errorf("pre-releases on: %v", release)
+	}
+	if told := h.told(); len(told) != 2 || told[1] != want {
+		t.Errorf("told %v", told)
+	}
+	var stable, prerelease string
+	if err := h.pool.QueryRow(t.Context(), "SELECT latest_version, prerelease_version FROM update_check").Scan(&stable, &prerelease); err != nil ||
+		stable != "1.5.0" || prerelease != "1.6.0-rc.2" {
+		t.Errorf("kept %q and %q: %v", stable, prerelease, err)
+	}
+	restarted := h.restart(t, "1.4.0")
+	check(t, restarted)
+	if release, _ := restarted.Available(); release != want || len(h.told()) != 2 {
+		t.Errorf("after a restart: %v, told %v", release, h.told())
+	}
+
+	h.prereleases.Store(false)
+	if release, ok := h.Available(); !ok || release.Version != "1.5.0" {
+		t.Errorf("turned off: %v", release)
+	}
+	check(t, h.Checker)
+	if err := h.pool.QueryRow(t.Context(), "SELECT prerelease_version FROM update_check").Scan(&prerelease); err != nil || prerelease != "" {
+		t.Errorf("turned off, the pre-release kept is %q: %v", prerelease, err)
+	}
+
+	// A release newer than the pre-releases is the one shown.
+	h.prereleases.Store(true)
+	h.github.releases([3]any{"v1.6.0", false, false}, [3]any{"v1.6.0-rc.2", true, false})
+	check(t, h.Checker)
+	if release, _ := h.Available(); release.Version != "1.6.0" {
+		t.Errorf("after the release: %v", release)
+	}
+}
+
+// Wake has Run check at once, rather than at its next time.
+func TestWakeChecksAtOnce(t *testing.T) {
+	h := newHarness(t, "1.4.0")
+	h.github.release("v1.5.0", false)
+	h.timing = timing{first: time.Hour, every: time.Hour, retry: time.Hour}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.Run(ctx)
+	}()
+	h.Wake()
+	deadline := time.Now().Add(30 * time.Second)
+	for len(h.told()) == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if len(h.told()) != 1 {
+		t.Errorf("after Wake: told %v", h.told())
 	}
 }
 
