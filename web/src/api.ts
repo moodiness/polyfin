@@ -1988,7 +1988,7 @@ export type AccountTitle = {
 
 /** What a home row of the web player lists. */
 export type HomeRowKind =
-  'catalog' | 'collection' | 'because' | 'new' | 'available' | 'waiting' | 'trakt'
+  'catalog' | 'collection' | 'because' | 'new' | 'available' | 'waiting' | 'trakt' | 'picks'
 
 /** Where the web player shows a home row: at the top, after Continue Watching, after Next Up, at the bottom. */
 export type HomeRowPlace = 'top' | 'resume' | 'nextup' | 'bottom'
@@ -2064,6 +2064,32 @@ export const fetchOwnHomeRows = (signal?: AbortSignal) =>
 
 export const setOwnHomeRow = (id: string, off: boolean) =>
   request<void>('PUT', `/account/home-rows/${seg(id)}`, { off })
+
+/** What a taste profile weighs titles by. */
+export type TasteFacet = 'genre' | 'director' | 'cast' | 'decade' | 'language'
+
+/** A value of a facet and its weight; `vetoed` tells a genre whose titles leave Top picks for you. */
+export type TasteLeaning = { name: string; weight: number; vetoed?: boolean }
+
+/**
+ * The signed-in user's taste profile: when it was built (null while never), how many titles it
+ * weighed, how sure it is from 0 to 1 and whether it passed the confidence gate, what they like and
+ * dislike of each facet, and whether their titles' details tell why a title is for them.
+ */
+export type OwnTaste = {
+  built: string | null
+  titles: number
+  certainty: number
+  confident: boolean
+  facets: { facet: TasteFacet; liked: TasteLeaning[]; disliked: TasteLeaning[] }[]
+  taglines: boolean
+}
+
+export const fetchOwnTaste = (signal?: AbortSignal) =>
+  request<OwnTaste>('GET', '/account/taste', undefined, signal)
+
+export const saveOwnTaste = (taglines: boolean) =>
+  request<OwnTaste>('PUT', '/account/taste', { taglines })
 
 /** A title of Continue Watching: its resume point and runtime in seconds, 0 when unknown. */
 export type ResumeTitle = {
@@ -4726,6 +4752,7 @@ export const queryKeys = {
   ownHidden: ['account', 'hidden'] as const,
   ownHomeRows: ['account', 'home-rows'] as const,
   ownTrackChoices: ['account', 'track-choices'] as const,
+  ownTaste: ['account', 'taste'] as const,
   homeRows: ['home-rows'] as const,
   homeRowChoices: ['home-rows', 'choices'] as const,
   ownReminders: ['account', 'reminders'] as const,

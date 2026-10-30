@@ -51,6 +51,7 @@ const kinds: HomeRowKind[] = [
   'available',
   'waiting',
   'trakt',
+  'picks',
 ]
 const places: HomeRowPlace[] = ['top', 'resume', 'nextup', 'bottom']
 

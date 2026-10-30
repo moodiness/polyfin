@@ -1022,6 +1022,7 @@ const settings: typeof en = {
         available: 'Ora disponibili',
         waiting: 'Ancora in attesa',
         trakt: 'Consigliati su Trakt',
+        picks: 'Scelti per te',
       },
       kindHelp: {
         catalog:
@@ -1037,6 +1038,8 @@ const settings: typeof en = {
           'I titoli non iniziati della lista «Da guardare» dell’utente per cui l’ultimo controllo non ha trovato alcuna versione, o non ancora usciti, dagli ultimi aggiunti. Un titolo non ancora controllato non è in nessuna delle due righe.',
         trakt:
           'I film e le serie che Trakt consiglia all’utente, letti con la sua connessione a Trakt ogni 12 ore, senza quelli della sua collezione o Watchlist di Trakt né quelli che ha già visto. La vedono solo gli utenti che hanno collegato Trakt in Il mio account › Monitoraggio; la prima volta appare appena Trakt ha risposto.',
+        picks:
+          'I film e le serie delle librerie dell’utente, liste intelligenti comprese, che il suo profilo dei gusti mette per primi, senza quelli già riprodotti né quelli di un genere che non gli piace. Finché il profilo non lo conosce abbastanza, i primi titoli delle librerie, i più popolari per primi. Ogni utente vede il proprio profilo in Il mio account.',
       },
       defaultNames: {
         because: 'Perché hai guardato',
@@ -1044,6 +1047,7 @@ const settings: typeof en = {
         available: 'Ora disponibili',
         waiting: 'Ancora in attesa',
         trakt: 'Consigliati su Trakt',
+        picks: 'Scelti per te',
       },
       catalog: 'Catalogo',
       noCatalog: 'Gli add-on del server non hanno cataloghi da mostrare.',

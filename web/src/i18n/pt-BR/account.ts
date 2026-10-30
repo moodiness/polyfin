@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Títulos ocultos',
       homeRows: 'Fileiras do início',
       trackChoices: 'Escolha de faixas',
+      taste: 'Perfil de gosto',
       metadataLanguage: 'Idioma dos metadados',
       webTheme: 'Tema do player web',
       audioRegion: 'Região do áudio',
@@ -57,6 +58,31 @@ const account: typeof en = {
         'pt-BR': 'Português (Brasil)',
         'pt-PT': 'Português (Portugal)',
       },
+    },
+    taste: {
+      help: 'O que o Polyfin aprendeu do seu gosto a partir dos filmes e séries que você terminou, reviu, largou cedo, curtiu, não curtiu, marcou como favoritos e ocultou, os mais recentes contando mais. Quando conhece você o suficiente, ele ordena Escolhas para você, os títulos semelhantes e as sugestões. Ele fica no servidor: só você o vê.',
+      notBuilt: 'Ainda não criado',
+      notBuiltHelp: 'O Polyfin cria o seu perfil em segundo plano, a cada hora.',
+      certainty: 'Quanto ele conhece você',
+      builtFrom: (titles: number) =>
+        `Criado a partir de ${titles === 1 ? '1 título' : `${titles} títulos`},`,
+      belowGate:
+        'O Polyfin ainda não conhece você o suficiente: termine ou curta mais alguns filmes e séries. Até lá, Escolhas para você mostra os títulos mais populares, e as outras listas mantêm a ordem de sempre.',
+      facets: {
+        genre: 'Gêneros',
+        director: 'Direção',
+        cast: 'Elenco',
+        decade: 'Décadas',
+        language: 'Idiomas',
+      },
+      liked: 'Você gosta',
+      disliked: 'Você gosta menos',
+      vetoed: 'fora de Escolhas para você',
+      taglines: 'Dizer por que um título é para mim',
+      taglinesHelp:
+        'A página de um título começa com “87% para você · porque você gosta de …”, quando o seu perfil conhece você o suficiente.',
+      taglinesOn: 'Os títulos agora dizem por que são para você.',
+      taglinesOff: 'Os títulos não dizem mais por que são para você.',
     },
     homeRows: {
       help: 'As fileiras que o administrador adiciona para você à página inicial do player web. Desative uma para tirá-la da sua página inicial, e também das suas bibliotecas em outros aplicativos quando ela for uma biblioteca neles. As seções próprias do player web ficam em Configurações › Início dele.',

@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Títulos ocultos',
       homeRows: 'Filas de inicio',
       trackChoices: 'Elección de pistas',
+      taste: 'Perfil de gustos',
       metadataLanguage: 'Idioma de los metadatos',
       webTheme: 'Tema del reproductor web',
       audioRegion: 'Región de audio',
@@ -57,6 +58,31 @@ const account: typeof en = {
         'pt-BR': 'Portugués (Brasil)',
         'pt-PT': 'Portugués (Portugal)',
       },
+    },
+    taste: {
+      help: 'Lo que Polyfin ha aprendido de sus gustos a partir de las películas y series que terminó, volvió a ver, dejó pronto, le gustaron, no le gustaron, marcó como favoritas y ocultó, contando más las más recientes. Cuando lo conoce lo suficiente, ordena Recomendados para usted, los títulos similares y las sugerencias. Se queda en el servidor: solo usted lo ve.',
+      notBuilt: 'Aún no creado',
+      notBuiltHelp: 'Polyfin crea su perfil en segundo plano, cada hora.',
+      certainty: 'Cuánto lo conoce',
+      builtFrom: (titles: number) =>
+        `Creado a partir de ${titles === 1 ? '1 título' : `${titles} títulos`},`,
+      belowGate:
+        'Polyfin aún no lo conoce lo suficiente: termine o marque con «Me gusta» algunas películas y series más. Mientras tanto, Recomendados para usted muestra los títulos más populares, y las demás listas mantienen su orden habitual.',
+      facets: {
+        genre: 'Géneros',
+        director: 'Dirección',
+        cast: 'Reparto',
+        decade: 'Décadas',
+        language: 'Idiomas',
+      },
+      liked: 'Le gusta',
+      disliked: 'Le gusta menos',
+      vetoed: 'excluido de Recomendados',
+      taglines: 'Decirme por qué un título es para mí',
+      taglinesHelp:
+        'La página de un título empieza por «87 % para usted · porque le gusta …», cuando su perfil lo conoce lo suficiente.',
+      taglinesOn: 'Los títulos ahora dicen por qué son para usted.',
+      taglinesOff: 'Los títulos ya no dicen por qué son para usted.',
     },
     homeRows: {
       help: 'Las filas que el administrador añade para usted a la página de inicio del reproductor web. Desactive una para quitarla de su página de inicio, y de sus bibliotecas en otras aplicaciones cuando también sea una allí. Las secciones propias del reproductor web siguen en sus Ajustes › Inicio.',

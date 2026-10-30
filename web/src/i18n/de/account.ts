@@ -12,6 +12,7 @@ const account: typeof en = {
       hidden: 'Ausgeblendete Titel',
       homeRows: 'Startseitenzeilen',
       trackChoices: 'Spurauswahl',
+      taste: 'Geschmacksprofil',
       metadataLanguage: 'Metadatensprache',
       webTheme: 'Theme des Web-Players',
       audioRegion: 'Audioregion',
@@ -57,6 +58,31 @@ const account: typeof en = {
         'pt-BR': 'Portugiesisch (Brasilien)',
         'pt-PT': 'Portugiesisch (Portugal)',
       },
+    },
+    taste: {
+      help: 'Was Polyfin über deinen Geschmack gelernt hat, aus den Filmen und Serien, die du zu Ende gesehen, erneut gesehen, früh abgebrochen, gemocht, nicht gemocht, zu Favoriten gemacht und ausgeblendet hast, die neuesten zählen am meisten. Sobald es dich gut genug kennt, ordnet es Top-Tipps für dich sowie ähnliche Titel und Vorschläge. Es bleibt auf dem Server: Nur du siehst es.',
+      notBuilt: 'Noch nicht erstellt',
+      notBuiltHelp: 'Polyfin erstellt dein Profil im Hintergrund, jede Stunde.',
+      certainty: 'Wie gut es dich kennt',
+      builtFrom: (titles: number) =>
+        `Erstellt aus ${titles === 1 ? '1 Titel' : `${titles} Titeln`},`,
+      belowGate:
+        'Polyfin kennt dich noch nicht gut genug: Sieh dir noch ein paar Filme und Serien zu Ende an oder markiere sie mit „Gefällt mir“. Bis dahin zeigt Top-Tipps für dich die beliebtesten Titel, und die anderen Listen behalten ihre gewohnte Reihenfolge.',
+      facets: {
+        genre: 'Genres',
+        director: 'Regie',
+        cast: 'Besetzung',
+        decade: 'Jahrzehnte',
+        language: 'Sprachen',
+      },
+      liked: 'Du magst',
+      disliked: 'Du magst weniger',
+      vetoed: 'aus Top-Tipps ausgeschlossen',
+      taglines: 'Mir sagen, warum ein Titel zu mir passt',
+      taglinesHelp:
+        'Die Seite eines Titels beginnt mit „87 % für dich · weil du … magst“, sobald dein Profil dich gut genug kennt.',
+      taglinesOn: 'Titel sagen jetzt, warum sie zu dir passen.',
+      taglinesOff: 'Titel sagen nicht mehr, warum sie zu dir passen.',
     },
     homeRows: {
       help: 'Die Zeilen, die der Administrator für dich zur Startseite des Web-Players hinzufügt. Schalte eine aus, um sie von deiner Startseite zu entfernen, und auch aus deinen Bibliotheken in anderen Apps, wenn sie dort ebenfalls eine ist. Die eigenen Bereiche des Web-Players bleiben in seinen Einstellungen › Startseite.',

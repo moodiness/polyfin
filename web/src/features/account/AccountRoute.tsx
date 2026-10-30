@@ -14,6 +14,7 @@ import {
   ShareNetworkIcon,
   ShieldCheckIcon,
   SpeakerHighIcon,
+  SparkleIcon,
   TranslateIcon,
 } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
@@ -50,6 +51,7 @@ import { OwnMetadataLanguage } from './MetadataLanguage'
 import { OwnWebTheme } from './WebTheme'
 import { OwnAudioRegion } from './AudioRegion'
 import ResetPreferences from './ResetPreferences'
+import TasteProfile from './TasteProfile'
 import { HiddenList, HomeRowList, ResumeList } from './WatchingLists'
 import OwnTrackChoices from './TrackChoices'
 import TwoStep from './TwoStep'
@@ -60,6 +62,7 @@ const sectionIds = [
   'resume',
   'hidden',
   'home-rows',
+  'taste',
   'track-choices',
   'metadata-language',
   'web-theme',
@@ -79,11 +82,11 @@ type SectionId = (typeof sectionIds)[number]
 const ownImportPollMs = 2000
 
 /**
- * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows, track
- * choices, the metadata language, the web player theme, the audio region, shared links (while the
- * user may share or has links), programme reminders (with the Live TV permission), importing from
- * another server and from an app (unless the server turns it off), notifications, devices, password
- * and two-step sign-in, with a list of sections beside them.
+ * `/me/account`: statistics, tracking services, Continue Watching, hidden titles, home rows, the
+ * taste profile, track choices, the metadata language, the web player theme, the audio region,
+ * shared links (while the user may share or has links), programme reminders (with the Live TV
+ * permission), importing from another server and from an app (unless the server turns it off),
+ * notifications, devices, password and two-step sign-in, with a list of sections beside them.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -173,6 +176,12 @@ export default function AccountRoute() {
               label: text.sections.homeRows,
               icon: RowsIcon,
               to: '#home-rows',
+            },
+            {
+              id: 'taste',
+              label: text.sections.taste,
+              icon: SparkleIcon,
+              to: '#taste',
             },
             {
               id: 'track-choices',
@@ -272,6 +281,9 @@ export default function AccountRoute() {
       </AccountSection>
       <AccountSection id="home-rows" title={text.sections.homeRows} help={text.homeRows.help}>
         <HomeRowList />
+      </AccountSection>
+      <AccountSection id="taste" title={text.sections.taste} help={text.taste.help}>
+        <TasteProfile />
       </AccountSection>
       <AccountSection
         id="track-choices"

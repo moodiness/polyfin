@@ -11,6 +11,7 @@ const account = {
       hidden: 'Hidden titles',
       homeRows: 'Home rows',
       trackChoices: 'Track choices',
+      taste: 'Taste profile',
       metadataLanguage: 'Metadata language',
       webTheme: 'Web player theme',
       audioRegion: 'Audio region',
@@ -55,6 +56,31 @@ const account = {
         'pt-BR': 'Portuguese (Brazil)',
         'pt-PT': 'Portuguese (Portugal)',
       } as Record<string, string>,
+    },
+    /** My account › Taste profile. */
+    taste: {
+      help: 'What Polyfin learned of your taste from the movies and series you finished, watched again, stopped early, liked, disliked, marked as favorites and hid, the latest counting most. Once it knows you well enough, it ranks Top picks for you and orders similar titles and suggestions. It stays on the server: only you see it.',
+      notBuilt: 'Not built yet',
+      notBuiltHelp: 'Polyfin builds your profile in the background, every hour.',
+      certainty: 'How well it knows you',
+      builtFrom: (titles: number) => `Built from ${titles === 1 ? '1 title' : `${titles} titles`},`,
+      belowGate:
+        'Polyfin does not know you well enough yet: finish or like a few more movies and series. Until then, Top picks for you shows the most popular titles, and other lists keep their usual order.',
+      facets: {
+        genre: 'Genres',
+        director: 'Directors',
+        cast: 'Cast',
+        decade: 'Decades',
+        language: 'Languages',
+      },
+      liked: 'You like',
+      disliked: 'You like less',
+      vetoed: 'left out of Top picks',
+      taglines: 'Tell me why a title is for me',
+      taglinesHelp:
+        'A title’s page starts with “87% for you · because you like …”, once your profile knows you well enough.',
+      taglinesOn: 'Titles now tell why they are for you.',
+      taglinesOff: 'Titles no longer tell why they are for you.',
     },
     /** My account › Home rows. */
     homeRows: {

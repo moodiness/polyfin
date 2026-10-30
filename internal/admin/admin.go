@@ -39,6 +39,7 @@ import (
 	"github.com/moodiness/polyfin/internal/reminders"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/tasks"
+	"github.com/moodiness/polyfin/internal/taste"
 	"github.com/moodiness/polyfin/internal/themecopy"
 	"github.com/moodiness/polyfin/internal/throttle"
 	"github.com/moodiness/polyfin/internal/tmdb"
@@ -176,6 +177,9 @@ type Options struct {
 	// collections they may list.
 	HomeRows       *homerows.Store
 	HomeRowChoices HomeRowChoices
+	// Taste keeps the users' taste profiles, which My account shows each
+	// their own; nil keeps none.
+	Taste *taste.Service
 	// Sharing finds the titles users give through share links; nil lets
 	// no one make a link.
 	Sharing Sharing
@@ -307,6 +311,8 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/hidden", h.signedIn(h.ownHidden))
 	mux.Handle("GET /admin/api/account/home-rows", h.signedIn(h.ownHomeRows))
 	mux.Handle("PUT /admin/api/account/home-rows/{id}", h.signedIn(h.setOwnHomeRow))
+	mux.Handle("GET /admin/api/account/taste", h.signedIn(h.ownTaste))
+	mux.Handle("PUT /admin/api/account/taste", h.signedIn(h.setOwnTaste))
 	mux.Handle("DELETE /admin/api/account/hidden/{id}", h.signedIn(h.showOwnHidden))
 	mux.Handle("POST /admin/api/account/preferences/reset", h.signedIn(h.resetOwnPreferences))
 	mux.Handle("GET /admin/api/account/track-choices", h.signedIn(h.ownTrackChoices))
