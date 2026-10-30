@@ -110,6 +110,7 @@ const notifications: typeof en = {
       new_device: 'Accesso da un nuovo dispositivo',
       share_played: 'Link condiviso riprodotto',
       programme_reminder: 'Programma in partenza',
+      title_available: 'Titolo da guardare disponibile',
     },
     eventHelp: {
       new_episode:
@@ -146,6 +147,8 @@ const notifications: typeof en = {
         'Qualcuno senza account ha avviato un film o un episodio tramite un link di condivisione: al massimo una volta all’ora per link, con il titolo e chi l’ha condiviso. Le destinazioni del server vengono avvisate per ogni link, le altre solo per i propri.',
       programme_reminder:
         'Un programma della Diretta TV per cui hai impostato un promemoria nel lettore web inizia a breve, con l’anticipo indicato in Remind me before, con un link al suo canale.',
+      title_available:
+        'Sono state trovate versioni di un titolo della tua lista «Da guardare» per cui i controlli precedenti non ne avevano trovata nessuna: una volta per titolo. Una versione trovata non è ancora stata provata.',
     },
     enabled: 'Invia messaggi a questa destinazione',
     create: 'Aggiungi',

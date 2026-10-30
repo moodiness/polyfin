@@ -244,6 +244,8 @@ const common: typeof en = {
       'L’intervallo di aggiornamento deve essere un numero intero di ore da 1 a 168.',
     invalid_local_scan_hours:
       'L’intervallo di scansione deve essere un numero intero di ore da 0 a 168.',
+    invalid_watchlist_check_hours:
+      'L’intervallo di controllo dei titoli da guardare deve essere un numero intero di ore da 0 a 168.',
     invalid_custom_css: 'Il CSS personalizzato non deve superare 2 MB.',
     invalid_custom_js: 'Il JavaScript personalizzato non deve superare 2 MB.',
     invalid_web_theme: 'Scegli un tema dall’elenco.',

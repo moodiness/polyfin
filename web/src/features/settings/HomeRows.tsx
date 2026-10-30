@@ -43,7 +43,7 @@ import {
   useToast,
 } from '@/ui'
 
-const kinds: HomeRowKind[] = ['catalog', 'collection', 'because', 'new']
+const kinds: HomeRowKind[] = ['catalog', 'collection', 'because', 'new', 'available', 'waiting']
 const places: HomeRowPlace[] = ['top', 'resume', 'nextup', 'bottom']
 
 /** The bounds of Because you watched's rows, as the server checks them. */
@@ -184,7 +184,7 @@ function HomeRowEntry({
         ? (collection?.name ?? text.unknownCollection)
         : row.kind === 'because'
           ? `${text.kinds.because} · ${text.rowsCount(row.count)}`
-          : text.kinds.new
+          : text.kinds[row.kind]
   return (
     <Row
       title={row.name}

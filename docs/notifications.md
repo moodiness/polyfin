@@ -1,13 +1,13 @@
 # Notifications
 
-Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved, a user who joined through an invite link, a new version of Polyfin, an account blocked after wrong passwords, a sign-in on a new device, a Live TV programme a user asked to be reminded of that starts soon; once a week, what happened that week (see [Weekly summary](#weekly-summary)); and once a month and once a year, what happened that month or that year (see [Month in review](#month-in-review) and [Year in review](#year-in-review)). Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
+Polyfin can tell users and administrators when something they care about happens: a new episode of a series they follow, a recording that finished or failed, a problem **System › Health** found or that was solved, a user who joined through an invite link, a new version of Polyfin, an account blocked after wrong passwords, a sign-in on a new device, a Live TV programme a user asked to be reminded of that starts soon, a title of a user's Watchlist that versions were found for; once a week, what happened that week (see [Weekly summary](#weekly-summary)); and once a month and once a year, what happened that month or that year (see [Month in review](#month-in-review) and [Year in review](#year-in-review)). Messages go to targets: a generic webhook, a Discord channel's webhook, an ntfy topic, an email address, a Telegram chat, a Gotify server or a Pushover user.
 
 ## Targets
 
 There are two kinds of owners:
 
 - **Settings › Notifications**, for administrators: the server's targets. They receive the events of every user, the health events, the users who joined, new versions, the blocked accounts, and the server's weekly summary, month and year in review.
-- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings, the blocks of their account and its sign-ins on new devices, their programme reminders, and their weekly summary, month and year in review. An administrator's own targets may receive the health events, the users who joined, new versions and every blocked account too, and the server's summaries in place of their own.
+- **My account › Notifications**, for every user: their own targets. They receive that user's new episodes and recordings, the blocks of their account and its sign-ins on new devices, their programme reminders, the titles of their Watchlist found available, and their weekly summary, month and year in review. An administrator's own targets may receive the health events, the users who joined, new versions and every blocked account too, and the server's summaries in place of their own.
 
 **Add a target** asks for its kind, a **Name**, the **Events** it receives, and:
 
@@ -89,6 +89,7 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Sign-in on a new device | `new_device` | The targets of the user who signed in only: the server's targets cannot choose it. |
 | Shared link played | `share_played` | The targets of the user who made the share link, and the server's: at most once an hour per link. |
 | Programme starting | `programme_reminder` | The targets of the user who set the reminder only: the server's targets cannot choose it. |
+| Watchlist title available | `title_available` | The targets of the user whose Watchlist holds the title only: the server's targets cannot choose it. |
 
 **Shared link played** is not chosen by default for a new target. It tells that a guest without an account started a title through a share link (see [Share links](users.md#share-links)), as "Shared link played: Example Movie (2008)" and "A guest played Example Movie (2008) through the link shared by alex.", and opens **My account › Shared links**. The event's `share` object holds the link's `id`, the title's `itemId`, `kind` (`movie` or `episode`) and `name`, and the link's `expiresAt`. The guest's playback also counts as the sharer's for the playback events, with `shared` true in their `playback` object and "Shared link" as its `app`.
 
@@ -135,6 +136,16 @@ A new target in the admin app has both events chosen; targets saved before they 
 A user with the **Live TV** permission sets a reminder from a programme's page in the web client, for that programme or for every airing of it (see [Programme reminders](live-tv.md#programme-reminders)). As long before the programme as **Remind me before** says, 5 minutes by default, their own targets receive "Starting at 20:30: Example Show", and "Example Show starts in 5 minutes on Example TV.", which opens the channel in the web client when a **Public address** is set. The time is the server's. The message is in the language of the web client the reminder was set in when Polyfin speaks it, else in the server language. A reminder sent late, after Polyfin was off at its time, tells the minutes left. It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
 
 With **Also show reminders on my apps**, under **My account › Notifications**, off by default, the same title and message also show on the user's Jellyfin apps that accept messages, as **Send a message** shows one (see [Administration](administration.md#stopping-a-playback-or-sending-a-message)), until dismissed: the web client while it is open, and the apps that keep a connection open and accept remote control. When no target of the user chose the event and the apps option is off, the web client's button and **My account › Notifications** say that reminders reach the user nowhere.
+
+A new target in the admin app has the event chosen; targets saved before it existed receive it once chosen.
+
+### Watchlist titles available
+
+Polyfin checks the titles of each user's Watchlist they have not started for versions, every 6 hours by default (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting)). The first time versions are found for a title that earlier checks found none for, the user's own targets receive "Versions found: Example Movie (2008)", and "Versions of Example Movie (2008), on your watchlist, were found. They have not been tried yet.", which opens the title in the [web client](web-client.md). The message says versions were found, not that the title plays: a version is only tried when it plays.
+
+- Each title is told of once: not when it already had versions at its first check, as when it was added, nor again when it finds versions anew after losing them.
+- A title parental control, blocked genres or the user's hidden titles keep from them is never told of.
+- It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
 
 A new target in the admin app has the event chosen; targets saved before it existed receive it once chosen.
 
@@ -244,7 +255,7 @@ A user who joined through an invite link:
 |---|---|---|
 | `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
 | `id` | string | Unique to the event: a message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, `account_blocked`, `new_device`, `programme_reminder`, or `test` for **Send a test**. |
+| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, `account_blocked`, `new_device`, `programme_reminder`, `title_available`, or `test` for **Send a test**. |
 | `at` | string | When the event happened, RFC 3339 in UTC. |
 | `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
 | `title`, `message` | string | The event for people, in the server language; a `programme_reminder` in the language its reminder was set in when Polyfin speaks it, else the server's. |
@@ -260,6 +271,7 @@ A user who joined through an invite link:
 | `connection` | object | For `connection_stopped`: `kind`, `app` for an app connection or `tracking` for a tracking service; `service`, the app or service as the API names it (`nuvio`, `stremio`, `trakt`, `simkl`, `mdblist`, `publicmetadb`, `anilist`, `myanimelist`, `lastfm`, `listenbrainz`); and `name`, as people name it. |
 | `signIn`, `block` | object | For `account_blocked` and `new_device`; see [The sign-in events](#the-sign-in-events). |
 | `programme` | object | For `programme_reminder`: `id`, the programme's item as Jellyfin apps know it, `name`, `channelId`, `channelName`, and its `start` and `end`, RFC 3339 in UTC. `programme_reminder` was added within version 1, with this object; no other field changed. |
+| `watchlistTitle` | object | For `title_available`: `id`, the movie's or series' item as Jellyfin apps know it, `kind` (`movie` or `series`), `name`, `year` (0 when unknown) and `providerIds`, as `episode`'s. `title_available` was added within version 1, with this object; no other field changed. |
 
 The playback events were added within version 1: their `playback` object is new, and no other field changed. So was `new_version`, with its `release` object:
 

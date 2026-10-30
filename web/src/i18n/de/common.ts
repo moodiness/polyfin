@@ -254,6 +254,8 @@ const common: typeof en = {
     invalid_live_tv_refresh_hours:
       'Das Aktualisierungsintervall muss eine ganze Zahl von 1 bis 168 Stunden sein.',
     invalid_local_scan_hours: 'Das Scan-Intervall muss eine ganze Zahl von 0 bis 168 Stunden sein.',
+    invalid_watchlist_check_hours:
+      'Das Prüfintervall der Merklisten muss eine ganze Zahl von 0 bis 168 Stunden sein.',
     invalid_custom_css: 'Das benutzerdefinierte CSS darf höchstens 2 MB groß sein.',
     invalid_custom_js: 'Das benutzerdefinierte JavaScript darf höchstens 2 MB groß sein.',
     invalid_web_theme: 'Wähle ein Theme aus der Liste.',

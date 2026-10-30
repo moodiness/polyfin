@@ -739,6 +739,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Ready:   notifier.Loaded(), Logger: logger})
 	jellyfinAPI.Reminders = programmeReminders
 	adminOptions.Reminders = programmeReminders
+	registerWatchlistTask(registry, store, watchlist.New(pool), jellyfinAPI, notifier, logger)
 	// Playbacks under way when Polyfin stops are kept in the history, as
 	// ended at their last report.
 	defer playbacks.Close()
@@ -1161,6 +1162,42 @@ func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Serv
 			"pt-BR": {Name: "Enviar a retrospectiva do ano", Description: "Envia agora a retrospectiva do último ano para cada destino de notificação que a escolheu. Todo ano, ela é enviada sozinha em 1º de janeiro, na hora do resumo semanal."},
 		},
 		Run: send(notifications.YearlySummary),
+	})
+}
+
+// registerWatchlistTask registers the checks of the watchlists for
+// versions: every hour, the titles not checked for the hours set under
+// Settings › Catalogs, telling their users of those found available once
+// the notifications read their targets.
+func registerWatchlistTask(registry *tasks.Registry, store *accounts.Store, lists *watchlist.Store, api *jellyfin.Handler,
+	notifier *notifications.Service, logger *slog.Logger) {
+	checker := watchlist.NewChecker(watchlist.CheckerOptions{
+		Store: lists,
+		Users: store.Users,
+		Hours: func() int { return store.Settings().WatchlistCheckHours },
+		Find:  api.FindWatchlistVersions,
+		Tell: func(ctx context.Context, user accounts.User, title accounts.ID) {
+			select {
+			case <-notifier.Loaded():
+				notifier.WatchlistTitleAvailable(ctx, user, title)
+			case <-ctx.Done():
+			}
+		},
+		Logger: logger,
+	})
+	registry.Register(tasks.Task{
+		Key:      "CheckWatchlists",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Look for versions of watchlist titles", Description: "Asks the stream addons for versions of the titles of each user's watchlist not started, 20 titles per user at a time, each again after the hours set under Settings › Catalogs, for the Now available and Still waiting home rows, and tells each user once of a title versions were found for."},
+			"fr":    {Name: "Chercher des versions des titres à regarder", Description: "Demande aux addons de flux des versions des titres non commencés de la liste « À regarder » de chaque utilisateur, 20 titres par utilisateur à la fois, chacun de nouveau après le nombre d’heures choisi dans Paramètres › Catalogues, pour les rangées d’accueil Disponibles et Toujours en attente, et prévient chaque utilisateur une fois d’un titre pour lequel des versions ont été trouvées."},
+			"de":    {Name: "Versionen der Titel auf Merklisten suchen", Description: "Fragt die Stream-Add-ons nach Versionen der nicht begonnenen Titel der Merkliste jedes Benutzers, 20 Titel je Benutzer auf einmal, jeden erneut nach den unter Einstellungen › Kataloge festgelegten Stunden, für die Startseitenzeilen Jetzt verfügbar und Noch ausstehend, und benachrichtigt jeden Benutzer einmal über einen Titel, für den Versionen gefunden wurden."},
+			"es":    {Name: "Buscar versiones de los títulos para ver", Description: "Pide a las extensiones de streams versiones de los títulos no empezados de la lista «Para ver» de cada usuario, 20 títulos por usuario a la vez, cada uno de nuevo tras las horas elegidas en Ajustes › Catálogos, para las filas de inicio Ya disponible y Aún en espera, y avisa a cada usuario una vez de un título para el que se encontraron versiones."},
+			"it":    {Name: "Cerca versioni dei titoli da guardare", Description: "Chiede agli add-on di flussi versioni dei titoli non iniziati della lista «Da guardare» di ogni utente, 20 titoli per utente alla volta, ciascuno di nuovo dopo le ore scelte in Impostazioni › Cataloghi, per le righe iniziali Ora disponibili e Ancora in attesa, e avvisa ogni utente una volta di un titolo per cui sono state trovate versioni."},
+			"pt-BR": {Name: "Procurar versões dos títulos para assistir", Description: "Pede aos complementos de streams versões dos títulos não iniciados da lista “Para assistir” de cada usuário, 20 títulos por usuário de cada vez, cada um de novo após as horas definidas em Configurações › Catálogos, para as linhas iniciais Já disponível e Ainda aguardando, e avisa cada usuário uma vez de um título para o qual foram encontradas versões."},
+		},
+		Interval: watchlist.CheckInterval,
+		Run:      checker.Check,
 	})
 }
 

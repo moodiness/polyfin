@@ -700,6 +700,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'catalogs',
+    anchor: 'watchlist-check-hours',
+    label: (t) => s(t).watchlistCheckHours,
+    help: (t, r) => s(t).watchlistCheckHoursHelp(r('watchlistCheckHours')),
+    keywords: ['watchlist', 'available', 'versions', 'streams'],
+    codes: ['invalid_watchlist_check_hours'],
+  },
+  {
+    section: 'catalogs',
     anchor: 'local-scan-hours',
     label: (t) => s(t).localScanHours,
     help: (t, r) => s(t).localScanHoursHelp(r('localScanHours')),

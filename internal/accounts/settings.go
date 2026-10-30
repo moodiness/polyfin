@@ -679,6 +679,17 @@ const (
 	DefaultLocalScanHours = 6
 )
 
+// ErrInvalidWatchlistCheckHours reports a WatchlistCheckHours outside
+// [0, MaxWatchlistCheckHours].
+var ErrInvalidWatchlistCheckHours = errors.New("invalid watchlist check hours")
+
+// The bound and default of Settings.WatchlistCheckHours: by default, each
+// title of a watchlist is checked for versions every 6 hours.
+const (
+	MaxWatchlistCheckHours     = 168
+	DefaultWatchlistCheckHours = 6
+)
+
 // The web player's looks, Settings.WebTheme: the LumaaGlaass theme Polyfin
 // bundles (LumaaGlaassCss and LumaaGlaassJs), jellyfin-web's own look, with
 // no custom CSS or script, and the administrator's CustomCss and CustomJs.
@@ -1591,6 +1602,10 @@ type Settings struct {
 	// scanned at startup, when an administrator asks and, when watched,
 	// when they change.
 	LocalScanHours int
+	// WatchlistCheckHours is how many hours after its last check a title
+	// of a user's watchlist is checked again for versions, 0 for never
+	// (see package watchlist).
+	WatchlistCheckHours int
 	// WatchLocalFolders watches the local folders for changes: those
 	// mounted in the container, each scanned again a few seconds after its
 	// files stop changing, and network shares, scanned again a few seconds
@@ -2036,7 +2051,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, " +
 	"recording_commercials, " +
-	"live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
+	"live_tv_refresh_hours, local_scan_hours, watchlist_check_hours, watch_local_folders, " +
 	"convert_recordings, convert_recordings_from, convert_recordings_until, convert_recordings_on_processor, " +
 	"web_theme, custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
@@ -2095,7 +2110,7 @@ func (settings *Settings) fields() []any {
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays,
 		&settings.RecordingCommercials,
-		&settings.LiveTvRefreshHours, &settings.LocalScanHours,
+		&settings.LiveTvRefreshHours, &settings.LocalScanHours, &settings.WatchlistCheckHours,
 		&settings.WatchLocalFolders,
 		&settings.ConvertRecordings, &settings.ConvertRecordingsFrom, &settings.ConvertRecordingsUntil, &settings.ConvertRecordingsOnProcessor,
 		&settings.WebTheme, &settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
@@ -2501,6 +2516,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.LocalScanHours < 0 || settings.LocalScanHours > MaxLocalScanHours {
 		return Settings{}, ErrInvalidLocalScanHours
+	}
+	if settings.WatchlistCheckHours < 0 || settings.WatchlistCheckHours > MaxWatchlistCheckHours {
+		return Settings{}, ErrInvalidWatchlistCheckHours
 	}
 	if !slices.Contains(WebThemes, settings.WebTheme) {
 		return Settings{}, ErrInvalidWebTheme

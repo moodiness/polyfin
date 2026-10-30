@@ -109,6 +109,7 @@ const notifications: typeof en = {
       new_device: 'Anmeldung auf einem neuen Gerät',
       share_played: 'Freigabelink abgespielt',
       programme_reminder: 'Sendung beginnt',
+      title_available: 'Titel der Merkliste verfügbar',
     },
     eventHelp: {
       new_episode:
@@ -144,6 +145,8 @@ const notifications: typeof en = {
         'Jemand ohne Konto hat über einen Freigabelink einen Film oder eine Folge gestartet: höchstens einmal pro Stunde und Link, mit dem Titel und wer ihn geteilt hat. Die Ziele des Servers erfahren von jedem Link, die anderen von ihren eigenen.',
       programme_reminder:
         'Eine Live-TV-Sendung, für die du im Web-Player eine Erinnerung gesetzt hast, beginnt bald, so lange vorher, wie „Remind me before“ angibt, mit einem Link zu ihrem Kanal.',
+      title_available:
+        'Für einen Titel deiner Merkliste, für den die früheren Prüfungen keine Version gefunden hatten, wurden Versionen gefunden: einmal je Titel. Eine gefundene Version wurde noch nicht ausprobiert.',
     },
     enabled: 'Nachrichten an dieses Ziel senden',
     create: 'Hinzufügen',

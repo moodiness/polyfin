@@ -142,6 +142,7 @@ func DefaultSettings() Settings {
 		RecordingCommercials:   false,
 		LiveTvRefreshHours:     DefaultLiveTvRefreshHours,
 		LocalScanHours:         DefaultLocalScanHours,
+		WatchlistCheckHours:    DefaultWatchlistCheckHours,
 		WatchLocalFolders:      true,
 
 		ConvertRecordings:            false,
@@ -378,6 +379,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"recordingCommercials":   is(d.RecordingCommercials),
 		"liveTvRefreshHours":     between(MinLiveTvRefreshHours, MaxLiveTvRefreshHours, d.LiveTvRefreshHours),
 		"localScanHours":         between(0, MaxLocalScanHours, d.LocalScanHours),
+		"watchlistCheckHours":    between(0, MaxWatchlistCheckHours, d.WatchlistCheckHours),
 		"watchLocalFolders":      is(d.WatchLocalFolders),
 
 		"convertRecordings":            is(d.ConvertRecordings),

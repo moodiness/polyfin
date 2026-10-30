@@ -524,6 +524,8 @@ export type Settings = {
   liveTvRefreshHours: number
   /** Hours after its last scan a local folder is scanned again; 0 for never on a schedule. */
   localScanHours: number
+  /** Hours after its last check a watchlist title is checked again for versions; 0 for never. */
+  watchlistCheckHours: number
   /** Whether the local folders, in the container and network shares, are watched for changes. */
   watchLocalFolders: boolean
   /**
@@ -1968,7 +1970,7 @@ export type AccountTitle = {
 }
 
 /** What a home row of the web player lists. */
-export type HomeRowKind = 'catalog' | 'collection' | 'because' | 'new'
+export type HomeRowKind = 'catalog' | 'collection' | 'because' | 'new' | 'available' | 'waiting'
 
 /** Where the web player shows a home row: at the top, after Continue Watching, after Next Up, at the bottom. */
 export type HomeRowPlace = 'top' | 'resume' | 'nextup' | 'bottom'
@@ -2273,6 +2275,7 @@ export type NotificationEvent =
   | 'new_device'
   | 'share_played'
   | 'programme_reminder'
+  | 'title_available'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is

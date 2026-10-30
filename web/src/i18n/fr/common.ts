@@ -251,6 +251,8 @@ const common: typeof en = {
       'L’intervalle d’actualisation doit être un nombre entier d’heures de 1 à 168.',
     invalid_local_scan_hours:
       'L’intervalle d’analyse doit être un nombre entier d’heures de 0 à 168.',
+    invalid_watchlist_check_hours:
+      'L’intervalle de vérification des titres à regarder doit être un nombre entier d’heures de 0 à 168.',
     invalid_custom_css: 'Le CSS personnalisé ne doit pas dépasser 2 Mo.',
     invalid_custom_js: 'Le JavaScript personnalisé ne doit pas dépasser 2 Mo.',
     invalid_web_theme: 'Choisissez un thème dans la liste.',

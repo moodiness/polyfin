@@ -660,6 +660,9 @@ const settings: typeof en = {
     localScanHours: 'Scansiona le cartelle locali ogni (ore, 0 = mai)',
     localScanHoursHelp: (r: RangeText) =>
       `Ogni quanto ciascuna cartella locale viene scansionata di nuovo per individuare file aggiunti, modificati o rimossi. Le cartelle vengono scansionate anche all’avvio, su richiesta e quando quelle monitorate cambiano. 0 disattiva la pianificazione. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
+    watchlistCheckHours: 'Cerca versioni dei titoli da guardare ogni (ore, 0 = mai)',
+    watchlistCheckHoursHelp: (r: RangeText) =>
+      `Ogni quanto ciascun titolo non iniziato della lista «Da guardare» di un utente viene controllato di nuovo per trovarne versioni, per le righe iniziali «Ora disponibili» e «Ancora in attesa» e per il messaggio che avvisa l’utente di un titolo disponibile. Ogni ora vengono controllati fino a 20 titoli di ogni utente, chiedendo ai suoi add-on di flussi. 0 disattiva i controlli. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
     watchLocalFolders: 'Monitora le modifiche di cartelle e condivisioni',
     watchLocalFoldersHelp: {
       container:
@@ -1000,6 +1003,8 @@ const settings: typeof en = {
         collection: 'Una collezione',
         because: 'Perché hai guardato',
         new: 'Novità nelle tue librerie',
+        available: 'Ora disponibili',
+        waiting: 'Ancora in attesa',
       },
       kindHelp: {
         catalog:
@@ -1009,10 +1014,16 @@ const settings: typeof en = {
         because:
           'Una riga per ciascuno degli ultimi film e serie TV riprodotti dall’utente, con i titoli simili, come li propongono i consigli sui film. Nessuna finché «Titoli simili» è disattivato.',
         new: 'I titoli arrivati nei cataloghi delle librerie dell’utente negli ultimi 7 giorni, dal più recente. Polyfin li conta dal momento in cui ha visto per la prima volta ogni titolo in ogni catalogo.',
+        available:
+          'I titoli non iniziati della lista «Da guardare» dell’utente per cui l’ultimo controllo ha trovato versioni, dagli ultimi trovati. Una versione trovata non è ancora stata provata: la sua riproduzione può ancora non riuscire.',
+        waiting:
+          'I titoli non iniziati della lista «Da guardare» dell’utente per cui l’ultimo controllo non ha trovato alcuna versione, o non ancora usciti, dagli ultimi aggiunti. Un titolo non ancora controllato non è in nessuna delle due righe.',
       },
       defaultNames: {
         because: 'Perché hai guardato',
         new: 'Novità nelle tue librerie',
+        available: 'Ora disponibili',
+        waiting: 'Ancora in attesa',
       },
       catalog: 'Catalogo',
       noCatalog: 'Gli add-on del server non hanno cataloghi da mostrare.',

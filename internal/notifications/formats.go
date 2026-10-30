@@ -34,6 +34,7 @@ var discordColors = map[string]int{
 	NewDevice:         0xf59e0b,
 	SharePlayed:       0x14b8a6,
 	ProgrammeReminder: 0x8b5cf6,
+	TitleAvailable:    0x22c55e,
 }
 
 // discordWebhook is what a Discord webhook takes: one embed, and no
@@ -115,6 +116,7 @@ var ntfyTags = map[string][]string{
 	NewDevice:         {"key"},
 	SharePlayed:       {"link"},
 	ProgrammeReminder: {"alarm_clock"},
+	TitleAvailable:    {"clapper"},
 }
 
 // ntfyMessage formats ev for topic: its title, its message, tags by its

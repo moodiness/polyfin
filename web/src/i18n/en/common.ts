@@ -230,6 +230,8 @@ const common = {
     invalid_live_tv_refresh_hours:
       'The refresh interval must be a whole number of hours from 1 to 168.',
     invalid_local_scan_hours: 'The scan interval must be a whole number of hours from 0 to 168.',
+    invalid_watchlist_check_hours:
+      'The watchlist check interval must be a whole number of hours from 0 to 168.',
     invalid_custom_css: 'The custom CSS must take at most 2 MB.',
     invalid_custom_js: 'The custom JavaScript must take at most 2 MB.',
     invalid_web_theme: 'Choose a theme from the list.',

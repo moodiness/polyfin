@@ -52,10 +52,15 @@ const (
 	KindBecause Kind = "because"
 	// KindNew lists the titles new in the user's libraries.
 	KindNew Kind = "new"
+	// KindAvailable lists the titles of the user's watchlist that versions
+	// were found for, and KindWaiting those still without (see package
+	// watchlist).
+	KindAvailable Kind = "available"
+	KindWaiting   Kind = "waiting"
 )
 
 // Kinds are the kinds of rows, in the order the admin app offers them.
-var Kinds = []Kind{KindCatalog, KindCollection, KindBecause, KindNew}
+var Kinds = []Kind{KindCatalog, KindCollection, KindBecause, KindNew, KindAvailable, KindWaiting}
 
 // Place is where the web player shows a row on its home page.
 type Place string

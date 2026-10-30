@@ -658,6 +658,10 @@ const settings: typeof en = {
     localScanHours: 'Analyser les dossiers locaux toutes les (heures, 0 = jamais)',
     localScanHoursHelp: (r: RangeText) =>
       `À quelle fréquence chaque dossier local est analysé à nouveau pour trouver les fichiers ajoutés, modifiés ou supprimés. Les dossiers sont aussi analysés au démarrage, à la demande, et quand ceux qui sont surveillés changent. 0 désactive cette planification. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    watchlistCheckHours:
+      'Chercher des versions des titres à regarder toutes les (heures, 0 = jamais)',
+    watchlistCheckHoursHelp: (r: RangeText) =>
+      `À quelle fréquence chaque titre non commencé de la liste « À regarder » d’un utilisateur est vérifié à nouveau pour trouver des versions, pour les rangées d’accueil Disponibles et Toujours en attente et le message qui prévient l’utilisateur d’un titre disponible. Chaque heure, jusqu’à 20 titres de chaque utilisateur sont vérifiés, en interrogeant ses addons de flux. 0 désactive ces vérifications. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     watchLocalFolders: 'Surveiller les changements des dossiers et des partages',
     watchLocalFoldersHelp: {
       container:
@@ -1000,6 +1004,8 @@ const settings: typeof en = {
         collection: 'Une collection',
         because: 'Parce que vous avez regardé',
         new: 'Nouveautés dans vos bibliothèques',
+        available: 'Disponibles',
+        waiting: 'Toujours en attente',
       },
       kindHelp: {
         catalog:
@@ -1009,10 +1015,16 @@ const settings: typeof en = {
         because:
           'Une rangée pour chacun des derniers films et séries vus par l’utilisateur, avec les titres similaires, comme les recommandations de films les donnent. Aucune tant que Titres similaires est désactivé.',
         new: 'Les titres arrivés dans les catalogues des bibliothèques de l’utilisateur ces 7 derniers jours, les plus récents d’abord. Polyfin les compte depuis la première fois qu’il a vu chaque titre dans chaque catalogue.',
+        available:
+          'Les titres non commencés de la liste « À regarder » de l’utilisateur pour lesquels la dernière vérification a trouvé des versions, les derniers trouvés d’abord. Une version trouvée n’a pas encore été essayée : sa lecture peut encore échouer.',
+        waiting:
+          'Les titres non commencés de la liste « À regarder » de l’utilisateur pour lesquels la dernière vérification n’a trouvé aucune version, ou qui ne sont pas encore sortis, les derniers ajoutés d’abord. Un titre pas encore vérifié n’est dans aucune des deux rangées.',
       },
       defaultNames: {
         because: 'Parce que vous avez regardé',
         new: 'Nouveautés dans vos bibliothèques',
+        available: 'Disponibles',
+        waiting: 'Toujours en attente',
       },
       catalog: 'Catalogue',
       noCatalog: 'Les addons du serveur n’ont aucun catalogue à afficher.',

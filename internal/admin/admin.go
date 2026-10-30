@@ -685,6 +685,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidPlaybackHistoryDays, http.StatusBadRequest, "invalid_playback_history_days"},
 		{accounts.ErrInvalidLiveTvRefreshHours, http.StatusBadRequest, "invalid_live_tv_refresh_hours"},
 		{accounts.ErrInvalidLocalScanHours, http.StatusBadRequest, "invalid_local_scan_hours"},
+		{accounts.ErrInvalidWatchlistCheckHours, http.StatusBadRequest, "invalid_watchlist_check_hours"},
 		{accounts.ErrInvalidWebTheme, http.StatusBadRequest, "invalid_web_theme"},
 		{accounts.ErrWebThemeLocked, http.StatusForbidden, "web_theme_locked"},
 		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},

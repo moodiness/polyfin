@@ -211,6 +211,8 @@ In the official Jellyfin apps for Android and iOS, which show the web client ins
   - **A collection**: a collection made by users, a smart list shown as a collection, or an addon's collection;
   - **Because you watched**: one row for each of the last movies and series the user played, up to the number chosen (3 by default, 10 at most), of the titles similar to it as [movie recommendations](jellyfin-compatibility.md#movie-recommendations) give them, without those already played. Each row is the name followed by the title it follows, such as "Because you watched Example Movie". There are none while **Similar titles** is off;
   - **New in your libraries**: the titles that came into the catalogs of the user's libraries in the last 7 days, newest first;
+  - **Now available**: the titles of the user's [Watchlist](tracking.md#the-watchlist) they have not started that versions were found for, the latest found first (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting));
+  - **Still waiting**: the titles of the user's Watchlist they have not started that no version was found for yet, or that are not out yet, the latest added first;
 - a **Place**: **At the top**, **After Continue Watching**, **After Next Up** or **At the bottom**. When a user's home page doesn't show Continue Watching or Next Up, the row takes the place before: after the rows above it, or at the top;
 - **Shown to**: **Every user**, or **Chosen users**;
 - **Also a library in other apps**, off by default.
@@ -219,9 +221,11 @@ Every row leaves out, for each user, what their other lists leave out: titles ab
 
 **New in your libraries** counts from the first time Polyfin saw each title in each catalog, as apps list the libraries and as Polyfin reads their first pages every hour. The titles a catalog held when Polyfin first read it, or first read a page of it, were there before: they are not new. A library narrowed to a genre counts that genre's titles. Smart lists, IPTV sources and local folders are left out. A title that leaves a catalog and comes back after 180 days is new again.
 
+**Now available** and **Still waiting** list what the last check of each title found, every 6 hours by default: a version found has not been tried yet, and may still fail to play. A title not checked yet, just added to the Watchlist, is in neither row (see [Tracking](tracking.md#now-available-and-still-waiting)).
+
 No app can be given a new kind of home section. With **Also a library in other apps** on, the row is also a library of its own, without type, as the Watchlist is (see [Tracking](tracking.md)): other apps list it among the user's libraries and show its latest titles on their home. The web player shows it too, in its libraries and with its own "Recently Added" row. A **Because you watched** row is then one library for each title it follows.
 
-**For app developers:** `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`), its `Kind` (`Catalog`, `Collection`, `BecauseYouWatched` or `New`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do. A row's `Id` is a folder: `/Items?ParentId=` lists the whole row, up to 500 titles, and `/Items/{Id}` describes it.
+**For app developers:** `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`), its `Kind` (`Catalog`, `Collection`, `BecauseYouWatched`, `New`, `NowAvailable` or `StillWaiting`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do. A row's `Id` is a folder: `/Items?ParentId=` lists the whole row, up to 500 titles, and `/Items/{Id}` describes it. The admin API names the two watchlist kinds `available` and `waiting`.
 
 ### Themes
 

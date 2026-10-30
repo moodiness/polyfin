@@ -615,6 +615,8 @@ type settingsJSON struct {
 	LiveTvRefreshHours *int `json:"liveTvRefreshHours"`
 	// LocalScanHours keeps its current value when a PUT leaves it out.
 	LocalScanHours *int `json:"localScanHours"`
+	// WatchlistCheckHours keeps its current value when a PUT leaves it out.
+	WatchlistCheckHours *int `json:"watchlistCheckHours"`
 	// WatchLocalFolders keeps its current value when a PUT leaves it out.
 	WatchLocalFolders *bool `json:"watchLocalFolders"`
 	// ConvertRecordings, ConvertRecordingsFrom, ConvertRecordingsUntil and
@@ -934,6 +936,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingCommercials:   &settings.RecordingCommercials,
 		LiveTvRefreshHours:     &settings.LiveTvRefreshHours,
 		LocalScanHours:         &settings.LocalScanHours,
+		WatchlistCheckHours:    &settings.WatchlistCheckHours,
 		WatchLocalFolders:      &settings.WatchLocalFolders,
 
 		ConvertRecordings:            &settings.ConvertRecordings,
@@ -1691,6 +1694,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingCommercials:   valueOr(body.RecordingCommercials, current.RecordingCommercials),
 		LiveTvRefreshHours:     valueOr(body.LiveTvRefreshHours, current.LiveTvRefreshHours),
 		LocalScanHours:         valueOr(body.LocalScanHours, current.LocalScanHours),
+		WatchlistCheckHours:    valueOr(body.WatchlistCheckHours, current.WatchlistCheckHours),
 		WatchLocalFolders:      valueOr(body.WatchLocalFolders, current.WatchLocalFolders),
 
 		ConvertRecordings:            valueOr(body.ConvertRecordings, current.ConvertRecordings),

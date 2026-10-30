@@ -840,6 +840,20 @@ function Catalogs({ form, update, error, number, range, limits }: SectionFormApi
         error={error('collection-library-apps')}
       />
       <FieldRow
+        anchor="watchlist-check-hours"
+        label={s.watchlistCheckHours}
+        help={s.watchlistCheckHoursHelp(range('watchlistCheckHours'))}
+        error={error('watchlist-check-hours')}
+      >
+        <NumberInput
+          {...limits('watchlistCheckHours')}
+          step={1}
+          {...number('watchlist-check-hours', form.watchlistCheckHours, (value) =>
+            update({ watchlistCheckHours: Math.trunc(value) }),
+          )}
+        />
+      </FieldRow>
+      <FieldRow
         anchor="local-scan-hours"
         label={s.localScanHours}
         help={s.localScanHoursHelp(range('localScanHours'))}
