@@ -25,7 +25,12 @@ const (
 // by RemuxDB: its video codec, of accounts.VersionCodecs, empty when they
 // name none, or several; its dynamic range; and its audio languages, by
 // their ISO 639-2/B codes, with Multi for labels saying it has several
-// (MULTI, DUAL) without naming them all.
+// (MULTI, DUAL) without naming them all. The languages the labels name as
+// its subtitles' are not its audio's (see subtitleWords).
+//
+// Regions are the regional variants of its audio languages the labels
+// name, of localization.AudioVariants, in the order they name them ("VFQ"
+// gives fr-CA); their languages are among Languages.
 //
 // Releases are the kinds of low-quality releases, of
 // accounts.ReleaseKinds, the labels tag the stream as, in the order they
@@ -39,6 +44,7 @@ type Labels struct {
 	Range     DynamicRange
 	Languages []string
 	Multi     bool
+	Regions   []string
 	Releases  []string
 	Elsewhere string
 }
@@ -135,11 +141,23 @@ func ReadLabels(title string, labels ...string) Labels {
 			read.Languages = append(read.Languages, code)
 		}
 	}
+	addRegion := func(variant string) {
+		addLanguage(localization.VariantLanguage(variant))
+		if !slices.Contains(read.Regions, variant) {
+			read.Regions = append(read.Regions, variant)
+		}
+	}
 	for _, label := range labels {
-		for _, code := range labelFlags(label) {
-			addLanguage(code)
+		for _, country := range labelFlags(label) {
+			if code, ok := flagLanguages[country]; ok {
+				addLanguage(code)
+			}
+			if variant := flagVariant(country); variant != "" {
+				addRegion(variant)
+			}
 		}
 		words := labelWords(label)
+		subtitles := subtitleWords(words, inTitle)
 		for i, word := range words {
 			lower := strings.ToLower(word)
 			next := ""
@@ -156,11 +174,17 @@ func ReadLabels(title string, labels ...string) Labels {
 				read.Range = HighRange
 			case lower == "sdr":
 				standard = true
-			case multiWords[lower]:
+			case multiWords[lower] && !subtitles[i]:
 				read.Multi = true
 			}
-			if inTitle[lower] {
+			if inTitle[lower] || subtitles[i] {
 				continue
+			}
+			for _, variant := range localization.ReleaseVariants(lower) {
+				addRegion(variant)
+			}
+			if variant := tagVariant(word, words, i, inTitle); variant != "" {
+				addRegion(variant)
 			}
 			if code, ok := labelLanguages[lower]; ok {
 				addLanguage(code)
@@ -184,10 +208,11 @@ func labelWords(label string) []string {
 	return strings.FieldsFunc(label, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }
 
-// labelFlags lists the languages of the flags a label holds, in order:
-// two regional indicator symbols make a flag.
+// labelFlags lists the countries of the flags a label holds, by their
+// ISO 3166-1 codes in capitals, in order: two regional indicator symbols
+// make a flag.
 func labelFlags(label string) []string {
-	var codes []string
+	var countries []string
 	var first rune
 	for _, r := range label {
 		if r < 0x1F1E6 || r > 0x1F1FF {
@@ -198,13 +223,10 @@ func labelFlags(label string) []string {
 			first = r
 			continue
 		}
-		country := string([]rune{'A' + first - 0x1F1E6, 'A' + r - 0x1F1E6})
-		if code, ok := flagLanguages[country]; ok {
-			codes = append(codes, code)
-		}
+		countries = append(countries, string([]rune{'A' + first - 0x1F1E6, 'A' + r - 0x1F1E6}))
 		first = 0
 	}
-	return codes
+	return countries
 }
 
 // releaseTags are the tags naming low-quality releases, in lower case, by
