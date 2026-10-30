@@ -88,6 +88,7 @@ const common: typeof en = {
     invalid_copy_from: 'Questo utente non esiste più. Scegline un altro.',
     invalid_server_name: 'Il nome del server deve avere da 1 a 64 caratteri.',
     invalid_language: 'Scegli una lingua dall’elenco.',
+    invalid_audio_region: 'Scegli una regione dall’elenco.',
     invalid_catalog_limit:
       'I titoli letti per catalogo devono essere un numero intero da 100 a 20.000.',
     invalid_channel_limit:

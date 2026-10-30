@@ -91,10 +91,11 @@ func (h *handler) resetGroup(w http.ResponseWriter, r *http.Request) {
 // resetOwnPreferences puts back the server's defaults for what the caller
 // chose themselves: the preferences and the configuration Jellyfin apps
 // saved in their account, the home rows they turned off, their metadata
-// language, and their web player theme, unless the administrator chose it
-// for them. What they watched, their favorites and resume points, their
-// connections and imports stay. Each part can be reset again alone, so a
-// failure part way leaves nothing that a second try does not finish.
+// language and their audio region, and their web player theme, unless
+// the administrator chose it for them. What they watched, their favorites
+// and resume points, their connections and imports stay. Each part can be
+// reset again alone, so a failure part way leaves nothing that a second
+// try does not finish.
 func (h *handler) resetOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	session := sessionFrom(r.Context())
 	if h.Preferences != nil {
@@ -109,7 +110,8 @@ func (h *handler) resetOwnPreferences(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	_, err := h.Accounts.UpdateUser(r.Context(), session.User.ID, accounts.UserChanges{MetadataLanguage: new("")}, session.TokenHash)
+	_, err := h.Accounts.UpdateUser(r.Context(), session.User.ID, accounts.UserChanges{MetadataLanguage: new(""), AudioRegion: new("")},
+		session.TokenHash)
 	if accountError(w, err) {
 		return
 	}

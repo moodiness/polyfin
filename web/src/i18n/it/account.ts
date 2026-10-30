@@ -13,6 +13,7 @@ const account: typeof en = {
       homeRows: 'Righe della Home',
       metadataLanguage: 'Lingua dei metadati',
       webTheme: 'Tema del lettore web',
+      audioRegion: 'Regione audio',
       sharedLinks: 'Link condivisi',
       reminders: 'Promemoria',
       import: 'Importa da un altro server',
@@ -41,6 +42,20 @@ const account: typeof en = {
       },
       locked: 'Il tuo amministratore ha scelto il tema del tuo lettore web.',
       saved: 'Tema del lettore web salvato.',
+    },
+    audioRegion: {
+      help: 'Il doppiaggio che preferisci quando una lingua viene doppiata a parte per una regione: il francese di Francia o del Québec, lo spagnolo di Spagna o dell’America Latina, il portoghese del Brasile o del Portogallo. Si applica alla lingua audio scelta nelle tue applicazioni, altrimenti a quella del server, quando è la lingua della regione, e la sceglie quando non ce n’è nessuna. In quella lingua, le tracce audio della regione vengono riprodotte per prime, e le sue versioni vengono prima quando il server ordina le versioni per lingua.',
+      label: 'Regione audio',
+      none: 'Nessuna',
+      saved: 'Regione audio salvata.',
+      regions: {
+        'fr-FR': 'Francese (Francia)',
+        'fr-CA': 'Francese (Québec)',
+        'es-ES': 'Spagnolo (Spagna)',
+        'es-419': 'Spagnolo (America Latina)',
+        'pt-BR': 'Portoghese (Brasile)',
+        'pt-PT': 'Portoghese (Portogallo)',
+      },
     },
     homeRows: {
       help: 'Le righe che l’amministratore aggiunge per te alla pagina Home del player web. Disattivane una per escluderla dalla tua pagina Home e, quando lo è anche lì, dalle tue librerie nelle altre applicazioni. Le sezioni proprie del player web restano nelle sue Impostazioni › Home.',
@@ -657,6 +672,7 @@ const account: typeof en = {
     metadataLanguage: 'Lingua dei metadati: Quella del server',
     webTheme:
       'Tema del lettore web: Quello del server, se il tuo amministratore non ha scelto il tuo',
+    audioRegion: 'Regione audio: Nessuna',
     homeRows: 'Righe della Home: tutte le righe tornano visibili',
     appPreferences:
       'Le preferenze che le app Jellyfin hanno salvato nel tuo account: lingue e modalità di audio e sottotitoli, preferenze della schermata Home e di visualizzazione',

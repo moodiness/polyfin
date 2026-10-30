@@ -13,6 +13,7 @@ const account: typeof en = {
       homeRows: 'Rangées d’accueil',
       metadataLanguage: 'Langue des métadonnées',
       webTheme: 'Thème du lecteur web',
+      audioRegion: 'Région audio',
       sharedLinks: 'Liens partagés',
       reminders: 'Rappels',
       import: 'Importer depuis un autre serveur',
@@ -41,6 +42,20 @@ const account: typeof en = {
       },
       locked: 'Votre administrateur a choisi le thème de votre lecteur web.',
       saved: 'Thème du lecteur web enregistré.',
+    },
+    audioRegion: {
+      help: 'Le doublage que vous préférez quand une langue est doublée à part pour une région : le français de France ou du Québec, l’espagnol d’Espagne ou d’Amérique latine, le portugais du Brésil ou du Portugal. Elle s’applique à la langue audio choisie dans vos applis, sinon celle du serveur, quand c’est la langue de la région, et la choisit quand aucune ne l’est. Dans cette langue, les pistes audio de la région sont lues en premier, et ses versions passent en premier quand le serveur trie les versions par langue.',
+      label: 'Région audio',
+      none: 'Aucune',
+      saved: 'Région audio enregistrée.',
+      regions: {
+        'fr-FR': 'Français (France)',
+        'fr-CA': 'Français (Québec)',
+        'es-ES': 'Espagnol (Espagne)',
+        'es-419': 'Espagnol (Amérique latine)',
+        'pt-BR': 'Portugais (Brésil)',
+        'pt-PT': 'Portugais (Portugal)',
+      },
     },
     homeRows: {
       help: 'Les rangées que l’administrateur ajoute pour vous à la page d’accueil du lecteur web. Désactivez-en une pour la retirer de votre page d’accueil, et de vos bibliothèques dans les autres applis quand elle en est aussi une. Les sections propres au lecteur web restent dans ses Paramètres › Accueil.',
@@ -659,6 +674,7 @@ const account: typeof en = {
     metadataLanguage: 'Langue des métadonnées : Celle du serveur',
     webTheme:
       'Thème du lecteur web : Celui du serveur, sauf si votre administrateur a choisi le vôtre',
+    audioRegion: 'Région audio : Aucune',
     homeRows: 'Rangées d’accueil : toutes les rangées s’affichent de nouveau',
     appPreferences:
       'Les préférences que les applications Jellyfin ont enregistrées dans votre compte : langues et mode de l’audio et des sous-titres, préférences de l’écran d’accueil et d’affichage',

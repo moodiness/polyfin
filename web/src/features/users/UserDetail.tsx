@@ -13,6 +13,7 @@ import {
   TrashIcon,
   UserCircleDashedIcon,
   BooksIcon,
+  SpeakerHighIcon,
   TranslateIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -41,6 +42,7 @@ import { useSessionUser } from '@/app/session'
 import { ShareLinkList } from '@/features/account/SharedLinks'
 import { MetadataLanguageSelect } from '@/features/account/MetadataLanguage'
 import { WebThemeSelect } from '@/features/account/WebTheme'
+import { AudioRegionSelect } from '@/features/account/AudioRegion'
 import { errorMessage, formatDate } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -92,6 +94,7 @@ const sectionIds = [
   'access',
   'metadata-language',
   'web-theme',
+  'audio-region',
   'playback',
   'parental',
   'libraries',
@@ -202,6 +205,12 @@ function UserPage({ user }: { user: User }) {
           to: '#web-theme',
         },
         {
+          id: 'audio-region',
+          label: t.users.audioRegionTitle,
+          icon: SpeakerHighIcon,
+          to: '#audio-region',
+        },
+        {
           id: 'playback',
           label: t.users.playbackAccessTitle,
           icon: PlayCircleIcon,
@@ -298,6 +307,7 @@ function UserPage({ user }: { user: User }) {
         <AccessPanel user={user} />
         <MetadataLanguagePanel user={user} />
         <WebThemePanel user={user} />
+        <AudioRegionPanel user={user} />
         <PlaybackAccessForm key={`playback:${formsKey}`} id="playback" target={target} />
         <ParentalControlForm key={`parental:${formsKey}`} id="parental" target={target} />
         <VisibleLibrariesForm key={`libraries:${formsKey}`} id="libraries" target={target} />
@@ -823,6 +833,33 @@ function WebThemePanel({ user }: { user: User }) {
     <div id="web-theme" className={sectionClass}>
       <Panel title={t.users.webThemeTitle} description={t.users.webThemeHelp}>
         {body}
+      </Panel>
+    </div>
+  )
+}
+
+/** The user's audio region: None, or one of the regions offered, saved as it changes. */
+function AudioRegionPanel({ user }: { user: User }) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const patch = useUserPatch(user)
+  return (
+    <div id="audio-region" className={sectionClass}>
+      <Panel title={t.users.audioRegionTitle} description={t.users.audioRegionHelp}>
+        <Field
+          label={t.users.audioRegionTitle}
+          hideLabel
+          error={patch.isError ? errorMessage(t, patch.error) : undefined}
+        >
+          <AudioRegionSelect
+            value={user.audioRegion}
+            regions={user.audioRegions}
+            onValue={(audioRegion) =>
+              patch.mutate({ audioRegion }, { onSuccess: () => toast(t.users.updated) })
+            }
+            disabled={patch.isPending}
+          />
+        </Field>
       </Panel>
     </div>
   )

@@ -114,6 +114,10 @@ export type User = {
   webTheme: UserWebTheme
   /** Whether the user is kept from changing their web player theme under My account. */
   webThemeLocked: boolean
+  /** The regional variant of audio the user prefers, one of audioRegions; '' for none. */
+  audioRegion: string
+  /** The regional variants offered, BCP 47 tags such as 'fr-CA'. */
+  audioRegions: string[]
   /** Whether the user signs in with a code from an authenticator app after their password. */
   twoStep: boolean
   /** Whether the user signs in through the identity provider only, their password refused. */
@@ -811,6 +815,8 @@ export type UserPatch = Partial<{
   followGroup: boolean
   /** One of the languages the server's addons were given, or '' for the server's. */
   metadataLanguage: string
+  /** One of the user's audioRegions, or '' for none. */
+  audioRegion: string
   /** Whether the user signs in through the identity provider only, their password refused. */
   providerOnly: boolean
   /** One of the themes offered (see WebThemes), or '' for the server's. */
@@ -1878,10 +1884,19 @@ export const fetchOwnWebTheme = (signal?: AbortSignal) =>
 export const saveOwnWebTheme = (webTheme: UserWebTheme) =>
   request<OwnWebTheme>('PUT', '/account/web-theme', { webTheme })
 
+/** The signed-in user's preferred audio region ('' for none) and the ones they may choose. */
+export type AudioRegion = { region: string; regions: string[] }
+
+export const fetchOwnAudioRegion = (signal?: AbortSignal) =>
+  request<AudioRegion>('GET', '/account/audio-region', undefined, signal)
+
+export const saveOwnAudioRegion = (region: string) =>
+  request<AudioRegion>('PUT', '/account/audio-region', { region })
+
 /**
- * Puts back the server's defaults for what the signed-in user chose: their metadata language, the
- * home rows they turned off, the preferences Jellyfin apps saved in their account, and their web
- * player theme unless the administrator chose it.
+ * Puts back the server's defaults for what the signed-in user chose: their metadata language, their
+ * audio region, the home rows they turned off, the preferences Jellyfin apps saved in their account,
+ * and their web player theme unless the administrator chose it.
  */
 export const resetOwnPreferences = () => request<void>('POST', '/account/preferences/reset')
 
@@ -4572,6 +4587,7 @@ export const queryKeys = {
   ownReminders: ['account', 'reminders'] as const,
   reminderSettings: ['account', 'reminders', 'settings'] as const,
   ownMetadataLanguage: ['account', 'metadata-language'] as const,
+  ownAudioRegion: ['account', 'audio-region'] as const,
   /** The languages the server's addons were given: refreshed with the server's addons. */
   metadataLanguages: ['scopes', 'shared', 'metadata-languages'] as const,
   ownWebTheme: ['account', 'web-theme'] as const,

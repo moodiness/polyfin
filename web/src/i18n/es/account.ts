@@ -13,6 +13,7 @@ const account: typeof en = {
       homeRows: 'Filas de inicio',
       metadataLanguage: 'Idioma de los metadatos',
       webTheme: 'Tema del reproductor web',
+      audioRegion: 'Región de audio',
       sharedLinks: 'Enlaces compartidos',
       reminders: 'Recordatorios',
       import: 'Importar desde otro servidor',
@@ -41,6 +42,20 @@ const account: typeof en = {
       },
       locked: 'Su administrador eligió el tema de su reproductor web.',
       saved: 'Tema del reproductor web guardado.',
+    },
+    audioRegion: {
+      help: 'El doblaje que prefiere cuando un idioma se dobla aparte para una región: el francés de Francia o de Quebec, el español de España o de Latinoamérica, el portugués de Brasil o de Portugal. Se aplica al idioma de audio que eligió en sus aplicaciones, o si no al del servidor, cuando es el idioma de la región, y lo elige cuando no hay ninguno. En ese idioma, las pistas de audio de la región se reproducen primero, y sus versiones van primero cuando el servidor ordena las versiones por idioma.',
+      label: 'Región de audio',
+      none: 'Ninguna',
+      saved: 'Región de audio guardada.',
+      regions: {
+        'fr-FR': 'Francés (Francia)',
+        'fr-CA': 'Francés (Quebec)',
+        'es-ES': 'Español (España)',
+        'es-419': 'Español (Latinoamérica)',
+        'pt-BR': 'Portugués (Brasil)',
+        'pt-PT': 'Portugués (Portugal)',
+      },
     },
     homeRows: {
       help: 'Las filas que el administrador añade para usted a la página de inicio del reproductor web. Desactive una para quitarla de su página de inicio, y de sus bibliotecas en otras aplicaciones cuando también sea una allí. Las secciones propias del reproductor web siguen en sus Ajustes › Inicio.',
@@ -661,6 +676,7 @@ const account: typeof en = {
     help: 'Lo que elegiste tú mismo vuelve a los valores predeterminados del servidor:',
     metadataLanguage: 'Idioma de los metadatos: El del servidor',
     webTheme: 'Tema del reproductor web: El del servidor, salvo si tu administrador eligió el tuyo',
+    audioRegion: 'Región de audio: Ninguna',
     homeRows: 'Filas de inicio: todas las filas vuelven a mostrarse',
     appPreferences:
       'Las preferencias que las aplicaciones de Jellyfin guardaron en tu cuenta: idiomas y modo del audio y los subtítulos, preferencias de la pantalla de inicio y de visualización',

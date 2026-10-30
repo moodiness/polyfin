@@ -13,6 +13,7 @@ const account: typeof en = {
       homeRows: 'Fileiras do início',
       metadataLanguage: 'Idioma dos metadados',
       webTheme: 'Tema do player web',
+      audioRegion: 'Região do áudio',
       sharedLinks: 'Links compartilhados',
       reminders: 'Lembretes',
       import: 'Importar de outro servidor',
@@ -41,6 +42,20 @@ const account: typeof en = {
       },
       locked: 'Seu administrador escolheu o tema do seu player web.',
       saved: 'Tema do player web salvo.',
+    },
+    audioRegion: {
+      help: 'A dublagem que você prefere quando um idioma é dublado à parte para uma região: o francês da França ou do Québec, o espanhol da Espanha ou da América Latina, o português do Brasil ou de Portugal. Ela vale para o idioma de áudio escolhido nos seus aplicativos, ou então o do servidor, quando ele é o idioma da região, e o define quando nenhum foi escolhido. Nesse idioma, as faixas de áudio da região tocam primeiro, e as versões dela vêm primeiro quando o servidor ordena as versões por idioma.',
+      label: 'Região do áudio',
+      none: 'Nenhuma',
+      saved: 'Região do áudio salva.',
+      regions: {
+        'fr-FR': 'Francês (França)',
+        'fr-CA': 'Francês (Québec)',
+        'es-ES': 'Espanhol (Espanha)',
+        'es-419': 'Espanhol (América Latina)',
+        'pt-BR': 'Português (Brasil)',
+        'pt-PT': 'Português (Portugal)',
+      },
     },
     homeRows: {
       help: 'As fileiras que o administrador adiciona para você à página inicial do player web. Desative uma para tirá-la da sua página inicial, e também das suas bibliotecas em outros aplicativos quando ela for uma biblioteca neles. As seções próprias do player web ficam em Configurações › Início dele.',
@@ -659,6 +674,7 @@ const account: typeof en = {
     metadataLanguage: 'Idioma dos metadados: O do servidor',
     webTheme:
       'Tema do player web: O do servidor, a menos que seu administrador tenha escolhido o seu',
+    audioRegion: 'Região do áudio: Nenhuma',
     homeRows: 'Fileiras do início: todas as fileiras voltam a aparecer',
     appPreferences:
       'As preferências que os apps Jellyfin salvaram na sua conta: idiomas e modo do áudio e das legendas, preferências da tela inicial e de exibição',

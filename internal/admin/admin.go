@@ -290,6 +290,8 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/web-theme", h.signedIn(h.ownWebTheme))
 	mux.Handle("PUT /admin/api/account/web-theme", h.signedIn(h.setOwnWebTheme))
 	mux.Handle("GET /admin/api/web-themes", h.signedIn(h.webThemes))
+	mux.Handle("GET /admin/api/account/audio-region", h.signedIn(h.ownAudioRegion))
+	mux.Handle("PUT /admin/api/account/audio-region", h.signedIn(h.setOwnAudioRegion))
 	ownPlays := statisticsRoutes{h: h, scope: ownPlaybacks}
 	mux.Handle("GET /admin/api/account/statistics", h.signedIn(ownPlays.statistics))
 	mux.Handle("GET /admin/api/account/history", h.signedIn(ownPlays.history))
@@ -711,6 +713,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidQualityGroup, http.StatusBadRequest, "invalid_quality_group"},
 		{accounts.ErrInvalidBlockedGenres, http.StatusBadRequest, "invalid_blocked_genres"},
 		{accounts.ErrInvalidMetadataLanguage, http.StatusBadRequest, "invalid_language"},
+		{accounts.ErrInvalidAudioRegion, http.StatusBadRequest, "invalid_audio_region"},
 		{accounts.ErrInvalidAccessSchedule, http.StatusBadRequest, "invalid_access_schedules"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},

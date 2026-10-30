@@ -83,6 +83,9 @@ const users: typeof en = {
     webThemeChange: 'Permitirle cambiarlo',
     webThemeChangeHelp:
       'En Mi cuenta › Tema del reproductor web. Desactivado, el tema elegido aquí sigue siendo el suyo.',
+    audioRegionTitle: 'Región de audio',
+    audioRegionHelp:
+      'El doblaje que este usuario prefiere cuando un idioma se dobla aparte para una región, como el francés de Quebec. Se aplica al idioma de audio que eligió en sus aplicaciones, o si no al del servidor, cuando es el idioma de la región, y lo elige cuando no hay ninguno: en ese idioma, las pistas de audio de la región se reproducen primero, y sus versiones van primero cuando el servidor ordena las versiones por idioma.',
     parentalTitle: 'Control parental',
     maxRating: 'Clasificación máxima',
     maxRatingHelp:

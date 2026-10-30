@@ -8,9 +8,9 @@ import { Button, ConfirmDialog, useToast } from '@/ui'
 
 /**
  * Reset my preferences, among the page's actions: asks first, listing what goes back to the
- * server's defaults and what stays, then resets the metadata language, the web player theme unless
- * the administrator chose it, the home rows turned off and the preferences Jellyfin apps saved in
- * the account.
+ * server's defaults and what stays, then resets the metadata language, the audio region, the web
+ * player theme unless the administrator chose it, the home rows turned off and the preferences
+ * Jellyfin apps saved in the account.
  */
 export default function ResetPreferences() {
   const { t } = useI18n()
@@ -22,9 +22,10 @@ export default function ResetPreferences() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownMetadataLanguage })
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownWebTheme })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ownAudioRegion })
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownHomeRows })
       void queryClient.invalidateQueries({ queryKey: queryKeys.session })
-      // An administrator's own page under Users shows their metadata language and theme.
+      // An administrator's own page under Users shows their metadata language, theme and audio region.
       void queryClient.invalidateQueries({ queryKey: queryKeys.users })
       setAsking(false)
       toast(text.done)
@@ -58,6 +59,7 @@ export default function ResetPreferences() {
             <ul className="mt-1 list-disc space-y-0.5 ps-5">
               <li>{text.metadataLanguage}</li>
               <li>{text.webTheme}</li>
+              <li>{text.audioRegion}</li>
               <li>{text.homeRows}</li>
               <li>{text.appPreferences}</li>
             </ul>

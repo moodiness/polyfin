@@ -52,6 +52,10 @@ type userJSON struct {
 	// under My account.
 	WebTheme       string `json:"webTheme"`
 	WebThemeLocked bool   `json:"webThemeLocked"`
+	// AudioRegion is the regional variant of audio the user prefers, one
+	// of AudioRegions, empty for none; AudioRegions are those offered.
+	AudioRegion  string   `json:"audioRegion"`
+	AudioRegions []string `json:"audioRegions"`
 	// EndsOn is the date the account ends, YYYY-MM-DD in the server's time
 	// zone, null for never; Ended is set once it has come, and the account
 	// is refused as a disabled one is.
@@ -296,6 +300,8 @@ func newUserJSON(user accounts.User) userJSON {
 		MetadataLanguage: user.MetadataLanguage,
 		WebTheme:         user.WebTheme,
 		WebThemeLocked:   user.WebThemeLocked,
+		AudioRegion:      user.AudioRegion,
+		AudioRegions:     localization.AudioVariants,
 		// When the account ends.
 		EndsOn:       endsOn(user),
 		Ended:        user.Ended(time.Now()),
@@ -1282,6 +1288,8 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		FollowGroup *bool   `json:"followGroup"`
 		// MetadataLanguage, see userJSON.
 		MetadataLanguage *string `json:"metadataLanguage"`
+		// AudioRegion, see userJSON.
+		AudioRegion *string `json:"audioRegion"`
 		// ProviderOnly, see userJSON.
 		ProviderOnly *bool `json:"providerOnly"`
 		// WebTheme and WebThemeLocked, see userJSON.
@@ -1301,6 +1309,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	changes.MetadataLanguage = body.MetadataLanguage
+	changes.AudioRegion = body.AudioRegion
 	if body.MetadataLanguage != nil && !h.metadataLanguageOffered(w, r, *body.MetadataLanguage) {
 		return
 	}

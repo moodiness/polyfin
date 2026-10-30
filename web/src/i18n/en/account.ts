@@ -12,6 +12,7 @@ const account = {
       homeRows: 'Home rows',
       metadataLanguage: 'Metadata language',
       webTheme: 'Web player theme',
+      audioRegion: 'Audio region',
       sharedLinks: 'Shared links',
       reminders: 'Reminders',
       import: 'Import from another server',
@@ -38,6 +39,21 @@ const account = {
       choices: { lumaaglaass: 'LumaaGlaass', none: 'jellyfin-web’s own look', custom: 'Custom' },
       locked: 'Your administrator chose your web player theme.',
       saved: 'Web player theme saved.',
+    },
+    /** My account › Audio region, and the names of the regions offered there and on a user's page. */
+    audioRegion: {
+      help: 'The dub you prefer where a language is dubbed apart for a region: French for France or for Quebec, Spanish for Spain or for Latin America, Portuguese for Brazil or for Portugal. It applies to the audio language you chose in your apps, else the server’s, when that is the region’s language, and sets it when neither is set. In that language, the audio tracks of the region play first, and its versions come first where the server orders versions by language.',
+      label: 'Audio region',
+      none: 'None',
+      saved: 'Audio region saved.',
+      regions: {
+        'fr-FR': 'French (France)',
+        'fr-CA': 'French (Quebec)',
+        'es-ES': 'Spanish (Spain)',
+        'es-419': 'Spanish (Latin America)',
+        'pt-BR': 'Portuguese (Brazil)',
+        'pt-PT': 'Portuguese (Portugal)',
+      } as Record<string, string>,
     },
     /** My account › Home rows. */
     homeRows: {
@@ -642,6 +658,7 @@ const account = {
     help: 'What you chose yourself goes back to the server’s defaults:',
     metadataLanguage: 'Metadata language: The server’s',
     webTheme: 'Web player theme: The server’s, unless your administrator chose yours',
+    audioRegion: 'Audio region: None',
     homeRows: 'Home rows: every row is shown again',
     appPreferences:
       'The preferences Jellyfin apps saved in your account: audio and subtitle languages and mode, home screen and display preferences',

@@ -84,6 +84,9 @@ const users: typeof en = {
     webThemeChange: 'Lui permettre de le changer',
     webThemeChangeHelp:
       'Dans Mon compte › Thème du lecteur web. Désactivé, le thème choisi ici reste le sien.',
+    audioRegionTitle: 'Région audio',
+    audioRegionHelp:
+      'Le doublage que cet utilisateur préfère quand une langue est doublée à part pour une région, comme le français du Québec. Elle s’applique à la langue audio choisie dans ses applis, sinon celle du serveur, quand c’est la langue de la région, et la choisit quand aucune ne l’est : dans cette langue, les pistes audio de la région sont lues en premier, et ses versions passent en premier quand le serveur trie les versions par langue.',
     parentalTitle: 'Contrôle parental',
     maxRating: 'Classification maximale',
     maxRatingHelp: 'Les titres classés au-delà de cette limite sont masqués pour cet utilisateur.',

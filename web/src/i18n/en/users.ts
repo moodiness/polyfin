@@ -78,6 +78,9 @@ const users = {
     webThemeChange: 'Let them change it',
     webThemeChangeHelp:
       'Under My account › Web player theme. Off, the theme chosen here stays theirs.',
+    audioRegionTitle: 'Audio region',
+    audioRegionHelp:
+      'The dub this user prefers where a language is dubbed apart for a region, such as French for Quebec. It applies to the audio language they chose in their apps, else the server’s, when that is the region’s language, and sets it when neither is set: in that language, the audio tracks of the region play first, and its versions come first where the server orders versions by language.',
     parentalTitle: 'Parental control',
     maxRating: 'Maximum rating',
     maxRatingHelp: 'Titles rated above this limit are hidden from this user.',

@@ -13,6 +13,7 @@ const account: typeof en = {
       homeRows: 'Startseitenzeilen',
       metadataLanguage: 'Metadatensprache',
       webTheme: 'Theme des Web-Players',
+      audioRegion: 'Audioregion',
       sharedLinks: 'Freigabelinks',
       reminders: 'Erinnerungen',
       import: 'Von einem anderen Server importieren',
@@ -41,6 +42,20 @@ const account: typeof en = {
       },
       locked: 'Dein Administrator hat das Theme deines Web-Players gewählt.',
       saved: 'Theme des Web-Players gespeichert.',
+    },
+    audioRegion: {
+      help: 'Die Synchronfassung, die du bevorzugst, wenn eine Sprache für eine Region eigens synchronisiert wird: Französisch für Frankreich oder für Québec, Spanisch für Spanien oder für Lateinamerika, Portugiesisch für Brasilien oder für Portugal. Sie gilt für die Audiosprache, die du in deinen Apps gewählt hast, sonst die des Servers, wenn es die Sprache der Region ist, und legt sie fest, wenn keine gewählt ist. In dieser Sprache werden die Audiospuren der Region zuerst abgespielt, und ihre Versionen kommen zuerst, wenn der Server Versionen nach Sprache sortiert.',
+      label: 'Audioregion',
+      none: 'Keine',
+      saved: 'Audioregion gespeichert.',
+      regions: {
+        'fr-FR': 'Französisch (Frankreich)',
+        'fr-CA': 'Französisch (Québec)',
+        'es-ES': 'Spanisch (Spanien)',
+        'es-419': 'Spanisch (Lateinamerika)',
+        'pt-BR': 'Portugiesisch (Brasilien)',
+        'pt-PT': 'Portugiesisch (Portugal)',
+      },
     },
     homeRows: {
       help: 'Die Zeilen, die der Administrator für dich zur Startseite des Web-Players hinzufügt. Schalte eine aus, um sie von deiner Startseite zu entfernen, und auch aus deinen Bibliotheken in anderen Apps, wenn sie dort ebenfalls eine ist. Die eigenen Bereiche des Web-Players bleiben in seinen Einstellungen › Startseite.',
@@ -657,6 +672,7 @@ const account: typeof en = {
     help: 'Was Sie selbst gewählt haben, erhält wieder die Standardwerte des Servers:',
     metadataLanguage: 'Metadatensprache: Die des Servers',
     webTheme: 'Theme des Web-Players: Das des Servers, außer Ihr Administrator hat Ihres gewählt',
+    audioRegion: 'Audioregion: Keine',
     homeRows: 'Startseitenzeilen: Alle Zeilen werden wieder angezeigt',
     appPreferences:
       'Die Einstellungen, die Jellyfin-Apps in Ihrem Konto gespeichert haben: Audio- und Untertitelsprachen und -modus, Startbildschirm- und Anzeigeeinstellungen',

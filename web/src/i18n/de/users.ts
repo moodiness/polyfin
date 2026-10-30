@@ -83,6 +83,9 @@ const users: typeof en = {
     webThemeChange: 'Ändern erlauben',
     webThemeChangeHelp:
       'Unter Mein Konto › Theme des Web-Players. Ausgeschaltet behält er das hier gewählte Theme.',
+    audioRegionTitle: 'Audioregion',
+    audioRegionHelp:
+      'Die Synchronfassung, die dieser Benutzer bevorzugt, wenn eine Sprache für eine Region eigens synchronisiert wird, etwa Französisch für Québec. Sie gilt für die Audiosprache, die er in seinen Apps gewählt hat, sonst die des Servers, wenn es die Sprache der Region ist, und legt sie fest, wenn keine gewählt ist: In dieser Sprache werden die Audiospuren der Region zuerst abgespielt, und ihre Versionen kommen zuerst, wenn der Server Versionen nach Sprache sortiert.',
     parentalTitle: 'Kindersicherung',
     maxRating: 'Maximale Altersfreigabe',
     maxRatingHelp:
