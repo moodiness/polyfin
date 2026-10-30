@@ -312,7 +312,7 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	edit := library.Overrides{
 		Name: request.Name, OriginalTitle: request.OriginalTitle, SortName: request.ForcedSortName, Overview: request.Overview,
-		Taglines: request.Taglines, Genres: request.Genres, Tags: request.Tags,
+		Taglines: h.dropTasteTagline(r.Context(), callerFrom(r.Context()).User, id, request.Taglines), Genres: request.Genres, Tags: request.Tags,
 		OfficialRating: request.OfficialRating, CustomRating: request.CustomRating,
 		CommunityRating: request.CommunityRating.value, CriticRating: request.CriticRating.value,
 		PremiereDate: request.PremiereDate.value, EndDate: request.EndDate.value,

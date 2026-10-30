@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"math/rand/v2"
 	"net/http"
 	"slices"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/taste"
 )
 
 // The user's root folder, item counts and suggestions: what Jellyfin
@@ -75,8 +77,8 @@ func (h *Handler) rootChildren(w http.ResponseWriter, r *http.Request, user acco
 // firstPages reads the first page of each of the user's libraries, as
 // their home screen does. A library whose addon does not answer is left
 // out.
-func (h *Handler) firstPages(r *http.Request, user accounts.User) ([]library.Page, error) {
-	libraries, err := h.Library.Libraries(r.Context(), user)
+func (h *Handler) firstPages(ctx context.Context, user accounts.User) ([]library.Page, error) {
+	libraries, err := h.Library.Libraries(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +87,7 @@ func (h *Handler) firstPages(r *http.Request, user accounts.User) ([]library.Pag
 	g.SetLimit(4)
 	for i, l := range libraries {
 		g.Go(func() error {
-			page, err := h.Library.Children(r.Context(), user, l.ID, 0, defaultPageSize, "")
+			page, err := h.Library.Children(ctx, user, l.ID, 0, defaultPageSize, "")
 			if err != nil {
 				h.Logger.Debug("A library could not be read", "library", l.ID.String(), "error", err)
 				return nil
@@ -95,7 +97,7 @@ func (h *Handler) firstPages(r *http.Request, user accounts.User) ([]library.Pag
 		})
 	}
 	_ = g.Wait()
-	return pages, r.Context().Err()
+	return pages, ctx.Err()
 }
 
 // ItemCounts is Jellyfin's count of the items of each type in a user's
@@ -214,7 +216,8 @@ func (h *Handler) itemCounts(w http.ResponseWriter, r *http.Request) {
 
 // suggestions are items picked at random among the user's libraries, of
 // the types and media types asked, as Jellyfin suggests them: here among
-// the first page of each library.
+// the first page of each library. Above the confidence gate of the user's
+// taste profile, the titles it ranks first come first (see taste.go).
 func (h *Handler) suggestions(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -227,7 +230,7 @@ func (h *Handler) suggestions(w http.ResponseWriter, r *http.Request) {
 	matches := func(list []string, value string) bool {
 		return len(list) == 0 || slices.ContainsFunc(list, func(v string) bool { return strings.EqualFold(v, value) })
 	}
-	libraries, err := h.suggestionCandidates(r, user, func(item library.Item) bool {
+	libraries, err := h.suggestionCandidates(r.Context(), user, func(item library.Item) bool {
 		return matches(types, itemTypes[item.Kind]) && matches(media, mediaType(item.Kind))
 	})
 	if err != nil {
@@ -236,6 +239,9 @@ func (h *Handler) suggestions(w http.ResponseWriter, r *http.Request) {
 	}
 	pool := slices.Concat(libraries...)
 	rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
+	// Above the confidence gate, the user's taste orders them, the titles
+	// it ranks the same in a random order.
+	pool = taste.Order(h.tasteProfile(r.Context(), user), pool, taste.TitleOf)
 	from := min(max(start, 0), len(pool))
 	to := len(pool)
 	if limit >= 0 {
@@ -256,8 +262,8 @@ func (h *Handler) suggestions(w http.ResponseWriter, r *http.Request) {
 // suggestionCandidates is, for each of the user's libraries, the titles
 // keep keeps on its first page, in the catalog's order, each title in the
 // first library that has it.
-func (h *Handler) suggestionCandidates(r *http.Request, user accounts.User, keep func(library.Item) bool) ([][]library.Item, error) {
-	pages, err := h.firstPages(r, user)
+func (h *Handler) suggestionCandidates(ctx context.Context, user accounts.User, keep func(library.Item) bool) ([][]library.Item, error) {
+	pages, err := h.firstPages(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +335,7 @@ func randomTitles(r *http.Request) bool {
 // random among everything, which a remote catalog cannot list: its first
 // titles are those it puts forward.
 func (h *Handler) randomListing(w http.ResponseWriter, r *http.Request, user accounts.User, start, limit int) {
-	libraries, err := h.suggestionCandidates(r, user, itemTypeFilter(r))
+	libraries, err := h.suggestionCandidates(r.Context(), user, itemTypeFilter(r))
 	if err != nil {
 		h.browseError(w, r, err)
 		return

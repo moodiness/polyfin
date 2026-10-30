@@ -1060,10 +1060,11 @@ func (h *Handler) ownItemExists(ctx context.Context, user accounts.User, id acco
 const similarLimit = 50
 
 // similarItems lists titles close to a movie or series (see
-// library.Service.Similar). Like Jellyfin, it leaves out the titles the user
-// played, and describes the titles with their provider identifiers, asked
-// for or not. Other items have none, and so does every item with similar
-// titles turned off in the settings: no addon is asked then.
+// library.Service.Similar), blended with the user's taste (see taste.go).
+// Like Jellyfin, it leaves out the titles the user played, and describes
+// the titles with their provider identifiers, asked for or not. Other
+// items have none, and so does every item with similar titles turned off
+// in the settings: no addon is asked then.
 func (h *Handler) similarItems(w http.ResponseWriter, r *http.Request) {
 	limit, limited := 0, false
 	// Similar items take a limit but no start index: StartIndex is 0.
@@ -1078,7 +1079,7 @@ func (h *Handler) similarItems(w http.ResponseWriter, r *http.Request) {
 	var items []library.Item
 	if id != (accounts.ID{}) && h.Accounts.Settings().SimilarTitles {
 		// Twice the limit leaves room for the played titles left out.
-		found, err := h.Library.Similar(r.Context(), user, id, 2*limit)
+		found, err := h.similarTitles(r.Context(), user, id, 2*limit)
 		if err != nil && !errors.Is(err, library.ErrNotFound) {
 			h.browseError(w, r, err)
 			return

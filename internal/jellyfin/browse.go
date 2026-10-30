@@ -778,6 +778,7 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 	// gives none of, and has those without one looked up on TMDB.
 	item.People = h.Library.CastPhotos(r.Context(), user, item.People)
 	dto := h.newItemDto(item, requestedFields(r), true, state)
+	h.addTasteTagline(r.Context(), user, &dto, item)
 	h.addMediaSources(r, user, &dto, item, id, true)
 	h.setExtraCounts(r, user, &dto, item)
 	if item.Kind == library.KindChannel {
