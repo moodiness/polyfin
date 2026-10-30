@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -18,7 +19,9 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/source"
+	"github.com/moodiness/polyfin/internal/speech"
 	"github.com/moodiness/polyfin/internal/subtitles"
+	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/testspeech"
 	"github.com/moodiness/polyfin/internal/torrent"
 	"github.com/moodiness/polyfin/internal/torrent/torrenttest"
@@ -76,11 +79,50 @@ func TestAddonSubtitlesAreSyncedToTheVersionPlayed(t *testing.T) {
 					}
 				}
 				// The timing is kept: the next request gets the same.
-				if again, _ := s.SyncSubtitle(t.Context(), version.ID, subtitle, nil); again != timing {
+				if again, _ := s.SyncSubtitle(t.Context(), version.ID, subtitle, nil); !reflect.DeepEqual(again, timing) {
 					t.Errorf("%s: timed %+v, then %+v", tc.name, timing, again)
 				}
 			}
 		})
+	}
+}
+
+// Against a text track of the whole version, an addon subtitle timed on a
+// cut with a 90-second scene more than the version is synced piece by
+// piece, and its cut is kept: a service started again serves the same
+// timing, from the database, and times another such subtitle so against
+// the track it reads from there.
+func TestASubtitleOfAnotherCutKeepsItsCut(t *testing.T) {
+	t.Parallel()
+	const length, cutAt, scene = 60 * time.Minute, 20 * time.Minute, 90 * time.Second
+	spoken := testspeech.Bursts(1, length)
+	var track []speech.Span
+	for _, span := range spoken {
+		switch {
+		case span.End <= cutAt:
+			track = append(track, span)
+		case span.Start >= cutAt+scene:
+			track = append(track, speech.Span{Start: span.Start - scene, End: span.End - scene})
+		}
+	}
+	pool := migrated.New(t)
+	s := newServiceOn(t, pool, &fileSource{}, "", nil)
+	version := accounts.ID{1}
+	reference := speech.Reference{Speech: track, Windows: []speech.Span{{Start: 0, End: length - scene}}, Whole: true}
+	if err := s.saveSpeech(t.Context(), version, speechTrack, reference); err != nil {
+		t.Fatal(err)
+	}
+	cues := testspeech.Cues(spoken, func(d time.Duration) time.Duration { return d })
+	timing, ok := s.SyncSubtitle(t.Context(), version, accounts.ID{2}, cues)
+	if !ok || len(timing.Cuts) != 1 {
+		t.Fatalf("timed %+v (%v), want one cut", timing, ok)
+	}
+	again := newServiceOn(t, pool, &fileSource{}, "", nil)
+	if kept, ok := again.SyncSubtitle(t.Context(), version, accounts.ID{2}, nil); !ok || !reflect.DeepEqual(kept, timing) {
+		t.Errorf("timed %+v, then %+v (%v)", timing, kept, ok)
+	}
+	if other, ok := again.SyncSubtitle(t.Context(), version, accounts.ID{3}, cues); !ok || !reflect.DeepEqual(other, timing) {
+		t.Errorf("timed %+v, then another %+v (%v)", timing, other, ok)
 	}
 }
 

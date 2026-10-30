@@ -271,6 +271,7 @@ func (s *Service) trackReference(ctx context.Context, version library.Version, a
 			end = max(end, cue.End)
 		}
 		reference.Windows = []speech.Span{{Start: 0, End: end}}
+		reference.Whole = true
 		return reference, true
 	}
 	return speech.Reference{}, false
@@ -418,6 +419,7 @@ func (s *Service) storedSpeech(ctx context.Context, version accounts.ID) (stored
 	if err == nil {
 		stored.reference.Speech, err = unmarshalSpans(spans)
 	}
+	stored.reference.Whole = stored.kind == speechTrack
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Warn("Reading the speech of a version failed", "error", err)
@@ -462,6 +464,30 @@ func unmarshalSpans(data []byte) ([]speech.Span, error) {
 	return spans, nil
 }
 
+// marshalCuts writes cuts as [start, end, offset] triples of milliseconds.
+func marshalCuts(cuts []speech.Cut) []byte {
+	triples := make([][3]int64, len(cuts))
+	for i, cut := range cuts {
+		triples[i] = [3]int64{cut.Start.Milliseconds(), cut.End.Milliseconds(), cut.Offset.Milliseconds()}
+	}
+	data, _ := json.Marshal(triples)
+	return data
+}
+
+// unmarshalCuts reads what marshalCuts writes; none for a timing of one
+// shift.
+func unmarshalCuts(data []byte) ([]speech.Cut, error) {
+	var triples [][3]int64
+	if err := json.Unmarshal(data, &triples); err != nil || len(triples) == 0 {
+		return nil, err
+	}
+	cuts := make([]speech.Cut, len(triples))
+	for i, t := range triples {
+		cuts[i] = speech.Cut{Start: time.Duration(t[0]) * time.Millisecond, End: time.Duration(t[1]) * time.Millisecond, Offset: time.Duration(t[2]) * time.Millisecond}
+	}
+	return cuts, nil
+}
+
 // Speech returns when a version has speech, once found; false while it
 // was not, and when the version has no speech reference.
 func (s *Service) Speech(ctx context.Context, version accounts.ID) (speech.Reference, bool) {
@@ -478,7 +504,7 @@ func (s *Service) SubtitleTimings(ctx context.Context, version accounts.ID) map[
 	if timings, ok := s.speech.timings.Get(version); ok {
 		return timings
 	}
-	rows, err := s.db.Query(ctx, "SELECT subtitle_id, ratio, offset_ms FROM subtitle_syncs WHERE version_id = $1", version)
+	rows, err := s.db.Query(ctx, "SELECT subtitle_id, ratio, offset_ms, cuts FROM subtitle_syncs WHERE version_id = $1", version)
 	if err != nil {
 		if ctx.Err() == nil {
 			s.logger.Warn("Reading the subtitles synced to a version failed", "error", err)
@@ -489,9 +515,13 @@ func (s *Service) SubtitleTimings(ctx context.Context, version accounts.ID) map[
 	var subtitle accounts.ID
 	var ratio float64
 	var offset int64
-	_, err = pgx.ForEachRow(rows, []any{&subtitle, &ratio, &offset}, func() error {
-		timings[subtitle] = speech.Timing{Ratio: ratio, Offset: time.Duration(offset) * time.Millisecond}
-		return nil
+	var cuts []byte
+	_, err = pgx.ForEachRow(rows, []any{&subtitle, &ratio, &offset, &cuts}, func() error {
+		timing := speech.Timing{Ratio: ratio, Offset: time.Duration(offset) * time.Millisecond}
+		var err error
+		timing.Cuts, err = unmarshalCuts(cuts)
+		timings[subtitle] = timing
+		return err
 	})
 	if err != nil {
 		if ctx.Err() == nil {
@@ -524,8 +554,8 @@ func (s *Service) SyncSubtitle(ctx context.Context, version, subtitle accounts.I
 		frameRate = videoFrameRate(analysis)
 	}
 	timing := speech.Align(cues, reference, frameRate)
-	_, err := s.db.Exec(ctx, `INSERT INTO subtitle_syncs (version_id, subtitle_id, ratio, offset_ms) VALUES ($1, $2, $3, $4)
-		ON CONFLICT (version_id, subtitle_id) DO NOTHING`, version, subtitle, timing.Ratio, timing.Offset.Milliseconds())
+	_, err := s.db.Exec(ctx, `INSERT INTO subtitle_syncs (version_id, subtitle_id, ratio, offset_ms, cuts) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (version_id, subtitle_id) DO NOTHING`, version, subtitle, timing.Ratio, timing.Offset.Milliseconds(), marshalCuts(timing.Cuts))
 	if err != nil {
 		if ctx.Err() == nil {
 			s.logger.Warn("Saving the sync of a subtitle failed", "error", err)
@@ -542,7 +572,7 @@ func (s *Service) SyncSubtitle(ctx context.Context, version, subtitle accounts.I
 	s.speech.timings.Put(version, updated)
 	s.speech.timingsMu.Unlock()
 	if timing.Changes() {
-		s.logger.Info("An addon subtitle was synced to its version", "speed", timing.Ratio, "shift", timing.Offset)
+		s.logger.Info("An addon subtitle was synced to its version", "speed", timing.Ratio, "shift", timing.Offset, "cuts", len(timing.Cuts))
 	}
 	return timing, true
 }
