@@ -359,6 +359,8 @@ const users: typeof en = {
       counts: (played: number, resumed: number, favorites: number) =>
         `${played} als gesehen markiert, ${resumed === 1 ? '1 Fortsetzungspunkt' : `${resumed} Fortsetzungspunkte`}, ${favorites === 1 ? '1 Favorit' : `${favorites} Favoriten`}`,
       upToDate: (count: number) => `${count} bereits in Polyfin`,
+      ratings: (count: number) => `${count} bewertet`,
+      watchlist: (count: number) => `${count} zur Merkliste hinzugefügt`,
       undated: (count: number) =>
         count === 1
           ? '1 Fortsetzungspunkt ohne Datum, nicht übernommen'
@@ -371,8 +373,10 @@ const users: typeof en = {
           'Dieser Plex-Server hat keine Film- oder Serienbibliothek: Es gab nichts zu lesen.',
         plex_owner_nothing_watched: () =>
           'Der Besitzer hat in den Film- und Serienbibliotheken dieses Servers nichts gesehen oder begonnen.',
+        plex_nothing_watched: () =>
+          'Dieses Konto hat in den Film- und Serienbibliotheken dieses Servers nichts gesehen, begonnen oder bewertet.',
         plex_no_history: () =>
-          'Plex listet keine Wiedergabe dieses Kontos auf diesem Server. Sein Wiedergabeverlauf enthält nur die Titel, die auf diesem Server bis zum Ende abgespielt wurden: Ohne Abspielen als gesehen markierte oder aus dem Plex-Konto synchronisierte Titel stehen nicht darin.',
+          'Plex listet keine Wiedergabe dieses Kontos auf diesem Server. Sein Wiedergabeverlauf enthält nur die Titel, die auf diesem Server bis zum Ende abgespielt wurden: Ohne Abspielen als gesehen markierte oder aus dem Plex-Konto synchronisierte Titel stehen nicht darin. Um alles zu übernehmen, Fortsetzungspunkte eingeschlossen, meldet sich die Person unter Mein Konto › Von einem anderen Server importieren mit Plex an.',
       },
       unmatched: (count: number) =>
         count === 1 ? '1 Titel nicht gefunden' : `${count} Titel nicht gefunden`,

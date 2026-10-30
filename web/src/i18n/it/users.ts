@@ -361,6 +361,9 @@ const users: typeof en = {
       counts: (played: number, resumed: number, favorites: number) =>
         `${played} segnati come visti, ${resumed === 1 ? '1 punto di ripresa' : `${resumed} punti di ripresa`}, ${favorites === 1 ? '1 preferito' : `${favorites} preferiti`}`,
       upToDate: (count: number) => `${count} già in Polyfin`,
+      ratings: (count: number) => (count === 1 ? '1 valutato' : `${count} valutati`),
+      watchlist: (count: number) =>
+        count === 1 ? '1 aggiunto a «Da guardare»' : `${count} aggiunti a «Da guardare»`,
       undated: (count: number) =>
         count === 1
           ? '1 punto di ripresa senza data, non aggiunto'
@@ -374,8 +377,10 @@ const users: typeof en = {
           'Questo server Plex non ha librerie di film o serie TV: non c’era nulla da leggere.',
         plex_owner_nothing_watched: () =>
           'Il proprietario non ha nulla di visto o in corso nelle librerie di film e serie TV di questo server.',
+        plex_nothing_watched: () =>
+          'Questo account non ha nulla di visto, in corso o valutato nelle librerie di film e serie TV di questo server.',
         plex_no_history: () =>
-          'Plex non elenca alcuna riproduzione di questo account su questo server. La sua cronologia di riproduzione contiene solo i titoli riprodotti fino alla fine su questo server: i titoli segnati come visti senza riprodurli, o sincronizzati dall’account Plex, non vi compaiono.',
+          'Plex non elenca alcuna riproduzione di questo account su questo server. La sua cronologia di riproduzione contiene solo i titoli riprodotti fino alla fine su questo server: i titoli segnati come visti senza riprodurli, o sincronizzati dall’account Plex, non vi compaiono. Per portare tutto, punti di ripresa compresi, la persona accede con Plex da Il mio account › Importa da un altro server.',
       },
       unmatched: (count: number) =>
         count === 1 ? '1 titolo non trovato' : `${count} titoli non trovati`,

@@ -513,6 +513,20 @@ const common: typeof en = {
     app_import_expired:
       'I dati letti dall’account non vengono più conservati dopo qualche minuto. Accedi di nuovo.',
     app_import_running: 'È in corso un’importazione in questo account. Attendi che finisca.',
+    plex_sign_in_ended:
+      'L’accesso a Plex è terminato: è scaduto, è stato sostituito o è stato usato da un’importazione. Accedi di nuovo con Plex.',
+    plex_sign_in_pending:
+      'Plex non ti ha ancora fatto accedere. Completa l’accesso sulla pagina di Plex.',
+    plex_unknown_profile: 'Questo Plex Home non ha questo profilo. Accedi di nuovo con Plex.',
+    plex_profile_pin_refused:
+      'Plex ha rifiutato questo PIN. Inserisci di nuovo il PIN del profilo.',
+    plex_profile_forbidden: 'Plex non consente a questo account di passare a questo profilo.',
+    plex_unknown_server: 'Il tuo account Plex non accede a questo server. Scegline un altro.',
+    plex_server_unreachable:
+      'Nessuno degli indirizzi che Plex fornisce per questo server ha risposto come quel server. Verifica che sia in funzione e che Polyfin possa raggiungerlo.',
+    plex_tv_failed: 'plex.tv non ha risposto come previsto. Riprova più tardi.',
+    plex_tv_unreachable:
+      'plex.tv non è raggiungibile. Verifica la connessione di Polyfin a Internet.',
     app_not_connected: 'Questa app non è più collegata all’account.',
     app_connection_stopped:
       'L’app ha rifiutato l’accesso conservato da Polyfin. Accedi di nuovo, con «Resta connesso» selezionato.',

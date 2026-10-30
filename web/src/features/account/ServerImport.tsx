@@ -19,14 +19,16 @@ import {
 import { useI18n } from '@/i18n'
 import { Button, Field, Notice, Panel, PanelFooter, Segmented, TextInput, useToast } from '@/ui'
 import { LetterboxdForm, LetterboxdProgress } from './LetterboxdImport'
+import { PlexImportForm } from './PlexImport'
 
-type Kind = 'jellyfin' | 'emby' | 'letterboxd'
+type Kind = 'jellyfin' | 'emby' | 'plex' | 'letterboxd'
 
 /**
  * The signed-in user imports their own watch history from a Jellyfin or Emby server, signing in
- * there with their own name and password, which only live in this form's state, or from their
- * Letterboxd export file. Their latest import, running or ended, shows above the form; another
- * import running on the server, or into their account, refuses theirs.
+ * there with their own name and password, which only live in this form's state, from a Plex server,
+ * signing in to Plex on Plex's own page, or from their Letterboxd export file. Their latest import,
+ * running or ended, shows above the form; another import running on the server, or into their
+ * account, refuses theirs.
  */
 export default function ServerImport({ own }: { own: OwnImport }) {
   const { t } = useI18n()
@@ -51,11 +53,11 @@ export default function ServerImport({ own }: { own: OwnImport }) {
   const current = own.import
   const running = current?.state === 'running'
   const kinds: readonly Kind[] = own.letterboxd
-    ? ['jellyfin', 'emby', 'letterboxd']
-    : ['jellyfin', 'emby']
+    ? ['jellyfin', 'emby', 'plex', 'letterboxd']
+    : ['jellyfin', 'emby', 'plex']
 
   const code = start.error instanceof ApiError ? start.error.code : null
-  const server = kind === 'letterboxd' ? 'jellyfin' : kind
+  const server = kind === 'letterboxd' || kind === 'plex' ? 'jellyfin' : kind
   const message = start.isError ? serverError(t, server, start.error) : undefined
   const addressError = code !== null && addressCodes.includes(code) ? message : undefined
   const passwordError = code !== null && accountCodes.includes(code) ? message : undefined
@@ -68,7 +70,7 @@ export default function ServerImport({ own }: { own: OwnImport }) {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (kind === 'letterboxd') return
+    if (kind === 'letterboxd' || kind === 'plex') return
     start.mutate({ kind, address: address.trim(), name: name.trim(), password })
   }
 
@@ -112,6 +114,17 @@ export default function ServerImport({ own }: { own: OwnImport }) {
                   (data) => data && { ...data, import: started },
                 )
               }
+            />
+          ) : kind === 'plex' ? (
+            <PlexImportForm
+              header={picker}
+              onStarted={(started) => {
+                queryClient.setQueryData<OwnImport>(
+                  queryKeys.ownImport,
+                  (data) => data && { ...data, import: started },
+                )
+                toast(text.started)
+              }}
             />
           ) : (
             <form onSubmit={submit} noValidate>

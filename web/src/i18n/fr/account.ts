@@ -95,7 +95,7 @@ const account: typeof en = {
           : `toutes les ${minutes / 60} heures`,
     serverImport: {
       description:
-        'Reprenez vos films et épisodes vus, vos points de reprise et vos favoris depuis un serveur Jellyfin ou Emby que vous utilisiez, ou vos films depuis votre export Letterboxd. Ils vont dans votre compte seulement, et complètent seulement ce que Polyfin a déjà. Rien n’est écrit sur l’autre serveur.',
+        'Reprenez vos films et épisodes vus, vos points de reprise et vos favoris depuis un serveur Jellyfin, Emby ou Plex que vous utilisiez, ou vos films depuis votre export Letterboxd. Ils vont dans votre compte seulement, et complètent seulement ce que Polyfin a déjà. Rien n’est écrit sur l’autre serveur.',
       serverKind: 'Serveur',
       address: 'Adresse du serveur',
       addressHelp:
@@ -109,6 +109,33 @@ const account: typeof en = {
       started: 'L’importation a commencé. Vous pouvez quitter cette page : elle continue.',
       lastTitle: 'Votre dernière importation',
       from: (server: string) => `Depuis ${server}`,
+    },
+    plexImport: {
+      help: 'Connectez-vous à Plex sur la page de Plex, puis choisissez le serveur. Polyfin y lit, en votre nom, les films et épisodes que vous avez lus, marqués comme vus ou synchronisés, vos points de reprise et vos notes, et votre Watchlist de Plex. Polyfin ne voit jamais votre mot de passe Plex : ce que Plex lui donne sert seulement à cette importation, puis est déconnecté.',
+      signIn: 'Se connecter avec Plex',
+      signingIn: 'Demande à Plex…',
+      approve:
+        'Connectez-vous à Plex sur sa page, qui s’ouvre dans un nouvel onglet, puis revenez ici.',
+      open: 'Ouvrir la page de connexion de Plex',
+      waiting: 'En attente de votre connexion à Plex…',
+      signedInAs: (name: string) => `Connecté à Plex en tant que ${name}.`,
+      profile: 'Profil Plex Home',
+      profileHelp:
+        'Le profil dont les données de visionnage sont reprises. Un profil géré n’a pas de connexion à lui : choisissez-le ici.',
+      managed: (name: string) => `${name} (géré)`,
+      pin: 'Code PIN du profil',
+      pinHelp: 'Le code PIN que ce profil demande sur Plex.',
+      useProfile: 'Utiliser ce profil',
+      switching: 'Changement…',
+      server: 'Serveur',
+      serverHelp:
+        'Les serveurs Plex auxquels ce profil a accès. Polyfin joint celui choisi aux adresses que Plex donne pour lui.',
+      owned: (name: string) => `${name} (le vôtre)`,
+      noServers: 'Ce profil n’a accès à aucun serveur Plex.',
+      watchlist: 'Watchlist vers ma liste « À regarder »',
+      watchlistHelp:
+        'Les films et séries de votre Watchlist de Plex vont dans votre liste « À regarder » de Polyfin.',
+      cancel: 'Annuler',
     },
     letterboxd: {
       option: 'Letterboxd (fichier d’export)',

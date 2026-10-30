@@ -313,6 +313,8 @@ function ImportedUserRow({
   const ended = [
     text.read(user.read),
     text.counts(user.played, user.resumed, user.favorites),
+    ...(user.ratings > 0 ? [text.ratings(user.ratings)] : []),
+    ...(user.watchlist > 0 ? [text.watchlist(user.watchlist)] : []),
     ...(user.upToDate > 0 ? [text.upToDate(user.upToDate)] : []),
     ...(user.undated > 0 ? [text.undated(user.undated)] : []),
   ].join(' · ')

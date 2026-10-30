@@ -361,6 +361,9 @@ const users: typeof en = {
       counts: (played: number, resumed: number, favorites: number) =>
         `${played <= 1 ? `${played} marqué vu` : `${played} marqués vus`}, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${favorites <= 1 ? `${favorites} favori` : `${favorites} favoris`}`,
       upToDate: (count: number) => `${count} déjà dans Polyfin`,
+      ratings: (count: number) => (count <= 1 ? `${count} noté` : `${count} notés`),
+      watchlist: (count: number) =>
+        count <= 1 ? `${count} ajouté à « À regarder »` : `${count} ajoutés à « À regarder »`,
       undated: (count: number) =>
         count <= 1
           ? `${count} point de reprise sans date, non ajouté`
@@ -374,8 +377,10 @@ const users: typeof en = {
           'Ce serveur Plex n’a aucune bibliothèque de films ou de séries : il n’y avait rien à lire.',
         plex_owner_nothing_watched: () =>
           'Le propriétaire n’a rien de vu ni en cours dans les bibliothèques de films et de séries de ce serveur.',
+        plex_nothing_watched: () =>
+          'Ce compte n’a rien de vu, en cours ni noté dans les bibliothèques de films et de séries de ce serveur.',
         plex_no_history: () =>
-          'Plex ne liste aucune lecture de ce compte sur ce serveur. Son historique de lecture ne contient que les titres lus jusqu’au bout sur ce serveur : les titres marqués comme vus sans être lus, ou synchronisés depuis le compte Plex, n’y figurent pas.',
+          'Plex ne liste aucune lecture de ce compte sur ce serveur. Son historique de lecture ne contient que les titres lus jusqu’au bout sur ce serveur : les titres marqués comme vus sans être lus, ou synchronisés depuis le compte Plex, n’y figurent pas. Pour tout reprendre, points de reprise compris, la personne se connecte avec Plex dans Mon compte › Importer depuis un autre serveur.',
       },
       unmatched: (count: number) =>
         count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,

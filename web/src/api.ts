@@ -2574,10 +2574,15 @@ export type JellyfinUserImport = {
   history: number | null
   /** Items read that a Polyfin title matched. */
   matched: number
-  /** Titles newly marked played, resume points set, titles newly marked favorite. */
+  /**
+   * Titles newly marked played, resume points set, titles newly marked favorite, titles rated, and
+   * titles a Plex Watchlist added to the user's.
+   */
   played: number
   resumed: number
   favorites: number
+  ratings: number
+  watchlist: number
   /** Marks, resume points and favorites Polyfin already had. */
   upToDate: number
   /** Resume points without a date, which are not added. */
@@ -2593,10 +2598,16 @@ export type JellyfinUserImport = {
 /**
  * Why a user's import added nothing: everything read was already in Polyfin; Jellyfin or Emby
  * lists nothing played, in progress or favorite for the user; the Plex server has no movie or show
- * library; the Plex owner has nothing played or in progress; Plex lists no play of the account.
+ * library; the Plex owner, or the account signed in to Plex, has nothing played, in progress or
+ * rated; Plex lists no play of the account.
  */
 export type JellyfinNothingAdded =
-  'up_to_date' | 'nothing_played' | 'no_sections' | 'plex_owner_nothing_watched' | 'plex_no_history'
+  | 'up_to_date'
+  | 'nothing_played'
+  | 'no_sections'
+  | 'plex_owner_nothing_watched'
+  | 'plex_nothing_watched'
+  | 'plex_no_history'
 
 /**
  * The running import, else the last one since Polyfin started: a restart forgets it. `startedBy`
@@ -2679,16 +2690,47 @@ export const fetchOwnImport = (signal?: AbortSignal) =>
   request<OwnImport>('GET', '/account/server-import', undefined, signal)
 
 /**
- * Signs in to a Jellyfin or Emby server as `name`, and imports that user's watch data into the
- * signed-in user's account, in the background. The password is used for this import only.
+ * Imports the signed-in user's own watch data in the background: from a Jellyfin or Emby server,
+ * signing in there as `name`, with a password used for this import only; or from the Plex server
+ * `server` their sign-in to Plex reaches, with its Watchlist unless `watchlist` is false.
  */
-export const startOwnImport = async (body: {
-  kind: Exclude<ServerKind, 'plex'>
-  address: string
-  name: string
-  password: string
-}) =>
+export const startOwnImport = async (
+  body:
+    | { kind: Exclude<ServerKind, 'plex'>; address: string; name: string; password: string }
+    | { kind: 'plex'; server: string; watchlist: boolean },
+) =>
   (await request<{ import: JellyfinImportStatus }>('POST', '/account/server-import', body)).import
+
+/** Where the user signs in to Plex: Plex's own sign-in page, until `expiresAt`. */
+export type PlexSignIn = { link: string; expiresAt: string }
+
+/**
+ * A Plex account signed in: its name, its Plex Home's profiles (empty outside one), the profile
+ * read, and the servers that profile reaches, by machine identifier; `preselected` is the server
+ * administrators import from.
+ */
+export type PlexAccount = {
+  name: string
+  profiles: { id: string; name: string; managed: boolean; protected: boolean }[]
+  profile: string
+  servers: { id: string; name: string; owned: boolean; preselected: boolean }[]
+}
+
+const plexBase = '/account/server-import/plex'
+
+/** Starts the user's sign-in to Plex, dropping the one held before. */
+export const startPlexSignIn = () => request<PlexSignIn>('POST', `${plexBase}/sign-in`)
+
+/** The account once Plex signed the user in, else pending. */
+export const pollPlexSignIn = () =>
+  request<PlexAccount | { pending: true }>('POST', `${plexBase}/sign-in/poll`)
+
+/** Reads the profile of the Plex Home chosen, with its PIN when it has one. */
+export const choosePlexProfile = (profile: string, pin: string) =>
+  request<PlexAccount>('POST', `${plexBase}/profile`, { profile, pin })
+
+/** Drops the user's sign-in to Plex, signing it out. */
+export const dropPlexSignIn = () => request<void>('DELETE', `${plexBase}/sign-in`)
 
 /** Why a movie of a Letterboxd export was not found. */
 export type LetterboxdReason = 'not_found' | 'ambiguous' | 'search_failed'

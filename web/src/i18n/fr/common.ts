@@ -516,6 +516,18 @@ const common: typeof en = {
     app_import_expired:
       'Ce qui a été lu du compte n’est plus gardé, après quelques minutes. Reconnectez-vous.',
     app_import_running: 'Une importation dans ce compte est en cours. Attendez qu’elle se termine.',
+    plex_sign_in_ended:
+      'La connexion à Plex a pris fin : elle a expiré, a été remplacée, ou a servi à une importation. Reconnectez-vous avec Plex.',
+    plex_sign_in_pending:
+      'Plex ne vous a pas encore connecté. Terminez la connexion sur la page de Plex.',
+    plex_unknown_profile: 'Ce Plex Home n’a pas ce profil. Reconnectez-vous avec Plex.',
+    plex_profile_pin_refused: 'Plex a refusé ce code PIN. Saisissez à nouveau celui du profil.',
+    plex_profile_forbidden: 'Plex ne laisse pas ce compte passer à ce profil.',
+    plex_unknown_server: 'Votre compte Plex n’a pas accès à ce serveur. Choisissez-en un autre.',
+    plex_server_unreachable:
+      'Aucune des adresses que Plex donne pour ce serveur n’a répondu comme lui. Vérifiez qu’il fonctionne, et que Polyfin peut le joindre.',
+    plex_tv_failed: 'plex.tv n’a pas répondu comme prévu. Réessayez plus tard.',
+    plex_tv_unreachable: 'plex.tv est injoignable. Vérifiez la connexion de Polyfin à Internet.',
     app_not_connected: 'Cette appli n’est plus connectée au compte.',
     app_connection_stopped:
       'L’appli a refusé la connexion que Polyfin gardait. Reconnectez-vous, avec « Rester connecté » coché.',

@@ -355,6 +355,9 @@ const users: typeof en = {
       counts: (played: number, resumed: number, favorites: number) =>
         `${played === 1 ? '1 marcado como reproduzido' : `${played} marcados como reproduzidos`}, ${resumed === 1 ? '1 ponto de retomada' : `${resumed} pontos de retomada`}, ${favorites === 1 ? '1 favorito' : `${favorites} favoritos`}`,
       upToDate: (count: number) => `${count} já no Polyfin`,
+      ratings: (count: number) => (count === 1 ? '1 avaliado' : `${count} avaliados`),
+      watchlist: (count: number) =>
+        count === 1 ? '1 adicionado a “Para assistir”' : `${count} adicionados a “Para assistir”`,
       undated: (count: number) =>
         count === 1
           ? '1 ponto de retomada sem data, não adicionado'
@@ -367,8 +370,10 @@ const users: typeof en = {
           'Este servidor Plex não tem biblioteca de filmes ou séries: não havia nada para ler.',
         plex_owner_nothing_watched: () =>
           'O proprietário não tem nada reproduzido ou em andamento nas bibliotecas de filmes e séries deste servidor.',
+        plex_nothing_watched: () =>
+          'Esta conta não tem nada reproduzido, em andamento ou avaliado nas bibliotecas de filmes e séries deste servidor.',
         plex_no_history: () =>
-          'O Plex não lista nenhuma reprodução desta conta neste servidor. O histórico de reprodução dela contém apenas os títulos reproduzidos até o fim neste servidor: títulos marcados como assistidos sem reprodução, ou sincronizados da conta Plex, não estão nele.',
+          'O Plex não lista nenhuma reprodução desta conta neste servidor. O histórico de reprodução dela contém apenas os títulos reproduzidos até o fim neste servidor: títulos marcados como assistidos sem reprodução, ou sincronizados da conta Plex, não estão nele. Para trazer tudo, pontos de retomada incluídos, a pessoa entra com o Plex em Minha conta › Importar de outro servidor.',
       },
       unmatched: (count: number) =>
         count === 1 ? '1 título não encontrado' : `${count} títulos não encontrados`,

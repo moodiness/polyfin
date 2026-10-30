@@ -359,6 +359,9 @@ const users: typeof en = {
       counts: (played: number, resumed: number, favorites: number) =>
         `${played === 1 ? '1 marcado como reproducido' : `${played} marcados como reproducidos`}, ${resumed === 1 ? '1 punto de reanudación' : `${resumed} puntos de reanudación`}, ${favorites === 1 ? '1 favorito' : `${favorites} favoritos`}`,
       upToDate: (count: number) => `${count} ya en Polyfin`,
+      ratings: (count: number) => (count === 1 ? '1 valorado' : `${count} valorados`),
+      watchlist: (count: number) =>
+        count === 1 ? '1 añadido a «Para ver»' : `${count} añadidos a «Para ver»`,
       undated: (count: number) =>
         count === 1
           ? '1 punto de reanudación sin fecha, no añadido'
@@ -371,8 +374,10 @@ const users: typeof en = {
           'Este servidor Plex no tiene ninguna biblioteca de películas o series: no había nada que leer.',
         plex_owner_nothing_watched: () =>
           'El propietario no tiene nada reproducido ni en curso en las bibliotecas de películas y series de este servidor.',
+        plex_nothing_watched: () =>
+          'Esta cuenta no tiene nada reproducido, en curso ni valorado en las bibliotecas de películas y series de este servidor.',
         plex_no_history: () =>
-          'Plex no muestra ninguna reproducción de esta cuenta en este servidor. Su historial de reproducción solo contiene los títulos reproducidos hasta el final en este servidor: los títulos marcados como vistos sin reproducirlos, o sincronizados desde la cuenta de Plex, no figuran en él.',
+          'Plex no muestra ninguna reproducción de esta cuenta en este servidor. Su historial de reproducción solo contiene los títulos reproducidos hasta el final en este servidor: los títulos marcados como vistos sin reproducirlos, o sincronizados desde la cuenta de Plex, no figuran en él. Para traerlo todo, puntos de reanudación incluidos, la persona inicia sesión con Plex en Mi cuenta › Importar desde otro servidor.',
       },
       unmatched: (count: number) =>
         count === 1 ? '1 título no encontrado' : `${count} títulos no encontrados`,

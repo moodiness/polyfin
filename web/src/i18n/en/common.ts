@@ -482,6 +482,18 @@ const common = {
     app_import_expired:
       'What was read of the account is no longer kept, after a few minutes. Sign in again.',
     app_import_running: 'An import into this account is running. Wait for it to end.',
+    plex_sign_in_ended:
+      'The sign-in to Plex ended: it expired, was replaced, or was used by an import. Sign in with Plex again.',
+    plex_sign_in_pending: 'Plex has not signed you in yet. Finish signing in on Plex’s page.',
+    plex_unknown_profile: 'This Plex Home has no such profile. Sign in with Plex again.',
+    plex_profile_pin_refused: 'Plex refused this PIN. Type the profile’s PIN again.',
+    plex_profile_forbidden: 'Plex does not let this account switch to this profile.',
+    plex_unknown_server: 'Your Plex account does not reach this server. Choose another one.',
+    plex_server_unreachable:
+      'None of the addresses Plex gives for this server answered as that server. Check that it runs, and that Polyfin can reach it.',
+    plex_tv_failed: 'plex.tv did not answer as expected. Try again later.',
+    plex_tv_unreachable:
+      'plex.tv could not be reached. Check Polyfin’s connection to the internet.',
     app_not_connected: 'This app is not connected to the account any longer.',
     app_connection_stopped:
       'The app refused the sign-in Polyfin kept. Sign in again, with Stay connected ticked.',

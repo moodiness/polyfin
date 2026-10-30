@@ -349,6 +349,8 @@ const users = {
       counts: (played: number, resumed: number, favorites: number) =>
         `${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${favorites === 1 ? '1 favorite' : `${favorites} favorites`}`,
       upToDate: (count: number) => `${count} already in Polyfin`,
+      ratings: (count: number) => (count === 1 ? '1 rated' : `${count} rated`),
+      watchlist: (count: number) => `${count} added to the Watchlist`,
       undated: (count: number) =>
         count === 1
           ? '1 resume point without a date, not added'
@@ -362,8 +364,10 @@ const users = {
           'This Plex server has no movie or show library: there was nothing to read.',
         plex_owner_nothing_watched: () =>
           'The owner has nothing played or in progress in this server’s movie and show libraries.',
+        plex_nothing_watched: () =>
+          'This account has nothing played, in progress or rated in this server’s movie and show libraries.',
         plex_no_history: () =>
-          'Plex lists no play of this account on this server. Its playback history holds only the titles played to the end on this server: titles marked as watched without playing them, or synced from the Plex account, are not in it.',
+          'Plex lists no play of this account on this server. Its playback history holds only the titles played to the end on this server: titles marked as watched without playing them, or synced from the Plex account, are not in it. To bring everything over, resume points included, the person signs in with Plex under My account › Import from another server.',
       },
       unmatched: (count: number) =>
         count === 1 ? '1 title not found' : `${count} titles not found`,

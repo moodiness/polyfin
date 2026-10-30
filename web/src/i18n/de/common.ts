@@ -526,6 +526,19 @@ const common: typeof en = {
     app_import_expired:
       'Die gelesenen Kontodaten werden nach ein paar Minuten nicht mehr aufbewahrt. Melde dich erneut an.',
     app_import_running: 'In dieses Konto läuft gerade ein Import. Warte, bis er abgeschlossen ist.',
+    plex_sign_in_ended:
+      'Die Anmeldung bei Plex ist beendet: Sie ist abgelaufen, wurde ersetzt oder von einem Import verwendet. Melde dich erneut mit Plex an.',
+    plex_sign_in_pending:
+      'Plex hat dich noch nicht angemeldet. Schließe die Anmeldung auf der Seite von Plex ab.',
+    plex_unknown_profile:
+      'Dieses Plex Home hat kein solches Profil. Melde dich erneut mit Plex an.',
+    plex_profile_pin_refused: 'Plex hat diese PIN abgelehnt. Gib die PIN des Profils erneut ein.',
+    plex_profile_forbidden: 'Plex lässt dieses Konto nicht zu diesem Profil wechseln.',
+    plex_unknown_server: 'Dein Plex-Konto greift nicht auf diesen Server zu. Wähle einen anderen.',
+    plex_server_unreachable:
+      'Keine der Adressen, die Plex für diesen Server angibt, hat als dieser Server geantwortet. Prüfe, ob er läuft und Polyfin ihn erreichen kann.',
+    plex_tv_failed: 'plex.tv hat nicht wie erwartet geantwortet. Versuche es später erneut.',
+    plex_tv_unreachable: 'plex.tv ist nicht erreichbar. Prüfe die Internetverbindung von Polyfin.',
     app_not_connected: 'Diese App ist nicht mehr mit dem Konto verbunden.',
     app_connection_stopped:
       'Die App hat die von Polyfin gespeicherte Anmeldung abgelehnt. Melde dich erneut an und setze dabei das Häkchen bei „Angemeldet bleiben“.',
