@@ -131,7 +131,7 @@ Nothing else comes over: ratings, playlists, collections, users' limits and sett
 
 Titles are found as an [imported watch history](tracking.md#importing-your-watch-history) finds them: by the IMDb identifier Jellyfin gives, the way the usual metadata addons name titles, or by TMDB, or by TVDB for series, when a catalog listed the title under one of those. Episodes are found by their series' identifiers and their season and episode numbers; a file holding several episodes counts for each of them. A title no catalog listed yet shows in the user's lists at once, described by the addons. One known by its TMDB identifier only, or a series by its TVDB one, is asked of the server's metadata addons that describe titles by it (`tmdb:<id>`, `tvdb:<id>`): it is found by the other identifiers their description gives, else shows under `tmdb:<id>` or `tvdb:<id>`.
 
-A title that cannot be matched is left out, and the import goes on. Each user's result lists these titles with why: **No IMDb, TMDB or TVDB identifier** (a home video, or an episode Jellyfin did not number) or **Not in Polyfin** (it has no IMDb identifier, no catalog listed it under its TMDB or TVDB one, and no metadata addon of the server describes it by its TMDB one, or a series by its TVDB one).
+A title that cannot be matched is left out, and the import goes on. Each user's result lists these titles with why: **No IMDb, TMDB or TVDB identifier** (a home video, or an episode Jellyfin did not number) or **Not in Polyfin** (it has no IMDb identifier, no catalog listed it under its TMDB or TVDB one, and no metadata addon of the server describes it by its TMDB one, or a series by its TVDB one). Plex adds two more (see [Plex](#plex)).
 
 ### How the data merges with Polyfin's
 
@@ -146,12 +146,26 @@ Nothing is written to the Jellyfin server: the import only reads it. Signing in 
 
 ### Progress and limits
 
-- One import runs at a time. Leaving the page does not stop it, and the page shows how far it is, user by user, then what it added: titles marked played, resume points and favorites, and the titles not found.
+- One import runs at a time. Leaving the page does not stop it, and the page shows how far it is, user by user, then what it read and added: the items read, titles marked played, resume points and favorites, what Polyfin already had, and the titles not found.
 - **Stop import** stops it at once. What was imported stays: a user whose data was being saved is saved whole, and one whose data was being read gets nothing until the next import.
 - Jellyfin is read 200 titles at a time, one request after the other. A request that fails is tried 3 times more; a server that keeps failing, or refuses the key, ends the import, after saving what was read of the current user. A user whose data the server does not let the key read is marked so, and the import goes on with the next users.
+- A resume point without a date is counted, not added: whether Polyfin's own is newer cannot be told. Jellyfin dates every resume point; Plex dates the ones a player saved.
 - An answer the import cannot read ends it with `not_jellyfin`, and Polyfin's log says where, at the warning level: `An import could not read an answer`, with the path asked and why it could not be read, never the query or the key.
+- Once each user is read and saved, Polyfin's log says, at the info level, `An import read a user's watch data`, with the user's identifier on the server and what was read and done: for Plex the library `sections`, the items `listed` and, for an account other than the owner, the `history` rows and the rows of `otherAccounts` left out; then `read`, `matched`, `played`, `resumed`, `favorites`, `upToDate`, `undated`, `unmatched`, `nothingAdded` and `problem`. Never the server's address nor the key.
 - A user signed in is signed out once their watch data is read, and the import's own session when it ends, stopped or failed. A restart during an import leaves them open: they show among the users' devices on the server, which can end them.
 - Polyfin keeps the running import and the last result in memory only: a restart stops an import under way and forgets the result. Start it again: it adds only what is missing.
+
+#### Nothing imported?
+
+A user whose import ended without a problem and added nothing says why, under the counts:
+
+- **Everything read was already in Polyfin**: an earlier import, or Polyfin itself, has it all (`up_to_date`).
+- **The server lists nothing played, in progress or favorite for this user**: Jellyfin and Emby (`nothing_played`).
+- **This Plex server has no movie or show library** (`no_sections`).
+- **The owner has nothing played or in progress** in the Plex server's movie and show libraries (`plex_owner_nothing_watched`).
+- **Plex lists no play of this account on this server** (`plex_no_history`): see [Plex](#plex) for what Plex's playback history holds.
+
+A user whose titles were read but could not be matched says nothing more: the titles not found tell why.
 
 **Compared with Jellyfin:**
 
@@ -162,7 +176,7 @@ Nothing is written to the Jellyfin server: the import only reads it. Signing in 
 - The admin API serves the import to administrators:
   - `POST /admin/api/jellyfin-import/users` lists a server's users, given `kind` (`jellyfin`, the default, `emby` or `plex`), `address`, and `apiKey`, or `account` with `name` and `password`. It answers `server` with its `kind`, and `keyOwner`, the user the key belongs to or who signed in, `null` for a server's key. An account the server refuses is `jellyfin_sign_in_refused`, and one it does not let sign in `jellyfin_sign_in_forbidden`.
   - `POST /admin/api/jellyfin-import` takes the same, creates the accounts and starts the import. An entry's `jellyfinPassword`, given with `watchData`, has the import sign in as that user. Connected as a user, another user's watch data needs it: without it, the answer is `jellyfin_key_owner_only`. A password the server refuses is `jellyfin_password_refused`, an account it does not let sign in `jellyfin_sign_in_forbidden`, and a sign-in that opens another user's session `jellyfin_other_user`. Each names the `jellyfinId`, and comes before anyone is created.
-  - `GET /admin/api/jellyfin-import` reads the import, and `POST /admin/api/jellyfin-import/stop` stops it. The import names its `server.kind`, `startedBy` (`id` and `name`), and `own`, set for a user's import of their own watch history.
+  - `GET /admin/api/jellyfin-import` reads the import, and `POST /admin/api/jellyfin-import/stop` stops it. The import names its `server.kind`, `startedBy` (`id` and `name`), and `own`, set for a user's import of their own watch history. Each user names what was read: `read` (the items with watch data), for Plex `sections`, `listed` and `history` (`null` for Jellyfin and Emby), and `matched`; what was done: `played`, `resumed`, `favorites`, `upToDate` (the marks, resume points and favorites Polyfin already had) and `undated` (the resume points without a date, not added); `unmatchedCount` and `unmatched`, whose `reason` is `no_identifier`, `not_found`, `not_in_library` or `other_episode_order`; `problem`; and `nothingAdded`, `null` unless the user's import ended without a problem and added nothing: `up_to_date`, `nothing_played`, `no_sections`, `plex_owner_nothing_watched` or `plex_no_history`.
   - While any import runs, starting another is `jellyfin_import_running` (409).
   - The key and passwords are never answered back.
 - Polyfin reads Jellyfin with `GET` requests, sending the key or session token as `Authorization: MediaBrowser Token="…"`: `/System/Info/Public`, `/Users`, `/Users/Me` (which Jellyfin answers a server's key with an error, and a user's key with that user), and `/Users/{id}/Items` with `Recursive`, `IncludeItemTypes`, `Filters` (`IsPlayed`, `IsResumable`, `IsFavorite`) and `Fields=ProviderIds`, then the episodes' series by `Ids`.
@@ -194,9 +208,21 @@ The users listed are the accounts the server knows, the owner first, marked as a
 |---|---|
 | The owner's played movies and episodes, with their play counts and the date last played | Played marks. |
 | The owner's resume points | Resume points, for titles not played. |
-| Another account's playback history: each movie and episode played, with the number of plays and the date of the last one | Played marks. |
+| Another account's playback history on this server: each movie and episode it played to the end there, with the number of plays and the date of the last one | Played marks. |
 
-Plex does not let the owner's token read the resume points of other accounts: they stay on Plex. Plex has no favorites to import, and its watchlist is not imported. Titles are found by the IMDb, TMDB and TVDB identifiers of their `Guid` list; an episode by its show's identifiers and its season and episode numbers. A title that left the libraries since it was played has no identifiers left, and is listed as not found.
+With the owner's token, Plex gives Polyfin the owner's own watch state, but of the other accounts only their playback history on this server, and Plex's history holds only plays:
+
+- a title played to the end on this server;
+- not a title marked as watched without playing it: since Plex Media Server 1.40, marking makes no history entry;
+- not a title synced from the account's Plex account, as Plex does when an account is given access to a new server;
+- not a resume point: those stay on Plex too.
+
+So an account that shows titles as watched in Plex may have nothing to import: the page then says that Plex lists no play of this account on this server. Plex has no favorites to import, and its watchlist is not imported. A history row of another account than the one asked is left out.
+
+Titles are found by the IMDb, TMDB and TVDB identifiers of their `Guid` list; an episode by its show's identifiers and its season and episode numbers. An item an older Plex agent matched has no `Guid` list: its `guid` names its identifier instead, as `com.plexapp.agents.imdb://tt…`, `com.plexapp.agents.themoviedb://…` or `com.plexapp.agents.thetvdb://…`, or after an agent's own scheme as `://tvdb-…`, `://tmdb-…` or `://imdb-tt…`. Two kinds of titles are listed as not found:
+
+- **No longer in Plex's libraries**: a title a history names that no library section lists any longer, which leaves no identifier to find it by.
+- **Numbered in another of TheTVDB's episode orders**: an episode of a show an older agent matched as `tvdb2-`, `tvdb3-`…, whose numbers are not TheTVDB's usual ones. Its show's identifier is known, but marking the episode its numbers name could mark the wrong one.
 
 Plex is only read, with `GET` requests: it is never written to.
 
@@ -204,7 +230,7 @@ Plex is only read, with `GET` requests: it is never written to.
 
 - The import's API is Jellyfin's, with `kind` set to `emby` or `plex`. Plex takes its owner's token as `apiKey`, and no `account` nor `jellyfinPassword`.
 - Emby is read under `/emby` when the address does not end with it, else at the address given, with the key in `X-Emby-Token`. The requests are Jellyfin's, but for `/Users/Me`, which Emby does not have: a key is taken only when `GET /Auth/Keys` lists it among the server's API keys. Lists ask for `Fields=ProviderIds,UserDataPlayCount,UserDataLastPlayedDate`, without which Emby leaves the play count and date out. Signing in sends the app and device in `X-Emby-Authorization`.
-- Plex is read in JSON (`Accept: application/json`), with the token in `X-Plex-Token` and Polyfin's device in `X-Plex-Client-Identifier`: `/identity`, `/`, `/accounts` (account 1 is the owner, account 0 nobody), `/library/sections`, each movie and show section's `/library/sections/{key}/all` with `type=1` or `type=2` and `includeGuids=1`, the show sections' episodes with `type=4` for the owner, and `/status/sessions/history/all?accountID=…` for the other accounts, a page at a time with `X-Plex-Container-Start` and `X-Plex-Container-Size`.
+- Plex is read in JSON (`Accept: application/json`), with the token in `X-Plex-Token` and Polyfin's device in `X-Plex-Client-Identifier`: `/identity`, `/`, `/accounts` (account 1 is the owner, account 0 nobody), `/library/sections`, each movie and show section's `/library/sections/{key}/all` with `type=1` or `type=2` and `includeGuids=1`, the show sections' episodes with `type=4` for the owner, and `/status/sessions/history/all?accountID=…&sort=viewedAt:desc` for the other accounts, a page at a time with `X-Plex-Container-Start` and `X-Plex-Container-Size`. A history row whose `accountID` is not the one asked is left out, and one without a `ratingKey`, a title deleted from the libraries, is listed as `not_in_library` once per title.
 
 ## Importing your own watch history
 
