@@ -190,6 +190,9 @@ func (h *Handler) describePlaying(r *http.Request, user accounts.User, info *Ses
 		RepeatMode:          playing.RepeatMode,
 		PlaybackOrder:       playing.PlaybackOrder,
 	}
+	if device, err := accounts.ParseID(info.Id); err == nil {
+		info.TranscodingInfo = h.transcodingInfo(r.Context(), device, playing)
+	}
 	item, err := h.played(r.Context(), user, playing.Item)
 	if err != nil {
 		return
@@ -791,6 +794,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 			streamed = false
 		}
 	}
+	h.logPlay(r, p.item.ID, version, decision, streamed)
 	h.queueTextCopies(r.Context(), p, decision, streams, version, analysis)
 	h.deliverable(r.Context(), decision, streams, version, analysis, streamed)
 	h.prefetchSubtitle(r.Context(), decision, streams, version, analysis)

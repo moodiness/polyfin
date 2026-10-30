@@ -206,6 +206,9 @@ type Handler struct {
 	// of each play session offers, when it offers several, for the admin
 	// dashboard.
 	qualities *cache.Cache[string, []int]
+	// transcodings remembers what each play session was last sent, for
+	// /Sessions between its encodings (see transcodingInfo).
+	transcodings *cache.Cache[string, TranscodingInfo]
 	// plays remembers each device's last PlaybackInfo profile and bitrate,
 	// which item details name versions for (see detailsNamer).
 	plays *cache.Cache[accounts.ID, devicePlay]
@@ -246,6 +249,7 @@ func New(options Options) *Handler {
 		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 		sizes:          cache.New[string, playback.ConversionSize](2000, 12*time.Hour),
 		qualities:      cache.New[string, []int](2000, 12*time.Hour),
+		transcodings:   cache.New[string, TranscodingInfo](2000, 12*time.Hour),
 		plays:          cache.New[accounts.ID, devicePlay](1000, 30*24*time.Hour),
 		guests:         newGuestPlays(),
 		downloads:      newDownloadPlays(),

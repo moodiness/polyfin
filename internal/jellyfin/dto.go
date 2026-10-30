@@ -328,6 +328,33 @@ type SessionInfo struct {
 	// Handler.reportViewing).
 	UserPrimaryImageTag string       `json:",omitempty"`
 	NowViewingItem      *BaseItemDto `json:",omitempty"`
+	// TranscodingInfo tells what Polyfin sends of what the device plays
+	// over HLS or as one stream (see Handler.transcodingInfo).
+	TranscodingInfo *TranscodingInfo `json:",omitempty"`
+}
+
+// TranscodingInfo is Jellyfin's description of what a server sends of a
+// play it streams: the video and audio copied (direct) or converted, the
+// codecs and size sent, and why the version is not played as it is.
+// jellyfin-web's Playback Info reads it to say "Direct streaming", or
+// that the file is only repackaged, rather than "Transcoding". Framerate
+// and CompletionPercentage, which Jellyfin reads from FFmpeg's progress,
+// are left out.
+type TranscodingInfo struct {
+	AudioCodec    string
+	VideoCodec    string
+	Container     string
+	IsVideoDirect bool
+	IsAudioDirect bool
+	Bitrate       *int64 `json:",omitempty"`
+	Width         *int   `json:",omitempty"`
+	Height        *int   `json:",omitempty"`
+	AudioChannels *int   `json:",omitempty"`
+	// HardwareAccelerationType names the GPU converting the video as
+	// Jellyfin's enum does, none for the processor; it is left out for
+	// copied video, which nothing encodes.
+	HardwareAccelerationType string `json:",omitempty"`
+	TranscodeReasons         []string
 }
 
 // newSessionInfo describes a device's session. Like Jellyfin, it reports
