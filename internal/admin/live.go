@@ -124,8 +124,9 @@ type videoConversionJSON struct {
 	ToneMap  bool   `json:"toneMap"`
 	Burn     bool   `json:"burnSubtitles"`
 	// LimitedBy is what set the size: source when nothing made it smaller
-	// than the source; gpu (4K), processor (1080p) or toneMapping (HDR
-	// converted on the processor), the server's own caps; qualityGroup,
+	// than the source; gpu (4K), processor (1080p), toneMapping (HDR
+	// converted on the processor) or gpuToneMapping (HDR converted on a
+	// GPU only keeping up below), the server's own caps; qualityGroup,
 	// the user's group; serverMax, the settings' maximum quality of
 	// converted video; bitrate, the bitrate limit; app, the frame or the
 	// codec level the app's profile allows. Empty when not known.

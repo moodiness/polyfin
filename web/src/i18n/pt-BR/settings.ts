@@ -438,6 +438,21 @@ const settings: typeof en = {
       qualityFactor: 'Aceita um número de qualidade',
       processor: 'Codificadores no processador',
       processorToneMapping: 'HDR para SDR no processador',
+      hdrPath: {
+        term: 'Títulos HDR',
+        gpu: 'Convertidos para SDR na placa',
+        gpuUpTo: (height: number) => `Convertidos para SDR na placa, até ${height}p`,
+        processor: 'Convertidos para SDR no processador, codificados na placa',
+        notTimed: 'A velocidade da placa ainda não foi medida, ou não pôde ser.',
+        keepsUp: (gpu: string) => `A placa converte o HDR a ${gpu} a velocidade de reprodução.`,
+        processorFaster: (gpu: string, processor: string) =>
+          `A placa converte o HDR a ${gpu} a velocidade de reprodução, devagar demais; o processador acompanha, a ${processor}.`,
+        lowerHeight: (gpu: string, low: string, processor: string | null) =>
+          `A placa converte o HDR para 1080p a ${gpu} a velocidade de reprodução, devagar demais, e para 720p a ${low}${processor ? `; o processador a ${processor}, também devagar demais` : ''}.`,
+        noneKeepsUp: (gpu: string, low: string, processor: string | null) =>
+          `Nenhum acompanha a reprodução: a placa converte o HDR para 1080p a ${gpu} a velocidade de reprodução e para 720p a ${low}${processor ? `, o processador a ${processor}` : ''}. Os títulos HDR podem pausar enquanto são convertidos.`,
+        turnedOff: 'HDR para SDR na placa está desativado nas configurações.',
+      },
       ffmpeg: 'FFmpeg',
       ffmpegShipped: 'O que acompanha o Polyfin',
       ffmpegOlderDrivers: 'Para drivers NVIDIA anteriores ao 610',

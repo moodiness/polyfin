@@ -441,6 +441,22 @@ const settings: typeof en = {
       qualityFactor: 'Akzeptiert einen Qualitätswert',
       processor: 'Encoder auf dem Prozessor',
       processorToneMapping: 'HDR zu SDR auf dem Prozessor',
+      hdrPath: {
+        term: 'HDR-Titel',
+        gpu: 'Auf der Karte in SDR konvertiert',
+        gpuUpTo: (height: number) => `Auf der Karte in SDR konvertiert, bis ${height}p`,
+        processor: 'Auf dem Prozessor in SDR konvertiert, auf der Karte kodiert',
+        notTimed:
+          'Die Geschwindigkeit der Karte ist noch nicht gemessen oder konnte nicht gemessen werden.',
+        keepsUp: (gpu: string) => `Die Karte konvertiert HDR mit ${gpu} Echtzeit.`,
+        processorFaster: (gpu: string, processor: string) =>
+          `Die Karte konvertiert HDR mit ${gpu} Echtzeit, zu langsam für die Wiedergabe; der Prozessor hält mit, mit ${processor}.`,
+        lowerHeight: (gpu: string, low: string, processor: string | null) =>
+          `Die Karte konvertiert HDR in 1080p mit ${gpu} Echtzeit, zu langsam für die Wiedergabe, und in 720p mit ${low}${processor ? `; der Prozessor mit ${processor}, ebenfalls zu langsam` : ''}.`,
+        noneKeepsUp: (gpu: string, low: string, processor: string | null) =>
+          `Keiner hält mit der Wiedergabe mit: Die Karte konvertiert HDR in 1080p mit ${gpu} Echtzeit und in 720p mit ${low}${processor ? `, der Prozessor mit ${processor}` : ''}. HDR-Titel können während der Konvertierung stocken.`,
+        turnedOff: 'HDR zu SDR auf der Karte ist in den Einstellungen ausgeschaltet.',
+      },
       ffmpeg: 'FFmpeg',
       ffmpegShipped: 'Das von Polyfin mitgelieferte',
       ffmpegOlderDrivers: 'Für NVIDIA-Treiber älter als 610',

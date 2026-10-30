@@ -193,6 +193,8 @@ const home: typeof en = {
         gpu: (height: string) => `Höchstens ${height}: von der Grafikkarte konvertiert`,
         processor: (height: string) => `Höchstens ${height}: vom Prozessor konvertiert`,
         toneMapping: (height: string) => `Höchstens ${height}: HDR vom Prozessor konvertiert`,
+        gpuToneMapping: (height: string) =>
+          `Höchstens ${height}: Nur bis dahin konvertiert die Grafikkarte HDR rechtzeitig`,
         qualityGroup: (height: string) => `Qualitätsgruppe: ${height}`,
         serverMax: (height: string) => `Maximale Qualität konvertierter Videos: ${height}`,
         app: (height: string) => `Von der App erlaubte Qualität: ${height}`,

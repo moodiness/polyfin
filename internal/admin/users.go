@@ -1502,7 +1502,8 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 	body.ConversionHardware = conversionHardwareJSON{Encoders: []string{}}
 	if encoder := h.Health.Encoder; encoder != nil {
 		if hw := encoder.Hardware(); hw != nil {
-			body.ConversionHardware.GPU = newHardwareJSON(hw)
+			// The form applies its own GPU tone mapping switch, saved or not.
+			body.ConversionHardware.GPU = newHardwareJSON(hw, encoder.HDRPath(hw), true)
 		}
 		for _, name := range []string{"libx264", "libx265"} {
 			if slices.Contains(encoder.Encoders(), name) {

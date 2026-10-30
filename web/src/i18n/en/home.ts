@@ -196,6 +196,8 @@ const home = {
         gpu: (height: string) => `${height} at most: converted by the graphics card`,
         processor: (height: string) => `${height} at most: converted by the processor`,
         toneMapping: (height: string) => `${height} at most: HDR converted by the processor`,
+        gpuToneMapping: (height: string) =>
+          `${height} at most: the graphics card converts HDR in time only up to there`,
         qualityGroup: (height: string) => `Quality group: ${height}`,
         serverMax: (height: string) => `Maximum quality of converted video: ${height}`,
         app: (height: string) => `Quality allowed by the app: ${height}`,

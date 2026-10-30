@@ -196,6 +196,8 @@ const home: typeof en = {
         gpu: (height: string) => `${height} au plus : converti par la carte graphique`,
         processor: (height: string) => `${height} au plus : converti par le processeur`,
         toneMapping: (height: string) => `${height} au plus : HDR converti par le processeur`,
+        gpuToneMapping: (height: string) =>
+          `${height} au plus : la carte graphique ne convertit le HDR à temps que jusque-là`,
         qualityGroup: (height: string) => `Groupe de qualité : ${height}`,
         serverMax: (height: string) => `Qualité max des vidéos converties : ${height}`,
         app: (height: string) => `Qualité permise par l’appli : ${height}`,

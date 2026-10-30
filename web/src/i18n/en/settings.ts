@@ -435,6 +435,23 @@ const settings = {
       qualityFactor: 'Takes a quality number',
       processor: 'Encoders on the processor',
       processorToneMapping: 'HDR to SDR on the processor',
+      /** Where HDR titles are converted to SDR, and why, as the timings at startup chose it. */
+      hdrPath: {
+        term: 'HDR titles',
+        gpu: 'Converted to SDR on the card',
+        gpuUpTo: (height: number) => `Converted to SDR on the card, up to ${height}p`,
+        processor: 'Converted to SDR on the processor, encoded on the card',
+        notTimed: 'The card’s speed is not measured yet, or could not be.',
+        keepsUp: (gpu: string) => `The card converts HDR at ${gpu} real time.`,
+        processorFaster: (gpu: string, processor: string) =>
+          `The card converts HDR at ${gpu} real time, too slow for playback; the processor keeps up, at ${processor}.`,
+        /** `processor` is null when the processor was not measured. */
+        lowerHeight: (gpu: string, low: string, processor: string | null) =>
+          `The card converts HDR to 1080p at ${gpu} real time, too slow for playback, and to 720p at ${low}${processor ? `; the processor at ${processor}, too slow as well` : ''}.`,
+        noneKeepsUp: (gpu: string, low: string, processor: string | null) =>
+          `Neither keeps up with playback: the card converts HDR to 1080p at ${gpu} real time and to 720p at ${low}${processor ? `, the processor at ${processor}` : ''}. HDR titles may pause while they convert.`,
+        turnedOff: 'HDR to SDR on the card is turned off in the settings.',
+      },
       ffmpeg: 'FFmpeg',
       ffmpegShipped: 'The one Polyfin ships',
       ffmpegOlderDrivers: 'For NVIDIA drivers older than 610',

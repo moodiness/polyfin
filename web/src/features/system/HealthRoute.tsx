@@ -49,6 +49,7 @@ import {
   useToast,
 } from '@/ui'
 import { lineupPath } from '@/features/iptv/lineup'
+import { hdrPathText } from '@/features/settings/hdrPath'
 import {
   problemText,
   unreadableName,
@@ -559,12 +560,14 @@ function Shares({ health }: { health: Health }) {
 }
 
 function Transcoder({ health }: { health: Health }) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const text = t.system.health
   const transcoder = health.transcoder
   if (transcoder === null) return null
   const hardware = transcoder.hardware
   const full = transcoder.limit > 0 && transcoder.conversions >= transcoder.limit
+  const hdrMessages = t.settings.conversion.hdrPath
+  const hdr = hardware?.hdr ? hdrPathText(hardware.hdr, hdrMessages, language) : null
   return (
     <Anchor id="transcoder">
       <Panel title={text.transcoderTitle} titleAs="h3">
@@ -599,6 +602,19 @@ function Transcoder({ health }: { health: Health }) {
                     {
                       label: text.toneMapping,
                       value: hardware.toneMapping ? '✓' : '–',
+                    },
+                  ]
+                : []),
+              ...(hdr
+                ? [
+                    {
+                      label: hdrMessages.term,
+                      value: (
+                        <span>
+                          {hdr.where}
+                          <span className="block text-small text-ink-3">{hdr.why}</span>
+                        </span>
+                      ),
                     },
                   ]
                 : []),

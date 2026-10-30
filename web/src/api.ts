@@ -757,6 +757,23 @@ export type ConversionGPU = {
   qvbr: boolean
   /** Whether it encodes with the FFmpeg for NVIDIA drivers older than 610. */
   olderDrivers: boolean
+  /** Where HDR titles are tone mapped and why, null when the card does not tone map. */
+  hdr: HDRPath | null
+}
+
+/**
+ * Where the HDR titles a graphics card tone maps are tone mapped, as the timings at startup
+ * chose it: on the card (`gpu`), up to `height` when it is not 0, or on the processor. The
+ * speeds are in times real time, 0 when not measured: the card's to 1080p, to 720p
+ * (`lowSpeed`, measured when the first is under 1), and the processor's to 1080p.
+ */
+export type HDRPath = {
+  path: 'gpu' | 'processor'
+  height: number
+  reason: 'notTimed' | 'keepsUp' | 'processorFaster' | 'lowerHeight' | 'noneKeepsUp' | 'turnedOff'
+  gpuSpeed: number
+  lowSpeed: number
+  processorSpeed: number
 }
 
 /**
@@ -3754,11 +3771,20 @@ export type Delivery = 'directPlay' | 'remux' | 'conversion' | 'stream'
 
 /**
  * What set the size of converted video: nothing below the source's, the GPU's 4K, the
- * processor's 1080p, HDR converted by the processor, the user's quality group, the settings'
- * maximum quality of converted video, the bitrate limit, or what the app's profile allows.
+ * processor's 1080p, HDR converted by the processor, HDR converted by a GPU that only keeps up
+ * at a lower height, the user's quality group, the settings' maximum quality of converted
+ * video, the bitrate limit, or what the app's profile allows.
  */
 export type SizeLimit =
-  'source' | 'gpu' | 'processor' | 'toneMapping' | 'qualityGroup' | 'serverMax' | 'bitrate' | 'app'
+  | 'source'
+  | 'gpu'
+  | 'processor'
+  | 'toneMapping'
+  | 'gpuToneMapping'
+  | 'qualityGroup'
+  | 'serverMax'
+  | 'bitrate'
+  | 'app'
 
 /** A device playing, as the dashboard shows it. */
 export type LiveSession = {
@@ -3982,6 +4008,7 @@ export type Health = {
       encoders: string[]
       toneMapping: boolean
       olderDrivers: boolean
+      hdr: HDRPath | null
     } | null
     encoders: string[]
     conversions: number

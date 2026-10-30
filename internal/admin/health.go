@@ -320,11 +320,47 @@ type hardwareJSON struct {
 	// OlderDrivers tells the GPU encodes with the FFmpeg for NVIDIA
 	// drivers older than 610, not with the one Polyfin ships.
 	OlderDrivers bool `json:"olderDrivers"`
+	// HDR is where HDR titles are tone mapped and why, null when the GPU
+	// does not tone map.
+	HDR *hdrPathJSON `json:"hdr"`
 }
 
-func newHardwareJSON(hw *hls.Hardware) *hardwareJSON {
+// newHardwareJSON describes hw, on which HDR goes as path says, unless the
+// settings turn tone mapping on the GPU off (gpuToneMapping).
+func newHardwareJSON(hw *hls.Hardware, path hls.HDRPath, gpuToneMapping bool) *hardwareJSON {
 	return &hardwareJSON{Method: hw.Method, Device: hw.Device, Encoders: hw.Encoders, ToneMapping: hw.ToneMapping, QVBR: hw.QVBR,
-		OlderDrivers: hw.FFmpeg != ""}
+		OlderDrivers: hw.FFmpeg != "", HDR: newHDRPathJSON(path, gpuToneMapping)}
+}
+
+// hdrPathJSON is where the HDR titles a GPU tone maps are tone mapped:
+// Path "gpu" or "processor", Height the height the GPU tone maps them up
+// to, 0 for any, and Reason why: one of hls's HDR reasons, or "turnedOff"
+// when the settings turn tone mapping on the GPU off. GPUSpeed, LowSpeed
+// and ProcessorSpeed are the timings at startup it follows, in times real
+// time, 0 when not timed (see hls.HDRPath).
+type hdrPathJSON struct {
+	Path           string  `json:"path"`
+	Height         int     `json:"height"`
+	Reason         string  `json:"reason"`
+	GPUSpeed       float64 `json:"gpuSpeed"`
+	LowSpeed       float64 `json:"lowSpeed"`
+	ProcessorSpeed float64 `json:"processorSpeed"`
+}
+
+// newHDRPathJSON describes path, nil for a GPU that does not tone map.
+func newHDRPathJSON(path hls.HDRPath, gpuToneMapping bool) *hdrPathJSON {
+	if path.Reason == "" {
+		return nil
+	}
+	result := &hdrPathJSON{Path: "gpu", Height: path.Height, Reason: path.Reason, GPUSpeed: path.GPUSpeed, LowSpeed: path.LowSpeed,
+		ProcessorSpeed: path.ProcessorSpeed}
+	switch {
+	case !gpuToneMapping:
+		result.Path, result.Height, result.Reason = "processor", 0, "turnedOff"
+	case path.Processor:
+		result.Path = "processor"
+	}
+	return result
 }
 
 // olderDriverJSON is the FFmpeg for NVIDIA drivers older than 610 while
@@ -466,7 +502,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	if encoder := h.Health.Encoder; encoder != nil {
 		t := &transcoderJSON{Encoders: []string{}, MaxHeight: settings.MaxConversionHeight, Enabled: settings.Transcoding}
 		if hw := encoder.Hardware(); hw != nil {
-			t.Hardware = newHardwareJSON(hw)
+			t.Hardware = newHardwareJSON(hw, encoder.HDRPath(hw), settings.GPUToneMapping)
 		}
 		for _, name := range softwareEncoders {
 			if slices.Contains(encoder.Encoders(), name) {
