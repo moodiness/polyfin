@@ -198,6 +198,18 @@ type Location struct {
 	// swarm takes longer to start, and to send a piece, than a host to
 	// answer.
 	HeaderTimeout, StallTimeout time.Duration
+	// Mirrors are other copies of the same file, byte for byte, read in
+	// their order once this one fails past the cache's tries (see
+	// Source.fail): the blocks cached stay valid, and the readers waiting
+	// get the blocks from the next copy rather than the failure.
+	Mirrors []Mirror
+}
+
+// Mirror is another copy of a source's file, where it is and how its link
+// is renewed (nil for never).
+type Mirror struct {
+	Location Location
+	Renew    Renewer
 }
 
 // Opener sends requests to sources; *stremio.Client is one.
@@ -321,7 +333,10 @@ func aheadBudget(limit int64) int64 {
 // renewed by renew (which may be nil) when its link expires. A source is
 // shared by all its readers; each must Release it when done. A location
 // naming another URL replaces the one known, as addons hand out new links;
-// the same one keeps where it redirected to (see Source.target).
+// the same one keeps where it redirected to (see Source.target). A
+// location the source left for one of its mirrors (see Location.Mirrors)
+// leaves the source on that mirror: the next playback, or the next request
+// of a relayed app, does not wait for the copy that failed again.
 func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -334,10 +349,14 @@ func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 		c.sources[id] = s
 	}
 	s.mu.Lock()
-	if location.URL != s.origin.URL {
-		s.pinned = nil
+	if !s.left[location.URL] {
+		if location.URL != s.origin.URL {
+			s.pinned = nil
+		}
+		s.origin, s.renew = location, renew
+		s.mirrors = slices.DeleteFunc(slices.Clone(location.Mirrors), func(m Mirror) bool { return s.left[m.Location.URL] })
+		s.origin.Mirrors = nil
 	}
-	s.origin, s.renew = location, renew
 	s.mu.Unlock()
 	s.refs++
 	return s
@@ -528,8 +547,13 @@ type Source struct {
 	// origin is where the addon said the file is, and pinned where the
 	// origin redirected the server's reads, nil when it did not or the
 	// address stopped working.
-	origin      Location
-	pinned      *pin
+	origin Location
+	pinned *pin
+	// mirrors are the copies of the file the source reads on from, in
+	// order, once the copy it reads fails, and left the URLs of the copies
+	// that failed so (see toMirror).
+	mirrors     []Mirror
+	left        map[string]bool
 	renew       Renewer
 	size        int64
 	contentType string
@@ -1008,10 +1032,22 @@ func (s *Source) wakePastEnd() {
 // fail answers every waiting reader with err, stops every connection, and
 // reports err to readers for a while: Failed is closed first, so that
 // what watches it stops what reads the source before the readers see the
-// error.
-func (s *Source) fail(err error) {
+// error. A source failing to answer, past its tries, with a mirror left
+// reads on from that mirror instead (see toMirror); once none is left,
+// it fails, and the next Open starts again from the location it gives.
+// The failure of connection c, once c was dropped, is ignored: c read a
+// copy the source left for a mirror meanwhile, which another connection
+// failing moved it to, and the mirror is read on from.
+func (s *Source) fail(c *conn, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if c.dropped {
+		return
+	}
+	if s.toMirror(err) {
+		return
+	}
+	s.left = nil
 	if s.failure == nil {
 		close(s.failed)
 	}
@@ -1028,6 +1064,40 @@ func (s *Source) fail(err error) {
 	s.conns = nil
 	s.signal()
 	s.cache.logger.Debug("A source could not be read", "source", s.id, "error", err)
+}
+
+// toMirror moves the source to its next mirror after its copy failed to
+// answer with err, and reports whether it did: the readers waiting keep
+// waiting, for the same blocks from the mirror, and the blocks cached
+// stay, as the mirror is the same file. Its size, once known, is checked
+// at the mirror's first answer, as an answer of another size is another
+// file (see learn), which fails it in turn. What the cache learned of the
+// host left, whether it ignores ranges or serves several at once, is
+// learned again of the mirror's. The source's lock is held.
+func (s *Source) toMirror(err error) bool {
+	if len(s.mirrors) == 0 || !errors.Is(err, ErrUnavailable) || s.ctx.Err() != nil {
+		return false
+	}
+	next := s.mirrors[0]
+	s.mirrors = s.mirrors[1:]
+	if s.left == nil {
+		s.left = map[string]bool{}
+	}
+	s.left[s.origin.URL] = true
+	s.origin, s.renew, s.pinned = next.Location, next.Renew, nil
+	s.origin.Mirrors = nil
+	s.rangeless, s.ranged, s.singleRanges, s.multiRanges = false, false, false, false
+	for _, c := range s.conns {
+		c.drop()
+	}
+	s.conns = nil
+	s.signal()
+	if len(s.wanted) > 0 {
+		s.kick()
+	}
+	s.cache.logger.Info("A source failed: reading on from another copy of the file", "source", s.id, "answer", Answer(err),
+		"copies left", len(s.mirrors))
+	return true
 }
 
 // Failed returns a channel closed once the source failed: its host did
