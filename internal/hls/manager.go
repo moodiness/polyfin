@@ -852,7 +852,10 @@ type Manager struct {
 	// recordings are the recordings running, by key, with the function
 	// stopping each.
 	recordings map[Key]context.CancelFunc
-	closed     bool
+	// playouts are the channels Polyfin airs itself, by channel (see
+	// playout.go).
+	playouts map[string]*playout
+	closed   bool
 }
 
 // NewManager returns a manager running FFmpeg from ffmpegPath and keeping
@@ -869,7 +872,7 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 		stall: stallTimeout, liveStall: liveStall,
 		grace:    recordGrace,
 		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{},
-		kept: map[Key]*keeping{}}
+		kept: map[Key]*keeping{}, playouts: map[string]*playout{}}
 	m.linger.Store(int64(variantLinger))
 	m.keepFor.Store(int64(keepFor))
 	go m.stopIdle()
@@ -894,6 +897,7 @@ func (m *Manager) Close() {
 	m.stopWhere(func(Key, *encoding) bool { return true })
 	m.stopLives(func(Key, *live) bool { return true })
 	m.stopAudios(func(AudioKey, *audioEncoding) bool { return true })
+	m.stopPlayouts(func(string) bool { return true })
 }
 
 // Stop stops the encodings of a play session. Its kept video is kept for
@@ -1035,7 +1039,8 @@ type userVersion struct{ user, version string }
 
 // converting counts the conversions of video under way: the playbacks
 // of HLS encodings, files' and channels', each conversion streamed as
-// one file on its own, and each file converted whole (see ConvertFile).
+// one file on its own, each file converted whole (see ConvertFile), and
+// each channel Polyfin airs (see Playout).
 // The playback shared, which counts already, and the live encoding leaving
 // are left out. The caller holds m.mu.
 func (m *Manager) converting(shared *userVersion, leaving *live) int {
@@ -1056,7 +1061,7 @@ func (m *Manager) converting(shared *userVersion, leaving *live) int {
 			count(k)
 		}
 	}
-	n := len(playbacks) + m.files
+	n := len(playbacks) + m.files + len(m.playouts)
 	for p := range m.progressives {
 		if p.key.Converts {
 			n++
