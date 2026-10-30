@@ -515,7 +515,7 @@ Rather than finding each value and setting it again, an administrator can put a 
 **Reset to defaults**, at the top of a user's page, puts the sections that set limits back to a new user's settings, the ones **Create a user** gives: the permissions of **Access**, **Playback and access** with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**. It asks first, listing the sections that change and, for **Access** and **Playback and access**, the settings that change in them, or saying that nothing changes.
 
 - An administrator gets an administrator's settings: **Can control other users' apps**, **Can manage collections**, **Can manage subtitles** and **Can record Live TV** on, as **Create a user** gives them with **Administrator**. Any other user gets them off.
-- Kept: the name and password, **Administrator**, **Show on the sign-in screen**, **Disabled**, **Ends on**, the group, the **Metadata language**, the user's own addons, connections and tracking accounts, and everything they watched.
+- Kept: the name and password, **Administrator**, **Show on the sign-in screen**, **Disabled**, **Ends on**, the group, the **Metadata language**, the **Web player theme**, the user's own addons, connections and tracking accounts, and everything they watched.
 - It applies as saving does: the user's apps already signed in have the new limits from their next request. A new user may not share titles, so a user who could loses their share links (see [Share links](#share-links)).
 - A member who follows their group has its values: their page does not offer the button, and the group's page resets them. A member with **Own settings** gets a new user's settings and stays in the group, still not following it.
 - The activity log records who reset whose settings, as "alex reset the settings of sam to their defaults".
@@ -529,6 +529,7 @@ Rather than finding each value and setting it again, an administrator can put a 
 **Reset my preferences**, at the top of **My account**, puts back the server's defaults for what the user chose themselves, after asking first:
 
 - the **Metadata language** goes back to **The server's** (see [Metadata language](#metadata-language));
+- the **Web player theme** goes back to the server's, unless the administrator turned off **Let them change it** (see [Web player theme](#web-player-theme));
 - every row of **Home rows** is shown again (see [Home rows](#home-rows));
 - the preferences Jellyfin apps saved in the account are forgotten: the audio and subtitle languages and the subtitle mode, the home screen (the order of the libraries and those left out), and the display preferences, such as each library's sorting and view. The user has a new user's again, which their apps already signed in read from their next request. Settings an app also keeps on the device stay there: jellyfin-web keeps a copy of its home sections in the browser, and still shows them on that browser.
 
@@ -762,6 +763,26 @@ A user with at least one row who is outside all of them cannot sign in (403). Th
 
 - Jellyfin sets a metadata language per library, and its apps send none per user: Polyfin reads the user's own, and the server configuration's `PreferredMetadataLanguage` stays `en`.
 - Images come without a user. An image asked for with the tag of a user's language gets that image.
+
+## Web player theme
+
+**Web player theme** is the look of the web player, Polyfin's web client, for a user, on every browser they sign in with: **The server's**, the default, which names the server's theme (see [Themes](web-client.md#themes)), **LumaaGlaass**, **jellyfin-web's own look**, or **Custom** while the Custom theme has a text. jellyfin-web's own look is the lightest, for the browsers of TVs and older phones. Administrators set it in its own panel on the user's page under **Users**; users set their own in its own section under **My account**.
+
+- **Let them change it**, beside the administrator's choice, is on by default. Off, the theme the administrator chose stays the user's: their **My account** shows it, read only, with "Your administrator chose your web player theme.", and refuses a change.
+- **Reset my preferences** puts it back to the server's, unless **Let them change it** is off (see [Your own preferences](#your-own-preferences)).
+- An invite link's model user passes on their theme and **Let them change it**.
+- A browser too old for LumaaGlaass gets jellyfin-web's own look by itself, whatever the theme (see [Each user's theme](web-client.md#each-user-s-theme)).
+- It applies to the web player only, in browsers and in the Jellyfin apps that show it; other apps draw their own screens.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no theme per user: its custom CSS is the server's, for everyone, and jellyfin-web keeps each user's display theme, such as Light, in the browser, not in the account.
+
+**For app developers:**
+
+- A user's JSON in the admin API has `webTheme`, `lumaaglaass`, `none` or `custom`, empty for the server's, and `webThemeLocked`, `true` while **Let them change it** is off; `PATCH /admin/api/users/{id}` sets them. A theme not offered is `400 invalid_web_theme`.
+- `GET /admin/api/web-themes`, for any user signed in to the admin app, answers `serverTheme` and `themes`, those a user may be given: `lumaaglaass` and `none`, and `custom` while the Custom theme has a text.
+- `GET /admin/api/account/web-theme` answers the caller's `webTheme`, `locked`, and the same `serverTheme` and `themes`; `PUT` with `{"webTheme": "none"}` changes it, `403 web_theme_locked` while **Let them change it** is off.
 
 ## Playback and access limits
 

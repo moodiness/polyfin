@@ -46,7 +46,7 @@ While **Show ratings on posters**, under **Settings › Web player**, is on, the
 - a star, with the title's star rating, the one its page shows: the addon's, or the IMDb rating while the server has an **MDBList API key for ratings** (see [Ratings](addons-and-libraries.md#ratings));
 - a review, with the critics' score, and a group of people, with the audience score, in percent, while the server has that key and MDBList gave them.
 
-A rating the title lacks is left out, and a title without any shows nothing. Other cards, such as episodes, collections and people, and the list layouts, show nothing either. The ratings follow the same rules as the listings: a title the user may not see answers nothing. They show with every theme, **LumaaGlaass**, **None** or **Custom**, and in jellyfin-web's TV layout. It is off by default, for every user; users cannot change it.
+A rating the title lacks is left out, and a title without any shows nothing. Other cards, such as episodes, collections and people, and the list layouts, show nothing either. The ratings follow the same rules as the listings: a title the user may not see answers nothing. They show with every theme, **LumaaGlaass**, **jellyfin-web's own look** or **Custom**, and in jellyfin-web's TV layout. It is off by default, for every user; users cannot change it.
 
 The first card the pointer or the focus comes to asks the server once for the ratings of every movie and series card of the page, those of the card's row first, 100 at most. The cards answered then show theirs without asking again; the answers are kept for a minute, in the browser tab, for the user signed in. Polyfin reads them as a listing does: no addon and no MDBList request comes from them that the listing of those titles did not make. Turned off, the web client asks again a minute later at the earliest. Turning it on or off thus applies within a minute, without reloading the page.
 
@@ -180,7 +180,8 @@ In the official Jellyfin apps for Android and iOS, which show the web client ins
 - The page itself is never cached.
 - Files whose name or query carries a build hash are cached for a year.
 - The other files are revalidated.
-- The files of the [default theme](#lumaaglaass), at `/web/polyfin/themes/lumaaglaass/<version>/assets/`, are Polyfin's own: cached for a year at the version of the bundled files, `text/css` and `text/javascript`. Any other version, such as `latest`, is redirected to the current one, and revalidated.
+- The files of the [default theme](#lumaaglaass), at `/web/polyfin/themes/lumaaglaass/<version>/assets/`, and the script that loads it, `/web/polyfin/themes/lumaaglaass/<version>/loader.js`, are Polyfin's own: cached for a year at the version of the bundled files, `text/css` and `text/javascript`. Any other version, such as `latest`, is redirected to the current one, and revalidated.
+- The Custom theme's texts, `/web/custom.css` and `/web/custom.js`, are cached for a year at the address with the hash of their content, which the page gives, and revalidated at any other (see [Custom CSS](#custom-css) and [Custom JavaScript](#custom-javascript)).
 - The files of a [copy of a theme](#keeping-a-copy-of-a-theme), at `/web/polyfin/themes/saved/<id>/`, are cached for a year, as `<id>` changes with each copy, with the type of their extension and a `Content-Security-Policy` that keeps them from running anything when opened on their own.
 - `/web/` gets no Content-Security-Policy, as from Jellyfin: the admin app's would stop jellyfin-web from working. The other security headers stay.
 
@@ -190,13 +191,13 @@ In the official Jellyfin apps for Android and iOS, which show the web client ins
 
 ## Customizing the web client
 
-**Settings › Web player** in the admin app holds the web client's **Theme**, two texts that are the **Custom** theme, **Custom CSS** and **Custom JavaScript**, the **Sign-in message**, two switches, **Add versions to an open title's page** and **Show ratings on posters** (see [Ratings on posters](#ratings-on-posters)), and the [home rows](#home-rows). By default, the theme is LumaaGlaass (see [Themes](#themes)), and **Sign-in message** is empty. **Open the web player** shows the result.
+**Settings › Web player** in the admin app holds the web client's **Server theme**, two texts that are the **Custom** theme, **Custom CSS** and **Custom JavaScript**, the **Sign-in message**, two switches, **Add versions to an open title's page** and **Show ratings on posters** (see [Ratings on posters](#ratings-on-posters)), and the [home rows](#home-rows). By default, the theme is LumaaGlaass (see [Themes](#themes)), and **Sign-in message** is empty. **Open the web player** shows the result.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Theme** | **Settings › Web player** | LumaaGlaass | The web client's look: **LumaaGlaass**, the theme Polyfin bundles, **None**, jellyfin-web's own look, or **Custom**, the two texts below. |
-| **Custom CSS** | **Settings › Web player** | Empty | CSS applied to every page of the web client while the theme is **Custom**. Up to 2 MB. |
-| **Custom JavaScript** | **Settings › Web player** | Empty | Script run on every page of the web client while the theme is **Custom**. Up to 2 MB. |
+| **Server theme** | **Settings › Web player** | LumaaGlaass | The web client's look for the users who keep the server's: **LumaaGlaass**, the theme Polyfin bundles, **jellyfin-web's own look**, or **Custom**, the two texts below. Each user can have their own (see [Each user's theme](#each-user-s-theme)). |
+| **Custom CSS** | **Settings › Web player** | Empty | CSS applied to every page of the web client for the users whose theme is **Custom**. Up to 2 MB. |
+| **Custom JavaScript** | **Settings › Web player** | Empty | Script run on every page of the web client for the users whose theme is **Custom**. Up to 2 MB. |
 | **Sign-in message** | **Settings › Web player** | Empty | Text shown under the sign-in form. Plain text, Markdown or HTML. Up to 8 KB. |
 | **Add versions to an open title's page** | **Settings › Web player** | On | Adds the versions the addons find to a title's page while it is open. Off, a page opened before any version was found still lists the first ones, and the play buttons still wait for a version; the others show when the page is opened again. See [Title pages](playback.md#title-pages). |
 
@@ -224,19 +225,55 @@ No app can be given a new kind of home section. With **Also a library in other a
 
 ### Themes
 
-**Theme**, under **Settings › Web player**, is one of three:
+**Server theme**, under **Settings › Web player**, is the theme of the users who keep the server's, as every user does until given their own (see [Each user's theme](#each-user-s-theme)). It is one of three:
 
 - **LumaaGlaass**, the default: the theme Polyfin bundles (see [LumaaGlaass](#lumaaglaass)). Polyfin serves its CSS and its script itself, and the two fields show them without letting them be edited.
-- **None**: jellyfin-web's own look, with no custom CSS or script. Each user then picks one of jellyfin-web's display themes, such as Light or Blue Radiance, under the web client's "Settings › Display › Theme". With LumaaGlaass, only Dark fits.
+- **jellyfin-web's own look**: no custom CSS or script. Each user then picks one of jellyfin-web's display themes, such as Light or Blue Radiance, under the web client's "Settings › Display › Theme". With LumaaGlaass, only Dark fits.
 - **Custom**: **Custom CSS** and **Custom JavaScript**, your own theme (see [Use another theme](#use-another-theme)).
 
-Choosing a theme keeps the **Custom** texts as they are, so choosing **Custom** again brings them back. **Edit as Custom**, beside the choice while it is **LumaaGlaass**, copies its two texts into **Custom CSS** and **Custom JavaScript** and chooses **Custom**, to change its options; it asks first when the **Custom** texts are not empty. The change applies when the page is saved.
+Choosing a theme keeps the **Custom** texts as they are, so choosing **Custom** again brings them back, and the users given the Custom theme keep it. **Edit as Custom**, beside the choice while it is **LumaaGlaass**, copies its two texts into **Custom CSS** and **Custom JavaScript** and chooses **Custom**, to change its options; it asks first when the **Custom** texts are not empty. The change applies when the page is saved.
 
-jellyfin-web keeps the custom CSS it read for up to a minute, in the browser (its query cache), and the script changes at the next page load: after changing the theme, reload the web client's open pages a minute later, as the admin app says.
+After changing the server's theme or the **Custom** texts, reload the web client's open pages: each load takes the theme and its texts as the server has them then (see [How the web client loads the theme](#how-the-web-client-loads-the-theme)).
 
 **Compared with Jellyfin:**
 
 - Jellyfin has no theme choice: its custom CSS is empty by default, and it has no custom JavaScript.
+
+#### Each user's theme
+
+**Web player theme**, on a user's page under **Users**, gives the user a theme of their own, on every browser they sign in with: **The server's**, the default, which names the server's theme, **LumaaGlaass**, **jellyfin-web's own look**, or **Custom** while the Custom theme has a text. A household can keep LumaaGlaass for most of its users and give jellyfin-web's own look, the lightest, to those who watch on a TV's browser or an older phone. **Let them change it**, on by default, lets the user choose their own under **My account › Web player theme**; off, the administrator's choice stays theirs (see [Web player theme](users.md#web-player-theme)).
+
+- A browser too old for LumaaGlaass gets jellyfin-web's own look, whatever the theme: one without CSS's `:has()`, before Chrome 105, Safari 15.4 and Firefox 121, or without the syntax of ES2021, before Chrome 85, Safari 14 and Firefox 79, both of which the theme's stylesheet and script use. On such a browser the theme's script would not run, and its stylesheet would apply only in part.
+- The theme applies to the web client, in browsers and in the Jellyfin apps that show it; the other apps draw their own screens.
+- To give users the **Custom** theme while the server keeps another, write the Custom texts while **Custom** is the server's theme and save, then choose the server's theme again: the texts stay.
+
+#### How the web client loads the theme
+
+The web client's page loads the theme itself as it opens, before jellyfin-web starts, so that the page shows it from its first paint, the sign-in page included:
+
+- the theme of the user signed in in this browser, as the browser kept it the last time they signed in there;
+- signed out, the theme of the user signed in last in this browser;
+- otherwise, as on a browser the user never signed in with, the server's theme.
+
+Once a user is signed in, as they sign in or as a page opens signed in, the page asks the server for their theme, and keeps it in the browser for the next loads. When it differs from the one the page shows:
+
+- a page that shows a theme with a script, LumaaGlaass or a Custom theme with **Custom JavaScript**, loads again, once, as a theme's script cannot be taken back;
+- any other page changes its theme at once, its stylesheet after jellyfin-web's own CSS, as the next loads show it.
+
+A theme changed by an administrator, or by the user on another device, thus shows in a browser once the web client is opened again there, or the user signs in there. A browser that keeps nothing, as some private windows, shows the server's theme as each page opens, and the user's once they sign in only when the server's has no script.
+
+The theme's stylesheet stays where jellyfin-web puts the server's custom CSS, after its own: **Disable server-provided custom CSS code**, in a user's display settings, still turns it off for them, in that browser, and the theme's script still runs.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has one custom CSS for the whole server, which its branding gives everyone. jellyfin-web keeps each user's display theme, such as Light, in the browser, not in the account: it does not follow the user to another browser, on Jellyfin as on Polyfin ([userSettings.js, lines 452 to 458](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/scripts/settings/userSettings.js#L452-L458)).
+
+**For app developers:**
+
+- The page describes the themes in its head, before Polyfin's script, as JSON in `<script type="application/json" id="polyfinWebThemes">`: `Cookie`, the name of the cookie the script names the theme it shows in, `polyfinWebTheme_<server ID>`; `Theme`, the server's theme; and `Themes`, the `Css` and `Js` addresses of each theme that has some, relative to the page.
+- The script writes the theme's `<link rel="stylesheet" id="polyfinWebThemeCss">` and its `<script defer>` while the page is parsed, and takes its stylesheet away once jellyfin-web shows the same, loaded. A theme changed at once has its stylesheet at the end of `<body>`. The script keeps what it knows in the browser's storage under `polyfinWebTheme`, and drops what jellyfin-web kept in IndexedDB when the stylesheet differs from the last load's.
+- jellyfin-web's SDK asks for the branding with `fetch` and `credentials: 'omit'`, without the browser's cookies: the script sends the page's cookies with jellyfin-web's requests to `/Branding/Configuration` and `/Branding/Css`, and with no other, so that the branding gives the CSS of the theme the page shows.
+- `GET /Polyfin/WebTheme`, with the user's token, answers `{"Theme": "none", "UserTheme": "none"}`: the theme the web client shows the user, and their own, empty while they keep the server's. An API key gets the server's.
 
 #### LumaaGlaass
 
@@ -254,7 +291,7 @@ The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass
   - the LumaaGlaass page takes the options of the script's loader as its defaults, where the theme's own page ignores them;
   - the theme's script, pasted rather than loaded, takes its extensions from Polyfin, where it would take them from the main branch of the theme's repository.
 - `scripts/lumaaglaass.sh` makes the bundled copy from a commit of the theme's repository and applies the patches again, so that each update is a change to review.
-- A server upgraded from a version without **Theme** chooses it from its two texts: **LumaaGlaass** when they still loaded the bundled theme, which empties them; **None** when both were empty; otherwise **Custom**, with the texts as they were, an edited LumaaGlaass included.
+- A server upgraded from a version without a theme chooses it from its two texts: **LumaaGlaass** when they still loaded the bundled theme, which empties them; **jellyfin-web's own look** when both were empty; otherwise **Custom**, with the texts as they were, an edited LumaaGlaass included.
 
 #### Follow the theme's repository
 
@@ -317,8 +354,8 @@ Any theme made for jellyfin-web can be the **Custom** theme: choose **Custom**, 
   Set the options the theme's documentation gives before the script loads, as LumaaGlaass's loader does with `window.LumaaGlaassOptions`.
 - **A theme loaded from a CDN, kept in Polyfin:** **Keep a copy in Polyfin** saves the files the two texts load from elsewhere in Polyfin's data folder, so that browsers load them from Polyfin, and the theme works offline. See [Keeping a copy of a theme](#keeping-a-copy-of-a-theme).
 - **Hosting a theme's files yourself:** you can also serve them from a web server of your own, such as the reverse proxy in front of Polyfin, and use their addresses in both fields. Keep the theme's folder as it is, as a script often loads more files from beside it. Serve stylesheets as `text/css` and scripts as `text/javascript`: browsers refuse them as anything else. Pasting a theme whole needs no server at all.
-- **One user's own look:** each user can add CSS of their own under the web client's "Settings › Display", in "Custom CSS code". It applies for them only, along with the server's.
-- **Security:** **Custom JavaScript** runs in the browser of every user who opens the web client, with their account. **Disable server-provided custom CSS code**, in a user's display settings, turns off the server's custom CSS only: a theme's script keeps running. Load or paste only code you trust, and pin a theme loaded from its repository to a commit or a tag.
+- **One user's own look:** each user can add CSS of their own under the web client's "Settings › Display", in "Custom CSS code". It applies for them only, in that browser, along with the theme's. An administrator can also give a user another theme than the server's (see [Each user's theme](#each-user-s-theme)).
+- **Security:** **Custom JavaScript** runs in the browser of every user whose theme is **Custom**, with their account. **Disable server-provided custom CSS code**, in a user's display settings, turns off the theme's custom CSS only: a theme's script keeps running. Load or paste only code you trust, and pin a theme loaded from its repository to a commit or a tag.
 
 ### Keeping a copy of a theme
 
@@ -344,7 +381,7 @@ Each address is asked once, from the internet only. A file kept is named after i
 - **Update the copy** downloads the files again from the addresses they came from, as a new copy under a new folder, so that browsers take the new files, and deletes the former one. It also saves addresses added to the texts since.
 - **Remove the copy** puts the original addresses back in the texts, and deletes the files.
 - Editing the texts keeps the copy: the addresses of its files stay in them, and **Update the copy** and **Remove the copy** still find their originals.
-- Reload the web client's open pages a minute after any of these (see [Themes](#themes)).
+- Reload the web client's open pages after any of these (see [Themes](#themes)).
 
 **Limits:** they leave room above the largest themes made for jellyfin-web (an icon font of 5.3 MB, about 6 MB and 31 files for a whole theme, three levels of `@import`), and keep a copy far from filling the data folder.
 
@@ -390,11 +427,17 @@ Each address is asked once, from the internet only. A file kept is named after i
 
 ### Custom CSS
 
-The theme's CSS, LumaaGlaass's or **Custom CSS**, is Jellyfin's branding CSS. jellyfin-web applies it to every page, unless a user ticks **Disable server-provided custom CSS code** in their display settings. jellyfin-web keeps it for up to a minute before asking again.
+The theme's CSS, LumaaGlaass's or **Custom CSS**, is Jellyfin's branding CSS, each user's theme's. jellyfin-web applies it to every page, after its own CSS, unless a user ticks **Disable server-provided custom CSS code** in their display settings. The web client's page loads it too, as it opens, so that it shows from the first paint (see [How the web client loads the theme](#how-the-web-client-loads-the-theme)).
+
+**Compared with Jellyfin:**
+
+- Jellyfin's branding gives the server's CSS to everyone, signed in or not ([BrandingController.cs, lines 30 to 64](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/BrandingController.cs#L30-L64)). Polyfin's gives the CSS of the theme the web client shows in the browser that asks, which the web client's page names in a cookie; else the CSS of the theme of the user signed in, whose token the request carries; and none to a request without a token, the web client's page loading the theme of the browser itself.
 
 **For app developers:**
 
-- Served at `/Branding/Css` and `/Branding/Css.css` (`text/css`, empty when unset), and in `CustomCss` of `/Branding/Configuration`.
+- Served at `/Branding/Css` and `/Branding/Css.css` (`text/css`, empty when there is none), and in `CustomCss` of `/Branding/Configuration`: with the cookie `polyfinWebTheme_<server ID>`, the CSS of the theme it names, `lumaaglaass`, `none` or `custom`; else, with a user's token, the CSS of their theme; with an API key, the server's; otherwise none.
+- With the cookie, `/Branding/Configuration` gives the **Custom CSS** as the web client's page loads it, `@import url('custom.css?v=<hash>');`, relative to the web client's address; `/Branding/Css` gives it as written.
+- `/web/custom.css` serves **Custom CSS**, while it is set, as `text/css`, cached for a year at the address with the hash of its content, and revalidated at any other.
 
 ### Sign-in message
 
@@ -402,10 +445,10 @@ The theme's CSS, LumaaGlaass's or **Custom CSS**, is Jellyfin's branding CSS. je
 
 ### Branding through the Jellyfin API
 
-Administrators can also set the custom CSS and sign-in message through Jellyfin's branding configuration, which jellyfin-web's own branding page uses. Saving replaces the branding whole, as in Jellyfin: a text left out is cleared. Anyone signed in can read it. The CSS read is the theme's.
+Administrators can also set the custom CSS and sign-in message through Jellyfin's branding configuration, which jellyfin-web's own branding page uses. Saving replaces the branding whole, as in Jellyfin: a text left out is cleared. Anyone signed in can read it. The CSS read is the server's theme's, whatever the theme of the user who reads it.
 
 - Posting back the theme's CSS unchanged, as that page does when only the sign-in message changes, keeps the theme.
-- Posting another CSS makes it **Custom CSS** and chooses **Custom**. When the theme was LumaaGlaass, its script becomes **Custom JavaScript**, so that the page keeps it; when it was None, **Custom JavaScript** becomes empty.
+- Posting another CSS makes it **Custom CSS** and chooses **Custom**. When the theme was LumaaGlaass, its script becomes **Custom JavaScript**, so that the page keeps it; when it was jellyfin-web's own look, **Custom JavaScript** becomes empty.
 
 **Compared with Jellyfin:**
 
@@ -419,9 +462,9 @@ Administrators can also set the custom CSS and sign-in message through Jellyfin'
 
 ### Custom JavaScript
 
-When the theme has a script, LumaaGlaass's or a **Custom JavaScript** that is not empty, Polyfin adds a script tag to jellyfin-web's `index.html`, after its own script. The script runs on every page of the web client, after jellyfin-web's scripts. It is never added to the admin app.
+When a user's theme has a script, LumaaGlaass's or a **Custom JavaScript** that is not empty, Polyfin's script adds a script tag for it to jellyfin-web's page as it loads (see [How the web client loads the theme](#how-the-web-client-loads-the-theme)). The script runs on every page of the web client, after jellyfin-web's scripts. It is never added to the admin app.
 
-The script runs in the browser of every user who opens the web client, with their account. The display setting does not turn it off. Paste only code you trust.
+The script runs in the browser of every user whose theme it is, with their account. The display setting does not turn it off. Paste only code you trust.
 
 **Compared with Jellyfin:**
 
@@ -429,9 +472,9 @@ The script runs in the browser of every user who opens the web client, with thei
 
 **For app developers:**
 
-- The tag is `<script src="custom.js?v=<hash>" defer></script>`.
-- `/web/custom.js` is served as `application/javascript`. It is cached for a year at the address with the hash of its content, which changes with it, and revalidated at any other address.
-- With no script, there is no tag and no `/web/custom.js`.
+- The tag is `<script src="custom.js?v=<hash>" defer></script>` for the Custom theme, and `<script src="polyfin/themes/lumaaglaass/<version>/loader.js" defer></script>` for LumaaGlaass, whose loader is the text the **Custom JavaScript** field shows for it.
+- `/web/custom.js` is served as `application/javascript`, while **Custom JavaScript** is set, whatever the server's theme. It is cached for a year at the address with the hash of its content, which changes with it, and revalidated at any other address.
+- Without a script, there is no tag; without **Custom JavaScript**, no `/web/custom.js`.
 
 ## License and source code
 
