@@ -43,7 +43,15 @@ import {
   useToast,
 } from '@/ui'
 
-const kinds: HomeRowKind[] = ['catalog', 'collection', 'because', 'new', 'available', 'waiting']
+const kinds: HomeRowKind[] = [
+  'catalog',
+  'collection',
+  'because',
+  'new',
+  'available',
+  'waiting',
+  'trakt',
+]
 const places: HomeRowPlace[] = ['top', 'resume', 'nextup', 'bottom']
 
 /** The bounds of Because you watched's rows, as the server checks them. */

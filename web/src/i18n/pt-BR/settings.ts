@@ -1010,6 +1010,7 @@ const settings: typeof en = {
         new: 'Novidades nas suas bibliotecas',
         available: 'Já disponível',
         waiting: 'Ainda aguardando',
+        trakt: 'Recomendados no Trakt',
       },
       kindHelp: {
         catalog:
@@ -1023,12 +1024,15 @@ const settings: typeof en = {
           'Os títulos não iniciados da lista “Para assistir” do usuário para os quais a última verificação encontrou versões, dos últimos encontrados aos primeiros. Uma versão encontrada ainda não foi testada: a reprodução dela ainda pode falhar.',
         waiting:
           'Os títulos não iniciados da lista “Para assistir” do usuário para os quais a última verificação não encontrou nenhuma versão, ou que ainda não foram lançados, dos últimos adicionados aos primeiros. Um título ainda não verificado não está em nenhuma das duas linhas.',
+        trakt:
+          'Os filmes e séries que o Trakt recomenda ao usuário, lidos com a conexão dele ao Trakt a cada 12 horas, sem os da coleção ou da Watchlist dele no Trakt nem os que ele já assistiu. Só os usuários que conectaram o Trakt em Minha conta › Acompanhamento a veem; na primeira vez, ela aparece assim que o Trakt responde.',
       },
       defaultNames: {
         because: 'Porque você assistiu',
         new: 'Novidades nas suas bibliotecas',
         available: 'Já disponível',
         waiting: 'Ainda aguardando',
+        trakt: 'Recomendados no Trakt',
       },
       catalog: 'Catálogo',
       noCatalog: 'Os complementos do servidor não têm nenhum catálogo para mostrar.',

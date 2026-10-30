@@ -1007,6 +1007,7 @@ const settings: typeof en = {
         new: 'Neu in deinen Bibliotheken',
         available: 'Jetzt verfügbar',
         waiting: 'Noch ausstehend',
+        trakt: 'Empfohlen auf Trakt',
       },
       kindHelp: {
         catalog:
@@ -1020,12 +1021,15 @@ const settings: typeof en = {
           'Die nicht begonnenen Titel der Merkliste des Benutzers, für die die letzte Prüfung Versionen gefunden hat, zuletzt gefundene zuerst. Eine gefundene Version wurde noch nicht ausprobiert: Ihre Wiedergabe kann noch fehlschlagen.',
         waiting:
           'Die nicht begonnenen Titel der Merkliste des Benutzers, für die die letzte Prüfung keine Version gefunden hat oder die noch nicht erschienen sind, zuletzt hinzugefügte zuerst. Ein noch nicht geprüfter Titel steht in keiner der beiden Zeilen.',
+        trakt:
+          'Die Filme und Serien, die Trakt dem Benutzer empfiehlt, alle 12 Stunden über seine Trakt-Verbindung gelesen, ohne die aus seiner Trakt-Sammlung oder -Watchlist und ohne die, die er gesehen hat. Nur Benutzer, die Trakt unter Mein Konto › Tracking verbunden haben, sehen sie; beim ersten Mal erscheint sie, sobald Trakt geantwortet hat.',
       },
       defaultNames: {
         because: 'Weil du gesehen hast',
         new: 'Neu in deinen Bibliotheken',
         available: 'Jetzt verfügbar',
         waiting: 'Noch ausstehend',
+        trakt: 'Empfohlen auf Trakt',
       },
       catalog: 'Katalog',
       noCatalog: 'Die Server-Add-ons haben keinen Katalog zum Anzeigen.',
