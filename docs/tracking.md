@@ -105,6 +105,18 @@ The first time versions are found for a title that earlier checks found none for
 
 **Compared with Jellyfin:** Jellyfin has no watchlist and no such check. The rows reach other Jellyfin apps as libraries, through **Also a library in other apps**.
 
+### Recommended on Trakt
+
+Trakt recommends movies and series to each of its users from what they watched and rated. When the administrator adds a **Recommended on Trakt** row to the web player's home page (see [Home rows](web-client.md#home-rows)), the users who connected Trakt see there what Trakt recommends to them, read with their connection. Nothing is to turn on: connecting Trakt is enough, and each user can turn the row off under **My account › Home rows**.
+
+- Polyfin asks Trakt for up to 50 movies and 50 series, without those on your Trakt collection and watchlist, and lists them in Trakt's order, a movie and a series in turn.
+- Titles are found as the watchlist's are, by their IMDb, TMDB or TVDB identifier. Those found by none, or that the server's metadata addons do not describe, are left out. So are the titles you played in Polyfin or hid, and those your parental control or blocked genres hide.
+- The recommendations are read the first time the row asks for them: the row shows once Trakt has answered, at the next visit of the home page. They are read again every 12 hours while the row asked for them within the last week. A read that fails keeps the last recommendations, and is tried again an hour later.
+- A user without a Trakt connection, or whose connection waits for **Connect again**, sees no such row, nor its library in other apps. Disconnecting Trakt, or connecting another account, forgets the recommendations read.
+- With **Also a library in other apps** on, the row is also a library in other apps, as the Watchlist view is.
+
+**Compared with Jellyfin:** Jellyfin has no such row, and its apps cannot be given a new kind of home section. Polyfin's row reaches them as a library.
+
 ## Anime
 
 AniDB, and Simkl's and Kitsu's anime that follow it, make each season of a series, and often each half of a season, a title of its own, with its episodes numbered from 1. Polyfin's titles, like the usual metadata addons', follow the seasons of IMDb and TVDB. Polyfin maps the two with two community lists:
