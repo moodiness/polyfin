@@ -14,8 +14,10 @@ import (
 // the settings say.
 func (s *Service) Capabilities() Capabilities {
 	settings := s.settings()
-	return Capabilities{Encoders: s.segments.Encoders(), ToneMapping: s.segments.HasFilters("zscale", "tonemap"), Hardware: s.segments.Hardware(),
-		ToneMappedHeight: cmp.Or(settings.ProcessorToneMappingHeight, s.segments.ToneMappedHeight()), Tuning: TuningOf(settings)}
+	hw := s.segments.Hardware()
+	return Capabilities{Encoders: s.segments.Encoders(), ToneMapping: s.segments.HasFilters("zscale", "tonemap"), Hardware: hw,
+		ToneMappedHeight: cmp.Or(settings.ProcessorToneMappingHeight, s.segments.ToneMappedHeight()), HDR: s.segments.HDRPath(hw),
+		Tuning: TuningOf(settings)}
 }
 
 // DecodingHardware is the GPU that decodes video of codec in bitDepth
@@ -40,6 +42,9 @@ type Capabilities struct {
 	ToneMappedHeight int
 	// Hardware is the GPU video is converted on, nil for none.
 	Hardware *hls.Hardware
+	// HDR is where HDR Hardware would tone map is tone mapped, as the
+	// timings at startup chose it (see hls.HDRPath).
+	HDR hls.HDRPath
 	// Tuning is how the settings tune conversions.
 	Tuning Tuning
 }
@@ -159,8 +164,11 @@ type VideoConversion struct {
 	// progressive.
 	ToneMap, Deinterlace bool
 	// ToneMapOnCPU tone maps HDR on the processor though Hardware could
-	// (see toneMapsOnGPU).
-	ToneMapOnCPU bool
+	// (see toneMapsOnGPU). ToneMapReason tells why, or why Hardware tone
+	// maps below the height it would convert at: one of hls's ToneMap
+	// reasons, empty when neither.
+	ToneMapOnCPU  bool
+	ToneMapReason string
 	// Hardware is the GPU Encoder belongs to, nil for software.
 	Hardware *hls.Hardware
 	// Size is what set Width and Height.
@@ -275,6 +283,9 @@ const (
 	// SizeToneMapping: the processor converts HDR to SDR up to
 	// Capabilities.ToneMappedHeight.
 	SizeToneMapping = "toneMapping"
+	// SizeGPUToneMapping: the GPU converts HDR to SDR up to the height
+	// where it keeps up (see hls.HDRPath).
+	SizeGPUToneMapping = "gpuToneMapping"
 	// SizeQualityGroup: the user's quality group.
 	SizeQualityGroup = "qualityGroup"
 	// SizeServerMax: the settings' MaxConversionHeight.
@@ -415,12 +426,14 @@ func fits(video MediaStream, height int) bool {
 // they are positive, than the user's quality group and the settings' cap,
 // at about the source's bitrate (see videoBitrate) up to the limit's,
 // converted to SDR and deinterlaced as needed. HDR is tone mapped on that
-// GPU when it can (see toneMapsOnGPU), else on the processor, up to the
-// capabilities' ToneMappedHeight, unless the tuning turns tone mapping
-// off. It is nil when the profile takes neither codec, and for HDR that
-// cannot be converted: on the processor, without FFmpeg's filters, or
-// Dolby Vision with no base layer other players read, which only NVIDIA's
-// GPUs tone map and which without tone mapping would show wrong colors.
+// GPU when it can (see toneMapsOnGPU) and keeps up (see hls.HDRPath),
+// else on the processor, up to the capabilities' ToneMappedHeight, unless
+// the tuning turns tone mapping off; a GPU keeping up only at a lower
+// height tone maps up to it. It is nil when the profile takes neither
+// codec, and for HDR that cannot be converted: on the processor, without
+// FFmpeg's filters, or Dolby Vision with no base layer other players
+// read, which only NVIDIA's GPUs tone map and which without tone mapping
+// would show wrong colors.
 func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilities) *VideoConversion {
 	candidates := videoEncoders
 	if can.Tuning.PreferHEVC {
@@ -464,7 +477,13 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 			return nil
 		}
 	default:
-		if !toneMapsOnGPU(conversion.Hardware, video, can.Tuning) {
+		onGPU := toneMapsOnGPU(conversion.Hardware, video, can.Tuning)
+		// The processor takes the HDR it tone maps from a GPU too slow for
+		// it; the GPU keeps Dolby Vision profile 5, which only it tone maps.
+		if onGPU && can.HDR.Processor && can.ToneMapping && video.VideoRangeType != "DOVI" {
+			onGPU, conversion.ToneMapReason = false, hls.ToneMapSlowGPU
+		}
+		if !onGPU {
 			if video.VideoRangeType == "DOVI" || !can.ToneMapping {
 				return nil
 			}
@@ -473,7 +492,14 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 			if height := cmp.Or(can.ToneMappedHeight, hls.LowToneMappedHeight); height < size.MaxHeight {
 				size = ConversionSize{Reason: SizeToneMapping, MaxHeight: height}
 			}
-			conversion.ToneMapOnCPU = conversion.Hardware != nil && conversion.Hardware.ToneMapping
+			if conversion.ToneMapOnCPU = conversion.Hardware != nil && conversion.Hardware.ToneMapping; conversion.ToneMapOnCPU && conversion.ToneMapReason == "" {
+				conversion.ToneMapReason = hls.ToneMapUnsupported
+				if can.Tuning.CPUToneMapping {
+					conversion.ToneMapReason = hls.ToneMapTurnedOff
+				}
+			}
+		} else if height := can.HDR.Height; height > 0 && height < size.MaxHeight {
+			size, conversion.ToneMapReason = ConversionSize{Reason: SizeGPUToneMapping, MaxHeight: height}, hls.ToneMapSlowGPU
 		}
 		conversion.ToneMap = true
 	}
@@ -549,6 +575,10 @@ func ConvertVideo(codecs string, limits Limits, video MediaStream, can Capabilit
 		}
 	}
 	conversion.Size = size
+	// A lower cap than the GPU's own leaves it nothing to say.
+	if !conversion.ToneMapOnCPU && size.Reason != SizeGPUToneMapping {
+		conversion.ToneMapReason = ""
+	}
 	conversion.Bitrate = videoBitrate(video, conversion.Codec, conversion.Width, conversion.Height, rung.usual)
 	if limits.Video > 0 {
 		conversion.Bitrate = min(conversion.Bitrate, limits.Video)
