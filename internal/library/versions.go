@@ -77,6 +77,10 @@ type Version struct {
 	// URL is then the torrent's magnet link (see torrentLink), which
 	// identifies it, and to which no app is sent.
 	Torrent *Torrent
+	// Mirrors are the same file as other addons list it, by its name and
+	// size, in the order they come: links the source cache reads from
+	// once this one fails (see withMirror). They are listed nowhere else.
+	Mirrors []Version
 }
 
 // RequestHeaders are the headers Polyfin's own requests for the stream
@@ -407,7 +411,8 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 // versions remembered by identifier (see Version) are those of every
 // stream, torrents included, as a user who may play torrents gets them, so
 // that each identifier names the same version for every user; another
-// user's Version lists the title again rather than take a torrent.
+// user's Version lists the title again rather than take a torrent. The
+// links to the same file listed after it are its mirrors (see withMirror).
 func (s *Service) listVersions(ctx context.Context, t target, serving []streamSource, mode listing, torrents bool) ([]Version, []streamSource) {
 	lists := make([][]stremio.Stream, len(serving))
 	var unknown []streamSource
@@ -447,6 +452,9 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 	wg.Wait()
 	var versions []Version
 	seen, remembered := map[accounts.ID]bool{}, map[accounts.ID]bool{}
+	// kept are the versions remembered, and listed where each is among
+	// versions, which take their mirrors as these come.
+	kept, listed := map[accounts.ID]Version{}, map[accounts.ID]int{}
 	add := func(version Version) {
 		// A version naming another title is hidden as the version rules
 		// hide others; it is told once, when first listed.
@@ -457,12 +465,23 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 		}
 		if !remembered[version.ID] {
 			remembered[version.ID] = true
+			kept[version.ID] = version
 			s.versions.Put(version.ID, version)
+		} else if first, ok := withMirror(kept[version.ID], version); ok {
+			kept[version.ID] = first
+			s.versions.Put(version.ID, first)
 		}
-		if version.Torrent != nil && !torrents || seen[version.ID] {
+		if version.Torrent != nil && !torrents {
+			return
+		}
+		if seen[version.ID] {
+			if first, ok := withMirror(versions[listed[version.ID]], version); ok {
+				versions[listed[version.ID]] = first
+			}
 			return
 		}
 		seen[version.ID] = true
+		listed[version.ID] = len(versions)
 		versions = append(versions, version)
 	}
 	// A video's own streams come first (see embed).
@@ -640,7 +659,8 @@ func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, o
 		}
 		version := newVersion(t, streamSource{entry, t.metaType, t.id}, stream)
 		version.Labels = old.Labels
-		s.versions.Put(version.ID, version)
+		version, kept := s.keepMirrors(version)
+		s.versions.Put(version.ID, kept)
 		return version, true
 	}
 	return Version{}, false
