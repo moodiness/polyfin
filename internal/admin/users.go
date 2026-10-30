@@ -47,6 +47,11 @@ type userJSON struct {
 	// one of the server's addons' languages, empty for the server's
 	// descriptions.
 	MetadataLanguage string `json:"metadataLanguage"`
+	// WebTheme is the user's web player theme, lumaaglaass, none or custom,
+	// empty for the server's; WebThemeLocked keeps them from changing it
+	// under My account.
+	WebTheme       string `json:"webTheme"`
+	WebThemeLocked bool   `json:"webThemeLocked"`
 	// EndsOn is the date the account ends, YYYY-MM-DD in the server's time
 	// zone, null for never; Ended is set once it has come, and the account
 	// is refused as a disabled one is.
@@ -289,6 +294,8 @@ func newUserJSON(user accounts.User) userJSON {
 		BlockedUntil:     blockedUntil(user),
 		ImageTag:         imageTag(user),
 		MetadataLanguage: user.MetadataLanguage,
+		WebTheme:         user.WebTheme,
+		WebThemeLocked:   user.WebThemeLocked,
 		// When the account ends.
 		EndsOn:       endsOn(user),
 		Ended:        user.Ended(time.Now()),
@@ -1277,6 +1284,9 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		MetadataLanguage *string `json:"metadataLanguage"`
 		// ProviderOnly, see userJSON.
 		ProviderOnly *bool `json:"providerOnly"`
+		// WebTheme and WebThemeLocked, see userJSON.
+		WebTheme       *string `json:"webTheme"`
+		WebThemeLocked *bool   `json:"webThemeLocked"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -1292,6 +1302,10 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	changes.MetadataLanguage = body.MetadataLanguage
 	if body.MetadataLanguage != nil && !h.metadataLanguageOffered(w, r, *body.MetadataLanguage) {
+		return
+	}
+	changes.WebTheme, changes.WebThemeLocked = body.WebTheme, body.WebThemeLocked
+	if body.WebTheme != nil && !webThemeOffered(w, h.Accounts.Settings(), *body.WebTheme) {
 		return
 	}
 	changes.Name = body.Name

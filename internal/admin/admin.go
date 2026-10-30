@@ -287,6 +287,9 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/metadata-language", h.signedIn(h.ownMetadataLanguage))
 	mux.Handle("PUT /admin/api/account/metadata-language", h.signedIn(h.setOwnMetadataLanguage))
 	mux.Handle("GET /admin/api/metadata-languages", h.signedIn(h.metadataLanguages))
+	mux.Handle("GET /admin/api/account/web-theme", h.signedIn(h.ownWebTheme))
+	mux.Handle("PUT /admin/api/account/web-theme", h.signedIn(h.setOwnWebTheme))
+	mux.Handle("GET /admin/api/web-themes", h.signedIn(h.webThemes))
 	ownPlays := statisticsRoutes{h: h, scope: ownPlaybacks}
 	mux.Handle("GET /admin/api/account/statistics", h.signedIn(ownPlays.statistics))
 	mux.Handle("GET /admin/api/account/history", h.signedIn(ownPlays.history))
@@ -663,6 +666,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidLiveTvRefreshHours, http.StatusBadRequest, "invalid_live_tv_refresh_hours"},
 		{accounts.ErrInvalidLocalScanHours, http.StatusBadRequest, "invalid_local_scan_hours"},
 		{accounts.ErrInvalidWebTheme, http.StatusBadRequest, "invalid_web_theme"},
+		{accounts.ErrWebThemeLocked, http.StatusForbidden, "web_theme_locked"},
 		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},
 		{accounts.ErrInvalidCustomJs, http.StatusBadRequest, "invalid_custom_js"},
 		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},
