@@ -79,6 +79,7 @@ import (
 	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/updatetool"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/virtualtv"
 	"github.com/moodiness/polyfin/internal/watchlist"
 	webui "github.com/moodiness/polyfin/web"
 )
@@ -386,6 +387,12 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// itself.
 	folders.UseFiles(player.LocalFiles(folders.Open), player.LocalInputs(folders))
 	player.LocalSources(folders.Source)
+	// The channels Polyfin airs from the library's titles are listed with
+	// the other channels, and play their playout, which airs their
+	// programmes from what the server's addons and local folders list.
+	ownChannels := virtualtv.New(pool)
+	lib.UseVirtual(virtualChannels{store: ownChannels, player: player})
+	player.UsePlayouts(playouts{store: ownChannels, lib: lib})
 	// Torrent streams are read from their swarms while they play, over the
 	// route the settings set alone, their pieces within a quarter of the
 	// source cache's space, which counts them. DHT lookups start from the
@@ -681,6 +688,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		LibraryRefreshes: lib,
 		SmartLists:       smartlists.New(pool),
 		SmartPreviews:    lib,
+		// The channels Polyfin airs, built from what the Jellyfin API lists.
+		VirtualChannels: ownChannels,
+		ChannelBuilder:  jellyfinAPI,
+		Playouts:        player,
 		// The rows of the web player's home page, and the collections they
 		// may list as the Jellyfin API tells them.
 		HomeRows:       homeRows,
