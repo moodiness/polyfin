@@ -213,6 +213,7 @@ In the official Jellyfin apps for Android and iOS, which show the web client ins
   - **New in your libraries**: the titles that came into the catalogs of the user's libraries in the last 7 days, newest first;
   - **Now available**: the titles of the user's [Watchlist](tracking.md#the-watchlist) they have not started that versions were found for, the latest found first (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting));
   - **Still waiting**: the titles of the user's Watchlist they have not started that no version was found for yet, or that are not out yet, the latest added first;
+  - **Recommended on Trakt**: the movies and series Trakt recommends to the user, for the users who connected Trakt only (see [Recommended on Trakt](tracking.md#recommended-on-trakt));
 - a **Place**: **At the top**, **After Continue Watching**, **After Next Up** or **At the bottom**. When a user's home page doesn't show Continue Watching or Next Up, the row takes the place before: after the rows above it, or at the top;
 - **Shown to**: **Every user**, or **Chosen users**;
 - **Also a library in other apps**, off by default.
@@ -222,6 +223,8 @@ Every row leaves out, for each user, what their other lists leave out: titles ab
 **New in your libraries** counts from the first time Polyfin saw each title in each catalog, as apps list the libraries and as Polyfin reads their first pages every hour. The titles a catalog held when Polyfin first read it, or first read a page of it, were there before: they are not new. A library narrowed to a genre counts that genre's titles. Smart lists, IPTV sources and local folders are left out. A title that leaves a catalog and comes back after 180 days is new again.
 
 **Now available** and **Still waiting** list what the last check of each title found, every 6 hours by default: a version found has not been tried yet, and may still fail to play. A title not checked yet, just added to the Watchlist, is in neither row (see [Tracking](tracking.md#now-available-and-still-waiting)).
+
+**Recommended on Trakt** lists what Trakt recommends to each user, read with their Trakt connection and read again every 12 hours, without the titles they played, as **Because you watched** leaves them out. Titles are found by their IMDb, TMDB or TVDB identifier, and those found by none are left out. A user without a Trakt connection, or whose connection waits for **Connect again**, sees no such row and no library of it, even when the row is shown to them. The first time, the row shows once Trakt has answered, at the next visit of the home page. In `GET /Polyfin/HomeRows`, its `Kind` is `Trakt`.
 
 No app can be given a new kind of home section. With **Also a library in other apps** on, the row is also a library of its own, without type, as the Watchlist is (see [Tracking](tracking.md)): other apps list it among the user's libraries and show its latest titles on their home. The web player shows it too, in its libraries and with its own "Recently Added" row. A **Because you watched** row is then one library for each title it follows.
 

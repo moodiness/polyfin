@@ -57,10 +57,13 @@ const (
 	// watchlist).
 	KindAvailable Kind = "available"
 	KindWaiting   Kind = "waiting"
+	// KindTrakt lists the movies and series Trakt recommends to the user,
+	// shown only to users with a Trakt connection (see package trackers).
+	KindTrakt Kind = "trakt"
 )
 
 // Kinds are the kinds of rows, in the order the admin app offers them.
-var Kinds = []Kind{KindCatalog, KindCollection, KindBecause, KindNew, KindAvailable, KindWaiting}
+var Kinds = []Kind{KindCatalog, KindCollection, KindBecause, KindNew, KindAvailable, KindWaiting, KindTrakt}
 
 // Place is where the web player shows a row on its home page.
 type Place string

@@ -12,6 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/trackers"
 )
 
 // Custom home rows.
@@ -41,6 +42,12 @@ import (
 // parental control or blocked genres hide, the titles they hid, and the
 // libraries of the server hidden from them, whose catalogs and collections
 // make no row.
+//
+// A Recommended on Trakt row lists the movies and series Trakt recommends
+// to the user, as last read (see trackers.Service.Recommended), without
+// those they played, as Because you watched leaves them out. It is shown
+// only to users with a Trakt connection that works: for the others it is
+// no row, no library and no folder.
 //
 // Each row is a folder of its own, a library without type, by an
 // identifier of its own (customRowID): its name, in the web player,
@@ -81,12 +88,14 @@ var customRowKinds = map[homerows.Kind]string{
 	homerows.KindNew:        "New",
 	homerows.KindAvailable:  "NowAvailable",
 	homerows.KindWaiting:    "StillWaiting",
+	homerows.KindTrakt:      "Trakt",
 }
 
 // CustomRowDto is a row of GET /Polyfin/HomeRows: its folder's Id, its
 // Name, its Place (Top, AfterResume, AfterNextUp or Bottom), its Kind
 // (Catalog, Collection, BecauseYouWatched, New, NowAvailable or
 // StillWaiting) and its first Items.
+// A Recommended on Trakt row's Kind is Trakt.
 type CustomRowDto struct {
 	Id    string
 	Name  string
@@ -123,8 +132,9 @@ func customRowBaseline(row, id accounts.ID) accounts.ID {
 
 // customRows lists the rows user sees that keep accepts, every one when
 // keep is nil, in order, a Because you watched row as one for each title
-// it follows; none for a request made with an API key, and none of them
-// while Similar titles is off.
+// it follows; none for a request made with an API key, none of them
+// while Similar titles is off, and no Recommended on Trakt row without a
+// Trakt connection.
 func (h *Handler) customRows(ctx context.Context, user accounts.User, keep func(homerows.Row) bool) ([]customRow, error) {
 	if h.HomeRows == nil || user.ID == (accounts.ID{}) {
 		return nil, nil
@@ -136,7 +146,26 @@ func (h *Handler) customRows(ctx context.Context, user accounts.User, keep func(
 	if keep != nil {
 		rows = slices.DeleteFunc(rows, func(row homerows.Row) bool { return !keep(row) })
 	}
+	isTrakt := func(row homerows.Row) bool { return row.Kind == homerows.KindTrakt }
+	if slices.ContainsFunc(rows, isTrakt) {
+		connected, err := h.traktRowShown(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		if !connected {
+			rows = slices.DeleteFunc(rows, isTrakt)
+		}
+	}
 	return h.userCustomRows(ctx, user, rows)
+}
+
+// traktRowShown reports whether user sees the Recommended on Trakt rows
+// shown to them: whether they have a Trakt connection that works.
+func (h *Handler) traktRowShown(ctx context.Context, user accounts.User) (bool, error) {
+	if h.Trackers == nil {
+		return false, nil
+	}
+	return h.Trackers.Recommends(ctx, user.ID)
 }
 
 // userCustomRows is customRows for rows, the user's rows.
@@ -184,9 +213,16 @@ func (h *Handler) customRowOf(ctx context.Context, user accounts.User, id accoun
 	for _, row := range rows {
 		switch {
 		case row.Kind != homerows.KindBecause:
-			if customRowID(row.ID, accounts.ID{}) == id {
-				return customRow{row: row, id: id, name: row.Name}, true, nil
+			if customRowID(row.ID, accounts.ID{}) != id {
+				continue
 			}
+			shown := true
+			if row.Kind == homerows.KindTrakt {
+				if shown, err = h.traktRowShown(ctx, user); err != nil {
+					return customRow{}, false, err
+				}
+			}
+			return customRow{row: row, id: id, name: row.Name}, shown, nil
 		case similar:
 			because, baselines = append(because, row), append(baselines, customRowBaseline(row.ID, id))
 		}
@@ -287,6 +323,8 @@ func (h *Handler) customRowTitles(ctx context.Context, user accounts.User, row c
 
 func (h *Handler) readCustomRow(ctx context.Context, user accounts.User, row customRow, start, count int, first bool) (library.Page, error) {
 	switch row.row.Kind {
+	case homerows.KindTrakt:
+		return h.traktRowTitles(ctx, user, start, count, first)
 	case homerows.KindCatalog:
 		return h.Library.CatalogTitles(ctx, user, row.row.Addon, row.row.CatalogType, row.row.CatalogID, start, count, first)
 	case homerows.KindCollection:
@@ -311,6 +349,28 @@ func (h *Handler) readCustomRow(ctx context.Context, user accounts.User, row cus
 		return h.Library.WatchlistWaiting(ctx, user, start, count, first)
 	}
 	return library.Page{}, library.ErrNotFound
+}
+
+// traktRowTitles lists the titles of a Recommended on Trakt row: those
+// Trakt recommends to user, as last read, without those they played;
+// ErrNotFound without a Trakt connection that works.
+func (h *Handler) traktRowTitles(ctx context.Context, user accounts.User, start, count int, first bool) (library.Page, error) {
+	if h.Trackers == nil {
+		return library.Page{}, library.ErrNotFound
+	}
+	ids, err := h.Trackers.Recommended(ctx, user.ID)
+	if errors.Is(err, trackers.ErrNotConnected) {
+		return library.Page{}, library.ErrNotFound
+	}
+	if err != nil || len(ids) == 0 {
+		return library.Page{}, err
+	}
+	played, err := h.playedTitles(ctx, user, ids)
+	if err != nil {
+		return library.Page{}, err
+	}
+	ids = slices.DeleteFunc(ids, func(id accounts.ID) bool { return played[id] })
+	return h.Library.Recommended(ctx, user, ids, start, count, first)
 }
 
 // collectionRowTitles lists the titles of a collection row: those of a
