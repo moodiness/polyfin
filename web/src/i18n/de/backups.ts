@@ -94,15 +94,28 @@ const backups: typeof en = {
       button: 'Wiederherstellen',
       title: 'Backup wiederherstellen',
       intro:
-        'Die Datenbank wird auf den Stand zurückgesetzt, den sie beim Erstellen des Backups hatte. Wähle ein Backup aus dem Ordner oder von einem Ziel, oder sende eine .dump-Datei.',
+        'Die Datenbank wird auf den Stand zurückgesetzt, den sie beim Erstellen des Backups hatte. Wähle ein Backup aus dem Ordner oder von einem Ziel, oder sende eine Backup-Datei.',
       loading: 'Backups werden aufgelistet…',
       folder: 'Backup-Ordner',
       none: 'Hier gibt es kein Backup.',
       beforeRestore: 'vor einer Wiederherstellung',
+      encrypted: 'verschlüsselt',
       choose: 'Dieses Backup wiederherstellen',
-      upload: '.dump-Datei senden',
+      download: 'Herunterladen',
+      downloadDecrypted: 'Entschlüsselt herunterladen',
+      downloadTitle: (file: string) => `${file} entschlüsselt herunterladen`,
+      downloadBody:
+        'Gib die Passphrase ein, mit der dieses Backup verschlüsselt wurde. Der Dump wird unverschlüsselt auf diesem Computer gespeichert: Bewahre ihn so sicher auf wie den Server.',
+      passphrase: 'Backup-Passphrase',
+      downloading: 'Passphrase wird geprüft…',
+      upload: 'Backup-Datei senden',
       uploadHelp:
-        'Ein Backup der Polyfin-Datenbank, erstellt von Polyfin oder mit pg_dump --format=custom.',
+        'Eine .dump-Datei der Polyfin-Datenbank, erstellt von Polyfin oder mit pg_dump --format=custom, oder eine von Polyfin verschlüsselte .dump.enc-Datei.',
+      unlockTitle: (file: string) => `${file} öffnen`,
+      unlockBody:
+        'Dieses Backup ist verschlüsselt. Gib die Passphrase ein, mit der es erstellt wurde: Polyfin entschlüsselt es, prüft jeden Teil davon und zeigt dann, was die Wiederherstellung bewirkt.',
+      unlock: 'Öffnen',
+      unlocking: 'Wird entschlüsselt und geprüft…',
       checking: 'Backup wird geprüft…',
       unavailable: {
         pg_restore_missing:
@@ -149,6 +162,7 @@ const backups: typeof en = {
         'Polyfin stellt das Backup wieder her und startet dann neu. Diese Seite wird neu geladen, sobald der Server antwortet.',
       lastRestore: 'Letzte Wiederherstellung',
       lastRestoreOk: (file: string, by: string) => `${file}, von ${by}`,
+      lastRestoreSetup: (file: string) => `${file}, auf der Einrichtungsseite`,
       lastRestoreFailed: (file: string) =>
         `${file} konnte nicht wiederhergestellt werden: Die Datenbank ist unverändert.`,
     },

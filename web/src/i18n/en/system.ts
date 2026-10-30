@@ -440,6 +440,7 @@ const system = {
         aniListClientSecret: 'AniList client secret',
         myAnimeListClientSecret: 'MyAnimeList client secret',
         smtpPassword: 'SMTP password',
+        backupPassphrase: 'Backup passphrase',
         torrentProxyPassword: 'Torrents’ SOCKS5 proxy password',
         torrentWireGuard: 'Torrents’ WireGuard configuration',
         metricsToken: 'Metrics token',

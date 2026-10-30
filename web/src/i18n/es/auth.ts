@@ -18,6 +18,30 @@ const auth: typeof en = {
     confirmPassword: 'Confirmar contraseña',
     submit: 'Crear administrador',
     submitting: 'Creando…',
+    restoreInstead: 'Restaurar una copia de seguridad en su lugar',
+    createInstead: 'Crear un administrador en su lugar',
+    restoreTitle: 'Restaurar una copia de seguridad',
+    restoreLede:
+      'Recupere este Polyfin desde una copia de seguridad de su base de datos: sus administradores, usuarios, ajustes e historial de reproducción.',
+    restoreFile: 'Archivo de copia de seguridad',
+    restoreFileHelp:
+      'Un archivo .dump o .dump.enc hecho por Polyfin, de su carpeta de copias de seguridad o de un destino.',
+    restoreChoose: 'Elegir un archivo',
+    restoreSend: 'Enviar y comprobar',
+    restoreSending: 'Enviando y comprobando…',
+    restoreUnlockHelp:
+      'Esta copia de seguridad está cifrada: escriba la frase de contraseña con la que se hizo.',
+    restoreReady: (file: string) =>
+      `${file} es una copia de seguridad de la base de datos de Polyfin que este Polyfin puede restaurar.`,
+    restoreSteps: [
+      'Polyfin se detiene, restaura la copia de seguridad en su base de datos de una sola vez y luego se inicia de nuevo con ella. Si algo falla, la base de datos se queda como está ahora.',
+      'Después, inicie sesión con un administrador de la copia de seguridad.',
+    ],
+    restoreStart: 'Restaurar',
+    restoreRestoring:
+      'Polyfin está restaurando la copia de seguridad y luego se inicia de nuevo. Esta página muestra el inicio de sesión en cuanto responde.',
+    restoreFailed:
+      'No se pudo restaurar la copia de seguridad: Polyfin se ha iniciado de nuevo sin ella. Su registro indica el motivo y contiene un nuevo código de configuración.',
   },
   login: {
     title: 'Iniciar sesión',

@@ -846,6 +846,13 @@ const settings = {
     backupsKept: 'Backups to keep',
     backupsKeptHelp: (r: RangeText) =>
       `After each backup, Polyfin deletes its oldest backups past this number. Other files in the folder are never touched. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    backupPassphrase: 'Backup passphrase',
+    backupPassphraseHelp: (min: number) =>
+      `Encrypts each backup as it is written, in the folder and at every destination, which then cannot read it. At least ${min} characters. It is kept encrypted and never shown again.`,
+    backupPassphraseNew:
+      'Keep this passphrase somewhere other than this server, such as a password manager: a lost passphrase means lost backups. Nobody can restore them without it, Polyfin included. Check it with the eye before saving. Backups already made stay as they are.',
+    backupPassphraseRemoved:
+      'Backups made from now on are not encrypted. Those already made still need this passphrase to be restored.',
     lastBackup: 'Last backup',
     backupDestinations: 'Destinations',
     backupDestinationsHelp:

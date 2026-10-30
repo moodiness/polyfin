@@ -862,6 +862,13 @@ const settings: typeof en = {
     backupsKept: 'Copias de seguridad que conservar',
     backupsKeptHelp: (r: RangeText) =>
       `Tras cada copia de seguridad, Polyfin borra sus copias más antiguas que superen este número. Los demás archivos de la carpeta nunca se tocan. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    backupPassphrase: 'Frase de contraseña de las copias de seguridad',
+    backupPassphraseHelp: (min: number) =>
+      `Cifra cada copia de seguridad mientras se escribe, en la carpeta y en cada destino, que así no puede leerla. Al menos ${min} caracteres. Se guarda cifrada y no se vuelve a mostrar.`,
+    backupPassphraseNew:
+      'Guarde esta frase de contraseña en otro lugar que este servidor, como un gestor de contraseñas: una frase de contraseña perdida significa copias de seguridad perdidas. Nadie puede restaurarlas sin ella, ni siquiera Polyfin. Compruébela con el ojo antes de guardar. Las copias de seguridad ya hechas se quedan como están.',
+    backupPassphraseRemoved:
+      'Las copias de seguridad hechas a partir de ahora no se cifran. Las ya hechas siguen necesitando esta frase de contraseña para restaurarse.',
     lastBackup: 'Última copia de seguridad',
     backupDestinations: 'Destinos',
     backupDestinationsHelp:

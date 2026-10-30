@@ -91,15 +91,28 @@ const backups: typeof en = {
       button: 'Restaurar',
       title: 'Restaurar um backup',
       intro:
-        'O banco de dados volta a ser como era quando o backup foi feito. Escolha um backup da pasta ou de um destino, ou envie um arquivo .dump.',
+        'O banco de dados volta a ser como era quando o backup foi feito. Escolha um backup da pasta ou de um destino, ou envie um arquivo de backup.',
       loading: 'Listando os backups…',
       folder: 'Pasta de backups',
       none: 'Nenhum backup aqui.',
       beforeRestore: 'antes de uma restauração',
+      encrypted: 'criptografado',
       choose: 'Restaurar este backup',
-      upload: 'Enviar um arquivo .dump',
+      download: 'Baixar',
+      downloadDecrypted: 'Baixar descriptografado',
+      downloadTitle: (file: string) => `Baixar ${file} descriptografado`,
+      downloadBody:
+        'Digite a frase secreta com que este backup foi criptografado. O dump é salvo sem criptografia neste computador: guarde-o com o mesmo cuidado que o servidor.',
+      passphrase: 'Frase secreta dos backups',
+      downloading: 'Verificando a frase secreta…',
+      upload: 'Enviar um arquivo de backup',
       uploadHelp:
-        'Um backup do banco de dados do Polyfin, feito pelo Polyfin ou com pg_dump --format=custom.',
+        'Um arquivo .dump do banco de dados do Polyfin, feito pelo Polyfin ou com pg_dump --format=custom, ou um arquivo .dump.enc criptografado pelo Polyfin.',
+      unlockTitle: (file: string) => `Abrir ${file}`,
+      unlockBody:
+        'Este backup está criptografado. Digite a frase secreta com que ele foi feito: o Polyfin o descriptografa, verifica cada parte dele e depois mostra o que a restauração faz.',
+      unlock: 'Abrir',
+      unlocking: 'Descriptografando e verificando…',
       checking: 'Verificando o backup…',
       unavailable: {
         pg_restore_missing:
@@ -146,6 +159,7 @@ const backups: typeof en = {
         'O Polyfin está restaurando o backup e depois será reiniciado. Esta página será recarregada assim que ele responder.',
       lastRestore: 'Última restauração',
       lastRestoreOk: (file: string, by: string) => `${file}, por ${by}`,
+      lastRestoreSetup: (file: string) => `${file}, pela página de configuração`,
       lastRestoreFailed: (file: string) =>
         `Não foi possível restaurar ${file}: o banco de dados continua como estava.`,
     },

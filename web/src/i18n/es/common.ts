@@ -339,6 +339,15 @@ const common: typeof en = {
     too_large: 'El archivo es demasiado grande.',
     destination_failed: 'No se pudo leer el destino.',
     restore_failed: 'No se pudo iniciar la restauración: no se ha cambiado nada.',
+    invalid_backup_passphrase:
+      'La frase de contraseña de las copias de seguridad tiene al menos 12 caracteres, en una línea, y 256 bytes como máximo.',
+    passphrase_required:
+      'Esta copia de seguridad está cifrada: ábrala primero con su frase de contraseña.',
+    wrong_passphrase: 'Esta frase de contraseña no abre la copia de seguridad.',
+    damaged_backup:
+      'Esta copia de seguridad cifrada está dañada: una parte se ha modificado o falta. No se ha restaurado nada.',
+    not_encrypted: 'Esta copia de seguridad no está cifrada.',
+    unlock_failed: 'No se pudo descifrar la copia de seguridad.',
     invalid_collection_read_hour:
       'Elija en la lista la hora a la que se leen las colecciones, o «Nunca».',
     invalid_collection_library_apps:

@@ -92,15 +92,28 @@ const backups: typeof en = {
       button: 'Restaurar',
       title: 'Restaurar una copia de seguridad',
       intro:
-        'La base de datos vuelve al estado en que estaba cuando se hizo la copia de seguridad. Elija una copia de seguridad de la carpeta o de un destino, o envíe un archivo .dump.',
+        'La base de datos vuelve al estado en que estaba cuando se hizo la copia de seguridad. Elija una copia de seguridad de la carpeta o de un destino, o envíe un archivo de copia de seguridad.',
       loading: 'Obteniendo la lista de copias de seguridad…',
       folder: 'Carpeta de copias de seguridad',
       none: 'No hay ninguna copia de seguridad aquí.',
       beforeRestore: 'antes de una restauración',
+      encrypted: 'cifrada',
       choose: 'Restaurar esta copia de seguridad',
-      upload: 'Enviar un archivo .dump',
+      download: 'Descargar',
+      downloadDecrypted: 'Descargar descifrada',
+      downloadTitle: (file: string) => `Descargar ${file} descifrada`,
+      downloadBody:
+        'Escriba la frase de contraseña con la que se cifró esta copia de seguridad. El volcado se guarda sin cifrar en este equipo: guárdelo con el mismo cuidado que el servidor.',
+      passphrase: 'Frase de contraseña de las copias de seguridad',
+      downloading: 'Comprobando la frase de contraseña…',
+      upload: 'Enviar un archivo de copia de seguridad',
       uploadHelp:
-        'Una copia de seguridad de la base de datos de Polyfin, hecha por Polyfin o con pg_dump --format=custom.',
+        'Un archivo .dump de la base de datos de Polyfin, hecho por Polyfin o con pg_dump --format=custom, o un archivo .dump.enc cifrado por Polyfin.',
+      unlockTitle: (file: string) => `Abrir ${file}`,
+      unlockBody:
+        'Esta copia de seguridad está cifrada. Escriba la frase de contraseña con la que se hizo: Polyfin la descifra, comprueba cada parte y luego indica lo que hace su restauración.',
+      unlock: 'Abrir',
+      unlocking: 'Descifrando y comprobando…',
       checking: 'Comprobando la copia de seguridad…',
       unavailable: {
         pg_restore_missing:
@@ -155,6 +168,7 @@ const backups: typeof en = {
         'Polyfin está restaurando la copia de seguridad y después se reiniciará. Esta página se recargará en cuanto responda.',
       lastRestore: 'Última restauración',
       lastRestoreOk: (file: string, by: string) => `${file}, por ${by}`,
+      lastRestoreSetup: (file: string) => `${file}, desde la página de configuración`,
       lastRestoreFailed: (file: string) =>
         `No se pudo restaurar ${file}: la base de datos sigue como estaba.`,
     },

@@ -450,6 +450,7 @@ const system: typeof en = {
         torrentProxyPassword: 'Mot de passe du proxy SOCKS5 des torrents',
         torrentWireGuard: 'Configuration WireGuard des torrents',
         smtpPassword: 'Mot de passe SMTP',
+        backupPassphrase: 'Phrase de passe des sauvegardes',
         metricsToken: 'Jeton des métriques',
         updateToolToken: 'Jeton de l’outil de mise à jour',
       },

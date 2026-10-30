@@ -864,6 +864,13 @@ const settings: typeof en = {
     backupsKept: 'Sauvegardes à conserver',
     backupsKeptHelp: (r: RangeText) =>
       `Après chaque sauvegarde, Polyfin supprime ses plus anciennes sauvegardes au-delà de ce nombre. Les autres fichiers du dossier ne sont jamais touchés. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    backupPassphrase: 'Phrase de passe des sauvegardes',
+    backupPassphraseHelp: (min: number) =>
+      `Chiffre chaque sauvegarde à mesure qu’elle est écrite, dans le dossier et sur chaque destination, qui ne peut donc pas la lire. Au moins ${min} caractères. Elle est gardée chiffrée et n’est plus jamais affichée.`,
+    backupPassphraseNew:
+      'Gardez cette phrase de passe ailleurs que sur ce serveur, par exemple dans un gestionnaire de mots de passe : une phrase de passe perdue, ce sont des sauvegardes perdues. Personne ne peut les restaurer sans elle, Polyfin compris. Vérifiez-la avec l’œil avant d’enregistrer. Les sauvegardes déjà faites restent telles quelles.',
+    backupPassphraseRemoved:
+      'Les sauvegardes faites à partir de maintenant ne sont pas chiffrées. Celles déjà faites demandent toujours cette phrase de passe pour être restaurées.',
     lastBackup: 'Dernière sauvegarde',
     backupDestinations: 'Destinations',
     backupDestinationsHelp:

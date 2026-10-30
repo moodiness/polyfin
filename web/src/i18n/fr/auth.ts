@@ -18,6 +18,30 @@ const auth: typeof en = {
     confirmPassword: 'Confirmer le mot de passe',
     submit: 'Créer l’administrateur',
     submitting: 'Création…',
+    restoreInstead: 'Restaurer plutôt une sauvegarde',
+    createInstead: 'Créer plutôt un administrateur',
+    restoreTitle: 'Restaurer une sauvegarde',
+    restoreLede:
+      'Ramenez ce Polyfin à partir d’une sauvegarde de sa base de données : ses administrateurs, ses utilisateurs, ses réglages et son historique de visionnage.',
+    restoreFile: 'Fichier de sauvegarde',
+    restoreFileHelp:
+      'Un fichier .dump ou .dump.enc fait par Polyfin, de son dossier des sauvegardes ou d’une destination.',
+    restoreChoose: 'Choisir un fichier',
+    restoreSend: 'Envoyer et vérifier',
+    restoreSending: 'Envoi et vérification…',
+    restoreUnlockHelp:
+      'Cette sauvegarde est chiffrée : saisissez la phrase de passe avec laquelle elle a été faite.',
+    restoreReady: (file: string) =>
+      `${file} est une sauvegarde de la base de données de Polyfin que ce Polyfin peut restaurer.`,
+    restoreSteps: [
+      'Polyfin s’arrête, restaure la sauvegarde dans sa base de données d’un seul coup, puis redémarre dessus. Si quelque chose échoue, la base de données reste telle qu’elle est maintenant.',
+      'Connectez-vous ensuite avec un administrateur de la sauvegarde.',
+    ],
+    restoreStart: 'Restaurer',
+    restoreRestoring:
+      'Polyfin restaure la sauvegarde, puis redémarre. Cette page affiche la connexion dès qu’il répond.',
+    restoreFailed:
+      'La sauvegarde n’a pas pu être restaurée : Polyfin a redémarré sans elle. Son journal dit pourquoi, et contient un nouveau code d’installation.',
   },
   login: {
     title: 'Connexion',

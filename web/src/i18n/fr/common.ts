@@ -337,6 +337,15 @@ const common: typeof en = {
     too_large: 'Le fichier est trop volumineux.',
     destination_failed: 'La destination n’a pas pu être lue.',
     restore_failed: 'La restauration n’a pas pu commencer : rien n’a été modifié.',
+    invalid_backup_passphrase:
+      'La phrase de passe des sauvegardes fait au moins 12 caractères, sur une ligne, et 256 octets au plus.',
+    passphrase_required:
+      'Cette sauvegarde est chiffrée : ouvrez-la d’abord avec sa phrase de passe.',
+    wrong_passphrase: 'Cette phrase de passe n’ouvre pas la sauvegarde.',
+    damaged_backup:
+      'Cette sauvegarde chiffrée est endommagée : une partie a été modifiée ou manque. Rien n’a été restauré.',
+    not_encrypted: 'Cette sauvegarde n’est pas chiffrée.',
+    unlock_failed: 'La sauvegarde n’a pas pu être déchiffrée.',
     invalid_collection_read_hour:
       'Choisissez dans la liste l’heure de lecture des collections, ou Jamais.',
     invalid_collection_library_apps:

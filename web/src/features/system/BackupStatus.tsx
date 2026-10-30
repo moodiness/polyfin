@@ -72,9 +72,11 @@ export default function BackupStatus({ backup }: { backup: Backup }) {
                         {last.error === '' ? text.succeeded : text.failed}
                       </StatusPill>
                       <span className="text-small break-all text-ink-3">
-                        {last.error === ''
-                          ? t.backups.restore.lastRestoreOk(last.file, last.administrator)
-                          : t.backups.restore.lastRestoreFailed(last.file)}{' '}
+                        {last.error !== ''
+                          ? t.backups.restore.lastRestoreFailed(last.file)
+                          : last.administrator === ''
+                            ? t.backups.restore.lastRestoreSetup(last.file)
+                            : t.backups.restore.lastRestoreOk(last.file, last.administrator)}{' '}
                         <RelativeTime iso={last.at} />
                       </span>
                     </span>

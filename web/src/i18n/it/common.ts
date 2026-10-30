@@ -330,6 +330,14 @@ const common: typeof en = {
     too_large: 'Il file è troppo grande.',
     destination_failed: 'Impossibile leggere la destinazione.',
     restore_failed: 'Impossibile avviare il ripristino: non è stato modificato nulla.',
+    invalid_backup_passphrase:
+      'La passphrase dei backup ha almeno 12 caratteri, su una riga, e 256 byte al massimo.',
+    passphrase_required: 'Questo backup è cifrato: aprilo prima con la sua passphrase.',
+    wrong_passphrase: 'Questa passphrase non apre il backup.',
+    damaged_backup:
+      'Questo backup cifrato è danneggiato: una parte è stata modificata o manca. Non è stato ripristinato nulla.',
+    not_encrypted: 'Questo backup non è cifrato.',
+    unlock_failed: 'Impossibile decifrare il backup.',
     invalid_collection_read_hour:
       'Scegli dall’elenco l’orario di lettura delle collezioni, oppure Mai.',
     invalid_collection_library_apps:

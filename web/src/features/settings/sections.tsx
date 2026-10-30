@@ -1724,6 +1724,27 @@ function Backups({ form, update, error, number, range, limits }: SectionFormApi)
             )}
           />
         </FieldRow>
+        <SettingRow
+          anchor="backup-passphrase"
+          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+        >
+          <SecretField
+            label={s.backupPassphrase}
+            help={s.backupPassphraseHelp(form.bounds.backupPassphrase?.min ?? 12)}
+            saved={form.backupPassphraseSet}
+            value={form.backupPassphrase}
+            onValue={(backupPassphrase) => update({ backupPassphrase })}
+            error={error('backup-passphrase')}
+          />
+          {form.backupPassphrase !== undefined && form.backupPassphrase !== '' && (
+            <Notice tone="warn" className="mt-3 max-w-[60ch]">
+              {s.backupPassphraseNew}
+            </Notice>
+          )}
+          {form.backupPassphraseSet && form.backupPassphrase === '' && (
+            <Notice className="mt-3 max-w-[60ch]">{s.backupPassphraseRemoved}</Notice>
+          )}
+        </SettingRow>
         {form.backups && <LastBackup />}
       </SettingsGroup>
       <SettingsGroup title={s.backupDestinations}>

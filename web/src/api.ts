@@ -579,6 +579,10 @@ export type Settings = {
   backupFolder: string
   /** Folder backups are written to when backupFolder is empty (read-only). */
   backupFolderDefault: string
+  /** Whether a passphrase encrypts the backups. */
+  backupPassphraseSet: boolean
+  /** Sent only to change the backup passphrase: a new one, or "" to stop encrypting. */
+  backupPassphrase?: string
   /** Hour of the server's time zone every collection of the server's collection libraries is read at each day, 0 to 23; -1 never. */
   collectionReadHour: number
   /** Apps, by the name they sign in with, told an addon's collection library holds collections (boxsets) rather than mixed content; none by default. */
@@ -4019,7 +4023,13 @@ export type Health = {
  * notification target, by its name, of a user or of the server (`user` null).
  */
 export type UnreadableSecret = {
-  setting: ServerSecretName | 'smtpPassword' | 'torrentProxyPassword' | 'torrentWireGuard' | null
+  setting:
+    | ServerSecretName
+    | 'smtpPassword'
+    | 'torrentProxyPassword'
+    | 'torrentWireGuard'
+    | 'backupPassphrase'
+    | null
   service: TrackingServiceName | null
   app: AppKind | null
   target: string | null
@@ -4252,8 +4262,17 @@ export const testBackupDestination = (id: string) =>
     `/backup/destinations/${seg(id)}/test`,
   )
 
-/** A backup that can be restored, `madeAt` read from its name; `size` is -1 when its destination does not tell it. */
-export type BackupFile = { name: string; size: number; madeAt: string; beforeRestore: boolean }
+/**
+ * A backup that can be restored, `madeAt` read from its name; `size` is -1 when its destination
+ * does not tell it; `encrypted` tells one encrypted with a passphrase.
+ */
+export type BackupFile = {
+  name: string
+  size: number
+  madeAt: string
+  beforeRestore: boolean
+  encrypted: boolean
+}
 
 /** The backups of the folder and of each destination, newest first. */
 export type BackupFiles = {
@@ -4266,7 +4285,9 @@ export const fetchBackupFiles = (signal?: AbortSignal) =>
 
 /**
  * A backup checked to be restored: `unreadable` counts by kind the stored keys in it that
- * POLYFIN_SECRET_KEY cannot decrypt; `serverName` is what the confirmation asks to type.
+ * POLYFIN_SECRET_KEY cannot decrypt; `serverName` is what the confirmation asks to type. A
+ * `locked` backup is encrypted and waits for its passphrase (see `unlockRestore`): it is checked
+ * once opened, and `unreadable` is empty until then.
  */
 export type RestorePlan = {
   id: string
@@ -4288,6 +4309,8 @@ export type RestorePlan = {
       number
     >
   >
+  encrypted: boolean
+  locked: boolean
   serverName: string
 }
 
@@ -4295,16 +4318,27 @@ export type RestorePlan = {
 export const prepareRestore = (destination: string | null, file: string) =>
   request<RestorePlan>('POST', '/backup/restore/prepare', { destination, file })
 
-/** Sends a backup file and checks it, to restore it. */
-export async function uploadRestore(file: File): Promise<RestorePlan> {
-  const response = await fetch(`${apiBase}/backup/restore/upload?name=${seg(file.name)}`, {
+/** Sends a file as the body of a POST to `path`, and answers the plan the server checked. */
+async function sendBackup(
+  path: string,
+  file: File,
+  headers: Record<string, string> = {},
+): Promise<RestorePlan> {
+  const response = await fetch(`${apiBase}${path}?name=${seg(file.name)}`, {
     method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/octet-stream' },
+    headers: { Accept: 'application/json', 'Content-Type': 'application/octet-stream', ...headers },
     body: file,
   })
   if (!response.ok) throw await apiError(response)
   return (await response.json()) as RestorePlan
 }
+
+/** Sends a backup file and checks it, to restore it. */
+export const uploadRestore = (file: File) => sendBackup('/backup/restore/upload', file)
+
+/** Opens the encrypted backup prepared with its passphrase, then checks it. */
+export const unlockRestore = (id: string, passphrase: string) =>
+  request<RestorePlan>('POST', '/backup/restore/unlock', { id, passphrase })
 
 /** Restores the backup checked: Polyfin stops, restores it, and starts again. */
 export const startRestore = (id: string, serverName: string, anyway: boolean) =>
@@ -4313,6 +4347,40 @@ export const startRestore = (id: string, serverName: string, anyway: boolean) =>
 /** Drops a backup checked and not restored, with the file downloaded or sent for it. */
 export const discardRestore = (id: string) =>
   request<void>('POST', '/backup/restore/discard', { id })
+
+/** The address that downloads a backup of the folder as it is. */
+export const backupDownloadUrl = (name: string) => `${apiBase}/backup/files/${seg(name)}`
+
+/**
+ * The address that downloads the dump an encrypted backup of the folder holds, with the ticket
+ * `checkBackupPassphrase` gave: a plain link, which the browser saves as it comes.
+ */
+export const backupDecryptedUrl = (name: string, ticket: string) =>
+  `${apiBase}/backup/files/${seg(name)}/decrypted?ticket=${seg(ticket)}`
+
+/**
+ * Checks that a passphrase opens an encrypted backup of the folder, and answers the ticket that
+ * downloads it decrypted, once, within a minute.
+ */
+export const checkBackupPassphrase = (name: string, passphrase: string) =>
+  request<{ ticket: string }>('POST', `/backup/files/${seg(name)}/check`, { passphrase })
+
+/**
+ * Sends a backup from the setup page, before any administrator exists, with the setup code; then
+ * `setupRestoreUnlock`, `setupRestoreStart` or `setupRestoreDiscard` with the plan's id.
+ */
+export const setupRestoreUpload = (setupCode: string, file: File) =>
+  sendBackup('/setup/restore/upload', file, { 'X-Polyfin-Setup-Code': setupCode })
+
+export const setupRestoreUnlock = (setupCode: string, id: string, passphrase: string) =>
+  request<RestorePlan>('POST', '/setup/restore/unlock', { setupCode, id, passphrase })
+
+/** Restores the backup sent from the setup page: Polyfin stops, restores it, and starts again. */
+export const setupRestoreStart = (setupCode: string, id: string, anyway: boolean) =>
+  request<{ restoring: boolean }>('POST', '/setup/restore', { setupCode, id, anyway })
+
+export const setupRestoreDiscard = (setupCode: string, id: string) =>
+  request<void>('POST', '/setup/restore/discard', { setupCode, id })
 
 /**
  * A device that asked Polyfin for something over DLNA, known by its address. `userId` is the user

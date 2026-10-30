@@ -313,6 +313,14 @@ const common = {
     too_large: 'The file is too large.',
     destination_failed: 'The destination could not be read.',
     restore_failed: 'The restore could not start: nothing was changed.',
+    invalid_backup_passphrase:
+      'The backup passphrase is at least 12 characters long, on one line, and at most 256 bytes.',
+    passphrase_required: 'This backup is encrypted: open it with its passphrase first.',
+    wrong_passphrase: 'This passphrase does not open the backup.',
+    damaged_backup:
+      'This encrypted backup is damaged: part of it was changed or is missing. Nothing was restored.',
+    not_encrypted: 'This backup is not encrypted.',
+    unlock_failed: 'The backup could not be decrypted.',
     invalid_collection_read_hour:
       'Choose the hour collections are read at, or Never, from the list.',
     invalid_collection_library_apps:

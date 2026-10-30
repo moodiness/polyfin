@@ -855,6 +855,13 @@ const settings: typeof en = {
     backupsKept: 'Zu behaltende Backups',
     backupsKeptHelp: (r: RangeText) =>
       `Nach jedem Backup löscht Polyfin seine ältesten Backups, die über diese Anzahl hinausgehen. Andere Dateien im Ordner werden nie angetastet. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    backupPassphrase: 'Backup-Passphrase',
+    backupPassphraseHelp: (min: number) =>
+      `Verschlüsselt jedes Backup beim Schreiben, im Ordner und an jedem Ziel, das es dann nicht lesen kann. Mindestens ${min} Zeichen. Sie wird verschlüsselt gespeichert und nie wieder angezeigt.`,
+    backupPassphraseNew:
+      'Bewahre diese Passphrase woanders als auf diesem Server auf, etwa in einem Passwort-Manager: Eine verlorene Passphrase bedeutet verlorene Backups. Ohne sie kann niemand sie wiederherstellen, auch Polyfin nicht. Prüfe sie vor dem Speichern mit dem Auge. Bereits erstellte Backups bleiben, wie sie sind.',
+    backupPassphraseRemoved:
+      'Ab jetzt erstellte Backups werden nicht verschlüsselt. Für die bereits erstellten wird diese Passphrase weiterhin zur Wiederherstellung benötigt.',
     lastBackup: 'Letztes Backup',
     backupDestinations: 'Backup-Ziele',
     backupDestinationsHelp:

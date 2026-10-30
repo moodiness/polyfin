@@ -1268,6 +1268,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'backups',
+    anchor: 'backup-passphrase',
+    label: (t) => s(t).backupPassphrase,
+    help: (t, r) => s(t).backupPassphraseHelp(Number(r('backupPassphrase').min)),
+    keywords: ['encryption', 'chiffrement', 'password'],
+    codes: ['invalid_backup_passphrase'],
+  },
+  {
+    section: 'backups',
     anchor: 'last-backup',
     label: (t) => s(t).lastBackup,
     keywords: ['backup'],

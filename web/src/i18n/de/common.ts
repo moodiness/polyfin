@@ -344,6 +344,14 @@ const common: typeof en = {
     destination_failed: 'Das Ziel konnte nicht gelesen werden.',
     restore_failed:
       'Die Wiederherstellung konnte nicht gestartet werden: Es wurde nichts geändert.',
+    invalid_backup_passphrase:
+      'Die Backup-Passphrase ist mindestens 12 Zeichen lang, steht in einer Zeile und hat höchstens 256 Byte.',
+    passphrase_required: 'Dieses Backup ist verschlüsselt: Öffne es zuerst mit seiner Passphrase.',
+    wrong_passphrase: 'Diese Passphrase öffnet das Backup nicht.',
+    damaged_backup:
+      'Dieses verschlüsselte Backup ist beschädigt: Ein Teil davon wurde verändert oder fehlt. Es wurde nichts wiederhergestellt.',
+    not_encrypted: 'Dieses Backup ist nicht verschlüsselt.',
+    unlock_failed: 'Das Backup konnte nicht entschlüsselt werden.',
     invalid_collection_read_hour:
       'Wähle aus der Liste die Uhrzeit, zu der Sammlungen eingelesen werden, oder „Nie“.',
     invalid_collection_library_apps:

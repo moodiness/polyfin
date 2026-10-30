@@ -457,6 +457,7 @@ const system: typeof en = {
         aniListClientSecret: 'Client secret di AniList',
         myAnimeListClientSecret: 'Client secret di MyAnimeList',
         smtpPassword: 'Password SMTP',
+        backupPassphrase: 'Passphrase dei backup',
         torrentProxyPassword: 'Password del proxy SOCKS5 dei torrent',
         torrentWireGuard: 'Configurazione WireGuard dei torrent',
         metricsToken: 'Token delle metriche',

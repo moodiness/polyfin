@@ -325,6 +325,15 @@ const common: typeof en = {
     too_large: 'O arquivo é grande demais.',
     destination_failed: 'Não foi possível ler o destino.',
     restore_failed: 'Não foi possível iniciar a restauração: nada foi alterado.',
+    invalid_backup_passphrase:
+      'A frase secreta dos backups tem pelo menos 12 caracteres, em uma linha, e no máximo 256 bytes.',
+    passphrase_required:
+      'Este backup está criptografado: abra-o primeiro com a frase secreta dele.',
+    wrong_passphrase: 'Esta frase secreta não abre o backup.',
+    damaged_backup:
+      'Este backup criptografado está danificado: uma parte dele foi alterada ou está faltando. Nada foi restaurado.',
+    not_encrypted: 'Este backup não está criptografado.',
+    unlock_failed: 'Não foi possível descriptografar o backup.',
     invalid_collection_read_hour:
       'Escolha na lista o horário em que as coleções são lidas, ou Nunca.',
     invalid_collection_library_apps:

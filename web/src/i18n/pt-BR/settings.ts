@@ -855,6 +855,13 @@ const settings: typeof en = {
     backupsKept: 'Backups a manter',
     backupsKeptHelp: (r: RangeText) =>
       `Após cada backup, o Polyfin exclui os backups mais antigos além deste número. Outros arquivos da pasta nunca são alterados. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
+    backupPassphrase: 'Frase secreta dos backups',
+    backupPassphraseHelp: (min: number) =>
+      `Criptografa cada backup enquanto ele é gravado, na pasta e em cada destino, que assim não consegue lê-lo. Pelo menos ${min} caracteres. Ela é guardada criptografada e nunca mais é exibida.`,
+    backupPassphraseNew:
+      'Guarde esta frase secreta em outro lugar que não este servidor, como um gerenciador de senhas: uma frase secreta perdida significa backups perdidos. Ninguém consegue restaurá-los sem ela, nem o Polyfin. Confira-a com o olho antes de salvar. Os backups já feitos continuam como estão.',
+    backupPassphraseRemoved:
+      'Os backups feitos a partir de agora não são criptografados. Os já feitos ainda precisam desta frase secreta para ser restaurados.',
     lastBackup: 'Último backup',
     backupDestinations: 'Destinos',
     backupDestinationsHelp:

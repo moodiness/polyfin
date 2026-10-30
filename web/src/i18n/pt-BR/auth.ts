@@ -18,6 +18,30 @@ const auth: typeof en = {
     confirmPassword: 'Confirmar senha',
     submit: 'Criar administrador',
     submitting: 'Criando…',
+    restoreInstead: 'Restaurar um backup em vez disso',
+    createInstead: 'Criar um administrador em vez disso',
+    restoreTitle: 'Restaurar um backup',
+    restoreLede:
+      'Traga este Polyfin de volta a partir de um backup do banco de dados dele: administradores, usuários, configurações e histórico de reprodução.',
+    restoreFile: 'Arquivo de backup',
+    restoreFileHelp:
+      'Um arquivo .dump ou .dump.enc feito pelo Polyfin, da pasta de backups dele ou de um destino.',
+    restoreChoose: 'Escolher um arquivo',
+    restoreSend: 'Enviar e verificar',
+    restoreSending: 'Enviando e verificando…',
+    restoreUnlockHelp:
+      'Este backup está criptografado: digite a frase secreta com que ele foi feito.',
+    restoreReady: (file: string) =>
+      `${file} é um backup do banco de dados do Polyfin que este Polyfin pode restaurar.`,
+    restoreSteps: [
+      'O Polyfin para, restaura o backup no banco de dados dele de uma só vez e depois inicia de novo com ele. Se algo falhar, o banco de dados continua como está agora.',
+      'Depois, entre com um administrador do backup.',
+    ],
+    restoreStart: 'Restaurar',
+    restoreRestoring:
+      'O Polyfin está restaurando o backup e depois inicia de novo. Esta página mostra a entrada assim que ele responder.',
+    restoreFailed:
+      'Não foi possível restaurar o backup: o Polyfin iniciou de novo sem ele. O log dele diz o motivo e contém um novo código de configuração.',
   },
   login: {
     title: 'Entrar',
