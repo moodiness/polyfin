@@ -707,6 +707,40 @@ The first time a poster shows, it waits for the artwork server, then for its res
 
 Jellyfin downloads a title's images when it scans its library, and resizes them the first time an app asks. Polyfin has no scan of the addons' catalogs: it warms what apps show first, and resizes it ahead too.
 
+### Badges on posters
+
+While **Badges on posters**, under **Settings › Content › Posters**, is on, Polyfin draws badges over the Primary image of every movie and series. Every app shows them, Jellyfin's and Silo's alike, as they are part of the image.
+
+- At the top left, one under the other: the star rating, the one the title's page shows, with "IMDb" in place of the star when it is the IMDb rating MDBList gave; then, while the server has an **MDBList API key for ratings** (see [Ratings](#ratings)), the critics' score, with a speech bubble, and the audience score, with a group of people, in percent. A rating the title lacks is left out.
+- At the top right, for a series: a play mark when an episode came out in the last 30 days, a stack when a season other than the first started in them. Specials, season 0, count for neither, as they are often extras. Polyfin reads them from the series' descriptions it keeps, whichever addon gave them, never asking an addon: a series nobody opened yet shows none. What it read is kept for 10 minutes.
+- Badges hold icons and numbers only, written in Go Bold, built into Polyfin, so they read the same in every language.
+- **Badge size** sets how large they are for the poster's width: **Small**, **Medium** (the default) or **Large**. On a small card they keep a least size, and only as many as fit in the poster's upper half are drawn.
+- **Preview** shows titles of your libraries as apps show them, as they are, with badges, and on a small card, at the size chosen before it is saved, whether the badges are on or not. **Another title** goes to the next one, those with something to show first.
+- A title with nothing to show, an image an administrator uploaded, and the images Polyfin draws keep their image as it is.
+- The image keeps its address. Its tag, which apps send to ask for it, is the image's own followed by what the badges show and Polyfin's signature: when a rating changes, the tag changes and apps load the image again once they list the title again. jellyfin-web keeps the listings it read in the browser and shows them first, so a change shows there once it reads them again. A tag Polyfin did not sign draws nothing.
+- The image as the addon gives it stays in the image cache, and each one with badges is kept beside it, at each width asked for, under the same bound.
+- Turned off, every title gets its image and its tag back. An app that asks with a badged tag still gets the image without badges, which it keeps for a week at most.
+- The badges follow the listings: a title a user may not see, through parental control, blocked genres, a hidden library or a hidden title, is not listed to them, badges or not.
+- While it is on, the web client shows no ratings on hover (see [Ratings on posters](web-client.md#ratings-on-posters)).
+
+**Compared with Jellyfin:**
+
+- Jellyfin draws nothing over images; its apps show the ratings their own way, or not at all. Polyfin's badges are a choice of its own, off by default.
+
+### Poster address template
+
+**Poster address template**, under **Settings › Content › Posters**, is an address movies' and series' posters are downloaded from in place of the addons' ones, such as `https://posters.example/{type}/{imdb_id}.jpg`. `{imdb_id}`, `{tmdb_id}`, `{type}`, `movie` or `series`, and `{tmdb_type}`, TMDB's `movie` or `tv`, are filled in; the address names `{imdb_id}` or `{tmdb_id}`.
+
+- A title lacking an identifier the address names keeps its addon's poster. When its listing lacks it, Polyfin looks in its description kept, so a title's page may show the template's poster while a listing shows the addon's.
+- A poster the address cannot give, for any reason, is replaced by the addon's, which apps keep for a week at most so that the template's comes once it can.
+- A local folder's poster and an uploaded one still come first. Seasons and episodes keep their own images.
+- The address is the administrator's: it may point to a server of the local network.
+- Empty, the default, the addons' posters show, with their tags.
+
+**Compared with Jellyfin:**
+
+- Jellyfin takes posters from its metadata providers and plugins. Polyfin takes them from the addons, and from this one address when it is set.
+
 ### Generated images
 
 Polyfin draws the images of the addons' collections without a poster, of the smart lists shown as collections, and of the libraries whose image is set to **Generated** (see [Library images](#library-images) and [Collections from addons](#collections-from-addons)).

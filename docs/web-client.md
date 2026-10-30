@@ -48,6 +48,8 @@ While **Show ratings on posters**, under **Settings › Web player**, is on, the
 
 A rating the title lacks is left out, and a title without any shows nothing. Other cards, such as episodes, collections and people, and the list layouts, show nothing either. The ratings follow the same rules as the listings: a title the user may not see answers nothing. They show with every theme, **LumaaGlaass**, **None** or **Custom**, and in jellyfin-web's TV layout. It is off by default, for every user; users cannot change it.
 
+While **Badges on posters**, under **Settings › Content › Posters**, is on, the posters themselves carry the ratings in every app (see [Badges on posters](addons-and-libraries.md#badges-on-posters)), and the web client shows none on hover: `GET /Polyfin/Items/Ratings` then answers `{"Enabled": false, "Items": []}`, as when this setting is off, and the web client's script, unchanged, draws nothing.
+
 The first card the pointer or the focus comes to asks the server once for the ratings of every movie and series card of the page, those of the card's row first, 100 at most. The cards answered then show theirs without asking again; the answers are kept for a minute, in the browser tab, for the user signed in. Polyfin reads them as a listing does: no addon and no MDBList request comes from them that the listing of those titles did not make. Turned off, the web client asks again a minute later at the earliest. Turning it on or off thus applies within a minute, without reloading the page.
 
 **Compared with Jellyfin:**
