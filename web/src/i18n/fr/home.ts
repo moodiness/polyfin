@@ -189,6 +189,7 @@ const home: typeof en = {
       sizeLimit: 'Plus petit que la source',
       /** Shown when the app may switch between several qualities of converted video. */
       qualityPlayed: 'Qualité lue',
+      switchedVersion: 'Version de relais',
       qualityAmong: (played: string, offered: string) => `${played}, parmi ${offered}`,
       sizeLimits: {
         steppedDown: (height: string) => `L’appli est passée sous ${height}`,

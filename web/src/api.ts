@@ -3821,6 +3821,8 @@ export type LiveSession = {
     steppedDownFrom: number
   } | null
   audio: { codec: string; channels: number; bitrate: number } | null
+  /** The version the play went on from once its version's source failed; empty when it did not. */
+  switchedVersion: string
 }
 
 export const fetchLiveSessions = (signal?: AbortSignal) =>

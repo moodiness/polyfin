@@ -186,6 +186,7 @@ const home: typeof en = {
       original: 'Original',
       sizeLimit: 'Kleiner als die Quelle',
       qualityPlayed: 'Abgespielte Qualität',
+      switchedVersion: 'Gewechselte Version',
       qualityAmong: (played: string, offered: string) => `${played}, von ${offered}`,
       sizeLimits: {
         steppedDown: (height: string) => `Die App ist unter ${height} gewechselt`,

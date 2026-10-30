@@ -68,6 +68,9 @@ type liveSessionJSON struct {
 	// Video and Audio tell what is converted, null when copied.
 	Video *videoConversionJSON `json:"video"`
 	Audio *audioConversionJSON `json:"audio"`
+	// SwitchedVersion names the version the play went on from once its
+	// version's source failed, empty when it did not.
+	SwitchedVersion string `json:"switchedVersion"`
 }
 
 type liveUserJSON struct {
@@ -183,6 +186,7 @@ func newLiveSessionJSON(s jellyfin.LiveSession) liveSessionJSON {
 		PlayMethod:   s.Playing.PlayMethod,
 		Reasons:      s.Reasons,
 	}
+	result.SwitchedVersion = s.Switched
 	// A device may download while it plays, and download several titles:
 	// each download is told apart by its version.
 	if s.Download {

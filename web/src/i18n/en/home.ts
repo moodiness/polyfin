@@ -188,6 +188,8 @@ const home = {
       sizeLimit: 'Smaller than the source',
       /** Shown when the app may switch between several qualities of converted video. */
       qualityPlayed: 'Quality played',
+      /** The version the play went on from once its source failed. */
+      switchedVersion: 'Switched version',
       qualityAmong: (played: string, offered: string) => `${played}, among ${offered}`,
       sizeLimits: {
         steppedDown: (height: string) => `The app stepped down from ${height}`,

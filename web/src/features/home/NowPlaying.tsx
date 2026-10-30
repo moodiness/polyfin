@@ -474,6 +474,9 @@ function HowItPlays({ session }: { session: LiveSession }) {
       : null
   const rows = [
     { label: live.source, value: streamText(session.source, language, live.unknown) },
+    ...(session.switchedVersion === ''
+      ? []
+      : [{ label: live.switchedVersion, value: session.switchedVersion }]),
     ...(session.delivery === 'directPlay'
       ? []
       : [{ label: live.sent, value: streamText(session.sent, language, live.unknown) }]),

@@ -49,6 +49,10 @@ type LiveSession struct {
 	// play session's master playlist offers, the one chosen then the lower
 	// ones, when it offers several: its encodings' Key.Variant index them.
 	Qualities []int
+	// Switched names the version the play session went on from once its
+	// version's source failed, empty when it did not (see
+	// playback.Service.SwitchedTo): Source describes that one then.
+	Switched string
 }
 
 // LiveSessions lists the devices playing, DLNA devices included, the guests
@@ -106,8 +110,12 @@ func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 			session.Item, session.Found = item, true
 		}
 		// The version played, which a title's own identifier, reported as
-		// the media source of its first version, does not name.
+		// the media source of its first version, does not name; the one
+		// the play went on from once that one failed.
 		if version, ok := h.playedVersion(deviceID, now); ok {
+			if switched, ok := h.Playback.SwitchedTo(now.PlaySessionID); ok && now.PlaySessionID != "" {
+				version, session.Switched = switched.ID, switched.Name
+			}
 			if analysis, ok := h.Playback.Analyzed(ctx, version); ok {
 				session.Source = &analysis
 			}
