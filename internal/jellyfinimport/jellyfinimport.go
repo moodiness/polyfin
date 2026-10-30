@@ -214,10 +214,29 @@ const (
 
 // The reasons a title is not matched: it has no identifier at all, as a
 // home video, or an episode not numbered, or no Polyfin title has its
-// identifiers.
+// identifiers, or a Plex history names it while no library section lists
+// it any longer, or Plex numbers the episode in another order than
+// TheTVDB's usual one, which its numbers cannot be trusted in.
 const (
-	ReasonNoIdentifier = "no_identifier"
-	ReasonNotFound     = "not_found"
+	ReasonNoIdentifier      = "no_identifier"
+	ReasonNotFound          = "not_found"
+	ReasonNotInLibrary      = "not_in_library"
+	ReasonOtherEpisodeOrder = "other_episode_order"
+)
+
+// The reasons the import of a user that ended without a problem added
+// nothing (see UserStatus.NothingAdded): everything it read was already in
+// Polyfin; or it read nothing: the Jellyfin or Emby server lists nothing
+// played, in progress or favorite for the user, the Plex server has no
+// library section of movies or shows, the Plex owner has nothing played or
+// in progress there, or Plex's history lists no play of the account on
+// that server.
+const (
+	NothingUpToDate      = "up_to_date"
+	NothingPlayed        = "nothing_played"
+	NothingNoSections    = "no_sections"
+	NothingPlexOwner     = "plex_owner_nothing_watched"
+	NothingPlexNoHistory = "plex_no_history"
 )
 
 // maxUnmatched bounds the unmatched titles listed for each user; the
@@ -253,11 +272,25 @@ type UserStatus struct {
 	// marked played that were not, Resumed the resume points set, and
 	// Favorites the titles made favorites.
 	Read, Played, Resumed, Favorites int
+	// Sections counts the library sections of movies and shows a Plex
+	// server has, Listed the items they list that were read, and History
+	// the rows of the account's playback history read; Read counts the
+	// items with watch data among them.
+	Sections, Listed, History int
+	// Matched counts the items read that a Polyfin title matched, UpToDate
+	// the marks, resume points and favorites they hold that Polyfin already
+	// had, and Undated the resume points without a date, which are not
+	// added: whether Polyfin's own is newer cannot be told.
+	Matched, UpToDate, Undated int
 	// Unmatched lists the first titles not found, UnmatchedCount counts
 	// them all.
 	Unmatched      []Unmatched
 	UnmatchedCount int
 	Problem        string
+	// NothingAdded tells why the import of a user that ended without a
+	// problem added nothing, empty when it added something, or when the
+	// titles it could not match tell why.
+	NothingAdded string
 }
 
 // Unmatched is a title of Jellyfin's that no Polyfin title matched.

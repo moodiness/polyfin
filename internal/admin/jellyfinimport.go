@@ -384,18 +384,27 @@ type jellyfinImportJSON struct {
 }
 
 type jellyfinUserImportJSON struct {
-	JellyfinID     string                  `json:"jellyfinId"`
-	JellyfinName   string                  `json:"jellyfinName"`
-	UserID         string                  `json:"userId"`
-	UserName       string                  `json:"userName"`
-	State          string                  `json:"state"`
-	Read           int                     `json:"read"`
+	JellyfinID   string `json:"jellyfinId"`
+	JellyfinName string `json:"jellyfinName"`
+	UserID       string `json:"userId"`
+	UserName     string `json:"userName"`
+	State        string `json:"state"`
+	Read         int    `json:"read"`
+	// Sections, Listed and History tell what was read of a Plex server,
+	// null for the other kinds.
+	Sections       *int                    `json:"sections"`
+	Listed         *int                    `json:"listed"`
+	History        *int                    `json:"history"`
+	Matched        int                     `json:"matched"`
 	Played         int                     `json:"played"`
 	Resumed        int                     `json:"resumed"`
 	Favorites      int                     `json:"favorites"`
+	UpToDate       int                     `json:"upToDate"`
+	Undated        int                     `json:"undated"`
 	UnmatchedCount int                     `json:"unmatchedCount"`
 	Unmatched      []jellyfinUnmatchedJSON `json:"unmatched"`
 	Problem        *string                 `json:"problem"`
+	NothingAdded   *string                 `json:"nothingAdded"`
 }
 
 // jellyfinUnmatchedJSON is a title no Polyfin title matched.
@@ -420,8 +429,12 @@ func newJellyfinImportJSON(status *jellyfinimport.Status) *jellyfinImportJSON {
 	result.StartedBy.ID, result.StartedBy.Name = status.StartedBy.String(), status.StartedByName
 	for _, u := range status.Users {
 		user := jellyfinUserImportJSON{JellyfinID: u.JellyfinID, JellyfinName: u.JellyfinName, UserID: u.User.String(), UserName: u.UserName,
-			State: u.State, Read: u.Read, Played: u.Played, Resumed: u.Resumed, Favorites: u.Favorites, UnmatchedCount: u.UnmatchedCount,
-			Unmatched: make([]jellyfinUnmatchedJSON, 0, len(u.Unmatched)), Problem: optional(u.Problem)}
+			State: u.State, Read: u.Read, Matched: u.Matched, Played: u.Played, Resumed: u.Resumed, Favorites: u.Favorites,
+			UpToDate: u.UpToDate, Undated: u.Undated, UnmatchedCount: u.UnmatchedCount,
+			Unmatched: make([]jellyfinUnmatchedJSON, 0, len(u.Unmatched)), Problem: optional(u.Problem), NothingAdded: optional(u.NothingAdded)}
+		if status.Kind == jellyfinimport.Plex {
+			user.Sections, user.Listed, user.History = &u.Sections, &u.Listed, &u.History
+		}
 		for _, title := range u.Unmatched {
 			entry := jellyfinUnmatchedJSON{Name: title.Name, Type: title.Kind, Series: optional(title.Series), Season: title.Season,
 				Episode: title.Episode, Reason: title.Reason}

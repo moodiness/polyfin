@@ -89,9 +89,19 @@ func (r *run) run(ctx context.Context) {
 }
 
 // history is what was read of a user: the items played, those with a
-// resume point, and the favorites.
+// resume point, and the favorites, and what was read of a Plex server to
+// find them.
 type history struct {
 	played, resumes, favorites []itemJSON
+	source                     plexSource
+}
+
+// plexSource counts what was read of a Plex server for a user (see
+// UserStatus): the library sections of movies and shows, the items they
+// list, the rows of the playback history, and, among those, the rows of
+// other accounts, which are left out.
+type plexSource struct {
+	sections, listed, rows, otherAccounts int
 }
 
 // user imports the watch data of the i-th user, and returns the problem
@@ -117,22 +127,68 @@ func (r *run) user(ctx context.Context, i int) string {
 	}
 	// What was read before the server failed is imported.
 	problem := readProblem(err)
-	r.update(i, func(u *UserStatus) { u.State = UserSaving })
+	r.update(i, func(u *UserStatus) {
+		u.State = UserSaving
+		u.Sections, u.Listed, u.History = h.source.sections, h.source.listed, h.source.rows
+	})
 	if err := r.merge(context.WithoutCancel(ctx), i, h); err != nil {
 		r.s.logger.Warn("A Jellyfin user's watch data could not be saved", "error", err)
 		problem = ProblemInternal
 	}
+	plexOwnerRead := c.kind == Plex && jellyfinID == plexOwner
+	var done UserStatus
 	r.update(i, func(u *UserStatus) {
 		u.State, u.Problem = UserDone, problem
 		if problem != "" {
 			u.State = UserFailed
+		} else {
+			u.NothingAdded = nothingAdded(c.kind, plexOwnerRead, *u)
 		}
+		done = *u
 	})
+	r.logRead(c.kind, plexOwnerRead, done, h.source)
 	if problem == ProblemForbidden {
 		// The key may still read the next users.
 		return ""
 	}
 	return problem
+}
+
+// nothingAdded tells why the import of u, which ended without a problem,
+// added nothing, from a server of kind (from its owner's data for a Plex
+// owner): empty when it added something, or read only titles it could
+// not match, which say why.
+func nothingAdded(kind Kind, plexOwnerRead bool, u UserStatus) string {
+	switch {
+	case u.Played+u.Resumed+u.Favorites > 0:
+		return ""
+	case u.UpToDate > 0:
+		return NothingUpToDate
+	case u.Read > 0:
+		return ""
+	case kind != Plex:
+		return NothingPlayed
+	case u.Sections == 0:
+		return NothingNoSections
+	case plexOwnerRead:
+		return NothingPlexOwner
+	}
+	return NothingPlexNoHistory
+}
+
+// logRead logs, at Info, what the import of u read and did, never the
+// server's address nor a key.
+func (r *run) logRead(kind Kind, plexOwnerRead bool, u UserStatus, source plexSource) {
+	attrs := []any{"kind", kind, "user", u.JellyfinID, "state", u.State}
+	if kind == Plex {
+		attrs = append(attrs, "owner", plexOwnerRead, "sections", u.Sections, "listed", u.Listed)
+		if !plexOwnerRead {
+			attrs = append(attrs, "history", u.History, "otherAccounts", source.otherAccounts)
+		}
+	}
+	attrs = append(attrs, "read", u.Read, "matched", u.Matched, "played", u.Played, "resumed", u.Resumed, "favorites", u.Favorites,
+		"upToDate", u.UpToDate, "undated", u.Undated, "unmatched", u.UnmatchedCount, "nothingAdded", u.NothingAdded, "problem", u.Problem)
+	r.s.logger.Info("An import read a user's watch data", attrs...)
 }
 
 // readProblem names what stopped reading a server.
@@ -226,6 +282,9 @@ func identified(providers map[string]string, series bool) (library.TitleRef, boo
 // holding several. None means it cannot be matched; known is false for an
 // episode whose series was not read.
 func (r *run) refs(item itemJSON) (refs []library.TitleRef, known bool) {
+	if item.unmatchable != "" {
+		return nil, true
+	}
 	switch item.Type {
 	case "Movie":
 		if ref, ok := identified(item.ProviderIDs, false); ok {
@@ -286,7 +345,8 @@ type point struct {
 
 // merge finds the titles of h and adds them to the data of the i-th
 // user's Polyfin account: played marks, then resume points of the titles
-// still unplayed, then favorites. It reports the titles it did not find.
+// still unplayed, then favorites. It reports the titles it did not find,
+// and counts those it found, and what of theirs Polyfin already had.
 func (r *run) merge(ctx context.Context, i int, h history) error {
 	user := r.status.Users[i].User
 	var refs []library.TitleRef
@@ -307,7 +367,10 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 		spans[l] = make([]span, len(list))
 		for j, item := range list {
 			found, known := r.refs(item)
-			if known && len(found) == 0 {
+			switch {
+			case known && len(found) == 0 && item.unmatchable != "":
+				report(item, item.unmatchable)
+			case known && len(found) == 0:
 				report(item, ReasonNoIdentifier)
 			}
 			spans[l][j] = span{len(refs), len(refs) + len(found)}
@@ -323,14 +386,19 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 		targets = append(targets, found...)
 	}
 	// targetsOf lists the items the j-th item of list l designates,
-	// reporting it when it has identifiers that none matched.
+	// reporting it when it has identifiers that none matched, and counting
+	// it when some did.
+	matched := 0
 	targetsOf := func(l, j int) []library.TitleTarget {
 		var all []library.TitleTarget
 		sp := spans[l][j]
 		for _, found := range targets[sp.start:sp.end] {
 			all = append(all, found...)
 		}
-		if sp.end > sp.start && len(all) == 0 {
+		switch {
+		case len(all) > 0:
+			matched++
+		case sp.end > sp.start:
 			report(lists[l][j], ReasonNotFound)
 		}
 		return all
@@ -358,12 +426,17 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 	}
 	points := map[accounts.ID]*point{}
 	var pointOrder []accounts.ID
+	undated := 0
 	for j, item := range h.resumes {
 		found := targetsOf(1, j)
 		at := date(item.UserData.LastPlayedDate)
 		if at == nil {
-			// Jellyfin dates every position it keeps; one without a date
-			// could not be told older or newer than Polyfin's.
+			// Jellyfin dates every position it keeps, and Plex the ones
+			// played: one without a date could not be told older or newer
+			// than Polyfin's.
+			if len(found) > 0 {
+				undated++
+			}
 			continue
 		}
 		for _, t := range found {
@@ -394,6 +467,7 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 	r.update(i, func(u *UserStatus) {
 		u.UnmatchedCount = len(noMatch)
 		u.Unmatched = noMatch[:min(len(noMatch), maxUnmatched)]
+		u.Matched, u.Undated = matched, undated
 	})
 
 	settings := r.s.settings()
@@ -403,6 +477,8 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 			m := marks[id]
 			if d.ImportPlayed(m.at) {
 				u.Played++
+			} else {
+				u.UpToDate++
 			}
 			// Polyfin counted its own plays: the larger count stands.
 			d.PlayCount = max(d.PlayCount, m.plays)
@@ -416,6 +492,8 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 				u.Played++
 			case userdata.ResumeSet:
 				u.Resumed++
+			case userdata.ResumeKept:
+				u.UpToDate++
 			}
 		}); err != nil {
 		return err
@@ -425,6 +503,8 @@ func (r *run) merge(ctx context.Context, i int, h history) error {
 			if !d.Favorite {
 				d.Favorite = true
 				u.Favorites++
+			} else {
+				u.UpToDate++
 			}
 		})
 }
@@ -450,6 +530,7 @@ func (r *run) change(ctx context.Context, i int, user accounts.ID, ids []account
 			u.Played += counts.Played
 			u.Resumed += counts.Resumed
 			u.Favorites += counts.Favorites
+			u.UpToDate += counts.UpToDate
 		})
 	}
 	return nil

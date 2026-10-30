@@ -392,3 +392,45 @@ func TestUsersImportTheirOwnWatchHistory(t *testing.T) {
 		t.Errorf("importing with the setting off: %d %v", status, body)
 	}
 }
+
+// The import tells, user by user, what it read and matched, and why a
+// user's import added nothing.
+func TestJellyfinImportTellsWhatItReadAndWhyNothingWasAdded(t *testing.T) {
+	t.Parallel()
+	jellyfin := fakeJellyfin(t)
+	api, _, _ := jellyfinImportAPI(t)
+	admin := api.signedIn("root", true)
+	alice, err := api.store.CreateUser(t.Context(), accounts.NewUser{Name: "alice", Password: "correct horse"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	carol, err := api.store.CreateUser(t.Context(), accounts.NewUser{Name: "carol", Password: "correct horse"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := map[string]any{"address": jellyfin, "apiKey": jellyfinKey, "users": []map[string]any{
+		{"jellyfinId": "jf-alice", "userId": alice.ID.String(), "watchData": true},
+		{"jellyfinId": "jf-carol", "userId": carol.ID.String(), "watchData": true},
+	}}
+	imported := func() []any {
+		t.Helper()
+		if status, body, _ := admin.call(http.MethodPost, "/jellyfin-import", start); status != http.StatusOK {
+			t.Fatalf("start: %d %v", status, body)
+		}
+		jellyfinImportDone(t, admin)
+		_, body, _ := admin.call(http.MethodGet, "/jellyfin-import", nil)
+		return body["import"].(map[string]any)["users"].([]any)
+	}
+	users := imported()
+	aliceRead, carolRead := users[0].(map[string]any), users[1].(map[string]any)
+	if aliceRead["read"] != 1.0 || aliceRead["matched"] != 1.0 || aliceRead["played"] != 1.0 || aliceRead["upToDate"] != 0.0 ||
+		aliceRead["undated"] != 0.0 || aliceRead["nothingAdded"] != nil || aliceRead["sections"] != nil || aliceRead["history"] != nil {
+		t.Errorf("Alice: %v", aliceRead)
+	}
+	if carolRead["read"] != 0.0 || carolRead["nothingAdded"] != "nothing_played" {
+		t.Errorf("Carol: %v", carolRead)
+	}
+	if again := imported()[0].(map[string]any); again["nothingAdded"] != "up_to_date" || again["upToDate"] != 1.0 || again["played"] != 0.0 {
+		t.Errorf("Alice again: %v", again)
+	}
+}

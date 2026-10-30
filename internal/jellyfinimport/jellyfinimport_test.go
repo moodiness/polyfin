@@ -1107,9 +1107,12 @@ func (f *fakePlex) serve(w http.ResponseWriter, r *http.Request) {
 		part := []map[string]any{}
 		for _, item := range all[min(start, len(all)):min(start+size, len(all))] {
 			// Plex names every item in its own scheme too, in guid, a
-			// string beside the Guid list whose key differs only by case.
+			// string beside the Guid list whose key differs only by case;
+			// an older agent's item names its identifier there instead.
 			copied := maps.Clone(item)
-			copied["guid"] = fmt.Sprintf("plex://%s/%x", item["type"], sha1.Sum([]byte(fmt.Sprint(item["ratingKey"]))))
+			if _, older := item["guid"]; !older {
+				copied["guid"] = fmt.Sprintf("plex://%s/%x", item["type"], sha1.Sum([]byte(fmt.Sprint(item["ratingKey"]))))
+			}
 			part = append(part, copied)
 		}
 		answer(map[string]any{"size": len(part), "totalSize": len(all), "offset": start, "Metadata": part})
@@ -1304,5 +1307,216 @@ func TestAnAnswerAnImportCannotReadIsLoggedWithItsPath(t *testing.T) {
 	if !strings.Contains(text, "level=WARN") || !strings.Contains(text, "path=/library/sections/1/all") ||
 		!strings.Contains(text, "year") || strings.Contains(text, plexToken) || strings.Contains(text, "X-Plex-Container") {
 		t.Errorf("logged: %s", text)
+	}
+}
+
+// plexImported imports the Plex account id of p's server into user, and
+// waits for the import to end.
+func (h harness) plexImported(t *testing.T, p *fakePlex, id string, user accounts.User) UserStatus {
+	t.Helper()
+	plex := Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: plexToken}}
+	if _, err := h.Start(t.Context(), plex, accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
+		return []Target{{JellyfinID: id, User: user.ID, UserName: user.Name}}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	status := h.ended(t)
+	if status.State != StateDone {
+		t.Fatalf("import: %+v", status)
+	}
+	return status.Users[0]
+}
+
+// smallPlex is a fake Plex server with its owner, Carol (account 5), and a
+// movie and a show section: two movies and a show of one episode, which
+// nobody watched.
+func smallPlex(t *testing.T) *fakePlex {
+	t.Helper()
+	p := newFakePlex(t)
+	p.accounts = []map[string]any{{"id": 1, "key": "/accounts/1", "name": "Owner"}, {"id": 5, "key": "/accounts/5", "name": "Carol"}}
+	p.sections = []map[string]any{{"key": "1", "type": "movie", "title": "Movies"}, {"key": "2", "type": "show", "title": "Shows"},
+		{"key": "3", "type": "artist", "title": "Music"}}
+	p.items["1"] = map[string][]map[string]any{"1": {
+		{"ratingKey": "11", "type": "movie", "title": "One", "year": 2019, "Guid": guids("imdb://tt0000011"), "duration": 6000000},
+		{"ratingKey": "12", "type": "movie", "title": "Two", "year": 2020, "Guid": guids("imdb://tt0000012"), "duration": 6000000},
+	}}
+	p.items["2"] = map[string][]map[string]any{
+		"2": {{"ratingKey": "20", "type": "show", "title": "A show", "Guid": guids("imdb://tt0100")}},
+		"4": {{"ratingKey": "21", "type": "episode", "title": "Pilot", "grandparentRatingKey": "20", "grandparentTitle": "A show",
+			"parentIndex": 1, "index": 1}},
+	}
+	return p
+}
+
+// An import that adds nothing to a user says why: the Plex owner has
+// nothing played or in progress, Plex lists no play of another account on
+// the server, the server has no library of movies or shows, or everything
+// read was already in Polyfin. What was read is counted, and logged at
+// Info for each user without the token or the server's address.
+func TestAPlexImportTellsWhatItReadAndWhyItAddedNothing(t *testing.T) {
+	h := newHarness(t)
+	var logged lockedBuffer
+	h.logger = slog.New(slog.NewTextHandler(&logged, nil))
+	p := smallPlex(t)
+	carol := h.user(t, "carol")
+
+	owner := h.plexImported(t, p, "1", carol)
+	if owner.NothingAdded != NothingPlexOwner || owner.Sections != 2 || owner.Listed != 4 || owner.Read != 0 {
+		t.Errorf("the owner, nothing watched: %+v", owner)
+	}
+	none := h.plexImported(t, p, "5", carol)
+	if none.NothingAdded != NothingPlexNoHistory || none.Sections != 2 || none.Listed != 3 || none.History != 0 || none.Read != 0 {
+		t.Errorf("Carol, no play: %+v", none)
+	}
+
+	p.history["5"] = []map[string]any{
+		{"historyKey": "/status/sessions/history/2", "ratingKey": "11", "type": "movie", "title": "One", "viewedAt": at("2026-09-02T20:00:00Z").Unix(),
+			"accountID": 5},
+		{"historyKey": "/status/sessions/history/1", "ratingKey": "21", "type": "episode", "title": "Pilot", "grandparentKey": "/library/metadata/20",
+			"grandparentTitle": "A show", "parentIndex": 1, "index": 1, "viewedAt": at("2026-09-01T20:00:00Z").Unix(), "accountID": 5},
+		{"historyKey": "/status/sessions/history/0", "ratingKey": "31", "type": "track", "title": "A song", "viewedAt": at("2026-09-01T10:00:00Z").Unix(),
+			"accountID": 5},
+	}
+	first := h.plexImported(t, p, "5", carol)
+	if first.NothingAdded != "" || first.History != 3 || first.Read != 2 || first.Matched != 2 || first.Played != 2 || first.UpToDate != 0 {
+		t.Errorf("Carol's plays: %+v", first)
+	}
+	again := h.plexImported(t, p, "5", carol)
+	if again.NothingAdded != NothingUpToDate || again.Read != 2 || again.Matched != 2 || again.Played != 0 || again.UpToDate != 2 {
+		t.Errorf("Carol's plays again: %+v", again)
+	}
+
+	p.sections = []map[string]any{{"key": "3", "type": "artist", "title": "Music"}}
+	if music := h.plexImported(t, p, "1", carol); music.NothingAdded != NothingNoSections || music.Sections != 0 {
+		t.Errorf("a server of music only: %+v", music)
+	}
+
+	text := logged.String()
+	if !strings.Contains(text, `msg="An import read a user's watch data" kind=plex user=5 state=done owner=false sections=2 listed=3 history=0`) ||
+		!strings.Contains(text, "nothingAdded=plex_no_history") || !strings.Contains(text, "nothingAdded=up_to_date") ||
+		strings.Contains(text, plexToken) || strings.Contains(text, strings.TrimPrefix(p.url, "http://")) {
+		t.Errorf("logged: %s", text)
+	}
+}
+
+// Plex keeps the plays of a title deleted from its libraries without its
+// rating key: they are listed as no longer in Plex, once per title, not
+// left out unsaid. A play the history files under another account than
+// the one asked, as a server leaving the filter out would answer, is left
+// out.
+func TestPlexPlaysOfDeletedTitlesAreListedAndOtherAccountsLeftOut(t *testing.T) {
+	h := newHarness(t)
+	p := smallPlex(t)
+	carol := h.user(t, "carol")
+	viewed := at("2026-09-01T20:00:00Z").Unix()
+	p.history["5"] = []map[string]any{
+		{"historyKey": "/status/sessions/history/5", "ratingKey": "11", "type": "movie", "title": "One", "viewedAt": viewed, "accountID": 5},
+		{"historyKey": "/status/sessions/history/4", "librarySectionID": "1", "type": "movie", "title": "Deleted", "viewedAt": viewed, "accountID": 5},
+		{"historyKey": "/status/sessions/history/3", "librarySectionID": "1", "type": "movie", "title": "Deleted", "viewedAt": viewed, "accountID": 5},
+		{"historyKey": "/status/sessions/history/2", "librarySectionID": "2", "type": "episode", "title": "Gone episode", "grandparentTitle": "Gone show",
+			"parentIndex": 2, "index": 3, "viewedAt": viewed, "accountID": 5},
+		{"historyKey": "/status/sessions/history/1", "ratingKey": "12", "type": "movie", "title": "Two", "viewedAt": viewed, "accountID": 7},
+	}
+	got := h.plexImported(t, p, "5", carol)
+	if got.Played != 1 || got.History != 5 || got.UnmatchedCount != 2 || len(got.Unmatched) != 2 {
+		t.Fatalf("Carol: %+v", got)
+	}
+	movie, episode := got.Unmatched[0], got.Unmatched[1]
+	if movie.Name != "Deleted" || movie.Kind != "movie" || movie.Reason != ReasonNotInLibrary ||
+		episode.Name != "Gone episode" || episode.Series != "Gone show" || *episode.Season != 2 || *episode.Episode != 3 || episode.Reason != ReasonNotInLibrary {
+		t.Errorf("unmatched: %+v %+v", movie, episode)
+	}
+	if d := h.dataOf(t, carol.ID, library.TitleRef{IMDb: "tt0000012"}); d.Played {
+		t.Errorf("another account's play: %+v", d)
+	}
+}
+
+// An item an older Plex agent matched has no Guid list: its guid names its
+// identifier, as the agent's scheme or behind the agent's own, with
+// ?lang=… after. An episode numbered in another of TheTVDB's episode orders
+// is listed as such rather than marked as another episode.
+func TestPlexReadsTheIdentifiersOfOlderAgents(t *testing.T) {
+	h := newHarness(t)
+	p := smallPlex(t)
+	owner := h.user(t, "owner")
+	h.listed(t, "movie", "movie|tmdb:550", `{"meta":{"id":"tmdb:550","type":"movie","name":"Listed by TMDB"}}`)
+	h.listed(t, "series", "series|tvdb:81189", `{"meta":{"id":"tvdb:81189","type":"series","name":"Listed by TVDB"}}`)
+	h.listed(t, "episode", "episode|tvdb:81189:1:1", `{"seriesId":"tvdb:81189","video":{"id":"tvdb:81189:1:1","season":1,"episode":1}}`)
+	h.listed(t, "episode", "episode|tvdb:81189:1:2", `{"seriesId":"tvdb:81189","video":{"id":"tvdb:81189:1:2","season":1,"episode":2}}`)
+	watched := func(item map[string]any) map[string]any {
+		item["viewCount"], item["lastViewedAt"] = 1, at("2026-09-01T20:00:00Z").Unix()
+		return item
+	}
+	p.items["1"] = map[string][]map[string]any{"1": {
+		watched(map[string]any{"ratingKey": "11", "type": "movie", "title": "By IMDb", "guid": "com.plexapp.agents.imdb://tt0000011?lang=en"}),
+		watched(map[string]any{"ratingKey": "12", "type": "movie", "title": "By TMDB", "guid": "com.plexapp.agents.themoviedb://550?lang=en"}),
+		// Only an identifier right after :// is one.
+		watched(map[string]any{"ratingKey": "13", "type": "movie", "title": "Stray", "guid": "com.plexapp.agents.other://anidb-1?tmdb-550"}),
+	}}
+	p.items["2"] = map[string][]map[string]any{
+		"2": {
+			{"ratingKey": "20", "type": "show", "title": "Usual order", "guid": "com.plexapp.agents.thetvdb://81189?lang=en"},
+			{"ratingKey": "30", "type": "show", "title": "Packed", "guid": "com.plexapp.agents.other://tvdb-81189?lang=en"},
+			{"ratingKey": "40", "type": "show", "title": "Other order", "guid": "com.plexapp.agents.other://tvdb2-81189?lang=en"},
+		},
+		"4": {
+			watched(map[string]any{"ratingKey": "21", "type": "episode", "title": "Pilot", "grandparentRatingKey": "20", "parentIndex": 1, "index": 1,
+				"guid": "com.plexapp.agents.thetvdb://81189/1/1?lang=en"}),
+			watched(map[string]any{"ratingKey": "31", "type": "episode", "title": "Second", "grandparentRatingKey": "30", "parentIndex": 1, "index": 2,
+				"guid": "com.plexapp.agents.other://tvdb-81189/1/2?lang=en"}),
+			watched(map[string]any{"ratingKey": "41", "type": "episode", "title": "Third", "grandparentRatingKey": "40", "grandparentTitle": "Other order",
+				"parentIndex": 1, "index": 3, "guid": "com.plexapp.agents.other://tvdb2-81189/1/3?lang=en"}),
+		},
+	}
+	got := h.plexImported(t, p, "1", owner)
+	if got.Played != 4 || got.UnmatchedCount != 2 {
+		t.Fatalf("owner: %+v", got)
+	}
+	if stray, other := got.Unmatched[0], got.Unmatched[1]; stray.Name != "Stray" || stray.Reason != ReasonNoIdentifier ||
+		other.Name != "Third" || other.Reason != ReasonOtherEpisodeOrder {
+		t.Errorf("unmatched: %+v", got.Unmatched)
+	}
+	for name, ref := range map[string]library.TitleRef{"by IMDb": {IMDb: "tt0000011"}, "by TMDB": {TMDB: 550},
+		"usual order": {Episode: true, TVDB: 81189, Season: 1, Number: 1}, "packed": {Episode: true, TVDB: 81189, Season: 1, Number: 2}} {
+		if d := h.dataOf(t, owner.ID, ref); !d.Played {
+			t.Errorf("%s: %+v", name, d)
+		}
+	}
+}
+
+// The owner's resume point without a date cannot be told older or newer
+// than Polyfin's: it is counted as such rather than left out unsaid.
+func TestPlexCountsTheOwnersUndatedResumePoints(t *testing.T) {
+	h := newHarness(t)
+	p := smallPlex(t)
+	owner := h.user(t, "owner")
+	p.items["1"]["1"][0]["viewOffset"] = 1800000
+	got := h.plexImported(t, p, "1", owner)
+	if got.Read != 1 || got.Matched != 1 || got.Undated != 1 || got.Resumed != 0 || got.NothingAdded != "" {
+		t.Errorf("owner: %+v", got)
+	}
+}
+
+// A Jellyfin user with nothing played, in progress or favorite is told so,
+// and a second import of a user is told that everything was already in
+// Polyfin.
+func TestAJellyfinImportTellsWhyItAddedNothing(t *testing.T) {
+	h := newHarness(t)
+	alice, bob := h.user(t, "alice"), h.user(t, "bob")
+	h.f.items["jf-alice"] = map[string][]map[string]any{
+		"IsPlayed":    {movie("m1", "One", map[string]string{"Imdb": "tt0000001"}, map[string]any{"Played": true, "PlayCount": 1})},
+		"IsFavorite":  {movie("m1", "One", map[string]string{"Imdb": "tt0000001"}, map[string]any{"IsFavorite": true})},
+		"IsResumable": {movie("m2", "Two", map[string]string{"Imdb": "tt0000002"}, map[string]any{"PlaybackPositionTicks": int64(30 * time.Minute / tick)})},
+	}
+	targets := []Target{{JellyfinID: "jf-alice", User: alice.ID}, {JellyfinID: "jf-bob", User: bob.ID}}
+	status := h.imported(t, targets...)
+	if got := status.Users[0]; got.NothingAdded != "" || got.Read != 3 || got.Matched != 3 || got.Played != 1 || got.Favorites != 1 || got.Undated != 1 {
+		t.Errorf("Alice: %+v", got)
+	}
+	if got := status.Users[1]; got.NothingAdded != NothingPlayed || got.Read != 0 || got.Sections != 0 {
+		t.Errorf("Bob: %+v", got)
+	}
+	if got := h.imported(t, targets[0]).Users[0]; got.NothingAdded != NothingUpToDate || got.UpToDate != 2 {
+		t.Errorf("Alice again: %+v", got)
 	}
 }

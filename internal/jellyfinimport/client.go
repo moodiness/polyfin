@@ -502,6 +502,9 @@ type itemJSON struct {
 		IsFavorite            bool
 		LastPlayedDate        string
 	}
+	// unmatchable is why an item cannot be matched whatever its
+	// identifiers, when it cannot (see plexLibrary.item).
+	unmatchable string
 }
 
 type pageJSON struct {
