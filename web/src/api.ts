@@ -1987,7 +1987,8 @@ export type AccountTitle = {
 }
 
 /** What a home row of the web player lists. */
-export type HomeRowKind = 'catalog' | 'collection' | 'because' | 'new' | 'available' | 'waiting'
+export type HomeRowKind =
+  'catalog' | 'collection' | 'because' | 'new' | 'available' | 'waiting' | 'trakt'
 
 /** Where the web player shows a home row: at the top, after Continue Watching, after Next Up, at the bottom. */
 export type HomeRowPlace = 'top' | 'resume' | 'nextup' | 'bottom'

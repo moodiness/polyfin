@@ -992,6 +992,7 @@ const settings = {
         new: 'New in your libraries',
         available: 'Now available',
         waiting: 'Still waiting',
+        trakt: 'Recommended on Trakt',
       },
       kindHelp: {
         catalog:
@@ -1005,12 +1006,15 @@ const settings = {
           'The titles of the user’s Watchlist they have not started that the last check found versions for, the latest found first. A version found has not been tried yet: it may still fail to play.',
         waiting:
           'The titles of the user’s Watchlist they have not started that the last check found no version for, or that are not out yet, the latest added first. A title not checked yet is in neither row.',
+        trakt:
+          'The movies and series Trakt recommends to the user, read with their Trakt connection every 12 hours, without those in their Trakt collection or Watchlist and those they played. Only users who connected Trakt in My account › Tracking see it; the first time, it shows once Trakt has answered.',
       },
       defaultNames: {
         because: 'Because you watched',
         new: 'New in your libraries',
         available: 'Now available',
         waiting: 'Still waiting',
+        trakt: 'Recommended on Trakt',
       },
       catalog: 'Catalog',
       noCatalog: 'The server’s addons have no catalog to show.',

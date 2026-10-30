@@ -1021,6 +1021,7 @@ const settings: typeof en = {
         new: 'Novità nelle tue librerie',
         available: 'Ora disponibili',
         waiting: 'Ancora in attesa',
+        trakt: 'Consigliati su Trakt',
       },
       kindHelp: {
         catalog:
@@ -1034,12 +1035,15 @@ const settings: typeof en = {
           'I titoli non iniziati della lista «Da guardare» dell’utente per cui l’ultimo controllo ha trovato versioni, dagli ultimi trovati. Una versione trovata non è ancora stata provata: la sua riproduzione può ancora non riuscire.',
         waiting:
           'I titoli non iniziati della lista «Da guardare» dell’utente per cui l’ultimo controllo non ha trovato alcuna versione, o non ancora usciti, dagli ultimi aggiunti. Un titolo non ancora controllato non è in nessuna delle due righe.',
+        trakt:
+          'I film e le serie che Trakt consiglia all’utente, letti con la sua connessione a Trakt ogni 12 ore, senza quelli della sua collezione o Watchlist di Trakt né quelli che ha già visto. La vedono solo gli utenti che hanno collegato Trakt in Il mio account › Monitoraggio; la prima volta appare appena Trakt ha risposto.',
       },
       defaultNames: {
         because: 'Perché hai guardato',
         new: 'Novità nelle tue librerie',
         available: 'Ora disponibili',
         waiting: 'Ancora in attesa',
+        trakt: 'Consigliati su Trakt',
       },
       catalog: 'Catalogo',
       noCatalog: 'Gli add-on del server non hanno cataloghi da mostrare.',
