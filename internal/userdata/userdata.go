@@ -197,6 +197,15 @@ func (s *Store) Played(ctx context.Context, user accounts.ID) ([]Entry, error) {
 		ORDER BY last_played_at DESC NULLS LAST, item_id`, user)
 }
 
+// Touched lists the data of every item the user played, started, rated
+// or marked as a favorite, most recently played first: what taste
+// profiles are built from (see package taste).
+func (s *Store) Touched(ctx context.Context, user accounts.ID) ([]Entry, error) {
+	return s.entries(ctx, "SELECT "+columns+` FROM user_data
+		WHERE user_id = $1 AND (played OR favorite OR rating IS NOT NULL OR last_played_at IS NOT NULL OR position_ticks > 0)
+		ORDER BY last_played_at DESC NULLS LAST, item_id`, user)
+}
+
 // Episodes lists the data of the episodes the user played, started or
 // has a resume point in, of every series, most recently played first. An
 // episode started and stopped before the resume threshold is only dated.
