@@ -115,6 +115,11 @@ const (
 	// after a backup restored on another system: Missing counts them, out
 	// of Files. While the Custom theme is chosen and loads the copy only.
 	problemThemeCopyMissing = "theme_copy_missing"
+	// Polyfin Desktop went back to the version that runs, as the new
+	// one's server stopped before it answered: Name is the version that
+	// did not start, Previous the one put back, and Error why. It lasts
+	// while an older version than Name runs.
+	problemDesktopRolledBack = "desktop_rolled_back"
 )
 
 // healthProblemJSON is something System › Health shows as needing
@@ -139,7 +144,8 @@ const (
 // and Failure, for a local folder whose searches failed; Peers for a
 // torrent that did not start; Missing and Files for a theme copy missing
 // files; Folder, Path and Error for a folder of the settings that cannot
-// be written into. To is the admin app's page that describes
+// be written into; Name, Previous and Error for Polyfin Desktop's return
+// to its previous version. To is the admin app's page that describes
 // it, with its anchor. Transient ones are not told as health problems:
 // they come and go with the load, or, for stopped connections, the
 // connection_stopped event told them already.
@@ -169,6 +175,7 @@ type healthProblemJSON struct {
 	Peers     *peerCountsJSON  `json:"peers,omitempty"`
 	Missing   int              `json:"missing,omitempty"`
 	Files     int              `json:"files,omitempty"`
+	Previous  string           `json:"previous,omitempty"`
 }
 
 // peerCountsJSON counts the peers a torrent that did not start found:
@@ -379,6 +386,11 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 			}
 			add(p)
 		}
+	}
+	if back := h.desktopRolledBack(); back != nil {
+		p := warning("desktop_rolled_back:"+back.Version, problemDesktopRolledBack, "process")
+		p.Name, p.Previous, p.Error = back.Version, back.Previous, back.Reason
+		add(p)
 	}
 	if h.ThemeCopier != nil && h.Accounts.Settings().WebTheme == accounts.WebThemeCustom {
 		status, err := h.ThemeCopier.Status(ctx)
@@ -957,6 +969,14 @@ func (p healthProblemJSON) text(language string) string {
 			"%s, %s, non è scrivibile: nel frattempo Polyfin tiene questi file nella cache della sua cartella dei dati. Rendi la cartella scrivibile o scegline un’altra, poi riavvia Polyfin.",
 			"%s, %s, não pode ser gravada: enquanto isso, o Polyfin guarda esses arquivos no cache da sua pasta de dados. Torne a pasta gravável ou escolha outra, depois reinicie o Polyfin."},
 			workFolders[p.Folder].In(language), p.Path)
+	case problemDesktopRolledBack:
+		return say(i18n.Text{"Polyfin Desktop went back to version %s, as version %s did not start: %s. That version is no longer offered; the next one will be.",
+			"Polyfin Desktop est revenu à la version %s, car la version %s n’a pas démarré : %s. Cette version n’est plus proposée ; la suivante le sera.",
+			"Polyfin Desktop ist zu Version %s zurückgekehrt, da Version %s nicht gestartet ist: %s. Diese Version wird nicht mehr angeboten, die nächste schon.",
+			"Polyfin Desktop volvió a la versión %s, ya que la versión %s no se inició: %s. Esa versión ya no se ofrece; la siguiente sí.",
+			"Polyfin Desktop è tornato alla versione %s, perché la versione %s non si è avviata: %s. Quella versione non viene più proposta; la prossima sì.",
+			"O Polyfin Desktop voltou para a versão %s, pois a versão %s não iniciou: %s. Essa versão não é mais oferecida; a próxima será."},
+			p.Previous, p.Name, p.Error)
 	case problemThemeCopyMissing:
 		return say(i18n.Text{"The copy of the web player theme misses %d of its %d files in Polyfin’s data folder, as after a backup restored on another system: browsers load them from their original addresses meanwhile, which needs the internet. Update the copy under Settings › Web player, or choose another theme.",
 			"La copie du thème du lecteur web n’a plus %d de ses %d fichiers dans le dossier de données de Polyfin, comme après la restauration d’une sauvegarde sur un autre système : les navigateurs les chargent en attendant depuis leurs adresses d’origine, ce qui demande internet. Mettez la copie à jour dans Paramètres › Lecteur web, ou choisissez un autre thème.",

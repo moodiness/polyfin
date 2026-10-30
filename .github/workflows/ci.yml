@@ -131,6 +131,13 @@ jobs:
           sudo ip link set pf0 up
           sudo -E env "PATH=$PATH" GOCACHE="$RUNNER_TEMP/root-go-build" POLYFIN_TEST_TORRENT_INTERFACE=pf0 \
             go test -count=1 -run 'Interface|Missing' ./internal/torrent
+      - name: Check the release signing key
+        # Before anything is published: Polyfin Desktop installs no update
+        # whose manifest a key it carries did not sign (docs/desktop.md).
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          POLYFIN_RELEASE_SIGNING_KEY: ${{ secrets.POLYFIN_RELEASE_SIGNING_KEY }}
+        run: go run ./cmd/polyfin-release-sign key
       - name: Build production binary and verify its version
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -144,7 +151,7 @@ jobs:
         # the Go checksum database, rather than from Docker Hub.
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
-            .github/workflows/ci.yml .github/workflows/pages.yml
+            .github/workflows/ci.yml .github/workflows/pages.yml .github/workflows/desktop-manifests.yml
           docker run --rm -i \
             ghcr.io/hadolint/hadolint@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e \
             < Dockerfile
@@ -717,28 +724,41 @@ jobs:
           done
 
   desktop-release:
-    # The packages go with the release the release job creates; GitHub
-    # gives each its SHA-256, which the app checks an update against.
+    # The packages go with the release the release job creates, with their
+    # manifest, signed with the release key: GitHub gives each package its
+    # SHA-256, and the app installs one only when the manifest, signed by a
+    # key it carries and not expired, lists it with the same. The
+    # desktop-manifests workflow renews the manifest every week.
     name: Attach Polyfin Desktop's packages to the release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [release, desktop-package-test]
+    needs: [check, release, desktop-package-test]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
+      - *checkout
+      - *setup-go
       - name: Fetch the packages
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: desktop-package-*
           merge-multiple: true
           path: packages
+      - name: Sign their manifest
+        env:
+          POLYFIN_RELEASE_SIGNING_KEY: ${{ secrets.POLYFIN_RELEASE_SIGNING_KEY }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          ls -l packages
+          test "$(find packages -type f | wc -l)" -eq 8
+          manifest="$RUNNER_TEMP/polyfin-${VERSION}.manifest.json"
+          go run ./cmd/polyfin-release-sign manifest -version "$VERSION" -out "$manifest" packages/*
+          go run ./cmd/polyfin-release-sign verify -in "$manifest" packages/*
+          echo "MANIFEST=$manifest" >> "$GITHUB_ENV"
       - name: Upload them to the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: |
-          ls -l packages
-          test "$(find packages -type f | wc -l)" -eq 8
-          gh release upload "$TAG" packages/*
+        run: gh release upload "$TAG" packages/* "$MANIFEST"
