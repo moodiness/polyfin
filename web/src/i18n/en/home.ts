@@ -78,6 +78,45 @@ const home = {
       graphicsCpu: 'Conversions use the processor',
       toneMapping: 'tone mapping',
     },
+    /** Home's Get started card: the steps of a good setup, each done or not. */
+    getStarted: {
+      title: 'Get started',
+      lede: (done: number, total: number) =>
+        `${done} of ${total} steps done. Each one opens the page where it is set.`,
+      dismiss: 'Dismiss',
+      done: 'Done',
+      todo: 'To do',
+      steps: {
+        metadata: {
+          title: 'Add a metadata addon',
+          help: 'It gives titles their posters, summaries and episodes.',
+        },
+        library: {
+          title: 'Choose your libraries',
+          help: 'The catalogs of your sources that apps show as libraries.',
+        },
+        users: {
+          title: 'Create users or an invite link',
+          help: 'An account for each person you share Polyfin with.',
+        },
+        backups: {
+          title: 'Back up the database every day',
+          help: 'A copy of the accounts, the settings and what everyone watched.',
+        },
+        secretKey: {
+          title: 'Set POLYFIN_SECRET_KEY',
+          help: 'It encrypts the keys and passwords Polyfin stores. Set it, then restart.',
+        },
+        address: {
+          title: 'Serve HTTPS or set a public address',
+          help: 'Apps away from home connect securely, and notifications link to Polyfin.',
+        },
+        discovery: {
+          title: 'Let apps on your network find Polyfin',
+          help: 'Answer local network discovery with the address apps reach.',
+        },
+      },
+    },
     /** Restart, the install of Polyfin Desktop's update, and Update now, on Home. */
     server: {
       restart: 'Restart',
