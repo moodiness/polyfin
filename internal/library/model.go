@@ -100,6 +100,9 @@ type Item struct {
 	Runtime         time.Duration
 	CommunityRating float64
 	OfficialRating  string
+	// Language is the original language a title's addon gives, as it
+	// writes it, empty when it gives none.
+	Language string
 	// OriginalTitle is a title's name as its addon gives it, which the
 	// metadata editor may change apart from its name; SortName, when set,
 	// is what it sorts by instead of its name. Taglines, Tags, Studios and
@@ -465,6 +468,7 @@ func fromMeta(item *Item, meta stremio.Meta) {
 		item.EndDate = &end
 	}
 	item.Runtime = parseRuntime(string(meta.Runtime))
+	item.Language = strings.TrimSpace(meta.Language)
 	item.CommunityRating = parseRating(string(meta.ImdbRating))
 	item.OfficialRating = certification(meta)
 	switch strings.ToLower(meta.Status) {
