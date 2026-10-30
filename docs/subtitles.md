@@ -42,22 +42,37 @@ Polyfin finds this once per version, in the background, at the version's first p
 
 - A constant shift, of up to a minute either way, such as a longer or shorter opening.
 - A speed difference between the usual frame rates, 23.976, 24 and 25 fps, either way: a subtitle timed for 25 fps runs 4% fast on a 23.976 fps version, and comes earlier and earlier.
+- Against a text track inside the file, another cut: a scene the version adds or removes, of up to 10 minutes, after which the subtitle runs early or late by the scene's length (see [Across a cut](#across-a-cut)).
 
 Both are found together, to the hundredth of a second. Of two speeds that fit as well, such as 23.976 and 24 fps, which subtitles timed to the half second do not tell apart, Polyfin keeps the subtitle's own speed, or the one for the version's frame rate. A subtitle is changed only when it fits clearly better changed: more of its lines fall on speech, by at least 15% of their time, and that timing stands well above the other shifts, above any timing more than 2 seconds from it, and above the subtitle's own. A subtitle already in time, and one of another title, are left as they are.
 
 It does not correct:
 
-- cuts within the version, a scene added or removed: a subtitle gets one timing for all its lines, and stays wrong on one side of the cut;
-- shifts of more than a minute, and other speeds;
+- cuts within the version when its speech comes from its audio: three stretches cannot tell where a scene was added or removed, so a subtitle gets one timing for all its lines, and stays wrong on one side of the cut;
+- shifts of more than a minute, but after a cut, and other speeds;
 - the subtitle files beside a local file, which are that file's own, and the subtitles users add.
+
+### Across a cut
+
+A subtitle timed on another cut of the title, with a scene more or less than the version, fits the version at one speed, but its shift changes at the scene. A text track inside the file gives the version's lines from start to end, so Polyfin can find where:
+
+- It finds the shift of each 2 minutes of the subtitle, a minute apart, among those of up to 10 minutes either way, as it finds a subtitle's, kept when it stands clearly above the others.
+- Stretches of one shift that follow each other make a piece, and Polyfin refines the piece's shift to the hundredth of a second, at the subtitle's speed. Between two pieces, it places the cut where the lines fit best. When the version lacks a scene, the subtitle's lines that start within that scene are left out; when it adds one, no line is.
+- The pieces are kept only when each is clear: at least 10 lines over at least 2 minutes, of which those on speech start within half a second of a line of the track, by their median, and much more of its time on speech, by at least 15%, than at the shift of the piece next to it. Else the subtitle gets one timing, as above.
+- A subtitle without a cut gets the timing it got before. When most of a subtitle is shifted by more than a minute, as after a scene removed in its first minutes, Polyfin tries each speed and keeps the one whose pieces fit best.
+
+A line or two right at a cut can be kept or left out wrongly when the track has speech on both sides of it.
 
 ### Served synced
 
 Once the version's speech is known, each addon subtitle chosen for it is timed once, and that timing is kept:
 
 - Apps get it synced in every format, WebVTT, SubRip, ASS or JSON, and in HLS.
-- Its name ends with "(synced)" in the server language, « (recalé) » in French: in PlaybackInfo once it was timed, which happens for the subtitle the app shows and for those read lately.
+- Its name ends with "(synced)" in the server language, « (recalé) » in French: in PlaybackInfo once it was timed, which happens for the subtitle the app shows and for those read lately. A subtitle synced across a cut has the same name.
 - A subtitle chosen before its version's speech was known comes as it is, and is synced from the next time it is chosen.
+- Subtitles synced against a text track before Polyfin looked for cuts are timed again the next time they are chosen.
+
+**Compared with Jellyfin:** Jellyfin does not sync subtitles: it serves each with the times it has.
 
 ## Subtitle files listed with a stream
 
