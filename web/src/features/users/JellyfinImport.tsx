@@ -292,7 +292,8 @@ export function ImportProgress({
 
 /**
  * One user of an import: the Polyfin user it went into, its state, what it read while it reads,
- * then what it added. A finished import's users still waiting were never reached.
+ * then what it read and added, and why it added nothing when it did not. A finished import's users
+ * still waiting were never reached.
  */
 function ImportedUserRow({
   user,
@@ -309,6 +310,12 @@ function ImportedUserRow({
   const { t } = useI18n()
   const text = t.users.jellyfinImport
   const notReached = finished && user.state === 'waiting'
+  const ended = [
+    text.read(user.read),
+    text.counts(user.played, user.resumed, user.favorites),
+    ...(user.upToDate > 0 ? [text.upToDate(user.upToDate)] : []),
+    ...(user.undated > 0 ? [text.undated(user.undated)] : []),
+  ].join(' · ')
   return (
     <Row
       leading={<Avatar name={user.userName} size="lg" />}
@@ -318,7 +325,7 @@ function ImportedUserRow({
           ? text.read(user.read)
           : user.state === 'waiting'
             ? undefined
-            : text.counts(user.played, user.resumed, user.favorites)
+            : ended
       }
       trailing={
         <>
@@ -335,6 +342,8 @@ function ImportedUserRow({
     >
       {user.problem !== null ? (
         <Notice tone="danger">{text.problems[user.problem](product)}</Notice>
+      ) : user.nothingAdded !== null ? (
+        <Notice>{text.nothingAdded[user.nothingAdded](product)}</Notice>
       ) : undefined}
     </Row>
   )

@@ -2547,8 +2547,12 @@ export type JellyfinUnmatched = {
   series: string | null
   season: number | null
   episode: number | null
-  /** `no_identifier`: no IMDb, TMDB or TVDB identifier; `not_found`: no Polyfin title has it. */
-  reason: 'no_identifier' | 'not_found'
+  /**
+   * `no_identifier`: no IMDb, TMDB or TVDB identifier; `not_found`: no Polyfin title has it;
+   * `not_in_library`: a Plex history names it, but no library section lists it any longer;
+   * `other_episode_order`: Plex numbers the episode in another of TheTVDB's episode orders.
+   */
+  reason: 'no_identifier' | 'not_found' | 'not_in_library' | 'other_episode_order'
 }
 
 /** How the import of one Jellyfin user's watch data goes. */
@@ -2559,17 +2563,40 @@ export type JellyfinUserImport = {
   userName: string
   /** A finished import's `waiting` users were not reached: it stopped or failed first. */
   state: 'waiting' | 'reading' | 'saving' | 'done' | 'failed'
-  /** Items read from Jellyfin so far. */
+  /** Items read from Jellyfin so far, with watch data. */
   read: number
+  /**
+   * What was read of a Plex server: its library sections of movies and shows, the items they list,
+   * and the rows of the account's playback history; null for Jellyfin and Emby.
+   */
+  sections: number | null
+  listed: number | null
+  history: number | null
+  /** Items read that a Polyfin title matched. */
+  matched: number
   /** Titles newly marked played, resume points set, titles newly marked favorite. */
   played: number
   resumed: number
   favorites: number
+  /** Marks, resume points and favorites Polyfin already had. */
+  upToDate: number
+  /** Resume points without a date, which are not added. */
+  undated: number
   /** Every title not matched; `unmatched` lists the first 500 only. */
   unmatchedCount: number
   unmatched: JellyfinUnmatched[]
   problem: JellyfinImportProblem | null
+  /** Why a user's import that ended without a problem added nothing; null otherwise. */
+  nothingAdded: JellyfinNothingAdded | null
 }
+
+/**
+ * Why a user's import added nothing: everything read was already in Polyfin; Jellyfin or Emby
+ * lists nothing played, in progress or favorite for the user; the Plex server has no movie or show
+ * library; the Plex owner has nothing played or in progress; Plex lists no play of the account.
+ */
+export type JellyfinNothingAdded =
+  'up_to_date' | 'nothing_played' | 'no_sections' | 'plex_owner_nothing_watched' | 'plex_no_history'
 
 /**
  * The running import, else the last one since Polyfin started: a restart forgets it. `startedBy`

@@ -269,10 +269,10 @@ const users: typeof en = {
       plexOwnerWatchDataHelp:
         'Titres vus avec leurs dates et leur nombre de lectures, et points de reprise.',
       plexWatchDataHelp:
-        'Titres vus avec leurs dates et leur nombre de lectures. Plex ne laisse pas Polyfin lire les points de reprise de ce compte.',
+        'Les titres que ce compte a lus jusqu’au bout sur ce serveur, d’après l’historique de lecture de Plex, avec leurs dates et leur nombre de lectures. Les titres qu’il a marqués comme vus ou synchronisés depuis son compte Plex, et ses points de reprise, restent sur Plex.',
       watchDataNeeded: 'Sans elles, rien n’est importé pour cet utilisateur.',
       plexNotice:
-        'Avec le jeton du propriétaire, Plex laisse Polyfin lire les titres vus et les points de reprise du propriétaire, mais seulement les titres vus des autres comptes, d’après leur historique de lecture : leurs points de reprise restent sur Plex. Plex n’a pas de favoris à importer.',
+        'Avec le jeton du propriétaire, Plex laisse Polyfin lire les titres vus et les points de reprise du propriétaire. Des autres comptes, il ne donne que leur historique de lecture sur ce serveur : les titres qu’ils y ont lus jusqu’au bout. Les titres qu’ils ont marqués comme vus sans les lire, ceux synchronisés depuis leur compte Plex et leurs points de reprise n’y figurent pas et restent sur Plex. Plex n’a pas de favoris à importer.',
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Connecté avec le compte ${owner ?? 'd’un utilisateur'}, Polyfin ne lit que ses données de visionnage.` : `Cette clé appartient à ${owner ?? 'un utilisateur'} : elle ne lit que ses données de visionnage.`} Pour importer celles d’un autre utilisateur, saisissez le mot de passe de son compte sur le serveur : Polyfin se connecte en tant que lui pour les lire. Sans lui, son compte peut quand même être créé.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
@@ -360,11 +360,27 @@ const users: typeof en = {
       read: (count: number) => (count <= 1 ? `${count} élément lu` : `${count} éléments lus`),
       counts: (played: number, resumed: number, favorites: number) =>
         `${played <= 1 ? `${played} marqué vu` : `${played} marqués vus`}, ${resumed <= 1 ? `${resumed} point de reprise` : `${resumed} points de reprise`}, ${favorites <= 1 ? `${favorites} favori` : `${favorites} favoris`}`,
+      upToDate: (count: number) => `${count} déjà dans Polyfin`,
+      undated: (count: number) =>
+        count <= 1
+          ? `${count} point de reprise sans date, non ajouté`
+          : `${count} points de reprise sans date, non ajoutés`,
+      nothingAdded: {
+        up_to_date: () =>
+          'Tout ce qui a été lu était déjà dans Polyfin : il n’y avait rien à ajouter.',
+        nothing_played: (server: string) =>
+          `${server} ne liste rien de vu, en cours ni favori pour cet utilisateur.`,
+        no_sections: () =>
+          'Ce serveur Plex n’a aucune bibliothèque de films ou de séries : il n’y avait rien à lire.',
+        plex_owner_nothing_watched: () =>
+          'Le propriétaire n’a rien de vu ni en cours dans les bibliothèques de films et de séries de ce serveur.',
+        plex_no_history: () =>
+          'Plex ne liste aucune lecture de ce compte sur ce serveur. Son historique de lecture ne contient que les titres lus jusqu’au bout sur ce serveur : les titres marqués comme vus sans être lus, ou synchronisés depuis le compte Plex, n’y figurent pas.',
+      },
       unmatched: (count: number) =>
         count <= 1 ? `${count} titre introuvable` : `${count} titres introuvables`,
       unmatchedTitle: (name: string) => `Titres introuvables pour ${name}`,
-      unmatchedHelp:
-        'Ces titres n’ont pas été importés : aucun titre de Polyfin ne leur correspond par IMDb, TMDB ou TVDB.',
+      unmatchedHelp: 'Ces titres n’ont pas été importés : la raison dit pourquoi.',
       titleColumn: 'Titre',
       kindColumn: 'Type',
       yearColumn: 'Année',
@@ -377,6 +393,8 @@ const users: typeof en = {
       reasons: {
         no_identifier: 'Aucun identifiant IMDb, TMDB ou TVDB',
         not_found: 'Absent de Polyfin',
+        not_in_library: 'Plus dans les bibliothèques de Plex',
+        other_episode_order: 'Numéroté selon un autre ordre des épisodes de TheTVDB',
       },
       more: (count: number) => (count <= 1 ? `Et ${count} autre.` : `Et ${count} autres.`),
     },

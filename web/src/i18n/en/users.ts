@@ -259,10 +259,10 @@ const users = {
       watchDataHelp: 'Played titles with their dates, resume points and favorites.',
       plexOwnerWatchDataHelp: 'Played titles with their dates and play counts, and resume points.',
       plexWatchDataHelp:
-        'Played titles with their dates and play counts. Plex does not let Polyfin read this account’s resume points.',
+        'The titles this account played to the end on this server, from Plex’s playback history, with their dates and play counts. Titles it marked as watched or synced from its Plex account, and its resume points, stay on Plex.',
       watchDataNeeded: 'Without it, nothing is imported for this user.',
       plexNotice:
-        'With the owner’s token, Plex lets Polyfin read the owner’s played titles and resume points, but only the played titles of the other accounts, from their playback history: their resume points stay on Plex. Plex has no favorites to import.',
+        'With the owner’s token, Plex lets Polyfin read the owner’s played titles and resume points. Of the other accounts, it gives only their playback history on this server: the titles they played to the end here. Titles they marked as watched without playing them, titles synced from their Plex account, and their resume points are not in it, and stay on Plex. Plex has no favorites to import.',
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Signed in as ${owner ?? 'a user'}, Polyfin reads only that user’s watch data.` : `This key is ${owner === null ? 'a user’s' : `${owner}’s`}: it reads only that user’s watch data.`} To import another user’s, type the password of their account on the server: Polyfin signs in as them to read it. Without it, their account can still be created.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
@@ -348,11 +348,27 @@ const users = {
       read: (count: number) => (count === 1 ? '1 item read' : `${count} items read`),
       counts: (played: number, resumed: number, favorites: number) =>
         `${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${favorites === 1 ? '1 favorite' : `${favorites} favorites`}`,
+      upToDate: (count: number) => `${count} already in Polyfin`,
+      undated: (count: number) =>
+        count === 1
+          ? '1 resume point without a date, not added'
+          : `${count} resume points without a date, not added`,
+      /** Why a user's import added nothing; `server` is the kind of server's name. */
+      nothingAdded: {
+        up_to_date: () => 'Everything read was already in Polyfin: there was nothing to add.',
+        nothing_played: (server: string) =>
+          `${server} lists nothing played, in progress or favorite for this user.`,
+        no_sections: () =>
+          'This Plex server has no movie or show library: there was nothing to read.',
+        plex_owner_nothing_watched: () =>
+          'The owner has nothing played or in progress in this server’s movie and show libraries.',
+        plex_no_history: () =>
+          'Plex lists no play of this account on this server. Its playback history holds only the titles played to the end on this server: titles marked as watched without playing them, or synced from the Plex account, are not in it.',
+      },
       unmatched: (count: number) =>
         count === 1 ? '1 title not found' : `${count} titles not found`,
       unmatchedTitle: (name: string) => `Titles not found for ${name}`,
-      unmatchedHelp:
-        'These titles were not imported: no Polyfin title matches them by IMDb, TMDB or TVDB.',
+      unmatchedHelp: 'These titles were not imported: the reason tells why.',
       titleColumn: 'Title',
       kindColumn: 'Kind',
       yearColumn: 'Year',
@@ -365,6 +381,8 @@ const users = {
       reasons: {
         no_identifier: 'No IMDb, TMDB or TVDB identifier',
         not_found: 'Not in Polyfin',
+        not_in_library: 'No longer in Plex’s libraries',
+        other_episode_order: 'Numbered in another of TheTVDB’s episode orders',
       },
       more: (count: number) => `And ${count} more.`,
     },
