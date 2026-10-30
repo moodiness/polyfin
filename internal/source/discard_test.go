@@ -2,7 +2,10 @@ package source
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
+	"os"
+	"sync"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -38,5 +41,41 @@ func TestADiscardedSourceIsReadAnew(t *testing.T) {
 	defer s.Release()
 	if got := readAll(t, s); !bytes.Equal(got, changed) {
 		t.Error("the file read is the one it replaced")
+	}
+}
+
+// Closing the cache while a block is being written waits for it: nothing
+// is written in the cache's folder once Close returns, which a test's
+// temporary folder removed after it would find not empty.
+func TestCloseWaitsForTheBlockBeingWritten(t *testing.T) {
+	_, server := newOrigin(t, 3*blockSize)
+	cache := newCache(t, 1<<30)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	cache.storing = func() {
+		once.Do(func() {
+			close(entered)
+			<-release
+		})
+	}
+	s := cache.Open(accounts.ID{8}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	read := make(chan struct{})
+	go func() {
+		defer close(read)
+		_, _ = s.ReadAt(context.Background(), make([]byte, 10), 0)
+	}()
+	<-entered
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		_ = cache.Close()
+	}()
+	close(release)
+	<-closed
+	<-read
+	entries, err := os.ReadDir(cache.dir)
+	if err != nil || len(entries) != 0 {
+		t.Errorf("the cache's folder after Close: %d entries, %v", len(entries), err)
 	}
 }

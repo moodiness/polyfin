@@ -237,6 +237,10 @@ type Cache struct {
 	// FetchRanges lets a request go, as it does: tests check the pacing
 	// there, not where a host receives the request, a moment later.
 	paced func(time.Time)
+	// storing, when set, is called as a block is about to be written, a
+	// source's discard waiting meanwhile (see Source.store): tests hold a
+	// write there.
+	storing func()
 	// headerTimeout bounds the wait for a source's headers, stallTimeout
 	// the time a connection read may go without a byte, recoveryTimeout
 	// the wait for the headers of the connection replacing a stalled one,
@@ -516,6 +520,9 @@ type Source struct {
 	cancel context.CancelFunc
 	// refs is guarded by the cache's lock.
 	refs int
+	// writing is held to read while a block is written into dir, and to
+	// write while the source is discarded, which then waits for it.
+	writing sync.RWMutex
 
 	mu sync.Mutex
 	// origin is where the addon said the file is, and pinned where the
@@ -712,14 +719,20 @@ func (s *Source) Release() {
 	s.cache.mu.Unlock()
 }
 
-// discard stops reading the source and removes its blocks.
+// discard stops reading the source and removes its blocks, once the
+// block being written, if any, is (see store).
 func (s *Source) discard() error {
 	s.cancel()
+	s.writing.Lock()
+	defer s.writing.Unlock()
 	s.mu.Lock()
 	s.present = nil
 	s.mu.Unlock()
 	return os.RemoveAll(s.dir)
 }
+
+// errDiscarded reports a block fetched for a source discarded meanwhile.
+var errDiscarded = errors.New("the source was discarded")
 
 func (s *Source) chunkPath(index int64) string {
 	return filepath.Join(s.dir, strconv.FormatInt(index, 10))
@@ -881,20 +894,21 @@ func (s *Source) sizeUnknown() bool {
 }
 
 // store keeps a fetched block and wakes the readers waiting for it. last
-// marks the final, short block of a source whose size was unknown.
+// marks the final, short block of a source whose size was unknown. A
+// source discarded writes nothing: discard waits for the write under way,
+// so that no file is written in its folder once it is removed.
 func (s *Source) store(block int64, data []byte, last bool) error {
 	index := block / s.cache.chunkBlocks
-	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return err
+	s.writing.RLock()
+	if s.ctx.Err() != nil {
+		s.writing.RUnlock()
+		return errDiscarded
 	}
-	file, err := os.OpenFile(s.chunkPath(index), os.O_RDWR|os.O_CREATE, 0o600)
-	if err != nil {
-		return err
+	if hold := s.cache.storing; hold != nil {
+		hold()
 	}
-	_, err = file.WriteAt(data, (block%s.cache.chunkBlocks)*blockSize)
-	if closeErr := file.Close(); err == nil {
-		err = closeErr
-	}
+	err := s.write(index, block, data)
+	s.writing.RUnlock()
 	if err != nil {
 		return err
 	}
@@ -927,6 +941,22 @@ func (s *Source) store(block int64, data []byte, last bool) error {
 		s.cache.stored(chunkKey{s.id, index}, int64(added))
 	}
 	return nil
+}
+
+// write writes a block into its chunk's file.
+func (s *Source) write(index, block int64, data []byte) error {
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(s.chunkPath(index), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = file.WriteAt(data, (block%s.cache.chunkBlocks)*blockSize)
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	return err
 }
 
 // signal tells whoever waits for progress that there is some. The source's
