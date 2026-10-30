@@ -744,8 +744,12 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			DLNA:          sharing.Handler(),
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,
-			CustomJs:      func() string { return store.Settings().ServedJs() },
-			SavedThemes:   themesDir,
+			WebThemes: func() server.WebThemes {
+				settings := store.Settings()
+				return server.WebThemes{Theme: settings.WebTheme, CustomCss: settings.CustomCss, CustomJs: settings.CustomJs}
+			},
+			ServerID:    serverID,
+			SavedThemes: themesDir,
 			// A file of the copy kept that is missing goes to where it
 			// came from.
 			SavedThemeOriginal: themeCopier.Original,
