@@ -99,6 +99,13 @@ func (u User) AllowedAt(t time.Time) bool {
 	return len(u.AccessSchedules) == 0 || slices.ContainsFunc(u.AccessSchedules, func(a AccessSchedule) bool { return a.includes(t) })
 }
 
+// AllowedFrom reports whether the user may use the server from where a
+// request comes: from the local network always (local), from outside it
+// only with RemoteAccess, as Jellyfin's EnableRemoteAccess allows it.
+func (u User) AllowedFrom(local bool) bool {
+	return local || u.RemoteAccess
+}
+
 // Restricted reports whether titles may be hidden from the user: by their
 // parental control, or by the genres they block. Such a user browses the
 // server's addons only, which describe the titles' ratings and genres.

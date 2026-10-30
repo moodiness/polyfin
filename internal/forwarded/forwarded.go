@@ -82,6 +82,20 @@ func ViaProxy(r *http.Request) bool {
 	return ok
 }
 
+// InLocalNetwork reports whether r's client, as Client tells it, is on the
+// local network: a loopback, private or link-local address, as Jellyfin
+// counts its local network by default. A request through a reverse proxy
+// missing from Known proxies is from the proxy, often on the local network
+// itself. An address that cannot be read is not on it.
+func InLocalNetwork(r *http.Request) bool {
+	address, err := netip.ParseAddr(Client(r))
+	if err != nil {
+		return false
+	}
+	address = address.Unmap()
+	return address.IsLoopback() || address.IsPrivate() || address.IsLinkLocalUnicast()
+}
+
 // Resolver looks up the addresses of a host name, as *net.Resolver does.
 type Resolver interface {
 	LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error)

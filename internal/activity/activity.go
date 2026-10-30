@@ -187,6 +187,21 @@ func (s *Store) SignInFailed(ctx context.Context, name, address string) {
 		ShortOverview: s.address(address), Severity: Error})
 }
 
+// SignInRefusedRemote records that user, who proved who they are, was
+// refused a sign-in from address, outside the local network, which they
+// may not connect from (see accounts.User.RemoteAccess). It is a failed
+// sign-in, about the user. Jellyfin only logs it.
+func (s *Store) SignInRefusedRemote(ctx context.Context, user accounts.User, address string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{
+		"%s may not sign in from outside the local network",
+		"%s ne peut pas se connecter depuis l’extérieur du réseau local",
+		"%s darf sich nicht von außerhalb des lokalen Netzwerks anmelden",
+		"%s no puede iniciar sesión desde fuera de la red local",
+		"%s non può accedere dall’esterno della rete locale",
+		"%s não pode entrar de fora da rede local",
+	}, user.Name), Type: "AuthenticationFailed", UserID: &user.ID, ShortOverview: s.address(address), Severity: Warning})
+}
+
 // PlaybackStarted records that user started playing title, the item item,
 // on device.
 func (s *Store) PlaybackStarted(ctx context.Context, user accounts.User, title, item, device string) {
