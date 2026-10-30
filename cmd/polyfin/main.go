@@ -546,8 +546,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// The daily check for a new version tells administrators through the
 	// notifications, made below.
 	updateCheck := updates.New(updates.Options{DB: pool, Version: version, Logger: logger,
-		Enabled: func() bool { return store.Settings().UpdateCheck },
-		Notify:  func(release updates.Release) { notifier.NewVersion(release.Version, release.URL) }})
+		Enabled:     func() bool { return store.Settings().UpdateCheck },
+		Prereleases: func() bool { return store.Settings().IncludePrereleases },
+		Notify:      func(release updates.Release) { notifier.NewVersion(release.Version, release.URL) }})
 	// The songs of music addons are measured after their first play, read
 	// as playback reads them; their measures end before playback closes.
 	songLoudness := loudness.New(pool, meter, logger, store.Settings)

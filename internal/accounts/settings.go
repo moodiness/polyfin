@@ -1199,6 +1199,9 @@ type Settings struct {
 	// UpdateCheck asks GitHub once a day for Polyfin's latest release, to
 	// tell administrators about a new version (see package updates).
 	UpdateCheck bool
+	// IncludePrereleases has that check, and Polyfin Desktop's updates,
+	// consider pre-releases too.
+	IncludePrereleases bool
 	// RestartConfirmed tells that an administrator confirmed that Polyfin
 	// is started again when it exits, by its container's restart policy
 	// or its service manager: Restart in the admin app then asks no more
@@ -1971,6 +1974,7 @@ func validWebText(text string, max int) bool {
 // Settings.fields.
 const settingsColumns = "server_name, quick_connect_enabled, legacy_authorization, language, prepare_ahead, transcoding, catalog_limit, channel_limit, " +
 	"update_check, local_discovery, local_address, " +
+	"include_prereleases, " +
 	"dlna, dlna_name, dlna_new_devices_user, dlna_mark_played, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, even_volume, measure_loudness, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"mdblist_ratings_key, critic_rating_shows, tmdb_key, " +
@@ -2022,6 +2026,7 @@ func (settings *Settings) fields() []any {
 	return []any{&settings.ServerName, &settings.QuickConnectEnabled, &settings.LegacyAuthorization, &settings.Language,
 		&settings.PrepareAhead, &settings.Transcoding, &settings.CatalogLimit, &settings.ChannelLimit,
 		&settings.UpdateCheck, &settings.LocalDiscovery, &settings.LocalAddress,
+		&settings.IncludePrereleases,
 		&settings.DLNA, &settings.DLNAName, &settings.DLNANewDevicesUser, &settings.DLNAMarkPlayed,
 		&settings.SkipButtons, &settings.PublicMetaDBKey, &settings.TheIntroDBKey, &settings.SegmentOrder, &settings.SegmentSourcesOff, &settings.AudioIntros,
 		&settings.SimilarTitles, &settings.GenerateImages, &settings.Lyrics, &settings.EvenVolume, &settings.MeasureLoudness, &settings.PlayedPercent, &settings.ResumePercent,

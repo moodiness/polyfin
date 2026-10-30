@@ -110,7 +110,7 @@ A user who created their account through an invite link (see [Invite links](user
 
 ### New versions
 
-While **Check for new versions** is on, under **Settings › General**, Polyfin asks GitHub once a day for its latest release (see [New versions](administration.md#new-versions)). A version newer than the running one is told once: the title is "New version: Polyfin 1.5.0", and the message "Polyfin 1.5.0 is available. This server runs version 1.4.0.". The message opens the release notes on GitHub, with or without a public address. The version told is kept in the database: a restart does not tell it again. A development build never tells one. Targets saved before this event existed do not receive it until it is chosen.
+While **Check for new versions** is on, under **Settings › General**, Polyfin asks GitHub once a day for its latest release, and its latest pre-release while **Include pre-releases** is on (see [New versions](administration.md#new-versions)). A version newer than the running one is told once: the title is "New version: Polyfin 1.5.0", and the message "Polyfin 1.5.0 is available. This server runs version 1.4.0.". The message opens the release notes on GitHub, with or without a public address. The version told is kept in the database: a restart does not tell it again. A development build never tells one. Targets saved before this event existed do not receive it until it is chosen.
 
 ### Playbacks
 
