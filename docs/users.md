@@ -62,6 +62,12 @@ The web player's home keeps its rows for a minute. jellyfin-web 12.4 keeps what 
 
 **My account › Home rows** lists the rows the administrator added to the web player's home page for the user (see [Home rows](web-client.md#home-rows)), each with its kind and place, and a switch. Off, the row leaves the user's home page, and, when it is also a library in other apps, their libraries there. Other users keep it. jellyfin-web's own home sections stay under its **Settings › Home**. **Reset my preferences** turns every row on again (see [Your own preferences](#your-own-preferences)).
 
+### Taste profile
+
+**My account › Taste profile** shows the user the taste profile Polyfin built of them (see [Top picks for you](web-client.md#top-picks-for-you)): when it was built and from how many titles, how well it knows them, and, of genres, directors, cast, decades and languages, up to eight values they like and eight they like less, the weightiest first. A genre whose titles leave **Top picks for you** says so. Before the profile is confident, the section says the lists keep their usual order. The profile stays on the server: only its user sees it, an administrator included, and deleting the user deletes it.
+
+**Tell me why a title is for me**, on by default, starts a title's page with "87% for you · because you like …" once the profile is confident. Off, no title's page says it.
+
 ### Track choices
 
 **My account › Track choices** tells for how many series and movies Polyfin keeps the audio and subtitle tracks the user chose, which their next plays show by default in every app (see [Remembered track choices](playback.md#remembered-track-choices)). **Forget my track choices** forgets them all, after asking first: every title plays the tracks the user's language preferences choose again. **Reset my preferences** forgets them too (see [Your own preferences](#your-own-preferences)).

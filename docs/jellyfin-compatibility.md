@@ -86,7 +86,7 @@ Before anything is typed, jellyfin-web's search page shows Suggestions: the user
 
 - Jellyfin picks suggestions at random among everything; Polyfin picks among the first page of each library, from its top, as a remote catalog puts its titles forward.
 
-**For app developers:** `/Items` without `ParentId` answers such suggestions when it asks `Recursive=true` for `Movie`, `Series` or `MusicArtist` only, sorted by `Random`, alone or with `IsFavoriteOrLiked`, which puts favorite and liked titles first. `/Items/Suggestions` still picks at random among the first page of each library, as Jellyfin picks at random.
+**For app developers:** `/Items` without `ParentId` answers such suggestions when it asks `Recursive=true` for `Movie`, `Series` or `MusicArtist` only, sorted by `Random`, alone or with `IsFavoriteOrLiked`, which puts favorite and liked titles first. `/Items/Suggestions` still picks at random among the first page of each library, as Jellyfin picks at random, the titles the user's taste profile ranks first coming first once it is confident (see [Top picks for you](web-client.md#top-picks-for-you)).
 
 ### Titles at random
 
@@ -126,7 +126,7 @@ jellyfin-web's TV shows tab sorts a series library by "Date Episode Added" and "
 
 ### Movie recommendations
 
-For each of the last movies the user played, recommendations give the "Because you watched" titles similar to it. They come from the similar titles of title pages, without those already played. With **Similar titles** off there are none.
+For each of the last movies the user played, recommendations give the "Because you watched" titles similar to it. They come from the similar titles of title pages, ordered half by the user's taste once their profile is confident (see [Top picks for you](web-client.md#top-picks-for-you)), without those already played. With **Similar titles** off there are none.
 
 **Compared with Jellyfin:**
 
