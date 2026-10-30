@@ -65,6 +65,7 @@ Converted video is never larger than its source. It is smaller when one of these
 - **GPU:** up to 4K.
 - **Processor:** up to 1080p.
 - **HDR converted by the processor:** up to **Maximum quality of HDR converted by the processor**, 720p or 1080p with **Automatic**, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
+- **HDR on a GPU too slow for it:** up to 720p, when the GPU tone maps HDR slower than real time at 1080p (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)).
 - **Quality group:** the user's, set on their page under **Users**.
 - **Maximum quality of converted video:** under **Settings › Conversion (transcoding)**.
 - **The app's profile:** the largest picture, or the highest codec level, the app says it decodes (see [What the app allows](#what-the-app-allows)).
@@ -255,9 +256,9 @@ A GPU's decoded frames can stay in its memory until it encodes them, or come bac
 
 - **SDR video:** kept on the GPU, it is scaled there (`scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel through VAAPI, `scale_vt` with VideoToolbox, `scale_qsv` on Intel through QSV, `vpp_amf` on AMD through AMF), and deinterlaced there with the matching filter (`yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`, `yadif_videotoolbox`, or `vpp_qsv`'s deinterlacer; AMF has none). A deinterlacer is used only once it deinterlaced a short sample on the GPU at startup: one that fails there, or makes FFmpeg crash, leaves interlaced video to the processor. On Windows, Intel and AMD GPUs decode into Direct3D 11 frames, which QSV maps to its own.
 - **HDR video on NVIDIA:** kept on the GPU, it is decoded into Vulkan frames, which libplacebo tone maps where they are. FFmpeg cannot hand Vulkan frames back to NVENC, so the converted picture, at its final size, goes to the encoder through memory.
-- **HDR video on Intel and VideoToolbox:** always kept on the GPU, which deinterlaces it, scales it and tone maps it there, with `scale_vaapi` and `tonemap_vaapi` through VAAPI, `vpp_qsv` through QSV, `scale_vt` with VideoToolbox, then encodes it. Burned-in subtitles are laid on in memory after the tone mapping. This is not measured: there is no other way on the GPU.
+- **HDR video on Intel and VideoToolbox:** always kept on the GPU, which deinterlaces it, scales it and tone maps it there, with `scale_vaapi` and `tonemap_vaapi` through VAAPI, `vpp_qsv` through QSV, `scale_vt` with VideoToolbox, then encodes it. Burned-in subtitles are laid on in memory after the tone mapping. There is no other way on the GPU to choose from, but its speed is measured (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)).
 
-Each measurement converts 2 seconds of generated 4K video to 1080p both ways. The log shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). Conversions that start before the measurement ends go through memory. The processor's tone mapping is measured next (see [HDR and tone mapping](#hdr-and-tone-mapping)).
+Each measurement converts 2 seconds of generated 4K video to 1080p both ways. The log shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). Conversions that start before the measurement ends go through memory. The GPU's HDR tone mapping, on every GPU that tone maps, and the processor's tone mapping are measured next (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 
 Frames always go through memory for burned-in subtitles (except on Intel and VideoToolbox when they tone map), for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the way through its memory failed.
 
@@ -291,6 +292,25 @@ AMD GPUs never tone map. Their Linux driver failed each way Polyfin tried to do 
 An Intel GPU, or VideoToolbox, tone maps only once a short HDR10 sample converted on it at startup; the check needs FFmpeg's x265 encoder to make that sample. Whether an HDR10 file carries its mastering display information comes from its container when Polyfin analyzes it. Otherwise, the first time an Intel GPU would tone map the file, Polyfin reads its first frame once and keeps the answer. Other GPUs and the processor never need it.
 
 If HDR looks wrong on the graphics card, turn off **Tone map HDR on the graphics card**: the processor then tone maps it, on every GPU alike. You can also turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).
+
+### A GPU too slow for HDR
+
+Tone mapping costs a GPU more than scaling SDR, and a small or older card can fall behind playback: an NVIDIA Quadro P2000 tone maps 4K HDR10 to 1080p at about half real time. So Polyfin also times the HDR tone mapping of each GPU that does it, at startup, in the background, the way conversions run: 2 seconds of generated 4K HDR10 converted to 1080p (from an x265 sample carrying its mastering display on Intel and VideoToolbox), then to 720p when that is slower than real time. A GPU keeping up, or not timed yet, tone maps HDR as above. A GPU slower than real time hands HDR, once the processor is timed too:
+
+- To the processor, when it keeps up, 1x real time or faster: up to its own cap, **Maximum quality of HDR converted by the processor**. The GPU still decodes and encodes the video.
+- Else to the GPU up to 720p, when it keeps up there.
+- Else to the faster of the two, the GPU up to 720p. HDR titles may then pause while they convert.
+
+Dolby Vision profile 5, which only NVIDIA GPUs tone map, and all HDR when FFmpeg has no tone mapping filters for the processor, stay on the GPU, up to 720p. **Tone map HDR on the graphics card** turned off still gives every HDR title to the processor.
+
+Where HDR goes, and why:
+
+- The log shows each timing, `Timed the GPU's conversion chains` with `kind=HDR` on NVIDIA, `Timed the GPU's HDR tone mapping` on Intel and VideoToolbox, `Timed the GPU's HDR tone mapping at a lower height` and `Timed the processor's HDR tone mapping`, then the choice: `Chose where HDR is tone mapped`, with `tone_mapping=gpu` or `processor`, the GPU's `height`, the `reason` (`keepsUp`, `notTimed`, `processorFaster`, `lowerHeight` or `noneKeepsUp`) and the speeds.
+- With **Detailed log** on, each conversion's `Started a remux` line has `tone_mapping=gpu` or `processor` for HDR, and `tone_mapping_reason` when the GPU does not tone map it at full height: `slow_gpu` (with the speeds), `turned_off` or `unsupported`.
+- **Settings › Conversion (transcoding) › Detected on this server** and **System › Health › Transcoder** show **HDR titles**: where they are converted, and why, with the speeds.
+- On Home, a playback's **Details** say "720p at most: the graphics card converts HDR in time only up to there" when the GPU's lower height set the size.
+
+**Compared with Jellyfin:** Jellyfin tone maps on the GPU whenever its hardware tone mapping is on and the GPU takes the video (`IsHwTonemapAvailable` in `MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs`, L359-L391 at v12.4), however fast the GPU is. Polyfin times the GPU and the processor, and gives HDR to the one that keeps up.
 
 ## HLS segments
 
@@ -381,9 +401,9 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 |---|---|---|---|
 | **Convert HDR to SDR (tone mapping)** | **Settings › Conversion (transcoding)** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's cap, and Dolby Vision without an HDR10 layer is not converted. |
 | **Tone mapping method** | **Settings › Conversion (transcoding)** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA cards only: the processor's filter has none and uses Hable. Intel cards and VideoToolbox use their own curve and ignore the method. |
-| **Tone map HDR on the graphics card** | **Settings › Conversion (transcoding)** | On | NVIDIA cards, Intel cards through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K. Off: the processor tone maps it on every card, a way out when a card's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
+| **Tone map HDR on the graphics card** | **Settings › Conversion (transcoding)** | On | NVIDIA cards, Intel cards through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K, unless they are too slow for it (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)). Off: the processor tone maps it on every card, a way out when a card's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
 | **Maximum quality of HDR converted by the processor** | **Settings › Conversion (transcoding)** | **Automatic (measured at startup)** | **Automatic** (1080p or 720p, as measured at startup, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
-| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion (transcoding)** | 0 (the video's), or 100 to 10,000 nits | Processor only; the cards do not take it, so it is hidden when an NVIDIA card tone maps. |
+| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion (transcoding)** | 0 (the video's), or 100 to 10,000 nits | Processor only; the cards do not take it, so it is hidden when an NVIDIA card tone maps, unless the card is too slow for HDR. |
 | **Highlight desaturation (0 = off)** | **Settings › Conversion (transcoding)** | 0 to 10 | Processor only, shown as the peak is. |
 
 ### Audio
