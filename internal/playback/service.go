@@ -522,6 +522,12 @@ func (s *Service) OpenSource(version library.Version) *source.Source {
 	return s.open(version)
 }
 
+// CachedSource reads what the shared cache holds of a version's source,
+// with no request; false when it holds nothing of it.
+func (s *Service) CachedSource(version library.Version) (source.Cached, bool) {
+	return s.sources.Cached(version.ID)
+}
+
 // Signer returns the service's grant signer.
 func (s *Service) Signer() Signer {
 	return s.signer

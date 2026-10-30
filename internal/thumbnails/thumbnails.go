@@ -1,8 +1,9 @@
 // Package thumbnails makes the scrubbing thumbnails (Jellyfin's trickplay)
 // and chapter images of the versions played, from their keyframes alone:
-// read through the container's index, a few dozen spans of a file rather
-// than the whole of it, gently, once nobody plays from its host, decoded
-// by FFmpeg and kept in the database.
+// during a play, those whose bytes the playback brought into the source
+// cache; after it, the others, read through the container's index, a few
+// dozen spans of a file rather than the whole of it, gently, once nobody
+// plays from its host. FFmpeg decodes them; the database keeps the images.
 package thumbnails
 
 import (
@@ -12,6 +13,7 @@ import (
 	"image"
 	"log/slog"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -83,10 +85,18 @@ type Options struct {
 	Open func(library.Version) Source
 	// Analyzed returns a version's analysis, if it was analyzed.
 	Analyzed func(context.Context, accounts.ID) (media.Analysis, bool)
+	// Cached returns what the source cache holds of a version's file, false
+	// when it holds nothing of it: thumbnails are made during a play when
+	// it is set (see live). Converting reports whether a conversion runs
+	// on the processor now, when they are not.
+	Cached     func(library.Version) (Cached, bool)
+	Converting func() bool
 	// Pace spaces the requests to a host and how often waits are checked
-	// again; zero for requestInterval and pollInterval. Tests shorten it.
-	Pace, Poll time.Duration
-	Logger     *slog.Logger
+	// again; zero for requestInterval and pollInterval. LiveEvery is how
+	// often the thumbnails of the versions playing are extended, zero for
+	// liveInterval. Tests shorten them.
+	Pace, Poll, LiveEvery time.Duration
+	Logger                *slog.Logger
 }
 
 // job is a version waiting for its images, after the playback of device
@@ -107,14 +117,22 @@ type Service struct {
 
 	mu   sync.Mutex
 	jobs []job
-	// working is set while the images of a version are made.
-	working bool
+	// working is set while the images of a version are made after its
+	// play, generating naming it; extending names the version whose
+	// thumbnails a play extends: neither works on the other's version.
+	working               bool
+	generating, extending accounts.ID
 	// playing lists the playbacks under way: images wait for them.
 	playing func() []Playing
+	// decoding runs one FFmpeg decoding keyframes at a time.
+	decoding sync.Mutex
 
 	failed  *cache.Cache[accounts.ID, error]
 	refused *cache.Cache[accounts.ID, error]
 	touched *cache.Cache[accounts.ID, struct{}]
+	// unextended holds the versions whose thumbnails a play cannot
+	// extend, for failureTTL.
+	unextended *cache.Cache[accounts.ID, error]
 
 	// budget is that above, which tests lower.
 	budget int
@@ -128,19 +146,31 @@ func New(options Options) *Service {
 	if options.Poll == 0 {
 		options.Poll = pollInterval
 	}
+	if options.LiveEvery == 0 {
+		options.LiveEvery = liveInterval
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{
-		Options: options,
-		cancel:  cancel,
-		done:    make(chan struct{}),
-		wake:    make(chan struct{}, 1),
-		gate:    newGate(options.Pace, perHour, time.Hour, options.Poll),
-		failed:  cache.New[accounts.ID, error](2000, failureTTL),
-		refused: cache.New[accounts.ID, error](2000, refusalTTL),
-		touched: cache.New[accounts.ID, struct{}](5000, touchEvery),
-		budget:  budget,
+		Options:    options,
+		cancel:     cancel,
+		done:       make(chan struct{}),
+		wake:       make(chan struct{}, 1),
+		gate:       newGate(options.Pace, perHour, time.Hour, options.Poll),
+		failed:     cache.New[accounts.ID, error](2000, failureTTL),
+		refused:    cache.New[accounts.ID, error](2000, refusalTTL),
+		touched:    cache.New[accounts.ID, struct{}](5000, touchEvery),
+		unextended: cache.New[accounts.ID, error](2000, failureTTL),
+		budget:     budget,
 	}
-	go s.run(ctx)
+	var wg sync.WaitGroup
+	wg.Go(func() { s.run(ctx) })
+	if options.Cached != nil {
+		wg.Go(func() { s.live(ctx) })
+	}
+	go func() {
+		wg.Wait()
+		close(s.done)
+	}()
 	return s
 }
 
@@ -213,14 +243,12 @@ func (s *Service) Wake() {
 }
 
 func (s *Service) run(ctx context.Context) {
-	defer close(s.done)
 	timer := time.NewTimer(s.Poll)
 	defer timer.Stop()
 	for {
 		if j, ok := s.next(); ok {
-			s.setWorking(true)
 			s.generate(ctx, j)
-			s.setWorking(false)
+			s.finished()
 			continue
 		}
 		timer.Reset(s.Poll)
@@ -233,23 +261,32 @@ func (s *Service) run(ctx context.Context) {
 	}
 }
 
-// next takes the first waiting version that may start: the playback that
-// asked for it stopped, nobody plays from its host, and its host is
-// neither paused nor out of requests for the hour.
+// next takes the first waiting version that may start, and marks it as
+// worked on: the playback that asked for it stopped, nobody plays from its
+// host, its host is neither paused nor out of requests for the hour, and
+// no play extends its thumbnails now.
 func (s *Service) next() (job, bool) {
 	playing := s.playbacks()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, j := range s.jobs {
-		blocked := slices.ContainsFunc(playing, func(p Playing) bool {
+		blocked := j.version.ID == s.extending || slices.ContainsFunc(playing, func(p Playing) bool {
 			return p.Device == j.after || busyHost(p, j.host)
 		})
 		if !blocked && s.gate.ready(j.host) {
 			s.jobs = slices.Delete(s.jobs, i, i+1)
+			s.working, s.generating = true, j.version.ID
 			return j, true
 		}
 	}
 	return job{}, false
+}
+
+// finished marks the version next took as done.
+func (s *Service) finished() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.working, s.generating = false, accounts.ID{}
 }
 
 // busyHost reports whether a playback reads host: one of an unknown
@@ -263,11 +300,14 @@ func (s *Service) busy(host string) bool {
 	return slices.ContainsFunc(s.playbacks(), func(p Playing) bool { return busyHost(p, host) })
 }
 
-// wanted is what a version lacks of what the settings turn on.
+// wanted is what a version lacks of what the settings turn on. partial
+// describes the thumbnails a play made of the set to complete, at
+// interval; none when its ThumbnailCount is 0.
 type wanted struct {
 	trickplay bool
 	width     int
 	interval  time.Duration
+	partial   Info
 	chapters  []media.Chapter
 }
 
@@ -277,6 +317,12 @@ func (s *Service) generate(ctx context.Context, j job) {
 	analysis, ok := s.Analyzed(ctx, version.ID)
 	if !ok {
 		return
+	}
+	// What the source cache still holds of a play takes no request.
+	if s.Cached != nil {
+		if _, err := s.extend(ctx, version, analysis, false); err != nil && ctx.Err() == nil {
+			s.Logger.Debug("The thumbnails of a version could not be made from what its play read", "addon", version.Addon, "error", err)
+		}
 	}
 	want, err := s.wanted(ctx, version.ID, analysis)
 	if err != nil {
@@ -341,18 +387,22 @@ func lasting(err error) bool {
 // duration to spread thumbnails over.
 var errNoVideo = errors.New("no video to make images of")
 
-// wanted reads what a version lacks of the images the settings turn on.
+// wanted reads what a version lacks of the images the settings turn on:
+// the thumbnails it has not, or not all of those a play made.
 func (s *Service) wanted(ctx context.Context, version accounts.ID, analysis media.Analysis) (wanted, error) {
 	settings := s.Settings()
 	var want wanted
 	if settings.Trickplay && analysis.Duration > 0 {
-		var exists bool
-		if err := s.DB.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM trickplay_sets WHERE version_id = $1 AND width = $2)",
-			version, settings.TrickplayWidth).Scan(&exists); err != nil {
+		info, exists, err := s.trickplaySet(ctx, version, settings.TrickplayWidth)
+		if err != nil {
 			return wanted{}, err
 		}
-		want.trickplay, want.width = !exists, settings.TrickplayWidth
+		want.width = settings.TrickplayWidth
 		want.interval = time.Duration(settings.TrickplayInterval) * time.Second
+		want.trickplay = !exists || !complete(info, analysis.Duration)
+		if want.trickplay && exists && info.interval() == want.interval {
+			want.partial = info
+		}
 	}
 	if settings.ChapterImages && len(analysis.Chapters) > 0 {
 		var exists bool
@@ -402,27 +452,32 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	// Every request left could read a keyframe: one for each thumbnail,
 	// their interval stretched so that each has its own, and one at each
 	// chapter's start while requests are left for them; otherwise chapter
-	// images show the thumbnails' keyframes.
+	// images show the thumbnails' keyframes. The thumbnails a play made
+	// are kept, and those after them read; when the requests left stretch
+	// the interval, the kept ones nearest each thumbnail's time show.
 	var chapters []time.Duration
 	for _, chapter := range want.chapters {
 		chapters = append(chapters, chapter.Start)
 	}
 	targets := chapters
 	interval := want.interval
+	kept := time.Duration(want.partial.ThumbnailCount) * want.interval
 	if want.trickplay {
-		interval = stepFor(analysis.Duration, want.interval, p.left)
-		targets = thumbnailTimes(analysis.Duration, interval)
+		reads := p.left
+		if kept > 0 && len(chapters) > 0 {
+			// The chapters within the thumbnails kept need reads of their
+			// own.
+			reads = max(p.left/2, p.left-len(chapters))
+		}
+		interval = stepFor(analysis.Duration-kept, want.interval, reads)
+		all := thumbnailTimes(analysis.Duration, interval)
+		targets = all[sort.Search(len(all), func(i int) bool { return all[i] >= kept }):]
 		if len(targets)+len(chapters) <= p.left {
 			targets = append(targets, chapters...)
 		}
 	}
 	order := chooseKeyframes(video.Keyframes, targets)
-	hdr := s.ToneMapping && (stream.ColorTransfer == "smpte2084" || stream.ColorTransfer == "arib-std-b67")
-	var hw *hls.Hardware
-	if s.Hardware != nil {
-		hw = s.Hardware(stream.Codec, stream.BitDepth)
-	}
-
+	hw, hdr := s.decoder(stream)
 	var filters []string
 	if want.trickplay {
 		filters = append(filters, thumbnailFilter(want.width, hdr))
@@ -435,7 +490,7 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	// order the keyframes were read in.
 	var frames []decodedFrame
 	err = video.ReadFrames(ctx, p, order, func(index int, frame []byte) error {
-		images, err := decodeKeyframe(ctx, s.FFmpeg, hw, video, frame, filters)
+		images, err := s.decode(ctx, hw, video, frame, filters, false)
 		switch {
 		case err == nil:
 			frames = append(frames, decodedFrame{at: video.Keyframes[index], images: images})
@@ -463,8 +518,16 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 		count := len(asked)
 		tiles := newTiler(count, interval)
 		tiles.info.Width = want.width
-		for _, k := range shown(times, asked) {
-			if err := tiles.add(frames[k].images[0]); err != nil {
+		made := &madeThumbnails{s: s, version: version.ID, info: want.partial}
+		for i, k := range shown(times, asked) {
+			img := frames[k].images[0]
+			if asked[i] < kept {
+				nearest := min(want.partial.ThumbnailCount-1, int((asked[i]+want.interval/2)/want.interval))
+				if img, err = made.at(ctx, nearest); err != nil {
+					return read, err
+				}
+			}
+			if err := tiles.add(img); err != nil {
 				return read, err
 			}
 		}

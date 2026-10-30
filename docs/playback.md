@@ -483,22 +483,36 @@ Turning either setting off hides what was made. It shows again when you turn the
 
 ### When images are made
 
-Images are made after watching, at a gentle pace:
+Thumbnails are made during the play from what it reads, and the rest after watching, at a gentle pace.
+
+**During the play:**
+
+- Every 30 seconds, Polyfin makes the thumbnails of the version playing whose keyframes are already in the [source cache](#reading-the-sources), read there for the playback. They take no request to the source. The file's index must be there too, as the analysis of a first play leaves it.
+- They go on from the start of the version, as far as those keyframes follow one another, so the minutes played from the start get their thumbnails. Apps show them from the title's next opening.
+- FFmpeg decodes them at the lowest priority, one keyframe at a time, and not while a conversion runs on the processor (a video converted or tone mapped there).
+- Chapter images wait for the end of the play.
+
+**After the play:**
 
 - once a version has been played, and for the next episode when [playback is prepared in advance](#preparing-playback-in-advance);
 - Polyfin waits until that playback has stopped and nobody plays anything from the same host;
-- it then reads in the background only keyframes, located through the file's index (Matroska Cues or MP4 sample tables), each with a request for its own bytes, never the whole file;
+- it first adds what the source cache still holds, as during the play;
+- it then reads in the background only the keyframes it still lacks, located through the file's index (Matroska Cues or MP4 sample tables), each with a request for its own bytes, never the whole file;
 - one version is made at a time, with a short queue.
+
+DVDs, recordings, Replay and torrents get no images, during or after the play.
 
 ### Request limits
 
 - A version takes at most 60 requests, its index included.
 - Requests are sent one every 3 seconds, and at most 120 an hour per host, across versions. Past that hour's share, they wait.
+- Thumbnails made from the source cache take none.
 
 ### How the images look
 
 - Each thumbnail gets a keyframe of its own: a version whose thumbnails would outnumber the requests left once its index is read gets its thumbnails spread evenly over its runtime, one per request, a whole number of seconds apart. With about 58 requests left, that is every 47 seconds for a 45-minute episode, and every 2 minutes 5 seconds for a 2-hour movie.
 - Each thumbnail shows the keyframe nearest its time, a few seconds from it at most, unless the file has keyframes further apart.
+- Thumbnails made during a play are one every **One thumbnail every (seconds, at least)**. After the play, they are kept and only the following ones are read, within the requests left. When those make the interval longer, each thumbnail kept shows at the nearest time of the longer interval.
 - Chapter images show the keyframe nearest each chapter's start: one read for it when the requests left allow one per thumbnail and per chapter, otherwise the nearest of the thumbnails' reads.
 - FFmpeg decodes each keyframe on its own as it arrives, tied to its time whatever the order it was read in, on the GPU when there is one, and tone maps HDR.
 - Thumbnails are packed into Jellyfin's 10x10 tile JPEGs. Chapter images are at most 640 pixels wide.
@@ -510,11 +524,12 @@ Images are made after watching, at a gentle pace:
 - A request answered oddly, as some hosts do now and then (the whole file for a range, another range, an answer cut short, or none), is asked once more after a short pause. The retry counts in the budget.
 - A link the source says expired is renewed, once per version, then asked again.
 - Two odd answers in a row fail the version for 30 minutes. The log tells what the source answered, never its address.
-- A host that asks to slow down (`429`) or fails as overloaded (`502`, `503`, `504`) is not asked again: the version stops at once, nothing of it is kept, and the version waits a day. That host gets no image request for 2 hours, while other hosts go on.
+- A host that asks to slow down (`429`) or fails as overloaded (`502`, `503`, `504`) is not asked again: the version stops at once, nothing read then is kept, and the version waits a day. That host gets no image request for 2 hours, while other hosts go on. The thumbnails made during the play stay.
 - A version that fails otherwise is left alone for 30 minutes, or a day when its file cannot give images (no index, an unsupported codec).
 
 **Compared with Jellyfin:**
 
+- Jellyfin makes trickplay images in a scheduled task, every day at 3 a.m. ([TrickplayImagesTask.cs, lines 60 to 68](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Trickplay/TrickplayImagesTask.cs#L60-L68)), or while a library scans when the library asks ([TrickplayProvider.cs, line 101](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Trickplay/TrickplayProvider.cs#L101)), from the whole file. Polyfin makes them of the versions played, the first minutes of a first play during that play.
 - Thumbnails are of the keyframes read, so their timing is approximate (see above).
 - Chapters carry no `ImagePath`.
 - Turning either setting off hides what was made, which shows again when turned back on.
@@ -522,6 +537,7 @@ Images are made after watching, at a gentle pace:
 **For app developers:**
 
 - Apps get images as Jellyfin gives them: the item's `Trickplay` field, by media source and width.
+- During a first play, a version's set lists the thumbnails made so far: its `ThumbnailCount` covers the start of the version, and grows. Tiles past it are not found.
 - `Trickplay` is keyed as the item's `MediaSources` name the versions (the first under the title's own identifier), and limited to the versions the user is offered under their quality group.
 - Tiles are served at `/Videos/{itemId}/Trickplay/{width}/tiles.m3u8` and `{index}.jpg`, which follow parental control, blocked genres and allowed hours.
 - Chapters carry an `ImageTag`, served by `/Items/{itemId}/Images/Chapter/{index}` without credentials, like all images.

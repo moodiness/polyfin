@@ -33,12 +33,6 @@ func (s *Service) Status() Status {
 	return status
 }
 
-func (s *Service) setWorking(working bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.working = working
-}
-
 // pausedHosts lists the hosts paused now, by name.
 func (g *gate) pausedHosts() []PausedHost {
 	g.mu.Lock()

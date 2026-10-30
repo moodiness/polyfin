@@ -437,7 +437,14 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Settings:    store.Settings,
 		Open:        func(v library.Version) thumbnails.Source { return player.OpenSource(v).Once() },
 		Analyzed:    player.Analyzed,
-		Logger:      logger,
+		// During a play, thumbnails are made of what it read, unless a
+		// conversion runs on the processor.
+		Cached: func(v library.Version) (thumbnails.Cached, bool) {
+			cached, ok := player.CachedSource(v)
+			return cached, ok
+		},
+		Converting: player.ConvertsOnProcessor,
+		Logger:     logger,
 	})
 	defer images.Close()
 	// Recording and backups follow the settings, which turn them on and
