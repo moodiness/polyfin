@@ -202,8 +202,10 @@ func TestDVDTitlesAreItsMovies(t *testing.T) {
 // A DVD copied as it is, a folder holding VIDEO_TS, is one movie: the
 // first VOB of its main title's set, sized as that set's VOBs, matched by
 // the disc folder's name, the folder above's when it only numbers the
-// disc. Its other files are left out; a DVD without VIDEO_TS.IFO is left
-// out whole, and one whose VIDEO_TS.IFO cannot be read is its largest set.
+// disc. Its other files are left out, its menus' VOBs too; a DVD without
+// VIDEO_TS.IFO is left out whole, and one whose VIDEO_TS.IFO cannot be
+// read is its largest set. A VOB out of a VIDEO_TS folder is a video of
+// its own.
 func TestDVDsAreOneMovie(t *testing.T) {
 	e := newEnv(t)
 	dir := t.TempDir()
@@ -239,6 +241,7 @@ func TestDVDsAreOneMovie(t *testing.T) {
 		"Nosferatu (1922)/VIDEO_TS/VTS_01_1.VOB":    "tt0013442",
 		"Nosferatu (1922)/Nosferatu (1922).mkv":     "tt0013442",
 		"Broken (2000)/VIDEO_TS/VTS_02_1.VOB":       "unmatched: not_found",
+		"Loose (2002)/VTS_01_1.VOB":                 "unmatched: not_found",
 	}
 	if got := e.files(addon.ID); !maps.Equal(got, want) {
 		t.Errorf("files: %v", got)
@@ -263,7 +266,7 @@ func TestDVDsAreOneMovie(t *testing.T) {
 	for _, u := range unmatched {
 		discs[u.Unit] = u.Disc
 	}
-	if err != nil || total != 2 || !maps.Equal(discs, map[string]string{"Other (1999)/Disc 1": DiscDVD, "Broken (2000)": DiscDVD}) {
+	if err != nil || total != 3 || !maps.Equal(discs, map[string]string{"Other (1999)/Disc 1": DiscDVD, "Broken (2000)": DiscDVD, "Loose (2002)/VTS_01_1.VOB": ""}) {
 		t.Errorf("unmatched: %d %+v %v", total, unmatched, err)
 	}
 
