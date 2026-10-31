@@ -682,6 +682,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// users saved, with what the Jellyfin API remembers of them.
 		LibraryOrders: jellyfinAPI,
 		Sharing:       lib,
+		// The Versions page explains titles' versions as the Jellyfin API
+		// offers them.
+		Versions: jellyfinAPI,
+		Titles:   lib,
 		Health: admin.HealthSources{
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,
