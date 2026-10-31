@@ -1004,13 +1004,27 @@ func (h *Handler) convertible(allowed accounts.Conversions, user accounts.User, 
 	return allowed
 }
 
+// mediaRoute tells how Jellyfin guards a media route: servedToAnyone for
+// those it serves without checking who asks, the streams of videos, audio
+// tracks, subtitles, attachments and recordings; servedSignedIn for those
+// it serves only to a signed-in caller ([Authorize]), as downloads, the
+// universal audio stream and its HLS playlists and segments.
+type mediaRoute bool
+
+const (
+	servedToAnyone mediaRoute = true
+	servedSignedIn mediaRoute = false
+)
+
 // streamAccess finds who a media request plays for. Players send no
 // credentials with media URLs: a signed grant in Path URLs, a signed play
 // session, or the caller's token stands for the user. A user outside their
 // allowed hours, or outside the local network without remote access, gets
 // nothing: Jellyfin serves direct streams without checking who asks, but
-// Polyfin knows, and keeps to the hours and the network.
-func (h *Handler) streamAccess(r *http.Request) (accounts.User, playback.Grant, bool) {
+// Polyfin knows, and keeps to the hours and the network. On a route
+// servedToAnyone, the token may come as the api_key query parameter even
+// without legacy authorization (see mediaToken).
+func (h *Handler) streamAccess(r *http.Request, route mediaRoute) (accounts.User, playback.Grant, bool) {
 	for _, name := range []string{grantParameter, "playSessionId"} {
 		token := query(r, name)
 		if token == "" {
@@ -1025,14 +1039,29 @@ func (h *Handler) streamAccess(r *http.Request) (accounts.User, playback.Grant, 
 			return user, grant, true
 		}
 	}
-	credentials := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
-	if credentials.Token != "" {
-		if _, user, err := h.Accounts.DeviceByToken(r.Context(), credentials.Token, forwarded.Client(r)); err == nil && !h.outsideHours(user) &&
+	if token := h.mediaToken(r, route); token != "" {
+		if _, user, err := h.Accounts.DeviceByToken(r.Context(), token, forwarded.Client(r)); err == nil && !h.outsideHours(user) &&
 			!remoteRefused(r, user) {
 			return user, playback.Grant{}, true
 		}
 	}
 	return accounts.User{}, playback.Grant{}, false
+}
+
+// mediaToken is the access token a media request carries, as any request
+// carries it (see readCredentials), or on a route servedToAnyone as the
+// api_key query parameter. Jellyfin 12.4 reads api_key only with legacy
+// authorization (AuthorizationContext.cs, lines 108 to 110), but serves
+// those routes to anyone: there the token only tells Polyfin who plays,
+// for the subtitle sync and the user's rules, and apps that sign their
+// own media URLs with api_key would otherwise be refused, or get what no
+// one in particular gets.
+func (h *Handler) mediaToken(r *http.Request, route mediaRoute) string {
+	token := readCredentials(r, h.Accounts.Settings().LegacyAuthorization).Token
+	if token == "" && route == servedToAnyone {
+		token = query(r, "api_key")
+	}
+	return token
 }
 
 // stream serves a version's bytes: /Videos/{itemId}/stream, with an
@@ -1056,7 +1085,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		validationProblem(w, map[string][]string{"itemId": {notValid(r.PathValue("itemId"))}})
 		return
 	}
-	user, grant, ok := h.streamAccess(r)
+	user, grant, ok := h.streamAccess(r, servedToAnyone)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -1167,7 +1196,7 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		// Not described since the server started: describe the item again
 		// for a signed-in caller.
-		user, _, signedIn := h.streamAccess(r)
+		user, _, signedIn := h.streamAccess(r, servedToAnyone)
 		if !signedIn {
 			processingError(w, http.StatusNotFound)
 			return
@@ -1287,7 +1316,7 @@ const trackWait = 2 * time.Minute
 // DeliveryUrls. The title's own identifier stands for the version its
 // first media source describes (see firstWorkingVersion).
 func (h *Handler) sourceVersion(r *http.Request, item accounts.ID) (library.Version, bool) {
-	user, _, signedIn := h.streamAccess(r)
+	user, _, signedIn := h.streamAccess(r, servedToAnyone)
 	wanted, ok := parseGUID(r.PathValue("mediaSourceId"))
 	if !signedIn || !ok {
 		return library.Version{}, false

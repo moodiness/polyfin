@@ -1077,7 +1077,7 @@ func (h *Handler) liveRecordingFile(w http.ResponseWriter, r *http.Request) {
 		notFoundProblem(w)
 		return
 	}
-	user, _, ok := h.streamAccess(r)
+	user, _, ok := h.streamAccess(r, servedToAnyone)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		return

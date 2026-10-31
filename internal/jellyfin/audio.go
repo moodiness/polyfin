@@ -317,14 +317,14 @@ type audioRequest struct {
 // audioOf resolves a request for a track's bytes, answering w when it
 // cannot. The conversion the query asks for is held to what the user may
 // have: none without the conversion permission, and no more than their
-// bitrate limit.
-func (h *Handler) audioOf(w http.ResponseWriter, r *http.Request, converted bool) (audioRequest, bool) {
+// bitrate limit. route is how Jellyfin guards the request's route.
+func (h *Handler) audioOf(w http.ResponseWriter, r *http.Request, converted bool, route mediaRoute) (audioRequest, bool) {
 	opened, ok := parseGUID(r.PathValue("itemId"))
 	if !ok {
 		validationProblem(w, map[string][]string{"itemId": {notValid(r.PathValue("itemId"))}})
 		return audioRequest{}, false
 	}
-	user, grant, ok := h.streamAccess(r)
+	user, grant, ok := h.streamAccess(r, route)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		return audioRequest{}, false
@@ -437,7 +437,7 @@ func (h *Handler) audioFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	static, _ := boolQuery(r, "static")
-	req, ok := h.audioOf(w, r, !static)
+	req, ok := h.audioOf(w, r, !static, servedToAnyone)
 	if !ok {
 		return
 	}
@@ -509,7 +509,7 @@ func segmentFormat(r *http.Request) hls.Format {
 // audioPlaylist answers the master or the media playlist of a track's
 // HLS conversion, whose files carry the same query.
 func (h *Handler) audioPlaylist(w http.ResponseWriter, r *http.Request, master bool) {
-	req, ok := h.audioOf(w, r, true)
+	req, ok := h.audioOf(w, r, true, servedSignedIn)
 	if !ok {
 		return
 	}
@@ -573,7 +573,7 @@ func (h *Handler) audioSegment(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusNotFound)
 		return
 	}
-	req, ok := h.audioOf(w, r, true)
+	req, ok := h.audioOf(w, r, true, servedSignedIn)
 	if !ok {
 		return
 	}
@@ -624,7 +624,7 @@ func (h *Handler) audioSegment(w http.ResponseWriter, r *http.Request) {
 // or container|codec), then serves the track as it is, its HLS master
 // playlist, or the converted stream.
 func (h *Handler) universalAudio(w http.ResponseWriter, r *http.Request) {
-	req, ok := h.audioOf(w, r, false)
+	req, ok := h.audioOf(w, r, false, servedSignedIn)
 	if !ok {
 		return
 	}

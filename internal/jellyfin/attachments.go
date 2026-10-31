@@ -113,7 +113,7 @@ func (h *Handler) attachment(w http.ResponseWriter, r *http.Request) {
 		notFoundProblem(w)
 		return
 	}
-	user, _, signedIn := h.streamAccess(r)
+	user, _, signedIn := h.streamAccess(r, servedToAnyone)
 	if !signedIn {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
