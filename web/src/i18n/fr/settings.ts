@@ -629,6 +629,9 @@ const settings: typeof en = {
     tmdbKey: 'Clé d’API TMDB',
     tmdbKeyHelp:
       'Facultatif. Avec une clé d’API ou un jeton d’accès en lecture d’un compte TMDB, « Modifier les images » de jellyfin-web cherche aussi sur TMDB les affiches, fonds et logos d’un titre, les images d’un épisode, les affiches d’une saison et les photos d’une personne, que Polyfin relaie. Les personnes sont aussi cherchées une fois sur TMDB : celles sans photo reçoivent la leur, et leurs pages montrent leur biographie, leurs dates de naissance et de décès et leur lieu de naissance. Les fichiers d’un dossier local dont la recherche échoue auprès de tous les addons de métadonnées sont aussi cherchés sur TMDB. Sans clé, « Modifier les images » ne montre que les images des addons et TMDB n’est jamais consulté.',
+    waitDigitalRelease: 'Attendre la sortie numérique',
+    waitDigitalReleaseHelp:
+      'Un film des catalogues des addons n’apparaît qu’une fois sorti en vidéo : sa première sortie numérique ou physique, selon TMDB, sinon 90 jours après sa sortie en salles. D’ici là, il est absent des bibliothèques, des rangées de l’accueil, des recherches, des titres similaires et des pages des personnes, n’a aucune version et ne se lit pas ; les listes intelligentes avec une règle de titres à venir le montrent, avec ce jour. Un film que TMDB ne connaît pas, ou sorti depuis plus d’un an, reste affiché. Nécessite la clé d’API TMDB.',
     mdblistRatingsKey: 'Clé d’API MDBList des notes',
     mdblistRatingsKeyHelp:
       'Facultatif. Avec la clé d’un compte MDBList, les films et les séries affichent leur note IMDb, le score des critiques et celui du public donnés par MDBList, cherchés en arrière-plan et gardés pour tous les utilisateurs. Les clés MDBList des utilisateurs pour le suivi ne servent jamais à cela. Sans clé, MDBList n’est jamais consulté.',
@@ -1118,6 +1121,7 @@ const settings: typeof en = {
       skip: 'Passer l’intro et le générique',
       titlePages: 'Fiche des titres',
       images: 'Images',
+      releases: 'Sorties des films',
       ratings: 'Notes',
       music: 'Musique',
       thresholds: 'Seuils de lecture',

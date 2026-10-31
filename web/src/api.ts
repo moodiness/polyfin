@@ -331,6 +331,8 @@ export type Settings = {
   tmdbKeySet: boolean
   /** Sent only to change the key: a new key, checked with TMDB before it is saved, or "" to remove it. */
   tmdbKey?: string
+  /** Whether movies are hidden until TMDB tells they are out at home; needs the TMDB key. */
+  waitDigitalRelease: boolean
   /** Whether songs get lyrics from LRCLIB, which is sent their artist, title, album and length. */
   lyrics: boolean
   /** Whether apps get the gains of songs and albums known, which even the volume between songs. */
@@ -1583,6 +1585,7 @@ export type SmartField =
   | 'person'
   | 'studio'
   | 'released'
+  | 'homeRelease'
   | 'type'
   | 'rank'
   | 'state'
@@ -1594,12 +1597,15 @@ export type SmartState = 'played' | 'unplayed' | 'started' | 'favorite'
 export type SmartSort =
   'catalog' | 'premiere' | 'latestEpisode' | 'seasonPremiere' | 'rating' | 'name' | 'random'
 
+/** What a `homeRelease` rule matches: titles out at home in the last days, in the next, or either. */
+export type SmartHomeRelease = 'released' | 'upcoming' | 'both'
+
 /**
  * A rule of a smart list, or a group of them. `not` negates it. `value` is a genre, an ISO 639
  * language code, the highest content rating, a person's or a studio's name, `movie` or `series`,
- * or a SmartState; `min` and `max` bound a year, a rating, its votes, a runtime in minutes, or a
- * release in days from today (negative: past), and `max` is the place in its catalog. A group
- * matches `all` or `any` of its `rules`.
+ * a SmartState, or a SmartHomeRelease; `min` and `max` bound a year, a rating, its votes, a
+ * runtime in minutes, or a release in days from today (negative: past), and `max` is the place in
+ * its catalog or a home release's days. A group matches `all` or `any` of its `rules`.
  */
 export type SmartRule = {
   field: SmartField

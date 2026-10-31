@@ -354,6 +354,25 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		h.browseError(w, r, err)
 		return
 	}
+	// A movie waiting for its digital release does not play: Jellyfin's
+	// NotAllowed, which jellyfin-web tells as playback not allowed, while
+	// its page tells when it is out.
+	if item.Kind == library.KindMovie {
+		day, held, err := h.Library.Upcoming(r.Context(), user, item.ID)
+		if err != nil {
+			h.browseError(w, r, err)
+			return
+		}
+		if held {
+			out := "not known yet"
+			if !day.IsZero() {
+				out = day.Format(time.DateOnly)
+			}
+			h.Logger.Info("A movie waiting for its digital release was not played", "item", item.ID, "out", out)
+			writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NotAllowed"})
+			return
+		}
+	}
 	// A channel, and a video whose stream has no end, play live.
 	if item.Kind == library.KindChannel || h.liveVideo(r.Context(), user, item) {
 		h.livePlaybackInfo(w, r, user, item, opened, request)

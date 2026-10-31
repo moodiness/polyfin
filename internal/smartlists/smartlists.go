@@ -1,12 +1,12 @@
 // Package smartlists keeps the smart lists: lists of titles drawn from
 // catalogs of addons, which keep the titles that match their rules over
 // what the titles are (genre, year, IMDb rating and its votes, language,
-// runtime, content rating, people, studio, release date, movie or series,
-// place in their catalog) and over what the user who opens them did with
-// them (played, unplayed, started, favorite), but those their exclusions
-// match. Apps see a list as a library or as a collection. The server's
-// lists, made by administrators, are seen by every user; a user's own
-// lists only by them.
+// runtime, content rating, people, studio, release date, home release,
+// movie or series, place in their catalog) and over what the user who
+// opens them did with them (played, unplayed, started, favorite), but
+// those their exclusions match. Apps see a list as a library or as a
+// collection. The server's lists, made by administrators, are seen by
+// every user; a user's own lists only by them.
 //
 // This package keeps the lists and judges a title by their rules (see
 // Rule.Judge); the library reads their catalogs and lists them.

@@ -224,6 +224,7 @@ const libraries = {
       rank: 'Place in its catalog',
       state: 'Watch state',
       released: 'Release date',
+      homeRelease: 'Home release',
       votes: 'IMDb votes',
       runtime: 'Runtime',
       contentRating: 'Content rating',
@@ -242,6 +243,11 @@ const libraries = {
     atMost: 'At most',
     releasedWhen: 'When',
     releasedWithin: { last: 'In the last', next: 'In the next' } as Record<string, string>,
+    homeReleaseWithin: {
+      released: 'Out in the last',
+      upcoming: 'Coming in the next',
+      both: 'Within',
+    } as Record<string, string>,
     days: 'days',
     namePlaceholder: { person: 'Their name', studio: 'Its name' } as Record<string, string>,
     types: { movie: 'A movie', series: 'A series' } as Record<string, string>,
@@ -259,6 +265,8 @@ const libraries = {
       'IMDb votes come from MDBList, with the MDBList API key for ratings under Settings › Content, looked up in the background. Without that key, no title has votes.',
     studioHelp:
       'Studios and networks come from TMDB, with the TMDB API key under Settings › Content, looked up in the background and kept: the list grows as they come. Without that key, only the studios an administrator set in a title’s metadata count.',
+    homeReleaseHelp:
+      'A movie’s home release is its first digital or physical release, else 90 days after it came out in cinemas, as TMDB tells with the TMDB API key under Settings › Content, looked up in the background and kept: the list grows as they come. A series’ is its premiere date. With Wait for the digital release on, a movie not out yet is listed only by lists with a rule of upcoming titles.',
     sort: 'Sort',
     sorts: {
       catalog: 'As its catalogs list them, one of each in turn',

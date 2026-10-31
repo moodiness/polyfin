@@ -442,6 +442,11 @@ type view struct {
 	// hidden are the titles the user hid, which listings leave out (see
 	// hidden.go).
 	hidden HiddenTitles
+	// waitRelease is set while movies wait for their digital release, and
+	// upcoming for a view whose listings keep those it holds back: a smart
+	// list's read (see releases.go).
+	waitRelease bool
+	upcoming    bool
 	// catalogLimit and channelLimit are the settings' limits when the
 	// request came (see limit).
 	catalogLimit int
@@ -512,7 +517,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 		}
 	}
 	v := view{user: user.ID, parental: user.Parental, genres: user.BlockedGenres, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
-		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}
+		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit, waitRelease: settings.WaitDigitalRelease && s.tmdb.Enabled()}
 	if user.ID != (accounts.ID{}) {
 		hidden, err := s.hiddenTitles(ctx, user.ID)
 		if err != nil {
@@ -1949,7 +1954,9 @@ func (s *Service) serverMeta(ctx context.Context, v view, metaType, id string) (
 }
 
 // Item describes one item. Titles are completed with their addon's full
-// metadata when available.
+// metadata when available. A movie waiting for its digital release has
+// the day it is out at home as its premiere date, and first in its
+// overview (see releases.go).
 func (s *Service) Item(ctx context.Context, user accounts.User, id accounts.ID) (Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -1959,7 +1966,18 @@ func (s *Service) Item(ctx context.Context, user accounts.User, id accounts.ID) 
 	if err != nil {
 		return Item{}, err
 	}
-	return s.overriddenItem(item), nil
+	item = s.overriddenItem(item)
+	if item.Kind == KindMovie {
+		day, held, err := s.upcoming(ctx, v, id)
+		if err != nil {
+			return Item{}, err
+		}
+		if held && !day.IsZero() {
+			item.PremiereDate = &day
+			homeReleaseNote(&item, v.words, day)
+		}
+	}
+	return item, nil
 }
 
 // Original describes one item as its addon and MDBList do, without what

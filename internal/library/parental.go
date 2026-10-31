@@ -314,14 +314,16 @@ func (v view) withoutWait() view {
 }
 
 // visibleMetas keeps the entries of a catalog page the user's parental
-// control and blocked genres let them see, without the titles they hid.
+// control and blocked genres let them see, without the titles they hid
+// and the movies waiting for their digital release (see releases.go).
 // Entries that are not titles, collections among them, are kept. held
-// reports titles left out only because their rating or genres are not
-// known yet (see visible).
+// reports titles left out only because their rating or genres, or their
+// release, are not known yet (see visible).
 func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []stremio.Meta) ([]stremio.Meta, bool) {
 	metas = v.unhiddenMetas(src, metas)
+	metas, waiting := s.releasedMetas(ctx, v, src, metas)
 	if !v.restricted() || len(metas) == 0 {
-		return metas, false
+		return metas, waiting
 	}
 	var titles []record
 	judged := make(map[accounts.ID]int, len(metas))
@@ -350,7 +352,7 @@ func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []
 			kept = append(kept, meta)
 		}
 	}
-	return kept, held
+	return kept, held || waiting
 }
 
 // storedTraits fills in the ratings and genres kept for records made from

@@ -631,6 +631,9 @@ const settings: typeof en = {
     tmdbKey: 'Chiave API TMDB',
     tmdbKeyHelp:
       'Facoltativa. Con una chiave API o un token di accesso in lettura di un account TMDB, «Modifica immagini» di jellyfin-web cerca anche su TMDB locandine, sfondi e loghi di un titolo, fotogrammi di un episodio, locandine di una stagione e foto di una persona, che Polyfin inoltra. Le persone vengono inoltre cercate una volta su TMDB: quelle senza foto ricevono la loro, e le loro pagine mostrano biografia, date di nascita e di morte e luogo di nascita. Anche i file di una cartella locale la cui ricerca non riesce presso tutti gli add-on dei metadati vengono cercati su TMDB. Senza chiave, «Modifica immagini» elenca solo le immagini degli add-on e TMDB non viene mai interpellato.',
+    waitDigitalRelease: 'Attendi l’uscita digitale',
+    waitDigitalReleaseHelp:
+      'Un film dei cataloghi degli addon compare solo quando è disponibile a casa: la sua prima uscita digitale o fisica, secondo TMDB, altrimenti 90 giorni dopo l’uscita al cinema. Fino ad allora non compare nelle librerie, nelle righe della home, nelle ricerche, nei titoli simili e nelle pagine delle persone, non ha versioni e non si riproduce; le liste intelligenti con una regola di titoli in arrivo lo mostrano, con quel giorno. Un film che TMDB non conosce, o uscito da più di un anno, resta visibile. Richiede la chiave API TMDB.',
     mdblistRatingsKey: 'Chiave API MDBList per i voti',
     mdblistRatingsKeyHelp:
       'Facoltativa. Con una chiave di un account MDBList, film e serie TV mostrano il voto IMDb, il voto della critica e il voto del pubblico da MDBList, recuperati in background e conservati per tutti gli utenti. Le chiavi MDBList personali degli utenti per il tracciamento non vengono mai usate a questo scopo. Senza chiave, MDBList non viene mai interpellato.',
@@ -1118,6 +1121,7 @@ const settings: typeof en = {
       skip: 'Salta intro e titoli di coda',
       titlePages: 'Pagine dei titoli',
       images: 'Immagini',
+      releases: 'Uscite dei film',
       ratings: 'Voti',
       music: 'Musica',
       thresholds: 'Soglie di riproduzione',

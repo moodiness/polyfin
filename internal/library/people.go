@@ -174,10 +174,10 @@ const reachesTitle = `(title.data->'addon' = ANY($10::jsonb[]) OR EXISTS (
 	WHERE title.data->'meta'->>'type' = rule.type AND starts_with(title.data->'meta'->>'id', rule.prefix)))`
 
 // credited lists the titles a person is credited in that the user's view
-// reaches and their parental control lets them see. Jellyfin knows people
-// through the items a user can access; likewise, a person credited only in
-// titles of other users' addons, or in titles hidden from the user, is not
-// found.
+// reaches and their parental control lets them see, but the movies
+// waiting for their digital release. Jellyfin knows people through the
+// items a user can access; likewise, a person credited only in titles of
+// other users' addons, or in titles hidden from the user, is not found.
 func (s *Service) credited(ctx context.Context, v view, person record) ([]record, error) {
 	if person.Person == nil {
 		return nil, ErrNotFound
@@ -194,6 +194,7 @@ func (s *Service) credited(ctx context.Context, v view, person record) ([]record
 	}
 	titles = slices.DeleteFunc(titles, func(title record) bool { return title.Meta == nil || !v.reaches(title) })
 	titles, _ = s.visible(ctx, v, titles)
+	titles, _ = s.released(ctx, v, titles)
 	if len(titles) == 0 {
 		return nil, ErrNotFound
 	}
