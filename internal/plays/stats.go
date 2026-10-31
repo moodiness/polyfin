@@ -17,6 +17,9 @@ const topCount = 10
 type Statistics struct {
 	Plays  int
 	Played time.Duration
+	// Sent is the bytes Polyfin sent the apps for the playbacks, those
+	// before it counted them, or that it did not relay, left out.
+	Sent int64
 	// Users are the users who played, the one who played longest first.
 	Users []UserFigures
 	// Buckets are the days, or months, with playbacks, in order, by the
@@ -84,7 +87,8 @@ func (h *History) Statistics(ctx context.Context, f Filter, unit string, zone *t
 	args := append(f.args(), zone.String())
 	from := " FROM playback_history h WHERE " + filterWhere
 	var played int64
-	if err := h.db.QueryRow(ctx, "SELECT count(*), coalesce(sum(h.played_seconds), 0)"+from, args[:3]...).Scan(&st.Plays, &played); err != nil {
+	if err := h.db.QueryRow(ctx, "SELECT count(*), coalesce(sum(h.played_seconds), 0), coalesce(sum(h.sent_bytes), 0)"+from, args[:3]...).
+		Scan(&st.Plays, &played, &st.Sent); err != nil {
 		return st, err
 	}
 	st.Played = seconds(played)
