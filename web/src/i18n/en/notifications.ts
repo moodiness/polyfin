@@ -88,6 +88,8 @@ const notifications = {
       own: 'What it is told of, about you.',
     },
     eventNames: {
+      server_crashed: 'Server crashed',
+      playback_failed: 'Playback failed',
       new_episode: 'New episodes',
       recording_finished: 'Recording finished',
       recording_failed: 'Recording failed',
@@ -110,6 +112,10 @@ const notifications = {
       title_available: 'Watchlist title available',
     },
     eventHelp: {
+      server_crashed:
+        'Polyfin stopped on an error and started again: told as it starts again, with the beginning of the error’s trace, which System › Health shows too.',
+      playback_failed:
+        'A play could not start or broke: no version plays on the app, a limit refused it, or its stream failed. Once an hour per user and title, with the app and the reason.',
       new_episode:
         'An episode of a series played or marked favorite is out: once per episode, never for those already out.',
       recording_finished: 'A Live TV recording ended, whole or with part of it missing.',
@@ -181,6 +187,50 @@ const notifications = {
         'Recent messages could not be delivered: the target did not answer, or answered with errors. Each message is tried again for an hour.',
       unreadable:
         'Its address, token or key cannot be decrypted with POLYFIN_SECRET_KEY: nothing is sent to it until it is entered again.',
+    },
+    perMinute: 'Messages a minute, at most',
+    perMinuteHelp: 'Further messages wait their turn, in order. Empty for no limit; 1 to 60.',
+    groupMinutes: 'Group plays and new episodes, in minutes',
+    groupMinutesHelp:
+      'Playbacks, shared links played and new episodes wait this long, then go as one message. Everything else still goes at once. Empty to send each at once; 1 to 1440.',
+    capped: (n: number) => `At most ${n} a minute`,
+    grouped: (n: number) => `Grouped every ${n} min`,
+    deliveries: {
+      open: 'Recent deliveries',
+      title: (name: string) => `Recent deliveries of ${name}`,
+      help: 'The last 100 messages, newest first, kept 30 days.',
+      loading: 'Loading the deliveries…',
+      empty: 'No message sent yet.',
+      when: 'When',
+      event: 'Message',
+      outcome: 'Outcome',
+      test: 'Test message',
+      grouped: (n: number) => `${n} events in one message`,
+      attempts: (n: number) => `${n} attempts`,
+      outcomes: {
+        delivered: 'Delivered',
+        refused: 'Refused',
+        rejected: 'Message refused',
+        failed: 'Not delivered',
+        dropped: 'Dropped',
+        unreadable: 'Cannot be decrypted',
+      },
+    },
+    preview: {
+      title: 'Preview',
+      help: 'See a summary as an email target would receive it now, of the server or of a user. Nothing is sent.',
+      summary: 'Summary',
+      summaries: {
+        weekly_summary: 'Weekly summary',
+        monthly_summary: 'Month in review',
+        yearly_summary: 'Year in review',
+      },
+      of: 'Of',
+      server: 'The server',
+      show: 'Preview',
+      loading: 'Making the preview…',
+      empty: 'Nothing to tell for this period: this summary would not be sent.',
+      frame: 'The summary’s email',
     },
     lastSent: 'Last message ',
     nothingSent: 'No message sent yet',

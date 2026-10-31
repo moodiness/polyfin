@@ -91,6 +91,8 @@ const notifications: typeof en = {
       own: 'Di cosa viene avvisata, per quanto ti riguarda.',
     },
     eventNames: {
+      server_crashed: 'Arresto anomalo del server',
+      playback_failed: 'Riproduzione non riuscita',
       new_episode: 'Nuovi episodi',
       recording_finished: 'Registrazione terminata',
       recording_failed: 'Registrazione non riuscita',
@@ -113,6 +115,10 @@ const notifications: typeof en = {
       title_available: 'Titolo da guardare disponibile',
     },
     eventHelp: {
+      server_crashed:
+        'Polyfin si è fermato per un errore ed è ripartito: segnalato alla ripartenza, con l’inizio della traccia dell’errore, che mostra anche Sistema › Stato di salute.',
+      playback_failed:
+        'Una riproduzione non è potuta partire o si è interrotta: nessuna versione si riproduce sull’app, un limite l’ha rifiutata o il suo flusso non ha funzionato. Una volta all’ora per utente e titolo, con l’app e il motivo.',
       new_episode:
         'È uscito un episodio di una serie TV guardata o aggiunta ai preferiti: una volta per episodio, mai per quelli già usciti.',
       recording_finished:
@@ -187,6 +193,51 @@ const notifications: typeof en = {
         'Non è stato possibile recapitare i messaggi recenti: la destinazione non ha risposto o ha risposto con errori. Ogni messaggio viene ritentato per un’ora.',
       unreadable:
         'L’indirizzo, il token o la chiave non possono essere decifrati con POLYFIN_SECRET_KEY: non le viene inviato nulla finché non vengono reinseriti.',
+    },
+    perMinute: 'Messaggi al minuto, al massimo',
+    perMinuteHelp:
+      'I messaggi successivi attendono il loro turno, in ordine. Vuoto per nessun limite; da 1 a 60.',
+    groupMinutes: 'Raggruppa riproduzioni e nuovi episodi, in minuti',
+    groupMinutesHelp:
+      'Riproduzioni, link condivisi riprodotti e nuovi episodi attendono questo tempo, poi partono in un solo messaggio. Tutto il resto parte sempre subito. Vuoto per inviare ognuno subito; da 1 a 1440.',
+    capped: (n: number) => `Al massimo ${n} al minuto`,
+    grouped: (n: number) => `Raggruppati ogni ${n} min`,
+    deliveries: {
+      open: 'Invii recenti',
+      title: (name: string) => `Invii recenti a ${name}`,
+      help: 'Gli ultimi 100 messaggi, dal più recente, conservati 30 giorni.',
+      loading: 'Caricamento degli invii…',
+      empty: 'Nessun messaggio ancora inviato.',
+      when: 'Quando',
+      event: 'Messaggio',
+      outcome: 'Esito',
+      test: 'Messaggio di prova',
+      grouped: (n: number) => `${n} eventi in un messaggio`,
+      attempts: (n: number) => `${n} tentativi`,
+      outcomes: {
+        delivered: 'Recapitato',
+        refused: 'Rifiutato',
+        rejected: 'Messaggio rifiutato',
+        failed: 'Non recapitato',
+        dropped: 'Scartato',
+        unreadable: 'Non decifrabile',
+      },
+    },
+    preview: {
+      title: 'Anteprima',
+      help: 'Vedi un riepilogo come lo riceverebbe ora una destinazione email, del server o di un utente. Non viene inviato nulla.',
+      summary: 'Riepilogo',
+      summaries: {
+        weekly_summary: 'Riepilogo settimanale',
+        monthly_summary: 'Il mese in sintesi',
+        yearly_summary: 'L’anno in sintesi',
+      },
+      of: 'Di',
+      server: 'Il server',
+      show: 'Anteprima',
+      loading: 'Preparazione dell’anteprima…',
+      empty: 'Niente da segnalare per questo periodo: questo riepilogo non verrebbe inviato.',
+      frame: 'L’email del riepilogo',
     },
     lastSent: 'Ultimo messaggio ',
     nothingSent: 'Nessun messaggio ancora inviato',

@@ -33,6 +33,7 @@ import {
   TextInput,
 } from '@/ui'
 import NotificationTargets from '@/features/notifications/NotificationTargets'
+import SummaryPreview from '@/features/notifications/SummaryPreview'
 import { computer, useServerSystem } from '@/features/sources/LocalFolders'
 import CodeEditor from './CodeEditor'
 import CollectionLibraryApps from './CollectionLibraryApps'
@@ -1978,6 +1979,10 @@ function Notifications({ form, update, error, number, limits }: SectionFormApi) 
             className="max-w-[10rem]"
           />
         </FieldRow>
+        <SettingRow anchor="summary-preview">
+          <h3 className="mb-2 text-[15px] font-medium text-ink">{text.preview.title}</h3>
+          <SummaryPreview />
+        </SettingRow>
       </SettingsGroup>
       <SettingsGroup title={s.email}>
         <TextRow anchor="email-setup">

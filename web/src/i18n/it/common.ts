@@ -401,6 +401,10 @@ const common: typeof en = {
     invalid_events: 'Uno degli eventi scelti non è disponibile per questa destinazione.',
     invalid_reminder_settings: 'Scegli 1, 5, 10, 15, 30 o 60 minuti.',
     too_many_targets: 'Ci sono già 20 destinazioni. Eliminane una per aggiungerne un’altra.',
+    invalid_per_minute: 'Messaggi al minuto: da 1 a 60, oppure vuoto per nessun limite.',
+    invalid_group_minutes: 'Raggruppamento: da 1 a 1.440 minuti, oppure vuoto per inviare subito.',
+    invalid_summary:
+      'Solo il riepilogo settimanale, il mese e l’anno in sintesi hanno un’anteprima.',
     target_unreadable:
       'Impossibile decifrare l’indirizzo o il token di questa destinazione con POLYFIN_SECRET_KEY. Inseriscilo di nuovo.',
     invalid_source_name: 'I nomi delle origini devono avere da 1 a 64 caratteri.',

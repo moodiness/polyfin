@@ -394,6 +394,9 @@ const common: typeof en = {
     invalid_events: 'Um dos eventos escolhidos não está disponível para este destino.',
     invalid_reminder_settings: 'Escolha 1, 5, 10, 15, 30 ou 60 minutos.',
     too_many_targets: 'Já existem 20 destinos. Exclua um para adicionar outro.',
+    invalid_per_minute: 'Mensagens por minuto: de 1 a 60, ou vazio para nenhum limite.',
+    invalid_group_minutes: 'Agrupamento: de 1 a 1.440 minutos, ou vazio para enviar na hora.',
+    invalid_summary: 'Só o resumo semanal e as retrospectivas do mês e do ano têm prévia.',
     target_unreadable:
       'O endereço ou token deste destino não pode ser descriptografado com POLYFIN_SECRET_KEY. Digite-o novamente.',
     invalid_source_name: 'Os nomes de fonte devem ter de 1 a 64 caracteres.',

@@ -55,7 +55,7 @@ import {
   useHealth,
   useHealthProblems,
 } from '@/features/system/problems'
-import { errorMessage, formatBytes, formatSpan, relativeTime } from '@/format'
+import { dateTime, errorMessage, formatBytes, formatSpan, relativeTime } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
 import BackupStatus from './BackupStatus'
@@ -1066,8 +1066,27 @@ function Process({ health }: { health: Health }) {
               label: 'Go',
               value: <span className="font-mono">{process.goVersion.replace(/^go/, '')}</span>,
             },
+            {
+              label: text.lastCrash,
+              value:
+                process.lastCrash === null ? (
+                  text.noCrash
+                ) : (
+                  <time dateTime={process.lastCrash.at}>
+                    {dateTime(process.lastCrash.at, language)}
+                  </time>
+                ),
+            },
           ]}
         />
+        {process.lastCrash !== null && (
+          <div className="mt-4">
+            <p className="max-w-[70ch] text-small text-ink-3">{text.lastCrashHelp}</p>
+            <pre className="mt-2 max-h-64 overflow-auto rounded-panel border border-line-2 bg-s1 p-3 font-mono text-small whitespace-pre-wrap text-ink-2">
+              {process.lastCrash.trace}
+            </pre>
+          </div>
+        )}
         <p className="mt-4 max-w-[70ch] text-small text-ink-3">{text.goroutinesHelp}</p>
         <a
           href={goroutinesDownloadUrl}

@@ -381,6 +381,9 @@ const common = {
     invalid_events: 'One of the events chosen is not available for this target.',
     invalid_reminder_settings: 'Choose 1, 5, 10, 15, 30 or 60 minutes.',
     too_many_targets: 'There are 20 targets already. Delete one to add another.',
+    invalid_per_minute: 'Messages a minute: 1 to 60, or empty for no limit.',
+    invalid_group_minutes: 'Grouping: 1 to 1,440 minutes, or empty to send each at once.',
+    invalid_summary: 'Only the weekly summary, the month and the year in review have a preview.',
     target_unreadable:
       'This target’s address or token cannot be decrypted with POLYFIN_SECRET_KEY. Enter it again.',
     invalid_source_name: 'Source names must be 1 to 64 characters long.',

@@ -203,6 +203,16 @@ type processJSON struct {
 	Memory     uint64 `json:"memory"`
 	Heap       uint64 `json:"heap"`
 	Goroutines int    `json:"goroutines"`
+	// LastCrash is the server's last crash, as the next start found it,
+	// null when it never crashed since crashes are kept.
+	LastCrash *crashJSON `json:"lastCrash"`
+}
+
+// crashJSON is a crash of the server: when it happened, and the first
+// lines of its trace, redacted.
+type crashJSON struct {
+	At    time.Time `json:"at"`
+	Trace string    `json:"trace"`
 }
 
 type databaseJSON struct {
@@ -404,6 +414,11 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	if result.Database.Reachable && h.Health.DatabaseSize != nil {
 		if size, err := h.Health.DatabaseSize(ctx); err == nil {
 			result.Database.Size = &size
+		}
+	}
+	if result.Database.Reachable && h.Notifications != nil {
+		if crash, err := h.Notifications.LastCrash(ctx); err == nil && crash != nil {
+			result.Process.LastCrash = &crashJSON{At: crash.At.UTC().Truncate(time.Second), Trace: crash.Trace}
 		}
 	}
 	if result.Database.Reachable {
