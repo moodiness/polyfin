@@ -838,19 +838,19 @@ func (s *Service) forget(source accounts.ID) {
 // number shows the tuner's ("5.1") while the source keeps the provider's.
 const channelColumns = `l.id, coalesce(l.name, l.provider_name), coalesce(l.logo, l.provider_logo), l.description,
 	coalesce(c.name, c.provider_name), coalesce(l.number, CASE WHEN i.numbering = 'provider' THEN l.provider_number END, 0), l.guide_id,
-	CASE WHEN l.number IS NULL AND i.numbering = 'provider' THEN l.provider_guide_number ELSE '' END`
+	CASE WHEN l.number IS NULL AND i.numbering = 'provider' THEN l.provider_guide_number ELSE '' END, c.key`
 
 const channelJoins = `FROM iptv_lineup l JOIN iptv_sources i ON i.addon_id = l.addon_id
 	JOIN iptv_categories c ON c.id = coalesce(l.moved_to, l.category_id)`
 
 func scanMeta(source accounts.ID, row pgx.Row) (stremio.Meta, error) {
-	var id, name, logo, description, category, guide, guideNumber string
+	var id, name, logo, description, category, guide, guideNumber, group string
 	var number int
-	if err := row.Scan(&id, &name, &logo, &description, &category, &number, &guide, &guideNumber); err != nil {
+	if err := row.Scan(&id, &name, &logo, &description, &category, &number, &guide, &guideNumber, &group); err != nil {
 		return stremio.Meta{}, err
 	}
 	meta := stremio.Meta{ID: prefix(source) + id, Type: "tv", Name: name, Logo: logo, Description: description, ChannelNumber: number, GuideID: guide,
-		GuideNumber: guideNumber}
+		GuideNumber: guideNumber, ChannelGroup: group}
 	if category != "" {
 		meta.Genres = stremio.Names{category}
 	}

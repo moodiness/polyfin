@@ -124,10 +124,12 @@ type Meta struct {
 	// sources: the number its provider gives it, 0 for none, and its
 	// channel in XMLTV guides; GuideNumber is a tuner's number of the
 	// channel ("5.1"), which it shows and which guide channels may be
-	// named by. Addons never send them.
+	// named by; ChannelGroup is the key of the line-up category it shows
+	// in, which refreshes keep. Addons never send them.
 	ChannelNumber int    `json:"-"`
 	GuideID       string `json:"-"`
 	GuideNumber   string `json:"-"`
+	ChannelGroup  string `json:"-"`
 }
 
 // The shapes of a poster an addon declares (Meta.PosterShape) other than
