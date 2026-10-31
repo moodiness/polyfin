@@ -90,7 +90,7 @@ func (m *Manager) Record(ctx context.Context, key Key, open Opener, path string)
 	case mine >= userLives:
 		replaced = oldest
 		delete(m.lives, replaced.key)
-	case len(m.lives)+len(m.recordings) >= serverLives:
+	case len(m.lives)+len(m.recordings)+len(m.playouts) >= serverLives:
 		m.mu.Unlock()
 		return ErrBusy
 	}

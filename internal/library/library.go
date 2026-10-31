@@ -30,6 +30,7 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tmdb"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/virtualtv"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
 
@@ -165,6 +166,9 @@ type Service struct {
 	// addons that accept other identifiers than a title's (see
 	// streamids.go); nil, it maps nothing.
 	anime *anime.Service
+	// virtual answers for the channels Polyfin airs itself (see
+	// UseVirtual).
+	virtual Virtual
 	// refreshes are the refreshes of libraries' descriptions (see
 	// libraryrefresh.go).
 	refreshes libraryRefreshes
@@ -426,6 +430,9 @@ type view struct {
 	addons    []installed
 	libraries []library
 	channels  []source
+	// virtual are the channels Polyfin airs that the user sees, in order
+	// (see virtualchannels.go).
+	virtual []virtualtv.Channel
 	// smart are the smart lists the user sees, in order (see
 	// smartlists.go).
 	smart []smartList
@@ -589,6 +596,9 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 		})
 	}
 	if err := s.smartLists(ctx, &v, user, scopes); err != nil {
+		return view{}, err
+	}
+	if err := s.virtualChannels(ctx, &v, user); err != nil {
 		return view{}, err
 	}
 	return v, nil
@@ -2133,6 +2143,12 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	if errors.Is(err, ErrNotFound) {
 		if extra, err := s.extra(ctx, v, id); !errors.Is(err, ErrNotFound) {
 			return extra, err
+		}
+		if channel, ok, err := s.unlistedVirtualChannel(ctx, v, id); ok || err != nil {
+			return channel, err
+		}
+		if program, ok, err := s.findVirtualProgram(ctx, v, id); ok || err != nil {
+			return program, err
 		}
 		return s.unsavedProgram(ctx, v, id)
 	}
