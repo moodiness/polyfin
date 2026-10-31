@@ -30,6 +30,9 @@ type words struct {
 	replay string
 	// watchlist names the Watchlist view (see WatchlistViewID).
 	watchlist string
+	// homeRelease tells, given the day, when a movie waiting for its
+	// digital release is out at home (see releases.go).
+	homeRelease string
 	// language is the language of the words, one of i18n.Languages.
 	language string
 }
@@ -38,27 +41,27 @@ var vocabulary = map[string]words{
 	"en": {season: "Season", specials: "Specials", episode: "Episode", otherEpisodes: "Other episodes", video: "Video", chapter: "Chapter",
 		movies: "Movies", shows: "Shows", videos: "Videos", collections: "Collections",
 		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists", myMusic: "My music", replay: "Replay",
-		watchlist: "Watchlist"},
+		watchlist: "Watchlist", homeRelease: "Out at home on %s."},
 	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", otherEpisodes: "Autres épisodes", video: "Vidéo", chapter: "Chapitre",
 		movies: "Films", shows: "Séries", videos: "Vidéos", collections: "Collections",
 		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique", replay: "Replay",
-		watchlist: "À regarder"},
+		watchlist: "À regarder", homeRelease: "Sortie en vidéo le %s."},
 	"de": {season: "Staffel", specials: "Specials", episode: "Folge", otherEpisodes: "Weitere Folgen", video: "Video", chapter: "Kapitel",
 		movies: "Filme", shows: "Serien", videos: "Videos", collections: "Sammlungen",
 		songs: "Titel", albums: "Alben", artists: "Künstler", playlists: "Wiedergabelisten", myMusic: "Meine Musik", replay: "Replay",
-		watchlist: "Merkliste"},
+		watchlist: "Merkliste", homeRelease: "Fürs Heimkino ab %s."},
 	"es": {season: "Temporada", specials: "Especiales", episode: "Episodio", otherEpisodes: "Otros episodios", video: "Vídeo", chapter: "Capítulo",
 		movies: "Películas", shows: "Series", videos: "Vídeos", collections: "Colecciones",
 		songs: "Canciones", albums: "Álbumes", artists: "Artistas", playlists: "Listas de reproducción", myMusic: "Mi música", replay: "Replay",
-		watchlist: "Para ver"},
+		watchlist: "Para ver", homeRelease: "Disponible en casa el %s."},
 	"it": {season: "Stagione", specials: "Speciali", episode: "Episodio", otherEpisodes: "Altri episodi", video: "Video", chapter: "Capitolo",
 		movies: "Film", shows: "Serie TV", videos: "Video", collections: "Collezioni",
 		songs: "Brani", albums: "Album", artists: "Artisti", playlists: "Playlist", myMusic: "La mia musica", replay: "Replay",
-		watchlist: "Da guardare"},
+		watchlist: "Da guardare", homeRelease: "Disponibile a casa dal %s."},
 	"pt-BR": {season: "Temporada", specials: "Especiais", episode: "Episódio", otherEpisodes: "Outros episódios", video: "Vídeo", chapter: "Capítulo",
 		movies: "Filmes", shows: "Séries", videos: "Vídeos", collections: "Coleções",
 		songs: "Músicas", albums: "Álbuns", artists: "Artistas", playlists: "Playlists", myMusic: "Minha música", replay: "Replay",
-		watchlist: "Para assistir"},
+		watchlist: "Para assistir", homeRelease: "Disponível em casa em %s."},
 }
 
 // vocabularyOf returns the words of a server language, English when the

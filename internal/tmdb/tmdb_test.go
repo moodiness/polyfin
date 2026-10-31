@@ -206,3 +206,38 @@ func TestAtMostFourRequestsGoToTMDBAtOnce(t *testing.T) {
 		t.Errorf("%d more requests, want %d", len(arrived), asked-maxRequests)
 	}
 }
+
+// A movie's release dates are the earliest of each kind in any country:
+// its first digital or physical release, its first in cinemas, limited or
+// wide, and its first of any kind.
+func TestReleaseDatesAreTheEarliestOfEachKind(t *testing.T) {
+	t.Parallel()
+	date := func(day string, kind int) map[string]any {
+		return map[string]any{"release_date": day + "T00:00:00.000Z", "type": kind, "certification": ""}
+	}
+	fake := newFakeTMDB(t, map[string]any{
+		"/3/movie/7/release_dates": map[string]any{"id": 7, "results": []map[string]any{
+			{"iso_3166_1": "US", "release_dates": []any{date("2026-03-06", 3), date("2026-05-19", 4), date("2026-06-30", 5)}},
+			{"iso_3166_1": "FR", "release_dates": []any{date("2026-02-14", 1), date("2026-03-04", 2), date("2026-05-12", 5)}},
+		}},
+		"/3/movie/8/release_dates": map[string]any{"id": 8, "results": []map[string]any{
+			{"iso_3166_1": "DE", "release_dates": []any{date("2026-09-10", 3)}},
+		}},
+	})
+	c := New(fake.URL+"/3", Images, "test", keyed("k3y"))
+	day := func(text string) time.Time {
+		parsed, _ := time.Parse(time.DateOnly, text)
+		return parsed
+	}
+	got, err := c.ReleaseDates(t.Context(), "7")
+	if want := (Releases{Home: day("2026-05-12"), Theatrical: day("2026-03-04"), First: day("2026-02-14")}); err != nil || got != want {
+		t.Errorf("movie 7: %+v %v, want %+v", got, err, want)
+	}
+	got, err = c.ReleaseDates(t.Context(), "8")
+	if want := (Releases{Theatrical: day("2026-09-10"), First: day("2026-09-10")}); err != nil || got != want {
+		t.Errorf("movie 8: %+v %v, want %+v", got, err, want)
+	}
+	if _, err := c.ReleaseDates(t.Context(), "9"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown movie: %v", err)
+	}
+}

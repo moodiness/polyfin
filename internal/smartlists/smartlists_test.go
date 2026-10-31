@@ -69,6 +69,7 @@ func TestRulesAreValidated(t *testing.T) {
 			Rule{Field: FieldPerson, Value: "Some Actor"},
 			Rule{Field: FieldStudio, Value: "Some Studio", Not: true},
 			Rule{Field: FieldReleased, Min: new(-30.0), Max: new(0.0)},
+			Rule{Field: FieldHomeRelease, Value: HomeEither, Max: new(366.0)},
 		),
 	}
 	for _, rules := range valid {
@@ -86,6 +87,10 @@ func TestRulesAreValidated(t *testing.T) {
 		group(MatchAll, Rule{Field: FieldStudio}),
 		group(MatchAll, Rule{Field: FieldReleased}),
 		group(MatchAll, Rule{Field: FieldReleased, Min: new(-40000.0)}),
+		group(MatchAll, Rule{Field: FieldHomeRelease, Value: HomeUpcoming}),
+		group(MatchAll, Rule{Field: FieldHomeRelease, Value: "soon", Max: new(30.0)}),
+		group(MatchAll, Rule{Field: FieldHomeRelease, Value: HomeUpcoming, Max: new(0.0)}),
+		group(MatchAll, Rule{Field: FieldHomeRelease, Value: HomeUpcoming, Min: new(1.0), Max: new(30.0)}),
 		{Field: FieldGenre, Value: "Comedy"},
 		group("some"),
 		group(MatchAll, group(MatchAny)),
@@ -111,7 +116,7 @@ func TestRulesAreValidated(t *testing.T) {
 // known yet stays unknown either way.
 func TestLackingDataMatchesNoRuleNegatedOrNot(t *testing.T) {
 	t.Parallel()
-	described := Title{Described: true, VotesKnown: true, StudiosKnown: true, Today: time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
+	described := Title{Described: true, VotesKnown: true, StudiosKnown: true, HomeReleaseKnown: true, Today: time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
 	listed := Title{Today: described.Today}
 	for _, rule := range []Rule{
 		{Field: FieldGenre, Value: "Drama"},
@@ -124,6 +129,7 @@ func TestLackingDataMatchesNoRuleNegatedOrNot(t *testing.T) {
 		{Field: FieldReleased, Min: new(-30.0), Max: new(0.0)},
 		{Field: FieldVotes, Min: new(1000.0)},
 		{Field: FieldStudio, Value: "Some Studio"},
+		{Field: FieldHomeRelease, Value: HomeUpcoming, Max: new(30.0)},
 	} {
 		negated := rule
 		negated.Not = true
@@ -197,6 +203,59 @@ func TestNewRulesJudgeWhatTitlesAre(t *testing.T) {
 	upcoming.Released = today.Add(59*24*time.Hour + 23*time.Hour)
 	if got := (Rule{Field: FieldReleased, Min: new(0.0), Max: new(60.0)}).Judge(upcoming); got != Yes {
 		t.Errorf("released in 60 days: %v", got)
+	}
+}
+
+// A home release rule judges a movie by the day it is out at home, and a
+// series by its premiere date: in the last days, today included, in the
+// next days, or either. Only a rule of upcoming titles, not negated, lists
+// the titles not out yet.
+func TestHomeReleaseRulesJudgeWhenTitlesAreOutAtHome(t *testing.T) {
+	t.Parallel()
+	today := time.Date(2026, 10, 30, 15, 0, 0, 0, time.UTC)
+	movie := func(days int) Title {
+		return Title{Described: true, HomeRelease: today.AddDate(0, 0, days).Truncate(24 * time.Hour), HomeReleaseKnown: true, Today: today}
+	}
+	rule := func(value string, days float64) Rule {
+		return Rule{Field: FieldHomeRelease, Value: value, Max: new(days)}
+	}
+	for _, c := range []struct {
+		name  string
+		rule  Rule
+		title Title
+		want  Verdict
+	}{
+		{"out today, released", rule(HomeReleased, 7), movie(0), Yes},
+		{"out today, upcoming", rule(HomeUpcoming, 7), movie(0), No},
+		{"out a week ago, released in the last week", rule(HomeReleased, 7), movie(-7), Yes},
+		{"out 8 days ago, released in the last week", rule(HomeReleased, 7), movie(-8), No},
+		{"out tomorrow, released", rule(HomeReleased, 7), movie(1), No},
+		{"out tomorrow, upcoming", rule(HomeUpcoming, 7), movie(1), Yes},
+		{"out in 31 days, upcoming in 30", rule(HomeUpcoming, 30), movie(31), No},
+		{"out in 30 days, either", rule(HomeEither, 30), movie(30), Yes},
+		{"out 30 days ago, either", rule(HomeEither, 30), movie(-30), Yes},
+		{"out 31 days ago, either", rule(HomeEither, 30), movie(-31), No},
+		{"series premiering next week", rule(HomeUpcoming, 30), Title{Series: true, Released: today.AddDate(0, 0, 7), Today: today}, Yes},
+		{"series without a premiere date", rule(HomeUpcoming, 30), Title{Series: true, Described: true, HomeReleaseKnown: true, Today: today}, Absent},
+		{"movie not looked up yet", rule(HomeUpcoming, 30), Title{Described: true, Released: today, Today: today}, Unknown},
+	} {
+		if got := c.rule.Judge(c.title); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+	for _, c := range []struct {
+		rules Rule
+		want  bool
+	}{
+		{group(MatchAll, rule(HomeUpcoming, 30)), true},
+		{group(MatchAll, Rule{Field: FieldType, Value: "movie"}, group(MatchAny, rule(HomeEither, 30))), true},
+		{group(MatchAll, rule(HomeReleased, 30)), false},
+		{group(MatchAll, Rule{Field: FieldHomeRelease, Value: HomeUpcoming, Max: new(30.0), Not: true}), false},
+		{group(MatchAll, Rule{Field: FieldReleased, Min: new(0.0), Max: new(60.0)}), false},
+	} {
+		if got := c.rules.Upcoming(); got != c.want {
+			t.Errorf("%+v upcoming: %v, want %v", c.rules, got, c.want)
+		}
 	}
 }
 

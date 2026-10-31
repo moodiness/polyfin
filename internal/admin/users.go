@@ -507,9 +507,11 @@ type settingsJSON struct {
 	MDBListRatingsKey    *string `json:"mdblistRatingsKey,omitempty"`
 	CriticRatingShows    *string `json:"criticRatingShows"`
 	// TMDBKeySet and TMDBKey are the same for the server's TMDB key, which
-	// TMDB checks too.
-	TMDBKeySet bool    `json:"tmdbKeySet"`
-	TMDBKey    *string `json:"tmdbKey,omitempty"`
+	// TMDB checks too. WaitDigitalRelease hides movies until they are out
+	// at home, as TMDB tells.
+	TMDBKeySet         bool    `json:"tmdbKeySet"`
+	TMDBKey            *string `json:"tmdbKey,omitempty"`
+	WaitDigitalRelease *bool   `json:"waitDigitalRelease"`
 	// The security settings keep their current values when a PUT leaves
 	// them out, too.
 	PersonalAddons     *bool `json:"personalAddons"`
@@ -869,6 +871,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		MDBListRatingsKeySet:  settings.MDBListRatingsKey != "",
 		CriticRatingShows:     &settings.CriticRatingShows,
 		TMDBKeySet:            settings.TMDBKey != "",
+		WaitDigitalRelease:    &settings.WaitDigitalRelease,
 		Lyrics:                &settings.Lyrics,
 		EvenVolume:            &settings.EvenVolume,
 		MeasureLoudness:       &settings.MeasureLoudness,
@@ -1636,6 +1639,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		MDBListRatingsKey:     ratingsKey,
 		CriticRatingShows:     valueOr(body.CriticRatingShows, current.CriticRatingShows),
 		TMDBKey:               tmdbKey,
+		WaitDigitalRelease:    valueOr(body.WaitDigitalRelease, current.WaitDigitalRelease),
 		Lyrics:                valueOr(body.Lyrics, current.Lyrics),
 		EvenVolume:            valueOr(body.EvenVolume, current.EvenVolume),
 		MeasureLoudness:       valueOr(body.MeasureLoudness, current.MeasureLoudness),

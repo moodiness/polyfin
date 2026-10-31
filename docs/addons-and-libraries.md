@@ -262,6 +262,32 @@ A genre the addon stops offering lists the whole catalog again, until another is
 
 - A listing of a library, of an addon's collection or of a collection made by users that sets no `limit`, as jellyfin-web's collection pages ask, lists up to 500 titles, or the library's maximum when lower. For a library or an addon's collection, the titles kept from earlier listings answer at once when they make the whole listing. Otherwise the listing waits for the addons 3 seconds at most, or 1 second when the titles kept fill a page of 100, then lists those read by then, and at least the first page of each catalog. It reads the rest in the background, for the next listing. A listing with a `limit` lists as many as it asks, within the library's maximum.
 
+### Movies waiting for their digital release
+
+Addons' catalogs list movies still in cinemas, which stream addons have no version of yet. With **Wait for the digital release** on, a movie shows only once it is out at home:
+
+- on its first digital or physical release, in any country, as TMDB's release dates tell;
+- else, when TMDB knows neither, 90 days after it came out in cinemas, limited or wide, or, without a cinema date, 90 days after it was first shown anywhere.
+
+Until then, the movie is left out of libraries, home rows, searches, similar titles and person pages, as a title the user hid is. Smart lists with a **Home release** rule of upcoming titles list it (see [Smart lists](#smart-lists)), with the day it is out as its premiere date and first in its overview, such as "Out at home on 2026-11-20.". It still opens by its identifier, from such a list or a link, with that day in its overview, but it has no version, its addons are not asked for streams, and it does not play: jellyfin-web tells "Playback of this media is not allowed.". A movie of a user's Watchlist stays there, and the checks of the Watchlist find no version of it before that day (see [Now available and Still waiting](tracking.md#now-available-and-still-waiting)).
+
+- Only movies of the addons' catalogs wait: an IPTV source's and a local folder's movies are files already there.
+- A movie TMDB does not know, one TMDB knows no date of, and one without an IMDb or TMDB identifier stay listed: nothing tells they are not out.
+- A movie whose catalog or description tells it came out more than a year ago, or in a year before last year, is out: TMDB is not asked about it.
+- TMDB is asked by the movie's TMDB identifier, else through its lookup of the IMDb identifier, in the background, through the requests to TMDB Polyfin allows at once (4). A listing waits for the answers 3 seconds at most, as for ratings under parental control, and leaves out the movies still not known then; they show at a later listing once known. One request starts at most 100 lookups.
+- The answers are kept in the database for every user. A movie not out yet is asked about again after 3 days, as its dates change; one TMDB does not know, or knows no date of, after 30 days; one out, never. Once its day has passed, a movie stays out, whatever TMDB tells later: a movie listed is not hidden again.
+- Without the server's **TMDB API key**, no movie waits.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Wait for the digital release** | **Settings › Content** | Off | Hides the movies of the addons' catalogs until they are out at home, as above. It needs the **TMDB API key**. Off, every movie is listed and plays as its versions allow. |
+
+**Compared with Jellyfin:**
+
+- Jellyfin lists the files of its folders, which are there to play; it has no such wait. A movie waiting is not listed, as Jellyfin does not list what a user cannot access.
+- A movie listed by a smart list of upcoming titles carries its future day as `PremiereDate`, as Jellyfin's episodes not aired yet do.
+- Its `PlaybackInfo` answers no source with `ErrorCode` `NotAllowed`, Jellyfin's "Playback of the item is not allowed" ([PlaybackErrorCode.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/PlaybackErrorCode.cs#L8-L11)), rather than the `NoCompatibleStream` Jellyfin answers for an item without a source ([MediaInfoHelper.cs, line 108](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L103-L109)): the movie has no source because it is not out, not because the app cannot play it.
+
 ### Smart lists
 
 A smart list gathers titles by what they are, from the catalogs it names, such as "French movies of the 1990s not watched yet". Administrators make the server's under **Content › Libraries**, with **Add a smart list**: every user sees them, unless their visible libraries leave a list shown as a library out. Users make their own under **My sources**: only they see them (see [Users' own addons](users.md#users-own-addons)).
@@ -273,6 +299,7 @@ A list draws from any catalog of movies or series of the server's addons, enable
 | **Genre** | A title with this genre, in any letter case. |
 | **Year** | A title that came out from one year to another, either left empty for no bound. |
 | **Release date** | A title released in the last so many days, up to today, or in the next so many days, from today. A title whose catalog and description give only its year has no release date. |
+| **Home release** | A title out at home in the last so many days, today included, in the next so many days, or either. A movie's home release is its first digital or physical release, else 90 days after it came out in cinemas, as TMDB tells (see [Movies waiting for their digital release](#movies-waiting-for-their-digital-release)); a series' is its premiere date. Without the server's **TMDB API key**, no movie has one. A list with this rule, not negated, of upcoming titles or of either is the only one that lists the movies waiting for their digital release. |
 | **IMDb rating** | A title whose IMDb rating is within the bounds given. |
 | **IMDb votes** | A title whose IMDb rating counts a number of votes within the bounds given, as MDBList tells it (see [Ratings](#ratings)). Without the server's **MDBList API key for ratings**, no title has votes. |
 | **Language** | A title whose description gives this language. |
@@ -305,6 +332,7 @@ How a list is made:
 - Until then, a title whose rules need its description is left out, negated rules included, and the list grows as descriptions come.
 - A title's IMDb votes come with its MDBList ratings, looked up in the background in batches (see [Ratings](#ratings)); a title still waiting for MDBList is left out until it is answered.
 - Studios and networks come from TMDB, by a title's TMDB identifier, else its IMDb one: Polyfin asks TMDB in the background for at most 50 titles at each listing, through the requests to TMDB it allows at once, and keeps the answers for every user, asking again after 30 days. A title waiting for TMDB is left out until it is answered; one TMDB does not know has no studio.
+- A movie's home release comes from TMDB the same way, kept and asked again as for the wait for the digital release; a movie not known yet is left out until it is, and one TMDB does not know, or knows no date of, has none. A movie to come shows the day it is out as its premiere date and first in its overview.
 - A listing waits for the addons 3 seconds at most. Past that, it lists the titles of the pages already kept and reads the others in the background.
 
 Limits:
@@ -320,7 +348,7 @@ Limits:
 - A list shown as a library is a `CollectionFolder` in `/UserViews`, after the libraries. Its `CollectionType` is `movies` or `tvshows` when all its catalogs are of that type; otherwise it has none, as the Watchlist. `/Items?ParentId=` lists its titles and `/Items/Latest?ParentId=` gives its home row.
 - A list shown as a collection is a `BoxSet` in the **Collections** view, by name with the collections made by users. The view shows once such a list exists.
 - The collections listing across the server lists it, except for jellyfin-web's **Add to collection** dialog. `POST` and `DELETE /Collections/{id}/Items` answer an empty `403`.
-- The admin API serves the lists under `/admin/api/scopes/{scope}/smart-lists`. A list's `rules` and `exclude` are each a group of rules (`{"field": "group", "match": "all" | "any", "rules": [...]}`); a list sent without `exclude` has none. A rule's `field` is `genre`, `year`, `released`, `rating`, `votes`, `language`, `runtime`, `contentRating`, `person`, `studio`, `type`, `rank` or `state`; `released` takes `min` and `max` in days from today, negative in the past. `sort` is `catalog`, `premiere`, `latestEpisode`, `seasonPremiere`, `rating`, `name` or `random`. `.../catalogs` gives the catalogs a list may draw from, the languages its rules may name and the `contentRatings` a rule may set as the highest. `POST .../preview` answers `titles`, `listed`, `unknown` (titles waiting for their description, votes or studios) and `complete` (whether every catalog answered in time).
+- The admin API serves the lists under `/admin/api/scopes/{scope}/smart-lists`. A list's `rules` and `exclude` are each a group of rules (`{"field": "group", "match": "all" | "any", "rules": [...]}`); a list sent without `exclude` has none. A rule's `field` is `genre`, `year`, `released`, `homeRelease`, `rating`, `votes`, `language`, `runtime`, `contentRating`, `person`, `studio`, `type`, `rank` or `state`; `released` takes `min` and `max` in days from today, negative in the past; `homeRelease` takes `value` `released`, `upcoming` or `both`, and `max` days, from 1 to 36,500. `sort` is `catalog`, `premiere`, `latestEpisode`, `seasonPremiere`, `rating`, `name` or `random`. `.../catalogs` gives the catalogs a list may draw from, the languages its rules may name and the `contentRatings` a rule may set as the highest. `POST .../preview` answers `titles`, `listed`, `unknown` (titles waiting for their description, votes, studios or home release) and `complete` (whether every catalog answered in time).
 
 ### Searches in plain words
 
@@ -909,7 +937,7 @@ Posters are listed for Primary, backdrops for Backdrop and Thumb (with the addon
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Edit images searches TMDB with it, people's photos and biographies are looked up with it, local folders' files are matched through TMDB's search when every metadata addon's fails, smart lists' **Studio or network** rules look titles' studios and networks up with it, and series' episode orders read TMDB's episode groups with it. Empty, only the addons' images are listed, people show what the addons give, such files stay unmatched, studio rules see only those an administrator set, every series shows as aired, and TMDB is never asked. |
+| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Edit images searches TMDB with it, people's photos and biographies are looked up with it, local folders' files are matched through TMDB's search when every metadata addon's fails, smart lists' **Studio or network** and **Home release** rules look titles' studios, networks and release dates up with it, **Wait for the digital release** tells with it when movies are out (see [Movies waiting for their digital release](#movies-waiting-for-their-digital-release)), and series' episode orders read TMDB's episode groups with it. Empty, only the addons' images are listed, people show what the addons give, such files stay unmatched, studio rules see only those an administrator set, no movie has a home release nor waits, every series shows as aired, and TMDB is never asked. |
 
 - Images are relayed by Polyfin, as all artwork is: apps never reach TMDB or an addon's artwork server. Polyfin relays only the images it listed for the item, and an addon's under the same limits as the addon: a user's own addon reaches public addresses only.
 - TMDB's answers are kept for 24 hours, and at most 4 requests go to TMDB at a time, its images included.

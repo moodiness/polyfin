@@ -1382,6 +1382,12 @@ type Settings struct {
 	// only the addons' images are listed and TMDB is never asked. A
 	// secret, like PublicMetaDBKey.
 	TMDBKey string
+	// WaitDigitalRelease hides a movie of the addons' catalogs until it is
+	// out at home: its first digital or physical release, else 90 days
+	// after it was first shown in cinemas, as TMDB tells with TMDBKey (see
+	// the library package's releases.go). A movie TMDB cannot tell of
+	// stays listed. Off, or without TMDBKey, no movie waits.
+	WaitDigitalRelease bool
 	// Lyrics looks music tracks up on LRCLIB and serves their lyrics to
 	// apps, synced line by line when LRCLIB has them; off, LRCLIB is never
 	// asked and tracks have no lyrics.
@@ -2077,6 +2083,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"dlna, dlna_name, dlna_new_devices_user, dlna_mark_played, " +
 	"skip_buttons, publicmetadb_key, theintrodb_key, segment_order, segment_sources_off, audio_intros, similar_titles, generate_images, lyrics, even_volume, measure_loudness, played_percent, resume_percent, version_list_minutes, catalog_refresh_minutes, " +
 	"mdblist_ratings_key, critic_rating_shows, tmdb_key, " +
+	"wait_digital_release, " +
 	"personal_addons, server_imports, share_links, login_attempts, inactive_device_days, known_proxies, known_proxy_names, " +
 	"two_step_administrators, " +
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
@@ -2130,6 +2137,7 @@ func (settings *Settings) fields() []any {
 		&settings.SimilarTitles, &settings.GenerateImages, &settings.Lyrics, &settings.EvenVolume, &settings.MeasureLoudness, &settings.PlayedPercent, &settings.ResumePercent,
 		&settings.VersionListMinutes, &settings.CatalogRefreshMinutes,
 		&settings.MDBListRatingsKey, &settings.CriticRatingShows, &settings.TMDBKey,
+		&settings.WaitDigitalRelease,
 		&settings.PersonalAddons, &settings.ServerImports, &settings.ShareLinks, &settings.LoginAttempts, &settings.InactiveDeviceDays, &settings.KnownProxies,
 		&settings.KnownProxyNames,
 		&settings.TwoStepAdministrators,
