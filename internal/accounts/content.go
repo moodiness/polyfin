@@ -23,6 +23,10 @@ var ErrInvalidAccessSchedule = errors.New("invalid access schedule")
 // language code (see MetadataLanguageCode).
 var ErrInvalidMetadataLanguage = errors.New("invalid metadata language")
 
+// ErrInvalidAudioRegion reports an audio region that is not one of
+// localization.AudioVariants (see User.AudioRegion).
+var ErrInvalidAudioRegion = errors.New("invalid audio region")
+
 // MetadataLanguageCode reports whether code names the language of
 // descriptions: an ISO 639 code of two or three lowercase letters, with
 // an optional region of two uppercase letters, as "fr" or "pt-BR". Server
@@ -93,6 +97,13 @@ func (a AccessSchedule) includes(t time.Time) bool {
 // no access schedule, or t falls in one of them.
 func (u User) AllowedAt(t time.Time) bool {
 	return len(u.AccessSchedules) == 0 || slices.ContainsFunc(u.AccessSchedules, func(a AccessSchedule) bool { return a.includes(t) })
+}
+
+// AllowedFrom reports whether the user may use the server from where a
+// request comes: from the local network always (local), from outside it
+// only with RemoteAccess, as Jellyfin's EnableRemoteAccess allows it.
+func (u User) AllowedFrom(local bool) bool {
+	return local || u.RemoteAccess
 }
 
 // Restricted reports whether titles may be hidden from the user: by their

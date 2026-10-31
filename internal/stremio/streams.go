@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/moodiness/polyfin/internal/drm"
 )
 
 // Stream is one way to play a title, as an addon's stream resource lists it.
@@ -38,6 +40,10 @@ type Stream struct {
 	// Unlike those, it is no header the stream needs: an app that can
 	// reach the source itself may still be sent there.
 	UserAgent string `json:"-"`
+	// Protection is Polyfin's, never an addon's: how an IPTV list says the
+	// stream is encrypted, with its ClearKey keys, which never leave
+	// Polyfin; nil when it says nothing.
+	Protection *drm.Protection `json:"-"`
 }
 
 // StreamBehavior holds hints about how a stream is played.

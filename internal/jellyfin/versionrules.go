@@ -22,8 +22,8 @@ import (
 // it knows, and is never hidden by it. Merged channels keep their own
 // order: only titles' versions follow the rules.
 
-// versionRules are the settings' rules, with the audio language the user
-// prefers, which the language criterion reads.
+// versionRules are the settings' rules, with the audio language and the
+// region of it the user prefers, which the language criterion reads.
 type versionRules struct {
 	order []string
 	// codecs is the order of the codec criterion, sources that of the
@@ -36,6 +36,9 @@ type versionRules struct {
 	// words are the words hiding versions, in lower case.
 	words    []string
 	language string
+	// region is the regional variant of language preferred, empty for
+	// none (see trackPreferences.audioRegion).
+	region string
 	// releases are the kinds of low-quality releases hidden (see
 	// library.Labels.Releases).
 	releases []string
@@ -53,30 +56,40 @@ func newVersionRules(settings accounts.Settings) versionRules {
 }
 
 // rulesFor returns the rules settings set for user: with their preferred
-// audio language when a criterion reads it.
+// audio language and region when a criterion reads them.
 func (h *Handler) rulesFor(ctx context.Context, user accounts.User) versionRules {
 	rules := newVersionRules(h.Accounts.Settings())
 	if slices.Contains(rules.order, "language") {
-		rules.language = h.trackPreferences(ctx, user).audioLanguage
+		preferences := h.trackPreferences(ctx, user)
+		rules.language, rules.region = preferences.audioLanguage, preferences.audioRegion
 	}
 	return rules
 }
 
 // key names what orders versions under the rules: the criteria, the
-// order of the codecs, that of the sources and the language the user
-// prefers. A page keeps the versions it lists in place only while it
-// stays the same.
+// order of the codecs, that of the sources and the language and region
+// the user prefers. A page keeps the versions it lists in place only while
+// it stays the same.
 func (r versionRules) key() string {
 	sources := make([]string, len(r.sources))
 	for i, source := range r.sources {
 		sources[i] = source.String()
 	}
-	return strings.Join(r.order, ",") + "|" + strings.Join(r.codecs, ",") + "|" + strings.Join(sources, ",") + "|" + r.language
+	return strings.Join(r.order, ",") + "|" + strings.Join(r.codecs, ",") + "|" + strings.Join(sources, ",") + "|" + r.language +
+		"|" + r.region
 }
 
 // hides reports whether a rule may hide versions.
 func (r versionRules) hides() bool {
 	return r.larger > 0 || len(r.hiddenCodecs) > 0 || len(r.words) > 0 || len(r.releases) > 0
+}
+
+// elsewhere reports whether a version's labels name another title than
+// its own: another episode, a season without it, or another movie's year
+// (see library.OtherTitle). Such a version is always hidden, as a rule
+// hides one, without a setting.
+func elsewhere(version library.Version) bool {
+	return version.Labels.Elsewhere != ""
 }
 
 // reordered reports whether the versions a user is offered may be ordered
@@ -92,7 +105,7 @@ func (h *Handler) reordered(user accounts.User) bool {
 // identifier, which it may have been shown before a rule hid it.
 func (h *Handler) hiddenVersion(ctx context.Context, user accounts.User, version library.Version) bool {
 	rules := newVersionRules(h.Accounts.Settings())
-	if !rules.hides() || !rules.hidden(version, h.versionFacts(ctx, version)) {
+	if !rules.hides() && !elsewhere(version) || !rules.hidden(version, h.versionFacts(ctx, version)) {
 		return false
 	}
 	versions, err := h.Library.Versions(ctx, user, version.Item)
@@ -108,8 +121,10 @@ func (h *Handler) hiddenVersion(ctx context.Context, user accounts.User, version
 // versionFacts are what the rules know of a version: its height, size and
 // video codec, 0 or empty when unknown, its range, its audio languages,
 // by ISO 639-2/B code, and multi when its labels say it has several
-// without naming them all; and source, the rank of its source for the
-// source criterion (see sourceRanks).
+// without naming them all; variants, its audio languages with their
+// regions, each a variant of localization.AudioVariants where its region
+// is known, else its language's code; and source, the rank of its source
+// for the source criterion (see sourceRanks).
 type versionFacts struct {
 	height    int
 	size      int64
@@ -117,6 +132,7 @@ type versionFacts struct {
 	hdr       library.DynamicRange
 	languages []string
 	multi     bool
+	variants  []string
 	source    int
 }
 
@@ -152,8 +168,8 @@ func (h *Handler) versionFacts(ctx context.Context, version library.Version) ver
 				}
 			}
 		}
-		if languages := audioLanguages(analysis); !spoken && len(languages) > 0 {
-			facts.languages, spoken = languages, true
+		if languages, variants := audioLanguages(analysis); !spoken && len(languages) > 0 {
+			facts.languages, facts.variants, spoken = languages, variants, true
 		}
 	}
 	labels := version.Labels
@@ -165,30 +181,45 @@ func (h *Handler) versionFacts(ctx context.Context, version library.Version) ver
 	}
 	if !spoken {
 		facts.languages, facts.multi = labels.Languages, labels.Multi
+		facts.variants = slices.Clone(labels.Regions)
+		for _, code := range labels.Languages {
+			if !slices.ContainsFunc(labels.Regions, func(variant string) bool { return localization.VariantLanguage(variant) == code }) {
+				facts.variants = append(facts.variants, code)
+			}
+		}
 	}
 	return facts
 }
 
 // audioLanguages are the languages of an analysis's audio tracks, by ISO
-// 639-2/B code, those tagged with none left out.
-func audioLanguages(analysis media.Analysis) []string {
-	var languages []string
+// 639-2/B code, those tagged with none left out, and their variants (see
+// versionFacts): each track's of localization.AudioVariants, read from its
+// tag and its title, else its language's code.
+func audioLanguages(analysis media.Analysis) (languages, variants []string) {
 	for _, stream := range analysis.Streams {
 		if stream.Type != "audio" || undeterminedLanguage(stream.Language) {
 			continue
 		}
-		if code := localization.LanguageCode(stream.Language); !slices.Contains(languages, code) {
+		code := localization.LanguageCode(stream.Language)
+		if !slices.Contains(languages, code) {
 			languages = append(languages, code)
 		}
+		if variant := cmp.Or(localization.AudioVariant(stream.Language, stream.Title), code); !slices.Contains(variants, variant) {
+			variants = append(variants, variant)
+		}
 	}
-	return languages
+	return languages, variants
 }
 
-// hidden reports whether a rule hides a version: one known to be larger
-// than the limit, or in a codec hidden, or whose labels, its name and
-// description and its file name, hold a word hiding it, or tag it as a
-// kind of low-quality release hidden.
+// hidden reports whether a rule hides a version: one naming another title
+// (see elsewhere), or one known to be larger than the limit, or in a codec
+// hidden, or whose labels, its name and description and its file name,
+// hold a word hiding it, or tag it as a kind of low-quality release
+// hidden.
 func (r versionRules) hidden(version library.Version, facts versionFacts) bool {
+	if elsewhere(version) {
+		return true
+	}
 	if r.larger > 0 && facts.size > r.larger || facts.codec != "" && slices.Contains(r.hiddenCodecs, facts.codec) {
 		return true
 	}
@@ -257,16 +288,27 @@ func knownFirst[T int | int64](a, b T, sign int) int {
 // the versions known to carry it first, then those whose labels say they
 // have several languages without naming it, then those of unknown
 // language, then the others. Without a preference, all rank the same.
+// With a preferred region, the versions carrying the language rank among
+// themselves: those carrying it in that region first, then those carrying
+// it with no known region, then those carrying it only in other regions.
 func (r versionRules) languageRank(facts versionFacts) int {
 	switch {
-	case r.language == "" || slices.ContainsFunc(facts.languages, func(code string) bool { return localization.SameLanguage(code, r.language) }):
+	case r.language == "":
 		return 0
-	case facts.multi:
-		return 1
-	case len(facts.languages) == 0:
+	case slices.ContainsFunc(facts.languages, func(code string) bool { return localization.SameLanguage(code, r.language) }):
+		switch {
+		case r.region == "" || slices.Contains(facts.variants, r.region):
+			return 0
+		case slices.Contains(facts.variants, localization.LanguageCode(r.language)):
+			return 1
+		}
 		return 2
+	case facts.multi:
+		return 3
+	case len(facts.languages) == 0:
+		return 4
 	}
-	return 3
+	return 5
 }
 
 // codecRank ranks a video codec in the order of the codec criterion: the
@@ -335,7 +377,7 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, versions []li
 		facts[version.ID] = known
 	}
 	kept := versions
-	if rules.hides() {
+	if rules.hides() || slices.ContainsFunc(versions, elsewhere) {
 		shown := slices.DeleteFunc(slices.Clone(versions), func(v library.Version) bool { return rules.hidden(v, facts[v.ID]) })
 		if len(shown) > 0 {
 			kept = shown

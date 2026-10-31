@@ -173,7 +173,7 @@ func TestOnlyTheWebClientPageLoadsPolyfinScript(t *testing.T) {
 	if string(webFiles["index.html"].Data) != webIndex {
 		t.Error("jellyfin-web's index.html was changed")
 	}
-	if page := string(withWebScripts([]byte("<p>Jellyfin</p>"), hashedScript{})); page != "<p>Jellyfin</p>"+tag {
+	if page := string(withWebScripts([]byte("<p>Jellyfin</p>"), nil)); page != "<p>Jellyfin</p>"+tag {
 		t.Errorf("a page without a head: %q", page)
 	}
 	// The page is revalidated, not downloaded again.
@@ -227,7 +227,8 @@ func TestWebClientNeedsJellyfinWebIndex(t *testing.T) {
 // however the client gets to them: on load, through its router (history),
 // a link (hashchange) or Back (popstate). A dashboard page with a match in the
 // admin app opens that page; the others open its home. It runs in Node.js, in
-// a context that stands for the browser.
+// a context that stands for the browser, without URL: the script runs before
+// jellyfin-web's polyfills, on browsers that may lack it.
 func TestDashboardRoutesOpenTheAdminApp(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -292,7 +293,7 @@ for (const route of routes) {
       const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
       // The page's head takes the style the script adds.
       const document = { head: { appendChild: () => {} }, createElement: () => ({}) }
-      vm.runInNewContext(script, { location, history, URL, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
+      vm.runInNewContext(script, { location, history, document, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
       if (way === 'pushState' || way === 'replaceState') history[way](null, '', route || page)
       if (way === 'hashchange' || way === 'popstate') { go(route || page); (listeners[way] || []).forEach((listener) => listener()) }
       results[way + ' ' + page + route] = replaced
@@ -462,12 +463,12 @@ for (const name of scenarios) {
     }
     now = until
   }
-  // The observer of the body's children; the one of its whole subtree
-  // follows the menus.
-  let observer = null
+  // The observers of the body's children, every block's that follows
+  // them; the one of its whole subtree follows the menus.
+  const observers = []
   class MutationObserver {
     constructor(callback) { this.callback = callback }
-    observe(target, options) { if (target !== body) throw new Error('not the body'); if (!options.subtree) observer = this }
+    observe(target, options) { if (target !== body) throw new Error('not the body'); if (!options.subtree) observers.push(this) }
     disconnect() {}
   }
   // A dialog as jellyfin-web's dialog helper adds it: a container after
@@ -485,7 +486,7 @@ for (const name of scenarios) {
     inner.querySelectorAll = (s) => (s === '.btnOption' ? list : [])
     return container
   }
-  const add = (container) => observer && observer.callback([{ addedNodes: [container.backdrop] }, { addedNodes: [container] }])
+  const add = (container) => observers.forEach((observer) => observer.callback([{ addedNodes: [container.backdrop] }, { addedNodes: [container] }]))
   // jellyfin-web opens a dialog with an animation.
   const open = (container) => { timers.push({ at: now + 150, run: () => { container.inner.opened = true } }) }
   const body = {}
@@ -2092,7 +2093,7 @@ async function run(scenario) {
   const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
   const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
   vm.runInNewContext(script, {
-    location, history, URL, document, MutationObserver, window: { ApiClient, localStorage },
+    location, history, document, MutationObserver, window: { ApiClient, localStorage },
     Date, setTimeout: () => 0, clearTimeout: () => {},
     addEventListener: () => {},
   })
@@ -2457,10 +2458,10 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
     let now = 0
     const listeners = {}
     const did = []
-    let observer = null
+    const observers = []
     class MutationObserver {
       constructor(callback) { this.callback = callback }
-      observe(target, options) { if (!options.subtree) observer = this }
+      observe(target, options) { if (!options.subtree) observers.push(this) }
       disconnect() {}
     }
     const classes = (initial) => {
@@ -2566,7 +2567,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
     fire(name.includes('right-clicked') ? 'contextmenu' : 'click', { type: name.includes('right-clicked') ? 'contextmenu' : 'click', target })
     if (name.includes('another click')) fire('click', { type: 'click', target: { closest: () => null } })
     if (name.includes('too late')) now += 11000
-    observer.callback([{ addedNodes: [container] }])
+    observers.forEach((observer) => observer.callback([{ addedNodes: [container] }]))
     for (let i = 0; i < 5; i++) await settle()
     const words = entries.map((e) => e.text.textContent)
     if (entries.length) {
@@ -2736,6 +2737,13 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 				"Trending[Alpha] s0 s1 Picks[Charlie] s2 s3 s4 s5 s6 s7 s8 s9"},
 		},
 		"malformed drops": {answers: [][]row{all}, storage: "{not json", steps: []string{"home", "wait 100", "show"}, want: []string{ask, byDefault}},
+		// The rows drawn are found by their places, not by the order of the
+		// list: listed in another order than their places', with other
+		// numbers of titles, they are drawn once and stay.
+		"listed out of their places' order": {answers: [][]row{{fresh, trending, because}},
+			steps: []string{"home", "wait 100", "show", "wait 100", "show"},
+			want: []string{ask, "Trending[Alpha Bravo] s0 s1 s2 s3 s4 s5 Because you watched Alpha[Delta] s6 s7 s8 s9 New[Echo]",
+				"Trending[Alpha Bravo] s0 s1 s2 s3 s4 s5 Because you watched Alpha[Delta] s6 s7 s8 s9 New[Echo]"}},
 	}
 	const harness = `
 const vm = require('node:vm')
@@ -2748,11 +2756,19 @@ async function run(scenario) {
   const listeners = {}
   const observers = new Set()
   let queued = false
+  // changes counts the page's changes: a script that keeps changing it,
+  // which would hang a browser, is stopped and logged.
+  let changes = 0
   const changed = () => {
     if (queued) return
     queued = true
     queueMicrotask(() => {
       queued = false
+      if (++changes > 10000) {
+        observers.clear()
+        log.push('changes the page without end')
+        return
+      }
       for (const observer of [...observers]) if (observers.has(observer)) try { observer.callback([]) } catch (error) {}
     })
   }
@@ -3141,7 +3157,7 @@ async function run(scenario) {
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
   class Event { constructor(type) { this.type = type } }
   vm.runInNewContext(script, {
-    location, history, URL, document, CustomEvent, Event, MutationObserver, window,
+    location, history, document, CustomEvent, Event, MutationObserver, window,
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
     clearTimeout: (id) => { if (id) timers[id - 1] = null },

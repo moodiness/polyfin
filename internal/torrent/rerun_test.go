@@ -3,6 +3,7 @@ package torrent
 import (
 	"net/netip"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,6 +70,112 @@ func TestARunStartsFromThePeersItsLastRunReached(t *testing.T) {
 	defer e.Play(again)()
 	if got := readAll(t, e, again); len(got) != len(large) {
 		t.Fatalf("read %d bytes", len(got))
+	}
+}
+
+// A torrent played again the moment its last run stops, as Running tells
+// it stopped and before that run has closed its peers, starts from what
+// that run learned: its peers and its info dictionary.
+func TestARunPlayedAgainAsTheLastStopsStartsFromIt(t *testing.T) {
+	t.Parallel()
+	tor, _, large := twoFiles()
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	empty := torrenttest.HTTPTracker(t, "127.0.0.1")
+	e := newEngineWith(t, proxied(torrenttest.StartProxy(t, true, "", "")), func(c *Config) { c.StartTimeout = 10 * time.Second })
+	// The first run that stops holds there until the next has started.
+	left, again := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	e.left = func(Hash) {
+		once.Do(func() {
+			close(left)
+			<-again
+		})
+	}
+	first, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := e.Play(first)
+	readAll(t, e, first)
+	stop()
+	<-left
+	if e.Running(first.Hash) {
+		t.Fatal("the torrent that stops still runs")
+	}
+
+	next, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + empty.URL()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Play(next)()
+	tr := torrentOf(e, tor.Hash)
+	tr.mu.Lock()
+	info, known := tr.info != nil, tr.knows(seeder.Address())
+	tr.mu.Unlock()
+	close(again)
+	if !info || !known {
+		t.Fatalf("the next run starts with info %v, its last peer known %v", info, known)
+	}
+	if got := readAll(t, e, next); len(got) != len(large) {
+		t.Fatalf("read %d bytes", len(got))
+	}
+}
+
+// A run that stops leaves the pieces of a run of the same torrent that
+// started once Running told it stopped, before its own pieces were
+// removed: they are the new run's.
+func TestARunThatStopsLeavesTheNextRunsPieces(t *testing.T) {
+	t.Parallel()
+	tor, _, large := twoFiles()
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	e := newEngineWith(t, proxied(torrenttest.StartProxy(t, true, "", "")), func(c *Config) { c.StartTimeout = 10 * time.Second })
+	spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pieces counts the torrent's pieces the store keeps.
+	pieces := func() int {
+		e.store.mu.Lock()
+		defer e.store.mu.Unlock()
+		n := 0
+		for key := range e.store.pieces {
+			if key.hash == tor.Hash {
+				n++
+			}
+		}
+		return n
+	}
+	// As the first run leaves the engine, the next starts and reads the
+	// file, before the first has closed its peers and removed its pieces.
+	var once sync.Once
+	var stopNext func()
+	read := 0
+	e.left = func(Hash) {
+		once.Do(func() {
+			stopNext = e.Play(spec)
+			if got := readAll(t, e, spec); len(got) != len(large) {
+				t.Errorf("the next run read %d bytes", len(got))
+			}
+			read = pieces()
+		})
+	}
+	stop := e.Play(spec)
+	readAll(t, e, spec)
+	stop()
+	// The first run stops at once, here, as when another title's playback
+	// takes its place.
+	e.End(spec.Hash)
+	if stopNext == nil {
+		t.Fatal("the first run never left the engine")
+	}
+	defer stopNext()
+	if read == 0 {
+		t.Fatal("the next run kept no piece")
+	}
+	if got := pieces(); got != read {
+		t.Fatalf("the store keeps %d of the next run's %d pieces once the first run stopped", got, read)
 	}
 }
 

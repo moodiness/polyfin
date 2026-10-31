@@ -31,10 +31,10 @@ type listedTitle struct {
 }
 
 // titlePage is what a user's title page follows: the title, and the addons
-// that list its streams in the user's view.
+// that list its streams in the user's view, with what each is asked.
 type titlePage struct {
 	t       target
-	serving []installed
+	serving []streamSource
 }
 
 // versionTracking ties addon lists to the items they list versions of,

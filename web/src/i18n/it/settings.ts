@@ -260,11 +260,11 @@ const settings: typeof en = {
       'Quando un’applicazione riproduce un titolo senza scegliere una versione, Polyfin sceglie la prima versione che l’applicazione riproduce così com’è o semplicemente reimpacchettata, anziché la prima che si riproduce comunque. La primissima riproduzione di un titolo può essere un po’ più lenta, perché potrebbero essere analizzate più versioni; non cambia nulla una volta che sono note.',
     nameHowVersionsPlay: 'Indica nei nomi delle versioni come vengono riprodotte',
     nameHowVersionsPlayHelp:
-      'I nomi delle versioni terminano con il modo in cui l’applicazione riproduce ciascuna: «(riproduzione diretta)», «(stream diretto)» quando viene copiata senza conversione, «(convertita: motivo)» con HDR, il limite di qualità, i sottotitoli, il video o l’audio come motivo, oppure «(non riproducibile qui)». Polyfin lo stabilisce in base al profilo del dispositivo inviato dall’applicazione alla sua ultima riproduzione, quindi i nomi non indicano nulla prima della prima riproduzione di un dispositivo o dopo un riavvio, né per una versione non ancora analizzata o descritta da RemuxDB. I nomi sono nella lingua dei nomi generati. Per questo non viene letto nulla.',
+      'I nomi delle versioni terminano con il modo in cui l’applicazione riproduce ciascuna: «(riproduzione diretta)», «(stream diretto)» quando viene copiata senza conversione, «(convertita: motivo)» con la richiesta dell’applicazione, HDR, il limite di qualità, i sottotitoli, il video o l’audio come motivo, oppure «(non riproducibile qui)». Polyfin lo stabilisce in base al profilo del dispositivo inviato dall’applicazione alla sua ultima riproduzione, quindi i nomi non indicano nulla prima della prima riproduzione di un dispositivo o dopo un riavvio, né per una versione non ancora analizzata o descritta da RemuxDB. I nomi sono nella lingua dei nomi generati. Per questo non viene letto nulla.',
     versionOrderGroup: 'Ordine delle versioni',
     versionOrder: {
       label: 'Ordina le versioni per',
-      help: 'Ogni criterio raggruppa le versioni di un film o di un episodio, e quello successivo le ordina all’interno di ciascun gruppo; le versioni a pari merito mantengono l’ordine degli add-on. La prima versione è quella avviata da Riproduci, e le versioni provate quando non funziona vengono subito dopo. Polyfin si basa su ciò che sa di una versione senza leggere il file: la sua analisi dopo la riproduzione, altrimenti la descrizione di RemuxDB, altrimenti le parole delle sue etichette. Una versione di cui un criterio non sa nulla viene dopo le altre. La lingua audio preferita è quella di ciascun utente, impostata nella sua applicazione, altrimenti la Lingua audio predefinita: prima le versioni note in quella lingua, poi quelle etichettate MULTI o DUAL, poi quelle di lingua sconosciuta. Finché la pagina di un titolo è aperta, le versioni mostrate mantengono la loro posizione.',
+      help: 'Ogni criterio raggruppa le versioni di un film o di un episodio, e quello successivo le ordina all’interno di ciascun gruppo; le versioni a pari merito mantengono l’ordine degli add-on. La prima versione è quella avviata da Riproduci, e le versioni provate quando non funziona vengono subito dopo. Polyfin si basa su ciò che sa di una versione senza leggere il file: la sua analisi dopo la riproduzione, altrimenti la descrizione di RemuxDB, altrimenti le parole delle sue etichette. Una versione di cui un criterio non sa nulla viene dopo le altre. La lingua audio preferita è quella di ciascun utente, impostata nella sua applicazione, altrimenti la Lingua audio predefinita: prima le versioni note in quella lingua, poi quelle etichettate MULTI o DUAL, poi quelle di lingua sconosciuta. In Il mio account, un utente può anche preferire una regione audio, come il francese del Québec: tra le versioni nella sua lingua, prima quelle di quella regione, poi quelle di regione sconosciuta. Finché la pagina di un titolo è aperta, le versioni mostrate mantengono la loro posizione.',
       none: 'Nessuno: le versioni mantengono l’ordine degli add-on.',
       add: 'Aggiungi un criterio',
       remove: (name: string) => `Rimuovi «${name}»`,
@@ -442,6 +442,31 @@ const settings: typeof en = {
       qualityFactor: 'Accetta un valore di qualità',
       processor: 'Codificatori sul processore',
       processorToneMapping: 'Da HDR a SDR sul processore',
+      hdrPath: {
+        term: 'Titoli HDR',
+        gpu: 'Convertiti in SDR sulla scheda',
+        gpuUpTo: (height: number) => `Convertiti in SDR sulla scheda, fino a ${height}p`,
+        processor: 'Convertiti in SDR sul processore, codificati sulla scheda',
+        notTimed:
+          'La velocità della scheda non è ancora stata misurata, o non è stato possibile misurarla.',
+        keepsUp: (gpu: string) => `La scheda converte l’HDR a ${gpu} la velocità di riproduzione.`,
+        processorFaster: (gpu: string, processor: string) =>
+          `La scheda converte l’HDR a ${gpu} la velocità di riproduzione, troppo lentamente; il processore tiene il passo, a ${processor}.`,
+        lowerHeight: (gpu: string, low: string, processor: string | null) =>
+          `La scheda converte l’HDR in 1080p a ${gpu} la velocità di riproduzione, troppo lentamente, e in 720p a ${low}${processor ? `; il processore a ${processor}, anch’esso troppo lentamente` : ''}.`,
+        noneKeepsUp: (gpu: string, low: string, processor: string | null) =>
+          `Nessuno dei due tiene il passo con la riproduzione: la scheda converte l’HDR in 1080p a ${gpu} la velocità di riproduzione e in 720p a ${low}${processor ? `, il processore a ${processor}` : ''}. I titoli HDR possono fermarsi durante la conversione.`,
+        turnedOff: 'Da HDR a SDR sulla scheda è disattivato nelle impostazioni.',
+      },
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'Quello fornito con Polyfin',
+      ffmpegOlderDrivers: 'Per i driver NVIDIA precedenti alla 610',
+      ffmpegOlderDownloading:
+        'Download dell’FFmpeg per i driver NVIDIA precedenti alla 610, necessario qui a NVENC: nel frattempo il processore converte i video.',
+      ffmpegOlderFailed: (error: string) =>
+        `Non è stato possibile scaricare l’FFmpeg per i driver NVIDIA precedenti alla 610, necessario qui a NVENC: ${error}`,
+      ffmpegOlderUnusable: (error: string) =>
+        `NVENC non codifica nemmeno con l’FFmpeg per i driver NVIDIA precedenti alla 610: ${error}`,
       yes: 'Sì',
       no: 'No',
       none: 'Nessuno',
@@ -651,6 +676,9 @@ const settings: typeof en = {
     localScanHours: 'Scansiona le cartelle locali ogni (ore, 0 = mai)',
     localScanHoursHelp: (r: RangeText) =>
       `Ogni quanto ciascuna cartella locale viene scansionata di nuovo per individuare file aggiunti, modificati o rimossi. Le cartelle vengono scansionate anche all’avvio, su richiesta e quando quelle monitorate cambiano. 0 disattiva la pianificazione. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
+    watchlistCheckHours: 'Cerca versioni dei titoli da guardare ogni (ore, 0 = mai)',
+    watchlistCheckHoursHelp: (r: RangeText) =>
+      `Ogni quanto ciascun titolo non iniziato della lista «Da guardare» di un utente viene controllato di nuovo per trovarne versioni, per le righe iniziali «Ora disponibili» e «Ancora in attesa» e per il messaggio che avvisa l’utente di un titolo disponibile. Ogni ora vengono controllati fino a 20 titoli di ogni utente, chiedendo ai suoi add-on di flussi. 0 disattiva i controlli. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
     watchLocalFolders: 'Monitora le modifiche di cartelle e condivisioni',
     watchLocalFoldersHelp: {
       container:
@@ -686,6 +714,39 @@ const settings: typeof en = {
     knownProxies: 'Proxy conosciuti',
     knownProxiesHelp: (r: RangeText) =>
       `I reverse proxy davanti a Polyfin, uno per riga: un indirizzo IP, una rete come 172.18.0.0/16 o un nome host come il nome di un container su una rete Docker (traefik), fino a ${r.max}. Un nome viene risolto ogni minuto e ogni indirizzo a cui corrisponde è considerato attendibile, quindi elenca solo nomi risolti dalla tua rete. Una richiesta da uno di essi proviene dal client indicato dalla sua intestazione X-Forwarded-For o X-Real-IP: è quell’indirizzo che limita gli accessi non riusciti, compare nei dispositivi e determina la rete locale. Le intestazioni inoltrate da qualsiasi altro indirizzo vengono ignorate. Lascia vuoto se davanti a Polyfin non c’è nulla.`,
+    provider: {
+      title: 'Provider di identità',
+      intro:
+        'Le persone possono accedere a questa applicazione di amministrazione e al lettore web con un provider OpenID Connect, che chiede allora il proprio accesso in due passaggi: Polyfin non chiede di nuovo il codice. Le applicazioni Jellyfin che non possono aprire il provider accedono con Quick Connect, approvato da una sessione aperta con esso. Registra Polyfin presso il provider come client confidenziale, o pubblico senza segreto, con l’URI di reindirizzamento qui sotto.',
+      redirectUri: 'URI di reindirizzamento',
+      redirectUriHelp:
+        'L’indirizzo a cui il provider rimanda i browser, costruito dall’indirizzo pubblico. Registralo presso il provider esattamente così.',
+      noPublicAddress:
+        'Imposta prima l’indirizzo pubblico in Impostazioni › Notifiche: l’accesso inizia e finisce lì, e il provider vi rimanda i browser.',
+      issuer: 'Emittente',
+      issuerHelp:
+        'L’emittente (issuer) del provider, esattamente come lo dà il suo documento di discovery, come https://id.example.org o https://id.example.org/realms/home. Polyfin legge il suo /.well-known/openid-configuration. Vuoto disattiva l’accesso.',
+      name: 'Nome del pulsante',
+      nameHelp:
+        'Ciò che i pulsanti di accesso mostrano dopo «Accedi con». Vuoto mostra il nome host dell’emittente.',
+      clientId: 'ID client',
+      clientIdHelp: 'L’ID che il provider ha dato al client di Polyfin. Vuoto disattiva l’accesso.',
+      clientSecret: 'Segreto client',
+      clientSecretHelp:
+        'Il segreto di un client confidenziale; lascialo vuoto per un client pubblico. È conservato cifrato con POLYFIN_SECRET_KEY e non viene più mostrato.',
+      userClaim: 'Claim che nomina l’utente',
+      userClaimHelp:
+        'Il claim del token ID confrontato con i nomi degli account, senza distinguere maiuscole e minuscole, la prima volta che qualcuno accede: preferred_username per impostazione predefinita. Poi viene l’email verificata. Gli accessi successivi trovano lo stesso account qualunque cosa dica il claim.',
+      createAccounts: 'Crea gli account',
+      createAccountsHelp:
+        'Chi non corrisponde a nessun account ne riceve uno, con il nome del claim, altrimenti dell’email, con i permessi di un nuovo account, che accede solo tramite il provider. Disattivato, viene rifiutato. Disattivato per impostazione predefinita.',
+      adminClaim: 'Claim degli amministratori',
+      adminClaimHelp:
+        'Il claim che elenca i gruppi o i ruoli di una persona, come groups. Con un valore qui sotto, chi lo ha nel claim diventa amministratore all’accesso. Polyfin chiede lo scope groups quando il claim è groups e il provider lo offre.',
+      adminValue: 'Valore degli amministratori',
+      adminValueHelp:
+        'Il gruppo o ruolo che rende amministratori, come polyfin-admins. Lasciarlo in seguito non rende di nuovo membro un amministratore: cambialo nella pagina Utenti.',
+    },
     https: {
       title: 'HTTPS',
       intro:
@@ -833,23 +894,33 @@ const settings: typeof en = {
     backupsKept: 'Backup da conservare',
     backupsKeptHelp: (r: RangeText) =>
       `Dopo ogni backup, Polyfin elimina i suoi backup più vecchi oltre questo numero. Gli altri file nella cartella non vengono mai toccati. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
+    backupPassphrase: 'Passphrase dei backup',
+    backupPassphraseHelp: (min: number) =>
+      `Cifra ogni backup mentre viene scritto, nella cartella e in ogni destinazione, che quindi non può leggerlo. Almeno ${min} caratteri. Viene conservata cifrata e non viene più mostrata.`,
+    backupPassphraseNew:
+      'Conserva questa passphrase altrove rispetto a questo server, ad esempio in un gestore di password: una passphrase persa significa backup persi. Nessuno può ripristinarli senza di essa, nemmeno Polyfin. Controllala con l’occhio prima di salvare. I backup già creati restano come sono.',
+    backupPassphraseRemoved:
+      'I backup creati da ora in poi non sono cifrati. Quelli già creati richiedono ancora questa passphrase per essere ripristinati.',
     lastBackup: 'Ultimo backup',
     backupDestinations: 'Destinazioni',
     backupDestinationsHelp:
       'Ogni backup viene inviato anche a queste destinazioni, con lo stesso nome file, dopo essere stato scritto nella cartella: archivi compatibili S3, server SFTP o WebDAV. Un caricamento non riuscito viene ritentato al backup successivo.',
     webPlayerHelp:
-      'Ciò che il lettore web (jellyfin-web, su /web/) mostra oltre alle proprie pagine. Lo script si applica al successivo caricamento di una pagina del lettore web; il lettore web conserva il CSS e il messaggio di accesso per un massimo di un minuto.',
+      'Ciò che il lettore web (jellyfin-web, su /web/) mostra oltre alle proprie pagine. Il tema e lo script si applicano al successivo caricamento di una pagina del lettore web; il lettore web conserva il messaggio di accesso per un massimo di un minuto.',
     openWebPlayer: 'Apri il lettore web',
-    webTheme: 'Tema',
+    webTheme: 'Tema del server',
     webThemeHelp:
-      'L’aspetto del lettore web. LumaaGlaass è il tema incluso in Polyfin. Nessuno mantiene l’aspetto di jellyfin-web, il cui tema di visualizzazione ogni utente sceglie in Impostazioni › Visualizzazione. Personalizzato usa il tuo CSS e il tuo JavaScript qui sotto, conservati mentre è scelto un altro tema.',
-    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'Nessuno', custom: 'Personalizzato' },
-    webThemeReload:
-      'Il lettore web conserva il CSS personalizzato letto fino a un minuto: dopo una modifica, ricarica le sue pagine aperte un minuto dopo.',
+      'L’aspetto del lettore web per gli utenti che mantengono quello del server; ogni utente può avere il proprio, nella sua pagina in Utenti. LumaaGlaass è il tema incluso in Polyfin. L’aspetto di jellyfin-web non ha CSS né script personalizzati, e ogni utente ne sceglie i temi di visualizzazione in Impostazioni › Visualizzazione. Personalizzato usa il tuo CSS e il tuo JavaScript qui sotto, conservati mentre è scelto un altro tema.',
+    webThemeChoices: {
+      lumaaglaass: 'LumaaGlaass',
+      none: 'Aspetto di jellyfin-web',
+      custom: 'Personalizzato',
+    },
+    webThemeReload: 'Dopo una modifica, ricarica le pagine aperte del lettore web.',
     webThemeTexts: {
       lumaaglaass:
         'Ciò che Polyfin serve per LumaaGlaass, mostrato qui e non modificabile. Scegli Personalizzato, o «Modifica come personalizzato», per scrivere il tuo.',
-      none: 'Nessuno non serve CSS né JavaScript personalizzati. Scegli Personalizzato per scrivere il tuo.',
+      none: 'L’aspetto di jellyfin-web non serve CSS né JavaScript personalizzati. Scegli Personalizzato per scrivere il tuo.',
     },
     editAsCustom: 'Modifica come personalizzato',
     editAsCustomTitle: 'Sostituire i tuoi testi personalizzati?',
@@ -923,6 +994,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Aggiungi le versioni alla pagina aperta di un titolo',
     addVersionsToOpenPageHelp:
       'Aggiunge le versioni trovate dagli add-on al menu delle versioni della pagina di un film o di un episodio mentre è aperta, mantenendo la versione scelta. Se disattivato, una pagina aperta prima che venisse trovata una versione elenca comunque le prime man mano che arrivano, e i suoi pulsanti di riproduzione attendono comunque una versione; le altre compaiono alla successiva apertura della pagina.',
+    posterRatings: 'Mostra i voti sulle locandine',
+    posterRatingsHelp:
+      'Mostra il voto a stelle di un film o di una serie sulla sua locandina nel lettore web quando vi arriva il puntatore o il focus, con i punteggi della critica e del pubblico finché è impostata una chiave API MDBList per i voti in Impostazioni › Contenuti. Per tutti gli utenti.',
     homeRows: 'Righe della Home',
     homeRowsHelp:
       'Righe che il lettore web aggiunge alla sua pagina Home, nella loro posizione, per tutti gli utenti o per utenti scelti. Ogni utente può disattivare una riga in Il mio account › Righe della Home; le sezioni proprie del lettore web restano nelle sue Impostazioni › Home. Ogni riga esclude ciò che l’utente non può vedere: i titoli oltre il suo controllo parentale, i generi bloccati, i titoli nascosti e le librerie a lui nascoste.',
@@ -954,6 +1028,8 @@ const settings: typeof en = {
         collection: 'Una collezione',
         because: 'Perché hai guardato',
         new: 'Novità nelle tue librerie',
+        available: 'Ora disponibili',
+        waiting: 'Ancora in attesa',
       },
       kindHelp: {
         catalog:
@@ -963,10 +1039,16 @@ const settings: typeof en = {
         because:
           'Una riga per ciascuno degli ultimi film e serie TV riprodotti dall’utente, con i titoli simili, come li propongono i consigli sui film. Nessuna finché «Titoli simili» è disattivato.',
         new: 'I titoli arrivati nei cataloghi delle librerie dell’utente negli ultimi 7 giorni, dal più recente. Polyfin li conta dal momento in cui ha visto per la prima volta ogni titolo in ogni catalogo.',
+        available:
+          'I titoli non iniziati della lista «Da guardare» dell’utente per cui l’ultimo controllo ha trovato versioni, dagli ultimi trovati. Una versione trovata non è ancora stata provata: la sua riproduzione può ancora non riuscire.',
+        waiting:
+          'I titoli non iniziati della lista «Da guardare» dell’utente per cui l’ultimo controllo non ha trovato alcuna versione, o non ancora usciti, dagli ultimi aggiunti. Un titolo non ancora controllato non è in nessuna delle due righe.',
       },
       defaultNames: {
         because: 'Perché hai guardato',
         new: 'Novità nelle tue librerie',
+        available: 'Ora disponibili',
+        waiting: 'Ancora in attesa',
       },
       catalog: 'Catalogo',
       noCatalog: 'Gli add-on del server non hanno cataloghi da mostrare.',

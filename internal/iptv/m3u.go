@@ -15,6 +15,8 @@ import (
 	"unicode"
 
 	"golang.org/x/net/http/httpguts"
+
+	"github.com/moodiness/polyfin/internal/drm"
 )
 
 // Entry is a channel of a provider's list, as read from an M3U playlist or
@@ -44,6 +46,10 @@ type Entry struct {
 	// Favorite tells a channel marked favorite on the tuner.
 	GuideNumber string
 	Favorite    bool
+	// Protection is how the list says the stream is encrypted, by its
+	// #KODIPROP lines (see kodiProperty); nil when it says nothing. Its
+	// ClearKey keys are kept with the list's other data, and nowhere else.
+	Protection *drm.Protection
 }
 
 // maxLine bounds a playlist line: a line longer than that is not M3U.
@@ -59,17 +65,21 @@ const maxLine = 1 << 20
 // an earlier one of the same name: the #EXTINF line's http-user-agent,
 // http-referrer and http-origin attributes, then #EXTVLCOPT lines' options
 // of the same names and #EXTHTTP lines' JSON object, as the lines come,
-// then the Name=value pairs after a | ending the address (see cutHeaders).
-// A byte order mark and CRLF line ends are accepted. Headings that are
-// not channels are skipped (see heading), as are entries without an
-// address. A playlist that does not start with #EXTM3U, or whose lines
-// are too long, is not M3U.
+// then the manifest and stream headers of #KODIPROP lines, then the
+// Name=value pairs after a | ending the address (see cutHeaders). The
+// #KODIPROP lines since the previous address are the entry's, before its
+// #EXTINF line or after it (see kodiProperty). A byte order mark and CRLF
+// line ends are accepted. Headings that are not channels are skipped (see
+// heading), as are entries without an address. A playlist that does not
+// start with #EXTM3U, or whose lines are too long, is not M3U.
 func ParseM3U(r io.Reader, entry func(Entry) error) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64<<10), maxLine)
 	first := true
 	var current *Entry
 	var header Catchup
+	// properties are the #KODIPROP lines since the previous address.
+	var properties [][2]string
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if first {
@@ -110,13 +120,21 @@ func ParseM3U(r io.Reader, entry func(Entry) error) error {
 			if current != nil && current.Group == "" {
 				current.Group = strings.TrimSpace(text[len("#EXTGRP:"):])
 			}
+		case hasPrefixFold(text, "#KODIPROP:"):
+			name, value, _ := strings.Cut(text[len("#KODIPROP:"):], "=")
+			properties = append(properties, [2]string{name, value})
 		case strings.HasPrefix(text, "#"):
 		default:
+			kept := properties
+			properties = nil
 			if current == nil {
 				continue
 			}
 			e := *current
 			current = nil
+			for _, property := range kept {
+				e.kodiProperty(property[0], property[1])
+			}
 			address, headers := cutHeaders(text)
 			e.URL = address
 			for _, name := range slices.Sorted(maps.Keys(headers)) {
@@ -179,18 +197,84 @@ func cutHeaders(line string) (string, map[string]string) {
 	if !found {
 		return line, nil
 	}
+	headers, ok := headerPairs(rest)
+	if !ok {
+		return line, nil
+	}
+	return strings.TrimSpace(address), headers
+}
+
+// headerPairs reads headers written Name=value&Name=value, each value
+// unescaped when it is percent-encoded; false when text is not such pairs.
+func headerPairs(text string) (map[string]string, bool) {
 	headers := map[string]string{}
-	for pair := range strings.SplitSeq(rest, "&") {
+	for pair := range strings.SplitSeq(text, "&") {
 		name, value, ok := strings.Cut(pair, "=")
 		if name = strings.TrimSpace(name); !ok || !httpguts.ValidHeaderFieldName(name) {
-			return line, nil
+			return nil, false
 		}
 		if unescaped, err := url.PathUnescape(value); err == nil {
 			value = unescaped
 		}
 		headers[name] = value
 	}
-	return strings.TrimSpace(address), headers
+	return headers, true
+}
+
+// kodiProperty reads a #KODIPROP line's property, as lists write those of
+// adaptive streams: inputstream.adaptive.manifest_type (mpd, hls),
+// license_type (org.w3.clearkey, com.widevine.alpha...), license_key
+// (ClearKey keys, or a licence server's address, see licenseKey), and
+// manifest_headers and stream_headers, Name=value pairs apart by &.
+// Polyfin sends one set of headers with every request of a stream: both
+// are its headers. Other properties are not read.
+func (e *Entry) kodiProperty(name, value string) {
+	name, value = strings.ToLower(strings.TrimSpace(name)), strings.TrimSpace(value)
+	property, ok := strings.CutPrefix(name, "inputstream.adaptive.")
+	if !ok || value == "" {
+		return
+	}
+	protection := func() *drm.Protection {
+		if e.Protection == nil {
+			e.Protection = &drm.Protection{}
+		}
+		return e.Protection
+	}
+	switch property {
+	case "manifest_type":
+		protection().Manifest = strings.ToLower(value)
+	case "license_type":
+		protection().License = drm.LicenseType(value)
+	case "license_key":
+		licenseKey(protection(), value)
+	case "manifest_headers", "stream_headers":
+		headers, _ := headerPairs(value)
+		for _, name := range slices.Sorted(maps.Keys(headers)) {
+			e.setHeader(name, headers[name])
+		}
+	}
+}
+
+// licenseKey reads a license_key property: ClearKey keys (see
+// drm.ParseKeys), which make the licence ClearKey when the list names no
+// type; or a licence server's address, written address|headers|... as
+// such lists write it, headers being Name=value pairs apart by &.
+func licenseKey(p *drm.Protection, value string) {
+	if streamAddress(value) {
+		address, rest, _ := strings.Cut(value, "|")
+		p.LicenseURL = strings.TrimSpace(address)
+		fields, _, _ := strings.Cut(rest, "|")
+		if headers, ok := headerPairs(fields); ok && strings.TrimSpace(fields) != "" {
+			p.LicenseHeaders = headers
+		}
+		return
+	}
+	if keys, ok := drm.ParseKeys(value); ok {
+		p.Keys = keys
+		if p.License == "" {
+			p.License = drm.ClearKey
+		}
+	}
 }
 
 // streamAddress reports whether a playlist line is an address Polyfin can

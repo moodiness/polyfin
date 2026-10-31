@@ -50,8 +50,11 @@ const (
 // tracks are known: a second and a half of probing instead of five, which
 // finds the audio of a stream whose first audio packets come up to a
 // second after its video, as FFmpeg's own MPEG-TS muxer delays them by
-// 0.7 seconds; FFmpeg stops sooner once every track is found.
-var shortProbe = []string{"-probesize", "4000000", "-analyzeduration", "1500000", "-fflags", "+nobuffer"}
+// 0.7 seconds; FFmpeg stops sooner once every track is found. What it
+// probes is kept, not dropped, as the start of the stream it writes: the
+// seconds of a feed's start (see feedReader.place) make the first live
+// playlist's lead at once.
+var shortProbe = []string{"-probesize", "4000000", "-analyzeduration", "1500000"}
 
 // Endless reports whether version streams with no end, as a live stream
 // does, which then plays as a channel's stream plays (see AnalyzeLive): an
@@ -156,8 +159,16 @@ func (s *Service) AnalyzeLive(ctx context.Context, version library.Version) (med
 
 // probeLive analyzes a live stream (see AnalyzeLive) and keeps what it
 // found. The source has its feed's times to answer (see sniff), and the
-// analysis liveProbeCap from then on.
+// analysis liveProbeCap from then on. A stream whose list names a licence
+// Polyfin cannot have fails before the source is asked, with ErrLiveDRM; a
+// DASH stream is read with its ClearKey keys, then checked (see
+// checkDASH).
 func (s *Service) probeLive(ctx context.Context, version library.Version) (media.Analysis, error) {
+	if version.Protection.Unsupported() {
+		err := drmFailure(version.Protection)
+		s.liveFailed(ctx, version, err, true)
+		return media.Analysis{}, err
+	}
 	reader, err := s.openFeed(ctx, version)
 	if err != nil && !errors.Is(err, errManifest) {
 		// A source may be slow once: one that sent nothing in time is asked
@@ -167,22 +178,41 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 	}
 	// The analysis joins the feed opened for it: it holds it open meanwhile.
 	defer reader.Close()
+	dash := errors.Is(err, errDASH)
+	var options []string
+	keyed := false
+	if dash {
+		if options, keyed, err = s.dashOptions(ctx, version); err != nil {
+			s.liveFailed(ctx, version, err, LiveFailure(err) != LiveTimeout)
+			return media.Analysis{}, err
+		}
+	}
 	prober := s.ffprobe()
 	prober.Timeout = min(prober.Timeout, liveProbeCap)
 	probeCtx, cancel := context.WithTimeout(ctx, prober.Timeout)
 	defer cancel()
 	live := s.loopback.registerLiveFor(version, userOf(ctx))
 	defer live.release()
-	analysis, err := prober.ProbeLive(probeCtx, live.target)
+	analysis, err := prober.ProbeLive(probeCtx, live.target, options...)
+	timedOut := probeCtx.Err() != nil
+	if err == nil && dash {
+		// The check reads the stream again: it has its own time.
+		checkCtx, cancel := context.WithTimeout(ctx, prober.Timeout)
+		err = s.checkDASH(checkCtx, version, analysis, live.target, options, keyed)
+		timedOut = checkCtx.Err() != nil
+		cancel()
+	}
 	if err != nil {
-		if probeCtx.Err() != nil {
+		if timedOut {
 			err = fmt.Errorf("%w: %w", ErrLiveTimeout, err)
+		} else if dash && !s.readsDASH(ctx) {
+			err = fmt.Errorf("%w: this server's FFmpeg has no DASH demuxer: %v", ErrLiveDead, err)
 		} else if LiveFailure(err) == "" {
 			err = fmt.Errorf("%w: %v", ErrLiveDead, err)
 		}
 		// A file of an HLS stream that answered no media tells why
 		// ffprobe found none.
-		if answered := live.answered(); answered != nil {
+		if answered := live.answered(time.Time{}); answered != nil {
 			err = fmt.Errorf("%w; %v", err, answered)
 		}
 		// The source answered: an analysis that outlasted its time would
@@ -287,10 +317,11 @@ func (s *Service) limited(ctx context.Context, version library.Version) bool {
 	return err != nil || limit.Connections > 0
 }
 
-// Manifest reports whether a live analysis is of an HLS playlist, which
-// players fetch file by file, rather than of one endless stream.
+// Manifest reports whether a live analysis is of an HLS playlist or a
+// DASH manifest, whose files are fetched one by one, rather than of one
+// endless stream.
 func Manifest(analysis media.Analysis) bool {
-	return strings.Contains(","+analysis.Format+",", ",hls,")
+	return strings.Contains(","+analysis.Format+",", ",hls,") || DASH(analysis)
 }
 
 // Redirectable reports whether a player may be sent to a version's source
@@ -311,8 +342,24 @@ func (s *Service) Redirectable(ctx context.Context, version library.Version) boo
 // skipped (see pictureBefore). When the source does not answer, the player
 // receives a 502 and the error is returned for logging. A file that
 // answered no media, a refusal or a page, returns a fileAnswer telling
-// it, once relayed.
+// it, once relayed. A DASH manifest is refused: it plays converted.
 func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version library.Version, target string, link func(target, name string) string) error {
+	return s.serveLive(w, r, version, target, liveRelay{link: link})
+}
+
+// liveRelay names the files a relayed live stream refers to: link a file,
+// given its address and the name to give it; folder an origin's root on
+// the loopback interface (see rewriteManifest), nil for a player, to which
+// no DASH manifest is relayed.
+type liveRelay struct {
+	link   func(target, name string) string
+	folder func(origin string) string
+}
+
+// serveLive is ServeLive, relaying FFmpeg a DASH manifest when
+// relay.folder is set.
+func (s *Service) serveLive(w http.ResponseWriter, r *http.Request, version library.Version, target string, relay liveRelay) error {
+	link := relay.link
 	// An MPEG-TS stream is read from its feed, shared with every other
 	// reader of the channel.
 	if target == "" && !s.manifest(version.ID) {
@@ -367,6 +414,37 @@ func (s *Service) ServeLive(w http.ResponseWriter, r *http.Request, version libr
 		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		w.Header().Set("Cache-Control", "no-cache")
+		_, err = w.Write(rewritten)
+		return err
+	}
+	// A DASH manifest is rewritten for FFmpeg however the source answered,
+	// a part of it from its first byte included, as FFmpeg asks for it.
+	if response.StatusCode != http.StatusRequestedRangeNotSatisfiable && dashAnswer(response, body) {
+		if relay.folder == nil {
+			http.Error(w, "source unavailable", http.StatusBadGateway)
+			return errPlayerManifest
+		}
+		data, err := io.ReadAll(io.LimitReader(body, maxPlaylist))
+		if response.StatusCode == http.StatusPartialContent && !strings.HasPrefix(response.Header.Get("Content-Range"), "bytes 0-") {
+			err = fmt.Errorf("%w: a part of a manifest", ErrUnsafePlaylist)
+		}
+		base, _ := url.Parse(target)
+		if response.Request != nil {
+			base = response.Request.URL
+		}
+		var rewritten []byte
+		if err == nil {
+			rewritten, err = rewriteManifest(data, base, relay.folder)
+		}
+		if err != nil {
+			http.Error(w, "source unavailable", http.StatusBadGateway)
+			return err
+		}
+		w.Header().Set("Content-Type", "application/dash+xml")
+		w.Header().Set("Cache-Control", "no-cache")
+		// FFmpeg's dash demuxer reads a manifest to its end, which an
+		// answer of chunks does not reach for it.
+		w.Header().Set("Content-Length", strconv.Itoa(len(rewritten)))
 		_, err = w.Write(rewritten)
 		return err
 	}
@@ -582,7 +660,8 @@ func (s *Service) LiveSegment(remux Remux, name string) (*os.File, error) {
 // FFmpeg sends the headers it needs, stays within its confinement and, for
 // MPEG-TS, shares the stream's feed. An MPEG-TS stream whose tracks are
 // known is read with a short probe; opened again, after a run that failed
-// quickly, it is analyzed again and read with FFmpeg's full probe.
+// quickly, it is analyzed again and read with FFmpeg's full probe. A DASH
+// stream is read with its keys (see dashInput).
 func (s *Service) liveOpener(remux Remux) hls.Opener {
 	opens := 0
 	return func(ctx context.Context) (hls.Remux, func(), error) {
@@ -600,8 +679,14 @@ func (s *Service) liveOpener(remux Remux) hls.Opener {
 			return hls.Remux{}, nil, ErrNotRemuxable
 		}
 		live := s.loopback.registerLiveFor(remux.Version, remux.User)
-		r := hls.Remux{Input: live.target, Refused: live.refused, Video: video.Index, Audio: audioOf(analysis, remux.Audio), Format: remux.Format}
+		r := hls.Remux{Input: live.target, Refused: live.refused, Answered: live.answered, Channel: remux.Channel, Video: video.Index,
+			Audio: audioOf(analysis, remux.Audio), Format: remux.Format}
 		switch {
+		case DASH(analysis):
+			if r.InputOptions, err = s.dashInput(ctx, remux.Version); err != nil {
+				live.release()
+				return hls.Remux{}, nil, err
+			}
 		case Manifest(analysis):
 			r.InputOptions = media.LiveOptions
 		case opens == 1:
@@ -652,8 +737,9 @@ type liveRegistration struct {
 	// last request of the stream was answered with, nil for none.
 	refused func() error
 	// answered tells the last file of the stream that answered no media
-	// (see fileAnswer), nil for none.
-	answered func() error
+	// since a time (see fileAnswer), nil for none: an encoding asks for
+	// those since it last made a segment, an analysis for any.
+	answered func(since time.Time) error
 	release  func()
 }
 
@@ -661,10 +747,11 @@ type liveRegistration struct {
 type liveTarget struct {
 	version library.Version
 	// refused is the refusal of the source the last request was answered
-	// with, nil for none; answered the last file that answered no media.
-	// They are guarded by the loopback's mu.
-	refused  error
-	answered error
+	// with, nil for none; answered the last file that answered no media,
+	// at answeredAt. They are guarded by the loopback's mu.
+	refused    error
+	answered   error
+	answeredAt time.Time
 }
 
 func (l *loopback) registerKey(version library.Version, key string) liveRegistration {
@@ -680,9 +767,16 @@ func (l *loopback) registerKey(version library.Version, key string) liveRegistra
 		}
 	}
 	return liveRegistration{
-		target:   l.liveURL(key, "", FileName(version.URL)),
-		refused:  guarded(&t.refused),
-		answered: guarded(&t.answered),
+		target:  l.liveURL(key, "", FileName(version.URL)),
+		refused: guarded(&t.refused),
+		answered: func(since time.Time) error {
+			l.mu.Lock()
+			defer l.mu.Unlock()
+			if t.answeredAt.Before(since) {
+				return nil
+			}
+			return t.answered
+		},
 		release: func() {
 			l.mu.Lock()
 			delete(l.feeds, key)
@@ -703,7 +797,9 @@ func (l *loopback) liveURL(key, target, name string) string {
 }
 
 // serveLive answers FFmpeg's and ffprobe's requests for a live stream
-// registered on the loopback interface: /live/{key}/{target}/{name}.
+// registered on the loopback interface: /live/{key}/{target}/{name}, or
+// /live/{key}/~{origin}/{path} for a file a DASH manifest names (see
+// folderURL).
 func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string) {
 	parts := strings.SplitN(rest, "/", 3)
 	if len(parts) != 3 {
@@ -714,7 +810,12 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 	live, ok := l.feeds[parts[0]]
 	l.mu.Unlock()
 	target := ""
-	if parts[1] != "-" {
+	switch {
+	case strings.HasPrefix(parts[1], "~"):
+		var found bool
+		target, found = folderTarget(r, parts[0], parts[1])
+		ok = ok && found
+	case parts[1] != "-":
 		decoded, err := base64.RawURLEncoding.DecodeString(parts[1])
 		ok = ok && err == nil
 		target = string(decoded)
@@ -723,7 +824,10 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 		http.NotFound(w, r)
 		return
 	}
-	link := func(file, name string) string { return l.liveURL(parts[0], file, name) }
+	relay := liveRelay{
+		link:   func(file, name string) string { return l.liveURL(parts[0], file, name) },
+		folder: func(origin string) string { return l.folderURL(parts[0], origin) },
+	}
 	if _, rest, ok := strings.Cut(parts[0], "."); ok {
 		if rest == recordingSuffix {
 			r = r.WithContext(forRecording(r.Context()))
@@ -735,7 +839,7 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 	l.mu.Lock()
 	live.refused = nil
 	l.mu.Unlock()
-	err := l.live(w, r, live.version, target, link)
+	err := l.live(w, r, live.version, target, relay)
 	var answered fileAnswer
 	odd := errors.As(err, &answered)
 	if !errors.Is(err, ErrLiveRefused) {
@@ -744,7 +848,7 @@ func (l *loopback) serveLive(w http.ResponseWriter, r *http.Request, rest string
 	l.mu.Lock()
 	live.refused = err
 	if odd {
-		live.answered = answered
+		live.answered, live.answeredAt = answered, time.Now()
 	}
 	l.mu.Unlock()
 }

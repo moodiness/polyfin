@@ -40,6 +40,7 @@ func (h *Handler) browseRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Polyfin/HomeRows", h.customRowsAnswer)
 	signedIn(http.MethodPost, "/Polyfin/Items/{itemId}/Versions/Search", h.searchVersions)
 	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Ratings", h.titleRatings)
+	signedIn(http.MethodGet, "/Polyfin/Items/Ratings", h.posterRatings)
 	signedIn(http.MethodGet, "/Shows/{seriesId}/Seasons", h.seasons)
 	signedIn(http.MethodGet, "/Shows/{seriesId}/Episodes", h.episodes)
 	signedIn(http.MethodGet, "/Items/Filters", h.filters)
@@ -500,6 +501,14 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		// The library cannot be narrowed to the requested genre, studio or
 		// year.
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
+		return
+	}
+	// A library's series by their episodes, and its titles at random, are
+	// sorted among more than a page.
+	if key, ok := episodeOrder(r); ok && h.episodeOrderListing(w, r, user, parent, key, genre, fields, keep, start, limit) {
+		return
+	}
+	if randomOrder(r) && h.randomLibraryListing(w, r, user, parent, genre, fields, keep, start, limit) {
 		return
 	}
 	asked := time.Now()

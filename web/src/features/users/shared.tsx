@@ -55,7 +55,10 @@ export function userSaved(updated: User, selfId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.users })
   void queryClient.invalidateQueries({ queryKey: queryKeys.userDevices(updated.id) })
   void queryClient.invalidateQueries({ queryKey: queryKeys.groups })
-  if (updated.id === selfId) void queryClient.invalidateQueries({ queryKey: queryKeys.session })
+  if (updated.id === selfId) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.session })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.ownWebTheme })
+  }
 }
 
 /** A PATCH mutation for one user that keeps the list (and our own session) up to date. */

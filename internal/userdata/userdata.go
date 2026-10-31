@@ -152,6 +152,28 @@ func (s *Store) EpisodeCounts(ctx context.Context, user accounts.ID, parents []a
 	return result, err
 }
 
+// SeriesLastPlayed returns, for each series in series, when the user last
+// played one of its episodes they played through, as Jellyfin's
+// SeriesDatePlayed sort reads it; series without one are missing.
+func (s *Store) SeriesLastPlayed(ctx context.Context, user accounts.ID, series []accounts.ID) (map[accounts.ID]time.Time, error) {
+	result := make(map[accounts.ID]time.Time, len(series))
+	if len(series) == 0 {
+		return result, nil
+	}
+	rows, err := s.db.Query(ctx, `SELECT series_id, max(last_played_at) FROM user_data
+		WHERE user_id = $1 AND series_id = ANY($2) AND played AND last_played_at IS NOT NULL GROUP BY series_id`, user, series)
+	if err != nil {
+		return nil, err
+	}
+	var id accounts.ID
+	var at time.Time
+	_, err = pgx.ForEachRow(rows, []any{&id, &at}, func() error {
+		result[id] = at.UTC()
+		return nil
+	})
+	return result, err
+}
+
 // Resumable lists the items with a resume point, most recently played
 // first; those never started come last.
 func (s *Store) Resumable(ctx context.Context, user accounts.ID) ([]Entry, error) {

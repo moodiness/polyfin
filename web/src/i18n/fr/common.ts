@@ -89,6 +89,7 @@ const common: typeof en = {
     invalid_copy_from: 'Cet utilisateur n’existe plus. Choisissez-en un autre.',
     invalid_server_name: 'Le nom du serveur doit comporter de 1 à 64 caractères.',
     invalid_language: 'Choisissez une langue dans la liste.',
+    invalid_audio_region: 'Choisissez une région dans la liste.',
     invalid_catalog_limit:
       'Le nombre de titres lus par catalogue doit être un nombre entier de 100 à 20 000.',
     invalid_channel_limit:
@@ -226,6 +227,10 @@ const common: typeof en = {
       'Les horaires vont de 00:00 à 24:00, et chaque fin doit venir après son début (50 lignes au plus).',
     outside_allowed_hours:
       'Ce compte ne peut pas être utilisé à cette heure-ci. Réessayez pendant ses horaires autorisés.',
+    outside_local_network:
+      'Ce compte ne peut être utilisé que depuis le réseau local. Connectez-vous depuis celui-ci, ou demandez à un administrateur.',
+    remote_access_self:
+      'Vous êtes connecté depuis l’extérieur du réseau local : désactiver vos propres connexions depuis l’extérieur vous bloquerait. Faites-le depuis le réseau local.',
     invalid_guide_url:
       'Saisissez une adresse de guide commençant par https:// ou http://, de 4 096 caractères au plus, ou le chemin absolu d’un fichier du serveur.',
     invalid_app:
@@ -246,9 +251,12 @@ const common: typeof en = {
       'L’intervalle d’actualisation doit être un nombre entier d’heures de 1 à 168.',
     invalid_local_scan_hours:
       'L’intervalle d’analyse doit être un nombre entier d’heures de 0 à 168.',
+    invalid_watchlist_check_hours:
+      'L’intervalle de vérification des titres à regarder doit être un nombre entier d’heures de 0 à 168.',
     invalid_custom_css: 'Le CSS personnalisé ne doit pas dépasser 2 Mo.',
     invalid_custom_js: 'Le JavaScript personnalisé ne doit pas dépasser 2 Mo.',
-    invalid_web_theme: 'Choisissez LumaaGlaass, Aucun ou Personnalisé.',
+    invalid_web_theme: 'Choisissez un thème dans la liste.',
+    web_theme_locked: 'Votre administrateur a choisi le thème de votre lecteur web.',
     theme_copy_running: 'Une copie du thème est déjà en cours. Réessayez dans un instant.',
     theme_copy_nothing: 'Les textes personnalisés enregistrés ne chargent rien d’ailleurs.',
     theme_copy_failed: 'Aucun fichier n’a pu être enregistré, donc aucune copie n’a été faite.',
@@ -339,6 +347,15 @@ const common: typeof en = {
     too_large: 'Le fichier est trop volumineux.',
     destination_failed: 'La destination n’a pas pu être lue.',
     restore_failed: 'La restauration n’a pas pu commencer : rien n’a été modifié.',
+    invalid_backup_passphrase:
+      'La phrase de passe des sauvegardes fait au moins 12 caractères, sur une ligne, et 256 octets au plus.',
+    passphrase_required:
+      'Cette sauvegarde est chiffrée : ouvrez-la d’abord avec sa phrase de passe.',
+    wrong_passphrase: 'Cette phrase de passe n’ouvre pas la sauvegarde.',
+    damaged_backup:
+      'Cette sauvegarde chiffrée est endommagée : une partie a été modifiée ou manque. Rien n’a été restauré.',
+    not_encrypted: 'Cette sauvegarde n’est pas chiffrée.',
+    unlock_failed: 'La sauvegarde n’a pas pu être déchiffrée.',
     invalid_collection_read_hour:
       'Choisissez dans la liste l’heure de lecture des collections, ou Jamais.',
     invalid_collection_library_apps:
@@ -349,6 +366,8 @@ const common: typeof en = {
       'L’adresse de l’outil de mise à jour doit être une adresse web commençant par http:// ou https://, sans nom d’utilisateur ni fragment.',
     invalid_update_tool_token:
       'Le jeton de l’outil de mise à jour ne contient pas d’espace, et 1024 caractères au plus.',
+    invalid_provider:
+      'Vérifiez le fournisseur d’identité : son émetteur est une adresse web commençant par http:// ou https://, sans requête ni fragment ; l’ID client, le secret et les claims ne contiennent pas d’espace ; un claim nomme l’utilisateur.',
     restart_unconfirmed:
       'Polyfin ne sait pas si quelque chose le relance : confirmez d’abord l’avertissement.',
     no_update: 'Polyfin Desktop ne propose pas cette mise à jour pour le moment.',
@@ -518,6 +537,20 @@ const common: typeof en = {
     app_import_expired:
       'Ce qui a été lu du compte n’est plus gardé, après quelques minutes. Reconnectez-vous.',
     app_import_running: 'Une importation dans ce compte est en cours. Attendez qu’elle se termine.',
+    plex_sign_in_ended:
+      'La connexion à Plex a pris fin : elle a expiré, a été remplacée, ou a servi à une importation. Reconnectez-vous avec Plex.',
+    plex_sign_in_pending:
+      'Plex ne vous a pas encore connecté. Terminez la connexion sur la page de Plex.',
+    plex_unknown_profile: 'Ce Plex Home n’a pas ce profil. Reconnectez-vous avec Plex.',
+    plex_profile_pin_refused: 'Plex a refusé ce code PIN. Saisissez à nouveau celui du profil.',
+    plex_profile_forbidden: 'Plex ne laisse pas ce compte passer à ce profil.',
+    plex_unknown_server: 'Votre compte Plex n’a pas accès à ce serveur. Choisissez-en un autre.',
+    plex_not_owner:
+      'Ce compte Plex n’est pas propriétaire du serveur. Connectez-vous avec le compte Plex du propriétaire.',
+    plex_server_unreachable:
+      'Aucune des adresses que Plex donne pour ce serveur n’a répondu comme lui. Vérifiez qu’il fonctionne, et que Polyfin peut le joindre.',
+    plex_tv_failed: 'plex.tv n’a pas répondu comme prévu. Réessayez plus tard.',
+    plex_tv_unreachable: 'plex.tv est injoignable. Vérifiez la connexion de Polyfin à Internet.',
     app_not_connected: 'Cette appli n’est plus connectée au compte.',
     app_connection_stopped:
       'L’appli a refusé la connexion que Polyfin gardait. Reconnectez-vous, avec « Rester connecté » coché.',

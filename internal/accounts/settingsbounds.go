@@ -142,6 +142,7 @@ func DefaultSettings() Settings {
 		RecordingCommercials:   false,
 		LiveTvRefreshHours:     DefaultLiveTvRefreshHours,
 		LocalScanHours:         DefaultLocalScanHours,
+		WatchlistCheckHours:    DefaultWatchlistCheckHours,
 		WatchLocalFolders:      true,
 
 		ConvertRecordings:            false,
@@ -176,6 +177,7 @@ func DefaultSettings() Settings {
 		RecordingsFolder: "",
 		Backups:          false,
 		BackupFolder:     "",
+		BackupPassphrase: "",
 
 		PublicAddress: "",
 
@@ -218,6 +220,16 @@ func DefaultSettings() Settings {
 		ReadingFolder:    "",
 		CacheFolder:      "",
 		SiloApps:         false,
+
+		PosterRatings:          false,
+		ProviderIssuer:         "",
+		ProviderName:           "",
+		ProviderClientID:       "",
+		ProviderClientSecret:   "",
+		ProviderUserClaim:      "preferred_username",
+		ProviderCreateAccounts: false,
+		ProviderAdminClaim:     "",
+		ProviderAdminValue:     "",
 	}
 }
 
@@ -226,9 +238,9 @@ type SettingBounds struct {
 	// Default is the setting's value on a new server.
 	Default any
 	// Min and Max bound a number, the length of a text, in characters for
-	// the server name and in bytes for the others, or the number of
-	// entries of a list of addresses or apps. Bounded tells whether they
-	// apply.
+	// the server name and the backup passphrase's Min, and in bytes for
+	// the others, or the number of entries of a list of addresses or apps.
+	// Bounded tells whether they apply.
 	Min, Max float64
 	Bounded  bool
 	// Zero tells that 0 is accepted too, below Min, turning the setting
@@ -368,6 +380,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"recordingCommercials":   is(d.RecordingCommercials),
 		"liveTvRefreshHours":     between(MinLiveTvRefreshHours, MaxLiveTvRefreshHours, d.LiveTvRefreshHours),
 		"localScanHours":         between(0, MaxLocalScanHours, d.LocalScanHours),
+		"watchlistCheckHours":    between(0, MaxWatchlistCheckHours, d.WatchlistCheckHours),
 		"watchLocalFolders":      is(d.WatchLocalFolders),
 
 		"convertRecordings":            is(d.ConvertRecordings),
@@ -404,6 +417,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"recordingsFolder": text(MaxFolderBytes, d.RecordingsFolder),
 		"backups":          is(d.Backups),
 		"backupFolder":     text(MaxFolderBytes, d.BackupFolder),
+		"backupPassphrase": orZero(MinBackupPassphraseRunes, MaxBackupPassphraseBytes, d.BackupPassphrase),
 
 		"publicAddress": text(MaxPublicAddressBytes, d.PublicAddress),
 
@@ -446,6 +460,16 @@ func SettingsBounds() map[string]SettingBounds {
 		"readingFolder":    text(MaxFolderBytes, d.ReadingFolder),
 		"cacheFolder":      text(MaxFolderBytes, d.CacheFolder),
 		"siloApps":         is(d.SiloApps),
+
+		"posterRatings":          is(d.PosterRatings),
+		"providerIssuer":         text(MaxProviderIssuerBytes, d.ProviderIssuer),
+		"providerName":           text(MaxProviderNameBytes, d.ProviderName),
+		"providerClientId":       text(MaxProviderClientBytes, d.ProviderClientID),
+		"providerClientSecret":   text(MaxProviderClientBytes, d.ProviderClientSecret),
+		"providerUserClaim":      between(1, MaxProviderClaimBytes, d.ProviderUserClaim),
+		"providerCreateAccounts": is(d.ProviderCreateAccounts),
+		"providerAdminClaim":     text(MaxProviderClaimBytes, d.ProviderAdminClaim),
+		"providerAdminValue":     text(MaxProviderValueBytes, d.ProviderAdminValue),
 	}
 }
 

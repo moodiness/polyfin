@@ -32,7 +32,10 @@ import (
 //     as movie recommendations give them, without those the user played;
 //     none while Similar titles is off;
 //   - New in your libraries: the titles new in the catalogs of the user's
-//     libraries (see library.Arrivals).
+//     libraries (see library.Arrivals);
+//   - Now available and Still waiting: the titles of the user's watchlist
+//     they have not started that versions were found for, and those still
+//     without (see library.WatchlistAvailable).
 //
 // Every row leaves out what the user's listings leave out: the titles
 // parental control or blocked genres hide, the titles they hid, and the
@@ -76,11 +79,14 @@ var customRowKinds = map[homerows.Kind]string{
 	homerows.KindCollection: "Collection",
 	homerows.KindBecause:    "BecauseYouWatched",
 	homerows.KindNew:        "New",
+	homerows.KindAvailable:  "NowAvailable",
+	homerows.KindWaiting:    "StillWaiting",
 }
 
 // CustomRowDto is a row of GET /Polyfin/HomeRows: its folder's Id, its
 // Name, its Place (Top, AfterResume, AfterNextUp or Bottom), its Kind
-// (Catalog, Collection, BecauseYouWatched or New) and its first Items.
+// (Catalog, Collection, BecauseYouWatched, New, NowAvailable or
+// StillWaiting) and its first Items.
 type CustomRowDto struct {
 	Id    string
 	Name  string
@@ -299,6 +305,10 @@ func (h *Handler) readCustomRow(ctx context.Context, user accounts.User, row cus
 		return pageOfItems(similar, start, count), nil
 	case homerows.KindNew:
 		return h.Library.Arrivals(ctx, user, start, count, first)
+	case homerows.KindAvailable:
+		return h.Library.WatchlistAvailable(ctx, user, start, count, first)
+	case homerows.KindWaiting:
+		return h.Library.WatchlistWaiting(ctx, user, start, count, first)
 	}
 	return library.Page{}, library.ErrNotFound
 }

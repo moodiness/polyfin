@@ -11,7 +11,10 @@ const account: typeof en = {
       resume: 'Continuar assistindo',
       hidden: 'Títulos ocultos',
       homeRows: 'Fileiras do início',
+      trackChoices: 'Escolha de faixas',
       metadataLanguage: 'Idioma dos metadados',
+      webTheme: 'Tema do player web',
+      audioRegion: 'Região do áudio',
       sharedLinks: 'Links compartilhados',
       reminders: 'Lembretes',
       import: 'Importar de outro servidor',
@@ -29,6 +32,32 @@ const account: typeof en = {
         'Nenhum complemento do servidor tem um idioma ainda, então os títulos são descritos no idioma do servidor. Um administrador define o idioma dos complementos em Conteúdo › Fontes.',
       saved: 'Idioma dos metadados salvo.',
     },
+    webTheme: {
+      help: 'A aparência do player web em cada navegador em que você entra. A aparência do jellyfin-web é mais leve, para TVs e celulares antigos; navegadores antigos demais para o LumaaGlaass a recebem sozinhos. Um navegador mostra uma alteração quando o player web é aberto de novo nele, ou assim que você entra nele.',
+      label: 'Tema do player web',
+      server: (theme: string) => `O do servidor (${theme})`,
+      choices: {
+        lumaaglaass: 'LumaaGlaass',
+        none: 'Aparência do jellyfin-web',
+        custom: 'Personalizado',
+      },
+      locked: 'Seu administrador escolheu o tema do seu player web.',
+      saved: 'Tema do player web salvo.',
+    },
+    audioRegion: {
+      help: 'A dublagem que você prefere quando um idioma é dublado à parte para uma região: o francês da França ou do Québec, o espanhol da Espanha ou da América Latina, o português do Brasil ou de Portugal. Ela vale para o idioma de áudio escolhido nos seus aplicativos, ou então o do servidor, quando ele é o idioma da região, e o define quando nenhum foi escolhido. Nesse idioma, as faixas de áudio da região tocam primeiro, e as versões dela vêm primeiro quando o servidor ordena as versões por idioma.',
+      label: 'Região do áudio',
+      none: 'Nenhuma',
+      saved: 'Região do áudio salva.',
+      regions: {
+        'fr-FR': 'Francês (França)',
+        'fr-CA': 'Francês (Québec)',
+        'es-ES': 'Espanhol (Espanha)',
+        'es-419': 'Espanhol (América Latina)',
+        'pt-BR': 'Português (Brasil)',
+        'pt-PT': 'Português (Portugal)',
+      },
+    },
     homeRows: {
       help: 'As fileiras que o administrador adiciona para você à página inicial do player web. Desative uma para tirá-la da sua página inicial, e também das suas bibliotecas em outros aplicativos quando ela for uma biblioteca neles. As seções próprias do player web ficam em Configurações › Início dele.',
       empty: 'Nenhuma fileira do início',
@@ -37,6 +66,21 @@ const account: typeof en = {
       shown: (name: string) => `Mostrar ${name} na sua página inicial`,
       on: (name: string) => `${name} voltou à sua página inicial.`,
       off: (name: string) => `${name} foi removida da sua página inicial.`,
+    },
+    trackChoices: {
+      help: 'Quando você escolhe outra faixa de áudio ou outras legendas além das que uma série ou um filme reproduz por padrão, as próximas reproduções mantêm esse idioma, em cada episódio e em qualquer versão, em todos os apps. Isso segue “Definir faixa de áudio baseado no item anterior” e “Definir legenda baseado no item anterior” nas configurações de reprodução do player web, ativadas a menos que você as tenha desativado.',
+      none: 'Nenhuma escolha de faixas guardada.',
+      kept: (count: number) =>
+        count === 1
+          ? 'Escolhas de faixas guardadas para 1 série ou filme.'
+          : `Escolhas de faixas guardadas para ${count} séries e filmes.`,
+      forget: 'Esquecer minhas escolhas de faixas',
+      title: 'Esquecer suas escolhas de faixas?',
+      confirmHelp:
+        'Cada série e filme volta a reproduzir as faixas que suas preferências de idioma escolhem.',
+      confirm: 'Esquecer',
+      forgetting: 'Esquecendo…',
+      done: 'Suas escolhas de faixas foram esquecidas.',
     },
     watching: {
       resumeHelp:
@@ -93,7 +137,7 @@ const account: typeof en = {
           : `a cada ${minutes / 60} horas`,
     serverImport: {
       description:
-        'Traga seus filmes e episódios reproduzidos, pontos de retomada e favoritos de um servidor Jellyfin ou Emby que você usava antes, ou seus filmes da sua exportação do Letterboxd. Eles vão apenas para a sua conta e só complementam o que o Polyfin já tem. Nada é gravado no outro servidor.',
+        'Traga seus filmes e episódios reproduzidos, pontos de retomada e favoritos de um servidor Jellyfin, Emby ou Plex que você usava antes, ou seus filmes da sua exportação do Letterboxd. Eles vão apenas para a sua conta e só complementam o que o Polyfin já tem. Nada é gravado no outro servidor.',
       serverKind: 'Servidor',
       address: 'Endereço do servidor',
       addressHelp:
@@ -107,6 +151,32 @@ const account: typeof en = {
       started: 'A importação foi iniciada. Você pode sair desta página: ela continua.',
       lastTitle: 'Sua última importação',
       from: (server: string) => `De ${server}`,
+    },
+    plexImport: {
+      help: 'Entre no Plex pela página do Plex e depois escolha o servidor. O Polyfin lê lá, em seu nome, os filmes e episódios que você reproduziu, marcou como assistidos ou sincronizou, seus pontos de retomada e suas avaliações, e sua Watchlist do Plex. O Polyfin nunca vê sua senha do Plex: o que o Plex lhe dá serve apenas para esta importação e depois é desconectado.',
+      signIn: 'Entrar com o Plex',
+      signingIn: 'Consultando o Plex…',
+      approve: 'Entre no Plex pela página dele, que abre em uma nova aba, e depois volte aqui.',
+      open: 'Abrir a página de login do Plex',
+      waiting: 'Aguardando você entrar no Plex…',
+      signedInAs: (name: string) => `Conectado ao Plex como ${name}.`,
+      profile: 'Perfil do Plex Home',
+      profileHelp:
+        'O perfil cujos dados de exibição são importados. Um perfil gerenciado não tem login próprio: escolha-o aqui.',
+      managed: (name: string) => `${name} (gerenciado)`,
+      pin: 'PIN do perfil',
+      pinHelp: 'O PIN que este perfil pede no Plex.',
+      useProfile: 'Usar este perfil',
+      switching: 'Trocando…',
+      server: 'Servidor',
+      serverHelp:
+        'Os servidores Plex que este perfil acessa. O Polyfin alcança o escolhido pelos endereços que o Plex informa.',
+      owned: (name: string) => `${name} (seu)`,
+      noServers: 'Este perfil não acessa nenhum servidor Plex.',
+      watchlist: 'Watchlist para a minha lista “Para assistir”',
+      watchlistHelp:
+        'Os filmes e séries da sua Watchlist do Plex vão para a sua lista “Para assistir” no Polyfin.',
+      cancel: 'Cancelar',
     },
     letterboxd: {
       option: 'Letterboxd (arquivo de exportação)',
@@ -618,7 +688,11 @@ const account: typeof en = {
     title: 'Redefinir suas preferências?',
     help: 'O que você mesmo escolheu volta aos padrões do servidor:',
     metadataLanguage: 'Idioma dos metadados: O do servidor',
+    webTheme:
+      'Tema do player web: O do servidor, a menos que seu administrador tenha escolhido o seu',
+    audioRegion: 'Região do áudio: Nenhuma',
     homeRows: 'Fileiras do início: todas as fileiras voltam a aparecer',
+    trackChoices: 'Escolha de faixas: esquecida para cada série e filme',
     appPreferences:
       'As preferências que os apps Jellyfin salvaram na sua conta: idiomas e modo do áudio e das legendas, preferências da tela inicial e de exibição',
     kept: 'O que você assistiu, seus favoritos, seus pontos de retomada, suas conexões e importações continuam.',

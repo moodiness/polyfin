@@ -40,6 +40,7 @@ The databases time a title once, but the versions addons offer may be cut differ
 - Credits that run to the end stop 1 second early, so that the web player (jellyfin-web) offers its skip button. Skipping then lands a second before the end, and the next episode starts, or the movie ends.
 - When the title's listed runtime is shorter than the file, such credits end exactly at the file's end instead. The web player then shows its "Up Next" card rather than a skip button.
 - The web player shows neither while its controls are on screen when the credits start: it offers a segment only once, as playback enters it.
+- Credits that run over a scene, during or after them, are split around it, so that skipping them lands on the scene: see [Scenes during and after the credits](#scenes-during-and-after-the-credits).
 
 A version not analyzed yet gets the databases' segments as they are. Asking for its segments never starts an analysis.
 
@@ -48,13 +49,41 @@ A version not analyzed yet gets the databases' segments as they are. Asking for 
 - An intro: intro, introduction, opening, OP, "générique de début", "générique d'ouverture" or "ouverture". "Opening Credits" is an intro.
 - A preview: preview, "next time on", "next on", "next episode", "sneak peek", "aperçu", "prochainement", "prochain épisode" or "à suivre".
 - A recap: recap, previously, "last time on", "last on", "récapitulatif", "résumé", "précédemment" or "épisode précédent".
-- Credits: credits (end or closing credits), closing, ending, ED, outro, "crédits", "générique de fin" or "générique final".
+- Credits: credits (end or closing credits), closing, ending, ED, outro, "crédits", "générique de fin" or "générique final". A chapter named as a scene during or after the credits, such as "Post-Credits Scene", is not credits (see [Scenes during and after the credits](#scenes-during-and-after-the-credits)).
 
 A name is tried as an intro, then as a preview, a recap and credits, as the plugin does: "Credits and Preview" is a preview. OP and ED count only as the whole name, maybe followed by a number: "OP", "op 1", "ED2" and "ED - 2" count, while "Ed Wood" and "OP Center" do not. Chapters with other names, such as "Chapter 2", give no segment. Chapters give segments even with no database asked.
 
 A chapter's segment runs from its start to the next chapter's start, or to the version's end for the last chapter. Chapters of the same type in a row make one segment.
 
 **Why credits stop early:** jellyfin-web shows no skip button for credits that reach the runtime the title is listed with, when something follows in its queue. Its video page shows its "Up Next" card instead, but only for credits that reach the end of the version it plays. Credits count as running to the end when they end within 2 seconds of it. They stop early only when the listed runtime is at least the version's length, and when they still last 3 seconds, as jellyfin-web ignores shorter segments.
+
+### Scenes during and after the credits
+
+A movie or an episode may hold a scene within its credits, between two parts of them, or after them. Credits running over it would have **Skip** jump past it. Once a version is analyzed, Polyfin splits its credits around such scenes: skipping the credits lands on the scene, and the web player offers the credits after it again as playback enters them.
+
+Polyfin finds a scene:
+
+- **In the version's chapters:** a chapter named as a scene during or after the credits: "post-credits", "mid-credits", "after credits", "after the credits" or "stinger", with or without a hyphen or the s, and in French "post-générique", "mi-générique" or "après le générique". Names count as the other chapter names do. Such a chapter is not credits, though its name says credits. It runs to the next chapter's start, or to the version's end for the last chapter.
+- **In its dialogue:** lines of dialogue resuming within the credits after 20 seconds without any, since the credits started or since the lines before. At least 3 lines are needed, with no such gap between them, lasting 10 minutes at most: longer is the title itself, under credits timed too early. The scene starts 5 seconds before its first line, as a scene starts before its first word, and ends with its last line, which may come after the credits' end.
+
+Lines that are not dialogue are left out: lyrics, which subtitles mark with a note (♪) or with "#", and descriptions in brackets, such as "[music]" or "(singing)". Credits over a song, with only its lyrics, are not split.
+
+The dialogue is what Polyfin already has of the version, nothing being read or synced for it:
+
+- a text track inside the version's file, read whole before (see [Text tracks inside files](subtitles.md#text-tracks-inside-files)), with at least 20 lines. Forced tracks, which show only some lines, are left out;
+- else, an addon subtitle synced to the version (see [Addon subtitles synced to the version](subtitles.md#addon-subtitles-synced-to-the-version)) and read lately, timed as synced, with at least 20 lines: the one with the most lines.
+
+A version without either has its credits split by its chapters only, until its dialogue is at hand: apps asking for its segments again then get them split by its dialogue too.
+
+- A part of the credits shorter than 3 seconds, before or after a scene, is left out, as the web player ignores such segments.
+- The last part of the credits follows the rules above: when it runs to the end, it stops a second before it, or ends at the file's end when the listed runtime is shorter.
+- A chapter right after credits chapters needs no rule of its own: the version's credits chapters give its credits, which end where the next chapter starts.
+- Credits found in local episodes' audio are split too (see [Intros and credits found in local episodes' audio](#intros-and-credits-found-in-local-episodes-audio)).
+- A version not analyzed yet keeps the databases' credits whole.
+
+**Compared with Jellyfin:** Jellyfin finds no such scene, and its credits run over it. jellyfin-web offers each segment as playback enters it, several `Outro` segments included, and **Skip** seeks to the segment's end (jellyfin-web 12.4, `src/apps/legacy/features/playback/utils/mediaSegmentManager.ts`, lines 37-57 and 123-144).
+
+**For app developers:** `/MediaSegments/{id}` lists the credits of such a version as several `Outro` segments, one before each scene and one after the last when they go on after it.
 
 ## Intros and credits found in local episodes' audio
 

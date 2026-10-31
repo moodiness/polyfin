@@ -188,12 +188,16 @@ const home = {
       sizeLimit: 'Smaller than the source',
       /** Shown when the app may switch between several qualities of converted video. */
       qualityPlayed: 'Quality played',
+      /** The version the play went on from once its source failed. */
+      switchedVersion: 'Switched version',
       qualityAmong: (played: string, offered: string) => `${played}, among ${offered}`,
       sizeLimits: {
         steppedDown: (height: string) => `The app stepped down from ${height}`,
         gpu: (height: string) => `${height} at most: converted by the graphics card`,
         processor: (height: string) => `${height} at most: converted by the processor`,
         toneMapping: (height: string) => `${height} at most: HDR converted by the processor`,
+        gpuToneMapping: (height: string) =>
+          `${height} at most: the graphics card converts HDR in time only up to there`,
         qualityGroup: (height: string) => `Quality group: ${height}`,
         serverMax: (height: string) => `Maximum quality of converted video: ${height}`,
         app: (height: string) => `Quality allowed by the app: ${height}`,

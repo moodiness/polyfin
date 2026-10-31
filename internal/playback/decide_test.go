@@ -648,3 +648,65 @@ func TestHDRIsToneMappedOnTheGPUWithoutTheProcessorsLimits(t *testing.T) {
 		}
 	}
 }
+
+// The Jellyfin app for Android asks again with direct play turned off
+// after two playback errors within 30 seconds (#542). Jellyfin 12.4 still
+// runs the direct-play check then (StreamBuilder.GetVideoDirectPlayProfile,
+// L1392-L1426): a file that would have played as it is gets
+// DirectPlayError beside the reasons its conversion has, and one that
+// would not gets the reasons the check found. The reasons below are those
+// Jellyfin 12.4's StreamBuilder gives for the same sources and profiles,
+// with direct play off as its MediaInfoHelper turns it off (L227-L230).
+// Polyfin's own refusals, a disc's or a DASH channel's, skip the check as
+// before.
+func TestDirectPlayTurnedOffByTheApp(t *testing.T) {
+	t.Parallel()
+	// #542's episode: HEVC Main 10 in SDR, 960 lines, and E-AC-3 in 5.1,
+	// which the integrated player takes as it is and Chrome does not.
+	hevc := MediaSource{Container: "mkv", Bitrate: 2_306_513, Streams: []MediaStream{
+		{Type: "Video", Index: 0, Codec: "hevc", Profile: "Main 10", Level: new(120.0), BitDepth: new(10), VideoRange: "SDR", VideoRangeType: "SDR",
+			Width: new(1920), Height: new(960), AverageFrameRate: new(23.976), BitRate: new(int64(1_666_513))},
+		{Type: "Audio", Index: 1, Codec: "eac3", IsDefault: true, Channels: new(6), SampleRate: new(48000), BitRate: new(int64(640_000))},
+	}}
+	// An AVI file, whose container neither app takes.
+	avi := MediaSource{Container: "avi", Bitrate: 2_000_000, Streams: []MediaStream{
+		{Type: "Video", Index: 0, Codec: "h264", Profile: "High", Level: new(40.0), BitDepth: new(8), VideoRange: "SDR", VideoRangeType: "SDR",
+			Width: new(1280), Height: new(720), AverageFrameRate: new(25.0), BitRate: new(int64(1_800_000))},
+		{Type: "Audio", Index: 1, Codec: "aac", IsDefault: true, Channels: new(2), SampleRate: new(48000), BitRate: new(int64(192_000))},
+	}}
+	software := Capabilities{Encoders: []string{"libx264", "libx265"}}
+	byApp := Options{DirectPlayOff: true, Can: software}
+	byPolyfin := Options{Can: software}
+	tests := []struct {
+		name, profile string
+		source        MediaSource
+		options       Options
+		reasons       []string
+		convertVideo  bool
+		off           bool
+	}{
+		{"would have played", "jellyfin-android-integrated", hevc, byApp, []string{"VideoCodecNotSupported", "DirectPlayError"}, true, true},
+		{"audio the app does not take", "jellyfin-web-chrome", hevc, byApp, []string{"AudioCodecNotSupported"}, false, false},
+		{"a container the app does not take", "jellyfin-web-chrome", avi, byApp, []string{"ContainerNotSupported"}, false, false},
+		{"a container the integrated player does not take", "jellyfin-android-integrated", avi, byApp, []string{"ContainerNotSupported"}, false, false},
+		{"a disc or a DASH channel", "jellyfin-android-integrated", hevc, byPolyfin, []string{"VideoCodecNotSupported"}, true, false},
+		{"a disc or a DASH channel, nothing else refused", "jellyfin-web-chrome", avi, byPolyfin, []string{"DirectPlayError"}, false, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			got := Decide(readDeviceProfile(t, test.profile), test.source, test.options)
+			if got.DirectPlay || !got.HLS || !slices.Equal(got.Reasons, test.reasons) || (got.Video != nil) != test.convertVideo ||
+				got.DirectPlayOff != test.off {
+				t.Errorf("DirectPlay %v, HLS %v, Reasons %v, Video %+v, DirectPlayOff %v; want reasons %v, video converted %v, off %v",
+					got.DirectPlay, got.HLS, got.Reasons, got.Video, got.DirectPlayOff, test.reasons, test.convertVideo, test.off)
+			}
+		})
+	}
+	// The integrated player's MPEG-TS profile takes H.264 and E-AC-3: the
+	// video is converted and the audio copied, as on Jellyfin.
+	got := Decide(readDeviceProfile(t, "jellyfin-android-integrated"), hevc, byApp)
+	if got.Transcoding == nil || got.Transcoding.Container != "ts" || got.Video == nil || got.Video.Codec != "h264" || got.Audio != nil {
+		t.Errorf("Transcoding %+v, Video %+v, Audio %+v", got.Transcoding, got.Video, got.Audio)
+	}
+}

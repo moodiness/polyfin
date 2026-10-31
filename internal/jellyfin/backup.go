@@ -130,7 +130,8 @@ func (h *Handler) backupManifest(w http.ResponseWriter, r *http.Request) {
 // restoreBackup restores the backup of the folder ArchiveFileName names:
 // 204, then Polyfin stops, restores it, and starts again, as Jellyfin
 // does. A backup the server cannot restore is refused with 400, one it
-// does not have with 404.
+// does not have with 404. An encrypted backup is refused with 400 and
+// errEncrypted's words: apps cannot ask for its passphrase.
 func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ArchiveFileName string
@@ -148,6 +149,11 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plan, err := h.Backups.Prepare(r.Context(), nil, body.ArchiveFileName)
+	if err == nil && plan.Locked {
+		h.Backups.Discard(plan.ID)
+		h.refuseEncrypted(w, body.ArchiveFileName)
+		return
+	}
 	if err == nil {
 		err = h.Backups.Start(r.Context(), plan.ID, false, callerFrom(r.Context()).User.Name)
 	}
@@ -164,4 +170,17 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		h.Logger.Warn("A restore asked for by an app failed", "file", body.ArchiveFileName, "error", err)
 		processingError(w, http.StatusInternalServerError)
 	}
+}
+
+// errEncrypted is what an app is answered when it asks to restore an
+// encrypted backup.
+const errEncrypted = "This backup is encrypted: restore it from Polyfin's admin app, which asks for its passphrase."
+
+// refuseEncrypted answers 400 to the restore of the encrypted backup
+// file, saying where to restore it.
+func (h *Handler) refuseEncrypted(w http.ResponseWriter, file string) {
+	h.Logger.Warn("A restore asked for by an app was refused: the backup is encrypted", "file", file)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusBadRequest)
+	_, _ = w.Write([]byte(errEncrypted))
 }

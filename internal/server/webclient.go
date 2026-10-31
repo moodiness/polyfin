@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -15,9 +16,9 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"sync/atomic"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/themecopy"
 	"github.com/moodiness/polyfin/internal/webtheme"
 )
@@ -27,9 +28,9 @@ const (
 	// webScript is the name Polyfin's own script is served under, in /web/,
 	// beside the files of jellyfin-web.
 	webScript = "polyfin.js"
-	// customScript is the name the administrator's own script, set in the
-	// admin app, is served under, in /web/.
-	customScript = "custom.js"
+	// themesID is the identifier of the element of the page that describes
+	// the themes to Polyfin's script (see withWebScripts).
+	themesID = "polyfinWebThemes"
 )
 
 var (
@@ -81,47 +82,107 @@ func WebClientFiles(dir string) fs.FS {
 	return files
 }
 
-// customScripts hashes the administrator's script, again only when it
-// changed, for the address index.html loads it from.
-type customScripts struct {
-	get  func() string
-	last atomic.Pointer[hashedScript]
+// WebThemes are the web player's themes as the web client's page needs
+// them: the server's theme, as accounts.Settings.WebTheme names it, and
+// the Custom theme's texts.
+type WebThemes struct {
+	Theme               string
+	CustomCss, CustomJs string
 }
 
-// hashedScript is a script and the hash of its content, which index.html
-// puts in its address so that browsers keep it until it changes.
-type hashedScript struct {
-	body, hash string
+// webThemes describes the themes to the page and serves the Custom
+// theme's texts, hashing each text again only when it changed.
+type webThemes struct {
+	get func() WebThemes
+	// cookie is the cookie the script names the theme it shows in (see
+	// webtheme.Cookie).
+	cookie  string
+	css, js webtheme.Hasher
 }
 
-func (c *customScripts) current() hashedScript {
-	if c.get == nil {
-		return hashedScript{}
+func (t *webThemes) current() WebThemes {
+	if t.get == nil {
+		return WebThemes{}
 	}
-	body := c.get()
-	if last := c.last.Load(); last != nil && last.body == body {
-		return *last
+	return t.get()
+}
+
+// pageThemes is what the page tells Polyfin's script of the themes, as
+// JSON (see withWebScripts): the cookie the script names the theme it
+// shows in, the server's theme, and the stylesheet and the script of each
+// theme that has some, as addresses relative to the page, which carry a
+// version of their content.
+type pageThemes struct {
+	Cookie string
+	Theme  string
+	Themes map[string]pageTheme
+}
+
+type pageTheme struct {
+	Css string `json:",omitempty"`
+	Js  string `json:",omitempty"`
+}
+
+// page describes the themes to the page: LumaaGlaass's files, those of
+// the Custom theme's texts that are set, and none for jellyfin-web's own
+// look. Without the themes it is nil, and the page shows jellyfin-web's own
+// look.
+func (t *webThemes) page() *pageThemes {
+	if t.get == nil {
+		return nil
 	}
-	sum := sha256.Sum256([]byte(body))
-	script := &hashedScript{body: body, hash: hex.EncodeToString(sum[:8])}
-	c.last.Store(script)
-	return *script
+	current := t.get()
+	themes := map[string]pageTheme{
+		accounts.WebThemeLumaaGlaass: {Css: webtheme.Address("assets/lumaaglaass.css"), Js: webtheme.Address(webtheme.Loader)},
+	}
+	var custom pageTheme
+	if current.CustomCss != "" {
+		custom.Css = webtheme.CustomCss + "?v=" + t.css.Hash(current.CustomCss)
+	}
+	if current.CustomJs != "" {
+		custom.Js = webtheme.CustomJs + "?v=" + t.js.Hash(current.CustomJs)
+	}
+	if custom != (pageTheme{}) {
+		themes[accounts.WebThemeCustom] = custom
+	}
+	return &pageThemes{Cookie: t.cookie, Theme: current.Theme, Themes: themes}
+}
+
+// serveText serves one of the Custom theme's texts, text, as contentType,
+// or leaves the request to api when it is not set. The address the page
+// gives (see page) names this very content, cached for good; any other is
+// revalidated, so an old address gets today's text.
+func serveText(w http.ResponseWriter, r *http.Request, name, text, contentType string, hasher *webtheme.Hasher, api http.Handler) {
+	if text == "" {
+		api.ServeHTTP(w, r)
+		return
+	}
+	hash := hasher.Hash(text)
+	header := w.Header()
+	header.Set("Content-Type", contentType)
+	if r.URL.Query().Get("v") == hash {
+		header.Set("Cache-Control", immutableCache)
+	} else {
+		header.Set("Cache-Control", "no-cache")
+	}
+	header.Set("ETag", `"`+hash+`"`)
+	http.ServeContent(w, r, name, time.Time{}, strings.NewReader(text))
 }
 
 // webClient serves jellyfin-web at /web/ as Jellyfin does: its files, and
 // the requests no file answers to the Jellyfin API, which has routes under
-// /web/ too. index.html is never cached and gets Polyfin's script, and the
-// administrator's when there is one; files whose name or query carries a
-// build or content hash are cached for good. Other files are revalidated
-// (Jellyfin sends no Cache-Control for them, which leaves browsers guessing
-// a lifetime for config.json and the like). The default theme's files are
-// Polyfin's own, under webtheme.Path (see serveTheme), and the copy of a
-// theme's files kept in savedThemes under themecopy.Path (see
-// serveSavedTheme). Text files go
+// /web/ too. index.html is never cached and gets Polyfin's script, with
+// the web player's themes, which the script loads each user's (see
+// withWebScripts); files whose name or query carries a build or content
+// hash are cached for good. Other files are revalidated (Jellyfin sends no
+// Cache-Control for them, which leaves browsers guessing a lifetime for
+// config.json and the like). The default theme's files are Polyfin's own,
+// under webtheme.Path (see serveTheme), the Custom theme's texts are
+// served while set (see serveText), and the copy of a theme's files kept
+// in savedThemes under themecopy.Path (see serveSavedTheme). Text files go
 // compressed to clients that take gzip, compressed once each (see
 // gzipFiles).
-func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() string, savedThemes string, savedOriginal func(id, name string) (string, bool), api http.Handler, logger *slog.Logger) http.Handler {
-	custom := &customScripts{get: customJs}
+func webClient(files fs.FS, setUp func(context.Context) bool, themes *webThemes, savedThemes string, savedOriginal func(id, name string) (string, bool), api http.Handler, logger *slog.Logger) http.Handler {
 	compressed := newGzipFiles(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -137,7 +198,7 @@ func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() st
 				http.Redirect(w, r, adminPrefix, http.StatusFound)
 				return
 			}
-			serveWebIndex(w, r, files, custom.current(), logger)
+			serveWebIndex(w, r, files, themes.page(), logger)
 			return
 		case webScript:
 			header := w.Header()
@@ -146,23 +207,11 @@ func webClient(files fs.FS, setUp func(context.Context) bool, customJs func() st
 			header.Set("ETag", webScriptETag)
 			http.ServeContent(w, r, webScript, time.Time{}, bytes.NewReader(webScriptBody))
 			return
-		case customScript:
-			script := custom.current()
-			if script.body == "" {
-				api.ServeHTTP(w, r)
-				return
-			}
-			header := w.Header()
-			header.Set("Content-Type", "application/javascript; charset=utf-8")
-			// The address index.html gives names this very content; any
-			// other is revalidated, so an old address gets today's script.
-			if r.URL.Query().Get("v") == script.hash {
-				header.Set("Cache-Control", immutableCache)
-			} else {
-				header.Set("Cache-Control", "no-cache")
-			}
-			header.Set("ETag", `"`+script.hash+`"`)
-			http.ServeContent(w, r, customScript, time.Time{}, strings.NewReader(script.body))
+		case webtheme.CustomCss:
+			serveText(w, r, name, themes.current().CustomCss, "text/css; charset=utf-8", &themes.css, api)
+			return
+		case webtheme.CustomJs:
+			serveText(w, r, name, themes.current().CustomJs, "application/javascript; charset=utf-8", &themes.js, api)
 			return
 		}
 		if rest, ok := strings.CutPrefix(name, webtheme.Path); ok {
@@ -261,15 +310,17 @@ func serveSavedTheme(w http.ResponseWriter, r *http.Request, dir string, origina
 }
 
 // serveTheme serves the bundled theme's file at rest, a version then the
-// file's name. At the version of the bundled files, it is cached for good;
-// at any other it is redirected there, revalidated, so that it gets
+// file's name, or the script that loads the theme (webtheme.Loader), which
+// Polyfin writes. At the version of the bundled files, it is cached for
+// good; at any other it is redirected there, revalidated, so that it gets
 // today's files: "latest", which the theme's script asks for when it
 // cannot tell its own address, and the version an earlier Polyfin bundled,
 // which an administrator's own script may still name.
 func serveTheme(w http.ResponseWriter, r *http.Request, rest string, logger *slog.Logger) {
 	version, name, _ := strings.Cut(rest, "/")
+	loader := name == webtheme.Loader
 	info, err := fs.Stat(webtheme.Files, name)
-	if version == "" || !fs.ValidPath(name) || err != nil || !info.Mode().IsRegular() {
+	if version == "" || !loader && (!fs.ValidPath(name) || err != nil || !info.Mode().IsRegular()) {
 		http.NotFound(w, r)
 		return
 	}
@@ -288,24 +339,27 @@ func serveTheme(w http.ResponseWriter, r *http.Request, rest string, logger *slo
 	if contentType != "" {
 		header.Set("Content-Type", contentType)
 	}
+	if loader {
+		http.ServeContent(w, r, name, time.Time{}, strings.NewReader(accounts.LumaaGlaassJs))
+		return
+	}
 	if themeFiles.serve(w, r, name, info, contentType) {
 		return
 	}
 	serveFile(w, r, webtheme.Files, name, info, http.NotFoundHandler(), logger)
 }
 
-// serveWebIndex serves jellyfin-web's index.html with Polyfin's script,
-// and the administrator's custom script when there is one. The file is read
-// at each request, as Jellyfin does, so that a new jellyfin-web needs no
-// restart.
-func serveWebIndex(w http.ResponseWriter, r *http.Request, files fs.FS, custom hashedScript, logger *slog.Logger) {
+// serveWebIndex serves jellyfin-web's index.html with Polyfin's script and
+// the themes it loads (see withWebScripts). The file is read at each
+// request, as Jellyfin does, so that a new jellyfin-web needs no restart.
+func serveWebIndex(w http.ResponseWriter, r *http.Request, files fs.FS, themes *pageThemes, logger *slog.Logger) {
 	page, err := fs.ReadFile(files, "index.html")
 	if err != nil {
 		logger.Error("The index.html of jellyfin-web cannot be read", "error", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	page = withWebScripts(page, custom)
+	page = withWebScripts(page, themes)
 	header := w.Header()
 	header.Set("Content-Type", "text/html; charset=utf-8")
 	header.Set("Cache-Control", "no-cache")
@@ -315,19 +369,23 @@ func serveWebIndex(w http.ResponseWriter, r *http.Request, files fs.FS, custom h
 
 // withWebScripts adds Polyfin's script to the end of the page's head, where
 // it runs before the page's own scripts, which are deferred; a page without
-// a head gets it at its end. The custom script, when there is one, comes
-// right after, deferred: it runs once the page is parsed, after
-// jellyfin-web's own scripts.
-func withWebScripts(page []byte, custom hashedScript) []byte {
+// a head gets it at its end. Right before it, the themes, when given, as
+// JSON in an element the script reads (themesID): the script writes the
+// stylesheet and the script of the theme it picks for the user in the head,
+// the script deferred, so that it runs once the page is parsed, after
+// jellyfin-web's own scripts. JSON escapes <, > and &, so the element holds
+// no tag.
+func withWebScripts(page []byte, themes *pageThemes) []byte {
 	at := bytes.Index(bytes.ToLower(page), []byte("</head>"))
 	if at < 0 {
 		at = len(page)
 	}
-	var customTag []byte
-	if custom.body != "" {
-		customTag = []byte(`<script src="` + customScript + `?v=` + custom.hash + `" defer></script>`)
+	var themesTag []byte
+	if themes != nil {
+		data, _ := json.Marshal(themes)
+		themesTag = slices.Concat([]byte(`<script type="application/json" id="`+themesID+`">`), data, []byte(`</script>`))
 	}
-	return slices.Concat(page[:at], webScriptTag, customTag, page[at:])
+	return slices.Concat(page[:at], themesTag, webScriptTag, page[at:])
 }
 
 func etag(content []byte) string {

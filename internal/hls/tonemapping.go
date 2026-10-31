@@ -3,6 +3,7 @@ package hls
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -37,12 +38,10 @@ func (m *Manager) ToneMappedHeight() int {
 }
 
 // timeToneMappingLater times HDR tone mapped on the processor in the
-// background, once the GPU's chains are timed (see measureLater), and
-// keeps the height it chose. Close stops it.
+// background, once the GPU's chains are timed (see measureLater), keeps
+// the height it chose and its speed, and logs where HDR is then tone
+// mapped (see HDRPath). Close stops it.
 func (m *Manager) timeToneMappingLater() {
-	if !m.HasFilters("zscale", "tonemap") {
-		return
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.measuring.Add(1)
 	go func() {
@@ -59,7 +58,13 @@ func (m *Manager) timeToneMappingLater() {
 		if ctx.Err() != nil {
 			return
 		}
-		m.toneMappedHeight.Store(int32(m.timeToneMapping(ctx, m.Hardware())))
+		if m.HasFilters("zscale", "tonemap") {
+			height, speed := m.timeToneMapping(ctx, m.Hardware())
+			m.toneMappingSpeed.Store(math.Float64bits(speed))
+			m.toneMappedHeight.Store(int32(height))
+		}
+		m.processorTimed.Store(true)
+		m.logHDRPath()
 	}()
 }
 
@@ -68,8 +73,9 @@ func (m *Manager) timeToneMappingLater() {
 // there is one, else in software, and encoded by hw's H.264 encoder, else
 // by x264 at Polyfin's preset. It reports HighToneMappedHeight when the
 // sample converted at fastToneMapping times real time or faster, else
-// LowToneMappedHeight, and logs what it timed.
-func (m *Manager) timeToneMapping(ctx context.Context, hw *Hardware) int {
+// LowToneMappedHeight, with how many times real time it converted at, 0
+// when it failed, and logs what it timed.
+func (m *Manager) timeToneMapping(ctx context.Context, hw *Hardware) (int, float64) {
 	encoding := VideoEncoding{Encoder: "libx264", Width: 1920, Height: 1080, ToneMap: true, ToneMapOnCPU: true}
 	encoder := []string{"-c:v", "libx264", "-preset", "veryfast"}
 	if hw != nil {
@@ -79,12 +85,12 @@ func (m *Manager) timeToneMapping(ctx context.Context, hw *Hardware) int {
 		}
 	}
 	if encoding.Hardware == nil && !slices.Contains(m.can.encoders, "libx264") {
-		return LowToneMappedHeight
+		return LowToneMappedHeight, 0
 	}
 	dir, err := os.MkdirTemp(m.dir, "tone-mapping-")
 	if err != nil {
 		m.logger.Warn("The processor's HDR tone mapping could not be timed", "error", err)
-		return LowToneMappedHeight
+		return LowToneMappedHeight, 0
 	}
 	defer os.RemoveAll(dir)
 	sample := filepath.Join(dir, "hdr.mkv")
@@ -94,11 +100,11 @@ func (m *Manager) timeToneMapping(ctx context.Context, hw *Hardware) int {
 			[]string{"-f", "null", "-"}))
 	}
 	height := LowToneMappedHeight
-	if err == nil && sampleLength.Seconds()/max(took, time.Millisecond).Seconds() >= fastToneMapping {
+	if speedOf(took, err) >= fastToneMapping {
 		height = HighToneMappedHeight
 	}
 	m.logger.Info("Timed the processor's HDR tone mapping", "encoder", encoding.Encoder, "speed", speed(took, err), "height", height)
-	return height
+	return height, speedOf(took, err)
 }
 
 // errNoHDREncoder reports that neither the GPU nor FFmpeg encodes HEVC in

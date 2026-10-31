@@ -45,7 +45,7 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		validationProblem(w, map[string][]string{"itemId": {notValid(r.PathValue("itemId"))}})
 		return
 	}
-	user, grant, ok := h.streamAccess(r)
+	user, grant, ok := h.streamAccess(r, servedSignedIn)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		return

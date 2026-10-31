@@ -128,6 +128,11 @@ func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Re
 		processingError(w, http.StatusForbidden)
 		return
 	}
+	// The approval came from where the approver may connect (see
+	// authorized); the app signing in must be too.
+	if h.signInRefusedRemote(w, r, user) {
+		return
+	}
 	// Redeemed last, so that a refused account leaves it as it was.
 	if _, err := h.QuickConnect.Redeem(body.Secret); err != nil {
 		processingError(w, http.StatusNotFound)

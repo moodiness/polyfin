@@ -31,6 +31,9 @@ const users = {
     accessTitle: 'Access',
     isDisabled: 'Disabled',
     isDisabledHelp: 'A disabled user cannot sign in, and all their devices are signed out.',
+    providerOnly: 'Identity provider only',
+    providerOnlyHelp:
+      'The user signs in through the identity provider set up under Settings › Security, never with a password: the password is refused, and an account created so needs none. Jellyfin apps that cannot open the provider sign in with Quick Connect.',
     ended: 'Ended',
     endsOn: (date: string) => `Ends on ${date}`,
     endedOn: (date: string) => `Ended on ${date}`,
@@ -69,6 +72,15 @@ const users = {
       'The language of titles’ names, overviews and images in this user’s apps, when one of the server’s addons describes them in it; titles no addon describes in it keep the server’s description. Genres, ratings and people stay the same for everyone, so parental control and blocked genres judge every user alike. The names Polyfin makes itself follow it when Polyfin speaks it: English, French, German, Spanish, Italian or Portuguese.',
     metadataLanguageNone:
       'No addon of the server has a language yet. Give one a language on its page under Content › Sources.',
+    webThemeTitle: 'Web player theme',
+    webThemeHelp:
+      'The web player’s look for this user, on every browser they sign in with: the server’s theme, LumaaGlaass, jellyfin-web’s own look, lighter, for TVs and older phones, or the Custom theme while it has a text. Browsers too old for LumaaGlaass get jellyfin-web’s own look by themselves.',
+    webThemeChange: 'Let them change it',
+    webThemeChangeHelp:
+      'Under My account › Web player theme. Off, the theme chosen here stays theirs.',
+    audioRegionTitle: 'Audio region',
+    audioRegionHelp:
+      'The dub this user prefers where a language is dubbed apart for a region, such as French for Quebec. It applies to the audio language they chose in their apps, else the server’s, when that is the region’s language, and sets it when neither is set: in that language, the audio tracks of the region play first, and its versions come first where the server orders versions by language.',
     parentalTitle: 'Parental control',
     maxRating: 'Maximum rating',
     maxRatingHelp: 'Titles rated above this limit are hidden from this user.',
@@ -179,6 +191,12 @@ const users = {
     canShare: 'Can share titles',
     canShareHelp:
       'Lets this user give a movie or an episode to someone without an account, through a link that expires, from My account or a title’s page in the web player, while Settings › Security › Allow share links is on. Turning it off revokes their links.',
+    remoteAccess: 'Can connect from outside the local network',
+    remoteAccessHelp:
+      'Lets this user sign in, browse and play from anywhere. Turned off, they may only from the local network, administrators included, as Known proxies under Settings › Security tells it. The links they share still play anywhere.',
+    remoteAccessUnknownProxy:
+      'Health sees a reverse proxy missing from Known proxies: everyone who comes through it looks local, so this limit does not hold for them.',
+    openKnownProxies: 'Open Known proxies',
     shareLinksTitle: 'Shared links',
     shareLinksHelp:
       'The links this user made to share a movie or an episode. Revoke stops one at once.',
@@ -254,12 +272,33 @@ const users = {
       newUser: 'New user',
       watchData: 'Import watch data',
       watchDataHelp: 'Played titles with their dates, resume points and favorites.',
-      plexOwnerWatchDataHelp: 'Played titles with their dates and play counts, and resume points.',
+      plexOwnerWatchDataHelp:
+        'Played titles with their dates and play counts, resume points and ratings.',
       plexWatchDataHelp:
-        'Played titles with their dates and play counts. Plex does not let Polyfin read this account’s resume points.',
+        'The titles this account played to the end on this server, from Plex’s playback history, with their dates and play counts. Titles it marked as watched or synced from its Plex account, and its resume points, stay on Plex.',
       watchDataNeeded: 'Without it, nothing is imported for this user.',
       plexNotice:
-        'With the owner’s token, Plex lets Polyfin read the owner’s played titles and resume points, but only the played titles of the other accounts, from their playback history: their resume points stay on Plex. Plex has no favorites to import.',
+        'With the owner’s token, Plex lets Polyfin read the owner’s played titles, resume points and ratings. Of the other accounts, it gives only their playback history on this server: the titles they played to the end here. Titles they marked as watched without playing them, titles synced from their Plex account, their resume points and their ratings are not in it. To read each account’s own watch data, sign in with Plex as the owner above. Plex has no favorites to import.',
+      /** The owner's sign-in to Plex, in the import of a Plex server. */
+      plexOwner: {
+        title: 'Read every account with Plex',
+        help: 'Sign in with Plex as this server’s owner. Plex then gives Polyfin the token of each account the server is shared with, and Polyfin reads with it what the account played, marked or synced as watched, its resume points and its ratings, not only its plays here. The profiles of your Plex Home are read with their PIN, when they have one.',
+        signIn: 'Sign in with Plex as the owner',
+        checking: 'Asking Plex which accounts it gives a token for…',
+        signedInAs: (name: string) => `Signed in to Plex as ${name}, the server’s owner.`,
+        signOut: 'Sign out of Plex',
+        notice:
+          'Polyfin reads each account below with the token Plex gives the owner for it, as that account’s own Plex apps read this server. The tokens serve this import only: they are never kept, and your sign-in is signed out of Plex once the import ends.',
+        all: 'Everything: the titles played, marked or synced as watched, the resume points and the ratings.',
+        pin: 'A Plex Home profile with a PIN: everything with its PIN, only its plays on this server without it.',
+        plays:
+          'Only its plays on this server, from Plex’s playback history: Plex gives no token for this account.',
+        everything: 'Everything',
+        playsOnly: 'Plays only',
+        pinLabel: 'Profile PIN',
+        pinHelp: (name: string) =>
+          `The PIN ${name} asks for on Plex. Left empty, only its plays are read.`,
+      },
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Signed in as ${owner ?? 'a user'}, Polyfin reads only that user’s watch data.` : `This key is ${owner === null ? 'a user’s' : `${owner}’s`}: it reads only that user’s watch data.`} To import another user’s, type the password of their account on the server: Polyfin signs in as them to read it. Without it, their account can still be created.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
@@ -345,11 +384,31 @@ const users = {
       read: (count: number) => (count === 1 ? '1 item read' : `${count} items read`),
       counts: (played: number, resumed: number, favorites: number) =>
         `${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${favorites === 1 ? '1 favorite' : `${favorites} favorites`}`,
+      upToDate: (count: number) => `${count} already in Polyfin`,
+      ratings: (count: number) => (count === 1 ? '1 rated' : `${count} rated`),
+      watchlist: (count: number) => `${count} added to the Watchlist`,
+      undated: (count: number) =>
+        count === 1
+          ? '1 resume point without a date, not added'
+          : `${count} resume points without a date, not added`,
+      /** Why a user's import added nothing; `server` is the kind of server's name. */
+      nothingAdded: {
+        up_to_date: () => 'Everything read was already in Polyfin: there was nothing to add.',
+        nothing_played: (server: string) =>
+          `${server} lists nothing played, in progress or favorite for this user.`,
+        no_sections: () =>
+          'This Plex server has no movie or show library: there was nothing to read.',
+        plex_owner_nothing_watched: () =>
+          'The owner has nothing played or in progress in this server’s movie and show libraries.',
+        plex_nothing_watched: () =>
+          'This account has nothing played, in progress or rated in this server’s movie and show libraries.',
+        plex_no_history: () =>
+          'Plex lists no play of this account on this server. Its playback history holds only the titles played to the end on this server: titles marked as watched without playing them, or synced from the Plex account, are not in it. To bring everything over, resume points included, sign in with Plex as the owner in this import, with the PIN of a Plex Home profile that has one, or the person signs in with Plex under My account › Import from another server.',
+      },
       unmatched: (count: number) =>
         count === 1 ? '1 title not found' : `${count} titles not found`,
       unmatchedTitle: (name: string) => `Titles not found for ${name}`,
-      unmatchedHelp:
-        'These titles were not imported: no Polyfin title matches them by IMDb, TMDB or TVDB.',
+      unmatchedHelp: 'These titles were not imported: the reason tells why.',
       titleColumn: 'Title',
       kindColumn: 'Kind',
       yearColumn: 'Year',
@@ -362,6 +421,8 @@ const users = {
       reasons: {
         no_identifier: 'No IMDb, TMDB or TVDB identifier',
         not_found: 'Not in Polyfin',
+        not_in_library: 'No longer in Plex’s libraries',
+        other_episode_order: 'Numbered in another of TheTVDB’s episode orders',
       },
       more: (count: number) => `And ${count} more.`,
     },

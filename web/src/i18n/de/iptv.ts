@@ -371,6 +371,8 @@ const iptv: typeof en = {
         dead: 'Kein Live-Stream',
         refused: 'Vom Anbieter abgelehnt',
         timeout: 'Keine Antwort',
+        drm: 'Braucht ein DRM, das Polyfin nicht unterstützt',
+        keys: 'Die Schlüssel der Liste entschlüsseln ihn nicht',
       },
       leftOutUntil: 'ausgelassen bis',
       retry: 'Alle Streams erneut versuchen',

@@ -90,6 +90,7 @@ const common: typeof en = {
     invalid_copy_from: 'Dieser Benutzer existiert nicht mehr. Wähle einen anderen.',
     invalid_server_name: 'Der Servername muss 1 bis 64 Zeichen lang sein.',
     invalid_language: 'Wähle eine Sprache aus der Liste.',
+    invalid_audio_region: 'Wähle eine Region aus der Liste.',
     invalid_catalog_limit:
       'Die pro Katalog gelesenen Titel müssen eine ganze Zahl von 100 bis 20.000 sein.',
     invalid_channel_limit:
@@ -231,6 +232,10 @@ const common: typeof en = {
       'Uhrzeiten reichen von 00:00 bis 24:00, und jedes Ende muss nach seinem Beginn liegen (höchstens 50 Zeilen).',
     outside_allowed_hours:
       'Dieses Konto kann zu dieser Zeit nicht verwendet werden. Versuche es während der erlaubten Zeiten erneut.',
+    outside_local_network:
+      'Dieses Konto kann nur im lokalen Netzwerk verwendet werden. Verbinde dich von dort oder frage einen Administrator.',
+    remote_access_self:
+      'Du bist von außerhalb des lokalen Netzwerks verbunden: Wenn du deine eigenen Verbindungen von außerhalb ausschaltest, sperrst du dich aus. Tu es aus dem lokalen Netzwerk.',
     invalid_guide_url:
       'Gib eine Adresse für das Fernsehprogramm ein, die mit https:// oder http:// beginnt und höchstens 4.096 Zeichen lang ist, oder den absoluten Pfad einer Datei auf dem Server.',
     invalid_app: 'Der App-Name muss 1 bis 64 Zeichen lang sein, ohne Sonderzeichen.',
@@ -249,9 +254,12 @@ const common: typeof en = {
     invalid_live_tv_refresh_hours:
       'Das Aktualisierungsintervall muss eine ganze Zahl von 1 bis 168 Stunden sein.',
     invalid_local_scan_hours: 'Das Scan-Intervall muss eine ganze Zahl von 0 bis 168 Stunden sein.',
+    invalid_watchlist_check_hours:
+      'Das Prüfintervall der Merklisten muss eine ganze Zahl von 0 bis 168 Stunden sein.',
     invalid_custom_css: 'Das benutzerdefinierte CSS darf höchstens 2 MB groß sein.',
     invalid_custom_js: 'Das benutzerdefinierte JavaScript darf höchstens 2 MB groß sein.',
-    invalid_web_theme: 'Wähle LumaaGlaass, Keines oder Benutzerdefiniert.',
+    invalid_web_theme: 'Wähle ein Theme aus der Liste.',
+    web_theme_locked: 'Dein Administrator hat das Theme deines Web-Players gewählt.',
     theme_copy_running:
       'Eine Kopie des Themes wird bereits angelegt. Versuche es gleich noch einmal.',
     theme_copy_nothing: 'Die gespeicherten benutzerdefinierten Texte laden nichts von anderswo.',
@@ -346,6 +354,14 @@ const common: typeof en = {
     destination_failed: 'Das Ziel konnte nicht gelesen werden.',
     restore_failed:
       'Die Wiederherstellung konnte nicht gestartet werden: Es wurde nichts geändert.',
+    invalid_backup_passphrase:
+      'Die Backup-Passphrase ist mindestens 12 Zeichen lang, steht in einer Zeile und hat höchstens 256 Byte.',
+    passphrase_required: 'Dieses Backup ist verschlüsselt: Öffne es zuerst mit seiner Passphrase.',
+    wrong_passphrase: 'Diese Passphrase öffnet das Backup nicht.',
+    damaged_backup:
+      'Dieses verschlüsselte Backup ist beschädigt: Ein Teil davon wurde verändert oder fehlt. Es wurde nichts wiederhergestellt.',
+    not_encrypted: 'Dieses Backup ist nicht verschlüsselt.',
+    unlock_failed: 'Das Backup konnte nicht entschlüsselt werden.',
     invalid_collection_read_hour:
       'Wähle aus der Liste die Uhrzeit, zu der Sammlungen eingelesen werden, oder „Nie“.',
     invalid_collection_library_apps:
@@ -356,6 +372,8 @@ const common: typeof en = {
       'Die Adresse des Update-Werkzeugs muss eine Webadresse sein, die mit http:// oder https:// beginnt, ohne Benutzername und Fragment.',
     invalid_update_tool_token:
       'Das Token des Update-Werkzeugs enthält keine Leerzeichen und höchstens 1024 Zeichen.',
+    invalid_provider:
+      'Prüfe den Identitätsanbieter: Sein Aussteller ist eine Webadresse, die mit http:// oder https:// beginnt, ohne Abfrage und Fragment; Client-ID, Geheimnis und Claims enthalten keine Leerzeichen; ein Claim nennt den Benutzer.',
     restart_unconfirmed:
       'Polyfin weiß nicht, ob es wieder gestartet wird: Bestätige zuerst die Warnung.',
     no_update: 'Polyfin Desktop bietet dieses Update gerade nicht an.',
@@ -528,6 +546,21 @@ const common: typeof en = {
     app_import_expired:
       'Die gelesenen Kontodaten werden nach ein paar Minuten nicht mehr aufbewahrt. Melde dich erneut an.',
     app_import_running: 'In dieses Konto läuft gerade ein Import. Warte, bis er abgeschlossen ist.',
+    plex_sign_in_ended:
+      'Die Anmeldung bei Plex ist beendet: Sie ist abgelaufen, wurde ersetzt oder von einem Import verwendet. Melde dich erneut mit Plex an.',
+    plex_sign_in_pending:
+      'Plex hat dich noch nicht angemeldet. Schließe die Anmeldung auf der Seite von Plex ab.',
+    plex_unknown_profile:
+      'Dieses Plex Home hat kein solches Profil. Melde dich erneut mit Plex an.',
+    plex_profile_pin_refused: 'Plex hat diese PIN abgelehnt. Gib die PIN des Profils erneut ein.',
+    plex_profile_forbidden: 'Plex lässt dieses Konto nicht zu diesem Profil wechseln.',
+    plex_unknown_server: 'Dein Plex-Konto greift nicht auf diesen Server zu. Wähle einen anderen.',
+    plex_not_owner:
+      'Dieses Plex-Konto ist nicht der Besitzer des Servers. Melde dich mit dem Plex-Konto des Besitzers an.',
+    plex_server_unreachable:
+      'Keine der Adressen, die Plex für diesen Server angibt, hat als dieser Server geantwortet. Prüfe, ob er läuft und Polyfin ihn erreichen kann.',
+    plex_tv_failed: 'plex.tv hat nicht wie erwartet geantwortet. Versuche es später erneut.',
+    plex_tv_unreachable: 'plex.tv ist nicht erreichbar. Prüfe die Internetverbindung von Polyfin.',
     app_not_connected: 'Diese App ist nicht mehr mit dem Konto verbunden.',
     app_connection_stopped:
       'Die App hat die von Polyfin gespeicherte Anmeldung abgelehnt. Melde dich erneut an und setze dabei das Häkchen bei „Angemeldet bleiben“.',

@@ -1,0 +1,211 @@
+name: FFmpeg for NVIDIA drivers older than 610
+
+# Builds the FFmpeg Polyfin runs NVENC with when the NVIDIA driver is older
+# than 610 (scripts/ffmpeg-nvenc13.sh): the Dockerfile's FFmpeg, built
+# against NVENC's API 13.0, for linux64, linuxarm64 and win64, and
+# publishes it with its SHA-256 files and its sources as the release
+# ffmpeg-nvenc13.0-<the Dockerfile's build tag>. Once a month, and when run
+# by hand, it builds what the Dockerfile names, unless that release exists:
+# rebuild builds it again, and replaces the release's files. Polyfin pins
+# the files' addresses and checksums (internal/desktop/tools).
+
+on:
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: Build again, and replace the files, when the release exists
+        type: boolean
+        default: false
+      runner:
+        description: Runner of the toolchain and FFmpeg builds, such as a larger runner's label
+        type: string
+        default: ubuntu-24.04
+  schedule:
+    - cron: "41 3 7 * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ffmpeg-nvenc13
+  cancel-in-progress: false
+
+env:
+  # The build's images, in the repository owner's packages.
+  NVENC13_IMAGES: ${{ github.repository_owner }}/polyfin-ffmpeg-nvenc13
+
+jobs:
+  pins:
+    name: Read what the Dockerfile ships
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      release: ${{ steps.pins.outputs.RELEASE_TAG }}
+      build: ${{ steps.release.outputs.build }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Read the pins
+        id: pins
+        run: scripts/ffmpeg-nvenc13.sh pins | tee -a "$GITHUB_OUTPUT"
+      - name: Look for the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ steps.pins.outputs.RELEASE_TAG }}
+          REBUILD: ${{ inputs.rebuild || false }}
+        run: |
+          if [ "$REBUILD" != true ] && gh release view "$RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$RELEASE is published: nothing to build."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  base:
+    name: Build the base image
+    needs: pins
+    if: needs.pins.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    # Every job of these steps has a step and a target, empty when it
+    # concerns no target.
+    strategy:
+      matrix:
+        step: [base]
+        target: [""]
+    steps: &image-steps
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GHCR
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - name: Adjust the recipe
+        run: scripts/ffmpeg-nvenc13.sh recipe "$RUNNER_TEMP/nvenc13"
+      - name: Build
+        env:
+          PUSH: "1"
+          QUICKBUILD: "1"
+          STEP: ${{ matrix.step }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          # The recipe's own way of making room on a hosted runner.
+          "$RUNNER_TEMP/nvenc13/recipe/util/free_disk_space.sh"
+          case "$STEP" in
+          base) scripts/ffmpeg-nvenc13.sh base "$RUNNER_TEMP/nvenc13" ;;
+          toolchain) scripts/ffmpeg-nvenc13.sh toolchain "$RUNNER_TEMP/nvenc13" "$TARGET" ;;
+          ffmpeg)
+            scripts/ffmpeg-nvenc13.sh image "$RUNNER_TEMP/nvenc13" "$TARGET"
+            scripts/ffmpeg-nvenc13.sh ffmpeg "$RUNNER_TEMP/nvenc13" "$TARGET"
+            ;;
+          sources) scripts/ffmpeg-nvenc13.sh sources "$RUNNER_TEMP/nvenc13" ;;
+          esac
+      - name: Keep the files
+        if: matrix.step == 'ffmpeg' || matrix.step == 'sources'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nvenc13-${{ matrix.target || matrix.step }}
+          path: ${{ runner.temp }}/nvenc13/out/*
+          compression-level: 0
+          retention-days: 7
+
+  toolchains:
+    name: Build the ${{ matrix.target }} toolchain
+    needs: base
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        step: [toolchain]
+        target: [linux64, linuxarm64, win64]
+    steps: *image-steps
+
+  builds:
+    name: Build FFmpeg for ${{ matrix.target }}
+    needs: toolchains
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        step: [ffmpeg]
+        target: [linux64, linuxarm64, win64]
+    steps: *image-steps
+
+  sources:
+    name: Gather the sources
+    needs: base
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      matrix:
+        step: [sources]
+        target: [""]
+    steps: *image-steps
+
+  release:
+    name: Publish the release
+    needs: [pins, builds, sources]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Gather the files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: nvenc13-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/files
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ needs.pins.outputs.release }}
+          FILES: ${{ runner.temp }}/files
+        run: |
+          set -euo pipefail
+          cd "$FILES"
+          # The sources' whole tar file is checked by those who join its parts.
+          for sum in *.sha256; do
+            case "$sum" in *-sources.tar.sha256) ;; *) sha256sum --check --strict "$sum" ;; esac
+          done
+          cat > notes.md <<EOF
+          FFmpeg for NVIDIA drivers older than 610, as Polyfin downloads it when NVENC's test encode finds such a driver.
+          It is the FFmpeg of the Dockerfile at ${GITHUB_SHA}, built with the same recipe against NVENC's API 13.0, which drivers from 570 take.
+          Built by scripts/ffmpeg-nvenc13.sh; what it was built from is in the sources' pins.env and recipe.diff.
+          The sources' tar file is cut into parts: join them with cat, in order, and check the whole with its .tar.sha256.
+          EOF
+          # The parts' own .sha256 files are among ./*.sha256: the parts are
+          # named so that no file is given twice.
+          if gh release view "$RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE" --repo "$GITHUB_REPOSITORY" --clobber ./*.tar.xz ./*.zip ./*.tar.part[0-9][0-9] ./*.sha256
+          else
+            gh release create "$RELEASE" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
+              --title "FFmpeg for NVIDIA drivers older than 610 ($RELEASE)" --notes-file notes.md \
+              ./*.tar.xz ./*.zip ./*.tar.part[0-9][0-9] ./*.sha256
+          fi

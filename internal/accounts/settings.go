@@ -680,6 +680,17 @@ const (
 	DefaultLocalScanHours = 6
 )
 
+// ErrInvalidWatchlistCheckHours reports a WatchlistCheckHours outside
+// [0, MaxWatchlistCheckHours].
+var ErrInvalidWatchlistCheckHours = errors.New("invalid watchlist check hours")
+
+// The bound and default of Settings.WatchlistCheckHours: by default, each
+// title of a watchlist is checked for versions every 6 hours.
+const (
+	MaxWatchlistCheckHours     = 168
+	DefaultWatchlistCheckHours = 6
+)
+
 // The web player's looks, Settings.WebTheme: the LumaaGlaass theme Polyfin
 // bundles (LumaaGlaassCss and LumaaGlaassJs), jellyfin-web's own look, with
 // no custom CSS or script, and the administrator's CustomCss and CustomJs.
@@ -689,13 +700,25 @@ const (
 	WebThemeCustom      = "custom"
 )
 
-// WebThemes are the values of Settings.WebTheme, the default first.
+// WebThemes are the values of Settings.WebTheme, the default first, and
+// those of User.WebTheme but its empty one.
 var WebThemes = []string{WebThemeLumaaGlaass, WebThemeNone, WebThemeCustom}
 
 // ServedCss is the custom CSS the web player gets for WebTheme: Jellyfin's
 // branding CSS.
 func (settings Settings) ServedCss() string {
-	switch settings.WebTheme {
+	return settings.ThemeCss(settings.WebTheme)
+}
+
+// ServedJs is the script Polyfin adds to the web player's page for
+// WebTheme.
+func (settings Settings) ServedJs() string {
+	return settings.ThemeJs(settings.WebTheme)
+}
+
+// ThemeCss is the custom CSS of theme, one of WebThemes, empty for another.
+func (settings Settings) ThemeCss(theme string) string {
+	switch theme {
 	case WebThemeLumaaGlaass:
 		return LumaaGlaassCss
 	case WebThemeCustom:
@@ -704,16 +727,30 @@ func (settings Settings) ServedCss() string {
 	return ""
 }
 
-// ServedJs is the script Polyfin adds to the web player's page for
-// WebTheme.
-func (settings Settings) ServedJs() string {
-	switch settings.WebTheme {
+// ThemeJs is the script of theme, one of WebThemes, empty for another.
+func (settings Settings) ThemeJs(theme string) string {
+	switch theme {
 	case WebThemeLumaaGlaass:
 		return LumaaGlaassJs
 	case WebThemeCustom:
 		return settings.CustomJs
 	}
 	return ""
+}
+
+// WebThemeOf is the theme the web player shows user: theirs, else the
+// server's WebTheme.
+func (settings Settings) WebThemeOf(user User) string {
+	if user.WebTheme != "" {
+		return user.WebTheme
+	}
+	return settings.WebTheme
+}
+
+// CustomThemeSet reports whether the Custom theme has a text, which a user
+// needs to be given it as their own theme.
+func (settings Settings) CustomThemeSet() bool {
+	return settings.CustomCss != "" || settings.CustomJs != ""
 }
 
 // ErrInvalidWebTheme reports a Settings.WebTheme not in WebThemes.
@@ -1117,6 +1154,25 @@ var (
 
 // MaxFolderBytes is the longest RecordingsFolder or BackupFolder, in bytes.
 const MaxFolderBytes = 512
+
+// The bounds of Settings.BackupPassphrase when it is set: at least
+// MinBackupPassphraseRunes characters, at most MaxBackupPassphraseBytes
+// bytes.
+const (
+	MinBackupPassphraseRunes = 12
+	MaxBackupPassphraseBytes = 256
+)
+
+// ErrInvalidBackupPassphrase reports a BackupPassphrase that is neither
+// empty nor within its bounds, or that holds control characters.
+var ErrInvalidBackupPassphrase = errors.New("invalid backup passphrase")
+
+// validBackupPassphrase reports whether passphrase may be saved as the
+// backup passphrase: empty turns encryption off.
+func validBackupPassphrase(passphrase string) bool {
+	return passphrase == "" || (utf8.RuneCountInString(passphrase) >= MinBackupPassphraseRunes &&
+		validLine(passphrase, MaxBackupPassphraseBytes))
+}
 
 // CleanFolder returns folder as Settings.RecordingsFolder and BackupFolder
 // keep it, cleaned (see filepath.Clean), and whether it may be one: empty,
@@ -1547,6 +1603,10 @@ type Settings struct {
 	// scanned at startup, when an administrator asks and, when watched,
 	// when they change.
 	LocalScanHours int
+	// WatchlistCheckHours is how many hours after its last check a title
+	// of a user's watchlist is checked again for versions, 0 for never
+	// (see package watchlist).
+	WatchlistCheckHours int
 	// WatchLocalFolders watches the local folders for changes: those
 	// mounted in the container, each scanned again a few seconds after its
 	// files stop changing, and network shares, scanned again a few seconds
@@ -1634,9 +1694,11 @@ type Settings struct {
 	RecordingsFolder string
 	// Backups turns the daily database backups on. BackupFolder is the
 	// folder they are written to, empty for the default one under the data
-	// folder (see BackupDir).
-	Backups      bool
-	BackupFolder string
+	// folder (see BackupDir). BackupPassphrase, when set, encrypts them,
+	// sealed with the other secrets.
+	Backups          bool
+	BackupFolder     string
+	BackupPassphrase string
 	// PublicAddress is the address people open Polyfin at, such as
 	// https://media.example.org, without a trailing slash: links in
 	// notifications start with it. Empty, messages carry no link.
@@ -1719,6 +1781,82 @@ type Settings struct {
 	// SiloApps lets Silo's apps sign in and play through Silo's API under
 	// /api/v2 (see package silo); off, the API answers nothing.
 	SiloApps bool
+
+	// PosterRatings has the web player show a title's ratings on its
+	// poster as the pointer or the focus comes to it (see
+	// /Polyfin/Items/Ratings); off, it shows none there.
+	PosterRatings bool
+
+	// The OpenID Connect provider people may sign in with (see
+	// ProviderSignIn): its issuer, the name its button shows, empty for
+	// the issuer's host, and Polyfin's client at it, the secret empty for
+	// a public client. ProviderUserClaim names the claim compared with
+	// account names, the verified email after it; ProviderCreateAccounts
+	// creates an account for someone no account matches. While both
+	// ProviderAdminClaim and ProviderAdminValue are set, the people whose
+	// claim is the value, or a list holding it, become administrators.
+	ProviderIssuer         string
+	ProviderName           string
+	ProviderClientID       string
+	ProviderClientSecret   string
+	ProviderUserClaim      string
+	ProviderCreateAccounts bool
+	ProviderAdminClaim     string
+	ProviderAdminValue     string
+}
+
+// ProviderSignIn reports whether people may sign in with the provider:
+// its issuer and Polyfin's client ID are set.
+func (s Settings) ProviderSignIn() bool {
+	return s.ProviderIssuer != "" && s.ProviderClientID != ""
+}
+
+// ProviderButton is the name the button of the provider shows: its name,
+// else its issuer's host.
+func (s Settings) ProviderButton() string {
+	if s.ProviderName != "" {
+		return s.ProviderName
+	}
+	if issuer, err := url.Parse(s.ProviderIssuer); err == nil && issuer.Host != "" {
+		return issuer.Hostname()
+	}
+	return s.ProviderIssuer
+}
+
+// The bounds of the provider's settings, in bytes.
+const (
+	MaxProviderIssuerBytes = 500
+	MaxProviderNameBytes   = 64
+	MaxProviderClientBytes = 255
+	MaxProviderClaimBytes  = 64
+	MaxProviderValueBytes  = 255
+)
+
+// ErrInvalidProvider reports provider settings refused: an issuer that is
+// not an http or https address without a query, a fragment or a user, a
+// name too long or holding control characters, a client ID, a secret or
+// a claim's name too long or holding spaces or control characters, no
+// claim naming the user, or an administrators' value too long or holding
+// control characters.
+var ErrInvalidProvider = errors.New("invalid identity provider")
+
+// validProvider checks the provider's settings, trimmed.
+func validProvider(s Settings) bool {
+	if s.ProviderIssuer != "" {
+		issuer, err := url.Parse(s.ProviderIssuer)
+		if err != nil || (issuer.Scheme != "https" && issuer.Scheme != "http") || issuer.Host == "" ||
+			issuer.User != nil || strings.ContainsAny(s.ProviderIssuer, "?#") || len(s.ProviderIssuer) > MaxProviderIssuerBytes {
+			return false
+		}
+	}
+	token := func(text string, max int) bool {
+		return len(text) <= max && utf8.ValidString(text) &&
+			!strings.ContainsFunc(text, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
+	}
+	return validLine(s.ProviderName, MaxProviderNameBytes) &&
+		token(s.ProviderClientID, MaxProviderClientBytes) && token(s.ProviderClientSecret, MaxProviderClientBytes) &&
+		s.ProviderUserClaim != "" && token(s.ProviderUserClaim, MaxProviderClaimBytes) &&
+		token(s.ProviderAdminClaim, MaxProviderClaimBytes) && validLine(s.ProviderAdminValue, MaxProviderValueBytes)
 }
 
 // TorrentsAllowed reports whether user is offered torrents' files: the
@@ -1924,12 +2062,12 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, " +
 	"recording_commercials, " +
-	"live_tv_refresh_hours, local_scan_hours, watch_local_folders, " +
+	"live_tv_refresh_hours, local_scan_hours, watchlist_check_hours, watch_local_folders, " +
 	"convert_recordings, convert_recordings_from, convert_recordings_until, convert_recordings_on_processor, " +
 	"web_theme, custom_css, custom_js, login_disclaimer, add_versions_to_open_page, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
 	"backup_hour, backups_kept, collection_read_hour, collection_library_apps, remuxdb, remuxdb_url, " +
-	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, public_address, " +
+	"cache_size_gb, vaapi_device, recording, recordings_folder, backups, backup_folder, backup_passphrase, public_address, " +
 	"smtp_host, smtp_port, smtp_security, smtp_user, smtp_password, smtp_from, smtp_from_name, " +
 	"playback_history, playback_history_days, weekly_summary_day, weekly_summary_hour, import_every_minutes, " +
 	"metrics, metrics_token, " +
@@ -1937,7 +2075,10 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"torrent_trackers, source_proxy, " +
 	"restart_confirmed, update_tool_url, update_tool_token, " +
 	"conversion_folder, reading_folder, cache_folder, " +
-	"silo_apps"
+	"silo_apps, " +
+	"poster_ratings, " +
+	"provider_issuer, provider_name, provider_client_id, provider_client_secret, provider_user_claim, provider_create_accounts, " +
+	"provider_admin_claim, provider_admin_value"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -1980,7 +2121,7 @@ func (settings *Settings) fields() []any {
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays,
 		&settings.RecordingCommercials,
-		&settings.LiveTvRefreshHours, &settings.LocalScanHours,
+		&settings.LiveTvRefreshHours, &settings.LocalScanHours, &settings.WatchlistCheckHours,
 		&settings.WatchLocalFolders,
 		&settings.ConvertRecordings, &settings.ConvertRecordingsFrom, &settings.ConvertRecordingsUntil, &settings.ConvertRecordingsOnProcessor,
 		&settings.WebTheme, &settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage,
@@ -1989,6 +2130,7 @@ func (settings *Settings) fields() []any {
 		&settings.AniListClientID, &settings.AniListClientSecret, &settings.MyAnimeListClientID, &settings.MyAnimeListClientSecret,
 		&settings.BackupHour, &settings.BackupsKept, &settings.CollectionReadHour, &settings.CollectionLibraryApps, &settings.RemuxDB, &settings.RemuxDBURL,
 		&settings.CacheSizeGB, &settings.VAAPIDevice, &settings.Recording, &settings.RecordingsFolder, &settings.Backups, &settings.BackupFolder,
+		&settings.BackupPassphrase,
 		&settings.PublicAddress,
 		&settings.SMTPHost, &settings.SMTPPort, &settings.SMTPSecurity, &settings.SMTPUser, &settings.SMTPPassword, &settings.SMTPFrom, &settings.SMTPFromName,
 		&settings.PlaybackHistory, &settings.PlaybackHistoryDays, &settings.WeeklySummaryDay, &settings.WeeklySummaryHour,
@@ -2000,7 +2142,10 @@ func (settings *Settings) fields() []any {
 		&settings.SourceProxy,
 		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken,
 		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder,
-		&settings.SiloApps}
+		&settings.SiloApps,
+		&settings.PosterRatings,
+		&settings.ProviderIssuer, &settings.ProviderName, &settings.ProviderClientID, &settings.ProviderClientSecret, &settings.ProviderUserClaim,
+		&settings.ProviderCreateAccounts, &settings.ProviderAdminClaim, &settings.ProviderAdminValue}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -2037,10 +2182,12 @@ func (settings *Settings) secrets() []struct {
 		{"aniListClientSecret", &settings.AniListClientSecret},
 		{"myAnimeListClientSecret", &settings.MyAnimeListClientSecret},
 		{"smtpPassword", &settings.SMTPPassword},
+		{"backupPassphrase", &settings.BackupPassphrase},
 		{"metricsToken", &settings.MetricsToken},
 		{"torrentProxyPassword", &settings.TorrentProxyPassword},
 		{"torrentWireGuard", &settings.TorrentWireGuard},
 		{"updateToolToken", &settings.UpdateToolToken},
+		{"providerClientSecret", &settings.ProviderClientSecret},
 	}
 }
 
@@ -2058,6 +2205,16 @@ func (s *Store) openSecrets(settings *Settings) {
 		}
 		*secret.value = value
 	}
+}
+
+// SecretUnreadable reports whether the secret of the settings named name,
+// as the admin API names it, is stored but cannot be opened with the key:
+// it reads as not set meanwhile.
+func (s *Store) SecretUnreadable(name string) bool {
+	s.secretsMu.Lock()
+	defer s.secretsMu.Unlock()
+	_, ok := s.unreadable[name]
+	return ok
 }
 
 // sealSecrets returns settings as they are stored: their secrets sealed,
@@ -2372,6 +2529,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	if settings.LocalScanHours < 0 || settings.LocalScanHours > MaxLocalScanHours {
 		return Settings{}, ErrInvalidLocalScanHours
 	}
+	if settings.WatchlistCheckHours < 0 || settings.WatchlistCheckHours > MaxWatchlistCheckHours {
+		return Settings{}, ErrInvalidWatchlistCheckHours
+	}
 	if !slices.Contains(WebThemes, settings.WebTheme) {
 		return Settings{}, ErrInvalidWebTheme
 	}
@@ -2425,6 +2585,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.BackupFolder, ok = CleanFolder(settings.BackupFolder); !ok {
 		return Settings{}, ErrInvalidBackupFolder
+	}
+	if !validBackupPassphrase(settings.BackupPassphrase) {
+		return Settings{}, ErrInvalidBackupPassphrase
 	}
 	if settings.ConversionFolder, ok = CleanFolder(settings.ConversionFolder); !ok {
 		return Settings{}, ErrInvalidConversionFolder
@@ -2488,6 +2651,13 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !validLine(settings.UpdateToolToken, MaxUpdateToolTokenBytes) || strings.ContainsFunc(settings.UpdateToolToken, unicode.IsSpace) {
 		return Settings{}, ErrInvalidUpdateToolToken
+	}
+	settings.ProviderIssuer, settings.ProviderName = strings.TrimSpace(settings.ProviderIssuer), strings.TrimSpace(settings.ProviderName)
+	settings.ProviderClientID, settings.ProviderClientSecret = strings.TrimSpace(settings.ProviderClientID), strings.TrimSpace(settings.ProviderClientSecret)
+	settings.ProviderUserClaim, settings.ProviderAdminClaim = strings.TrimSpace(settings.ProviderUserClaim), strings.TrimSpace(settings.ProviderAdminClaim)
+	settings.ProviderAdminValue = strings.TrimSpace(settings.ProviderAdminValue)
+	if !validProvider(settings) {
+		return Settings{}, ErrInvalidProvider
 	}
 	if settings.LoginAttempts == 0 {
 		// Without a limit, no account stays blocked, nor keeps counting.

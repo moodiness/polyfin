@@ -92,15 +92,28 @@ const backups: typeof en = {
       button: 'Ripristina',
       title: 'Ripristina un backup',
       intro:
-        'Il database torna com’era al momento del backup. Scegli un backup della cartella o di una destinazione, oppure invia un file .dump.',
+        'Il database torna com’era al momento del backup. Scegli un backup della cartella o di una destinazione, oppure invia un file di backup.',
       loading: 'Elenco dei backup…',
       folder: 'Cartella dei backup',
       none: 'Nessun backup qui.',
       beforeRestore: 'prima di un ripristino',
+      encrypted: 'cifrato',
       choose: 'Ripristina questo backup',
-      upload: 'Invia un file .dump',
+      download: 'Scarica',
+      downloadDecrypted: 'Scarica decifrato',
+      downloadTitle: (file: string) => `Scarica ${file} decifrato`,
+      downloadBody:
+        'Digita la passphrase con cui è stato cifrato questo backup. Il dump viene salvato non cifrato su questo computer: custodiscilo con la stessa cura del server.',
+      passphrase: 'Passphrase dei backup',
+      downloading: 'Verifica della passphrase…',
+      upload: 'Invia un file di backup',
       uploadHelp:
-        'Un backup del database di Polyfin, creato da Polyfin o con pg_dump --format=custom.',
+        'Un file .dump del database di Polyfin, creato da Polyfin o con pg_dump --format=custom, oppure un file .dump.enc cifrato da Polyfin.',
+      unlockTitle: (file: string) => `Apri ${file}`,
+      unlockBody:
+        'Questo backup è cifrato. Digita la passphrase con cui è stato creato: Polyfin lo decifra, ne verifica ogni parte, poi indica cosa fa il ripristino.',
+      unlock: 'Apri',
+      unlocking: 'Decifratura e verifica…',
       checking: 'Verifica del backup…',
       unavailable: {
         pg_restore_missing:
@@ -151,6 +164,7 @@ const backups: typeof en = {
         'Polyfin sta ripristinando il backup, poi si riavvierà. Questa pagina si ricarica appena risponde.',
       lastRestore: 'Ultimo ripristino',
       lastRestoreOk: (file: string, by: string) => `${file}, da ${by}`,
+      lastRestoreSetup: (file: string) => `${file}, dalla pagina di configurazione`,
       lastRestoreFailed: (file: string) =>
         `Impossibile ripristinare ${file}: il database è rimasto com’era.`,
     },

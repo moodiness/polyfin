@@ -1,0 +1,22 @@
+FFmpeg for NVIDIA drivers older than 610, by the FFmpeg developers and the
+authors of the libraries it is built with. Licensed under the GNU General
+Public License, version 3: see LICENSE.txt in the folder it is unpacked in.
+
+Polyfin downloads it, on Linux (amd64, arm64) and Windows (x64), when
+NVENC's test encode finds an NVIDIA driver older than 610 that NVENC's API
+13.0 takes, into the data folder's tools/nvenc13. It is the FFmpeg of the
+Polyfin image, n9.0.2-17-g2a571b6068, built with the same recipe against
+NVENC's API 13.0 by scripts/ffmpeg-nvenc13.sh and the workflow
+ffmpeg-nvenc13, and published as the release
+ffmpeg-nvenc13.0-autobuild-2026-09-30-13-08 of
+https://github.com/moodiness/polyfin
+
+Its complete corresponding source code is attached to the same release:
+ffmpeg-n9.0.2-17-g2a571b6068-nvenc13.0-sources.tar, in parts
+(.tar.part01, .tar.part02) to join with cat, in order, and to check with
+its .tar.sha256. It holds the source of FFmpeg at its commit, of every
+library it is built with as the build fetched it, the build recipe, and
+how Polyfin adjusted and pinned it (recipe.diff, pins.env).
+
+Polyfin is a separate program, released under the MIT License. It runs
+this FFmpeg as a program, as it runs the FFmpeg of its image.

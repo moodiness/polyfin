@@ -14,7 +14,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
-	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/drm"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -37,8 +37,12 @@ type Version struct {
 	// send when Headers name none (see RequestHeaders), empty for
 	// Polyfin's: an IPTV source's default (see stremio.Stream.UserAgent).
 	UserAgent string
-	Filename  string
-	Size      int64
+	// Protection is how an IPTV list says the stream is encrypted, with
+	// its ClearKey keys (see stremio.Stream.Protection); nil when it says
+	// nothing.
+	Protection *drm.Protection
+	Filename   string
+	Size       int64
 	// Addon is the name of the addon that listed the stream.
 	Addon string
 	// Origin is where the stream was listed, to ask again for it when its
@@ -76,6 +80,10 @@ type Version struct {
 	// URL is then the torrent's magnet link (see torrentLink), which
 	// identifies it, and to which no app is sent.
 	Torrent *Torrent
+	// Mirrors are the same file as other addons list it, by its name and
+	// size, in the order they come: links the source cache reads from
+	// once this one fails (see withMirror). They are listed nowhere else.
+	Mirrors []Version
 }
 
 // RequestHeaders are the headers Polyfin's own requests for the stream
@@ -192,6 +200,17 @@ type target struct {
 	// season and episode are the episode's, episode 0 for another title:
 	// a torrent's file without an index is found by them.
 	season, episode int
+	// year is a movie's, 0 for another title or when unknown: a version
+	// naming another year is another movie's (see OtherTitle).
+	year int
+	// ids are the identifiers a movie's, or an episode's series',
+	// description gives, under Jellyfin's names (see providerIDs): those
+	// it may be asked streams by when an addon does not accept its own
+	// (see streamRequests).
+	ids map[string]string
+	// described is an episode's series' complete description, when the
+	// caller has read it already; else streamRequests reads it.
+	described *stremio.Meta
 	// holder is the record of the title whose description holds the
 	// video: an episode's series, or a folder's video's folder. embedded
 	// are the streams it embeds for the video, described by embeddedBy,
@@ -251,7 +270,12 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		if full, _, ok := s.describedMeta(ctx, v, r, false, inDatabase); ok {
 			meta = &full
 		}
-		return target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime)), name: meta.Name}, v, nil
+		t := target{item: id, kind: r.Kind, metaType: meta.Type, id: meta.ID, runtime: parseRuntime(string(meta.Runtime)), name: meta.Name,
+			ids: providerIDs(*meta)}
+		if r.Kind == KindMovie {
+			t.year = metaYear(*meta)
+		}
+		return t, v, nil
 	case r.Kind == KindChannel && r.Meta != nil:
 		return target{item: id, kind: KindChannel, metaType: r.Meta.Type, id: r.Meta.ID}, v, nil
 	case r.Kind == KindReplay:
@@ -267,7 +291,8 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 			return target{}, view{}, ErrNotFound
 		}
 		t := target{item: id, kind: KindEpisode, metaType: series.Meta.Type, id: r.Video.ID, runtime: parseRuntime(string(r.Video.Runtime)),
-			name: series.Meta.Name, videoName: r.Video.DisplayName(), season: int(r.Video.Season), episode: r.Video.EpisodeNumber(), holder: &series}
+			name: series.Meta.Name, videoName: r.Video.DisplayName(), season: int(r.Video.Season), episode: r.Video.EpisodeNumber(), holder: &series,
+			ids: providerIDs(*series.Meta)}
 		s.embed(ctx, v, &t, false)
 		return t, v, nil
 	default:
@@ -350,14 +375,20 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 	if mode == waitAll || mode == staleNow {
 		s.embed(ctx, v, &t, true)
 	}
-	serving := streamServing(v, t)
+	serving := s.streamServing(ctx, v, t)
 	if len(t.embedded) > 0 {
 		// An addon that embeds a video's streams in its description is
 		// not asked for them again, as Stremio apps do not ask it.
-		serving = slices.DeleteFunc(serving, func(entry installed) bool { return entry.addon.ID == t.embeddedBy.addon.ID })
+		serving = slices.DeleteFunc(serving, func(source streamSource) bool { return source.addon.ID == t.embeddedBy.addon.ID })
 	}
 	tracked := s.tracked()
 	tracked.titles.Put(listedTitle{t.metaType, t.id}, t.item)
+	for _, source := range serving {
+		// An addon asked by another identifier tells the item too.
+		if source.id != t.id || source.contentType != t.metaType {
+			tracked.titles.Put(listedTitle{source.contentType, source.id}, t.item)
+		}
+	}
 	if mode == askLater {
 		// Item details: the title's page follows its versions from now on
 		// (see FollowedProgress).
@@ -383,22 +414,23 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 // versions remembered by identifier (see Version) are those of every
 // stream, torrents included, as a user who may play torrents gets them, so
 // that each identifier names the same version for every user; another
-// user's Version lists the title again rather than take a torrent.
-func (s *Service) listVersions(ctx context.Context, t target, serving []installed, mode listing, torrents bool) ([]Version, []installed) {
+// user's Version lists the title again rather than take a torrent. The
+// links to the same file listed after it are its mirrors (see withMirror).
+func (s *Service) listVersions(ctx context.Context, t target, serving []streamSource, mode listing, torrents bool) ([]Version, []streamSource) {
 	lists := make([][]stremio.Stream, len(serving))
-	var unknown []installed
+	var unknown []streamSource
 	var wg sync.WaitGroup
 	for i, entry := range serving {
 		// An IPTV source's or a local folder's streams are Polyfin's own:
 		// reading them asks no addon.
 		if own(entry.addon) && mode != waitAll {
-			lists[i], _ = s.fetchStreams(ctx, entry, t.metaType, t.id)
+			lists[i], _ = s.fetchStreams(ctx, entry.installed, entry.contentType, entry.id)
 			continue
 		}
 		var l list[stremio.Stream]
 		var fresh, ok bool
 		if mode != waitAll {
-			l, fresh, ok = s.streamListOf(ctx, streamKey{entry.addon.ID, t.metaType, t.id})
+			l, fresh, ok = s.streamListOf(ctx, entry.key())
 		}
 		switch {
 		case fresh || ok && mode == knownOnly:
@@ -409,7 +441,7 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 			unknown = append(unknown, entry)
 		case mode == waitAll || mode == staleNow:
 			wg.Go(func() {
-				streams, err := s.streams(ctx, entry, t.metaType, t.id)
+				streams, err := s.streams(ctx, entry.installed, entry.contentType, entry.id)
 				// An app that stops waiting cancels ctx: nothing failed.
 				if err != nil && ctx.Err() == nil {
 					s.logger.Warn("An addon could not list streams", "addon", entry.addon.Manifest.Name, "error", err)
@@ -423,15 +455,36 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []installe
 	wg.Wait()
 	var versions []Version
 	seen, remembered := map[accounts.ID]bool{}, map[accounts.ID]bool{}
+	// kept are the versions remembered, and listed where each is among
+	// versions, which take their mirrors as these come.
+	kept, listed := map[accounts.ID]Version{}, map[accounts.ID]int{}
 	add := func(version Version) {
+		// A version naming another title is hidden as the version rules
+		// hide others; it is told once, when first listed.
+		if version.Labels.Elsewhere != "" && !remembered[version.ID] {
+			if _, known := s.versions.Get(version.ID); !known {
+				s.logger.Debug("A version names another title", "addon", version.Addon, "names", version.Labels.Elsewhere)
+			}
+		}
 		if !remembered[version.ID] {
 			remembered[version.ID] = true
+			kept[version.ID] = version
 			s.versions.Put(version.ID, version)
+		} else if first, ok := withMirror(kept[version.ID], version); ok {
+			kept[version.ID] = first
+			s.versions.Put(version.ID, first)
 		}
-		if version.Torrent != nil && !torrents || seen[version.ID] {
+		if version.Torrent != nil && !torrents {
+			return
+		}
+		if seen[version.ID] {
+			if first, ok := withMirror(versions[listed[version.ID]], version); ok {
+				versions[listed[version.ID]] = first
+			}
 			return
 		}
 		seen[version.ID] = true
+		listed[version.ID] = len(versions)
 		versions = append(versions, version)
 	}
 	// A video's own streams come first (see embed).
@@ -607,16 +660,20 @@ func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, o
 		if !listable(stream) || versionID(t.item, streamIdentity(stream)) != old.ID {
 			continue
 		}
-		version := newVersion(t, entry, stream)
+		version := newVersion(t, streamSource{entry, t.metaType, t.id}, stream)
 		version.Labels = old.Labels
-		s.versions.Put(version.ID, version)
+		version, kept := s.keepMirrors(version)
+		s.versions.Put(version.ID, kept)
 		return version, true
 	}
 	return Version{}, false
 }
 
-// newVersion describes a stream an addon listed for a target.
-func newVersion(t target, entry installed, stream stremio.Stream) Version {
+// newVersion describes a stream an addon listed for a target, asked as
+// source tells (see streamServing): a version is renewed by asking the
+// addon the same again.
+func newVersion(t target, source streamSource, stream stremio.Stream) Version {
+	entry := source.installed
 	version := Version{
 		Item:    t.item,
 		Name:    versionName(stream),
@@ -624,10 +681,11 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		Headers: stream.RequestHeaders(),
 		// An IPTV source's default User-Agent: no addon sets it.
 		UserAgent:   stream.UserAgent,
+		Protection:  stream.Protection,
 		Filename:    stream.BehaviorHints.Filename,
 		Size:        int64(stream.BehaviorHints.VideoSize),
 		Addon:       entry.addon.Manifest.Name,
-		Origin:      Origin{Addon: entry.addon.ID, Type: t.metaType, ID: t.id},
+		Origin:      Origin{Addon: entry.addon.ID, Type: source.contentType, ID: source.id},
 		Confined:    entry.confined,
 		ProxySource: entry.addon.Kind == addons.KindStremio && !entry.confined,
 		Runtime:     t.runtime,
@@ -637,6 +695,7 @@ func newVersion(t target, entry installed, stream stremio.Stream) Version {
 		HoldsConnection: t.kind == KindReplay,
 	}
 	version.Labels.Releases = ReleaseKinds([]string{t.name, t.videoName}, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
+	version.Labels.Elsewhere = OtherTitle(t.name, t.season, t.episode, t.year, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
 	if stream.Torrent() {
 		version.ProxySource = false
 		version.URL = torrentLink(stream)
@@ -734,6 +793,7 @@ func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamK
 	return shared(ctx, s, streamsFlight(key), func(ctx context.Context) ([]stremio.Stream, error) {
 		asked, done := s.ask(followKey{listStreams, key})
 		defer done()
+		s.logger.Debug("An addon is asked for streams", "addon", entry.addon.Manifest.Name, "type", key.contentType, "id", key.id)
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
 		if err != nil {
 			return nil, err
@@ -759,18 +819,6 @@ var errOnlyNotices = errors.New("its answer has only notices, nothing to play: t
 // title, which callers share (see streamAnswer).
 func streamsFlight(key streamKey) string {
 	return "streams " + key.addon.String() + " " + key.contentType + " " + key.id
-}
-
-// streamServing lists the addons of v that list streams for t.
-func streamServing(v view, t target) []installed {
-	var serving []installed
-	for _, entry := range v.addons {
-		// An IPTV source's channel is only its source's to play.
-		if serves(entry, "stream", t.metaType, t.id) && !(entry.addon.Stremio() && strings.HasPrefix(t.id, iptv.IDPrefix)) {
-			serving = append(serving, entry)
-		}
-	}
-	return serving
 }
 
 // serves reports whether an addon serves a resource for a title: a home

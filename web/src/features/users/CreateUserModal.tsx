@@ -33,6 +33,8 @@ export default function CreateUserModal({
   // Hidden by default, like Jellyfin.
   const [showOnSignIn, setShowOnSignIn] = useState(false)
   const [groupId, setGroupId] = useState('')
+  // An account signing in through the identity provider only needs no password.
+  const [providerOnly, setProviderOnly] = useState(false)
 
   const mutation = useMutation({
     mutationFn: createUser,
@@ -42,6 +44,7 @@ export default function CreateUserModal({
       setIsAdministrator(false)
       setShowOnSignIn(false)
       setGroupId('')
+      setProviderOnly(false)
       // The new user's page needs it in the list before the refresh comes back.
       queryClient.setQueryData<User[]>(queryKeys.users, (old) => old && [...old, created])
       void queryClient.invalidateQueries({ queryKey: queryKeys.users })
@@ -64,7 +67,8 @@ export default function CreateUserModal({
     event.preventDefault()
     mutation.mutate({
       name: name.trim(),
-      password,
+      password: providerOnly ? '' : password,
+      providerOnly,
       isAdministrator,
       isHidden: !showOnSignIn,
       groupId: isAdministrator || groupId === '' ? null : groupId,
@@ -105,20 +109,28 @@ export default function CreateUserModal({
             invalid={nameError !== undefined}
           />
         </Field>
-        <Field label={t.users.password} help={t.common.passwordRule} error={passwordError}>
-          <TextInput
-            type="password"
-            revealable
-            value={password}
-            onValue={(value) => {
-              mutation.reset()
-              setPassword(value)
-            }}
-            autoComplete="new-password"
-            required
-            invalid={passwordError !== undefined}
-          />
-        </Field>
+        <Checkbox
+          label={t.users.providerOnly}
+          help={t.users.providerOnlyHelp}
+          checked={providerOnly}
+          onChange={setProviderOnly}
+        />
+        {!providerOnly && (
+          <Field label={t.users.password} help={t.common.passwordRule} error={passwordError}>
+            <TextInput
+              type="password"
+              revealable
+              value={password}
+              onValue={(value) => {
+                mutation.reset()
+                setPassword(value)
+              }}
+              autoComplete="new-password"
+              required
+              invalid={passwordError !== undefined}
+            />
+          </Field>
+        )}
         <Checkbox
           label={t.users.isAdministrator}
           help={t.users.isAdministratorHelp}

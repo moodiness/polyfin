@@ -75,7 +75,7 @@ func ParseAddress(text string) (string, error) {
 
 // client reads one server with a key, one request at a time, spaced by the
 // service's gap: an API key of the server's dashboard, a user's own key,
-// the token of a session the client signed in, or Plex's owner's token.
+// the token of a session the client signed in, or a Plex account's token.
 type client struct {
 	s            *Service
 	kind         Kind
@@ -283,6 +283,9 @@ type Server struct {
 	// that user's watch data only: some servers answer it with that user's
 	// data whatever user is asked.
 	KeyOwner string
+	// MachineID is a Plex server's machine identifier, which plex.tv names
+	// it by among an account's servers; empty for other kinds.
+	MachineID string
 }
 
 // User is a user of a server.
@@ -502,6 +505,11 @@ type itemJSON struct {
 		IsFavorite            bool
 		LastPlayedDate        string
 	}
+	// unmatchable is why an item cannot be matched whatever its
+	// identifiers, when it cannot (see plexLibrary.item); rating is the
+	// user's, from 0 to 10, for an item of the ratings read.
+	unmatchable string
+	rating      *float64
 }
 
 type pageJSON struct {

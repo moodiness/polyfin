@@ -211,6 +211,10 @@ const system = {
           `${name} (${path}): Polyfin cannot write into this folder, and keeps these files in its data folder’s cache meanwhile. Make the folder writable or choose another, then restart Polyfin.`,
         nvidiaDriver: (version: string) =>
           `The NVIDIA graphics card does not convert video: its driver is older than version ${version}, which FFmpeg needs for NVENC. Update the driver to use the card.`,
+        nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>
+          failure === 'download'
+            ? `The NVIDIA graphics card does not convert video: its driver is older than version 610, and the FFmpeg for such drivers could not be downloaded: ${error}. Polyfin tries again at its next start, or when the conversion settings are saved.`
+            : `The NVIDIA graphics card does not convert video, with the FFmpeg for drivers older than version 610 either: ${error}`,
         backupFailed: 'The last database backup failed.',
         backupStale: 'The last database backup is more than two days old.',
         backupDestinationFailed: (name: string) =>
@@ -305,6 +309,10 @@ const system = {
       noGpu: 'None: video is converted on the CPU',
       toneMapping: 'HDR to SDR on the GPU',
       cpuEncoders: 'CPU encoders',
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'The one Polyfin ships',
+      ffmpegOlderDrivers: 'For NVIDIA drivers older than 610',
+      ffmpegOlderDownloading: 'Downloading the one for NVIDIA drivers older than 610',
       conversions: 'Video conversions',
       noLimit: 'no limit',
       remuxes: 'Remuxes',
@@ -432,6 +440,7 @@ const system = {
         aniListClientSecret: 'AniList client secret',
         myAnimeListClientSecret: 'MyAnimeList client secret',
         smtpPassword: 'SMTP password',
+        backupPassphrase: 'Backup passphrase',
         torrentProxyPassword: 'Torrents’ SOCKS5 proxy password',
         torrentWireGuard: 'Torrents’ WireGuard configuration',
         metricsToken: 'Metrics token',

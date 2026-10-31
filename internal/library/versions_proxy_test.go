@@ -27,7 +27,7 @@ func TestVersionProxySource(t *testing.T) {
 		{"IPTV source", stremioAddon(addons.KindM3U, false), stream, false},
 		{"torrent", stremioAddon(addons.KindStremio, false), stremio.Stream{InfoHash: strings.Repeat("a", 40)}, false},
 	} {
-		version := newVersion(target{}, tc.entry, tc.stream)
+		version := newVersion(target{}, streamSource{installed: tc.entry}, tc.stream)
 		if version.ProxySource != tc.want {
 			t.Errorf("%s: ProxySource = %t, want %t", tc.name, version.ProxySource, tc.want)
 		}

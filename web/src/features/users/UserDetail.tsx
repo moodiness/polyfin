@@ -5,6 +5,7 @@ import {
   FilmSlateIcon,
   IdentificationCardIcon,
   KeyIcon,
+  PaletteIcon,
   PlayCircleIcon,
   ProhibitIcon,
   ShareNetworkIcon,
@@ -12,6 +13,7 @@ import {
   TrashIcon,
   UserCircleDashedIcon,
   BooksIcon,
+  SpeakerHighIcon,
   TranslateIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -24,6 +26,7 @@ import {
   fetchUserDevices,
   fetchUserShareLinks,
   fetchMetadataLanguages,
+  fetchWebThemes,
   fetchUsers,
   queryClient,
   queryKeys,
@@ -38,6 +41,8 @@ import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { ShareLinkList } from '@/features/account/SharedLinks'
 import { MetadataLanguageSelect } from '@/features/account/MetadataLanguage'
+import { WebThemeSelect } from '@/features/account/WebTheme'
+import { AudioRegionSelect } from '@/features/account/AudioRegion'
 import { errorMessage, formatDate } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -88,6 +93,8 @@ const sectionIds = [
   'profile',
   'access',
   'metadata-language',
+  'web-theme',
+  'audio-region',
   'playback',
   'parental',
   'libraries',
@@ -192,6 +199,18 @@ function UserPage({ user }: { user: User }) {
           to: '#metadata-language',
         },
         {
+          id: 'web-theme',
+          label: t.users.webThemeTitle,
+          icon: PaletteIcon,
+          to: '#web-theme',
+        },
+        {
+          id: 'audio-region',
+          label: t.users.audioRegionTitle,
+          icon: SpeakerHighIcon,
+          to: '#audio-region',
+        },
+        {
           id: 'playback',
           label: t.users.playbackAccessTitle,
           icon: PlayCircleIcon,
@@ -287,6 +306,8 @@ function UserPage({ user }: { user: User }) {
         <ProfilePanel user={user} />
         <AccessPanel user={user} />
         <MetadataLanguagePanel user={user} />
+        <WebThemePanel user={user} />
+        <AudioRegionPanel user={user} />
         <PlaybackAccessForm key={`playback:${formsKey}`} id="playback" target={target} />
         <ParentalControlForm key={`parental:${formsKey}`} id="parental" target={target} />
         <VisibleLibrariesForm key={`libraries:${formsKey}`} id="libraries" target={target} />
@@ -570,6 +591,13 @@ function AccessPanel({ user }: { user: User }) {
             disabled={access.isPending}
             onChange={(isDisabled) => change({ isDisabled })}
           />
+          <SwitchRow
+            title={t.users.providerOnly}
+            help={t.users.providerOnlyHelp}
+            checked={user.providerOnly}
+            disabled={access.isPending}
+            onChange={(providerOnly) => change({ providerOnly })}
+          />
           <EndRow
             key={user.endsOn ?? ''}
             user={user}
@@ -745,6 +773,93 @@ function MetadataLanguagePanel({ user }: { user: User }) {
     <div id="metadata-language" className={sectionClass}>
       <Panel title={t.users.metadataLanguageTitle} description={t.users.metadataLanguageHelp}>
         {body}
+      </Panel>
+    </div>
+  )
+}
+
+/**
+ * The user's web player theme: The server's, or one the server offers, saved as it changes, and
+ * whether they may change it themselves under My account.
+ */
+function WebThemePanel({ user }: { user: User }) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const patch = useUserPatch(user)
+  const themes = useQuery({
+    queryKey: queryKeys.webThemes,
+    queryFn: ({ signal }) => fetchWebThemes(signal),
+  })
+
+  let body
+  if (themes.isPending) body = <SkeletonRows rows={2} label={t.common.loading} />
+  else if (themes.isError)
+    body = (
+      <InlineError onRetry={() => void themes.refetch()} retrying={themes.isFetching}>
+        {errorMessage(t, themes.error)}
+      </InlineError>
+    )
+  else
+    body = (
+      <div>
+        <Field
+          label={t.users.webThemeTitle}
+          hideLabel
+          error={patch.isError ? errorMessage(t, patch.error) : undefined}
+        >
+          <WebThemeSelect
+            value={user.webTheme}
+            themes={themes.data}
+            onValue={(webTheme) =>
+              patch.mutate({ webTheme }, { onSuccess: () => toast(t.users.updated) })
+            }
+            disabled={patch.isPending}
+          />
+        </Field>
+        <div className="mt-4">
+          <SwitchRow
+            title={t.users.webThemeChange}
+            help={t.users.webThemeChangeHelp}
+            checked={!user.webThemeLocked}
+            onChange={(change) =>
+              patch.mutate({ webThemeLocked: !change }, { onSuccess: () => toast(t.users.updated) })
+            }
+            disabled={patch.isPending}
+          />
+        </div>
+      </div>
+    )
+  return (
+    <div id="web-theme" className={sectionClass}>
+      <Panel title={t.users.webThemeTitle} description={t.users.webThemeHelp}>
+        {body}
+      </Panel>
+    </div>
+  )
+}
+
+/** The user's audio region: None, or one of the regions offered, saved as it changes. */
+function AudioRegionPanel({ user }: { user: User }) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const patch = useUserPatch(user)
+  return (
+    <div id="audio-region" className={sectionClass}>
+      <Panel title={t.users.audioRegionTitle} description={t.users.audioRegionHelp}>
+        <Field
+          label={t.users.audioRegionTitle}
+          hideLabel
+          error={patch.isError ? errorMessage(t, patch.error) : undefined}
+        >
+          <AudioRegionSelect
+            value={user.audioRegion}
+            regions={user.audioRegions}
+            onValue={(audioRegion) =>
+              patch.mutate({ audioRegion }, { onSuccess: () => toast(t.users.updated) })
+            }
+            disabled={patch.isPending}
+          />
+        </Field>
       </Panel>
     </div>
   )

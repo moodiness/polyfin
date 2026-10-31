@@ -87,3 +87,50 @@ func TestCustomTextsAreReplacedOnlyAsTheyWereRead(t *testing.T) {
 		t.Errorf("stored: %q %q %q %v", reloaded.CustomCss, reloaded.CustomJs, reloaded.WebTheme, err)
 	}
 }
+
+// Each user has a web player theme, the server's until one is chosen: the
+// user changes their own, unless the administrator keeps them from it, as
+// the administrator alone may. An unknown theme is refused.
+func TestEachUserHasTheirWebTheme(t *testing.T) {
+	t.Parallel()
+	store := newStore(t)
+	ctx := t.Context()
+	user := mustCreate(t, store, NewUser{Name: "kid", Password: "correct horse"})
+	settings := store.Settings()
+	if user.WebTheme != "" || user.WebThemeLocked || settings.WebThemeOf(user) != WebThemeLumaaGlaass {
+		t.Fatalf("a new user: %q, locked %v", user.WebTheme, user.WebThemeLocked)
+	}
+	got, err := store.SetOwnWebTheme(ctx, user.ID, WebThemeNone)
+	if err != nil || got.WebTheme != WebThemeNone || settings.WebThemeOf(got) != WebThemeNone {
+		t.Fatalf("the user's own: %q, %v", got.WebTheme, err)
+	}
+	got, err = store.UpdateUser(ctx, user.ID, UserChanges{WebTheme: new(WebThemeCustom), WebThemeLocked: new(true)}, nil)
+	if err != nil || got.WebTheme != WebThemeCustom || !got.WebThemeLocked {
+		t.Fatalf("the administrator's, locked: %q %v, %v", got.WebTheme, got.WebThemeLocked, err)
+	}
+	if _, err := store.SetOwnWebTheme(ctx, user.ID, ""); !errors.Is(err, ErrWebThemeLocked) {
+		t.Errorf("the user's own while locked: %v", err)
+	}
+	if got, err := store.User(ctx, user.ID); err != nil || got.WebTheme != WebThemeCustom {
+		t.Errorf("after a refused change: %q, %v", got.WebTheme, err)
+	}
+	// Unlocked, the user goes back to the server's.
+	if _, err := store.UpdateUser(ctx, user.ID, UserChanges{WebThemeLocked: new(false)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := store.SetOwnWebTheme(ctx, user.ID, ""); err != nil || got.WebTheme != "" || store.Settings().WebThemeOf(got) != WebThemeLumaaGlaass {
+		t.Errorf("back to the server's: %q, %v", got.WebTheme, err)
+	}
+	if _, err := store.UpdateUser(ctx, user.ID, UserChanges{WebTheme: new("another")}, nil); !errors.Is(err, ErrInvalidWebTheme) {
+		t.Errorf("the administrator's unknown theme: %v", err)
+	}
+	if _, err := store.SetOwnWebTheme(ctx, user.ID, "another"); !errors.Is(err, ErrInvalidWebTheme) {
+		t.Errorf("the user's unknown theme: %v", err)
+	}
+	if _, err := store.db.Exec(ctx, "UPDATE users SET web_theme = 'another' WHERE id = $1", user.ID); err == nil {
+		t.Error("the database took an unknown theme")
+	}
+	if _, err := store.SetOwnWebTheme(ctx, ID{9}, ""); !errors.Is(err, ErrNotFound) {
+		t.Errorf("an unknown user: %v", err)
+	}
+}

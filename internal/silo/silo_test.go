@@ -109,7 +109,7 @@ type harness struct {
 
 func newHarness(t *testing.T, answer func(w http.ResponseWriter, c call)) *harness {
 	t.Helper()
-	user := accounts.User{ID: accounts.ID{1}, Name: "member", CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	user := accounts.User{ID: accounts.ID{1}, Name: "member", CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), RemoteAccess: true}
 	h := &harness{t: t, accounts: &fakeAccounts{user: user, tokens: map[string]bool{testToken: true},
 		device: accounts.Device{ID: accounts.ID{2}, UserID: user.ID, DeviceInfo: accounts.DeviceInfo{DeviceID: "pixel", DeviceName: "Pixel",
 			Client: "Silo", ClientVersion: "1"}}},
@@ -464,6 +464,36 @@ func TestOutsideTheirHoursAppsAreRefusedButSignOut(t *testing.T) {
 	}
 	if w := h.do(http.MethodGet, "/api/v2/account/me", nil); w.Code != http.StatusUnauthorized {
 		t.Errorf("after logout: %d", w.Code)
+	}
+}
+
+// From outside the local network, the apps of a user without remote
+// access are refused, as Jellyfin's are, but may sign out; from the local
+// network they are served.
+func TestOutsideTheLocalNetworkAppsAreRefusedButSignOut(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, playable)
+	h.accounts.user.RemoteAccess = false
+	from := func(address, method, path string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequestWithContext(t.Context(), method, path, http.NoBody)
+		r.RemoteAddr = address
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		r.Header.Set("X-Profile-Id", h.profile)
+		w := httptest.NewRecorder()
+		h.server.ServeHTTP(w, r)
+		return w
+	}
+	for _, path := range []string{"/api/v2/account/me", "/api/v2/profiles"} {
+		if w := from("203.0.113.9:50000", http.MethodGet, path); w.Code != http.StatusForbidden || problemCode(w) != "permission_denied" {
+			t.Errorf("%s from the internet: %d %s", path, w.Code, w.Body)
+		}
+		if w := from("192.168.1.20:50000", http.MethodGet, path); w.Code != http.StatusOK {
+			t.Errorf("%s from the local network: %d %s", path, w.Code, w.Body)
+		}
+	}
+	if w := from("203.0.113.9:50000", http.MethodPost, "/api/v2/auth/logout"); w.Code != http.StatusNoContent {
+		t.Errorf("logout from the internet: %d %s", w.Code, w.Body)
 	}
 }
 

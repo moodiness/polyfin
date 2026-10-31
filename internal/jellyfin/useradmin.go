@@ -264,15 +264,11 @@ func (h *Handler) updateUser(w http.ResponseWriter, r *http.Request) {
 
 // inLocalNetwork reports whether r comes from the server's machine
 // (local) or its local network (inNetwork, local included): loopback,
-// private and link-local addresses, as Jellyfin counts them by default.
+// private and link-local addresses, as Jellyfin counts them by default
+// (see forwarded.InLocalNetwork).
 func inLocalNetwork(r *http.Request) (local, inNetwork bool) {
 	address, err := netip.ParseAddr(forwarded.Client(r))
-	if err != nil {
-		return false, false
-	}
-	address = address.Unmap()
-	local = address.IsLoopback()
-	return local, local || address.IsPrivate() || address.IsLinkLocalUnicast()
+	return err == nil && address.Unmap().IsLoopback(), forwarded.InLocalNetwork(r)
 }
 
 // ForgotPasswordResult is Jellyfin's answer to a forgotten password.

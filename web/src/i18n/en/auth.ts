@@ -17,6 +17,29 @@ const auth = {
     confirmPassword: 'Confirm password',
     submit: 'Create administrator',
     submitting: 'Creating…',
+    restoreInstead: 'Restore a backup instead',
+    createInstead: 'Create an administrator instead',
+    restoreTitle: 'Restore a backup',
+    restoreLede:
+      'Bring this Polyfin back from a backup of its database: its administrators, users, settings and watch history.',
+    restoreFile: 'Backup file',
+    restoreFileHelp:
+      'A .dump or .dump.enc file Polyfin made, from its backups folder or a destination.',
+    restoreChoose: 'Choose a file',
+    restoreSend: 'Send and check',
+    restoreSending: 'Sending and checking…',
+    restoreUnlockHelp: 'This backup is encrypted: type the passphrase it was made with.',
+    restoreReady: (file: string) =>
+      `${file} is a backup of Polyfin’s database that this Polyfin can restore.`,
+    restoreSteps: [
+      'Polyfin stops, restores the backup into its database in one go, then starts again on it. If anything fails, the database stays as it is now.',
+      'Afterwards, sign in with an administrator of the backup.',
+    ],
+    restoreStart: 'Restore',
+    restoreRestoring:
+      'Polyfin is restoring the backup, then starts again. This page shows the sign-in once it answers.',
+    restoreFailed:
+      'The backup could not be restored: Polyfin started again without it. Its log tells why, and holds a new setup code.',
   },
   login: {
     title: 'Sign in',
@@ -38,6 +61,18 @@ const auth = {
       'Administrators must use two-step sign-in on this server. Add your account to an authenticator app on your phone, then enter the code it shows.',
     recoveryTitle: 'Keep your recovery codes',
     continue: 'Continue',
+    /** The identity provider's button, and what its sign-in can come back with. */
+    providerSignIn: (name: string) => `Sign in with ${name}`,
+    providerOutcomes: {
+      provider_refused: 'The sign-in with the identity provider was cancelled.',
+      provider_no_account:
+        'No account on this server matches your account at the identity provider.',
+      account_disabled: 'This account is disabled.',
+      outside_allowed_hours: 'This account may not sign in at this time.',
+      outside_local_network: 'This account may only sign in from the local network.',
+      too_many_attempts: 'Too many attempts. Try again later.',
+      provider_failed: 'The sign-in with the identity provider failed. Try again.',
+    },
   },
   invite: {
     title: (server: string) => `Join ${server}`,

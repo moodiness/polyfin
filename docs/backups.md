@@ -30,6 +30,18 @@ The **Database backups** panel shows the last run and its result, the last backu
 
 The folder is on the same server as the database: send the backups to a destination too, so that a failed disk does not take them with it.
 
+## Encrypting the backups
+
+Under **Settings › Backups**, a **Backup passphrase** of at least 12 characters encrypts every backup as it is written: `pg_dump`'s output goes through the encryption on its way to the file, so the dump is never on disk unencrypted. An encrypted backup is named `polyfin-YYYYMMDD-HHMMSS.dump.enc`, in the folder and at every destination, which then holds nothing it can read. Retention counts both kinds of names: the backups made before the passphrase was set stay as they are until it deletes them. The passphrase is stored encrypted with `POLYFIN_SECRET_KEY`, like the other stored keys, and never shown again. A passphrase that key cannot decrypt fails the backups, rather than let them be written unencrypted: enter it again.
+
+A lost passphrase means lost backups. Nobody can restore an encrypted backup without the passphrase it was made with, Polyfin included. Keep it somewhere other than the server, such as a password manager, and keep the old one as long as backups made with it are kept.
+
+The key is derived from the passphrase with scrypt (N = 2^17, r = 8, p = 1) and a random salt of its own for each file. The dump is sealed with AES-256-GCM in chunks of 64 KB, each numbered, the last one marked, and all bound to the file's header: a backup with a chunk changed, moved, dropped or added, or cut short, is refused whole, and nothing of it is restored. A check in the header tells a wrong passphrase from a damaged file.
+
+## Downloading a backup
+
+**Restore**, in the **Database backups** panel, offers **Download** next to each backup of the folder, as it is. An encrypted one also offers **Download decrypted**, which asks for its passphrase and saves the `.dump` it holds: keep that file as safe as the server. A download stopped by a damaged chunk fails rather than save part of the dump.
+
 ## Destinations
 
 Under **Settings › Backups › Destinations**, **Add a destination** offers three kinds, at most 10 destinations in all:
@@ -54,7 +66,7 @@ A destination that stops answering fails too, and Polyfin goes on with the next 
 
 ## Restoring a backup from the admin app
 
-**Restore**, in the **Database backups** panel of **System › Schedule**, lists the backups of the folder and of each destination, with their date and size, and also takes a `.dump` file sent from your computer. Choosing one, Polyfin checks it first, without changing anything:
+**Restore**, in the **Database backups** panel of **System › Schedule**, lists the backups of the folder and of each destination, with their date and size, and also takes a `.dump` or `.dump.enc` file sent from your computer. An encrypted backup asks for its passphrase first: Polyfin decrypts it into the backups folder, checking every chunk, and a wrong passphrase can be typed again. Then, as for any backup, Polyfin checks it first, without changing anything:
 
 - it must be a backup of Polyfin's database, in `pg_dump`'s custom format;
 - a newer Polyfin must not have made it, nor a Polyfin whose database migrations differ: update Polyfin first;
@@ -62,7 +74,11 @@ A destination that stops answering fails too, and Polyfin goes on with the next 
 
 The confirmation then says what happens, and asks you to type the server's name. When some stored keys of the backup cannot be decrypted with the current key, it counts them by kind: settings, tracking connections, app connections, notification targets, share passwords, backup destinations and the keys of two-step sign-ins. **Cancel** leaves everything as it was: set the key that was set when the backup was made, and restore again. **Restore anyway** goes ahead, and those keys must then be entered again. A user whose two-step sign-in key cannot be decrypted still signs in with a recovery code (see [Two-step sign-in](users.md#for-administrators)).
 
-A backup from a destination is downloaded into the backups folder under a hidden temporary name, and a file sent is written there too: backups must be on, into a folder with room for it. The download stops with an error when the destination sends more bytes than it lists for the file; a WebDAV server that does not tell a file's size lists it without one, and its download is bounded at 64 GB, as a file sent is. The file is deleted when the dialog is closed or another backup is chosen, an hour after it was checked if the restore was not started (or as soon as a restore started past that hour fails), and at Polyfin's next start if it stopped meanwhile. A restore needs `pg_restore` 18, which the Docker image includes; without it, **Restore** says so.
+A backup from a destination is downloaded into the backups folder under a hidden temporary name, and a file sent is written there too, as is the dump an encrypted backup holds once opened: backups must be on, into a folder with room for it. The download stops with an error when the destination sends more bytes than it lists for the file; a WebDAV server that does not tell a file's size lists it without one, and its download is bounded at 64 GB, as a file sent is. The file is deleted when the dialog is closed or another backup is chosen, an hour after it was checked if the restore was not started (or as soon as a restore started past that hour fails), and at Polyfin's next start if it stopped meanwhile. A restore needs `pg_restore` 18, which the Docker image includes; without it, **Restore** says so.
+
+### Restoring from the setup page
+
+A new Polyfin, before any administrator exists, restores a backup instead of creating one: on the setup page, **Restore a backup instead** asks for the setup code (see [Getting started](getting-started.md)), then a `.dump` or `.dump.enc` file, and the passphrase of an encrypted one. The setup code is checked before the file is received, and wrong codes count against the same limit as a wrong code when creating the administrator. The file goes to the default backups folder, even while backups are off, through the same checks as above, and the restore runs as below, except that nothing is backed up first: the database holds no administrator, so nothing was set up yet. Polyfin then starts again on the backup: sign in with one of its administrators. Once an administrator exists, the setup page and its restore are gone. If the restore fails, Polyfin starts again on the empty database, and prints a new setup code in its log.
 
 ### What a restore does
 
@@ -76,11 +92,13 @@ Afterwards, everything is as it was when the backup was made, users, settings, a
 
 The restore runs inside Polyfin's own database rather than in a new database swapped in for it: it needs no other privilege than owning Polyfin's tables, which every setup grants since Polyfin creates them. It does not need the database user to create or rename databases. The transaction drops and creates every table and index at once, which takes about 1,500 of the server's locks: PostgreSQL's defaults allow 6,400. A server set with a much smaller `max_connections` or `max_locks_per_transaction` may refuse it, and the restore then fails without changing anything. The restore leaves out the `GRANT` statements of the backup: privileges granted to other database users on Polyfin's tables must be granted again.
 
-Jellyfin apps restore a backup of the folder the same way, through `/Backup/Restore` (see [Jellyfin compatibility](jellyfin-compatibility.md#backups)). They cannot show the warning about the key: a backup holding keys the current key cannot decrypt is refused there, and restored from the admin app.
+Jellyfin apps restore a backup of the folder the same way, through `/Backup/Restore` (see [Jellyfin compatibility](jellyfin-compatibility.md#backups)). They cannot show the warning about the key, nor ask for a passphrase: a backup holding keys the current key cannot decrypt, and an encrypted backup, are refused there with 400, the latter saying to restore it from the admin app.
 
 ## Restoring a backup by hand
 
 A backup also restores into the PostgreSQL 18 container with its own `pg_restore`, with Polyfin stopped. The examples below use the Compose services `postgres` and `polyfin`, the database and user `polyfin` of `compose.yaml`, and a `backups` folder of the server holding the backups. When they are in Polyfin's data volume, copy the one to restore out of it first: `mkdir -p backups && docker compose cp polyfin:/data/backups/polyfin-20261005-040000.dump backups/`. On Unraid, use `docker stop`, `docker exec` and `docker start` with your containers' names instead.
+
+An encrypted backup restores by hand once decrypted: download it decrypted from the panel, or restore it from the admin app or the setup page, which decrypt it.
 
 1. Stop Polyfin, so that nothing writes to the database:
 

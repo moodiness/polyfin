@@ -73,7 +73,7 @@ export default function SmartLists({ scope }: { scope: Scope }) {
   function summary(list: SmartList): string {
     const parts = [
       t.smartLists.catalogCount(list.catalogs.length),
-      t.smartLists.ruleCount(ruleCount(list.rules)),
+      t.smartLists.ruleCount(ruleCount(list.rules) + ruleCount(list.exclude)),
       t.smartLists.sorts[list.sort],
     ]
     if (list.maxItems !== null)

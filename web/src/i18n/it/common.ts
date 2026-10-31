@@ -88,6 +88,7 @@ const common: typeof en = {
     invalid_copy_from: 'Questo utente non esiste più. Scegline un altro.',
     invalid_server_name: 'Il nome del server deve avere da 1 a 64 caratteri.',
     invalid_language: 'Scegli una lingua dall’elenco.',
+    invalid_audio_region: 'Scegli una regione dall’elenco.',
     invalid_catalog_limit:
       'I titoli letti per catalogo devono essere un numero intero da 100 a 20.000.',
     invalid_channel_limit:
@@ -219,6 +220,10 @@ const common: typeof en = {
       'Gli orari vanno dalle 00:00 alle 24:00 e ogni fine deve venire dopo il rispettivo inizio (al massimo 50 righe).',
     outside_allowed_hours:
       'Questo account non può essere usato in questo momento. Riprova durante gli orari consentiti.',
+    outside_local_network:
+      'Questo account può essere usato solo dalla rete locale. Connettiti da lì o chiedi a un amministratore.',
+    remote_access_self:
+      'Sei connesso dall’esterno della rete locale: disattivare le tue connessioni dall’esterno ti lascerebbe bloccato. Fallo dalla rete locale.',
     invalid_guide_url:
       'Inserisci l’indirizzo di una guida che inizi con https:// o http://, di massimo 4.096 caratteri, o il percorso assoluto di un file del server.',
     invalid_app:
@@ -239,9 +244,12 @@ const common: typeof en = {
       'L’intervallo di aggiornamento deve essere un numero intero di ore da 1 a 168.',
     invalid_local_scan_hours:
       'L’intervallo di scansione deve essere un numero intero di ore da 0 a 168.',
+    invalid_watchlist_check_hours:
+      'L’intervallo di controllo dei titoli da guardare deve essere un numero intero di ore da 0 a 168.',
     invalid_custom_css: 'Il CSS personalizzato non deve superare 2 MB.',
     invalid_custom_js: 'Il JavaScript personalizzato non deve superare 2 MB.',
-    invalid_web_theme: 'Scegli LumaaGlaass, Nessuno o Personalizzato.',
+    invalid_web_theme: 'Scegli un tema dall’elenco.',
+    web_theme_locked: 'Il tuo amministratore ha scelto il tema del tuo lettore web.',
     theme_copy_running: 'Una copia del tema è già in corso. Riprova tra un momento.',
     theme_copy_nothing: 'I testi personalizzati salvati non caricano nulla da altrove.',
     theme_copy_failed:
@@ -332,6 +340,14 @@ const common: typeof en = {
     too_large: 'Il file è troppo grande.',
     destination_failed: 'Impossibile leggere la destinazione.',
     restore_failed: 'Impossibile avviare il ripristino: non è stato modificato nulla.',
+    invalid_backup_passphrase:
+      'La passphrase dei backup ha almeno 12 caratteri, su una riga, e 256 byte al massimo.',
+    passphrase_required: 'Questo backup è cifrato: aprilo prima con la sua passphrase.',
+    wrong_passphrase: 'Questa passphrase non apre il backup.',
+    damaged_backup:
+      'Questo backup cifrato è danneggiato: una parte è stata modificata o manca. Non è stato ripristinato nulla.',
+    not_encrypted: 'Questo backup non è cifrato.',
+    unlock_failed: 'Impossibile decifrare il backup.',
     invalid_collection_read_hour:
       'Scegli dall’elenco l’orario di lettura delle collezioni, oppure Mai.',
     invalid_collection_library_apps:
@@ -342,6 +358,8 @@ const common: typeof en = {
       'L’indirizzo dello strumento di aggiornamento deve essere un indirizzo web che inizia con http:// o https://, senza nome utente né frammento.',
     invalid_update_tool_token:
       'Il token dello strumento di aggiornamento non contiene spazi e ha al massimo 1024 caratteri.',
+    invalid_provider:
+      'Controlla il provider di identità: il suo emittente è un indirizzo web che inizia con http:// o https://, senza query né frammento; l’ID client, il segreto e i claim non contengono spazi; un claim nomina l’utente.',
     restart_unconfirmed: 'Polyfin non sa se qualcosa lo riavvia: conferma prima l’avviso.',
     no_update: 'Polyfin Desktop non offre questo aggiornamento al momento.',
     not_desktop: 'Polyfin non è eseguito in Polyfin Desktop.',
@@ -515,6 +533,22 @@ const common: typeof en = {
     app_import_expired:
       'I dati letti dall’account non vengono più conservati dopo qualche minuto. Accedi di nuovo.',
     app_import_running: 'È in corso un’importazione in questo account. Attendi che finisca.',
+    plex_sign_in_ended:
+      'L’accesso a Plex è terminato: è scaduto, è stato sostituito o è stato usato da un’importazione. Accedi di nuovo con Plex.',
+    plex_sign_in_pending:
+      'Plex non ti ha ancora fatto accedere. Completa l’accesso sulla pagina di Plex.',
+    plex_unknown_profile: 'Questo Plex Home non ha questo profilo. Accedi di nuovo con Plex.',
+    plex_profile_pin_refused:
+      'Plex ha rifiutato questo PIN. Inserisci di nuovo il PIN del profilo.',
+    plex_profile_forbidden: 'Plex non consente a questo account di passare a questo profilo.',
+    plex_unknown_server: 'Il tuo account Plex non accede a questo server. Scegline un altro.',
+    plex_not_owner:
+      'Questo account Plex non è il proprietario del server. Accedi con l’account Plex del proprietario.',
+    plex_server_unreachable:
+      'Nessuno degli indirizzi che Plex fornisce per questo server ha risposto come quel server. Verifica che sia in funzione e che Polyfin possa raggiungerlo.',
+    plex_tv_failed: 'plex.tv non ha risposto come previsto. Riprova più tardi.',
+    plex_tv_unreachable:
+      'plex.tv non è raggiungibile. Verifica la connessione di Polyfin a Internet.',
     app_not_connected: 'Questa app non è più collegata all’account.',
     app_connection_stopped:
       'L’app ha rifiutato l’accesso conservato da Polyfin. Accedi di nuovo, con «Resta connesso» selezionato.',

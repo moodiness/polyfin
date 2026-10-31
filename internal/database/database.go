@@ -99,6 +99,19 @@ func Secret(ctx context.Context, db interface {
 	return secret, nil
 }
 
+// PlexClient returns the client identifier Polyfin names itself by to
+// plex.tv and to Plex Media Servers, created by a migration, so that every
+// sign-in with Plex reuses one entry among the account's devices.
+func PlexClient(ctx context.Context, db interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}) (string, error) {
+	var id string
+	if err := db.QueryRow(ctx, "SELECT plex_client::text FROM server_identity").Scan(&id); err != nil {
+		return "", fmt.Errorf("read Plex client identifier: %w", err)
+	}
+	return id, nil
+}
+
 // Size returns the bytes the database takes on disk.
 func Size(ctx context.Context, db interface {
 	QueryRow(context.Context, string, ...any) pgx.Row

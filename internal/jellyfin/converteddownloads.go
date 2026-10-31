@@ -184,9 +184,10 @@ func (h *Handler) convertedDownload(w http.ResponseWriter, r *http.Request, exte
 
 // downloadDevice is the device a converted download's request names by
 // its token, zero when it names none; false when the token belongs to
-// another user than user.
+// another user than user. A converted download is a video stream, which
+// Jellyfin serves to anyone (see mediaToken).
 func (h *Handler) downloadDevice(r *http.Request, user accounts.User) (accounts.ID, bool) {
-	token := readCredentials(r, h.Accounts.Settings().LegacyAuthorization).Token
+	token := h.mediaToken(r, servedToAnyone)
 	if token == "" {
 		return accounts.ID{}, true
 	}

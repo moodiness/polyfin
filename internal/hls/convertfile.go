@@ -100,7 +100,7 @@ func (m *Manager) ConvertFile(ctx context.Context, c FileConversion, progress fu
 		m.files--
 		m.mu.Unlock()
 	}()
-	cmd := exec.CommandContext(ctx, m.ffmpeg, c.args()...)
+	cmd := exec.CommandContext(ctx, m.ffmpegPath(), c.args()...)
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
 	out, err := cmd.StdoutPipe()
@@ -159,7 +159,7 @@ func (m *Manager) takeFileSlot(ctx context.Context) error {
 // FFmpeg met one. The other tracks are left out: a conversion copies them
 // as they are.
 func (m *Manager) DecodedLength(ctx context.Context, path string) (time.Duration, error) {
-	cmd := exec.CommandContext(ctx, m.ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error", "-xerror", "-progress", "pipe:1",
+	cmd := exec.CommandContext(ctx, m.ffmpegPath(), "-hide_banner", "-nostdin", "-loglevel", "error", "-xerror", "-progress", "pipe:1",
 		"-i", path, "-map", "0:v", "-f", "null", "-")
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr

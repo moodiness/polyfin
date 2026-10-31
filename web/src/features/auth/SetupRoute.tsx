@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { UserPlusIcon } from '@phosphor-icons/react'
+import { ClockCounterClockwiseIcon, UserPlusIcon } from '@phosphor-icons/react'
 import { useMutation } from '@tanstack/react-query'
 import { queryClient, queryKeys, setup, type Status } from '@/api'
 import { errorMessage } from '@/format'
@@ -7,8 +7,12 @@ import { computer, useServerSystem } from '@/features/sources/LocalFolders'
 import { useI18n } from '@/i18n'
 import { Button, Field, Notice, TextInput } from '@/ui'
 import { AuthFrame } from './AuthFrame'
+import SetupRestore from './SetupRestore'
 
-/** The first administrator, shown by the session gate at any address until one exists. */
+/**
+ * The first administrator, shown by the session gate at any address until one exists; or, with
+ * "Restore a backup instead", the restore of a backup that brings its administrators back.
+ */
 export default function SetupRoute() {
   const { t, language } = useI18n()
   const host = computer(useServerSystem())
@@ -17,6 +21,7 @@ export default function SetupRoute() {
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [mismatch, setMismatch] = useState(false)
+  const [restoring, setRestoring] = useState(false)
 
   const mutation = useMutation({
     mutationFn: setup,
@@ -37,6 +42,19 @@ export default function SetupRoute() {
     // The server adopts the interface language for the names it generates.
     if (!mismatched)
       mutation.mutate({ setupCode: setupCode.trim(), name: name.trim(), password, language })
+  }
+
+  if (restoring) {
+    return (
+      <AuthFrame title={t.setup.restoreTitle} lede={t.setup.restoreLede} wide>
+        <Notice className="mb-6">{t.setup.codeHelp[host]}</Notice>
+        <SetupRestore
+          setupCode={setupCode}
+          onSetupCode={setSetupCode}
+          onCancel={() => setRestoring(false)}
+        />
+      </AuthFrame>
+    )
   }
 
   return (
@@ -101,6 +119,17 @@ export default function SetupRoute() {
           className="w-full"
         >
           {mutation.isPending ? t.setup.submitting : t.setup.submit}
+        </Button>
+        <Button
+          variant="ghost"
+          icon={ClockCounterClockwiseIcon}
+          onClick={() => {
+            mutation.reset()
+            setRestoring(true)
+          }}
+          className="w-full"
+        >
+          {t.setup.restoreInstead}
         </Button>
       </form>
     </AuthFrame>

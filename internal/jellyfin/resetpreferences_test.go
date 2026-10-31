@@ -22,7 +22,7 @@ func TestResetPreferencesForgetsTheRememberedConfiguration(t *testing.T) {
 	ctx := t.Context()
 	prefs := preferences.New(pool)
 	h := &Handler{Options: Options{Preferences: prefs, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))},
-		configurations: cache.New[accounts.ID, UserConfiguration](10, time.Hour)}
+		configurations: cache.New[accounts.ID, UserConfiguration](10, time.Hour), trackChoices: newTrackChoices()}
 	store, err := accounts.Open(ctx, pool)
 	if err != nil {
 		t.Fatal(err)

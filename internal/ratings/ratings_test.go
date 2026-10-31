@@ -226,6 +226,10 @@ func TestTitlesAreAskedInBatchesAndKept(t *testing.T) {
 			t.Errorf("title %d: %s, want %s", i, got, w)
 		}
 	}
+	// The IMDb rating's votes come with it, where MDBList gives them.
+	if votes := kept[0].IMDbVotes; votes == nil || *votes != 673852 || kept[1].IMDbVotes != nil {
+		t.Errorf("votes %v and %v, want 673852 and none", votes, kept[1].IMDbVotes)
+	}
 	asked := f.asked()
 	byPath := map[string][]string{}
 	for _, r := range asked {
@@ -256,7 +260,8 @@ func TestTitlesAreAskedInBatchesAndKept(t *testing.T) {
 	s.Kept(t.Context(), titles)
 	again := New(s.db, f.server.URL, "test", s.logger, s.settings)
 	t.Cleanup(again.Close)
-	if got := again.Kept(t.Context(), titles); len(got) != len(want) || got[0].String() != want[0] {
+	if got := again.Kept(t.Context(), titles); len(got) != len(want) || got[0].String() != want[0] ||
+		got[0].IMDbVotes == nil || *got[0].IMDbVotes != 673852 {
 		t.Errorf("after a restart: %v", got)
 	}
 	time.Sleep(100 * time.Millisecond)

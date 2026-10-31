@@ -127,11 +127,12 @@ func callerFrom(ctx context.Context) caller {
 }
 
 // keyUser is the user of API key requests: an administrator without
-// identifier, allowed everything, at any hour. Endpoints that act for a
-// user act for the one the request names by userId, as Jellyfin's do (see
-// targetUser); without one, they browse the server's libraries as no one.
+// identifier, allowed everything, at any hour and from anywhere. Endpoints
+// that act for a user act for the one the request names by userId, as
+// Jellyfin's do (see targetUser); without one, they browse the server's
+// libraries as no one.
 var keyUser = accounts.User{IsAdministrator: true, VideoTranscoding: true, AudioTranscoding: true, ContentDownloading: true,
-	LiveTv: true, SyncPlay: accounts.SyncPlayCreateAndJoin, RemoteControl: true}
+	LiveTv: true, SyncPlay: accounts.SyncPlayCreateAndJoin, RemoteControl: true, RemoteAccess: true}
 
 // signedInCaller is the user and device of the access token r carries, or
 // the API key it carries. ok is false when r carries none, or none of an
@@ -176,14 +177,16 @@ func (h *Handler) keyCaller(r *http.Request, c credentials) (caller, bool, error
 }
 
 // authenticated serves next only for a valid access token of an enabled
-// user, within their allowed hours. Like Jellyfin, a request without a
-// valid token gets an empty 401, and one outside the hours an empty 403.
+// user, from where they may connect, within their allowed hours. Like
+// Jellyfin, a request without a valid token gets an empty 401, and one from
+// outside the local network or outside the hours an empty 403.
 func (h *Handler) authenticated(next http.HandlerFunc) http.Handler {
 	return h.authorized(next, true)
 }
 
 // authenticatedAnyHour is authenticated for the endpoints Jellyfin serves
 // whatever the user's allowed hours (its IgnoreParentalControl policy).
+// They are refused from outside the local network all the same.
 func (h *Handler) authenticatedAnyHour(next http.HandlerFunc) http.Handler {
 	return h.authorized(next, false)
 }
@@ -196,6 +199,8 @@ func (h *Handler) authorized(next http.HandlerFunc, hours bool) http.Handler {
 			h.internalError(w, r, err)
 		case !ok:
 			w.WriteHeader(http.StatusUnauthorized)
+		case c.APIKey == nil && remoteRefused(r, c.User):
+			w.WriteHeader(http.StatusForbidden)
 		case hours && h.outsideHours(c.User):
 			w.WriteHeader(http.StatusForbidden)
 		default:
@@ -210,4 +215,14 @@ func (h *Handler) authorized(next http.HandlerFunc, hours bool) http.Handler {
 // (see authenticateByName).
 func (h *Handler) outsideHours(user accounts.User) bool {
 	return !user.IsAdministrator && !user.AllowedAt(h.now())
+}
+
+// remoteRefused reports whether a request of user is refused for coming
+// from outside the local network, which they may not connect from (see
+// accounts.User.AllowedFrom). Like Jellyfin, administrators are refused
+// too, whatever the endpoint, the hours' exceptions included
+// (DefaultAuthorizationHandler.cs, lines 58 to 71); API keys, which are no
+// user, never are.
+func remoteRefused(r *http.Request, user accounts.User) bool {
+	return !user.AllowedFrom(forwarded.InLocalNetwork(r))
 }

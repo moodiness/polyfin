@@ -187,6 +187,21 @@ func (s *Store) SignInFailed(ctx context.Context, name, address string) {
 		ShortOverview: s.address(address), Severity: Error})
 }
 
+// SignInRefusedRemote records that user, who proved who they are, was
+// refused a sign-in from address, outside the local network, which they
+// may not connect from (see accounts.User.RemoteAccess). It is a failed
+// sign-in, about the user. Jellyfin only logs it.
+func (s *Store) SignInRefusedRemote(ctx context.Context, user accounts.User, address string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{
+		"%s may not sign in from outside the local network",
+		"%s ne peut pas se connecter depuis l’extérieur du réseau local",
+		"%s darf sich nicht von außerhalb des lokalen Netzwerks anmelden",
+		"%s no puede iniciar sesión desde fuera de la red local",
+		"%s non può accedere dall’esterno della rete locale",
+		"%s não pode entrar de fora da rede local",
+	}, user.Name), Type: "AuthenticationFailed", UserID: &user.ID, ShortOverview: s.address(address), Severity: Warning})
+}
+
 // PlaybackStarted records that user started playing title, the item item,
 // on device.
 func (s *Store) PlaybackStarted(ctx context.Context, user accounts.User, title, item, device string) {
@@ -387,6 +402,14 @@ func (s *Store) MetricsTokenMade(ctx context.Context, administrator string) {
 func (s *Store) BackupRestored(ctx context.Context, administrator, file string) {
 	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s restored the database backup %s", "%s a restauré la sauvegarde de la base de données %s", "%s hat das Datenbank-Backup %s wiederhergestellt", "%s ha restaurado la copia de seguridad de la base de datos %s", "%s ha ripristinato il backup del database %s", "%s restaurou o backup do banco de dados %s"},
 		administrator, file), Type: "BackupRestored", Severity: Warning})
+}
+
+// BackupRestoredAtSetup records, in the database restored, that the
+// database backup file was restored from the setup page, before any
+// administrator existed.
+func (s *Store) BackupRestoredAtSetup(ctx context.Context, file string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"The database backup %s was restored from the setup page", "La sauvegarde de la base de données %s a été restaurée depuis la page d’installation", "Das Datenbank-Backup %s wurde auf der Einrichtungsseite wiederhergestellt", "La copia de seguridad de la base de datos %s se ha restaurado desde la página de configuración", "Il backup del database %s è stato ripristinato dalla pagina di configurazione", "O backup do banco de dados %s foi restaurado na página de configuração"},
+		file), Type: "BackupRestored", Severity: Warning})
 }
 
 // ServerRestarted records that administrator restarted Polyfin from the

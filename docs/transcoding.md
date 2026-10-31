@@ -17,11 +17,39 @@ Converted video keeps the colors its source states: range, matrix, transfer and 
 
 With **Say in version names how they play** on, the default, apps see in each version's name which of these ways it takes: "(direct play)", "(direct stream)" when its tracks are copied into HLS, "(converted: reason)", or "(cannot play here)" when it needs a conversion the server or the user may not have. See [Version names](playback.md#version-names).
 
+### Direct play turned off by the app
+
+An app may ask for a title again with direct play turned off, as the Jellyfin app for Android's integrated player does after two playback errors within 30 seconds. Polyfin then still checks whether the app would play the file as it is:
+
+- **It would:** the file is repackaged or converted to what the app's conversion formats take, and **Direct play failed** joins the reasons: in **Home › Now playing › Details** under **Why**, and as `DirectPlayError` in the `TranscodeReasons` of the `TranscodingUrl`. A version converted so ends its name with "(converted: app’s request)". For instance, an HEVC Main 10 file with E-AC-3 audio, which the integrated player plays as it is, is converted to H.264 for its MPEG-TS format with the reasons "Video codec not supported" and "Direct play failed", where the codec alone would point at the wrong cause.
+- **It would not:** the reasons are those the check finds, such as "File format not supported" for an AVI file, as when direct play is on.
+
+Discs and DASH channels never play as they are, so they skip the check, as do DLNA devices and guests through share links, which Polyfin sends a stream itself: their reasons are those of their conversion alone, or "Direct play failed" when no other reason applies.
+
+**Compared with Jellyfin:** Jellyfin 12.4 runs the check too when the app turns direct play off ([`MediaInfoHelper.cs`, lines 227 to 230](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L227-L230); [`StreamBuilder.cs`, lines 1392 to 1426](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L1392-L1426)), and gives the same reasons. Version names are Polyfin's own.
+
 ### Audio in HLS segments
 
 The audio of a video repackaged or converted into HLS is copied only when the app takes its codec and the HLS segments carry it: AAC, AC-3, E-AC-3 and MP3 in MPEG-TS segments, and also ALAC, FLAC, Opus, DTS and TrueHD in fragmented MP4 ones. Another track is converted to a codec the app takes that the segments carry, even when the app's profile names its own codec: jellyfin-web names MP2 for Chrome, which refuses it in both kinds of segments, so in Chrome the MP2 of TV recordings and channels is converted to AAC, whether the video is copied or converted, and plays at the first try. The `TranscodingUrl` writes those codecs alone as `AudioCodec`. A stream sent as one file, to an app that asks for one or to a DLNA device, keeps to the app's codecs as they are.
 
 **Compared with Jellyfin:** Jellyfin keeps the same codecs, in `StreamBuilder.BuildStreamVideoItem`, for HLS only, as Polyfin does. Jellyfin's `TranscodingUrl` writes the codec of a copied track alone as `AudioCodec`; Polyfin writes the codecs the segments carry either way, as it does when the track is converted.
+
+### Dolby audio in browsers
+
+Browsers built on Chromium, such as Chrome and Android's web view, and Firefox do not decode AC-3 or E-AC-3 (Dolby Digital and Dolby Digital Plus). jellyfin-web asks the browser what it plays, so in these browsers a file with such audio is not played as it is: Polyfin repackages it into HLS, copies the video when the browser takes it, as HEVC with a GPU that decodes it, and converts only the audio, to AAC. Nothing is encoded for the video, and the graphics card does no work for it. Edge on Windows and Safari decode both, and play such a file as it is when they take its video and container.
+
+To play it without any conversion in such a browser, a version with AAC or Opus audio plays as it is, and **Prefer versions the app plays without conversion** picks one first when there is one (see [Prefer versions the app plays without conversion](playback.md#prefer-versions-the-app-plays-without-conversion)).
+
+**Compared with Jellyfin:** Jellyfin 12.4 decides the same for the same file and browser, with the same reason, `AudioCodecNotSupported` (`StreamBuilder.BuildStreamVideoItem`).
+
+### Seeing how a play goes
+
+- **In jellyfin-web:** "Playback Info", in the player's settings menu, names how the play goes: "Direct playing", "Direct streaming" when the video is copied and the audio converted, "Remuxing" when both are copied into HLS, and "Transcoding" when the video is converted. A play streamed by Polyfin adds a section with the target codecs, "(direct)" beside a copied one, and the reasons, such as "The audio codec is not supported". The section shows once the play's first segment is made, and stays while the encoding waits between requests.
+- **In the version's name:** it ends with how it plays, such as "(converted: audio)" (see [Version names](playback.md#version-names)).
+- **In the admin app:** **Home › Now playing › Details** shows the encoder, "Copied" for copied video, the audio sent, and why.
+- **In the detailed log:** one line for each play (see [Logs](administration.md#logs)), `A version plays as it is`, or `A version plays over HLS` (`A version plays as one stream` for a stream sent as one file) with `video` (`copied`, or the codec and encoder, such as `h264 with h264_nvenc`), `audio` (`copied`, `none`, or the codec and channels, such as `aac 2 ch`) and `reasons`. Each FFmpeg run then logs `Started a remux` with `video` (`copy` or the encoder) and `audio` (`copy`, `none` or the encoder). Neither names an address.
+
+**Compared with Jellyfin:** Jellyfin reports the same on the device's session, as `TranscodingInfo` ([TranscodeManager.cs, lines 343 to 366](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.MediaEncoding/Transcoding/TranscodeManager.cs#L343-L366); [SessionManager.cs, lines 2008 to 2023](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Session/SessionManager.cs#L2008-L2023)), and clears it when its transcode ends; Polyfin keeps it until the play stops, as its encodings stop and start again within a play. Jellyfin also reports the conversion's frame rate and progress, which Polyfin leaves out, and its configured hardware acceleration even for copied video, where Polyfin names the GPU of a video conversion alone. Jellyfin logs its decision at the debug level with the file's path and URL ([StreamBuilder.cs, lines 833 to 841](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L833-L841)); Polyfin's line names no address.
 
 ### Lower quality during a play
 
@@ -48,6 +76,7 @@ Converted video is never larger than its source. It is smaller when one of these
 - **GPU:** up to 4K.
 - **Processor:** up to 1080p.
 - **HDR converted by the processor:** up to **Maximum quality of HDR converted by the processor**, 720p or 1080p with **Automatic**, when no GPU tone maps it (see [HDR and tone mapping](#hdr-and-tone-mapping)).
+- **HDR on a GPU too slow for it:** up to 720p, when the GPU tone maps HDR slower than real time at 1080p (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)).
 - **Quality group:** the user's, set on their page under **Users**.
 - **Maximum quality of converted video:** under **Settings › Conversion (transcoding)**.
 - **The app's profile:** the largest picture, or the highest codec level, the app says it decodes (see [What the app allows](#what-the-app-allows)).
@@ -205,11 +234,32 @@ It then measures, in the background, which way converts faster on that GPU (see 
 
 On arm64, VAAPI is tried only where libva is installed. The arm64 image has no libva, nor the AMD and Intel drivers VAAPI uses, so there VAAPI is not tried, and the log says `VAAPI is not offered here: libva is not installed`. On amd64, and on an arm64 system with libva, a failure gives FFmpeg's own reason.
 
+### Which FFmpeg runs
+
+- **Polyfin Desktop:** it always runs the FFmpeg it downloads, or the one for older NVIDIA drivers (see [NVIDIA driver](#nvidia-driver)), and cannot be given another: `POLYFIN_FFMPEG` and `POLYFIN_FFPROBE` in the environment it starts from are left out (see [Configuration](configuration.md)).
+- **`polyfin serve` and Docker:** they run the FFmpeg and ffprobe that `POLYFIN_FFMPEG` and `POLYFIN_FFPROBE` name, FFmpeg 9.0 or later. Polyfin does not check the version at startup: an older FFmpeg, such as Jellyfin's 8.1, starts, and may fail later on what it lacks.
+- **When it does not matter:** when the video is copied, as for audio converted alone (see [Dolby audio in browsers](#dolby-audio-in-browsers)), no video encoder runs. A conversion on a GPU uses the GPU's own encoder, such as NVENC, whichever FFmpeg drives it.
+
 ### NVIDIA driver
 
-The FFmpeg 9.0 of the Docker image and of Polyfin Desktop needs NVIDIA driver 610.00 or newer for NVENC, on Linux and on Windows. In Docker, this is the host's driver. With an older driver, NVENC fails at startup: the log gives FFmpeg's reason, `Driver does not support the required nvenc API version`, and **System › Health** shows a warning naming the version needed. Video is then converted on another GPU of the computer if one encodes, or else on the processor.
+The FFmpeg 9.0 of the Docker image and of Polyfin Desktop is built for NVENC's API 13.1, which needs NVIDIA driver 610.00 or newer, on Linux and on Windows. In Docker, this is the host's driver. NVIDIA's R580 drivers are the last for Maxwell, Pascal and Volta cards, such as the GeForce GTX 900 and 10 series, the Quadro M and P series and the Titan V: they never reach 610.
 
-NVIDIA's R580 drivers are the last for Maxwell, Pascal and Volta cards, such as the GeForce GTX 900 and 10 series, the Quadro M and P series and the Titan V. They never reach 610, so these cards cannot use NVENC with Polyfin. Turing cards (GeForce GTX 16 and RTX 20 series) and newer ones can, once their driver is updated.
+For drivers from 570 to 609, R570 and R580 among them, Polyfin uses a second FFmpeg: the same FFmpeg 9.0, built for NVENC's API 13.0, which takes drivers from 570. API 13.1 adds nothing Polyfin uses.
+
+- **When:** NVENC's test encode at startup fails with `Driver does not support the required nvenc API version. Required: 13.1 Found: 13.0`, as it does with such a driver.
+- **Download:** Polyfin downloads that FFmpeg into the data folder, in `tools/nvenc13` (64 MB on Linux amd64, 50 MB on arm64, 86 MB on Windows), checks it against the checksum pinned in Polyfin, and keeps it. Video is converted on the processor meanwhile, a few seconds to a minute.
+- **Use:** NVENC is then tested again with it. When it encodes, Polyfin runs that FFmpeg for every conversion while the NVIDIA card is the one chosen, and its own FFmpeg otherwise.
+- **What tells it:** **Settings › Conversion (transcoding) › Detected on this server** and the transcoder of **System › Health** name the FFmpeg used: **The one Polyfin ships** or **For NVIDIA drivers older than 610**.
+- **Download failed:** **System › Health** warns, with why, and Polyfin tries again at its next start, or when the conversion settings are saved. A server without internet keeps converting on the processor until it has downloaded it once.
+- **NVENC fails with it too:** **System › Health** warns, with FFmpeg's reason.
+- **Drivers older than 570:** nothing is downloaded, and **System › Health** warns that the driver is older than version 570.0. Update the driver to use the card.
+- **Other systems:** this FFmpeg exists for Linux on amd64 and arm64 and for Windows on x64, where NVIDIA's drivers run NVENC.
+
+Turing cards (GeForce GTX 16 and RTX 20 series) and newer ones get drivers from 610 on, and convert with the FFmpeg Polyfin ships once their driver is updated.
+
+**License and source code:** this FFmpeg is free software under the GNU General Public License, version 3, a separate program from Polyfin. Its license is `LICENSE.txt` in its folder. It is built by `scripts/ffmpeg-nvenc13.sh` with the workflow `ffmpeg-nvenc13`, and published with its complete source code as the release `ffmpeg-nvenc13.0-autobuild-2026-09-30-13-08` of Polyfin's repository (see [`third_party/ffmpeg-nvenc13`](../third_party/ffmpeg-nvenc13)).
+
+**Compared with Jellyfin:** Jellyfin ships one FFmpeg, whose NVENC needs the driver its NVIDIA headers ask for. Polyfin adds the second FFmpeg so that the last drivers of older cards still convert on the card.
 
 ### Frames on the GPU
 
@@ -217,9 +267,9 @@ A GPU's decoded frames can stay in its memory until it encodes them, or come bac
 
 - **SDR video:** kept on the GPU, it is scaled there (`scale_cuda` on NVIDIA, `scale_vaapi` on AMD or Intel through VAAPI, `scale_vt` with VideoToolbox, `scale_qsv` on Intel through QSV, `vpp_amf` on AMD through AMF), and deinterlaced there with the matching filter (`yadif_cuda` or `bwdif_cuda`, `deinterlace_vaapi`, `yadif_videotoolbox`, or `vpp_qsv`'s deinterlacer; AMF has none). A deinterlacer is used only once it deinterlaced a short sample on the GPU at startup: one that fails there, or makes FFmpeg crash, leaves interlaced video to the processor. On Windows, Intel and AMD GPUs decode into Direct3D 11 frames, which QSV maps to its own.
 - **HDR video on NVIDIA:** kept on the GPU, it is decoded into Vulkan frames, which libplacebo tone maps where they are. FFmpeg cannot hand Vulkan frames back to NVENC, so the converted picture, at its final size, goes to the encoder through memory.
-- **HDR video on Intel and VideoToolbox:** always kept on the GPU, which deinterlaces it, scales it and tone maps it there, with `scale_vaapi` and `tonemap_vaapi` through VAAPI, `vpp_qsv` through QSV, `scale_vt` with VideoToolbox, then encodes it. Burned-in subtitles are laid on in memory after the tone mapping. This is not measured: there is no other way on the GPU.
+- **HDR video on Intel and VideoToolbox:** always kept on the GPU, which deinterlaces it, scales it and tone maps it there, with `scale_vaapi` and `tonemap_vaapi` through VAAPI, `vpp_qsv` through QSV, `scale_vt` with VideoToolbox, then encodes it. Burned-in subtitles are laid on in memory after the tone mapping. There is no other way on the GPU to choose from, but its speed is measured (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)).
 
-Each measurement converts 2 seconds of generated 4K video to 1080p both ways. The log shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). Conversions that start before the measurement ends go through memory. The processor's tone mapping is measured next (see [HDR and tone mapping](#hdr-and-tone-mapping)).
+Each measurement converts 2 seconds of generated 4K video to 1080p both ways. The log shows, for each kind, the way chosen and the speed of each (`Timed the GPU's conversion chains`). Conversions that start before the measurement ends go through memory. The GPU's HDR tone mapping, on every GPU that tone maps, and the processor's tone mapping are measured next (see [HDR and tone mapping](#hdr-and-tone-mapping)).
 
 Frames always go through memory for burned-in subtitles (except on Intel and VideoToolbox when they tone map), for formats unchecked under **Read these formats on the graphics card**, for tone mapping on the processor, and on a GPU where the way through its memory failed.
 
@@ -227,7 +277,7 @@ Frames always go through memory for burned-in subtitles (except on Intel and Vid
 
 - Docker: `--runtime=nvidia`. Compose: `runtime: nvidia`.
 - This needs the NVIDIA Container Toolkit, or Unraid's Nvidia Driver plugin.
-- The host's NVIDIA driver must be 610.00 or newer (see [NVIDIA driver](#nvidia-driver)).
+- The host's NVIDIA driver must be 610.00 or newer for the image's FFmpeg; from 570 to 609, Polyfin downloads an FFmpeg built for it (see [NVIDIA driver](#nvidia-driver)).
 - HDR is also tone mapped on the NVIDIA GPU, through Vulkan. This needs `graphics` among `NVIDIA_DRIVER_CAPABILITIES`; the image sets it.
 
 ### Giving the container an AMD or Intel GPU
@@ -254,6 +304,25 @@ An Intel GPU, or VideoToolbox, tone maps only once a short HDR10 sample converte
 
 If HDR looks wrong on the graphics card, turn off **Tone map HDR on the graphics card**: the processor then tone maps it, on every GPU alike. You can also turn tone mapping off and pick the method under [Conversion settings](#conversion-settings).
 
+### A GPU too slow for HDR
+
+Tone mapping costs a GPU more than scaling SDR, and a small or older card can fall behind playback: an NVIDIA Quadro P2000 tone maps 4K HDR10 to 1080p at about half real time. So Polyfin also times the HDR tone mapping of each GPU that does it, at startup, in the background, the way conversions run: 2 seconds of generated 4K HDR10 converted to 1080p (from an x265 sample carrying its mastering display on Intel and VideoToolbox), then to 720p when that is slower than real time. A GPU keeping up, or not timed yet, tone maps HDR as above. A GPU slower than real time hands HDR, once the processor is timed too:
+
+- To the processor, when it keeps up, 1x real time or faster: up to its own cap, **Maximum quality of HDR converted by the processor**. The GPU still decodes and encodes the video.
+- Else to the GPU up to 720p, when it keeps up there.
+- Else to the faster of the two, the GPU up to 720p. HDR titles may then pause while they convert.
+
+Dolby Vision profile 5, which only NVIDIA GPUs tone map, and all HDR when FFmpeg has no tone mapping filters for the processor, stay on the GPU, up to 720p. **Tone map HDR on the graphics card** turned off still gives every HDR title to the processor.
+
+Where HDR goes, and why:
+
+- The log shows each timing, `Timed the GPU's conversion chains` with `kind=HDR` on NVIDIA, `Timed the GPU's HDR tone mapping` on Intel and VideoToolbox, `Timed the GPU's HDR tone mapping at a lower height` and `Timed the processor's HDR tone mapping`, then the choice: `Chose where HDR is tone mapped`, with `tone_mapping=gpu` or `processor`, the GPU's `height`, the `reason` (`keepsUp`, `notTimed`, `processorFaster`, `lowerHeight` or `noneKeepsUp`) and the speeds.
+- With **Detailed log** on, each conversion's `Started a remux` line has `tone_mapping=gpu` or `processor` for HDR, and `tone_mapping_reason` when the GPU does not tone map it at full height: `slow_gpu` (with the speeds), `turned_off` or `unsupported`.
+- **Settings › Conversion (transcoding) › Detected on this server** and **System › Health › Transcoder** show **HDR titles**: where they are converted, and why, with the speeds.
+- On Home, a playback's **Details** say "720p at most: the graphics card converts HDR in time only up to there" when the GPU's lower height set the size.
+
+**Compared with Jellyfin:** Jellyfin tone maps on the GPU whenever its hardware tone mapping is on and the GPU takes the video (`IsHwTonemapAvailable` in `MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs`, L359-L391 at v12.4), however fast the GPU is. Polyfin times the GPU and the processor, and gives HDR to the one that keeps up.
+
 ## HLS segments
 
 Remuxes and conversions of files are cut into HLS segments on the source's own keyframes:
@@ -262,7 +331,7 @@ Remuxes and conversions of files are cut into HLS segments on the source's own k
 - An MPEG-TS file, which has no keyframe index, is converted and cut the same way: 2 seconds, then every 4 seconds. Its segments count from its start, whatever time its first packet tells, such as an hour into a broadcast, and a seek lands where asked, however far apart its keyframes are.
 - A Blu-ray disc is cut on the keyframes its clips' information files list, and its video copied when the app takes it; a DVD is converted and cut every few seconds, as an MPEG-TS file is. See [Local folders](local-folders.md#blu-ray-discs).
 - Polyfin makes segments up to **Seconds prepared ahead** past the last one the app asked for, then waits for the app.
-- An app asking for a segment whose source stopped sending anything for 20 seconds gets `503` at once, rather than waiting minutes. Its next request waits for the same conversion, which goes on when the source answers again. A source that fails for good ends its conversion, and the next request answers `503` too.
+- An app asking for a segment whose source stopped sending anything for 20 seconds gets `503` at once, rather than waiting minutes. Its next request waits for the same conversion, which goes on when the source answers again. A source that fails for good reads on from a mirror of its file, or else the play goes on from another version of the title, at the same time and with the same segment numbers, converted into what the app plays (see [Carrying a play on](playback.md#carrying-a-play-on)); when neither can, its conversion ends, and the next request answers `503` too.
 - A remux or conversion stops when its app stops its play session (`/Sessions/Playing/Stopped`, or `DELETE /Videos/ActiveEncodings`), and once its app has asked nothing of it for 3 minutes, as when a player stays paused; it starts again at the next request.
 - An app may play another title without stopping the one before, as an app that sends no stop does, or one that crashed and started again. As it reports the new title, the repackaging and conversions of the play sessions its device reported for the title before stop, as its stop would have stopped them, and they no longer read their source, a torrent's swarm included (see [Torrents](torrents.md#only-while-playing)). The same title played again, as for another audio track, stops nothing: the app stops what it leaves itself. Only the device's latest playback changes its title: a start, or a report of its latest play session, or of one it never reported before. A late report of a play session of the title it left, such as a progress sent before the switch that arrives after it, stops nothing. The playbacks of the user's other devices, of DLNA devices, of guests through share links and of converted downloads go on.
 
@@ -343,9 +412,9 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 |---|---|---|---|
 | **Convert HDR to SDR (tone mapping)** | **Settings › Conversion (transcoding)** | On, as before | Off: HDR is converted without tone mapping and looks pale, without the processor's cap, and Dolby Vision without an HDR10 layer is not converted. |
 | **Tone mapping method** | **Settings › Conversion (transcoding)** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA card, Hable on the processor, as before), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA cards only: the processor's filter has none and uses Hable. Intel cards and VideoToolbox use their own curve and ignore the method. |
-| **Tone map HDR on the graphics card** | **Settings › Conversion (transcoding)** | On | NVIDIA cards, Intel cards through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K. Off: the processor tone maps it on every card, a way out when a card's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
+| **Tone map HDR on the graphics card** | **Settings › Conversion (transcoding)** | On | NVIDIA cards, Intel cards through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K, unless they are too slow for it (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)). Off: the processor tone maps it on every card, a way out when a card's colors look wrong, and Dolby Vision without an HDR10 layer is not converted. |
 | **Maximum quality of HDR converted by the processor** | **Settings › Conversion (transcoding)** | **Automatic (measured at startup)** | **Automatic** (1080p or 720p, as measured at startup, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
-| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion (transcoding)** | 0 (the video's), or 100 to 10,000 nits | Processor only; the cards do not take it, so it is hidden when an NVIDIA card tone maps. |
+| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion (transcoding)** | 0 (the video's), or 100 to 10,000 nits | Processor only; the cards do not take it, so it is hidden when an NVIDIA card tone maps, unless the card is too slow for HDR. |
 | **Highlight desaturation (0 = off)** | **Settings › Conversion (transcoding)** | 0 to 10 | Processor only, shown as the peak is. |
 
 ### Audio

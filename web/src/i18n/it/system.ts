@@ -224,6 +224,10 @@ const system: typeof en = {
           `${name} (${path}): Polyfin non può scrivere in questa cartella e nel frattempo tiene questi file nella cache della sua cartella dei dati. Rendi la cartella scrivibile o scegline un’altra, poi riavvia Polyfin.`,
         nvidiaDriver: (version: string) =>
           `La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione ${version}, necessaria a FFmpeg per NVENC. Aggiorna il driver per usare la scheda.`,
+        nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>
+          failure === 'download'
+            ? `La scheda grafica NVIDIA non converte i video: il suo driver è precedente alla versione 610 e non è stato possibile scaricare l’FFmpeg per questi driver: ${error}. Polyfin riprova al prossimo avvio o quando vengono salvate le impostazioni di conversione.`
+            : `La scheda grafica NVIDIA non converte i video, nemmeno con l’FFmpeg per i driver precedenti alla versione 610: ${error}`,
         backupFailed: 'L’ultimo backup del database non è riuscito.',
         backupStale: 'L’ultimo backup del database risale a più di due giorni fa.',
         backupDestinationFailed: (name: string) =>
@@ -321,6 +325,10 @@ const system: typeof en = {
       noGpu: 'Nessuna: il video viene convertito dalla CPU',
       toneMapping: 'Da HDR a SDR sulla GPU',
       cpuEncoders: 'Encoder CPU',
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'Quello fornito con Polyfin',
+      ffmpegOlderDrivers: 'Per i driver NVIDIA precedenti alla 610',
+      ffmpegOlderDownloading: 'Download di quello per i driver NVIDIA precedenti alla 610',
       conversions: 'Conversioni video',
       noLimit: 'nessun limite',
       remuxes: 'Remux',
@@ -449,6 +457,7 @@ const system: typeof en = {
         aniListClientSecret: 'Client secret di AniList',
         myAnimeListClientSecret: 'Client secret di MyAnimeList',
         smtpPassword: 'Password SMTP',
+        backupPassphrase: 'Passphrase dei backup',
         torrentProxyPassword: 'Password del proxy SOCKS5 dei torrent',
         torrentWireGuard: 'Configurazione WireGuard dei torrent',
         metricsToken: 'Token delle metriche',

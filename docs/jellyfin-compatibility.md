@@ -88,6 +88,42 @@ Before anything is typed, jellyfin-web's search page shows Suggestions: the user
 
 **For app developers:** `/Items` without `ParentId` answers such suggestions when it asks `Recursive=true` for `Movie`, `Series` or `MusicArtist` only, sorted by `Random`, alone or with `IsFavoriteOrLiked`, which puts favorite and liked titles first. `/Items/Suggestions` still picks at random among the first page of each library, as Jellyfin picks at random.
 
+### Titles at random
+
+An app that lists a library's titles at random, as the home carousel of the [LumaaGlaass](web-client.md#lumaaglaass) theme picks its slides, and as jellyfin-web's shuffle of a library plays, gets them drawn among the library's first 100 titles, in their catalog's order, rather than its first catalog page alone: the carousel's picks reach well past a library's first titles, and change from one page load to the next.
+
+- The titles drawn among are those the user may see: within their parental control and blocked genres, without the titles they hid, a title hidden after the draw leaving it at once. A collection library gives the titles of its collections, as its other listings of titles do.
+- A listing that asks for more than 100, from its first title, draws among as many, up to 500, the most a listing that asks for no limit gets. A library's **Maximum titles** bounds its draws too (see [Genre and maximum](addons-and-libraries.md#genre-and-maximum)).
+- A draw is kept for 2 minutes, so that the pages an app asks for one after the other follow one order and list each title once. A listing after that draws anew.
+- The listing's total is the number of titles drawn among: pages past it are empty.
+- A library's first 100 titles are read as a listing of 100 reads them, a few catalog pages, and kept with the other pages read (see [Catalog pages](addons-and-libraries.md#catalog-pages)). While they are being read, a listing waits for them at most 3 seconds, then draws among those read so far, without keeping that draw, and the rest is read in the background for the next one.
+- Smart lists keep their own sort (see [Smart lists](addons-and-libraries.md#smart-lists)).
+
+**Compared with Jellyfin:**
+
+- Jellyfin sorts the whole library at random, anew for each request ([`OrderMapper.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/OrderMapper.cs#L55), applied by [`BaseItemRepository.QueryBuilding.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/BaseItemRepository.QueryBuilding.cs#L306-L341), Jellyfin 12.4), so the pages of one listing may repeat or skip titles. Polyfin keeps each draw 2 minutes so that its pages do not.
+- Polyfin stops at a library's first 100 titles: a remote catalog is read a page at a time from its addon, and reaching its end, which may be thousands of titles away, would cost as many requests to the addon for every user's home page. 100 titles are a few pages, which listings read anyway.
+
+**For app developers:** a listing of a library with `ParentId`, `Recursive=true` and only title types, such as `IncludeItemTypes=Movie,Series`, whose first `SortBy` is `Random`, is answered from the draw; the keys after `Random` change nothing. `TotalRecordCount` is the number of titles drawn among.
+
+### Series by their latest episode
+
+jellyfin-web's TV shows tab sorts a series library by "Date Episode Added" and "Date Played" ([`tvshows.js`, lines 249 to 268](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/legacy/controllers/shows/tvshows.js#L249-L268), jellyfin-web 12.4). Polyfin answers both:
+
+- "Date Episode Added" orders the series by their latest regular episode that has aired, as their descriptions date it, the latest first. Specials (season 0) and episodes to come do not count. A series without a dated episode comes last, the first in ascending order.
+- "Date Played" orders them by the last time the user played an episode of theirs through, the latest first; series never played come last.
+- As for a listing at random (see [Titles at random](#titles-at-random)), the series are sorted among the library's first 100, or as many as the listing asks for from its first title, up to 500, within the user's parental control and blocked genres, without the titles they hid. The order is kept 2 minutes, so that the pages of one listing follow it, and the listing's total is the number of series sorted.
+- A series whose description Polyfin does not keep yet has it read in the background, at most 50 at each listing: it comes as a series without episodes meanwhile, and the order is not kept until every description is read.
+- Smart lists keep their own sort (see [Smart lists](addons-and-libraries.md#smart-lists)), which may also be by the latest episode or the latest season premiere.
+
+**Compared with Jellyfin:**
+
+- Jellyfin orders series by `DateLastMediaAdded`, when their latest episode was added to the library ([`OrderMapper.cs`, line 61](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/OrderMapper.cs#L61), Jellyfin 12.4). An addon's episodes are never added: they air. Polyfin takes the day the latest regular episode aired in its place.
+- `SeriesDatePlayed` is, as in Jellyfin, the latest date the user played one of the series' episodes through ([`OrderMapper.cs`, lines 78 to 87](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/OrderMapper.cs#L78-L87)); `DatePlayed` the date the user last played the series itself ([lines 32 to 48](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Item/OrderMapper.cs#L32-L48)).
+- Jellyfin sorts the whole library; Polyfin its first titles, as for titles at random, since a remote catalog is read a page at a time.
+
+**For app developers:** a listing of a library with `ParentId`, `Recursive=true` and `IncludeItemTypes=Series` alone, whose first `SortBy` is `DateLastContentAdded`, `SeriesDatePlayed` or `DatePlayed`, is answered so. `SortOrder` applies to every key, as in Jellyfin, and the keys after the first, then the name, order the series of one date.
+
 ### Movie recommendations
 
 For each of the last movies the user played, recommendations give the "Because you watched" titles similar to it. They come from the similar titles of title pages, without those already played. With **Similar titles** off there are none.
@@ -142,6 +178,30 @@ Sources need no opening. A title's file download serves its first working versio
 - `/LiveStreams/Open` answers 400, as Jellyfin does without an open token; `/LiveStreams/Close` answers 204.
 - `/Items/{id}/File` serves the first working version.
 - `/Videos/{id}/stream.mp4` and `/Videos/{id}/stream.ts` convert only for the `TranscodingUrl` of a converted download: with `static=true`, or without a play session and a `videoCodec`, or with **Converted downloads** off, they serve the version as it is, as before.
+
+### What a streamed play sends
+
+The session of a device playing a version Polyfin streams, over HLS or as one file, carries `TranscodingInfo`, as Jellyfin's does: whether the video and the audio are copied (`IsVideoDirect`, `IsAudioDirect`), the codecs, size, bitrate and audio channels sent, the container, the GPU converting the video, and `TranscodeReasons`. jellyfin-web's "Playback Info" reads it to say "Direct streaming" when only the audio is converted, rather than "Transcoding", with the target codecs and the reasons (see [Seeing how a play goes](transcoding.md#seeing-how-a-play-goes)). DLNA devices' sessions carry it too. A version played as it is has none.
+
+**Compared with Jellyfin:**
+
+- Jellyfin clears it when its transcode ends; Polyfin keeps the last one for the play session until the play stops, as its encodings stop while the player is idle and start again at its next request.
+- `Framerate` and `CompletionPercentage`, FFmpeg's progress, are left out, and `HardwareAccelerationType` only names the GPU of a video conversion, `none` for the processor.
+
+**For app developers:** `GET /Sessions` fills `TranscodingInfo` once the play session's first encoding opened its source, from the play session the app reported in `/Sessions/Playing`; nothing for a play reported as `DirectPlay`.
+
+### Who a media URL plays for
+
+Polyfin serves a title's streams, subtitles and attached fonts for the user a media URL names: by the play session or grant Polyfin signed into it, else by the caller's access token. That user's parental control, blocked genres, visible libraries and allowed hours apply, and addon subtitles come synced to the version they play (see [Addon subtitles synced to the version](subtitles.md#addon-subtitles-synced-to-the-version)).
+
+The token is read as on any request: from the `Authorization` header or the `ApiKey` query parameter, and with legacy authorization from the legacy headers and `api_key`. On the routes Jellyfin serves to anyone, `api_key` counts even without legacy authorization, as some apps sign the addresses they build themselves with it: the streams of videos and audio tracks, subtitles, attachments and recordings under way.
+
+**Compared with Jellyfin:**
+
+- Jellyfin 12.4 reads `api_key` only with legacy authorization ([`AuthorizationContext.cs`, lines 108 to 110](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Security/AuthorizationContext.cs#L108-L110)), but serves those routes without checking who asks, for example the subtitle streams ([`SubtitleController.cs`, lines 208 and 294](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SubtitleController.cs#L208)). Polyfin needs to know who plays, and refuses them without a user.
+- The routes Jellyfin serves to signed-in callers only keep its rule, and refuse `api_key` without legacy authorization: `/Items/{id}/Download` and `/Items/{id}/File`, `/Audio/{id}/universal`, and the HLS playlists and segments of audio tracks.
+
+**For app developers:** prefer the `ApiKey` query parameter, which Polyfin's own media URLs use. A token in an address never reaches the log: request paths are logged without their query, and the values of `api_key`, `ApiKey` and other tokens are hidden in log lines.
 
 ### Fallback fonts
 
@@ -286,6 +346,7 @@ The backups page of the web client's dashboard, since Jellyfin 10.11, shows the 
 - `POST /Backup/Create` runs **Back up the database** at once, sends the backup to the destinations, and answers its manifest. The options of the body are ignored.
 - `GET /Backup/Manifest?path=` answers the manifest of the backup of the folder named `path`, and 404 for any other path.
 - `POST /Backup/Restore` with `ArchiveFileName`, a file name `/Backup` lists, restores it as the admin app does, and answers 204: Polyfin backs the current database up, stops, restores it and starts again, answering 503 meanwhile. It answers 404 for a backup the folder does not have, and 400 for a file that is not a backup of Polyfin's database, a backup of a newer Polyfin, a server without `pg_restore`, a restore already under way, and a backup holding stored keys the current `POLYFIN_SECRET_KEY` cannot decrypt, as apps cannot show that warning: the admin app restores those.
+- An encrypted backup (`.dump.enc`, see [Encrypting the backups](backups.md#encrypting-the-backups)) is listed by `/Backup` like the others, but `POST /Backup/Restore` refuses it with 400 and the text `This backup is encrypted: restore it from Polyfin's admin app, which asks for its passphrase.`, as apps cannot ask for one. Jellyfin answers only 204 or 404 there ([BackupController.cs](https://github.com/jellyfin/jellyfin/blob/07866611e9d8/Jellyfin.Api/Controllers/BackupController.cs#L57-L70)): its backups have no passphrase.
 
 ## Jellyfin features Polyfin does without
 

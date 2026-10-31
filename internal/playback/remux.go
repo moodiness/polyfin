@@ -59,6 +59,13 @@ type Remux struct {
 	// a live stream to list (its TranscodingUrl's MinSegments), 0 when it
 	// asks none (see hls.Manager.LivePlaylist).
 	MinSegments int
+	// Channel names the channel, or the video of an addon, a live stream
+	// plays, in the log lines of its encoding (see hls.Remux.Channel).
+	Channel string
+	// Alternates, when set, are the title's versions as the user is
+	// offered them, in order, which the play may go on from once its
+	// version's source fails for good (see carry); nil for none.
+	Alternates func(ctx context.Context) []library.Version
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe
@@ -577,7 +584,9 @@ func (r Remux) videoConversion() string {
 // source's connections takes it while FFmpeg reads (see Hold). A version
 // read from its input is read there by FFmpeg itself (see LocalInputs).
 // Seeks in a searched version start as far back as playbacks of its file
-// learned they must (see useLookback).
+// learned they must (see useLookback). A version whose source fails for
+// good has the play go on from another one, when the app's stream allows
+// it (see carry); a play session that went on so opens that one again.
 func (s *Service) remuxOpener(remux Remux) hls.Opener {
 	return func(ctx context.Context) (hls.Remux, func(), error) {
 		plan, err := s.Plan(ctx, remux.Version)
@@ -590,6 +599,13 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		analysis, err := s.Analyze(ctx, remux.Version)
 		if err != nil {
 			return hls.Remux{}, nil, err
+		}
+		carried := carries(remux, analysis, plan) && !s.ReadsInput(remux.Version)
+		c := &carry{s: s, remux: remux, analysis: analysis, plan: plan}
+		if carried {
+			if r, release, ok := c.reopen(ctx); ok {
+				return r, release, nil
+			}
 		}
 		hold, err := s.Hold(ForUser(ctx, remux.User), remux.Version)
 		if err != nil {
@@ -651,6 +667,9 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 			r.ADTS = true
 		}
 		remux.convert(&r, video, TuningOf(s.settings()))
+		if carried {
+			r.Switch = c.switchFrom(remux.Version, 0)
+		}
 		return r, release, nil
 	}
 }
@@ -693,7 +712,7 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 		// keeps (see hls.VideoEncoding.Colors).
 		colors := hls.Colors{Range: video.ColorRange, Matrix: video.ColorSpace, Transfer: video.ColorTransfer, Primaries: video.ColorPrimaries}
 		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate, MaxRate: c.Peak,
-			FrameRate: rate, DropFrames: drop, Profile: c.Profile, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace,
+			FrameRate: rate, DropFrames: drop, Profile: c.Profile, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, ToneMapReason: c.ToneMapReason, Deinterlace: c.Deinterlace,
 			Burn: remux.Burn, BurnFile: remux.BurnFile, Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec),
 			ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double,
 			DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}

@@ -19,6 +19,30 @@ const auth: typeof en = {
     confirmPassword: 'Passwort bestätigen',
     submit: 'Administrator erstellen',
     submitting: 'Wird erstellt…',
+    restoreInstead: 'Stattdessen ein Backup wiederherstellen',
+    createInstead: 'Stattdessen einen Administrator erstellen',
+    restoreTitle: 'Backup wiederherstellen',
+    restoreLede:
+      'Hole dieses Polyfin aus einem Backup seiner Datenbank zurück: seine Administratoren, Benutzer, Einstellungen und den Wiedergabeverlauf.',
+    restoreFile: 'Backup-Datei',
+    restoreFileHelp:
+      'Eine .dump- oder .dump.enc-Datei, die Polyfin erstellt hat, aus seinem Backup-Ordner oder von einem Ziel.',
+    restoreChoose: 'Datei auswählen',
+    restoreSend: 'Senden und prüfen',
+    restoreSending: 'Wird gesendet und geprüft…',
+    restoreUnlockHelp:
+      'Dieses Backup ist verschlüsselt: Gib die Passphrase ein, mit der es erstellt wurde.',
+    restoreReady: (file: string) =>
+      `${file} ist ein Backup der Polyfin-Datenbank, das dieses Polyfin wiederherstellen kann.`,
+    restoreSteps: [
+      'Polyfin hält an, stellt das Backup in einem Zug in seiner Datenbank wieder her und startet dann damit neu. Schlägt etwas fehl, bleibt die Datenbank, wie sie jetzt ist.',
+      'Melde dich danach mit einem Administrator des Backups an.',
+    ],
+    restoreStart: 'Wiederherstellen',
+    restoreRestoring:
+      'Polyfin stellt das Backup wieder her und startet dann neu. Diese Seite zeigt die Anmeldung, sobald es antwortet.',
+    restoreFailed:
+      'Das Backup konnte nicht wiederhergestellt werden: Polyfin ist ohne es neu gestartet. Sein Protokoll nennt den Grund und enthält einen neuen Einrichtungscode.',
   },
   login: {
     title: 'Anmelden',
@@ -40,6 +64,18 @@ const auth: typeof en = {
       'Administratoren müssen auf diesem Server die zweistufige Anmeldung verwenden. Füge dein Konto zu einer Authenticator-App auf deinem Handy hinzu und gib dann den angezeigten Code ein.',
     recoveryTitle: 'Bewahre deine Wiederherstellungscodes auf',
     continue: 'Weiter',
+    providerSignIn: (name: string) => `Mit ${name} anmelden`,
+    providerOutcomes: {
+      provider_refused: 'Die Anmeldung beim Identitätsanbieter wurde abgebrochen.',
+      provider_no_account:
+        'Kein Konto dieses Servers passt zu deinem Konto beim Identitätsanbieter.',
+      account_disabled: 'Dieses Konto ist deaktiviert.',
+      outside_allowed_hours: 'Dieses Konto darf sich zu dieser Zeit nicht anmelden.',
+      outside_local_network: 'Dieses Konto darf sich nur im lokalen Netzwerk anmelden.',
+      too_many_attempts: 'Zu viele Versuche. Versuche es später erneut.',
+      provider_failed:
+        'Die Anmeldung beim Identitätsanbieter ist fehlgeschlagen. Versuche es erneut.',
+    },
   },
   invite: {
     title: (server: string) => `${server} beitreten`,

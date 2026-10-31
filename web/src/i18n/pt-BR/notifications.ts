@@ -111,6 +111,7 @@ const notifications: typeof en = {
       new_device: 'Login em um novo dispositivo',
       share_played: 'Link compartilhado reproduzido',
       programme_reminder: 'Programa começando',
+      title_available: 'Título para assistir disponível',
     },
     eventHelp: {
       new_episode:
@@ -146,6 +147,8 @@ const notifications: typeof en = {
         'Alguém sem conta iniciou um filme ou um episódio por um link de compartilhamento: no máximo uma vez por hora por link, com o título e quem o compartilhou. Os destinos do servidor são avisados sobre todos os links; os demais, sobre os próprios links.',
       programme_reminder:
         'Um programa da TV ao Vivo para o qual você definiu um lembrete no player web começa em breve, com a antecedência definida em Remind me before, com um link para o canal.',
+      title_available:
+        'Foram encontradas versões de um título da sua lista “Para assistir” para o qual as verificações anteriores não tinham encontrado nenhuma: uma vez por título. Uma versão encontrada ainda não foi testada.',
     },
     enabled: 'Enviar mensagens para este destino',
     create: 'Adicionar',

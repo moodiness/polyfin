@@ -107,6 +107,7 @@ const notifications = {
       new_device: 'Sign-in on a new device',
       share_played: 'Shared link played',
       programme_reminder: 'Programme starting',
+      title_available: 'Watchlist title available',
     },
     eventHelp: {
       new_episode:
@@ -139,6 +140,8 @@ const notifications = {
         'Someone without an account started a movie or an episode through a share link: at most once an hour per link, with the title and who shared it. The server’s targets hear of every link, the others of their own.',
       programme_reminder:
         'A Live TV programme you set a reminder for in the web player starts soon, as long before as Remind me before says, with a link to its channel.',
+      title_available:
+        'Versions were found for a title of your Watchlist that the earlier checks found none for: once per title. A version found has not been tried yet.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',

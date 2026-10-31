@@ -243,15 +243,64 @@ const masteringDisplayType = "Mastering display metadata"
 // demuxer still checks that each segment's content matches its name.
 var LiveOptions = []string{"-allowed_extensions", "ALL", "-allowed_segment_extensions", "ALL"}
 
-// ProbeLive analyzes a live stream at url, an HLS playlist or an endless
-// stream, reading about a second of it. It never reconnects: a live
-// stream that ends while it is read is a failure, told at once.
-func (p Prober) ProbeLive(ctx context.Context, url string) (Analysis, error) {
-	data, err := p.run(ctx, url, false, slices.Concat(analysisSections, []string{"-probesize", "1M", "-analyzeduration", "1M"}, LiveOptions)...)
+// ProbeLive analyzes a live stream at url, an HLS playlist, a DASH
+// manifest or an endless stream, reading about a second of it, with
+// options for its demuxer after LiveOptions, such as a DASH stream's keys.
+// It never reconnects: a live stream that ends while it is read is a
+// failure, told at once.
+func (p Prober) ProbeLive(ctx context.Context, url string, options ...string) (Analysis, error) {
+	data, err := p.run(ctx, url, false, slices.Concat(analysisSections, []string{"-probesize", "1M", "-analyzeduration", "1M"}, LiveOptions, options)...)
 	if err != nil {
 		return Analysis{}, err
 	}
 	return Parse(data)
+}
+
+// decodedPackets is how many packets of a track Decodes reads.
+const decodedPackets = 8
+
+// Decodes reports whether the first packets ffprobe reads of the track at
+// index in the source, decodedPackets of them, all decode into frames
+// without an error: an encrypted track does not, read with a wrong key.
+// The garbage a wrong key makes of a picture sometimes decodes, but not
+// of several pictures in a row. The decoder runs on one thread and gives
+// up at the first error, so that the answer is the same however busy the
+// host is.
+func (p Prober) Decodes(ctx context.Context, in Input, index int) (bool, error) {
+	data, err := p.run(ctx, in.Path, false, slices.Concat(in.Args(), []string{"-threads", "1", "-err_detect", "explode",
+		"-select_streams", strconv.Itoa(index), "-show_frames", "-read_intervals", "%+#" + strconv.Itoa(decodedPackets),
+		"-show_entries", "frame=decode_error_flags"})...)
+	if err != nil {
+		return false, err
+	}
+	var frames struct {
+		Frames []struct {
+			Errors int `json:"decode_error_flags"`
+		} `json:"frames"`
+	}
+	if err := json.Unmarshal(data, &frames); err != nil {
+		return false, err
+	}
+	for _, frame := range frames.Frames {
+		if frame.Errors != 0 {
+			return false, nil
+		}
+	}
+	return len(frames.Frames) >= decodedPackets, nil
+}
+
+// DASHKeys reports whether ffprobe's DASH demuxer is there (dash), and
+// takes decryption keys by key ID (keys), as FFmpeg's builds Polyfin
+// ships do: those built without libxml2 have no DASH demuxer.
+func (p Prober) DASHKeys(ctx context.Context) (dash, keys bool) {
+	ctx, cancel := context.WithTimeout(ctx, p.Timeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, p.Path, "-hide_banner", "-h", "demuxer=dash").Output()
+	if err != nil {
+		return false, false
+	}
+	dash = bytes.Contains(out, []byte("Demuxer dash"))
+	return dash, dash && bytes.Contains(out, []byte("cenc_decryption_keys"))
 }
 
 // probe runs ffprobe on url with options, reconnecting when the
@@ -289,12 +338,18 @@ func (p Prober) run(ctx context.Context, url string, reconnect bool, options ...
 			return nil, fmt.Errorf("ffprobe: %w", err)
 		}
 		// ffprobe's message may quote the URL: keep only its last line, and
-		// only once the URL is removed.
+		// only once the URL is removed. It may quote an option's value too,
+		// one it refused: a decryption key's never shows.
 		message := strings.TrimSpace(stderr.String())
 		if i := strings.LastIndexByte(message, '\n'); i >= 0 {
 			message = message[i+1:]
 		}
 		message = strings.ReplaceAll(message, url, "<source>")
+		for i, option := range options[:max(len(options)-1, 0)] {
+			if slices.Contains(secretOptions, option) && options[i+1] != "" {
+				message = strings.ReplaceAll(message, options[i+1], "<keys>")
+			}
+		}
 		if mismatch := segmentMismatch(stderr.String()); mismatch != "" {
 			message += " (" + mismatch + ")"
 		}
@@ -302,6 +357,10 @@ func (p Prober) run(ctx context.Context, url string, reconnect bool, options ...
 	}
 	return stdout.Bytes(), nil
 }
+
+// secretOptions are the demuxer options whose values are secrets: the
+// keys that decrypt a stream.
+var secretOptions = []string{"-cenc_decryption_keys", "-cenc_decryption_key", "-decryption_key", "-decryption_keys"}
 
 // mismatchLine is how FFmpeg's HLS demuxer says it refused a segment
 // whose name is none of those of the format it found in it.

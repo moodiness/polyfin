@@ -45,6 +45,7 @@ const nav = {
     searchShortcut: (keys: string) => `Search (${keys})`,
     webPlayer: 'Web player',
     webPlayerHint: 'Opens the Jellyfin web app of this server in a new tab.',
+    backToWebPlayer: 'Back to the web player',
     accountOf: (name: string) => `Account of ${name}`,
     accountMenu: 'Account',
     administrator: 'Administrator',

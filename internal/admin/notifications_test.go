@@ -40,10 +40,11 @@ func TestNotificationTargetsBelongToTheirOwner(t *testing.T) {
 	if strings.Contains(string(encoded), "a-secret-token") || len(listed["targets"].([]any)) != 1 {
 		t.Errorf("listed: %s", encoded)
 	}
-	// Every event but the sign-ins on new devices and the programme
-	// reminders, which only users' own targets receive.
-	if got := listed["events"].([]any); len(got) != len(notifications.Events)-2 || slices.Contains(got, any("new_device")) ||
-		slices.Contains(got, any("programme_reminder")) {
+	// Every event but the sign-ins on new devices, the programme
+	// reminders and the watchlist titles found available, which only
+	// users' own targets receive.
+	if got := listed["events"].([]any); len(got) != len(notifications.Events)-3 || slices.Contains(got, any("new_device")) ||
+		slices.Contains(got, any("programme_reminder")) || slices.Contains(got, any("title_available")) {
 		t.Errorf("the server's events: %v", got)
 	}
 	if response.Header.Get("Content-Type") != "application/json" {

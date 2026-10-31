@@ -16,6 +16,11 @@ export type Status = {
   webClient?: boolean
   /** Where the server runs, which names its local folders; absent from servers without it. */
   system?: ServerSystem
+  /**
+   * The identity provider the sign-in pages offer: the name its button shows, and the address, at
+   * the server's public address, that starts its sign-in, ?app=admin added. Null without one.
+   */
+  provider?: { name: string; start: string } | null
 }
 
 /** Where the server runs: in a container, as the Docker image does, else on its computer's system. */
@@ -87,6 +92,11 @@ export type User = {
    * (Settings.torrentStreams). Off for every user, administrators included, until given.
    */
   torrentStreams: boolean
+  /**
+   * Whether the user may sign in and use the server from outside the local network, Jellyfin's
+   * EnableRemoteAccess; without it, only from the local network, as Known proxies tells it.
+   */
+  remoteAccess: boolean
   /** Identifies the user's profile picture, served at /UserImage; null without one. */
   imageTag: string | null
   /** The tallest video the user is offered, in lines (480 to 2160); 0 for Original, no limit. */
@@ -105,8 +115,18 @@ export type User = {
   followGroup: boolean
   /** The language the user's titles are described in; '' for the server's. */
   metadataLanguage: string
+  /** The user's web player theme; '' for the server's. */
+  webTheme: UserWebTheme
+  /** Whether the user is kept from changing their web player theme under My account. */
+  webThemeLocked: boolean
+  /** The regional variant of audio the user prefers, one of audioRegions; '' for none. */
+  audioRegion: string
+  /** The regional variants offered, BCP 47 tags such as 'fr-CA'. */
+  audioRegions: string[]
   /** Whether the user signs in with a code from an authenticator app after their password. */
   twoStep: boolean
+  /** Whether the user signs in through the identity provider only, their password refused. */
+  providerOnly: boolean
 }
 
 /** The fields of a user a group holds, in its sections: Access, Playback and access, and the rest. */
@@ -119,6 +139,7 @@ export type GroupLimits = Pick<
   | 'subtitleManagement'
   | 'canShare'
   | 'torrentStreams'
+  | 'remoteAccess'
   | 'maxPlaybacks'
   | 'maxBitrate'
   | 'qualityGroup'
@@ -503,6 +524,8 @@ export type Settings = {
   liveTvRefreshHours: number
   /** Hours after its last scan a local folder is scanned again; 0 for never on a schedule. */
   localScanHours: number
+  /** Hours after its last check a watchlist title is checked again for versions; 0 for never. */
+  watchlistCheckHours: number
   /** Whether the local folders, in the container and network shares, are watched for changes. */
   watchLocalFolders: boolean
   /**
@@ -526,6 +549,8 @@ export type Settings = {
   loginDisclaimer: string
   /** Whether the web player adds the versions that come to a title's page while it is open. */
   addVersionsToOpenPage: boolean
+  /** Whether the web player shows titles' ratings on their posters, as the pointer or focus comes. */
+  posterRatings: boolean
   /** Trakt app users connect through; both its client ID and secret are needed. */
   traktClientId: string
   /** Whether the Trakt client secret is saved. */
@@ -562,6 +587,10 @@ export type Settings = {
   backupFolder: string
   /** Folder backups are written to when backupFolder is empty (read-only). */
   backupFolderDefault: string
+  /** Whether a passphrase encrypts the backups. */
+  backupPassphraseSet: boolean
+  /** Sent only to change the backup passphrase: a new one, or "" to stop encrypting. */
+  backupPassphrase?: string
   /** Hour of the server's time zone every collection of the server's collection libraries is read at each day, 0 to 23; -1 never. */
   collectionReadHour: number
   /** Apps, by the name they sign in with, told an addon's collection library holds collections (boxsets) rather than mixed content; none by default. */
@@ -658,6 +687,26 @@ export type Settings = {
   interfaceRoutes: boolean
   /** Whether Silo's apps may sign in and play through Silo's API under /api/v2. */
   siloApps: boolean
+  /**
+   * The OpenID Connect provider people may sign in with: its issuer, the name its button shows
+   * (empty for the issuer's host), and the server's client at it. The client secret is never sent
+   * back: providerClientSecretSet tells whether one is saved; providerClientSecret, sent only to
+   * replace it, empty to remove it. providerUserClaim names the claim compared with account names,
+   * the verified email after it; providerCreateAccounts creates an account for someone none
+   * matches; providerAdminClaim and providerAdminValue, both set, make administrators.
+   * providerRedirectUri is the address to register at the provider, empty without a public
+   * address (read-only).
+   */
+  providerIssuer: string
+  providerName: string
+  providerClientId: string
+  providerClientSecretSet: boolean
+  providerClientSecret?: string
+  providerUserClaim: string
+  providerCreateAccounts: boolean
+  providerAdminClaim: string
+  providerAdminValue: string
+  providerRedirectUri: string
   /** What each setting accepts, and its default, by its name here (read-only). */
   bounds: Record<string, SettingBounds>
 }
@@ -712,6 +761,34 @@ export type ConversionGPU = {
   toneMapping: boolean
   /** Whether a VAAPI GPU takes a quality factor. */
   qvbr: boolean
+  /** Whether it encodes with the FFmpeg for NVIDIA drivers older than 610. */
+  olderDrivers: boolean
+  /** Where HDR titles are tone mapped and why, null when the card does not tone map. */
+  hdr: HDRPath | null
+}
+
+/**
+ * Where the HDR titles a graphics card tone maps are tone mapped, as the timings at startup
+ * chose it: on the card (`gpu`), up to `height` when it is not 0, or on the processor. The
+ * speeds are in times real time, 0 when not measured: the card's to 1080p, to 720p
+ * (`lowSpeed`, measured when the first is under 1), and the processor's to 1080p.
+ */
+export type HDRPath = {
+  path: 'gpu' | 'processor'
+  height: number
+  reason: 'notTimed' | 'keepsUp' | 'processorFaster' | 'lowerHeight' | 'noneKeepsUp' | 'turnedOff'
+  gpuSpeed: number
+  lowSpeed: number
+  processorSpeed: number
+}
+
+/**
+ * The FFmpeg for NVIDIA drivers older than 610 while NVENC waits for it, or when it could not
+ * download it (`failed`) or NVENC failed with it too (`unusable`), `error` telling why.
+ */
+export type OlderDriverFFmpeg = {
+  state: 'downloading' | 'failed' | 'unusable'
+  error?: string
 }
 
 /** What conversions run on. */
@@ -726,6 +803,8 @@ export type ConversionHardware = {
   toneMappingHeight: number
   /** Whether FFmpeg has the bwdif deinterlacer. */
   bwdif: boolean
+  /** The FFmpeg for older NVIDIA drivers, null when it is used or not needed. */
+  olderDriverFFmpeg: OlderDriverFFmpeg | null
 }
 
 export type NewUser = {
@@ -735,6 +814,8 @@ export type NewUser = {
   isHidden: boolean
   /** The group the account joins and follows; absent or null for none. */
   groupId?: string | null
+  /** Whether the account signs in through the identity provider only; it then needs no password. */
+  providerOnly?: boolean
 }
 
 export type UserPatch = Partial<{
@@ -760,6 +841,7 @@ export type UserPatch = Partial<{
   subtitleManagement: boolean
   canShare: boolean
   torrentStreams: boolean
+  remoteAccess: boolean
   qualityGroup: QualityGroup
   /** YYYY-MM-DD, or null for never. */
   endsOn: string | null
@@ -769,6 +851,14 @@ export type UserPatch = Partial<{
   followGroup: boolean
   /** One of the languages the server's addons were given, or '' for the server's. */
   metadataLanguage: string
+  /** One of the user's audioRegions, or '' for none. */
+  audioRegion: string
+  /** Whether the user signs in through the identity provider only, their password refused. */
+  providerOnly: boolean
+  /** One of the themes offered (see WebThemes), or '' for the server's. */
+  webTheme: UserWebTheme
+  /** True keeps the user from changing their web player theme under My account. */
+  webThemeLocked: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
@@ -1231,8 +1321,8 @@ export type LineupCategory = {
 /** How a stream last answered when its channel was opened. */
 export type StreamHealth = {
   okAt: string | null
-  /** dead (no live stream), refused (not served now), timeout (nothing came), or empty. */
-  failure: '' | 'dead' | 'refused' | 'timeout'
+  /** dead (no live stream), refused (not served now), timeout (nothing came), drm (needs a DRM Polyfin does not support), keys (the list's keys do not decrypt it), or empty. */
+  failure: '' | 'dead' | 'refused' | 'timeout' | 'drm' | 'keys'
   failedAt: string | null
   failures: number
   /** Set while the stream is left out of its channel. */
@@ -1500,18 +1590,34 @@ export type LibraryImageRequest = Pick<Library, 'addonId' | 'catalogType' | 'cat
 
 /** What a rule of a smart list looks at; `group` holds rules of its own. */
 export type SmartField =
-  'group' | 'genre' | 'year' | 'rating' | 'language' | 'type' | 'rank' | 'state'
+  | 'group'
+  | 'genre'
+  | 'year'
+  | 'rating'
+  | 'votes'
+  | 'language'
+  | 'runtime'
+  | 'contentRating'
+  | 'person'
+  | 'studio'
+  | 'released'
+  | 'type'
+  | 'rank'
+  | 'state'
 
 /** What a `state` rule matches, for the user who opens the list. */
 export type SmartState = 'played' | 'unplayed' | 'started' | 'favorite'
 
 /** How a smart list orders its titles. */
-export type SmartSort = 'catalog' | 'premiere' | 'rating' | 'name' | 'random'
+export type SmartSort =
+  'catalog' | 'premiere' | 'latestEpisode' | 'seasonPremiere' | 'rating' | 'name' | 'random'
 
 /**
  * A rule of a smart list, or a group of them. `not` negates it. `value` is a genre, an ISO 639
- * language code, `movie` or `series`, or a SmartState; `min` and `max` bound a year or a rating,
- * and `max` is the place in its catalog. A group matches `all` or `any` of its `rules`.
+ * language code, the highest content rating, a person's or a studio's name, `movie` or `series`,
+ * or a SmartState; `min` and `max` bound a year, a rating, its votes, a runtime in minutes, or a
+ * release in days from today (negative: past), and `max` is the place in its catalog. A group
+ * matches `all` or `any` of its `rules`.
  */
 export type SmartRule = {
   field: SmartField
@@ -1534,6 +1640,8 @@ export type SmartList = {
   shownAs: 'library' | 'collection'
   catalogs: SmartCatalogRef[]
   rules: SmartRule
+  /** The group of rules whose titles it leaves out; one without rules leaves none out. */
+  exclude: SmartRule
   sort: SmartSort
   /** Most titles it lists; null for no maximum. */
   maxItems: number | null
@@ -1558,8 +1666,15 @@ export type SmartCatalogChoice = {
   genres: string[]
 }
 
-/** What a smart list may draw from, and the ISO 639-1 codes of the languages its rules may name. */
-export type SmartChoices = { catalogs: SmartCatalogChoice[]; languages: string[] }
+/**
+ * What a smart list may draw from, the ISO 639-1 codes of the languages its rules may name, and the
+ * content ratings a rule may set as the highest, from the youngest.
+ */
+export type SmartChoices = {
+  catalogs: SmartCatalogChoice[]
+  languages: string[]
+  contentRatings: string[]
+}
 
 /**
  * A title of a smart list's preview. `languages`: those its description gives, by their ISO 639-1
@@ -1833,11 +1948,40 @@ export const fetchOwnMetadataLanguage = (signal?: AbortSignal) =>
 export const saveOwnMetadataLanguage = (language: string) =>
   request<MetadataLanguage>('PUT', '/account/metadata-language', { language })
 
+/** The signed-in user's web player theme ('' for the server's), whether the administrator keeps them from changing it, and the themes they choose among. */
+export type OwnWebTheme = WebThemes & { webTheme: UserWebTheme; locked: boolean }
+
+export const fetchOwnWebTheme = (signal?: AbortSignal) =>
+  request<OwnWebTheme>('GET', '/account/web-theme', undefined, signal)
+
+export const saveOwnWebTheme = (webTheme: UserWebTheme) =>
+  request<OwnWebTheme>('PUT', '/account/web-theme', { webTheme })
+
+/** The signed-in user's preferred audio region ('' for none) and the ones they may choose. */
+export type AudioRegion = { region: string; regions: string[] }
+
+export const fetchOwnAudioRegion = (signal?: AbortSignal) =>
+  request<AudioRegion>('GET', '/account/audio-region', undefined, signal)
+
+export const saveOwnAudioRegion = (region: string) =>
+  request<AudioRegion>('PUT', '/account/audio-region', { region })
+
 /**
- * Puts back the server's defaults for what the signed-in user chose: their metadata language, the
- * home rows they turned off, and the preferences Jellyfin apps saved in their account.
+ * Puts back the server's defaults for what the signed-in user chose: their metadata language, their
+ * audio region, the home rows they turned off, the tracks they chose on titles, the preferences
+ * Jellyfin apps saved in their account, and their web player theme unless the administrator chose
+ * it.
  */
 export const resetOwnPreferences = () => request<void>('POST', '/account/preferences/reset')
+
+/** How many series and movies the signed-in user chose audio or subtitle tracks on. */
+export type TrackChoices = { titles: number }
+
+export const fetchOwnTrackChoices = (signal?: AbortSignal) =>
+  request<TrackChoices>('GET', '/account/track-choices', undefined, signal)
+
+/** Forgets the tracks the signed-in user chose on every series and movie. */
+export const forgetOwnTrackChoices = () => request<void>('DELETE', '/account/track-choices')
 
 export const fetchMyDevices = (signal?: AbortSignal) =>
   request<Device[]>('GET', '/account/devices', undefined, signal)
@@ -1861,7 +2005,7 @@ export type AccountTitle = {
 }
 
 /** What a home row of the web player lists. */
-export type HomeRowKind = 'catalog' | 'collection' | 'because' | 'new'
+export type HomeRowKind = 'catalog' | 'collection' | 'because' | 'new' | 'available' | 'waiting'
 
 /** Where the web player shows a home row: at the top, after Continue Watching, after Next Up, at the bottom. */
 export type HomeRowPlace = 'top' | 'resume' | 'nextup' | 'bottom'
@@ -2166,6 +2310,7 @@ export type NotificationEvent =
   | 'new_device'
   | 'share_played'
   | 'programme_reminder'
+  | 'title_available'
 
 /**
  * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is
@@ -2497,6 +2642,8 @@ export type JellyfinImportEntry = {
   create?: NewUser
   watchData: boolean
   jellyfinPassword?: string
+  /** A Plex Home profile's PIN, for an import the server's owner signed in to Plex for. */
+  plexPin?: string
 }
 
 /**
@@ -2519,8 +2666,12 @@ export type JellyfinUnmatched = {
   series: string | null
   season: number | null
   episode: number | null
-  /** `no_identifier`: no IMDb, TMDB or TVDB identifier; `not_found`: no Polyfin title has it. */
-  reason: 'no_identifier' | 'not_found'
+  /**
+   * `no_identifier`: no IMDb, TMDB or TVDB identifier; `not_found`: no Polyfin title has it;
+   * `not_in_library`: a Plex history names it, but no library section lists it any longer;
+   * `other_episode_order`: Plex numbers the episode in another of TheTVDB's episode orders.
+   */
+  reason: 'no_identifier' | 'not_found' | 'not_in_library' | 'other_episode_order'
 }
 
 /** How the import of one Jellyfin user's watch data goes. */
@@ -2531,17 +2682,51 @@ export type JellyfinUserImport = {
   userName: string
   /** A finished import's `waiting` users were not reached: it stopped or failed first. */
   state: 'waiting' | 'reading' | 'saving' | 'done' | 'failed'
-  /** Items read from Jellyfin so far. */
+  /** Items read from Jellyfin so far, with watch data. */
   read: number
-  /** Titles newly marked played, resume points set, titles newly marked favorite. */
+  /**
+   * What was read of a Plex server: its library sections of movies and shows, the items they list,
+   * and the rows of the account's playback history; null for Jellyfin and Emby.
+   */
+  sections: number | null
+  listed: number | null
+  history: number | null
+  /** Items read that a Polyfin title matched. */
+  matched: number
+  /**
+   * Titles newly marked played, resume points set, titles newly marked favorite, titles rated, and
+   * titles a Plex Watchlist added to the user's.
+   */
   played: number
   resumed: number
   favorites: number
+  ratings: number
+  watchlist: number
+  /** Marks, resume points and favorites Polyfin already had. */
+  upToDate: number
+  /** Resume points without a date, which are not added. */
+  undated: number
   /** Every title not matched; `unmatched` lists the first 500 only. */
   unmatchedCount: number
   unmatched: JellyfinUnmatched[]
   problem: JellyfinImportProblem | null
+  /** Why a user's import that ended without a problem added nothing; null otherwise. */
+  nothingAdded: JellyfinNothingAdded | null
 }
+
+/**
+ * Why a user's import added nothing: everything read was already in Polyfin; Jellyfin or Emby
+ * lists nothing played, in progress or favorite for the user; the Plex server has no movie or show
+ * library; the Plex owner, or the account signed in to Plex, has nothing played, in progress or
+ * rated; Plex lists no play of the account.
+ */
+export type JellyfinNothingAdded =
+  | 'up_to_date'
+  | 'nothing_played'
+  | 'no_sections'
+  | 'plex_owner_nothing_watched'
+  | 'plex_nothing_watched'
+  | 'plex_no_history'
 
 /**
  * The running import, else the last one since Polyfin started: a restart forgets it. `startedBy`
@@ -2585,10 +2770,16 @@ export const connectJellyfin = (
 
 /**
  * Creates the new users (all or none), then starts importing the watch data in the background;
- * `import` is null when no entry asked for watch data.
+ * `import` is null when no entry asked for watch data. `plexOwner` reads each account of a Plex
+ * server with the token Plex gives its owner, whom the administrator signed in to Plex as.
  */
 export const startJellyfinImport = (
-  body: { kind: ServerKind; address: string; users: JellyfinImportEntry[] } & JellyfinCredentials,
+  body: {
+    kind: ServerKind
+    address: string
+    plexOwner?: boolean
+    users: JellyfinImportEntry[]
+  } & JellyfinCredentials,
 ) =>
   request<{ created: User[]; import: JellyfinImportStatus | null }>(
     'POST',
@@ -2624,16 +2815,76 @@ export const fetchOwnImport = (signal?: AbortSignal) =>
   request<OwnImport>('GET', '/account/server-import', undefined, signal)
 
 /**
- * Signs in to a Jellyfin or Emby server as `name`, and imports that user's watch data into the
- * signed-in user's account, in the background. The password is used for this import only.
+ * Imports the signed-in user's own watch data in the background: from a Jellyfin or Emby server,
+ * signing in there as `name`, with a password used for this import only; or from the Plex server
+ * `server` their sign-in to Plex reaches, with its Watchlist unless `watchlist` is false.
  */
-export const startOwnImport = async (body: {
-  kind: Exclude<ServerKind, 'plex'>
-  address: string
-  name: string
-  password: string
-}) =>
+export const startOwnImport = async (
+  body:
+    | { kind: Exclude<ServerKind, 'plex'>; address: string; name: string; password: string }
+    | { kind: 'plex'; server: string; watchlist: boolean },
+) =>
   (await request<{ import: JellyfinImportStatus }>('POST', '/account/server-import', body)).import
+
+/** Where the user signs in to Plex: Plex's own sign-in page, until `expiresAt`. */
+export type PlexSignIn = { link: string; expiresAt: string }
+
+/**
+ * A Plex account signed in: its name, its Plex Home's profiles (empty outside one), the profile
+ * read, and the servers that profile reaches, by machine identifier; `preselected` is the server
+ * administrators import from.
+ */
+export type PlexAccount = {
+  name: string
+  profiles: { id: string; name: string; managed: boolean; protected: boolean }[]
+  profile: string
+  servers: { id: string; name: string; owned: boolean; preselected: boolean }[]
+}
+
+/**
+ * Whose sign-in to Plex: a user's own, under My account, or the server owner's, in the
+ * administrators' import.
+ */
+export type PlexSignInFor = 'own' | 'owner'
+
+const plexBases: Record<PlexSignInFor, string> = {
+  own: '/account/server-import/plex',
+  owner: '/jellyfin-import/plex',
+}
+
+/** Starts the user's sign-in to Plex, dropping the one held before. */
+export const startPlexSignIn = (of: PlexSignInFor) =>
+  request<PlexSignIn>('POST', `${plexBases[of]}/sign-in`)
+
+/** The account once Plex signed the user in, else pending. */
+export const pollPlexSignIn = (of: PlexSignInFor) =>
+  request<PlexAccount | { pending: true }>('POST', `${plexBases[of]}/sign-in/poll`)
+
+/** Reads the profile of the Plex Home chosen, with its PIN when it has one. */
+export const choosePlexProfile = (profile: string, pin: string) =>
+  request<PlexAccount>('POST', `${plexBases.own}/profile`, { profile, pin })
+
+/** Drops the user's sign-in to Plex, signing it out. */
+export const dropPlexSignIn = (of: PlexSignInFor) =>
+  request<void>('DELETE', `${plexBases[of]}/sign-in`)
+
+/**
+ * What an administrator's import reads of a Plex account once the owner signed in to Plex: all its
+ * watch data, all of it once its Plex Home profile's PIN is given, or its plays on the server only.
+ */
+export type PlexAccess = 'all' | 'pin' | 'plays'
+
+/** What the import reads of each account of the Plex server but the owner, by its identifier. */
+export const fetchPlexOwnerAccess = async (
+  body: { kind: 'plex'; address: string } & JellyfinCredentials,
+) =>
+  (
+    await request<{ accounts: Record<string, PlexAccess> }>(
+      'POST',
+      `${plexBases.owner}/owner`,
+      body,
+    )
+  ).accounts
 
 /** Why a movie of a Letterboxd export was not found. */
 export type LetterboxdReason = 'not_found' | 'ambiguous' | 'search_failed'
@@ -3024,6 +3275,11 @@ export const newMetricsToken = () => request<Settings>('POST', '/settings/metric
 /** The web player's looks: the bundled LumaaGlaass, jellyfin-web's own, or the Custom texts. */
 export const webThemes = ['lumaaglaass', 'none', 'custom'] as const
 export type WebTheme = (typeof webThemes)[number]
+/** A user's web player theme: one of the server's themes, or '' for the server's own. */
+export type UserWebTheme = WebTheme | ''
+
+/** The server's theme, which users without their own get, and the themes a user may be given. */
+export type WebThemes = { serverTheme: WebTheme; themes: WebTheme[] }
 
 /** A file of the copy Polyfin keeps of a theme's files. */
 export type ThemeCopyFile = {
@@ -3086,6 +3342,10 @@ export const fetchSettingsApps = async (signal?: AbortSignal) =>
 export const fetchMetadataLanguages = async (signal?: AbortSignal) =>
   (await request<{ languages: string[] }>('GET', '/metadata-languages', undefined, signal))
     .languages
+
+/** The web player themes users choose among: Custom while it has a text. */
+export const fetchWebThemes = (signal?: AbortSignal) =>
+  request<WebThemes>('GET', '/web-themes', undefined, signal)
 
 const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
 
@@ -3538,11 +3798,20 @@ export type Delivery = 'directPlay' | 'remux' | 'conversion' | 'stream'
 
 /**
  * What set the size of converted video: nothing below the source's, the GPU's 4K, the
- * processor's 1080p, HDR converted by the processor, the user's quality group, the settings'
- * maximum quality of converted video, the bitrate limit, or what the app's profile allows.
+ * processor's 1080p, HDR converted by the processor, HDR converted by a GPU that only keeps up
+ * at a lower height, the user's quality group, the settings' maximum quality of converted
+ * video, the bitrate limit, or what the app's profile allows.
  */
 export type SizeLimit =
-  'source' | 'gpu' | 'processor' | 'toneMapping' | 'qualityGroup' | 'serverMax' | 'bitrate' | 'app'
+  | 'source'
+  | 'gpu'
+  | 'processor'
+  | 'toneMapping'
+  | 'gpuToneMapping'
+  | 'qualityGroup'
+  | 'serverMax'
+  | 'bitrate'
+  | 'app'
 
 /** A device playing, as the dashboard shows it. */
 export type LiveSession = {
@@ -3605,6 +3874,8 @@ export type LiveSession = {
     steppedDownFrom: number
   } | null
   audio: { codec: string; channels: number; bitrate: number } | null
+  /** The version the play went on from once its version's source failed; empty when it did not. */
+  switchedVersion: string
 }
 
 export const fetchLiveSessions = (signal?: AbortSignal) =>
@@ -3758,13 +4029,21 @@ export type Health = {
     low: boolean
   }[]
   transcoder: {
-    hardware: { method: string; device: string; encoders: string[]; toneMapping: boolean } | null
+    hardware: {
+      method: string
+      device: string
+      encoders: string[]
+      toneMapping: boolean
+      olderDrivers: boolean
+      hdr: HDRPath | null
+    } | null
     encoders: string[]
     conversions: number
     limit: number
     remuxes: number
     maxHeight: number
     enabled: boolean
+    olderDriverFFmpeg: OlderDriverFFmpeg | null
   } | null
   thumbnails: {
     enabled: boolean
@@ -3820,7 +4099,13 @@ export type Health = {
  * notification target, by its name, of a user or of the server (`user` null).
  */
 export type UnreadableSecret = {
-  setting: ServerSecretName | 'smtpPassword' | 'torrentProxyPassword' | 'torrentWireGuard' | null
+  setting:
+    | ServerSecretName
+    | 'smtpPassword'
+    | 'torrentProxyPassword'
+    | 'torrentWireGuard'
+    | 'backupPassphrase'
+    | null
   service: TrackingServiceName | null
   app: AppKind | null
   target: string | null
@@ -3930,6 +4215,8 @@ export type HealthProblem = {
   | { code: 'metadata_languages'; name: string }
   /** NVENC needs a newer NVIDIA driver than the GPU's: `name` is the version it needs. */
   | { code: 'nvidia_driver'; name: string }
+  /** NVENC cannot use the FFmpeg for older NVIDIA drivers: not downloaded, or failing too. */
+  | { code: 'nvidia_older_ffmpeg'; failure: 'download' | 'encode'; error: string }
   /** The copy kept of the Custom theme's files misses `missing` of its `files`. */
   | { code: 'theme_copy_missing'; missing: number; files: number }
   /**
@@ -4051,8 +4338,17 @@ export const testBackupDestination = (id: string) =>
     `/backup/destinations/${seg(id)}/test`,
   )
 
-/** A backup that can be restored, `madeAt` read from its name; `size` is -1 when its destination does not tell it. */
-export type BackupFile = { name: string; size: number; madeAt: string; beforeRestore: boolean }
+/**
+ * A backup that can be restored, `madeAt` read from its name; `size` is -1 when its destination
+ * does not tell it; `encrypted` tells one encrypted with a passphrase.
+ */
+export type BackupFile = {
+  name: string
+  size: number
+  madeAt: string
+  beforeRestore: boolean
+  encrypted: boolean
+}
 
 /** The backups of the folder and of each destination, newest first. */
 export type BackupFiles = {
@@ -4065,7 +4361,9 @@ export const fetchBackupFiles = (signal?: AbortSignal) =>
 
 /**
  * A backup checked to be restored: `unreadable` counts by kind the stored keys in it that
- * POLYFIN_SECRET_KEY cannot decrypt; `serverName` is what the confirmation asks to type.
+ * POLYFIN_SECRET_KEY cannot decrypt; `serverName` is what the confirmation asks to type. A
+ * `locked` backup is encrypted and waits for its passphrase (see `unlockRestore`): it is checked
+ * once opened, and `unreadable` is empty until then.
  */
 export type RestorePlan = {
   id: string
@@ -4087,6 +4385,8 @@ export type RestorePlan = {
       number
     >
   >
+  encrypted: boolean
+  locked: boolean
   serverName: string
 }
 
@@ -4094,16 +4394,27 @@ export type RestorePlan = {
 export const prepareRestore = (destination: string | null, file: string) =>
   request<RestorePlan>('POST', '/backup/restore/prepare', { destination, file })
 
-/** Sends a backup file and checks it, to restore it. */
-export async function uploadRestore(file: File): Promise<RestorePlan> {
-  const response = await fetch(`${apiBase}/backup/restore/upload?name=${seg(file.name)}`, {
+/** Sends a file as the body of a POST to `path`, and answers the plan the server checked. */
+async function sendBackup(
+  path: string,
+  file: File,
+  headers: Record<string, string> = {},
+): Promise<RestorePlan> {
+  const response = await fetch(`${apiBase}${path}?name=${seg(file.name)}`, {
     method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/octet-stream' },
+    headers: { Accept: 'application/json', 'Content-Type': 'application/octet-stream', ...headers },
     body: file,
   })
   if (!response.ok) throw await apiError(response)
   return (await response.json()) as RestorePlan
 }
+
+/** Sends a backup file and checks it, to restore it. */
+export const uploadRestore = (file: File) => sendBackup('/backup/restore/upload', file)
+
+/** Opens the encrypted backup prepared with its passphrase, then checks it. */
+export const unlockRestore = (id: string, passphrase: string) =>
+  request<RestorePlan>('POST', '/backup/restore/unlock', { id, passphrase })
 
 /** Restores the backup checked: Polyfin stops, restores it, and starts again. */
 export const startRestore = (id: string, serverName: string, anyway: boolean) =>
@@ -4112,6 +4423,40 @@ export const startRestore = (id: string, serverName: string, anyway: boolean) =>
 /** Drops a backup checked and not restored, with the file downloaded or sent for it. */
 export const discardRestore = (id: string) =>
   request<void>('POST', '/backup/restore/discard', { id })
+
+/** The address that downloads a backup of the folder as it is. */
+export const backupDownloadUrl = (name: string) => `${apiBase}/backup/files/${seg(name)}`
+
+/**
+ * The address that downloads the dump an encrypted backup of the folder holds, with the ticket
+ * `checkBackupPassphrase` gave: a plain link, which the browser saves as it comes.
+ */
+export const backupDecryptedUrl = (name: string, ticket: string) =>
+  `${apiBase}/backup/files/${seg(name)}/decrypted?ticket=${seg(ticket)}`
+
+/**
+ * Checks that a passphrase opens an encrypted backup of the folder, and answers the ticket that
+ * downloads it decrypted, once, within a minute.
+ */
+export const checkBackupPassphrase = (name: string, passphrase: string) =>
+  request<{ ticket: string }>('POST', `/backup/files/${seg(name)}/check`, { passphrase })
+
+/**
+ * Sends a backup from the setup page, before any administrator exists, with the setup code; then
+ * `setupRestoreUnlock`, `setupRestoreStart` or `setupRestoreDiscard` with the plan's id.
+ */
+export const setupRestoreUpload = (setupCode: string, file: File) =>
+  sendBackup('/setup/restore/upload', file, { 'X-Polyfin-Setup-Code': setupCode })
+
+export const setupRestoreUnlock = (setupCode: string, id: string, passphrase: string) =>
+  request<RestorePlan>('POST', '/setup/restore/unlock', { setupCode, id, passphrase })
+
+/** Restores the backup sent from the setup page: Polyfin stops, restores it, and starts again. */
+export const setupRestoreStart = (setupCode: string, id: string, anyway: boolean) =>
+  request<{ restoring: boolean }>('POST', '/setup/restore', { setupCode, id, anyway })
+
+export const setupRestoreDiscard = (setupCode: string, id: string) =>
+  request<void>('POST', '/setup/restore/discard', { setupCode, id })
 
 /**
  * A device that asked Polyfin for something over DLNA, known by its address. `userId` is the user
@@ -4406,13 +4751,18 @@ export const queryKeys = {
   ownResume: ['account', 'resume'] as const,
   ownHidden: ['account', 'hidden'] as const,
   ownHomeRows: ['account', 'home-rows'] as const,
+  ownTrackChoices: ['account', 'track-choices'] as const,
   homeRows: ['home-rows'] as const,
   homeRowChoices: ['home-rows', 'choices'] as const,
   ownReminders: ['account', 'reminders'] as const,
   reminderSettings: ['account', 'reminders', 'settings'] as const,
   ownMetadataLanguage: ['account', 'metadata-language'] as const,
+  ownAudioRegion: ['account', 'audio-region'] as const,
   /** The languages the server's addons were given: refreshed with the server's addons. */
   metadataLanguages: ['scopes', 'shared', 'metadata-languages'] as const,
+  ownWebTheme: ['account', 'web-theme'] as const,
+  /** The server's theme and the themes offered: refreshed as the settings are saved. */
+  webThemes: ['web-themes'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   /** Prefix of every group query: invalidating it refreshes the list and each group. */

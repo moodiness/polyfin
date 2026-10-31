@@ -361,6 +361,8 @@ const iptv = {
         dead: 'No live stream',
         refused: 'Refused by the provider',
         timeout: 'Nothing came',
+        drm: 'Needs a DRM Polyfin does not support',
+        keys: 'The list’s keys do not decrypt it',
       },
       leftOutUntil: 'left out until',
       retry: 'Try every stream again',

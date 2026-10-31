@@ -1,7 +1,10 @@
 // Package tools downloads FFmpeg and ffprobe 9.0 into the data folder of
 // Polyfin Desktop at its first start: the builds of the Docker image for
 // Windows and Linux, and a build made for macOS, each archive checked
-// against the checksum pinned here before anything in it is used.
+// against the checksum pinned here before anything in it is used. The
+// server, in Docker as in Polyfin Desktop, downloads the same way the
+// FFmpeg for NVIDIA drivers older than 610 when NVENC needs it (see
+// OlderDriver).
 package tools
 
 import (

@@ -219,6 +219,10 @@ const system: typeof en = {
           `${name} (${path}): o Polyfin não consegue gravar nesta pasta e, enquanto isso, guarda esses arquivos no cache da sua pasta de dados. Torne a pasta gravável ou escolha outra, depois reinicie o Polyfin.`,
         nvidiaDriver: (version: string) =>
           `A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão ${version}, de que o FFmpeg precisa para o NVENC. Atualize o driver para usar a placa.`,
+        nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>
+          failure === 'download'
+            ? `A placa de vídeo NVIDIA não converte vídeo: o driver dela é anterior à versão 610, e não foi possível baixar o FFmpeg para esses drivers: ${error}. O Polyfin tenta de novo na próxima inicialização, ou quando as configurações de conversão são salvas.`
+            : `A placa de vídeo NVIDIA não converte vídeo, nem com o FFmpeg para drivers anteriores à versão 610: ${error}`,
         backupFailed: 'O último backup do banco de dados falhou.',
         backupStale: 'O último backup do banco de dados tem mais de dois dias.',
         backupDestinationFailed: (name: string) =>
@@ -316,6 +320,10 @@ const system: typeof en = {
       noGpu: 'Nenhuma: o vídeo é convertido na CPU',
       toneMapping: 'HDR para SDR na GPU',
       cpuEncoders: 'Codificadores de CPU',
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'O que acompanha o Polyfin',
+      ffmpegOlderDrivers: 'Para drivers NVIDIA anteriores ao 610',
+      ffmpegOlderDownloading: 'Baixando o dos drivers NVIDIA anteriores ao 610',
       conversions: 'Conversões de vídeo',
       noLimit: 'sem limite',
       remuxes: 'Remuxes',
@@ -444,6 +452,7 @@ const system: typeof en = {
         aniListClientSecret: 'Client secret do AniList',
         myAnimeListClientSecret: 'Client secret do MyAnimeList',
         smtpPassword: 'Senha SMTP',
+        backupPassphrase: 'Frase secreta dos backups',
         torrentProxyPassword: 'Senha do proxy SOCKS5 dos torrents',
         torrentWireGuard: 'Configuração do WireGuard dos torrents',
         metricsToken: 'Token de métricas',

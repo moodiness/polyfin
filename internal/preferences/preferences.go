@@ -76,10 +76,14 @@ func (s *Store) PutConfiguration(ctx context.Context, user accounts.ID, value js
 }
 
 // Reset forgets the display preferences and the configuration user saved,
-// from every app: they have a new user's again.
+// from every app, and the tracks they chose on titles: they have a new
+// user's again.
 func (s *Store) Reset(ctx context.Context, user accounts.ID) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "DELETE FROM display_preferences WHERE user_id = $1", user); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, forgetTrackChoices, user); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, "DELETE FROM user_configurations WHERE user_id = $1", user)

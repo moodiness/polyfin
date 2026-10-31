@@ -89,6 +89,7 @@ const common: typeof en = {
     invalid_copy_from: 'Este usuario ya no existe. Elija otro.',
     invalid_server_name: 'El nombre del servidor debe tener entre 1 y 64 caracteres.',
     invalid_language: 'Elija un idioma de la lista.',
+    invalid_audio_region: 'Elija una región de la lista.',
     invalid_catalog_limit:
       'Los títulos leídos por catálogo deben ser un número entero entre 100 y 20.000.',
     invalid_channel_limit:
@@ -225,6 +226,10 @@ const common: typeof en = {
       'Las horas van de 00:00 a 24:00, y cada fin debe ser posterior a su inicio (50 filas como máximo).',
     outside_allowed_hours:
       'Esta cuenta no se puede usar en este momento. Vuelva a intentarlo durante su horario permitido.',
+    outside_local_network:
+      'Esta cuenta solo se puede usar desde la red local. Conéctese desde allí o pregunte a un administrador.',
+    remote_access_self:
+      'Está conectado desde fuera de la red local: desactivar sus propias conexiones desde fuera lo dejaría bloqueado. Hágalo desde la red local.',
     invalid_guide_url:
       'Introduzca una dirección de guía que empiece por https:// o http://, de 4096 caracteres como máximo, o la ruta absoluta de un archivo del servidor.',
     invalid_app:
@@ -245,9 +250,12 @@ const common: typeof en = {
       'El intervalo de actualización debe ser un número entero de horas de 1 a 168.',
     invalid_local_scan_hours:
       'El intervalo de escaneo debe ser un número entero de horas de 0 a 168.',
+    invalid_watchlist_check_hours:
+      'El intervalo de comprobación de los títulos para ver debe ser un número entero de horas de 0 a 168.',
     invalid_custom_css: 'El CSS personalizado no debe superar los 2 MB.',
     invalid_custom_js: 'El JavaScript personalizado no debe superar los 2 MB.',
-    invalid_web_theme: 'Elija LumaaGlaass, Ninguno o Personalizado.',
+    invalid_web_theme: 'Elija un tema de la lista.',
+    web_theme_locked: 'Su administrador eligió el tema de su reproductor web.',
     theme_copy_running:
       'Ya se está haciendo una copia del tema. Vuelva a intentarlo en un momento.',
     theme_copy_nothing: 'Los textos personalizados guardados no cargan nada desde otro sitio.',
@@ -341,6 +349,15 @@ const common: typeof en = {
     too_large: 'El archivo es demasiado grande.',
     destination_failed: 'No se pudo leer el destino.',
     restore_failed: 'No se pudo iniciar la restauración: no se ha cambiado nada.',
+    invalid_backup_passphrase:
+      'La frase de contraseña de las copias de seguridad tiene al menos 12 caracteres, en una línea, y 256 bytes como máximo.',
+    passphrase_required:
+      'Esta copia de seguridad está cifrada: ábrala primero con su frase de contraseña.',
+    wrong_passphrase: 'Esta frase de contraseña no abre la copia de seguridad.',
+    damaged_backup:
+      'Esta copia de seguridad cifrada está dañada: una parte se ha modificado o falta. No se ha restaurado nada.',
+    not_encrypted: 'Esta copia de seguridad no está cifrada.',
+    unlock_failed: 'No se pudo descifrar la copia de seguridad.',
     invalid_collection_read_hour:
       'Elija en la lista la hora a la que se leen las colecciones, o «Nunca».',
     invalid_collection_library_apps:
@@ -351,6 +368,8 @@ const common: typeof en = {
       'La dirección de la herramienta de actualización debe ser una dirección web que empiece por http:// o https://, sin nombre de usuario ni fragmento.',
     invalid_update_tool_token:
       'El token de la herramienta de actualización no lleva espacios y tiene 1024 caracteres como máximo.',
+    invalid_provider:
+      'Revise el proveedor de identidad: su emisor es una dirección web que empieza por http:// o https://, sin consulta ni fragmento; el ID de cliente, el secreto y los claims no llevan espacios; un claim nombra al usuario.',
     restart_unconfirmed: 'Polyfin no sabe si algo lo vuelve a iniciar: confirme antes el aviso.',
     no_update: 'Polyfin Desktop no ofrece esa actualización ahora.',
     not_desktop: 'Polyfin no se ejecuta en Polyfin Desktop.',
@@ -519,6 +538,21 @@ const common: typeof en = {
     app_import_expired:
       'Lo que se leyó de la cuenta ya no se conserva tras unos minutos. Vuelva a iniciar sesión.',
     app_import_running: 'Hay una importación en curso en esta cuenta. Espere a que termine.',
+    plex_sign_in_ended:
+      'El inicio de sesión en Plex ha terminado: caducó, se sustituyó o lo usó una importación. Vuelva a iniciar sesión con Plex.',
+    plex_sign_in_pending:
+      'Plex aún no ha iniciado su sesión. Termine de iniciar sesión en la página de Plex.',
+    plex_unknown_profile: 'Este Plex Home no tiene ese perfil. Vuelva a iniciar sesión con Plex.',
+    plex_profile_pin_refused: 'Plex ha rechazado este PIN. Escriba de nuevo el PIN del perfil.',
+    plex_profile_forbidden: 'Plex no permite a esta cuenta cambiar a este perfil.',
+    plex_unknown_server: 'Su cuenta de Plex no accede a este servidor. Elija otro.',
+    plex_not_owner:
+      'Esta cuenta de Plex no es la propietaria del servidor. Inicie sesión con la cuenta de Plex del propietario.',
+    plex_server_unreachable:
+      'Ninguna de las direcciones que Plex da para este servidor respondió como él. Compruebe que funciona y que Polyfin puede llegar a él.',
+    plex_tv_failed: 'plex.tv no respondió como se esperaba. Inténtelo de nuevo más tarde.',
+    plex_tv_unreachable:
+      'No se pudo contactar con plex.tv. Compruebe la conexión de Polyfin a Internet.',
     app_not_connected: 'Esta aplicación ya no está conectada a la cuenta.',
     app_connection_stopped:
       'La aplicación ha rechazado la sesión que Polyfin conservaba. Vuelva a iniciar sesión con «Mantener la sesión iniciada» marcado.',

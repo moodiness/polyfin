@@ -2,8 +2,11 @@ package iptv
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/moodiness/polyfin/internal/drm"
 )
 
 func parse(t *testing.T, playlist string) ([]Entry, error) {
@@ -158,5 +161,63 @@ func TestHeadingsAreNotChannels(t *testing.T) {
 		if heading(name) {
 			t.Errorf("%q is a heading", name)
 		}
+	}
+}
+
+// #KODIPROP lines say how a stream is encrypted, before the #EXTINF line
+// or after it: the manifest and licence types, ClearKey keys or the
+// licence server that gives them, with its headers, and the headers of
+// the manifest and of the segments, which are the stream's.
+func TestKodiPropertiesAreRead(t *testing.T) {
+	t.Parallel()
+	entries, err := parse(t, "#EXTM3U\n"+
+		"#EXTINF:-1 tvg-id=\"zeb.zz\",Zeb Keys\n"+
+		"#KODIPROP:inputstream=inputstream.adaptive\n"+
+		"#KODIPROP:inputstream.adaptive.manifest_type=mpd\n"+
+		"#KODIPROP:inputstream.adaptive.license_type=org.w3.clearkey\n"+
+		"#KODIPROP:inputstream.adaptive.license_key=0123456789abcdef0123456789abcdef:00112233445566778899aabbccddeeff\n"+
+		"#KODIPROP:inputstream.adaptive.manifest_headers=User-Agent=Player%2F3&Referer=https://portal.example/\n"+
+		"https://live.example/zeb/manifest.mpd\n"+
+		"#KODIPROP:inputstream.adaptive.license_type=clearkey\n"+
+		"#KODIPROP:inputstream.adaptive.license_key=https://licence.example/ck?t=1|X-Token=abc&Origin=https://portal.example|R{SSM}|\n"+
+		"#KODIPROP:inputstream.adaptive.stream_headers=Cookie=k%3Dv\n"+
+		"#EXTINF:-1,Orbe Server\n"+
+		"https://live.example/orbe/manifest.mpd\n"+
+		"#EXTINF:-1,Plume Widevine\n"+
+		"#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha\n"+
+		"#KODIPROP:inputstream.adaptive.license_key=https://licence.example/wv\n"+
+		"https://live.example/plume/manifest.mpd\n"+
+		"#EXTINF:-1,Kite Untyped\n"+
+		"#KODIPROP:inputstream.adaptive.license_key=ASNFZ4mrze8BI0VniavN7w:ABEiM0RVZneImaq7zN3u_w\n"+
+		"https://live.example/kite.mpd\n"+
+		"#EXTINF:-1,Plain\n"+
+		"https://live.example/plain.ts\n")
+	if err != nil || len(entries) != 5 {
+		t.Fatalf("entries: %+v %v", entries, err)
+	}
+	keys := []drm.Key{{ID: "0123456789abcdef0123456789abcdef", Value: "00112233445566778899aabbccddeeff"}}
+	zeb := entries[0]
+	if p := zeb.Protection; p == nil || p.Manifest != "mpd" || p.License != drm.ClearKey || !slices.Equal(p.Keys, keys) || p.LicenseURL != "" {
+		t.Errorf("keys in the list: %+v", p)
+	}
+	if zeb.Headers["User-Agent"] != "Player/3" || zeb.Headers["Referer"] != "https://portal.example/" || len(zeb.Headers) != 2 {
+		t.Errorf("manifest headers: %v", zeb.Headers)
+	}
+	orbe := entries[1]
+	if p := orbe.Protection; p == nil || p.License != drm.ClearKey || p.Keys != nil || p.LicenseURL != "https://licence.example/ck?t=1" ||
+		p.LicenseHeaders["X-Token"] != "abc" || p.LicenseHeaders["Origin"] != "https://portal.example" || len(p.LicenseHeaders) != 2 {
+		t.Errorf("a licence server, before the #EXTINF line: %+v", p)
+	}
+	if orbe.Headers["Cookie"] != "k=v" || len(orbe.Headers) != 1 {
+		t.Errorf("stream headers: %v", orbe.Headers)
+	}
+	if p := entries[2].Protection; p == nil || !p.Unsupported() || p.Name() != "Widevine" {
+		t.Errorf("a Widevine licence: %+v", p)
+	}
+	if p := entries[3].Protection; p == nil || p.License != drm.ClearKey || !slices.Equal(p.Keys, keys) {
+		t.Errorf("keys without a licence type: %+v", p)
+	}
+	if entries[4].Protection != nil {
+		t.Errorf("a stream the list says nothing of: %+v", entries[4].Protection)
 	}
 }

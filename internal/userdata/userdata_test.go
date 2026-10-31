@@ -268,6 +268,20 @@ func TestARemovedResumePointComesBackOnlyNewer(t *testing.T) {
 	}
 }
 
+// A point another service keeps before the resume threshold is dropped,
+// which tells it apart from one Polyfin's newer data keeps out.
+func TestAnImportedResumePointTooEarlyIsDropped(t *testing.T) {
+	at := time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
+	var d Data
+	if outcome := d.ImportResume(ImportedResume{Position: time.Minute, Runtime: 2 * time.Hour, At: at}, jellyfin); outcome != ResumeDropped || d.Position != 0 {
+		t.Errorf("too early: %d, %+v", outcome, d)
+	}
+	d = Data{Position: time.Hour, Runtime: 2 * time.Hour, LastPlayed: new(at.Add(time.Hour))}
+	if outcome := d.ImportResume(ImportedResume{Position: 40 * time.Minute, Runtime: 2 * time.Hour, At: at}, jellyfin); outcome != ResumeKept {
+		t.Errorf("older than Polyfin's: %d, %+v", outcome, d)
+	}
+}
+
 func TestHiddenTitlesArePerUserLatestFirst(t *testing.T) {
 	store, alice, bob := setup(t)
 	first, second := accounts.ID{1}, accounts.ID{2}

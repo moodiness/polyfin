@@ -1,4 +1,5 @@
 import {
+  ArrowLeftIcon,
   ArrowSquareOutIcon,
   GithubLogoIcon,
   ListIcon,
@@ -9,6 +10,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { userImageUrl, type SessionUser } from '@/api'
 import { useI18n } from '@/i18n'
+import { webPlayerLink } from '@/jellyfinApps'
 import { Avatar, cx, IconButton, Modal } from '@/ui'
 import { LanguageSwitch, repositoryUrl } from './Brand'
 import { accountPages, adminSections, isCurrent, memberSections } from './navigation'
@@ -51,10 +53,19 @@ function Item({
 }
 
 /**
- * The phone menu: the menu button of the TopBar and the sheet it opens, holding the sections with
- * their pages, the user's own pages, the web player, the language and signing out.
+ * The phone menu: the menu button of the TopBar and the sheet it opens, holding the web player
+ * first, then the sections with their pages, the user's own pages, the language and signing out.
+ * `inPlace`: the web player opens in place, as the way back to it.
  */
-export function MobileMenu({ user, webClient }: { user: SessionUser; webClient: boolean }) {
+export function MobileMenu({
+  user,
+  webClient,
+  inPlace,
+}: {
+  user: SessionUser
+  webClient: boolean
+  inPlace: boolean
+}) {
   const { t } = useI18n()
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
@@ -84,6 +95,26 @@ export function MobileMenu({ user, webClient }: { user: SessionUser; webClient: 
               </p>
             </div>
           </div>
+          {webClient && (
+            <a {...webPlayerLink(inPlace)} className={cx(itemClass, 'mb-1')}>
+              {inPlace ? (
+                <>
+                  <ArrowLeftIcon size={18} aria-hidden="true" className="shrink-0 text-ink-3" />
+                  {t.nav.backToWebPlayer}
+                </>
+              ) : (
+                <>
+                  <ArrowSquareOutIcon
+                    size={18}
+                    aria-hidden="true"
+                    className="shrink-0 text-ink-3"
+                  />
+                  {t.nav.webPlayer}
+                  <span className="sr-only">{t.nav.webPlayerHint}</span>
+                </>
+              )}
+            </a>
+          )}
           <nav aria-label={t.nav.label} className="flex flex-col gap-0.5">
             {sections.map((section) =>
               section.pages ? (
@@ -131,13 +162,6 @@ export function MobileMenu({ user, webClient }: { user: SessionUser; webClient: 
             </>
           )}
           <hr className="mx-3 my-2 border-line" />
-          {webClient && (
-            <a href="/web/" target="_blank" rel="noopener" className={itemClass}>
-              <ArrowSquareOutIcon size={18} aria-hidden="true" className="shrink-0 text-ink-3" />
-              {t.nav.webPlayer}
-              <span className="sr-only">{t.nav.webPlayerHint}</span>
-            </a>
-          )}
           <div className="flex h-12 items-center justify-between gap-3 px-3 text-[15px] font-medium text-ink-2">
             {t.nav.language}
             <LanguageSwitch />

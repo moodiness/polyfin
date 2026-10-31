@@ -6,6 +6,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/preferences"
 )
 
 // trackPreferences are the settings of a user's configuration that choose
@@ -14,12 +15,25 @@ import (
 // the same language).
 type trackPreferences struct {
 	audioLanguage string
+	// audioRegion is the regional variant of audioLanguage preferred, of
+	// localization.AudioVariants, empty for none (see
+	// accounts.User.AudioRegion).
+	audioRegion string
+	// region is the user's audio region whatever their audio language,
+	// which ranks the tracks in a language they chose on a title (see
+	// rememberedAudio).
+	region string
 	// playDefaultAudio plays the audio track flagged default whatever its
 	// language.
 	playDefaultAudio bool
 	subtitleLanguage string
 	// subtitleMode is one of subtitleModes.
 	subtitleMode string
+	// remembered is what the user chose of the title's tracks, which comes
+	// before their languages, for the kinds of selection their
+	// configuration remembers (see titleTracks).
+	remembered                       preferences.TrackChoice
+	rememberAudio, rememberSubtitles bool
 }
 
 func newTrackPreferences(configuration UserConfiguration) trackPreferences {
@@ -46,6 +60,11 @@ func newTrackPreferences(configuration UserConfiguration) trackPreferences {
 // PlayDefaultAudioTrack, on for every new user, is an app default rather
 // than their choice. A user's own language keeps Jellyfin's rule, the
 // flagged track first while PlayDefaultAudioTrack is on.
+//
+// The user's audio region, a Polyfin setting as Jellyfin's preference has
+// no region, refines the audio language when it is the region's
+// language; for a user who chose no audio language, it names theirs,
+// ranking above the flagged track as the server's does.
 func (h *Handler) trackPreferences(ctx context.Context, user accounts.User) trackPreferences {
 	configuration, err := h.userConfiguration(ctx, user.ID)
 	if err != nil {
@@ -55,6 +74,17 @@ func (h *Handler) trackPreferences(ctx context.Context, user accounts.User) trac
 		configuration = defaultUserConfiguration()
 	}
 	preferences := newTrackPreferences(configuration)
+	preferences.region = user.AudioRegion
+	if user.AudioRegion != "" {
+		language := localization.VariantLanguage(user.AudioRegion)
+		if preferences.audioLanguage == "" {
+			preferences.audioLanguage = language
+			preferences.playDefaultAudio = false
+		}
+		if localization.SameLanguage(preferences.audioLanguage, language) {
+			preferences.audioRegion = user.AudioRegion
+		}
+	}
 	settings := h.Accounts.Settings()
 	if preferences.audioLanguage == "" && settings.DefaultAudioLanguage != "" {
 		preferences.audioLanguage = settings.DefaultAudioLanguage
@@ -75,18 +105,23 @@ func defaultAudio(streams []playback.MediaStream) *int {
 // audio is the audio track played unless the app asks for another, as
 // Jellyfin chooses it: one in the preferred language, then the one flagged
 // default, then the first; a user who plays the default track whatever its
-// language gets the one flagged default first. nil when there is none.
+// language gets the one flagged default first. Among the tracks in the
+// preferred language, those of the preferred region come first, then
+// those of no known region, then those of another. nil when there is
+// none. A language the user chose on the title comes before all of these
+// (see rememberedAudio), as their subtitle choice does in subtitle (see
+// rememberedSubtitle).
 func (t trackPreferences) audio(streams []playback.MediaStream) *int {
+	if remembered := t.rememberedAudio(streams); remembered != nil {
+		return remembered
+	}
 	rank := func(stream playback.MediaStream) int {
-		preferred, flagged := 0, 0
-		if localization.SameLanguage(stream.Language, t.audioLanguage) {
-			preferred = 1
-		}
+		preferred, flagged := t.audioRank(stream), 0
 		if stream.IsDefault {
 			flagged = 1
 		}
 		if t.playDefaultAudio {
-			return flagged<<1 | preferred
+			return flagged<<2 | preferred
 		}
 		return preferred<<1 | flagged
 	}
@@ -103,6 +138,26 @@ func (t trackPreferences) audio(streams []playback.MediaStream) *int {
 		return nil
 	}
 	return new(best)
+}
+
+// audioRank ranks an audio track for the preferred language and region,
+// higher first, in 2 bits: 0 in another language; in the language, 3 in
+// the region or without a region preferred, 2 of no known region (see
+// localization.AudioVariant), 1 of another region.
+func (t trackPreferences) audioRank(stream playback.MediaStream) int {
+	if !localization.SameLanguage(stream.Language, t.audioLanguage) {
+		return 0
+	}
+	if t.audioRegion == "" {
+		return 3
+	}
+	switch localization.AudioVariant(stream.Language, stream.Title) {
+	case t.audioRegion:
+		return 3
+	case "":
+		return 2
+	}
+	return 1
 }
 
 // subtitle is the subtitle shown unless the app asks for another, -1 for
@@ -148,6 +203,9 @@ func (t trackPreferences) subtitle(streams []playback.MediaStream, audio *int) *
 	}
 	if len(subtitles) == 0 {
 		return nil
+	}
+	if remembered := t.rememberedSubtitle(subtitles, audioLanguage); remembered != nil {
+		return remembered
 	}
 	ranked := func(keep func(playback.MediaStream) bool) *playback.MediaStream {
 		return bestSubtitle(subtitles, func(s playback.MediaStream) int {

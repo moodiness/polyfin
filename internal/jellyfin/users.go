@@ -22,7 +22,9 @@ func decode(r *http.Request, into any) error {
 
 // publicUsers lists the users shown on the sign-in screen of Jellyfin apps.
 // Anyone may read it: users' saved configurations are left out, each
-// showing a new user's.
+// showing a new user's. Like Jellyfin's, from outside the local network it
+// leaves out those who may not sign in from there (UserController.cs,
+// lines 626 to 632).
 func (h *Handler) publicUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.Accounts.Users(r.Context())
 	if err != nil {
@@ -31,8 +33,9 @@ func (h *Handler) publicUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	visible := []UserDto{}
 	var libraries []library.ServerLibrary
+	local := forwarded.InLocalNetwork(r)
 	for _, user := range users {
-		if user.IsHidden || user.Refused(h.now()) {
+		if user.IsHidden || user.Refused(h.now()) || !user.AllowedFrom(local) {
 			continue
 		}
 		dto := newUserDto(user, h.ServerID)
@@ -113,6 +116,9 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	attempt.Succeed()
+	if h.signInRefusedRemote(w, r, user) {
+		return
+	}
 	// Like Jellyfin, a user outside their allowed hours, administrators
 	// included, cannot sign in. Quick Connect, which Jellyfin does not check
 	// here, signs them in, and their requests are then refused.
@@ -121,6 +127,22 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.signIn(w, r, user, c)
+}
+
+// signInRefusedRemote refuses user's sign-in from outside the local
+// network, which they may not connect from, with an empty 403, and
+// records it; it reports whether it did. Like Jellyfin, administrators
+// are refused too, once their password is right (UserManager.cs, lines
+// 633 to 641); unlike Jellyfin, which only logs it, the refusal is in the
+// activity log. Polyfin also checks a sign-in through Quick Connect,
+// which Jellyfin lets through to refuse its requests.
+func (h *Handler) signInRefusedRemote(w http.ResponseWriter, r *http.Request, user accounts.User) bool {
+	if !remoteRefused(r, user) {
+		return false
+	}
+	h.Activity.SignInRefusedRemote(r.Context(), user, forwarded.Client(r))
+	processingError(w, http.StatusForbidden)
+	return true
 }
 
 // signIn issues a token for the calling device and answers with Jellyfin's

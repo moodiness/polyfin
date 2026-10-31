@@ -126,6 +126,13 @@ type Remux struct {
 	// refusal. A live run that failed while it was refused failed for that
 	// reason, which is no fault of the encoding.
 	Refused func() error
+	// Channel names the channel a live Input plays, in the log lines of
+	// its encoding. Answered, when set, tells the last file of a live
+	// Input that answered no media since a time, an error or a page, by
+	// its file name; nil for none. A live run that fails or stalls says
+	// what was answered since it last made a segment (see live.start).
+	Channel  string
+	Answered func(since time.Time) error
 	// Lookback is how far before a segment's start FFmpeg starts reading
 	// a searched version from the encoding's first seek on, as an earlier
 	// encoding of the same file learned it (see encoding.lookback); zero
@@ -133,6 +140,20 @@ type Remux struct {
 	// encoding learns, on a goroutine of its own, so as to keep it.
 	Lookback time.Duration
 	Learned  func(time.Duration)
+	// Switch, when set, carries the encoding on from another input once
+	// this one failed for good (see Failed), from segment n, the first a
+	// player still waits for: it returns that input with the same Plan
+	// and Format, and what releases it, within ctx's time. Its segments
+	// follow the plan's times, Shift telling where they are in the input.
+	// An error ends the encoding, as without it.
+	Switch func(ctx context.Context, n int) (Remux, func(), error)
+	// Shift is how far the input's times are past the plan's: zero but for
+	// an input switched to, whose speech comes that much later than the
+	// first one's.
+	Shift time.Duration
+	// AudioRate is the sample rate converted audio is brought to, 0 to
+	// keep the input's: that of the audio the player had before a switch.
+	AudioRate int
 }
 
 // VideoEncoding is what a job converts the video to: 8-bit, progressive,
@@ -161,8 +182,11 @@ type VideoEncoding struct {
 	// progressive.
 	ToneMap, Deinterlace bool
 	// ToneMapOnCPU tone maps HDR on the processor even on a GPU that tone
-	// maps.
-	ToneMapOnCPU bool
+	// maps. ToneMapReason tells why, or why the GPU tone maps below the
+	// height it would convert at: one of the ToneMap reasons, empty when
+	// neither, for the log.
+	ToneMapOnCPU  bool
+	ToneMapReason string
 	// Burn is the FFmpeg index of an image subtitle stream burned into the
 	// video, nil for none; BurnFile, the address of an image subtitle file
 	// burned in instead, a PGS file or a VobSub pair's .idx file, read
@@ -366,10 +390,17 @@ func (v *VideoEncoding) burnGraph(video int, from time.Duration, skip string) st
 
 // args are FFmpeg's encoder options for a job starting at segment n.
 func (v *VideoEncoding) args(plan Plan, n int) []string {
+	return v.shiftedArgs(plan, n, 0)
+}
+
+// shiftedArgs are args for an input whose times are shift past the
+// plan's (see Remux.Shift): its keyframes are asked at the plan's times
+// moved so, which FFmpeg compares with the input's own.
+func (v *VideoEncoding) shiftedArgs(plan Plan, n int, shift time.Duration) []string {
 	lead := v.keyframeLead().Seconds()
 	times := make([]string, 0, plan.Len()-n)
 	for k := n; k < plan.Len(); k++ {
-		times = append(times, strconv.FormatFloat(max(plan.Start(k).Seconds()-lead, 0), 'f', 4, 64))
+		times = append(times, strconv.FormatFloat(max((plan.Start(k)+shift).Seconds()-lead, 0), 'f', 4, 64))
 	}
 	return v.encoderArgs(strings.Join(times, ","), v.skip(plan, n))
 }
@@ -732,6 +763,16 @@ type Manager struct {
 	detected  map[string]*Hardware
 	failed    map[string][]gpuFailure
 	failures  atomic.Pointer[[]gpuFailure]
+	// wanted and wantedDevice are the choice detected last, which the
+	// download of the FFmpeg for older NVIDIA drivers detects again; older
+	// is that FFmpeg, nil for none, and olderMu guards whether it is being
+	// downloaded and why its last download failed (see
+	// fetchOlderDriverFFmpeg).
+	wanted, wantedDevice string
+	older                OlderDriverFFmpeg
+	olderMu              sync.Mutex
+	fetching             bool
+	fetchErr             error
 	// measuring counts the timings under way (see measureLater and
 	// timeToneMappingLater), and timingGPU those of the GPU's chains; run,
 	// when set, runs FFmpeg in their place, for tests.
@@ -740,9 +781,13 @@ type Manager struct {
 	run       func(ctx context.Context, args []string) (time.Duration, error)
 	// toneMappingTimed times HDR tone mapped on the processor once, and
 	// toneMappedHeight keeps the height it chose, 0 until then (see
-	// ToneMappedHeight).
+	// ToneMappedHeight); toneMappingSpeed, the speed it timed, as
+	// math.Float64bits, 0 until then and when it failed; processorTimed
+	// tells that timing ended, or never runs (see logHDRPath).
 	toneMappingTimed sync.Once
 	toneMappedHeight atomic.Int32
+	toneMappingSpeed atomic.Uint64
+	processorTimed   atomic.Bool
 	// vendor, when set, tells the PCI vendor of a render node in place of
 	// Linux, for tests.
 	vendor func(node string) string
@@ -759,8 +804,8 @@ type Manager struct {
 	// FFmpeg makes segments before it waits; nil, or a value not above
 	// zero, keeps defaultAhead.
 	ahead atomic.Pointer[func() time.Duration]
-	// stall is stallTimeout, which tests shorten.
-	stall time.Duration
+	// stall is stallTimeout, and liveStall liveStall, which tests shorten.
+	stall, liveStall time.Duration
 	// grace is recordGrace, which tests lengthen.
 	grace time.Duration
 	// linger is variantLinger, in nanoseconds, which tests change.
@@ -803,7 +848,7 @@ func NewManager(ffmpegPath, dir string, logger *slog.Logger) (*Manager, error) {
 		return nil, err
 	}
 	m := &Manager{ffmpeg: ffmpegPath, dir: dir, logger: logger, done: make(chan struct{}), can: probe(ffmpegPath), system: runtime.GOOS, arch: runtime.GOARCH,
-		stall:    stallTimeout,
+		stall: stallTimeout, liveStall: liveStall,
 		grace:    recordGrace,
 		detected: map[string]*Hardware{}, encodings: map[Key]*encoding{}, lives: map[Key]*live{}, recordings: map[Key]context.CancelFunc{},
 		kept: map[Key]*keeping{}}
@@ -982,7 +1027,10 @@ func (m *Manager) converting(shared *userVersion, leaving *live) int {
 			playbacks[p] = true
 		}
 	}
-	for k := range m.encodings {
+	for k, e := range m.encodings {
+		// An encoding whose input switched to one converting its video
+		// counts as converting (see carryOn).
+		k.Converts = k.Converts || e.converts
 		count(k)
 	}
 	for k, l := range m.lives {
@@ -1183,6 +1231,16 @@ type encoding struct {
 	// searched version: Remux.Lookback until a job landed past its first
 	// segment's start (see Plan.seekTime and searchFurther).
 	lookback time.Duration
+	// input is what the jobs read: remux, until its input failed and
+	// Remux.Switch carried the encoding on from another one (see carryOn);
+	// switching is set while Switch looks for it, and switches counts the
+	// inputs switched to, which tests read. converts marks an encoding
+	// copying its video whose input switched to converts it, under the
+	// manager's lock: it counts toward the conversions at once.
+	input     *Remux
+	switching bool
+	switches  int
+	converts  bool
 }
 
 func (e *encoding) open(ctx context.Context, open Opener) {
@@ -1197,7 +1255,8 @@ func (e *encoding) open(ctx context.Context, open Opener) {
 		e.err = err
 		return
 	}
-	e.remux, e.release, e.lookback = remux, release, remux.Lookback
+	input := remux
+	e.remux, e.release, e.lookback, e.input = remux, release, remux.Lookback, &input
 	e.ready = make([]bool, remux.Plan.Len())
 	if remux.Failed != nil {
 		go e.watchInput()
@@ -1207,36 +1266,124 @@ func (e *encoding) open(ctx context.Context, open Opener) {
 // errInputFailed is the failure of an input that tells none.
 var errInputFailed = errors.New("the input failed")
 
+// switchBudget bounds the search for another input once one failed (see
+// Remux.Switch): a player waits on its buffer meanwhile, and its requests
+// past the stall timeout are answered that the server is busy, which it
+// asks again.
+const switchBudget = 40 * time.Second
+
 // watchInput ends the encoding once its input failed for good: the
 // requests waiting get the failure, and the next one opens the encoding
-// again, through an opener that knows the input failed.
+// again, through an opener that knows the input failed. An input that
+// can be switched for another carries the encoding on instead (see
+// carryOn), and that one is watched in turn.
 func (e *encoding) watchInput() {
-	select {
-	case <-e.remux.Failed:
-	case <-e.quit:
+	for {
+		e.mu.Lock()
+		input := e.input
+		e.mu.Unlock()
+		if input.Failed == nil {
+			return
+		}
+		select {
+		case <-input.Failed:
+		case <-e.quit:
+			return
+		}
+		err := errInputFailed
+		if input.Failure != nil {
+			err = cmp.Or(input.Failure(), errInputFailed)
+		}
+		if input.Switch != nil && e.carryOn(input, err) {
+			continue
+		}
+		e.mu.Lock()
+		e.failure = err
+		e.mu.Unlock()
+		e.m.logger.Info("A remux was stopped: its source failed", "error", err)
+		e.m.mu.Lock()
+		if e.m.encodings[e.key] == e {
+			delete(e.m.encodings, e.key)
+		}
+		e.m.mu.Unlock()
+		e.stop()
+		e.m.sweepKept()
 		return
 	}
-	err := errInputFailed
-	if e.remux.Failure != nil {
-		err = cmp.Or(e.remux.Failure(), errInputFailed)
-	}
-	e.mu.Lock()
-	e.failure = err
-	e.mu.Unlock()
-	e.m.logger.Info("A remux was stopped: its source failed", "error", err)
-	e.m.mu.Lock()
-	if e.m.encodings[e.key] == e {
-		delete(e.m.encodings, e.key)
-	}
-	e.m.mu.Unlock()
-	e.stop()
-	e.m.sweepKept()
 }
 
-// inputFailed reports whether the input failed for good.
-func (e *encoding) inputFailed() bool {
+// carryOn switches the encoding to another input once input failed for
+// good with err, from the first segment the player still waits for, and
+// reports whether it did, or whether the encoding stopped meanwhile. The
+// segments made stay, and so does their numbering: the next ones come
+// from the other input, at the same times, which the player plays on from
+// without a new playlist. Requests wait meanwhile, rather than get the
+// failure. An input converting video where the encoding copied it counts
+// toward the conversions at once: at the limit, there is no switch.
+func (e *encoding) carryOn(input *Remux, err error) bool {
+	e.mu.Lock()
+	if e.stopped {
+		e.mu.Unlock()
+		return true
+	}
+	n := min(e.requested, len(e.ready))
+	for n < len(e.ready) && e.ready[n] {
+		n++
+	}
+	if n >= len(e.ready) {
+		n = len(e.ready) - 1
+	}
+	e.switching = true
+	if e.job != nil {
+		e.job.cancel()
+	}
+	e.signal()
+	e.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), switchBudget)
+	defer cancel()
+	go func() {
+		select {
+		case <-e.quit:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	next, release, switchErr := input.Switch(ctx, n)
+	if switchErr == nil && next.Encode != nil && !e.key.Converts {
+		e.m.mu.Lock()
+		if e.converts = e.converts || e.m.admits(Key{User: e.key.User, Version: e.key.Version, Converts: true}, nil); !e.converts {
+			switchErr = ErrBusy
+		}
+		e.m.mu.Unlock()
+	}
+	e.mu.Lock()
+	e.switching = false
+	if switchErr != nil || e.stopped {
+		stopped := e.stopped
+		e.signal()
+		e.mu.Unlock()
+		if switchErr == nil {
+			release()
+		} else {
+			e.m.logger.Info("A playback could not go on from another version", "failure", err, "error", switchErr)
+		}
+		return stopped
+	}
+	left := e.release
+	e.input, e.release, e.lookback = &next, release, next.Lookback
+	e.switches++
+	e.start(n)
+	e.signal()
+	e.mu.Unlock()
+	left()
+	e.m.logger.Info("A playback went on from another version: its source failed", "segment", n, "error", err)
+	return true
+}
+
+// inputFailed reports whether the input of job j failed for good.
+func (j *job) inputFailed() bool {
 	select {
-	case <-e.remux.Failed:
+	case <-j.input.Failed:
 		return true
 	default:
 		return false
@@ -1371,6 +1518,9 @@ func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 			start = e.requested
 		}
 		switch {
+		case e.switching:
+			// Another input is being found: the job that failed is no
+			// answer, and none starts until it is there.
 		case j != nil && j.done && j.err != nil && !errors.Is(j.err, errStale) && j.start == start:
 			// Reported once: the next request tries again.
 			e.job = nil
@@ -1407,6 +1557,7 @@ func (e *encoding) awaitCovered(ctx context.Context, n int) error {
 		}
 		j := e.job
 		switch {
+		case e.switching:
 		case j != nil && j.done && j.err != nil && !errors.Is(j.err, errStale) && j.start == n:
 			e.job = nil
 			return j.err
@@ -1457,11 +1608,12 @@ func (e *encoding) stop() {
 		e.linger.Stop()
 	}
 	e.signal()
+	release := e.release
 	e.mu.Unlock()
 	if e.err != nil {
 		return
 	}
-	e.release()
+	release()
 	if err := os.RemoveAll(e.dir); err != nil {
 		e.m.logger.Warn("The segments of an encoding could not be removed", "error", err)
 	}
@@ -1485,6 +1637,9 @@ type job struct {
 	// it landed, came (see searchFurther).
 	lookback time.Duration
 	landed   bool
+	// input is what the job reads: the encoding's when it started (see
+	// carryOn).
+	input *Remux
 }
 
 // start replaces the running job with one starting at segment n. The
@@ -1494,7 +1649,7 @@ func (e *encoding) start(n int) {
 		e.job.cancel()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	j := &job{start: n, next: n, cancel: cancel, progressed: time.Now(), lookback: e.lookback}
+	j := &job{start: n, next: n, cancel: cancel, progressed: time.Now(), lookback: e.lookback, input: e.input}
 	e.job = j
 	go e.run(ctx, j)
 }
@@ -1509,7 +1664,7 @@ func (e *encoding) progress(j *job) {
 // run runs FFmpeg for a job and files what it writes into segments, and
 // the cues of the subtitles it extracts.
 func (e *encoding) run(ctx context.Context, j *job) {
-	cmd := exec.CommandContext(ctx, e.m.ffmpeg, e.remux.args(j.start, j.lookback)...)
+	cmd := exec.CommandContext(ctx, e.m.ffmpegPath(), j.input.args(j.start, j.lookback)...)
 	cmd.WaitDelay = 5 * time.Second
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
@@ -1518,7 +1673,7 @@ func (e *encoding) run(ctx context.Context, j *job) {
 	// on, then FFmpeg's progress (see Remux.args).
 	var outputs *process.Outputs
 	if err == nil {
-		outputs, err = process.NewOutputs(cmd, len(e.remux.Subtitles)+1)
+		outputs, err = process.NewOutputs(cmd, len(j.input.Subtitles)+1)
 	}
 	if err == nil {
 		err = cmd.Start()
@@ -1539,10 +1694,10 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		watchProgress(progress, func() { e.progress(j) })
 	})
 	for i, r := range readers[:len(readers)-1] {
-		stream := e.remux.Subtitles[i]
+		stream := j.input.Subtitles[i]
 		extracting.Go(func() {
 			defer r.Close()
-			if err := subtitles.Scan(r, func(cue subtitles.Cue) { e.remux.Extracted.Add(stream, cue) }); err != nil {
+			if err := subtitles.Scan(r, func(cue subtitles.Cue) { j.input.Extracted.Add(stream, cue) }); err != nil {
 				e.m.logger.Warn("A subtitle could not be extracted", "stream", stream, "error", err)
 				// FFmpeg would wait for the pipe to be read.
 				_, _ = io.Copy(io.Discard, r)
@@ -1550,7 +1705,7 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		})
 	}
 	started := time.Now()
-	e.m.logger.Debug("Started a remux", "from", j.start, "variant", e.key.Variant)
+	e.m.logger.Debug("Started a remux", append([]any{"from", j.start, "variant", e.key.Variant, "video", e.remux.loggedVideo(), "audio", e.remux.loggedAudio()}, e.m.toneMapAttrs(e.remux.Encode)...)...)
 	take := func(p piece) error { return e.take(ctx, j, p) }
 	if e.remux.Format == TS {
 		err = splitTS(output, take)
@@ -1574,7 +1729,7 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		err = errStale
 	case err == nil && waitErr != nil:
 		err = fmt.Errorf("FFmpeg failed: %w: %s", waitErr, bytes.TrimSpace(stderr.bytes()))
-	case err == nil && e.inputFailed():
+	case err == nil && j.inputFailed():
 		// FFmpeg takes an input cut short for its end: what it wrote last
 		// is not the version's.
 		err = errInputFailed
@@ -1584,7 +1739,7 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		e.m.logger.Debug("A remux was stopped", "from", j.start, "duration", time.Since(started))
 	case err != nil:
 		e.m.logger.Warn("A remux failed", "from", j.start, "error", err)
-		metrics.EncodingFailed(e.remux.Encode.method())
+		metrics.EncodingFailed(j.input.Encode.method())
 	default:
 		e.m.logger.Debug("A remux reached the end", "from", j.start, "duration", time.Since(started))
 	}
@@ -1620,12 +1775,12 @@ func (e *encoding) take(ctx context.Context, j *job, p piece) error {
 	if j.file == nil {
 		// FFmpeg may start on a keyframe before the segment: what comes
 		// before it is not part of the job.
-		if !p.keyframe || p.at < plan.Start(j.next)-e.remux.cutTolerance() {
+		if !p.keyframe || p.at < plan.Start(j.next)-j.input.cutTolerance() {
 			return nil
 		}
 		return e.begin(j, p.data)
 	}
-	if p.keyframe && j.next+1 < plan.Len() && p.at >= plan.Start(j.next+1)-e.remux.cutTolerance() {
+	if p.keyframe && j.next+1 < plan.Len() && p.at >= plan.Start(j.next+1)-j.input.cutTolerance() {
 		if err := e.close(j); err != nil {
 			return err
 		}
@@ -1673,7 +1828,7 @@ func (e *encoding) close(j *job) error {
 		return err
 	}
 	e.ready[j.next] = true
-	metrics.SegmentMade(e.remux.Encode.method())
+	metrics.SegmentMade(j.input.Encode.method())
 	// The cues starting before the segment just made are counted as
 	// extracted once they had time to come, leaving that segment's length
 	// as a margin too.
@@ -1733,7 +1888,7 @@ func (e *encoding) searchFurther(j *job, at time.Duration) bool {
 func (e *encoding) finish(j *job, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if err == nil && e.job == j && !e.stopped && !e.inputFailed() {
+	if err == nil && e.job == j && !e.stopped && !j.inputFailed() {
 		plan := e.remux.Plan
 		if j.next == j.start && j.file == nil && e.searchFurther(j, plan.End(plan.Len()-1)) {
 			err = errStale
@@ -1763,10 +1918,11 @@ func writeFile(path string, data []byte) error {
 // args is FFmpeg's command line for a job starting at segment n, lookback
 // before it in a searched version (see Plan.seekTime). Segments keep the
 // source's timestamps, shifted by timestampOffset, so that those of
-// different jobs follow each other. Extracted subtitles keep the source's
-// own. FFmpeg reports its progress on the pipe after the subtitles'. A
-// subtitle file burned in is the second input, read whole (see
-// burnGraph).
+// different jobs follow each other; an input switched to has its own moved
+// back by its Shift, so that they follow those of the input before it.
+// Extracted subtitles keep the source's own. FFmpeg reports its progress
+// on the pipe after the subtitles'. A subtitle file burned in is the
+// second input, read whole (see burnGraph).
 func (r Remux) args(n int, lookback time.Duration) []string {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:" + strconv.Itoa(3+len(r.Subtitles))}
 	seek, from := r.seekArgs(n, lookback)
@@ -1790,7 +1946,7 @@ func (r Remux) args(n int, lookback time.Duration) []string {
 	}
 	args = append(args, "-map_metadata", "-1", "-map_chapters", "-1", "-c", "copy")
 	if r.Encode != nil {
-		args = append(args, r.Encode.args(r.Plan, n)...)
+		args = append(args, r.Encode.shiftedArgs(r.Plan, n, r.Shift)...)
 	}
 	if r.VideoTag != "" {
 		args = append(args, "-tag:v", r.VideoTag)
@@ -1800,7 +1956,7 @@ func (r Remux) args(n int, lookback time.Duration) []string {
 		args = append(args, "-bsf:a", r.audioFilters())
 	}
 	args = append(args, r.threadArgs()...)
-	args = append(args, "-avoid_negative_ts", "disabled", "-output_ts_offset", strconv.FormatFloat(timestampOffset.Seconds(), 'f', -1, 64))
+	args = append(args, "-avoid_negative_ts", "disabled", "-output_ts_offset", strconv.FormatFloat((timestampOffset-r.Shift).Seconds(), 'f', -1, 64))
 	if r.Format == TS {
 		args = append(args, "-muxdelay", "0", "-muxpreload", "0", "-f", "mpegts", "pipe:1")
 	} else {
@@ -1820,12 +1976,13 @@ func (r Remux) args(n int, lookback time.Duration) []string {
 
 // seekArgs are FFmpeg's options reading the input from segment n, lookback
 // before it in a searched version, and the time it reads from, zero for
-// the start.
+// the start: in the input's times, the plan's moved by Shift.
 func (r Remux) seekArgs(n int, lookback time.Duration) ([]string, time.Duration) {
 	var from time.Duration
 	if n > 0 {
 		from = r.Plan.seekTime(n, lookback)
 	}
+	from += r.Shift
 	if from <= 0 {
 		return nil, 0
 	}

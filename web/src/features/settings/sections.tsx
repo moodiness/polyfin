@@ -21,6 +21,7 @@ import {
 import type { SettingsSectionId } from '@/app/navigation'
 import { formatHour } from '@/format'
 import { languages, useI18n, type Language } from '@/i18n'
+import { jellyfinApp, webPlayerLink } from '@/jellyfinApps'
 import {
   Button,
   Checkbox,
@@ -92,6 +93,7 @@ export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => R
   security: (api) => (
     <>
       <Security {...api} />
+      <IdentityProvider {...api} />
       <Https {...api} />
     </>
   ),
@@ -905,6 +907,20 @@ function Catalogs({ form, update, error, number, range, limits }: SectionFormApi
         error={error('collection-library-apps')}
       />
       <FieldRow
+        anchor="watchlist-check-hours"
+        label={s.watchlistCheckHours}
+        help={s.watchlistCheckHoursHelp(range('watchlistCheckHours'))}
+        error={error('watchlist-check-hours')}
+      >
+        <NumberInput
+          {...limits('watchlistCheckHours')}
+          step={1}
+          {...number('watchlist-check-hours', form.watchlistCheckHours, (value) =>
+            update({ watchlistCheckHours: Math.trunc(value) }),
+          )}
+        />
+      </FieldRow>
+      <FieldRow
         anchor="local-scan-hours"
         label={s.localScanHours}
         help={s.localScanHoursHelp(range('localScanHours'))}
@@ -1080,6 +1096,123 @@ function Security({ form, update, error, number, range, limits }: SectionFormApi
         error={error('known-proxies')}
       >
         <ProxyList value={form.knownProxies} onValue={(knownProxies) => update({ knownProxies })} />
+      </FieldRow>
+    </SettingsGroup>
+  )
+}
+
+/**
+ * Settings › Security › Identity provider: an OpenID Connect provider people sign in with, in this
+ * app and in the web player, and the redirect URI to register at it, built from the public address.
+ */
+function IdentityProvider({ form, update, error, limits }: SectionFormApi) {
+  const { t } = useI18n()
+  const s = t.settings.provider
+  return (
+    <SettingsGroup title={s.title}>
+      <TextRow anchor="provider-setup">
+        <p className="max-w-[60ch]">{s.intro}</p>
+        {form.providerRedirectUri === '' ? (
+          <div className="mt-3 max-w-[60ch]">
+            <Notice tone="warn">{s.noPublicAddress}</Notice>
+          </div>
+        ) : (
+          <>
+            <Address label={s.redirectUri} value={form.providerRedirectUri} />
+            <p className="mt-1 text-small text-ink-3">{s.redirectUriHelp}</p>
+          </>
+        )}
+      </TextRow>
+      <FieldRow
+        anchor="provider-issuer"
+        label={s.issuer}
+        help={s.issuerHelp}
+        error={error('provider-issuer')}
+      >
+        <TextInput
+          type="url"
+          value={form.providerIssuer}
+          onValue={(providerIssuer) => update({ providerIssuer })}
+          placeholder="https://id.example.org"
+          maxLength={limits('providerIssuer').max}
+          autoComplete="off"
+          spellCheck={false}
+          mono
+          className="max-w-md"
+        />
+      </FieldRow>
+      <FieldRow anchor="provider-name" label={s.name} help={s.nameHelp}>
+        <TextInput
+          value={form.providerName}
+          onValue={(providerName) => update({ providerName })}
+          maxLength={limits('providerName').max}
+          autoComplete="off"
+          className="max-w-sm"
+        />
+      </FieldRow>
+      <FieldRow anchor="provider-client-id" label={s.clientId} help={s.clientIdHelp}>
+        <TextInput
+          value={form.providerClientId}
+          onValue={(providerClientId) => update({ providerClientId })}
+          maxLength={limits('providerClientId').max}
+          autoComplete="off"
+          spellCheck={false}
+          mono
+          className="max-w-md"
+        />
+      </FieldRow>
+      <SettingRow
+        anchor="provider-client-secret"
+        className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+      >
+        <SecretField
+          label={s.clientSecret}
+          help={s.clientSecretHelp}
+          saved={form.providerClientSecretSet}
+          value={form.providerClientSecret}
+          onValue={(providerClientSecret) => update({ providerClientSecret })}
+        />
+      </SettingRow>
+      <FieldRow anchor="provider-user-claim" label={s.userClaim} help={s.userClaimHelp}>
+        <TextInput
+          value={form.providerUserClaim}
+          onValue={(providerUserClaim) => update({ providerUserClaim })}
+          maxLength={limits('providerUserClaim').max}
+          autoComplete="off"
+          spellCheck={false}
+          mono
+          required
+          className="max-w-xs"
+        />
+      </FieldRow>
+      <SwitchRow
+        anchor="provider-create-accounts"
+        label={s.createAccounts}
+        help={s.createAccountsHelp}
+        checked={form.providerCreateAccounts}
+        onChange={(providerCreateAccounts) => update({ providerCreateAccounts })}
+      />
+      <FieldRow anchor="provider-admin-claim" label={s.adminClaim} help={s.adminClaimHelp}>
+        <TextInput
+          value={form.providerAdminClaim}
+          onValue={(providerAdminClaim) => update({ providerAdminClaim })}
+          placeholder="groups"
+          maxLength={limits('providerAdminClaim').max}
+          autoComplete="off"
+          spellCheck={false}
+          mono
+          className="max-w-xs"
+        />
+      </FieldRow>
+      <FieldRow anchor="provider-admin-value" label={s.adminValue} help={s.adminValueHelp}>
+        <TextInput
+          value={form.providerAdminValue}
+          onValue={(providerAdminValue) => update({ providerAdminValue })}
+          maxLength={limits('providerAdminValue').max}
+          autoComplete="off"
+          spellCheck={false}
+          className="max-w-xs"
+        />
       </FieldRow>
     </SettingsGroup>
   )
@@ -1672,6 +1805,27 @@ function Backups({ form, update, error, number, range, limits }: SectionFormApi)
             )}
           />
         </FieldRow>
+        <SettingRow
+          anchor="backup-passphrase"
+          className="[&_label]:text-[15px] [&_label]:tracking-[-0.01em]"
+        >
+          <SecretField
+            label={s.backupPassphrase}
+            help={s.backupPassphraseHelp(form.bounds.backupPassphrase?.min ?? 12)}
+            saved={form.backupPassphraseSet}
+            value={form.backupPassphrase}
+            onValue={(backupPassphrase) => update({ backupPassphrase })}
+            error={error('backup-passphrase')}
+          />
+          {form.backupPassphrase !== undefined && form.backupPassphrase !== '' && (
+            <Notice tone="warn" className="mt-3 max-w-[60ch]">
+              {s.backupPassphraseNew}
+            </Notice>
+          )}
+          {form.backupPassphraseSet && form.backupPassphrase === '' && (
+            <Notice className="mt-3 max-w-[60ch]">{s.backupPassphraseRemoved}</Notice>
+          )}
+        </SettingRow>
         {form.backups && <LastBackup />}
       </SettingsGroup>
       <SettingsGroup title={s.backupDestinations}>
@@ -1693,17 +1847,18 @@ function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi
   })
   const custom = form.webTheme === 'custom'
   const shown = shownTexts(form)
+  const inApp = jellyfinApp() !== null
   return (
     <>
       <SettingsGroup>
         {status.data?.webClient === true && (
           <SettingRow anchor="open-web-player">
+            {/* A preview in a new tab, which keeps this page, but in place in a Jellyfin app: Android
+                hands a new tab to the system browser. */}
             <ExternalButtonLink
-              href="/web/"
-              target="_blank"
-              rel="noopener"
+              {...webPlayerLink(inApp)}
               icon={PlayIcon}
-              iconEnd={ArrowSquareOutIcon}
+              iconEnd={inApp ? undefined : ArrowSquareOutIcon}
             >
               {s.openWebPlayer}
             </ExternalButtonLink>
@@ -1775,6 +1930,13 @@ function WebPlayer({ form, update, error, limits, dirty, adopt }: SectionFormApi
           help={s.addVersionsToOpenPageHelp}
           checked={form.addVersionsToOpenPage}
           onChange={(addVersionsToOpenPage) => update({ addVersionsToOpenPage })}
+        />
+        <SwitchRow
+          anchor="poster-ratings"
+          label={s.posterRatings}
+          help={s.posterRatingsHelp}
+          checked={form.posterRatings}
+          onChange={(posterRatings) => update({ posterRatings })}
         />
       </SettingsGroup>
       <SettingsGroup title={s.homeRows}>

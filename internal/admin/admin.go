@@ -32,6 +32,7 @@ import (
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/netproxy"
 	"github.com/moodiness/polyfin/internal/notifications"
+	"github.com/moodiness/polyfin/internal/oidc"
 	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
@@ -195,6 +196,9 @@ type Options struct {
 	// Jellyfin apps saved for a user, for Reset my preferences; nil keeps
 	// none.
 	Preferences PreferencesReset
+	// TrackChoices counts and forgets the tracks a user chose on titles,
+	// for My account; nil has none.
+	TrackChoices TrackChoices
 	// LibraryOrders counts and clears the orders of libraries users saved
 	// from Jellyfin apps, for Apply this order to every user under Content
 	// › Libraries; nil has none.
@@ -210,6 +214,15 @@ type handler struct {
 	actions spacing
 	// steps are the sign-ins waiting for their second step.
 	steps pendingSteps
+	// provider reaches the identity provider; providerFlows are the
+	// sign-ins under way there, by their state, and providerTickets the
+	// web client's sign-ins waiting to be traded (see providerStart).
+	provider        *oidc.Client
+	providerFlows   once[providerFlow]
+	providerTickets once[accounts.ID]
+	// decryptedDownloads are the downloads of backups decrypted that a
+	// passphrase checked allows (see checkBackupPassphrase).
+	decryptedDownloads once[decryptedDownload]
 }
 
 // New returns the handler of every /admin/api/ route.
@@ -228,6 +241,7 @@ func New(options Options) http.Handler {
 	// of start-up as within a minute of the last one, which the process
 	// that restarted could not tell the new one.
 	h.actions.last = map[string]time.Time{"restart": h.Health.Started}
+	h.provider = oidc.New(&http.Client{Timeout: providerTimeout}, h.now)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/api/status", h.status)
 	mux.HandleFunc("POST /admin/api/setup", h.setup)
@@ -236,6 +250,9 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("POST /admin/api/session/two-step", h.signInSecondStep)
 	mux.HandleFunc("GET /admin/api/invite/{token}", h.publicInvite)
 	mux.HandleFunc("POST /admin/api/invite/{token}", h.acceptInvite)
+	mux.HandleFunc("GET "+providerPath+"start", h.providerStart)
+	mux.HandleFunc("GET "+providerCallbackPath, h.providerCallback)
+	mux.HandleFunc("POST "+providerWebPath, h.providerWebSignIn)
 
 	mux.Handle("GET /admin/api/session", h.signedInAnyHour(h.session))
 	mux.Handle("DELETE /admin/api/session", h.signedInAnyHour(h.signOut))
@@ -256,6 +273,10 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/account/tracking/{service}/key/reveal", h.signedIn(h.revealTrackingKey))
 	mux.Handle("GET /admin/api/account/server-import", h.signedIn(h.ownImport))
 	mux.Handle("POST /admin/api/account/server-import", h.signedIn(h.startOwnImport))
+	mux.Handle("POST /admin/api/account/server-import/plex/sign-in", h.signedIn(h.plexSignIn(true, h.startPlexSignIn)))
+	mux.Handle("POST /admin/api/account/server-import/plex/sign-in/poll", h.signedIn(h.plexSignIn(true, h.pollPlexSignIn)))
+	mux.Handle("POST /admin/api/account/server-import/plex/profile", h.signedIn(h.plexSignIn(true, h.choosePlexProfile)))
+	mux.Handle("DELETE /admin/api/account/server-import/plex/sign-in", h.signedIn(h.plexSignIn(true, h.dropPlexSignIn)))
 	mux.Handle("GET /admin/api/account/app-import", h.signedIn(h.ownAppImport))
 	mux.Handle("POST /admin/api/account/app-import", h.signedIn(h.startAppImport(h.ownAppImportTarget)))
 	mux.Handle("POST /admin/api/account/app-import/nuvio", h.signedIn(h.readNuvio(h.ownAppImportTarget)))
@@ -279,6 +300,11 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/metadata-language", h.signedIn(h.ownMetadataLanguage))
 	mux.Handle("PUT /admin/api/account/metadata-language", h.signedIn(h.setOwnMetadataLanguage))
 	mux.Handle("GET /admin/api/metadata-languages", h.signedIn(h.metadataLanguages))
+	mux.Handle("GET /admin/api/account/web-theme", h.signedIn(h.ownWebTheme))
+	mux.Handle("PUT /admin/api/account/web-theme", h.signedIn(h.setOwnWebTheme))
+	mux.Handle("GET /admin/api/web-themes", h.signedIn(h.webThemes))
+	mux.Handle("GET /admin/api/account/audio-region", h.signedIn(h.ownAudioRegion))
+	mux.Handle("PUT /admin/api/account/audio-region", h.signedIn(h.setOwnAudioRegion))
 	ownPlays := statisticsRoutes{h: h, scope: ownPlaybacks}
 	mux.Handle("GET /admin/api/account/statistics", h.signedIn(ownPlays.statistics))
 	mux.Handle("GET /admin/api/account/history", h.signedIn(ownPlays.history))
@@ -290,6 +316,8 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/account/home-rows/{id}", h.signedIn(h.setOwnHomeRow))
 	mux.Handle("DELETE /admin/api/account/hidden/{id}", h.signedIn(h.showOwnHidden))
 	mux.Handle("POST /admin/api/account/preferences/reset", h.signedIn(h.resetOwnPreferences))
+	mux.Handle("GET /admin/api/account/track-choices", h.signedIn(h.ownTrackChoices))
+	mux.Handle("DELETE /admin/api/account/track-choices", h.signedIn(h.forgetOwnTrackChoices))
 	mux.Handle("GET /admin/api/account/share-links", h.signedIn(h.ownShareLinks))
 	mux.Handle("POST /admin/api/account/share-links", h.signedIn(h.createShareLink))
 	mux.Handle("POST /admin/api/account/share-links/{id}/revoke", h.signedIn(h.revokeOwnShareLink))
@@ -351,6 +379,10 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/jellyfin-import", h.administrator(h.startJellyfinImport))
 	mux.Handle("POST /admin/api/jellyfin-import/users", h.administrator(h.jellyfinImportUsers))
 	mux.Handle("POST /admin/api/jellyfin-import/stop", h.administrator(h.stopJellyfinImport))
+	mux.Handle("POST /admin/api/jellyfin-import/plex/sign-in", h.administrator(h.plexSignIn(false, h.startPlexSignIn)))
+	mux.Handle("POST /admin/api/jellyfin-import/plex/sign-in/poll", h.administrator(h.plexSignIn(false, h.pollPlexSignIn)))
+	mux.Handle("DELETE /admin/api/jellyfin-import/plex/sign-in", h.administrator(h.plexSignIn(false, h.dropPlexSignIn)))
+	mux.Handle("POST /admin/api/jellyfin-import/plex/owner", h.administrator(h.plexSignIn(false, h.plexOwnerAccess)))
 	mux.Handle("GET /admin/api/user-content-choices", h.administrator(h.userContentChoices))
 	mux.Handle("GET /admin/api/api-keys", h.administrator(h.apiKeys))
 	mux.Handle("POST /admin/api/api-keys", h.administrator(h.createAPIKey))
@@ -392,10 +424,20 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/backup/destinations/{id}", backups(h.deleteBackupDestination))
 	mux.Handle("POST /admin/api/backup/destinations/{id}/test", backups(h.testBackupDestination))
 	mux.Handle("GET /admin/api/backup/files", backups(h.backupFiles))
+	mux.Handle("GET /admin/api/backup/files/{name}", backups(h.downloadBackup))
+	mux.Handle("POST /admin/api/backup/files/{name}/check", backups(h.checkBackupPassphrase))
+	mux.Handle("GET /admin/api/backup/files/{name}/decrypted", backups(h.downloadDecryptedBackup))
 	mux.Handle("POST /admin/api/backup/restore/prepare", backups(h.prepareRestore))
 	mux.Handle("POST /admin/api/backup/restore/upload", backups(h.uploadRestore))
+	mux.Handle("POST /admin/api/backup/restore/unlock", backups(h.unlockRestore))
 	mux.Handle("POST /admin/api/backup/restore/discard", backups(h.discardRestore))
 	mux.Handle("POST /admin/api/backup/restore", backups(h.startRestore))
+	// The setup page restores a backup instead of creating the first
+	// administrator: gated by the setup code, until one exists.
+	mux.HandleFunc("POST /admin/api/setup/restore/upload", h.setupRestoreUpload)
+	mux.HandleFunc("POST /admin/api/setup/restore/unlock", h.setupRestoreUnlock)
+	mux.HandleFunc("POST /admin/api/setup/restore/discard", h.setupRestoreDiscard)
+	mux.HandleFunc("POST /admin/api/setup/restore", h.setupRestoreStart)
 	mux.Handle("GET /admin/api/variables", h.administrator(h.variables))
 	// Without a store, as in tests that leave it out, there are no rows.
 	homeRows := func(next http.HandlerFunc) http.Handler {
@@ -652,7 +694,9 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidPlaybackHistoryDays, http.StatusBadRequest, "invalid_playback_history_days"},
 		{accounts.ErrInvalidLiveTvRefreshHours, http.StatusBadRequest, "invalid_live_tv_refresh_hours"},
 		{accounts.ErrInvalidLocalScanHours, http.StatusBadRequest, "invalid_local_scan_hours"},
+		{accounts.ErrInvalidWatchlistCheckHours, http.StatusBadRequest, "invalid_watchlist_check_hours"},
 		{accounts.ErrInvalidWebTheme, http.StatusBadRequest, "invalid_web_theme"},
+		{accounts.ErrWebThemeLocked, http.StatusForbidden, "web_theme_locked"},
 		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},
 		{accounts.ErrInvalidCustomJs, http.StatusBadRequest, "invalid_custom_js"},
 		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},
@@ -679,6 +723,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidRemuxDBURL, http.StatusBadRequest, "invalid_remuxdb_url"},
 		{accounts.ErrInvalidUpdateToolURL, http.StatusBadRequest, "invalid_update_tool_url"},
 		{accounts.ErrInvalidUpdateToolToken, http.StatusBadRequest, "invalid_update_tool_token"},
+		{accounts.ErrInvalidProvider, http.StatusBadRequest, "invalid_provider"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
 		{accounts.ErrInvalidTorrentRoute, http.StatusBadRequest, "invalid_torrent_route"},
 		{accounts.ErrInvalidTorrentLimit, http.StatusBadRequest, "invalid_torrent_limit"},
@@ -686,6 +731,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidVAAPIDevice, http.StatusBadRequest, "invalid_vaapi_device"},
 		{accounts.ErrInvalidRecordingsFolder, http.StatusBadRequest, "invalid_recordings_folder"},
 		{accounts.ErrInvalidBackupFolder, http.StatusBadRequest, "invalid_backup_folder"},
+		{accounts.ErrInvalidBackupPassphrase, http.StatusBadRequest, "invalid_backup_passphrase"},
 		{accounts.ErrInvalidConversionFolder, http.StatusBadRequest, "invalid_conversion_folder"},
 		{accounts.ErrInvalidReadingFolder, http.StatusBadRequest, "invalid_reading_folder"},
 		{accounts.ErrInvalidCacheFolder, http.StatusBadRequest, "invalid_cache_folder"},
@@ -696,6 +742,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidQualityGroup, http.StatusBadRequest, "invalid_quality_group"},
 		{accounts.ErrInvalidBlockedGenres, http.StatusBadRequest, "invalid_blocked_genres"},
 		{accounts.ErrInvalidMetadataLanguage, http.StatusBadRequest, "invalid_language"},
+		{accounts.ErrInvalidAudioRegion, http.StatusBadRequest, "invalid_audio_region"},
 		{accounts.ErrInvalidAccessSchedule, http.StatusBadRequest, "invalid_access_schedules"},
 		{accounts.ErrNameTaken, http.StatusConflict, "name_taken"},
 		{accounts.ErrLastAdministrator, http.StatusConflict, "last_administrator"},

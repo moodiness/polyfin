@@ -211,6 +211,10 @@ const libraries: typeof en = {
     noCatalogMatch: 'Ningún catálogo coincide con este filtro.',
     rules: 'Reglas',
     rulesHelp: 'Sin reglas, la lista conserva todos los títulos de sus catálogos.',
+    exclude: 'Exclusiones',
+    excludeHelp:
+      'Los títulos que cumplen estas reglas quedan fuera, digan lo que digan las reglas de arriba. Sin exclusiones, ninguno queda fuera.',
+    excludeMatch: 'Dejar fuera los títulos que cumplen',
     match: 'Los títulos cumplen',
     matchChoices: { all: 'Todas las reglas', any: 'Alguna de las reglas' },
     groupMatch: 'Este grupo cumple',
@@ -228,6 +232,12 @@ const libraries: typeof en = {
       type: 'Película o serie',
       rank: 'Posición en su catálogo',
       state: 'Estado de visualización',
+      released: 'Fecha de estreno',
+      votes: 'Votos de IMDb',
+      runtime: 'Duración',
+      contentRating: 'Clasificación por edad',
+      person: 'Actor o director',
+      studio: 'Estudio o cadena',
     } as Record<string, string>,
     negation: 'Cumple o no',
     is: 'es',
@@ -237,6 +247,12 @@ const libraries: typeof en = {
     to: 'Hasta',
     language: 'Idioma',
     rankMax: 'Entre sus primeros',
+    minutes: 'minutos',
+    atMost: 'Como mucho',
+    releasedWhen: 'Cuándo',
+    releasedWithin: { last: 'En los últimos', next: 'En los próximos' } as Record<string, string>,
+    days: 'días',
+    namePlaceholder: { person: 'Su nombre', studio: 'Su nombre' } as Record<string, string>,
     types: { movie: 'Una película', series: 'Una serie' } as Record<string, string>,
     states: {
       played: 'Reproducido',
@@ -246,16 +262,24 @@ const libraries: typeof en = {
     } as Record<string, string>,
     stateHelp:
       'Las reglas de reproducido, empezado y favorito siguen lo que hizo cada usuario: cada uno ve su propia lista.',
-    languageHelp:
-      'El idioma viene con la descripción de un título, que Polyfin lee en segundo plano: un título aún sin describir queda fuera hasta que lo esté.',
+    describedHelp:
+      'El idioma de un título, y su duración, su clasificación, sus personas y su fecha de estreno cuando su catálogo no las da, llegan con su descripción, que Polyfin lee en segundo plano: un título aún sin describir queda fuera hasta que lo esté. Un título al que le falta lo que mira una regla no cumple ni la regla ni su contrario.',
+    votesHelp:
+      'Los votos de IMDb vienen de MDBList, con la clave API de MDBList para valoraciones en Ajustes › Contenido, consultados en segundo plano. Sin esa clave, ningún título tiene votos.',
+    studioHelp:
+      'Los estudios y las cadenas vienen de TMDB, con la clave API de TMDB en Ajustes › Contenido, consultados en segundo plano y guardados: la lista crece a medida que llegan. Sin esa clave, solo cuentan los estudios que un administrador puso en los metadatos de un título.',
     sort: 'Ordenar',
     sorts: {
       catalog: 'Como los listan sus catálogos, uno de cada uno por turnos',
       premiere: 'Fecha de estreno, más reciente primero',
+      latestEpisode: 'Último episodio emitido, más reciente primero',
+      seasonPremiere: 'Último estreno de temporada, más reciente primero',
       rating: 'Valoración de IMDb, más alta primero',
       name: 'Nombre',
       random: 'Al azar, sorteado de nuevo cada día',
     } as Record<string, string>,
+    episodeSortHelp:
+      'Las series van según su último episodio regular emitido, o el estreno de su última temporada, según su descripción, sin especiales ni episodios por venir; las películas según su fecha de estreno. Una serie cuya descripción aún no se ha leído va al final hasta que se lea.',
     maxItems: 'Máximo de títulos',
     maxHelp: (max: string) => `De 1 a ${max}. Vacío: sin máximo.`,
     noMax: 'Sin máximo',
@@ -276,8 +300,8 @@ const libraries: typeof en = {
     firstOf: (shown: string, listed: string) => `Los primeros ${shown} de ${listed}.`,
     unknown: (count: string) =>
       count === '1'
-        ? '1 título aún espera su descripción, que indica su idioma: la lista crece a medida que llegan las descripciones.'
-        : `${count} títulos aún esperan su descripción, que indica su idioma: la lista crece a medida que llegan las descripciones.`,
+        ? '1 título aún espera lo que miran sus reglas: su descripción, sus votos o sus estudios. La lista crece a medida que llegan.'
+        : `${count} títulos aún esperan lo que miran sus reglas: su descripción, sus votos o sus estudios. La lista crece a medida que llegan.`,
     incomplete:
       'Algunos catálogos no respondieron a tiempo: la lista muestra lo leído hasta ahora y lee el resto.',
     previewEmpty: 'Por ahora, ningún título cumple estas reglas.',

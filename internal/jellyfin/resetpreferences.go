@@ -7,12 +7,15 @@ import (
 )
 
 // ResetPreferences forgets the display preferences and the configuration
-// user saved from Jellyfin apps, with the configuration remembered for
-// them: their apps read a new user's from their next request (My account ›
-// Reset my preferences).
+// user saved from Jellyfin apps, and the tracks they chose on titles, with
+// what is remembered of them: their apps read a new user's from their next
+// request (My account › Reset my preferences).
 func (h *Handler) ResetPreferences(ctx context.Context, user accounts.ID) error {
+	h.trackChoices.mu.Lock()
+	defer h.trackChoices.mu.Unlock()
 	err := h.Preferences.Reset(ctx, user)
 	h.configurations.Delete(user)
+	h.trackChoices.cache.Delete(user)
 	return err
 }
 

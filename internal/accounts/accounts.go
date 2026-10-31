@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/i18n"
+	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
@@ -136,6 +137,24 @@ type User struct {
 	// TwoStep is set once the user signs in with a code from an
 	// authenticator app after their password (see Store.ConfirmTwoStep).
 	TwoStep bool
+	// ProviderOnly has the user sign in through the identity provider
+	// alone: their password is refused (see Authenticate).
+	ProviderOnly bool
+	// WebTheme is the user's web player theme, one of WebThemes, empty for
+	// the server's (see Settings.WebThemeOf); WebThemeLocked keeps the user
+	// from changing it themselves (see SetOwnWebTheme).
+	WebTheme       string
+	WebThemeLocked bool
+	// AudioRegion is the regional variant of audio the user prefers, one
+	// of localization.AudioVariants ("fr-CA"), empty for none. It refines
+	// the audio language they or the server chose for them, or names it
+	// when neither did.
+	AudioRegion string
+	// RemoteAccess lets the user sign in and use the server from outside
+	// the local network, Jellyfin's EnableRemoteAccess: without it, only
+	// from the local network (see AllowedFrom). On for every user until
+	// taken away.
+	RemoteAccess bool
 }
 
 // NewUser describes an account to create.
@@ -147,6 +166,9 @@ type NewUser struct {
 	// Group is the group the account joins and follows, nil for none; an
 	// administrator cannot join one (ErrAdministratorGroup).
 	Group *ID
+	// ProviderOnly has the account sign in through the identity provider
+	// only; it then needs no password.
+	ProviderOnly bool
 }
 
 // UserChanges lists the fields to update; nil fields are kept.
@@ -207,6 +229,17 @@ type UserChanges struct {
 	// or empty. Which languages the server's addons have is the caller's to
 	// check.
 	MetadataLanguage *string
+	// ProviderOnly, see User.
+	ProviderOnly *bool
+	// WebTheme and WebThemeLocked, see User: WebTheme is one of WebThemes
+	// or empty. Whether the Custom theme is offered is the caller's to
+	// check.
+	WebTheme       *string
+	WebThemeLocked *bool
+	// AudioRegion, see User: one of localization.AudioVariants or empty.
+	AudioRegion *string
+	// RemoteAccess, see User.
+	RemoteAccess *bool
 }
 
 // Store is the accounts repository.
@@ -298,7 +331,8 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"personal_addons, use_shared_addons, invalid_login_attempts, blocked_until, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language, two_step, torrent_streams"
+	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language, two_step, torrent_streams, " +
+	"provider_only, web_theme, web_theme_locked, audio_region, remote_access"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -310,7 +344,8 @@ func (user *User) fields() []any {
 		&user.MaxPlaybacks, &user.MaxBitrate, &user.LiveTv, &user.SyncPlay, &user.RemoteControl,
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare,
-		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams}
+		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
+		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked, &user.AudioRegion, &user.RemoteAccess}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -464,15 +499,19 @@ func createUser(ctx context.Context, db interface {
 	if err != nil {
 		return User{}, err
 	}
-	if err := checkPassword(user.Password); err != nil {
+	password := user.Password
+	if user.ProviderOnly && password == "" {
+		password = unknowablePassword()
+	}
+	if err := checkPassword(password); err != nil {
 		return User{}, err
 	}
 	// The administratorPermissions take is_administrator, the other
 	// settings a group holds their columns' defaults (see newUserValues).
 	created, err := scanUser(db.QueryRow(ctx,
-		"INSERT INTO users (name, password_hash, is_administrator, is_hidden, "+strings.Join(administratorPermissions, ", ")+
-			") VALUES ($1, $2, $3, $4, $3, $3, $3, $3) RETURNING "+userColumns,
-		name, hashPassword(user.Password), user.IsAdministrator, user.IsHidden))
+		"INSERT INTO users (name, password_hash, is_administrator, is_hidden, provider_only, "+strings.Join(administratorPermissions, ", ")+
+			") VALUES ($1, $2, $3, $4, $5, $3, $3, $3, $3) RETURNING "+userColumns,
+		name, hashPassword(password), user.IsAdministrator, user.IsHidden, user.ProviderOnly))
 	if uniqueViolation(err) {
 		return User{}, ErrNameTaken
 	}
@@ -523,6 +562,13 @@ func (s *Store) Authenticate(ctx context.Context, name, password string) (User, 
 		if ok, err = verifyPassword(password, hash); err != nil {
 			return User{}, fmt.Errorf("user %s: %w", user.ID, err)
 		}
+	}
+	// An account that signs in through the provider alone refuses every
+	// password, as a wrong one, which counts toward the client's attempts
+	// but not toward the account's: nobody may block it with passwords
+	// that could never be right.
+	if user.ProviderOnly {
+		return User{}, ErrInvalidCredentials
 	}
 	limit, now := s.Settings().LoginAttempts, s.now()
 	if limit > 0 && user.Blocked(now) {
@@ -615,6 +661,12 @@ func (changes UserChanges) prepare() (userUpdate, error) {
 	}
 	if changes.MetadataLanguage != nil && *changes.MetadataLanguage != "" && !MetadataLanguageCode(*changes.MetadataLanguage) {
 		return u, ErrInvalidMetadataLanguage
+	}
+	if changes.WebTheme != nil && *changes.WebTheme != "" && !slices.Contains(WebThemes, *changes.WebTheme) {
+		return u, ErrInvalidWebTheme
+	}
+	if changes.AudioRegion != nil && *changes.AudioRegion != "" && !localization.AudioVariantOffered(*changes.AudioRegion) {
+		return u, ErrInvalidAudioRegion
 	}
 	if changes.Name != nil {
 		normalized, err := normalizeName(*changes.Name)
@@ -730,7 +782,12 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 			group_id = $30,
 			follow_group = $31,
 			metadata_language = coalesce($32, metadata_language),
-			torrent_streams = coalesce($33, torrent_streams)
+			torrent_streams = coalesce($33, torrent_streams),
+			provider_only = coalesce($34, provider_only),
+			web_theme = coalesce($35, web_theme),
+			web_theme_locked = coalesce($36, web_theme_locked),
+			audio_region = coalesce($37, audio_region),
+			remote_access = coalesce($38, remote_access)
 		WHERE id = $1 RETURNING `+userColumns,
 		id, u.name, u.hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 		changes.Parental != nil, u.parental.MaxRating, u.parental.MaxSubRating, u.parental.BlockUnrated,
@@ -739,7 +796,8 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		changes.MaxPlaybacks, changes.MaxBitrate, changes.LiveTv, changes.SyncPlay, changes.RemoteControl,
 		u.hidden, u.genres, u.schedules, changes.CollectionManagement,
 		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
-		membership.group, membership.follow, changes.MetadataLanguage, changes.TorrentStreams))
+		membership.group, membership.follow, changes.MetadataLanguage, changes.TorrentStreams, changes.ProviderOnly,
+		changes.WebTheme, changes.WebThemeLocked, changes.AudioRegion, changes.RemoteAccess))
 	if uniqueViolation(err) {
 		return User{}, nil, ErrNameTaken
 	}

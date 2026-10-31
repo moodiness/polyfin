@@ -4,17 +4,18 @@
 // solved, a user who joined through an invite, a new version of Polyfin, a
 // playback that started, paused, resumed or stopped, an account blocked
 // after wrong passwords, a sign-in on a device an account never used, a
-// Live TV programme a user set a reminder for that starts soon, once a
-// week a summary of the week, once a month and once a year a review of
-// the month and of the year, and an app or tracking connection that
-// stopped. Messages go to targets: generic webhooks, which receive a
-// versioned JSON event (see Event); Discord webhooks, ntfy topics,
-// Telegram chats, Gotify servers and Pushover users, which receive
-// messages formatted for them; and email addresses, through the SMTP server
-// of the settings. Administrators add the server's targets, which receive
-// the events of every user but their sign-ins on new devices and their
-// programme reminders; each user adds their own, which receive their own
-// events, and the health, joining and new version events, every
+// Live TV programme a user set a reminder for that starts soon, a title of
+// a user's watchlist that versions were found for, once a week a summary
+// of the week, once a month and once a year a review of the month and of
+// the year, and an app or tracking connection that stopped. Messages go
+// to targets: generic webhooks, which receive a versioned JSON event (see
+// Event); Discord webhooks, ntfy topics, Telegram chats, Gotify servers
+// and Pushover users, which receive messages formatted for them; and email
+// addresses, through the SMTP server of the settings. Administrators add
+// the server's targets, which receive the events of every user but their
+// sign-ins on new devices, their programme reminders and their watchlist
+// titles found available; each user adds their own, which receive their
+// own events, and the health, joining and new version events, every
 // account's blocks and the server's summaries for administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
@@ -105,6 +106,10 @@ const (
 	// reminder for starts soon, to their own targets only (see
 	// reminders.go).
 	ProgrammeReminder = "programme_reminder"
+	// TitleAvailable tells a user that versions were found for a title of
+	// their watchlist, once per title, to their own targets only (see
+	// watchlist.go).
+	TitleAvailable = "title_available"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 )
@@ -113,7 +118,7 @@ const (
 // shows them.
 var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined, NewVersion,
 	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary, MonthlySummary, YearlySummary, ConnectionStopped,
-	AccountBlocked, NewDevice, SharePlayed, ProgrammeReminder}
+	AccountBlocked, NewDevice, SharePlayed, ProgrammeReminder, TitleAvailable}
 
 // administratorsEvent reports whether event is one only the server's
 // targets and administrators' own receive: about System › Health, a user
@@ -123,9 +128,10 @@ func administratorsEvent(event string) bool {
 }
 
 // personalEvent reports whether event is one only users' own targets
-// receive: a sign-in on a new device, a programme reminder.
+// receive: a sign-in on a new device, a programme reminder, a title of
+// their watchlist found available.
 func personalEvent(event string) bool {
-	return event == NewDevice || event == ProgrammeReminder
+	return event == NewDevice || event == ProgrammeReminder || event == TitleAvailable
 }
 
 // EventsFor lists the events the targets of owner may receive: every event

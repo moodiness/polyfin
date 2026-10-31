@@ -112,7 +112,7 @@ const (
 	// model: everything an administrator sets on a user's page but the
 	// name, the password, administrator status, the disabled switch and the
 	// group.
-	modelColumns  = "is_hidden, metadata_language, " + groupColumns
+	modelColumns  = "is_hidden, metadata_language, web_theme, web_theme_locked, " + groupColumns
 	inviteColumns = "i.id, i.max_uses, i.uses, i.expires_at, i.created_at, i.revoked_at, " +
 		"m.id, m.name, g.id, g.name, c.id, c.name, coalesce(i.account_days, 0)"
 	inviteJoins = " FROM invites i LEFT JOIN users m ON m.id = i.model_user_id LEFT JOIN user_groups g ON g.id = i.group_id" +

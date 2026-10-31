@@ -18,6 +18,29 @@ const auth: typeof en = {
     confirmPassword: 'Conferma password',
     submit: 'Crea amministratore',
     submitting: 'Creazione…',
+    restoreInstead: 'Ripristina invece un backup',
+    createInstead: 'Crea invece un amministratore',
+    restoreTitle: 'Ripristina un backup',
+    restoreLede:
+      'Riporta questo Polyfin da un backup del suo database: i suoi amministratori, utenti, impostazioni e cronologia di visione.',
+    restoreFile: 'File di backup',
+    restoreFileHelp:
+      'Un file .dump o .dump.enc creato da Polyfin, dalla sua cartella dei backup o da una destinazione.',
+    restoreChoose: 'Scegli un file',
+    restoreSend: 'Invia e verifica',
+    restoreSending: 'Invio e verifica…',
+    restoreUnlockHelp: 'Questo backup è cifrato: digita la passphrase con cui è stato creato.',
+    restoreReady: (file: string) =>
+      `${file} è un backup del database di Polyfin che questo Polyfin può ripristinare.`,
+    restoreSteps: [
+      'Polyfin si ferma, ripristina il backup nel suo database in un’unica operazione, poi si riavvia su di esso. Se qualcosa non riesce, il database resta com’è ora.',
+      'Poi accedi con un amministratore del backup.',
+    ],
+    restoreStart: 'Ripristina',
+    restoreRestoring:
+      'Polyfin sta ripristinando il backup, poi si riavvia. Questa pagina mostra l’accesso appena risponde.',
+    restoreFailed:
+      'Impossibile ripristinare il backup: Polyfin si è riavviato senza di esso. Il suo registro indica il motivo e contiene un nuovo codice di configurazione.',
   },
   login: {
     title: 'Accedi',
@@ -39,6 +62,17 @@ const auth: typeof en = {
       'Su questo server gli amministratori devono usare l’accesso in due passaggi. Aggiungi il tuo account a un’applicazione di autenticazione sul telefono, poi inserisci il codice che mostra.',
     recoveryTitle: 'Conserva i tuoi codici di recupero',
     continue: 'Continua',
+    providerSignIn: (name: string) => `Accedi con ${name}`,
+    providerOutcomes: {
+      provider_refused: 'L’accesso con il provider di identità è stato annullato.',
+      provider_no_account:
+        'Nessun account di questo server corrisponde al tuo account presso il provider di identità.',
+      account_disabled: 'Questo account è disattivato.',
+      outside_allowed_hours: 'Questo account non può accedere a quest’ora.',
+      outside_local_network: 'Questo account può accedere solo dalla rete locale.',
+      too_many_attempts: 'Troppi tentativi. Riprova più tardi.',
+      provider_failed: 'L’accesso con il provider di identità non è riuscito. Riprova.',
+    },
   },
   invite: {
     title: (server: string) => `Unisciti a ${server}`,

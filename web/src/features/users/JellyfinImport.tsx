@@ -16,6 +16,7 @@ import {
   type JellyfinImportStatus,
   type JellyfinUser,
   type JellyfinUserImport,
+  type PlexAccess,
   type ServerKind,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
@@ -45,6 +46,7 @@ import {
   type SelectOption,
   type StatusTone,
 } from '@/ui'
+import { PlexOwnerSignIn } from './PlexOwnerSignIn'
 
 /** How often the import is read while it runs. */
 const importPollMs = 2000
@@ -66,6 +68,8 @@ const signInCodes = [
   'jellyfin_other_user',
   'jellyfin_key_owner_only',
 ]
+/** Codes about a Plex Home profile's PIN, shown under that row's PIN. */
+const plexPinCodes = ['plex_profile_pin_refused', 'plex_profile_forbidden']
 
 const importTones: Record<JellyfinImportStatus['state'], StatusTone> = {
   running: 'live',
@@ -112,6 +116,8 @@ type Choice = {
   jellyfinPassword: string
   /** Whether a new user keeps that password in Polyfin. */
   keepPassword: boolean
+  /** A Plex Home profile's PIN, for an import the owner signed in to Plex for. */
+  plexPin: string
 }
 
 /**
@@ -292,7 +298,8 @@ export function ImportProgress({
 
 /**
  * One user of an import: the Polyfin user it went into, its state, what it read while it reads,
- * then what it added. A finished import's users still waiting were never reached.
+ * then what it read and added, and why it added nothing when it did not. A finished import's users
+ * still waiting were never reached.
  */
 function ImportedUserRow({
   user,
@@ -309,6 +316,14 @@ function ImportedUserRow({
   const { t } = useI18n()
   const text = t.users.jellyfinImport
   const notReached = finished && user.state === 'waiting'
+  const ended = [
+    text.read(user.read),
+    text.counts(user.played, user.resumed, user.favorites),
+    ...(user.ratings > 0 ? [text.ratings(user.ratings)] : []),
+    ...(user.watchlist > 0 ? [text.watchlist(user.watchlist)] : []),
+    ...(user.upToDate > 0 ? [text.upToDate(user.upToDate)] : []),
+    ...(user.undated > 0 ? [text.undated(user.undated)] : []),
+  ].join(' · ')
   return (
     <Row
       leading={<Avatar name={user.userName} size="lg" />}
@@ -318,7 +333,7 @@ function ImportedUserRow({
           ? text.read(user.read)
           : user.state === 'waiting'
             ? undefined
-            : text.counts(user.played, user.resumed, user.favorites)
+            : ended
       }
       trailing={
         <>
@@ -335,6 +350,8 @@ function ImportedUserRow({
     >
       {user.problem !== null ? (
         <Notice tone="danger">{text.problems[user.problem](product)}</Notice>
+      ) : user.nothingAdded !== null ? (
+        <Notice>{text.nothingAdded[user.nothingAdded](product)}</Notice>
       ) : undefined}
     </Row>
   )
@@ -598,10 +615,13 @@ function ChooseUsers({
           watchData: true,
           jellyfinPassword: '',
           keepPassword: true,
+          plexPin: '',
         },
       ]),
     ),
   )
+  // Once the owner signs in to Plex: what is read of each account but the owner's.
+  const [access, setAccess] = useState<Record<string, PlexAccess> | null>(null)
 
   const start = useMutation({
     mutationFn: startJellyfinImport,
@@ -632,7 +652,9 @@ function ChooseUsers({
           ? 'password'
           : signInCodes.includes(failed.code)
             ? 'jellyfinPassword'
-            : null
+            : plexPinCodes.includes(failed.code)
+              ? 'plexPin'
+              : null
   const otherError = field === null ? message : undefined
 
   const options: SelectOption<Target>[] = [
@@ -646,10 +668,12 @@ function ChooseUsers({
     const choice = choices[user.id]
     if (choice.target === 'skip' || (choice.target !== 'new' && !choice.watchData)) return []
     const signIn = signsIn(user) && choice.watchData
+    const pin = access?.[user.id] === 'pin' && choice.watchData && choice.plexPin !== ''
     const entry: JellyfinImportEntry = {
       jellyfinId: user.id,
       watchData: choice.watchData,
       ...(signIn && { jellyfinPassword: choice.jellyfinPassword }),
+      ...(pin && { plexPin: choice.plexPin }),
     }
     if (choice.target !== 'new') return [{ ...entry, userId: choice.target.slice('user:'.length) }]
     const create = {
@@ -668,7 +692,13 @@ function ChooseUsers({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    start.mutate({ kind, address: connection.server.address, ...credentials, users: entries })
+    start.mutate({
+      kind,
+      address: connection.server.address,
+      ...credentials,
+      ...(access !== null && { plexOwner: true }),
+      users: entries,
+    })
   }
 
   return (
@@ -713,33 +743,49 @@ function ChooseUsers({
                   : text.ownerNotice(ownerName, 'account' in credentials)}
               </Notice>
             )}
+            {kind === 'plex' && (
+              <PlexOwnerSignIn
+                address={connection.server.address}
+                credentials={credentials}
+                onAccess={(read) => {
+                  start.reset()
+                  setAccess(read)
+                }}
+              />
+            )}
             {/* Plex's owner's token reads the other accounts' played history, not their resume points. */}
-            {kind === 'plex' && <Notice>{text.plexNotice}</Notice>}
+            {kind === 'plex' && access === null && <Notice>{text.plexNotice}</Notice>}
             <RowList variant="plain" aria-label={text.chooseTitle}>
-              {connection.users.map((user) => (
-                <ChoiceRow
-                  key={user.id}
-                  user={user}
-                  server={connection.server.name}
-                  activity={kind !== 'plex'}
-                  dataHelp={
-                    kind !== 'plex'
-                      ? text.watchDataHelp
-                      : user.isAdministrator
-                        ? text.plexOwnerWatchDataHelp
-                        : text.plexWatchDataHelp
-                  }
-                  choice={choices[user.id]}
-                  options={options}
-                  signsIn={signsIn(user)}
-                  error={
-                    field !== null && message !== undefined && failed?.jellyfinId === user.id
-                      ? { field, message }
-                      : undefined
-                  }
-                  onChange={(patch) => update(user.id, patch)}
-                />
-              ))}
+              {connection.users.map((user) => {
+                const read = access?.[user.id]
+                return (
+                  <ChoiceRow
+                    key={user.id}
+                    user={user}
+                    server={connection.server.name}
+                    activity={kind !== 'plex'}
+                    dataHelp={
+                      kind !== 'plex'
+                        ? text.watchDataHelp
+                        : read !== undefined
+                          ? text.plexOwner[read]
+                          : user.isAdministrator
+                            ? text.plexOwnerWatchDataHelp
+                            : text.plexWatchDataHelp
+                    }
+                    plexAccess={read}
+                    choice={choices[user.id]}
+                    options={options}
+                    signsIn={signsIn(user)}
+                    error={
+                      field !== null && message !== undefined && failed?.jellyfinId === user.id
+                        ? { field, message }
+                        : undefined
+                    }
+                    onChange={(patch) => update(user.id, patch)}
+                  />
+                )
+              })}
             </RowList>
           </>
         )}
@@ -754,7 +800,7 @@ function ChooseUsers({
 }
 
 /** An error the server answered about a field of a row. */
-type RowError = { field: 'name' | 'password' | 'jellyfinPassword'; message: string }
+type RowError = { field: 'name' | 'password' | 'jellyfinPassword' | 'plexPin'; message: string }
 
 /** One user of the server: who it is, what it becomes in Polyfin, and whether its data comes along. */
 function ChoiceRow({
@@ -762,6 +808,7 @@ function ChoiceRow({
   server,
   dataHelp,
   activity,
+  plexAccess,
   choice,
   options,
   signsIn,
@@ -775,6 +822,8 @@ function ChoiceRow({
   dataHelp: string
   /** Whether the server tells when its users last used it: Plex does not. */
   activity: boolean
+  /** What is read of this Plex account once the owner signed in to Plex; else undefined. */
+  plexAccess: PlexAccess | undefined
   choice: Choice
   options: SelectOption<Target>[]
   /** The connection is another user's: this user's watch data is read signed in as them. */
@@ -789,6 +838,8 @@ function ChoiceRow({
   const signIn = signsIn && choice.watchData
   // A new user keeping their password on the server has no other.
   const keeps = signIn && choice.target === 'new' && choice.keepPassword
+  // Once the owner signed in to Plex: whether all of this account's watch data is read.
+  const everything = plexAccess === 'all' || (plexAccess === 'pin' && choice.plexPin !== '')
   const lastActivity =
     user.lastActivityAt === null ? t.common.never : <RelativeTime iso={user.lastActivityAt} />
   return (
@@ -800,6 +851,11 @@ function ChoiceRow({
         <>
           {user.isAdministrator && <Badge tone="accent">{t.users.administrator}</Badge>}
           {user.isDisabled && <Badge>{t.users.disabled}</Badge>}
+          {plexAccess !== undefined && choice.target !== 'skip' && choice.watchData && (
+            <Badge tone={everything ? 'ok' : 'neutral'}>
+              {everything ? text.plexOwner.everything : text.plexOwner.playsOnly}
+            </Badge>
+          )}
         </>
       }
       meta={
@@ -896,6 +952,23 @@ function ChoiceRow({
               />
             )}
           </>
+        )}
+        {choice.target !== 'skip' && choice.watchData && plexAccess === 'pin' && (
+          <Field
+            label={text.plexOwner.pinLabel}
+            help={text.plexOwner.pinHelp(user.name)}
+            error={error?.field === 'plexPin' ? error.message : undefined}
+            className="max-w-sm"
+          >
+            <TextInput
+              type="password"
+              inputMode="numeric"
+              revealable
+              value={choice.plexPin}
+              onValue={(plexPin) => onChange({ plexPin })}
+              autoComplete="off"
+            />
+          </Field>
         )}
       </div>
     </Row>

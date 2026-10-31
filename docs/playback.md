@@ -48,18 +48,19 @@ A title's details list every stream the addons offer as a version (see [Title pa
 
 ### Which streams become versions
 
-Polyfin does nothing to an addon's streams but what this list says, in this order. By default, only steps 1 to 6 leave streams out, and the versions keep the addons' order.
+Polyfin does nothing to an addon's streams but what this list says, in this order. By default, only steps 1 to 7 leave streams out, and the versions keep the addons' order.
 
-1. **The addons asked:** the enabled addons the user browses that list streams (`stream` in their manifest) for the title's type and identifier: the server's sources in the order of **Content › Sources**, unless the user turned **Use the server's sources** off, then the user's own addons under **My sources**, in theirs (see [Personal addons](addons-and-libraries.md#personal-addons)). A user under parental control or blocking genres gets the server's sources only. A video whose title's description carries its own streams gets those first, and the addon that gave them is not asked for them (see [Streams in a title's details](addons-and-libraries.md#streams-in-a-title-s-details)).
-2. **What is asked:** each addon is asked at the address it was installed with, its configuration included, for the title or the episode (`/stream/<type>/<id>.json`). Polyfin adds nothing to the request, and takes the streams in the order the addon gives them: what the addon's configuration filters, sorts or limits is what Polyfin gets. An addon that fails, or does not answer within 15 seconds, gives no new version; the versions Polyfin kept from its earlier answers for the title may still show (see [Title pages](#title-pages)).
+1. **The addons asked:** the enabled addons the user browses that list streams (`stream` in their manifest) for the title's type and identifier, or for another identifier of the title they accept (see [Identifiers addons accept](addons-and-libraries.md#identifiers-addons-accept)): the server's sources in the order of **Content › Sources**, unless the user turned **Use the server's sources** off, then the user's own addons under **My sources**, in theirs (see [Personal addons](addons-and-libraries.md#personal-addons)). A user under parental control or blocking genres gets the server's sources only. A video whose title's description carries its own streams gets those first, and the addon that gave them is not asked for them (see [Streams in a title's details](addons-and-libraries.md#streams-in-a-title-s-details)).
+2. **What is asked:** each addon is asked at the address it was installed with, its configuration included, for the title or the episode (`/stream/<type>/<id>.json`), by its own identifier or the other one the addon accepts. For example, an episode of a series an anime catalog lists as `kitsu:<id>:3` is asked of an addon that takes IMDb identifiers only as `tt…:2:3`, when the anime mapping places it there. Polyfin adds nothing to the request, and takes the streams in the order the addon gives them: what the addon's configuration filters, sorts or limits is what Polyfin gets. An addon that fails, or does not answer within 15 seconds, gives no new version; the versions Polyfin kept from its earlier answers for the title may still show (see [Title pages](#title-pages)).
 3. **Nothing to play:** a stream with nothing to play is left out. A stream plays when it is a link over `http` or `https`, or a torrent's file (an `infoHash` of 40 hexadecimal digits). A web page (`externalUrl`), a YouTube video (`ytId`), or a notice the addon lists among its streams makes no version.
 4. **Torrents:** they are left out unless **Play torrent streams** is on, under **Settings › Torrents**, and the user has **Can play torrent streams** (see [Turning torrents on](torrents.md#turning-torrents-on)). Both are off by default.
-5. **The same file twice:** two streams that give the same file name and the same size, from one addon or two, as a torrent and a link or two torrents of the same release, are one version, the first in the order above. Without both its name and its size, a stream is known by its link, a torrent by its info hash and file index. A torrent left out by the previous step leaves its place to a link to the same file listed after it.
+5. **The same file twice:** two streams that give the same file name and the same size, from one addon or two, as a torrent and a link or two torrents of the same release, are one version, the first in the order above. Without both its name and its size, a stream is known by its link, a torrent by its info hash and file index. A torrent left out by the previous step leaves its place to a link to the same file listed after it. The links to the same file that other addons list after it, up to 3, are kept as the version's hidden mirrors: they are listed nowhere, and carry a play on when the version's source fails (see [Carrying a play on](#carrying-a-play-on)). A torrent has no mirror and is none.
 6. **Failed lately:** versions that failed are left out for 15 minutes: a source that could not be read or analyzed (see [Sources that fail](#sources-that-fail)). A torrent that did not start in time stays listed, in its place: a play that picks no version passes it over for those 15 minutes and tries the next ones, and a version the user picks in the version menu is tried again at once (see [When torrents do not start](torrents.md#when-torrents-do-not-start)). A torrent whose peers stopped sending, a route that was down, the limit of torrents at once, or a host asking to slow down leaves the version listed and tried as any other. A restart forgets these failures, and so does a change of a local folder's address or credentials, for its files. A failure is the file's: a torrent that did not start leaves out, for those 15 minutes, the link to the same file that users without torrents get instead, and a link that failed leaves out the torrent of its file.
-7. **Hide rules:** when set, **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Playback**, leave out what they name. All are off by default, and none ever hides every version of a title (see [Version order](#version-order)).
-8. **Quality group:** the user's group, when set, leaves out the versions taller than it, while one fits. It is **Original (no limit)** by default (see [Quality groups](users.md#quality-groups)).
-9. **The order:** it stays the addons' unless **Order versions by**, under **Settings › Playback**, has criteria. It has none by default. Versions the criteria tie on keep the addons' order.
-10. **Plays without a pick:** when an app plays without picking a version, `PlaybackInfo` leaves out the versions it passed over: those that could not be read or did not play on the app, and the torrents that did not start lately (see above).
+7. **Another title:** a stream whose labels name another episode, a season without the episode, or another movie of the same name is left out, without a setting, as a hide rule leaves a version out: never every version of a title (see [Versions of another title](#versions-of-another-title)).
+8. **Hide rules:** when set, **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Playback**, leave out what they name. All are off by default, and none ever hides every version of a title (see [Version order](#version-order)).
+9. **Quality group:** the user's group, when set, leaves out the versions taller than it, while one fits. It is **Original (no limit)** by default (see [Quality groups](users.md#quality-groups)).
+10. **The order:** it stays the addons' unless **Order versions by**, under **Settings › Playback**, has criteria. It has none by default. Versions the criteria tie on keep the addons' order.
+11. **Plays without a pick:** when an app plays without picking a version, `PlaybackInfo` leaves out the versions it passed over: those that could not be read or did not play on the app, and the torrents that did not start lately (see above).
 
 Polyfin keeps no maximum of versions, and looks at no seeders, source, size or language unless a setting above says so.
 
@@ -67,8 +68,20 @@ Polyfin keeps no maximum of versions, and looks at no seeders, source, size or l
 
 - An addon that failed, timed out or answered only a notice logs `An addon could not list streams`, at Warn, with the addon and the error, and **System › Health › Addons** shows its last failure.
 - A version a play could not analyze logs `A version could not be analyzed`, at Info, with the addon and why; a source that fails later in a play logs why too, never its address. A torrent that did not start logs `A torrent did not start in time`, and **System › Health** shows it under **Needs attention**.
+- A stream left out as another title's logs `A version names another title`, at Debug, with the addon and the marker that names it (`S01E03`, `S02`, `1998`), once while Polyfin remembers the version.
 - Streams with nothing to play, torrents left out, files listed twice, and the hide rules and quality group log nothing. Compare the addon's list with the steps above: turn the hide rules and the quality group off, and check the addon's configuration where it was installed.
 - `GET /Polyfin/Items/{id}/Versions` tells how many versions are known and how many addons are still asked (see [Title pages](#title-pages)).
+
+#### Versions of another title
+
+Addons that gather releases from many places sometimes list, for an episode, a release of another episode, or, for a movie, another movie of the same name. Polyfin reads the stream's name, title and description as its addon gives them, and its file name, line by line, and leaves the stream out when a line contradicts the title:
+
+- **An episode:** the seasons and episodes a line names after the series' own words, written `S01E02`, `S01E02E03`, `1x02`, `S01 E02`, `Season 1 Episode 2`, a range `S01E01-E04`, `S01E01-04` or `1x01-1x04`, a season `S01` or `Season 1`, or seasons `S01-S03`, `S01-03` or `Seasons 1-3`, in any letter case. When none of them holds the episode, the stream is another title's. A season pack or a range holding it is kept: the torrent's file is picked inside it (see [Reading and storage](torrents.md#reading-and-storage)). So, for S01E02, `Some.Show.S01E03.mkv`, `Some.Show.S02.COMPLETE` and `Some.Show.S01E05-E08` are left out, and `Some.Show.S01.1080p`, `Some.Show.S01-S03` and `Some.Show.S01E01-03` are kept. A pack whose file name names another episode, as in `Some.Show.S01.1080p` with the file `Some.Show.S01E06.mkv`, is left out too.
+- **A movie:** a line naming the movie, as its addon names it, whose next word is a year more than one year from the movie's. So, for Some Movie (2008), `Some.Movie.1985.1080p` is left out, and `Some.Movie.2007`, `Some Movie (2009)` and `Some.Movie.Remastered.2020` are kept. The movie's own name may hold a year: for 1917 (2019), `1917.2019.1080p` is kept. A line that does not name the movie, such as a translated title, tells no year.
+
+Names without these markers are kept: `Some Show Complete Series`, an addon's `4K` line, or an episode numbered from the series' start, as in `Some Show - 25`. In a line naming the series, only what follows its name is read, so that a series named `1x1 Club` is not taken for its first episode; in a line that does not name it, every word is. When every version of a title names another, they are all kept, as with the hide rules: the addon may number episodes otherwise than the title's description.
+
+**Compared with Jellyfin:** Jellyfin 12.4 lists no addon's streams, so it has no such step: its versions are the files of a title it found in its folders. Polyfin's own folders are read the same way as addons' streams.
 
 ### Default audio and subtitle languages
 
@@ -90,6 +103,54 @@ Each user chooses an audio language, a subtitle language and a subtitle mode in 
 - Jellyfin 12.4 has no server-wide default: it reads the user's own preferences alone ([MediaSourceManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L515), [L574-L578](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L574-L578)), and an empty one is no language at all ([L477-L482](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L477-L482)). Without a language, its audio is the track flagged default, else the first ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L14-L29)), and every subtitle counts as in the preferred language ([L154-L158](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L154-L158)). With both settings at None, as by default, Polyfin chooses as Jellyfin does; a default subtitle language makes it choose a user's subtitles as Jellyfin would for a user who chose that language.
 - Polyfin's default audio language ranks above the track a file flags as default whatever `PlayDefaultAudioTrack` says, where a language a user chose in Jellyfin gives way to the flagged track while that setting is on.
 - jellyfin-web 12.4 also offers "Original language" as an audio preference. Polyfin does not offer it as a default.
+
+### Regional audio
+
+French, Spanish and Portuguese are dubbed apart for some regions. Polyfin tells six regional variants apart, by their BCP 47 tags, and each user may prefer one as their **Audio region** (see [Audio region](users.md#audio-region)):
+
+| Variant | Tags that name it | Release words that name it |
+|---|---|---|
+| French (France), `fr-FR` | `fr-FR`, and `fr-BE`, `fr-CH`, `fr-LU`, `fr-MC`, which hear the same dub | VFF, TRUEFRENCH, VF2 |
+| French (Quebec), `fr-CA` | `fr-CA` | VFQ, VF2 |
+| Spanish (Spain), `es-ES` | `es-ES` | CASTELLANO |
+| Spanish (Latin America), `es-419` | `es-419`, and the tag of any Latin American country or of the United States (`es-MX`, `es-AR`, `es-US`…) | LATINO, LATAM |
+| Portuguese (Brazil), `pt-BR` | `pt-BR`, `pob` | DUBLADO, PTBR |
+| Portuguese (Portugal), `pt-PT` | `pt-PT`, and the tags of the other Portuguese-speaking countries (`pt-AO`, `pt-MZ`…) | |
+
+- A track's variant is the one its language tag names, as Matroska files keep a BCP 47 tag with its region, by any code of the language (`fr-CA`, `fre-CA`); else the one its title names: a tag (`Portuguese (PT-BR)`), the region's name or code in English or in the language (`French (Canada)`, `Français (Québec)`, `Spanish (Latin America)`, `Castellano`, `Brazilian`, `French (CA)`), or a release word of its language (`VFQ`). A track tagged `fre` and titled `VFF` is French (France).
+- A version's variants, until it is analyzed or described by RemuxDB, are those its labels name, as the [version order](#version-order) reads them: the release words above, a tag written in two words (`PT-BR`, `ES-MX`, `es-419`), and the flags of Mexico, Argentina and Colombia (Latin America) and of Brazil. Each also names the language. The flags of France, Spain and Portugal stand for the language at large, as releases show them for any dub of it.
+- Subtitled releases keep their original audio. The languages named right after a word saying subtitles (Sub, Subs, Subtitles, Subbed, VOST, VOS, VOSE, Legenda, Legendado, Subtitulado, Sottotitoli, Untertitel…) are the subtitles', as in `ENG Sub ITA` or `Audio: English | Subtitles: French, Spanish`, and so is the language named right before Subs, Subbed, Subtitles, Subtitled or Legendado when none follows, as in `French Subs` or `PT-BR Legendado`. None of these counts as the version's audio, and `MULTi-SUBS` does not say it has several audio languages. Tags such as VOSTFR and SUBFRENCH name no audio language either. A word of the title is never taken for one of these words.
+
+With an **Audio region**, among the tracks and versions in the user's audio language:
+
+- the default audio track is the one of the region, else one of no known region, else one of another region. The flagged track still comes first for a user who chose their language in their app and plays the default track whatever its language (`PlayDefaultAudioTrack`), as Jellyfin does;
+- with **Preferred audio language** in **Order versions by**, the versions carrying the language in that region come first, then those carrying it with no known region, then those carrying it only in another region, then those that say MULTI or DUAL, then those of unknown language, then the others (see [Version order](#version-order)).
+
+The region applies only to its own language: a user who chose English in their app keeps English tracks and versions first, whatever their region. A user with no audio language, their own or the server's, gets the region's language, which ranks above the flagged track as the server's **Default audio language** does. When the user picked a track in the region's language on a series or a movie, the region ranks that language's tracks there too (see [Remembered track choices](#remembered-track-choices)).
+
+**Compared with Jellyfin:**
+
+- Jellyfin 12.4 keeps a track's language as tagged and compares it with the user's preferred language as a whole string, in any letter case ([MediaStreamSelector.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaStreamSelector.cs#L181-L190)): its preference has no region, a track tagged `fr-CA` does not match a preference of `fre`, and two French tracks rank alike. Polyfin compares languages by any of their codes, and the region is its own setting.
+- Jellyfin reads no language from release names. Polyfin's reading of regions and subtitled releases is its own, for the version order.
+
+### Remembered track choices
+
+When a user picks an audio track or subtitles other than those a title plays by default, Polyfin remembers the choice for the series, on all its episodes, or for the movie, and plays it by default on the user's next plays, in every app.
+
+- It follows the user's **Set audio track based on previous item** (`RememberAudioSelections`) and **Set subtitle track based on previous item** (`RememberSubtitleSelections`), in jellyfin-web's playback settings, each for its own kind of track. Both are on for every new user. A setting turned off stops its choices from applying at once, and the next playback report forgets them, as in Jellyfin.
+- A choice is the track's language, with a subtitle's forced and hearing-impaired flags, or no subtitles; never the track's number, as the versions of a title, and the episodes of a series, number their tracks differently. A track of no stated language is not remembered. An audio track's regional variant is remembered only when the user has an **Audio region** in its language and picked a track of another region, such as the French of France against **French (Quebec)** (see [Regional audio](#regional-audio)).
+- Polyfin learns the choice from the playback reports apps send (`POST /Sessions/Playing` and `POST /Sessions/Playing/Progress`), when their tracks change: a track other than the one the title plays by default becomes the user's choice, and the track their language preferences play anyway forgets it. The text copy of a picture subtitle counts as its original.
+- On later plays, the choice comes first, before the user's languages and the server's defaults, in the default tracks of a title's details and of `PlaybackInfo`. A track the app names in `PlaybackInfo` still wins. Among the audio tracks in the chosen language, those of the variant remembered come first, else those of the user's **Audio region** when it is of that language, then those of no known region, then those of another region, the one flagged default first among equals; with neither, the one flagged default comes first. Among the subtitles, those equally forced come first, a hearing-impaired one first when the choice was one.
+- A choice changes the default tracks only, not the version order, which follows the user's audio language and region (see [Version order](#version-order)).
+- A version without such a track plays as the user's preferences have it, and the choice stays for the next episodes.
+- The subtitle mode still applies: with `None`, no remembered subtitle shows, and with `OnlyForced`, only a remembered forced track, or no subtitles.
+- **My account › Track choices** counts the series and movies with a choice, and **Forget my track choices** forgets them all; **Reset my preferences** does too (see [Track choices](users.md#track-choices)).
+
+**Compared with Jellyfin:**
+
+- Jellyfin 12.4 remembers the number of the track for the item played alone, in the user's data of the item ([SessionManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Session/SessionManager.cs#L1016-L1055)), and plays that number again when the item's source has such a track ([MediaSourceManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L493-L543)). Its choice reaches neither the next episode nor another version, which numbers its tracks otherwise; Polyfin's, a language per series or movie, reaches both.
+- Jellyfin keeps every track reported, the default one included, so a later change of a user's languages does not reach an item played once. Polyfin keeps only a track other than the default.
+- With the same settings on, jellyfin-web picks the tracks of the next item of its queue to match the last ones, and names them in `PlaybackInfo`; as any track an app names, they win.
 
 ### Title pages
 
@@ -258,7 +319,7 @@ The **Version order** group of **Settings › Playback** orders a movie's or an 
 - the size the addon gives (`videoSize`);
 - the codec its labels name: HEVC, x265 or H.265; H.264, x264 or AVC; AV1; VP9; VC-1; MPEG-2; Xvid or DivX;
 - HDR when they name HDR, HDR10, HDR10+, HLG, DV, DoVi or Dolby Vision. Labels that name the height or the codec but no HDR count as SDR;
-- the audio languages they name: language names in English (French, German…), some others used by releases (TRUEFRENCH, VFF, Latino, Castellano…), ISO 639-2 codes in capitals (ENG, ITA, GER…) and flags. MULTI and DUAL say a version has several languages. A word of the movie's or the series' name is never taken for a language.
+- the audio languages they name: language names in English (French, German…), some others used by releases (TRUEFRENCH, VFF, Latino, Castellano…), ISO 639-2 codes in capitals (ENG, ITA, GER…) and flags, with their regional variants (see [Regional audio](#regional-audio)). MULTI and DUAL say a version has several languages. The languages named as the subtitles' (`Sub ITA`, `French Subs`) are not the audio's. A word of the movie's or the series' name is never taken for a language.
 
 A version a criterion knows nothing of comes after those it knows, and a hide rule never hides it.
 
@@ -270,14 +331,14 @@ A version a criterion knows nothing of comes after those it knows, and a hide ru
 
 A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. So, for the movie Cam, `Cam.2018.1080p.WEB-DL.mkv` is kept; `Some.Movie.2026.HDCAM.x264.mkv` is a camera copy and `Some.Movie.2026.1080p.WEB.ts` is kept; `Its.Always.Something.S01E01.1080p.mkv` is kept and `Some.Show.S01E01.TS.mkv` is a telesync; `Some Movie (2026) [HDTS]` is a telesync. A tag before the title in the same line, as in `[HDCAM] Some Movie 2026`, is not read.
 
-**Preferred audio language** is each user's own, the audio language they set in their app, else the server's [Default audio language](#default-audio-and-subtitle-languages). Versions known to carry it come first, then those that say MULTI or DUAL without naming it, then those of unknown language, then the others. For a user without a preferred language, and without a default one, it changes nothing.
+**Preferred audio language** is each user's own, the audio language they set in their app, else the server's [Default audio language](#default-audio-and-subtitle-languages). Versions known to carry it come first, then those that say MULTI or DUAL without naming it, then those of unknown language, then the others. For a user without a preferred language, and without a default one, it changes nothing. A user's **Audio region** orders the versions carrying the language among themselves, and gives the language to a user without one (see [Regional audio](#regional-audio)).
 
 **Source, in the order below** groups a title's versions by the addon or folder that gives them, the next criteria sorting each source's versions; placed after other criteria, it orders the versions they tie on. The sources **Order of sources** lists come first, in its order, then the others in the addons' order: a source added since the list was saved comes after those it lists, until it is moved there, and a user's own addons come after the server's sources. A source removed leaves the list. The list orders versions only: which addon describes a title, the order of the addons' subtitles and that of search results keep the order of **Content › Sources**, as versions do while the criterion is not chosen (see [Addons and libraries](addons-and-libraries.md)). It is how local files come first, whatever the other criteria (see [Local folders](local-folders.md#versions)).
 
 **In what order things happen:** these steps follow steps 1 to 5 of [Which streams become versions](#which-streams-become-versions).
 
 1. The versions that failed lately are left out (see [Sources that fail](#sources-that-fail)), but the torrents that did not start in time, which stay in place (see [Which streams become versions](#which-streams-become-versions), step 6).
-2. The hide rules apply. When they would hide every version of a title, none is hidden.
+2. The hide rules apply, with the versions of [another title](#versions-of-another-title), which are hidden whatever the rules. When they would hide every version of a title, none is hidden.
 3. The user's [quality group](users.md#quality-groups) leaves out the taller versions. When no version fits, the closest height comes first, and the criteria order the versions of the same height.
 4. The criteria order the others.
 
@@ -301,7 +362,7 @@ With **Say in version names how they play**, in **Settings › Playback** and on
 
 - "(direct play)": the app plays the file as it is.
 - "(direct stream)": its tracks are copied, without conversion, into HLS.
-- "(converted: reason)", with one reason, the first that applies: "HDR" when the app cannot show the video's HDR or Dolby Vision; "quality limit" when the app's quality setting, the user's **Maximum quality** or their quality group needs the video converted down; "subtitles" when a subtitle is burned into the video; "video" for any other reason about the video; "audio" when only the audio is converted. "(converted)" alone for any other reason.
+- "(converted: reason)", with one reason, the first that applies: "app’s request" when the app turned direct play off for a version it would play as it is (see [Direct play turned off by the app](transcoding.md#direct-play-turned-off-by-the-app)); "HDR" when the app cannot show the video's HDR or Dolby Vision; "quality limit" when the app's quality setting, the user's **Maximum quality** or their quality group needs the video converted down; "subtitles" when a subtitle is burned into the video; "video" for any other reason about the video; "audio" when only the audio is converted. "(converted)" alone for any other reason.
 - "(cannot play here)": the version needs a conversion the server or the user may not have (see [Transcoding](transcoding.md)).
 
 How names are decided:
@@ -401,6 +462,19 @@ The admin app detects a WARP container on the same Docker network and suggests `
 **For app developers:**
 
 - `PlaybackInfo` for a version played over HLS starts reading the bytes of its first segment; with `StartTimeTicks`, those of the segment the app resumes at.
+
+### Carrying a play on
+
+A source that fails for good during a play, past the tries above, need not end it:
+
+- Mirrors: the source cache reads on from the version's next mirror, the same file another addon lists (see [Which streams become versions](#which-streams-become-versions), step 5), from the byte where the read stopped. The blocks already read stay, as the file is the same, and an answer of another size is no mirror and fails in turn. Relayed apps and HLS plays go on without an error; the log says `A source failed: reading on from another copy of the file`, at Info. The version is kept as failed only once its last mirror failed too. A relayed file that has mirrors is always read through the cache, which alone can switch.
+- Another version, over HLS: once the version and its mirrors failed, a repackaged or converted HLS play goes on from the next version of the title, in the order the user is offered them (the [version order](#version-order) rules and the user's quality group included), then those before it, from the segment the app waits for. The segments keep their numbers and times; the playlist served after the switch has one `#EXT-X-DISCONTINUITY` before the first segment of the other version. The other version is made into what the app plays: its video converted into the codec, size and frame rate the app received, its audio track the first in the same language, copied when it is alike, else converted into the codec, channels and sample rate the app received. When both versions' speech is known (see [Subtitles](subtitles.md)), its times are moved by how much later its speech comes. The log says `A play went on from another version: its source failed`, and Home's playback **Details** show **Switched version**.
+- Limits of the switch: the search for another version takes 40 seconds at most; the app's requests meanwhile wait, and those past 20 seconds are told the server is busy, which apps ask again. A play switches 3 times at most. The video conversion counts toward [Video conversions at once](#video-conversions-at-once): at the cap, there is no switch. The versions passed over: torrents, whose swarm takes longer to start than a player waits; versions that failed lately; MPEG-TS files and discs; versions more than 1% longer or shorter, or of another frame shape (2%), which are another cut; and versions whose tracks cannot be converted into the app's. A play that copies HDR or 10-bit video, a play in fragmented MP4 segments whose video is copied (the app keeps the first version's initialization segment), MPEG-TS files and discs, Live TV, and plays with **Keep the converted video when the audio track changes** on do not switch, and end as before. A picture subtitle of the first version's own file is not burned into the other version, and its embedded text subtitles stop at the switch.
+- Direct play cannot be carried on: the app reads the provider's link itself, and Polyfin is not asked again when it fails. Neither can a relayed file without mirrors.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no mirrors and never switches a play to another version: a source that fails ends the play. Apps keep requesting the same play session's segments, so the switch needs nothing of them.
 
 ## Scrubbing thumbnails and chapter images
 

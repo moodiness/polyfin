@@ -59,6 +59,12 @@ func (s *Service) watchlistChildren(ctx context.Context, v view, start, count in
 	if err != nil {
 		return Page{}, err
 	}
+	return s.watchlistPage(ctx, v, ids, start, count, first)
+}
+
+// watchlistPage describes the titles ids of a watchlist from start, as
+// watchlistChildren does.
+func (s *Service) watchlistPage(ctx context.Context, v view, ids []accounts.ID, start, count int, first bool) (Page, error) {
 	if !first {
 		items, err := s.itemsOf(ctx, v, ids, watchlistKinds)
 		return slicePage(items, start, count), err
@@ -77,6 +83,36 @@ func (s *Service) watchlistChildren(ctx context.Context, v view, start, count in
 	page := slicePage(items, start, count)
 	page.More = from < len(ids)
 	return page, nil
+}
+
+// WatchlistAvailable lists, from start, the titles of the user's
+// watchlist they have not started that the last check found versions for
+// (see watchlist.Store.Available), those found the latest first: the Now
+// available home row. WatchlistWaiting lists those it found none for, the
+// latest added first: the Still waiting row. Both leave out what the
+// Watchlist view leaves out, and list nothing for a request made with an
+// API key. A home row's, first, describes only as many titles as it shows.
+func (s *Service) WatchlistAvailable(ctx context.Context, user accounts.User, start, count int, first bool) (Page, error) {
+	return s.watchlistRow(ctx, user, s.watchlist.Available, start, count, first)
+}
+
+// WatchlistWaiting lists the Still waiting row (see WatchlistAvailable).
+func (s *Service) WatchlistWaiting(ctx context.Context, user accounts.User, start, count int, first bool) (Page, error) {
+	return s.watchlistRow(ctx, user, s.watchlist.Waiting, start, count, first)
+}
+
+func (s *Service) watchlistRow(ctx context.Context, user accounts.User, list func(context.Context, accounts.ID) ([]accounts.ID, error),
+	start, count int, first bool) (Page, error) {
+	v, err := s.view(ctx, user)
+	if err != nil || v.user == (accounts.ID{}) {
+		return Page{}, err
+	}
+	ids, err := list(ctx, v.user)
+	if err != nil {
+		return Page{}, err
+	}
+	ids = slices.DeleteFunc(ids, func(id accounts.ID) bool { return v.hidden[id] })
+	return s.watchlistPage(ctx, v, ids, start, count, first)
 }
 
 // AddToWatchlist puts a movie or a series on user's watchlist, on the list

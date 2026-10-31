@@ -94,15 +94,28 @@ const backups: typeof en = {
       button: 'Restaurer',
       title: 'Restaurer une sauvegarde',
       intro:
-        'La base de données revient telle qu’elle était quand la sauvegarde a été faite. Choisissez une sauvegarde du dossier ou d’une destination, ou envoyez un fichier .dump.',
+        'La base de données revient telle qu’elle était quand la sauvegarde a été faite. Choisissez une sauvegarde du dossier ou d’une destination, ou envoyez un fichier de sauvegarde.',
       loading: 'Liste des sauvegardes…',
       folder: 'Dossier des sauvegardes',
       none: 'Aucune sauvegarde ici.',
       beforeRestore: 'avant une restauration',
+      encrypted: 'chiffrée',
       choose: 'Restaurer cette sauvegarde',
-      upload: 'Envoyer un fichier .dump',
+      download: 'Télécharger',
+      downloadDecrypted: 'Télécharger déchiffrée',
+      downloadTitle: (file: string) => `Télécharger ${file} déchiffrée`,
+      downloadBody:
+        'Saisissez la phrase de passe avec laquelle cette sauvegarde a été chiffrée. Le dump est enregistré en clair sur cet ordinateur : gardez-le aussi bien que le serveur.',
+      passphrase: 'Phrase de passe des sauvegardes',
+      downloading: 'Vérification de la phrase de passe…',
+      upload: 'Envoyer un fichier de sauvegarde',
       uploadHelp:
-        'Une sauvegarde de la base de données de Polyfin, faite par Polyfin ou avec pg_dump --format=custom.',
+        'Un fichier .dump de la base de données de Polyfin, fait par Polyfin ou avec pg_dump --format=custom, ou un fichier .dump.enc chiffré par Polyfin.',
+      unlockTitle: (file: string) => `Ouvrir ${file}`,
+      unlockBody:
+        'Cette sauvegarde est chiffrée. Saisissez la phrase de passe avec laquelle elle a été faite : Polyfin la déchiffre, en vérifie chaque partie, puis indique ce que fait sa restauration.',
+      unlock: 'Ouvrir',
+      unlocking: 'Déchiffrement et vérification…',
       checking: 'Vérification de la sauvegarde…',
       unavailable: {
         pg_restore_missing:
@@ -146,6 +159,7 @@ const backups: typeof en = {
         'Polyfin restaure la sauvegarde, puis redémarre. Cette page se recharge dès qu’il répond.',
       lastRestore: 'Dernière restauration',
       lastRestoreOk: (file: string, by: string) => `${file}, par ${by}`,
+      lastRestoreSetup: (file: string) => `${file}, depuis la page d’installation`,
       lastRestoreFailed: (file: string) =>
         `${file} n’a pas pu être restaurée : la base de données est restée telle quelle.`,
     },

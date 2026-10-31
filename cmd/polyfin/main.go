@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/moodiness/polyfin/internal/commercials"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/desktop/tools"
 	"github.com/moodiness/polyfin/internal/discovery"
 	"github.com/moodiness/polyfin/internal/dlna"
 	"github.com/moodiness/polyfin/internal/forwarded"
@@ -321,11 +323,26 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		return fmt.Errorf("prepare the segment directory: %w", err)
 	}
 	defer segments.Close()
+	// NVENC with an NVIDIA driver older than 610 takes the FFmpeg built for
+	// such drivers, downloaded into the data folder's tools when it needs
+	// it, where Polyfin Desktop keeps its own FFmpeg too.
+	if manifest, ok, err := tools.OlderDriverManifest(runtime.GOOS, runtime.GOARCH); err != nil {
+		logger.Warn("The manifest of the FFmpeg for NVIDIA drivers older than 610 cannot be read", "variable", tools.OlderDriverVariable, "error", err)
+	} else if ok {
+		segments.UseOlderDriverFFmpeg(tools.OlderDriver(filepath.Join(cfg.DataDir, "tools"), manifest))
+	}
 	settings := store.Settings()
 	segments.SelectHardware(settings.HardwareAcceleration, settings.VAAPIDevice)
 	lib := library.New(pool, addonStore, addonClient, logger, store.Settings)
 	channels := iptv.New(pool, addonStore, addonClient, logger, store.Settings)
 	lib.UseIPTV(channels)
+	// Anime named by AniDB, Kitsu or MyAnimeList, as Simkl's history and
+	// anime addons name them, are mapped to IMDb and TVDB from two lists
+	// kept in the data folder. Stream addons that accept other identifiers
+	// than a title's are asked by those the mapping gives.
+	animeMapping := anime.New(anime.Options{Dir: filepath.Join(cfg.DataDir, "anime"), Version: version, Logger: logger})
+	defer animeMapping.Close()
+	lib.UseAnime(animeMapping)
 	channels.OnChange(lib.LineupChanged)
 	// Find tuners asks the local networks for HDHomeRun tuners on their
 	// port, or only the addresses POLYFIN_HDHOMERUN_ADDRESSES gives.
@@ -454,9 +471,13 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Settings: store.Settings, Logger: logger})
 	defer breaks.Close()
 	registerRecordingTasks(registry, recorder, breaks)
-	// The destinations' passwords and keys are sealed as the other secrets.
+	// The destinations' passwords and keys are sealed as the other secrets,
+	// and so is the passphrase that encrypts the backups: one the key
+	// cannot open fails the backups rather than leave them unencrypted. A
+	// backup sent from the setup page is written to the default folder.
 	backups := backup.New(backup.Config{Folder: func() string { return store.Settings().BackupDir(cfg.DataDir) }, DatabaseURL: cfg.DatabaseURL,
-		DB: pool, Secrets: box, Settings: store.Settings, Logger: logger})
+		DB: pool, Secrets: box, Settings: store.Settings, PassphraseUnreadable: func() bool { return store.SecretUnreadable("backupPassphrase") },
+		SetupFolder: accounts.DefaultBackupFolder(cfg.DataDir), Logger: logger})
 	if backups.Available() {
 		logger.Info("Database backups are on", "folder", backups.Dir())
 		if _, err := exec.LookPath(backups.PgDump()); err != nil {
@@ -466,9 +487,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			logger.Warn("pg_restore was not found: backups cannot be restored from the admin app until it is installed", "pg_restore",
 				backups.PgRestore())
 		}
-		// Backups downloaded or sent to be restored, and never restored, go.
-		backups.RemoveRestoreLeftovers()
 	}
+	// Backups downloaded, sent or decrypted to be restored, and never
+	// restored, go.
+	backups.RemoveRestoreLeftovers()
 	registerBackupTask(registry, backups)
 	webClient := server.WebClientFiles(cfg.WebDir)
 	switch {
@@ -485,11 +507,6 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Settings: store.Settings, Logger: logger})
 	defer audioSegments.Close()
 	userData := userdata.New(pool)
-	// Anime named by AniDB, Kitsu or MyAnimeList, as Simkl's history and
-	// anime addons name them, are mapped to IMDb and TVDB from two lists
-	// kept in the data folder.
-	animeMapping := anime.New(anime.Options{Dir: filepath.Join(cfg.DataDir, "anime"), Version: version, Logger: logger})
-	defer animeMapping.Close()
 	// Imported watch histories find their titles in the library and add to
 	// the users' data. A connection a service stops is told to the
 	// notifications, made below, as recordings are.
@@ -500,9 +517,16 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		}})
 	defer tracking.Close()
 	// Users and their watch data imported from a Jellyfin server find
-	// their titles and merge the same way.
+	// their titles and merge the same way. A user signing in to Plex to
+	// import their own watch data brings their Plex Watchlist too, and
+	// Polyfin names itself to Plex by one identifier, kept with the
+	// server's identity.
+	plexClient, err := database.PlexClient(ctx, pool)
+	if err != nil {
+		return err
+	}
 	fromJellyfin := jellyfinimport.New(jellyfinimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Version: version,
-		Logger: logger})
+		Logger: logger, Watchlist: watchlist.New(pool), PlexClient: plexClient})
 	defer fromJellyfin.Close()
 	// The watch data of accounts on apps built on addons, Nuvio's and
 	// Stremio's, finds its titles and merges the same way; the accounts'
@@ -658,6 +682,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// Reset my preferences forgets what Jellyfin apps saved, with what
 		// the Jellyfin API remembers of it.
 		Preferences: jellyfinAPI,
+		// My account's track choices are those the Jellyfin API remembers.
+		TrackChoices: jellyfinAPI,
 		// Apply this order to every user clears the orders of libraries
 		// users saved, with what the Jellyfin API remembers of them.
 		LibraryOrders: jellyfinAPI,
@@ -682,6 +708,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			MissingLanguages: player.MissingLanguages,
 			Torrents:         torrents,
 			Images:           jellyfinAPI,
+
+			// The FFmpeg for NVIDIA drivers older than 610 (#542).
+			OlderDriverFFmpeg: segments.OlderDriverFFmpeg,
 		},
 		Variables:      config.Variables(os.Environ(), cfg),
 		Trackers:       tracking,
@@ -716,6 +745,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Ready:   notifier.Loaded(), Logger: logger})
 	jellyfinAPI.Reminders = programmeReminders
 	adminOptions.Reminders = programmeReminders
+	registerWatchlistTask(registry, store, watchlist.New(pool), jellyfinAPI, notifier, logger)
 	// Playbacks under way when Polyfin stops are kept in the history, as
 	// ended at their last report.
 	defer playbacks.Close()
@@ -730,8 +760,12 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			DLNA:          sharing.Handler(),
 			Web:           webClient,
 			SetupRequired: store.SetupRequired,
-			CustomJs:      func() string { return store.Settings().ServedJs() },
-			SavedThemes:   themesDir,
+			WebThemes: func() server.WebThemes {
+				settings := store.Settings()
+				return server.WebThemes{Theme: settings.WebTheme, CustomCss: settings.CustomCss, CustomJs: settings.CustomJs}
+			},
+			ServerID:    serverID,
+			SavedThemes: themesDir,
 			// A file of the copy kept that is missing goes to where it
 			// came from.
 			SavedThemeOriginal: themeCopier.Original,
@@ -1134,6 +1168,42 @@ func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Serv
 			"pt-BR": {Name: "Enviar a retrospectiva do ano", Description: "Envia agora a retrospectiva do último ano para cada destino de notificação que a escolheu. Todo ano, ela é enviada sozinha em 1º de janeiro, na hora do resumo semanal."},
 		},
 		Run: send(notifications.YearlySummary),
+	})
+}
+
+// registerWatchlistTask registers the checks of the watchlists for
+// versions: every hour, the titles not checked for the hours set under
+// Settings › Catalogs, telling their users of those found available once
+// the notifications read their targets.
+func registerWatchlistTask(registry *tasks.Registry, store *accounts.Store, lists *watchlist.Store, api *jellyfin.Handler,
+	notifier *notifications.Service, logger *slog.Logger) {
+	checker := watchlist.NewChecker(watchlist.CheckerOptions{
+		Store: lists,
+		Users: store.Users,
+		Hours: func() int { return store.Settings().WatchlistCheckHours },
+		Find:  api.FindWatchlistVersions,
+		Tell: func(ctx context.Context, user accounts.User, title accounts.ID) {
+			select {
+			case <-notifier.Loaded():
+				notifier.WatchlistTitleAvailable(ctx, user, title)
+			case <-ctx.Done():
+			}
+		},
+		Logger: logger,
+	})
+	registry.Register(tasks.Task{
+		Key:      "CheckWatchlists",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Look for versions of watchlist titles", Description: "Asks the stream addons for versions of the titles of each user's watchlist not started, 20 titles per user at a time, each again after the hours set under Settings › Catalogs, for the Now available and Still waiting home rows, and tells each user once of a title versions were found for."},
+			"fr":    {Name: "Chercher des versions des titres à regarder", Description: "Demande aux addons de flux des versions des titres non commencés de la liste « À regarder » de chaque utilisateur, 20 titres par utilisateur à la fois, chacun de nouveau après le nombre d’heures choisi dans Paramètres › Catalogues, pour les rangées d’accueil Disponibles et Toujours en attente, et prévient chaque utilisateur une fois d’un titre pour lequel des versions ont été trouvées."},
+			"de":    {Name: "Versionen der Titel auf Merklisten suchen", Description: "Fragt die Stream-Add-ons nach Versionen der nicht begonnenen Titel der Merkliste jedes Benutzers, 20 Titel je Benutzer auf einmal, jeden erneut nach den unter Einstellungen › Kataloge festgelegten Stunden, für die Startseitenzeilen Jetzt verfügbar und Noch ausstehend, und benachrichtigt jeden Benutzer einmal über einen Titel, für den Versionen gefunden wurden."},
+			"es":    {Name: "Buscar versiones de los títulos para ver", Description: "Pide a las extensiones de streams versiones de los títulos no empezados de la lista «Para ver» de cada usuario, 20 títulos por usuario a la vez, cada uno de nuevo tras las horas elegidas en Ajustes › Catálogos, para las filas de inicio Ya disponible y Aún en espera, y avisa a cada usuario una vez de un título para el que se encontraron versiones."},
+			"it":    {Name: "Cerca versioni dei titoli da guardare", Description: "Chiede agli add-on di flussi versioni dei titoli non iniziati della lista «Da guardare» di ogni utente, 20 titoli per utente alla volta, ciascuno di nuovo dopo le ore scelte in Impostazioni › Cataloghi, per le righe iniziali Ora disponibili e Ancora in attesa, e avvisa ogni utente una volta di un titolo per cui sono state trovate versioni."},
+			"pt-BR": {Name: "Procurar versões dos títulos para assistir", Description: "Pede aos complementos de streams versões dos títulos não iniciados da lista “Para assistir” de cada usuário, 20 títulos por usuário de cada vez, cada um de novo após as horas definidas em Configurações › Catálogos, para as linhas iniciais Já disponível e Ainda aguardando, e avisa cada usuário uma vez de um título para o qual foram encontradas versões."},
+		},
+		Interval: watchlist.CheckInterval,
+		Run:      checker.Check,
 	})
 }
 

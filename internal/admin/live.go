@@ -68,6 +68,9 @@ type liveSessionJSON struct {
 	// Video and Audio tell what is converted, null when copied.
 	Video *videoConversionJSON `json:"video"`
 	Audio *audioConversionJSON `json:"audio"`
+	// SwitchedVersion names the version the play went on from once its
+	// version's source failed, empty when it did not.
+	SwitchedVersion string `json:"switchedVersion"`
 }
 
 type liveUserJSON struct {
@@ -121,8 +124,9 @@ type videoConversionJSON struct {
 	ToneMap  bool   `json:"toneMap"`
 	Burn     bool   `json:"burnSubtitles"`
 	// LimitedBy is what set the size: source when nothing made it smaller
-	// than the source; gpu (4K), processor (1080p) or toneMapping (HDR
-	// converted on the processor), the server's own caps; qualityGroup,
+	// than the source; gpu (4K), processor (1080p), toneMapping (HDR
+	// converted on the processor) or gpuToneMapping (HDR converted on a
+	// GPU only keeping up below), the server's own caps; qualityGroup,
 	// the user's group; serverMax, the settings' maximum quality of
 	// converted video; bitrate, the bitrate limit; app, the frame or the
 	// codec level the app's profile allows. Empty when not known.
@@ -183,6 +187,7 @@ func newLiveSessionJSON(s jellyfin.LiveSession) liveSessionJSON {
 		PlayMethod:   s.Playing.PlayMethod,
 		Reasons:      s.Reasons,
 	}
+	result.SwitchedVersion = s.Switched
 	// A device may download while it plays, and download several titles:
 	// each download is told apart by its version.
 	if s.Download {
@@ -297,32 +302,16 @@ func sentStream(s liveSessionJSON) *streamJSON {
 		*sent = *s.Source
 	}
 	if s.Video != nil {
-		sent.Width, sent.Height, sent.VideoCodec = s.Video.Width, s.Video.Height, videoCodecOf(s.Video.Encoder)
+		sent.Width, sent.Height, sent.VideoCodec = s.Video.Width, s.Video.Height, hls.VideoCodecOf(s.Video.Encoder)
 		sent.Bitrate = s.Video.Bitrate
 		if s.Audio != nil {
 			sent.Bitrate += s.Audio.Bitrate
 		}
 	}
 	if s.Audio != nil {
-		sent.AudioCodec = audioCodecOf(s.Audio.Codec)
+		sent.AudioCodec = hls.AudioCodecOf(s.Audio.Codec)
 	}
 	return sent
-}
-
-// videoCodecOf names the codec an FFmpeg video encoder makes.
-func videoCodecOf(encoder string) string {
-	switch {
-	case strings.Contains(encoder, "265"), strings.HasPrefix(encoder, "hevc"):
-		return "hevc"
-	case strings.Contains(encoder, "264"), strings.HasPrefix(encoder, "h264"):
-		return "h264"
-	}
-	return encoder
-}
-
-// audioCodecOf names the codec an FFmpeg audio encoder makes.
-func audioCodecOf(encoder string) string {
-	return strings.TrimPrefix(encoder, "lib")
 }
 
 // maxMessageLength bounds the messages administrators send to apps.

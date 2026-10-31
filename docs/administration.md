@@ -14,11 +14,13 @@ A bar at the top holds the sections, for administrators:
 - **System**: **Health**, **Statistics**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`);
 - **Settings**, one page per section (`/admin/settings/general`, `/admin/settings/content`…).
 
-The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them. On a phone, the bar keeps the logo, the search and a menu button that opens all of these.
+The account menu, on the right, holds **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language and **Sign out**. Members see a shorter bar: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them. On a phone, the bar keeps the logo, the search and a menu button that opens all of these, the web player first.
+
+When the server serves a web client, the bar has a link to it. Opened from the web client, or inside the Jellyfin apps for Android and iOS, it reads **Back to the web player** and opens it in place, and a phone shows it as a back arrow before the logo. In those apps, Android's **Back** button and the iOS app's **Home** tab lead back to it too. Otherwise it reads **Web player** and opens it in a new tab. See [Back to the web client](web-client.md#back-to-the-web-client).
 
 The admin app is in English, French, German, Spanish, Italian and Brazilian Portuguese. It starts in the first of these the browser prefers, any Portuguese in Brazilian Portuguese, else in English; the language list at the top of the sign-in and setup pages, and **Language** in the account menu, change it for this browser.
 
-**My account** has these sections: **Statistics**, the hours you watched, your most played titles, apps and devices, and your recent playbacks, with **Export CSV** (see [Statistics](statistics.md#my-account)), **Tracking** (see [Tracking services](tracking.md)), **Continue Watching** and **Hidden titles**, **Reminders**, the programmes and series you asked to be reminded of from the web client, with **Delete**, shown with the **Live TV** permission (see [Programme reminders](live-tv.md#programme-reminders)), **Notifications** (see [Notifications](notifications.md)), with **Remind me before** and **Also show reminders on my apps** under the targets, **Devices**, the apps signed in with the account, **Password**, and **Two-step sign-in**, a code from an authenticator app after the password (see [Two-step sign-in](users.md#two-step-sign-in)). Signing out a device asks first.
+**My account** has these sections: **Statistics**, the hours you watched, your most played titles, apps and devices, and your recent playbacks, with **Export CSV** (see [Statistics](statistics.md#my-account)), **Tracking** (see [Tracking services](tracking.md)), **Continue Watching** and **Hidden titles**, **Track choices**, with **Forget my track choices** (see [Track choices](users.md#track-choices)), **Reminders**, the programmes and series you asked to be reminded of from the web client, with **Delete**, shown with the **Live TV** permission (see [Programme reminders](live-tv.md#programme-reminders)), **Notifications** (see [Notifications](notifications.md)), with **Remind me before** and **Also show reminders on my apps** under the targets, **Devices**, the apps signed in with the account, **Password**, and **Two-step sign-in**, a code from an authenticator app after the password (see [Two-step sign-in](users.md#two-step-sign-in)). Signing out a device asks first.
 
 Signing in to the admin app takes the account's name and password, then, for an account with two-step sign-in, the code of its authenticator app or a recovery code. Administrators can require it of administrators under **Settings › Security**, and turn it off for a user who lost their phone (see [For administrators](users.md#for-administrators)).
 
@@ -35,7 +37,7 @@ Addresses from before this layout, such as `/admin/health` or `/admin/settings#s
 **Home** greets you by name. At the top, on the right of the greeting, it shows the version Polyfin runs, **Restart**, in red, and **Update now** while an update tool is set (see [Restart and updates](#restart-and-updates)). Below, it shows:
 
 - a notice when a new version of Polyfin is out, with **Release notes**, and **Update now** while an update tool is set (see [New versions](#new-versions)).
-- **Now playing**, updated every 3 seconds. A playback whose app reported nothing for five minutes, as a tab closed while it played, leaves it (see [Playbacks at once](users.md#playbacks-at-once)). For each playback you see the user, the device and the app, the title and the position, and **How it plays**: direct play, remux or conversion. **Details** adds Jellyfin's reasons, the user's quality group, the resolution and bitrate sent, and whether the GPU or the CPU encodes. The source it describes is the version played: when the app names only the title, as jellyfin-web does when it plays a title's first version as it is, the version the app's last PlaybackInfo chose for it. When the video sent is smaller than the source, **Smaller than the source** tells what limited it: the GPU's 4K, the processor's 1080p, HDR converted by the processor, the user's quality group, **Maximum quality of converted video**, or the bitrate allowed by the app or by the user's **Maximum quality**. See [Size of converted video](transcoding.md#size-of-converted-video). A [converted download](transcoding.md#converted-downloads) shows there too, labeled "Downloading", its bar telling how far the copy is made.
+- **Now playing**, updated every 3 seconds. A playback whose app reported nothing for five minutes, as a tab closed while it played, leaves it (see [Playbacks at once](users.md#playbacks-at-once)). For each playback you see the user, the device and the app, the title and the position, and **How it plays**: direct play, remux or conversion. **Details** adds Jellyfin's reasons, the user's quality group, the resolution and bitrate sent, and whether the GPU or the CPU encodes. The source it describes is the version played: when the app names only the title, as jellyfin-web does when it plays a title's first version as it is, the version the app's last PlaybackInfo chose for it; once the play went on from another version because its source failed, that one, named under **Switched version** (see [Carrying a play on](playback.md#carrying-a-play-on)). When the video sent is smaller than the source, **Smaller than the source** tells what limited it: the GPU's 4K, the processor's 1080p, HDR converted by the processor, the user's quality group, **Maximum quality of converted video**, or the bitrate allowed by the app or by the user's **Maximum quality**. See [Size of converted video](transcoding.md#size-of-converted-video). A [converted download](transcoding.md#converted-downloads) shows there too, labeled "Downloading", its bar telling how far the copy is made.
 - **To look at**: the problems Health found, with a link to it.
 - **Server state**: version, database, cache and graphics card.
 - **Recent activity**, the activity log, which you can filter by kind and search. Its list scrolls in its own box and loads older events as you reach its end.
@@ -93,7 +95,7 @@ A picture subtitle track that could not be read into text, its language having n
 
 When every metadata addon of the server has a language, a warning names the first one, with a link to its page: they then describe titles in their language for every user, whatever the user's metadata language. Keep **Language of its descriptions** at **None** on that addon, or on one more metadata addon (see [Languages](addons-and-libraries.md#languages)).
 
-An NVIDIA graphics card whose driver is older than the version FFmpeg needs for NVENC is a warning naming that version, with a link to **Transcoder**: video is converted on another graphics card or on the processor until the driver is updated (see [NVIDIA driver](transcoding.md#nvidia-driver)).
+An NVIDIA graphics card whose driver is older than the version FFmpeg needs for NVENC is a warning naming that version, with a link to **Transcoder**: video is converted on another graphics card or on the processor until the driver is updated. With a driver from 570 to 609, Polyfin downloads an FFmpeg built for it instead; a warning tells, with why, when it could not be downloaded, which Polyfin tries again at its next start or when the conversion settings are saved, or when NVENC fails with it too (see [NVIDIA driver](transcoding.md#nvidia-driver)).
 
 A local folder whose files are left unmatched because the search of their titles failed is a warning, naming the addon that failed most of them and why, with a link to the folder's page. It goes away once the searches go through, which Polyfin tries again on its own (see [Failed searches](local-folders.md#failed-searches)).
 
@@ -283,6 +285,32 @@ Over HTTPS, the stream addresses Polyfin gives apps start with `https://`, and t
 
 **For app developers:** `/admin/api/settings` holds the settings as `httpsMode` (`off`, `files` or `letsencrypt`), `httpsPort`, `httpsRedirect`, `httpsCertificate`, `httpsPrivateKey`, `acmeHosts`, `acmeEmail`, `acmeTerms` and `acmeChallenge` (`http-01` or `tls-alpn-01`). A `PUT` with files that cannot be served answers 400 `https_certificate_missing`, `https_private_key_missing`, `https_certificate_unreadable`, `https_private_key_unreadable` or `https_files_mismatch`; Let's Encrypt without a host name answers `invalid_acme_hosts`, and without the terms agreed to `acme_terms_required`. `GET /admin/api/health/problems` lists `https_port`, with `port`, `https_files`, with `failure` (`missing`, `unreadable` or `mismatch`) and `file`, `https_renewal`, with `error`, and `https_expiry`, with `expires`.
 
+## Identity provider
+
+People can sign in to the admin app and to the web client with an OpenID Connect provider, set under **Settings › Security**, in its **Identity provider** part. Changes apply at once, without a restart. Signing in through it is told in [Signing in with an identity provider](users.md#signing-in-with-an-identity-provider).
+
+To set it up:
+
+1. Set **Public address**, under **Settings › Notifications**, to the address people open Polyfin at: the sign-in starts and ends there.
+2. At the provider, register Polyfin as a client, confidential or public, with the **Redirect URI** the part shows, `<public address>/admin/api/provider/callback`, exactly, and the authorization code flow.
+3. Fill in **Issuer** and **Client ID**, and **Client secret** for a confidential client, then save. The sign-in pages show their button once the issuer, the client ID and the public address are set.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Issuer** | **Settings › Security** | Empty, off | The provider's issuer, exactly as its discovery document gives it, `http://` or `https://`, without a query or a fragment. Polyfin reads `<issuer>/.well-known/openid-configuration`. `http://` is accepted for a provider on your own network, but see the warning below. |
+| **Button name** | **Settings › Security** | Empty | What the buttons say after "Sign in with", up to 64 bytes. Empty shows the issuer's host name. |
+| **Client ID** | **Settings › Security** | Empty, off | The ID the provider gave Polyfin's client. |
+| **Client secret** | **Settings › Security** | Empty | The secret of a confidential client, sent with HTTP Basic authentication, or in the form when the provider lists only `client_secret_post`. Kept encrypted with `POLYFIN_SECRET_KEY`, and never shown again. |
+| **Claim naming the user** | **Settings › Security** | `preferred_username` | The ID token's claim compared with account names the first time someone signs in; the verified email comes next. |
+| **Create accounts** | **Settings › Security** | Off | Creates an account, signing in through the provider only, for someone no account matches. Off, they are refused. |
+| **Administrators' claim**, **Administrators' value** | **Settings › Security** | Empty | Both set, someone whose claim is the value, or a list holding it, becomes an administrator as they sign in. With the claim `groups`, Polyfin asks for the `groups` scope when the provider lists it. |
+
+**Use HTTPS.** Polyfin accepts an `http://` issuer, as self-hosted providers often sit on the local network. Over HTTP, though, the client secret, the codes and the tokens cross the network unencrypted, between Polyfin and the provider, and between browsers and both of them: anyone on the way can read them, and sign in as the people they belong to. Give the provider an `https://` address, and serve Polyfin's public address over HTTPS too, whenever the sign-in leaves a network you fully trust.
+
+Polyfin asks for the scopes `openid`, `profile` and `email`, the last two when the provider lists them or lists no scope. A provider that cannot be reached when someone starts to sign in is logged as a warning, with its issuer, and the browser comes back with an error; a refused ID token is logged with the check it failed, never with the token.
+
+**For app developers:** `/admin/api/settings` holds `providerIssuer`, `providerName`, `providerClientId`, `providerClientSecretSet` (the secret itself is only sent, never answered, empty to remove it), `providerUserClaim`, `providerCreateAccounts`, `providerAdminClaim`, `providerAdminValue`, and `providerRedirectUri`, read-only, empty without a public address. Settings refused answer 400 `invalid_provider`.
+
 ## Logs
 
 **System › Logs** follows the in-memory log, redacted as it is for Jellyfin apps (see [Server logs](#server-logs)). It has a **Level** filter, a search box, **Follow** and **Pause**, and **Download**.
@@ -345,7 +373,7 @@ scrape_configs:
 - secrets are hidden;
 - the database URL shows its host and database only.
 
-A **Web player** link appears when the server serves a web client. See [configuration](configuration.md) for the variables and [web client](web-client.md) for **Settings › Web player**.
+The web client's link, **Back to the web player** or **Web player**, appears when the server serves one (see [The admin app](#the-admin-app)). See [configuration](configuration.md) for the variables and [web client](web-client.md) for **Settings › Web player**.
 
 ## Showing a saved key
 

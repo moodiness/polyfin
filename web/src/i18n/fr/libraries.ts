@@ -213,6 +213,10 @@ const libraries: typeof en = {
     noCatalogMatch: 'Aucun catalogue ne correspond à ce filtre.',
     rules: 'Règles',
     rulesHelp: 'Sans règle, la liste garde tous les titres de ses catalogues.',
+    exclude: 'Exclusions',
+    excludeHelp:
+      'Les titres qui suivent ces règles sont écartés, quoi que disent les règles ci-dessus. Sans exclusion, aucun ne l’est.',
+    excludeMatch: 'Écarter les titres qui suivent',
     match: 'Les titres suivent',
     matchChoices: { all: 'Toutes les règles', any: 'Au moins une règle' },
     groupMatch: 'Ce groupe suit',
@@ -230,6 +234,12 @@ const libraries: typeof en = {
       type: 'Film ou série',
       rank: 'Place dans son catalogue',
       state: 'État de visionnage',
+      released: 'Date de sortie',
+      votes: 'Votes IMDb',
+      runtime: 'Durée',
+      contentRating: 'Classification',
+      person: 'Acteur ou réalisateur',
+      studio: 'Studio ou chaîne',
     } as Record<string, string>,
     negation: 'Suit ou non',
     is: 'est',
@@ -239,6 +249,12 @@ const libraries: typeof en = {
     to: 'À',
     language: 'Langue',
     rankMax: 'Parmi ses premiers',
+    minutes: 'minutes',
+    atMost: 'Au plus',
+    releasedWhen: 'Quand',
+    releasedWithin: { last: 'Depuis', next: 'D’ici' } as Record<string, string>,
+    days: 'jours',
+    namePlaceholder: { person: 'Son nom', studio: 'Son nom' } as Record<string, string>,
     types: { movie: 'Un film', series: 'Une série' } as Record<string, string>,
     states: {
       played: 'Vu',
@@ -248,16 +264,24 @@ const libraries: typeof en = {
     } as Record<string, string>,
     stateHelp:
       'Les règles vu, commencé et favori suivent ce qu’a fait chaque utilisateur : chacun voit sa propre liste.',
-    languageHelp:
-      'La langue vient avec la description d’un titre, que Polyfin lit en arrière-plan : un titre pas encore décrit est écarté jusqu’à ce qu’il le soit.',
+    describedHelp:
+      'La langue d’un titre, et sa durée, sa classification, ses personnes et sa date de sortie quand son catalogue ne les donne pas, viennent avec sa description, que Polyfin lit en arrière-plan : un titre pas encore décrit est écarté jusqu’à ce qu’il le soit. Un titre à qui manque ce que regarde une règle ne suit ni la règle ni son contraire.',
+    votesHelp:
+      'Les votes IMDb viennent de MDBList, avec la clé d’API MDBList des notes dans Paramètres › Contenu, cherchés en arrière-plan. Sans cette clé, aucun titre n’a de votes.',
+    studioHelp:
+      'Les studios et les chaînes viennent de TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, cherchés en arrière-plan et gardés : la liste grandit à mesure qu’ils arrivent. Sans cette clé, seuls comptent les studios qu’un administrateur a donnés dans les métadonnées d’un titre.',
     sort: 'Tri',
     sorts: {
       catalog: 'Comme ses catalogues les listent, un de chaque tour à tour',
       premiere: 'Date de sortie, la plus récente d’abord',
+      latestEpisode: 'Dernier épisode diffusé, le plus récent d’abord',
+      seasonPremiere: 'Dernier début de saison, le plus récent d’abord',
       rating: 'Note IMDb, la plus haute d’abord',
       name: 'Nom',
       random: 'Au hasard, tiré à nouveau chaque jour',
     } as Record<string, string>,
+    episodeSortHelp:
+      'Les séries viennent selon leur dernier épisode régulier diffusé, ou le début de leur dernière saison, comme le dit leur description, sans les épisodes spéciaux ni ceux à venir ; les films selon leur date de sortie. Une série dont la description n’est pas encore lue vient en dernier jusqu’à ce qu’elle le soit.',
     maxItems: 'Nombre maximum de titres',
     maxHelp: (max: string) => `De 1 à ${max}. Vide : pas de maximum.`,
     noMax: 'Pas de maximum',
@@ -278,8 +302,8 @@ const libraries: typeof en = {
     firstOf: (shown: string, listed: string) => `Les ${shown} premiers sur ${listed}.`,
     unknown: (count: string) =>
       count === '1'
-        ? '1 titre attend encore sa description, qui donne sa langue : la liste grandit à mesure que les descriptions arrivent.'
-        : `${count} titres attendent encore leur description, qui donne leur langue : la liste grandit à mesure que les descriptions arrivent.`,
+        ? '1 titre attend encore ce que regardent ses règles : sa description, ses votes ou ses studios. La liste grandit à mesure qu’ils arrivent.'
+        : `${count} titres attendent encore ce que regardent leurs règles : leur description, leurs votes ou leurs studios. La liste grandit à mesure qu’ils arrivent.`,
     incomplete:
       'Certains catalogues n’ont pas répondu à temps : la liste montre ce qui a été lu jusqu’ici, et lit le reste.',
     previewEmpty: 'Aucun titre ne suit ces règles pour l’instant.',

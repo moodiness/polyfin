@@ -46,7 +46,14 @@ func (s *Service) Record(ctx context.Context, user accounts.ID, version library.
 		}
 		target, release := s.loopback.registerRecording(version)
 		r := hls.Remux{Input: target, Video: video.Index, Audio: liveAudio(analysis)}
-		if Manifest(analysis) {
+		switch {
+		case DASH(analysis):
+			if r.InputOptions, _, err = s.dashOptions(ctx, version); err != nil {
+				release()
+				_ = held.Close()
+				return hls.Remux{}, nil, err
+			}
+		case Manifest(analysis):
 			r.InputOptions = media.LiveOptions
 		}
 		return r, func() { release(); _ = held.Close() }, nil

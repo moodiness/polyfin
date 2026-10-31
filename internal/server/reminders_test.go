@@ -216,7 +216,7 @@ async function run(scenario) {
   }
   if (scenario.start) go(scenario.start)
   vm.runInNewContext(script, {
-    location, history, URL, document, MutationObserver, window: { ApiClient }, Object, JSON, String, Date,
+    location, history, document, MutationObserver, window: { ApiClient }, Object, JSON, String, Date,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail } },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
     clearTimeout: (id) => { if (id) timers[id - 1] = null },

@@ -17,6 +17,10 @@ func TestPlayNoteNamesTheFirstReason(t *testing.T) {
 	}{
 		{Decision{DirectPlay: true}, true, "(direct play)", "(lecture directe)"},
 		{Decision{HLS: true, Reasons: []string{"ContainerNotSupported"}}, true, "(direct stream)", "(flux direct)"},
+		// The app turned direct play off for a version it plays as it is:
+		// the conversion is its request, not its codec's.
+		{Decision{HLS: true, Video: video, Reasons: []string{"VideoCodecNotSupported", "DirectPlayError"}, DirectPlayOff: true, SubtitleStreamIndex: -1}, true,
+			"(converted: app’s request)", "(converti\u00a0: demande de l’app)"},
 		{Decision{HLS: true, Video: video, Reasons: []string{"VideoCodecNotSupported", "VideoRangeTypeNotSupported"}}, true,
 			"(converted: HDR)", "(converti\u00a0: HDR)"},
 		{Decision{HLS: true, Video: video, Reasons: []string{"VideoCodecNotSupported", "VideoResolutionNotSupported"}}, true,

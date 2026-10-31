@@ -2,6 +2,10 @@ package jellyfin
 
 import (
 	"net/http"
+	"slices"
+
+	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/library"
 )
 
 // TitleRatings is what /Polyfin/Items/{itemId}/Ratings answers of a movie
@@ -47,4 +51,80 @@ func (h *Handler) titleRatings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, answer)
+}
+
+// maxPosterRatings is how many titles one /Polyfin/Items/Ratings request
+// may name: the cards of a screen, a row's or a page's.
+const maxPosterRatings = 100
+
+// PosterRatings is what /Polyfin/Items/Ratings answers: whether the web
+// player shows ratings on posters (Settings.PosterRatings), and the
+// ratings of the movies and series named, those with none left out.
+type PosterRatings struct {
+	Enabled bool
+	Items   []PosterRating
+}
+
+// PosterRating is a title's ratings on its poster: its CommunityRating,
+// shown with a star, whatever gave it, and, while the server has an
+// MDBList key, its critics' and audience scores, as
+// /Polyfin/Items/{id}/Ratings gives them. Each is null when the title has
+// none.
+type PosterRating struct {
+	Id              string
+	CommunityRating *float64
+	CriticsScore    *float64
+	AudienceScore   *float64
+}
+
+// posterRatings answers /Polyfin/Items/Ratings?Ids=…, for the cards the
+// web player's script shows ratings on: one request for the cards of a
+// screen. It reads what listings read, the scores kept included, and has
+// MDBList asked about nothing a listing of the same titles would not;
+// switched off, it reads nothing. Identifiers past the first 100, of
+// items the user cannot reach, or of other items than movies and series,
+// are left out.
+func (h *Handler) posterRatings(w http.ResponseWriter, r *http.Request) {
+	b := bindErrors{}
+	user, ok := h.viewer(w, r, b, unknownListingUser)
+	if !ok {
+		return
+	}
+	answer := PosterRatings{Enabled: h.Accounts.Settings().PosterRatings, Items: []PosterRating{}}
+	ids := slices.Compact(slices.SortedFunc(slices.Values(queryIDs(r, "ids")), compareIDs))
+	if !answer.Enabled || len(ids) == 0 {
+		writeJSON(w, http.StatusOK, answer)
+		return
+	}
+	if len(ids) > maxPosterRatings {
+		ids = ids[:maxPosterRatings]
+	}
+	items, err := h.Library.ItemsOf(r.Context(), user, ids, []library.Kind{library.KindMovie, library.KindSeries})
+	if err != nil {
+		h.browseError(w, r, err)
+		return
+	}
+	audience := h.Accounts.Settings().CriticRatingShows == "audience"
+	for _, item := range items {
+		rating := PosterRating{Id: item.ID.String()}
+		if item.CommunityRating > 0 {
+			rating.CommunityRating = new(item.CommunityRating)
+		}
+		if scores, _, known := h.Library.Scores(item); known {
+			rating.CriticsScore, rating.AudienceScore = scores.Critics, scores.Audience
+			if audience {
+				rating.AudienceScore = item.CriticRating
+			} else {
+				rating.CriticsScore = item.CriticRating
+			}
+		}
+		if rating.CommunityRating != nil || rating.CriticsScore != nil || rating.AudienceScore != nil {
+			answer.Items = append(answer.Items, rating)
+		}
+	}
+	writeJSON(w, http.StatusOK, answer)
+}
+
+func compareIDs(a, b accounts.ID) int {
+	return slices.Compare(a[:], b[:])
 }

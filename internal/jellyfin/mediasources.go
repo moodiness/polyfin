@@ -77,7 +77,7 @@ type playable struct {
 // others are offered as the version rules and the user's quality group
 // have them (see offered); so are subtitles that cannot be listed.
 func (h *Handler) playable(ctx context.Context, user accounts.User, item library.Item) (playable, error) {
-	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
+	p := playable{item: item, tracks: h.titleTracks(ctx, user, item)}
 	if item.Kind == library.KindRecording {
 		p.versions = h.recordingVersions(ctx, item)
 		return p, nil
@@ -107,7 +107,7 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 // versionsChanged). RemuxDB, when on, is asked about the versions it was
 // not asked about lately, for a moment at most (see remuxdb.Describe).
 func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item library.Item, opened accounts.ID) (playable, bool, error) {
-	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
+	p := playable{item: item, tracks: h.titleTracks(ctx, user, item)}
 	versions, complete, err := h.Library.VersionsNow(ctx, user, item.ID)
 	if err == nil {
 		h.watch(user, item.ID, opened)
@@ -131,7 +131,7 @@ func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item li
 // title is too costly. Like playable, it offers them as the rules and the
 // user's group have them.
 func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item library.Item) playable {
-	p := playable{item: item, tracks: h.trackPreferences(ctx, user)}
+	p := playable{item: item, tracks: h.titleTracks(ctx, user, item)}
 	if item.Kind == library.KindRecording {
 		p.versions = h.recordingVersions(ctx, item)
 		return p
@@ -147,10 +147,11 @@ func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item l
 // but the torrents that did not start in time (see playback.Unstarted),
 // which stay in place for the user to pick, a play that picks none
 // skipping them (see choose); and, with the version rules or the user's
-// quality group, those they hide, ordering the others (see ordered).
+// quality group, or versions naming another title, those they hide,
+// ordering the others (see ordered).
 func (h *Handler) offered(ctx context.Context, user accounts.User, versions []library.Version) []library.Version {
 	versions = slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) && !h.didNotStart(v) })
-	if !h.reordered(user) {
+	if !h.reordered(user) && !slices.ContainsFunc(versions, elsewhere) {
 		return versions
 	}
 	return h.ordered(ctx, user, versions)
@@ -304,7 +305,6 @@ func (h *Handler) placeholderSource(r *http.Request, item library.Item) MediaSou
 // tells the version's tracks when known: its analysis, or RemuxDB's
 // description of its file.
 func (h *Handler) baseSource(r *http.Request, p playable, version library.Version, id accounts.ID, analysis media.Analysis, known bool) MediaSourceInfo {
-	language := h.Accounts.Settings().Language
 	source := MediaSourceInfo{
 		Protocol:               "Http",
 		Id:                     id.String(),
@@ -336,16 +336,14 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 		source.HasSegments = h.Commercials.Has(r.Context(), p.item.ID)
 	}
 	size, runtime := version.Size, version.Runtime
+	source.MediaStreams = h.sourceStreams(r.Context(), p, version, analysis, known)
 	if known {
-		source.MediaStreams = playback.MediaStreams(analysis, h.externals(r.Context(), p, version), language)
 		source.MediaAttachments = mediaAttachments(analysis)
 		size = cmp.Or(analysis.Size, size)
 		runtime = cmp.Or(analysis.Duration, runtime)
 		if analysis.Bitrate > 0 {
 			source.Bitrate = new(analysis.Bitrate)
 		}
-	} else {
-		source.MediaStreams = playback.ExternalStreams(h.externals(r.Context(), p, version), language)
 	}
 	if size > 0 {
 		source.Size = new(size)
@@ -357,6 +355,31 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 		}
 	}
 	return source
+}
+
+// sourceStreams lists a version's streams as baseSource describes them:
+// the subtitle files, then its tracks when analysis tells them.
+func (h *Handler) sourceStreams(ctx context.Context, p playable, version library.Version, analysis media.Analysis, known bool) []playback.MediaStream {
+	language := h.Accounts.Settings().Language
+	if known {
+		return playback.MediaStreams(analysis, h.externals(ctx, p, version), language)
+	}
+	return playback.ExternalStreams(h.externals(ctx, p, version), language)
+}
+
+// versionStreams lists a version's streams as describedSource describes
+// them, with the text copies of its picture subtitles.
+func (h *Handler) versionStreams(ctx context.Context, p playable, version library.Version) []playback.MediaStream {
+	analysis, analyzed := h.Playback.Analyzed(ctx, version.ID)
+	known := analyzed
+	if !known {
+		analysis, known = h.RemuxDB.Described(version)
+	}
+	streams := h.sourceStreams(ctx, p, version, analysis, known)
+	if analyzed {
+		streams = h.withTextCopies(ctx, p, version, analysis, streams)
+	}
+	return streams
 }
 
 // withTextCopies lists after a version's streams the text copies of its

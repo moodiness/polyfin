@@ -45,6 +45,7 @@ const nav: typeof en = {
     searchShortcut: (keys: string) => `Cerca (${keys})`,
     webPlayer: 'Lettore web',
     webPlayerHint: 'Apre l’applicazione web Jellyfin di questo server in una nuova scheda.',
+    backToWebPlayer: 'Torna al lettore web',
     accountOf: (name: string) => `Account di ${name}`,
     accountMenu: 'Account',
     administrator: 'Amministratore',

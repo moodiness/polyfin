@@ -17,6 +17,7 @@ An **M3U playlist** source takes a **Name**, the **Playlist address** and, optio
 
 - A playlist's `#EXTINF` lines give each channel its `tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno` and `group-title` (quoted with double or single quotes, or not), and its name after the comma.
 - The header attributes of its `#EXTINF` lines, its `#EXTVLCOPT` and `#EXTHTTP` lines, and the `|` ending an address, give the headers its stream is requested with (see [Headers and user agent](#headers-and-user-agent)).
+- Its `#KODIPROP` lines tell a DASH stream's manifest type, and how it is encrypted (see [DASH channels and encryption](#dash-channels-and-encryption)).
 - A byte order mark, CRLF line ends and `#EXTGRP` lines are accepted.
 
 ### Lists and guides that are files of the server
@@ -71,6 +72,35 @@ The channels, replays, movies and episodes of an M3U playlist or an Xtream Codes
 **Compared with Jellyfin:**
 - Jellyfin's M3U tuners send their **User agent** setting, else the same browser user agent (Chrome 122), with their channels' streams ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L169-L177)), and download the list with that setting when it is set ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L57-L61)).
 - Jellyfin reads none of a playlist's header lines, nor the header attributes of its `#EXTINF` lines, of which it reads the `tvg-`, `logo`, `group-title` and `channel-id` ones: it skips every line but `#EXTINF` and the addresses ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L72-L114)). Polyfin sends the headers they give, as other players do.
+
+### DASH channels and encryption
+
+A channel whose address is a DASH manifest (MPD), live or static, plays as other channels do: FFmpeg's DASH demuxer reads the manifest and its segments through Polyfin, with the channel's headers and within its source's rules, and repackages it into HLS for the apps, or converts what they cannot take (see [How a channel plays](live-tv.md#how-a-channel-plays)). Apps never get the manifest itself.
+
+- Every address the manifest names (its `BaseURL`s, its segment templates and lists) is rewritten to go through Polyfin. A manifest naming an address that is not HTTP is refused.
+- A live manifest of several periods plays its last one, the one airing: FFmpeg plays one period of a manifest.
+- FFmpeg reads a DASH stream at its own pace after its first 6 seconds, live or static. It starts a live manifest up to a minute behind its end, and would otherwise reach a segment the source does not have yet within a second: the source answers 404, the stream ends, and starts again a minute behind.
+- Segment templates, timelines and lists play as FFmpeg reads them. FFmpeg reads a live manifest again before each segment, and finds where it was to the whole second: a live stream whose segments start less than a second apart may read the same segment again and again, and not play. Providers' segments last 2 seconds or more.
+- An encrypted stream's keys are checked by decoding its first 8 pictures: the garbage a wrong key makes of one picture sometimes decodes, not that of several in a row.
+- The analysis, the dead-stream rules, the stream health and the log lines are those of HLS channels.
+
+A playlist's `#KODIPROP` lines, before or after the channel's `#EXTINF` line, are read as such lists write them:
+
+- `inputstream.adaptive.manifest_type` (`mpd`, `hls`);
+- `inputstream.adaptive.license_type`: `org.w3.clearkey` or `clearkey` for ClearKey; any other type, such as `com.widevine.alpha` or `com.microsoft.playready`, is not supported (see below);
+- `inputstream.adaptive.license_key`: ClearKey keys as `kid:key` pairs, in hexadecimal or base64url, several separated by commas (or a JSON Web Key set), or the address of a ClearKey licence server, optionally followed by `|` and its `Name=value&Name=value` headers;
+- `inputstream.adaptive.manifest_headers` and `inputstream.adaptive.stream_headers`, `Name=value` pairs separated by `&`: Polyfin sends one set of headers with every request of a stream, so both are the channel's headers, after its `#EXTVLCOPT` and `#EXTHTTP` lines and before the `|` pairs of its address.
+
+A ClearKey channel is decrypted by FFmpeg with the keys its list gives, by key ID (the DASH demuxer's `cenc_decryption_keys` option, which its MP4 demuxer applies as `decryption_keys`; FFmpeg decrypts the `cenc`, `cens`, `cbc1` and `cbcs` schemes). With a licence server, Polyfin posts it the W3C ClearKey licence request for the key IDs the manifest names (`cenc:default_KID`), with the channel's headers and the licence's own, and reads the JSON Web Key set it answers ([Encrypted Media Extensions, Clear Key](https://www.w3.org/TR/encrypted-media-2/#clear-key-request-format), [License Format](https://www.w3.org/TR/encrypted-media-2/#clear-key-license-format)), at each start: its keys are kept nowhere.
+
+- Keys given by a list are kept with the list's other data and nowhere else. They are never logged nor shown in the admin app; a licence server's address is never shown either. FFmpeg takes them on its command line, the only way it reads them, so the server's other local users can see them while the channel plays.
+- Keys that do not decrypt the stream (its first 8 pictures do not all decode) fail the stream as **The list's keys do not decrypt it**.
+- Widevine, PlayReady and any other licence type need the provider's content decryption module, which is licensed to browsers and devices, not to servers: such a channel, and an encrypted one whose list gives no ClearKey keys, fails as **Needs a DRM Polyfin does not support**, before its source is asked when its list names the licence. It is not tried again as a network failure would be (see [Stream health](#stream-health)).
+- The keys apply to DASH channels. The builds of FFmpeg Polyfin ships read DASH; an FFmpeg built without libxml2 has no DASH demuxer, and its DASH channels fail saying so.
+
+Polyfin decrypts a stream only with the keys its list gives, or its list's licence server answers. You remain responsible for having the right to watch what you decrypt with them.
+
+**Compared with Jellyfin:** Jellyfin 12.4 plays a channel whose address ends in `.mpd` only through FFmpeg, never directly ([M3UTunerHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L35), [lines 161-167](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3UTunerHost.cs#L161-L167)), which reads the manifest and its segments itself, and it reads no `#KODIPROP` line ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L72-L114)), so it decrypts nothing. Polyfin plays DASH the same way, through its relay, tells a DASH stream by its content whatever its address, and decrypts ClearKey.
 
 ### What is read
 
@@ -189,6 +219,7 @@ Each stream shows how it last answered when its channel was opened:
 - **No live stream**: an error, a web page, an empty answer or bytes of no video. It is left out of its channel for an hour, then 6 hours, then a day while it keeps failing.
 - **Nothing came**: left out for 10 minutes when it never played at its address, or after nothing came twice in a row. A stream that played and was silent once, as when its provider was slow, is tried again at the next start, after the channel's other streams.
 - **Refused by the provider**: the provider would not serve it then (connections in use, too many requests). It is tried again at the next start.
+- **Needs a DRM Polyfin does not support**, and **The list's keys do not decrypt it**: see [DASH channels and encryption](#dash-channels-and-encryption). They are left out as a dead stream is.
 
 Streams that failed come after the others in their channel. A stream that plays, or that the list gives a new address, is healthy again. **Try every stream again** forgets it all for the channel: its next start tries every stream at once, those that failed within the last 15 minutes included.
 

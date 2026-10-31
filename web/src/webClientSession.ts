@@ -15,6 +15,12 @@ const fromParameter = 'from'
 const fromWebClient = 'web'
 
 /**
+ * Kept in sessionStorage once the tab came from the web client: the tab's later pages, reloads
+ * included, then lead back to the web client in place rather than in a new tab.
+ */
+const cameFromWebClientKey = 'polyfin.cameFromWebClient'
+
+/**
  * Whether this page load came from the web client. The parameter leaves the address before the
  * router reads it, so that a reload is not taken for another arrival.
  */
@@ -29,7 +35,21 @@ function takeArrival(): boolean {
     '',
     address.pathname + address.search + address.hash,
   )
+  try {
+    sessionStorage.setItem(cameFromWebClientKey, '1')
+  } catch {
+    // Without storage, the tab only forgets where it came from.
+  }
   return true
+}
+
+/** Whether this tab, or this app's web view, opened the admin app from the web client. */
+export function cameFromWebClient(): boolean {
+  try {
+    return sessionStorage.getItem(cameFromWebClientKey) === '1'
+  } catch {
+    return false
+  }
 }
 
 /** The web client's sign-in on this server: its access token and its user's ID. */

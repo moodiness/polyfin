@@ -186,12 +186,15 @@ const home: typeof en = {
       original: 'Original',
       sizeLimit: 'Kleiner als die Quelle',
       qualityPlayed: 'Abgespielte Qualität',
+      switchedVersion: 'Gewechselte Version',
       qualityAmong: (played: string, offered: string) => `${played}, von ${offered}`,
       sizeLimits: {
         steppedDown: (height: string) => `Die App ist unter ${height} gewechselt`,
         gpu: (height: string) => `Höchstens ${height}: von der Grafikkarte konvertiert`,
         processor: (height: string) => `Höchstens ${height}: vom Prozessor konvertiert`,
         toneMapping: (height: string) => `Höchstens ${height}: HDR vom Prozessor konvertiert`,
+        gpuToneMapping: (height: string) =>
+          `Höchstens ${height}: Nur bis dahin konvertiert die Grafikkarte HDR rechtzeitig`,
         qualityGroup: (height: string) => `Qualitätsgruppe: ${height}`,
         serverMax: (height: string) => `Maximale Qualität konvertierter Videos: ${height}`,
         app: (height: string) => `Von der App erlaubte Qualität: ${height}`,

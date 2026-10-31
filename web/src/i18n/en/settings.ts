@@ -255,11 +255,11 @@ const settings = {
       'When an app plays a title without choosing a version, Polyfin picks the first version the app plays as it is or simply repackaged, rather than the first that plays at all. The very first play of a title can be a little slower, as more versions may be analyzed; nothing changes once they are known.',
     nameHowVersionsPlay: 'Say in version names how they play',
     nameHowVersionsPlayHelp:
-      'Version names end with how the app plays each: “(direct play)”, “(direct stream)” when copied without conversion, “(converted: reason)” with HDR, the quality limit, subtitles, video or audio as the reason, or “(cannot play here)”. Polyfin decides it for the device profile the app sent at its last playback, so names say nothing before a device’s first play or after a restart, and nothing for a version not analyzed or described by RemuxDB yet. Names are in the language of generated names. Nothing is read for them.',
+      'Version names end with how the app plays each: “(direct play)”, “(direct stream)” when copied without conversion, “(converted: reason)” with the app’s request, HDR, the quality limit, subtitles, video or audio as the reason, or “(cannot play here)”. Polyfin decides it for the device profile the app sent at its last playback, so names say nothing before a device’s first play or after a restart, and nothing for a version not analyzed or described by RemuxDB yet. Names are in the language of generated names. Nothing is read for them.',
     versionOrderGroup: 'Version order',
     versionOrder: {
       label: 'Order versions by',
-      help: 'Each criterion groups the versions of a movie or an episode, and the next one sorts them within each group; versions that tie keep the addons’ order. The first version is the one Play starts, and the versions tried when it does not work come next. Polyfin goes by what it knows of a version without reading the file: its analysis once played, else RemuxDB’s description, else the words of its labels. A version a criterion knows nothing of comes after the others. The preferred audio language is each user’s own, set in their app, else Default audio language: versions known in that language come first, then those labeled MULTI or DUAL, then those of unknown language. While a title’s page is open, the versions it shows keep their places.',
+      help: 'Each criterion groups the versions of a movie or an episode, and the next one sorts them within each group; versions that tie keep the addons’ order. The first version is the one Play starts, and the versions tried when it does not work come next. Polyfin goes by what it knows of a version without reading the file: its analysis once played, else RemuxDB’s description, else the words of its labels. A version a criterion knows nothing of comes after the others. The preferred audio language is each user’s own, set in their app, else Default audio language: versions known in that language come first, then those labeled MULTI or DUAL, then those of unknown language. Under My account, a user may also prefer an audio region, such as French for Quebec: among the versions in its language, those of that region come first, then those of no known region. While a title’s page is open, the versions it shows keep their places.',
       none: 'None: versions keep the addons’ order.',
       add: 'Add a criterion',
       remove: (name: string) => `Remove ${name}`,
@@ -435,6 +435,32 @@ const settings = {
       qualityFactor: 'Takes a quality number',
       processor: 'Encoders on the processor',
       processorToneMapping: 'HDR to SDR on the processor',
+      /** Where HDR titles are converted to SDR, and why, as the timings at startup chose it. */
+      hdrPath: {
+        term: 'HDR titles',
+        gpu: 'Converted to SDR on the card',
+        gpuUpTo: (height: number) => `Converted to SDR on the card, up to ${height}p`,
+        processor: 'Converted to SDR on the processor, encoded on the card',
+        notTimed: 'The card’s speed is not measured yet, or could not be.',
+        keepsUp: (gpu: string) => `The card converts HDR at ${gpu} real time.`,
+        processorFaster: (gpu: string, processor: string) =>
+          `The card converts HDR at ${gpu} real time, too slow for playback; the processor keeps up, at ${processor}.`,
+        /** `processor` is null when the processor was not measured. */
+        lowerHeight: (gpu: string, low: string, processor: string | null) =>
+          `The card converts HDR to 1080p at ${gpu} real time, too slow for playback, and to 720p at ${low}${processor ? `; the processor at ${processor}, too slow as well` : ''}.`,
+        noneKeepsUp: (gpu: string, low: string, processor: string | null) =>
+          `Neither keeps up with playback: the card converts HDR to 1080p at ${gpu} real time and to 720p at ${low}${processor ? `, the processor at ${processor}` : ''}. HDR titles may pause while they convert.`,
+        turnedOff: 'HDR to SDR on the card is turned off in the settings.',
+      },
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'The one Polyfin ships',
+      ffmpegOlderDrivers: 'For NVIDIA drivers older than 610',
+      ffmpegOlderDownloading:
+        'Downloading the FFmpeg for NVIDIA drivers older than 610, which NVENC needs here: the processor converts video meanwhile.',
+      ffmpegOlderFailed: (error: string) =>
+        `The FFmpeg for NVIDIA drivers older than 610, which NVENC needs here, could not be downloaded: ${error}`,
+      ffmpegOlderUnusable: (error: string) =>
+        `NVENC does not encode with the FFmpeg for NVIDIA drivers older than 610 either: ${error}`,
       yes: 'Yes',
       no: 'No',
       none: 'None',
@@ -633,6 +659,9 @@ const settings = {
     localScanHours: 'Scan local folders every (hours, 0 = never)',
     localScanHoursHelp: (r: RangeText) =>
       `How often each local folder is scanned again for files added, changed or removed. Folders are also scanned at startup, when you ask, and when watched ones change. 0 turns the schedule off. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    watchlistCheckHours: 'Look for versions of watchlist titles every (hours, 0 = never)',
+    watchlistCheckHoursHelp: (r: RangeText) =>
+      `How often each title of a user’s Watchlist they have not started is checked again for versions, for the Now available and Still waiting home rows and the message telling a user of a title found available. Each hour, up to 20 titles of each user are checked, asking their stream addons. 0 turns the checks off. From ${r.min} to ${r.max}; ${r.default} by default.`,
     watchLocalFolders: 'Watch folders and shares for changes',
     watchLocalFoldersHelp: {
       container:
@@ -667,6 +696,40 @@ const settings = {
     knownProxies: 'Known proxies',
     knownProxiesHelp: (r: RangeText) =>
       `The reverse proxies in front of Polyfin, one a line: an IP address, a network such as 172.18.0.0/16, or a host name such as a container’s name on a Docker network (traefik), up to ${r.max}. A name is looked up every minute and each address it resolves to is trusted, so list only names your own network resolves. A request from one of them comes from the client its X-Forwarded-For or X-Real-IP header names: that address limits failed sign-ins, shows on devices and tells the local network. Forwarded headers from any other address are ignored. Leave it empty when nothing stands in front of Polyfin.`,
+    /** Settings › Security › Identity provider: signing in through an OpenID Connect provider. */
+    provider: {
+      title: 'Identity provider',
+      intro:
+        'People can sign in to this admin app and to the web player with an OpenID Connect provider, which then asks for its own two-step sign-in: Polyfin does not ask for its code again. Jellyfin apps that cannot open the provider sign in with Quick Connect, approved from a session opened through it. Register Polyfin at the provider as a confidential client, or a public one without a secret, using the redirect URI below.',
+      redirectUri: 'Redirect URI',
+      redirectUriHelp:
+        'The address the provider sends browsers back to, built from the public address. Register it at the provider exactly as shown.',
+      noPublicAddress:
+        'Set the public address under Settings › Notifications first: the sign-in starts and ends there, and the provider sends browsers back to it.',
+      issuer: 'Issuer',
+      issuerHelp:
+        'The provider’s issuer, exactly as its discovery document gives it, such as https://id.example.org or https://id.example.org/realms/home. Polyfin reads its /.well-known/openid-configuration. Empty turns the sign-in off.',
+      name: 'Button name',
+      nameHelp:
+        'What the sign-in buttons say after “Sign in with”. Empty shows the issuer’s host name.',
+      clientId: 'Client ID',
+      clientIdHelp: 'The ID the provider gave Polyfin’s client. Empty turns the sign-in off.',
+      clientSecret: 'Client secret',
+      clientSecretHelp:
+        'The secret of a confidential client; leave it empty for a public client. It is kept encrypted with POLYFIN_SECRET_KEY and never shown again.',
+      userClaim: 'Claim naming the user',
+      userClaimHelp:
+        'The claim of the ID token compared with account names, without regard to case, the first time someone signs in: preferred_username by default. The verified email comes next. Later sign-ins find the same account whatever the claim says.',
+      createAccounts: 'Create accounts',
+      createAccountsHelp:
+        'Someone no account matches gets one, named after the claim, else the email, with the permissions of a new account, signing in through the provider only. Off, they are refused. Off by default.',
+      adminClaim: 'Administrators’ claim',
+      adminClaimHelp:
+        'The claim listing someone’s groups or roles, such as groups. With a value below, someone whose claim holds it becomes an administrator as they sign in. Polyfin asks for the groups scope when the claim is groups and the provider offers it.',
+      adminValue: 'Administrators’ value',
+      adminValueHelp:
+        'The group or role that makes administrators, such as polyfin-admins. Leaving it later does not make an administrator a member again: change that on the Users page.',
+    },
     https: {
       title: 'HTTPS',
       intro:
@@ -811,23 +874,33 @@ const settings = {
     backupsKept: 'Backups to keep',
     backupsKeptHelp: (r: RangeText) =>
       `After each backup, Polyfin deletes its oldest backups past this number. Other files in the folder are never touched. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    backupPassphrase: 'Backup passphrase',
+    backupPassphraseHelp: (min: number) =>
+      `Encrypts each backup as it is written, in the folder and at every destination, which then cannot read it. At least ${min} characters. It is kept encrypted and never shown again.`,
+    backupPassphraseNew:
+      'Keep this passphrase somewhere other than this server, such as a password manager: a lost passphrase means lost backups. Nobody can restore them without it, Polyfin included. Check it with the eye before saving. Backups already made stay as they are.',
+    backupPassphraseRemoved:
+      'Backups made from now on are not encrypted. Those already made still need this passphrase to be restored.',
     lastBackup: 'Last backup',
     backupDestinations: 'Destinations',
     backupDestinationsHelp:
       'Each backup is also sent to these places, under the same file name, once written to the folder: S3-compatible storage, SFTP or WebDAV servers. A failed upload is tried again at the next backup.',
     webPlayerHelp:
-      'What the web player (jellyfin-web, at /web/) shows besides its own pages. The script applies the next time a page of the web player is loaded; the web player keeps the CSS and the sign-in message for up to a minute.',
+      'What the web player (jellyfin-web, at /web/) shows besides its own pages. The theme and the script apply the next time a page of the web player is loaded; the web player keeps the sign-in message for up to a minute.',
     openWebPlayer: 'Open the web player',
-    webTheme: 'Theme',
+    webTheme: 'Server theme',
     webThemeHelp:
-      'The web player’s look. LumaaGlaass is the theme Polyfin bundles. None keeps jellyfin-web’s own look, whose display themes each user picks under Settings › Display. Custom uses your own CSS and JavaScript below, which are kept while another theme is chosen.',
-    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'None', custom: 'Custom' },
-    webThemeReload:
-      'The web player keeps the custom CSS it read for up to a minute: after a change, reload its open pages a minute later.',
+      'The web player’s look for the users who keep the server’s; each user can have their own, on their page under Users. LumaaGlaass is the theme Polyfin bundles. jellyfin-web’s own look has no custom CSS or script, and each user picks its display themes under Settings › Display. Custom uses your own CSS and JavaScript below, which are kept while another theme is chosen.',
+    webThemeChoices: {
+      lumaaglaass: 'LumaaGlaass',
+      none: 'jellyfin-web’s own look',
+      custom: 'Custom',
+    },
+    webThemeReload: 'After a change, reload the web player’s open pages.',
     webThemeTexts: {
       lumaaglaass:
         'What Polyfin serves for LumaaGlaass, shown here and not editable. Choose Custom, or Edit as Custom, to write your own.',
-      none: 'None serves no custom CSS or JavaScript. Choose Custom to write your own.',
+      none: 'jellyfin-web’s own look serves no custom CSS or JavaScript. Choose Custom to write your own.',
     },
     editAsCustom: 'Edit as Custom',
     editAsCustomTitle: 'Replace your Custom texts?',
@@ -892,6 +965,9 @@ const settings = {
     addVersionsToOpenPage: 'Add versions to an open title’s page',
     addVersionsToOpenPageHelp:
       'Adds the versions the addons find to the version menu of a movie’s or an episode’s page while it is open, keeping the version picked. When off, a page opened before any version was found still lists the first ones as they come, and its play buttons still wait for a version; the others show when the page is opened again.',
+    posterRatings: 'Show ratings on posters',
+    posterRatingsHelp:
+      'Shows a movie’s or a series’ star rating over its poster in the web player as the pointer or the focus comes to it, with its critics’ and audience scores while an MDBList API key for ratings is set under Settings › Content. For every user.',
     homeRows: 'Home rows',
     homeRowsHelp:
       'Rows the web player adds to its home page, at their place, for every user or for chosen users. Each user can turn off a row under My account › Home rows; the web player’s own sections stay in its Settings › Home. Every row leaves out what the user may not see: titles above their parental control, blocked genres, hidden titles, and the libraries hidden from them.',
@@ -922,6 +998,8 @@ const settings = {
         collection: 'A collection',
         because: 'Because you watched',
         new: 'New in your libraries',
+        available: 'Now available',
+        waiting: 'Still waiting',
       },
       kindHelp: {
         catalog:
@@ -931,10 +1009,16 @@ const settings = {
         because:
           'One row for each of the last movies and series the user played, of the titles similar to it, as movie recommendations give them. None while Similar titles is off.',
         new: 'The titles that came into the catalogs of the user’s libraries in the last 7 days, newest first. Polyfin counts them from the time it first saw each title in each catalog.',
+        available:
+          'The titles of the user’s Watchlist they have not started that the last check found versions for, the latest found first. A version found has not been tried yet: it may still fail to play.',
+        waiting:
+          'The titles of the user’s Watchlist they have not started that the last check found no version for, or that are not out yet, the latest added first. A title not checked yet is in neither row.',
       },
       defaultNames: {
         because: 'Because you watched',
         new: 'New in your libraries',
+        available: 'Now available',
+        waiting: 'Still waiting',
       },
       catalog: 'Catalog',
       noCatalog: 'The server’s addons have no catalog to show.',

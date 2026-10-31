@@ -47,6 +47,15 @@ type userJSON struct {
 	// one of the server's addons' languages, empty for the server's
 	// descriptions.
 	MetadataLanguage string `json:"metadataLanguage"`
+	// WebTheme is the user's web player theme, lumaaglaass, none or custom,
+	// empty for the server's; WebThemeLocked keeps them from changing it
+	// under My account.
+	WebTheme       string `json:"webTheme"`
+	WebThemeLocked bool   `json:"webThemeLocked"`
+	// AudioRegion is the regional variant of audio the user prefers, one
+	// of AudioRegions, empty for none; AudioRegions are those offered.
+	AudioRegion  string   `json:"audioRegion"`
+	AudioRegions []string `json:"audioRegions"`
 	// EndsOn is the date the account ends, YYYY-MM-DD in the server's time
 	// zone, null for never; Ended is set once it has come, and the account
 	// is refused as a disabled one is.
@@ -60,6 +69,9 @@ type userJSON struct {
 	// TwoStep tells whether the user signs in with a code from an
 	// authenticator app after their password.
 	TwoStep bool `json:"twoStep"`
+	// ProviderOnly tells whether the user signs in through the identity
+	// provider only, their password refused.
+	ProviderOnly bool `json:"providerOnly"`
 }
 
 // limitsJSON are the settings a group holds, as a user's JSON and a
@@ -104,6 +116,9 @@ type limitsJSON struct {
 	// TorrentStreams offers the user the torrents' files addons list,
 	// while the server plays them.
 	TorrentStreams bool `json:"torrentStreams"`
+	// RemoteAccess lets the user sign in and use the server from outside
+	// the local network, as Known proxies tells it.
+	RemoteAccess bool `json:"remoteAccess"`
 	// QualityGroup is the tallest video the user is offered, in lines: 480,
 	// 720, 1080, 1440 or 2160, or 0 for Original, no limit.
 	QualityGroup int `json:"qualityGroup"`
@@ -132,6 +147,7 @@ func newLimitsJSON(limits accounts.Limits) limitsJSON {
 		SubtitleManagement:   limits.SubtitleManagement,
 		CanShare:             limits.CanShare,
 		TorrentStreams:       limits.TorrentStreams,
+		RemoteAccess:         limits.RemoteAccess,
 		QualityGroup:         limits.QualityGroup,
 	}
 }
@@ -156,6 +172,7 @@ type limitChanges struct {
 	SubtitleManagement   *bool                    `json:"subtitleManagement"`
 	CanShare             *bool                    `json:"canShare"`
 	TorrentStreams       *bool                    `json:"torrentStreams"`
+	RemoteAccess         *bool                    `json:"remoteAccess"`
 	LiveTvManagement     *bool                    `json:"liveTvManagement"`
 	QualityGroup         *int                     `json:"qualityGroup"`
 }
@@ -180,6 +197,7 @@ func (l limitChanges) changes(w http.ResponseWriter) (accounts.UserChanges, bool
 		QualityGroup:         l.QualityGroup,
 		CanShare:             l.CanShare,
 		TorrentStreams:       l.TorrentStreams,
+		RemoteAccess:         l.RemoteAccess,
 	}
 	if p := l.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
@@ -286,11 +304,16 @@ func newUserJSON(user accounts.User) userJSON {
 		BlockedUntil:     blockedUntil(user),
 		ImageTag:         imageTag(user),
 		MetadataLanguage: user.MetadataLanguage,
+		WebTheme:         user.WebTheme,
+		WebThemeLocked:   user.WebThemeLocked,
+		AudioRegion:      user.AudioRegion,
+		AudioRegions:     localization.AudioVariants,
 		// When the account ends.
-		EndsOn:      endsOn(user),
-		Ended:       user.Ended(time.Now()),
-		FollowGroup: user.FollowGroup || user.GroupID == nil,
-		TwoStep:     user.TwoStep,
+		EndsOn:       endsOn(user),
+		Ended:        user.Ended(time.Now()),
+		FollowGroup:  user.FollowGroup || user.GroupID == nil,
+		TwoStep:      user.TwoStep,
+		ProviderOnly: user.ProviderOnly,
 	}
 	if user.GroupID != nil {
 		result.GroupID = new(user.GroupID.String())
@@ -592,6 +615,8 @@ type settingsJSON struct {
 	LiveTvRefreshHours *int `json:"liveTvRefreshHours"`
 	// LocalScanHours keeps its current value when a PUT leaves it out.
 	LocalScanHours *int `json:"localScanHours"`
+	// WatchlistCheckHours keeps its current value when a PUT leaves it out.
+	WatchlistCheckHours *int `json:"watchlistCheckHours"`
 	// WatchLocalFolders keeps its current value when a PUT leaves it out.
 	WatchLocalFolders *bool `json:"watchLocalFolders"`
 	// ConvertRecordings, ConvertRecordingsFrom, ConvertRecordingsUntil and
@@ -658,6 +683,11 @@ type settingsJSON struct {
 	RecordingsFolderDefault string   `json:"recordingsFolderDefault"`
 	BackupFolderDefault     string   `json:"backupFolderDefault"`
 	RenderNodes             []string `json:"renderNodes"`
+	// BackupPassphrase, which encrypts the backups, keeps its value when a
+	// PUT leaves it out, and "" turns encryption off; it is never sent
+	// back: BackupPassphraseSet tells whether one is saved.
+	BackupPassphrase    *string `json:"backupPassphrase,omitempty"`
+	BackupPassphraseSet bool    `json:"backupPassphraseSet"`
 	// PublicAddress keeps its current value when a PUT leaves it out; empty
 	// sends notifications without links.
 	PublicAddress *string `json:"publicAddress"`
@@ -742,6 +772,25 @@ type settingsJSON struct {
 	CacheFolderDefault string  `json:"cacheFolderDefault"`
 	// SiloApps keeps its current value when a PUT leaves it out.
 	SiloApps *bool `json:"siloApps"`
+	// PosterRatings keeps its current value when a PUT leaves it out.
+	PosterRatings *bool `json:"posterRatings"`
+	// The identity provider keeps its current values when a PUT leaves
+	// them out; an empty issuer or client ID turns its sign-in off. The
+	// client secret is never sent back: ProviderClientSecretSet tells
+	// whether one is saved, and a PUT ignores it; empty removes it.
+	// ProviderRedirectURI, the address the provider sends browsers back
+	// to, built from the public address, empty without one, is to be
+	// registered at the provider; a PUT ignores it.
+	ProviderIssuer          *string `json:"providerIssuer"`
+	ProviderName            *string `json:"providerName"`
+	ProviderClientID        *string `json:"providerClientId"`
+	ProviderClientSecret    *string `json:"providerClientSecret,omitempty"`
+	ProviderClientSecretSet bool    `json:"providerClientSecretSet"`
+	ProviderUserClaim       *string `json:"providerUserClaim"`
+	ProviderCreateAccounts  *bool   `json:"providerCreateAccounts"`
+	ProviderAdminClaim      *string `json:"providerAdminClaim"`
+	ProviderAdminValue      *string `json:"providerAdminValue"`
+	ProviderRedirectURI     string  `json:"providerRedirectUri"`
 	// LumaaGlaass is the custom CSS and script the web player gets for
 	// the theme Polyfin bundles, which the admin app shows; a PUT ignores
 	// it.
@@ -891,6 +940,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingCommercials:   &settings.RecordingCommercials,
 		LiveTvRefreshHours:     &settings.LiveTvRefreshHours,
 		LocalScanHours:         &settings.LocalScanHours,
+		WatchlistCheckHours:    &settings.WatchlistCheckHours,
 		WatchLocalFolders:      &settings.WatchLocalFolders,
 
 		ConvertRecordings:            &settings.ConvertRecordings,
@@ -930,6 +980,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingsFolder: &settings.RecordingsFolder,
 		Backups:          &settings.Backups,
 		BackupFolder:     &settings.BackupFolder,
+
+		BackupPassphraseSet: settings.BackupPassphrase != "",
 
 		PublicAddress: &settings.PublicAddress,
 
@@ -972,6 +1024,17 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		CacheFolder:             &settings.CacheFolder,
 		InterfaceRoutes:         accounts.InterfaceRoutes,
 		SiloApps:                &settings.SiloApps,
+		PosterRatings:           &settings.PosterRatings,
+
+		ProviderIssuer:          &settings.ProviderIssuer,
+		ProviderName:            &settings.ProviderName,
+		ProviderClientID:        &settings.ProviderClientID,
+		ProviderClientSecretSet: settings.ProviderClientSecret != "",
+		ProviderUserClaim:       &settings.ProviderUserClaim,
+		ProviderCreateAccounts:  &settings.ProviderCreateAccounts,
+		ProviderAdminClaim:      &settings.ProviderAdminClaim,
+		ProviderAdminValue:      &settings.ProviderAdminValue,
+		ProviderRedirectURI:     providerRedirectURI(settings),
 	}
 }
 
@@ -1189,6 +1252,9 @@ func (h *handler) createUser(w http.ResponseWriter, r *http.Request) {
 		Password        string `json:"password"`
 		IsAdministrator bool   `json:"isAdministrator"`
 		IsHidden        bool   `json:"isHidden"`
+		// ProviderOnly has the account sign in through the identity
+		// provider only; it then needs no password.
+		ProviderOnly bool `json:"providerOnly"`
 		// GroupID is the group the account joins and follows, empty or
 		// left out for none.
 		GroupID *string `json:"groupId"`
@@ -1205,6 +1271,7 @@ func (h *handler) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.Accounts.CreateUser(r.Context(), accounts.NewUser{
 		Name: body.Name, Password: body.Password, IsAdministrator: body.IsAdministrator, IsHidden: body.IsHidden, Group: group,
+		ProviderOnly: body.ProviderOnly,
 	})
 	if accountError(w, err) {
 		return
@@ -1242,6 +1309,13 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		FollowGroup *bool   `json:"followGroup"`
 		// MetadataLanguage, see userJSON.
 		MetadataLanguage *string `json:"metadataLanguage"`
+		// AudioRegion, see userJSON.
+		AudioRegion *string `json:"audioRegion"`
+		// ProviderOnly, see userJSON.
+		ProviderOnly *bool `json:"providerOnly"`
+		// WebTheme and WebThemeLocked, see userJSON.
+		WebTheme       *string `json:"webTheme"`
+		WebThemeLocked *bool   `json:"webThemeLocked"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -1255,8 +1329,17 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if id == session.User.ID && locksOutCaller(r, changes.RemoteAccess) {
+		writeError(w, http.StatusConflict, "remote_access_self")
+		return
+	}
 	changes.MetadataLanguage = body.MetadataLanguage
+	changes.AudioRegion = body.AudioRegion
 	if body.MetadataLanguage != nil && !h.metadataLanguageOffered(w, r, *body.MetadataLanguage) {
+		return
+	}
+	changes.WebTheme, changes.WebThemeLocked = body.WebTheme, body.WebThemeLocked
+	if body.WebTheme != nil && !webThemeOffered(w, h.Accounts.Settings(), *body.WebTheme) {
 		return
 	}
 	changes.Name = body.Name
@@ -1265,6 +1348,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	changes.IsHidden = body.IsHidden
 	changes.IsDisabled = body.IsDisabled
 	changes.FollowGroup = body.FollowGroup
+	changes.ProviderOnly = body.ProviderOnly
 	if changes.Group, ok = groupParam(w, body.GroupID); !ok {
 		return
 	}
@@ -1434,7 +1518,8 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 	body.ConversionHardware = conversionHardwareJSON{Encoders: []string{}}
 	if encoder := h.Health.Encoder; encoder != nil {
 		if hw := encoder.Hardware(); hw != nil {
-			body.ConversionHardware.GPU = newHardwareJSON(hw)
+			// The form applies its own GPU tone mapping switch, saved or not.
+			body.ConversionHardware.GPU = newHardwareJSON(hw, encoder.HDRPath(hw), true)
 		}
 		for _, name := range []string{"libx264", "libx265"} {
 			if slices.Contains(encoder.Encoders(), name) {
@@ -1446,6 +1531,7 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 			body.ConversionHardware.ToneMappingHeight = encoder.ToneMappedHeight()
 		}
 		body.ConversionHardware.Bwdif = encoder.HasFilters("bwdif")
+		body.ConversionHardware.OlderDriverFFmpeg = newOlderDriverJSON(encoder)
 	}
 	return body, nil
 }
@@ -1455,13 +1541,14 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 // HDR and the bwdif deinterlacer. ToneMappingHeight is the height
 // Automatic caps HDR tone mapped on the processor at, as a timing at
 // startup chose it (720 until it ends), 0 when the processor cannot tone
-// map.
+// map. OlderDriverFFmpeg is as System › Health tells it.
 type conversionHardwareJSON struct {
-	GPU               *hardwareJSON `json:"gpu"`
-	Encoders          []string      `json:"encoders"`
-	ToneMapping       bool          `json:"toneMapping"`
-	ToneMappingHeight int           `json:"toneMappingHeight"`
-	Bwdif             bool          `json:"bwdif"`
+	GPU               *hardwareJSON    `json:"gpu"`
+	Encoders          []string         `json:"encoders"`
+	ToneMapping       bool             `json:"toneMapping"`
+	ToneMappingHeight int              `json:"toneMappingHeight"`
+	Bwdif             bool             `json:"bwdif"`
+	OlderDriverFFmpeg *olderDriverJSON `json:"olderDriverFFmpeg"`
 }
 
 func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
@@ -1624,6 +1711,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingCommercials:   valueOr(body.RecordingCommercials, current.RecordingCommercials),
 		LiveTvRefreshHours:     valueOr(body.LiveTvRefreshHours, current.LiveTvRefreshHours),
 		LocalScanHours:         valueOr(body.LocalScanHours, current.LocalScanHours),
+		WatchlistCheckHours:    valueOr(body.WatchlistCheckHours, current.WatchlistCheckHours),
 		WatchLocalFolders:      valueOr(body.WatchLocalFolders, current.WatchLocalFolders),
 
 		ConvertRecordings:            valueOr(body.ConvertRecordings, current.ConvertRecordings),
@@ -1662,6 +1750,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingsFolder: valueOr(body.RecordingsFolder, current.RecordingsFolder),
 		Backups:          valueOr(body.Backups, current.Backups),
 		BackupFolder:     valueOr(body.BackupFolder, current.BackupFolder),
+		BackupPassphrase: valueOr(body.BackupPassphrase, current.BackupPassphrase),
 
 		PublicAddress: valueOr(body.PublicAddress, current.PublicAddress),
 
@@ -1703,6 +1792,16 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ReadingFolder:        valueOr(body.ReadingFolder, current.ReadingFolder),
 		CacheFolder:          valueOr(body.CacheFolder, current.CacheFolder),
 		SiloApps:             valueOr(body.SiloApps, current.SiloApps),
+		PosterRatings:        valueOr(body.PosterRatings, current.PosterRatings),
+
+		ProviderIssuer:         valueOr(body.ProviderIssuer, current.ProviderIssuer),
+		ProviderName:           valueOr(body.ProviderName, current.ProviderName),
+		ProviderClientID:       valueOr(body.ProviderClientID, current.ProviderClientID),
+		ProviderClientSecret:   valueOr(body.ProviderClientSecret, current.ProviderClientSecret),
+		ProviderUserClaim:      valueOr(body.ProviderUserClaim, current.ProviderUserClaim),
+		ProviderCreateAccounts: valueOr(body.ProviderCreateAccounts, current.ProviderCreateAccounts),
+		ProviderAdminClaim:     valueOr(body.ProviderAdminClaim, current.ProviderAdminClaim),
+		ProviderAdminValue:     valueOr(body.ProviderAdminValue, current.ProviderAdminValue),
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)

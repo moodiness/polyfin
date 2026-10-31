@@ -7,8 +7,19 @@
 // item menus for a tenth, adds the server's home rows to the home page for
 // an eleventh, offers to share a movie or an episode for a twelfth, adds
 // reminders to a programme's page for a thirteenth, drops the answers
-// jellyfin-web keeps when another user signs in for a fourteenth, and lists
-// the user's recent searches on the search page for a fifteenth.
+// jellyfin-web keeps when another user signs in for a fourteenth, lists
+// the user's recent searches on the search page for a fifteenth,
+// shows titles' ratings on their posters for a sixteenth, writes how a
+// torrent starts under jellyfin-web's spinner for a seventeenth, offers
+// the identity provider's sign-in on the sign-in page for an eighteenth,
+// and gives the page each user's web player theme for a nineteenth.
+//
+// It is written in ES5 and runs before jellyfin-web's scripts and their
+// polyfills, so that it works on every browser jellyfin-web 12.4 is built
+// for, down to Chrome 27: it uses no syntax newer than ES5 (a test checks
+// it), writes addresses by hand rather than with URL or URLSearchParams,
+// and falls back where a later API (WeakMap, WeakSet, isConnected) is
+// missing.
 //
 // First, it sends the pages of jellyfin-web that need a Jellyfin server's
 // administration, which Polyfin does not have, to Polyfin's admin app. It
@@ -336,6 +347,428 @@
 // through its own Sign out. Storage that fails, or holds anything else,
 // counts as none. Its words follow jellyfin-web's language, as the
 // third's. Any error just stops it.
+//
+// Sixteenth, while the administrator turned it on (Settings › Web player ›
+// Show ratings on posters), it shows a movie's or a series' ratings over
+// its poster, at the top on the start side, as the pointer comes to its
+// card or the focus does, the TV layout's included: its CommunityRating
+// with a star, then its critics' and audience scores, in percent, each
+// with an icon of its own, without words, those it lacks left out. Cards
+// are jellyfin-web 12.4's (.card[data-id] with data-type Movie or
+// Series, the poster in .cardScalable); others, and lists, get nothing.
+// The first card met that is not known asks /Polyfin/Items/Ratings once
+// for it and the other title cards of the page not known, those of its
+// row first, 100 at most, which answers Enabled and the ratings of those
+// with some; another card coming meanwhile waits for that answer. Every
+// card answered gets its ratings at once, hidden by the style until the
+// pointer or the focus comes, so that a row shows them without asking
+// again; a card jellyfin-web draws anew gets them back as the pointer or
+// the focus comes. Answers are kept for a minute, for the user signed in,
+// and forgotten when another signs in. Turned off, nothing shows, and the
+// server is asked again a minute later at the earliest, as is a server
+// that did not answer; a server turning it off takes the ratings shown
+// away. Nothing changes during a video. Any error just stops it.
+//
+// Seventeenth, while jellyfin-web's loading spinner shows (its .docspinner,
+// .mdlSpinnerActive while it turns), it writes under it how the torrent the
+// play waits for starts: "Finding peers: 12 found, 3 connected", then
+// "Receiving the start: 2.4 MB from 3 peers", or why it did not start. It
+// asks /Polyfin/Playback/Starting as the spinner shows, then every second
+// after each answer, and stops as the spinner hides, the line going with
+// it. Polyfin answers for the play of this browser's own session, the
+// torrents its PlaybackInfo tries, then the one it chose while the player
+// reads its first segments, and an empty Stage for anything else, which
+// shows no line: a play of a link, a page loading. jellyfin-web's spinner
+// takes no text (loading.ts), and the Jellyfin API tells a play nothing
+// before it starts. Its words follow jellyfin-web's language, as the
+// third's. Any error just stops it.
+//
+// Eighteenth, on jellyfin-web's sign-in page (#/login, its #loginPage), it
+// offers to sign in with the identity provider the administrator set up
+// (Settings › Security › Identity provider), as /admin/api/status names it:
+// a "Sign in with …" button first among the page's buttons
+// (.readOnlyContent), drawn as jellyfin-web's own, which opens the
+// provider's sign-in at the server's public address (the provider's start,
+// with ?app=web). The provider sends the browser back to /web/ with
+// ?polyfinProvider=signed-in, and a ticket in a cookie the script cannot
+// read. The script takes the parameter out of the address at once, waits
+// for jellyfin-web to draw its first page, by which time it has saved its
+// own connection to the server, then trades the ticket at
+// /admin/api/provider/web, as jellyfin-web's device (ApiClient's app,
+// device name, device ID and version, else those jellyfin-web keeps in
+// the browser), for a Jellyfin sign-in of that device. It keeps the
+// sign-in where jellyfin-web reads it (jellyfin_credentials), in this
+// server's entry, as the admin app's sign-in to the web client does, and
+// opens /web/ again, signed in. Any other value of the parameter, and a
+// trade refused, is what went wrong, said under the button. It looks for
+// the page as the route changes, for 5 seconds. Its words follow
+// jellyfin-web's language, as the third's. Without fetch or storage it
+// does nothing, and any error just stops it.
+//
+// Nineteenth, it gives the page the web player theme of the user, which
+// an administrator, or the user under My account, chooses in the admin
+// app: the server's, LumaaGlaass, jellyfin-web's own look (none) or the
+// Custom theme. The page describes the themes in its head, as JSON
+// (#polyfinWebThemes): the server's theme, the stylesheet and the script
+// of each theme that has some, and the cookie that tells the server the
+// theme shown. As it starts, before jellyfin-web, the script picks the
+// theme: the one it kept for the user jellyfin-web's saved credentials
+// sign in (as the fourteenth finds them), else, signed out, the one of the
+// user last signed in in this browser, else the server's. It keeps, in the
+// browser's storage (polyfinWebTheme), each user's own theme, empty for the
+// server's, up to 20 users, the last first. A browser that cannot run
+// LumaaGlaass, without CSS's :has() or the syntax of ES2021, which the
+// theme's stylesheet and script need, gets jellyfin-web's own look instead.
+// It writes the theme's stylesheet in the head while the page is parsed,
+// so that the page shows the theme from its first paint, unless the user
+// turned off the server's CSS in jellyfin-web's display settings
+// (disableCustomCss, kept in the browser for the user); and the theme's
+// script, deferred, which runs after jellyfin-web's own scripts, as the
+// server's custom script did. It names the theme in the cookie, so that
+// Jellyfin's branding, which jellyfin-web applies after its own CSS, gives
+// the same theme's CSS, imported from the same address; jellyfin-web's
+// SDK asks for it through fetch without the browser's cookies, so those
+// requests, to the branding alone, go with the cookies of the page's own
+// server. Once jellyfin-web shows that CSS, loaded, the script takes its
+// own stylesheet away, and jellyfin-web keeps the theme where it always
+// did, after its own CSS, and turns it off with the user's display
+// settings. When the stylesheet differs from the one shown at the last
+// load in this browser, it deletes the answers jellyfin-web kept in
+// IndexedDB, as the fourteenth does, which would show the CSS of the theme
+// before. Once jellyfin-web has a user signed in, as the route changes, or
+// as a load signed in starts, looked for every half second for half a
+// minute, it asks /Polyfin/WebTheme, once for each user signed in, and
+// keeps their own theme. When that theme is another than the page shows:
+// if the theme shown has a script, which cannot be taken back, it reloads
+// the page, once for that user and theme in the tab, and only if the
+// browser's storage kept the theme, which the load then shows; else it
+// changes the stylesheet at once, turns off jellyfin-web's copy of the one
+// before, and adds the new theme's script. Signing out keeps the theme.
+// Storage that fails counts as none, and any error just stops it.
+;(function () {
+  var themes = null
+  try {
+    var element = document.getElementById('polyfinWebThemes')
+    themes = element && JSON.parse(element.textContent)
+  } catch (error) {}
+  if (!themes || !themes.Themes || typeof themes.Cookie !== 'string') return
+  var storageKey = 'polyfinWebTheme'
+  var reloadKey = 'polyfinWebThemeReload'
+  var mostUsers = 20
+  var linkId = 'polyfinWebThemeCss'
+  function quietly(listener) {
+    return function (event) {
+      try {
+        listener(event)
+      } catch (error) {}
+    }
+  }
+  // jellyfin-web asks for the branding through fetch without the
+  // browser's cookies (its SDK's axios sends credentials: 'omit'), which
+  // would leave out the one naming the theme: those requests go with the
+  // cookies of the page's own server. Its XMLHttpRequests send them anyway.
+  var branding = /\/Branding\/(?:Configuration|Css(?:\.css)?)(?:[?#]|$)/i
+  if (typeof window.fetch === 'function') {
+    var originalFetch = window.fetch
+    window.fetch = function (input, init) {
+      var address = typeof input === 'string' ? input : input && input.url
+      if (typeof address === 'string' && branding.test(address)) {
+        var options = {}
+        for (var name in init || {}) options[name] = init[name]
+        options.credentials = 'same-origin'
+        init = options
+      }
+      return originalFetch.call(window, input, init)
+    }
+  }
+  // kept is what the browser keeps: Users, [server/user, theme] with the
+  // last first, the theme empty for the server's; Last, the user last
+  // signed in; Applied, the stylesheet the page showed, null when unknown.
+  function kept() {
+    try {
+      var value = JSON.parse(window.localStorage.getItem(storageKey))
+      if (value && Object.prototype.toString.call(value.Users) === '[object Array]') return value
+    } catch (error) {}
+    return { Users: [], Last: '', Applied: null }
+  }
+  // keep stores value, and tells whether the browser kept it.
+  function keep(value) {
+    try {
+      var text = JSON.stringify(value)
+      window.localStorage.setItem(storageKey, text)
+      return window.localStorage.getItem(storageKey) === text
+    } catch (error) {
+      return false
+    }
+  }
+  function ownTheme(value, user) {
+    for (var i = 0; i < value.Users.length; i++) {
+      if (value.Users[i] && value.Users[i][0] === user) return String(value.Users[i][1] || '')
+    }
+    return ''
+  }
+  function setOwnTheme(value, user, theme) {
+    var users = [[user, theme]]
+    for (var i = 0; i < value.Users.length && users.length < mostUsers; i++) {
+      if (value.Users[i] && value.Users[i][0] !== user) users.push(value.Users[i])
+    }
+    value.Users = users
+    value.Last = user
+  }
+  // savedUser is the user jellyfin-web's saved credentials sign in on the
+  // server it used last, as server/user; "" when none.
+  function savedUser() {
+    try {
+      var servers = JSON.parse(window.localStorage.getItem('jellyfin_credentials') || '{}').Servers || []
+      var last = null
+      for (var i = 0; i < servers.length; i++) {
+        var server = servers[i]
+        if (!server || !server.AccessToken || !server.UserId) continue
+        if (!last || (server.DateLastAccessed || 0) > (last.DateLastAccessed || 0)) last = server
+      }
+      return last ? last.Id + '/' + last.UserId : ''
+    } catch (error) {
+      return ''
+    }
+  }
+  var runsLumaaGlaass = null
+  // shown is the theme the page shows for theme: LumaaGlaass where the
+  // browser runs it, the Custom theme, else jellyfin-web's own look.
+  function shown(theme) {
+    if (theme === 'lumaaglaass' && runsLumaaGlaass === null) {
+      runsLumaaGlaass = false
+      try {
+        runsLumaaGlaass =
+          !!(window.CSS && CSS.supports && CSS.supports('selector(:has(a))')) &&
+          typeof new Function('a', 'b', 'a ||= b?.c ?? 1; return a') === 'function'
+      } catch (error) {}
+    }
+    if (theme === 'lumaaglaass' && runsLumaaGlaass) return theme
+    return theme === 'custom' ? theme : 'none'
+  }
+  function filesOf(theme) {
+    var files = themes.Themes[theme] || {}
+    return { css: typeof files.Css === 'string' ? files.Css : '', js: typeof files.Js === 'string' ? files.Js : '' }
+  }
+  // cssOff tells whether the user, by their ID, "" signed out, turned off
+  // the server's CSS in jellyfin-web's display settings, which jellyfin-web
+  // keeps in the browser for them (appSettings).
+  function cssOff(id) {
+    try {
+      return window.localStorage.getItem((id ? id + '-' : '') + 'disableCustomCss') === 'true'
+    } catch (error) {
+      return false
+    }
+  }
+  function name(theme) {
+    try {
+      document.cookie = themes.Cookie + '=' + theme + '; path=/; samesite=lax'
+    } catch (error) {}
+  }
+  // forgetKept deletes jellyfin-web's copy of its answers in IndexedDB, as
+  // the fourteenth does.
+  function forgetKept() {
+    try {
+      var request = indexedDB.open('keyval-store')
+      request.onupgradeneeded = function () {
+        request.transaction.abort()
+      }
+      request.onerror = function (event) {
+        event.preventDefault()
+      }
+      request.onsuccess = function () {
+        var database = request.result
+        try {
+          if (database.objectStoreNames.contains('keyval')) {
+            database.transaction('keyval', 'readwrite').objectStore('keyval').delete('jellyfin-query-cache')
+          }
+        } finally {
+          database.close()
+        }
+      }
+    } catch (error) {}
+  }
+  function escaped(text) {
+    return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+  }
+  // copies are the style elements jellyfin-web shows the CSS at address in,
+  // as Jellyfin's branding imports it.
+  function copies(address) {
+    var found = []
+    var styles = document.getElementsByTagName('style')
+    for (var i = 0; i < styles.length; i++) {
+      if ((styles[i].textContent || '').indexOf("url('" + address + "')") >= 0) found.push(styles[i])
+    }
+    return found
+  }
+  // loaded tells whether the stylesheet a style element imports came.
+  function loaded(style) {
+    try {
+      var rule = style.sheet && style.sheet.cssRules[0]
+      return !!(rule && rule.styleSheet && rule.styleSheet.cssRules.length > 0)
+    } catch (error) {
+      return false
+    }
+  }
+  var link = null
+  var handing = null
+  // handOver takes the script's stylesheet away once jellyfin-web shows
+  // the same, loaded; it looks again every quarter of a second, for two
+  // minutes.
+  function handOver(tries) {
+    clearTimeout(handing)
+    if (!link) return
+    var found = copies(link.getAttribute('href'))
+    for (var i = 0; i < found.length; i++) {
+      if (loaded(found[i])) {
+        if (link.parentNode) link.parentNode.removeChild(link)
+        link = null
+        return
+      }
+    }
+    if (tries < 480) {
+      handing = setTimeout(
+        quietly(function () {
+          handOver(tries + 1)
+        }),
+        250
+      )
+    }
+  }
+  // setStylesheet shows the stylesheet at address, "" for none, in place
+  // of the script's own: at the end of the page, after jellyfin-web's own
+  // CSS, where jellyfin-web puts the branding's.
+  function setStylesheet(address) {
+    if (link && link.getAttribute('href') === address) return
+    if (link && link.parentNode) link.parentNode.removeChild(link)
+    link = null
+    if (!address) return
+    link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.id = linkId
+    link.setAttribute('href', address)
+    ;(document.body || document.head).appendChild(link)
+    handOver(0)
+  }
+
+  var value = kept()
+  var saved = savedUser()
+  var user = saved || String(value.Last || '')
+  var theme = shown((user && ownTheme(value, user)) || themes.Theme)
+  var files = filesOf(theme)
+  var off = cssOff(saved ? saved.slice(saved.indexOf('/') + 1) : '')
+  // What the page shows: its theme, stylesheet and script.
+  var applied = { theme: theme, css: files.css, js: files.js }
+  name(theme)
+  if (value.Applied !== files.css) forgetKept()
+  value.Applied = files.css
+  if (saved) value.Last = saved
+  keep(value)
+  // A load that shows the theme a reload was for ends that reload's mark.
+  try {
+    if (window.sessionStorage.getItem(reloadKey) === user + ' ' + theme) window.sessionStorage.removeItem(reloadKey)
+  } catch (error) {}
+  if (files.css && !off) {
+    if (document.readyState === 'loading') {
+      document.write('<link rel="stylesheet" id="' + linkId + '" href="' + escaped(files.css) + '">')
+      link = document.getElementById(linkId)
+      handOver(0)
+    } else {
+      setStylesheet(files.css)
+    }
+  }
+  if (files.js) {
+    if (document.readyState === 'loading') {
+      document.write('<script src="' + escaped(files.js) + '" defer></' + 'script>')
+    } else {
+      var script = document.createElement('script')
+      script.src = files.js
+      document.head.appendChild(script)
+    }
+  }
+
+  // The user whose theme was asked last, as server/user.
+  var asked = ''
+  // show shows theme, which the page did not show, for user, by their ID.
+  function show(user, id, theme, value) {
+    var files = filesOf(theme)
+    if (applied.js) {
+      // A theme's script cannot be taken back: the page loads again, and
+      // shows the theme from its start, once for this user and theme.
+      var reload = user + ' ' + theme
+      var reloaded = ''
+      try {
+        reloaded = window.sessionStorage.getItem(reloadKey)
+      } catch (error) {}
+      if (reloaded === reload || !keep(value)) return
+      try {
+        window.sessionStorage.setItem(reloadKey, reload)
+      } catch (error) {}
+      name(theme)
+      location.reload()
+      return
+    }
+    // jellyfin-web's copy of the CSS before is turned off until it asks
+    // again, and the next load forgets what it kept.
+    name(theme)
+    value.Applied = null
+    keep(value)
+    var before = copies(applied.css)
+    for (var i = 0; i < before.length; i++) {
+      if (before[i].sheet) before[i].sheet.disabled = true
+    }
+    setStylesheet(cssOff(id) ? '' : files.css)
+    if (files.js) {
+      var script = document.createElement('script')
+      script.src = files.js
+      document.head.appendChild(script)
+    }
+    applied = { theme: theme, css: files.css, js: files.js }
+  }
+  // follow asks the theme of the user jellyfin-web signed in, once for
+  // each, and shows it when the page shows another.
+  function follow() {
+    var api = window.ApiClient
+    var id = api && api.getCurrentUserId()
+    if (!id) return
+    var user = (typeof api.serverId === 'function' ? api.serverId() : '') + '/' + id
+    if (user === asked) return
+    asked = user
+    api.getJSON(api.getUrl('Polyfin/WebTheme')).then(
+      quietly(function (answer) {
+        if (asked !== user || !answer || typeof answer.Theme !== 'string') return
+        var value = kept()
+        setOwnTheme(value, user, typeof answer.UserTheme === 'string' ? answer.UserTheme : '')
+        var theme = shown(answer.Theme)
+        if (theme !== applied.theme) {
+          show(user, id, theme, value)
+          return
+        }
+        keep(value)
+        // The user who signed in may have turned off the server's CSS.
+        if (cssOff(id)) setStylesheet('')
+      }),
+      function () {}
+    )
+  }
+  ;['pushState', 'replaceState'].forEach(function (name) {
+    var original = history[name]
+    history[name] = function () {
+      var result = original.apply(this, arguments)
+      quietly(follow)()
+      return result
+    }
+  })
+  addEventListener('hashchange', quietly(follow))
+  addEventListener('popstate', quietly(follow))
+  // A load signed in may move no route: jellyfin-web's user is looked for
+  // every half second, for half a minute, until one is found.
+  var looks = 0
+  ;(function look() {
+    quietly(follow)()
+    if (!asked && looks++ < 60) setTimeout(look, 500)
+  })()
+})()
 ;(function () {
   var menus = document.createElement('style')
   menus.textContent =
@@ -382,12 +815,74 @@
     }
     return ''
   }
+  // Addresses are read and written by hand, never with URL: the script runs
+  // before jellyfin-web's polyfills, and browsers jellyfin-web is built for
+  // lack URL (before Chrome 32) or its searchParams (before Chrome 51).
+  //
+  // webFolder is the address of the web client's folder, /web/ or a folder
+  // under Polyfin's base path, with its last slash.
+  function webFolder() {
+    var page = location.href.split('#')[0].split('?')[0]
+    return page.slice(0, page.lastIndexOf('/') + 1)
+  }
+  // resolved is address as the page resolves it: one with a scheme as it
+  // is, one from the server's root, such as /admin/…, on the page's server,
+  // and any other in the web client's folder.
+  function resolved(address) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(address)) return address
+    var root = /^([a-z][a-z0-9+.-]*:)\/\/[^/?#]*/i.exec(location.href)
+    if (root && address.indexOf('//') === 0) return root[1] + address
+    if (root && address.charAt(0) === '/') return root[0] + address
+    return webFolder() + address
+  }
+  // adminAddress is the address of the admin app's page path ("" for its
+  // home), which '../admin/' leads to from the web client's folder, never
+  // above the server's root.
+  function adminAddress(path) {
+    var folder = webFolder()
+    var root = /^[a-z][a-z0-9+.-]*:\/\/[^/]*\//i.exec(folder)
+    var above = folder.replace(/[^/]+\/$/, '')
+    return (root && above.length < root[0].length ? root[0] : above) + 'admin/' + path
+  }
   // An address of the admin app, marked as opened from the web client
   // (?from=web): the admin app then shows the user signed in here, and
   // signs out a session of another user it had in this browser.
   function fromWebClient(address) {
-    address.searchParams.set('from', 'web')
-    return address.href
+    var at = address.indexOf('#')
+    var rest = at < 0 ? address : address.slice(0, at)
+    var join = rest.indexOf('?') < 0 ? '?' : /[?&]$/.test(rest) ? '' : '&'
+    return rest + join + 'from=web' + (at < 0 ? '' : address.slice(at))
+  }
+  // marks is a WeakSet (kind "set") or a WeakMap ("map") of the page's
+  // elements, or, before Chrome 36, which has neither, the same kept on
+  // each element under a property named after name: either way, an element
+  // takes what was kept for it when it goes.
+  function marks(kind, name) {
+    if (kind === 'set' && typeof WeakSet === 'function') return new WeakSet()
+    if (kind === 'map' && typeof WeakMap === 'function') return new WeakMap()
+    var key = '__polyfin' + name
+    return {
+      has: function (element) {
+        return Object.prototype.hasOwnProperty.call(element, key)
+      },
+      get: function (element) {
+        return Object.prototype.hasOwnProperty.call(element, key) ? element[key] : undefined
+      },
+      set: function (element, value) {
+        element[key] = value
+        return this
+      },
+      add: function (element) {
+        element[key] = true
+        return this
+      },
+    }
+  }
+  // attached tells whether node is in the page, as isConnected does from
+  // Chrome 54 on.
+  function attached(node) {
+    if (typeof node.isConnected === 'boolean') return node.isConnected
+    return document.documentElement.contains(node)
   }
   // The title whose versions are followed, the next time they are asked,
   // and how many times the script began asking, the latest only going on.
@@ -411,9 +906,9 @@
   // given, the sources the script was last given by identifier, tells them
   // again for an option jellyfin-web listed under a source's identifier and
   // name.
-  var added = new WeakSet()
-  var sizes = new WeakMap()
-  var tags = new WeakMap()
+  var added = marks('set', 'Added')
+  var sizes = marks('map', 'Size')
+  var tags = marks('map', 'Tag')
   var given = {}
   // The version picked among those added, until jellyfin-web lists it: the
   // observer that waits for jellyfin-web's options, and the identifier of
@@ -986,7 +1481,7 @@
   function follow() {
     if (adminRoute.test(location.hash)) {
       // Replaced, so that Back returns to the page before.
-      location.replace(fromWebClient(new URL('../admin/' + target(location.hash), location.href)))
+      location.replace(fromWebClient(adminAddress(target(location.hash))))
       return
     }
     try {
@@ -1199,7 +1694,7 @@
               var line = divider.cloneNode(true)
               line.classList.add(entryClass, 'polyfinMenuDivider')
               return line
-            }),
+            })
           )
         })
       }
@@ -1233,7 +1728,7 @@
   // jellyfin-web's emby-linkbutton would open it within jellyfin-web.
   function adminLink(className, content) {
     var link = element('a', className, content)
-    link.setAttribute('href', fromWebClient(new URL('../admin/', location.href)))
+    link.setAttribute('href', fromWebClient(adminAddress('')))
     return link
   }
   function materialIcon(className) {
@@ -1268,7 +1763,7 @@
     if (!text || !path) return null
     item.classList.add(entryClass, 'polyfinMenuEntry')
     item.classList.remove('Mui-focusVisible')
-    item.setAttribute('href', fromWebClient(new URL('../admin/', location.href)))
+    item.setAttribute('href', fromWebClient(adminAddress('')))
     text.textContent = 'Polyfin'
     path.setAttribute('d', dashboardIcon)
     path.parentNode.removeAttribute('data-testid')
@@ -1307,7 +1802,7 @@
     if (!title || buttons.length !== 1) return
     var shown = { container: container, title: title.textContent, at: Date.now() }
     var before = alerted
-    if (!before || !before.container.isConnected || shown.at - before.at > duplicateWithin || before.title !== shown.title) {
+    if (!before || !attached(before.container) || shown.at - before.at > duplicateWithin || before.title !== shown.title) {
       alerted = shown
       return
     }
@@ -1319,7 +1814,7 @@
     // seconds later all the same.
     var waited = 0
     ;(function close() {
-      if (!container.isConnected) return
+      if (!attached(container)) return
       if (dialog.classList.contains('opened') || waited >= 2000) {
         buttons[0].click()
         return
@@ -1344,7 +1839,7 @@
             }
           }
         }
-      }),
+      })
     ).observe(document.body, { childList: true })
   }
   // The title whose scores are asked for, its last answer holding one,
@@ -1542,7 +2037,7 @@
               return resumable[plainId(other.getAttribute('data-id'))]
             }),
         }
-      },
+      }
     )
   }
   // extendMenu adds the entries to the item menu a dialog container holds,
@@ -1556,7 +2051,7 @@
       .then(function (facts) {
         var scroller = sheet.querySelector('.actionSheetScroller')
         var model = scroller && scroller.querySelector('.actionSheetMenuItem')
-        if (!container.isConnected || !model) return
+        if (!attached(container) || !model) return
         if (facts.resume) {
           scroller.appendChild(
             menuItem(container, model, 'playlist_remove', say('removeResume'), function () {
@@ -1566,7 +2061,7 @@
                 keepDrop({ kind: 'resume', id: entry.id, last: Date.parse((data && data.LastPlayedDate) || '') || 0 })
                 dropCards(entry.card ? [entry.card] : [])
               })
-            }),
+            })
           )
         }
         if (facts.hideable && facts.hidden) {
@@ -1576,7 +2071,7 @@
                 forgetHidden([entry.id, facts.series])
                 toast(say('shown'))
               })
-            }),
+            })
           )
         } else if (facts.hideable) {
           scroller.appendChild(
@@ -1593,7 +2088,7 @@
                 dropCards(cards)
                 toast(say('hidden'))
               })
-            }),
+            })
           )
         }
         // The menu was placed for its own entries: it moves up as far as
@@ -1629,7 +2124,7 @@
         else container.remove()
         run()
       }),
-      true,
+      true
     )
     return item
   }
@@ -1717,8 +2212,8 @@
   }
   // Every row's fetchData goes through screened, as jellyfin-web sets it on
   // the row: rows are divs, and the script runs before jellyfin-web.
-  if (typeof HTMLDivElement === 'function' && typeof WeakMap === 'function') {
-    var fetchers = new WeakMap()
+  if (typeof HTMLDivElement === 'function') {
+    var fetchers = marks('map', 'Fetcher')
     Object.defineProperty(HTMLDivElement.prototype, 'fetchData', {
       configurable: true,
       get: function () {
@@ -1815,7 +2310,7 @@
       .getJSON(api.getUrl('Polyfin/Items/' + id + '/Share'))
       .then(function (answer) {
         if (shareTitle !== id || !answer || answer.Shareable !== true || typeof answer.Url !== 'string') return
-        shareAddress = fromWebClient(new URL(answer.Url, location.href))
+        shareAddress = fromWebClient(resolved(answer.Url))
         showShare()
       })
       .catch(function () {})
@@ -2015,17 +2510,24 @@
       })
   }
   // drawn tells whether the container holds every row shown, each with all
-  // its titles.
+  // its titles. Rows are found by their identifiers: draw puts them in the
+  // order of their places, which may not be the order of the answer.
   function drawn(container) {
     var rows = shownRows()
-    var drawnRows = []
+    var drawnRows = {}
+    var count = 0
     for (var i = 0; i < container.children.length; i++) {
-      if (container.children[i].classList.contains('polyfinHomeRow')) drawnRows.push(container.children[i])
+      var child = container.children[i]
+      if (child.classList.contains('polyfinHomeRow')) {
+        drawnRows[child.getAttribute('data-polyfin-row')] = child
+        count++
+      }
     }
     return (
-      drawnRows.length === rows.length &&
-      drawnRows.every(function (element, i) {
-        return element.querySelectorAll('.card').length === rows[i].Items.length
+      count === rows.length &&
+      rows.every(function (row) {
+        var element = drawnRows[row.Id]
+        return !!element && element.querySelectorAll('.card').length === row.Items.length
       })
     )
   }
@@ -2078,7 +2580,7 @@
         'a',
         'more button-flat button-flat-mini sectionTitleTextButton emby-button',
         { is: 'emby-linkbutton', href: '#/list?parentId=' + encodeURIComponent(row.Id) + '&serverId=' + encodeURIComponent(server) },
-        [made('h2', 'sectionTitle sectionTitle-cards', {}, [row.Name]), icon('chevron_right')],
+        [made('h2', 'sectionTitle sectionTitle-cards', {}, [row.Name]), icon('chevron_right')]
       ),
     ])
     var cards = (row.Items || []).map(function (item, index) {
@@ -2089,7 +2591,7 @@
       'div',
       'padded-top-focusscale padded-bottom-focusscale emby-scroller',
       { is: 'emby-scroller', 'data-centerfocus': 'true' },
-      [items],
+      [items]
     )
     return made('div', 'verticalSection emby-scroller-container polyfinHomeRow', { 'data-polyfin-row': row.Id }, [title, scroller])
   }
@@ -2116,7 +2618,7 @@
           made('div', 'countIndicator indicator', {}, [
             String(Math.min(data.UnplayedItemCount, 99)) + (data.UnplayedItemCount > 99 ? '+' : ''),
           ]),
-        ]),
+        ])
       )
     } else if (data.Played) {
       image.appendChild(made('div', 'cardIndicators', {}, [made('div', 'playedIndicator indicator', {}, [icon('check', 'indicatorIcon')])]))
@@ -2125,7 +2627,7 @@
       var bar = made('div', 'itemProgressBarForeground')
       bar.style.width = data.PlayedPercentage + '%'
       image.appendChild(
-        made('div', 'innerCardFooter fullInnerCardFooter innerCardFooterClear', {}, [made('div', 'itemProgressBar', {}, [bar])]),
+        made('div', 'innerCardFooter fullInnerCardFooter innerCardFooterClear', {}, [made('div', 'itemProgressBar', {}, [bar])])
       )
     }
     var overlay = made('div', 'cardOverlayContainer itemAction', { 'data-action': 'link' }, [
@@ -2137,7 +2639,7 @@
           type: 'button',
           'data-action': 'resume',
         },
-        [icon('play_arrow', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')],
+        [icon('play_arrow', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')]
       ),
       made('div', 'cardOverlayButton-br flex', {}, [
         made(
@@ -2148,7 +2650,7 @@
             type: 'button',
             'data-action': 'menu',
           },
-          [icon('more_vert', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')],
+          [icon('more_vert', 'cardOverlayButtonIcon cardOverlayButtonIcon-hover')]
         ),
       ]),
     ])
@@ -2176,7 +2678,7 @@
           name,
           year,
         ]),
-      ],
+      ]
     )
   }
   // watch checks the page as jellyfin-web changes it, the route included.
@@ -2369,7 +2871,7 @@
         state = answer
         place()
       }),
-      function () {},
+      function () {}
     )
   }
   // button makes a button styled as jellyfin-web's record buttons.
@@ -2428,7 +2930,7 @@
           menu.classList.toggle('hide', !open)
           more.setAttribute('aria-expanded', open ? 'true' : 'false')
           if (open) every.focus()
-        }),
+        })
       )
       row.appendChild(more)
       row.appendChild(menu)
@@ -2445,10 +2947,22 @@
       var link = document.createElement('a')
       link.className = 'polyfinReminderLink'
       // Marked as opened from the web client, as the script's other links
-      // to the admin app are (see fromWebClient).
-      var address = new URL('..' + (state.NotificationsUrl || '/admin/me/account#notifications'), location.href)
-      address.searchParams.set('from', 'web')
-      link.href = address.href
+      // to the admin app are (see fromWebClient). The server names the page
+      // from its root, /admin/…: the web client's folder is one below it,
+      // or below Polyfin's base path. Written by hand, as the script writes
+      // its addresses (see adminAddress).
+      var page = location.href.split('#')[0].split('?')[0]
+      var path = (state.NotificationsUrl || '/admin/me/account#notifications').replace(/^\/+/, '')
+      var at = path.indexOf('#')
+      var rest = at < 0 ? path : path.slice(0, at)
+      var root = /^[a-z][a-z0-9+.-]*:\/\/[^/]*\//i.exec(page)
+      var above = page.slice(0, page.lastIndexOf('/') + 1).replace(/[^/]+\/$/, '')
+      link.href =
+        (root && above.length < root[0].length ? root[0] : above) +
+        rest +
+        (rest.indexOf('?') < 0 ? '?' : '&') +
+        'from=web' +
+        (at < 0 ? '' : path.slice(at))
       link.textContent = say('notifications')
       hint.appendChild(link)
       hint.appendChild(document.createTextNode('.'))
@@ -2501,7 +3015,7 @@
         busy = false
         drawnFor = null
         place()
-      }),
+      })
     )
   }
   // toast says text as jellyfin-web's toasts do, for 3.3 seconds.
@@ -2571,7 +3085,7 @@
       if (target && target.closest && target.closest('.polyfinReminderRow')) return
       menu.classList.add('hide')
     }),
-    true,
+    true
   )
   quietly(follow)()
 })()
@@ -2718,7 +3232,66 @@
   function params(hash) {
     if (!route.test(hash)) return null
     var at = hash.indexOf('?')
-    return new URLSearchParams(at < 0 ? '' : hash.slice(at + 1).split('#')[0])
+    return new RouteParams(at < 0 ? '' : hash.slice(at + 1).split('#')[0])
+  }
+  // RouteParams are a route's parameters, read and written as
+  // URLSearchParams does, which browsers before Chrome 49 lack: the script
+  // runs before jellyfin-web's polyfills. get gives a parameter's first
+  // value, set replaces its first and drops the others, and toString
+  // writes them back.
+  function RouteParams(text) {
+    this.pairs = []
+    var parts = text.split('&')
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue
+      var at = parts[i].indexOf('=')
+      this.pairs.push([decoded(at < 0 ? parts[i] : parts[i].slice(0, at)), at < 0 ? '' : decoded(parts[i].slice(at + 1))])
+    }
+  }
+  RouteParams.prototype.get = function (name) {
+    for (var i = 0; i < this.pairs.length; i++) if (this.pairs[i][0] === name) return this.pairs[i][1]
+    return null
+  }
+  RouteParams.prototype.set = function (name, value) {
+    var kept = []
+    var placed = false
+    for (var i = 0; i < this.pairs.length; i++) {
+      if (this.pairs[i][0] !== name) {
+        kept.push(this.pairs[i])
+      } else if (!placed) {
+        kept.push([name, String(value)])
+        placed = true
+      }
+    }
+    if (!placed) kept.push([name, String(value)])
+    this.pairs = kept
+  }
+  RouteParams.prototype.toString = function () {
+    return this.pairs
+      .map(function (pair) {
+        return encoded(pair[0]) + '=' + encoded(pair[1])
+      })
+      .join('&')
+  }
+  // decoded reads a parameter's name or value, + standing for a space; a
+  // malformed escape leaves it as it is.
+  function decoded(text) {
+    var plain = text.replace(/\+/g, ' ')
+    try {
+      return decodeURIComponent(plain)
+    } catch (error) {
+      return plain
+    }
+  }
+  // encoded writes a parameter's name or value as URLSearchParams does
+  // (application/x-www-form-urlencoded): a space as +, and every character
+  // but letters, digits and *-._ escaped.
+  function encoded(text) {
+    return encodeURIComponent(text)
+      .replace(/[!'()~]/g, function (character) {
+        return '%' + character.charCodeAt(0).toString(16).toUpperCase()
+      })
+      .replace(/%20/g, '+')
   }
   // recent are the searches kept for who, newest first.
   function recent(who) {
@@ -2853,7 +3426,7 @@
   // address is the route that searches query again on the search page,
   // in the page's library, if any.
   function address(query) {
-    var found = params(location.hash) || new URLSearchParams('')
+    var found = params(location.hash) || new RouteParams('')
     found.set('query', query)
     return '#/search?' + found.toString()
   }
@@ -2879,14 +3452,14 @@
         'aria-label',
         say('removeOne').replace('{0}', function () {
           return query
-        }),
+        })
       )
       remove.title = say('remove')
       remove.addEventListener(
         'click',
         quietly(function () {
           forget(who, query)
-        }),
+        })
       )
       entries.appendChild(made('div', 'polyfinRecentSearch', [made('span', 'polyfinRecentSearchItem', [link, remove])]))
     })
@@ -2896,7 +3469,7 @@
       'click',
       quietly(function () {
         forget(who, null)
-      }),
+      })
     )
     var heading = made('h2', 'sectionTitle padded-left padded-right', [say('title')])
     return made('div', 'verticalSection polyfinRecentSearches', [made('div', '', [heading]), entries, made('div', '', [clear])])
@@ -2949,4 +3522,736 @@
   // Closing the tab, or loading another page in it, leaves the search too.
   addEventListener('pagehide', quietly(leave))
   quietly(follow)()
+})()
+
+// Titles' ratings on their posters (see the header's sixteenth), on their
+// own: they follow the pointer and the focus.
+;(function () {
+  var titleCard = '.card[data-id]'
+  var titleTypes = { Movie: true, Series: true }
+  // How long an answer is kept, so that turning the ratings on posters on
+  // or off applies within a minute, how long a server that shows none, or
+  // did not answer, is left unasked, and how many titles one request names.
+  var keptFor = 60 * 1000
+  var offFor = 60 * 1000
+  var most = 100
+  // The ratings answered, by identifier, as { at, rating }, rating null for
+  // a title without any, for keptUser; until when not to ask; whether a
+  // request is under way, and the card last met meanwhile.
+  var kept = {}
+  var keptUser = ''
+  var offUntil = 0
+  var asking = false
+  var waiting = null
+  // The icons, MUI's Material Icons (Apache License 2.0) as jellyfin-web
+  // draws its own: a star, a review and a group of people.
+  var icons = {
+    community: 'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
+    critics:
+      'M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 14v-2.47l6.88-6.88c.2-.2.51-.2.71 0l1.77 1.77c.2.2.2.51 0 .71L8.47 14H6zm12 0h-7.5l2-2H18v2z',
+    audience:
+      'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
+  }
+  // The percent sign as each of jellyfin-web's languages writes it after a
+  // number, "%" for the others.
+  var percents = { fr: '\u00a0%', de: '\u00a0%', es: '\u00a0%' }
+  function percent() {
+    var language = /^[a-z]*/.exec(String(document.documentElement.lang || '').toLowerCase())[0]
+    return percents[language] || '%'
+  }
+  function quietly(listener) {
+    return function () {
+      try {
+        listener.apply(this, arguments)
+      } catch (error) {}
+    }
+  }
+  function plainId(id) {
+    return String(id).replace(/-/g, '').toLowerCase()
+  }
+  // titleOf returns the title card an element is in, null outside one.
+  function titleOf(element) {
+    var card = element && element.closest ? element.closest(titleCard) : null
+    return card && titleTypes[card.getAttribute('data-type')] ? card : null
+  }
+  function known(id, now) {
+    var entry = kept[id]
+    return entry && now - entry.at < keptFor ? entry : null
+  }
+  // arrive follows the pointer and the focus to a title card: it shows the
+  // card's ratings when known, and asks for them otherwise.
+  function arrive(event) {
+    var card = titleOf(event.target)
+    var api = window.ApiClient
+    if (!card || !api || /^#!?\/video(?:[/?#]|$)/i.test(location.hash)) return
+    var user = api.getCurrentUserId() || ''
+    if (!user) return
+    if (user !== keptUser) {
+      kept = {}
+      keptUser = user
+      offUntil = 0
+    }
+    var now = Date.now()
+    var entry = known(plainId(card.getAttribute('data-id')), now)
+    if (entry) return show(card, entry.rating)
+    if (now < offUntil) return
+    if (asking) {
+      waiting = card
+      return
+    }
+    ask(api, user, card, now)
+  }
+  // ask asks for the ratings of card and of the other title cards of the
+  // page not known, those of its row first, 100 at most, then shows them.
+  function ask(api, user, card, now) {
+    var ids = []
+    var row = card.closest('.itemsContainer')
+    var cards = [card]
+      .concat(row ? Array.prototype.slice.call(row.querySelectorAll(titleCard)) : [])
+      .concat(Array.prototype.slice.call(document.querySelectorAll(titleCard)))
+    for (var i = 0; i < cards.length && ids.length < most; i++) {
+      if (!titleTypes[cards[i].getAttribute('data-type')]) continue
+      var id = plainId(cards[i].getAttribute('data-id'))
+      if (ids.indexOf(id) < 0 && !known(id, now)) ids.push(id)
+    }
+    asking = true
+    var done = function () {
+      asking = false
+      var next = waiting
+      waiting = null
+      if (next) quietly(arrive)({ target: next })
+    }
+    api
+      .getJSON(api.getUrl('Polyfin/Items/Ratings', { Ids: ids.join(',') }))
+      .then(
+        quietly(function (answer) {
+          if (keptUser !== user) return
+          var at = Date.now()
+          if (!answer || !answer.Enabled) {
+            offUntil = at + offFor
+            strip()
+            return
+          }
+          ids.forEach(function (id) {
+            kept[id] = { at: at, rating: null }
+          })
+          ;(answer.Items || []).forEach(function (item) {
+            if (item && item.Id) kept[plainId(item.Id)] = { at: at, rating: item }
+          })
+          decorate(at)
+        }),
+        function () {
+          offUntil = Date.now() + offFor
+        }
+      )
+      .then(done, done)
+  }
+  // decorate gives every title card of the page whose ratings are known
+  // its ratings.
+  function decorate(now) {
+    var cards = document.querySelectorAll(titleCard)
+    for (var i = 0; i < cards.length; i++) {
+      if (!titleTypes[cards[i].getAttribute('data-type')]) continue
+      var entry = known(plainId(cards[i].getAttribute('data-id')), now)
+      if (entry) show(cards[i], entry.rating)
+    }
+  }
+  // strip takes every card's ratings away.
+  function strip() {
+    var shown = document.querySelectorAll('.polyfinPosterRatings')
+    for (var i = 0; i < shown.length; i++) if (shown[i].parentNode) shown[i].parentNode.removeChild(shown[i])
+  }
+  // show puts a title's ratings over its card's poster, once.
+  function show(card, rating) {
+    var poster = card.querySelector('.cardScalable')
+    if (!rating || !poster || poster.querySelector('.polyfinPosterRatings')) return
+    var entries = []
+    if (rating.CommunityRating != null) entries.push(['community', Number(rating.CommunityRating).toFixed(1)])
+    if (rating.CriticsScore != null) entries.push(['critics', Math.round(rating.CriticsScore) + percent()])
+    if (rating.AudienceScore != null) entries.push(['audience', Math.round(rating.AudienceScore) + percent()])
+    if (!entries.length) return
+    style()
+    var badge = document.createElement('div')
+    badge.className = 'polyfinPosterRatings'
+    // What the pointer or the focus already reaches: the card names the
+    // title, and its page tells the ratings in words.
+    badge.setAttribute('aria-hidden', 'true')
+    entries.forEach(function (entry) {
+      var score = document.createElement('span')
+      score.className = 'polyfinPosterRating polyfinPosterRating-' + entry[0]
+      var icon = document.createElement('span')
+      icon.className = 'polyfinPosterRatingIcon'
+      icon.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="' + icons[entry[0]] + '"></path></svg>'
+      score.appendChild(icon)
+      score.appendChild(document.createTextNode(entry[1]))
+      badge.appendChild(score)
+    })
+    poster.appendChild(badge)
+  }
+  // style adds the look of the ratings, once: hidden until the pointer or
+  // the focus comes to the card, above jellyfin-web's hover menu, under a
+  // version count, never in the pointer's way.
+  function style() {
+    if (document.getElementById('polyfinPosterRatingsStyle')) return
+    var sheet = document.createElement('style')
+    sheet.id = 'polyfinPosterRatingsStyle'
+    sheet.textContent =
+      '.polyfinPosterRatings{position:absolute;top:.45em;inset-inline-start:.45em;z-index:3;display:flex;flex-direction:column;' +
+      'align-items:flex-start;gap:.3em;pointer-events:none;opacity:0;transition:opacity .15s ease}' +
+      '.cardScalable:has(.mediaSourceIndicator) .polyfinPosterRatings{top:2.4em}' +
+      '.card:hover .polyfinPosterRatings,.card:focus .polyfinPosterRatings,.card:focus-within .polyfinPosterRatings{opacity:1}' +
+      '.polyfinPosterRating{display:inline-flex;align-items:center;gap:.3em;padding:.2em .5em;border-radius:1em;' +
+      'background:rgba(0,0,0,.68);color:#fff;font-size:.8rem;font-weight:600;line-height:1.25;white-space:nowrap;' +
+      'font-variant-numeric:tabular-nums;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}' +
+      '.polyfinPosterRatingIcon{display:inline-flex}' +
+      '.polyfinPosterRatingIcon svg{width:1.1em;height:1.1em;fill:currentColor}' +
+      '.polyfinPosterRating-community .polyfinPosterRatingIcon{color:#ffc83d}' +
+      '@media (prefers-reduced-motion:reduce){.polyfinPosterRatings{transition:none}}'
+    document.head.appendChild(sheet)
+  }
+  addEventListener('mouseover', quietly(arrive), true)
+  addEventListener('focusin', quietly(arrive), true)
+})()
+
+// Polyfin's line under jellyfin-web's spinner while a torrent starts (see
+// the header's seventeenth), on its own.
+;(function () {
+  var startWords = {
+    en: {
+      looking: 'Finding peers…',
+      finding: 'Finding peers: {found} found, {connected} connected',
+      receiving: 'Receiving the start: {mb} MB from {peers} peers',
+      receivingOne: 'Receiving the start: {mb} MB from 1 peer',
+      failed: 'The torrent did not start: {why}',
+      silent: 'its peers sent nothing',
+      noUdp: 'no peer found, and the route carries no UDP',
+      refused: 'its trackers did not answer',
+      noTrackers: 'the addon named no tracker, and none was found otherwise',
+      noPeers: 'no peer found',
+      route: 'the route for torrents is down',
+      atCap: 'as many torrents play as allowed',
+    },
+    fr: {
+      looking: 'Recherche de pairs…',
+      finding: 'Recherche de pairs : {found} trouvés, {connected} connectés',
+      receiving: 'Réception du début : {mb} Mo depuis {peers} pairs',
+      receivingOne: 'Réception du début : {mb} Mo depuis 1 pair',
+      failed: 'Le torrent n’a pas démarré : {why}',
+      silent: 'ses pairs n’ont rien envoyé',
+      noUdp: 'aucun pair trouvé, et la route ne transporte pas l’UDP',
+      refused: 'ses trackers n’ont pas répondu',
+      noTrackers: 'l’addon n’a indiqué aucun tracker, et aucun pair n’a été trouvé autrement',
+      noPeers: 'aucun pair trouvé',
+      route: 'la route des torrents est coupée',
+      atCap: 'autant de torrents sont lus que permis',
+    },
+    de: {
+      looking: 'Suche nach Peers…',
+      finding: 'Suche nach Peers: {found} gefunden, {connected} verbunden',
+      receiving: 'Empfange den Anfang: {mb} MB von {peers} Peers',
+      receivingOne: 'Empfange den Anfang: {mb} MB von 1 Peer',
+      failed: 'Der Torrent ist nicht gestartet: {why}',
+      silent: 'seine Peers haben nichts gesendet',
+      noUdp: 'kein Peer gefunden, und die Route überträgt kein UDP',
+      refused: 'seine Tracker haben nicht geantwortet',
+      noTrackers: 'das Add-on hat keinen Tracker genannt, und anders wurde kein Peer gefunden',
+      noPeers: 'kein Peer gefunden',
+      route: 'die Route für Torrents ist unterbrochen',
+      atCap: 'es laufen so viele Torrents wie erlaubt',
+    },
+    es: {
+      looking: 'Buscando pares…',
+      finding: 'Buscando pares: {found} encontrados, {connected} conectados',
+      receiving: 'Recibiendo el inicio: {mb} MB de {peers} pares',
+      receivingOne: 'Recibiendo el inicio: {mb} MB de 1 par',
+      failed: 'El torrent no se inició: {why}',
+      silent: 'sus pares no enviaron nada',
+      noUdp: 'no se encontró ningún par, y la ruta no transporta UDP',
+      refused: 'sus trackers no respondieron',
+      noTrackers: 'la extensión no indicó ningún tracker, y no se encontró ningún par de otro modo',
+      noPeers: 'no se encontró ningún par',
+      route: 'la ruta de los torrents está caída',
+      atCap: 'se reproducen tantos torrents como se permite',
+    },
+    it: {
+      looking: 'Ricerca dei peer…',
+      finding: 'Ricerca dei peer: {found} trovati, {connected} connessi',
+      receiving: 'Ricezione dell’inizio: {mb} MB da {peers} peer',
+      receivingOne: 'Ricezione dell’inizio: {mb} MB da 1 peer',
+      failed: 'Il torrent non è partito: {why}',
+      silent: 'i suoi peer non hanno inviato nulla',
+      noUdp: 'nessun peer trovato, e il percorso non trasporta UDP',
+      refused: 'i suoi tracker non hanno risposto',
+      noTrackers: 'l’add-on non ha indicato nessun tracker, e non è stato trovato nessun peer in altro modo',
+      noPeers: 'nessun peer trovato',
+      route: 'il percorso dei torrent è interrotto',
+      atCap: 'sono in riproduzione tanti torrent quanti consentiti',
+    },
+    pt: {
+      looking: 'Procurando peers…',
+      finding: 'Procurando peers: {found} encontrados, {connected} conectados',
+      receiving: 'Recebendo o início: {mb} MB de {peers} peers',
+      receivingOne: 'Recebendo o início: {mb} MB de 1 peer',
+      failed: 'O torrent não começou: {why}',
+      silent: 'seus peers não enviaram nada',
+      noUdp: 'nenhum peer encontrado, e a rota não transporta UDP',
+      refused: 'seus trackers não responderam',
+      noTrackers: 'o complemento não indicou nenhum tracker, e nenhum peer foi encontrado de outro modo',
+      noPeers: 'nenhum peer encontrado',
+      route: 'a rota dos torrents está fora do ar',
+      atCap: 'há tantos torrents em reprodução quanto o permitido',
+    },
+  }
+  // The words of each failure Polyfin tells.
+  var failures = { silent: 'silent', no_udp: 'noUdp', refused: 'refused', no_trackers: 'noTrackers', no_peers: 'noPeers', route: 'route', at_cap: 'atCap' }
+  function language() {
+    return /^[a-z]*/.exec(String(document.documentElement.lang || '').toLowerCase())[0]
+  }
+  function say(key) {
+    return (startWords[language()] || startWords.en)[key]
+  }
+  function quietly(listener) {
+    return function () {
+      try {
+        listener.apply(this, arguments)
+      } catch (error) {}
+    }
+  }
+  // The spinner watched, the round of asks while it shows (0 while it does
+  // not), the ask to come, and the line drawn.
+  var watched = null
+  var rounds = 0
+  var polling = 0
+  var timer = null
+  var line = null
+  function spinning() {
+    return !!document.querySelector('.docspinner.mdlSpinnerActive')
+  }
+  // watch follows jellyfin-web's spinner, which it makes at its first
+  // show, then turns on and off by its class.
+  function watch() {
+    var loader = document.querySelector('.docspinner')
+    if (loader && loader !== watched) {
+      watched = loader
+      new MutationObserver(quietly(check)).observe(loader, { attributes: true, attributeFilter: ['class'] })
+    }
+    check()
+  }
+  function check() {
+    if (spinning()) {
+      if (!polling) {
+        polling = ++rounds
+        ask(polling)
+      }
+      return
+    }
+    if (!polling) return
+    polling = 0
+    clearTimeout(timer)
+    timer = null
+    undraw()
+  }
+  function ask(round) {
+    timer = null
+    if (round !== polling) return
+    var api = window.ApiClient
+    if (!api || !api.getCurrentUserId()) return again(round)
+    api
+      .getJSON(api.getUrl('Polyfin/Playback/Starting'))
+      .then(
+        quietly(function (progress) {
+          if (round !== polling) return
+          draw(describe(progress))
+          again(round)
+        }),
+        quietly(function () {
+          if (round === polling) again(round)
+        })
+      )
+      .catch(function () {})
+  }
+  function again(round) {
+    timer = setTimeout(
+      quietly(function () {
+        ask(round)
+      }),
+      1000
+    )
+  }
+  // describe words how the start goes, empty when nothing starts.
+  function describe(progress) {
+    if (!progress || !progress.Stage) return ''
+    if (progress.Stage === 'failed') return say('failed').replace('{why}', say(failures[progress.Failure] || 'noPeers'))
+    if (progress.Stage === 'pieces') {
+      return say(progress.PeersConnected === 1 ? 'receivingOne' : 'receiving')
+        .replace('{mb}', megabytes(progress.Received))
+        .replace('{peers}', String(progress.PeersConnected))
+    }
+    if (!progress.PeersFound) return say('looking')
+    return say('finding').replace('{found}', String(progress.PeersFound)).replace('{connected}', String(progress.PeersConnected))
+  }
+  // megabytes writes bytes in megabytes, with one decimal, as the
+  // language writes numbers.
+  function megabytes(bytes) {
+    var lang = String(document.documentElement.lang || 'en')
+    try {
+      return (bytes / 1e6).toLocaleString(lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    } catch (error) {
+      return (bytes / 1e6).toFixed(1)
+    }
+  }
+  function draw(text) {
+    if (!text) return undraw()
+    style()
+    if (!line) {
+      line = document.createElement('div')
+      line.className = 'polyfinTorrentStart'
+      line.setAttribute('role', 'status')
+      line.setAttribute('aria-live', 'polite')
+    }
+    if (line.textContent !== text) line.textContent = text
+    if (!line.parentNode) document.body.appendChild(line)
+    place()
+  }
+  // place puts the line under the spinner where it shows: jellyfin-web
+  // centres it in the window, a web theme may move it, as the default
+  // theme does under its header.
+  function place() {
+    var loader = document.querySelector('.docspinner.mdlSpinnerActive')
+    var box = loader && loader.getBoundingClientRect && loader.getBoundingClientRect()
+    if (!box || !box.height || !line.style) return
+    line.style.top = Math.round(box.bottom + 12) + 'px'
+    line.style.left = Math.round(box.left + box.width / 2) + 'px'
+  }
+  function undraw() {
+    if (line && line.parentNode) line.parentNode.removeChild(line)
+  }
+  // style places the line under the spinner as jellyfin-web places it,
+  // centred in the window, 10vh wide and tall, above everything, until
+  // place finds where it shows.
+  function style() {
+    if (document.getElementById('polyfinTorrentStartStyle')) return
+    var sheet = document.createElement('style')
+    sheet.id = 'polyfinTorrentStartStyle'
+    sheet.textContent =
+      '.polyfinTorrentStart{position:fixed;left:50%;top:calc(50% + 7vh);transform:translateX(-50%);z-index:9999999;' +
+      'padding:.35em .9em;border-radius:1em;background:rgba(0,0,0,.65);color:#fff;font-size:1em;line-height:1.4;' +
+      'text-align:center;white-space:nowrap;pointer-events:none}'
+    document.head.appendChild(sheet)
+  }
+  // The script runs from the page's head: the body, where jellyfin-web
+  // puts its spinner, comes later.
+  function start() {
+    new MutationObserver(quietly(watch)).observe(document.body, { childList: true })
+    watch()
+  }
+  if (document.body) quietly(start)()
+  else addEventListener('DOMContentLoaded', quietly(start))
+})()
+
+;(function () {
+  var providerWords = {
+    en: {
+      signIn: 'Sign in with {0}',
+      signingIn: 'Signing in…',
+      refused: 'The sign-in was cancelled.',
+      noAccount: 'No account on this server matches your account at the identity provider.',
+      disabled: 'This account is disabled.',
+      hours: 'This account may not sign in at this time.',
+      remote: 'This account may only sign in from the local network.',
+      tooMany: 'Too many attempts. Try again later.',
+      failed: 'The sign-in with the identity provider failed. Try again.',
+    },
+    fr: {
+      signIn: 'Se connecter avec {0}',
+      signingIn: 'Connexion…',
+      refused: 'La connexion a été annulée.',
+      noAccount: 'Aucun compte de ce serveur ne correspond à votre compte chez le fournisseur d’identité.',
+      disabled: 'Ce compte est désactivé.',
+      hours: 'Ce compte ne peut pas se connecter à cette heure.',
+      remote: 'Ce compte ne peut se connecter que depuis le réseau local.',
+      tooMany: 'Trop de tentatives. Réessayez plus tard.',
+      failed: 'La connexion avec le fournisseur d’identité a échoué. Réessayez.',
+    },
+    de: {
+      signIn: 'Mit {0} anmelden',
+      signingIn: 'Anmeldung…',
+      refused: 'Die Anmeldung wurde abgebrochen.',
+      noAccount: 'Kein Konto dieses Servers passt zu deinem Konto beim Identitätsanbieter.',
+      disabled: 'Dieses Konto ist deaktiviert.',
+      hours: 'Dieses Konto darf sich zu dieser Zeit nicht anmelden.',
+      remote: 'Dieses Konto darf sich nur im lokalen Netzwerk anmelden.',
+      tooMany: 'Zu viele Versuche. Versuche es später erneut.',
+      failed: 'Die Anmeldung beim Identitätsanbieter ist fehlgeschlagen. Versuche es erneut.',
+    },
+    es: {
+      signIn: 'Iniciar sesión con {0}',
+      signingIn: 'Iniciando sesión…',
+      refused: 'Se canceló el inicio de sesión.',
+      noAccount: 'Ninguna cuenta de este servidor corresponde a su cuenta del proveedor de identidad.',
+      disabled: 'Esta cuenta está desactivada.',
+      hours: 'Esta cuenta no puede iniciar sesión a esta hora.',
+      remote: 'Esta cuenta solo puede iniciar sesión desde la red local.',
+      tooMany: 'Demasiados intentos. Vuelva a intentarlo más tarde.',
+      failed: 'El inicio de sesión con el proveedor de identidad falló. Vuelva a intentarlo.',
+    },
+    it: {
+      signIn: 'Accedi con {0}',
+      signingIn: 'Accesso in corso…',
+      refused: 'L’accesso è stato annullato.',
+      noAccount: 'Nessun account di questo server corrisponde al tuo account presso il provider di identità.',
+      disabled: 'Questo account è disattivato.',
+      hours: 'Questo account non può accedere a quest’ora.',
+      remote: 'Questo account può accedere solo dalla rete locale.',
+      tooMany: 'Troppi tentativi. Riprova più tardi.',
+      failed: 'L’accesso con il provider di identità non è riuscito. Riprova.',
+    },
+    pt: {
+      signIn: 'Entrar com {0}',
+      signingIn: 'Entrando…',
+      refused: 'O login foi cancelado.',
+      noAccount: 'Nenhuma conta deste servidor corresponde à sua conta no provedor de identidade.',
+      disabled: 'Esta conta está desativada.',
+      hours: 'Esta conta não pode entrar neste horário.',
+      remote: 'Esta conta só pode entrar pela rede local.',
+      tooMany: 'Tentativas demais. Tente novamente mais tarde.',
+      failed: 'O login com o provedor de identidade falhou. Tente novamente.',
+    },
+  }
+  // The words for what the server says went wrong; any other, failed.
+  var providerOutcomes = {
+    provider_refused: 'refused',
+    provider_no_account: 'noAccount',
+    account_disabled: 'disabled',
+    outside_allowed_hours: 'hours',
+    outside_local_network: 'remote',
+    too_many_attempts: 'tooMany',
+    signing_in: 'signingIn',
+  }
+  function sayProvider(key) {
+    var language = /^[a-z]*/.exec(String(document.documentElement.lang || '').toLowerCase())[0]
+    return (providerWords[language] || providerWords.en)[key]
+  }
+  if (typeof fetch !== 'function' || typeof localStorage === 'undefined' || !document.querySelectorAll) return
+  var credentialsKey = 'jellyfin_credentials'
+  // provider is the provider /admin/api/status names, null for none;
+  // message what went wrong, or signing_in, "" for nothing.
+  var provider = null
+  var message = ''
+  var outcome = ''
+  try {
+    var address = new URL(location.href)
+    outcome = address.searchParams.get('polyfinProvider') || ''
+    if (outcome) {
+      address.searchParams.delete('polyfinProvider')
+      history.replaceState(history.state, '', address.pathname + address.search + address.hash)
+    }
+  } catch (error) {
+    return
+  }
+  message = outcome === 'signed-in' ? 'signing_in' : outcome
+  function quietly(run) {
+    return function () {
+      try {
+        return run.apply(this, arguments)
+      } catch (error) {
+        return undefined
+      }
+    }
+  }
+  fetch('/admin/api/status', { credentials: 'same-origin' })
+    .then(function (response) {
+      return response.ok ? response.json() : null
+    })
+    .then(
+      quietly(function (status) {
+        var named = status && status.provider
+        provider = named && typeof named.start === 'string' && typeof named.name === 'string' ? named : null
+        follow()
+      })
+    )
+    .catch(function () {})
+  if (outcome === 'signed-in') settle(0)
+  // settle trades the ticket once jellyfin-web drew its first page, or
+  // after 20 seconds.
+  function settle(waited) {
+    if ((/^#!?\//.test(location.hash) && document.querySelector('.page')) || waited >= 20000) return trade()
+    setTimeout(
+      quietly(function () {
+        settle(waited + 250)
+      }),
+      250
+    )
+  }
+  // device is how jellyfin-web names itself: its client's, else what it
+  // keeps in the browser and the browser it runs in.
+  function device() {
+    var api = typeof window !== 'undefined' && window.ApiClient
+    var ask = function (name) {
+      try {
+        return api && typeof api[name] === 'function' ? String(api[name]() || '') : ''
+      } catch (error) {
+        return ''
+      }
+    }
+    var agent = typeof navigator !== 'undefined' ? String(navigator.userAgent || '') : ''
+    var id = ask('deviceId') || localStorage.getItem('_deviceId2')
+    if (!id) {
+      id = btoa(agent + '|' + Date.now()).replace(/=/g, '1')
+      localStorage.setItem('_deviceId2', id)
+    }
+    var browser = /Firefox\//.test(agent)
+      ? 'Firefox'
+      : /Edg\//.test(agent)
+        ? 'Edge Chromium'
+        : /OPR\//.test(agent)
+          ? 'Opera'
+          : /Chrome\//.test(agent)
+            ? 'Chrome'
+            : /Safari\//.test(agent)
+              ? 'Safari'
+              : 'Web Browser'
+    return {
+      client: ask('appName') || 'Jellyfin Web',
+      name: ask('deviceName') || browser,
+      id: id,
+      version: ask('appVersion') || '12.4.0',
+    }
+  }
+  // encode escapes a value of the header once, as jellyfin-web sends it:
+  // its client gives some values escaped already, such as its app's name
+  // (Jellyfin%20Web), which the server takes back once.
+  function encode(value) {
+    try {
+      return encodeURIComponent(decodeURIComponent(value))
+    } catch (error) {
+      return encodeURIComponent(value)
+    }
+  }
+  function trade() {
+    var named = device()
+    var header =
+      'MediaBrowser Client="' +
+      encode(named.client) +
+      '", Device="' +
+      encode(named.name) +
+      '", DeviceId="' +
+      encode(named.id) +
+      '", Version="' +
+      encode(named.version) +
+      '"'
+    fetch('/admin/api/provider/web', { method: 'POST', credentials: 'same-origin', headers: { Authorization: header } })
+      .then(function (response) {
+        return response.json().then(function (body) {
+          return { ok: response.ok, body: body }
+        })
+      })
+      .then(
+        quietly(function (answer) {
+          if (!answer.ok || !answer.body || typeof answer.body.accessToken !== 'string') {
+            message = (answer.body && answer.body.error) || 'failed'
+            return follow()
+          }
+          keep(answer.body)
+          location.replace(location.pathname)
+        })
+      )
+      .catch(function () {
+        message = 'failed'
+        follow()
+      })
+  }
+  // keep puts the sign-in in this server's entry of jellyfin-web's
+  // credentials, first, keeping what jellyfin-web saved there.
+  function keep(signedIn) {
+    var stored
+    try {
+      stored = JSON.parse(localStorage.getItem(credentialsKey) || '{}')
+    } catch (error) {
+      stored = {}
+    }
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {}
+    var servers = Array.isArray(stored.Servers) ? stored.Servers : []
+    var entry = { ManualAddress: location.origin, LastConnectionMode: 2 }
+    var others = []
+    servers.forEach(function (server) {
+      if (server && typeof server === 'object' && server.Id === signedIn.serverId) entry = server
+      else others.push(server)
+    })
+    entry.Id = signedIn.serverId
+    entry.Name = entry.Name || signedIn.serverName
+    entry.UserId = signedIn.userId
+    entry.AccessToken = signedIn.accessToken
+    entry.DateLastAccessed = Date.now()
+    stored.Servers = [entry].concat(others)
+    localStorage.setItem(credentialsKey, JSON.stringify(stored))
+  }
+  // place draws the button, and the line under it, on the sign-in pages
+  // shown, and reports whether there was one.
+  function place() {
+    var found = false
+    var pages = document.querySelectorAll('#loginPage .readOnlyContent')
+    for (var i = 0; i < pages.length; i++) {
+      var container = pages[i]
+      found = true
+      var button = container.querySelector('.polyfinProviderButton')
+      var line = container.querySelector('.polyfinProviderMessage')
+      if (!provider) {
+        if (button) button.remove()
+        if (line) line.remove()
+        continue
+      }
+      if (!button) {
+        button = document.createElement('button')
+        button.setAttribute('type', 'button')
+        button.className = 'raised block emby-button polyfinProviderButton'
+        button.appendChild(document.createElement('span'))
+        button.addEventListener(
+          'click',
+          quietly(function () {
+            location.href = provider.start + '?app=web'
+          })
+        )
+        container.insertBefore(button, container.firstChild)
+      }
+      button.firstChild.textContent = sayProvider('signIn').replace('{0}', function () {
+        return provider.name
+      })
+      if (!message) {
+        if (line) line.remove()
+        continue
+      }
+      if (!line) {
+        line = document.createElement('p')
+        line.className = 'fieldDescription polyfinProviderMessage'
+        line.setAttribute('role', 'status')
+        container.insertBefore(line, button.nextSibling)
+      }
+      line.textContent = sayProvider(providerOutcomes[message] || 'failed')
+    }
+    return found
+  }
+  // follow looks for the sign-in page as the route changes, every 200
+  // milliseconds for 5 seconds, until it finds it.
+  var looking = null
+  function follow() {
+    clearTimeout(looking)
+    var tries = 0
+    var look = quietly(function () {
+      looking = null
+      if (place() || ++tries >= 25) return
+      looking = setTimeout(look, 200)
+    })
+    look()
+  }
+  ;['pushState', 'replaceState'].forEach(function (name) {
+    var original = history[name]
+    history[name] = function () {
+      var result = original.apply(this, arguments)
+      quietly(follow)()
+      return result
+    }
+  })
+  addEventListener('hashchange', quietly(follow))
+  addEventListener('popstate', quietly(follow))
 })()

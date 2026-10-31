@@ -48,9 +48,11 @@ Refused, Polyfin still works on the computer itself, at `localhost`, and other d
 
 ## NVIDIA graphics cards
 
-On Windows and Linux, Polyfin converts video on an NVIDIA graphics card through NVENC, which the downloaded FFmpeg 9.0 opens only with NVIDIA driver 610.00 or newer. With an older driver, video is converted on another graphics card of the computer if one encodes, or else on the processor, and **System › Health** shows a warning naming the version needed.
+On Windows and Linux, Polyfin converts video on an NVIDIA graphics card through NVENC, which the downloaded FFmpeg 9.0 opens with NVIDIA driver 610.00 or newer. With a driver from 570 to 609, such as the R580 drivers that are the last of Maxwell, Pascal and Volta cards (the GeForce GTX 900 and 10 series, the Quadro M and P series), Polyfin downloads at its first need an FFmpeg built for these drivers into the data folder's `tools/nvenc13`, and converts on the card with it.
 
-Maxwell, Pascal and Volta cards, such as the GeForce GTX 900 and 10 series and the Quadro M and P series, get no driver past NVIDIA's R580 series, so they cannot use NVENC with Polyfin. See [NVIDIA driver](transcoding.md#nvidia-driver).
+With a driver older than 570, or until that FFmpeg could be downloaded, video is converted on another graphics card of the computer if one encodes, or else on the processor, and **System › Health** says why. See [NVIDIA driver](transcoding.md#nvidia-driver).
+
+Polyfin Desktop always runs the FFmpeg it downloads, or the one for these older drivers: another FFmpeg can be given only to `polyfin serve` and Docker. See [Which FFmpeg runs](transcoding.md#which-ffmpeg-runs).
 
 ## The menu
 

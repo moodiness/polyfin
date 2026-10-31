@@ -13,6 +13,7 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 		"POLYFIN_ADMIN_PASSWORD=hunter2",
 		"POLYFIN_SECRET_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
 		"POLYFIN_EXTRA_FEED=https://user:pw@feeds.example/list?key=abc",
+		"POLYFIN_NVENC13_TOOLS=/tmp/nvenc13.json",
 		"HOME=/root",
 	}
 	getenv := func(name string) string {
@@ -49,6 +50,8 @@ func TestVariablesShowTheConfigurationWithoutSecrets(t *testing.T) {
 		"POLYFIN_ADMIN_PASSWORD": {Set: true, Hidden: true},
 		"POLYFIN_SECRET_KEY":     {Set: true, Hidden: true, Known: true},
 		"POLYFIN_EXTRA_FEED":     {Value: "https://feeds.example/…", Set: true},
+		// The FFmpeg for older NVIDIA drivers of a test: read when set.
+		"POLYFIN_NVENC13_TOOLS": {Value: "/tmp/nvenc13.json", Set: true, Known: true},
 	} {
 		got := byName[name]
 		want.Name = name

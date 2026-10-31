@@ -3,9 +3,11 @@ package jellyfinimport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"net/url"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +37,9 @@ type plexItemJSON struct {
 	// PlexGUID names the item in Plex's own scheme, plex://movie/…. Plex
 	// sends it in guid beside the Guid list, and encoding/json would decode
 	// guid into Guid, whose name matches without regard to case, without a
-	// field named exactly so.
+	// field named exactly so. An item an older Plex agent matched has no
+	// Guid list: its guid names it by that agent's identifier, as
+	// com.plexapp.agents.imdb://tt…?lang=en.
 	PlexGUID string `json:"guid"`
 	// Guid lists the item's identifiers elsewhere, such as imdb://tt…,
 	// tmdb://… and tvdb://…, with includeGuids=1.
@@ -49,14 +53,17 @@ type plexItemJSON struct {
 	GrandparentTitle     string `json:"grandparentTitle"`
 	ParentIndex          *int   `json:"parentIndex"`
 	Index                *int   `json:"index"`
-	// ViewCount, LastViewedAt, a time in seconds, and ViewOffset, a position
-	// in milliseconds, are the token's owner's; Duration is in
-	// milliseconds. ViewedAt dates a play of the history.
-	ViewCount    int   `json:"viewCount"`
-	LastViewedAt int64 `json:"lastViewedAt"`
-	ViewOffset   int64 `json:"viewOffset"`
-	Duration     int64 `json:"duration"`
-	ViewedAt     int64 `json:"viewedAt"`
+	// ViewCount, LastViewedAt, a time in seconds, ViewOffset, a position
+	// in milliseconds, and UserRating, from 0 to 10, are the token's
+	// owner's; Duration is in milliseconds. ViewedAt dates a play of the
+	// history, and AccountID names the account that played it.
+	ViewCount    int      `json:"viewCount"`
+	LastViewedAt int64    `json:"lastViewedAt"`
+	ViewOffset   int64    `json:"viewOffset"`
+	UserRating   *float64 `json:"userRating"`
+	Duration     int64    `json:"duration"`
+	ViewedAt     int64    `json:"viewedAt"`
+	AccountID    int      `json:"accountID"`
 }
 
 // show is the rating key of an episode's show.
@@ -70,28 +77,62 @@ func (p plexItemJSON) show() string {
 	return path.Base(p.GrandparentKey)
 }
 
-// providers are the identifiers of p's Guid list, as Jellyfin names them.
+// providers are the identifiers of p's Guid list, as Jellyfin names them,
+// else, for an item an older Plex agent matched, which has no Guid list,
+// the ones its guid names.
 func (p plexItemJSON) providers() map[string]string {
 	providers := map[string]string{}
 	for _, guid := range p.Guid {
 		scheme, id, _ := strings.Cut(guid.ID, "://")
-		switch scheme {
-		case "imdb":
-			providers["Imdb"] = id
-		case "tmdb":
-			providers["Tmdb"] = id
-		case "tvdb":
-			providers["Tvdb"] = id
+		if name := plexProviders[scheme]; name != "" {
+			providers[name] = id
+		}
+	}
+	if len(p.Guid) > 0 {
+		return providers
+	}
+	for name, pattern := range plexAgentGUIDs {
+		if match := pattern.FindStringSubmatch(p.PlexGUID); match != nil {
+			providers[name] = match[1] + match[2]
 		}
 	}
 	return providers
 }
 
-// plexContainerJSON is a page of a Plex list.
+// otherEpisodeOrder tells an item an older Plex agent numbered in one of
+// TheTVDB's alternate episode orders, as its guid's tvdb2-, tvdb3-… tell:
+// its season and episode numbers are not TheTVDB's usual ones.
+func (p plexItemJSON) otherEpisodeOrder() bool {
+	return len(p.Guid) == 0 && plexOtherOrderGUID.MatchString(p.PlexGUID)
+}
+
+// plexProviders name the schemes of a Plex item's Guid list as Jellyfin
+// names its providers. plexAgentGUIDs read the identifiers in the guid of
+// an item an older agent matched, which names the source either as its
+// scheme, com.plexapp.agents.imdb://tt…, com.plexapp.agents.themoviedb://…
+// and com.plexapp.agents.thetvdb://…, or after the agent's own scheme,
+// com.plexapp.agents.<agent>://tvdb-…, ://tmdb-… or ://imdb-tt…, with
+// tvdb2-, tvdb3-… for TheTVDB's alternate episode orders. An episode's
+// identifier goes on with /<season>/<episode>, and any identifier with
+// ?lang=…, where the digits stop. Each pattern is anchored on :// so that
+// a stray tmdb-123 elsewhere in the guid is not taken for an identifier.
+var (
+	plexProviders  = map[string]string{"imdb": "Imdb", "tmdb": "Tmdb", "tvdb": "Tvdb"}
+	plexAgentGUIDs = map[string]*regexp.Regexp{
+		"Imdb": regexp.MustCompile(`imdb://(tt\d+)|://imdb-(tt\d+)`),
+		"Tmdb": regexp.MustCompile(`(?:tmdb|themoviedb)://(\d+)|://tmdb-(\d+)`),
+		"Tvdb": regexp.MustCompile(`tvdb://(\d+)|://tvdb[2-9]?-(\d+)`),
+	}
+	plexOtherOrderGUID = regexp.MustCompile(`://tvdb[2-9]-\d`)
+)
+
+// plexContainerJSON is a page of a Plex list. Plex's Discover service
+// lists some items under Video rather than Metadata.
 type plexContainerJSON struct {
 	MediaContainer struct {
 		TotalSize *int           `json:"totalSize"`
 		Metadata  []plexItemJSON `json:"Metadata"`
+		Video     []plexItemJSON `json:"Video"`
 		Directory []struct {
 			Key, Type string
 		} `json:"Directory"`
@@ -102,14 +143,25 @@ type plexContainerJSON struct {
 	}
 }
 
+// items are the items of the page, under Metadata or Video.
+func (p plexContainerJSON) items() []plexItemJSON {
+	if len(p.MediaContainer.Metadata) > 0 {
+		return p.MediaContainer.Metadata
+	}
+	return p.MediaContainer.Video
+}
+
 // plexLibrary is what an import reads of a Plex server's library sections
 // once: the movies and shows by their rating key, with their identifiers
-// and the owner's data, and the sections of shows.
+// and the token's account's data, the sections of shows, and how many
+// sections of movies and shows there are.
 type plexLibrary struct {
 	movies, shows map[string]plexItemJSON
-	// movieOrder lists the movies in the order read.
-	movieOrder   []string
-	showSections []string
+	// movieOrder and showOrder list the movies and shows in the order
+	// read.
+	movieOrder, showOrder []string
+	showSections          []string
+	sections              int
 }
 
 // plexConnect reads which Plex Media Server the address leads to, then,
@@ -156,7 +208,8 @@ func (c *client) plexConnect(ctx context.Context, token string) (Server, []User,
 			users = append(users, user)
 		}
 	}
-	return Server{Kind: Plex, Name: root.MediaContainer.FriendlyName, Version: identity.MediaContainer.Version, Address: c.address}, users, nil
+	return Server{Kind: Plex, Name: root.MediaContainer.FriendlyName, Version: identity.MediaContainer.Version, Address: c.address,
+		MachineID: identity.MediaContainer.MachineIdentifier}, users, nil
 }
 
 // plexList reads, page by page, the items of the list at path with query,
@@ -205,10 +258,13 @@ func (c *client) library(ctx context.Context) (*plexLibrary, error) {
 		default:
 			continue
 		}
+		lib.sections++
 		err := c.plexList(ctx, "/library/sections/"+url.PathEscape(section.Key)+"/all", url.Values{"type": {kind}, "includeGuids": {"1"}},
 			func(item plexItemJSON) {
 				if _, seen := into[item.RatingKey]; !seen && section.Type == plexMovie {
 					lib.movieOrder = append(lib.movieOrder, item.RatingKey)
+				} else if !seen {
+					lib.showOrder = append(lib.showOrder, item.RatingKey)
 				}
 				into[item.RatingKey] = item
 			})
@@ -222,17 +278,29 @@ func (c *client) library(ctx context.Context) (*plexLibrary, error) {
 
 // plexWatched reads the watch data of the Plex account user, handing each
 // item read to found, and records the identifiers of the shows of its
-// episodes in series, by the show's rating key. The owner's comes from the
-// library sections: the movies and episodes played, with their play counts
-// and the date last played, and those with a resume point. Another
+// episodes in series, by the show's rating key. The token's own account's,
+// own, comes from the library sections: the movies and episodes played,
+// marked or synced as played, with their play counts and the date last
+// played, those with a resume point, and the movies, shows and episodes
+// rated. That is the owner's with the owner's token, and a user's with
+// the token signing in to Plex gave them for the server. Another
 // account's is its playback history: the movies and episodes it played,
-// each play dated. Plex does not let the owner's token read their resume
-// points, and has no favorites.
-func (c *client) plexWatched(ctx context.Context, user string, series map[string]map[string]string, found func()) (history, error) {
+// each play dated, those deleted from the libraries since included. Plex
+// does not let the owner's token read their resume points or ratings, and
+// has no favorites.
+func (c *client) plexWatched(ctx context.Context, user string, own bool, series map[string]map[string]string, found func()) (history, error) {
 	var h history
 	lib, err := c.library(ctx)
 	if err != nil {
 		return h, err
+	}
+	h.source.sections, h.source.listed = lib.sections, len(lib.movies)+len(lib.shows)
+	rated := func(item itemJSON, rating *float64) {
+		if rating != nil {
+			item.rating = new(*rating)
+			h.ratings = append(h.ratings, item)
+			found()
+		}
 	}
 	add := func(p plexItemJSON) {
 		item := lib.item(p, series)
@@ -251,13 +319,25 @@ func (c *client) plexWatched(ctx context.Context, user string, series map[string
 			h.resumes = append(h.resumes, item)
 			found()
 		}
+		rated(item, p.UserRating)
 	}
-	if user == plexOwner {
+	if own {
 		for _, key := range lib.movieOrder {
 			add(lib.movies[key])
 		}
+		// A show's rating is the series'; a season's has no title in
+		// Polyfin to go to.
+		for _, key := range lib.showOrder {
+			show := lib.shows[key]
+			rated(itemJSON{ID: show.RatingKey, Name: show.Title, Type: "Series", ProductionYear: show.Year, ProviderIDs: show.providers()},
+				show.UserRating)
+		}
+		episode := func(p plexItemJSON) {
+			h.source.listed++
+			add(p)
+		}
 		for _, section := range lib.showSections {
-			if err := c.plexList(ctx, "/library/sections/"+url.PathEscape(section)+"/all", url.Values{"type": {"4"}}, add); err != nil {
+			if err := c.plexList(ctx, "/library/sections/"+url.PathEscape(section)+"/all", url.Values{"type": {"4"}}, episode); err != nil {
 				return h, err
 			}
 		}
@@ -268,8 +348,21 @@ func (c *client) plexWatched(ctx context.Context, user string, series map[string
 	plays := map[string]*plexItemJSON{}
 	var order []string
 	err = c.plexList(ctx, "/status/sessions/history/all", url.Values{"accountID": {user}, "sort": {"viewedAt:desc"}}, func(p plexItemJSON) {
-		if p.Type != plexMovie && p.Type != plexEpisode || p.RatingKey == "" {
+		h.source.rows++
+		switch {
+		case p.AccountID != 0 && strconv.Itoa(p.AccountID) != user:
+			// A server that left the filter out would give every account's
+			// plays.
+			h.source.otherAccounts++
 			return
+		case p.Type != plexMovie && p.Type != plexEpisode:
+			return
+		case p.RatingKey == "":
+			// Plex keeps the plays of an item deleted from its libraries
+			// without its rating key: they are told apart by what they
+			// name.
+			p.RatingKey = fmt.Sprint("deleted:", p.Type, "\x00", p.GrandparentTitle, "\x00", p.Title, "\x00",
+				deref(p.ParentIndex), "\x00", deref(p.Index))
 		}
 		seen := plays[p.RatingKey]
 		if seen == nil {
@@ -296,7 +389,10 @@ func (c *client) plexWatched(ctx context.Context, user string, series map[string
 
 // item is p as Jellyfin describes it, without the user's data: a movie
 // with the identifiers its library section gives, or an episode of a show
-// whose identifiers go into series.
+// whose identifiers go into series. A movie, or an episode's show, that no
+// library section lists any longer cannot be matched, nor can an episode
+// numbered in another order than TheTVDB's usual one: a wrong episode
+// marked played would be worse than one left out.
 func (lib *plexLibrary) item(p plexItemJSON, series map[string]map[string]string) itemJSON {
 	item := itemJSON{ID: p.RatingKey, Name: p.Title, ProductionYear: p.Year, RunTimeTicks: int64(time.Duration(p.Duration) * time.Millisecond / tick)}
 	switch p.Type {
@@ -304,20 +400,38 @@ func (lib *plexLibrary) item(p plexItemJSON, series map[string]map[string]string
 		item.Type = "Movie"
 		// The history leaves the identifiers out: the library section
 		// gives them.
-		if listed, ok := lib.movies[p.RatingKey]; ok {
+		listed, ok := lib.movies[p.RatingKey]
+		if !ok {
+			item.unmatchable = ReasonNotInLibrary
+		} else {
 			item.ProviderIDs, item.ProductionYear = listed.providers(), listed.Year
 		}
 	case plexEpisode:
 		item.Type = "Episode"
 		item.SeriesID, item.SeriesName, item.ParentIndexNumber, item.IndexNumber = p.show(), p.GrandparentTitle, p.ParentIndex, p.Index
-		// A show no longer in a library section has no identifier.
 		show, listed := lib.shows[item.SeriesID]
 		series[item.SeriesID] = nil
+		switch {
+		case !listed:
+			item.unmatchable = ReasonNotInLibrary
+		case show.otherEpisodeOrder() || p.otherEpisodeOrder():
+			// The show keeps its identifiers, but not the episode its
+			// numbers.
+			item.unmatchable = ReasonOtherEpisodeOrder
+		}
 		if listed {
 			series[item.SeriesID] = show.providers()
 		}
 	}
 	return item
+}
+
+// deref is the number n points to, -1 for none.
+func deref(n *int) int {
+	if n == nil {
+		return -1
+	}
+	return *n
 }
 
 // plexDate writes a Plex time in seconds as Jellyfin writes dates, empty

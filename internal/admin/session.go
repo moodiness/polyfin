@@ -50,20 +50,21 @@ func clearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Path: cookiePath, MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 }
 
-// signedIn serves next only for a valid session of an enabled user, within
-// their allowed hours unless they are an administrator, as Jellyfin serves
-// its own apps.
+// signedIn serves next only for a valid session of an enabled user, from
+// where they may connect, and within their allowed hours unless they are
+// an administrator, as Jellyfin serves its own apps.
 func (h *handler) signedIn(next http.HandlerFunc) http.Handler {
 	return h.requireSession(next, true)
 }
 
-// signedInAnyHour is signedIn whatever the user's allowed hours, so that
-// the app still shows who is signed in and signs them out.
+// signedInAnyHour is signedIn whatever the user's allowed hours and
+// wherever they connect from, so that the app still shows who is signed
+// in and signs them out.
 func (h *handler) signedInAnyHour(next http.HandlerFunc) http.Handler {
 	return h.requireSession(next, false)
 }
 
-func (h *handler) requireSession(next http.HandlerFunc, hours bool) http.Handler {
+func (h *handler) requireSession(next http.HandlerFunc, limited bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(cookieName)
 		if err != nil || cookie.Value == "" {
@@ -83,7 +84,13 @@ func (h *handler) requireSession(next http.HandlerFunc, hours bool) http.Handler
 		if session.Renewed {
 			setCookie(w, r, cookie.Value, session.ExpiresAt)
 		}
-		if hours && !session.User.IsAdministrator && !session.User.AllowedAt(h.now()) {
+		// Like Jellyfin, a user without remote access is refused from
+		// outside the local network, administrators included.
+		if limited && !session.User.AllowedFrom(forwarded.InLocalNetwork(r)) {
+			writeError(w, http.StatusForbidden, "outside_local_network")
+			return
+		}
+		if limited && !session.User.IsAdministrator && !session.User.AllowedAt(h.now()) {
 			writeError(w, http.StatusForbidden, "outside_allowed_hours")
 			return
 		}
@@ -120,6 +127,8 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request) {
 		"setupRequired": setupRequired,
 		"webClient":     h.WebClient,
 		"system":        system(h.InContainer),
+		// The identity provider the sign-in pages offer, null for none.
+		"provider": offeredProvider(h.Accounts.Settings()),
 	})
 }
 
@@ -222,6 +231,10 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 	if accountError(w, err) {
 		return
 	}
+	if err == nil && h.remoteRefused(r, user) {
+		writeError(w, http.StatusForbidden, "outside_local_network")
+		return
+	}
 	if err == nil && !user.AllowedAt(h.now()) {
 		// Like Jellyfin's sign-in, administrators included.
 		writeError(w, http.StatusForbidden, "outside_allowed_hours")
@@ -242,6 +255,28 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 	h.startSession(w, r, http.StatusOK, user)
 }
 
+// remoteRefused reports whether a sign-in of user, with the right
+// password or another proof, is refused for coming from outside the local
+// network, which they may not connect from, and then records it in the
+// activity log. Like Jellyfin's sign-in, administrators are refused too
+// (UserManager.cs, lines 633 to 641).
+func (h *handler) remoteRefused(r *http.Request, user accounts.User) bool {
+	if user.AllowedFrom(forwarded.InLocalNetwork(r)) {
+		return false
+	}
+	h.Activity.SignInRefusedRemote(r.Context(), user, forwarded.Client(r))
+	return true
+}
+
+// locksOutCaller reports whether setting remote access to remote on the
+// caller's own account would lock them out at once: they ask from outside
+// the local network, which they could no longer use, even to put it back.
+// Polyfin refuses such a change (409 remote_access_self); Jellyfin has no
+// such guard.
+func locksOutCaller(r *http.Request, remote *bool) bool {
+	return remote != nil && !*remote && !forwarded.InLocalNetwork(r)
+}
+
 // signInWithJellyfin opens an admin session for the user a Jellyfin app is
 // signed in as, so that jellyfin-web's Dashboard, which leads administrators
 // to the admin app, and the Polyfin entry that leads members there need no
@@ -251,9 +286,13 @@ func (h *handler) signIn(w http.ResponseWriter, r *http.Request) {
 // URL. Only a signed-in device's token counts: API keys have no user. The
 // user must be allowed to sign in now, as with a password: not disabled
 // (their devices are then signed out), not blocked after wrong passwords,
-// within their allowed hours. An account that needs two-step sign-in, or
+// from the local network unless they have remote access, within their
+// allowed hours. An account that needs two-step sign-in, or
 // to set it up, is refused, as its password is: its devices may have
-// signed in before it was turned on, or through Quick Connect.
+// signed in before it was turned on, or through Quick Connect. A device
+// signed in through the identity provider is not refused for either: the
+// provider asked for its own second step, and wrong passwords block
+// passwords only (see providerCallback).
 //
 // A token that is no device's counts as a wrong password does toward the
 // client's failed attempts; the token of someone who may not have a session
@@ -288,9 +327,12 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 	}
 	now := h.now()
 	switch {
-	case h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now),
-		user.NeedsTwoStep(h.Accounts.Settings()):
+	case !device.Provider && h.Accounts.Settings().LoginAttempts > 0 && user.Blocked(now),
+		!device.Provider && user.NeedsTwoStep(h.Accounts.Settings()):
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
+		return
+	case !user.AllowedFrom(forwarded.InLocalNetwork(r)):
+		writeError(w, http.StatusForbidden, "outside_local_network")
 		return
 	case !user.AllowedAt(now):
 		writeError(w, http.StatusForbidden, "outside_allowed_hours")
@@ -312,9 +354,15 @@ func (h *handler) signInWithJellyfin(w http.ResponseWriter, r *http.Request) {
 }
 
 // mediaBrowserToken reads the Token parameter of an Authorization header in
-// Jellyfin's MediaBrowser scheme: comma-separated key=value pairs, keys in
-// any case, values quoted or not.
+// Jellyfin's MediaBrowser scheme (see mediaBrowserParam).
 func mediaBrowserToken(header string) string {
+	return mediaBrowserParam(header, "Token")
+}
+
+// mediaBrowserParam reads the parameter name of an Authorization header
+// in Jellyfin's MediaBrowser scheme: comma-separated key=value pairs, keys
+// in any case, values quoted or not, as they are sent.
+func mediaBrowserParam(header, name string) string {
 	scheme, params, _ := strings.Cut(strings.TrimSpace(header), " ")
 	if !strings.EqualFold(scheme, "MediaBrowser") {
 		return ""
@@ -332,7 +380,7 @@ func mediaBrowserToken(header string) string {
 		} else {
 			value, params, _ = strings.Cut(rest, ",")
 		}
-		if strings.EqualFold(strings.TrimSpace(key), "Token") {
+		if strings.EqualFold(strings.TrimSpace(key), name) {
 			return strings.TrimSpace(value)
 		}
 	}

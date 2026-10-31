@@ -205,12 +205,15 @@ func (s *Source) work(c *conn) {
 					return
 				}
 				continue
-			case errors.Is(err, io.EOF):
+			case errors.Is(err, io.EOF) && !errors.Is(err, ErrUnavailable):
+				// The file ends before the block (see unsatisfiable). A host
+				// closing the connection unanswered fails as any other: its
+				// io.EOF is no end of the file.
 				continue
 			case err != nil && s.extraFailed(c, err, true):
 				return
 			case err != nil:
-				s.fail(err)
+				s.fail(c, err)
 				return
 			case !s.needed(target):
 				// The reader gave up while the connection opened: it reads
@@ -233,7 +236,7 @@ func (s *Source) work(c *conn) {
 		switch {
 		case n == length:
 			if err := s.store(block, buffer[:n], false); err != nil {
-				s.fail(err)
+				s.fail(c, err)
 				return
 			}
 			s.advance(c, n)
@@ -241,7 +244,7 @@ func (s *Source) work(c *conn) {
 		case n > 0 && errors.Is(err, io.ErrUnexpectedEOF) && s.sizeUnknown():
 			// The source ends inside this block.
 			if err := s.store(block, buffer[:n], true); err != nil {
-				s.fail(err)
+				s.fail(c, err)
 				return
 			}
 		case n == 0 && errors.Is(err, io.EOF) && s.sizeUnknown():
@@ -258,7 +261,7 @@ func (s *Source) work(c *conn) {
 				if s.extraFailed(c, err, false) {
 					return
 				}
-				s.fail(err)
+				s.fail(c, err)
 				return
 			}
 			if c.failures >= 2 {

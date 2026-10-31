@@ -192,6 +192,9 @@ func (h *handler) signInSecondStep(w http.ResponseWriter, r *http.Request) {
 		clearStepCookie(w)
 		writeError(w, http.StatusForbidden, "account_disabled")
 		return
+	case !user.AllowedFrom(forwarded.InLocalNetwork(r)):
+		writeError(w, http.StatusForbidden, "outside_local_network")
+		return
 	case !user.AllowedAt(now):
 		writeError(w, http.StatusForbidden, "outside_allowed_hours")
 		return

@@ -1,6 +1,7 @@
 package hls
 
 import (
+	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/metrics"
@@ -65,7 +66,12 @@ func (m *Manager) Running() []Running {
 		select {
 		case <-e.opened:
 			if e.err == nil {
-				r.describe(e.remux)
+				// The input played now: another one once the first failed
+				// (see carryOn).
+				e.mu.Lock()
+				input := *e.input
+				e.mu.Unlock()
+				r.describe(input)
 			}
 		default:
 		}
@@ -160,4 +166,42 @@ func (m *Manager) ConversionsByMethod() []metrics.Sample {
 		samples = append(samples, metrics.Sample{Labels: []string{method}, Value: counts[method]})
 	}
 	return samples
+}
+
+// VideoCodecOf names the codec an FFmpeg video encoder makes: hevc for
+// libx265 and the GPUs' HEVC encoders, h264 for theirs and libx264.
+func VideoCodecOf(encoder string) string {
+	switch {
+	case strings.Contains(encoder, "265"), strings.HasPrefix(encoder, "hevc"):
+		return "hevc"
+	case strings.Contains(encoder, "264"), strings.HasPrefix(encoder, "h264"):
+		return "h264"
+	}
+	return encoder
+}
+
+// AudioCodecOf names the codec an FFmpeg audio encoder makes.
+func AudioCodecOf(encoder string) string {
+	return strings.TrimPrefix(encoder, "lib")
+}
+
+// loggedVideo tells, in the log line of an encoding's start, how it makes
+// its video: copy, or the encoder converting it.
+func (r Remux) loggedVideo() string {
+	if r.Encode == nil {
+		return "copy"
+	}
+	return r.Encode.Encoder
+}
+
+// loggedAudio tells, in the log line of an encoding's start, how it makes
+// its audio: none, copy, or the encoder converting it.
+func (r Remux) loggedAudio() string {
+	switch {
+	case r.Audio < 0:
+		return "none"
+	case r.AudioCodec == "":
+		return "copy"
+	}
+	return r.AudioCodec
 }

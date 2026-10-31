@@ -15,8 +15,11 @@ import (
 // and deletes its copy in IndexedDB; on a load whose saved credentials sign
 // in another user, it deletes the copy before jellyfin-web restores it. The
 // same user, or signing out, keeps them. A browser without the database, or
-// a jellyfin-web without the hooks, is left as it is. It runs in Node.js, in
-// a context that stands for the browser and jellyfin-web.
+// a jellyfin-web without the hooks, is left as it is. So is an engine
+// without URL, WeakMap and WeakSet, as before Chrome 36, with the page
+// loaded on a dashboard route, which the script leaves before jellyfin-web
+// and its polyfills run. It runs in Node.js, in a context that stands for
+// the browser and jellyfin-web, which has no URL.
 func TestAnotherUserDoesNotGetTheAnswersKeptForTheLast(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -38,6 +41,10 @@ func TestAnotherUserDoesNotGetTheAnswersKeptForTheLast(t *testing.T) {
 		saved []server
 		// user is signed in on server "s" as the script loads; empty for none.
 		user string
+		// load is the route the page loads on; empty for the web client's
+		// address alone. old is an engine without WeakMap and WeakSet.
+		load string
+		old  bool
 		// database is whether the browser has jellyfin-web's IndexedDB
 		// database; bare is a jellyfin-web without LANGUAGE_CHANGE
 		// listeners, a browser without IndexedDB and with storage off.
@@ -83,6 +90,10 @@ func TestAnotherUserDoesNotGetTheAnswersKeptForTheLast(t *testing.T) {
 		"a jellyfin-web without the hooks still routes": {keptFor: "s/boss", bare: true,
 			steps: []string{"signin viewer", "#/home", "where"},
 			want:  []string{"at #/home"}},
+		"an engine before Chrome 36 drops them on a dashboard route": {keptFor: "s/boss", user: "viewer", database: true,
+			saved: []server{{"s", "viewer", "t", 1}}, load: "#/dashboard/users", old: true,
+			steps: []string{"kept"},
+			want:  []string{"replace http://polyfin.test/admin/users?from=web", "deleted jellyfin-query-cache", "kept s/viewer"}},
 	}
 	const harness = `
 const vm = require('node:vm')
@@ -92,7 +103,7 @@ async function run(scenario) {
   const log = []
   let user = scenario.user
   const listeners = {}
-  const location = { href: 'http://polyfin.test/web/', hash: '', replace: (url) => log.push('replace ' + url) }
+  const location = { href: 'http://polyfin.test/web/' + (scenario.load || ''), hash: scenario.load || '', replace: (url) => log.push('replace ' + url) }
   const go = (hash) => { location.hash = hash; location.href = 'http://polyfin.test/web/' + hash }
   const history = { pushState: (state, title, url) => go(url), replaceState: (state, title, url) => go(url) }
   class MutationObserver { observe() {} disconnect() {} }
@@ -139,11 +150,12 @@ async function run(scenario) {
   const ApiClient = { serverId: () => 's', getCurrentUserId: () => user || null, getUrl: (path) => 'http://polyfin.test/' + path, getJSON: () => new Promise(() => {}) }
   window.ApiClient = ApiClient
   const context = {
-    location, history, URL, document, MutationObserver, window,
+    location, history, document, MutationObserver, window,
     setTimeout: () => 0, clearTimeout: () => {},
     addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
   }
   if (!scenario.bare) context.indexedDB = indexedDB
+  if (scenario.old) Object.assign(context, { WeakMap: undefined, WeakSet: undefined })
   vm.runInNewContext(script, context)
   // jellyfin-web, whose scripts run after this one, then listens to
   // language changes, which clear its query cache.
@@ -175,13 +187,15 @@ async function run(scenario) {
 		KeptFor  string   `json:"keptFor,omitempty"`
 		Saved    []server `json:"saved,omitempty"`
 		User     string   `json:"user"`
+		Load     string   `json:"load"`
+		Old      bool     `json:"old"`
 		Database bool     `json:"database"`
 		Bare     bool     `json:"bare"`
 		Steps    []string `json:"steps"`
 	}
 	inputs := map[string]input{}
 	for name, s := range scenarios {
-		inputs[name] = input{s.keptFor, s.saved, s.user, s.database, s.bare, s.steps}
+		inputs[name] = input{s.keptFor, s.saved, s.user, s.load, s.old, s.database, s.bare, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "key": keptForKey, "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)

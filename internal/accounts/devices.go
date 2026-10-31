@@ -24,6 +24,9 @@ type DeviceInfo struct {
 	Client        string
 	ClientVersion string
 	RemoteAddress string
+	// Provider is set for a device signed in through the identity
+	// provider, which asked for whatever second step it requires.
+	Provider bool
 }
 
 // Capabilities are what a signed-in app reports it can play and control.
@@ -52,13 +55,13 @@ type Device struct {
 	Unfamiliar bool
 }
 
-const deviceColumns = "d.id, d.user_id, d.device_id, d.device_name, d.client, d.client_version, d.remote_address, d.capabilities, d.created_at, d.last_activity_at"
+const deviceColumns = "d.id, d.user_id, d.device_id, d.device_name, d.client, d.client_version, d.remote_address, d.capabilities, d.created_at, d.last_activity_at, d.provider"
 
 func scanDevice(row pgx.Row, extra ...any) (Device, error) {
 	var device Device
 	var capabilities []byte
 	err := row.Scan(append([]any{&device.ID, &device.UserID, &device.DeviceID, &device.DeviceName, &device.Client,
-		&device.ClientVersion, &device.RemoteAddress, &capabilities, &device.CreatedAt, &device.LastActivityAt}, extra...)...)
+		&device.ClientVersion, &device.RemoteAddress, &capabilities, &device.CreatedAt, &device.LastActivityAt, &device.Provider}, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return device, ErrNotFound
 	}
@@ -87,8 +90,8 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		var err error
 		device, err = scanDevice(tx.QueryRow(ctx, `INSERT INTO devices AS d
-				(user_id, token_hash, device_id, device_name, client, client_version, remote_address)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+				(user_id, token_hash, device_id, device_name, client, client_version, remote_address, provider)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (user_id, device_id) DO UPDATE SET
 				token_hash = excluded.token_hash,
 				device_name = excluded.device_name,
@@ -96,9 +99,10 @@ func (s *Store) SignInDevice(ctx context.Context, user ID, info DeviceInfo) (str
 				client_version = excluded.client_version,
 				remote_address = excluded.remote_address,
 				capabilities = '{}',
+				provider = excluded.provider,
 				last_activity_at = now()
 			RETURNING `+deviceColumns,
-			user, hash, info.DeviceID, info.DeviceName, info.Client, info.ClientVersion, info.RemoteAddress))
+			user, hash, info.DeviceID, info.DeviceName, info.Client, info.ClientVersion, info.RemoteAddress, info.Provider))
 		if err != nil {
 			return err
 		}

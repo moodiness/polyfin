@@ -202,6 +202,10 @@ const libraries = {
     noCatalogMatch: 'No catalog matches this filter.',
     rules: 'Rules',
     rulesHelp: 'Without rules, the list keeps every title of its catalogs.',
+    exclude: 'Exclusions',
+    excludeHelp:
+      'Titles that match these rules are left out, whatever the rules above say. Without exclusions, none is.',
+    excludeMatch: 'Leave out titles that match',
     match: 'Titles match',
     matchChoices: { all: 'All of the rules', any: 'Any of the rules' },
     groupMatch: 'This group matches',
@@ -219,6 +223,12 @@ const libraries = {
       type: 'Movie or series',
       rank: 'Place in its catalog',
       state: 'Watch state',
+      released: 'Release date',
+      votes: 'IMDb votes',
+      runtime: 'Runtime',
+      contentRating: 'Content rating',
+      person: 'Actor or director',
+      studio: 'Studio or network',
     } as Record<string, string>,
     negation: 'Matches or not',
     is: 'is',
@@ -228,6 +238,12 @@ const libraries = {
     to: 'To',
     language: 'Language',
     rankMax: 'Among its first',
+    minutes: 'minutes',
+    atMost: 'At most',
+    releasedWhen: 'When',
+    releasedWithin: { last: 'In the last', next: 'In the next' } as Record<string, string>,
+    days: 'days',
+    namePlaceholder: { person: 'Their name', studio: 'Its name' } as Record<string, string>,
     types: { movie: 'A movie', series: 'A series' } as Record<string, string>,
     states: {
       played: 'Played',
@@ -237,16 +253,24 @@ const libraries = {
     } as Record<string, string>,
     stateHelp:
       'Played, started and favorite rules follow what each user did: everyone sees their own list.',
-    languageHelp:
-      'The language comes with a title’s description, which Polyfin reads in the background: a title not yet described is left out until it is.',
+    describedHelp:
+      'A title’s language, and its runtime, content rating, people and release date when its catalog does not give them, come with its description, which Polyfin reads in the background: a title not yet described is left out until it is. A title that lacks what a rule looks at matches neither the rule nor its opposite.',
+    votesHelp:
+      'IMDb votes come from MDBList, with the MDBList API key for ratings under Settings › Content, looked up in the background. Without that key, no title has votes.',
+    studioHelp:
+      'Studios and networks come from TMDB, with the TMDB API key under Settings › Content, looked up in the background and kept: the list grows as they come. Without that key, only the studios an administrator set in a title’s metadata count.',
     sort: 'Sort',
     sorts: {
       catalog: 'As its catalogs list them, one of each in turn',
       premiere: 'Premiere date, latest first',
+      latestEpisode: 'Latest episode aired, latest first',
+      seasonPremiere: 'Latest season premiere, latest first',
       rating: 'IMDb rating, highest first',
       name: 'Name',
       random: 'At random, drawn again each day',
     } as Record<string, string>,
+    episodeSortHelp:
+      'Series come by their latest regular episode aired, or their latest season premiere, as their description tells, specials and episodes to come left out; movies by their premiere date. A series whose description is not read yet comes last until it is.',
     maxItems: 'Maximum titles',
     maxHelp: (max: string) => `From 1 to ${max}. Empty: no maximum.`,
     noMax: 'No maximum',
@@ -266,8 +290,8 @@ const libraries = {
     firstOf: (shown: string, listed: string) => `The first ${shown} of ${listed}.`,
     unknown: (count: string) =>
       count === '1'
-        ? '1 title still waits for its description, which tells its language: the list grows as descriptions come.'
-        : `${count} titles still wait for their description, which tells their language: the list grows as descriptions come.`,
+        ? '1 title still waits for what its rules look at: its description, its votes or its studios. The list grows as they come.'
+        : `${count} titles still wait for what their rules look at: their description, their votes or their studios. The list grows as they come.`,
     incomplete:
       'Some catalogs had not answered in time: the list shows what was read so far, and reads the rest.',
     previewEmpty: 'No title matches these rules for now.',

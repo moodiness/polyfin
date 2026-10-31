@@ -1,6 +1,7 @@
 // Package ratings looks movies and series up on MDBList, with the server's
 // own API key (Settings.MDBListRatingsKey), for three ratings: their IMDb
-// rating, their critics' score and their audience score.
+// rating, with the votes it counts, which smart lists may judge, their
+// critics' score and their audience score.
 //
 // Nothing waits for MDBList. Kept answers at once with what the database
 // keeps, and has the titles it does not keep, or keeps for too long, asked
@@ -26,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -89,11 +91,12 @@ type Title struct {
 
 // Scores are a title's ratings, each nil when MDBList has none: the IMDb
 // rating, from 0 to 10, and the critics' and audience scores, from 0 to
-// 100.
+// 100. IMDbVotes is how many votes the IMDb rating counts.
 type Scores struct {
-	IMDb     *float64
-	Critics  *float64
-	Audience *float64
+	IMDb      *float64
+	Critics   *float64
+	Audience  *float64
+	IMDbVotes *int
 }
 
 // key identifies a title as MDBList is asked about it, and as its answer
@@ -368,7 +371,7 @@ func (s *Service) load(ctx context.Context) bool {
 	if s.loaded.Load() {
 		return true
 	}
-	rows, err := s.db.Query(ctx, "SELECT kind, provider, id, found, imdb, critics, audience, released, asked_at FROM title_ratings")
+	rows, err := s.db.Query(ctx, "SELECT kind, provider, id, found, imdb, critics, audience, imdb_votes, released, asked_at FROM title_ratings")
 	if err != nil {
 		s.loadFailed(ctx, err)
 		return false
@@ -377,11 +380,12 @@ func (s *Service) load(ctx context.Context) bool {
 	var k key
 	var a answer
 	var imdb, critics, audience *float32
-	_, err = pgx.ForEachRow(rows, []any{&k.kind, &k.provider, &k.id, &a.found, &imdb, &critics, &audience, &a.released, &a.asked}, func() error {
-		a.scores = Scores{IMDb: widen(imdb), Critics: widen(critics), Audience: widen(audience)}
+	var votes *int
+	_, err = pgx.ForEachRow(rows, []any{&k.kind, &k.provider, &k.id, &a.found, &imdb, &critics, &audience, &votes, &a.released, &a.asked}, func() error {
+		a.scores = Scores{IMDb: widen(imdb), Critics: widen(critics), Audience: widen(audience), IMDbVotes: votes}
 		kept[k] = a
 		// The next row's are its own.
-		imdb, critics, audience, a.released = nil, nil, nil, nil
+		imdb, critics, audience, votes, a.released = nil, nil, nil, nil, nil
 		return nil
 	})
 	if err != nil {
@@ -706,18 +710,21 @@ func (s *Service) save(ctx context.Context, answers map[key]answer) error {
 	kinds, providers, ids := make([]string, 0, n), make([]string, 0, n), make([]string, 0, n)
 	found := make([]bool, 0, n)
 	imdb, critics, audience := make([]*float64, 0, n), make([]*float64, 0, n), make([]*float64, 0, n)
+	votes := make([]*int, 0, n)
 	released, asked := make([]*time.Time, 0, n), make([]time.Time, 0, n)
 	for k, a := range answers {
 		kinds, providers, ids = append(kinds, k.kind), append(providers, k.provider), append(ids, k.id)
 		found = append(found, a.found)
 		imdb, critics, audience = append(imdb, a.scores.IMDb), append(critics, a.scores.Critics), append(audience, a.scores.Audience)
+		votes = append(votes, a.scores.IMDbVotes)
 		released, asked = append(released, a.released), append(asked, a.asked)
 	}
-	_, err := s.db.Exec(ctx, `INSERT INTO title_ratings (kind, provider, id, found, imdb, critics, audience, released, asked_at)
-		SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::boolean[], $5::real[], $6::real[], $7::real[], $8::date[], $9::timestamptz[])
+	_, err := s.db.Exec(ctx, `INSERT INTO title_ratings (kind, provider, id, found, imdb, critics, audience, imdb_votes, released, asked_at)
+		SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::boolean[], $5::real[], $6::real[], $7::real[], $8::integer[], $9::date[],
+			$10::timestamptz[])
 		ON CONFLICT (kind, provider, id) DO UPDATE SET found = excluded.found, imdb = excluded.imdb, critics = excluded.critics,
-			audience = excluded.audience, released = excluded.released, asked_at = excluded.asked_at`,
-		kinds, providers, ids, found, imdb, critics, audience, released, asked)
+			audience = excluded.audience, imdb_votes = excluded.imdb_votes, released = excluded.released, asked_at = excluded.asked_at`,
+		kinds, providers, ids, found, imdb, critics, audience, votes, released, asked)
 	return err
 }
 
@@ -831,6 +838,7 @@ type mediaInfo struct {
 	Ratings  []struct {
 		Source string   `json:"source"`
 		Value  *float64 `json:"value"`
+		Votes  *float64 `json:"votes"`
 	} `json:"ratings"`
 }
 
@@ -857,6 +865,9 @@ func (info mediaInfo) answer() answer {
 		case "imdb":
 			if *value <= 10 {
 				a.scores.IMDb = new(*value)
+			}
+			if votes := rating.Votes; votes != nil && *votes >= 1 && *votes <= math.MaxInt32 {
+				a.scores.IMDbVotes = new(int(*votes))
 			}
 		case "critics":
 			if *value <= 100 {

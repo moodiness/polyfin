@@ -33,6 +33,9 @@ const users: typeof en = {
     isDisabled: 'Desativado',
     isDisabledHelp:
       'Um usuário desativado não consegue entrar, e todos os seus dispositivos são desconectados.',
+    providerOnly: 'Somente provedor de identidade',
+    providerOnlyHelp:
+      'O usuário entra pelo provedor de identidade configurado em Configurações › Segurança, nunca com uma senha: a senha é recusada, e uma conta criada assim não precisa de uma. Os aplicativos Jellyfin que não conseguem abrir o provedor entram com o Quick Connect.',
     ended: 'Encerrada',
     endsOn: (date: string) => `Encerra em ${date}`,
     endedOn: (date: string) => `Encerrada em ${date}`,
@@ -72,6 +75,15 @@ const users: typeof en = {
       'O idioma dos nomes, sinopses e imagens dos títulos nos aplicativos deste usuário, quando um dos complementos do servidor os descreve nesse idioma; títulos que nenhum complemento descreve nele mantêm a descrição do servidor. Gêneros, classificações etárias e pessoas continuam iguais para todos, então o controle parental e os gêneros bloqueados avaliam todos os usuários da mesma forma. Os nomes que o próprio Polyfin cria seguem esse idioma quando o Polyfin o fala: inglês, francês, alemão, espanhol, italiano ou português.',
     metadataLanguageNone:
       'Nenhum complemento do servidor tem idioma ainda. Defina um idioma para um complemento na página dele, em Conteúdo › Fontes.',
+    webThemeTitle: 'Tema do player web',
+    webThemeHelp:
+      'A aparência do player web para este usuário, em cada navegador em que ele entra: o tema do servidor, LumaaGlaass, a aparência do jellyfin-web, mais leve, para TVs e celulares antigos, ou o tema personalizado enquanto ele tiver um texto. Navegadores antigos demais para o LumaaGlaass recebem sozinhos a aparência do jellyfin-web.',
+    webThemeChange: 'Permitir que ele mude',
+    webThemeChangeHelp:
+      'Em Minha conta › Tema do player web. Desativado, o tema escolhido aqui continua sendo o dele.',
+    audioRegionTitle: 'Região do áudio',
+    audioRegionHelp:
+      'A dublagem que este usuário prefere quando um idioma é dublado à parte para uma região, como o francês do Québec. Ela vale para o idioma de áudio escolhido nos aplicativos dele, ou então o do servidor, quando ele é o idioma da região, e o define quando nenhum foi escolhido: nesse idioma, as faixas de áudio da região tocam primeiro, e as versões dela vêm primeiro quando o servidor ordena as versões por idioma.',
     parentalTitle: 'Controle parental',
     maxRating: 'Classificação etária máxima',
     maxRatingHelp: 'Títulos com classificação acima deste limite ficam ocultos para este usuário.',
@@ -182,6 +194,12 @@ const users: typeof en = {
     canShare: 'Pode compartilhar títulos',
     canShareHelp:
       'Permite que este usuário dê acesso a um filme ou episódio a alguém sem conta, por meio de um link que expira, em Minha conta ou na página de um título no player web, enquanto Configurações › Segurança › Permitir links de compartilhamento estiver ativado. Desativar revoga os links dele.',
+    remoteAccess: 'Pode se conectar de fora da rede local',
+    remoteAccessHelp:
+      'Permite que este usuário entre, navegue e reproduza de qualquer lugar. Desativado, só pode fazer isso da rede local, mesmo sendo administrador, conforme os Proxies conhecidos em Configurações › Segurança a definem. Os links que ele compartilha continuam sendo reproduzidos em qualquer lugar.',
+    remoteAccessUnknownProxy:
+      'Integridade vê um proxy reverso que não está em Proxies conhecidos: todos que passam por ele parecem locais, então esta limitação não vale para eles.',
+    openKnownProxies: 'Abrir Proxies conhecidos',
     shareLinksTitle: 'Links compartilhados',
     shareLinksHelp:
       'Os links que este usuário criou para compartilhar um filme ou um episódio. “Revogar” encerra um deles imediatamente.',
@@ -259,12 +277,31 @@ const users: typeof en = {
       watchData: 'Importar dados de exibição',
       watchDataHelp: 'Títulos reproduzidos com suas datas, pontos de retomada e favoritos.',
       plexOwnerWatchDataHelp:
-        'Títulos reproduzidos com suas datas e número de reproduções, e pontos de retomada.',
+        'Títulos reproduzidos com suas datas e número de reproduções, pontos de retomada e avaliações.',
       plexWatchDataHelp:
-        'Títulos reproduzidos com suas datas e número de reproduções. O Plex não permite que o Polyfin leia os pontos de retomada desta conta.',
+        'Os títulos que esta conta reproduziu até o fim neste servidor, segundo o histórico de reprodução do Plex, com suas datas e número de reproduções. Os títulos que ela marcou como assistidos ou sincronizou da conta Plex, e os pontos de retomada dela, ficam no Plex.',
       watchDataNeeded: 'Sem isso, nada é importado para este usuário.',
       plexNotice:
-        'Com o token do proprietário, o Plex permite que o Polyfin leia os títulos reproduzidos e os pontos de retomada do proprietário, mas apenas os títulos reproduzidos das outras contas, a partir do histórico de reprodução delas: os pontos de retomada delas ficam no Plex. O Plex não tem favoritos para importar.',
+        'Com o token do proprietário, o Plex permite que o Polyfin leia os títulos reproduzidos, os pontos de retomada e as avaliações do proprietário. Das outras contas, ele fornece apenas o histórico de reprodução neste servidor: os títulos que elas reproduziram até o fim aqui. Os títulos marcados como assistidos sem reprodução, os sincronizados da conta Plex delas, os pontos de retomada e as avaliações delas não estão nele. Para ler os dados de exibição de cada conta, entre com o Plex como proprietário, acima. O Plex não tem favoritos para importar.',
+      plexOwner: {
+        title: 'Ler cada conta com o Plex',
+        help: 'Entre com o Plex como proprietário deste servidor. O Plex então fornece ao Polyfin o token de cada conta com a qual o servidor é compartilhado, e o Polyfin lê com ele o que a conta reproduziu, marcou como assistido ou sincronizou, os pontos de retomada e as avaliações dela, não apenas as reproduções aqui. Os perfis do seu Plex Home são lidos com o PIN deles, quando têm um.',
+        signIn: 'Entrar com o Plex como proprietário',
+        checking: 'Perguntando ao Plex para quais contas ele fornece um token…',
+        signedInAs: (name: string) => `Conectado ao Plex como ${name}, proprietário do servidor.`,
+        signOut: 'Sair do Plex',
+        notice:
+          'O Polyfin lê cada conta abaixo com o token que o Plex fornece ao proprietário para ela, como os apps do Plex dessa conta leem este servidor. Os tokens servem apenas para esta importação: nunca são guardados, e a sua sessão no Plex é encerrada quando a importação termina.',
+        all: 'Tudo: os títulos reproduzidos, marcados como assistidos ou sincronizados, os pontos de retomada e as avaliações.',
+        pin: 'Um perfil do Plex Home com PIN: tudo com o PIN dele, sem ele apenas as reproduções neste servidor.',
+        plays:
+          'Apenas as reproduções neste servidor, segundo o histórico de reprodução do Plex: o Plex não fornece token para esta conta.',
+        everything: 'Tudo',
+        playsOnly: 'Só reproduções',
+        pinLabel: 'PIN do perfil',
+        pinHelp: (name: string) =>
+          `O PIN que ${name} pede no Plex. Se ficar vazio, apenas as reproduções são lidas.`,
+      },
       ownerNotice: (owner: string | null, signedIn: boolean) =>
         `${signedIn ? `Conectado como ${owner ?? 'um usuário'}, o Polyfin lê apenas os dados de exibição desse usuário.` : `Esta chave pertence a ${owner ?? 'um usuário'}: ela lê apenas os dados de exibição desse usuário.`} Para importar os de outro usuário, digite a senha da conta dele no servidor: o Polyfin entra como ele para lê-los. Sem a senha, a conta dele ainda pode ser criada.`,
       ownerOnlyNotice: (owner: string | null, signedIn: boolean) =>
@@ -351,11 +388,31 @@ const users: typeof en = {
       read: (count: number) => (count === 1 ? '1 item lido' : `${count} itens lidos`),
       counts: (played: number, resumed: number, favorites: number) =>
         `${played === 1 ? '1 marcado como reproduzido' : `${played} marcados como reproduzidos`}, ${resumed === 1 ? '1 ponto de retomada' : `${resumed} pontos de retomada`}, ${favorites === 1 ? '1 favorito' : `${favorites} favoritos`}`,
+      upToDate: (count: number) => `${count} já no Polyfin`,
+      ratings: (count: number) => (count === 1 ? '1 avaliado' : `${count} avaliados`),
+      watchlist: (count: number) =>
+        count === 1 ? '1 adicionado a “Para assistir”' : `${count} adicionados a “Para assistir”`,
+      undated: (count: number) =>
+        count === 1
+          ? '1 ponto de retomada sem data, não adicionado'
+          : `${count} pontos de retomada sem data, não adicionados`,
+      nothingAdded: {
+        up_to_date: () => 'Tudo o que foi lido já estava no Polyfin: não havia nada a adicionar.',
+        nothing_played: (server: string) =>
+          `${server} não lista nada reproduzido, em andamento ou favorito para este usuário.`,
+        no_sections: () =>
+          'Este servidor Plex não tem biblioteca de filmes ou séries: não havia nada para ler.',
+        plex_owner_nothing_watched: () =>
+          'O proprietário não tem nada reproduzido ou em andamento nas bibliotecas de filmes e séries deste servidor.',
+        plex_nothing_watched: () =>
+          'Esta conta não tem nada reproduzido, em andamento ou avaliado nas bibliotecas de filmes e séries deste servidor.',
+        plex_no_history: () =>
+          'O Plex não lista nenhuma reprodução desta conta neste servidor. O histórico de reprodução dela contém apenas os títulos reproduzidos até o fim neste servidor: títulos marcados como assistidos sem reprodução, ou sincronizados da conta Plex, não estão nele. Para trazer tudo, pontos de retomada incluídos, entre com o Plex como proprietário nesta importação, com o PIN de um perfil do Plex Home que tenha um, ou a pessoa entra com o Plex em Minha conta › Importar de outro servidor.',
+      },
       unmatched: (count: number) =>
         count === 1 ? '1 título não encontrado' : `${count} títulos não encontrados`,
       unmatchedTitle: (name: string) => `Títulos não encontrados para ${name}`,
-      unmatchedHelp:
-        'Estes títulos não foram importados: nenhum título do Polyfin corresponde a eles pelo IMDb, TMDB ou TVDB.',
+      unmatchedHelp: 'Estes títulos não foram importados: o motivo diz por quê.',
       titleColumn: 'Título',
       kindColumn: 'Tipo',
       yearColumn: 'Ano',
@@ -368,6 +425,8 @@ const users: typeof en = {
       reasons: {
         no_identifier: 'Nenhum identificador do IMDb, TMDB ou TVDB',
         not_found: 'Não está no Polyfin',
+        not_in_library: 'Não está mais nas bibliotecas do Plex',
+        other_episode_order: 'Numerado em outra ordem de episódios do TheTVDB',
       },
       more: (count: number) => (count === 1 ? 'E mais 1.' : `E mais ${count}.`),
     },

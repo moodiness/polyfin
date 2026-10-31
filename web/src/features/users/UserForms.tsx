@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { PlusIcon, TrashIcon, XIcon } from '@phosphor-icons/react'
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
 import {
   fetchGroupDefaults,
   fetchUserContentChoices,
@@ -25,6 +25,7 @@ import {
   type User,
 } from '@/api'
 import { useSessionUser } from '@/app/session'
+import { useHealthProblems } from '@/features/system/problems'
 import { errorMessage } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import {
@@ -626,6 +627,7 @@ export function AllowedHoursForm({ target, id }: { target: LimitsTarget; id: str
 /** The permissions of Access a group holds, each a switch saved as it changes. */
 export type Permissions = Pick<
   GroupLimits,
+  | 'remoteAccess'
   | 'transcoding'
   | 'downloads'
   | 'personalAddons'
@@ -635,7 +637,11 @@ export type Permissions = Pick<
   | 'torrentStreams'
 >
 
-/** The switches of the permissions in Access, on a user's page and on a group's. */
+/**
+ * The switches of the permissions in Access, on a user's page and on a group's. Remote access off
+ * warns when Health sees a reverse proxy missing from Known proxies: everyone coming through it
+ * looks local, so the limit does not hold for them.
+ */
 export function PermissionRows({
   values,
   disabled,
@@ -646,7 +652,10 @@ export function PermissionRows({
   onChange: (patch: Partial<Permissions>) => void
 }) {
   const { t } = useI18n()
+  const unknownProxy =
+    useHealthProblems().data?.some((problem) => problem.code === 'unknown_proxy') ?? false
   const rows = [
+    ['remoteAccess', t.users.remoteAccess, t.users.remoteAccessHelp],
     ['transcoding', t.users.canTranscode, t.users.canTranscodeHelp],
     ['downloads', t.users.canDownload, t.users.canDownloadHelp],
     ['torrentStreams', t.users.canPlayTorrents, t.users.canPlayTorrentsHelp],
@@ -656,14 +665,27 @@ export function PermissionRows({
     ['canShare', t.users.canShare, t.users.canShareHelp],
   ] as const
   return rows.map(([field, title, help]) => (
-    <SwitchRow
-      key={field}
-      title={title}
-      help={help}
-      checked={values[field]}
-      disabled={disabled}
-      onChange={(checked) => onChange({ [field]: checked })}
-    />
+    <Fragment key={field}>
+      <SwitchRow
+        title={title}
+        help={help}
+        checked={values[field]}
+        disabled={disabled}
+        onChange={(checked) => onChange({ [field]: checked })}
+      />
+      {field === 'remoteAccess' && !values.remoteAccess && unknownProxy && (
+        <div className="pb-4">
+          <Notice
+            tone="warn"
+            action={
+              <TextLink to="/settings/security#known-proxies">{t.users.openKnownProxies}</TextLink>
+            }
+          >
+            {t.users.remoteAccessUnknownProxy}
+          </Notice>
+        </div>
+      )}
+    </Fragment>
   ))
 }
 
@@ -679,6 +701,7 @@ function sameSet(a: readonly string[], b: readonly string[]) {
 function resetChanges(t: Messages, current: GroupLimits, defaults: GroupLimits) {
   const access = (
     [
+      ['remoteAccess', t.users.remoteAccess],
       ['transcoding', t.users.canTranscode],
       ['downloads', t.users.canDownload],
       ['torrentStreams', t.users.canPlayTorrents],

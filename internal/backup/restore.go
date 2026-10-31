@@ -47,10 +47,10 @@ import (
 
 // restorableName matches the backups that can be restored: those Polyfin
 // makes every day, with the time they were made, and the before-restore
-// ones. restoreTemporary matches a backup downloaded or sent to be
-// restored.
+// ones, plain or encrypted. restoreTemporary matches a backup downloaded,
+// sent or decrypted to be restored.
 var (
-	restorableName   = regexp.MustCompile(`^polyfin-(\d{8}-\d{6})(-before-restore)?\.dump$`)
+	restorableName   = regexp.MustCompile(`^polyfin-(\d{8}-\d{6})(-before-restore)?\.dump(\.enc)?$`)
 	restoreTemporary = regexp.MustCompile(`^\.polyfin-restore-[0-9a-f]{16}\.dump$`)
 )
 
@@ -79,6 +79,9 @@ var (
 	ErrUnreadableSecrets = errors.New("the backup holds keys that POLYFIN_SECRET_KEY cannot decrypt")
 	// ErrRestoring reports a restore asked for while one runs.
 	ErrRestoring = errors.New("a restore is under way")
+	// ErrPassphraseRequired reports a restore of an encrypted backup not
+	// opened with its passphrase yet (see Unlock).
+	ErrPassphraseRequired = errors.New("the backup is encrypted: its passphrase is needed to restore it")
 )
 
 // File is a backup that can be restored: its name, size, and when it was
@@ -87,8 +90,10 @@ type File struct {
 	Name   string
 	Size   int64
 	MadeAt time.Time
-	// BeforeRestore tells a backup made before a restore.
+	// BeforeRestore tells a backup made before a restore, Encrypted one
+	// encrypted with a passphrase, from its name.
 	BeforeRestore bool
+	Encrypted     bool
 }
 
 // Listing lists the backups of the folder and of each destination, newest
@@ -165,7 +170,8 @@ func restorable(name string, size int64) (File, bool) {
 	if !ok {
 		return File{}, false
 	}
-	return File{Name: name, Size: size, MadeAt: made, BeforeRestore: strings.HasSuffix(name, beforeRestoreSuffix+".dump")}, true
+	return File{Name: name, Size: size, MadeAt: made, BeforeRestore: strings.Contains(name, beforeRestoreSuffix+".dump"),
+		Encrypted: encryptedName(name)}, true
 }
 
 // sortFiles puts the newest first.
@@ -190,13 +196,24 @@ type Plan struct {
 	// Unreadable counts, by kind (see the secrets package's Kind
 	// constants), the stored secrets the current key cannot decrypt.
 	Unreadable map[string]int
-	// path is the file restored, temporary when it was downloaded or sent.
+	// Encrypted tells an encrypted backup. Locked tells one not opened
+	// with its passphrase yet: it is neither checked nor restored before
+	// Unlock opens it, and Unreadable is empty until then.
+	Encrypted bool
+	Locked    bool
+	// path is the file restored, temporary when it was downloaded, sent or
+	// decrypted, in dir, the folder of the restore.
 	path      string
 	temporary bool
+	dir       string
+	// setup tells a restore from the setup page, of a database without an
+	// administrator, which has nothing to back up first.
+	setup bool
 	// expires is when it is dropped unless its restore was started.
 	expires time.Time
-	// By is the administrator who started the restore, BeforeRestore the
-	// backup made of the current database first.
+	// By is the administrator who started the restore, empty from the
+	// setup page; BeforeRestore the backup made of the current database
+	// first.
 	By            string
 	BeforeRestore string
 }
@@ -239,7 +256,7 @@ func (s *Service) Prepare(ctx context.Context, destination *accounts.ID, name st
 	if !restorableName.MatchString(name) {
 		return Plan{}, ErrBackupNotFound
 	}
-	plan := Plan{File: name}
+	plan := Plan{File: name, dir: dir}
 	if made, ok := madeAt(name); ok {
 		plan.MadeAt = &made
 	}
@@ -311,10 +328,36 @@ func (s *Service) PrepareUpload(ctx context.Context, name string, body io.Reader
 	if err := s.CanRestore(); err != nil {
 		return Plan{}, err
 	}
+	return s.prepareUpload(ctx, s.Dir(), name, body, false)
+}
+
+// PrepareSetupUpload reads a backup sent from the setup page, before any
+// administrator exists, named name, from body, to restore it (see Plan).
+// Backups are off then, as a new server has them: it is written into
+// SetupFolder, unless they are on. Its restore backs nothing up first:
+// a database without an administrator holds nothing set up yet.
+func (s *Service) PrepareSetupUpload(ctx context.Context, name string, body io.Reader) (Plan, error) {
+	if _, err := exec.LookPath(s.cfg.PgRestore); err != nil {
+		return Plan{}, ErrNoPgRestore
+	}
+	dir := s.Dir()
+	if dir == "" {
+		dir = s.cfg.SetupFolder
+		if dir == "" {
+			return Plan{}, ErrOff
+		}
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return Plan{}, err
+		}
+	}
+	return s.prepareUpload(ctx, dir, name, body, true)
+}
+
+func (s *Service) prepareUpload(ctx context.Context, dir, name string, body io.Reader, setup bool) (Plan, error) {
 	if err := s.checkNotRestoring(); err != nil {
 		return Plan{}, err
 	}
-	path := temporaryPath(s.Dir())
+	path := temporaryPath(dir)
 	size, err := copyTo(path, func(w io.Writer) error {
 		_, err := io.Copy(w, body)
 		return err
@@ -326,7 +369,7 @@ func (s *Service) PrepareUpload(ctx context.Context, name string, body io.Reader
 	if name == "." || name == "/" || len(name) > 255 || strings.ContainsFunc(name, func(r rune) bool { return r < ' ' }) {
 		name = "upload.dump"
 	}
-	return s.prepare(ctx, Plan{File: name, Uploaded: true, path: path, temporary: true, Size: size})
+	return s.prepare(ctx, Plan{File: name, Uploaded: true, path: path, temporary: true, dir: dir, setup: setup, Size: size})
 }
 
 // temporaryPath is the path of a new backup to restore in dir, a name of
@@ -338,16 +381,21 @@ func temporaryPath(dir string) string {
 	return filepath.Join(dir, ".polyfin-restore-"+hex.EncodeToString(random)+".dump")
 }
 
-// prepare inspects plan's file and keeps it as the backup to restore.
+// prepare inspects plan's file and keeps it as the backup to restore. An
+// encrypted backup is kept locked, to be opened by Unlock.
 func (s *Service) prepare(ctx context.Context, plan Plan) (Plan, error) {
-	unreadable, err := s.inspect(ctx, plan.path)
+	encrypted, err := isEncrypted(plan.path)
+	if err == nil && encrypted {
+		plan.Encrypted, plan.Locked, plan.Unreadable = true, true, map[string]int{}
+	} else if err == nil {
+		plan.Unreadable, err = s.inspect(ctx, plan.path)
+	}
 	if err != nil {
 		if plan.temporary {
 			_ = os.Remove(plan.path)
 		}
 		return Plan{}, err
 	}
-	plan.Unreadable = unreadable
 	random := make([]byte, 8)
 	_, _ = rand.Read(random)
 	plan.ID = hex.EncodeToString(random)
@@ -368,6 +416,93 @@ func (s *Service) prepare(ctx context.Context, plan Plan) (Plan, error) {
 	// whose start fails past that time, by Start.
 	time.AfterFunc(s.planLifetime, func() { s.Discard(plan.ID) })
 	return plan, nil
+}
+
+// Unlock opens the encrypted backup prepared as id with passphrase: it is
+// decrypted into a new file of the restore's folder, readable only by its
+// owner, every chunk checked, then checked as Prepare checks a backup, and
+// the plan, unlocked, is restored from that file. A wrong passphrase
+// fails with ErrWrongPassphrase and leaves the backup prepared, to try
+// another; a damaged backup, or one this Polyfin cannot restore, is
+// dropped with its error.
+func (s *Service) Unlock(ctx context.Context, id, passphrase string) (Plan, error) {
+	// One backup is opened at a time: scrypt takes 128 MiB.
+	s.unlocks.Lock()
+	defer s.unlocks.Unlock()
+	s.mu.Lock()
+	switch {
+	case s.restoring:
+		s.mu.Unlock()
+		return Plan{}, ErrRestoring
+	case s.plan == nil || s.plan.ID != id:
+		s.mu.Unlock()
+		return Plan{}, ErrNoPlan
+	case !s.plan.Locked:
+		plan := *s.plan
+		s.mu.Unlock()
+		return plan, nil
+	}
+	plan := *s.plan
+	s.mu.Unlock()
+	path := temporaryPath(plan.dir)
+	err := decryptFile(ctx, plan.path, path, passphrase)
+	var unreadable map[string]int
+	if err == nil {
+		unreadable, err = s.inspect(ctx, path)
+		if err != nil {
+			_ = os.Remove(path)
+		}
+	}
+	if err != nil {
+		if !errors.Is(err, ErrWrongPassphrase) && ctx.Err() == nil {
+			s.Discard(id)
+		}
+		return Plan{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.restoring || s.plan == nil || s.plan.ID != id {
+		_ = os.Remove(path)
+		return Plan{}, ErrNoPlan
+	}
+	if s.plan.temporary {
+		_ = os.Remove(s.plan.path)
+	}
+	s.plan.path, s.plan.temporary, s.plan.Locked, s.plan.Unreadable = path, true, false, unreadable
+	return *s.plan, nil
+}
+
+// decryptFile writes the dump of the encrypted backup at path, opened with
+// passphrase, to a new file at to, readable only by its owner; a failure
+// leaves no file.
+func decryptFile(ctx context.Context, path, to, passphrase string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	dump, err := newDecrypter(f, passphrase)
+	if err != nil {
+		return err
+	}
+	_, err = copyTo(to, func(w io.Writer) error {
+		_, err := io.Copy(w, contextReader{ctx: ctx, r: dump})
+		return err
+	})
+	return err
+}
+
+// contextReader reads r until ctx ends.
+type contextReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c contextReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
 }
 
 // PlanLifetime is how long a backup prepared to be restored stays so: its
@@ -401,29 +536,34 @@ func (s *Service) checkNotRestoring() error {
 	return nil
 }
 
-// RemoveRestoreLeftovers deletes from the folder the backups downloaded or
-// sent to be restored that a stop left behind. Polyfin calls it at
-// startup, before any is prepared.
+// RemoveRestoreLeftovers deletes from the folder, and from SetupFolder,
+// the backups downloaded, sent or decrypted to be restored that a stop
+// left behind. Polyfin calls it at startup, before any is prepared.
 func (s *Service) RemoveRestoreLeftovers() {
-	dir := s.Dir()
-	if dir == "" {
-		return
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
+	dirs := []string{s.Dir()}
+	if s.cfg.SetupFolder != dirs[0] {
+		dirs = append(dirs, s.cfg.SetupFolder)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, entry := range entries {
-		path := filepath.Join(dir, entry.Name())
-		if !entry.Type().IsRegular() || !restoreTemporary.MatchString(entry.Name()) || (s.plan != nil && s.plan.path == path) {
+	for _, dir := range dirs {
+		if dir == "" {
 			continue
 		}
-		if err := os.Remove(path); err != nil {
-			s.cfg.Logger.Warn("Could not delete a backup left from a restore", "file", entry.Name(), "error", err)
-		} else {
-			s.cfg.Logger.Info("Deleted a backup left from a restore", "file", entry.Name())
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			path := filepath.Join(dir, entry.Name())
+			if !entry.Type().IsRegular() || !restoreTemporary.MatchString(entry.Name()) || (s.plan != nil && s.plan.path == path) {
+				continue
+			}
+			if err := os.Remove(path); err != nil {
+				s.cfg.Logger.Warn("Could not delete a backup left from a restore", "file", entry.Name(), "error", err)
+			} else {
+				s.cfg.Logger.Info("Deleted a backup left from a restore", "file", entry.Name())
+			}
 		}
 	}
 }
@@ -517,43 +657,60 @@ func (s *Service) pgRestore(ctx context.Context, args ...string) ([]byte, error)
 
 // Start restores the backup prepared as id, by administrator: anyway goes
 // ahead when it holds secrets the current key cannot decrypt. It backs
-// the current database up first, then asks Polyfin to stop, which it
-// does once Requested gives the plan.
+// the current database up first, then asks Polyfin to stop, which it does
+// once Requested gives the plan. An encrypted backup must have been
+// unlocked.
 func (s *Service) Start(ctx context.Context, id string, anyway bool, administrator string) error {
+	return s.start(ctx, id, anyway, administrator, false)
+}
+
+// StartSetup restores the backup prepared from the setup page as id (see
+// PrepareSetupUpload), as Start does, without a backup first.
+func (s *Service) StartSetup(ctx context.Context, id string, anyway bool) error {
+	return s.start(ctx, id, anyway, "", true)
+}
+
+func (s *Service) start(ctx context.Context, id string, anyway bool, administrator string, setup bool) error {
 	s.mu.Lock()
 	plan := s.plan
 	switch {
 	case s.restoring:
 		s.mu.Unlock()
 		return ErrRestoring
-	case plan == nil || plan.ID != id:
+	case plan == nil || plan.ID != id || plan.setup != setup:
 		s.mu.Unlock()
 		return ErrNoPlan
+	case plan.Locked:
+		s.mu.Unlock()
+		return ErrPassphraseRequired
 	case plan.UnreadableCount() > 0 && !anyway:
 		s.mu.Unlock()
 		return ErrUnreadableSecrets
 	}
 	s.restoring = true
 	s.mu.Unlock()
-	name, err := s.backUpBeforeRestore(ctx)
-	if err != nil {
-		s.mu.Lock()
-		s.restoring = false
-		// Its time passed while the backup was made: the timer could not
-		// drop it then.
-		if s.plan != nil && s.plan.ID == id && !time.Now().Before(s.plan.expires) {
-			if s.plan.temporary {
-				_ = os.Remove(s.plan.path)
+	name := ""
+	if !plan.setup {
+		var err error
+		if name, err = s.backUpBeforeRestore(ctx); err != nil {
+			s.mu.Lock()
+			s.restoring = false
+			// Its time passed while the backup was made: the timer could
+			// not drop it then.
+			if s.plan != nil && s.plan.ID == id && !time.Now().Before(s.plan.expires) {
+				if s.plan.temporary {
+					_ = os.Remove(s.plan.path)
+				}
+				s.plan = nil
 			}
-			s.plan = nil
+			s.mu.Unlock()
+			return fmt.Errorf("the current database could not be backed up first, so nothing was restored: %w", err)
 		}
-		s.mu.Unlock()
-		return fmt.Errorf("the current database could not be backed up first, so nothing was restored: %w", err)
 	}
 	restore := *plan
 	restore.By, restore.BeforeRestore = administrator, name
 	s.cfg.Logger.Info("Restoring a database backup: Polyfin stops, then starts again on it", "file", restore.File,
-		"administrator", administrator, "before_restore", name)
+		"administrator", administrator, "before_restore", name, "setup", restore.setup)
 	s.requests <- restore
 	return nil
 }
@@ -628,8 +785,12 @@ func (s *Service) Restore(ctx context.Context, plan Plan) error {
 		if pool.QueryRow(ctx, "SELECT language FROM settings").Scan(&language) != nil {
 			language = "en"
 		}
-		activity.New(pool, func() accounts.Settings { return accounts.Settings{Language: language} }, s.cfg.Logger).
-			BackupRestored(ctx, plan.By, plan.File)
+		log := activity.New(pool, func() accounts.Settings { return accounts.Settings{Language: language} }, s.cfg.Logger)
+		if plan.setup {
+			log.BackupRestoredAtSetup(ctx, plan.File)
+		} else {
+			log.BackupRestored(ctx, plan.By, plan.File)
+		}
 		s.recordBeforeRestore(ctx, pool, plan.BeforeRestore)
 	}
 	return err

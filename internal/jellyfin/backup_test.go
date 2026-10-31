@@ -153,6 +153,43 @@ func TestBackupsAreThoseOfTheFolder(t *testing.T) {
 	}
 }
 
+// An encrypted backup is listed, but /Backup/Restore refuses it with 400
+// and words that say where to restore it: apps cannot ask for its
+// passphrase.
+func TestAppsCannotRestoreAnEncryptedBackup(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	script := filepath.Join(t.TempDir(), "pg_dump")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf 'PGDMP'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s, admin, _, service := backupServer(t, dir, func(c *backup.Config, _ *pgxpool.Pool) {
+		c.PgDump, c.PgRestore, c.DatabaseURL = script, "true", "postgresql://polyfin@127.0.0.1:1/polyfin"
+		c.Settings = func() accounts.Settings {
+			return accounts.Settings{BackupsKept: 7, BackupPassphrase: "correct horse battery"}
+		}
+	})
+	if err := service.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	made, _ := service.Status(t.Context())
+	if !strings.HasSuffix(made.File, ".dump.enc") {
+		t.Fatalf("the backup made: %q", made.File)
+	}
+	if status, body := s.call(http.MethodGet, "/Backup", admin, nil); status != http.StatusOK || !strings.Contains(string(body), made.File) {
+		t.Errorf("list: %d %s", status, body)
+	}
+	status, body := s.call(http.MethodPost, "/Backup/Restore", admin, map[string]string{"ArchiveFileName": made.File})
+	if status != http.StatusBadRequest || string(body) != errEncrypted {
+		t.Errorf("restore: %d %s", status, body)
+	}
+	select {
+	case <-service.Requested():
+		t.Error("an encrypted backup is restored")
+	default:
+	}
+}
+
 // /Backup/Restore restores a backup of the folder as the admin app does:
 // Polyfin backs up the current database, then stops to restore it. A
 // backup holding stored keys the current POLYFIN_SECRET_KEY cannot decrypt

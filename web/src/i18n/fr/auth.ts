@@ -18,6 +18,30 @@ const auth: typeof en = {
     confirmPassword: 'Confirmer le mot de passe',
     submit: 'Créer l’administrateur',
     submitting: 'Création…',
+    restoreInstead: 'Restaurer plutôt une sauvegarde',
+    createInstead: 'Créer plutôt un administrateur',
+    restoreTitle: 'Restaurer une sauvegarde',
+    restoreLede:
+      'Ramenez ce Polyfin à partir d’une sauvegarde de sa base de données : ses administrateurs, ses utilisateurs, ses réglages et son historique de visionnage.',
+    restoreFile: 'Fichier de sauvegarde',
+    restoreFileHelp:
+      'Un fichier .dump ou .dump.enc fait par Polyfin, de son dossier des sauvegardes ou d’une destination.',
+    restoreChoose: 'Choisir un fichier',
+    restoreSend: 'Envoyer et vérifier',
+    restoreSending: 'Envoi et vérification…',
+    restoreUnlockHelp:
+      'Cette sauvegarde est chiffrée : saisissez la phrase de passe avec laquelle elle a été faite.',
+    restoreReady: (file: string) =>
+      `${file} est une sauvegarde de la base de données de Polyfin que ce Polyfin peut restaurer.`,
+    restoreSteps: [
+      'Polyfin s’arrête, restaure la sauvegarde dans sa base de données d’un seul coup, puis redémarre dessus. Si quelque chose échoue, la base de données reste telle qu’elle est maintenant.',
+      'Connectez-vous ensuite avec un administrateur de la sauvegarde.',
+    ],
+    restoreStart: 'Restaurer',
+    restoreRestoring:
+      'Polyfin restaure la sauvegarde, puis redémarre. Cette page affiche la connexion dès qu’il répond.',
+    restoreFailed:
+      'La sauvegarde n’a pas pu être restaurée : Polyfin a redémarré sans elle. Son journal dit pourquoi, et contient un nouveau code d’installation.',
   },
   login: {
     title: 'Connexion',
@@ -39,6 +63,17 @@ const auth: typeof en = {
       'Les administrateurs doivent utiliser la connexion en deux étapes sur ce serveur. Ajoutez votre compte à une application d’authentification sur votre téléphone, puis saisissez le code qu’elle affiche.',
     recoveryTitle: 'Gardez vos codes de secours',
     continue: 'Continuer',
+    providerSignIn: (name: string) => `Se connecter avec ${name}`,
+    providerOutcomes: {
+      provider_refused: 'La connexion avec le fournisseur d’identité a été annulée.',
+      provider_no_account:
+        'Aucun compte de ce serveur ne correspond à votre compte chez le fournisseur d’identité.',
+      account_disabled: 'Ce compte est désactivé.',
+      outside_allowed_hours: 'Ce compte ne peut pas se connecter à cette heure.',
+      outside_local_network: 'Ce compte ne peut se connecter que depuis le réseau local.',
+      too_many_attempts: 'Trop de tentatives. Réessayez plus tard.',
+      provider_failed: 'La connexion avec le fournisseur d’identité a échoué. Réessayez.',
+    },
   },
   invite: {
     title: (server: string) => `Rejoindre ${server}`,

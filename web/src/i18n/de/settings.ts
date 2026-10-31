@@ -259,11 +259,11 @@ const settings: typeof en = {
       'Wenn eine App einen Titel ohne Wahl einer Version abspielt, wählt Polyfin die erste Version, die die App unverändert oder nur neu verpackt abspielt, statt der ersten, die überhaupt abspielbar ist. Die allererste Wiedergabe eines Titels kann etwas langsamer sein, da mehr Versionen analysiert werden können; sobald sie bekannt sind, ändert sich nichts mehr.',
     nameHowVersionsPlay: 'In Versionsnamen angeben, wie sie abgespielt werden',
     nameHowVersionsPlayHelp:
-      'Versionsnamen enden damit, wie die App die jeweilige Version abspielt: „(Direktes Abspielen)“, „(Direktes Streamen)“, wenn sie ohne Umwandlung kopiert wird, „(umgewandelt: Grund)“ mit HDR, dem Qualitätslimit, Untertiteln, Video oder Audio als Grund, oder „(hier nicht abspielbar)“. Polyfin entscheidet das anhand des Geräteprofils, das die App bei ihrer letzten Wiedergabe gesendet hat. Vor der ersten Wiedergabe eines Geräts oder nach einem Neustart sagen die Namen daher nichts, ebenso bei einer Version, die noch nicht analysiert oder von RemuxDB beschrieben wurde. Die Namen stehen in der Sprache der generierten Namen. Dafür wird nichts gelesen.',
+      'Versionsnamen enden damit, wie die App die jeweilige Version abspielt: „(Direktes Abspielen)“, „(Direktes Streamen)“, wenn sie ohne Umwandlung kopiert wird, „(umgewandelt: Grund)“ mit dem Wunsch der App, HDR, dem Qualitätslimit, Untertiteln, Video oder Audio als Grund, oder „(hier nicht abspielbar)“. Polyfin entscheidet das anhand des Geräteprofils, das die App bei ihrer letzten Wiedergabe gesendet hat. Vor der ersten Wiedergabe eines Geräts oder nach einem Neustart sagen die Namen daher nichts, ebenso bei einer Version, die noch nicht analysiert oder von RemuxDB beschrieben wurde. Die Namen stehen in der Sprache der generierten Namen. Dafür wird nichts gelesen.',
     versionOrderGroup: 'Versionsreihenfolge',
     versionOrder: {
       label: 'Versionen sortieren nach',
-      help: 'Jedes Kriterium gruppiert die Versionen eines Films oder einer Folge, und das nächste sortiert sie innerhalb jeder Gruppe; gleichrangige Versionen behalten die Reihenfolge der Add-ons. Die erste Version ist die, die „Abspielen“ startet, und die Versionen, die versucht werden, wenn sie nicht funktioniert, folgen danach. Polyfin richtet sich nach dem, was es über eine Version weiß, ohne die Datei zu lesen: nach ihrer Analyse, sobald sie abgespielt wurde, sonst nach der Beschreibung von RemuxDB, sonst nach den Wörtern ihrer Bezeichnungen. Eine Version, über die ein Kriterium nichts weiß, kommt nach den anderen. Die bevorzugte Audiosprache ist die jedes einzelnen Benutzers, eingestellt in seiner App, sonst die Standard-Audiosprache: Versionen, die bekanntermaßen in dieser Sprache sind, kommen zuerst, dann solche mit MULTI oder DUAL, dann solche mit unbekannter Sprache. Solange die Seite eines Titels geöffnet ist, behalten die dort angezeigten Versionen ihre Plätze.',
+      help: 'Jedes Kriterium gruppiert die Versionen eines Films oder einer Folge, und das nächste sortiert sie innerhalb jeder Gruppe; gleichrangige Versionen behalten die Reihenfolge der Add-ons. Die erste Version ist die, die „Abspielen“ startet, und die Versionen, die versucht werden, wenn sie nicht funktioniert, folgen danach. Polyfin richtet sich nach dem, was es über eine Version weiß, ohne die Datei zu lesen: nach ihrer Analyse, sobald sie abgespielt wurde, sonst nach der Beschreibung von RemuxDB, sonst nach den Wörtern ihrer Bezeichnungen. Eine Version, über die ein Kriterium nichts weiß, kommt nach den anderen. Die bevorzugte Audiosprache ist die jedes einzelnen Benutzers, eingestellt in seiner App, sonst die Standard-Audiosprache: Versionen, die bekanntermaßen in dieser Sprache sind, kommen zuerst, dann solche mit MULTI oder DUAL, dann solche mit unbekannter Sprache. Unter Mein Konto kann ein Benutzer außerdem eine Audioregion bevorzugen, etwa Französisch aus Québec: Unter den Versionen in ihrer Sprache kommen die dieser Region zuerst, dann die ohne bekannte Region. Solange die Seite eines Titels geöffnet ist, behalten die dort angezeigten Versionen ihre Plätze.',
       none: 'Keine: Die Versionen behalten die Reihenfolge der Add-ons.',
       add: 'Kriterium hinzufügen',
       remove: (name: string) => `${name} entfernen`,
@@ -441,6 +441,31 @@ const settings: typeof en = {
       qualityFactor: 'Akzeptiert einen Qualitätswert',
       processor: 'Encoder auf dem Prozessor',
       processorToneMapping: 'HDR zu SDR auf dem Prozessor',
+      hdrPath: {
+        term: 'HDR-Titel',
+        gpu: 'Auf der Karte in SDR konvertiert',
+        gpuUpTo: (height: number) => `Auf der Karte in SDR konvertiert, bis ${height}p`,
+        processor: 'Auf dem Prozessor in SDR konvertiert, auf der Karte kodiert',
+        notTimed:
+          'Die Geschwindigkeit der Karte ist noch nicht gemessen oder konnte nicht gemessen werden.',
+        keepsUp: (gpu: string) => `Die Karte konvertiert HDR mit ${gpu} Echtzeit.`,
+        processorFaster: (gpu: string, processor: string) =>
+          `Die Karte konvertiert HDR mit ${gpu} Echtzeit, zu langsam für die Wiedergabe; der Prozessor hält mit, mit ${processor}.`,
+        lowerHeight: (gpu: string, low: string, processor: string | null) =>
+          `Die Karte konvertiert HDR in 1080p mit ${gpu} Echtzeit, zu langsam für die Wiedergabe, und in 720p mit ${low}${processor ? `; der Prozessor mit ${processor}, ebenfalls zu langsam` : ''}.`,
+        noneKeepsUp: (gpu: string, low: string, processor: string | null) =>
+          `Keiner hält mit der Wiedergabe mit: Die Karte konvertiert HDR in 1080p mit ${gpu} Echtzeit und in 720p mit ${low}${processor ? `, der Prozessor mit ${processor}` : ''}. HDR-Titel können während der Konvertierung stocken.`,
+        turnedOff: 'HDR zu SDR auf der Karte ist in den Einstellungen ausgeschaltet.',
+      },
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'Das von Polyfin mitgelieferte',
+      ffmpegOlderDrivers: 'Für NVIDIA-Treiber älter als 610',
+      ffmpegOlderDownloading:
+        'Das FFmpeg für NVIDIA-Treiber älter als 610, das NVENC hier braucht, wird heruntergeladen: Bis dahin konvertiert der Prozessor die Videos.',
+      ffmpegOlderFailed: (error: string) =>
+        `Das FFmpeg für NVIDIA-Treiber älter als 610, das NVENC hier braucht, konnte nicht heruntergeladen werden: ${error}`,
+      ffmpegOlderUnusable: (error: string) =>
+        `NVENC kodiert auch mit dem FFmpeg für NVIDIA-Treiber älter als 610 nicht: ${error}`,
       yes: 'Ja',
       no: 'Nein',
       none: 'Keine',
@@ -641,6 +666,9 @@ const settings: typeof en = {
     localScanHours: 'Lokale Ordner scannen alle (Stunden, 0 = nie)',
     localScanHoursHelp: (r: RangeText) =>
       `Wie oft jeder lokale Ordner erneut nach hinzugefügten, geänderten oder entfernten Dateien gescannt wird. Ordner werden außerdem beim Start, auf Anforderung und bei Änderungen an überwachten Ordnern gescannt. 0 schaltet den Zeitplan aus. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    watchlistCheckHours: 'Versionen der Titel auf Merklisten suchen alle (Stunden, 0 = nie)',
+    watchlistCheckHoursHelp: (r: RangeText) =>
+      `Wie oft jeder nicht begonnene Titel der Merkliste eines Benutzers erneut nach Versionen durchsucht wird, für die Startseitenzeilen „Jetzt verfügbar“ und „Noch ausstehend“ und die Nachricht, die einen Benutzer über einen verfügbaren Titel informiert. Jede Stunde werden bis zu 20 Titel jedes Benutzers geprüft, wobei seine Stream-Add-ons gefragt werden. 0 schaltet die Prüfungen aus. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
     watchLocalFolders: 'Ordner und Freigaben auf Änderungen überwachen',
     watchLocalFoldersHelp: {
       container:
@@ -676,6 +704,40 @@ const settings: typeof en = {
     knownProxies: 'Bekannte Proxys',
     knownProxiesHelp: (r: RangeText) =>
       `Die Reverse-Proxys vor Polyfin, einer pro Zeile: eine IP-Adresse, ein Netzwerk wie 172.18.0.0/16 oder ein Hostname wie der Name eines Containers in einem Docker-Netzwerk (traefik), bis zu ${r.max}. Ein Name wird jede Minute aufgelöst und jeder Adresse, zu der er auflöst, wird vertraut, also trage nur Namen ein, die dein eigenes Netzwerk auflöst. Eine Anfrage von einem davon stammt von dem Client, den ihr X-Forwarded-For- oder X-Real-IP-Header nennt: Diese Adresse begrenzt fehlgeschlagene Anmeldungen, wird bei Geräten angezeigt und bestimmt das lokale Netzwerk. Weitergeleitete Header von jeder anderen Adresse werden ignoriert. Lass das Feld leer, wenn nichts vor Polyfin steht.`,
+    provider: {
+      title: 'Identitätsanbieter',
+      intro:
+        'Benutzer können sich bei dieser Admin-App und beim Web-Player über einen OpenID-Connect-Anbieter anmelden, der dann seine eigene zweistufige Anmeldung verlangt: Polyfin fragt nicht noch einmal nach dem Code. Jellyfin-Apps, die den Anbieter nicht öffnen können, melden sich mit Quick Connect an, bestätigt aus einer über ihn geöffneten Sitzung. Registriere Polyfin beim Anbieter als vertraulichen Client oder als öffentlichen ohne Geheimnis, mit der Weiterleitungs-URI unten.',
+      redirectUri: 'Weiterleitungs-URI',
+      redirectUriHelp:
+        'Die Adresse, zu der der Anbieter Browser zurückschickt, gebildet aus der öffentlichen Adresse. Registriere sie beim Anbieter genau so.',
+      noPublicAddress:
+        'Lege zuerst die öffentliche Adresse unter Einstellungen › Benachrichtigungen fest: Die Anmeldung beginnt und endet dort, und der Anbieter schickt Browser dorthin zurück.',
+      issuer: 'Aussteller',
+      issuerHelp:
+        'Der Aussteller (Issuer) des Anbieters, genau wie in seinem Discovery-Dokument, etwa https://id.example.org oder https://id.example.org/realms/home. Polyfin liest seine /.well-known/openid-configuration. Leer schaltet die Anmeldung aus.',
+      name: 'Name der Schaltfläche',
+      nameHelp:
+        'Was die Anmeldeschaltflächen nach „Mit“ anzeigen. Leer zeigt den Hostnamen des Ausstellers.',
+      clientId: 'Client-ID',
+      clientIdHelp:
+        'Die ID, die der Anbieter Polyfins Client gab. Leer schaltet die Anmeldung aus.',
+      clientSecret: 'Client-Geheimnis',
+      clientSecretHelp:
+        'Das Geheimnis eines vertraulichen Clients; leer lassen für einen öffentlichen Client. Es wird mit POLYFIN_SECRET_KEY verschlüsselt gespeichert und nie wieder angezeigt.',
+      userClaim: 'Claim mit dem Benutzernamen',
+      userClaimHelp:
+        'Der Claim des ID-Tokens, der bei der ersten Anmeldung ohne Rücksicht auf Groß- und Kleinschreibung mit den Kontonamen verglichen wird: standardmäßig preferred_username. Danach kommt die bestätigte E-Mail-Adresse. Spätere Anmeldungen finden dasselbe Konto, egal was der Claim dann sagt.',
+      createAccounts: 'Konten erstellen',
+      createAccountsHelp:
+        'Wer zu keinem Konto passt, bekommt eines, benannt nach dem Claim, sonst nach der E-Mail-Adresse, mit den Berechtigungen eines neuen Kontos, das sich nur über den Anbieter anmeldet. Aus, wird die Person abgewiesen. Standardmäßig aus.',
+      adminClaim: 'Claim der Administratoren',
+      adminClaimHelp:
+        'Der Claim mit den Gruppen oder Rollen einer Person, etwa groups. Mit einem Wert darunter wird, wessen Claim ihn enthält, bei der Anmeldung Administrator. Polyfin fragt nach dem Scope groups, wenn der Claim groups ist und der Anbieter ihn anbietet.',
+      adminValue: 'Wert der Administratoren',
+      adminValueHelp:
+        'Die Gruppe oder Rolle, die Administratoren macht, etwa polyfin-admins. Sie später zu verlassen macht einen Administrator nicht wieder zum Mitglied: Ändere das auf der Seite Benutzer.',
+    },
     https: {
       title: 'HTTPS',
       intro:
@@ -821,23 +883,33 @@ const settings: typeof en = {
     backupsKept: 'Zu behaltende Backups',
     backupsKeptHelp: (r: RangeText) =>
       `Nach jedem Backup löscht Polyfin seine ältesten Backups, die über diese Anzahl hinausgehen. Andere Dateien im Ordner werden nie angetastet. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    backupPassphrase: 'Backup-Passphrase',
+    backupPassphraseHelp: (min: number) =>
+      `Verschlüsselt jedes Backup beim Schreiben, im Ordner und an jedem Ziel, das es dann nicht lesen kann. Mindestens ${min} Zeichen. Sie wird verschlüsselt gespeichert und nie wieder angezeigt.`,
+    backupPassphraseNew:
+      'Bewahre diese Passphrase woanders als auf diesem Server auf, etwa in einem Passwort-Manager: Eine verlorene Passphrase bedeutet verlorene Backups. Ohne sie kann niemand sie wiederherstellen, auch Polyfin nicht. Prüfe sie vor dem Speichern mit dem Auge. Bereits erstellte Backups bleiben, wie sie sind.',
+    backupPassphraseRemoved:
+      'Ab jetzt erstellte Backups werden nicht verschlüsselt. Für die bereits erstellten wird diese Passphrase weiterhin zur Wiederherstellung benötigt.',
     lastBackup: 'Letztes Backup',
     backupDestinations: 'Backup-Ziele',
     backupDestinationsHelp:
       'Jedes Backup wird, sobald es in den Ordner geschrieben ist, unter demselben Dateinamen auch an diese Orte gesendet: S3-kompatiblen Speicher, SFTP- oder WebDAV-Server. Ein fehlgeschlagener Upload wird beim nächsten Backup erneut versucht.',
     webPlayerHelp:
-      'Was der Web-Player (jellyfin-web, unter /web/) zusätzlich zu seinen eigenen Seiten anzeigt. Das Skript wirkt beim nächsten Laden einer Seite des Web-Players; der Web-Player behält CSS und Anmeldenachricht bis zu einer Minute.',
+      'Was der Web-Player (jellyfin-web, unter /web/) zusätzlich zu seinen eigenen Seiten anzeigt. Theme und Skript wirken beim nächsten Laden einer Seite des Web-Players; der Web-Player behält die Anmeldenachricht bis zu einer Minute.',
     openWebPlayer: 'Web-Player öffnen',
-    webTheme: 'Theme',
+    webTheme: 'Theme des Servers',
     webThemeHelp:
-      'Das Aussehen des Web-Players. LumaaGlaass ist das Theme, das Polyfin mitbringt. Keines behält das Aussehen von jellyfin-web, dessen Anzeige-Theme jeder Benutzer unter Einstellungen › Darstellung wählt. Benutzerdefiniert verwendet dein eigenes CSS und JavaScript unten, die erhalten bleiben, während ein anderes Theme gewählt ist.',
-    webThemeChoices: { lumaaglaass: 'LumaaGlaass', none: 'Keines', custom: 'Benutzerdefiniert' },
-    webThemeReload:
-      'Der Web-Player behält das gelesene benutzerdefinierte CSS bis zu einer Minute: Lade seine offenen Seiten nach einer Änderung eine Minute später neu.',
+      'Das Aussehen des Web-Players für die Benutzer, die das des Servers behalten; jeder Benutzer kann sein eigenes haben, auf seiner Seite unter Benutzer. LumaaGlaass ist das Theme, das Polyfin mitbringt. Das Aussehen von jellyfin-web hat weder benutzerdefiniertes CSS noch Skript, und jeder Benutzer wählt seine Anzeige-Themes unter Einstellungen › Darstellung. Benutzerdefiniert verwendet dein eigenes CSS und JavaScript unten, die erhalten bleiben, während ein anderes Theme gewählt ist.',
+    webThemeChoices: {
+      lumaaglaass: 'LumaaGlaass',
+      none: 'Aussehen von jellyfin-web',
+      custom: 'Benutzerdefiniert',
+    },
+    webThemeReload: 'Lade nach einer Änderung die offenen Seiten des Web-Players neu.',
     webThemeTexts: {
       lumaaglaass:
         'Was Polyfin für LumaaGlaass ausliefert, hier angezeigt und nicht bearbeitbar. Wähle Benutzerdefiniert oder „Als benutzerdefiniert bearbeiten“, um dein eigenes zu schreiben.',
-      none: 'Keines liefert weder benutzerdefiniertes CSS noch JavaScript aus. Wähle Benutzerdefiniert, um dein eigenes zu schreiben.',
+      none: 'Das Aussehen von jellyfin-web liefert weder benutzerdefiniertes CSS noch JavaScript aus. Wähle Benutzerdefiniert, um dein eigenes zu schreiben.',
     },
     editAsCustom: 'Als benutzerdefiniert bearbeiten',
     editAsCustomTitle: 'Deine benutzerdefinierten Texte ersetzen?',
@@ -908,6 +980,9 @@ const settings: typeof en = {
     addVersionsToOpenPage: 'Versionen zur geöffneten Seite eines Titels hinzufügen',
     addVersionsToOpenPageHelp:
       'Fügt die von den Add-ons gefundenen Versionen dem Versionsmenü der Seite eines Films oder einer Folge hinzu, während sie geöffnet ist, und behält die gewählte Version bei. Wenn aus, zeigt eine Seite, die geöffnet wurde, bevor eine Version gefunden wurde, die ersten trotzdem an, sobald sie eintreffen, und ihre Wiedergabeschaltflächen warten weiterhin auf eine Version; die übrigen erscheinen beim erneuten Öffnen der Seite.',
+    posterRatings: 'Bewertungen auf Postern anzeigen',
+    posterRatingsHelp:
+      'Zeigt die Sternbewertung eines Films oder einer Serie im Web-Player auf dem Poster, sobald der Zeiger oder der Fokus darauf kommt, dazu die Kritiker- und Publikumswertung, solange unter Einstellungen › Inhalte ein MDBList-API-Schlüssel für Bewertungen gesetzt ist. Für alle Benutzer.',
     homeRows: 'Startseiten-Zeilen',
     homeRowsHelp:
       'Zeilen, die der Web-Player an ihrer Stelle zu seiner Startseite hinzufügt, für alle Benutzer oder für ausgewählte. Jeder Benutzer kann eine Zeile unter Mein Konto › Startseiten-Zeilen ausblenden; die eigenen Bereiche des Web-Players bleiben in dessen Einstellungen › Startseite. Jede Zeile lässt weg, was der Benutzer nicht sehen darf: Titel über seiner Kindersicherung, gesperrte Genres, ausgeblendete Titel und die für ihn ausgeblendeten Bibliotheken.',
@@ -939,6 +1014,8 @@ const settings: typeof en = {
         collection: 'Eine Sammlung',
         because: 'Weil du … gesehen hast',
         new: 'Neu in deinen Bibliotheken',
+        available: 'Jetzt verfügbar',
+        waiting: 'Noch ausstehend',
       },
       kindHelp: {
         catalog:
@@ -948,10 +1025,16 @@ const settings: typeof en = {
         because:
           'Eine Zeile für jeden der zuletzt abgespielten Filme und jede der zuletzt abgespielten Serien des Benutzers, mit ähnlichen Titeln, wie sie die Filmempfehlungen liefern. Keine, solange „Ähnliche Titel“ ausgeschaltet ist.',
         new: 'Die Titel, die in den letzten 7 Tagen in die Kataloge der Bibliotheken des Benutzers gekommen sind, neueste zuerst. Polyfin zählt sie ab dem Zeitpunkt, an dem es jeden Titel zum ersten Mal in jedem Katalog gesehen hat.',
+        available:
+          'Die nicht begonnenen Titel der Merkliste des Benutzers, für die die letzte Prüfung Versionen gefunden hat, zuletzt gefundene zuerst. Eine gefundene Version wurde noch nicht ausprobiert: Ihre Wiedergabe kann noch fehlschlagen.',
+        waiting:
+          'Die nicht begonnenen Titel der Merkliste des Benutzers, für die die letzte Prüfung keine Version gefunden hat oder die noch nicht erschienen sind, zuletzt hinzugefügte zuerst. Ein noch nicht geprüfter Titel steht in keiner der beiden Zeilen.',
       },
       defaultNames: {
         because: 'Weil du gesehen hast',
         new: 'Neu in deinen Bibliotheken',
+        available: 'Jetzt verfügbar',
+        waiting: 'Noch ausstehend',
       },
       catalog: 'Katalog',
       noCatalog: 'Die Server-Add-ons haben keinen Katalog zum Anzeigen.',

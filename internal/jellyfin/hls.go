@@ -203,8 +203,9 @@ func (h *Handler) remuxOf(w http.ResponseWriter, r *http.Request) (remuxRequest,
 		return remuxRequest{}, false
 	}
 	user, err := h.Accounts.User(r.Context(), grant.User)
-	// Like Jellyfin's HLS endpoints, the user's allowed hours apply.
-	if err != nil || user.Refused(h.now()) || h.outsideHours(user) {
+	// Like Jellyfin's HLS endpoints, the user's allowed hours apply, and
+	// so does their access from outside the local network.
+	if err != nil || user.Refused(h.now()) || h.outsideHours(user) || remoteRefused(r, user) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return remuxRequest{}, false
 	}
@@ -266,9 +267,22 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 	remux := playback.Remux{Session: session, User: user.ID, Device: query(r, "deviceId"), Version: version,
 		Audio: audioTrack(analysis, len(files), query(r, "audioStreamIndex")), Format: format}
 	// The segments the app asks the first live playlist to list, as the
-	// TranscodingUrl carries them from its profile.
+	// TranscodingUrl carries them from its profile; the channel, named in
+	// the log lines of its encoding.
 	if live {
 		remux.MinSegments, _ = strconv.Atoi(query(r, "minSegments"))
+		remux.Channel = item.Name
+	} else if item.Kind != library.KindRecording {
+		// The versions the play may go on from once its version's source
+		// fails: those the user is offered, in their order, from what is
+		// known already (see playback.Remux.Alternates).
+		remux.Alternates = func(ctx context.Context) []library.Version {
+			versions, ok := h.Library.CachedVersions(ctx, user, item.ID)
+			if !ok || !h.reordered(user) {
+				return versions
+			}
+			return h.ordered(ctx, user, versions)
+		}
 	}
 	// The conversions PlaybackInfo chose follow from the URL, as they
 	// would for Jellyfin, through the same functions, under the limit it
@@ -489,7 +503,7 @@ func (h *Handler) mediaPlaylist(w http.ResponseWriter, r *http.Request, req remu
 	extension := req.remux.Format.Extension()
 	if err := hls.WriteMedia(w, plan, req.remux.Format, func(n int) string {
 		return withQuery(prefix+strconv.Itoa(n)+"."+extension, req.uris)
-	}); err != nil {
+	}, h.Playback.Discontinuities(req.remux.Session, req.remux.Version.ID)...); err != nil {
 		h.remuxError(w, r, req.remux, err)
 	}
 }
@@ -702,6 +716,11 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 const segmentWait = 2 * time.Minute
 
 func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playback.Remux, err error) {
+	logger := h.Logger
+	if remux.Channel != "" {
+		// A live stream's lines name its channel.
+		logger = logger.With("channel", remux.Channel)
+	}
 	switch {
 	case r.Context().Err() != nil:
 	case errors.Is(err, playback.ErrLiveRefused):
@@ -709,7 +728,7 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 		// tuner or the provider's connections are all in use: a normal
 		// event, which lasts while they are. Even once the encoding gave up
 		// after its restarts, a 503 tells the app to ask again later.
-		h.Logger.Info("A live stream was refused by its source", "addon", remux.Version.Addon, "error", err)
+		logger.Info("A live stream was refused by its source", "addon", remux.Version.Addon, "error", err)
 		processingError(w, http.StatusServiceUnavailable)
 	case errors.Is(err, hls.ErrNotFound), errors.Is(err, hls.ErrStopped), errors.Is(err, playback.ErrNotRemuxable):
 		processingError(w, http.StatusNotFound)
@@ -719,17 +738,17 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 		// nearest, a tuner's stream limit, fails with a 500. A 503 says the
 		// same to apps, which take both as a server error, and that the
 		// refusal lasts only while the server is busy.
-		h.Logger.Info("An encoding was refused: the server runs as many as it may", "addon", remux.Version.Addon)
+		logger.Info("An encoding was refused: the server runs as many as it may", "addon", remux.Version.Addon)
 		processingError(w, http.StatusServiceUnavailable)
 	case errors.Is(err, hls.ErrStalled), errors.Is(err, context.DeadlineExceeded), errors.Is(err, source.ErrUnavailable):
 		// The source is slow, stopped answering, or failed: the app hears
 		// it within seconds, rather than after minutes, and may ask again,
 		// which waits for the same encoding, or reopens one once the
 		// source failed.
-		h.Logger.Warn("A segment could not be served in time: its source is slow or failed", "addon", remux.Version.Addon, "error", err)
+		logger.Warn("A segment could not be served in time: its source is slow or failed", "addon", remux.Version.Addon, "error", err)
 		processingError(w, http.StatusServiceUnavailable)
 	default:
-		h.Logger.Warn("A remux could not be served", "addon", remux.Version.Addon, "error", err)
+		logger.Warn("A remux could not be served", "addon", remux.Version.Addon, "error", err)
 		processingError(w, http.StatusInternalServerError)
 	}
 }

@@ -186,12 +186,15 @@ const home: typeof en = {
       original: 'Original',
       sizeLimit: 'Menor que a fonte',
       qualityPlayed: 'Qualidade reproduzida',
+      switchedVersion: 'Versão de troca',
       qualityAmong: (played: string, offered: string) => `${played}, entre ${offered}`,
       sizeLimits: {
         steppedDown: (height: string) => `O aplicativo reduziu a partir de ${height}`,
         gpu: (height: string) => `${height} no máximo: convertido pela placa de vídeo`,
         processor: (height: string) => `${height} no máximo: convertido pelo processador`,
         toneMapping: (height: string) => `${height} no máximo: HDR convertido pelo processador`,
+        gpuToneMapping: (height: string) =>
+          `${height} no máximo: a placa de vídeo só converte o HDR a tempo até aí`,
         qualityGroup: (height: string) => `Grupo de qualidade: ${height}`,
         serverMax: (height: string) => `Qualidade máxima do vídeo convertido: ${height}`,
         app: (height: string) => `Qualidade permitida pelo aplicativo: ${height}`,

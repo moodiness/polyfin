@@ -199,19 +199,24 @@ type ImportedResume struct {
 	At                time.Time
 }
 
-// What ImportResume did with a resume point.
+// What ImportResume did with a resume point: ResumeKept keeps Polyfin's
+// data, which is played, newer, or took the item off Continue Watching
+// since; ResumeSet sets the point, ResumePlayed marks the item played, and
+// ResumeDropped drops a point before the resume threshold, or without a
+// runtime to place it in.
 const (
 	ResumeKept = iota
 	ResumeSet
 	ResumePlayed
+	ResumeDropped
 )
 
 // ImportResume adds a resume point another service keeps, under
 // thresholds: none for a played item, nor when Polyfin's is newer, nor
 // when the user took the item off Continue Watching since it was set
 // (see RemoveResume); past the played threshold the item is played,
-// before the resume one nothing is kept. It reports ResumeKept, ResumeSet
-// or ResumePlayed.
+// before the resume one nothing is kept. It reports ResumeKept, ResumeSet,
+// ResumePlayed or ResumeDropped.
 func (d *Data) ImportResume(p ImportedResume, thresholds Thresholds) int {
 	if d.Played || d.Position > 0 && d.LastPlayed != nil && !d.LastPlayed.Before(p.At) ||
 		d.ResumeRemoved != nil && !d.ResumeRemoved.Before(p.At) {
@@ -232,7 +237,7 @@ func (d *Data) ImportResume(p ImportedResume, thresholds Thresholds) int {
 		return ResumePlayed
 	case runtime <= 0 || float64(position)/float64(runtime)*100 < float64(thresholds.Resume):
 		// Without a runtime there is no position to resume from.
-		return ResumeKept
+		return ResumeDropped
 	}
 	d.Position, d.Runtime = position, runtime
 	d.LastPlayed = new(p.At.UTC())

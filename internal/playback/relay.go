@@ -38,7 +38,8 @@ var copyBuffers = sync.Pool{New: func() any { return new([256 << 10]byte) }}
 // does not answer with content, the player receives a 502 and the error is
 // returned for logging; when its source's connections are all in use, a
 // 503. A file analyzed as one, not a live stream, is served from the
-// source cache, which reads it the way remuxes do.
+// source cache, which reads it the way remuxes do, and so is a file with
+// mirrors, which only the cache reads on from (see open).
 func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.Version, delivery Delivery) error {
 	release, err := s.Hold(r.Context(), version)
 	if err != nil {
@@ -46,7 +47,7 @@ func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.
 		return err
 	}
 	defer release()
-	if s.cacheable(r.Context(), version) || version.Torrent != nil {
+	if s.cacheable(r.Context(), version) || version.Torrent != nil || len(version.Mirrors) > 0 {
 		// A torrent's file is read from its swarm alone, through the cache.
 		return s.relayCached(w, r, version, delivery)
 	}
@@ -157,7 +158,7 @@ func expired(status int) bool {
 type loopback struct {
 	listener net.Listener
 	server   *http.Server
-	live     func(w http.ResponseWriter, r *http.Request, version library.Version, target string, link func(target, name string) string) error
+	live     func(w http.ResponseWriter, r *http.Request, version library.Version, target string, relay liveRelay) error
 
 	mu      sync.Mutex
 	sources map[string]*source.Source

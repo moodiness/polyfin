@@ -107,7 +107,10 @@ func TestStalledSegmentsAreAnsweredWithinTheTimeout(t *testing.T) {
 	}
 
 	// Paced at twice the video's own rate: segment 3, which ends at 14 s,
-	// takes about 7 s to come.
+	// takes about 6 s to come, FFmpeg telling progress every 0.7 s at
+	// most. The stall timeout is longer here, 4 s: still shorter than that
+	// wait, but not one a slow runner pausing FFmpeg for 1.5 s reaches.
+	m.stall = 4 * time.Second
 	slow := pacedSource(t, path, int(info.Size()/15), 0)
 	open = func(context.Context) (Remux, func(), error) {
 		return Remux{Input: slow.URL + "/steady.mkv", Video: 0, Audio: -1, Format: FMP4, Plan: plan}, func() {}, nil

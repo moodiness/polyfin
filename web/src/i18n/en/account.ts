@@ -10,7 +10,10 @@ const account = {
       resume: 'Continue Watching',
       hidden: 'Hidden titles',
       homeRows: 'Home rows',
+      trackChoices: 'Track choices',
       metadataLanguage: 'Metadata language',
+      webTheme: 'Web player theme',
+      audioRegion: 'Audio region',
       sharedLinks: 'Shared links',
       reminders: 'Reminders',
       import: 'Import from another server',
@@ -29,6 +32,30 @@ const account = {
         'No addon of the server has a language yet, so titles are described in the server’s. An administrator gives addons a language under Content › Sources.',
       saved: 'Metadata language saved.',
     },
+    /** My account › Web player theme, and the choice of a user's on their page under Users. */
+    webTheme: {
+      help: 'The web player’s look on every browser you sign in with. jellyfin-web’s own look is lighter, for TVs and older phones; browsers too old for LumaaGlaass get it by themselves. A browser shows a change once the web player is opened again, or right after you sign in there.',
+      label: 'Web player theme',
+      server: (theme: string) => `The server’s (${theme})`,
+      choices: { lumaaglaass: 'LumaaGlaass', none: 'jellyfin-web’s own look', custom: 'Custom' },
+      locked: 'Your administrator chose your web player theme.',
+      saved: 'Web player theme saved.',
+    },
+    /** My account › Audio region, and the names of the regions offered there and on a user's page. */
+    audioRegion: {
+      help: 'The dub you prefer where a language is dubbed apart for a region: French for France or for Quebec, Spanish for Spain or for Latin America, Portuguese for Brazil or for Portugal. It applies to the audio language you chose in your apps, else the server’s, when that is the region’s language, and sets it when neither is set. In that language, the audio tracks of the region play first, and its versions come first where the server orders versions by language.',
+      label: 'Audio region',
+      none: 'None',
+      saved: 'Audio region saved.',
+      regions: {
+        'fr-FR': 'French (France)',
+        'fr-CA': 'French (Quebec)',
+        'es-ES': 'Spanish (Spain)',
+        'es-419': 'Spanish (Latin America)',
+        'pt-BR': 'Portuguese (Brazil)',
+        'pt-PT': 'Portuguese (Portugal)',
+      } as Record<string, string>,
+    },
     /** My account › Home rows. */
     homeRows: {
       help: 'The rows the administrator adds to the web player’s home page for you. Turn one off to leave it out of your home page, and out of your libraries in other apps when it is one there too. The web player’s own sections stay in its Settings › Home.',
@@ -37,6 +64,22 @@ const account = {
       shown: (name: string) => `Show ${name} on your home page`,
       on: (name: string) => `${name} is back on your home page.`,
       off: (name: string) => `${name} is off your home page.`,
+    },
+    /** My account › Track choices. */
+    trackChoices: {
+      help: 'When you pick another audio track or other subtitles than those a series or a movie plays by default, its next plays keep that language, on every episode and in whichever version, in every app. This follows “Set audio track based on previous item” and “Set subtitle track based on previous item” in the web player’s playback settings, which are on unless you turned them off.',
+      none: 'No track choice is kept.',
+      kept: (count: number) =>
+        count === 1
+          ? 'Track choices are kept for 1 series or movie.'
+          : `Track choices are kept for ${count} series and movies.`,
+      forget: 'Forget my track choices',
+      title: 'Forget your track choices?',
+      confirmHelp:
+        'Every series and movie plays the tracks your language preferences choose again.',
+      confirm: 'Forget',
+      forgetting: 'Forgetting…',
+      done: 'Your track choices have been forgotten.',
     },
     /** My account › Continue Watching and Hidden titles. */
     watching: {
@@ -96,7 +139,7 @@ const account = {
           : `every ${minutes / 60} hours`,
     serverImport: {
       description:
-        'Bring your played movies and episodes, resume points and favorites over from a Jellyfin or Emby server you used before, or your movies from your Letterboxd export. They go into your account only, and only add to what Polyfin already has. Nothing is written to the other server.',
+        'Bring your played movies and episodes, resume points and favorites over from a Jellyfin, Emby or Plex server you used before, or your movies from your Letterboxd export. They go into your account only, and only add to what Polyfin already has. Nothing is written to the other server.',
       serverKind: 'Server',
       address: 'Server address',
       addressHelp:
@@ -110,6 +153,32 @@ const account = {
       started: 'The import has started. You can leave this page: it goes on.',
       lastTitle: 'Your last import',
       from: (server: string) => `From ${server}`,
+    },
+    /** My account › Import from another server, from Plex, signing in to Plex. */
+    plexImport: {
+      help: 'Sign in to Plex on Plex’s own page, then choose the server. Polyfin reads there, as you, the movies and episodes you played, marked as watched or synced, your resume points and your ratings, and your Plex Watchlist. Polyfin never sees your Plex password: what Plex gives it is used for this import only, then signed out.',
+      signIn: 'Sign in with Plex',
+      signingIn: 'Asking Plex…',
+      approve: 'Sign in to Plex on its page, which opens in a new tab, then come back here.',
+      open: 'Open Plex’s sign-in page',
+      waiting: 'Waiting for you to sign in to Plex…',
+      signedInAs: (name: string) => `Signed in to Plex as ${name}.`,
+      profile: 'Plex Home profile',
+      profileHelp:
+        'The profile whose watch data comes over. A managed profile has no sign-in of its own: choose it here.',
+      managed: (name: string) => `${name} (managed)`,
+      pin: 'Profile PIN',
+      pinHelp: 'The PIN this profile asks for on Plex.',
+      useProfile: 'Use this profile',
+      switching: 'Switching…',
+      server: 'Server',
+      serverHelp:
+        'The Plex servers this profile reaches. Polyfin reaches the one chosen at the addresses Plex gives for it.',
+      owned: (name: string) => `${name} (yours)`,
+      noServers: 'This profile reaches no Plex server.',
+      watchlist: 'Watchlist to my Watchlist',
+      watchlistHelp: 'The movies and shows of your Plex Watchlist go to your Watchlist in Polyfin.',
+      cancel: 'Cancel',
     },
     /** My account › Import from another server, with Letterboxd's export file. */
     letterboxd: {
@@ -605,7 +674,10 @@ const account = {
     title: 'Reset your preferences?',
     help: 'What you chose yourself goes back to the server’s defaults:',
     metadataLanguage: 'Metadata language: The server’s',
+    webTheme: 'Web player theme: The server’s, unless your administrator chose yours',
+    audioRegion: 'Audio region: None',
     homeRows: 'Home rows: every row is shown again',
+    trackChoices: 'Track choices: forgotten for every series and movie',
     appPreferences:
       'The preferences Jellyfin apps saved in your account: audio and subtitle languages and mode, home screen and display preferences',
     kept: 'What you watched, your favorites, your resume points, your connections and imports stay.',

@@ -57,6 +57,8 @@ type Event struct {
 	Share *ShareJSON `json:"share,omitempty"`
 	// Programme is the programme a programme_reminder event tells of.
 	Programme *ProgrammeJSON `json:"programme,omitempty"`
+	// WatchlistTitle is the title a title_available event tells of.
+	WatchlistTitle *TitleJSON `json:"watchlistTitle,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its

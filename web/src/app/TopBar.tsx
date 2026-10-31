@@ -1,4 +1,5 @@
 import {
+  ArrowLeftIcon,
   ArrowSquareOutIcon,
   CaretDownIcon,
   GithubLogoIcon,
@@ -9,6 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router'
 import { fetchStatus, queryKeys, userImageUrl, type SessionUser } from '@/api'
 import { languages, useI18n } from '@/i18n'
+import { webPlayerInPlace, webPlayerLink } from '@/jellyfinApps'
 import {
   Avatar,
   cx,
@@ -41,12 +43,16 @@ export function useWebClient(): boolean {
  * pages), search, the web player and the account menu. Below 768 px it keeps the logo, search
  * and a menu button that opens the same entries in a sheet. `data-top-bar` marks it for the
  * lists of `Select` and `SuggestInput`, which stay under it.
+ *
+ * Opened from the web player or inside a Jellyfin app, the web player opens in place, and a
+ * phone shows a back arrow to it before the logo, where jellyfin-web's dashboard has its own.
  */
 export function TopBar({ user }: { user: SessionUser }) {
   const { t } = useI18n()
   const { pathname } = useLocation()
   const openPalette = useOpenPalette()
   const webClient = useWebClient()
+  const inPlace = webPlayerInPlace()
   const sections = user.isAdministrator ? adminSections : memberSections
 
   return (
@@ -55,6 +61,16 @@ export function TopBar({ user }: { user: SessionUser }) {
       className="sticky top-0 z-30 h-topbar border-b border-line bg-bg/78 backdrop-blur-[18px] backdrop-saturate-130"
     >
       <div className="mx-auto flex h-full max-w-page items-center gap-10 px-14 max-xl:gap-6 max-xl:px-8 max-md:gap-3 max-md:px-5">
+        {webClient && inPlace && (
+          <a
+            {...webPlayerLink(true)}
+            aria-label={t.nav.backToWebPlayer}
+            title={t.nav.backToWebPlayer}
+            className="-ml-2 inline-grid size-9 shrink-0 place-items-center rounded-field text-ink-2 transition-[background-color,color] duration-160 ease-nuit hover:bg-ink/8 hover:text-ink md:hidden"
+          >
+            <ArrowLeftIcon size={18} aria-hidden="true" />
+          </a>
+        )}
         <Brand />
         <nav aria-label={t.nav.label} className="flex h-full items-stretch gap-1 max-md:hidden">
           {sections.map((section) => (
@@ -90,22 +106,29 @@ export function TopBar({ user }: { user: SessionUser }) {
           </button>
           {webClient && (
             <a
-              href="/web/"
-              target="_blank"
-              rel="noopener"
-              title={t.nav.webPlayerHint}
+              {...webPlayerLink(inPlace)}
+              title={inPlace ? t.nav.backToWebPlayer : t.nav.webPlayerHint}
               className="inline-flex h-9 items-center gap-2 rounded-field px-3 text-control font-medium whitespace-nowrap text-ink-2 transition-[background-color,color] duration-160 ease-nuit hover:bg-s2 hover:text-ink max-md:hidden"
             >
-              <span className="max-lg:sr-only">{t.nav.webPlayer}</span>
-              <ArrowSquareOutIcon size={16} aria-hidden="true" />
-              <span className="sr-only">{t.nav.webPlayerHint}</span>
+              {inPlace ? (
+                <>
+                  <ArrowLeftIcon size={16} aria-hidden="true" />
+                  <span className="max-lg:sr-only">{t.nav.backToWebPlayer}</span>
+                </>
+              ) : (
+                <>
+                  <span className="max-lg:sr-only">{t.nav.webPlayer}</span>
+                  <ArrowSquareOutIcon size={16} aria-hidden="true" />
+                  <span className="sr-only">{t.nav.webPlayerHint}</span>
+                </>
+              )}
             </a>
           )}
           <div className="max-md:hidden">
             <AccountMenu user={user} />
           </div>
           <div className="md:hidden">
-            <MobileMenu user={user} webClient={webClient} />
+            <MobileMenu user={user} webClient={webClient} inPlace={inPlace} />
           </div>
         </div>
       </div>

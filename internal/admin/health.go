@@ -48,6 +48,9 @@ type HealthSources struct {
 	// GPU's driver is older (hls.Manager.NVIDIADriver), empty otherwise;
 	// nil tells nothing.
 	NVIDIADriver func() string
+	// OlderDriverFFmpeg tells how the FFmpeg for NVIDIA drivers older than
+	// 610 stands (hls.Manager.OlderDriverFFmpeg); nil tells nothing.
+	OlderDriverFFmpeg func() hls.OlderDriverStatus
 	// Thumbnails makes the scrubbing thumbnails and chapter images.
 	Thumbnails *thumbnails.Service
 	// DatabaseSize measures the database.
@@ -301,6 +304,10 @@ type transcoderJSON struct {
 	// the original's.
 	MaxHeight int  `json:"maxHeight"`
 	Enabled   bool `json:"enabled"`
+	// OlderDriverFFmpeg tells how the FFmpeg for NVIDIA drivers older than
+	// 610 stands while NVENC waits for it, or failed with it; null when it
+	// is used (Hardware.OlderDrivers) or not needed.
+	OlderDriverFFmpeg *olderDriverJSON `json:"olderDriverFFmpeg"`
 }
 
 type hardwareJSON struct {
@@ -310,10 +317,69 @@ type hardwareJSON struct {
 	ToneMapping bool     `json:"toneMapping"`
 	// QVBR tells whether a VAAPI GPU takes a quality factor.
 	QVBR bool `json:"qvbr"`
+	// OlderDrivers tells the GPU encodes with the FFmpeg for NVIDIA
+	// drivers older than 610, not with the one Polyfin ships.
+	OlderDrivers bool `json:"olderDrivers"`
+	// HDR is where HDR titles are tone mapped and why, null when the GPU
+	// does not tone map.
+	HDR *hdrPathJSON `json:"hdr"`
 }
 
-func newHardwareJSON(hw *hls.Hardware) *hardwareJSON {
-	return &hardwareJSON{Method: hw.Method, Device: hw.Device, Encoders: hw.Encoders, ToneMapping: hw.ToneMapping, QVBR: hw.QVBR}
+// newHardwareJSON describes hw, on which HDR goes as path says, unless the
+// settings turn tone mapping on the GPU off (gpuToneMapping).
+func newHardwareJSON(hw *hls.Hardware, path hls.HDRPath, gpuToneMapping bool) *hardwareJSON {
+	return &hardwareJSON{Method: hw.Method, Device: hw.Device, Encoders: hw.Encoders, ToneMapping: hw.ToneMapping, QVBR: hw.QVBR,
+		OlderDrivers: hw.FFmpeg != "", HDR: newHDRPathJSON(path, gpuToneMapping)}
+}
+
+// hdrPathJSON is where the HDR titles a GPU tone maps are tone mapped:
+// Path "gpu" or "processor", Height the height the GPU tone maps them up
+// to, 0 for any, and Reason why: one of hls's HDR reasons, or "turnedOff"
+// when the settings turn tone mapping on the GPU off. GPUSpeed, LowSpeed
+// and ProcessorSpeed are the timings at startup it follows, in times real
+// time, 0 when not timed (see hls.HDRPath).
+type hdrPathJSON struct {
+	Path           string  `json:"path"`
+	Height         int     `json:"height"`
+	Reason         string  `json:"reason"`
+	GPUSpeed       float64 `json:"gpuSpeed"`
+	LowSpeed       float64 `json:"lowSpeed"`
+	ProcessorSpeed float64 `json:"processorSpeed"`
+}
+
+// newHDRPathJSON describes path, nil for a GPU that does not tone map.
+func newHDRPathJSON(path hls.HDRPath, gpuToneMapping bool) *hdrPathJSON {
+	if path.Reason == "" {
+		return nil
+	}
+	result := &hdrPathJSON{Path: "gpu", Height: path.Height, Reason: path.Reason, GPUSpeed: path.GPUSpeed, LowSpeed: path.LowSpeed,
+		ProcessorSpeed: path.ProcessorSpeed}
+	switch {
+	case !gpuToneMapping:
+		result.Path, result.Height, result.Reason = "processor", 0, "turnedOff"
+	case path.Processor:
+		result.Path = "processor"
+	}
+	return result
+}
+
+// olderDriverJSON is the FFmpeg for NVIDIA drivers older than 610 while
+// NVENC waits for it, State "downloading", or could not use it: "failed"
+// to download it, or "unusable" when NVENC failed with it too, Error
+// telling why.
+type olderDriverJSON struct {
+	State string `json:"state"`
+	Error string `json:"error,omitempty"`
+}
+
+// newOlderDriverJSON is how the FFmpeg for older NVIDIA drivers stands,
+// nil when it is used or not needed.
+func newOlderDriverJSON(encoder *hls.Manager) *olderDriverJSON {
+	status := encoder.OlderDriverFFmpeg()
+	if status.State == "" || status.State == "used" {
+		return nil
+	}
+	return &olderDriverJSON{State: status.State, Error: status.Error}
 }
 
 type thumbnailHealthJSON struct {
@@ -436,7 +502,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	if encoder := h.Health.Encoder; encoder != nil {
 		t := &transcoderJSON{Encoders: []string{}, MaxHeight: settings.MaxConversionHeight, Enabled: settings.Transcoding}
 		if hw := encoder.Hardware(); hw != nil {
-			t.Hardware = newHardwareJSON(hw)
+			t.Hardware = newHardwareJSON(hw, encoder.HDRPath(hw), settings.GPUToneMapping)
 		}
 		for _, name := range softwareEncoders {
 			if slices.Contains(encoder.Encoders(), name) {
@@ -444,6 +510,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		t.Conversions, t.Limit = encoder.Conversions()
+		t.OlderDriverFFmpeg = newOlderDriverJSON(encoder)
 		for _, running := range encoder.Running() {
 			if !running.Key.Converts {
 				t.Remuxes++

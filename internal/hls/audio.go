@@ -95,7 +95,7 @@ func (m *Manager) Convert(ctx context.Context, audio Audio, format string, start
 		args = append(args, "-movflags", "+frag_keyframe+empty_moov+default_base_moof")
 	}
 	args = append(args, "-f", format, "pipe:1")
-	cmd := exec.CommandContext(ctx, m.ffmpeg, args...)
+	cmd := exec.CommandContext(ctx, m.ffmpegPath(), args...)
 	cmd.WaitDelay = 5 * time.Second
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr
@@ -334,7 +334,7 @@ func (e *audioEncoding) run(ctx context.Context, j *audioJob) {
 		args = append(args, "-hls_segment_type", "mpegts")
 	}
 	args = append(args, filepath.Join(e.dir, "ffmpeg.m3u8"))
-	cmd := exec.CommandContext(ctx, e.m.ffmpeg, args...)
+	cmd := exec.CommandContext(ctx, e.m.ffmpegPath(), args...)
 	cmd.WaitDelay = 5 * time.Second
 	stderr := &tail{limit: 4096}
 	cmd.Stderr = stderr

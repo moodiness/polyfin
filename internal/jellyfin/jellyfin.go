@@ -37,6 +37,7 @@ import (
 	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/updates"
 	"github.com/moodiness/polyfin/internal/userdata"
+	"github.com/moodiness/polyfin/internal/webtheme"
 )
 
 const (
@@ -165,6 +166,9 @@ type Handler struct {
 	// configurations remembers each user's configuration, which item
 	// listings read for every title.
 	configurations *cache.Cache[accounts.ID, UserConfiguration]
+	// trackChoices remembers the tracks each user chose on titles (see
+	// trackmemory.go).
+	trackChoices *trackChoices
 	// sockets are the WebSockets apps keep open.
 	sockets *sockets
 	// syncPlay holds the groups apps watch together in.
@@ -179,6 +183,12 @@ type Handler struct {
 	// searches bounds how often users have titles' addons asked again
 	// (see searchVersions).
 	searches versionSearches
+	// starts are the plays whose torrents' starts the web client tells
+	// (see startprogress.go).
+	starts starts
+	// customCss hashes the Custom theme's CSS, for the address the web
+	// client loads it from (see brandingCss).
+	customCss webtheme.Hasher
 	// now tells the time users' allowed hours are checked against.
 	now func() time.Time
 	// newKeys remembers the API keys made from Jellyfin apps until a
@@ -196,6 +206,9 @@ type Handler struct {
 	// of each play session offers, when it offers several, for the admin
 	// dashboard.
 	qualities *cache.Cache[string, []int]
+	// transcodings remembers what each play session was last sent, for
+	// /Sessions between its encodings (see transcodingInfo).
+	transcodings *cache.Cache[string, TranscodingInfo]
 	// plays remembers each device's last PlaybackInfo profile and bitrate,
 	// which item details name versions for (see detailsNamer).
 	plays *cache.Cache[accounts.ID, devicePlay]
@@ -214,6 +227,9 @@ type Handler struct {
 	// titles are the play sessions devices reported for the title they
 	// play (see leftplayback.go).
 	titles *titleSessions
+	// draws are the orders listings of libraries' titles at random drew,
+	// kept for drawLife (see randomLibraryListing).
+	draws *cache.Cache[drawKey, draw]
 }
 
 // New returns the Jellyfin API handler.
@@ -224,6 +240,7 @@ func New(options Options) *Handler {
 		subtitleCache:  cache.New[accounts.ID, subtitleText](200, time.Hour).Sized(32<<20, subtitleText.size),
 		runtimes:       cache.New[string, time.Duration](2000, 12*time.Hour),
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),
+		trackChoices:   newTrackChoices(),
 		sockets:        newSockets(),
 		preparations:   newPreparations(options.Logger),
 		watched:        newWatchedPages(),
@@ -232,6 +249,7 @@ func New(options Options) *Handler {
 		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 		sizes:          cache.New[string, playback.ConversionSize](2000, 12*time.Hour),
 		qualities:      cache.New[string, []int](2000, 12*time.Hour),
+		transcodings:   cache.New[string, TranscodingInfo](2000, 12*time.Hour),
 		plays:          cache.New[accounts.ID, devicePlay](1000, 30*24*time.Hour),
 		guests:         newGuestPlays(),
 		downloads:      newDownloadPlays(),
@@ -242,6 +260,9 @@ func New(options Options) *Handler {
 	}
 	// Sessions read the handler's clock, which tests set.
 	h.sessions = playback.NewSessions(func() time.Time { return h.now() })
+	// So do the draws of listings at random, which hold the titles drawn.
+	h.draws = cache.NewLasting[drawKey, draw](1000, func() time.Duration { return drawLife }, func() time.Time { return h.now() }).
+		Sized(64<<20, func(d draw) int { return cache.JSONSize(d.items) })
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.listings = newListings(h.listVersions)
 	if options.Library != nil {
@@ -271,6 +292,7 @@ func New(options Options) *Handler {
 	anonymous(http.MethodGet, "/Branding/Configuration", h.brandingConfiguration)
 	anonymous(http.MethodGet, "/Branding/Css", h.brandingCSS)
 	anonymous(http.MethodGet, "/Branding/Css.css", h.brandingCSS)
+	signedIn(http.MethodGet, "/Polyfin/WebTheme", h.webTheme)
 
 	anonymous(http.MethodGet, "/Users/Public", h.publicUsers)
 	anonymous(http.MethodPost, "/Users/AuthenticateByName", h.authenticateByName)

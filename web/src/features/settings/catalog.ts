@@ -32,6 +32,7 @@ const s = (text: SettingsText) => text.settings
 const c = (text: SettingsText) => text.settings.conversion
 const tr = (text: SettingsText) => text.settings.tracking
 const h = (text: SettingsText) => text.settings.https
+const p = (text: SettingsText) => text.settings.provider
 /** Both texts of a help that names folders of the container or of a computer: search finds either. */
 const anyServer = (help: { container: string; computer: string }) =>
   `${help.container} ${help.computer}`
@@ -707,6 +708,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'catalogs',
+    anchor: 'watchlist-check-hours',
+    label: (t) => s(t).watchlistCheckHours,
+    help: (t, r) => s(t).watchlistCheckHoursHelp(r('watchlistCheckHours')),
+    keywords: ['watchlist', 'available', 'versions', 'streams'],
+    codes: ['invalid_watchlist_check_hours'],
+  },
+  {
+    section: 'catalogs',
     anchor: 'local-scan-hours',
     label: (t) => s(t).localScanHours,
     help: (t, r) => s(t).localScanHoursHelp(r('localScanHours')),
@@ -822,6 +831,70 @@ export const settingEntries: readonly SettingEntry[] = [
       'nom d’hôte',
     ],
     codes: ['invalid_known_proxies'],
+  },
+  {
+    section: 'security',
+    anchor: 'provider-setup',
+    label: (t) => p(t).title,
+    help: (t) => `${p(t).intro} ${p(t).redirectUriHelp}`,
+    keywords: ['OpenID Connect', 'OIDC', 'SSO', 'single sign-on', 'redirect URI', 'OAuth'],
+  },
+  {
+    section: 'security',
+    anchor: 'provider-issuer',
+    label: (t) => p(t).issuer,
+    help: (t) => p(t).issuerHelp,
+    keywords: ['OpenID Connect', 'OIDC', 'SSO', 'issuer', 'discovery'],
+    codes: ['invalid_provider'],
+  },
+  {
+    section: 'security',
+    anchor: 'provider-name',
+    label: (t) => p(t).name,
+    help: (t) => p(t).nameHelp,
+    keywords: ['OpenID Connect', 'SSO'],
+  },
+  {
+    section: 'security',
+    anchor: 'provider-client-id',
+    label: (t) => p(t).clientId,
+    help: (t) => p(t).clientIdHelp,
+    keywords: ['OpenID Connect', 'OIDC', 'client_id'],
+  },
+  {
+    section: 'security',
+    anchor: 'provider-client-secret',
+    label: (t) => p(t).clientSecret,
+    help: (t) => p(t).clientSecretHelp,
+    keywords: ['OpenID Connect', 'OIDC', 'client_secret'],
+  },
+  {
+    section: 'security',
+    anchor: 'provider-user-claim',
+    label: (t) => p(t).userClaim,
+    help: (t) => p(t).userClaimHelp,
+    keywords: ['preferred_username', 'email', 'claim'],
+  },
+  {
+    section: 'security',
+    anchor: 'provider-create-accounts',
+    label: (t) => p(t).createAccounts,
+    help: (t) => p(t).createAccountsHelp,
+    keywords: ['OpenID Connect', 'SSO', 'accounts', 'comptes'],
+  },
+  {
+    section: 'security',
+    anchor: 'provider-admin-claim',
+    label: (t) => p(t).adminClaim,
+    help: (t) => p(t).adminClaimHelp,
+    keywords: ['groups', 'roles', 'administrator'],
+  },
+  {
+    section: 'security',
+    anchor: 'provider-admin-value',
+    label: (t) => p(t).adminValue,
+    help: (t) => p(t).adminValueHelp,
+    keywords: ['groups', 'roles', 'administrator'],
   },
   {
     section: 'security',
@@ -1211,6 +1284,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'backups',
+    anchor: 'backup-passphrase',
+    label: (t) => s(t).backupPassphrase,
+    help: (t, r) => s(t).backupPassphraseHelp(Number(r('backupPassphrase').min)),
+    keywords: ['encryption', 'chiffrement', 'password'],
+    codes: ['invalid_backup_passphrase'],
+  },
+  {
+    section: 'backups',
     anchor: 'last-backup',
     label: (t) => s(t).lastBackup,
     keywords: ['backup'],
@@ -1347,6 +1428,13 @@ export const settingEntries: readonly SettingEntry[] = [
     label: (t) => s(t).addVersionsToOpenPage,
     help: (t) => s(t).addVersionsToOpenPageHelp,
     keywords: ['versions', 'jellyfin-web'],
+  },
+  {
+    section: 'web-player',
+    anchor: 'poster-ratings',
+    label: (t) => s(t).posterRatings,
+    help: (t) => s(t).posterRatingsHelp,
+    keywords: ['ratings', 'posters', 'cards', 'jellyfin-web'],
   },
   {
     section: 'web-player',

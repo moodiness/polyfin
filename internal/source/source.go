@@ -198,6 +198,18 @@ type Location struct {
 	// swarm takes longer to start, and to send a piece, than a host to
 	// answer.
 	HeaderTimeout, StallTimeout time.Duration
+	// Mirrors are other copies of the same file, byte for byte, read in
+	// their order once this one fails past the cache's tries (see
+	// Source.fail): the blocks cached stay valid, and the readers waiting
+	// get the blocks from the next copy rather than the failure.
+	Mirrors []Mirror
+}
+
+// Mirror is another copy of a source's file, where it is and how its link
+// is renewed (nil for never).
+type Mirror struct {
+	Location Location
+	Renew    Renewer
 }
 
 // Opener sends requests to sources; *stremio.Client is one.
@@ -237,6 +249,10 @@ type Cache struct {
 	// FetchRanges lets a request go, as it does: tests check the pacing
 	// there, not where a host receives the request, a moment later.
 	paced func(time.Time)
+	// storing, when set, is called as a block is about to be written, a
+	// source's discard waiting meanwhile (see Source.store): tests hold a
+	// write there.
+	storing func()
 	// headerTimeout bounds the wait for a source's headers, stallTimeout
 	// the time a connection read may go without a byte, recoveryTimeout
 	// the wait for the headers of the connection replacing a stalled one,
@@ -317,7 +333,10 @@ func aheadBudget(limit int64) int64 {
 // renewed by renew (which may be nil) when its link expires. A source is
 // shared by all its readers; each must Release it when done. A location
 // naming another URL replaces the one known, as addons hand out new links;
-// the same one keeps where it redirected to (see Source.target).
+// the same one keeps where it redirected to (see Source.target). A
+// location the source left for one of its mirrors (see Location.Mirrors)
+// leaves the source on that mirror: the next playback, or the next request
+// of a relayed app, does not wait for the copy that failed again.
 func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -330,10 +349,14 @@ func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 		c.sources[id] = s
 	}
 	s.mu.Lock()
-	if location.URL != s.origin.URL {
-		s.pinned = nil
+	if !s.left[location.URL] {
+		if location.URL != s.origin.URL {
+			s.pinned = nil
+		}
+		s.origin, s.renew = location, renew
+		s.mirrors = slices.DeleteFunc(slices.Clone(location.Mirrors), func(m Mirror) bool { return s.left[m.Location.URL] })
+		s.origin.Mirrors = nil
 	}
-	s.origin, s.renew = location, renew
 	s.mu.Unlock()
 	s.refs++
 	return s
@@ -516,13 +539,21 @@ type Source struct {
 	cancel context.CancelFunc
 	// refs is guarded by the cache's lock.
 	refs int
+	// writing is held to read while a block is written into dir, and to
+	// write while the source is discarded, which then waits for it.
+	writing sync.RWMutex
 
 	mu sync.Mutex
 	// origin is where the addon said the file is, and pinned where the
 	// origin redirected the server's reads, nil when it did not or the
 	// address stopped working.
-	origin      Location
-	pinned      *pin
+	origin Location
+	pinned *pin
+	// mirrors are the copies of the file the source reads on from, in
+	// order, once the copy it reads fails, and left the URLs of the copies
+	// that failed so (see toMirror).
+	mirrors     []Mirror
+	left        map[string]bool
 	renew       Renewer
 	size        int64
 	contentType string
@@ -712,14 +743,33 @@ func (s *Source) Release() {
 	s.cache.mu.Unlock()
 }
 
-// discard stops reading the source and removes its blocks.
+// discard stops reading the source and removes its blocks, once the
+// block being written, if any, is (see store). The readers waiting for a
+// block get errDiscarded, and so does any read after it (see wait): no
+// connection fetches a block of a source discarded, and they would wait
+// for good. It runs under the cache's lock, and may wait there for a
+// write, which never takes the cache's lock nor the source's (see store):
+// no wait can form a cycle. Removing the folder outside the cache's lock
+// would remove that of the source opened anew under the same identifier.
 func (s *Source) discard() error {
 	s.cancel()
+	s.writing.Lock()
+	defer s.writing.Unlock()
 	s.mu.Lock()
 	s.present = nil
+	for block, w := range s.wanted {
+		w.err = errDiscarded
+		delete(s.wanted, block)
+		close(w.done)
+	}
+	s.signal()
 	s.mu.Unlock()
 	return os.RemoveAll(s.dir)
 }
+
+// errDiscarded reports a read of a source discarded: the cache was closed,
+// or the source evicted or discarded while a read was under way.
+var errDiscarded = fmt.Errorf("%w: the source was closed", ErrUnavailable)
 
 func (s *Source) chunkPath(index int64) string {
 	return filepath.Join(s.dir, strconv.FormatInt(index, 10))
@@ -803,6 +853,10 @@ func (s *Source) wait(ctx context.Context, r *Reader, block int64) error {
 		s.mu.Unlock()
 		return err
 	}
+	if s.ctx.Err() != nil {
+		s.mu.Unlock()
+		return errDiscarded
+	}
 	w := s.wanted[block]
 	if w == nil {
 		w = &want{done: make(chan struct{}), since: time.Now()}
@@ -881,20 +935,21 @@ func (s *Source) sizeUnknown() bool {
 }
 
 // store keeps a fetched block and wakes the readers waiting for it. last
-// marks the final, short block of a source whose size was unknown.
+// marks the final, short block of a source whose size was unknown. A
+// source discarded writes nothing: discard waits for the write under way,
+// so that no file is written in its folder once it is removed.
 func (s *Source) store(block int64, data []byte, last bool) error {
 	index := block / s.cache.chunkBlocks
-	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return err
+	s.writing.RLock()
+	if s.ctx.Err() != nil {
+		s.writing.RUnlock()
+		return errDiscarded
 	}
-	file, err := os.OpenFile(s.chunkPath(index), os.O_RDWR|os.O_CREATE, 0o600)
-	if err != nil {
-		return err
+	if hold := s.cache.storing; hold != nil {
+		hold()
 	}
-	_, err = file.WriteAt(data, (block%s.cache.chunkBlocks)*blockSize)
-	if closeErr := file.Close(); err == nil {
-		err = closeErr
-	}
+	err := s.write(index, block, data)
+	s.writing.RUnlock()
 	if err != nil {
 		return err
 	}
@@ -923,10 +978,27 @@ func (s *Source) store(block int64, data []byte, last bool) error {
 	}
 	s.signal()
 	s.mu.Unlock()
-	if added > 0 {
+	// A source discarded meanwhile keeps nothing: its folder is gone.
+	if added > 0 && s.ctx.Err() == nil {
 		s.cache.stored(chunkKey{s.id, index}, int64(added))
 	}
 	return nil
+}
+
+// write writes a block into its chunk's file.
+func (s *Source) write(index, block int64, data []byte) error {
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(s.chunkPath(index), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = file.WriteAt(data, (block%s.cache.chunkBlocks)*blockSize)
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	return err
 }
 
 // signal tells whoever waits for progress that there is some. The source's
@@ -960,10 +1032,22 @@ func (s *Source) wakePastEnd() {
 // fail answers every waiting reader with err, stops every connection, and
 // reports err to readers for a while: Failed is closed first, so that
 // what watches it stops what reads the source before the readers see the
-// error.
-func (s *Source) fail(err error) {
+// error. A source failing to answer, past its tries, with a mirror left
+// reads on from that mirror instead (see toMirror); once none is left,
+// it fails, and the next Open starts again from the location it gives.
+// The failure of connection c, once c was dropped, is ignored: c read a
+// copy the source left for a mirror meanwhile, which another connection
+// failing moved it to, and the mirror is read on from.
+func (s *Source) fail(c *conn, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if c.dropped {
+		return
+	}
+	if s.toMirror(err) {
+		return
+	}
+	s.left = nil
 	if s.failure == nil {
 		close(s.failed)
 	}
@@ -980,6 +1064,40 @@ func (s *Source) fail(err error) {
 	s.conns = nil
 	s.signal()
 	s.cache.logger.Debug("A source could not be read", "source", s.id, "error", err)
+}
+
+// toMirror moves the source to its next mirror after its copy failed to
+// answer with err, and reports whether it did: the readers waiting keep
+// waiting, for the same blocks from the mirror, and the blocks cached
+// stay, as the mirror is the same file. Its size, once known, is checked
+// at the mirror's first answer, as an answer of another size is another
+// file (see learn), which fails it in turn. What the cache learned of the
+// host left, whether it ignores ranges or serves several at once, is
+// learned again of the mirror's. The source's lock is held.
+func (s *Source) toMirror(err error) bool {
+	if len(s.mirrors) == 0 || !errors.Is(err, ErrUnavailable) || s.ctx.Err() != nil {
+		return false
+	}
+	next := s.mirrors[0]
+	s.mirrors = s.mirrors[1:]
+	if s.left == nil {
+		s.left = map[string]bool{}
+	}
+	s.left[s.origin.URL] = true
+	s.origin, s.renew, s.pinned = next.Location, next.Renew, nil
+	s.origin.Mirrors = nil
+	s.rangeless, s.ranged, s.singleRanges, s.multiRanges = false, false, false, false
+	for _, c := range s.conns {
+		c.drop()
+	}
+	s.conns = nil
+	s.signal()
+	if len(s.wanted) > 0 {
+		s.kick()
+	}
+	s.cache.logger.Info("A source failed: reading on from another copy of the file", "source", s.id, "answer", Answer(err),
+		"copies left", len(s.mirrors))
+	return true
 }
 
 // Failed returns a channel closed once the source failed: its host did

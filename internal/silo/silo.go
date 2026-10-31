@@ -133,8 +133,9 @@ func bearer(r *http.Request) string {
 
 // signedIn serves next for the session of the request's bearer token, a
 // session of an enabled account: one disabled or ended since is signed
-// out, and a user outside their allowed hours is refused, except
-// administrators, as Jellyfin apps are.
+// out, a user outside their allowed hours is refused, except
+// administrators, and so is a user outside the local network without
+// remote access, administrators included, as Jellyfin apps are.
 func (s *Server) signedIn(next func(http.ResponseWriter, *http.Request, viewer)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, ok := s.session(w, r, true)
@@ -144,8 +145,8 @@ func (s *Server) signedIn(next func(http.ResponseWriter, *http.Request, viewer))
 	}
 }
 
-// signedInAnyHour is signedIn whatever the user's allowed hours: signing
-// out is never refused.
+// signedInAnyHour is signedIn whatever the user's allowed hours and
+// wherever they connect from: signing out is never refused.
 func (s *Server) signedInAnyHour(next func(http.ResponseWriter, *http.Request, viewer)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, ok := s.session(w, r, false)
@@ -156,9 +157,10 @@ func (s *Server) signedInAnyHour(next func(http.ResponseWriter, *http.Request, v
 }
 
 // session finds the session of the request's bearer token, answering the
-// request when there is none, or when hours holds and the user is outside
-// their allowed hours.
-func (s *Server) session(w http.ResponseWriter, r *http.Request, hours bool) (viewer, bool) {
+// request when there is none, or when limited holds and the user is
+// outside the local network without remote access, or outside their
+// allowed hours.
+func (s *Server) session(w http.ResponseWriter, r *http.Request, limited bool) (viewer, bool) {
 	token := bearer(r)
 	if token == "" {
 		problem(w, http.StatusUnauthorized, "authentication_required", "Sign in first.")
@@ -173,7 +175,11 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request, hours bool) (vi
 		s.internalError(w, r, err)
 		return viewer{}, false
 	}
-	if hours && !user.IsAdministrator && !user.AllowedAt(s.options.now()) {
+	if limited && !user.AllowedFrom(forwarded.InLocalNetwork(r)) {
+		problem(w, http.StatusForbidden, "permission_denied", "This account may not be used from outside the local network.")
+		return viewer{}, false
+	}
+	if limited && !user.IsAdministrator && !user.AllowedAt(s.options.now()) {
 		problem(w, http.StatusForbidden, "permission_denied", "This account may not be used at this hour.")
 		return viewer{}, false
 	}

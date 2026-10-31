@@ -85,6 +85,9 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 			}
 		}
 	}
+	// series is the series' complete description, which the lists of its
+	// episodes asked for by other identifiers are found by.
+	var series *stremio.Meta
 	if r.Kind == KindSeries || r.Kind == KindSeason {
 		for _, entry := range v.addons {
 			key := metaKey{entry.addon.ID, title.Meta.Type, title.Meta.ID}
@@ -94,6 +97,9 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 			}
 			if ok {
 				lists = append(lists, videoIDs(kept.value, r)...)
+				if series == nil {
+					series = &kept.value
+				}
 			}
 		}
 	}
@@ -106,6 +112,11 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 			// (see streamAnswer).
 			s.forgetLists(ctx, streamKey{entry.addon.ID, title.Meta.Type, video})
 		}
+	}
+	// So are those of the addons asked for them by another identifier
+	// (see streamServing).
+	for _, key := range s.otherStreamKeys(ctx, v, r, title, series) {
+		s.forgetLists(ctx, key)
 	}
 	if _, err := s.db.Exec(ctx, "UPDATE items SET data = data - 'rating' - 'ratedAt' - 'genres' WHERE id = $1", title.ID); err != nil {
 		return err

@@ -221,6 +221,10 @@ const system: typeof en = {
           `${name} (${path}) : Polyfin ne peut pas écrire dans ce dossier, et garde ces fichiers dans le cache de son dossier de données en attendant. Rendez le dossier accessible en écriture ou choisissez-en un autre, puis redémarrez Polyfin.`,
         nvidiaDriver: (version: string) =>
           `La carte graphique NVIDIA ne convertit pas la vidéo : son pilote est antérieur à la version ${version}, dont FFmpeg a besoin pour NVENC. Mettez à jour le pilote pour utiliser la carte.`,
+        nvidiaOlderFFmpeg: (failure: 'download' | 'encode', error: string) =>
+          failure === 'download'
+            ? `La carte graphique NVIDIA ne convertit pas la vidéo : son pilote est antérieur à la version 610, et le FFmpeg pour ces pilotes n’a pas pu être téléchargé : ${error}. Polyfin réessaie à son prochain démarrage, ou quand les réglages de conversion sont enregistrés.`
+            : `La carte graphique NVIDIA ne convertit pas la vidéo, même avec le FFmpeg pour les pilotes antérieurs à la version 610 : ${error}`,
         backupFailed: 'La dernière sauvegarde de la base de données a échoué.',
         backupStale: 'La dernière sauvegarde de la base de données date de plus de deux jours.',
         backupDestinationFailed: (name: string) =>
@@ -312,6 +316,10 @@ const system: typeof en = {
       noGpu: 'Aucun : la vidéo est convertie par le processeur',
       toneMapping: 'HDR vers SDR sur le GPU',
       cpuEncoders: 'Encodeurs processeur',
+      ffmpeg: 'FFmpeg',
+      ffmpegShipped: 'Celui que Polyfin fournit',
+      ffmpegOlderDrivers: 'Pour les pilotes NVIDIA antérieurs à 610',
+      ffmpegOlderDownloading: 'Téléchargement de celui des pilotes NVIDIA antérieurs à 610',
       conversions: 'Conversions vidéo',
       noLimit: 'sans limite',
       remuxes: 'Remux',
@@ -442,6 +450,7 @@ const system: typeof en = {
         torrentProxyPassword: 'Mot de passe du proxy SOCKS5 des torrents',
         torrentWireGuard: 'Configuration WireGuard des torrents',
         smtpPassword: 'Mot de passe SMTP',
+        backupPassphrase: 'Phrase de passe des sauvegardes',
         metricsToken: 'Jeton des métriques',
         updateToolToken: 'Jeton de l’outil de mise à jour',
       },
