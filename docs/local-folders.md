@@ -118,8 +118,6 @@ A share that was read but cannot be listed while it is watched is reported under
 
 ## Naming files
 
-Videos are read by their extension, in any letter case: `.mkv`, `.mp4`, `.m4v`, `.avi`, `.mov`, `.webm`, `.wmv`, `.mpg`, `.mpeg`, `.flv`, `.ogv`, and the MPEG-TS extensions `.ts`, `.m2ts`, `.mts`, `.m2t`, `.tp` and `.trp`, as TV recordings are often named. An MPEG-TS file plays as it is on apps that take MPEG-TS, such as Android TV and Swiftfin; in a browser, which does not, its video is converted (see [HLS segments](transcoding.md#hls-segments)), and a user who may not have video converted cannot play it there.
-
 Movies, one file per movie, alone or in a folder of its own, a Blu-ray disc or a DVD copied as it is (see [Blu-ray discs](#blu-ray-discs) and [DVD folders](#dvd-folders)), or a disc image (see [Disc images](#disc-images)):
 
 ```
@@ -141,6 +139,16 @@ Shows, a folder per show, the season and episode in each file's name, or discs c
 An identifier in a file's or folder's name settles its title: `{imdb-tt0063350}`, `[imdbid-tt0063350]`, `{tmdb-10331}` or `[tmdbid-10331]`.
 
 Extras, local trailers and theme media, named as Jellyfin names them, are no titles: they show under their titles (see [Extras and theme media](#extras-and-theme-media)). Hidden folders and folders named `sample` are left out, as are a Blu-ray disc's streams and playlists, which its titles play, and the files of a DVD.
+
+### Video files
+
+A scan reads videos by their extension, in any letter case: Matroska and WebM (`.mkv`, `.webm`), MP4 and QuickTime (`.mp4`, `.m4v`, `.mov`), MPEG-TS (`.ts`, `.m2ts`, `.mts`, and `.m2t`, `.tp` and `.trp`, as TV recordings are often named), MPEG program streams (`.mpg`, `.mpeg`, `.vob`), AVI (`.avi`), Windows Media (`.wmv`), Flash Video (`.flv`) and Ogg (`.ogv`). The `.VOB` files of a `VIDEO_TS` folder are its DVD's, never videos of their own (see [DVD folders](#dvd-folders)).
+
+Each plays as it is on an app that takes its container and codecs. Otherwise:
+
+- Matroska, WebM, MP4 and QuickTime files are repackaged into HLS, cut on their keyframe index, their video copied when the app takes its codec, else converted.
+- MPEG-TS files, MPEG program streams and AVI files have no index Polyfin reads: over HLS, their video is always converted, cut every few seconds, and a seek lands where asked (see [HLS segments](transcoding.md#hls-segments)). A user who may not have video converted is offered them only as they are. jellyfin-web plays none of them as they are; the Android TV app and Swiftfin play MPEG-TS as it is, and the Android TV app plays MPEG program streams and AVI files over HLS.
+- Windows Media, Flash Video and Ogg files are never cut into HLS segments: they play only on an app that takes them as they are.
 
 ### Extras and theme media
 
@@ -767,7 +775,7 @@ The folder's page counts its videos, and how many are dated by an NFO file, by t
 - Both accept a title dated a year apart from the name's, as release dates straddle a new year. Jellyfin 12.4 scores a year one off as high as the very year, and keeps the provider's first title of the best score ([`TmdbUtils.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbUtils.cs#L246-L255), `ScoreYear`, and lines 188-227, `FindBestMatch`), so a better known title of the year after can win over one of the very year. Polyfin keeps a title of the very year whenever there is one, and a title of a year one off only when it is the only one left, flagged; Jellyfin also takes a title whose name only starts with the file's, which Polyfin never does.
 - Polyfin reads Roman and Arabic numerals, and numbers written in words after "Part", alike, and searches a name with a numeral it does not find once more with the numeral written the other way; Jellyfin compares names as they are, keeping the provider's first title when none matches ([`TmdbUtils.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbUtils.cs#L180-L187)).
 - Both read the identifiers of NFO files; Polyfin reads nothing else of them for movies and shows, neither names, plots nor artwork, and only the title, plot and date for home videos.
-- Both read videos by their extension, MPEG-TS ones among them: `.ts`, `.m2ts`, `.mts`, `.m2t` and `.tp`. Jellyfin reads some fifty extensions ([`NamingOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/Common/NamingOptions.cs#L24-L79)), Polyfin those listed in [Naming files](#naming-files), `.trp` among them, which Jellyfin does not read. In a browser, Jellyfin copies an MPEG-TS file's video into HLS; Polyfin converts it (see [HLS segments](transcoding.md#hls-segments)).
+- Both read videos by their extension, MPEG-TS ones among them: `.ts`, `.m2ts`, `.mts`, `.m2t` and `.tp`, and MPEG program streams, `.vob` among them. Jellyfin reads some fifty extensions ([`NamingOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/Common/NamingOptions.cs#L24-L79)), Polyfin those listed in [Video files](#video-files), `.trp` among them, which Jellyfin does not read. In a browser, Jellyfin copies the video of an MPEG-TS file or an MPEG program stream into HLS; Polyfin converts it (see [HLS segments](transcoding.md#hls-segments)).
 - Both offer the subtitle files beside a video, named after it, text and pictures (`.sup`, and `.idx` with `.sub`). Polyfin reads only those in the video's own folder.
 - Both read the artwork beside movies and shows, and the image beside an episode's file, with the same names. Polyfin keeps one backdrop per title, reads no `extrafanart` folder, `.gif`, `.tbn` or `.svg` image, nor images for the episodes of discs, and shows the addons' artwork of the types a folder has none of.
 - Both list every episode a show's files hold, those the metadata provider does not know named after their files, and show a frame of the file for an episode without an image. Jellyfin also makes frames for movies and makes them during scans; Polyfin makes them for episodes only, when an app first asks.

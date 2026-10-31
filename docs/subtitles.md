@@ -159,7 +159,7 @@ What is read:
 - PGS files (`.sup`) and VobSub pairs (`.idx` and `.sub`) beside local files. Of a `.idx` file listing several tracks, the first is read.
 - DVB subtitles are not read.
 
-Polyfin decodes the pictures itself. Each one is cropped to its text, made dark text on a white background, as Tesseract reads best, and enlarged when its lines are small, as those of DVDs are. The times of the lines are those of the pictures; for an MPEG-TS file, such as a Blu-ray's `.m2ts` file, and for a disc, they count from the start of the video, as their playbacks do. A picture is drawn only within the video the track names, a DVD's at least for VobSub, and at most 3840×2160: what a track places past it is left out. Tesseract reads a track's pictures by batches of at most 64 MB of pictures, so that a long track never holds all of them in memory at once.
+Polyfin decodes the pictures itself. Each one is cropped to its text, made dark text on a white background, as Tesseract reads best, and enlarged when its lines are small, as those of DVDs are. The times of the lines are those of the pictures; for an MPEG-TS file, such as a Blu-ray's `.m2ts` file, an MPEG program stream, such as a `.vob` file, an AVI file, and a disc, they count from the start of the video, as their playbacks do. A picture is drawn only within the video the track names, a DVD's at least for VobSub, and at most 3840×2160: what a track places past it is left out. Tesseract reads a track's pictures by batches of at most 64 MB of pictures, so that a long track never holds all of them in memory at once.
 
 How apps see the copy:
 

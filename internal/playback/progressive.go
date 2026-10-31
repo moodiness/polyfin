@@ -38,9 +38,10 @@ func (s *Service) MayConvertAlone() bool {
 // progressiveOpener reads the version as a remux does (see remuxOpener),
 // without its keyframe index: a version read from its input is read there
 // by FFmpeg, any other through the source cache, as a playback, holding
-// one of its source's connections when it takes one. An MPEG-TS file or a
-// disc's title starts at zero, as their remuxes do, so that a subtitle
-// file burned in lines up.
+// one of its source's connections when it takes one. A file of a container
+// whose index Polyfin does not read, such as an MPEG-TS file or an MPEG
+// program stream, or a disc's title starts at zero, as their remuxes do,
+// so that a subtitle file burned in lines up.
 func (s *Service) progressiveOpener(remux Remux) hls.Opener {
 	return func(ctx context.Context) (hls.Remux, func(), error) {
 		analysis, err := s.Analyze(ctx, remux.Version)
@@ -77,11 +78,11 @@ func (s *Service) progressiveOpener(remux Remux) hls.Opener {
 		}
 		failed := src.Failed()
 		r.Input, r.Failed, r.Failure = target, failed, func() error { return failureOf(src, failed) }
-		if transportStream(analysis) {
+		if unindexedFormat(analysis) {
 			r.InputOptions = []string{"-start_at_zero"}
-			if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" {
-				r.ADTS = true
-			}
+		}
+		if stream, ok := streamOf(analysis, remux.Audio); ok && stream.Codec == "aac" && transportStream(analysis) {
+			r.ADTS = true
 		}
 		remux.convert(&r, video, TuningOf(s.settings()))
 		return r, release, nil
