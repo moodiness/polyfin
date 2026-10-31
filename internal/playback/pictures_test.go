@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
@@ -78,11 +79,13 @@ func (f *fakeReader) count() int {
 }
 
 // localDisk stands for local folders: the files of dir by their keys,
-// their states told by states, which a test changes.
+// their states told by states, which a test changes, and the inputs of
+// discs by theirs.
 type localDisk struct {
 	dir    string
 	mu     sync.Mutex
 	states map[string]string
+	discs  map[string]media.Input
 }
 
 func (d *localDisk) open(_ context.Context, key string) (io.ReadSeekCloser, time.Time, error) {
@@ -90,7 +93,10 @@ func (d *localDisk) open(_ context.Context, key string) (io.ReadSeekCloser, time
 	return file, time.Time{}, err
 }
 
-func (d *localDisk) Input(context.Context, string) (media.Input, error) {
+func (d *localDisk) Input(_ context.Context, key string) (media.Input, error) {
+	if in, ok := d.discs[key]; ok {
+		return in, nil
+	}
 	return media.Input{}, errors.New("no disc")
 }
 
@@ -356,8 +362,10 @@ func testTools(t *testing.T) (ffmpeg, ffprobe string, reader *ocr.Tesseract) {
 }
 
 // TestPictureTracksAreReadIntoText reads a PGS track inside a Matroska
-// file, a VobSub pair beside it, and a DVD's VobSub track, inside an MPEG
-// program stream as a disc's cells are, into the captions' text and times.
+// file, a VobSub pair beside it, and a VobSub track inside a loose VOB, an
+// MPEG program stream as a DVD's cells are, into the captions' text and
+// times. The loose VOB plays over HLS from zero, its first frame's time
+// (see playback.unindexedFormat): its text counts from there too.
 func TestPictureTracksAreReadIntoText(t *testing.T) {
 	t.Parallel()
 	ffmpeg, ffprobe, tesseract := testTools(t)
@@ -391,7 +399,7 @@ func TestPictureTracksAreReadIntoText(t *testing.T) {
 	}{
 		{"a PGS track", nil, "movie.mkv"},
 		{"a VobSub pair", []library.ExternalSubtitle{{URL: p.base + "pair.idx", Format: "idx", Language: "eng"}}, "movie.mkv"},
-		{"a DVD's track", nil, "disc.vob"},
+		{"a loose VOB's track", nil, "disc.vob"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			analysis, err := media.Prober{Path: ffprobe, Timeout: time.Minute}.Probe(t.Context(), filepath.Join(dir, c.video))
@@ -408,7 +416,7 @@ func TestPictureTracksAreReadIntoText(t *testing.T) {
 				t.Fatal(err)
 			}
 			offset := time.Duration(seconds * float64(time.Second))
-			if c.files != nil {
+			if c.files != nil || c.video == "disc.vob" {
 				offset = 0
 			}
 			if c.files != nil {
@@ -433,9 +441,8 @@ func TestPictureTracksAreReadIntoText(t *testing.T) {
 				if got := strings.ToLower(strings.Join(cue.Lines, " ")); got != strings.ToLower(want.Lines[0]) {
 					t.Errorf("cue %d reads %q, want %q", i, got, want.Lines[0])
 				}
-				// A DVD's times count in 1024/90000 s; a program stream's
-				// start late, by what its muxer gave its first pack, which
-				// the source's timestamps keep, as remuxes do.
+				// A DVD's times count in 1024/90000 s. A Matroska file's
+				// remuxes keep its timestamps; a loose VOB's start at zero.
 				start, end := want.Start+offset, want.End+offset
 				if d := cue.Start - start; d < -50*time.Millisecond || d > 50*time.Millisecond {
 					t.Errorf("cue %d starts at %v, want %v", i, cue.Start, start)
@@ -574,4 +581,142 @@ func TestTextCopiesOfTransportStreamsStartAtZero(t *testing.T) {
 			t.Errorf("cue %d ends at %v, want %v", i, cue.End, want.End)
 		}
 	}
+}
+
+// The text copy of a VobSub track inside an MPEG program stream lines up
+// with the video its HLS output plays, whose timestamps it starts at the
+// first frame's: the frame the HLS output shows at each cue's start is the
+// one the source shows with the caption's picture. So for a loose VOB,
+// played as a file, and for a DVD's title on a share, read from its input
+// as one program stream.
+func TestTextCopiesOfProgramStreamsMatchTheirHLSVideo(t *testing.T) {
+	t.Parallel()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	ffprobe := filepath.Join(filepath.Dir(ffmpeg), "ffprobe")
+	dir := t.TempDir()
+	disk := &localDisk{dir: dir, states: map[string]string{}, discs: map[string]media.Input{}}
+	p := newPictureService(t, migrated.New(t), &fakeReader{languages: []string{"eng"}}, disk, ffmpeg)
+	idx, sub := testsubtitles.Captions{CanvasWidth: 720, CanvasHeight: 480, Size: 22, Shown: pgsCaptions.Shown}.VobSub("en")
+	for name, data := range map[string][]byte{"pair.idx": []byte(idx), "pair.sub": sub} {
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	vob := filepath.Join(dir, "disc.vob")
+	// testsrc2 draws each frame apart; the muxer starts the stream late,
+	// its captions with it (-copyts).
+	if out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-copyts", "-f", "lavfi", "-i", "testsrc2=size=720x480:rate=25",
+		"-i", filepath.Join(dir, "pair.idx"), "-t", "8", "-map", "0", "-map", "1", "-c:v", "mpeg2video", "-g", "12", "-c:s", "copy", "-f", "vob",
+		vob).CombinedOutput(); err != nil {
+		t.Fatalf("ffmpeg: %v: %s", err, out)
+	}
+	analysis, err := media.Prober{Path: ffprobe, Timeout: time.Minute}.Probe(t.Context(), vob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(ffprobe, "-v", "error", "-select_streams", "s:0", "-show_entries", "packet=pts_time", "-of", "csv=p=0", vob).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shown []float64
+	for line := range strings.Lines(string(out)) {
+		if at, err := strconv.ParseFloat(strings.Trim(strings.TrimSpace(line), ","), 64); err == nil {
+			shown = append(shown, at)
+		}
+	}
+	source := framesOf(t, ffmpeg, nil, vob)
+	disk.setState("disc.vob", "1 1")
+	disk.setState("title", "1 1")
+	disk.discs["title"] = media.Input{Format: "mpeg", Path: vob}
+	info, err := os.Stat(vob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, version := range map[string]library.Version{
+		"a loose VOB":   {ID: accounts.ID{1}, URL: p.base + "disc.vob", Size: info.Size()},
+		"a DVD's title": {ID: accounts.ID{2}, URL: p.LocalInputs(disk) + "title"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p.analyses.Put(version.ID, analysis)
+			// The test's sources serve no bytes: the program stream's lack of
+			// an index is known.
+			p.unindexed.Put(version.ID, container.ErrNoIndex)
+			p.queueTracks(t.Context(), version, analysis, nil, -1)
+			p.waitReads(t)
+			copies := p.TextCopies(t.Context(), version, analysis, nil)
+			if len(copies) != 1 {
+				t.Fatalf("copies: %+v", copies)
+			}
+			cues, _ := p.TextCopyCues(t.Context(), version, analysis, nil, copies[0].Index)
+			if len(cues) != len(shown) {
+				t.Fatalf("cues %+v, shown at %v", cues, shown)
+			}
+			convert := &VideoConversion{Codec: "h264", Encoder: "libx264", Width: 720, Height: 480, Bitrate: 2_000_000}
+			r, release, err := p.remuxOpener(Remux{Session: name, Version: version, Audio: -1, Format: hls.TS, ConvertVideo: convert})(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !r.Plan.Grid() || !r.Plan.IsSearched() {
+				t.Errorf("the remux's plan: grid %v, searched %v", r.Plan.Grid(), r.Plan.IsSearched())
+			}
+			// The remux's options, on the file itself, which a loose VOB's
+			// remux reads through the source cache.
+			played := framesOf(t, ffmpeg, r.InputOptions, vob)
+			release()
+			for i, cue := range cues {
+				if got, want := frameAt(played, cue.Start.Seconds()), frameAt(source, shown[i]); got == "" || got != want {
+					t.Errorf("cue %d at %v: the remux shows frame %q, the source %q with its picture at %.3f s", i, cue.Start, got, want, shown[i])
+				}
+			}
+		})
+	}
+}
+
+// decodedFrame is a video frame FFmpeg decodes: its time and its checksum.
+type decodedFrame struct {
+	at  float64
+	sum string
+}
+
+// framesOf are the video frames FFmpeg decodes of input read with options,
+// keeping their timestamps, as a remux does.
+func framesOf(t *testing.T, ffmpeg string, options []string, input string) []decodedFrame {
+	t.Helper()
+	args := slices.Concat([]string{"-hide_banner", "-nostdin"}, options, []string{"-copyts", "-i", input, "-map", "0:v:0", "-vf", "showinfo", "-f", "null", "-"})
+	out, err := exec.Command(ffmpeg, args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("ffmpeg: %v: %s", err, out)
+	}
+	var frames []decodedFrame
+	for line := range strings.Lines(string(out)) {
+		_, at, ok := strings.Cut(line, " pts_time:")
+		_, sum, found := strings.Cut(line, " checksum:")
+		if !ok || !found {
+			continue
+		}
+		seconds, err := strconv.ParseFloat(strings.Fields(at)[0], 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		frames = append(frames, decodedFrame{at: seconds, sum: strings.Fields(sum)[0]})
+	}
+	if len(frames) == 0 {
+		t.Fatalf("no frame decoded: %s", out)
+	}
+	return frames
+}
+
+// frameAt is the checksum of the frame shown at a time: the last one
+// starting by then, within a millisecond.
+func frameAt(frames []decodedFrame, at float64) string {
+	sum := ""
+	for _, f := range frames {
+		if f.at <= at+0.001 {
+			sum = f.sum
+		}
+	}
+	return sum
 }
