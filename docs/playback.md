@@ -64,13 +64,31 @@ Polyfin does nothing to an addon's streams but what this list says, in this orde
 
 Polyfin keeps no maximum of versions, and looks at no seeders, source, size or language unless a setting above says so.
 
-**Why a stream is missing:** apps do not say why. To find out:
+**Why a stream is missing:** apps do not say why. **Content › Versions**, in the admin app, tells it for a movie or an episode (see [Versions of a title](#versions-of-a-title)). Besides:
 
 - An addon that failed, timed out or answered only a notice logs `An addon could not list streams`, at Warn, with the addon and the error, and **System › Health › Addons** shows its last failure.
 - A version a play could not analyze logs `A version could not be analyzed`, at Info, with the addon and why; a source that fails later in a play logs why too, never its address. A torrent that did not start logs `A torrent did not start in time`, and **System › Health** shows it under **Needs attention**.
 - A stream left out as another title's logs `A version names another title`, at Debug, with the addon and the marker that names it (`S01E03`, `S02`, `1998`), once while Polyfin remembers the version.
-- Streams with nothing to play, torrents left out, files listed twice, and the hide rules and quality group log nothing. Compare the addon's list with the steps above: turn the hide rules and the quality group off, and check the addon's configuration where it was installed.
+- Streams with nothing to play, torrents left out, files listed twice, blocked files, and the hide rules and quality group log nothing: the Versions page shows them.
 - `GET /Polyfin/Items/{id}/Versions` tells how many versions are known and how many addons are still asked (see [Title pages](#title-pages)).
+
+#### Versions of a title
+
+**Content › Versions** finds a movie, or a series and then one of its episodes, as a user sees it: the administrator signed in, or the user picked under **As user**, since versions depend on the user's own addons, torrents, quality group and audio language. For that user, it lists every stream each addon listed, source by source, in the addons' order, with:
+
+- its labels as read (height, codec, HDR, audio languages, MULTI), and, once analyzed, what the version rules know of it;
+- what became of it: its place among the versions offered, or the step above that left it out: nothing to play, torrents off for the user, the same file listed before, a mirror, a blocked file, failed lately with why (without the source's address), the hide rule that hides it with what it matched, or the quality group. A torrent that did not start lately is marked so: it stays listed, and plays that pick no version pass it over;
+- how versions are ordered: the criteria of **Order versions by**, the user's quality group, and whether the hide rules would hide every version, so that none is hidden;
+- the title's last plays, by any user, kept in memory until a restart, the last 5 of each title: who played it on which device and app, whether the app picked a version in its version menu, each version tried and what came of it (plays, could not be read, did not start, the limit of torrents or conversions at once, a conversion the user may not have, not analyzed before), and the version chosen with how it plays.
+
+Its actions:
+
+- **Pin** a version: for every user, it comes first in the title's details and `PlaybackInfo`, before the order the criteria give, the others keeping theirs, so that Play starts it and the versions tried when it does not work come after it. A version the user picks in the version menu still plays. A pin brings back no version that failed lately, that a hide rule hides, or that the user's quality group leaves out. The pin names the file of that title, by its name and size, else its link: when no addon lists it any more, the page shows it as missing and the usual order applies. **Unpin** ends it.
+- **Block** a file, with a reason, for **This title** or **Every title**: every title blocks the same file name and size wherever an addon lists it. A blocked file is listed nowhere, not in details, `PlaybackInfo`, downloads or trickplay, and its version is refused by its own identifier. Unlike the hide rules, blocks may leave a title with no version. **Unblock** lifts it. The page lists the title's blocks, those of files no addon lists now included; the blocks of every title are listed under the search. Pins and blocks are kept in the database, without links: a file is kept as a hash of its identity.
+- **Analyze now** analyzes a version, its recent failure forgotten, and tells why it could not be analyzed. Torrents are analyzed by plays only.
+- **Ask addons again** asks the user's addons again for the title's streams, as `POST /Polyfin/Items/{id}/Versions/Search` does, once every 20 seconds at most; the page follows the addons still asked.
+
+**Compared with Jellyfin:** Jellyfin 12.4 has no page explaining a title's versions, and no way to pin or block one: a title's versions are the files it found in its folders, listed in the order it gives them. A pin changes only the order of `MediaSources`, which every Jellyfin app reads.
 
 #### Versions of another title
 
