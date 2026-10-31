@@ -322,6 +322,43 @@ Limits:
 - The collections listing across the server lists it, except for jellyfin-web's **Add to collection** dialog. `POST` and `DELETE /Collections/{id}/Items` answer an empty `403`.
 - The admin API serves the lists under `/admin/api/scopes/{scope}/smart-lists`. A list's `rules` and `exclude` are each a group of rules (`{"field": "group", "match": "all" | "any", "rules": [...]}`); a list sent without `exclude` has none. A rule's `field` is `genre`, `year`, `released`, `rating`, `votes`, `language`, `runtime`, `contentRating`, `person`, `studio`, `type`, `rank` or `state`; `released` takes `min` and `max` in days from today, negative in the past. `sort` is `catalog`, `premiere`, `latestEpisode`, `seasonPremiere`, `rating`, `name` or `random`. `.../catalogs` gives the catalogs a list may draw from, the languages its rules may name and the `contentRatings` a rule may set as the highest. `POST .../preview` answers `titles`, `listed`, `unknown` (titles waiting for their description, votes or studios) and `complete` (whether every catalog answered in time).
 
+### Searches in plain words
+
+A search in plain words, such as "80s sci-fi under 2 hours", "highly rated korean series" or « comédies des années 80 de moins de 2 heures », also finds a collection named after the search. It lists the movies and series of your libraries that match what the search says, as a smart list of your own would (see [Smart lists](#smart-lists)). Any other search finds what it found before, and no collection.
+
+Polyfin understands these words:
+
+| Words | Mean |
+|---|---|
+| A decade: "80s", "1980s", "the eighties", « années 80 », „80er“, "los ochenta", "anni 80", "anos 80" | Titles that came out in it. Two digits from 20 to 90 are the 1920s to the 1990s, 00 and 10 the 2000s and the 2010s: write "2020s" in full. |
+| A year from 1900 to 2099 | Titles that came out that year. |
+| A genre of your libraries | Titles of that genre: one the genre filters of your libraries' catalogs offer, by its name, or by its common name in your language ("sci-fi", « horreur », „Komödien“) for the genres catalogs commonly name in English. "sci-fi" stands for every one of "Science Fiction", "Sci-Fi" and "Sci-Fi & Fantasy" your libraries have. |
+| "under 2 hours", "under 90 minutes", "under an hour" | Titles shorter than that. |
+| "short" | Titles shorter than 90 minutes. |
+| "highly rated", "top rated" | Titles with an IMDb rating of 7.5 or more. |
+| A language: "french", "korean" | Titles whose description gives that language. |
+| "movies", "series", "shows" | Movies, or series. |
+| "the", "of", "from", "and" | Nothing: they only link the others. |
+
+- Polyfin reads searches in English, French, German, Spanish, Italian and Portuguese, without regard to letter case or accents. All the words of a search are of one language, but its numbers.
+- Every word must be understood, and a search must name at least two things: "Drama", "1917" or "short" alone stay searches of titles, as do "80s westerns" when none of your libraries has westerns. A search names each thing once, but genres: "comedy drama movies" are movies of both genres.
+- Searches are read on the server, from word tables built into Polyfin. Nothing is sent to any other service.
+
+The collection:
+
+- It draws from the catalogs of your libraries of movies and series, or of the type the search names. It lists their titles as they list them, within their maximum, and applies parental control, blocked genres and the titles you hid, as smart lists do.
+- A title whose description is not read yet waits for it when the search names a language, as in a smart list: the collection grows as descriptions come.
+- It is not in the **Collections** view, and has no generated image. Polyfin keeps your last 20 searches in plain words for 24 hours after you last made them, until the server restarts: searching the same words again finds the same collection.
+- In jellyfin-web, its "Add to favorites" heart saves it as your own smart list, shown as a collection and named after the search, which you then find in the **Collections** view and under **My sources**. Removing the heart deletes that list, unless you changed its name or its rules since. A user who cannot have their own smart lists, under parental control, blocking genres, or whose own addons are turned off, is refused.
+
+**Compared with Jellyfin:** Jellyfin's search matches names only. jellyfin-web lists the collections a search finds under "Collections" ([search.ts, lines 103 to 104 and 138](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/legacy/features/search/utils/search.ts#L103-L138)), where the collection of a search in plain words shows. "Add to favorites" on a Jellyfin collection marks it favorite; on this one it saves a smart list.
+
+**For app developers:**
+
+- `/Items?searchTerm=` lists the collection first, a `BoxSet`, when the request keeps `BoxSet` items, as jellyfin-web's search asks for its Collections row with `IncludeItemTypes=BoxSet` and as a search without type filters does, and has no `ParentId`. `/Search/Hints` does not list it.
+- `/Items?ParentId=` lists its titles, in their order. Another user cannot reach it.
+- `POST /UserFavoriteItems/{id}` (or `/Users/{userId}/FavoriteItems/{id}`) saves it as the user's own smart list and answers its `UserData` with `IsFavorite` set; `DELETE` deletes the list. The refusal is an empty `403`, as is the save of a user who has 100 smart lists already. `UserData.IsFavorite` tells whether a list saved from it exists.
+
 ### Libraries hidden from the top bar
 
 Under **Content › Libraries**, **Hide from the web player's top bar** in a library's row leaves the library out of the web player's menus: the buttons of its top bar, the bar's **More** menu, and its side menu, in both of its layouts. It is saved with the list's **Save**, like the library's name, and the row then says **Hidden from the top bar**. Users set the same for their own libraries under **My sources**. Live TV catalogs have no such choice: their channels go to Live TV, never to a menu.
