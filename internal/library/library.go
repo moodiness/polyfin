@@ -115,6 +115,9 @@ type Service struct {
 	// iptvHosts tells the hosts of IPTV sources and of their logos (see
 	// IPTVHost).
 	iptvHosts iptvHosts
+	// choices are the versions administrators pinned and the files they
+	// blocked (see versionchoices.go).
+	choices versionChoices
 
 	// streamLists and subtitleLists are the addons' lists for each title,
 	// kept stale once expired (see staleLists).

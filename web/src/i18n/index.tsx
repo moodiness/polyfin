@@ -14,6 +14,7 @@ import enSources from './en/sources'
 import enStatistics from './en/statistics'
 import enSystem from './en/system'
 import enUsers from './en/users'
+import enVersions from './en/versions'
 import frAccount from './fr/account'
 import frNotifications from './fr/notifications'
 import frBackups from './fr/backups'
@@ -29,6 +30,7 @@ import frSources from './fr/sources'
 import frStatistics from './fr/statistics'
 import frSystem from './fr/system'
 import frUsers from './fr/users'
+import frVersions from './fr/versions'
 import deAccount from './de/account'
 import deNotifications from './de/notifications'
 import deBackups from './de/backups'
@@ -44,6 +46,7 @@ import deSources from './de/sources'
 import deStatistics from './de/statistics'
 import deSystem from './de/system'
 import deUsers from './de/users'
+import deVersions from './de/versions'
 import esAccount from './es/account'
 import esNotifications from './es/notifications'
 import esBackups from './es/backups'
@@ -59,6 +62,7 @@ import esSources from './es/sources'
 import esStatistics from './es/statistics'
 import esSystem from './es/system'
 import esUsers from './es/users'
+import esVersions from './es/versions'
 import itAccount from './it/account'
 import itNotifications from './it/notifications'
 import itBackups from './it/backups'
@@ -74,6 +78,7 @@ import itSources from './it/sources'
 import itStatistics from './it/statistics'
 import itSystem from './it/system'
 import itUsers from './it/users'
+import itVersions from './it/versions'
 import ptBRAccount from './pt-BR/account'
 import ptBRNotifications from './pt-BR/notifications'
 import ptBRBackups from './pt-BR/backups'
@@ -89,6 +94,7 @@ import ptBRSources from './pt-BR/sources'
 import ptBRStatistics from './pt-BR/statistics'
 import ptBRSystem from './pt-BR/system'
 import ptBRUsers from './pt-BR/users'
+import ptBRVersions from './pt-BR/versions'
 
 /*
  * The messages are split into one file per area and language, `en/<area>.ts`, `fr/<area>.ts` and so
@@ -117,6 +123,7 @@ const en = {
   ...enNotifications,
   ...enStatistics,
   ...enBackups,
+  ...enVersions,
 }
 
 /** Every message of the interface, in one language. */
@@ -138,6 +145,7 @@ const fr: Messages = {
   ...frNotifications,
   ...frStatistics,
   ...frBackups,
+  ...frVersions,
 }
 
 const de: Messages = {
@@ -156,6 +164,7 @@ const de: Messages = {
   ...deNotifications,
   ...deStatistics,
   ...deBackups,
+  ...deVersions,
 }
 
 const es: Messages = {
@@ -174,6 +183,7 @@ const es: Messages = {
   ...esNotifications,
   ...esStatistics,
   ...esBackups,
+  ...esVersions,
 }
 
 const it: Messages = {
@@ -192,6 +202,7 @@ const it: Messages = {
   ...itNotifications,
   ...itStatistics,
   ...itBackups,
+  ...itVersions,
 }
 
 const ptBR: Messages = {
@@ -210,6 +221,7 @@ const ptBR: Messages = {
   ...ptBRNotifications,
   ...ptBRStatistics,
   ...ptBRBackups,
+  ...ptBRVersions,
 }
 
 // Two areas defining the same top-level key would silently hide one of them.
@@ -231,6 +243,7 @@ if (import.meta.env.DEV) {
     enNotifications,
     enStatistics,
     enBackups,
+    enVersions,
   ]) {
     for (const key of Object.keys(area)) {
       if (seen.has(key)) throw new Error(`i18n: the key "${key}" is defined by two areas`)

@@ -106,6 +106,23 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	c = h.tryable(p, c)
 	at := openedIndex(opened, p.versions)
 	allowed := h.Accounts.Conversions(user)
+	// What each candidate gave is kept with the title's last plays (see
+	// playdecisions.go), once the play is decided; a play the app gave up
+	// tells nothing.
+	outcomes := newPlayTries(p.versions, c.order)
+	started := 0
+	defer func() {
+		if r.Context().Err() != nil {
+			return
+		}
+		device := callerFrom(r.Context()).Device
+		decision := PlayDecision{At: h.now(), User: user.Name, Device: device.DeviceName, App: device.Client, Picked: c.picked,
+			Tries: outcomes.reached(started)}
+		if result.decided != nil {
+			decision.Chosen, decision.Delivery = result.decided.version.ID, delivery(result.decided.decision)
+		}
+		h.recordDecision(p.item.ID, decision)
+	}()
 	// The analyses and keyframe indexes started run to their end whatever
 	// the app does meanwhile, for the next play (see playback.Analyze). The
 	// tries stop waiting for them once the play is decided, or gave up: no
@@ -147,6 +164,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			if err := h.Playback.TorrentAdmittedWithin(detached.Context(), version, wait); err != nil {
 				h.Logger.Info("A torrent version is passed over: as many torrents run as Torrents at once allows", "addon", version.Addon)
 				start.tried(version, err)
+				outcomes.note(n, TryTorrentCap, nil)
 				return tried{n: n, unreadable: true, unstarted: true}
 			}
 		}
@@ -166,11 +184,18 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				}
 				h.Logger.Info("A version could not be analyzed", "addon", version.Addon, "error", err)
 				start.tried(version, err)
-				return tried{n: n, unreadable: true, unstarted: version.Torrent != nil && playback.TorrentUnstarted(err)}
+				unstarted := version.Torrent != nil && playback.TorrentUnstarted(err)
+				if unstarted {
+					outcomes.note(n, TryUnstarted, err)
+				} else {
+					outcomes.note(n, TryUnreadable, err)
+				}
+				return tried{n: n, unreadable: true, unstarted: unstarted}
 			}
 		} else {
 			var known bool
 			if analysis, known = h.Playback.Analyzed(detached.Context(), version.ID); !known {
+				outcomes.note(n, TryNotAnalyzed, nil)
 				return tried{n: n}
 			}
 		}
@@ -182,21 +207,24 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				return tried{n: n}
 			}
 			if d.unstarted {
+				outcomes.note(n, TryUnstarted, nil)
 				return tried{n: n, unreadable: true, unstarted: true}
 			}
 			if permits != allowed {
 				h.Logger.Info("A version would need its video converted while the server converts as many as it may", "addon", version.Addon)
+				outcomes.note(n, TryConversionCap, nil)
 			} else {
 				h.Logger.Info("A version would need a conversion the user may not have, or is above their bitrate limit or quality group, or cannot be streamed", "addon", version.Addon)
+				outcomes.note(n, TryUnplayable, nil)
 			}
 			return tried{n: n}
 		}
+		outcomes.note(n, TryPlays, nil)
 		return tried{n: n, decided: d, plays: true, unconverted: prefer && h.unconverted(detached.Context(), d, request)}
 	}
 
 	attempted := min(c.analyzed, len(c.order))
 	results := make(chan tried, attempted)
-	started := 0
 	start := func() {
 		n := started
 		started++

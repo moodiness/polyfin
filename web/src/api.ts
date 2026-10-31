@@ -2575,6 +2575,196 @@ export const fetchShareEpisodes = (seriesId: string, signal?: AbortSignal) =>
     signal,
   )
 
+/** What became of a stream an addon listed for a title (docs/playback.md, Which streams become versions). */
+export type VersionStep =
+  | 'offered'
+  | 'nothing'
+  | 'torrents'
+  | 'blocked'
+  | 'duplicate'
+  | 'mirror'
+  | 'failed'
+  | 'hidden'
+  | 'group'
+
+/** The hide rule that hides a version; label rules may add their own. */
+export type VersionHideRule = 'elsewhere' | 'larger' | 'codec' | 'release' | 'words' | string
+
+/** A video's range as labels or the analysis tell it; empty when unknown. */
+export type VersionRange = 'sdr' | 'hdr' | ''
+
+export type VersionBlock = {
+  id: string
+  /** The title it blocks the file for; empty for every title. */
+  item: string
+  everywhere: boolean
+  name: string
+  filename: string
+  size: number
+  reason: string
+  /** The administrator who blocked it; empty once their account is gone. */
+  by: string
+  at: string
+}
+
+export type VersionStream = {
+  name: string
+  filename: string
+  /** Bytes, 0 when the addon gives none. */
+  size: number
+  torrent: boolean
+  /** The version it makes; for a duplicate or a mirror, the one listed before; empty for nothing to play. */
+  version: string
+  step: VersionStep
+  /** For `hidden`, the rule; for `hidden` and `failed`, what it read or why. */
+  rule: string
+  detail: string
+  /** Its place among the versions offered, from 1; 0 when not offered. */
+  place: number
+  pinned: boolean
+  /** A torrent that did not start lately: listed, but passed over by plays that pick none. */
+  unstarted: boolean
+  block: VersionBlock | null
+  labels: {
+    height: number
+    codec: string
+    range: VersionRange
+    languages: string[]
+    multi: boolean
+    releases: string[]
+    elsewhere: string
+  }
+  /** What the version rules know of it: its analysis, else RemuxDB, else its labels. */
+  facts: {
+    height: number
+    size: number
+    codec: string
+    range: VersionRange
+    languages: string[]
+    multi: boolean
+  }
+  analyzed: boolean
+}
+
+export type TitleVersionSource = {
+  id: string
+  name: string
+  /** The streams the title's description embeds for the video. */
+  embedded: boolean
+  /** Whether its list is known, stale and asked again, or being asked. */
+  state: 'known' | 'stale' | 'asked'
+  streams: VersionStream[]
+}
+
+/** What came of a version a play tried. */
+export type PlayTryOutcome =
+  | 'plays'
+  | 'unreadable'
+  | 'unstarted'
+  | 'torrentCap'
+  | 'conversionCap'
+  | 'unplayable'
+  | 'notAnalyzed'
+  | 'passed'
+
+export type PlayDecision = {
+  at: string
+  user: string
+  device: string
+  app: string
+  /** Whether the app picked the version in its version menu. */
+  picked: boolean
+  tries: { version: string; name: string; outcome: PlayTryOutcome; reason: string }[]
+  /** The version chosen; empty when none played. */
+  chosen: string
+  delivery: 'directPlay' | 'directStream' | 'converted' | ''
+}
+
+/** A title's versions explained for a user, on Content › Versions. */
+export type TitleVersions = {
+  sources: TitleVersionSource[]
+  /** How many addons are still asked. */
+  pending: number
+  /** The criteria of Order versions by, in order. */
+  criteria: string[]
+  /** The user's quality group, a height; 0 for none. */
+  qualityGroup: number
+  /** The hide rules would hide every version, so none is hidden. */
+  keptAll: boolean
+  /** No version fits the quality group: the closest heights come first. */
+  closest: boolean
+  pin: {
+    version: string
+    name: string
+    filename: string
+    size: number
+    by: string
+    at: string
+    /** No addon lists the file now: the order stays as it is. */
+    missing: boolean
+  } | null
+  /** The blocks of the title's own files. */
+  blocks: VersionBlock[]
+  /** The title's last plays, the latest first, kept until a restart. */
+  decisions: PlayDecision[]
+}
+
+const asUser = (user: string) => (user === '' ? '' : `?${new URLSearchParams({ user })}`)
+
+/** Movies and series a user sees, for Content › Versions; the administrator signed in when user is empty. */
+export const searchVersionTitles = (user: string, term: string, signal?: AbortSignal) =>
+  request<AccountTitle[]>(
+    'GET',
+    `/titles?${new URLSearchParams(user === '' ? { search: term } : { search: term, user })}`,
+    undefined,
+    signal,
+  )
+
+export const fetchVersionTitle = (user: string, id: string, signal?: AbortSignal) =>
+  request<AccountTitle>('GET', `/titles/${seg(id)}${asUser(user)}`, undefined, signal)
+
+export const fetchVersionEpisodes = (user: string, seriesId: string, signal?: AbortSignal) =>
+  request<AccountTitle[]>(
+    'GET',
+    `/titles/${seg(seriesId)}/episodes${asUser(user)}`,
+    undefined,
+    signal,
+  )
+
+export const fetchTitleVersions = (id: string, user: string, signal?: AbortSignal) =>
+  request<TitleVersions>('GET', `/titles/${seg(id)}/versions${asUser(user)}`, undefined, signal)
+
+/** Asks the user's addons again for the title's streams; 429 asked_lately when asked within 20 seconds. */
+export const askVersionsAgain = (id: string, user: string) =>
+  request<void>('POST', `/titles/${seg(id)}/versions/search${asUser(user)}`)
+
+export const pinVersion = (id: string, version: string, user: string) =>
+  request<void>('PUT', `/titles/${seg(id)}/versions/pin`, { version, user })
+
+export const unpinVersion = (id: string) =>
+  request<void>('DELETE', `/titles/${seg(id)}/versions/pin`)
+
+export const blockVersion = (
+  id: string,
+  body: { version: string; user: string; everywhere: boolean; reason: string },
+) => request<VersionBlock>('POST', `/titles/${seg(id)}/versions/blocks`, body)
+
+export const unblockVersion = (id: string) => request<void>('DELETE', `/version-blocks/${seg(id)}`)
+
+/** The blocks of every title, the latest first. */
+export const fetchVersionBlocks = (signal?: AbortSignal) =>
+  request<VersionBlock[]>('GET', '/version-blocks', undefined, signal)
+
+/** Analyzes a version now; `failure` says what kept it from being analyzed, empty when it was. */
+export const analyzeVersion = (id: string, version: string, user: string) =>
+  request<{ failure: string }>(
+    'POST',
+    `/titles/${seg(id)}/versions/${seg(version)}/analyze${asUser(user)}`,
+  )
+
+/** Longest block reason, in characters, as the server allows. */
+export const maxBlockReason = 200
+
 /** A user's share links, for an administrator. */
 export const fetchUserShareLinks = (userId: string, signal?: AbortSignal) =>
   request<ShareLink[]>('GET', `/users/${seg(userId)}/share-links`, undefined, signal)
@@ -4773,6 +4963,13 @@ export const queryKeys = {
   shareTitle: (id: string) => ['account', 'share-title', id] as const,
   shareEpisodes: (seriesId: string) => ['account', 'share-episodes', seriesId] as const,
   userShareLinks: (id: string) => ['users', id, 'share-links'] as const,
+  versionTitles: (user: string, term: string) => ['version-titles', user, term] as const,
+  versionTitle: (user: string, id: string) => ['version-title', user, id] as const,
+  versionEpisodes: (user: string, seriesId: string) =>
+    ['version-episodes', user, seriesId] as const,
+  /** A title's versions explained for a user: invalidated after a pin, a block or an analysis. */
+  titleVersions: (id: string, user: string) => ['title-versions', id, user] as const,
+  versionBlocks: ['version-blocks'] as const,
   activity: (query: ActivityQuery) => ['activity', query] as const,
   /** Everything a source's line-up shows: invalidated after any change to it. */
   lineup: (scope: Scope, id: string) => ['lineup', scope, id] as const,

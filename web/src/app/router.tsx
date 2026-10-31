@@ -29,6 +29,8 @@ import GroupsRoute from '@/features/users/GroupsRoute'
 import JellyfinImportRoute from '@/features/users/JellyfinImport'
 import LetterboxdImportRoute from '@/features/users/LetterboxdImportRoute'
 import UsersRoute from '@/features/users/UsersRoute'
+import TitleVersionsRoute from '@/features/versions/TitleVersionsRoute'
+import VersionsRoute from '@/features/versions/VersionsRoute'
 import { isSettingsSection, settingsPath } from './navigation'
 import { SectionTabs } from './SectionTabs'
 import { AdminOnly, SessionGate } from './SessionGate'
@@ -139,6 +141,8 @@ export const router = createBrowserRouter(
                 { path: 'libraries', element: <LibrariesRoute /> },
                 { path: 'libraries/smart/:id', element: <SmartListRoute scope="shared" /> },
                 { path: 'live-tv', element: <LiveTvRoute /> },
+                { path: 'versions', element: <VersionsRoute /> },
+                { path: 'versions/:id', element: <TitleVersionsRoute /> },
               ],
             },
           ],
