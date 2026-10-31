@@ -1,10 +1,17 @@
-import { PlusIcon, RowsIcon } from '@phosphor-icons/react'
+import {
+  EyeIcon,
+  FilmSlateIcon,
+  PlusIcon,
+  RowsIcon,
+  TelevisionSimpleIcon,
+} from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useId, useState, type FormEvent } from 'react'
 import {
   createHomeRow,
   deleteHomeRow,
   fetchHomeRowChoices,
+  fetchHomeRowPreview,
   fetchHomeRows,
   fetchUsers,
   orderHomeRows,
@@ -17,6 +24,8 @@ import {
   type HomeRowDraft,
   type HomeRowKind,
   type HomeRowPlace,
+  type HomeRowPreviewTitle,
+  type HomeRowSchedule,
   type User,
 } from '@/api'
 import { errorMessage } from '@/format'
@@ -58,6 +67,32 @@ const places: HomeRowPlace[] = ['top', 'resume', 'nextup', 'bottom']
 /** The bounds of Because you watched's rows, as the server checks them. */
 const count = { min: 1, max: 10, byDefault: 3 }
 
+/** The days of the week, from Sunday, as schedules number them. */
+const weekdays = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const
+
+/** An hour of the day on the clock: 18 is 18:00. */
+function clockHour(hour: number) {
+  return `${String(hour).padStart(2, '0')}:00`
+}
+
+/** Whether a schedule bounds the row at all. */
+function scheduled(schedule: HomeRowSchedule) {
+  return (
+    schedule.startDate !== '' ||
+    schedule.endDate !== '' ||
+    schedule.days.length > 0 ||
+    schedule.startHour !== null
+  )
+}
+
 /** A catalog's key in the catalog list. */
 function catalogKey(row: Pick<HomeRow, 'addonId' | 'catalogType' | 'catalogId'>) {
   return `${row.addonId}/${row.catalogType}/${row.catalogId}`
@@ -70,13 +105,15 @@ function catalogName(catalog: HomeRowCatalog) {
 
 /**
  * Settings › Web player › Home rows: the rows the web player adds to its home page, in order,
- * each with its kind, place and who it is shown to, Move, Edit and Delete, and Add.
+ * each with its kind, place, who it is shown to and whether its schedule shows it now, Move, Edit
+ * and Delete, Add, and Preview as…, which shows a user's rows as their web player does.
  */
 export default function HomeRows() {
   const { t } = useI18n()
   const text = t.settings.homeRow
   const toast = useToast()
   const [editing, setEditing] = useState<HomeRow | 'new' | null>(null)
+  const [previewing, setPreviewing] = useState(false)
   const rows = useQuery({
     queryKey: queryKeys.homeRows,
     queryFn: ({ signal }) => fetchHomeRows(signal),
@@ -132,10 +169,15 @@ export default function HomeRows() {
           ))}
         </RowList>
       )}
-      <div>
+      <div className="flex flex-wrap gap-2">
         <Button icon={PlusIcon} onClick={() => setEditing('new')}>
           {text.add}
         </Button>
+        {list.length > 0 && (
+          <Button variant="ghost" icon={EyeIcon} onClick={() => setPreviewing(true)}>
+            {text.preview}
+          </Button>
+        )}
       </div>
       {editing !== null && (
         <HomeRowModal
@@ -146,11 +188,14 @@ export default function HomeRows() {
           onClose={() => setEditing(null)}
         />
       )}
+      {previewing && (
+        <HomeRowPreviewModal users={users.data ?? []} onClose={() => setPreviewing(false)} />
+      )}
     </div>
   )
 }
 
-/** A row of the list: its name, what it lists, its place and who sees it. */
+/** A row of the list: its name, what it lists, its place, who sees it and when. */
 function HomeRowEntry({
   row,
   index,
@@ -197,13 +242,21 @@ function HomeRowEntry({
   return (
     <Row
       title={row.name}
-      titleAside={row.library ? <Badge>{text.libraryBadge}</Badge> : undefined}
+      titleAside={
+        row.library || !row.shownNow ? (
+          <span className="flex gap-1.5">
+            {row.library && <Badge>{text.libraryBadge}</Badge>}
+            {!row.shownNow && <Badge tone="warn">{text.notShownNow}</Badge>}
+          </span>
+        ) : undefined
+      }
       meta={
         <span className="truncate">
           {[
             source,
             text.places[row.place],
             row.everyone ? text.everyone : text.shownToUsers(row.users.length),
+            ...(scheduled(row.schedule) ? [text.scheduled] : []),
           ].join(' · ')}
         </span>
       }
@@ -272,6 +325,12 @@ function HomeRowModal({
   const [everyone, setEveryone] = useState(row?.everyone ?? true)
   const [chosen, setChosen] = useState<string[]>(row?.users ?? [])
   const [library, setLibrary] = useState(row?.library ?? false)
+  const [startDate, setStartDate] = useState(row?.schedule.startDate ?? '')
+  const [endDate, setEndDate] = useState(row?.schedule.endDate ?? '')
+  const [days, setDays] = useState<number[]>(row?.schedule.days ?? [])
+  const [someHours, setSomeHours] = useState((row?.schedule.startHour ?? null) !== null)
+  const [startHour, setStartHour] = useState(row?.schedule.startHour ?? 18)
+  const [endHour, setEndHour] = useState(row?.schedule.endHour ?? 23)
   const mutation = useMutation({
     mutationFn: (draft: HomeRowDraft) =>
       row === null ? createHomeRow(draft) : updateHomeRow(row.id, draft),
@@ -309,9 +368,11 @@ function HomeRowModal({
   }
 
   const missingUser = !everyone && chosen.length === 0
+  // Dates as YYYY-MM-DD compare as text.
+  const datesOutOfOrder = startDate !== '' && endDate !== '' && endDate < startDate
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (missingUser) return
+    if (missingUser || datesOutOfOrder) return
     const [addonId, catalogType, ...rest] = kind === 'catalog' ? catalog.split('/') : []
     mutation.mutate({
       name: name.trim(),
@@ -325,6 +386,13 @@ function HomeRowModal({
       everyone,
       users: everyone ? [] : chosen,
       library,
+      schedule: {
+        startDate,
+        endDate,
+        days: [...days].sort((a, b) => a - b),
+        startHour: someHours ? startHour : null,
+        endHour: someHours ? endHour : null,
+      },
     })
   }
 
@@ -455,8 +523,215 @@ function HomeRowModal({
           </div>
           <Switch checked={library} onChange={setLibrary} labelledBy={`${formId}-library`} />
         </div>
+        <fieldset className="space-y-4 border-t border-line pt-5">
+          <legend className="sr-only">{text.schedule}</legend>
+          <div>
+            <p className="text-control font-medium text-ink" aria-hidden="true">
+              {text.schedule}
+            </p>
+            <p className="mt-1 max-w-[60ch] text-small text-ink-3">{text.scheduleHelp}</p>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <Field label={text.startDate}>
+              <TextInput
+                type="date"
+                value={startDate}
+                onValue={(value) => {
+                  mutation.reset()
+                  setStartDate(value)
+                }}
+                className="w-44"
+              />
+            </Field>
+            <Field
+              label={text.endDate}
+              error={datesOutOfOrder ? text.dateOrder : undefined}
+              help={datesOutOfOrder ? undefined : text.datesHelp}
+            >
+              <TextInput
+                type="date"
+                value={endDate}
+                onValue={(value) => {
+                  mutation.reset()
+                  setEndDate(value)
+                }}
+                className="w-44"
+              />
+            </Field>
+          </div>
+          {library ? (
+            <Notice>{text.libraryDatesOnly}</Notice>
+          ) : (
+            <>
+              <fieldset>
+                <legend className="mb-2 text-control font-medium text-ink">{text.days}</legend>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {weekdays.map((weekday, day) => (
+                    <Checkbox
+                      key={weekday}
+                      label={t.users.days[weekday]}
+                      checked={days.includes(day)}
+                      onChange={(checked) =>
+                        setDays((current) =>
+                          checked ? [...current, day] : current.filter((d) => d !== day),
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+                <p className="mt-1.5 text-small text-ink-3">{text.daysHelp}</p>
+              </fieldset>
+              <Field label={text.hours} help={someHours ? text.hoursHelp : undefined}>
+                <Segmented
+                  label={text.hours}
+                  value={someHours ? 'some' : 'all'}
+                  options={[
+                    { value: 'all', label: text.allDay },
+                    { value: 'some', label: text.someHours },
+                  ]}
+                  onChange={(value) => setSomeHours(value === 'some')}
+                />
+              </Field>
+              {someHours && (
+                <div className="flex flex-wrap gap-4">
+                  <Field label={text.startHour}>
+                    <Select
+                      value={startHour}
+                      options={Array.from({ length: 24 }, (_, hour) => ({
+                        value: hour,
+                        label: clockHour(hour),
+                        disabled: hour === endHour,
+                      }))}
+                      onValue={setStartHour}
+                      className="w-32"
+                    />
+                  </Field>
+                  <Field label={text.endHour}>
+                    <Select
+                      value={endHour}
+                      options={Array.from({ length: 24 }, (_, i) => ({
+                        value: i + 1,
+                        label: clockHour(i + 1),
+                        disabled: i + 1 === startHour,
+                      }))}
+                      onValue={setEndHour}
+                      className="w-32"
+                    />
+                  </Field>
+                </div>
+              )}
+            </>
+          )}
+        </fieldset>
         {mutation.isError && <Notice tone="danger">{errorMessage(t, mutation.error)}</Notice>}
       </form>
     </Modal>
+  )
+}
+
+/**
+ * Preview as…: the rows a chosen user's web player shows on its home page now, grouped by place
+ * in the order the page shows them, each with its first titles.
+ */
+function HomeRowPreviewModal({ users, onClose }: { users: User[]; onClose: () => void }) {
+  const { t } = useI18n()
+  const text = t.settings.homeRow
+  const [userId, setUserId] = useState('')
+  const preview = useQuery({
+    queryKey: queryKeys.homeRowPreview(userId),
+    queryFn: ({ signal }) => fetchHomeRowPreview(userId, signal),
+    enabled: userId !== '',
+  })
+  const rows = preview.data?.rows ?? []
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={text.previewTitle}
+      width={880}
+      footer={
+        <Button variant="ghost" onClick={onClose}>
+          {t.ui.close}
+        </Button>
+      }
+    >
+      <div className="space-y-5 p-5">
+        <Field label={text.previewUser} help={text.previewHelp}>
+          <Select
+            value={userId}
+            options={[
+              { value: '', label: t.settings.homeRow.choose, disabled: true },
+              ...users.map((user) => ({ value: user.id, label: user.name })),
+            ]}
+            onValue={setUserId}
+            className="max-w-xs"
+          />
+        </Field>
+        {userId === '' ? (
+          <p className="text-small text-ink-3">{text.previewChoose}</p>
+        ) : preview.isPending ? (
+          <SkeletonRows rows={2} label={text.previewLoading} />
+        ) : preview.isError ? (
+          <InlineError onRetry={() => void preview.refetch()} retrying={preview.isFetching}>
+            {errorMessage(t, preview.error)}
+          </InlineError>
+        ) : rows.length === 0 ? (
+          <EmptyState icon={RowsIcon} title={text.previewEmpty} />
+        ) : (
+          places
+            .filter((place) => rows.some((row) => row.place === place))
+            .map((place) => (
+              <section key={place} aria-label={text.places[place]} className="space-y-3">
+                <p className="text-small font-medium uppercase tracking-wide text-ink-3">
+                  {text.places[place]}
+                </p>
+                {rows
+                  .filter((row) => row.place === place)
+                  .map((row) => (
+                    <div key={row.id} className="space-y-2">
+                      <p className="text-control font-medium text-ink">{row.name}</p>
+                      <ul className="flex gap-3 overflow-x-auto pb-2">
+                        {row.titles.map((title) => (
+                          <li key={title.id} className="w-24 shrink-0">
+                            <PreviewPoster title={title} />
+                            <p className="mt-1 truncate text-small text-ink-2" title={title.name}>
+                              {title.name}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+              </section>
+            ))
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+/** A title's poster in a preview, or the icon of its kind when it has none or fails to load. */
+function PreviewPoster({ title }: { title: HomeRowPreviewTitle }) {
+  const [failed, setFailed] = useState(false)
+  const KindIcon =
+    title.kind === 'series' || title.kind === 'episode' ? TelevisionSimpleIcon : FilmSlateIcon
+  if (failed) {
+    return (
+      <span
+        aria-hidden="true"
+        className="grid aspect-[2/3] w-full place-items-center rounded-check border border-line-2 bg-s2 text-ink-3"
+      >
+        <KindIcon size={20} />
+      </span>
+    )
+  }
+  return (
+    <img
+      src={`/Items/${encodeURIComponent(title.posterId)}/Images/Primary?maxHeight=216&quality=85`}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="aspect-[2/3] w-full rounded-check object-cover ring-1 ring-ink/8"
+    />
   )
 }
