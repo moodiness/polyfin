@@ -75,12 +75,14 @@ The server's certificate must name its host. Polyfin signs in with the **SMTP us
 | Recording failed | `recording_failed` | The same. |
 | Health problem found | `health_problem` | The server's targets, and administrators' own. |
 | Health problem solved | `health_solved` | The same. |
+| Server crashed | `server_crashed` | The server's targets, and administrators' own. |
 | User joined | `user_joined` | The server's targets, and administrators' own. |
 | New version | `new_version` | The server's targets, and administrators' own. |
 | Playback started | `playback_started` | The targets of the user who plays, and the server's. |
 | Playback paused | `playback_paused` | The same. |
 | Playback resumed | `playback_resumed` | The same. |
 | Playback stopped | `playback_stopped` | The same. |
+| Playback failed | `playback_failed` | The server's targets, and administrators' own: at most once an hour per user and title. |
 | Weekly summary | `weekly_summary` | The server's targets and administrators' own: the server's week. Every other user's targets: their own week. |
 | Month in review | `monthly_summary` | The server's targets and administrators' own: the server's month. Every other user's targets: their own month. |
 | Year in review | `yearly_summary` | The server's targets and administrators' own: the server's year. Every other user's targets: their own year. |
@@ -118,6 +120,14 @@ While **Check for new versions** is on, under **Settings › General**, Polyfin 
 A video (a movie, an episode, a channel, a recording or a Replay programme) or a song or an audiobook that starts playing in a Jellyfin app, pauses, resumes or stops is told once per change, whatever the number of reports the app sends: positions as it plays are never told. A playback whose app stops reporting is told stopped five minutes after its last report (see [Statistics](statistics.md#playbacks)). Each message names the user, the title (a movie, an episode with its series, a channel, a song with its artist), the app and the device, the position, and how it plays: direct play, remux or conversion, such as "sam is watching Example Series S01E02" and "Pilot · Jellyfin Web on Chrome · 12:34 · Direct play".
 
 Targets saved before these events existed do not receive them until they are chosen, and a new target in the admin app leaves them unchosen: each user plays many times a day.
+
+### Failed plays
+
+A play that fails is told to the server's targets and administrators' own, so that they hear of it before the user complains. A play fails when none of the title's versions plays on the app (Jellyfin's `NoCompatibleStream`, or a torrent version that could not start), when a limit refuses it (the user's **Playbacks at once**, or a provider whose connections are all in use), or when its stream breaks while it plays: a segment that cannot be served because its source failed or its encoding did, or a direct stream whose source failed. The message names the user, the title, the reason, the app and the device, such as "sam could not play Example Movie" and "None of its versions plays on this app now. · Jellyfin Web on Chrome", and opens the title. The same user and title are told once an hour at most: an app that tries again, or asks for each segment of a broken stream, is told of once. The `failure` object of the webhook event holds the title's `itemId` (null when it is not known), `kind`, `name`, `seriesId`, `seriesName`, `season` and `number` for an episode, `app`, `device`, and `reason`: `no_compatible_stream`, `limit` or `stream_error`. Users' own targets cannot choose it: they saw the failure. A new target has it chosen; targets saved before it existed do not receive it until it is chosen.
+
+### Crashes
+
+When Polyfin stops on an unrecovered panic or a fatal error, Go writes the trace to standard error and, through `debug.SetCrashOutput`, to `crash.log` in the data folder. A restart under Docker or a service manager loses standard error from the admin app; the next start reads the file instead. It keeps the crash in the database (the last ten), shows the last one under **System › Health › Polyfin** with its time and the first lines of its trace, and tells the server's targets and administrators' own once their targets are read: "Polyfin crashed", with the time and the first six lines of the trace, opening **System › Health**. The webhook event's `crash` object holds `at` and `trace`, its first 20 lines. A Go trace holds function names, file paths and memory addresses, never request data; the lines kept are still redacted as the log is, since a panic's message may hold anything: addresses keep only their host, and tokens, keys and passwords are hidden. The file is moved to `crash.previous.log` until the crash is kept, then deleted, so a start that cannot reach the database tells it at the next. It is urgent: ntfy, Gotify and Pushover show it with a high priority. Targets that chose **Health problem found** before this event existed have it chosen.
 
 ### Blocked accounts
 
@@ -203,6 +213,19 @@ A new target has this event chosen. Targets saved before it existed do not recei
 
 Nothing is sent while a request is answered. Each target has its own queue, sent in order in the background, at most four requests at once. Each request, or each email from connecting to the SMTP server to its last answer, waits 10 seconds at most. After a network error, a timeout, a 5xx answer, or a 4xx answer from an SMTP server (busy, or too many messages), the message is tried again after 30 seconds, then twice as long each time, up to 10 minutes; a 429 answer waits as long as its `Retry-After` header (or the `retry_after` of Discord, or of Telegram's `parameters`) asks. A message not delivered within an hour is dropped, and the target shows **Not reached**; it shows so after three failures in a row already. A 401, 403, 404 or 410, or a refusal as in **Refused** above, drops the message and shows **Refused** at once. Messages still waiting when Polyfin stops are dropped; at most 100 wait for one target.
 
+### Pacing
+
+Each target's form has two more fields:
+
+- **Messages a minute, at most**, 1 to 60, empty for no limit: past it, the next messages wait their turn, in order, until a minute has passed since the oldest of the last ones. Each request counts, retries included; **Send a test** does not.
+- **Group plays and new episodes, in minutes**, 1 to 1,440, empty to send each at once: the playback events (started, paused, resumed, stopped), shared links played and new episodes wait that long after the first of them, then go as one message, "3 notifications", with a line per event, its title then its message. A group of one goes as the event alone, and a group reaching 100 events goes at once. Every other event, failures, crashes and Health problems among them, still goes at once. A webhook receives the group as one event of type `grouped`, whose `events` array holds each event whole, as it would have been sent alone. Messages a group holds when Polyfin stops are dropped, as are those waiting in a queue.
+
+The targets list shows both, as "At most 5 a minute" and "Grouped every 15 min".
+
+### Recent deliveries
+
+**Recent deliveries**, on each target, lists the last 100 messages sent to it, newest first, kept 30 days: when, the message's title (a test, or how many events a group held), and its outcome: **Delivered**, **Refused** (401, 403, 404 or 410), **Message refused** (another 4xx), **Not delivered** (given up after an hour of retries), **Dropped** (too many messages waited) or **Cannot be decrypted**, with the status the target answered, the start of its answer without its address or tokens, and how many attempts it took. Users see their own targets' deliveries only.
+
 ## The webhook event
 
 A webhook receives each event as JSON in a `POST`, unless its address is a Discord webhook's, which receives Discord's message (see [Targets](#targets)), with the headers `Content-Type: application/json`, `User-Agent: Polyfin/<version>` and `X-Polyfin-Event: <type>`. Any 2xx answer counts as delivered.
@@ -255,7 +278,7 @@ A user who joined through an invite link:
 |---|---|---|
 | `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
 | `id` | string | Unique to the event: a message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, `account_blocked`, `new_device`, `programme_reminder`, `title_available`, or `test` for **Send a test**. |
+| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `server_crashed`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `playback_failed`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, `account_blocked`, `new_device`, `programme_reminder`, `title_available`, `grouped` for a target's grouped message (see [Pacing](#pacing)), or `test` for **Send a test**. |
 | `at` | string | When the event happened, RFC 3339 in UTC. |
 | `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
 | `title`, `message` | string | The event for people, in the server language; a `programme_reminder` in the language its reminder was set in when Polyfin speaks it, else the server's. |
@@ -528,12 +551,16 @@ The admin API serves the targets: the server's to administrators at `/admin/api/
   - `target_unreadable` (409): a Pushover target whose key and token cannot be decrypted, changed with only one of them.
 - `GET /admin/api/settings` answers `smtpHost`, `smtpPort`, `smtpSecurity` (`starttls`, `tls` or `none`), `smtpUser`, `smtpPasswordSet`, `smtpFrom` and `smtpFromName`. `PUT` takes them and `smtpPassword`, which is never answered: left out, it is kept; empty, it is removed. The errors are `invalid_smtp_host`, `invalid_smtp_port`, `invalid_smtp_security`, `invalid_smtp_account` and `invalid_smtp_sender`.
 - `GET /admin/api/settings` answers `weeklySummaryDay`, the day the weekly summary is sent, 0 for Sunday to 6 for Saturday, and `weeklySummaryHour`, 0 to 23, in the server's time zone. `PUT` takes them; out of bounds, they are `invalid_weekly_summary_day` and `invalid_weekly_summary_hour`.
+- A target answers `perMinute` and `groupMinutes`, null when unset; a draft takes them, 0 to unset; out of bounds, they are `invalid_per_minute` and `invalid_group_minutes`.
+- `GET .../targets/{id}/deliveries` lists a target's recent deliveries: `id`, `eventId`, `type`, `title`, `events`, `outcome`, `status` (null when the target did not answer), `error` (null when it accepted the message), `attempts`, `queuedAt` and `at`.
+- `GET /admin/api/notifications/preview?event=weekly_summary&user=<id>`, for administrators, answers a summary (`weekly_summary`, `monthly_summary` or `yearly_summary`, else `invalid_summary`) as it would be sent now, of the server without `user`, else of that user: `subject`, `text` and `html`, exactly the email's parts, `start` and `end`, and `empty`, true when nothing would be sent. **Settings › Notifications › Weekly summary › Preview** shows it in a sandboxed frame. Nothing is sent.
 
 ## Compared with Jellyfin
 
 Jellyfin sends notifications through its webhook plugin, which administrators install and configure with templates for each destination, and whose events are Jellyfin's own (item added, playback, users, tasks). Polyfin builds the messages itself, and:
 
-- its events are those of Polyfin: a new episode of a followed series (there is no library scan to tell of added items), recordings, Health problems, users who joined through an invite link, accounts blocked after wrong passwords, sign-ins on new devices, and a weekly summary, a month and a year in review for the server and for each user;
+- its events are those of Polyfin: a new episode of a followed series (there is no library scan to tell of added items), recordings, Health problems, crashes of the server, failed plays, users who joined through an invite link, accounts blocked after wrong passwords, sign-ins on new devices, and a weekly summary, a month and a year in review for the server and for each user;
+- each target may cap its messages a minute and group plays and new episodes, and keeps its recent deliveries;
 - each user chooses their own targets and events under **My account**, besides the server's;
 - the webhook format is one documented, versioned JSON event rather than templates; Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them;
 - addresses, tokens, keys and the SMTP password are stored encrypted, and failing targets are shown.
