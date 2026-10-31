@@ -27,6 +27,10 @@ const libraries: typeof en = {
     hideInMenusHelp:
       'Ela mantém sua linha na tela inicial. O menu lateral do player web também a omite; outros aplicativos Jellyfin continuam a listá-la. Aplica-se na próxima vez que o player web for carregado.',
     hiddenInMenus: 'Oculta da barra superior',
+    skipLocal: 'Omitir os títulos que as pastas locais têm',
+    skipLocalHelp:
+      'Um filme ou série que a biblioteca de uma pasta local lista, vinculado ao mesmo identificador, aparece só lá. Suas versões e o estado de assistido continuam os mesmos, e a busca o encontra uma vez. Um usuário que não vê a biblioteca da pasta continua a encontrá-lo aqui.',
+    skippedLocal: 'Sem os títulos das pastas locais',
     remove: 'Remover',
     removeLabel: (name: string) => `Remover ${name}`,
     moreActions: (name: string) => `Mais ações para ${name}`,

@@ -27,6 +27,10 @@ const libraries: typeof en = {
     hideInMenusHelp:
       'Elle garde sa rangée sur l’accueil. Le menu latéral du lecteur web la masque aussi ; les autres applis Jellyfin la listent toujours. S’applique au prochain chargement du lecteur web.',
     hiddenInMenus: 'Masquée dans la barre du haut',
+    skipLocal: 'Omettre les titres que contiennent les dossiers locaux',
+    skipLocalHelp:
+      'Un film ou une série que liste la bibliothèque d’un dossier local, lié au même identifiant, n’apparaît que là. Ses versions et son état de lecture ne changent pas, et la recherche le trouve une fois. Un utilisateur qui ne voit pas la bibliothèque du dossier le trouve toujours ici.',
+    skippedLocal: 'Sans les titres des dossiers locaux',
     remove: 'Retirer',
     removeLabel: (name: string) => `Retirer ${name}`,
     moreActions: (name: string) => `Autres actions pour ${name}`,

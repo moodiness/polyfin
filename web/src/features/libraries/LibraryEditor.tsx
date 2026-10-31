@@ -81,7 +81,7 @@ const nameMaxLength = 64
 /**
  * One enabled library being edited. `name` is the text of its name field: empty = catalog name.
  * `genre` and `maxItems` narrow it; null for none. `hideInMenus` leaves it out of the web
- * player's menus.
+ * player's menus. `skipLocal` leaves out the titles local folders hold.
  */
 type Entry = {
   key: string
@@ -90,6 +90,7 @@ type Entry = {
   genre: string | null
   maxItems: number | null
   hideInMenus: boolean
+  skipLocal: boolean
 }
 
 /** Whether the server takes this maximum: none, or a whole number from 1 to MAX_LIBRARY_ITEMS. */
@@ -113,7 +114,8 @@ function sameEntries(a: Entry[], b: Entry[]): boolean {
         entry.name === b[i].name &&
         entry.genre === b[i].genre &&
         entry.maxItems === b[i].maxItems &&
-        entry.hideInMenus === b[i].hideInMenus,
+        entry.hideInMenus === b[i].hideInMenus &&
+        entry.skipLocal === b[i].skipLocal,
     )
   )
 }
@@ -328,7 +330,7 @@ function LibraryForm({
     mutationFn: (entries: Entry[]) =>
       saveLibraries(
         scope,
-        entries.map(({ library, name, genre, maxItems, hideInMenus }) => ({
+        entries.map(({ library, name, genre, maxItems, hideInMenus, skipLocal }) => ({
           addonId: library.addonId,
           catalogType: library.catalogType,
           catalogId: library.catalogId,
@@ -336,6 +338,7 @@ function LibraryForm({
           genre,
           maxItems,
           hideInMenus,
+          skipLocal,
         })),
       ),
     onSuccess: (saved, entries) => {
@@ -362,6 +365,7 @@ function LibraryForm({
       genre: library.genre,
       maxItems: library.maxItems,
       hideInMenus: library.hideInMenus,
+      skipLocal: library.skipLocal,
     }))
   const entries = draft ?? serverEntries
   const dirty = draft !== null
@@ -436,6 +440,10 @@ function LibraryForm({
     edit(entries.map((entry, i) => (i === index ? { ...entry, hideInMenus: hidden } : entry)))
   }
 
+  function skipLocal(index: number, skip: boolean) {
+    edit(entries.map((entry, i) => (i === index ? { ...entry, skipLocal: skip } : entry)))
+  }
+
   /** Opens the genre and maximum editor of `key`, or closes it with null, and the image editor. */
   function openNarrow(key: string | null) {
     setImageOpen(null)
@@ -470,7 +478,10 @@ function LibraryForm({
       // The last catalog added: the filter is gone with the list, so go to its new row.
       ids.remove(key),
     ]
-    edit([...entries, { key, library, name: '', genre: null, maxItems: null, hideInMenus: false }])
+    edit([
+      ...entries,
+      { key, library, name: '', genre: null, maxItems: null, hideInMenus: false, skipLocal: false },
+    ])
     setAnnouncement(t.libraries.addedLive(library.catalogName, entries.length + 1))
   }
 
@@ -648,6 +659,9 @@ function LibraryForm({
                           {!tv && entry.hideInMenus && (
                             <StatusPill tone="muted">{t.libraries.hiddenInMenus}</StatusPill>
                           )}
+                          {library.skippable && entry.skipLocal && (
+                            <StatusPill tone="muted">{t.libraries.skippedLocal}</StatusPill>
+                          )}
                         </p>
                         {library.refreshable && (
                           <RefreshStatus refresh={library.refresh} name={name} />
@@ -703,6 +717,15 @@ function LibraryForm({
                             label={t.libraries.hideInMenus}
                             help={entry.hideInMenus ? t.libraries.hideInMenusHelp : undefined}
                           />
+                          {library.skippable && (
+                            <Checkbox
+                              className="mt-2"
+                              checked={entry.skipLocal}
+                              onChange={(skip) => skipLocal(index, skip)}
+                              label={t.libraries.skipLocal}
+                              help={entry.skipLocal ? t.libraries.skipLocalHelp : undefined}
+                            />
+                          )}
                         </>
                       )}
                     </div>
