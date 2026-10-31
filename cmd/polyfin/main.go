@@ -31,6 +31,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/commercials"
 	"github.com/moodiness/polyfin/internal/config"
+	"github.com/moodiness/polyfin/internal/crashes"
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/desktop/tools"
 	"github.com/moodiness/polyfin/internal/discovery"
@@ -208,6 +209,15 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// is killed (see process.KillChildrenOnExit).
 	if err := process.KillChildrenOnExit(); err != nil {
 		logger.Warn("The programs Polyfin runs may outlive it if it is killed", "error", err)
+	}
+	// A crash of this run is written to the data folder too, for the next
+	// start to tell; the last run's, if any, is told once the notifications
+	// are made, below.
+	var crashed *crashes.Report
+	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
+		logger.Warn("A crash of Polyfin would not be kept: the data folder cannot be made", "error", err)
+	} else if crashed, err = crashes.Watch(cfg.DataDir); err != nil {
+		logger.Warn("A crash of Polyfin would not be kept", "error", err)
 	}
 	adminApp, err := webui.Assets()
 	if err != nil {
@@ -625,9 +635,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Backups:        backups,
 		Trackers:       tracking,
 		Plays:          playbacks,
-		// Guests playing through share links are told through the
-		// notifications, made below.
+		// Guests playing through share links, and plays that failed, are
+		// told through the notifications, made below.
 		SharePlayed: func(link accounts.ShareLink) { notifier.SharePlayed(link) },
+		PlayFailed:  func(f plays.Failure) { notifier.PlaybackFailed(f) },
 	})
 	// DLNA devices on the local network browse and play the libraries of
 	// the user chosen for each, while the settings share them; a port
@@ -768,6 +779,14 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	defer notifier.Close()
 	adminOptions.Notifications = notifier
 	registerSummaryTasks(registry, notifier)
+	if crashed != nil {
+		logger.Warn("Polyfin crashed during its last run: System › Health shows the start of its trace", "crashed_at", crashed.At.Format(time.RFC3339))
+		if err := notifier.ServerCrashed(ctx, *crashed); err != nil {
+			logger.Warn("The last crash could not be kept: the next start tells it", "error", err)
+		} else if err := crashes.Forget(cfg.DataDir); err != nil {
+			logger.Warn("The last crash's file could not be deleted", "error", err)
+		}
+	}
 	// Programme reminders tell users, on their own targets and on their
 	// apps when they choose it, that a programme they chose starts soon.
 	// They are sent once the notifications read their targets.

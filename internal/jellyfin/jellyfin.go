@@ -148,6 +148,9 @@ type Options struct {
 	// SharePlayed is told of a guest's playback through a share link, at
 	// most once an hour per link; nil tells nothing.
 	SharePlayed func(accounts.ShareLink)
+	// PlayFailed is told of a play that failed: no version played on the
+	// app, a limit refused it, or its stream broke; nil tells nothing.
+	PlayFailed func(plays.Failure)
 	// Reminders keeps the users' programme reminders; nil keeps none.
 	Reminders *reminders.Service
 }
