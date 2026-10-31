@@ -32,8 +32,9 @@ const containerSeconds = 12
 // converted and cut every few seconds, as an MPEG-TS file's is, even
 // H.264 the app takes. The last segment and one in the middle, read
 // first, as seeks read them, hold the frames they hold read in order; all
-// the segments hold each of the file's frames once, from its start. So
-// does an MPEG-TS file of MPEG-2, whose first keyframe a seek near the
+// the segments hold each of the file's frames once, from its start, even
+// for a recording cut mid-broadcast, whose timestamps start an hour in.
+// So does an MPEG-TS file of MPEG-2, whose first keyframe a seek near the
 // start lands on, as it does in an MPEG program stream, on jellyfin-web:
 // the Android TV app plays MPEG-TS as it is.
 func TestLocalUnindexedContainersPlayOverHLS(t *testing.T) {
@@ -47,6 +48,8 @@ func TestLocalUnindexedContainersPlayOverHLS(t *testing.T) {
 	}{
 		{"Movie (2008).mpg", "mpeg2video", []string{"-c:v", "mpeg2video", "-b:v", "1M", "-g", "12", "-bf", "2", "-c:a", "mp2"}, both},
 		{"Movie (2008).vob", "mpeg2video", []string{"-c:v", "mpeg2video", "-b:v", "1M", "-g", "15", "-bf", "2", "-c:a", "ac3", "-f", "vob"}, both},
+		{"Movie (2008) late.vob", "mpeg2video", []string{"-c:v", "mpeg2video", "-b:v", "1M", "-g", "15", "-bf", "2", "-c:a", "mp2",
+			"-output_ts_offset", "3600", "-f", "vob"}, both},
 		{"Movie (2008).avi", "mpeg4", []string{"-c:v", "mpeg4", "-vtag", "XVID", "-q:v", "4", "-g", "250", "-bf", "2", "-c:a", "libmp3lame"}, both},
 		{"Movie (2008) h264.avi", "h264", []string{"-c:v", "libx264", "-preset", "veryfast", "-g", "100", "-pix_fmt", "yuv420p", "-c:a", "libmp3lame"}, both},
 		{"Movie (2008).ts", "mpeg2video", []string{"-c:v", "mpeg2video", "-b:v", "1M", "-g", "12", "-bf", "2", "-c:a", "mp2"}, both[:1]},
