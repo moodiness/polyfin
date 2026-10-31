@@ -421,8 +421,8 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 	slices.SortStableFunc(items, func(a, b library.Item) int {
 		return cmp.Or(a.PremiereDate.Compare(*b.PremiereDate),
 			cmp.Compare(strings.ToLower(a.SeriesName), strings.ToLower(b.SeriesName)),
-			cmp.Compare(a.ParentIndexNumber, b.ParentIndexNumber),
-			cmp.Compare(a.IndexNumber, b.IndexNumber))
+			cmp.Compare(a.ShownPlace().Season, b.ShownPlace().Season),
+			cmp.Compare(a.ShownPlace().Episode, b.ShownPlace().Episode))
 	})
 	page := window(items, start, limit)
 	// Jellyfin counts the episodes of the page, not all of them.
@@ -464,9 +464,9 @@ func nextEpisode(episodes []library.Item, data map[accounts.ID]userdata.Data, re
 }
 
 // regularEpisodes are a series' episodes, in order, without the specials,
-// which Next Up leaves out.
+// which Next Up leaves out: those its order shows in season 0.
 func regularEpisodes(episodes []library.Item) []library.Item {
-	return slices.DeleteFunc(slices.Clone(episodes), func(e library.Item) bool { return e.ParentIndexNumber == 0 })
+	return slices.DeleteFunc(slices.Clone(episodes), func(e library.Item) bool { return e.ShownPlace().Season == 0 })
 }
 
 // before reports whether date a comes strictly before date b, a missing

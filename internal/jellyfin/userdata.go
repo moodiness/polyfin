@@ -81,7 +81,7 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 		if item.Kind == library.KindTrack {
 			songs = append(songs, item.ID)
 		}
-		if item.Kind == library.KindFolder && item.Contents != nil {
+		if counted(item) {
 			videos = append(videos, item.Contents.Videos...)
 		}
 	}
@@ -94,9 +94,10 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 		return userState{}, err
 	}
 	// A folder counts its videos the user watched, and started, as a
-	// series counts its episodes.
+	// series counts its episodes; so does a season of an episode order,
+	// which the episodes' data does not name.
 	for _, item := range items {
-		if item.Kind != library.KindFolder || item.Contents == nil {
+		if !counted(item) {
 			continue
 		}
 		var c userdata.Counts
@@ -128,6 +129,12 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 		}
 	}
 	return state, nil
+}
+
+// counted reports whether the videos an item holds are counted from their
+// own data: a folder's, and a season of an episode order's.
+func counted(item library.Item) bool {
+	return item.Contents != nil && (item.Kind == library.KindFolder || item.Kind == library.KindSeason && item.EpisodeGroup != "")
 }
 
 // of describes what the user did with item. Series and seasons count

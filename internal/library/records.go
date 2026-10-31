@@ -36,6 +36,9 @@ type record struct {
 	Season   int            `json:"season,omitempty"`
 	Poster   string         `json:"poster,omitempty"`
 	Video    *stremio.Video `json:"video,omitempty"`
+	// Group is the TMDB episode group a season of an episode order is a
+	// season of, whose number is Season (see episodeorder.go).
+	Group string `json:"group,omitempty"`
 	// Channel is the Stremio ID of a programme's channel; Number, a
 	// channel's number when it was last listed, and GuideNumber a tuner's
 	// number of it ("5.1").

@@ -207,11 +207,11 @@ func (s *Service) keptBefore(r record, keptBy string, err error) {
 }
 
 // videoIDs lists the videos of a series' description that r covers: all of
-// them for the series, those of its season for a season.
+// them for the series, those of its season for a season (see covers).
 func videoIDs(meta stremio.Meta, r record) []string {
 	var ids []string
 	for _, video := range meta.Videos {
-		if r.Kind == KindSeries || int(video.Season) == r.Season {
+		if r.covers(video) {
 			ids = append(ids, video.ID)
 		}
 	}

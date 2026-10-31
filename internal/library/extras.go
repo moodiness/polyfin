@@ -148,6 +148,10 @@ func extraOwner(item Item) (ExtraOwner, bool) {
 	case KindMovie, KindSeries:
 		return ExtraOwner{Item: item.ID, Kind: item.Kind, StremioID: item.StremioID}, true
 	case KindSeason:
+		// A season of an episode order is none of the series' own.
+		if item.EpisodeGroup != "" {
+			return ExtraOwner{}, false
+		}
 		return ExtraOwner{Item: item.ID, Kind: KindSeries, StremioID: item.StremioID, Season: new(item.IndexNumber)}, true
 	}
 	return ExtraOwner{}, false

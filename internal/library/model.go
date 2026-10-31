@@ -142,6 +142,15 @@ type Item struct {
 	IndexNumber int
 	// ParentIndexNumber is the season number of an episode.
 	ParentIndexNumber int
+	// DisplayOrder is a series' order of episodes, as Jellyfin names it;
+	// EpisodeGroup the TMDB episode group a season of such an order is a
+	// season of, empty for the addon's seasons; and Shown where an
+	// episode shows in its series' order, nil as aired (see
+	// episodeorder.go). The fields above keep the episode's own season
+	// and number.
+	DisplayOrder string
+	EpisodeGroup string
+	Shown        *Place
 	// SeriesPoster is the Primary artwork of a season's or episode's series;
 	// SeasonPoster that of an episode's season, empty when the season has
 	// none of its own.
@@ -211,8 +220,9 @@ type Contents struct {
 	Released     int
 	Runtime      time.Duration
 	LastReleased *time.Time
-	// Videos are a folder's released videos, by item, which count as
-	// watched in it.
+	// Videos are a folder's released videos, or the episodes of a season
+	// of an episode order (see episodeorder.go), by item: those the user
+	// watched count as watched in it.
 	Videos []accounts.ID
 }
 

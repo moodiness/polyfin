@@ -273,6 +273,7 @@ type itemUpdate struct {
 	PremiereDate    flexibleDate
 	EndDate         flexibleDate
 	ProductionYear  flexibleNumber
+	DisplayOrder    *string
 }
 
 // updateItem keeps an administrator's edit of an item's metadata.
@@ -302,7 +303,7 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		Taglines: request.Taglines, Genres: request.Genres, Tags: request.Tags,
 		OfficialRating: request.OfficialRating, CustomRating: request.CustomRating,
 		CommunityRating: request.CommunityRating.value, CriticRating: request.CriticRating.value,
-		PremiereDate: request.PremiereDate.value, EndDate: request.EndDate.value,
+		PremiereDate: request.PremiereDate.value, EndDate: request.EndDate.value, DisplayOrder: request.DisplayOrder,
 	}
 	if request.Studios != nil {
 		edit.Studios = []string{}
