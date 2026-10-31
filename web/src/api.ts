@@ -581,6 +581,8 @@ export type Settings = {
   aheadSeconds: number
   /** Converts video apart from its audio, and keeps it when an app changes the audio track. */
   keepConvertedVideo: boolean
+  /** Starts remote plays whose first segment is long with 2-second segments converted quickly at 720p at most. */
+  fastStart: boolean
   /** What conversions run on (read-only). */
   conversionHardware: ConversionHardware
   /** Makes scrubbing thumbnails of the versions played, from their keyframes, in the background. */

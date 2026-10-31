@@ -616,6 +616,13 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => c(t).keepConvertedVideoHelp,
     keywords: ['audio track', 'language'],
   },
+  {
+    section: 'conversion',
+    anchor: 'fast-start',
+    label: (t) => c(t).fastStart,
+    help: (t) => c(t).fastStartHelp,
+    keywords: ['keyframe', 'first picture', 'remote', 'torrent'],
+  },
   // Content
   {
     section: 'content',

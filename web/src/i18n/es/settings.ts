@@ -623,6 +623,9 @@ const settings: typeof en = {
       keepConvertedVideo: 'Conservar el vídeo convertido al cambiar la pista de audio',
       keepConvertedVideoHelp:
         'Convierte la imagen y el sonido por separado, de modo que elegir otra pista de audio en el reproductor solo prepara el nuevo sonido: la imagen ya convertida sigue reproduciéndose y la nueva pista empieza antes. La imagen se conserva 30 segundos después de que un reproductor la detenga, y mientras tanto cuenta como una conversión.',
+      fastStart: 'Iniciar antes las reproducciones de fuentes remotas',
+      fastStartHelp:
+        'Cuando una reproducción reempaquetada o convertida del enlace de una extensión o de un torrent empieza en un segmento largo, como con un fotograma clave cada 10 segundos, ese segmento se divide en segmentos de 2 segundos convertidos rápidamente a 720p como máximo: la imagen aparece antes, algo menos nítida durante esos segundos, y luego la reproducción sigue como siempre. Se aplica a las siguientes reproducciones.',
     },
     catalogsTitle: 'Catálogos',
     catalogLimit: 'Títulos leídos por catálogo de películas y series',
