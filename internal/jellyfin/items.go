@@ -452,20 +452,23 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.IndexNumber = new(item.IndexNumber)
 		dto.SeriesPrimaryImageTag = library.ImageTag(item.SeriesPoster)
 	case library.KindEpisode:
-		dto.IndexNumber = new(item.IndexNumber)
-		dto.ParentIndexNumber = new(item.ParentIndexNumber)
-		dto.SeasonId = item.SeasonID.String()
-		dto.SeasonName = item.SeasonName
+		// An episode shows where its series' order puts it.
+		place := item.ShownPlace()
+		dto.IndexNumber = new(place.Episode)
+		dto.ParentIndexNumber = new(place.Season)
+		dto.SeasonId = place.SeasonID.String()
+		dto.SeasonName = place.SeasonName
 		dto.SeriesPrimaryImageTag = library.ImageTag(item.SeriesPoster)
 		// Jellyfin shows the nearest parent artwork: the season's, else the
-		// series'.
-		if item.SeasonPoster != "" {
+		// series'. A season of an episode order shows its series'.
+		if item.SeasonPoster != "" && item.Shown == nil {
 			dto.ParentPrimaryImageItemId, dto.ParentPrimaryImageTag = item.SeasonID.String(), library.ImageTag(item.SeasonPoster)
 		} else if item.SeriesPoster != "" {
 			dto.ParentPrimaryImageItemId, dto.ParentPrimaryImageTag = item.SeriesID.String(), library.ImageTag(item.SeriesPoster)
 		}
 	case library.KindSeries:
 		dto.AirDays = &[]string{}
+		dto.DisplayOrder = item.DisplayOrder
 	case library.KindCollection:
 		dto.DisplayOrder = "PremiereDate"
 	case library.KindFolder:
@@ -527,6 +530,9 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 	}
 	if (detail || fields.has("ParentId") || item.ExtraType != "") && item.ParentID != (accounts.ID{}) {
 		dto.ParentId = item.ParentID.String()
+		if item.Shown != nil {
+			dto.ParentId = item.Shown.SeasonID.String()
+		}
 	}
 	dto.ExtraType = item.ExtraType
 	if detail {

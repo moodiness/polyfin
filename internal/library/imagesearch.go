@@ -71,6 +71,9 @@ func (s *Service) ImageSources(ctx context.Context, id accounts.ID) (ImageSource
 	case r.Kind == KindPerson && r.Person != nil:
 		sources.Person = r.Person.Name
 		return sources, nil
+	case r.Kind == KindSeason && r.Group != "":
+		// A season of an episode order is none of TMDB's seasons.
+		return sources, nil
 	case r.Kind == KindSeason, r.Kind == KindEpisode && r.Video != nil:
 		if r.Kind == KindSeason {
 			sources.Season = r.Season

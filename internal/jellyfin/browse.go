@@ -879,7 +879,7 @@ func (h *Handler) episodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if hasNumber && !hasSeasonID {
-		episodes = slices.DeleteFunc(episodes, func(item library.Item) bool { return item.ParentIndexNumber != number })
+		episodes = slices.DeleteFunc(episodes, func(item library.Item) bool { return item.ShownPlace().Season != number })
 	}
 	// jellyfin-web plays an episode with the episodes from it on, which it
 	// asks starting at the episode, or at the version the user picked: a
