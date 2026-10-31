@@ -926,6 +926,31 @@ With **Live TV** off, the Live TV view leaves the user's apps, and channels and 
 
 - The `/LiveTv` routes answer 403, as Jellyfin's do without `EnableLiveTvAccess`.
 
+### Live TV channels
+
+**Live TV channels**, a section of its own on a user's page and on a group's page, saved with **Save Live TV channels**, chooses which channels of the server's Live TV sources the user sees, while **Live TV** is on:
+
+- **All** (the default): every channel.
+- **Only these**: only the groups and channels ticked.
+- **All except these**: every channel but the groups and channels ticked. **Hide channels from groups added later** also hides the groups a source adds after the section is saved. They show in the section ticked and marked **New**, and saving the section again with them unticked shows them.
+
+A group is a category of an IPTV source's line-up, or the first genre an addon's TV catalog gives a channel (the catalog itself for a channel without one). Groups list their source and how many channels they hold; a filter finds a group, and a search finds channels by name or number, among line-ups of tens of thousands of channels.
+
+A rule names groups and channels by the keys their line-ups keep across refreshes (see [How the line-up is kept](iptv.md#how-the-line-up-is-kept)): a channel renumbered, renamed or moved to another category by the administrator is still the channel ticked. An M3U entry whose provider moves it to another group, or renames it, becomes a new channel.
+
+A hidden channel is hidden wherever **Live TV** off hides Live TV: the channel lists, the guide, what airs now, searches, the channel and its programmes opened by their identifiers, playback, Replay, timers, series timers, reminders and the recordings shown. A recording of a hidden channel is hidden even from the user who scheduled it, and a timer on it records nothing, as for a user without **Live TV**. Other users still see the channel. Hidden channels keep their place in the numbering, so a channel has the same number for everyone.
+
+The rule applies to the server's sources only: a user's own sources, under **My sources**, are theirs. Groups, invites' model users and **Reset to defaults** carry it like the other sections.
+
+**For app developers:**
+
+- `GET /admin/api/live-tv/channel-choices`, for administrators, answers every group (`key`, `name`, `source`, `channels`) and a page of channels (`key`, `name`, `number`, `group`), with `total`; `q` searches channels by name or number, `group` keeps one group's, repeated `key` the channels named, and `offset` and `limit` (100, at most 500) page them.
+- The user's and the group's JSON hold `liveTvChannels`: `mode` (`all`, `only` or `except`), `groups`, `channels`, `hideNewGroups` and `knownGroups`. `PATCH` takes the first four; saving with `hideNewGroups` sets `knownGroups` to the groups the server's sources have then, and had before. A rule that is not valid, or lists more than 10,000 groups or channels, is 400 `invalid_live_tv_channels`.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no such setting for Live TV. Its policy's `EnableAllChannels` and `EnabledChannels` choose its channel plugins, not Live TV channels ([Channel.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Channels/Channel.cs#L38-L39)). Polyfin keeps reporting `EnableAllChannels` on, so jellyfin-web's user editor neither shows nor changes the rule, and saving a policy keeps it.
+
 ### Watch together
 
 **Watch together** chooses, as Jellyfin's `SyncPlayAccess` does, whether the user may:
