@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -367,6 +368,71 @@ func TestAConvertedPlayGoesOnFromTheNextVersion(t *testing.T) {
 		t.Fatal("no initialization segment")
 	}
 	checkSwitch(t, playlist, segments, init, 1)
+}
+
+// A play never goes on from an MPEG program stream or an AVI file, which
+// it would read without their searching from before the time asked and
+// their start shifted to zero: it passes over both, coloured as the first
+// version, to the grey version after them.
+func TestAPlayGoesOnFromNoUnindexedFile(t *testing.T) {
+	t.Parallel()
+	ffmpeg, ffprobe := failoverFFmpeg(t)
+	colour, grey := failoverClip(t, ffmpeg, false, 48), failoverClip(t, ffmpeg, true, 72)
+	program := failoverCopy(t, ffmpeg, colour, "mpg", "-c:v", "mpeg2video", "-b:v", "2M", "-g", "12", "-c:a", "mp2")
+	avi := failoverCopy(t, ffmpeg, colour, "avi", "-c:v", "mpeg4", "-q:v", "4", "-c:a", "libmp3lame")
+	first := newDyingHost(t, colour, len(colour)/2)
+	hosts := map[string][]byte{"colour.mpg": program, "colour.avi": avi, "grey.mp4": grey}
+	urls := map[string]string{}
+	for name, data := range hosts {
+		host, _ := steadyHost(t, data)
+		urls[name] = host.URL + "/" + name
+	}
+	stream := func(name, url, filename string, data []byte) []stremio.Stream {
+		return []stremio.Stream{{Name: name, URL: url, BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number(len(data))}}}
+	}
+	p := failoverServer(t, ffprobe,
+		failoverAddon(t, "catalog", stream("Colour", first.URL+"/colour.mp4", "Failover.2026.1080p.Colour.mp4", colour)),
+		failoverAddon(t, "program", stream("Program", urls["colour.mpg"], "Failover.2026.1080p.Program.mpg", program)),
+		failoverAddon(t, "avi", stream("AVI", urls["colour.avi"], "Failover.2026.1080p.AVI.avi", avi)),
+		failoverAddon(t, "other", stream("Grey", urls["grey.mp4"], "Failover.2026.1080p.Grey.mp4", grey)))
+	answer := p.ask(t, p.token, p.movie, recordedProfile(t, "androidtv"), map[string]any{"MediaSourceId": p.movie, "EnableDirectPlay": false})
+	if len(answer.MediaSources) != 1 || answer.MediaSources[0].TranscodingUrl == "" || !strings.HasPrefix(answer.MediaSources[0].Name, "Colour") {
+		t.Fatalf("PlaybackInfo: %+v", answer)
+	}
+	base, query, _ := strings.Cut(p.url+answer.MediaSources[0].TranscodingUrl, "master.m3u8?")
+	_, _, playlist := fetchText(t, base+"main.m3u8?"+query)
+	uris, _ := segmentsOf(playlist)
+	const upTo = 2
+	if len(uris) <= upTo+2 {
+		t.Fatalf("playlist:\n%s", playlist)
+	}
+	segments := make([]string, len(uris))
+	for n := range segments {
+		if n == upTo+1 {
+			first.kill()
+		}
+		segments[n] = fetchSegment(t, base+"hls1/main/"+strconv.Itoa(n)+".ts?"+query)
+	}
+	_, _, after := fetchText(t, base+"main.m3u8?"+query)
+	checkSwitch(t, after, segments, "", upTo)
+}
+
+// failoverCopy is clip in the container of extension, encoded with args.
+func failoverCopy(t *testing.T, ffmpeg string, clip []byte, extension string, args ...string) []byte {
+	t.Helper()
+	dir := t.TempDir()
+	in, out := filepath.Join(dir, "clip.mp4"), filepath.Join(dir, "copy."+extension)
+	if err := os.WriteFile(in, clip, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command(ffmpeg, slices.Concat([]string{"-v", "error", "-i", in}, args, []string{out})...).CombinedOutput(); err != nil {
+		t.Fatalf("making a copy: %v: %s", err, output)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
 
 // A repackaged play whose host goes down reads on from the copy of the

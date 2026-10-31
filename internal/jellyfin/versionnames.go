@@ -79,10 +79,11 @@ func (h *Handler) playbackNamer(item library.Item, request playbackInfoRequest, 
 // playName is a version's name ending with how n's app plays it, decided
 // from its tracks, streams as described from its analysis or RemuxDB's
 // description, with the tracks the user's preferences choose, reading
-// nothing (see trackDecision). Over HLS, an MPEG-TS file whose keyframes
-// are not known has its video converted, as decide plays it (see
-// playback.Service.GridPlanned); another file whose index cannot be read
-// is found out only once played: its name cannot tell it before.
+// nothing (see trackDecision). Over HLS, an MPEG-TS file, an MPEG program
+// stream or an AVI file whose keyframes are not known has its video
+// converted, as decide plays it (see playback.Service.GridPlanned);
+// another file whose index cannot be read is found out only once played:
+// its name cannot tell it before.
 func (h *Handler) playName(n *versionNamer, p playable, version library.Version, streams []playback.MediaStream, analysis media.Analysis) string {
 	decision, options, described := h.trackDecision(p, version, streams, analysis, n.request, n.allowed, false)
 	playable := true

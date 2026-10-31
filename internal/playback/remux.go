@@ -147,10 +147,11 @@ func transportStream(analysis media.Analysis) bool {
 
 // GridPlanned reports, reading nothing, whether the HLS plan of a version
 // analyzed so is cut on a fixed grid, which needs its video converted (see
-// plan): an MPEG-TS file, not read from an input, whose keyframes are not
+// plan): a file of a container whose index Polyfin does not read (see
+// unindexedFormat), not read from an input, whose keyframes are not
 // known. Version names tell with it how such a version plays.
 func (s *Service) GridPlanned(version library.Version, analysis media.Analysis) bool {
-	if s.ReadsInput(version) || !transportStream(analysis) {
+	if s.ReadsInput(version) || !unindexedFormat(analysis) {
 		return false
 	}
 	_, indexed := s.indexes.Get(version.ID)

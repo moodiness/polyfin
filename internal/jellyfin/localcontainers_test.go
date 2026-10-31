@@ -99,6 +99,31 @@ func TestLocalUnindexedContainersPlayOverHLS(t *testing.T) {
 	}
 }
 
+// The H.264 of an MPEG program stream or of an AVI file is converted over
+// HLS, though jellyfin-web takes it: the version's name in item details
+// says so, as PlaybackInfo plays it.
+func TestLocalUnindexedVersionsAreNamedAsTheyPlay(t *testing.T) {
+	t.Parallel()
+	ffmpeg, ffprobe := discFFmpeg(t, "-demuxers", "avi")
+	h264 := []string{"-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p"}
+	for name, args := range map[string][]string{
+		"Movie (2008).mpg": slices.Concat(h264, []string{"-c:a", "mp2", "-f", "vob"}),
+		"Movie (2008).avi": slices.Concat(h264, []string{"-c:a", "libmp3lame"}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			p, item, local := localContainerFile(t, ffprobe, containerFile(t, ffmpeg, name, args...))
+			source := playContainer(t, p, item, local, p.profile(t, "jellyfin-web-12.4-chrome"))
+			var dto BaseItemDto
+			p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+item, p.token, &dto)
+			if dto.MediaSources == nil || len(*dto.MediaSources) != 1 || (*dto.MediaSources)[0].Name != local.Name+" (converted)" ||
+				source.Name != local.Name+" (converted)" {
+				t.Errorf("named %+v in item details, %q by PlaybackInfo", dto.MediaSources, source.Name)
+			}
+		})
+	}
+}
+
 // A local MPEG program stream is served as video/mpeg to an app playing
 // it as it is.
 func TestLocalProgramStreamsAreServedAsMPEG(t *testing.T) {
