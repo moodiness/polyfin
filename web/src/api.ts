@@ -2659,15 +2659,24 @@ export type JellyfinUserImport = {
   /** Items read that a Polyfin title matched. */
   matched: number
   /**
-   * Titles newly marked played, resume points set, titles newly marked favorite, titles rated, and
-   * titles a Plex Watchlist added to the user's.
+   * Titles newly marked played, resume points set, titles newly marked favorite, titles rated,
+   * titles a Plex Watchlist added to the user's, and the collections and playlists created.
    */
   played: number
   resumed: number
   favorites: number
   ratings: number
   watchlist: number
-  /** Marks, resume points and favorites Polyfin already had. */
+  collections: number
+  playlists: number
+  /** Titles added to collections and playlists an earlier import brought. */
+  listTitles: number
+  /** The collections and playlists of the server that no title of matched, which were not created. */
+  skipped: { kind: 'collection' | 'playlist'; name: string }[]
+  /**
+   * Marks, resume points and favorites Polyfin already had, and collections and playlists an
+   * earlier import brought that already held every title found.
+   */
   upToDate: number
   /** Resume points without a date, which are not added. */
   undated: number
@@ -2694,6 +2703,13 @@ export type JellyfinNothingAdded =
   | 'plex_no_history'
 
 /**
+ * What an import brings besides the titles played, the resume points and the favorites: the
+ * ratings, the server's collections, and each user's video playlists. A user's own import brings
+ * no collections unless the user may manage collections.
+ */
+export type ImportExtras = { ratings: boolean; collections: boolean; playlists: boolean }
+
+/**
  * The running import, else the last one since Polyfin started: a restart forgets it. `startedBy`
  * is the Polyfin user who started it; `own` tells an import of their own watch data, made under My
  * account.
@@ -2703,6 +2719,7 @@ export type JellyfinImportStatus = {
   server: { kind: ServerKind; name: string; address: string }
   startedBy: { id: string; name: string }
   own: boolean
+  extras: ImportExtras
   state: 'running' | 'done' | 'stopped' | 'failed'
   problem: JellyfinImportProblem | null
   startedAt: string
@@ -2736,7 +2753,8 @@ export const connectJellyfin = (
 /**
  * Creates the new users (all or none), then starts importing the watch data in the background;
  * `import` is null when no entry asked for watch data. `plexOwner` reads each account of a Plex
- * server with the token Plex gives its owner, whom the administrator signed in to Plex as.
+ * server with the token Plex gives its owner, whom the administrator signed in to Plex as. Each
+ * extra left out is brought.
  */
 export const startJellyfinImport = (
   body: {
@@ -2744,7 +2762,8 @@ export const startJellyfinImport = (
     address: string
     plexOwner?: boolean
     users: JellyfinImportEntry[]
-  } & JellyfinCredentials,
+  } & JellyfinCredentials &
+    Partial<ImportExtras>,
 ) =>
   request<{ created: User[]; import: JellyfinImportStatus | null }>(
     'POST',
@@ -2766,13 +2785,15 @@ export const stopJellyfinImport = async () =>
 /**
  * Whether the signed-in user may import their own watch history from another server, whether they
  * may import a Letterboxd export and the server's metadata addons search movies (without one, no
- * movie of an export is found), and their latest import, from a server or Letterboxd, running or
- * ended, else null.
+ * movie of an export is found), whether their import from a server may bring its collections (only
+ * for a user who may manage collections), and their latest import, from a server or Letterboxd,
+ * running or ended, else null.
  */
 export type OwnImport = {
   enabled: boolean
   letterboxd: boolean
   searchable: boolean
+  collections: boolean
   import: JellyfinImportStatus | LetterboxdImportStatus | null
 }
 
@@ -2782,12 +2803,15 @@ export const fetchOwnImport = (signal?: AbortSignal) =>
 /**
  * Imports the signed-in user's own watch data in the background: from a Jellyfin or Emby server,
  * signing in there as `name`, with a password used for this import only; or from the Plex server
- * `server` their sign-in to Plex reaches, with its Watchlist unless `watchlist` is false.
+ * `server` their sign-in to Plex reaches, with its Watchlist unless `watchlist` is false. Each
+ * extra left out is brought.
  */
 export const startOwnImport = async (
-  body:
+  body: (
     | { kind: Exclude<ServerKind, 'plex'>; address: string; name: string; password: string }
-    | { kind: 'plex'; server: string; watchlist: boolean },
+    | { kind: 'plex'; server: string; watchlist: boolean }
+  ) &
+    Partial<ImportExtras>,
 ) =>
   (await request<{ import: JellyfinImportStatus }>('POST', '/account/server-import', body)).import
 

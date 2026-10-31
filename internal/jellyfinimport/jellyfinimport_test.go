@@ -20,7 +20,9 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -39,9 +41,14 @@ type fakeJellyfin struct {
 	requests []*http.Request
 	users    []map[string]any
 	// items are each user's items by filter (IsPlayed, IsResumable,
-	// IsFavorite); series, the identifiers of the series by their id.
-	items  map[string]map[string][]map[string]any
-	series map[string]map[string]string
+	// IsFavorite, Likes), or, without one, by type (BoxSet, Playlist);
+	// series, the identifiers of the series by their id; children, the
+	// titles of each collection by its id, and entries, the entries of
+	// each playlist by its id.
+	items    map[string]map[string][]map[string]any
+	series   map[string]map[string]string
+	children map[string][]map[string]any
+	entries  map[string][]map[string]any
 	// refused are the users whose items answer 401, as after the key was
 	// revoked; forbidden, those whose items answer 403, which the key may
 	// not read; hold, when set, holds every items request until closed.
@@ -75,7 +82,8 @@ func newFakeJellyfin(t *testing.T) *fakeJellyfin {
 	t.Helper()
 	f := &fakeJellyfin{items: map[string]map[string][]map[string]any{}, series: map[string]map[string]string{}, refused: map[string]bool{},
 		forbidden: map[string]bool{}, userKeys: map[string]string{}, passwords: map[string]string{}, barred: map[string]bool{},
-		signsInAs: map[string]string{}, sessions: map[string]string{}}
+		signsInAs: map[string]string{}, sessions: map[string]string{}, children: map[string][]map[string]any{},
+		entries: map[string][]map[string]any{}}
 	server := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(server.Close)
 	f.url = server.URL
@@ -192,8 +200,13 @@ func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"Id": owner, "Name": "Owner"})
-	case found && strings.HasSuffix(user, "/Items"):
+	case found && strings.HasSuffix(user, "/Items"), strings.HasPrefix(path, "/Playlists/") && strings.HasSuffix(path, "/Items"):
 		user = strings.TrimSuffix(user, "/Items")
+		playlist, inPlaylist := strings.CutPrefix(strings.TrimSuffix(path, "/Items"), "/Playlists/")
+		if inPlaylist {
+			// Jellyfin reads a playlist as the user UserId names.
+			user = query.Get("UserId")
+		}
 		if hold != nil {
 			f.mu.Unlock()
 			<-hold
@@ -217,8 +230,14 @@ func (f *fakeJellyfin) serve(w http.ResponseWriter, r *http.Request) {
 					all = append(all, map[string]any{"Id": id, "Type": "Series", "ProviderIds": providers})
 				}
 			}
+		} else if inPlaylist {
+			all = f.entries[playlist]
+		} else if parent := query.Get("ParentId"); parent != "" {
+			all = f.children[parent]
+		} else if filter := query.Get("Filters"); filter != "" {
+			all = f.items[user][filter]
 		} else {
-			all = f.items[user][query.Get("Filters")]
+			all = f.items[user][query.Get("IncludeItemTypes")]
 		}
 		start, _ := strconv.Atoi(query.Get("StartIndex"))
 		limit, err := strconv.Atoi(query.Get("Limit"))
@@ -304,7 +323,8 @@ func newHarness(t *testing.T) harness {
 	client := stremio.NewClient("test")
 	lib := library.New(pool, addons.New(pool, client), client, logger, store.Settings)
 	data := userdata.New(pool)
-	s := New(Options{Settings: store.Settings, Titles: lib, UserData: data, Version: "1.2.3", Logger: logger})
+	s := New(Options{Settings: store.Settings, Titles: lib, UserData: data, Version: "1.2.3", Logger: logger,
+		Collections: collections.New(pool), Playlists: playlists.New(pool)})
 	s.timing.gap, s.timing.retryFirst, s.timing.pageSize = 0, time.Millisecond, 2
 	t.Cleanup(s.Close)
 	return harness{Service: s, pool: pool, store: store, lib: lib, data: data, f: newFakeJellyfin(t)}
@@ -1069,12 +1089,18 @@ type fakePlex struct {
 	// by rating key; machine is the server's machine identifier.
 	states  map[string]map[string]map[string]any
 	machine string
+	// collections are each section's collections, by its key, and
+	// children each collection's titles, by its rating key; playlists are
+	// each token's account's playlists, and entries each playlist's items,
+	// by its rating key.
+	collections, children, playlists, entries map[string][]map[string]any
 }
 
 func newFakePlex(t *testing.T) *fakePlex {
 	t.Helper()
 	f := &fakePlex{items: map[string]map[string][]map[string]any{}, history: map[string][]map[string]any{},
-		states: map[string]map[string]map[string]any{}, machine: "0a1b2c"}
+		states: map[string]map[string]map[string]any{}, machine: "0a1b2c", collections: map[string][]map[string]any{},
+		children: map[string][]map[string]any{}, playlists: map[string][]map[string]any{}, entries: map[string][]map[string]any{}}
 	server := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(server.Close)
 	f.url = server.URL
@@ -1155,6 +1181,20 @@ func (f *fakePlex) serve(w http.ResponseWriter, r *http.Request) {
 		page(shown)
 	case r.URL.Path == "/status/sessions/history/all":
 		page(f.history[query.Get("accountID")])
+	case inSection && strings.HasSuffix(section, "/collections"):
+		page(f.collections[strings.TrimSuffix(section, "/collections")])
+	case strings.HasPrefix(r.URL.Path, "/library/collections/") && strings.HasSuffix(r.URL.Path, "/children"):
+		page(f.children[strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/library/collections/"), "/children")])
+	case r.URL.Path == "/playlists":
+		var kind []map[string]any
+		for _, playlist := range f.playlists[token] {
+			if playlist["playlistType"] == query.Get("playlistType") {
+				kind = append(kind, playlist)
+			}
+		}
+		page(kind)
+	case strings.HasPrefix(r.URL.Path, "/playlists/") && strings.HasSuffix(r.URL.Path, "/items"):
+		page(f.entries[strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/playlists/"), "/items")])
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -1325,11 +1365,11 @@ func TestAnAnswerAnImportCannotReadIsLoggedWithItsPath(t *testing.T) {
 	}
 }
 
-// plexImported imports the Plex account id of p's server into user, and
-// waits for the import to end.
+// plexImported imports the Plex account id of p's server into user, with
+// its ratings, and waits for the import to end.
 func (h harness) plexImported(t *testing.T, p *fakePlex, id string, user accounts.User) UserStatus {
 	t.Helper()
-	plex := Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: plexToken}}
+	plex := Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: plexToken}, Extras: Extras{Ratings: true}}
 	if _, err := h.Start(t.Context(), plex, accounts.User{}, func(Server, []User, SignIn) ([]Target, error) {
 		return []Target{{JellyfinID: id, User: user.ID, UserName: user.Name}}, nil
 	}); err != nil {

@@ -227,7 +227,7 @@ const users: typeof en = {
       open: 'Importar de outro servidor',
       title: 'Importar de outro servidor',
       description:
-        'Traga contas e seus dados de exibição de um servidor Jellyfin, Emby ou Plex: nomes das contas e status de administrador e, para cada usuário, os filmes e episódios reproduzidos com suas datas, pontos de retomada e favoritos, identificados pelo IMDb, TMDB ou TVDB. Os dados do Polyfin são apenas complementados, e nada é gravado no outro servidor. Os servidores não fornecem senhas: você define uma para cada nova conta ou mantém aquela com que o usuário entra.',
+        'Traga contas e seus dados de exibição de um servidor Jellyfin, Emby ou Plex: nomes das contas e status de administrador e, para cada usuário, os filmes e episódios reproduzidos com suas datas, pontos de retomada e favoritos, identificados pelo IMDb, TMDB ou TVDB, e se quiser suas avaliações, as coleções do servidor e suas listas de reprodução. Os dados do Polyfin são apenas complementados, e nada é gravado no outro servidor. Os servidores não fornecem senhas: você define uma para cada nova conta ou mantém aquela com que o usuário entra.',
       serverKind: 'Servidor',
       servers: {
         jellyfin: 'Jellyfin',
@@ -281,6 +281,20 @@ const users: typeof en = {
       plexWatchDataHelp:
         'Os títulos que esta conta reproduziu até o fim neste servidor, segundo o histórico de reprodução do Plex, com suas datas e número de reproduções. Os títulos que ela marcou como assistidos ou sincronizou da conta Plex, e os pontos de retomada dela, ficam no Plex.',
       watchDataNeeded: 'Sem isso, nada é importado para este usuário.',
+      extras: {
+        title: 'Trazer também',
+        ratings: 'Avaliações',
+        ratingsHelp:
+          'As avaliações de cada usuário, de 0 a 10, como estão. Um joinha sem avaliação vira favorito. Uma avaliação que o Polyfin já tem é mantida.',
+        collections: 'Coleções',
+        collectionsHelp:
+          'As coleções do servidor, como coleções do Polyfin que todo usuário vê, com os títulos encontrados. Uma coleção sem nenhum título encontrado não é criada.',
+        playlists: 'Listas de reprodução',
+        playlistsHelp:
+          'As listas de reprodução de vídeo de cada usuário, como listas dele, na ordem, com os títulos encontrados.',
+        plexHelp:
+          'O Plex só fornece avaliações e listas de reprodução das contas lidas com o próprio token: a do proprietário e, depois que você entra no Plex como proprietário, as dos outros.',
+      },
       plexNotice:
         'Com o token do proprietário, o Plex permite que o Polyfin leia os títulos reproduzidos, os pontos de retomada e as avaliações do proprietário. Das outras contas, ele fornece apenas o histórico de reprodução neste servidor: os títulos que elas reproduziram até o fim aqui. Os títulos marcados como assistidos sem reprodução, os sincronizados da conta Plex delas, os pontos de retomada e as avaliações delas não estão nele. Para ler os dados de exibição de cada conta, entre com o Plex como proprietário, acima. O Plex não tem favoritos para importar.',
       plexOwner: {
@@ -390,6 +404,20 @@ const users: typeof en = {
         `${played === 1 ? '1 marcado como reproduzido' : `${played} marcados como reproduzidos`}, ${resumed === 1 ? '1 ponto de retomada' : `${resumed} pontos de retomada`}, ${favorites === 1 ? '1 favorito' : `${favorites} favoritos`}`,
       upToDate: (count: number) => `${count} já no Polyfin`,
       ratings: (count: number) => (count === 1 ? '1 avaliado' : `${count} avaliados`),
+      collections: (count: number) =>
+        count === 1 ? '1 coleção criada' : `${count} coleções criadas`,
+      playlists: (count: number) =>
+        count === 1 ? '1 lista de reprodução criada' : `${count} listas de reprodução criadas`,
+      listTitles: (count: number) =>
+        count === 1
+          ? '1 título adicionado a listas já importadas'
+          : `${count} títulos adicionados a listas já importadas`,
+      skipped: {
+        collection: (name: string) =>
+          `Coleção “${name}”: nenhum título encontrado, não foi criada.`,
+        playlist: (name: string) =>
+          `Lista de reprodução “${name}”: nenhum título encontrado, não foi criada.`,
+      },
       watchlist: (count: number) =>
         count === 1 ? '1 adicionado a “Para assistir”' : `${count} adicionados a “Para assistir”`,
       undated: (count: number) =>

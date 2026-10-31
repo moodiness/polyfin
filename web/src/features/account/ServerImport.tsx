@@ -16,6 +16,7 @@ import {
   ImportProgress,
   serverError,
 } from '@/features/users/JellyfinImport'
+import { allExtras, ExtrasChoice } from '@/features/users/ImportExtras'
 import { useI18n } from '@/i18n'
 import { Button, Field, Notice, Panel, PanelFooter, Segmented, TextInput, useToast } from '@/ui'
 import { LetterboxdForm, LetterboxdProgress } from './LetterboxdImport'
@@ -39,6 +40,9 @@ export default function ServerImport({ own }: { own: OwnImport }) {
   const [address, setAddress] = useState('')
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
+  // A user who may not manage collections brings none: the choice is not offered.
+  const [extras, setExtras] = useState(allExtras)
+  const asked = { ...extras, collections: own.collections && extras.collections }
   const start = useMutation({
     mutationFn: startOwnImport,
     onSuccess: (started) => {
@@ -71,7 +75,7 @@ export default function ServerImport({ own }: { own: OwnImport }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (kind === 'letterboxd' || kind === 'plex') return
-    start.mutate({ kind, address: address.trim(), name: name.trim(), password })
+    start.mutate({ kind, address: address.trim(), name: name.trim(), password, ...asked })
   }
 
   const picker = (
@@ -117,6 +121,7 @@ export default function ServerImport({ own }: { own: OwnImport }) {
             />
           ) : kind === 'plex' ? (
             <PlexImportForm
+              collections={own.collections}
               header={picker}
               onStarted={(started) => {
                 queryClient.setQueryData<OwnImport>(
@@ -161,6 +166,11 @@ export default function ServerImport({ own }: { own: OwnImport }) {
                     autoComplete="off"
                   />
                 </Field>
+                <ExtrasChoice
+                  value={extras}
+                  onChange={(value) => change(() => setExtras(value))}
+                  collections={own.collections}
+                />
                 {otherError && (
                   <Notice tone="danger" live>
                     {otherError}

@@ -10,6 +10,7 @@ import {
   queryKeys,
   startJellyfinImport,
   stopJellyfinImport,
+  type ImportExtras,
   type JellyfinConnection,
   type JellyfinCredentials,
   type JellyfinImportEntry,
@@ -46,6 +47,7 @@ import {
   type SelectOption,
   type StatusTone,
 } from '@/ui'
+import { allExtras, ExtrasChoice } from './ImportExtras'
 import { PlexOwnerSignIn } from './PlexOwnerSignIn'
 
 /** How often the import is read while it runs. */
@@ -321,6 +323,9 @@ function ImportedUserRow({
     text.counts(user.played, user.resumed, user.favorites),
     ...(user.ratings > 0 ? [text.ratings(user.ratings)] : []),
     ...(user.watchlist > 0 ? [text.watchlist(user.watchlist)] : []),
+    ...(user.collections > 0 ? [text.collections(user.collections)] : []),
+    ...(user.playlists > 0 ? [text.playlists(user.playlists)] : []),
+    ...(user.listTitles > 0 ? [text.listTitles(user.listTitles)] : []),
     ...(user.upToDate > 0 ? [text.upToDate(user.upToDate)] : []),
     ...(user.undated > 0 ? [text.undated(user.undated)] : []),
   ].join(' · ')
@@ -353,6 +358,15 @@ function ImportedUserRow({
       ) : user.nothingAdded !== null ? (
         <Notice>{text.nothingAdded[user.nothingAdded](product)}</Notice>
       ) : undefined}
+      {user.skipped.length > 0 && (
+        <Notice>
+          <ul className="space-y-1">
+            {user.skipped.map((list, index) => (
+              <li key={index}>{text.skipped[list.kind](list.name)}</li>
+            ))}
+          </ul>
+        </Notice>
+      )}
     </Row>
   )
 }
@@ -622,6 +636,7 @@ function ChooseUsers({
   )
   // Once the owner signs in to Plex: what is read of each account but the owner's.
   const [access, setAccess] = useState<Record<string, PlexAccess> | null>(null)
+  const [extras, setExtras] = useState<ImportExtras>(allExtras)
 
   const start = useMutation({
     mutationFn: startJellyfinImport,
@@ -697,6 +712,7 @@ function ChooseUsers({
       address: connection.server.address,
       ...credentials,
       ...(access !== null && { plexOwner: true }),
+      ...extras,
       users: entries,
     })
   }
@@ -787,6 +803,14 @@ function ChooseUsers({
                 )
               })}
             </RowList>
+            <ExtrasChoice
+              value={extras}
+              onChange={(value) => {
+                start.reset()
+                setExtras(value)
+              }}
+              plex={kind === 'plex'}
+            />
           </>
         )}
         {otherError && (

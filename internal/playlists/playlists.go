@@ -346,3 +346,54 @@ func insertEntries(ctx context.Context, tx pgx.Tx, id accounts.ID, items []accou
 	_, err := tx.Exec(ctx, "UPDATE playlists SET last_added_at = now() WHERE id = $1", id)
 	return err
 }
+
+// Import brings into owner's account a playlist of another server, which
+// server names by its kind and its own identifier, and source names
+// there: it adds after the entries of the playlist an earlier import
+// brought owner from it the items it does not hold yet, in order, else
+// creates one of owner's named name with every item, in order. A
+// playlist deleted since is created again. Without items, and none
+// brought before, it creates nothing, and returns the zero identifier. It
+// reports whether it created the playlist, else how many entries it added
+// to the one brought before.
+func (s *Store) Import(ctx context.Context, server, source string, owner accounts.ID, name string,
+	items []accounts.ID) (id accounts.ID, created bool, added int, err error) {
+	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		// Locking the playlist keeps it from being changed meanwhile.
+		err := tx.QueryRow(ctx, `SELECT p.id FROM imported_playlists i JOIN playlists p ON p.id = i.playlist_id
+			WHERE i.server = $1 AND i.source_id = $2 AND i.user_id = $3 FOR UPDATE OF p`, server, source, owner).Scan(&id)
+		switch {
+		case err == nil:
+			rows, _ := tx.Query(ctx, "SELECT item_id FROM playlist_entries WHERE playlist_id = $1", id)
+			held, err := pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+			if err != nil {
+				return err
+			}
+			holds := make(map[accounts.ID]bool, len(held))
+			for _, item := range held {
+				holds[item] = true
+			}
+			missing := slices.DeleteFunc(slices.Clone(items), func(item accounts.ID) bool { return holds[item] })
+			added = len(missing)
+			return insertEntries(ctx, tx, id, missing, len(held))
+		case !errors.Is(err, pgx.ErrNoRows):
+			return err
+		case len(items) == 0:
+			return nil
+		}
+		if err := tx.QueryRow(ctx, "INSERT INTO playlists (owner_id, name) VALUES ($1, $2) RETURNING id", owner, name).Scan(&id); err != nil {
+			return err
+		}
+		created = true
+		if _, err := tx.Exec(ctx, `INSERT INTO imported_playlists (server, source_id, user_id, playlist_id) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (server, source_id, user_id) DO UPDATE SET playlist_id = EXCLUDED.playlist_id, imported_at = now()`,
+			server, source, owner, id); err != nil {
+			return err
+		}
+		return insertEntries(ctx, tx, id, items, 0)
+	})
+	if err != nil {
+		return accounts.ID{}, false, 0, err
+	}
+	return id, created, added, nil
+}

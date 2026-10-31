@@ -262,10 +262,10 @@ func TestAUserSignedInToPlexImportsTheirOwnWatchData(t *testing.T) {
 		account.Servers[0].Owned {
 		t.Fatalf("account: %+v", account)
 	}
-	if _, err := h.ImportOwnPlex(t.Context(), friend, "elsewhere", true); !errors.Is(err, ErrPlexUnknownServer) {
+	if _, err := h.ImportOwnPlex(t.Context(), friend, "elsewhere", Extras{Ratings: true, Watchlist: true}); !errors.Is(err, ErrPlexUnknownServer) {
 		t.Errorf("another server: %v", err)
 	}
-	snapshot, err := h.ImportOwnPlex(t.Context(), friend, "0a1b2c", true)
+	snapshot, err := h.ImportOwnPlex(t.Context(), friend, "0a1b2c", Extras{Ratings: true, Watchlist: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestAnExpiredPlexSignInIsRefused(t *testing.T) {
 	if _, err := h.PlexAccount(t.Context(), user.ID); !errors.Is(err, ErrPlexSignInEnded) {
 		t.Errorf("forgotten: %v", err)
 	}
-	if _, err := h.ImportOwnPlex(t.Context(), user, "0a1b2c", true); !errors.Is(err, ErrPlexSignInEnded) {
+	if _, err := h.ImportOwnPlex(t.Context(), user, "0a1b2c", Extras{Watchlist: true}); !errors.Is(err, ErrPlexSignInEnded) {
 		t.Errorf("import: %v", err)
 	}
 
@@ -373,7 +373,7 @@ func TestAPlexServerMustAnswerAsItself(t *testing.T) {
 	tv.users["account-token"] = map[string]any{"uuid": "u-friend", "title": "Friend"}
 	tv.resources["account-token"] = []map[string]any{plexServer("friend-server-token", map[string]any{"uri": impostor.url, "local": true})}
 	h.signedIn(t, tv, clock, user)
-	if _, err := h.ImportOwnPlex(t.Context(), user, "0a1b2c", false); !errors.Is(err, ErrPlexServerUnreachable) {
+	if _, err := h.ImportOwnPlex(t.Context(), user, "0a1b2c", Extras{}); !errors.Is(err, ErrPlexServerUnreachable) {
 		t.Fatalf("an impostor: %v", err)
 	}
 	if len(impostor.requests) != 1 || impostor.requests[0].URL.Path != "/identity" || impostor.requests[0].Header.Get("X-Plex-Token") != "" {
@@ -399,7 +399,7 @@ func TestAPlexAccountWithNothingWatchedSaysSo(t *testing.T) {
 	tv.users["account-token"] = map[string]any{"uuid": "u-friend", "title": "Friend"}
 	tv.resources["account-token"] = []map[string]any{plexServer("friend-server-token", map[string]any{"uri": p.url, "relay": true})}
 	h.signedIn(t, tv, clock, user)
-	if _, err := h.ImportOwnPlex(t.Context(), user, "0a1b2c", false); err != nil {
+	if _, err := h.ImportOwnPlex(t.Context(), user, "0a1b2c", Extras{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := h.ended(t).Users[0]; got.NothingAdded != NothingPlexOwn || got.Sections != 2 || got.Listed != 4 {
@@ -441,7 +441,7 @@ func TestAPlexHomeProfileIsImportedWithItsOwnToken(t *testing.T) {
 	if err != nil || account.Profile != "u-kid" || len(account.Servers) != 1 {
 		t.Fatalf("Kid: %+v %v", account, err)
 	}
-	if _, err := h.ImportOwnPlex(t.Context(), kid, "0a1b2c", true); err != nil {
+	if _, err := h.ImportOwnPlex(t.Context(), kid, "0a1b2c", Extras{Watchlist: true}); err != nil {
 		t.Fatal(err)
 	}
 	status := h.ended(t)
@@ -533,7 +533,7 @@ func TestTheOwnersPlexSignInReadsEachAccountWithItsOwnToken(t *testing.T) {
 		"viewedAt": viewed, "accountID": 11}}
 	admin, carol, dan, kid, teen := h.user(t, "admin"), h.user(t, "carol"), h.user(t, "dan"), h.user(t, "kid"), h.user(t, "teen")
 	h.signedIn(t, tv, clock, admin)
-	plex := Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: plexToken}, PlexOwner: true}
+	plex := Connection{Kind: Plex, Address: p.url, Credentials: Credentials{Key: plexToken}, PlexOwner: true, Extras: Extras{Ratings: true}}
 
 	access, err := h.PlexOwnerAccess(t.Context(), admin.ID, plex)
 	if err != nil || len(access) != 4 || access["5"] != PlexAccessAll || access["7"] != PlexAccessPlays || access["9"] != PlexAccessPIN ||

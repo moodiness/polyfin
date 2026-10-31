@@ -231,7 +231,7 @@ const users: typeof en = {
       open: 'Von einem anderen Server importieren',
       title: 'Von einem anderen Server importieren',
       description:
-        'Übernimm Konten und ihre Wiedergabedaten von einem Jellyfin-, Emby- oder Plex-Server: Kontonamen und Administratorstatus, dann für jeden Benutzer die gesehenen Filme und Folgen mit ihren Daten, Fortsetzungspunkte und Favoriten, zugeordnet über IMDb, TMDB oder TVDB. Die Daten in Polyfin werden nur ergänzt, und auf den anderen Server wird nichts geschrieben. Server geben keine Passwörter heraus: Du legst für jedes neue Konto eines fest oder behältst das, mit dem sich ein Benutzer anmeldet.',
+        'Übernimm Konten und ihre Wiedergabedaten von einem Jellyfin-, Emby- oder Plex-Server: Kontonamen und Administratorstatus, dann für jeden Benutzer die gesehenen Filme und Folgen mit ihren Daten, Fortsetzungspunkte und Favoriten, zugeordnet über IMDb, TMDB oder TVDB, und auf Wunsch ihre Bewertungen, die Sammlungen des Servers und ihre Wiedergabelisten. Die Daten in Polyfin werden nur ergänzt, und auf den anderen Server wird nichts geschrieben. Server geben keine Passwörter heraus: Du legst für jedes neue Konto eines fest oder behältst das, mit dem sich ein Benutzer anmeldet.',
       serverKind: 'Server',
       servers: {
         jellyfin: 'Jellyfin',
@@ -285,6 +285,20 @@ const users: typeof en = {
       plexWatchDataHelp:
         'Die Titel, die dieses Konto auf diesem Server bis zum Ende abgespielt hat, aus dem Wiedergabeverlauf von Plex, mit ihren Daten und Wiedergabezahlen. Titel, die es als gesehen markiert oder aus seinem Plex-Konto synchronisiert hat, und seine Fortsetzungspunkte bleiben bei Plex.',
       watchDataNeeded: 'Ohne sie wird für diesen Benutzer nichts importiert.',
+      extras: {
+        title: 'Außerdem übernehmen',
+        ratings: 'Bewertungen',
+        ratingsHelp:
+          'Die Bewertungen jedes Benutzers von 0 bis 10, wie sie sind. Ein Daumen hoch ohne Bewertung wird zum Favoriten. Eine Bewertung, die Polyfin schon hat, bleibt.',
+        collections: 'Sammlungen',
+        collectionsHelp:
+          'Die Sammlungen des Servers, als Sammlungen in Polyfin, die jeder Benutzer sieht, mit den gefundenen Titeln. Eine Sammlung ohne gefundenen Titel wird nicht angelegt.',
+        playlists: 'Wiedergabelisten',
+        playlistsHelp:
+          'Die Video-Wiedergabelisten jedes Benutzers, als seine eigenen Wiedergabelisten, in ihrer Reihenfolge, mit den gefundenen Titeln.',
+        plexHelp:
+          'Plex gibt Bewertungen und Wiedergabelisten nur für die Konten heraus, die mit ihrem eigenen Token gelesen werden: das des Besitzers, und die der anderen, sobald du dich bei Plex als Besitzer anmeldest.',
+      },
       plexNotice:
         'Mit dem Token des Besitzers lässt Plex Polyfin die gesehenen Titel, Fortsetzungspunkte und Bewertungen des Besitzers lesen. Von den anderen Konten gibt es nur ihren Wiedergabeverlauf auf diesem Server: die Titel, die sie hier bis zum Ende abgespielt haben. Titel, die sie ohne Abspielen als gesehen markiert haben, aus ihrem Plex-Konto synchronisierte Titel, ihre Fortsetzungspunkte und ihre Bewertungen stehen nicht darin. Um die eigenen Wiedergabedaten jedes Kontos zu lesen, melde dich oben als Besitzer mit Plex an. Plex hat keine Favoriten zum Importieren.',
       plexOwner: {
@@ -394,6 +408,19 @@ const users: typeof en = {
         `${played} als gesehen markiert, ${resumed === 1 ? '1 Fortsetzungspunkt' : `${resumed} Fortsetzungspunkte`}, ${favorites === 1 ? '1 Favorit' : `${favorites} Favoriten`}`,
       upToDate: (count: number) => `${count} bereits in Polyfin`,
       ratings: (count: number) => `${count} bewertet`,
+      collections: (count: number) =>
+        count === 1 ? '1 Sammlung angelegt' : `${count} Sammlungen angelegt`,
+      playlists: (count: number) =>
+        count === 1 ? '1 Wiedergabeliste angelegt' : `${count} Wiedergabelisten angelegt`,
+      listTitles: (count: number) =>
+        count === 1
+          ? '1 Titel zu früher übernommenen Listen hinzugefügt'
+          : `${count} Titel zu früher übernommenen Listen hinzugefügt`,
+      skipped: {
+        collection: (name: string) => `Sammlung „${name}“: kein Titel gefunden, nicht angelegt.`,
+        playlist: (name: string) =>
+          `Wiedergabeliste „${name}“: kein Titel gefunden, nicht angelegt.`,
+      },
       watchlist: (count: number) => `${count} zur Merkliste hinzugefügt`,
       undated: (count: number) =>
         count === 1
