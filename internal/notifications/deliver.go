@@ -53,9 +53,20 @@ func (s *Service) dispatchAdministrators(ev Event) {
 	s.dispatch(ev, func(t target) bool { return t.owner == nil || s.admins[*t.owner] })
 }
 
-// push queues ev for the target id, and starts its lane. It is called with
-// s.mu held.
+// push queues ev for the target id, and starts its lane, or holds it for
+// the target's next group when the target groups events of its type. It
+// is called with s.mu held.
 func (s *Service) push(id accounts.ID, ev Event) {
+	if t, ok := s.targets[id]; ok && t.groupMinutes > 0 && groupable(ev.Type) {
+		s.hold(id, t, ev)
+		return
+	}
+	s.enqueue(id, ev)
+}
+
+// enqueue queues ev for the target id, and starts its lane. It is called
+// with s.mu held.
+func (s *Service) enqueue(id accounts.ID, ev Event) {
 	if s.closed {
 		return
 	}
@@ -66,12 +77,80 @@ func (s *Service) push(id accounts.ID, ev Event) {
 	}
 	if len(l.queue) >= maxQueue {
 		s.logger.Warn("Too many notifications wait for a target: the oldest was dropped", "target", id.String())
+		dropped := l.queue[0]
 		l.queue = l.queue[1:]
+		s.spawn(func() { s.record(id, dropped, DeliveryDropped, result{}) })
 	}
 	l.queue = append(l.queue, &delivery{event: ev, queued: s.now()})
 	if !l.running {
 		l.running = s.spawn(func() { s.drive(id, l) })
 	}
+}
+
+// group is the events a target holds for its next grouped message.
+type group struct {
+	events []Event
+}
+
+// hold keeps ev for the next group of the target id, t, which is sent
+// t.groupMinutes after the first event it holds, or at once when it holds
+// maxGroup. It is called with s.mu held.
+func (s *Service) hold(id accounts.ID, t target, ev Event) {
+	if s.closed {
+		return
+	}
+	g := s.held[id]
+	if g == nil {
+		g = &group{}
+		s.held[id] = g
+		wait := time.Duration(t.groupMinutes) * s.timing.minute
+		s.spawn(func() {
+			if s.sleep(wait) {
+				s.mu.Lock()
+				s.release(id, g)
+				s.mu.Unlock()
+			}
+		})
+	}
+	g.events = append(g.events, ev)
+	if len(g.events) >= maxGroup {
+		s.release(id, g)
+	}
+}
+
+// release queues g, the group of the target id, as one message, or its
+// event as it is when it holds one, unless it was sent or the target
+// deleted. It is called with s.mu held.
+func (s *Service) release(id accounts.ID, g *group) {
+	if s.held[id] != g {
+		return
+	}
+	delete(s.held, id)
+	if len(g.events) == 1 {
+		s.enqueue(id, g.events[0])
+		return
+	}
+	s.enqueue(id, s.groupedEvent(g.events))
+}
+
+// capWait is how long the target id, t, waits before its next message
+// for its cap of messages a minute: zero when it may send now. It forgets
+// the messages sent more than a minute ago. It is called with s.mu held.
+func (s *Service) capWait(id accounts.ID, t target) time.Duration {
+	now := s.now()
+	recent := s.recent[id]
+	for len(recent) > 0 && now.Sub(recent[0]) >= s.timing.minute {
+		recent = recent[1:]
+	}
+	if len(recent) == 0 {
+		delete(s.recent, id)
+	} else {
+		s.recent[id] = recent
+	}
+	if t.perMinute == 0 || len(recent) < t.perMinute {
+		return 0
+	}
+	return recent[0].Add(s.timing.minute).Sub(now)
 }
 
 // drive sends the messages of a lane until none waits.
@@ -89,9 +168,14 @@ func (s *Service) drive(id accounts.ID, l *lane) {
 		d := l.queue[0]
 		t, ok := s.targets[id]
 		confined := ok && t.owner != nil && !s.admins[*t.owner]
-		s.mu.Unlock()
+		// The cap holds the message until it allows one more; a target
+		// deleted or turned off drops it.
 		wait := time.Duration(0)
 		if ok && t.enabled {
+			wait = s.capWait(id, t)
+		}
+		s.mu.Unlock()
+		if wait == 0 && ok && t.enabled {
 			wait = s.attempt(id, l, t, d, confined)
 		}
 		if wait == 0 {
@@ -124,17 +208,24 @@ func (s *Service) attempt(id accounts.ID, l *lane, t target, d *delivery, confin
 		l.failures = 0
 	}
 	failures := l.failures
+	// Each request counts toward the cap, whatever came of it.
+	if t.perMinute > 0 {
+		s.recent[id] = append(s.recent[id], s.now())
+	}
 	s.mu.Unlock()
 	switch res.outcome {
 	case delivered:
 		s.delivered(id)
+		s.record(id, d, DeliveryDelivered, res)
 		return 0
 	case unreadable:
+		s.record(id, d, DeliveryUnreadable, res)
 		return 0
 	case refused, rejected:
 		s.failing(id, res)
 		s.logger.Warn("A notification target refused a message, which was dropped", "target", id.String(), "kind", t.kind,
 			"event", d.event.Type, "status", res.status)
+		s.record(id, d, outcomeOf(res), res)
 		return 0
 	}
 	backoff := s.timing.retryFirst
@@ -153,6 +244,7 @@ func (s *Service) attempt(id accounts.ID, l *lane, t target, d *delivery, confin
 		s.failing(id, res)
 		s.logger.Warn("A notification could not be delivered in time and was dropped", "target", id.String(), "kind", t.kind,
 			"event", d.event.Type, "attempts", d.attempts, "status", res.status, "error", res.err)
+		s.record(id, d, DeliveryFailed, res)
 		return 0
 	}
 	return wait
@@ -376,7 +468,8 @@ func (s *Service) Test(ctx context.Context, owner *accounts.User, id accounts.ID
 	if err != nil {
 		return TestResult{}, err
 	}
-	res := s.send(t, s.testEvent(), owner != nil && !owner.IsAdministrator)
+	ev, queued := s.testEvent(), s.now()
+	res := s.send(t, ev, owner != nil && !owner.IsAdministrator)
 	switch res.outcome {
 	case unreadable:
 		return TestResult{}, ErrUnreadable
@@ -387,6 +480,7 @@ func (s *Service) Test(ctx context.Context, owner *accounts.User, id accounts.ID
 		s.logger.Info("A notification target did not accept a test message", "target", id.String(), "kind", t.kind,
 			"status", res.status, "error", res.err)
 	}
+	s.record(id, &delivery{event: ev, queued: queued, attempts: 1}, outcomeOf(res), res)
 	if t, err = s.load(ctx, owner, id); err != nil {
 		return TestResult{}, err
 	}
