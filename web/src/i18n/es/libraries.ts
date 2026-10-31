@@ -28,6 +28,10 @@ const libraries: typeof en = {
     hideInMenusHelp:
       'Conserva su fila en la pantalla de inicio. El menú lateral del reproductor web también la omite; las demás aplicaciones de Jellyfin la siguen mostrando. Se aplica la próxima vez que se cargue el reproductor web.',
     hiddenInMenus: 'Oculta en la barra superior',
+    skipLocal: 'Omitir los títulos que tienen las carpetas locales',
+    skipLocalHelp:
+      'Una película o serie que muestra la biblioteca de una carpeta local, vinculada al mismo identificador, solo aparece allí. Sus versiones y su estado de visto no cambian, y la búsqueda la encuentra una vez. Un usuario que no ve la biblioteca de la carpeta la sigue encontrando aquí.',
+    skippedLocal: 'Sin los títulos de carpetas locales',
     remove: 'Eliminar',
     removeLabel: (name: string) => `Eliminar ${name}`,
     moreActions: (name: string) => `Más acciones para ${name}`,

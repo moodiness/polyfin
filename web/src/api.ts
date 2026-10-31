@@ -1625,6 +1625,16 @@ export type Library = {
    */
   hideInMenus: boolean
   /**
+   * Whether the library leaves out the movies and series a local folder's library lists, for the
+   * users who see that library. False for a catalog that is not an enabled library.
+   */
+  skipLocal: boolean
+  /**
+   * Whether the library takes `skipLocal`: a catalog of movies or series of an addon, not of a
+   * local folder, an IPTV source or a music addon.
+   */
+  skippable: boolean
+  /**
    * Whether an enabled library of the server's has its descriptions read again on request: a movie
    * or series library of a Stremio addon or a local folder. False in the users' own scopes.
    */
@@ -1746,7 +1756,7 @@ export const MAX_LIBRARY_ITEMS = 20000
 
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'> &
-  Partial<Pick<Library, 'genre' | 'maxItems' | 'hideInMenus'>>
+  Partial<Pick<Library, 'genre' | 'maxItems' | 'hideInMenus' | 'skipLocal'>>
 
 export type LibraryImageChoice = 'none' | 'automatic' | 'generated' | 'custom'
 

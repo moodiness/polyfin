@@ -26,6 +26,10 @@ const libraries: typeof en = {
     hideInMenusHelp:
       'Ihre Zeile auf dem Startbildschirm bleibt erhalten. Auch das Seitenmenü des Web-Players blendet sie aus; andere Jellyfin-Apps listen sie weiterhin auf. Gilt ab dem nächsten Laden des Web-Players.',
     hiddenInMenus: 'In der oberen Leiste ausgeblendet',
+    skipLocal: 'Titel lokaler Ordner auslassen',
+    skipLocalHelp:
+      'Ein Film oder eine Serie, die die Bibliothek eines lokalen Ordners unter derselben Kennung auflistet, erscheint nur dort. Versionen und Gesehen-Status bleiben gleich, und die Suche findet den Titel einmal. Wer die Bibliothek des Ordners nicht sieht, findet ihn weiterhin hier.',
+    skippedLocal: 'Ohne Titel lokaler Ordner',
     remove: 'Entfernen',
     removeLabel: (name: string) => `${name} entfernen`,
     moreActions: (name: string) => `Weitere Aktionen für ${name}`,

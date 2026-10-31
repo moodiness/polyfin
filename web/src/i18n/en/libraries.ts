@@ -25,6 +25,10 @@ const libraries = {
     hideInMenusHelp:
       'It keeps its row on the home screen. The web player’s side menu leaves it out too; other Jellyfin apps still list it. Applies the next time the web player is loaded.',
     hiddenInMenus: 'Hidden from the top bar',
+    skipLocal: 'Leave out the titles local folders hold',
+    skipLocalHelp:
+      'A movie or show that a local folder’s library lists, linked to the same identifier, shows only there. Its versions and watched state stay the same, and search finds it once. A user who does not see the folder’s library still finds it here.',
+    skippedLocal: 'Without local folders’ titles',
     remove: 'Remove',
     removeLabel: (name: string) => `Remove ${name}`,
     moreActions: (name: string) => `More actions for ${name}`,
