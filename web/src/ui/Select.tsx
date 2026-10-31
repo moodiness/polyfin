@@ -209,6 +209,8 @@ export type SelectProps<T extends string | number> = {
   'aria-describedby'?: string
   /** Classes of the outer box (width, height). */
   className?: string
+  /** The choice shown wraps onto more lines, the box growing, rather than being cut. */
+  wrap?: boolean
 }
 
 /**
@@ -231,6 +233,7 @@ export function Select<T extends string | number>({
   'aria-describedby': ownDescribedBy,
   'aria-label': ariaLabel,
   className,
+  wrap,
 }: SelectProps<T>) {
   const { t } = useI18n()
   const controlProps = useControlProps(id, ownDescribedBy, invalid)
@@ -397,7 +400,12 @@ export function Select<T extends string | number>({
   return (
     <div
       ref={box}
-      className={cx(fieldBox, 'h-10', open && 'border-accent ring-3 ring-accent/15', className)}
+      className={cx(
+        fieldBox,
+        wrap ? 'min-h-10' : 'h-10',
+        open && 'border-accent ring-3 ring-accent/15',
+        className,
+      )}
     >
       <button
         ref={trigger}
@@ -423,9 +431,16 @@ export function Select<T extends string | number>({
           onKeyDown(event, false)
         }}
         onBlur={onBlur}
-        className={cx(control, 'flex cursor-pointer items-center pr-9 text-left')}
+        className={cx(
+          control,
+          'flex cursor-pointer items-center pr-9 text-left',
+          wrap && 'min-h-[38px] py-2',
+        )}
       >
-        <span className="min-w-0 truncate" lang={chosen >= 0 ? options[chosen].lang : undefined}>
+        <span
+          className={cx('min-w-0', wrap ? '[overflow-wrap:anywhere]' : 'truncate')}
+          lang={chosen >= 0 ? options[chosen].lang : undefined}
+        >
           {chosen >= 0 ? options[chosen].label : ''}
         </span>
       </button>

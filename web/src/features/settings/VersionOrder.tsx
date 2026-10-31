@@ -75,7 +75,8 @@ export default function VersionOrder({
                 onValue={(chosen: VersionCriterion) =>
                   onChange(order.map((other, at) => (at === index ? chosen : other)))
                 }
-                className="min-w-0 flex-1 sm:max-w-sm"
+                className="min-w-0 flex-1"
+                wrap
               />
               <MoveButtons
                 name={text.criteria[criterion]}
