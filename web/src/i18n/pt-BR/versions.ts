@@ -1,0 +1,144 @@
+import type en from '../en/versions'
+
+const versions: typeof en = {
+  versions: {
+    title: 'Versões',
+    description:
+      'Veja o que acontece com cada stream que os complementos listam para um filme ou episódio, como são oferecidos a um usuário, e fixe ou bloqueie versões.',
+    asUser: 'Como usuário',
+    asUserHelp:
+      'As versões dependem do usuário: seus próprios complementos, torrents, grupo de qualidade e idioma de áudio.',
+    you: (name: string) => `${name} (você)`,
+    find: 'Encontrar um título',
+    search: 'Filme ou série',
+    searchHelp: 'Busca nas bibliotecas que este usuário vê. Uma série lista seus episódios.',
+    searchButton: 'Buscar',
+    searching: 'Buscando…',
+    noTitles: 'Nenhum filme ou série encontrado.',
+    titlesFound: (term: string) => `Títulos encontrados para “${term}”`,
+    pickTitle: (name: string, details: string) => `${name}, ${details}`,
+    episodesOf: (name: string) => `Episódios de ${name}`,
+    noEpisodes: 'Nenhum episódio.',
+    back: 'Voltar',
+    everywhere: 'Bloqueados para todos os títulos',
+    everywhereHelp:
+      'Nenhuma versão destes arquivos é listada para nenhum título. O bloqueio de um único título aparece na página dele.',
+    noBlocks: 'Nenhum arquivo está bloqueado para todos os títulos.',
+    backToSearch: 'Versões',
+    askAgain: 'Perguntar aos complementos de novo',
+    askedAgain: 'Os complementos estão sendo perguntados de novo.',
+    askedLately:
+      'Os complementos foram perguntados agora há pouco: tente de novo em alguns segundos.',
+    pending: (count: number) =>
+      count === 1
+        ? '1 complemento ainda está sendo perguntado…'
+        : `${count} complementos ainda estão sendo perguntados…`,
+    order: 'Como as versões são ordenadas',
+    orderNone: 'A ordem dos complementos: Ordenar versões por não tem nenhum critério.',
+    orderBy: (criteria: string) => `Ordenar versões por: ${criteria}.`,
+    group: (height: number) => `Grupo de qualidade: ${height}p.`,
+    keptAll: 'As regras de ocultação ocultariam todas as versões, então nenhuma é ocultada.',
+    closest: 'Nenhuma versão cabe no grupo de qualidade: as alturas mais próximas vêm primeiro.',
+    pin: 'Versão fixada',
+    noPin:
+      'Nenhuma versão está fixada. Uma versão fixada vem primeiro para todos os usuários, nas páginas dos títulos e na reprodução, enquanto um complemento a listar; uma versão escolhida no menu de versões continua sendo reproduzida.',
+    pinnedBy: (name: string) => (name === '' ? 'Fixada' : `Fixada por ${name}`),
+    pinMissing: 'Nenhum complemento lista este arquivo agora: vale a ordem de sempre.',
+    unpin: 'Desafixar',
+    pinAction: 'Fixar',
+    pinned: 'Fixada',
+    pinDone: 'Versão fixada.',
+    unpinDone: 'Versão desafixada.',
+    sources: 'Streams por fonte',
+    sourceStates: {
+      known: 'Respondeu',
+      stale: 'Expirada, perguntada de novo',
+      asked: 'Sendo perguntada',
+    },
+    embedded: 'Na descrição do título',
+    noStreams: 'Não listou nenhum stream.',
+    noSources: 'Nenhum complemento lista streams para este título.',
+    steps: {
+      offered: (place: number) => `Versão ${place}`,
+      nothing: 'Nada para reproduzir',
+      torrents: 'Torrents desativados para este usuário',
+      blocked: 'Bloqueado',
+      duplicate: 'Mesmo arquivo listado antes',
+      mirror: 'Espelho',
+      failed: 'Falhou recentemente',
+      hidden: 'Ocultada por uma regra',
+      group: 'Acima do grupo de qualidade',
+    },
+    stepHelp: {
+      nothing: 'Uma página web, um vídeo de outro site ou um aviso: nada que o Polyfin reproduza.',
+      torrents:
+        'Reproduzir streams de torrent está desativado, ou o usuário não pode reproduzir streams de torrent (Configurações › Torrents).',
+      duplicate: 'O mesmo nome de arquivo e o mesmo tamanho, listados antes: uma só versão.',
+      mirror:
+        'O mesmo arquivo de outro complemento, guardado como espelho oculto: uma reprodução continua nele quando a fonte da versão falha.',
+      group:
+        'O grupo de qualidade do usuário deixa de fora as versões mais altas enquanto alguma couber.',
+    },
+    rules: {
+      elsewhere: (marker: string) => `Nomeia outro título (${marker})`,
+      larger: (gigabytes: string) => `Ocultar versões maiores que ${gigabytes} GB`,
+      codec: (codec: string) => `Ocultar estes codecs de vídeo: ${codec}`,
+      release: (kind: string) => `Ocultar lançamentos de baixa qualidade: ${kind}`,
+      words: (word: string) => `Ocultar versões cujos rótulos contêm “${word}”`,
+      other: (rule: string, detail: string) => (detail === '' ? rule : `${rule}: ${detail}`),
+      none: 'Ocultada por uma regra alterada desde então',
+    },
+    unstarted: 'Não iniciou recentemente: reproduções que não escolhem versão a pulam',
+    labelsAsRead: 'Rótulos',
+    facts: 'O que as regras sabem',
+    analyzed: 'Analisada',
+    multi: 'MULTI',
+    block: 'Bloquear',
+    blockTitle: 'Bloquear este arquivo',
+    blockScope: 'Bloquear para',
+    scopeTitle: 'Este título',
+    scopeEverywhere: 'Todos os títulos',
+    scopeHelp:
+      'Todos os títulos bloqueia este nome de arquivo e este tamanho onde quer que um complemento os liste. Nenhuma versão de um arquivo bloqueado é listada ou reproduzida; as regras de ocultação nunca ocultam todas as versões, um bloqueio sim.',
+    reason: 'Motivo',
+    reasonHelp: (max: number) => `Por quê, para o próximo administrador. Até ${max} caracteres.`,
+    blocked: 'Bloqueado',
+    blockedBy: (name: string, reason: string) =>
+      [name === '' ? 'Bloqueado' : `Bloqueado por ${name}`, reason].filter(Boolean).join(': '),
+    blockedEverywhere: 'Para todos os títulos',
+    unblock: 'Desbloquear',
+    blockDone: 'Arquivo bloqueado.',
+    unblockDone: 'Arquivo desbloqueado.',
+    titleBlocks: 'Bloqueados para este título',
+    noTitleBlocks: 'Nenhum arquivo está bloqueado para este título.',
+    analyze: 'Analisar agora',
+    analyzeDone: 'Versão analisada.',
+    analysisFailed: (why: string) => `Não foi possível analisá-la: ${why}`,
+    decisions: 'Últimas reproduções',
+    decisionsHelp:
+      'O que as últimas reproduções deste título tentaram, para qualquer usuário. Mantidas até reiniciar.',
+    noDecisions: 'Nenhuma reprodução desde que o servidor iniciou.',
+    decisionBy: (user: string, device: string, app: string) =>
+      [user, device, app].filter(Boolean).join(' · '),
+    picked: 'Escolhida no menu de versões',
+    noneChosen: 'Nenhuma versão reproduzida',
+    deliveries: {
+      directPlay: 'reprodução direta',
+      directStream: 'stream direto',
+      converted: 'convertida',
+    },
+    outcomes: {
+      plays: 'reproduz',
+      unreadable: 'não pôde ser lida',
+      unstarted: 'o torrent não iniciou',
+      torrentCap: 'havia tantos torrents quanto o permitido',
+      conversionCap: 'havia tantas conversões quanto o permitido',
+      unplayable: 'precisa de uma conversão que o usuário não tem, ou passa dos limites dele',
+      notAnalyzed: 'não analisada antes, então não foi tentada',
+      passed: 'ainda estava sendo lida quando a reprodução seguiu',
+    },
+    notFound: 'Este título não foi encontrado para este usuário.',
+  },
+}
+
+export default versions
