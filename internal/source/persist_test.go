@@ -39,6 +39,9 @@ func TestARestartKeepsTheBlocksRead(t *testing.T) {
 	}
 	s.Release()
 	kept := before.Usage()
+	if kept.Misses != int64(len(o.data)) || kept.Hits != 0 {
+		t.Errorf("a first read: hits %d, misses %d", kept.Hits, kept.Misses)
+	}
 	if err := before.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +61,39 @@ func TestARestartKeepsTheBlocksRead(t *testing.T) {
 	}
 	if usage := after.Usage(); usage.Hits != int64(len(o.data)) || usage.Misses != 0 {
 		t.Errorf("hits %d, misses %d", usage.Hits, usage.Misses)
+	}
+}
+
+// Bytes fetched ahead of the readers, by a warm or a read ahead, count as
+// misses the first time a reader reads them, a block read in parts
+// included, and as hits once read again.
+func TestBytesReadForTheFirstTimeAreMisses(t *testing.T) {
+	o, server := newOrigin(t, 8*blockSize)
+	cache := keptCache(t, t.TempDir(), 1<<30)
+	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+	defer s.Release()
+	if err := s.Warm(t.Context(), Span{Off: 0, End: 3 * blockSize}); err != nil {
+		t.Fatal(err)
+	}
+	read := func(off int64, n int) {
+		t.Helper()
+		p := make([]byte, n)
+		if _, err := s.ReadAt(t.Context(), p, off); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(p, o.data[off:off+int64(n)]) {
+			t.Fatalf("content differs at %d", off)
+		}
+	}
+	read(0, blockSize/2)
+	read(blockSize/2, blockSize/2)
+	read(blockSize, 2*blockSize)
+	if usage := cache.Usage(); usage.Misses != 3*blockSize || usage.Hits != 0 {
+		t.Errorf("after a first read: hits %d, misses %d", usage.Hits, usage.Misses)
+	}
+	read(blockSize/4, blockSize)
+	if usage := cache.Usage(); usage.Misses != 3*blockSize || usage.Hits != blockSize {
+		t.Errorf("after reading again: hits %d, misses %d", usage.Hits, usage.Misses)
 	}
 }
 
