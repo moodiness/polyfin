@@ -42,7 +42,7 @@ type slowTorrent struct {
 func newSlowTorrent(t *testing.T, ffprobe string, id byte, data []byte, analysis media.Analysis) slowTorrent {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	sources, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, &fakeSource{}, logger)
+	sources, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, &fakeSource{}, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -269,7 +269,7 @@ func TestReadsWithinABudgetFetchNoMoreThanIt(t *testing.T) {
 			addon.Start()
 			t.Cleanup(addon.Close)
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			sources, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, newSmallBuffers(t), logger)
+			sources, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, newSmallBuffers(t), logger)
 			if err != nil {
 				t.Fatal(err)
 			}

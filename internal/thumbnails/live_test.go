@@ -98,7 +98,7 @@ func TestThumbnailsDuringThePlay(t *testing.T) {
 	data := longVideo(t, ffmpeg)
 	origin := newHost(t, data)
 	ts := newTestService(t, ffmpeg)
-	cache, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, httpOpener{}, slog.New(slog.DiscardHandler))
+	cache, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, httpOpener{}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

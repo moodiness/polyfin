@@ -314,8 +314,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	if err := work.ClearUnused(cfg.DataDir); err != nil {
 		logger.Warn("The folders of the data folder's cache left unused could not be removed", "error", err)
 	}
-	cacheLimit := func() int64 { return int64(store.Settings().CacheSizeGB) * 1e9 }
-	sources, err := source.New(work.Sources(), cacheLimit, addonClient, logger)
+	sources, err := source.New(work.Sources(), func() source.Policy { return playback.SourcePolicy(store.Settings()) }, addonClient, logger)
 	if err != nil {
 		return fmt.Errorf("prepare the source cache: %w", err)
 	}
@@ -398,7 +397,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// source cache's space, which counts them. DHT lookups start from the
 	// bootstrap nodes clients use, over a route that carries UDP.
 	torrents, err := torrent.New(torrent.Config{Settings: func() torrent.Settings { return playback.TorrentSettings(store.Settings()) },
-		Dir: work.Torrents(), Budget: func() int64 { return cacheLimit() / 4 },
+		Dir: work.Torrents(), Budget: func() int64 { return playback.SourcePolicy(store.Settings()).Limit / 4 },
 		Bootstrap: torrent.BootstrapNodes, Logger: logger})
 	if err != nil {
 		return fmt.Errorf("prepare the torrent directory: %w", err)

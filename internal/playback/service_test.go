@@ -94,7 +94,7 @@ func newService(t *testing.T, opener source.Opener, ffprobe string, renew Renewe
 func newServiceOn(t *testing.T, pool *pgxpool.Pool, opener source.Opener, ffprobe string, renew Renewer) *Service {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	sources, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, opener, logger)
+	sources, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, opener, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

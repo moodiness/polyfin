@@ -117,7 +117,7 @@ func TestSharedBytesCountWithinTheLimit(t *testing.T) {
 		}
 	}
 	shared.Store(5 * blockSize)
-	if used, _, _ := c.Usage(); used != 11*blockSize {
+	if used := c.Usage().Used; used != 11*blockSize {
 		t.Fatalf("usage %d, want the cache's 6 blocks and the 5 shared", used)
 	}
 	// Past the protection of chunks read lately, the next block stored
