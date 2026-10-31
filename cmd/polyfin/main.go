@@ -710,6 +710,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// Apply this order to every user clears the orders of libraries
 		// users saved, with what the Jellyfin API remembers of them.
 		LibraryOrders: jellyfinAPI,
+		EpisodeOrders: lib,
 		Sharing:       lib,
 		Health: admin.HealthSources{
 			Addons:           addonClient,

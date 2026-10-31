@@ -213,6 +213,9 @@ type Options struct {
 	// from Jellyfin apps, for Apply this order to every user under Content
 	// › Libraries; nil has none.
 	LibraryOrders LibraryOrders
+	// EpisodeOrders shows and sets the order series show their episodes
+	// in, under Content › Libraries; nil offers none.
+	EpisodeOrders EpisodeOrders
 }
 
 type handler struct {
@@ -512,6 +515,10 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/scopes/shared/libraries/refresh/stop", h.administrator(h.stopLibraryRefresh))
 	mux.Handle("GET /admin/api/scopes/shared/libraries/user-orders", h.administrator(h.libraryOrders))
 	mux.Handle("DELETE /admin/api/scopes/shared/libraries/user-orders", h.administrator(h.clearLibraryOrders))
+	mux.Handle("GET /admin/api/episode-orders", h.administrator(h.episodeOrders))
+	mux.Handle("GET /admin/api/episode-orders/series", h.administrator(h.searchOrderedSeries))
+	mux.Handle("GET /admin/api/titles/{id}/episode-order", h.administrator(h.episodeOrder))
+	mux.Handle("PUT /admin/api/titles/{id}/episode-order", h.administrator(h.setEpisodeOrder))
 	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists", h.signedIn(h.smartLists))
 	mux.Handle("POST /admin/api/scopes/{scope}/smart-lists", h.signedIn(h.createSmartList))
 	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists/catalogs", h.signedIn(h.smartCatalogs))
