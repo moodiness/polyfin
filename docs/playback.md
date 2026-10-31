@@ -59,7 +59,7 @@ Polyfin does nothing to an addon's streams but what this list says, in this orde
 7. **Another title:** a stream whose labels name another episode, a season without the episode, or another movie of the same name is left out, without a setting, as a hide rule leaves a version out: never every version of a title (see [Versions of another title](#versions-of-another-title)).
 8. **Hide rules:** when set, **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Playback**, leave out what they name. All are off by default, and none ever hides every version of a title (see [Version order](#version-order)).
 9. **Quality group:** the user's group, when set, leaves out the versions taller than it, while one fits. It is **Original (no limit)** by default (see [Quality groups](users.md#quality-groups)).
-10. **The order:** it stays the addons' unless **Order versions by**, under **Settings › Playback**, has criteria. It has none by default. Versions the criteria tie on keep the addons' order.
+10. **The order:** it stays the addons' unless **Order versions by**, under **Settings › Playback**, has criteria. It has none by default. Versions the criteria tie on keep the addons' order. For a user given **Play local files first**, the versions of local folders and network shares then come before the others (see [Local files first for some users](#local-files-first-for-some-users)). It is off by default.
 11. **Plays without a pick:** when an app plays without picking a version, `PlaybackInfo` leaves out the versions it passed over: those that could not be read or did not play on the app, and the torrents that did not start lately (see above).
 
 Polyfin keeps no maximum of versions, and looks at no seeders, source, size or language unless a setting above says so.
@@ -373,6 +373,7 @@ A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. S
 2. The hide rules apply, with the versions of [another title](#versions-of-another-title), which are hidden whatever the rules, and the [label rules](#label-rules) that hide come last. When they would hide every version of a title, none is hidden.
 3. The user's [quality group](users.md#quality-groups) leaves out the taller versions. When no version fits, the closest height comes first, and the criteria order the versions of the same height.
 4. The criteria order the others.
+5. For a user given **Play local files first**, the versions of local folders and network shares move before the others, each side keeping the order the criteria gave it (see [Local files first for some users](#local-files-first-for-some-users)).
 
 - Item details and `PlaybackInfo` list the versions in that order, so version menus show it. The first, named after the title, is the one Play starts first and **Prepare playback in advance** analyzes. **Versions tried when one does not work** and **Prefer versions the app plays without conversion** take the versions in that order.
 - Hidden versions are listed nowhere: not in details, `PlaybackInfo`, downloads or trickplay. A version an app asks for by its own identifier, one it was shown before a rule hid it, is refused as if it were gone.
@@ -395,6 +396,20 @@ A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. S
 The criterion **Score of the label rules, highest first** orders versions by their score where it stands among the criteria. With scoring rules and without that criterion, the score orders the versions after every criterion chosen, so that rules alone order them. Ties keep the addons' order.
 
 Up to 40 rules, of 200 characters each at most. A regular expression must be valid when saved, and not too large: Polyfin matches them in a time that grows only with the size of the expression and of the labels, both bounded (the labels read are the first 4,096 bytes), so that no rule can take long whatever it says. Rules apply to every user.
+
+#### Local files first for some users
+
+**Play local files first**, in the **Playback and access** section of a user's page or a group's (see [User groups](users.md#user-groups)), offers that user the versions of their local folders and network shares (see [Local folders](local-folders.md)) before the addons' streams, whatever **Order versions by** and **Order of sources** say. Other users keep the server's order. It is off for every user and every group until an administrator gives it, so that nothing changes on its own.
+
+- It comes after the criteria: they still order the local files among themselves, and the addons' streams among themselves. With **Source, in the order below**, the folders keep their places in **Order of sources** among the folders, and the addons theirs among the addons.
+- The version menu of item details and `PlaybackInfo` lists the local files first, so the first, named after the title, is a local file: **Play**, a play started from a card such as Next Up, and **Prepare playback in advance** take it. When it cannot be read or does not play on the app, Polyfin tries the next ones as usual, the addons' streams after the other local files.
+- It hides no version and brings none back: the hide rules and the user's quality group apply first. A title without a local file keeps the server's order.
+- It is a group setting: the members who follow a group take its value at once, and **Reset to defaults** and **Create a user** turn it off. **Create a group** and invite links whose **Settings of** names a user copy that user's value.
+- Users do not set it themselves: a local file is always sent by the server, and may need converting where a remote stream would play as it is, so it is the administrator's choice, as the quality group is.
+
+To put local files first for everyone, rather than for some users, choose **Source, in the order below** first in **Order versions by** and move the folders to the top of **Order of sources**.
+
+**Compared with Jellyfin:** Jellyfin 12.4 has no remote streams and no choice of the kind: it orders a title's versions the same for every user, the version opened first, then plain video files before disc folders, 2D before 3D, the widest first ([`MediaSourceManager.cs`, lines 617 to 642](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L617-L642)). Its user policy has no such field, so Jellyfin apps neither show nor change it: an app sending a user's policy back leaves it as it is.
 
 ### Version names
 
