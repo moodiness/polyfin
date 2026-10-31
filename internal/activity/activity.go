@@ -303,6 +303,7 @@ var sectionNames = map[string]i18n.Text{
 	accounts.SectionLibraries: {"Visible libraries", "Bibliothèques visibles", "Sichtbare Bibliotheken", "Bibliotecas visibles", "Librerie visibili", "Bibliotecas visíveis"},
 	accounts.SectionGenres:    {"Blocked genres", "Genres bloqués", "Gesperrte Genres", "Géneros bloqueados", "Generi bloccati", "Gêneros bloqueados"},
 	accounts.SectionHours:     {"Allowed hours", "Horaires autorisés", "Erlaubte Zeiten", "Horario permitido", "Orari consentiti", "Horários permitidos"},
+	accounts.SectionChannels:  {"Live TV channels", "Chaînes de TV en direct", "Live-TV-Sender", "Canales de TV en directo", "Canali TV in diretta", "Canais de TV ao vivo"},
 }
 
 // GroupCreated records a new user group.

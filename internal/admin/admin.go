@@ -199,6 +199,10 @@ type Options struct {
 	// from Jellyfin apps, for Apply this order to every user under Content
 	// › Libraries; nil has none.
 	LibraryOrders LibraryOrders
+	// ChannelChoices lists the channel groups and channels of the server's
+	// Live TV sources, which users' and groups' channel rules name; nil
+	// lists none.
+	ChannelChoices ChannelChoices
 }
 
 type handler struct {
@@ -341,6 +345,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/invites", h.administrator(h.invites))
 	mux.Handle("POST /admin/api/invites", h.administrator(h.createInvite))
 	mux.Handle("POST /admin/api/invites/{id}/revoke", h.administrator(h.revokeInvite))
+	mux.Handle("GET /admin/api/live-tv/channel-choices", h.administrator(h.channelChoices))
 	mux.Handle("GET /admin/api/groups", h.administrator(h.groups))
 	mux.Handle("POST /admin/api/groups", h.administrator(h.createGroup))
 	mux.Handle("GET /admin/api/groups/{id}", h.administrator(h.group))
@@ -732,6 +737,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidSyncPlay, http.StatusBadRequest, "invalid_sync_play"},
 		{accounts.ErrInvalidQualityGroup, http.StatusBadRequest, "invalid_quality_group"},
 		{accounts.ErrInvalidBlockedGenres, http.StatusBadRequest, "invalid_blocked_genres"},
+		{accounts.ErrInvalidChannelRule, http.StatusBadRequest, "invalid_live_tv_channels"},
 		{accounts.ErrInvalidMetadataLanguage, http.StatusBadRequest, "invalid_language"},
 		{accounts.ErrInvalidAudioRegion, http.StatusBadRequest, "invalid_audio_region"},
 		{accounts.ErrInvalidAccessSchedule, http.StatusBadRequest, "invalid_access_schedules"},

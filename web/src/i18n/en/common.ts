@@ -205,6 +205,8 @@ const common = {
     invalid_hidden_libraries: 'The library list changed in the meantime. Reload the page.',
     invalid_blocked_genres:
       'Genres must be 1 to 100 characters long, and at most 100 can be blocked.',
+    invalid_live_tv_channels:
+      'The channel choice is not valid: All, Only these or All except these, with at most 10,000 groups and 10,000 channels.',
     invalid_access_schedules:
       'Hours run from 00:00 to 24:00, and each end must come after its start (50 rows at most).',
     outside_allowed_hours:

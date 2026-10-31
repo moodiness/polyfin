@@ -721,8 +721,9 @@ func (h *Handler) cancelSeriesTimer(w http.ResponseWriter, r *http.Request) {
 
 // visibleRecordings keeps the recordings user sees: those of the timers
 // they made, and those of channels they reach, which their parental
-// control and blocked genres let them reach. It returns the channels they
-// reach.
+// control and blocked genres let them reach. A recording of a channel their
+// channel rule hides is not shown, even to the user who scheduled it. It
+// returns the channels they reach.
 func (h *Handler) visibleRecordings(ctx context.Context, user accounts.User, list []recordings.Recording) ([]recordings.Recording, map[accounts.ID]library.Item, error) {
 	ids := make([]accounts.ID, 0, len(list))
 	for _, rec := range list {
@@ -732,9 +733,13 @@ func (h *Handler) visibleRecordings(ctx context.Context, user accounts.User, lis
 	if err != nil {
 		return nil, nil, err
 	}
+	hidden, err := h.Library.HiddenChannels(ctx, user, ids)
+	if err != nil {
+		return nil, nil, err
+	}
 	return slices.DeleteFunc(list, func(rec recordings.Recording) bool {
 		_, reached := channels[rec.Channel]
-		mine := rec.User != nil && *rec.User == user.ID
+		mine := rec.User != nil && *rec.User == user.ID && !hidden[rec.Channel]
 		return !reached && !mine || !recordings.Allows(user, recordings.RecordingKind, rec.Rating, rec.Genres)
 	}), channels, nil
 }
