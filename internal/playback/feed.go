@@ -821,7 +821,7 @@ func (s *Service) sniff(ctx context.Context, version library.Version, times live
 	}
 	// The connection lives on with ctx; answerCtx only bounded the wait.
 	stopAfter := context.AfterFunc(ctx, cancelAnswer)
-	var body io.ReadCloser = &closer{ReadCloser: response.Body, done: func() { stopAfter(); cancelAnswer() }}
+	var body io.ReadCloser = &closer{ReadCloser: s.countReceived(version.ID, response.Body), done: func() { stopAfter(); cancelAnswer() }}
 	if err := statusFailure(response); err != nil {
 		body.Close()
 		return nil, nil, err
