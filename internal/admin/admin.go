@@ -176,6 +176,9 @@ type Options struct {
 	// collections they may list.
 	HomeRows       *homerows.Store
 	HomeRowChoices HomeRowChoices
+	// PosterPreviews finds titles to preview the badges over posters on
+	// (Settings › Content › Posters); nil previews none.
+	PosterPreviews PosterPreviews
 	// Sharing finds the titles users give through share links; nil lets
 	// no one make a link.
 	Sharing Sharing
@@ -359,6 +362,7 @@ func New(options Options) http.Handler {
 	h.dlnaRoutes(mux)
 	mux.Handle("PUT /admin/api/settings", h.administrator(h.updateSettings))
 	mux.Handle("GET /admin/api/settings/apps", h.administrator(h.settingsApps))
+	mux.Handle("GET /admin/api/settings/poster-previews", h.administrator(h.posterPreviews))
 	mux.Handle("POST /admin/api/settings/secrets/{name}/reveal", h.administrator(h.revealServerSecret))
 	mux.Handle("POST /admin/api/settings/metrics-token", h.administrator(h.newMetricsToken))
 	mux.Handle("GET /admin/api/settings/theme-copy", h.administrator(h.themeCopy))
@@ -632,6 +636,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidMDBListRatingsKey, http.StatusBadRequest, "invalid_mdblist_ratings_key"},
 		{accounts.ErrInvalidTMDBKey, http.StatusBadRequest, "invalid_tmdb_key"},
 		{accounts.ErrInvalidCriticRatingShows, http.StatusBadRequest, "invalid_critic_rating_shows"},
+		{accounts.ErrInvalidPosterBadgeSize, http.StatusBadRequest, "invalid_poster_badge_size"},
+		{accounts.ErrInvalidPosterTemplate, http.StatusBadRequest, "invalid_poster_template"},
 		{accounts.ErrInvalidMeasureLoudness, http.StatusBadRequest, "invalid_measure_loudness"},
 		{accounts.ErrInvalidSegmentOrder, http.StatusBadRequest, "invalid_segment_order"},
 		{accounts.ErrInvalidSegmentSourcesOff, http.StatusBadRequest, "invalid_segment_sources_off"},

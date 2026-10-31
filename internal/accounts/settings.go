@@ -856,6 +856,35 @@ func ValidRatingsKey(key string) bool {
 // or the audience score.
 var CriticRatingChoices = []string{"critics", "audience"}
 
+// PosterBadgeSizes are the size presets of the badges drawn over posters
+// (see Settings.PosterBadgeSize), the first by default.
+var PosterBadgeSizes = []string{"medium", "small", "large"}
+
+// ErrInvalidPosterBadgeSize reports a Settings.PosterBadgeSize not among
+// PosterBadgeSizes, and ErrInvalidPosterTemplate a Settings.PosterTemplate
+// that is not valid (see ValidPosterTemplate).
+var (
+	ErrInvalidPosterBadgeSize = errors.New("invalid poster badge size")
+	ErrInvalidPosterTemplate  = errors.New("invalid poster address template")
+)
+
+// MaxPosterTemplateBytes is the longest Settings.PosterTemplate.
+const MaxPosterTemplateBytes = 1024
+
+// ValidPosterTemplate reports whether template may be the poster address
+// template: empty, or an absolute http or https URL with a host, without
+// user info or fragment, of at most MaxPosterTemplateBytes, holding no
+// spaces or control characters, that names {imdb_id} or {tmdb_id}.
+func ValidPosterTemplate(template string) bool {
+	if template == "" {
+		return true
+	}
+	if !strings.Contains(template, "{imdb_id}") && !strings.Contains(template, "{tmdb_id}") {
+		return false
+	}
+	return ValidUpdateToolURL(template)
+}
+
 // ErrInvalidTMDBKey reports a Settings.TMDBKey that is not a valid key
 // (see ValidTMDBKey).
 var ErrInvalidTMDBKey = errors.New("invalid TMDB key")
@@ -1781,6 +1810,18 @@ type Settings struct {
 	// /Polyfin/Items/Ratings); off, it shows none there.
 	PosterRatings bool
 
+	// PosterBadges draws a movie's or a series' ratings, and a series' new
+	// episode or season, over its Primary image, for every app, at the
+	// size of PosterBadgeSize, one of PosterBadgeSizes; the web player then
+	// shows no ratings on hover (see PosterRatings).
+	PosterBadges    bool
+	PosterBadgeSize string
+	// PosterTemplate is the address of a movie's or a series' poster in
+	// place of its addon's, with {imdb_id}, {tmdb_id}, {type} and
+	// {tmdb_type} filled in, empty for none (see ValidPosterTemplate and
+	// library.PosterAddress).
+	PosterTemplate string
+
 	// The OpenID Connect provider people may sign in with (see
 	// ProviderSignIn): its issuer, the name its button shows, empty for
 	// the issuer's host, and Polyfin's client at it, the secret empty for
@@ -2065,7 +2106,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"restart_confirmed, update_tool_url, update_tool_token, " +
 	"conversion_folder, reading_folder, cache_folder, " +
 	"silo_apps, " +
-	"poster_ratings, " +
+	"poster_ratings, poster_badges, poster_badge_size, poster_template, " +
 	"provider_issuer, provider_name, provider_client_id, provider_client_secret, provider_user_claim, provider_create_accounts, " +
 	"provider_admin_claim, provider_admin_value"
 
@@ -2131,7 +2172,7 @@ func (settings *Settings) fields() []any {
 		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken,
 		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder,
 		&settings.SiloApps,
-		&settings.PosterRatings,
+		&settings.PosterRatings, &settings.PosterBadges, &settings.PosterBadgeSize, &settings.PosterTemplate,
 		&settings.ProviderIssuer, &settings.ProviderName, &settings.ProviderClientID, &settings.ProviderClientSecret, &settings.ProviderUserClaim,
 		&settings.ProviderCreateAccounts, &settings.ProviderAdminClaim, &settings.ProviderAdminValue}
 }
@@ -2377,6 +2418,13 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !slices.Contains(CriticRatingChoices, settings.CriticRatingShows) {
 		return Settings{}, ErrInvalidCriticRatingShows
+	}
+	if !slices.Contains(PosterBadgeSizes, settings.PosterBadgeSize) {
+		return Settings{}, ErrInvalidPosterBadgeSize
+	}
+	settings.PosterTemplate = strings.TrimSpace(settings.PosterTemplate)
+	if !ValidPosterTemplate(settings.PosterTemplate) {
+		return Settings{}, ErrInvalidPosterTemplate
 	}
 	if !slices.Contains(MeasureLoudnessChoices, settings.MeasureLoudness) {
 		return Settings{}, ErrInvalidMeasureLoudness

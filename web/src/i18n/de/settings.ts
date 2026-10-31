@@ -633,6 +633,27 @@ const settings: typeof en = {
     criticRatingShowsHelp:
       'Jellyfin-Apps haben ein einziges Feld für eine Kritikerbewertung von 0 bis 100: Es zeigt die Kritikerwertung oder die Publikumswertung. Auf der Seite eines Titels zeigt der Web-Player beide, zusammen mit der IMDb-Bewertung.',
     criticRatingChoices: { critics: 'Kritikerwertung', audience: 'Publikumswertung' },
+    posterBadges: 'Abzeichen auf Postern',
+    posterBadgesHelp:
+      'Zeichnet auf das Poster eines Films oder einer Serie die Sternbewertung, mit dem Namen IMDb, wenn sie die IMDb-Bewertung von MDBList ist, die Kritiker- und Publikumswertung, solange ein MDBList-API-Schlüssel für Bewertungen gesetzt ist, und bei einer Serie eine neue Folge oder neue Staffel der letzten 30 Tage. Jede App zeigt sie, da sie Teil des Posters sind, nur mit Symbolen und Zahlen, für jede Sprache. Solange es an ist, zeigt der Web-Player keine Bewertungen beim Überfahren. Wenn aus, erhalten die Apps die Poster, wie sie sind.',
+    posterBadgeSize: 'Größe der Abzeichen',
+    posterBadgeSizeHelp:
+      'Wie groß die Abzeichen im Verhältnis zur Breite des Posters sind. Auf kleinen Karten behalten sie eine Mindestgröße, dort passen weniger davon.',
+    posterBadgeSizeChoices: { medium: 'Mittel', small: 'Klein', large: 'Groß' },
+    posterPreview: {
+      title: 'Vorschau',
+      help: 'Titel deiner Bibliotheken, wie Apps sie zeigen, in der gewählten Größe, schon vor dem Speichern, ob die Abzeichen an sind oder nicht.',
+      original: 'Wie es ist',
+      badged: 'Mit Abzeichen',
+      card: 'Auf einer kleinen Karte',
+      another: 'Anderer Titel',
+      none: 'Noch ist kein Film und keine Serie deiner Bibliotheken bekannt: Öffne zuerst eine Bibliothek im Web-Player.',
+      nothing:
+        'Dieser Titel hat keine Bewertung und keine neue Folge: Sein Poster zeigt kein Abzeichen.',
+    },
+    posterTemplate: 'Vorlage für Poster-Adressen',
+    posterTemplateHelp:
+      'Optional. Die Adresse, von der die Poster von Filmen und Serien statt der Poster der Add-ons geladen werden, mit {imdb_id}, {tmdb_id}, {type}, movie oder series, und {tmdb_type}, movie oder tv, eingesetzt. Ein Titel ohne eine Kennung, die die Adresse nennt, oder dessen Poster dort nicht geladen werden kann, behält das seines Add-ons. Poster lokaler Ordner und hochgeladene Poster haben weiterhin Vorrang.',
     lyrics: 'Songtexte von LRCLIB',
     lyricsHelp:
       'Apps zeigen die Texte von Songs, Zeile für Zeile synchronisiert, wenn LRCLIB, eine freie Songtext-Datenbank, sie hat. Polyfin sucht einen Song einmalig anhand von Interpret, Titel, Album und Länge, wenn er abgespielt wird oder seine Details oder sein Text geöffnet werden. Wenn aus, haben Songs keine Texte und LRCLIB wird nie abgefragt.',
@@ -973,7 +994,7 @@ const settings: typeof en = {
       'Fügt die von den Add-ons gefundenen Versionen dem Versionsmenü der Seite eines Films oder einer Folge hinzu, während sie geöffnet ist, und behält die gewählte Version bei. Wenn aus, zeigt eine Seite, die geöffnet wurde, bevor eine Version gefunden wurde, die ersten trotzdem an, sobald sie eintreffen, und ihre Wiedergabeschaltflächen warten weiterhin auf eine Version; die übrigen erscheinen beim erneuten Öffnen der Seite.',
     posterRatings: 'Bewertungen auf Postern anzeigen',
     posterRatingsHelp:
-      'Zeigt die Sternbewertung eines Films oder einer Serie im Web-Player auf dem Poster, sobald der Zeiger oder der Fokus darauf kommt, dazu die Kritiker- und Publikumswertung, solange unter Einstellungen › Inhalte ein MDBList-API-Schlüssel für Bewertungen gesetzt ist. Für alle Benutzer.',
+      'Zeigt die Sternbewertung eines Films oder einer Serie im Web-Player auf dem Poster, sobald der Zeiger oder der Fokus darauf kommt, dazu die Kritiker- und Publikumswertung, solange unter Einstellungen › Inhalte ein MDBList-API-Schlüssel für Bewertungen gesetzt ist. Für alle Benutzer. Solange Abzeichen auf Postern unter Einstellungen › Inhalte an ist, erscheinen stattdessen die Abzeichen.',
     homeRows: 'Startseiten-Zeilen',
     homeRowsHelp:
       'Zeilen, die der Web-Player an ihrer Stelle zu seiner Startseite hinzufügt, für alle Benutzer oder für ausgewählte. Jeder Benutzer kann eine Zeile unter Mein Konto › Startseiten-Zeilen ausblenden; die eigenen Bereiche des Web-Players bleiben in dessen Einstellungen › Startseite. Jede Zeile lässt weg, was der Benutzer nicht sehen darf: Titel über seiner Kindersicherung, gesperrte Genres, ausgeblendete Titel und die für ihn ausgeblendeten Bibliotheken.',
@@ -1107,6 +1128,7 @@ const settings: typeof en = {
       titlePages: 'Titelseiten',
       images: 'Bilder',
       ratings: 'Bewertungen',
+      posters: 'Poster',
       music: 'Musik',
       thresholds: 'Wiedergabeschwellen',
     },

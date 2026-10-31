@@ -673,6 +673,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// may list as the Jellyfin API tells them.
 		HomeRows:       homeRows,
 		HomeRowChoices: jellyfinAPI,
+		// Settings › Content › Posters previews the badges over real
+		// titles' posters.
+		PosterPreviews: jellyfinAPI,
 		// Reset my preferences forgets what Jellyfin apps saved, with what
 		// the Jellyfin API remembers of it.
 		Preferences: jellyfinAPI,

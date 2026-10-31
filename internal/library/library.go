@@ -115,6 +115,9 @@ type Service struct {
 	// iptvHosts tells the hosts of IPTV sources and of their logos (see
 	// IPTVHost).
 	iptvHosts iptvHosts
+	// releaseStatuses remembers what series' posters tell of their
+	// newest episodes, by series (see ReleaseStatuses).
+	releaseStatuses *cache.Cache[string, ReleaseStatus]
 
 	// streamLists and subtitleLists are the addons' lists for each title,
 	// kept stale once expired (see staleLists).
@@ -360,6 +363,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock)
 	s.musicCache = newMusicCaches(s)
 	s.warmed.opened = cache.New[accounts.ID, struct{}](openedLibraries, openedFor)
+	s.releaseStatuses = cache.NewLasting[string, ReleaseStatus](20000, func() time.Duration { return releaseStatusLife }, clock)
 	s.refreshes.pace, s.refreshes.wait = LibraryRefreshPace, waitFor
 	return s
 }
@@ -2761,11 +2765,15 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 // ImageTag); downloading it is confined to public addresses when Confined.
 // Generated, when set, is the image Polyfin draws for the item (see
 // GeneratedImage): only Polyfin's own choice is one, never an artwork URL
-// in the scheme of generated images.
+// in the scheme of generated images. Templated tells the poster address
+// template gave URL (see templatePoster), which is not confined then, and
+// Fallback is the addon's poster to download when URL cannot be.
 type Artwork struct {
 	URL       string
 	Confined  bool
 	Generated *GeneratedImage
+	Templated bool
+	Fallback  string
 }
 
 // Artwork returns an item's image: the artwork an administrator uploaded,
@@ -2819,6 +2827,8 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		return s.Artwork(ctx, itemID(channelKey(r.Channel)), imageType)
 	}
 	var images Images
+	var fallback string
+	var templated bool
 	confined := r.Confined
 	switch {
 	case r.Kind == KindChannel && r.Meta != nil:
@@ -2833,16 +2843,28 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		var item Item
 		fromMeta(&item, *r.Meta)
 		images = item.Images
-		if images.URL(imageType) == "" {
+		template := s.settings().PosterTemplate
+		_, templated := PosterAddress(template, r.Kind, item.ProviderIDs)
+		if images.URL(imageType) == "" || template != "" && !templated && strings.EqualFold(imageType, "Primary") {
+			// The description may give what the listing lacks: the image,
+			// or the identifier the poster address template names.
 			v, err := s.artworkView(ctx, r)
 			if err != nil {
 				return Artwork{}, err
 			}
 			if full, describer, ok := s.describedMeta(ctx, v, r, false, inDatabase); ok {
+				listed := images
 				fromMeta(&item, full)
-				images = item.Images
-				confined = confined || describer.confined
+				images = withLocal(item.Images, listed)
+				if listed.URL(imageType) == "" {
+					confined = confined || describer.confined
+				}
 			}
+		}
+		if strings.EqualFold(imageType, "Primary") {
+			item.Kind, item.Images = r.Kind, images
+			fallback, templated = templatePoster(&item, template)
+			images.Primary = item.Images.Primary
 		}
 	case r.Kind == KindEpisode && r.Video != nil:
 		images.Primary = r.Video.Thumbnail
@@ -2910,7 +2932,7 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 	if url == "" || strings.HasPrefix(url, generatedScheme) {
 		return Artwork{}, ErrNotFound
 	}
-	return Artwork{URL: url, Confined: confined}, nil
+	return Artwork{URL: url, Confined: confined, Templated: templated, Fallback: fallback}, nil
 }
 
 // artworkView is the view a title's artwork is found with (see

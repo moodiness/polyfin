@@ -152,8 +152,9 @@ func (h *Handler) searchHints(w http.ResponseWriter, r *http.Request) {
 	}
 	found = slices.DeleteFunc(found, func(item library.Item) bool { return !keep(item) })
 	hints := make([]SearchHint, 0, len(found))
+	badges := h.posterBadges(r.Context(), found)
 	for _, item := range found {
-		hints = append(hints, h.searchHint(item))
+		hints = append(hints, h.searchHint(item, badges))
 	}
 	total := len(hints)
 	hints = hints[min(max(start, 0), len(hints)):]
@@ -165,11 +166,12 @@ func (h *Handler) searchHints(w http.ResponseWriter, r *http.Request) {
 
 // searchHint describes an item as a search hint, with the artwork its
 // page shows: a season's or an episode's backdrop and thumbnail are their
-// series'.
-func (h *Handler) searchHint(item library.Item) SearchHint {
+// series'. badges holds what the badges over posters show (see
+// posterBadges).
+func (h *Handler) searchHint(item library.Item, badges map[accounts.ID]string) SearchHint {
 	var images BaseItemDto
 	images.ImageTags = map[string]string{}
-	h.setImages(&images, item)
+	h.setImages(&images, item, badges)
 	hint := SearchHint{
 		ItemId:                  item.ID.String(),
 		Id:                      item.ID.String(),
@@ -492,7 +494,7 @@ func (h *Handler) itemImages(w http.ResponseWriter, r *http.Request) {
 	}
 	var dto BaseItemDto
 	dto.ImageTags = map[string]string{}
-	h.setImages(&dto, item)
+	h.setImages(&dto, item, h.posterBadges(r.Context(), []library.Item{item}))
 	images := []ImageInfo{}
 	for _, imageType := range []string{"Primary", "Logo", "Thumb", "Banner", "Art", "Disc"} {
 		if tag := dto.ImageTags[imageType]; tag != "" {

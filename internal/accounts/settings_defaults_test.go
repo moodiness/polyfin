@@ -126,6 +126,9 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 			case "torrentProxy":
 				// A proxy is a host and a port.
 				end = ":1080"
+			case "posterTemplate":
+				// The template names an identifier to fill in.
+				start, end = "https://", "/{imdb_id}"
 			case "torrentWireGuard":
 				// A WireGuard configuration, a comment ending it.
 				key := "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk="

@@ -636,6 +636,26 @@ const settings: typeof en = {
     criticRatingShowsHelp:
       'Les applications Jellyfin n’ont qu’un champ pour une note critique, de 0 à 100 : il affiche le score des critiques ou celui du public. Sur la fiche d’un titre, le lecteur web affiche les deux, avec la note IMDb.',
     criticRatingChoices: { critics: 'Score des critiques', audience: 'Score du public' },
+    posterBadges: 'Badges sur les affiches',
+    posterBadgesHelp:
+      'Dessine sur l’affiche d’un film ou d’une série sa note en étoiles, en nommant IMDb quand c’est la note IMDb de MDBList, les scores des critiques et du public tant qu’une clé d’API MDBList des notes est définie, et pour une série un nouvel épisode ou une nouvelle saison des 30 derniers jours. Toutes les applications les affichent, puisqu’ils font partie de l’affiche, avec des icônes et des chiffres seulement, pour toutes les langues. Activé, le lecteur web n’affiche pas les notes au survol. Désactivé, les applications reçoivent les affiches telles quelles.',
+    posterBadgeSize: 'Taille des badges',
+    posterBadgeSizeHelp:
+      'La taille des badges selon la largeur de l’affiche. Sur les petites cartes, ils gardent une taille minimale, et moins d’entre eux y tiennent.',
+    posterBadgeSizeChoices: { medium: 'Moyenne', small: 'Petite', large: 'Grande' },
+    posterPreview: {
+      title: 'Aperçu',
+      help: 'Des titres de vos bibliothèques tels que les applications les affichent, à la taille choisie, avant de l’enregistrer, que les badges soient activés ou non.',
+      original: 'Telle quelle',
+      badged: 'Avec les badges',
+      card: 'Sur une petite carte',
+      another: 'Un autre titre',
+      none: 'Aucun film ni aucune série de vos bibliothèques n’est encore connu : ouvrez d’abord une bibliothèque dans le lecteur web.',
+      nothing: 'Ce titre n’a ni note ni nouvel épisode : son affiche ne montre aucun badge.',
+    },
+    posterTemplate: 'Modèle d’adresse des affiches',
+    posterTemplateHelp:
+      'Facultatif. L’adresse d’où sont téléchargées les affiches des films et des séries à la place de celles des addons, avec {imdb_id}, {tmdb_id}, {type}, movie ou series, et {tmdb_type}, movie ou tv, remplis. Un titre sans un identifiant que nomme l’adresse, ou dont l’affiche ne peut pas y être téléchargée, garde celle de son addon. Les affiches des dossiers locaux et celles téléversées passent toujours en premier.',
     lyrics: 'Paroles des chansons depuis LRCLIB',
     lyricsHelp:
       'Les applications affichent les paroles des chansons, synchronisées ligne par ligne quand LRCLIB, une base de paroles libre, les connaît. Polyfin recherche une chanson une seule fois, par son artiste, son titre, son album et sa durée, quand sa lecture commence ou que sa fiche ou ses paroles s’ouvrent. Si cette option est désactivée, les chansons n’ont pas de paroles et LRCLIB n’est jamais consulté.',
@@ -987,7 +1007,7 @@ const settings: typeof en = {
       'Ajoute les versions trouvées par les addons au menu des versions de la page d’un film ou d’un épisode pendant qu’elle est ouverte, en gardant la version choisie. Désactivé, une page ouverte avant qu’une version soit trouvée affiche quand même les premières dès qu’elles arrivent, et ses boutons de lecture attendent toujours une version ; les autres apparaissent à la prochaine ouverture de la page.',
     posterRatings: 'Afficher les notes sur les affiches',
     posterRatingsHelp:
-      'Affiche la note en étoiles d’un film ou d’une série sur son affiche dans le lecteur web quand le pointeur ou le focus y arrive, avec les scores des critiques et du public tant qu’une clé d’API MDBList des notes est définie dans Paramètres › Contenu. Pour tous les utilisateurs.',
+      'Affiche la note en étoiles d’un film ou d’une série sur son affiche dans le lecteur web quand le pointeur ou le focus y arrive, avec les scores des critiques et du public tant qu’une clé d’API MDBList des notes est définie dans Paramètres › Contenu. Pour tous les utilisateurs. Tant que Badges sur les affiches est activé dans Paramètres › Contenu, les badges s’affichent à la place.',
     homeRows: 'Rangées d’accueil',
     homeRowsHelp:
       'Les rangées que le lecteur web ajoute à sa page d’accueil, à leur place, pour tous les utilisateurs ou pour ceux choisis. Chaque utilisateur peut désactiver une rangée dans Mon compte › Rangées d’accueil ; les sections propres au lecteur web restent dans ses Paramètres › Accueil. Chaque rangée laisse de côté ce que l’utilisateur ne peut pas voir : les titres au-dessus de son contrôle parental, les genres bloqués, les titres masqués et les bibliothèques qui lui sont masquées.',
@@ -1119,6 +1139,7 @@ const settings: typeof en = {
       titlePages: 'Fiche des titres',
       images: 'Images',
       ratings: 'Notes',
+      posters: 'Affiches',
       music: 'Musique',
       thresholds: 'Seuils de lecture',
     },
