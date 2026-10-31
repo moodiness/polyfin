@@ -6,7 +6,8 @@
 // those that do not exist yet. The import then reads, user by user, the
 // movies and episodes played with their dates and play counts, the resume
 // points, and the favorite movies, series and episodes, and adds them to the
-// accounts. A user may also import their own watch data into their own
+// accounts; and, as asked (see Extras), the ratings, the collections and the
+// playlists. A user may also import their own watch data into their own
 // account, signing in to a Jellyfin or Emby server as themselves (see
 // Service.ImportOwn).
 //
@@ -28,7 +29,7 @@
 //
 // Plex is read with its owner's token, which reads the owner's watch data
 // from the library sections, and every other account's played history,
-// but not their resume points. Plex has no favorites.
+// but not their resume points, ratings or playlists. Plex has no favorites.
 //
 // One import runs at a time, in the background. It and the last one's
 // result are kept in memory: an import cut by a restart is lost and is
@@ -45,7 +46,9 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
 )
@@ -83,11 +86,37 @@ const (
 // PlexOwner has an administrator's import of a Plex server read the
 // other accounts with the tokens Plex gives the server's owner, whom the
 // administrator starting it signed in to Plex as (see PlexSignIn).
+// Extras are what an import brings besides watch data; Users ignores
+// them.
 type Connection struct {
 	Kind    Kind
 	Address string
 	Credentials
 	PlexOwner bool
+	Extras    Extras
+}
+
+// Extras are what an import brings besides the titles played, the resume
+// points and the favorites, which it always brings.
+//
+// Ratings are each user's ratings, from 0 to 10, as they are: a rating
+// Polyfin has stays. A title Emby gives a thumb up without a rating
+// becomes a favorite, as Letterboxd's liked movies can.
+//
+// Collections are the server's collections, Jellyfin's and Emby's BoxSets
+// and the collections of Plex's library sections, which become Polyfin
+// collections, which every user sees, holding the titles matched; one
+// that has none is not created. An administrator's import brings them; a
+// user's own import, only for a user who may manage collections.
+//
+// Playlists are each user's video playlists, which become playlists of
+// theirs, with the entries matched, in order. Plex gives them only for the
+// accounts read with their own token, the owner's included.
+//
+// Watchlist is a user's own Plex import's, the titles of their Plex
+// Watchlist.
+type Extras struct {
+	Ratings, Collections, Playlists, Watchlist bool
 }
 
 // Titles finds the items of titles named by other services' identifiers
@@ -109,6 +138,10 @@ type Options struct {
 	// Watchlist keeps the titles of the Plex Watchlist a user's own Plex
 	// import brings; nil brings none.
 	Watchlist *watchlist.Store
+	// Collections and Playlists keep the collections and playlists imports
+	// bring; nil brings none.
+	Collections *collections.Store
+	Playlists   *playlists.Store
 	// PlexClient is the client identifier Polyfin names itself by to
 	// plex.tv and to Plex Media Servers (see database.PlexClient); empty,
 	// one for as long as Polyfin runs.
@@ -151,11 +184,14 @@ type Service struct {
 	titles    Titles
 	userData  *userdata.Store
 	watchlist *watchlist.Store
-	version   string
-	logger    *slog.Logger
-	client    *http.Client
-	timing    timing
-	now       func() time.Time
+	// collections and playlists keep the lists imports bring.
+	collections *collections.Store
+	playlists   *playlists.Store
+	version     string
+	logger      *slog.Logger
+	client      *http.Client
+	timing      timing
+	now         func() time.Time
 	// device names Polyfin to plex.tv and to Plex Media Servers, which
 	// list the devices reading them; plexTV are Plex's online services.
 	device string
@@ -192,6 +228,8 @@ func New(options Options) *Service {
 		titles:      options.Titles,
 		userData:    options.UserData,
 		watchlist:   options.Watchlist,
+		collections: options.Collections,
+		playlists:   options.Playlists,
 		version:     options.Version,
 		logger:      options.Logger,
 		client:      &http.Client{},
@@ -300,7 +338,12 @@ type Status struct {
 	StartedBy     accounts.ID
 	StartedByName string
 	Own           bool
-	Users         []UserStatus
+	// Extras are what the import brings besides watch data.
+	Extras Extras
+	Users  []UserStatus
+	// source names the server the lists brought remember (see
+	// Server.source).
+	source string
 }
 
 // UserStatus is how the import of one Jellyfin user's watch data goes.
@@ -311,9 +354,12 @@ type UserStatus struct {
 	State                    string
 	// Read counts the items read from Jellyfin. Played counts the titles
 	// marked played that were not, Resumed the resume points set,
-	// Favorites the titles made favorites, Ratings the titles rated, and
-	// Watchlist the titles a Plex Watchlist added to the user's.
+	// Favorites the titles made favorites, Ratings the titles rated,
+	// Watchlist the titles a Plex Watchlist added to the user's,
+	// Collections and Playlists the collections and playlists created, and
+	// ListTitles the titles added to those an earlier import brought.
 	Read, Played, Resumed, Favorites, Ratings, Watchlist int
+	Collections, Playlists, ListTitles                   int
 	// Sections counts the library sections of movies and shows a Plex
 	// server has, Listed the items they list that were read, and History
 	// the rows of the account's playback history read; Read counts the
@@ -321,14 +367,18 @@ type UserStatus struct {
 	Sections, Listed, History int
 	// Matched counts the items read that a Polyfin title matched, UpToDate
 	// the marks, resume points and favorites they hold that Polyfin already
-	// had, and Undated the resume points without a date, which are not
-	// added: whether Polyfin's own is newer cannot be told.
+	// had, and the lists an earlier import brought that already held every
+	// title found, and Undated the resume points without a date, which are
+	// not added: whether Polyfin's own is newer cannot be told.
 	Matched, UpToDate, Undated int
 	// Unmatched lists the first titles not found, UnmatchedCount counts
 	// them all.
 	Unmatched      []Unmatched
 	UnmatchedCount int
 	Problem        string
+	// Skipped lists the collections and playlists read that no title of
+	// matched, which were not created.
+	Skipped []SkippedList
 	// NothingAdded tells why the import of a user that ended without a
 	// problem added nothing, empty when it added something, or when the
 	// titles it could not match tell why.
@@ -348,12 +398,26 @@ type Unmatched struct {
 	Reason          string
 }
 
+// The kinds of SkippedList.
+const (
+	ListCollection = "collection"
+	ListPlaylist   = "playlist"
+)
+
+// SkippedList is a collection or a playlist of the server, of Kind
+// ListCollection or ListPlaylist, named Name there, that an import did
+// not create: no title of it matched.
+type SkippedList struct {
+	Kind, Name string
+}
+
 // clone copies s, so that what the import changes later does not show.
 func (s *Status) clone() *Status {
 	c := *s
 	c.Users = slices.Clone(s.Users)
 	for i := range c.Users {
 		c.Users[i].Unmatched = slices.Clone(c.Users[i].Unmatched)
+		c.Users[i].Skipped = slices.Clone(c.Users[i].Skipped)
 	}
 	return &c
 }
@@ -548,7 +612,7 @@ func (s *Service) Start(ctx context.Context, connection Connection, by accounts.
 		}
 	}
 	sessions = used
-	status := s.newStatus(server, by, false)
+	status := s.newStatus(server, by, false, connection.Extras)
 	for _, t := range targets {
 		status.Users = append(status.Users, UserStatus{JellyfinID: t.JellyfinID, JellyfinName: names[t.JellyfinID], User: t.User,
 			UserName: t.UserName, State: UserWaiting})
@@ -605,7 +669,7 @@ func (s *Service) ImportOwn(ctx context.Context, connection Connection, user acc
 	if err != nil {
 		return nil, err
 	}
-	status := s.newStatus(server, user, true)
+	status := s.newStatus(server, user, true, connection.Extras)
 	status.Users = []UserStatus{{JellyfinID: server.KeyOwner, JellyfinName: connection.Name, User: user.ID, UserName: user.Name,
 		State: UserWaiting}}
 	snapshot, err := s.launch(status, c, nil, nil, nil)
@@ -633,10 +697,15 @@ func (s *Service) release() {
 }
 
 // newStatus is a running import of server that by starts, without users
-// yet; own tells an import of by's own watch data.
-func (s *Service) newStatus(server Server, by accounts.User, own bool) *Status {
+// yet; own tells an import of by's own watch data, and extras what it
+// brings besides. A user's own import creates collections, which every
+// user sees, only for a user who may manage them, as Jellyfin lets only
+// them create collections.
+func (s *Service) newStatus(server Server, by accounts.User, own bool, extras Extras) *Status {
+	extras.Collections = extras.Collections && s.collections != nil && (!own || by.CollectionManagement)
+	extras.Playlists = extras.Playlists && s.playlists != nil
 	return &Status{ID: newID(), Kind: server.Kind, ServerName: server.Name, Address: server.Address, State: StateRunning,
-		StartedAt: s.now().UTC(), StartedBy: by.ID, StartedByName: by.Name, Own: own}
+		StartedAt: s.now().UTC(), StartedBy: by.ID, StartedByName: by.Name, Own: own, Extras: extras, source: server.source()}
 }
 
 // launch runs the import of status in the background, reading with own and

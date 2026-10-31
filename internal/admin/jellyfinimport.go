@@ -204,6 +204,7 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		jellyfinConnectionJSON
+		extrasJSON
 		PlexOwner bool                      `json:"plexOwner"`
 		Users     []jellyfinImportEntryJSON `json:"users"`
 	}
@@ -216,7 +217,7 @@ func (h *handler) startJellyfinImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	connection.PlexOwner = body.PlexOwner
+	connection.PlexOwner, connection.Extras = body.PlexOwner, body.extras()
 	seen := map[string]bool{}
 	for _, entry := range body.Users {
 		// Plex has no sign-in: its owner's token reads every account, and
@@ -386,7 +387,9 @@ func (h *handler) stopJellyfinImport(w http.ResponseWriter, r *http.Request) {
 
 // jellyfinImportJSON is how an import goes, or went. StartedBy is the
 // Polyfin user who started it, and Own tells an import of their own watch
-// data, made under My account.
+// data, made under My account. Extras are what it brings besides watch
+// data: a user's own import brings no collections for a user who may not
+// manage them.
 type jellyfinImportJSON struct {
 	ID     string `json:"id"`
 	Server struct {
@@ -398,12 +401,30 @@ type jellyfinImportJSON struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"startedBy"`
-	Own       bool                     `json:"own"`
+	Own    bool `json:"own"`
+	Extras struct {
+		Ratings     bool `json:"ratings"`
+		Collections bool `json:"collections"`
+		Playlists   bool `json:"playlists"`
+	} `json:"extras"`
 	State     string                   `json:"state"`
 	Problem   *string                  `json:"problem"`
 	StartedAt time.Time                `json:"startedAt"`
 	EndedAt   *time.Time               `json:"endedAt"`
 	Users     []jellyfinUserImportJSON `json:"users"`
+}
+
+// extrasJSON are what an import asked brings besides watch data, each by
+// default.
+type extrasJSON struct {
+	Ratings     *bool `json:"ratings"`
+	Collections *bool `json:"collections"`
+	Playlists   *bool `json:"playlists"`
+}
+
+func (e extrasJSON) extras() jellyfinimport.Extras {
+	on := func(asked *bool) bool { return asked == nil || *asked }
+	return jellyfinimport.Extras{Ratings: on(e.Ratings), Collections: on(e.Collections), Playlists: on(e.Playlists)}
 }
 
 type jellyfinUserImportJSON struct {
@@ -424,12 +445,25 @@ type jellyfinUserImportJSON struct {
 	Favorites      int                     `json:"favorites"`
 	Ratings        int                     `json:"ratings"`
 	Watchlist      int                     `json:"watchlist"`
+	Collections    int                     `json:"collections"`
+	Playlists      int                     `json:"playlists"`
+	ListTitles     int                     `json:"listTitles"`
 	UpToDate       int                     `json:"upToDate"`
 	Undated        int                     `json:"undated"`
 	UnmatchedCount int                     `json:"unmatchedCount"`
 	Unmatched      []jellyfinUnmatchedJSON `json:"unmatched"`
 	Problem        *string                 `json:"problem"`
 	NothingAdded   *string                 `json:"nothingAdded"`
+	// Skipped are the collections and playlists no title of matched,
+	// which were not created.
+	Skipped []jellyfinSkippedJSON `json:"skipped"`
+}
+
+// jellyfinSkippedJSON is a collection or a playlist of the server that an
+// import did not create; Kind is collection or playlist.
+type jellyfinSkippedJSON struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 // jellyfinUnmatchedJSON is a title no Polyfin title matched.
@@ -452,11 +486,17 @@ func newJellyfinImportJSON(status *jellyfinimport.Status) *jellyfinImportJSON {
 		Users: make([]jellyfinUserImportJSON, 0, len(status.Users))}
 	result.Server.Kind, result.Server.Name, result.Server.Address = status.Kind, status.ServerName, status.Address
 	result.StartedBy.ID, result.StartedBy.Name = status.StartedBy.String(), status.StartedByName
+	result.Extras.Ratings, result.Extras.Collections, result.Extras.Playlists = status.Extras.Ratings, status.Extras.Collections,
+		status.Extras.Playlists
 	for _, u := range status.Users {
 		user := jellyfinUserImportJSON{JellyfinID: u.JellyfinID, JellyfinName: u.JellyfinName, UserID: u.User.String(), UserName: u.UserName,
 			State: u.State, Read: u.Read, Matched: u.Matched, Played: u.Played, Resumed: u.Resumed, Favorites: u.Favorites,
-			Ratings: u.Ratings, Watchlist: u.Watchlist, UpToDate: u.UpToDate, Undated: u.Undated, UnmatchedCount: u.UnmatchedCount,
-			Unmatched: make([]jellyfinUnmatchedJSON, 0, len(u.Unmatched)), Problem: optional(u.Problem), NothingAdded: optional(u.NothingAdded)}
+			Ratings: u.Ratings, Watchlist: u.Watchlist, Collections: u.Collections, Playlists: u.Playlists, ListTitles: u.ListTitles,
+			UpToDate: u.UpToDate, Undated: u.Undated, UnmatchedCount: u.UnmatchedCount, Unmatched: make([]jellyfinUnmatchedJSON, 0, len(u.Unmatched)),
+			Problem: optional(u.Problem), NothingAdded: optional(u.NothingAdded), Skipped: make([]jellyfinSkippedJSON, 0, len(u.Skipped))}
+		for _, list := range u.Skipped {
+			user.Skipped = append(user.Skipped, jellyfinSkippedJSON{Kind: list.Kind, Name: list.Name})
+		}
 		if status.Kind == jellyfinimport.Plex {
 			user.Sections, user.Listed, user.History = &u.Sections, &u.Listed, &u.History
 		}

@@ -64,6 +64,8 @@ type plexItemJSON struct {
 	Duration     int64    `json:"duration"`
 	ViewedAt     int64    `json:"viewedAt"`
 	AccountID    int      `json:"accountID"`
+	// PlaylistType is a playlist's kind: video, audio or photo.
+	PlaylistType string `json:"playlistType"`
 }
 
 // show is the rating key of an episode's show.
@@ -154,13 +156,13 @@ func (p plexContainerJSON) items() []plexItemJSON {
 // plexLibrary is what an import reads of a Plex server's library sections
 // once: the movies and shows by their rating key, with their identifiers
 // and the token's account's data, the sections of shows, and how many
-// sections of movies and shows there are.
+// sections of movies and shows there are, and their keys.
 type plexLibrary struct {
 	movies, shows map[string]plexItemJSON
 	// movieOrder and showOrder list the movies and shows in the order
 	// read.
 	movieOrder, showOrder []string
-	showSections          []string
+	showSections, keys    []string
 	sections              int
 }
 
@@ -259,6 +261,7 @@ func (c *client) library(ctx context.Context) (*plexLibrary, error) {
 			continue
 		}
 		lib.sections++
+		lib.keys = append(lib.keys, section.Key)
 		err := c.plexList(ctx, "/library/sections/"+url.PathEscape(section.Key)+"/all", url.Values{"type": {kind}, "includeGuids": {"1"}},
 			func(item plexItemJSON) {
 				if _, seen := into[item.RatingKey]; !seen && section.Type == plexMovie {
@@ -281,14 +284,15 @@ func (c *client) library(ctx context.Context) (*plexLibrary, error) {
 // episodes in series, by the show's rating key. The token's own account's,
 // own, comes from the library sections: the movies and episodes played,
 // marked or synced as played, with their play counts and the date last
-// played, those with a resume point, and the movies, shows and episodes
-// rated. That is the owner's with the owner's token, and a user's with
-// the token signing in to Plex gave them for the server. Another
-// account's is its playback history: the movies and episodes it played,
-// each play dated, those deleted from the libraries since included. Plex
-// does not let the owner's token read their resume points or ratings, and
-// has no favorites.
-func (c *client) plexWatched(ctx context.Context, user string, own bool, series map[string]map[string]string, found func()) (history, error) {
+// played, those with a resume point, and, with ratings, the movies, shows
+// and episodes rated. That is the owner's with the owner's token, and a
+// user's with the token signing in to Plex gave them for the server.
+// Another account's is its playback history: the movies and episodes it
+// played, each play dated, those deleted from the libraries since
+// included. Plex does not let the owner's token read their resume points
+// or ratings, and has no favorites.
+func (c *client) plexWatched(ctx context.Context, user string, own, ratings bool, series map[string]map[string]string,
+	found func()) (history, error) {
 	var h history
 	lib, err := c.library(ctx)
 	if err != nil {
@@ -296,7 +300,7 @@ func (c *client) plexWatched(ctx context.Context, user string, own bool, series 
 	}
 	h.source.sections, h.source.listed = lib.sections, len(lib.movies)+len(lib.shows)
 	rated := func(item itemJSON, rating *float64) {
-		if rating != nil {
+		if rating != nil && ratings {
 			item.rating = new(*rating)
 			h.ratings = append(h.ratings, item)
 			found()
@@ -441,4 +445,99 @@ func plexDate(seconds int64) string {
 		return ""
 	}
 	return time.Unix(seconds, 0).UTC().Format(time.RFC3339)
+}
+
+// plexCollections reads the collections of the server's library sections
+// of movies and shows, with their titles in order, recording the
+// identifiers of the shows of their episodes in series, and handing each
+// title read to found.
+func (c *client) plexCollections(ctx context.Context, series map[string]map[string]string, found func()) ([]list, error) {
+	lib, err := c.library(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var lists []list
+	for _, key := range lib.keys {
+		var listed []plexItemJSON
+		if err := c.plexList(ctx, "/library/sections/"+url.PathEscape(key)+"/collections", url.Values{},
+			func(p plexItemJSON) { listed = append(listed, p) }); err != nil {
+			return lists, err
+		}
+		for _, collection := range listed {
+			read, err := c.plexEntries(ctx, lib, "/library/collections/"+url.PathEscape(collection.RatingKey)+"/children", series, found)
+			if err != nil {
+				return lists, err
+			}
+			lists = append(lists, list{id: collection.RatingKey, name: collection.Title, entries: read})
+		}
+	}
+	return lists, nil
+}
+
+// plexPlaylists reads the token's account's video playlists, with their
+// movies and episodes in order, recording the identifiers of the shows of
+// their episodes in series, and handing each entry read to found.
+func (c *client) plexPlaylists(ctx context.Context, series map[string]map[string]string, found func()) ([]list, error) {
+	lib, err := c.library(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var listed []plexItemJSON
+	if err := c.plexList(ctx, "/playlists", url.Values{"playlistType": {"video"}},
+		func(p plexItemJSON) { listed = append(listed, p) }); err != nil {
+		return nil, err
+	}
+	var lists []list
+	for _, playlist := range listed {
+		if playlist.PlaylistType != "" && playlist.PlaylistType != "video" {
+			// A server that left the filter out would give the others.
+			continue
+		}
+		read, err := c.plexEntries(ctx, lib, "/playlists/"+url.PathEscape(playlist.RatingKey)+"/items", series, func() {})
+		if err != nil {
+			return lists, err
+		}
+		var entries []itemJSON
+		for _, entry := range read {
+			// Polyfin's playlists hold movies and episodes.
+			if entry.Type != "Series" {
+				entries = append(entries, entry)
+				found()
+			}
+		}
+		lists = append(lists, list{id: playlist.RatingKey, name: playlist.Title, entries: entries})
+	}
+	return lists, nil
+}
+
+// plexEntries reads the movies, shows and episodes the list at path holds,
+// in order, handing each to found.
+func (c *client) plexEntries(ctx context.Context, lib *plexLibrary, path string, series map[string]map[string]string,
+	found func()) ([]itemJSON, error) {
+	var entries []itemJSON
+	err := c.plexList(ctx, path, url.Values{}, func(p plexItemJSON) {
+		if entry, ok := lib.entry(p, series); ok {
+			entries = append(entries, entry)
+			found()
+		}
+	})
+	return entries, err
+}
+
+// entry is p as Jellyfin describes it, a movie, a show or an episode (see
+// item), and false for another kind of item.
+func (lib *plexLibrary) entry(p plexItemJSON, series map[string]map[string]string) (itemJSON, bool) {
+	switch p.Type {
+	case plexMovie, plexEpisode:
+		return lib.item(p, series), true
+	case plexShow:
+		item := itemJSON{ID: p.RatingKey, Name: p.Title, Type: "Series", ProductionYear: p.Year}
+		if show, listed := lib.shows[p.RatingKey]; listed {
+			item.ProviderIDs, item.ProductionYear = show.providers(), show.Year
+		} else {
+			item.unmatchable = ReasonNotInLibrary
+		}
+		return item, true
+	}
+	return itemJSON{}, false
 }
