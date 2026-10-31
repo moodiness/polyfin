@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/desktop"
 	"github.com/moodiness/polyfin/internal/desktop/update"
@@ -29,7 +30,7 @@ func TestAFailedUpdateIsTold(t *testing.T) {
 	t.Cleanup(github.Close)
 	sum := sha256.Sum256(body)
 	offer := &update.Offer{Version: "0.43.0", Asset: update.Asset{Name: "Polyfin-Desktop-0.43.0-windows-x64-setup.exe",
-		URL: github.URL + "/download", Size: int64(len(body)), SHA256: hex.EncodeToString(sum[:])}}
+		URL: github.URL + "/download", Size: int64(len(body)), SHA256: hex.EncodeToString(sum[:])}, Expires: time.Now().Add(time.Hour)}
 	checker := &update.Checker{Version: "0.42.0", Client: github.Client()}
 	a := New(Options{Version: "0.42.0", Install: inst, Folders: desktop.Folders{Data: data}, Keys: &fakeKeys{secrets: map[string]string{}},
 		Tools: manifest, DatabasePort: databasePort(t), Updates: checker, Executable: filepath.Join(inst.Dir, "polyfin-desktop")})

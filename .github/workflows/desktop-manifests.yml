@@ -1,0 +1,59 @@
+name: Polyfin Desktop manifests
+
+# Each release's signed manifest, which Polyfin Desktop checks before it
+# installs an update, expires 30 days after it was issued: every week this
+# renews the manifests of the latest releases, each only once its
+# signature checks against the keys the app carries (docs/desktop.md).
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-manifests
+  cancel-in-progress: false
+
+jobs:
+  renew:
+    name: Renew the manifests of the latest releases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Renew and upload each manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          POLYFIN_RELEASE_SIGNING_KEY: ${{ secrets.POLYFIN_RELEASE_SIGNING_KEY }}
+        run: |
+          sign="$RUNNER_TEMP/polyfin-release-sign"
+          go build -o "$sign" ./cmd/polyfin-release-sign
+          "$sign" key
+          dir="$RUNNER_TEMP/manifests"
+          mkdir -p "$dir"
+          renewed=0
+          # The app offers the latest release or pre-release: the ten
+          # latest leave room for a run of pre-releases.
+          for tag in $(gh release list --limit 10 --exclude-drafts --json tagName --jq '.[].tagName'); do
+            name="polyfin-${tag#v}.manifest.json"
+            if ! gh release download "$tag" --pattern "$name" --dir "$dir" --clobber; then
+              echo "$tag has no manifest"
+              continue
+            fi
+            "$sign" renew -in "$dir/$name" -out "$dir/$name"
+            gh release upload "$tag" "$dir/$name" --clobber
+            renewed=$((renewed + 1))
+          done
+          echo "Renewed $renewed manifests"

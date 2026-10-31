@@ -141,6 +141,13 @@ type App struct {
 	// written.
 	offerMu sync.Mutex
 	offered *desktop.Offered
+
+	// pending is the update this version was installed by, until its
+	// server answers /healthz: nil once it did, or without one. Under mu.
+	pending *update.Pending
+	// rolledBack carries what starts the previous version, once the app
+	// went back to it (see update.Pending).
+	rolledBack chan *exec.Cmd
 }
 
 // New returns an app, stopped.
@@ -151,11 +158,16 @@ func New(o Options) *App {
 	if o.Open == nil {
 		o.Open = func(string) error { return nil }
 	}
-	a := &App{o: o, logger: o.Logger, client: &http.Client{Timeout: 5 * time.Second}}
+	a := &App{o: o, logger: o.Logger, client: &http.Client{Timeout: 5 * time.Second}, rolledBack: make(chan *exec.Cmd, 1)}
 	on := a.readState().StartWithComputer
 	a.status = Status{Phase: Stopped, StartWithComputer: on != nil && *on}
 	return a
 }
+
+// RolledBack gives what starts the previous version once the app went
+// back to it, as the new version's server started update.MaxStarts times
+// without answering: the app is to quit, then start it.
+func (a *App) RolledBack() <-chan *exec.Cmd { return a.rolledBack }
 
 // Status is the app's status now.
 func (a *App) Status() Status {
@@ -279,6 +291,7 @@ func (a *App) run(ctx context.Context) {
 		Log: filepath.Join(a.o.Folders.Log(), "postgresql.log"), Port: a.o.DatabasePort, Logger: a.logger,
 		Rebuilding: a.rebuilding}
 	server, err := a.prepare(ctx, db)
+	var rollBack bool
 	defer func() {
 		a.update(func(s *Status) { s.Phase = Stopping })
 		// Stopping must finish, whatever ended the run.
@@ -288,6 +301,9 @@ func (a *App) run(ctx context.Context) {
 		}
 		if err := db.Stop(stop); err != nil {
 			a.logger.Error("The database could not be stopped", "error", err)
+		}
+		if rollBack {
+			a.goBack(server.lastExit())
 		}
 		a.update(func(s *Status) {
 			if s.Phase != Failed {
@@ -304,10 +320,136 @@ func (a *App) run(ctx context.Context) {
 		}
 		return
 	}
+	ctx, stopRun := context.WithCancel(ctx)
+	defer stopRun()
 	var wg sync.WaitGroup
-	wg.Go(func() { server.supervise(ctx) })
+	wg.Go(func() {
+		// A new version that does not start ends the run, for the
+		// previous one to be put back once everything stopped.
+		rollBack = server.supervise(ctx)
+		stopRun()
+	})
 	wg.Go(func() { a.monitor(ctx, db) })
 	wg.Wait()
+}
+
+// reviewPending reads the update this version may have been installed
+// by: while its server has not answered yet, the previous app and the
+// copy of the database are kept. A record of another version, as left by
+// an installer that was cancelled, is dropped with what it kept.
+func (a *App) reviewPending() {
+	if a.o.Updates != nil {
+		if err := update.RemoveLeftovers(a.o.Updates.Kind, a.o.Executable); err != nil {
+			a.logger.Warn("What the return to the previous version left could not be removed", "error", err)
+		}
+	}
+	pending, err := update.ReadPending(a.o.Folders)
+	if err != nil {
+		a.logger.Warn("The record of the last update could not be read", "error", err)
+		return
+	}
+	if pending == nil {
+		return
+	}
+	if pending.To != a.o.Version {
+		a.logger.Info("The update to another version was not installed: what it kept is removed", "version", pending.To)
+		if err := pending.Confirm(a.o.Folders, a.o.Executable); err != nil {
+			a.logger.Warn("What the update kept could not be removed", "error", err)
+		}
+		return
+	}
+	a.logger.Info("The new version runs: the previous one is kept until its server answers", "previous", pending.From,
+		"starts", pending.Starts)
+	a.mu.Lock()
+	a.pending = pending
+	a.mu.Unlock()
+}
+
+// countStart counts a start of the new version's server, while it has not
+// answered yet: false once it started update.MaxStarts times, for the app
+// to go back to the previous version.
+func (a *App) countStart() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.pending == nil {
+		return true
+	}
+	if a.pending.Starts >= update.MaxStarts {
+		return false
+	}
+	a.pending.Starts++
+	if err := a.pending.Write(a.o.Folders); err != nil {
+		a.logger.Warn("The record of the last update could not be written", "error", err)
+	}
+	return true
+}
+
+// mayStartAgain tells whether the server may start again: false once a
+// new version's server started update.MaxStarts times without answering.
+func (a *App) mayStartAgain() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.pending == nil || a.pending.Starts < update.MaxStarts
+}
+
+// probation tells whether the new version's server has not answered yet.
+func (a *App) probation() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.pending != nil
+}
+
+// confirm removes the previous app and the copy of the database, once the
+// new version's server answered /healthz.
+func (a *App) confirm() {
+	a.mu.Lock()
+	pending := a.pending
+	a.pending = nil
+	a.mu.Unlock()
+	if pending == nil {
+		return
+	}
+	a.logger.Info("The new version answers: the previous one is removed", "version", pending.To, "previous", pending.From)
+	if err := pending.Confirm(a.o.Folders, a.o.Executable); err != nil {
+		a.logger.Warn("The previous version could not be removed", "error", err)
+	}
+	if err := desktop.RemoveRolledBack(a.o.Folders); err != nil {
+		a.logger.Warn("The record of an earlier return to the previous version could not be removed", "error", err)
+	}
+}
+
+// goBack puts the previous app and the copy of the database back, once
+// the server and the database stopped, records why for System › Health,
+// and gives what starts the previous app to RolledBack. A failure is told
+// as the start's.
+func (a *App) goBack(reason error) {
+	a.mu.Lock()
+	pending := a.pending
+	a.mu.Unlock()
+	why := fmt.Sprintf("its server stopped %d times before it answered", pending.Starts)
+	if reason != nil {
+		why += ": " + reason.Error()
+	}
+	a.logger.Error("The new version does not start: going back to the previous one", "version", pending.To, "previous", pending.From,
+		"reason", why)
+	cmd, err := pending.Restore(a.o.Folders, a.o.Folders.Cluster(), a.o.Executable)
+	if err != nil {
+		a.logger.Error("The previous version could not be put back", "error", err)
+		a.problem(StartFailed, err)
+		a.update(func(s *Status) { s.Phase = Failed })
+		return
+	}
+	a.mu.Lock()
+	a.pending = nil
+	a.mu.Unlock()
+	record := desktop.RolledBack{Version: pending.To, Previous: pending.From, Reason: why, At: time.Now().UTC()}
+	if err := desktop.WriteRolledBack(a.o.Folders, record); err != nil {
+		a.logger.Warn("The return to the previous version could not be recorded", "error", err)
+	}
+	select {
+	case a.rolledBack <- cmd:
+	default:
+	}
 }
 
 // prepare stops a server a crash left running, reads the key, starts the
@@ -320,6 +462,7 @@ func (a *App) prepare(ctx context.Context, db *cluster.Cluster) (*serverProcess,
 		return nil, err
 	}
 	stopLeftover(a.o.Folders.ServerPID(), a.logger)
+	a.reviewPending()
 	key := ""
 	if a.o.Keys != nil {
 		var created bool
@@ -456,6 +599,9 @@ func (a *App) monitor(ctx context.Context, db *cluster.Cluster) {
 			return
 		case <-time.After(wait):
 		}
+		if a.probation() && a.healthy(ctx, "http://"+ask+"/healthz") {
+			a.confirm()
+		}
 		status, err := a.ask(ctx, "http://"+ask+"/admin/api/status")
 		if err != nil || status.Database != "ready" {
 			wait = 2 * time.Second
@@ -492,6 +638,20 @@ func (a *App) monitor(ctx context.Context, db *cluster.Cluster) {
 			a.checkUpdate(ctx, db.URL())
 		}
 	}
+}
+
+// healthy tells whether the server answers its /healthz at address.
+func (a *App) healthy(ctx context.Context, address string) bool {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
+	if err != nil {
+		return false
+	}
+	response, err := a.client.Do(request)
+	if err != nil {
+		return false
+	}
+	response.Body.Close()
+	return response.StatusCode == http.StatusOK
 }
 
 func (a *App) ask(ctx context.Context, address string) (adminStatus, error) {
@@ -608,19 +768,24 @@ func (a *App) checkUpdate(ctx context.Context, databaseURL string) {
 	if err != nil {
 		return
 	}
-	enabled, latest, err := update.Found(ctx, conn)
+	found, err := update.ReadFound(ctx, conn)
 	_ = conn.Close(ctx)
 	if err != nil {
 		a.logger.Debug("What the check for a new version found could not be read", "error", err)
 		return
 	}
 	current := a.Status().Offer
-	if current != nil && current.Version == latest && enabled {
+	if current != nil && current.Version == found.Latest && found.Enabled {
 		return
 	}
-	offer, err := a.o.Updates.Offer(ctx, enabled, latest)
+	// The version the app went back from is not offered again.
+	skip := ""
+	if back, err := desktop.ReadRolledBack(a.o.Folders); err == nil && back != nil {
+		skip = back.Version
+	}
+	offer, err := a.o.Updates.Offer(ctx, found, skip)
 	if err != nil {
-		a.logger.Warn("The new version's package could not be found", "version", latest, "error", err)
+		a.logger.Warn("The new version's package could not be found, or is refused", "version", found.Latest, "error", err)
 		return
 	}
 	if offer != nil && (current == nil || current.Version != offer.Version) {
@@ -642,6 +807,10 @@ func (a *App) InstallUpdate(ctx context.Context) (*exec.Cmd, error) {
 		a.failUpdate(err)
 		return nil, err
 	}
+	if err := a.o.Updates.Current(*offer); err != nil {
+		a.failUpdate(err)
+		return nil, err
+	}
 	a.logger.Info("Downloading the new version", "version", offer.Version)
 	a.update(func(s *Status) { s.Phase, s.Percent = Updating, 0 })
 	file, err := update.Download(ctx, a.o.Updates.Client, *offer, a.o.Folders.Updates(), func(done, total int64) {
@@ -655,15 +824,41 @@ func (a *App) InstallUpdate(ctx context.Context) (*exec.Cmd, error) {
 		return nil, err
 	}
 	a.Stop(ctx)
-	cmd, err := update.Install(ctx, file, a.o.Updates.Kind, a.o.Executable)
+	// The database as this version leaves it is kept until the new one
+	// answers: once migrated, it would not start this one again. A .deb,
+	// which the system's package installer replaces, keeps no previous
+	// app to go back to.
+	kind := a.o.Updates.Kind
+	database := ""
+	if kind != update.Deb {
+		database = a.o.Folders.PreviousDatabase()
+		if err := update.CopyTree(a.o.Folders.Cluster(), database); err != nil {
+			err = fmt.Errorf("keep a copy of the database: %w", err)
+			a.Start()
+			a.failUpdate(err)
+			return nil, err
+		}
+	}
+	installed, err := update.Install(ctx, file, kind, a.o.Executable)
 	if err != nil {
+		if database != "" {
+			_ = os.RemoveAll(database)
+		}
 		// Starting clears the problems: the failure is told after it.
 		a.Start()
 		a.failUpdate(err)
 		return nil, err
 	}
+	if installed.Previous != "" {
+		pending := update.Pending{From: a.o.Version, To: offer.Version, Kind: kind, App: installed.App, Previous: installed.Previous,
+			Database: database}
+		if err := pending.Write(a.o.Folders); err != nil {
+			a.logger.Warn("The previous version is not kept: the new one cannot go back to it", "error", err)
+			_ = pending.Confirm(a.o.Folders, a.o.Executable)
+		}
+	}
 	a.logger.Info("The new version is installed: starting it", "version", offer.Version)
-	return cmd, nil
+	return installed.Start, nil
 }
 
 func (a *App) failUpdate(err error) {
@@ -710,6 +905,15 @@ type serverProcess struct {
 	mu      sync.Mutex
 	process *os.Process
 	exited  chan struct{}
+	// exit is why the server last ended, or could not start.
+	exit error
+}
+
+// lastExit is why the server last ended, or could not start.
+func (p *serverProcess) lastExit() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.exit
 }
 
 // Restarts wait from minDelay, doubling up to maxDelay; a server that ran
@@ -726,18 +930,28 @@ const (
 	outputWait = 5 * time.Second
 )
 
-func (p *serverProcess) supervise(ctx context.Context) {
+// supervise starts the server, and again each time it ends by itself,
+// until ctx ends. It returns true, without starting it, once a new
+// version's server started update.MaxStarts times without answering: the
+// app goes back to the previous version.
+func (p *serverProcess) supervise(ctx context.Context) bool {
 	delay := minDelay
 	for ctx.Err() == nil {
+		if !p.app.countStart() {
+			return true
+		}
 		started := time.Now()
 		exited, err := p.start()
 		if err != nil {
 			p.app.logger.Error("The server could not start", "error", err)
 			p.app.problem(StartFailed, err)
+			p.mu.Lock()
+			p.exit = err
+			p.mu.Unlock()
 		} else {
 			select {
 			case <-ctx.Done():
-				return
+				return false
 			case <-exited:
 			}
 			p.app.logger.Warn("The server stopped by itself: starting it again", "after", delay)
@@ -747,16 +961,20 @@ func (p *serverProcess) supervise(ctx context.Context) {
 				}
 			})
 		}
+		if !p.app.mayStartAgain() {
+			return true
+		}
 		if time.Since(started) > stableRun {
 			delay = minDelay
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-time.After(delay):
 		}
 		delay = min(delay*2, maxDelay)
 	}
+	return false
 }
 
 // setupCode finds the code in the line the server logs while no
@@ -820,6 +1038,9 @@ func (p *serverProcess) start() (<-chan struct{}, error) {
 			p.app.logger.Warn("A process the server started still holds its output")
 		}
 		p.app.logger.Info("The server ended", "status", err)
+		p.mu.Lock()
+		p.exit = err
+		p.mu.Unlock()
 		close(exited)
 	}()
 	return exited, nil

@@ -95,6 +95,24 @@ func (h *handler) desktopOffer() *desktop.Offered {
 	return offered
 }
 
+// desktopRolledBack is Polyfin Desktop's return to the version that runs,
+// from a newer one that did not start; nil when there was none, or
+// Polyfin Desktop does not run Polyfin.
+func (h *handler) desktopRolledBack() *desktop.RolledBack {
+	if !h.Desktop {
+		return nil
+	}
+	back, err := desktop.ReadRolledBack(desktop.Folders{Data: h.DataDir})
+	if err != nil {
+		h.Logger.Warn("Polyfin Desktop's return to its previous version could not be read", "error", err)
+		return nil
+	}
+	if back == nil || !updates.Newer(back.Version, h.Version) {
+		return nil
+	}
+	return back
+}
+
 // serverAction checks what each of the server's actions needs once its
 // own conditions hold: the administrator's password or two-step code
 // (see checkIdentity), then that the action was not asked within the last

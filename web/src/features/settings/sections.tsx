@@ -177,6 +177,14 @@ function General({ form, update, error, range, limits }: SectionFormApi) {
         onChange={(updateCheck) => update({ updateCheck })}
       />
       <SwitchRow
+        anchor="include-prereleases"
+        label={s.includePrereleases}
+        help={s.includePrereleasesHelp}
+        checked={form.includePrereleases}
+        disabled={!form.updateCheck}
+        onChange={(includePrereleases) => update({ includePrereleases })}
+      />
+      <SwitchRow
         anchor="local-discovery"
         label={s.localDiscovery}
         help={s.localDiscoveryHelp}

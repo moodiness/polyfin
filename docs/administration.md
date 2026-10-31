@@ -105,6 +105,8 @@ A local folder whose files are left unmatched because no addon of the server des
 
 A copy of the web player's **Custom** theme kept in Polyfin that misses some of its files, as after a backup restored on another system or into another data folder, is a warning with how many are missing, linked to the copy under **Settings › Web player**, while the **Custom** theme is chosen and its texts load the copy. Browsers meanwhile load those files from their original addresses, which needs the internet. **Update the copy** downloads them again and clears it; so does choosing another theme (see [Keeping a copy of a theme](web-client.md#keeping-a-copy-of-a-theme)).
 
+In Polyfin Desktop, a return to the previous version, after a new version's server ended 3 times before it answered, is a warning naming the version that did not start, the one put back, and why, as the app's log tells it, linked to the server's version under **Process**. It lasts while a version older than the one that did not start runs, and goes once a newer version answers (see [Going back to the previous version](desktop.md#going-back-to-the-previous-version)). **For app developers:** `GET /admin/api/health/problems` lists it as `desktop_rolled_back`, with `name`, the version that did not start, `previous` and `error`.
+
 A **Conversion folder**, **Folder for files being read** or **Cache folder** that Polyfin could not write into when it started, such as a disk not mounted, is a warning naming the folder, with a link to its setting: the data folder's `cache` holds those files until a start finds the folder writable (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)). **For app developers:** `GET /admin/api/health/problems` lists it as `folder_unwritable`, with `folder` (`conversion`, `reading` or `cache`), `path` and `error`; `/admin/api/settings` holds the folders as `conversionFolder`, `readingFolder` and `cacheFolder`, with `cacheFolderDefault`, and a `PUT` with a folder Polyfin cannot write into answers 400 `invalid_conversion_folder`, `invalid_reading_folder` or `invalid_cache_folder`.
 
 A user's app connection or tracking service that stopped, its app or service having refused what Polyfin kept, is a warning, one per user and app or service, which opens the user's page. Only that user can connect it again. It is not sent as a health problem: the **Connection stopped** notification told it (see [Stopped connections](notifications.md#stopped-connections)).
@@ -137,11 +139,11 @@ It leaves alone the scrubbing thumbnails and chapter images, kept in the databas
 
 While **Check for new versions** is on, under **Settings › General**, Polyfin asks GitHub for its latest release a minute after it starts, then once a day. This is the one request Polyfin makes to GitHub for itself:
 
-- it asks `https://api.github.com/repos/moodiness/polyfin/releases/latest`, which leaves out pre-releases and drafts;
+- it asks `https://api.github.com/repos/moodiness/polyfin/releases/latest`, which leaves out pre-releases and drafts, or, while **Include pre-releases** is on too, `https://api.github.com/repos/moodiness/polyfin/releases?per_page=20`, the 20 latest releases, of which it takes the newest release and the newest pre-release;
 - it sends nothing but Polyfin's version, in its `User-Agent: Polyfin/<version>` header;
 - it goes through the proxy the environment sets (`HTTPS_PROXY`), and gives up after 10 seconds.
 
-A failed request, or GitHub asking to wait (403 or 429), changes nothing, and is tried again an hour later. A release whose tag is a pre-release is left out too.
+A failed request, or GitHub asking to wait (403 or 429), changes nothing, and is tried again an hour later. A release GitHub marks as a pre-release, or whose tag is one, such as `v1.4.0-rc.1`, is left out while **Include pre-releases** is off. On, the newest pre-release is the one shown while it is newer than the newest release; turning it on looks at once rather than at the next daily check, and turning it off shows the newest release again at once. Polyfin Desktop offers the same version (see [Updates](desktop.md#updates)).
 
 When the release is newer than the running version, in semantic version order:
 
@@ -156,6 +158,9 @@ A development build, whose version is `dev`, asks nothing and never shows a new 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Check for new versions** | **Settings › General** | On | Asks GitHub once a day, and a minute after Polyfin starts, for Polyfin's latest release, and tells administrators about a newer one. Off, GitHub is never asked. |
+| **Include pre-releases** | **Settings › General** | Off | The check, and Polyfin Desktop's updates, consider pre-releases too. Pre-releases are for trying what comes next, and may have bugs. |
+
+**Compared with Jellyfin:** Jellyfin 12.4 has no check for its own new versions: `HasUpdateAvailable` of `/System/Info` is marked obsolete, "This should be handled by the package manager" ([SystemInfo.cs, lines 133 to 135](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/System/SystemInfo.cs#L133-L135)), and never set, so it is always false ([SystemManager.cs, lines 56 to 83](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/SystemManager.cs#L56-L83)). Polyfin sets it from its own check, following releases alone unless **Include pre-releases** is on.
 
 ## Restart and updates
 
@@ -182,7 +187,7 @@ A container does not tell the processes in it its restart policy: only the Docke
 
 ### Polyfin Desktop's update
 
-In Polyfin Desktop, the notice of a new version on **Home** offers **Install Polyfin `<version>`** while the app's menu offers it: a release newer than the server, with a package for the system (see [Updates](desktop.md#updates)). It asks the app to do what its menu item does: download the package and check it, stop Polyfin, install the new version and start it. The notice shows the download's progress, then the admin app waits for the new version to answer. When the install fails, Polyfin runs on as it was, and the admin app says so. Elsewhere than in Polyfin Desktop, this is never offered.
+In Polyfin Desktop, the notice of a new version on **Home** offers **Install Polyfin `<version>`** while the app's menu offers it: a release newer than the server, with a package for the system (see [Updates](desktop.md#updates)). It asks the app to do what its menu item does: download the package and check it against the release's signed manifest, stop Polyfin, install the new version and start it, going back to the previous one when the new one does not start (see [Going back to the previous version](desktop.md#going-back-to-the-previous-version)). The notice shows the download's progress, then the admin app waits for the new version to answer. When the install fails, Polyfin runs on as it was, and the admin app says so. Elsewhere than in Polyfin Desktop, this is never offered.
 
 ### Update now
 
