@@ -49,6 +49,9 @@ func (s *Service) Channels(ctx context.Context, user accounts.User) ([]Item, err
 
 // channels lists the channels of a view, with the records that find them
 // again. A catalog that cannot be read is left out, as from a collection.
+// The channels the user's channel rule hides are left out too, but keep
+// their place in the numbering, so that a channel shows the same number
+// to every user.
 func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 	lists := make([][]stremio.Meta, len(v.channels))
 	var group errgroup.Group
@@ -67,6 +70,7 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 	var items []Item
 	var records []record
 	seen := map[string]bool{}
+	place := 0
 	for i, metas := range lists {
 		src := v.channels[i]
 		addon := src.addon.addon.ID
@@ -74,11 +78,17 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 			if meta.ID == "" || seen[meta.ID] {
 				continue
 			}
-			seen[meta.ID] = true
 			if meta.Type == "" {
 				meta.Type = src.catalog.Type
 			}
-			number := len(items) + 1
+			group, _ := channelGroup(src, meta)
+			if !v.allowsChannel(src, group, meta.ID) {
+				place++
+				continue
+			}
+			seen[meta.ID] = true
+			place++
+			number := place
 			if meta.ChannelNumber > 0 {
 				number = meta.ChannelNumber
 			}
@@ -87,7 +97,7 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 			items = append(items, item)
 			records = append(records, record{ID: item.ID, Key: channelKey(meta.ID), Kind: KindChannel, Addon: &addon,
 				CatalogType: src.catalog.Type, CatalogID: src.catalog.ID, Meta: &preview, Number: number, GuideNumber: meta.GuideNumber,
-				Confined: src.addon.confined})
+				Group: group, Confined: src.addon.confined})
 		}
 	}
 	return items, records
@@ -110,10 +120,11 @@ func channelImages(meta stremio.Meta) Images {
 }
 
 // channel describes a channel listed before, from what Polyfin remembers
-// of it, when the user still has the live TV catalog that listed it:
-// players ask for it with every segment, which must not list the catalogs
-// again. An IPTV source answers at once whether it still shows the
-// channel: its groups may have been chosen since.
+// of it, when the user still has the live TV catalog that listed it and
+// their channel rule shows it: players ask for it with every segment,
+// which must not list the catalogs again. An IPTV source answers at once
+// whether it still shows the channel, and in which category: its groups
+// may have been chosen since.
 func (s *Service) channel(ctx context.Context, v view, r record) (Item, error) {
 	index := slices.IndexFunc(v.channels, func(src source) bool {
 		return r.Addon != nil && src.addon.addon.ID == *r.Addon && src.catalog.Type == r.CatalogType && src.catalog.ID == r.CatalogID
@@ -121,12 +132,21 @@ func (s *Service) channel(ctx context.Context, v view, r record) (Item, error) {
 	if r.Kind != KindChannel || r.Meta == nil || index < 0 {
 		return Item{}, ErrNotFound
 	}
-	if src := v.channels[index]; src.addon.addon.IPTV() {
-		if _, err := s.fetchMeta(ctx, src.addon, r.CatalogType, r.Meta.ID); errors.Is(err, stremio.ErrNotFound) {
+	src := v.channels[index]
+	var group string
+	if src.addon.addon.IPTV() {
+		current, err := s.fetchMeta(ctx, src.addon, r.CatalogType, r.Meta.ID)
+		if errors.Is(err, stremio.ErrNotFound) {
 			return Item{}, ErrNotFound
 		} else if err != nil {
 			return Item{}, err
 		}
+		group, _ = channelGroup(src, current)
+	} else {
+		group, _ = channelGroup(src, *r.Meta)
+	}
+	if !v.allowsChannel(src, group, r.Meta.ID) {
+		return Item{}, ErrNotFound
 	}
 	meta := *r.Meta
 	meta.GuideNumber = r.GuideNumber

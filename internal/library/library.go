@@ -415,6 +415,9 @@ type view struct {
 	addons    []installed
 	libraries []library
 	channels  []source
+	// channelFilter is the user's channel rule, which hides channels of
+	// the server's sources (see channellimits.go); nil hides none.
+	channelFilter *accounts.ChannelFilter
 	// smart are the smart lists the user sees, in order (see
 	// smartlists.go).
 	smart []smartList
@@ -501,7 +504,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 		}
 	}
 	v := view{user: user.ID, parental: user.Parental, genres: user.BlockedGenres, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
-		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}
+		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit, channelFilter: user.LiveTvChannels.Filter()}
 	if user.ID != (accounts.ID{}) {
 		hidden, err := s.hiddenTitles(ctx, user.ID)
 		if err != nil {
