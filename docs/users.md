@@ -501,6 +501,12 @@ Leaving a group, with **No group**, or deleting it, works as turning **Follow th
 
 **Turn off downloads for everyone** (see [Transcoding](transcoding.md)) also turns **Can download** off on every group, so that its members keep following it.
 
+### Server sources a group uses
+
+A group holds no addon setting of its own: each server source says who uses it, everyone or only some groups and users (see [Who uses a server addon](addons-and-libraries.md#who-uses-a-server-addon)). A user uses a limited source when they are ticked, or their group is, whether they follow the group or keep **Own settings**; a new user in no group uses none of the limited sources. Deleting a group removes it from every source's list. Unlike **Visible libraries**, which only hides libraries and leaves their titles reachable, a source a user does not use gives them nothing: no library, title only it knows, version, subtitle or channel.
+
+**Compared with Jellyfin:** Jellyfin has no groups and no addons; its closest setting, a user's "Library access", is Polyfin's **Visible libraries**. jellyfin-web's library list still shows, ticked or not, the libraries of a source the user does not use: ticking them grants nothing.
+
 ### Groups and Jellyfin apps
 
 - `GET /Users` and `GET /Users/{id}` show a member's policy with the values that apply to them, the group's while they follow it.
@@ -1106,6 +1112,8 @@ Jellyfin apps cannot open the provider's page. They sign in with Quick Connect: 
 ### Users' own addons
 
 Under **My sources**, users choose which catalogs of their own addons are libraries, in which order, with their names, images, genres and maximums, and whether the web player's top bar shows them, as administrators do under **Content › Libraries** (see [The order of libraries](addons-and-libraries.md#the-order-of-libraries), [Library images](addons-and-libraries.md#library-images), [Genre and maximum](addons-and-libraries.md#genre-and-maximum) and [Libraries hidden from the top bar](addons-and-libraries.md#libraries-hidden-from-the-top-bar)). Their image addresses must be public: only administrators can use local network addresses.
+
+A server source limited to some groups and users (see [Who uses a server addon](addons-and-libraries.md#who-uses-a-server-addon)) keeps others from it, but a user who may add their own addons can still add the same addon under **My sources**, at a public address. To prevent it, turn **Can add their own addons** off for them or their group.
 
 Users also make their own smart lists under **My sources**, with **Add a smart list**, as administrators make the server's (see [Smart lists](addons-and-libraries.md#smart-lists)). A user's own list may draw from their own addons' catalogs and, while they use the server's sources, from the server's. Only they see it: as a library among their own, or in the Collections view. The rules on what was played, started or marked favorite follow what they did, in their own lists as in the server's.
 
