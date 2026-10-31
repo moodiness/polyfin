@@ -233,6 +233,7 @@ const libraries: typeof en = {
       rank: 'Platz im Katalog',
       state: 'Wiedergabestatus',
       released: 'Erscheinungsdatum',
+      homeRelease: 'Heimkino-Veröffentlichung',
       votes: 'IMDb-Stimmen',
       runtime: 'Laufzeit',
       contentRating: 'Altersfreigabe',
@@ -251,6 +252,11 @@ const libraries: typeof en = {
     atMost: 'Höchstens',
     releasedWhen: 'Wann',
     releasedWithin: { last: 'In den letzten', next: 'In den nächsten' } as Record<string, string>,
+    homeReleaseWithin: {
+      released: 'Erschienen in den letzten',
+      upcoming: 'Erscheint in den nächsten',
+      both: 'Innerhalb von',
+    } as Record<string, string>,
     days: 'Tagen',
     namePlaceholder: { person: 'Name', studio: 'Name' } as Record<string, string>,
     types: { movie: 'Ein Film', series: 'Eine Serie' } as Record<string, string>,
@@ -268,6 +274,8 @@ const libraries: typeof en = {
       'IMDb-Stimmen kommen von MDBList, mit dem MDBList-API-Schlüssel für Bewertungen unter Einstellungen › Inhalte, im Hintergrund abgefragt. Ohne diesen Schlüssel hat kein Titel Stimmen.',
     studioHelp:
       'Studios und Sender kommen von TMDB, mit dem TMDB-API-Schlüssel unter Einstellungen › Inhalte, im Hintergrund abgefragt und behalten: Die Liste wächst, während sie eintreffen. Ohne diesen Schlüssel zählen nur die Studios, die ein Administrator in den Metadaten eines Titels gesetzt hat.',
+    homeReleaseHelp:
+      'Die Heimkino-Veröffentlichung eines Films ist seine erste digitale oder physische Veröffentlichung, sonst 90 Tage nach dem Kinostart, laut TMDB mit dem TMDB-API-Schlüssel unter Einstellungen › Inhalte, im Hintergrund abgefragt und behalten: Die Liste wächst, während sie eintreffen. Bei einer Serie ist es ihr Premierendatum. Mit „Auf die digitale Veröffentlichung warten“ erscheint ein noch nicht erschienener Film nur in Listen mit einer Regel für kommende Titel.',
     sort: 'Sortierung',
     sorts: {
       catalog: 'Wie ihre Kataloge sie auflisten, abwechselnd einer aus jedem',
