@@ -183,6 +183,9 @@ type Service struct {
 	smartCache   *cache.Cache[smartKey, []smartTitle]
 	smartFetches chan struct{}
 	smartWait    time.Duration
+	// plain holds the searches in plain words users made lately, which
+	// stand for smart lists (see plainsearch.go).
+	plain plainSearches
 	// userData tells the users' state of titles, which smart lists judge
 	// by, and holds the titles each user hid, which their listings leave
 	// out (see hidden.go).
@@ -496,6 +499,12 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 	return v, err
 }
 
+// browsesOwnAddons reports whether user browses their own addons, and so
+// sees their own smart lists (see buildView).
+func browsesOwnAddons(user accounts.User, settings accounts.Settings) bool {
+	return !user.Restricted() && user.ID != (accounts.ID{}) && settings.PersonalAddonsAllowed(user)
+}
+
 func (s *Service) buildView(ctx context.Context, user accounts.User) (view, error) {
 	settings := s.settings()
 	// A user under parental control or blocking genres browses the server's
@@ -505,7 +514,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 	// not used. A request without a user, made with an API key, browses the
 	// server's addons too.
 	scopes := []addons.Scope{addons.Shared()}
-	if !user.Restricted() && user.ID != (accounts.ID{}) && settings.PersonalAddonsAllowed(user) {
+	if browsesOwnAddons(user, settings) {
 		scopes = []addons.Scope{addons.Personal(user.ID)}
 		if user.UseSharedAddons {
 			scopes = append([]addons.Scope{addons.Shared()}, scopes...)
@@ -591,6 +600,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 	if err := s.smartLists(ctx, &v, user, scopes); err != nil {
 		return view{}, err
 	}
+	s.plainSearchLists(&v, user.ID)
 	return v, nil
 }
 

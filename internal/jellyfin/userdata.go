@@ -14,6 +14,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/trackers"
 	"github.com/moodiness/polyfin/internal/userdata"
 )
@@ -72,7 +73,7 @@ type userState struct {
 // description of a library goes through it.
 func (h *Handler) userState(ctx context.Context, user accounts.User, items []library.Item) (userState, error) {
 	ids := make([]accounts.ID, 0, len(items))
-	var parents, songs, videos []accounts.ID
+	var parents, songs, videos, collections []accounts.ID
 	for _, item := range items {
 		ids = append(ids, item.ID)
 		if item.Kind == library.KindSeries || item.Kind == library.KindSeason {
@@ -84,10 +85,27 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 		if item.Kind == library.KindFolder && item.Contents != nil {
 			videos = append(videos, item.Contents.Videos...)
 		}
+		if item.Kind == library.KindCollection {
+			collections = append(collections, item.ID)
+		}
 	}
 	data, err := h.UserData.Get(ctx, user.ID, append(ids, videos...))
 	if err != nil {
 		return userState{}, err
+	}
+	// The collection of a search in plain words is a favorite once saved
+	// as the user's own smart list (see markFavorite).
+	saved, err := h.Library.SavedPlainSearches(ctx, user, collections)
+	if err != nil {
+		return userState{}, err
+	}
+	for id := range saved {
+		if data == nil {
+			data = map[accounts.ID]userdata.Data{}
+		}
+		d := data[id]
+		d.Favorite = true
+		data[id] = d
 	}
 	counts, err := h.UserData.EpisodeCounts(ctx, user.ID, parents)
 	if err != nil {
@@ -331,15 +349,43 @@ func (h *Handler) markTargets(ctx context.Context, user accounts.User, item libr
 }
 
 // markFavorite marks an item, of any kind, as a favorite or not. Favorites
-// do not spread to what the item contains.
+// do not spread to what the item contains. The collection of a search in
+// plain words is saved as the user's own smart list instead, or the list
+// saved from it deleted (see library.SavePlainSearch). A user whose apps
+// would not show the list, or who has as many as they may, is refused with
+// an empty 403, as Jellyfin refuses what a user's policy does not allow.
 func (h *Handler) markFavorite(favorite bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, item, ok := h.userDataItem(w, r, bindErrors{})
 		if !ok {
 			return
 		}
+		if item.Kind == library.KindCollection && h.Library.IsPlainSearch(user, item.ID) {
+			h.savePlainSearch(w, r, user, item, favorite)
+			return
+		}
 		h.change(w, r, user, item, []library.Item{item}, func(d *userdata.Data) { d.Favorite = favorite })
 	}
+}
+
+// savePlainSearch saves the collection of a search in plain words, or
+// deletes the list saved from it, and answers what the user did with it.
+func (h *Handler) savePlainSearch(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, save bool) {
+	_, err := h.Library.SavePlainSearch(r.Context(), user, item.ID, save)
+	if errors.Is(err, library.ErrOwnListsOff) || errors.Is(err, smartlists.ErrTooMany) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	data, err := h.itemData(r.Context(), user, item)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, data)
 }
 
 // rate records that the user likes or dislikes an item. Posting without
