@@ -48,7 +48,8 @@ import MetricsToken from './MetricsToken'
 import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
-import VersionOrder, { CodecOrder, SourceOrder } from './VersionOrder'
+import LabelRules from './LabelRules'
+import VersionOrder, { CodecOrder, EditionOrder, SourceOrder } from './VersionOrder'
 import { EditAsCustom, shownTexts, ThemeCopyPanel } from './WebTheme'
 import WorkFolderRow from './WorkFolders'
 import WordList from './WordList'
@@ -398,6 +399,27 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
             error={error('version-source-order')}
           />
         </SettingRow>
+        <SettingRow anchor="version-edition-order">
+          <EditionOrder
+            order={form.versionEditionOrder}
+            onChange={(versionEditionOrder) => update({ versionEditionOrder })}
+            error={error('version-edition-order')}
+          />
+        </SettingRow>
+        <FieldRow
+          anchor="version-mb-per-minute"
+          label={s.versionMbPerMinute}
+          help={s.versionMbPerMinuteHelp(range('versionMbPerMinute'))}
+          error={error('version-mb-per-minute')}
+        >
+          <NumberInput
+            {...limits('versionMbPerMinute')}
+            step={1}
+            {...number('version-mb-per-minute', form.versionMbPerMinute, (value) =>
+              update({ versionMbPerMinute: Math.trunc(value) }),
+            )}
+          />
+        </FieldRow>
         <FieldRow
           anchor="hide-versions-larger"
           label={s.hideVersionsLarger}
@@ -488,6 +510,14 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
               </div>
             )}
           </fieldset>
+        </SettingRow>
+        <SettingRow anchor="version-label-rules">
+          <LabelRules
+            rules={form.versionLabelRules}
+            max={limits('versionLabelRules').max ?? 0}
+            onChange={(versionLabelRules) => update({ versionLabelRules })}
+            error={error('version-label-rules')}
+          />
         </SettingRow>
       </SettingsGroup>
       <SettingsGroup title={s.playbackHistoryGroup}>

@@ -279,6 +279,11 @@ const settings: typeof en = {
         'hdr-first': 'Prima HDR e Dolby Vision',
         'hdr-last': 'HDR e Dolby Vision per ultimi',
         source: 'Origine, nell’ordine sottostante',
+        'size-per-minute': 'Dimensione al minuto di durata, come impostato sotto',
+        tier: 'Origine della copia: disco, Blu-ray, web, DVD, poi TV',
+        audio: 'Audio: lossless e Atmos per primi, poi più canali',
+        edition: 'Edizione, nell’ordine sottostante',
+        labels: 'Punteggio delle regole sulle etichette, il più alto per primo',
       },
     },
     versionCodecOrder: {
@@ -291,6 +296,19 @@ const settings: typeof en = {
       none: 'Nessuna origine del server fornisce ancora versioni di film o episodi.',
       dragHandle: (name: string) => `Trascina ${name}`,
     },
+    versionEditionOrder: {
+      label: 'Ordine delle edizioni',
+      help: 'L’ordine in cui il criterio Edizione mette le versioni, secondo l’edizione che le loro etichette nominano. Una versione le cui etichette non ne nominano nessuna conta come versione cinematografica.',
+    },
+    versionEditions: {
+      theatrical: 'Versione cinematografica',
+      extended: 'Versione estesa',
+      directors: 'Director’s cut',
+      imax: 'IMAX',
+    },
+    versionMbPerMinute: 'Dimensione al minuto cercata (MB, 0 = la più grande)',
+    versionMbPerMinuteHelp: (r: RangeText) =>
+      `Il criterio Dimensione al minuto mette per prime le versioni più vicine a questi megabyte al minuto di durata, per esempio 50 per una buona codifica 1080p; 0 mette per prima la più grande. La durata è quella della versione una volta analizzata, altrimenti quella del titolo. Fino a ${r.max}; ${r.default} di default.`,
     versionCodecs: {
       av1: 'AV1',
       hevc: 'HEVC (H.265)',
@@ -318,6 +336,22 @@ const settings: typeof en = {
       telecine: 'Telecine (TC, TELECINE)',
       screener: 'Screener (SCR, DVDSCR)',
       early: 'Copie anticipate (R5, WORKPRINT)',
+    },
+    versionLabelRules: {
+      label: 'Regole sulle etichette',
+      help: (max: string) =>
+        `Ogni regola legge il nome, la descrizione e il nome del file di una versione, senza distinzione tra maiuscole e minuscole: una parola trovata in qualsiasi punto, o un’espressione regolare. Una regola nasconde le versioni che riconosce, dopo le regole per nascondere qui sopra e mai tutte le versioni di un titolo, oppure aggiunge il suo punteggio, da −100 a 100, al loro. Il criterio Punteggio delle regole sulle etichette mette per primo il più alto; senza di esso, il punteggio ordina le versioni dopo gli altri criteri. Fino a ${max} regole; nessuna di default.`,
+      none: 'Nessuna regola: le etichette non danno punti.',
+      add: 'Aggiungi una regola',
+      remove: (position: number) => `Rimuovi la regola ${position}`,
+      text: (position: number) => `Parola o espressione della regola ${position}`,
+      action: (position: number) => `Cosa fa la regola ${position}`,
+      points: (position: number) => `Punteggio della regola ${position}`,
+      regex: 'Espressione regolare',
+      score: 'Aggiungi un punteggio',
+      hide: 'Nascondi',
+      wordPlaceholder: 'Parola',
+      regexPlaceholder: 'Espressione regolare',
     },
     syncAddonSubtitles: 'Sincronizza i sottotitoli degli add-on',
     syncAddonSubtitlesHelp:

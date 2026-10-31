@@ -276,6 +276,11 @@ const settings: typeof en = {
         'hdr-first': 'HDR e Dolby Vision primeiro',
         'hdr-last': 'HDR e Dolby Vision por último',
         source: 'Fonte, na ordem abaixo',
+        'size-per-minute': 'Tamanho por minuto de duração, conforme o ajuste abaixo',
+        tier: 'Origem: cópia de disco, Blu-ray, web, DVD e depois TV',
+        audio: 'Áudio: sem perdas e Atmos primeiro, depois mais canais',
+        edition: 'Edição, na ordem abaixo',
+        labels: 'Pontuação das regras de rótulos, a mais alta primeiro',
       },
     },
     versionCodecOrder: {
@@ -288,6 +293,19 @@ const settings: typeof en = {
       none: 'Nenhuma fonte do servidor fornece versões de filmes ou episódios ainda.',
       dragHandle: (name: string) => `Arrastar ${name}`,
     },
+    versionEditionOrder: {
+      label: 'Ordem das edições',
+      help: 'A ordem em que o critério Edição coloca as versões, conforme a edição que seus rótulos nomeiam. Uma versão cujos rótulos não nomeiam nenhuma conta como a versão de cinema.',
+    },
+    versionEditions: {
+      theatrical: 'Versão de cinema',
+      extended: 'Versão estendida',
+      directors: 'Versão do diretor',
+      imax: 'IMAX',
+    },
+    versionMbPerMinute: 'Tamanho por minuto desejado (MB, 0 = o maior)',
+    versionMbPerMinuteHelp: (r: RangeText) =>
+      `O critério Tamanho por minuto coloca primeiro as versões mais próximas desta quantidade de megabytes por minuto de duração, por exemplo 50 para uma boa codificação 1080p; 0 coloca primeiro a maior. A duração é a da versão depois de analisada, senão a do título. Até ${r.max}; ${r.default} por padrão.`,
     versionCodecs: {
       av1: 'AV1',
       hevc: 'HEVC (H.265)',
@@ -314,6 +332,22 @@ const settings: typeof en = {
       telecine: 'Telecines (TC, TELECINE)',
       screener: 'Screeners (SCR, DVDSCR)',
       early: 'Cópias antecipadas (R5, WORKPRINT)',
+    },
+    versionLabelRules: {
+      label: 'Regras de rótulos',
+      help: (max: string) =>
+        `Cada regra lê o nome, a descrição e o nome do arquivo de uma versão, sem diferenciar maiúsculas e minúsculas: uma palavra encontrada em qualquer lugar, ou uma expressão regular. Uma regra oculta as versões que reconhece, depois das regras de ocultar acima e nunca todas as versões de um título, ou soma sua pontuação, de −100 a 100, à delas. O critério Pontuação das regras de rótulos coloca a mais alta primeiro; sem ele, a pontuação ordena as versões depois dos outros critérios. Até ${max} regras; nenhuma por padrão.`,
+      none: 'Nenhuma regra: os rótulos não pontuam.',
+      add: 'Adicionar uma regra',
+      remove: (position: number) => `Remover a regra ${position}`,
+      text: (position: number) => `Palavra ou expressão da regra ${position}`,
+      action: (position: number) => `O que a regra ${position} faz`,
+      points: (position: number) => `Pontuação da regra ${position}`,
+      regex: 'Expressão regular',
+      score: 'Somar uma pontuação',
+      hide: 'Ocultar',
+      wordPlaceholder: 'Palavra',
+      regexPlaceholder: 'Expressão regular',
     },
     syncAddonSubtitles: 'Sincronizar legendas dos complementos',
     syncAddonSubtitlesHelp:

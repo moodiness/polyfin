@@ -254,6 +254,22 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'playback',
+    anchor: 'version-edition-order',
+    label: (t) => s(t).versionEditionOrder.label,
+    help: (t) => s(t).versionEditionOrder.help,
+    keywords: ['edition', 'extended', 'IMAX', 'director'],
+    codes: ['invalid_version_edition_order'],
+  },
+  {
+    section: 'playback',
+    anchor: 'version-mb-per-minute',
+    label: (t) => s(t).versionMbPerMinute,
+    help: (t, r) => s(t).versionMbPerMinuteHelp(r('versionMbPerMinute')),
+    keywords: ['bitrate', 'size', 'taille'],
+    codes: ['invalid_version_mb_per_minute'],
+  },
+  {
+    section: 'playback',
     anchor: 'hide-versions-larger',
     label: (t) => s(t).hideVersionsLarger,
     help: (t, r) => s(t).hideVersionsLargerHelp(r('hideVersionsLargerGb')),
@@ -280,6 +296,14 @@ export const settingEntries: readonly SettingEntry[] = [
     help: (t) => s(t).hiddenReleasesHelp,
     keywords: ['CAM', 'TS', 'telesync', 'screener', 'quality'],
     codes: ['invalid_hidden_releases'],
+  },
+  {
+    section: 'playback',
+    anchor: 'version-label-rules',
+    label: (t) => s(t).versionLabelRules.label,
+    help: (t, r) => s(t).versionLabelRules.help(r('versionLabelRules').max),
+    keywords: ['regex', 'regular expression', 'score', 'label'],
+    codes: ['invalid_version_label_rules'],
   },
   {
     section: 'playback',
