@@ -205,7 +205,7 @@ In the official Jellyfin apps for Android and iOS, which show the web client ins
 
 ### Home rows
 
-**Settings › Web player › Home rows** adds rows to the web player's home page. The list is empty by default; it holds up to 20 rows, in order, each with **Edit**, **Delete** and arrows to move it. Each row has:
+**Settings › Web player › Home rows** adds rows to the web player's home page. The list is empty by default; it holds up to 20 rows, in order, each with **Edit**, **Delete** and arrows to move it, and **Not shown now** beside a row its schedule hides at the moment. Each row has:
 
 - a **Name**, its title on the home page;
 - a **Kind**, what it lists:
@@ -219,7 +219,8 @@ In the official Jellyfin apps for Android and iOS, which show the web client ins
   - **Top picks for you**: the movies and series of the first page of each of the user's libraries, smart lists seen as libraries included, that their taste profile ranks first, without those they played (see [Top picks for you](#top-picks-for-you));
 - a **Place**: **At the top**, **After Continue Watching**, **After Next Up** or **At the bottom**. When a user's home page doesn't show Continue Watching or Next Up, the row takes the place before: after the rows above it, or at the top;
 - **Shown to**: **Every user**, or **Chosen users**;
-- **Also a library in other apps**, off by default.
+- **Also a library in other apps**, off by default;
+- a **Schedule**, empty by default: the row shows all the time (see [Row schedules](#row-schedules)).
 
 Every row leaves out, for each user, what their other lists leave out: titles above their [parental control](users.md#parental-control), their blocked genres, the titles they hid, and the libraries of the server hidden from them, whose catalog or collection makes no row. A catalog row needs the user to use the server's addons. A row without any title isn't shown. Each user can turn off a row under **My account › Home rows** (see [Users](users.md#home-rows)); jellyfin-web's own sections stay under its **Settings › Home**.
 
@@ -230,6 +231,8 @@ Every row leaves out, for each user, what their other lists leave out: titles ab
 **Recommended on Trakt** lists what Trakt recommends to each user, read with their Trakt connection and read again every 12 hours, without the titles they played, as **Because you watched** leaves them out. Titles are found by their IMDb, TMDB or TVDB identifier, and those found by none are left out. A user without a Trakt connection, or whose connection waits for **Connect again**, sees no such row and no library of it, even when the row is shown to them. The first time, the row shows once Trakt has answered, at the next visit of the home page. In `GET /Polyfin/HomeRows`, its `Kind` is `Trakt`.
 
 No app can be given a new kind of home section. With **Also a library in other apps** on, the row is also a library of its own, without type, as the Watchlist is (see [Tracking](tracking.md)): other apps list it among the user's libraries and show its latest titles on their home. The web player shows it too, in its libraries and with its own "Recently Added" row. A **Because you watched** row is then one library for each title it follows.
+
+**For app developers:** `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`), its `Kind` (`Catalog`, `Collection`, `BecauseYouWatched`, `New`, `NowAvailable`, `StillWaiting`, `Trakt` or `TopPicks`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do. A row's `Id` is a folder: `/Items?ParentId=` lists the whole row, up to 500 titles, and `/Items/{Id}` describes it. The admin API names the two watchlist kinds `available` and `waiting`. Its rows carry a `schedule`, with `startDate` and `endDate` (`YYYY-MM-DD`, empty for none), `days` (0 for Sunday to 6) and `startHour` and `endHour` (0 to 23 and 1 to 24, both null for all day), and `shownNow`. `GET /admin/api/home-rows/preview/{userId}` answers the preview: `rows`, each with its folder's `id`, its `rowId`, `name`, `kind`, `place` and `titles` (`id`, `kind`, `name`, `year` and `posterId`).
 
 #### Top picks for you
 
@@ -253,7 +256,24 @@ A genre is vetoed, confident or not, once its weight is -1.5 or less and two tit
 
 **Compared with Jellyfin:** Jellyfin has no taste profile. Its suggestions are at random ([SuggestionsController.cs, lines 82 to 93](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SuggestionsController.cs#L82-L93)), and its similar titles are ordered by their score alone ([SimilarItemsManager.cs, lines 245 to 249](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/SimilarItems/SimilarItemsManager.cs#L245-L249)). Polyfin orders them by the user's taste once it knows it, and the row reaches other apps through **Also a library in other apps**. jellyfin-web already shows "Ends at" on a title's page, which the tagline does not repeat.
 
-**For app developers:** `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`), its `Kind` (`Catalog`, `Collection`, `BecauseYouWatched`, `New`, `NowAvailable`, `StillWaiting`, `Trakt` or `TopPicks`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do. A row's `Id` is a folder: `/Items?ParentId=` lists the whole row, up to 500 titles, and `/Items/{Id}` describes it. The admin API names the two watchlist kinds `available` and `waiting`.
+#### Row schedules
+
+A row's **Schedule** tells when it shows, in the server's time zone, as users' [allowed hours](users.md#allowed-hours) do:
+
+- **From** and **Until**: its first and last dates, both included. Either may be left empty.
+- **Days**: the days of the week it shows on. None chosen is every day.
+- **Hours**: **All day**, or **Certain hours**, from the start of one hour to the start of another, such as 18:00 to 23:00. An end before the start passes midnight, and that night belongs to the day it starts on: from 22:00 to 02:00 on Fridays shows the row from Friday 22:00 to Saturday 02:00, and an **Until** date keeps its last night.
+
+Outside its schedule, the row is not on the user's home page, and its list does not open. A row that is also a library in other apps follows its dates only, so that libraries don't come and go by the hour: other apps keep the libraries they listed until they ask again, and its library and its row show from its first date to the end of its last. The form then hides **Days** and **Hours**, and keeps them for when the row is no longer a library. The list says "Scheduled" for a row with a schedule.
+
+#### Preview as a user
+
+**Preview as…**, under the list, shows a user's home rows as their web player shows them now. Choose the **User**: the preview lists the rows they see, under their places, each with its name there and its first 20 titles, as `GET /Polyfin/HomeRows` answers it to their web player. Their parental control, blocked genres and hidden titles apply, and so do the libraries hidden from them, the rows not shown to them or turned off, and the schedules. jellyfin-web's own sections, such as Continue Watching, are not in it.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no home rows that the server adds, so no schedules for them; its libraries never come and go by themselves. That is why a row that is also a library follows its dates only.
+- Jellyfin's dashboard has no preview of a user's home page.
 
 ### Themes
 
