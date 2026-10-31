@@ -2510,17 +2510,24 @@
       })
   }
   // drawn tells whether the container holds every row shown, each with all
-  // its titles.
+  // its titles. Rows are found by their identifiers: draw puts them in the
+  // order of their places, which may not be the order of the answer.
   function drawn(container) {
     var rows = shownRows()
-    var drawnRows = []
+    var drawnRows = {}
+    var count = 0
     for (var i = 0; i < container.children.length; i++) {
-      if (container.children[i].classList.contains('polyfinHomeRow')) drawnRows.push(container.children[i])
+      var child = container.children[i]
+      if (child.classList.contains('polyfinHomeRow')) {
+        drawnRows[child.getAttribute('data-polyfin-row')] = child
+        count++
+      }
     }
     return (
-      drawnRows.length === rows.length &&
-      drawnRows.every(function (element, i) {
-        return element.querySelectorAll('.card').length === rows[i].Items.length
+      count === rows.length &&
+      rows.every(function (row) {
+        var element = drawnRows[row.Id]
+        return !!element && element.querySelectorAll('.card').length === row.Items.length
       })
     )
   }

@@ -2737,6 +2737,13 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 				"Trending[Alpha] s0 s1 Picks[Charlie] s2 s3 s4 s5 s6 s7 s8 s9"},
 		},
 		"malformed drops": {answers: [][]row{all}, storage: "{not json", steps: []string{"home", "wait 100", "show"}, want: []string{ask, byDefault}},
+		// The rows drawn are found by their places, not by the order of the
+		// list: listed in another order than their places', with other
+		// numbers of titles, they are drawn once and stay.
+		"listed out of their places' order": {answers: [][]row{{fresh, trending, because}},
+			steps: []string{"home", "wait 100", "show", "wait 100", "show"},
+			want: []string{ask, "Trending[Alpha Bravo] s0 s1 s2 s3 s4 s5 Because you watched Alpha[Delta] s6 s7 s8 s9 New[Echo]",
+				"Trending[Alpha Bravo] s0 s1 s2 s3 s4 s5 Because you watched Alpha[Delta] s6 s7 s8 s9 New[Echo]"}},
 	}
 	const harness = `
 const vm = require('node:vm')
@@ -2749,11 +2756,19 @@ async function run(scenario) {
   const listeners = {}
   const observers = new Set()
   let queued = false
+  // changes counts the page's changes: a script that keeps changing it,
+  // which would hang a browser, is stopped and logged.
+  let changes = 0
   const changed = () => {
     if (queued) return
     queued = true
     queueMicrotask(() => {
       queued = false
+      if (++changes > 10000) {
+        observers.clear()
+        log.push('changes the page without end')
+        return
+      }
       for (const observer of [...observers]) if (observers.has(observer)) try { observer.callback([]) } catch (error) {}
     })
   }
