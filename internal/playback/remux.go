@@ -66,6 +66,11 @@ type Remux struct {
 	// offered them, in order, which the play may go on from once its
 	// version's source fails for good (see carry); nil for none.
 	Alternates func(ctx context.Context) []library.Version
+	// FastStart marks a play that asked to start with fast segments, as
+	// PlaybackInfo decided (see FastStarts), and Start is where it starts:
+	// it gets them there when they can be made (see RemuxPlan).
+	FastStart bool
+	Start     time.Duration
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe
@@ -495,10 +500,14 @@ func audioCodecString(audio media.Stream) string {
 	return ""
 }
 
-// RemuxInit opens the initialization segment of a fragmented MP4 remux.
-func (s *Service) RemuxInit(ctx context.Context, remux Remux) (*os.File, error) {
+// RemuxInit opens the initialization segment of a fragmented MP4 remux,
+// of its fast segments with fast (see RemuxPlan).
+func (s *Service) RemuxInit(ctx context.Context, remux Remux, fast bool) (*os.File, error) {
 	if !remux.HasVariant() {
 		return nil, hls.ErrNotFound
+	}
+	if fast {
+		return s.segments.FastInit(ctx, remux.key(), s.remuxOpener(remux))
 	}
 	return s.segments.Init(ctx, remux.key(), s.remuxOpener(remux))
 }
@@ -517,7 +526,7 @@ func (s *Service) RemuxSegment(ctx context.Context, remux Remux, n int) (*os.Fil
 // track the index locates is read whole meanwhile, for the segments after,
 // unless remuxes have extracted the version's tracks whole already.
 func (s *Service) RemuxSubtitle(ctx context.Context, remux Remux, stream, n int) ([]byte, error) {
-	plan, err := s.Plan(ctx, remux.Version)
+	plan, err := s.RemuxPlan(ctx, remux)
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +564,7 @@ func (s *Service) MayConvert(user, version accounts.ID) bool {
 
 func (r Remux) key() hls.Key {
 	return hls.Key{Session: r.Session, Audio: r.Audio, Format: r.Format, User: r.User.String(), Device: r.Device,
-		Version: r.Version.ID.String(), Converts: r.ConvertVideo != nil, Video: r.videoConversion(), Variant: r.Variant}
+		Version: r.Version.ID.String(), Converts: r.ConvertVideo != nil, Video: r.videoConversion(), Variant: r.Variant, FastStart: r.FastStart}
 }
 
 // videoConversion describes what the remux converts the video to, as
@@ -589,7 +598,7 @@ func (r Remux) videoConversion() string {
 // it (see carry); a play session that went on so opens that one again.
 func (s *Service) remuxOpener(remux Remux) hls.Opener {
 	return func(ctx context.Context) (hls.Remux, func(), error) {
-		plan, err := s.Plan(ctx, remux.Version)
+		plan, err := s.RemuxPlan(ctx, remux)
 		if err != nil {
 			return hls.Remux{}, nil, err
 		}
@@ -667,6 +676,9 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 			r.ADTS = true
 		}
 		remux.convert(&r, video, TuningOf(s.settings()))
+		if plan.HasFast() {
+			remux.fast(&r, video, s.Capabilities())
+		}
 		if carried {
 			r.Switch = c.switchFrom(remux.Version, 0)
 		}
@@ -693,29 +705,7 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 		r.VideoTag = RemuxTag(codec, "mp4")
 	}
 	if c := remux.conversion(video); c != nil {
-		rate := video.AverageRate
-		if rate <= 0 {
-			rate = video.FrameRate
-		}
-		// Like Jellyfin, frames are doubled up to 30 a second, within the
-		// frame rate the app's profile allows, which drops the frames
-		// beyond it.
-		double := c.Deinterlace && t.DoubleRate && rate > 0 && rate <= 30 && (c.FrameRate <= 0 || rate*2 <= c.FrameRate)
-		if double {
-			rate *= 2
-		}
-		drop := c.FrameRate > 0 && rate > c.FrameRate
-		if drop {
-			rate = c.FrameRate
-		}
-		// The source's colors, which video converted without tone mapping
-		// keeps (see hls.VideoEncoding.Colors).
-		colors := hls.Colors{Range: video.ColorRange, Matrix: video.ColorSpace, Transfer: video.ColorTransfer, Primaries: video.ColorPrimaries}
-		r.Encode = &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate, MaxRate: c.Peak,
-			FrameRate: rate, DropFrames: drop, Profile: c.Profile, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace,
-			Burn: remux.Burn, BurnFile: remux.BurnFile, Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec),
-			ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double,
-			DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
+		r.Encode = remux.encoding(c, video, t)
 	}
 	if c := remux.ConvertAudio; c != nil && r.Audio >= 0 {
 		r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter = c.Codec, c.Channels, c.Bitrate, c.Filter
@@ -723,4 +713,32 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 	if r.Encode != nil || r.AudioCodec != "" {
 		r.Threads = t.Threads
 	}
+}
+
+// encoding is what an encoding converts video to as c says, tuned by t,
+// with the remux's subtitle burned in.
+func (remux Remux) encoding(c *VideoConversion, video media.Stream, t Tuning) *hls.VideoEncoding {
+	rate := video.AverageRate
+	if rate <= 0 {
+		rate = video.FrameRate
+	}
+	// Like Jellyfin, frames are doubled up to 30 a second, within the
+	// frame rate the app's profile allows, which drops the frames beyond
+	// it.
+	double := c.Deinterlace && t.DoubleRate && rate > 0 && rate <= 30 && (c.FrameRate <= 0 || rate*2 <= c.FrameRate)
+	if double {
+		rate *= 2
+	}
+	drop := c.FrameRate > 0 && rate > c.FrameRate
+	if drop {
+		rate = c.FrameRate
+	}
+	// The source's colors, which video converted without tone mapping
+	// keeps (see hls.VideoEncoding.Colors).
+	colors := hls.Colors{Range: video.ColorRange, Matrix: video.ColorSpace, Transfer: video.ColorTransfer, Primaries: video.ColorPrimaries}
+	return &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate, MaxRate: c.Peak,
+		FrameRate: rate, DropFrames: drop, Profile: c.Profile, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace,
+		Burn: remux.Burn, BurnFile: remux.BurnFile, Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec),
+		ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double,
+		DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
 }

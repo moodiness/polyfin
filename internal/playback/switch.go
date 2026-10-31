@@ -319,6 +319,17 @@ func (c *carry) target(sw versionSwitch) (hls.Remux, error) {
 		return hls.Remux{}, err
 	}
 	r.Encode, r.VideoTag = encode, played.VideoTag
+	// The plan's fast segments are converted as the app's first ones were,
+	// from this video.
+	if c.plan.HasFast() {
+		c.remux.fast(&played, first, c.s.Capabilities())
+		if played.Fast != nil {
+			fast := *played.Fast
+			fast.ToneMap, fast.ToneMapOnCPU, fast.Deinterlace, fast.DoubleRate = encode.ToneMap, encode.ToneMapOnCPU, encode.Deinterlace, false
+			fast.Burn, fast.DecodeOnCPU, fast.FrameRate, fast.DropFrames = nil, encode.DecodeOnCPU, encode.FrameRate, encode.DropFrames
+			r.Fast, r.FastTag = &fast, played.FastTag
+		}
+	}
 	if err := c.audio(&r, sw.analysis, played, tuning); err != nil {
 		return hls.Remux{}, err
 	}

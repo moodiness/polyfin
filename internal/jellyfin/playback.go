@@ -14,6 +14,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/forwarded"
+	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/media"
@@ -804,7 +805,7 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 			limit = *request.DeviceProfile.MaxStreamingBitrate
 		}
 		source.SupportsTranscoding = true
-		source.TranscodingUrl = transcodingURL(r, p.item.ID, id, version, analysis, streams, decision, limit, session)
+		source.TranscodingUrl = transcodingURL(r, p.item.ID, id, version, analysis, streams, decision, limit, session, h.fastStart(r, version, decision, request))
 		source.TranscodingSubProtocol = "hls"
 		if decision.Progressive {
 			source.TranscodingSubProtocol = "http"
@@ -844,6 +845,27 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 		attachment.DeliveryUrl = attachmentURL(r, p.item.ID, id, attachment.Index)
 	}
 	return source
+}
+
+// fastStart is where a play over HLS that starts with fast segments
+// starts, as the request asks (see playback.Service.FastStarts), nil for
+// one that starts without. Fast segments are converted smaller than the
+// segments after them, which need their own initialization segment in
+// fragmented MP4: there, only jellyfin-web, whose players load each,
+// gets them. Every app gets them in MPEG-TS segments, which carry what
+// decodes them, as it plays a switch to another version.
+func (h *Handler) fastStart(r *http.Request, version library.Version, decision playback.Decision, request playbackInfoRequest) *time.Duration {
+	if !decision.HLS || decision.Transcoding == nil {
+		return nil
+	}
+	if format, _ := hls.ParseFormat(decision.Transcoding.Container); format == hls.FMP4 && !webClient(callerFrom(r.Context()).Device.Client) {
+		return nil
+	}
+	start := time.Duration(request.StartTimeTicks.value) * 100
+	if !h.Playback.FastStarts(r.Context(), version, decision.Video, start) {
+		return nil
+	}
+	return &start
 }
 
 // deliverable adapts a Jellyfin decision's subtitle deliveries to what

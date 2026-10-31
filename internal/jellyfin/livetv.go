@@ -853,7 +853,7 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 			limit = *request.DeviceProfile.MaxStreamingBitrate
 		}
 		source.SupportsTranscoding = true
-		source.TranscodingUrl = transcodingURL(r, channel.ID, id, version, analysis, streams, decision, limit, session)
+		source.TranscodingUrl = transcodingURL(r, channel.ID, id, version, analysis, streams, decision, limit, session, nil)
 		source.TranscodingSubProtocol = "hls"
 		source.TranscodingContainer = decision.Transcoding.Container
 		describeConverted(request, analysis, source.MediaStreams, decision.Video)
