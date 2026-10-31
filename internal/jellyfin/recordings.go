@@ -54,7 +54,7 @@ func (h *Handler) recordingRoutes(rt *router, signedIn func(method, pattern stri
 	managing(http.MethodPost, "/LiveTv/SeriesTimers/{timerId}", h.updateSeriesTimer)
 	managing(http.MethodDelete, "/LiveTv/SeriesTimers/{timerId}", h.cancelSeriesTimer)
 	// Players fetch it without credentials: see liveRecordingFile.
-	rt.handle(http.MethodGet, "/LiveTv/LiveRecordings/{recordingId}/stream", http.HandlerFunc(h.liveRecordingFile))
+	rt.handle(http.MethodGet, "/LiveTv/LiveRecordings/{recordingId}/stream", h.meteredFile(h.liveRecordingFile))
 }
 
 // liveTvManagement refuses the routes managing recordings to users without
