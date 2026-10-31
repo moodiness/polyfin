@@ -9,6 +9,7 @@ import {
   ProhibitIcon,
   ShieldCheckIcon,
   TrashIcon,
+  TelevisionSimpleIcon,
   UserPlusIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
@@ -57,6 +58,7 @@ import { groupSaved, refreshGroupIfGone, useSectionInView } from './shared'
 import {
   AllowedHoursForm,
   BlockedGenresForm,
+  LiveTvChannelsForm,
   ParentalControlForm,
   PermissionRows,
   PlaybackAccessForm,
@@ -179,6 +181,12 @@ function GroupPage({ group }: { group: Group }) {
         },
         { id: 'genres', label: t.users.blockedGenresTitle, icon: ProhibitIcon, to: '#genres' },
         { id: 'hours', label: t.users.allowedHoursTitle, icon: ClockIcon, to: '#hours' },
+        {
+          id: 'channels',
+          label: t.users.liveTvChannelsTitle,
+          icon: TelevisionSimpleIcon,
+          to: '#channels',
+        },
         { id: 'members', label: t.groups.membersTitle, icon: UsersThreeIcon, to: '#members' },
       ]}
     />
@@ -220,6 +228,7 @@ function GroupPage({ group }: { group: Group }) {
         <VisibleLibrariesForm key={`libraries:${resets}`} id="libraries" target={target} />
         <BlockedGenresForm key={`genres:${resets}`} id="genres" target={target} />
         <AllowedHoursForm key={`hours:${resets}`} id="hours" target={target} />
+        <LiveTvChannelsForm key={`channels:${resets}`} id="channels" target={target} />
         <MembersSection group={group} />
       </PageLayout>
       {/* Outside the layout, whose block spacing would push the dialog down. */}

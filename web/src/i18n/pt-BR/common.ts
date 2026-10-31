@@ -224,6 +224,8 @@ const common: typeof en = {
     invalid_hidden_libraries: 'A lista de bibliotecas mudou nesse meio-tempo. Recarregue a página.',
     invalid_blocked_genres:
       'Os gêneros devem ter de 1 a 100 caracteres, e no máximo 100 podem ser bloqueados.',
+    invalid_live_tv_channels:
+      'A escolha de canais não é válida: Todos, Somente estes ou Todos exceto estes, com no máximo 10.000 grupos e 10.000 canais.',
     invalid_access_schedules:
       'Os horários vão de 00:00 a 24:00, e cada fim deve vir depois do seu início (no máximo 50 linhas).',
     outside_allowed_hours:

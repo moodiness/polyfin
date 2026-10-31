@@ -712,6 +712,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		LibraryOrders: jellyfinAPI,
 		EpisodeOrders: lib,
 		Sharing:       lib,
+		// Users' and groups' Live TV channel rules name the channels of the
+		// server's line-ups.
+		ChannelChoices: lib,
 		Health: admin.HealthSources{
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,

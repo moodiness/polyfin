@@ -112,6 +112,12 @@ func (h *handler) updateGroup(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.knownChannelGroups(w, r, limits.LiveTvChannels, func() (accounts.ChannelRule, error) {
+		group, err := h.Accounts.Group(r.Context(), id)
+		return group.LiveTvChannels, err
+	}) {
+		return
+	}
 	changes := accounts.GroupChanges{Name: body.Name, Limits: limits}
 	group, err := h.Accounts.UpdateGroup(r.Context(), id, changes)
 	if accountError(w, err) {

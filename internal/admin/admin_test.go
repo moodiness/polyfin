@@ -91,6 +91,7 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 		SmartLists:       smartlists.New(pool),
 		SmartPreviews:    lib,
 		DataDir:          t.TempDir(),
+		ChannelChoices:   lib,
 	}
 	for _, c := range configure {
 		c(&options, testDeps{pool: pool, client: client, addons: addonStore})
