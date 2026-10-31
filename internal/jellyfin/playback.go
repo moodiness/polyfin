@@ -29,13 +29,14 @@ func (h *Handler) playbackRoutes(rt *router) {
 	signedIn(http.MethodPost, "/Items/{itemId}/PlaybackInfo", h.playbackInfo)
 	signedIn(http.MethodGet, "/Polyfin/Playback/Starting", h.playbackStarting)
 	// Players fetch media, subtitles and the fonts they use without
-	// credentials, as Jellyfin allows: see streamAccess.
-	rt.handle(http.MethodGet, "/Videos/{itemId}/{file}", http.HandlerFunc(h.stream))
-	rt.handle(http.MethodGet, "/Videos/{itemId}/hls1/{playlistId}/{file}", http.HandlerFunc(h.hlsSegment))
+	// credentials, as Jellyfin allows: see streamAccess. What the media
+	// routes send is counted (see metered).
+	rt.handle(http.MethodGet, "/Videos/{itemId}/{file}", h.meteredFile(h.stream))
+	rt.handle(http.MethodGet, "/Videos/{itemId}/hls1/{playlistId}/{file}", h.meteredStream(h.hlsSegment))
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/{file}", http.HandlerFunc(h.subtitle))
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/{startTicks}/{file}", http.HandlerFunc(h.subtitle))
 	rt.handle(http.MethodGet, "/Videos/{itemId}/{mediaSourceId}/Attachments/{index}", http.HandlerFunc(h.attachment))
-	rt.handle(http.MethodGet, "/Items/{itemId}/Download", http.HandlerFunc(h.download))
+	rt.handle(http.MethodGet, "/Items/{itemId}/Download", h.meteredFile(h.download))
 	signedIn(http.MethodDelete, "/Videos/ActiveEncodings", h.stopEncodings)
 
 	signedIn(http.MethodPost, "/Sessions/Playing", h.reportPlayback("playbackStartInfo", playbackStarted))

@@ -41,6 +41,7 @@ func (h *Handler) followPlayback(user accounts.User, device accounts.Device, eve
 		PositionKnown: positionKnown,
 		Paused:        state.Paused,
 		Method:        h.playMethod(state),
+		Sent:          h.sentSoFar(device.ID.String()),
 	})
 }
 
