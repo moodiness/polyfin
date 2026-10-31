@@ -243,7 +243,7 @@ A library taken out of the list keeps its custom image, for when it is added bac
 Under **Content › Libraries**, the funnel button at the end of a library's row opens its **Genre and maximum**. Both are saved with the list's **Save**, like the library's name. They apply to catalogs of titles and of collections, not to Live TV catalogs or music libraries. Users set the same for their own libraries under **My sources**. The row shows a library's genre and maximum at a glance.
 
 - **Genre**: one of the genres the catalog offers in its genre filter. The library then lists only that genre's titles, as the addon narrows them. Without a name of its own, apps name it after its catalog and its genre, such as "Popular · Comedy". The choice shows only for a catalog that offers genres to choose from: not for one that requires a single genre, as many collection catalogs do.
-- **Maximum titles**: the most titles the library lists, from 1 to 20,000, and as many in each of its collections. It replaces **Titles read per movie and series catalog** for this library, lower or higher (see [Catalog limits and refresh](#catalog-limits-and-refresh)). Polyfin reads no page of the catalog past it. Empty, that setting applies.
+- **Maximum titles**: the most titles the library lists, from 1 to 20,000, and as many in each of its collections. It replaces **Titles read per movie and series catalog** for this library, lower or higher (see [Catalog limits and refresh](#catalog-limits-and-refresh)). Polyfin reads no page of the catalog past it, but for a library that leaves out the titles local folders hold, which reads as many more as it leaves out (see [Titles local folders hold](#titles-local-folders-hold)). Empty, that setting applies.
 
 A library narrowed to a genre:
 
@@ -402,6 +402,27 @@ Under **Content › Libraries**, **Hide from the web player's top bar** in a lib
 **For app developers:**
 
 - The web player's Polyfin script reads the choice from `GET /Polyfin/UserViews` (see [Libraries left out of the web player menus](jellyfin-compatibility.md#libraries-left-out-of-the-web-player-menus)) and hides the library's links with a style. `/UserViews` and every other answer list the library as before.
+
+### Titles local folders hold
+
+A movie or a show of a local folder, linked to the identifier a catalog lists it under, is the catalog's title, so both libraries list it (see [Titles your catalogs list too](local-folders.md#titles-your-catalogs-list-too)). Under **Content › Libraries**, **Leave out the titles local folders hold** in the row of a movie or series library takes such titles out of that library: the folder's library alone lists them. It is saved with the list's **Save**, like the library's name, and the row then says **Without local folders' titles**. Users set the same for their own libraries under **My sources**.
+
+- The title stays what it was: the same item, with its versions, the folder's files among them, its watched state, resume point and favorite. Search, Next Up, Continue Watching and the series page list it once, as before.
+- Only the library's own listings leave it out: its pages in apps, its row of latest titles on the home screen, and the home rows made of its catalog. Smart lists, collections, genre pages and the **New in your libraries** row read the catalog as it is.
+- A title is matched by its identifier: the movies and shows folders' titles, matched by a scan or linked by hand, against the identifiers the catalog lists. A title the catalog lists under another identifier, such as a TMDB one, is another title, which the folder's files do not play: it stays.
+- Only the folders whose library a user sees count for that user. A user whose visible libraries leave out the folder's library still finds the title in the catalog's library (see [Visible libraries](users.md#visible-libraries)). So does everyone once the folder or its library is turned off, or the folder no longer holds a file of the title.
+- Pages stay full. The titles left out are taken out of the catalog's pages before the titles are counted, as a user's hidden titles are, so that an app's page from an index starts with the next title listed, whatever the addon's page size. **Maximum titles**, and **Titles read per movie and series catalog**, count the titles the library lists: the library reads as many more titles of its catalog as it leaves out. The count apps show grows as pages are read, as for any catalog.
+- The library's home screen row shows the catalog's first page, as Stremio apps do, without the titles left out: it shows fewer titles when the first page holds some.
+- It applies to catalogs of movies and series of addons, `anime` types included. A local folder's own library, an IPTV source's, a music library, a collection library, a Live TV catalog and a catalog of other videos have no such choice.
+
+**Compared with Jellyfin:**
+
+- Jellyfin makes a separate item of a series for each library that holds it, the libraries being part of the series' key ([Series.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/TV/Series.cs#L79-L121)), and lists it in each. It has no option that leaves out of a library what another holds.
+
+**For app developers:**
+
+- `/Items?ParentId=<library>` and `/Items/Latest?ParentId=<library>` leave the titles out; the title's own requests, search, `/Shows/NextUp` and `/UserItems/Resume` answer it as before, under the same `Id`.
+- The admin API's libraries carry `skipLocal`, saved with `PUT /admin/api/scopes/{scope}/libraries`, and `skippable`, which tells the catalogs that take it. `skipLocal` on another catalog is refused with `invalid_library`.
 
 ## Music addons
 
