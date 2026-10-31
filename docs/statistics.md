@@ -23,7 +23,10 @@ Each video that played for at least 10 seconds is kept once it stops, with:
 - the user;
 - the item, and what it was called then: its name, its series, season and episode numbers for an episode, its channel for a channel, a Replay programme or a recording;
 - the app and the device;
-- when it started and ended, how long it played, its last position, and how it reached the app.
+- when it started and ended, how long it played, its last position, and how it reached the app;
+- the bytes Polyfin sent the app for it (see [Bandwidth](administration.md#bandwidth)).
+
+The bytes sent count from the end of the device's previous playback, so that what the app read before it reported the start, its first range requests or segments, count with it. A playback the app read from the source itself, without Polyfin, keeps none; so do the playbacks kept before Polyfin counted them.
 
 Playbacks under way when Polyfin stops are kept, ended at their last report. A deleted user's playbacks are deleted with them.
 
@@ -38,14 +41,14 @@ The "Clean the playback history" task, under **System › Schedule**, deletes th
 
 **System › Statistics** shows, for **7 days**, **30 days**, a **Year** or **All** the history, for everyone or one user:
 
-- the hours watched, the playbacks and the users;
+- the hours watched, the playbacks, the users, and the **Data sent** to the apps;
 - **Hours watched per day**, each day's column split by user (per month for all the history);
 - **Hours watched per user**;
 - the **Most played movies**, **Most played series** and **Most played channels**, ten each, by hours watched (a channel counts its live playbacks and its Replay programmes);
 - the **Apps** and **Devices**;
 - **How videos play**: the share of direct play, remux and conversion;
 - the **Busiest hours**: the hours watched at each hour of the week, each playback spread over the hours it lasted, in the browser's time zone;
-- **Recent playbacks**, the history itself.
+- **Recent playbacks**, the history itself, with the data sent for each.
 
 **Export CSV** downloads the playbacks of the period, for everyone or the user chosen.
 
@@ -66,7 +69,7 @@ The admin API serves the statistics, the history and the CSV, everyone's to admi
 | `GET /admin/api/history/export` | `GET /admin/api/account/history/export` |
 
 - Every route takes `period`: `7d`, `30d` (the default), `year` or `all`. The administrators' routes also take `user`, a user's ID, to keep that user's playbacks; the own routes ignore it.
-- The statistics take `timeZone`, an IANA name such as `Europe/Paris`, UTC by default, which days, months and hours of the week are counted in. They answer `period`, `since` (null for all), `unit` (`day` or `month`), `plays`, `played`, and:
+- The statistics take `timeZone`, an IANA name such as `Europe/Paris`, UTC by default, which days, months and hours of the week are counted in. They answer `period`, `since` (null for all), `unit` (`day` or `month`), `plays`, `played`, `sent` (the bytes sent to the apps), and:
   - `users`: `id`, `name`, `plays`, `played`;
   - `buckets`: each day or month with playbacks, `start` as `YYYY-MM-DD`, `played`, and `users` (`id`, `played`);
   - `movies`, `series`, `channels`: `id`, the latest `name`, `plays`, `users` (how many played it), `played`;
@@ -75,8 +78,8 @@ The admin API serves the statistics, the history and the CSV, everyone's to admi
   - `historyEnabled` and `historyDays`, the settings.
 
   Times are in seconds, pauses left out.
-- The history takes `limit` (1 to 100, 20 by default) and `start`, and answers `items`, the latest first, and `total`. Each item has `id`, `user` (`id`, `name`), `item` (`id`, `kind`: `movie`, `episode`, `channel`, `recording` or `replay`, `name`, and `seriesName`, `season`, `episode`, `channelName`, null when they do not apply), `app`, `device`, `startedAt`, `endedAt`, `played`, `position` and `method`.
-- The export answers `text/csv` with a header line: `started_at`, `ended_at` (RFC 3339, UTC), `user`, `kind`, `title`, `series`, `season`, `episode`, `channel`, `app`, `device`, `played_seconds`, `position_seconds`, `method`. A name that a spreadsheet would read as a formula starts with an apostrophe.
+- The history takes `limit` (1 to 100, 20 by default) and `start`, and answers `items`, the latest first, and `total`. Each item has `id`, `user` (`id`, `name`), `item` (`id`, `kind`: `movie`, `episode`, `channel`, `recording` or `replay`, `name`, and `seriesName`, `season`, `episode`, `channelName`, null when they do not apply), `app`, `device`, `startedAt`, `endedAt`, `played`, `position`, `method`, `shared`, and `sent`, the bytes sent to the app, 0 when none were counted.
+- The export answers `text/csv` with a header line: `started_at`, `ended_at` (RFC 3339, UTC), `user`, `kind`, `title`, `series`, `season`, `episode`, `channel`, `app`, `device`, `played_seconds`, `position_seconds`, `method`, `shared`, `sent_bytes` (empty when none were counted). A name that a spreadsheet would read as a formula starts with an apostrophe.
 - Errors: `invalid_period`, `invalid_user`, `invalid_time_zone`, `invalid_limit` (400). A member asking for everyone's gets 403.
 - `GET /admin/api/settings` answers `playbackHistory` and `playbackHistoryDays`, which `PUT` takes; a number of days out of bounds is `invalid_playback_history_days`.
 
