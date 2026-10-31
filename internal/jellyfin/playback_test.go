@@ -584,7 +584,10 @@ func TestRemuxesOfferSubtitlesAsRenditions(t *testing.T) {
 		t.Errorf("the addon's subtitle file: %s %s", file.DeliveryMethod, file.DeliveryUrl)
 	}
 	target := source.TranscodingUrl
-	for _, part := range []string{"&AudioStreamIndex=1&SubtitleStreamIndex=0&VideoBitrate=", "&SubtitleMethod=Hls&TranscodeReasons=DirectPlayError"} {
+	// With direct play off, the direct-play check still finds that the
+	// player takes the subtitle from the playlist only, as Jellyfin 12.4
+	// answers for the same request (StreamBuilder L1320-L1332).
+	for _, part := range []string{"&AudioStreamIndex=1&SubtitleStreamIndex=0&VideoBitrate=", "&SubtitleMethod=Hls&TranscodeReasons=SubtitleCodecNotSupported"} {
 		if !strings.Contains(target, part) {
 			t.Errorf("TranscodingUrl lacks %q: %s", part, target)
 		}

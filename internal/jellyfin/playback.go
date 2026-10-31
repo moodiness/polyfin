@@ -292,6 +292,11 @@ type playbackInfoRequest struct {
 	// progressive lets a version be streamed as one file, to an app whose
 	// device profile asks for it (see downloadsConverted).
 	progressive bool
+	// directPlayOff is set when the app itself sent EnableDirectPlay false,
+	// as the Jellyfin app for Android does after playback errors, rather
+	// than Polyfin for a DLNA device or a guest: the direct-play check
+	// still runs, and gives DirectPlayError (see playback.Options).
+	directPlayOff bool
 }
 
 // playbackInfo answers what an app needs to play an item: its version's
@@ -328,6 +333,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost && !h.readPlaybackInfoBody(w, r, b, &request) {
 		return
 	}
+	request.directPlayOff = request.EnableDirectPlay != nil && !*request.EnableDirectPlay
 	user, ok := h.viewer(w, r, b, notFoundProblem)
 	if !ok {
 		return
@@ -682,6 +688,7 @@ func (h *Handler) trackDecision(p playable, version library.Version, streams []p
 		MaxStreamingBitrate: request.MaxStreamingBitrate.value,
 		UserBitrate:         request.userLimit,
 		EnableDirectPlay:    (request.EnableDirectPlay == nil || *request.EnableDirectPlay) && !notFile,
+		DirectPlayOff:       request.directPlayOff && !notFile,
 		EnableDirectStream:  (request.EnableDirectStream == nil || *request.EnableDirectStream) && !notFile,
 		ConvertAudio:        request.AllowAudioStreamCopy != nil && !*request.AllowAudioStreamCopy,
 		ConvertVideo:        request.AllowVideoStreamCopy != nil && !*request.AllowVideoStreamCopy,

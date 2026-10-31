@@ -815,6 +815,7 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 		UserBitrate:         request.userLimit,
 		SubtitleStreamIndex: new(-1),
 		EnableDirectPlay:    (request.EnableDirectPlay == nil || *request.EnableDirectPlay) && !playback.DASH(analysis),
+		DirectPlayOff:       request.directPlayOff && !playback.DASH(analysis),
 		EnableDirectStream:  request.EnableDirectStream == nil || *request.EnableDirectStream,
 		ConvertAudio:        request.AllowAudioStreamCopy != nil && !*request.AllowAudioStreamCopy,
 		ConvertVideo:        request.AllowVideoStreamCopy != nil && !*request.AllowVideoStreamCopy,
