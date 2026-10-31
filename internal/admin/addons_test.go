@@ -118,7 +118,8 @@ func TestLibrariesShowTheNameAppsShow(t *testing.T) {
 }
 
 // narrowedLibrary is what the admin app reads of a library's genre and
-// maximum, and of whether the web player's menus leave it out.
+// maximum, of whether the web player's menus leave it out, and of whether
+// it leaves out the titles local folders hold.
 type narrowedLibrary struct {
 	AddonID     string   `json:"addonId"`
 	CatalogType string   `json:"catalogType"`
@@ -130,6 +131,8 @@ type narrowedLibrary struct {
 	MaxItems    *int     `json:"maxItems"`
 	Filterable  bool     `json:"filterable"`
 	HideInMenus bool     `json:"hideInMenus"`
+	SkipLocal   bool     `json:"skipLocal"`
+	Skippable   bool     `json:"skippable"`
 }
 
 // saveLibraries puts a scope's libraries, and answers the status, the
@@ -293,6 +296,54 @@ func TestLibrariesHideInMenus(t *testing.T) {
 		// Saved without it, the library is listed in the menus again.
 		if status, saved, code := administrator.saveLibraries(scope, library("movie", "top", nil)); status != http.StatusOK || byCatalog(saved)["movie/top"].HideInMenus {
 			t.Errorf("%s cleared: %d %s %+v", scope, status, code, saved)
+		}
+	}
+}
+
+// An administrator sets a movie library to leave out the titles local
+// folders hold: the option reads back on it, and the movie and series
+// catalogs offer it. A live TV catalog and a catalog of other videos,
+// whose titles no folder of movies or shows holds, neither offer nor take
+// it.
+func TestLibrariesSkipLocal(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id": "local", "name": "Local", "version": "1.0.0", "resources": ["catalog"],
+			"catalogs": [{"type": "movie", "id": "top", "name": "Top"}, {"type": "series", "id": "top", "name": "Top"},
+				{"type": "other", "id": "clips", "name": "Clips"}, {"type": "tv", "id": "channels", "name": "Channels"}]}`))
+	}))
+	defer server.Close()
+	administrator := api.signedIn("administrator", true)
+	status, body, _ := administrator.call(http.MethodPost, "/scopes/shared/addons", map[string]string{"manifestUrl": server.URL + "/manifest.json"})
+	if status != http.StatusCreated {
+		t.Fatalf("installing: %d %v", status, body)
+	}
+	addonID, _ := body["id"].(string)
+	library := func(catalogType, catalogID string, skip bool) map[string]any {
+		return map[string]any{"addonId": addonID, "catalogType": catalogType, "catalogId": catalogID, "name": nil, "skipLocal": skip}
+	}
+	status, saved, code := administrator.saveLibraries("shared", library("movie", "top", true), library("series", "top", false),
+		library("other", "clips", false), library("tv", "channels", false))
+	if status != http.StatusOK {
+		t.Fatalf("saving: %d %s", status, code)
+	}
+	for when, listed := range map[string]map[string]narrowedLibrary{"saved": byCatalog(saved), "read": byCatalog(administrator.libraries("shared"))} {
+		if l := listed["movie/top"]; !l.SkipLocal || !l.Skippable {
+			t.Errorf("%s: the library set to leave them out: %+v", when, l)
+		}
+		if l := listed["series/top"]; l.SkipLocal || !l.Skippable {
+			t.Errorf("%s: a series library saved without the option: %+v", when, l)
+		}
+		for _, key := range []string{"other/clips", "tv/channels"} {
+			if l := listed[key]; l.SkipLocal || l.Skippable {
+				t.Errorf("%s: %s: %+v", when, key, l)
+			}
+		}
+	}
+	for _, refused := range []map[string]any{library("other", "clips", true), library("tv", "channels", true)} {
+		if status, _, code := administrator.saveLibraries("shared", refused); status != http.StatusBadRequest || code != "invalid_library" {
+			t.Errorf("%s/%s with the option: %d %s", refused["catalogType"], refused["catalogId"], status, code)
 		}
 	}
 }
