@@ -84,6 +84,9 @@ func newImageSearch(t *testing.T) *imageSearch {
 			"logos":     []any{poster("/logo.svg", "en", 7, 500, 200), poster("/logo.png", "en", 3, 500, 200)},
 		},
 		"/3/tv/77/season/1/episode/1/images": map[string]any{"stills": []any{poster("/still.png", nil, 6, 1920, 1080)}},
+		// Identify's lookups: Show's IMDb identifier, and its TVDB one.
+		"/3/tv/77/external_ids": map[string]any{"imdb_id": "tt20"},
+		"/3/find/9077":          map[string]any{"movie_results": []any{}, "tv_results": []map[string]any{{"id": 77}}},
 	}
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()

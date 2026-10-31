@@ -719,6 +719,17 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 			err = matchErr
 		}
 	}
+	if err == nil && (item.Kind == library.KindMovie || item.Kind == library.KindSeries || item.Kind == library.KindSeason ||
+		item.Kind == library.KindEpisode) {
+		// So is a title a local folder's files were matched to before
+		// Identify relinked them, while the folder holds it no more (see
+		// library.RelinkedTitle).
+		if relinked, relinkErr := h.Library.RelinkedTitle(r.Context(), user, id); relinkErr == nil {
+			item, id = relinked, relinked.ID
+		} else if !errors.Is(relinkErr, library.ErrNotFound) {
+			err = relinkErr
+		}
+	}
 	if errors.Is(err, library.ErrNotFound) {
 		// Apps open a version as an item by its media source id.
 		item, err = h.title(r.Context(), user, id)
