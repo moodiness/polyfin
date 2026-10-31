@@ -81,6 +81,9 @@ type Version struct {
 	// size, in the order they come: links the source cache reads from
 	// once this one fails (see withMirror). They are listed nowhere else.
 	Mirrors []Version
+	// identity is the file the version is (see streamIdentity), which
+	// administrators' blocks name (see fileKey).
+	identity string
 }
 
 // RequestHeaders are the headers Polyfin's own requests for the stream
@@ -421,16 +424,15 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 // and those whose lists are stale; for staleNow, those whose lists are
 // stale; for waitAll, none. Torrents' files are listed only with torrents
 // set, for a user who may play them (see accounts.Settings.TorrentsAllowed).
-//
-// A file listed twice, by its identity (see streamIdentity), is one
-// version, the first listed of those the user may play: a torrent left out
-// leaves its place to a link to the same file listed after it. The
-// versions remembered by identifier (see Version) are those of every
-// stream, torrents included, as a user who may play torrents gets them, so
-// that each identifier names the same version for every user; another
-// user's Version lists the title again rather than take a torrent. The
-// links to the same file listed after it are its mirrors (see withMirror).
 func (s *Service) listVersions(ctx context.Context, t target, serving []streamSource, mode listing, torrents bool) ([]Version, []streamSource) {
+	lists, unknown := s.gatherStreams(ctx, t, serving, mode)
+	return s.buildVersions(t, serving, lists, torrents, s.versionChoices(ctx), nil), unknown
+}
+
+// gatherStreams gathers the lists of streams serving give for t, as far as
+// mode goes (see listVersions), each at the place of its source, nil for
+// a source whose list is not known.
+func (s *Service) gatherStreams(ctx context.Context, t target, serving []streamSource, mode listing) ([][]stremio.Stream, []streamSource) {
 	lists := make([][]stremio.Stream, len(serving))
 	var unknown []streamSource
 	var wg sync.WaitGroup
@@ -467,6 +469,47 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 		}
 	}
 	wg.Wait()
+	return lists, unknown
+}
+
+// What became of a stream an addon listed for a title, as buildVersions
+// tells it (see VersionsExplained): a version, or left out by one of the
+// steps of docs/playback.md, Which streams become versions.
+const (
+	// StepVersion: the stream is a version of the title.
+	StepVersion = "version"
+	// StepNothing: the stream has nothing to play, as a web page, a
+	// YouTube video or a notice.
+	StepNothing = "nothing"
+	// StepTorrents: the stream is a torrent's file, for a user who may
+	// not play torrents.
+	StepTorrents = "torrents"
+	// StepBlocked: an administrator blocked the file.
+	StepBlocked = "blocked"
+	// StepDuplicate: the same file was listed before it.
+	StepDuplicate = "duplicate"
+	// StepMirror: the same file was listed before it by another addon,
+	// and the stream is one of that version's mirrors.
+	StepMirror = "mirror"
+)
+
+// buildVersions makes the versions of t from lists, the streams each of
+// serving gave, as listVersions lists them. A file listed twice, by its
+// identity (see streamIdentity), is one version, the first listed of those
+// the user may play: a torrent left out leaves its place to a link to the
+// same file listed after it. The versions remembered by identifier (see
+// Version) are those of every stream, torrents and files blocked included,
+// as a user who may play torrents gets them, so that each identifier names
+// the same version for every user; another user's Version lists the title
+// again rather than take a torrent. The links to the same file listed
+// after it are its mirrors (see withMirror). The files administrators
+// blocked, for t or the server (see BlockVersion), are listed nowhere.
+//
+// note, when set, is told of every stream in the order they come, those
+// t embeds first under the source -1: the version it makes, empty for a
+// stream with nothing to play, and what became of it (see StepVersion).
+func (s *Service) buildVersions(t target, serving []streamSource, lists [][]stremio.Stream, torrents bool, choices choiceSet,
+	note func(source int, stream stremio.Stream, version Version, step string)) []Version {
 	var versions []Version
 	seen, remembered := map[accounts.ID]bool{}, map[accounts.ID]bool{}
 	// kept are the versions remembered, and listed where each is among
@@ -474,7 +517,7 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 	// remembered until now, from any user's listing: their links from
 	// addons this listing does not ask stay mirrors (see carryMirrors).
 	kept, listed, before := map[accounts.ID]Version{}, map[accounts.ID]int{}, map[accounts.ID]Version{}
-	add := func(version Version) {
+	add := func(version Version) string {
 		// A version naming another title is hidden as the version rules
 		// hide others; it is told once, when first listed.
 		if version.Labels.Elsewhere != "" && !remembered[version.ID] {
@@ -494,29 +537,43 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 			s.versions.Put(version.ID, first)
 		}
 		if version.Torrent != nil && !torrents {
-			return
+			return StepTorrents
+		}
+		if _, blocked := choices.blocked(version); blocked {
+			return StepBlocked
 		}
 		if seen[version.ID] {
 			if first, ok := withMirror(versions[listed[version.ID]], version); ok {
 				versions[listed[version.ID]] = first
+				return StepMirror
 			}
-			return
+			return StepDuplicate
 		}
 		seen[version.ID] = true
 		listed[version.ID] = len(versions)
 		versions = append(versions, version)
+		return StepVersion
+	}
+	if note == nil {
+		note = func(int, stremio.Stream, Version, string) {}
 	}
 	// A video's own streams come first (see embed).
 	for _, stream := range t.embedded {
-		if listable(stream) {
-			add(embeddedVersion(t, stream))
+		if !listable(stream) {
+			note(-1, stream, Version{}, StepNothing)
+			continue
 		}
+		version := embeddedVersion(t, stream)
+		note(-1, stream, version, add(version))
 	}
 	for i, streams := range lists {
 		for _, stream := range streams {
-			if listable(stream) {
-				add(newVersion(t, serving[i], stream))
+			if !listable(stream) {
+				note(i, stream, Version{}, StepNothing)
+				continue
 			}
+			version := newVersion(t, serving[i], stream)
+			note(i, stream, version, add(version))
 		}
 	}
 	if len(before) > 0 {
@@ -533,7 +590,7 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 			}
 		}
 	}
-	return versions, unknown
+	return versions
 }
 
 // Version finds a version of an item, listing the item's versions again
@@ -547,10 +604,14 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 // reaches the versions their own sources list (see listedFor): one
 // remembered from another user's sources lists the item again as the
 // user, and a file none of their sources lists is ErrNotFound, as a
-// version that does not exist.
+// version that does not exist. A file an administrator blocked is
+// ErrNotFound.
 func (s *Service) Version(ctx context.Context, user accounts.User, item, id accounts.ID) (Version, error) {
 	if version, ok := s.versions.Get(id); ok && version.Item == item && version.fresh(s.now()) &&
 		(version.Torrent == nil || s.settings().TorrentsAllowed(user)) {
+		if _, blocked := s.versionChoices(ctx).blocked(version); blocked {
+			return Version{}, ErrNotFound
+		}
 		mine, listed, err := s.listedFor(ctx, user, version)
 		if err != nil {
 			return Version{}, err
@@ -748,7 +809,8 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources),
 			Season: t.season, Episode: t.episode}
 	}
-	version.ID = versionID(t.item, streamIdentity(stream))
+	version.identity = streamIdentity(stream)
+	version.ID = versionID(t.item, version.identity)
 	// The subtitle files listed with a stream are its version's own: those
 	// beside a local file, or those an addon gives with its stream.
 	for _, subtitle := range stream.Subtitles {

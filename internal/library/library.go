@@ -119,6 +119,9 @@ type Service struct {
 	// releaseStatuses remembers what series' posters tell of their
 	// newest episodes, by series (see ReleaseStatuses).
 	releaseStatuses *cache.Cache[string, ReleaseStatus]
+	// choices are the versions administrators pinned and the files they
+	// blocked (see versionchoices.go).
+	choices versionChoices
 
 	// streamLists and subtitleLists are the addons' lists for each title,
 	// kept stale once expired (see staleLists).
