@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -211,26 +212,37 @@ func audioLanguages(analysis media.Analysis) (languages, variants []string) {
 	return languages, variants
 }
 
-// hidden reports whether a rule hides a version: one naming another title
-// (see elsewhere), or one known to be larger than the limit, or in a codec
-// hidden, or whose labels, its name and description and its file name,
-// hold a word hiding it, or tag it as a kind of low-quality release
-// hidden.
+// hidden reports whether a rule hides a version (see hiddenBy).
 func (r versionRules) hidden(version library.Version, facts versionFacts) bool {
+	rule, _ := r.hiddenBy(version, facts)
+	return rule != ""
+}
+
+// hiddenBy tells the rule hiding a version, and what of the version it
+// reads, empty when none hides it: "elsewhere", the marker naming another
+// title (see elsewhere); "larger", the limit in GB, for a version known
+// to be larger; "codec", its codec, when hidden; "release", the kind of
+// low-quality release its labels tag it as, when hidden; "words", a word
+// hiding it, in lower case, that its labels, its name and description and
+// its file name, hold.
+func (r versionRules) hiddenBy(version library.Version, facts versionFacts) (rule, detail string) {
 	if elsewhere(version) {
-		return true
+		return "elsewhere", version.Labels.Elsewhere
 	}
-	if r.larger > 0 && facts.size > r.larger || facts.codec != "" && slices.Contains(r.hiddenCodecs, facts.codec) {
-		return true
+	if r.larger > 0 && facts.size > r.larger {
+		return "larger", strconv.FormatInt(r.larger/1e9, 10)
 	}
-	if slices.ContainsFunc(version.Labels.Releases, func(kind string) bool { return slices.Contains(r.releases, kind) }) {
-		return true
+	if facts.codec != "" && slices.Contains(r.hiddenCodecs, facts.codec) {
+		return "codec", facts.codec
 	}
-	if len(r.words) == 0 {
-		return false
+	if i := slices.IndexFunc(version.Labels.Releases, func(kind string) bool { return slices.Contains(r.releases, kind) }); i >= 0 {
+		return "release", version.Labels.Releases[i]
 	}
 	labels := strings.ToLower(version.Name + "\n" + version.Filename)
-	return slices.ContainsFunc(r.words, func(word string) bool { return strings.Contains(labels, word) })
+	if i := slices.IndexFunc(r.words, func(word string) bool { return strings.Contains(labels, word) }); i >= 0 {
+		return "words", r.words[i]
+	}
+	return "", ""
 }
 
 // compare orders two versions by the criteria, each grouping them and the
