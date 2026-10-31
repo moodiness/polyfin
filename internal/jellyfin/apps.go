@@ -35,7 +35,7 @@ func (h *Handler) appRoutes(rt *router) {
 	signedIn(http.MethodPost, "/LiveStreams/Open", h.openLiveStream)
 	signedIn(http.MethodPost, "/LiveStreams/Close", h.closeLiveStream)
 	// Like the download route, which it serves as: see streamAccess.
-	rt.handle(http.MethodGet, "/Items/{itemId}/File", http.HandlerFunc(h.itemFile))
+	rt.handle(http.MethodGet, "/Items/{itemId}/File", h.meteredFile(h.itemFile))
 	signedIn(http.MethodGet, "/Items/{itemId}/Images", h.itemImages)
 	signedIn(http.MethodGet, "/FallbackFont/Fonts", h.fallbackFonts)
 	signedIn(http.MethodGet, "/FallbackFont/Fonts/{name}", h.fallbackFont)

@@ -34,9 +34,9 @@ import (
 func (h *Handler) audioRoutes(rt *router) {
 	// Players fetch audio without credentials, as Jellyfin allows: see
 	// streamAccess.
-	rt.handle(http.MethodGet, "/Audio/{itemId}/{file}", http.HandlerFunc(h.audioFile))
-	rt.handle(http.MethodGet, "/Audio/{itemId}/universal", http.HandlerFunc(h.universalAudio))
-	rt.handle(http.MethodGet, "/Audio/{itemId}/hls1/{playlistId}/{file}", http.HandlerFunc(h.audioSegment))
+	rt.handle(http.MethodGet, "/Audio/{itemId}/{file}", h.meteredFile(h.audioFile))
+	rt.handle(http.MethodGet, "/Audio/{itemId}/universal", h.meteredFile(h.universalAudio))
+	rt.handle(http.MethodGet, "/Audio/{itemId}/hls1/{playlistId}/{file}", h.meteredStream(h.audioSegment))
 }
 
 // audioCodec reads an Eclipse codec as Jellyfin names it, with its profile.

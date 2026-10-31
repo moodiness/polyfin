@@ -53,6 +53,17 @@ type LiveSession struct {
 	// version's source failed, empty when it did not (see
 	// playback.Service.SwitchedTo): Source describes that one then.
 	Switched string
+	// Sent is the bytes per second Polyfin sends the app, and Received
+	// those the version's source sends Polyfin, averaged over
+	// bandwidth.Window (see measure); Redirected tells that the app was
+	// sent to read the source itself, so that none of its bytes pass
+	// through Polyfin. Origin is where the version is read from.
+	Sent, Received float64
+	Redirected     bool
+	Origin         Origin
+	// version is the version played, when the session's report does not
+	// name it.
+	version accounts.ID
 }
 
 // LiveSessions lists the devices playing, DLNA devices included, the guests
@@ -116,11 +127,15 @@ func (h *Handler) LiveSessions(ctx context.Context) ([]LiveSession, error) {
 			if switched, ok := h.Playback.SwitchedTo(now.PlaySessionID); ok && now.PlaySessionID != "" {
 				version, session.Switched = switched.ID, switched.Name
 			}
+			session.version = version
 			if analysis, ok := h.Playback.Analyzed(ctx, version); ok {
 				session.Source = &analysis
 			}
 		}
 		sessions = append(sessions, session)
+	}
+	for i := range sessions {
+		h.measure(ctx, &sessions[i])
 	}
 	slices.SortFunc(sessions, func(a, b LiveSession) int {
 		return cmp.Or(b.Playing.Started.Compare(a.Playing.Started), cmp.Compare(a.Device.ID.String(), b.Device.ID.String()))
