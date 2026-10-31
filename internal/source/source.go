@@ -720,19 +720,32 @@ func (s *Source) Release() {
 }
 
 // discard stops reading the source and removes its blocks, once the
-// block being written, if any, is (see store).
+// block being written, if any, is (see store). The readers waiting for a
+// block get errDiscarded, and so does any read after it (see wait): no
+// connection fetches a block of a source discarded, and they would wait
+// for good. It runs under the cache's lock, and may wait there for a
+// write, which never takes the cache's lock nor the source's (see store):
+// no wait can form a cycle. Removing the folder outside the cache's lock
+// would remove that of the source opened anew under the same identifier.
 func (s *Source) discard() error {
 	s.cancel()
 	s.writing.Lock()
 	defer s.writing.Unlock()
 	s.mu.Lock()
 	s.present = nil
+	for block, w := range s.wanted {
+		w.err = errDiscarded
+		delete(s.wanted, block)
+		close(w.done)
+	}
+	s.signal()
 	s.mu.Unlock()
 	return os.RemoveAll(s.dir)
 }
 
-// errDiscarded reports a block fetched for a source discarded meanwhile.
-var errDiscarded = errors.New("the source was discarded")
+// errDiscarded reports a read of a source discarded: the cache was closed,
+// or the source evicted or discarded while a read was under way.
+var errDiscarded = fmt.Errorf("%w: the source was closed", ErrUnavailable)
 
 func (s *Source) chunkPath(index int64) string {
 	return filepath.Join(s.dir, strconv.FormatInt(index, 10))
@@ -815,6 +828,10 @@ func (s *Source) wait(ctx context.Context, r *Reader, block int64) error {
 		err := s.failure
 		s.mu.Unlock()
 		return err
+	}
+	if s.ctx.Err() != nil {
+		s.mu.Unlock()
+		return errDiscarded
 	}
 	w := s.wanted[block]
 	if w == nil {
@@ -937,7 +954,8 @@ func (s *Source) store(block int64, data []byte, last bool) error {
 	}
 	s.signal()
 	s.mu.Unlock()
-	if added > 0 {
+	// A source discarded meanwhile keeps nothing: its folder is gone.
+	if added > 0 && s.ctx.Err() == nil {
 		s.cache.stored(chunkKey{s.id, index}, int64(added))
 	}
 	return nil
