@@ -10,15 +10,18 @@ import (
 
 // words are the names Polyfin generates, in one server language.
 type words struct {
-	season      string // followed by the season number
-	specials    string // season 0
-	episode     string // followed by the episode number, for untitled episodes
-	video       string // followed by the video's number, for untitled videos of a folder
-	chapter     string // followed by the chapter number, for untitled chapters
-	movies      string
-	shows       string
-	videos      string
-	collections string
+	season   string // followed by the season number
+	specials string // season 0
+	episode  string // followed by the episode number, for untitled episodes
+	// otherEpisodes names the season of an episode order that holds the
+	// episodes it leaves out (see episodeorder.go).
+	otherEpisodes string
+	video         string // followed by the video's number, for untitled videos of a folder
+	chapter       string // followed by the chapter number, for untitled chapters
+	movies        string
+	shows         string
+	videos        string
+	collections   string
 	// The content of music rows: songs, albums, artists and playlists.
 	songs, albums, artists, playlists string
 	// myMusic names a music addon's My music (see eclipse.MyMusic).
@@ -32,27 +35,27 @@ type words struct {
 }
 
 var vocabulary = map[string]words{
-	"en": {season: "Season", specials: "Specials", episode: "Episode", video: "Video", chapter: "Chapter",
+	"en": {season: "Season", specials: "Specials", episode: "Episode", otherEpisodes: "Other episodes", video: "Video", chapter: "Chapter",
 		movies: "Movies", shows: "Shows", videos: "Videos", collections: "Collections",
 		songs: "Songs", albums: "Albums", artists: "Artists", playlists: "Playlists", myMusic: "My music", replay: "Replay",
 		watchlist: "Watchlist"},
-	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", video: "Vidéo", chapter: "Chapitre",
+	"fr": {season: "Saison", specials: "Épisodes spéciaux", episode: "Épisode", otherEpisodes: "Autres épisodes", video: "Vidéo", chapter: "Chapitre",
 		movies: "Films", shows: "Séries", videos: "Vidéos", collections: "Collections",
 		songs: "Titres", albums: "Albums", artists: "Artistes", playlists: "Playlists", myMusic: "Ma musique", replay: "Replay",
 		watchlist: "À regarder"},
-	"de": {season: "Staffel", specials: "Specials", episode: "Folge", video: "Video", chapter: "Kapitel",
+	"de": {season: "Staffel", specials: "Specials", episode: "Folge", otherEpisodes: "Weitere Folgen", video: "Video", chapter: "Kapitel",
 		movies: "Filme", shows: "Serien", videos: "Videos", collections: "Sammlungen",
 		songs: "Titel", albums: "Alben", artists: "Künstler", playlists: "Wiedergabelisten", myMusic: "Meine Musik", replay: "Replay",
 		watchlist: "Merkliste"},
-	"es": {season: "Temporada", specials: "Especiales", episode: "Episodio", video: "Vídeo", chapter: "Capítulo",
+	"es": {season: "Temporada", specials: "Especiales", episode: "Episodio", otherEpisodes: "Otros episodios", video: "Vídeo", chapter: "Capítulo",
 		movies: "Películas", shows: "Series", videos: "Vídeos", collections: "Colecciones",
 		songs: "Canciones", albums: "Álbumes", artists: "Artistas", playlists: "Listas de reproducción", myMusic: "Mi música", replay: "Replay",
 		watchlist: "Para ver"},
-	"it": {season: "Stagione", specials: "Speciali", episode: "Episodio", video: "Video", chapter: "Capitolo",
+	"it": {season: "Stagione", specials: "Speciali", episode: "Episodio", otherEpisodes: "Altri episodi", video: "Video", chapter: "Capitolo",
 		movies: "Film", shows: "Serie TV", videos: "Video", collections: "Collezioni",
 		songs: "Brani", albums: "Album", artists: "Artisti", playlists: "Playlist", myMusic: "La mia musica", replay: "Replay",
 		watchlist: "Da guardare"},
-	"pt-BR": {season: "Temporada", specials: "Especiais", episode: "Episódio", video: "Vídeo", chapter: "Capítulo",
+	"pt-BR": {season: "Temporada", specials: "Especiais", episode: "Episódio", otherEpisodes: "Outros episódios", video: "Vídeo", chapter: "Capítulo",
 		movies: "Filmes", shows: "Séries", videos: "Vídeos", collections: "Coleções",
 		songs: "Músicas", albums: "Álbuns", artists: "Artistas", playlists: "Playlists", myMusic: "Minha música", replay: "Replay",
 		watchlist: "Para assistir"},

@@ -280,6 +280,7 @@ type itemUpdate struct {
 	EndDate         flexibleDate
 	ProductionYear  flexibleNumber
 	ProviderIds     map[string]string
+	DisplayOrder    *string
 }
 
 // updateItem keeps an administrator's edit of an item's metadata. An IMDb
@@ -315,7 +316,7 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		Taglines: h.dropTasteTagline(r.Context(), callerFrom(r.Context()).User, id, request.Taglines), Genres: request.Genres, Tags: request.Tags,
 		OfficialRating: request.OfficialRating, CustomRating: request.CustomRating,
 		CommunityRating: request.CommunityRating.value, CriticRating: request.CriticRating.value,
-		PremiereDate: request.PremiereDate.value, EndDate: request.EndDate.value,
+		PremiereDate: request.PremiereDate.value, EndDate: request.EndDate.value, DisplayOrder: request.DisplayOrder,
 	}
 	if request.Studios != nil {
 		edit.Studios = []string{}

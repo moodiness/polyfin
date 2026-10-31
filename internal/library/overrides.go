@@ -61,12 +61,21 @@ type Overrides struct {
 	PremiereDate    *time.Time `json:"premiereDate,omitempty"`
 	EndDate         *time.Time `json:"endDate,omitempty"`
 	ProductionYear  *int       `json:"productionYear,omitempty"`
+	// DisplayOrder, EpisodeGroup and Specials are a series' order of
+	// episodes (see episodeorder.go): DisplayOrder as Jellyfin's metadata
+	// editor names it, EpisodeGroup the TMDB episode group an
+	// administrator chose in the admin app, and Specials where the
+	// specials show, SpecialsLast or SpecialsHidden.
+	DisplayOrder *string `json:"displayOrder,omitempty"`
+	EpisodeGroup *string `json:"episodeGroup,omitempty"`
+	Specials     *string `json:"specials,omitempty"`
 }
 
 func (o Overrides) empty() bool {
 	return o.Name == nil && o.OriginalTitle == nil && o.SortName == nil && o.Overview == nil && o.Taglines == nil &&
 		o.Genres == nil && o.Tags == nil && o.Studios == nil && o.OfficialRating == nil && o.CustomRating == nil &&
-		o.CommunityRating == nil && o.CriticRating == nil && o.PremiereDate == nil && o.EndDate == nil && o.ProductionYear == nil
+		o.CommunityRating == nil && o.CriticRating == nil && o.PremiereDate == nil && o.EndDate == nil && o.ProductionYear == nil &&
+		o.DisplayOrder == nil && o.EpisodeGroup == nil && o.Specials == nil
 }
 
 // apply sets the fields overridden on item.
@@ -105,6 +114,9 @@ func (o Overrides) apply(item *Item) {
 	}
 	if o.ProductionYear != nil {
 		item.ProductionYear = *o.ProductionYear
+	}
+	if o.DisplayOrder != nil && item.Kind == KindSeries {
+		item.DisplayOrder = *o.DisplayOrder
 	}
 }
 
@@ -193,6 +205,16 @@ func (o Overrides) against(base Item, current Overrides) Overrides {
 	}
 	if o.ProductionYear != nil && *o.ProductionYear > 0 && *o.ProductionYear != base.ProductionYear {
 		result.ProductionYear = new(*o.ProductionYear)
+	}
+	// Only a series has an order of episodes. Jellyfin's API sets its
+	// DisplayOrder alone: the group chosen of it stays while the order
+	// does, and where the specials show stays.
+	if base.Kind == KindSeries {
+		result.DisplayOrder = text(o.DisplayOrder, "")
+		if result.DisplayOrder != nil && current.DisplayOrder != nil && *result.DisplayOrder == *current.DisplayOrder {
+			result.EpisodeGroup = current.EpisodeGroup
+		}
+		result.Specials = current.Specials
 	}
 	return result
 }
@@ -308,11 +330,17 @@ func (s *Service) Overrides(id accounts.ID) Overrides {
 // describes it as base (see Original): the fields of requested that differ
 // from the addon's, the others following the addon again.
 func (s *Service) SaveOverrides(ctx context.Context, base Item, requested Overrides) error {
+	return s.changeOwnOverrides(ctx, base.ID, func(current Overrides) Overrides { return requested.against(base, current) })
+}
+
+// changeOwnOverrides keeps the overrides of the item id that change
+// returns from those set before.
+func (s *Service) changeOwnOverrides(ctx context.Context, id accounts.ID, change func(Overrides) Overrides) error {
 	var result Overrides
 	return s.changeOverrides(ctx, func(current *overrideSet) error {
-		result = requested.against(base, current.fields[base.ID])
+		result = change(current.fields[id])
 		if result.empty() {
-			_, err := s.db.Exec(ctx, "DELETE FROM item_overrides WHERE item_id = $1", base.ID)
+			_, err := s.db.Exec(ctx, "DELETE FROM item_overrides WHERE item_id = $1", id)
 			return err
 		}
 		encoded, err := json.Marshal(result)
@@ -320,13 +348,13 @@ func (s *Service) SaveOverrides(ctx context.Context, base Item, requested Overri
 			return err
 		}
 		_, err = s.db.Exec(ctx, `INSERT INTO item_overrides (item_id, fields) VALUES ($1, $2)
-			ON CONFLICT (item_id) DO UPDATE SET fields = excluded.fields, updated_at = now()`, base.ID, encoded)
+			ON CONFLICT (item_id) DO UPDATE SET fields = excluded.fields, updated_at = now()`, id, encoded)
 		return err
 	}, func(next *overrideSet) {
 		if result.empty() {
-			delete(next.fields, base.ID)
+			delete(next.fields, id)
 		} else {
-			next.fields[base.ID] = result
+			next.fields[id] = result
 		}
 	})
 }
@@ -527,6 +555,13 @@ func (set *overrideSet) apply(item *Item) {
 		}
 		if url, ok := set.uploadedArtwork(item.SeasonID, "Primary"); ok {
 			item.SeasonPoster = url
+		}
+	}
+	if item.Shown != nil {
+		if season, ok := set.fields[item.Shown.SeasonID]; ok && season.Name != nil {
+			shown := *item.Shown
+			shown.SeasonName = *season.Name
+			item.Shown = &shown
 		}
 	}
 	if item.AlbumID != (accounts.ID{}) {

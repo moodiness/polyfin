@@ -266,7 +266,7 @@ func (s *Service) otherStreamKeys(ctx context.Context, v view, r, title record, 
 	case KindSeries, KindSeason:
 		if described != nil {
 			for _, video := range described.Videos {
-				if r.Kind == KindSeries || int(video.Season) == r.Season {
+				if r.covers(video) {
 					targets = append(targets, episode(video))
 				}
 			}

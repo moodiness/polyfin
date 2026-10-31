@@ -75,7 +75,8 @@ func (h *Handler) trackedTitles(user accounts.User, items []library.Item) func(c
 			if ok && h.Trackers.NeedsAbsolute(title) {
 				listed, loaded := episodes[item.SeriesID]
 				if !loaded {
-					listed, _ = h.Library.Episodes(ctx, user, item.SeriesID, nil)
+					// Numbered as aired, whatever order the series shows in.
+					listed, _ = h.Library.Episodes(library.InAiredOrder(ctx), user, item.SeriesID, nil)
 					episodes[item.SeriesID] = listed
 				}
 				title.Absolute = absoluteNumber(listed, title.Season, title.Number)
