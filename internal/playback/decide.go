@@ -27,6 +27,15 @@ type Options struct {
 	// EnableDirectPlay false refuses direct play, with DirectPlayError when
 	// nothing else would refuse it.
 	EnableDirectPlay bool
+	// DirectPlayOff tells that the app itself asked for no direct play,
+	// as the Jellyfin app for Android does after playback errors, with
+	// EnableDirectPlay false. The direct-play check still runs, as in
+	// Jellyfin 12.4 (StreamBuilder.GetVideoDirectPlayProfile, L1392-L1426):
+	// a source that would have played as it is gets DirectPlayError beside
+	// the reasons its conversion has, and one that would not gets the
+	// reasons the check found. Polyfin's own refusals, such as a disc's,
+	// leave it false and skip the check.
+	DirectPlayOff bool
 	// EnableDirectStream changes nothing on its own: Jellyfin 12.2 answers
 	// the same whether it is set or not.
 	EnableDirectStream bool
@@ -71,6 +80,10 @@ type Decision struct {
 	// direct play is refused. They are empty when the app cannot transcode
 	// either, since Jellyfin reports them nowhere then.
 	Reasons []string
+	// DirectPlayOff is set when the app turned direct play off for a
+	// source that would have played as it is (see Options.DirectPlayOff):
+	// DirectPlayError is then among the Reasons.
+	DirectPlayOff bool
 	// AudioStreamIndex is the chosen audio track, -1 if none.
 	AudioStreamIndex int
 	// SubtitleStreamIndex is the chosen subtitle track, -1 if none.
@@ -231,14 +244,20 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 		reasons |= containerBitrateExceedsLimit
 	}
 	var matched *DirectPlayProfile
-	if options.EnableDirectPlay && reasons == 0 {
+	// refused is set when the app turned direct play off for a source that
+	// would have played as it is.
+	refused := false
+	if (options.EnableDirectPlay || options.DirectPlayOff) && reasons == 0 {
 		var why reason
 		matched, why = d.directPlay()
 		reasons |= why
+		if !options.EnableDirectPlay {
+			refused, matched = matched != nil, nil
+		}
 	}
 	tall := d.taller(options.MaxHeight)
 	if tall {
-		matched, reasons = nil, reasons|videoResolutionNotSupported
+		matched, refused, reasons = nil, false, reasons|videoResolutionNotSupported
 	}
 	decision.DirectPlay = matched != nil
 	if decision.DirectPlay {
@@ -257,9 +276,10 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 					decision.Limit = played
 				}
 			}
-			if reasons == 0 {
-				reasons = directPlayError
+			if reasons == 0 || refused {
+				reasons |= directPlayError
 			}
+			decision.DirectPlayOff = refused
 			decision.Reasons = reasons.names()
 		}
 	}
