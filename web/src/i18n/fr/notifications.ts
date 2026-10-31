@@ -92,6 +92,8 @@ const notifications: typeof en = {
       own: 'Ce qui lui est signalé, vous concernant.',
     },
     eventNames: {
+      server_crashed: 'Plantage du serveur',
+      playback_failed: 'Échec d’une lecture',
       new_episode: 'Nouveaux épisodes',
       recording_finished: 'Enregistrement terminé',
       recording_failed: 'Échec d’un enregistrement',
@@ -114,6 +116,10 @@ const notifications: typeof en = {
       title_available: 'Titre à regarder disponible',
     },
     eventHelp: {
+      server_crashed:
+        'Polyfin s’est arrêté sur une erreur puis a redémarré : signalé au redémarrage, avec le début de la trace de l’erreur, que Système › Santé affiche aussi.',
+      playback_failed:
+        'Une lecture n’a pas pu commencer ou s’est interrompue : aucune version ne se lit sur l’appli, une limite l’a refusée, ou son flux a échoué. Une fois par heure par utilisateur et par titre, avec l’appli et la raison.',
       new_episode:
         'Un épisode d’une série regardée ou mise en favori est sorti : une fois par épisode, jamais pour ceux déjà sortis.',
       recording_finished:
@@ -187,6 +193,51 @@ const notifications: typeof en = {
         'Les derniers messages n’ont pas pu être remis : la cible n’a pas répondu, ou a répondu par des erreurs. Chaque message est retenté pendant une heure.',
       unreadable:
         'Son adresse, son jeton ou sa clé ne peut pas être déchiffré avec POLYFIN_SECRET_KEY : rien ne lui est envoyé tant qu’il n’est pas saisi de nouveau.',
+    },
+    perMinute: 'Messages par minute, au plus',
+    perMinuteHelp:
+      'Les messages suivants attendent leur tour, dans l’ordre. Vide pour aucune limite ; de 1 à 60.',
+    groupMinutes: 'Grouper les lectures et nouveaux épisodes, en minutes',
+    groupMinutesHelp:
+      'Les lectures, les liens partagés lus et les nouveaux épisodes attendent ce temps, puis partent en un seul message. Tout le reste part toujours aussitôt. Vide pour tout envoyer aussitôt ; de 1 à 1 440.',
+    capped: (n: number) => `Au plus ${n} par minute`,
+    grouped: (n: number) => `Groupés toutes les ${n} min`,
+    deliveries: {
+      open: 'Derniers envois',
+      title: (name: string) => `Derniers envois à ${name}`,
+      help: 'Les 100 derniers messages, du plus récent au plus ancien, gardés 30 jours.',
+      loading: 'Chargement des envois…',
+      empty: 'Aucun message envoyé.',
+      when: 'Quand',
+      event: 'Message',
+      outcome: 'Résultat',
+      test: 'Message de test',
+      grouped: (n: number) => `${n} événements en un message`,
+      attempts: (n: number) => `${n} tentatives`,
+      outcomes: {
+        delivered: 'Remis',
+        refused: 'Refusé',
+        rejected: 'Message refusé',
+        failed: 'Non remis',
+        dropped: 'Abandonné',
+        unreadable: 'Indéchiffrable',
+      },
+    },
+    preview: {
+      title: 'Aperçu',
+      help: 'Voir un résumé tel qu’une cible e-mail le recevrait maintenant, celui du serveur ou d’un utilisateur. Rien n’est envoyé.',
+      summary: 'Résumé',
+      summaries: {
+        weekly_summary: 'Résumé de la semaine',
+        monthly_summary: 'Bilan du mois',
+        yearly_summary: 'Bilan de l’année',
+      },
+      of: 'De',
+      server: 'Le serveur',
+      show: 'Aperçu',
+      loading: 'Préparation de l’aperçu…',
+      empty: 'Rien à dire pour cette période : ce résumé ne serait pas envoyé.',
+      frame: 'L’e-mail du résumé',
     },
     lastSent: 'Dernier message ',
     nothingSent: 'Aucun message envoyé',

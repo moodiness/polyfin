@@ -59,6 +59,13 @@ type Event struct {
 	Programme *ProgrammeJSON `json:"programme,omitempty"`
 	// WatchlistTitle is the title a title_available event tells of.
 	WatchlistTitle *TitleJSON `json:"watchlistTitle,omitempty"`
+	// Failure is the play a playback_failed event tells of.
+	Failure *FailureJSON `json:"failure,omitempty"`
+	// Crash is the crash a server_crashed event tells of.
+	Crash *CrashJSON `json:"crash,omitempty"`
+	// Events are the events a grouped message holds, oldest first, each
+	// as it would have been sent alone.
+	Events []Event `json:"events,omitempty"`
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its

@@ -616,7 +616,9 @@ func (h *Handler) serveSegment(w http.ResponseWriter, r *http.Request, remuxOf r
 		file, err = h.Playback.RemuxSegment(ctx, remux, n)
 	}
 	if err != nil {
-		h.remuxError(w, r, remux, err)
+		if h.remuxError(w, r, remux, err) {
+			h.streamFailed(r, req.user, req.item, remux.Device)
+		}
 		return
 	}
 	defer file.Close()
@@ -715,7 +717,9 @@ func (h *Handler) hlsSubtitles(w http.ResponseWriter, r *http.Request, index int
 // segmentWait bounds the wait for a segment whose FFmpeg makes progress.
 const segmentWait = 2 * time.Minute
 
-func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playback.Remux, err error) {
+// remuxError answers err, which came of serving remux, and reports
+// whether the stream broke: its source failed, or its encoding did.
+func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playback.Remux, err error) (broke bool) {
 	logger := h.Logger
 	if remux.Channel != "" {
 		// A live stream's lines name its channel.
@@ -747,10 +751,13 @@ func (h *Handler) remuxError(w http.ResponseWriter, r *http.Request, remux playb
 		// source failed.
 		logger.Warn("A segment could not be served in time: its source is slow or failed", "addon", remux.Version.Addon, "error", err)
 		processingError(w, http.StatusServiceUnavailable)
+		return true
 	default:
 		logger.Warn("A remux could not be served", "addon", remux.Version.Addon, "error", err)
 		processingError(w, http.StatusInternalServerError)
+		return true
 	}
+	return false
 }
 
 // stopEncodings answers DELETE /Videos/ActiveEncodings, which apps send

@@ -2,12 +2,55 @@ package jellyfin
 
 import (
 	"cmp"
+	"net/http"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/plays"
 )
+
+// refusePlay answers a PlaybackInfo that plays nothing with code, as
+// Jellyfin does (NoCompatibleStream, or RateLimitExceeded, which
+// jellyfin-web tells as media that cannot be played at this time), and
+// tells PlayFailed of it for reason. item is the title opened, empty when
+// it is not known.
+func (h *Handler) refusePlay(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, code, reason string) {
+	writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: code})
+	h.playFailed(r, user, callerFrom(r.Context()).Device, item, reason)
+}
+
+// streamFailed tells PlayFailed that the stream of item broke for user,
+// on the app of the device whose identifier deviceID is, as the stream's
+// address carries it: stream requests carry no other credentials.
+func (h *Handler) streamFailed(r *http.Request, user accounts.User, item library.Item, deviceID string) {
+	if h.PlayFailed == nil {
+		return
+	}
+	device := callerFrom(r.Context()).Device
+	if device.DeviceID == "" && deviceID != "" {
+		if devices, err := h.Accounts.Devices(r.Context(), user.ID); err == nil {
+			for _, d := range devices {
+				if d.DeviceID == deviceID {
+					device = d
+					break
+				}
+			}
+		}
+	}
+	h.playFailed(r, user, device, item, plays.FailedStream)
+}
+
+// playFailed tells PlayFailed, when set, that user's play of item on
+// device failed for reason. The notifications keep one per user and title
+// an hour.
+func (h *Handler) playFailed(r *http.Request, user accounts.User, device accounts.Device, item library.Item, reason string) {
+	if h.PlayFailed == nil || r.Context().Err() != nil {
+		return
+	}
+	h.PlayFailed(plays.Failure{User: user.ID, UserName: user.Name, App: device.Client, DeviceName: device.DeviceName, Title: playedTitle(item),
+		Reason: reason, At: h.now()})
+}
 
 // playsReports are the kinds of tracker reports, by the kind of playback
 // report.

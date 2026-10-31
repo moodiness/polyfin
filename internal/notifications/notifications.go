@@ -1,8 +1,9 @@
 // Package notifications tells users and administrators when something they
 // care about happens: a new episode of a series a user follows, a recording
 // that finished or failed, a problem System › Health found or that was
-// solved, a user who joined through an invite, a new version of Polyfin, a
-// playback that started, paused, resumed or stopped, an account blocked
+// solved, a crash of the server, a user who joined through an invite, a
+// new version of Polyfin, a playback that started, paused, resumed,
+// stopped or failed, an account blocked
 // after wrong passwords, a sign-in on a device an account never used, a
 // Live TV programme a user set a reminder for that starts soon, a title of
 // a user's watchlist that versions were found for, once a week a summary
@@ -19,9 +20,12 @@
 // account's blocks and the server's summaries for administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
-// sent in order in the background, tried again after network errors and
-// server errors, as long as a target asks to wait, and given up after a
-// while. A target that refuses Polyfin is marked so for the admin app.
+// sent in order in the background, at most so many a minute when the
+// target caps them, tried again after network errors and server errors,
+// as long as a target asks to wait, and given up after a while. A target
+// may group the plays and new episodes into one message every so many
+// minutes. A target that refuses Polyfin is marked so for the admin app,
+// and what came of each message is kept for its Recent deliveries.
 package notifications
 
 import (
@@ -110,21 +114,45 @@ const (
 	// their watchlist, once per title, to their own targets only (see
 	// watchlist.go).
 	TitleAvailable = "title_available"
+	// PlaybackFailed tells that a play failed: no version played on the
+	// app, a limit refused it, or its stream broke; once an hour per user
+	// and title, to the server's targets and administrators' own (see
+	// failures.go).
+	PlaybackFailed = "playback_failed"
+	// ServerCrashed tells that the server crashed, at the next start, to
+	// the server's targets and administrators' own (see crash.go).
+	ServerCrashed = "server_crashed"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
+	// Grouped is a message that holds the plays and new episodes a target
+	// grouped (see Target.GroupMinutes); targets do not choose it.
+	Grouped = "grouped"
 )
 
 // Events lists the events targets choose from, in the order the admin app
 // shows them.
-var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, UserJoined, NewVersion,
-	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, WeeklySummary, MonthlySummary, YearlySummary, ConnectionStopped,
-	AccountBlocked, NewDevice, SharePlayed, ProgrammeReminder, TitleAvailable}
+var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, ServerCrashed, UserJoined, NewVersion,
+	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, PlaybackFailed, WeeklySummary, MonthlySummary, YearlySummary,
+	ConnectionStopped, AccountBlocked, NewDevice, SharePlayed, ProgrammeReminder, TitleAvailable}
 
 // administratorsEvent reports whether event is one only the server's
-// targets and administrators' own receive: about System › Health, a user
-// who joined through an invite, or a new version of Polyfin.
+// targets and administrators' own receive: about System › Health, a crash
+// of the server, a user who joined through an invite, a new version of
+// Polyfin, or a failed play.
 func administratorsEvent(event string) bool {
-	return event == HealthProblem || event == HealthSolved || event == UserJoined || event == NewVersion
+	return event == HealthProblem || event == HealthSolved || event == ServerCrashed || event == UserJoined || event == NewVersion ||
+		event == PlaybackFailed
+}
+
+// groupable reports whether a target that groups its messages holds
+// event for its next group: the plays, guests' plays through share links
+// and new episodes, which can wait. Every other event goes at once.
+func groupable(event string) bool {
+	switch event {
+	case PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, SharePlayed, NewEpisode:
+		return true
+	}
+	return false
 }
 
 // personalEvent reports whether event is one only users' own targets
@@ -207,6 +235,14 @@ var (
 	ErrTooManyTargets = errors.New("too many notification targets")
 	// ErrUnreadable reports a target whose secret the key cannot decrypt.
 	ErrUnreadable = errors.New("notification target cannot be decrypted")
+	// ErrInvalidPerMinute reports a cap of messages a minute that is not 0
+	// to MaxPerMinute; ErrInvalidGroupMinutes a grouping that is not 0 to
+	// MaxGroupMinutes minutes.
+	ErrInvalidPerMinute    = errors.New("invalid notification messages per minute")
+	ErrInvalidGroupMinutes = errors.New("invalid notification grouping minutes")
+	// ErrNoPreview reports a preview asked of an event that is not a
+	// summary.
+	ErrNoPreview = errors.New("no preview of this notification")
 )
 
 // Accounts are the users and the settings; accounts.Store is one.
@@ -310,6 +346,15 @@ type timing struct {
 	// summaryFirst is how long after start the summaries are first looked
 	// at, due or not, and summaryEvery how often after that.
 	summaryFirst, summaryEvery time.Duration
+	// minute is the minute of the targets' caps and groupings: tests
+	// shorten it.
+	minute time.Duration
+	// failureQuiet is how long a failed play of a user and title is not
+	// told again.
+	failureQuiet time.Duration
+	// pruneEvery is how often the deliveries older than keepDeliveries
+	// are deleted.
+	pruneEvery time.Duration
 }
 
 var defaultTiming = timing{
@@ -324,12 +369,18 @@ var defaultTiming = timing{
 	healthConfirm:    2,
 	summaryFirst:     time.Minute,
 	summaryEvery:     time.Minute,
+	minute:           time.Minute,
+	failureQuiet:     time.Hour,
+	pruneEvery:       time.Hour,
 }
 
 const (
 	// maxQueue bounds the messages waiting for one target: past it, the
 	// oldest is dropped.
 	maxQueue = 100
+	// maxGroup bounds the events of a grouped message: a group that
+	// reaches it is sent at once.
+	maxGroup = 100
 	// maxSending bounds the requests to targets under way at once.
 	maxSending = 4
 	// maxReply bounds the bytes read from a target's answer.
@@ -384,6 +435,14 @@ type Service struct {
 	admins  map[accounts.ID]bool
 	// lanes are the messages waiting, by target.
 	lanes map[accounts.ID]*lane
+	// held are the events targets that group hold for their next group,
+	// and recent when each target was last sent messages, within a minute,
+	// for its cap (see deliver.go).
+	held   map[accounts.ID]*group
+	recent map[accounts.ID][]time.Time
+	// failures are when each user's failed play of a title was last told,
+	// by user and title (see failures.go).
+	failures map[failureKey]time.Time
 	// health are the problems found, by key (see health.go).
 	health map[string]*healthState
 	// episodesMu and healthMu serialize the looks at the series, and at
@@ -431,15 +490,18 @@ func New(options Options) *Service {
 		targets:     map[accounts.ID]target{},
 		admins:      map[accounts.ID]bool{},
 		lanes:       map[accounts.ID]*lane{},
+		held:        map[accounts.ID]*group{},
+		recent:      map[accounts.ID][]time.Time{},
+		failures:    map[failureKey]time.Time{},
 		summarySent: map[string]time.Time{},
 		loaded:      make(chan struct{}),
 	}
 }
 
 // Run reads the targets, then looks at the series users follow, at the
-// health problems and at whether a summary is due, each on its
-// own schedule, until ctx ends; it then stops sending and waits for the
-// sends under way.
+// health problems and at whether a summary is due, and deletes old
+// deliveries, each on its own schedule, until ctx ends; it then stops
+// sending and waits for the sends under way.
 func (s *Service) Run(ctx context.Context) {
 	if err := s.reload(ctx); err != nil && ctx.Err() == nil {
 		s.logger.Warn("The notification targets could not be read", "error", err)
@@ -449,6 +511,7 @@ func (s *Service) Run(ctx context.Context) {
 	wg.Go(func() { every(ctx, s.timing.episodesFirst, s.timing.episodesEvery, s.CheckEpisodes) })
 	wg.Go(func() { every(ctx, s.timing.healthEvery, s.timing.healthEvery, s.CheckHealth) })
 	wg.Go(func() { every(ctx, s.timing.summaryFirst, s.timing.summaryEvery, s.CheckSummary) })
+	wg.Go(func() { every(ctx, s.timing.pruneEvery, s.timing.pruneEvery, s.pruneDeliveries) })
 	wg.Wait()
 	s.Close()
 }

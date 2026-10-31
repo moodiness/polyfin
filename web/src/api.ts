@@ -2278,12 +2278,14 @@ export type NotificationEvent =
   | 'recording_failed'
   | 'health_problem'
   | 'health_solved'
+  | 'server_crashed'
   | 'user_joined'
   | 'new_version'
   | 'playback_started'
   | 'playback_paused'
   | 'playback_resumed'
   | 'playback_stopped'
+  | 'playback_failed'
   | 'weekly_summary'
   | 'monthly_summary'
   | 'yearly_summary'
@@ -2324,6 +2326,10 @@ export type NotificationTarget = {
   /** The HTTP status, or an email target's SMTP code, answered with its problem, when it answered. */
   problemStatus: number | null
   problemAt: string | null
+  /** At most this many messages a minute, null for no cap. */
+  perMinute: number | null
+  /** Plays and new episodes grouped into one message every this many minutes, null for none. */
+  groupMinutes: number | null
 }
 
 /** The targets of the server, or of the signed-in user, and what they may choose. */
@@ -2357,6 +2363,10 @@ export type NotificationDraft = {
   userKey?: string
   events?: NotificationEvent[]
   enabled?: boolean
+  /** 1 to 60 messages a minute, 0 for no cap. */
+  perMinute?: number
+  /** 1 to 1440 minutes, 0 to send each message at once. */
+  groupMinutes?: number
 }
 
 /** Whose targets: the server's (Settings › Notifications) or the signed-in user's own. */
@@ -2389,6 +2399,61 @@ export const testNotificationTarget = (scope: NotificationScope, id: string) =>
     answer: string | null
     target: NotificationTarget
   }>('POST', `${notificationsPath(scope)}/targets/${seg(id)}/test`)
+
+/** What came of a message sent to a target, as Recent deliveries lists it. */
+export type NotificationDelivery = {
+  id: number
+  eventId: string
+  /** The event's type, `test` for Send a test, `grouped` for a grouped message. */
+  type: NotificationEvent | 'test' | 'grouped'
+  title: string
+  /** How many events it held: more than one for a grouped message. */
+  events: number
+  outcome: 'delivered' | 'refused' | 'rejected' | 'failed' | 'dropped' | 'unreadable'
+  /** The HTTP status, or SMTP code, the target answered, when it answered. */
+  status: number | null
+  /** Why it did not accept the message, without its address or tokens. */
+  error: string | null
+  attempts: number
+  queuedAt: string
+  at: string
+}
+
+/** The last 100 deliveries of a target, newest first, kept 30 days. */
+export const fetchNotificationDeliveries = (
+  scope: NotificationScope,
+  id: string,
+  signal?: AbortSignal,
+) =>
+  request<NotificationDelivery[]>(
+    'GET',
+    `${notificationsPath(scope)}/targets/${seg(id)}/deliveries`,
+    undefined,
+    signal,
+  )
+
+/** The summaries a preview may show. */
+export type SummaryEvent = 'weekly_summary' | 'monthly_summary' | 'yearly_summary'
+
+/** A summary as an email target would receive it now. */
+export type SummaryPreview = {
+  subject: string
+  text: string
+  html: string
+  start: string
+  end: string
+  /** Nothing to tell: no summary is sent. */
+  empty: boolean
+}
+
+/** The summary of the server (`user` omitted), or of a user, as it would be sent now. */
+export const fetchSummaryPreview = (event: SummaryEvent, user?: string, signal?: AbortSignal) =>
+  request<SummaryPreview>(
+    'GET',
+    `/notifications/preview?${new URLSearchParams(user ? { event, user } : { event })}`,
+    undefined,
+    signal,
+  )
 
 export const lookupQuickConnect = (code: string, signal?: AbortSignal) =>
   request<QuickConnectRequest>('GET', `/quick-connect/${seg(code)}`, undefined, signal)
@@ -3968,6 +4033,8 @@ export type Health = {
     memory: number
     heap: number
     goroutines: number
+    /** The last crash, as the start after it found it: null when none is kept. */
+    lastCrash: { at: string; trace: string } | null
   }
   database: { reachable: boolean; size: number | null }
   /** `torrents` is the part of `used` the pieces of torrents being played take. */
