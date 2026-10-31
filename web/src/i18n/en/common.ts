@@ -300,6 +300,10 @@ const common = {
     invalid_torrent_trackers:
       'Enter at most 30 trackers, each an HTTP, HTTPS or UDP announce URL, UDP with its port, of at most 500 characters.',
     invalid_cache_size: 'The disk space must be a whole number of GB from 1 to 2000.',
+    invalid_source_cache:
+      'Parts read are kept a whole number of days from 0 to 365, with 0 to 30 extra days for each play again.',
+    invalid_preload:
+      'Preloading takes 1 to 3 episodes per series, a speed limit of 1 to 1000 Mbit/s and 1 to 1000 GB of free space to keep.',
     invalid_vaapi_device: 'Choose the graphics card from the list.',
     invalid_recordings_folder:
       'The recordings folder must be an absolute path to a folder Polyfin can write to.',

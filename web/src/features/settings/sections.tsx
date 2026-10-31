@@ -49,6 +49,7 @@ import { FieldRow, SettingRow, SettingsGroup, SwitchRow, TextRow } from './parts
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
 import LabelRules from './LabelRules'
+import SourceCache from './SourceCache'
 import VersionOrder, { CodecOrder, EditionOrder, SourceOrder } from './VersionOrder'
 import { EditAsCustom, shownTexts, ThemeCopyPanel } from './WebTheme'
 import WorkFolderRow from './WorkFolders'
@@ -328,27 +329,6 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
             )}
           />
         </FieldRow>
-        <FieldRow
-          anchor="cache-size"
-          label={s.cacheSize}
-          help={s.cacheSizeHelp(range('cacheSizeGb'))}
-          error={error('cache-size')}
-        >
-          <NumberInput
-            {...limits('cacheSizeGb')}
-            step={1}
-            {...number('cache-size', form.cacheSizeGb, (value) =>
-              update({ cacheSizeGb: Math.trunc(value) }),
-            )}
-          />
-        </FieldRow>
-        <WorkFolderRow
-          folder="readingFolder"
-          form={form}
-          update={update}
-          error={error}
-          limits={limits}
-        />
         <SwitchRow
           anchor="remuxdb"
           label={s.remuxDb}
@@ -375,6 +355,14 @@ function Playback({ form, update, error, number, range, limits }: SectionFormApi
           />
         </FieldRow>
       </SettingsGroup>
+      <SourceCache
+        form={form}
+        update={update}
+        error={error}
+        number={number}
+        range={range}
+        limits={limits}
+      />
       <SettingsGroup title={s.versionOrderGroup}>
         <SettingRow anchor="version-order">
           <VersionOrder

@@ -860,6 +860,44 @@ const settings: typeof en = {
     cacheSize: 'Speicherplatz für gelesene Dateien (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Speicherplatz, den Polyfin nutzen darf, um die Teile der abgespielten Dateien zu behalten, damit Spulen und Neustarts sie nicht erneut herunterladen. Teile, die in den letzten 30 Sekunden gelesen wurden, werden auch darüber hinaus behalten. Von ${r.min} bis ${r.max} GB; standardmäßig ${r.default}.`,
+    sourceCacheGroup: 'Gelesene Dateien',
+    sourceCachePreset: 'Speicherplatz und Aufbewahrung',
+    sourceCachePresetHelp: (free: string) =>
+      `Wie viel der abgespielten Dateien Polyfin auf der Festplatte behält und wie lange, auch über Neustarts hinweg: Ein erneut abgespielter oder nach einem Neustart fortgesetzter Titel wird dann von der Festplatte statt von seiner Quelle gelesen. Eine Voreinstellung setzt die Felder darunter; wird eines davon geändert, wird sie zu Benutzerdefiniert. ${free}`,
+    sourceCacheFree: (free: string) =>
+      `${free} frei auf der Festplatte des Ordners für gelesene Dateien.`,
+    sourceCachePresetNames: {
+      off: 'Aus',
+      small: 'Klein',
+      everyday: 'Alltag',
+      large: 'Groß',
+      custom: 'Benutzerdefiniert',
+    },
+    sourceCachePresetChoice: (name: string, size: string, days: number) =>
+      days > 0
+        ? `${name}: ${size} GB, ${days} Tage behalten`
+        : `${name}: ${size} GB, bei jedem Start geleert`,
+    sourceCacheDays: 'Gelesene Teile behalten (Tage)',
+    sourceCacheDaysHelp: (r: RangeText) =>
+      `Wie lange ein Teil einer Datei nach dem letzten Lesen behalten wird, auch über Neustarts hinweg. 0 behält nichts über einen Neustart hinaus: Jeder Start leert den Cache. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    sourceCacheCreditDays: 'Zusätzliche Tage je erneuter Wiedergabe',
+    sourceCacheCreditDaysHelp: (r: RangeText) =>
+      `Ein Titel, der 6 Stunden oder mehr nach seiner letzten Wiedergabe erneut abgespielt wird, behält seine Teile für jede Wiedergabe nach der ersten so viele Tage länger, höchstens 8-mal, und sie machen erst nach denen einmal abgespielter Titel Platz. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    preloadGroup: 'Vorladen der nächsten Folgen',
+    preloadNextEpisodes: 'Nächste Folgen vorladen',
+    preloadNextEpisodesHelp:
+      'Liest, solange nichts abgespielt wird, die nächsten Folgen der Serien vor, die jeder Benutzer in den letzten 14 Tagen abgespielt oder begonnen hat, höchstens 5 Serien pro Benutzer: die erste Version, die Abspielen wählen würde, ihre ersten 128 MiB und ihr Ende oder die ganze Datei. Es stoppt, sobald etwas abgespielt wird, und liest alle 15 Minuten höchstens ein Viertel des Speicherplatzes oben. Torrents werden nie vorgeladen.',
+    preloadEpisodes: 'Folgen pro Serie',
+    preloadEpisodesHelp: (r: RangeText) => `Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    preloadMbps: 'Geschwindigkeitsgrenze (Mbit/s)',
+    preloadMbpsHelp: (r: RangeText) =>
+      `Die durchschnittliche Geschwindigkeit des Vorladens, die dem Haushalt den Rest der Verbindung lässt. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    preloadReserveGb: 'Freizuhaltender Speicherplatz (GB)',
+    preloadReserveGbHelp: (r: RangeText) =>
+      `Das Vorladen stoppt, bevor auf der Festplatte des Ordners für gelesene Dateien weniger als so viel frei ist. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    preloadWholeFiles: 'Ganze Dateien vorladen',
+    preloadWholeFilesHelp:
+      'Liest ganze Folgen statt ihres Anfangs und Endes, für eine große Festplatte. Die Voreinstellung Groß schaltet es ein; eine Änderung macht die Voreinstellung zu Benutzerdefiniert.',
     workFolders: {
       conversionFolder: 'Konvertierungsordner',
       conversionFolderHelp:

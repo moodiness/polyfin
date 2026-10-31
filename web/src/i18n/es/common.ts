@@ -326,6 +326,10 @@ const common: typeof en = {
     invalid_torrent_trackers:
       'Introduzca 30 trackers como máximo, cada uno una URL de anuncio HTTP, HTTPS o UDP, UDP con su puerto, de 500 caracteres como máximo.',
     invalid_cache_size: 'El espacio en disco debe ser un número entero de GB de 1 a 2000.',
+    invalid_source_cache:
+      'Las partes leídas se conservan un número entero de días de 0 a 365, con 0 a 30 días extra por cada nueva reproducción.',
+    invalid_preload:
+      'La precarga admite de 1 a 3 episodios por serie, un límite de velocidad de 1 a 1000 Mbit/s y de 1 a 1000 GB de espacio libre que conservar.',
     invalid_vaapi_device: 'Elija la tarjeta gráfica en la lista.',
     invalid_recordings_folder:
       'La carpeta de grabaciones debe ser una ruta absoluta a una carpeta en la que Polyfin pueda escribir.',
