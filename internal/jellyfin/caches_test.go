@@ -66,7 +66,7 @@ func TestSubtitleListsAreKeptUpTo16MB(t *testing.T) {
 			URL: "https://subtitles.test/" + strings.Repeat("x", 1000)}
 	}
 	for n := range 20 {
-		s.handler.subtitleFiles.Put(accounts.ID{byte(n + 1)}, files)
+		s.handler.subtitleFiles.Put(accounts.ID{byte(n + 1)}, listedSubtitles{Files: files})
 	}
 	if _, ok := s.handler.subtitleFiles.Get(accounts.ID{1}); ok {
 		t.Error("the list stored first was kept past 16 MB")

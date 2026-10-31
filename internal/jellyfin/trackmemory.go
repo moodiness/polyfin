@@ -187,7 +187,7 @@ func (h *Handler) reportedStreams(ctx context.Context, user accounts.User, item 
 		return nil, false
 	}
 	p := playable{item: item}
-	p.subtitles, _ = h.subtitleFiles.Get(item.ID)
+	p.subtitles, _ = h.keptSubtitles(user, item.ID)
 	return h.versionStreams(ctx, p, version), true
 }
 

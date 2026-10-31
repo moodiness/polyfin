@@ -251,7 +251,7 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		analysis, err = h.Playback.AnalyzeLive(r.Context(), version)
 	} else {
 		analysis, err = h.Playback.Analyze(r.Context(), version)
-		if cached, ok := h.subtitleFiles.Get(item.ID); ok {
+		if cached, ok := h.keptSubtitles(user, item.ID); ok {
 			files = cached
 		} else {
 			files, _ = h.Library.Subtitles(r.Context(), user, item.ID)
