@@ -274,6 +274,11 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		}
 		return t, v, nil
 	case r.Kind == KindChannel && r.Meta != nil:
+		// A channel plays while the user reaches it: from one of their live
+		// TV catalogs, and shown by their channel rule.
+		if _, err := s.channel(ctx, v, r); err != nil {
+			return target{}, view{}, err
+		}
 		return target{item: id, kind: KindChannel, metaType: r.Meta.Type, id: r.Meta.ID}, v, nil
 	case r.Kind == KindReplay:
 		// A programme plays while its channel's archive keeps it.
