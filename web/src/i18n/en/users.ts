@@ -223,7 +223,7 @@ const users = {
       open: 'Import from another server',
       title: 'Import from another server',
       description:
-        'Bring accounts and their watch data over from a Jellyfin, Emby or Plex server: account names and administrator status, then for each user the movies and episodes played with their dates, resume points and favorites, matched by IMDb, TMDB or TVDB. Polyfin’s data is only added to, and nothing is written to the other server. Servers do not give out passwords: you set one for each new account, or keep the one a user signs in with.',
+        'Bring accounts and their watch data over from a Jellyfin, Emby or Plex server: account names and administrator status, then for each user the movies and episodes played with their dates, resume points and favorites, matched by IMDb, TMDB or TVDB, and if you choose their ratings, the server’s collections and their playlists. Polyfin’s data is only added to, and nothing is written to the other server. Servers do not give out passwords: you set one for each new account, or keep the one a user signs in with.',
       serverKind: 'Server',
       servers: {
         jellyfin: 'Jellyfin',
@@ -277,6 +277,21 @@ const users = {
       plexWatchDataHelp:
         'The titles this account played to the end on this server, from Plex’s playback history, with their dates and play counts. Titles it marked as watched or synced from its Plex account, and its resume points, stay on Plex.',
       watchDataNeeded: 'Without it, nothing is imported for this user.',
+      /** What an import brings besides watch data, each on by default. */
+      extras: {
+        title: 'Also bring',
+        ratings: 'Ratings',
+        ratingsHelp:
+          'Each user’s ratings from 0 to 10, as they are. A thumb up without a rating becomes a favorite. A rating Polyfin already has stays.',
+        collections: 'Collections',
+        collectionsHelp:
+          'The server’s collections, as Polyfin collections every user sees, with the titles found. A collection with no title found is not created.',
+        playlists: 'Playlists',
+        playlistsHelp:
+          'Each user’s video playlists, as playlists of their own, in order, with the titles found.',
+        plexHelp:
+          'Plex gives ratings and playlists only for the accounts read with their own token: the owner’s, and the others’ once you sign in with Plex as the owner.',
+      },
       plexNotice:
         'With the owner’s token, Plex lets Polyfin read the owner’s played titles, resume points and ratings. Of the other accounts, it gives only their playback history on this server: the titles they played to the end here. Titles they marked as watched without playing them, titles synced from their Plex account, their resume points and their ratings are not in it. To read each account’s own watch data, sign in with Plex as the owner above. Plex has no favorites to import.',
       /** The owner's sign-in to Plex, in the import of a Plex server. */
@@ -386,6 +401,20 @@ const users = {
         `${played} marked played, ${resumed === 1 ? '1 resume point' : `${resumed} resume points`}, ${favorites === 1 ? '1 favorite' : `${favorites} favorites`}`,
       upToDate: (count: number) => `${count} already in Polyfin`,
       ratings: (count: number) => (count === 1 ? '1 rated' : `${count} rated`),
+      collections: (count: number) =>
+        count === 1 ? '1 collection created' : `${count} collections created`,
+      playlists: (count: number) =>
+        count === 1 ? '1 playlist created' : `${count} playlists created`,
+      /** Titles added to collections and playlists an earlier import brought. */
+      listTitles: (count: number) =>
+        count === 1
+          ? '1 title added to lists brought before'
+          : `${count} titles added to lists brought before`,
+      /** A collection or playlist of the server with no title found, which was not created. */
+      skipped: {
+        collection: (name: string) => `Collection “${name}”: no title found, not created.`,
+        playlist: (name: string) => `Playlist “${name}”: no title found, not created.`,
+      },
       watchlist: (count: number) => `${count} added to the Watchlist`,
       undated: (count: number) =>
         count === 1

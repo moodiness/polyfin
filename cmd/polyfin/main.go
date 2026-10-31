@@ -535,7 +535,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		return err
 	}
 	fromJellyfin := jellyfinimport.New(jellyfinimport.Options{Settings: store.Settings, Titles: lib, UserData: userData, Version: version,
-		Logger: logger, Watchlist: watchlist.New(pool), PlexClient: plexClient})
+		Logger: logger, Watchlist: watchlist.New(pool), Collections: collections.New(pool), Playlists: playlists.New(pool),
+		PlexClient: plexClient})
 	defer fromJellyfin.Close()
 	// The watch data of accounts on apps built on addons, Nuvio's and
 	// Stremio's, finds its titles and merges the same way; the accounts'
