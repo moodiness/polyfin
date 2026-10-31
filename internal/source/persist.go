@@ -544,6 +544,9 @@ func (c *Cache) unclaim(s *Source, index int64) {
 // cache's lock is held.
 func (c *Cache) keep(s *Source) error {
 	s.halt()
+	if s.received != nil {
+		c.received.Release(s.received)
+	}
 	defer s.writing.Unlock()
 	state, unsynced, ok := c.snapshot(s)
 	if !ok {
