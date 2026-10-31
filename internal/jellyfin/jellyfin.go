@@ -189,7 +189,8 @@ type Handler struct {
 	// customCss hashes the Custom theme's CSS, for the address the web
 	// client loads it from (see brandingCss).
 	customCss webtheme.Hasher
-	// now tells the time users' allowed hours are checked against.
+	// now tells the time users' allowed hours and the home rows' schedules
+	// are checked against.
 	now func() time.Time
 	// newKeys remembers the API keys made from Jellyfin apps until a
 	// listing shows them.

@@ -669,10 +669,11 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		LibraryRefreshes: lib,
 		SmartLists:       smartlists.New(pool),
 		SmartPreviews:    lib,
-		// The rows of the web player's home page, and the collections they
-		// may list as the Jellyfin API tells them.
-		HomeRows:       homeRows,
-		HomeRowChoices: jellyfinAPI,
+		// The rows of the web player's home page, the collections they may
+		// list, and each user's rows as the Jellyfin API tells them.
+		HomeRows:        homeRows,
+		HomeRowChoices:  jellyfinAPI,
+		HomeRowPreviews: jellyfinAPI,
 		// Reset my preferences forgets what Jellyfin apps saved, with what
 		// the Jellyfin API remembers of it.
 		Preferences: jellyfinAPI,
