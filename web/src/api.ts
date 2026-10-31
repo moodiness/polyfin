@@ -3978,9 +3978,9 @@ export type Health = {
   database: { reachable: boolean; size: number | null }
   /**
    * `torrents` is the part of `used` the pieces of torrents being played take; `kept` counts the
-   * files the cache holds parts of, `hits` and `misses` the bytes read since the start that were on
-   * disk when asked for and those waited for, and `days` how long parts are kept, 0 for not past a
-   * restart.
+   * files the cache holds parts of, `hits` and `misses` the bytes read since the start that were read
+   * before or kept from before the start and those read for the first time since they were fetched,
+   * and `days` how long parts are kept, 0 for not past a restart.
    */
   cache: {
     used: number
