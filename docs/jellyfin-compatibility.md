@@ -124,6 +124,22 @@ jellyfin-web's TV shows tab sorts a series library by "Date Episode Added" and "
 
 **For app developers:** a listing of a library with `ParentId`, `Recursive=true` and `IncludeItemTypes=Series` alone, whose first `SortBy` is `DateLastContentAdded`, `SeriesDatePlayed` or `DatePlayed`, is answered so. `SortOrder` applies to every key, as in Jellyfin, and the keys after the first, then the name, order the series of one date.
 
+### Episode orders
+
+A series' "Display order", set in jellyfin-web's **Edit metadata**, shows its seasons and episodes in one of its TMDB episode groups, for every user (see [Episode orders](addons-and-libraries.md#episode-orders)). jellyfin-web offers the orders by type ([`metadataEditor.js`, lines 737 to 754](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/metadataEditor/metadataEditor.js#L737-L754), jellyfin-web 12.4); the admin app chooses among a series' groups by name, and where its specials show.
+
+**Compared with Jellyfin:**
+
+- Jellyfin reads the first TMDB group of the type for each episode's metadata, the episodes being numbered in that order by their files ([`TmdbClientManager.cs`, lines 182 to 226 and 286 to 297](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbClientManager.cs#L182-L297), Jellyfin 12.4). Polyfin's addons number episodes as aired, so Polyfin moves them to the group's seasons and numbers, as Jellyfin's mapping reads them: the group's part N is season N, its place N episode N+1. Episodes keep their identity: their identifiers, watch state, tracking and streams are those of the addon's numbers.
+- Jellyfin refreshes the series' metadata when its order changes ([`ItemUpdateController.cs`, lines 122 to 133](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemUpdateController.cs#L122-L133)); Polyfin shows the new order at once, from TMDB's groups.
+- Jellyfin has no place for the specials of an order, nor a choice among several groups of a type: both are Polyfin's own.
+
+**For app developers:**
+
+- `DisplayOrder` is kept from `POST /Items/{id}` on a series, as Jellyfin keeps it ([`ItemUpdateController.cs`, lines 412 to 415](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemUpdateController.cs#L412-L415)), and given back in the series' `DisplayOrder` ([`DtoService.cs`, lines 1207 to 1210](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Dto/DtoService.cs#L1207-L1210)). Empty or absent is aired.
+- In an order, `/Shows/{id}/Seasons` lists the group's seasons, with identifiers of their own, which `/Items/{id}`, `/Items?ParentId=` and `/Shows/{id}/Episodes?seasonId=` take; `seasonId` also takes a season of the addon's. An episode's `ParentIndexNumber`, `IndexNumber`, `SeasonId`, `SeasonName` and `ParentId` are those of the order; its `Id` is the same in every order.
+- `/Shows/{id}/Episodes?season=` filters by the order's season number.
+
 ### Movie recommendations
 
 For each of the last movies the user played, recommendations give the "Because you watched" titles similar to it. They come from the similar titles of title pages, without those already played. With **Similar titles** off there are none.
