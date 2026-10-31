@@ -277,6 +277,12 @@ const common: typeof en = {
       'Não foi possível acessar o MDBList para verificar a chave. Nada foi salvo: tente novamente mais tarde.',
     invalid_tmdb_key:
       'O TMDB não aceitou esta chave. Copie novamente a chave da API ou o token de acesso de leitura da sua conta TMDB. Nada foi salvo.',
+    unknown_episode_group:
+      'O TMDB não dá mais esta ordem para esta série. Abra-a de novo e escolha outra.',
+    episode_groups_unreachable:
+      'Não foi possível acessar o TMDB para listar as ordens desta série. Nada foi salvo: tente mais tarde.',
+    no_tmdb_key:
+      'Adicione primeiro uma chave do TMDB em Configurações › Conteúdo: as ordens vêm do TMDB.',
     tmdb_unreachable:
       'Não foi possível acessar o TMDB para verificar a chave. Nada foi salvo: tente novamente mais tarde.',
     invalid_critic_rating_shows: 'Escolha na lista qual nota a avaliação da crítica exibe.',

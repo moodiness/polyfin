@@ -316,6 +316,50 @@ const libraries: typeof en = {
       languages: 'Idioma',
     },
   },
+  /** Episode orders: the order a series shows its seasons and episodes in, for every user. */
+  episodeOrders: {
+    title: 'Órdenes de episodios',
+    help: 'Una serie muestra sus temporadas y episodios como los numera su complemento, en orden de emisión. Muestre una en otro orden de TMDB, como DVD, absoluto o arco argumental, para todos los usuarios, como hace el orden de visualización del editor de metadatos de jellyfin-web. Sus episodios conservan su propia temporada y número para la reproducción, el historial y el seguimiento.',
+    loading: 'Cargando los órdenes de episodios…',
+    emptyTitle: 'Todas las series se muestran en orden de emisión',
+    emptyHow: 'Busque una serie abajo para mostrarla en otro orden.',
+    search: 'Buscar una serie',
+    searchPlaceholder: 'Nombre de la serie',
+    searchButton: 'Buscar',
+    searching: 'Buscando…',
+    results: 'Series encontradas',
+    noSeries: 'Ninguna serie coincide con este nombre.',
+    editTitle: (name: string) => `Orden de episodios de ${name}`,
+    order: 'Orden',
+    orderHelp:
+      'Los grupos de episodios que TMDB da para esta serie. Las partes de un grupo pasan a ser sus temporadas.',
+    aired: 'Orden de emisión',
+    types: {
+      originalAirDate: 'Fecha de emisión original',
+      absolute: 'Absoluto',
+      dvd: 'DVD',
+      digital: 'Digital',
+      storyArc: 'Arco argumental',
+      production: 'Producción',
+      tv: 'TV',
+    },
+    counts: (seasons: number, episodes: number) =>
+      `${seasons === 1 ? '1 temporada' : `${seasons} temporadas`}, ${episodes === 1 ? '1 episodio' : `${episodes} episodios`}`,
+    lookup: {
+      no_key: 'Añada una clave de TMDB en Ajustes › Contenido para ver los órdenes de esta serie.',
+      unknown: 'TMDB no conoce esta serie: se muestra en orden de emisión.',
+      failed:
+        'No se pudo contactar con TMDB para ver los órdenes de esta serie. Inténtelo de nuevo en un momento.',
+    },
+    specials: 'Especiales',
+    specialsHelp:
+      'Dónde aparece la temporada 0 entre las temporadas. Los especiales ocultos se siguen reproduciendo desde «Seguir viendo» o un enlace.',
+    specialsFirst: 'Primero',
+    specialsLast: 'Al final',
+    specialsHidden: 'Ocultos',
+    specialsSummary: { last: 'Especiales al final', hidden: 'Especiales ocultos' },
+    saved: (name: string) => `${name}: orden de episodios guardado.`,
+  },
 }
 
 export default libraries

@@ -306,6 +306,49 @@ const libraries = {
       languages: 'Language',
     },
   },
+  /** Episode orders: the order a series shows its seasons and episodes in, for every user. */
+  episodeOrders: {
+    title: 'Episode orders',
+    help: 'A series shows its seasons and episodes as its addon numbers them, as aired. Show one in another order from TMDB, such as DVD, absolute or story arc, for every user, as the Display order of jellyfin-web’s metadata editor does. Its episodes keep their own season and number for playback, watch history and tracking.',
+    loading: 'Loading episode orders…',
+    emptyTitle: 'Every series shows as aired',
+    emptyHow: 'Find a series below to show it in another order.',
+    search: 'Find a series',
+    searchPlaceholder: 'Series name',
+    searchButton: 'Search',
+    searching: 'Searching…',
+    results: 'Series found',
+    noSeries: 'No series matches this name.',
+    editTitle: (name: string) => `Episode order of ${name}`,
+    order: 'Order',
+    orderHelp:
+      'The episode groups TMDB gives this series. The parts of a group become its seasons.',
+    aired: 'As aired',
+    types: {
+      originalAirDate: 'Original air date',
+      absolute: 'Absolute',
+      dvd: 'DVD',
+      digital: 'Digital',
+      storyArc: 'Story arc',
+      production: 'Production',
+      tv: 'TV',
+    },
+    counts: (seasons: number, episodes: number) =>
+      `${seasons === 1 ? '1 season' : `${seasons} seasons`}, ${episodes === 1 ? '1 episode' : `${episodes} episodes`}`,
+    lookup: {
+      no_key: 'Add a TMDB key in Settings › Content to list this series’ orders.',
+      unknown: 'TMDB does not know this series: it shows as aired.',
+      failed: 'TMDB could not be reached to list this series’ orders. Try again in a moment.',
+    },
+    specials: 'Specials',
+    specialsHelp:
+      'Where season 0 shows among the seasons. Hidden specials still play from Continue Watching or a link.',
+    specialsFirst: 'First',
+    specialsLast: 'Last',
+    specialsHidden: 'Hidden',
+    specialsSummary: { last: 'Specials last', hidden: 'Specials hidden' },
+    saved: (name: string) => `${name}: episode order saved.`,
+  },
 }
 
 export default libraries

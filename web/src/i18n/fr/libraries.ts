@@ -318,6 +318,51 @@ const libraries: typeof en = {
       languages: 'Langue',
     },
   },
+  /** Episode orders: the order a series shows its seasons and episodes in, for every user. */
+  episodeOrders: {
+    title: 'Ordres des épisodes',
+    help: 'Une série présente ses saisons et ses épisodes comme son addon les numérote, dans l’ordre de diffusion. Présentez-en une dans un autre ordre de TMDB, comme DVD, absolu ou arc narratif, pour tous les utilisateurs, comme le fait l’ordre d’affichage de l’éditeur de métadonnées de jellyfin-web. Ses épisodes gardent leur propre saison et leur numéro pour la lecture, l’historique et le suivi.',
+    loading: 'Chargement des ordres des épisodes…',
+    emptyTitle: 'Toutes les séries sont dans l’ordre de diffusion',
+    emptyHow: 'Cherchez une série ci-dessous pour la présenter dans un autre ordre.',
+    search: 'Trouver une série',
+    searchPlaceholder: 'Nom de la série',
+    searchButton: 'Rechercher',
+    searching: 'Recherche…',
+    results: 'Séries trouvées',
+    noSeries: 'Aucune série ne porte ce nom.',
+    editTitle: (name: string) => `Ordre des épisodes de ${name}`,
+    order: 'Ordre',
+    orderHelp:
+      'Les groupes d’épisodes que TMDB donne pour cette série. Les parties d’un groupe deviennent ses saisons.',
+    aired: 'Ordre de diffusion',
+    types: {
+      originalAirDate: 'Date de diffusion originale',
+      absolute: 'Absolu',
+      dvd: 'DVD',
+      digital: 'Numérique',
+      storyArc: 'Arc narratif',
+      production: 'Production',
+      tv: 'TV',
+    },
+    counts: (seasons: number, episodes: number) =>
+      `${seasons === 1 ? '1 saison' : `${seasons} saisons`}, ${episodes === 1 ? '1 épisode' : `${episodes} épisodes`}`,
+    lookup: {
+      no_key:
+        'Ajoutez une clé TMDB dans Paramètres › Contenu pour lister les ordres de cette série.',
+      unknown: 'TMDB ne connaît pas cette série : elle reste dans l’ordre de diffusion.',
+      failed:
+        'TMDB n’a pas pu être joint pour lister les ordres de cette série. Réessayez dans un instant.',
+    },
+    specials: 'Épisodes spéciaux',
+    specialsHelp:
+      'Où la saison 0 apparaît parmi les saisons. Les épisodes spéciaux masqués se lisent encore depuis Reprendre ou un lien.',
+    specialsFirst: 'En premier',
+    specialsLast: 'En dernier',
+    specialsHidden: 'Masqués',
+    specialsSummary: { last: 'Épisodes spéciaux en dernier', hidden: 'Épisodes spéciaux masqués' },
+    saved: (name: string) => `${name} : ordre des épisodes enregistré.`,
+  },
 }
 
 export default libraries

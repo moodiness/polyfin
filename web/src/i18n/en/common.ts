@@ -265,6 +265,11 @@ const common = {
       'MDBList could not be reached to check the key. Nothing was saved: try again later.',
     invalid_tmdb_key:
       'TMDB did not accept this key. Copy the API key or the read access token again from your TMDB account. Nothing was saved.',
+    unknown_episode_group:
+      'TMDB no longer gives this series this order. Open it again and choose another one.',
+    episode_groups_unreachable:
+      'TMDB could not be reached to list this series’ orders. Nothing was saved: try again later.',
+    no_tmdb_key: 'Add a TMDB key in Settings › Content first: the orders come from TMDB.',
     tmdb_unreachable:
       'TMDB could not be reached to check the key. Nothing was saved: try again later.',
     invalid_critic_rating_shows: 'Choose from the list which score the critic rating shows.',

@@ -311,6 +311,51 @@ const libraries: typeof en = {
       languages: 'Idioma',
     },
   },
+  /** Episode orders: the order a series shows its seasons and episodes in, for every user. */
+  episodeOrders: {
+    title: 'Ordens de episódios',
+    help: 'Uma série mostra suas temporadas e episódios como o complemento os numera, na ordem de exibição. Mostre uma em outra ordem do TMDB, como DVD, absoluta ou arco narrativo, para todos os usuários, como faz a ordem de exibição do editor de metadados do jellyfin-web. Seus episódios mantêm a própria temporada e número para reprodução, histórico e acompanhamento.',
+    loading: 'Carregando as ordens de episódios…',
+    emptyTitle: 'Todas as séries aparecem na ordem de exibição',
+    emptyHow: 'Encontre uma série abaixo para mostrá-la em outra ordem.',
+    search: 'Encontrar uma série',
+    searchPlaceholder: 'Nome da série',
+    searchButton: 'Buscar',
+    searching: 'Buscando…',
+    results: 'Séries encontradas',
+    noSeries: 'Nenhuma série tem esse nome.',
+    editTitle: (name: string) => `Ordem dos episódios de ${name}`,
+    order: 'Ordem',
+    orderHelp:
+      'Os grupos de episódios que o TMDB dá para esta série. As partes de um grupo viram as temporadas dele.',
+    aired: 'Ordem de exibição',
+    types: {
+      originalAirDate: 'Data de exibição original',
+      absolute: 'Absoluta',
+      dvd: 'DVD',
+      digital: 'Digital',
+      storyArc: 'Arco narrativo',
+      production: 'Produção',
+      tv: 'TV',
+    },
+    counts: (seasons: number, episodes: number) =>
+      `${seasons === 1 ? '1 temporada' : `${seasons} temporadas`}, ${episodes === 1 ? '1 episódio' : `${episodes} episódios`}`,
+    lookup: {
+      no_key:
+        'Adicione uma chave do TMDB em Configurações › Conteúdo para listar as ordens desta série.',
+      unknown: 'O TMDB não conhece esta série: ela aparece na ordem de exibição.',
+      failed:
+        'Não foi possível acessar o TMDB para listar as ordens desta série. Tente de novo em instantes.',
+    },
+    specials: 'Especiais',
+    specialsHelp:
+      'Onde a temporada 0 aparece entre as temporadas. Especiais ocultos continuam tocando a partir de Continuar assistindo ou de um link.',
+    specialsFirst: 'Primeiro',
+    specialsLast: 'Por último',
+    specialsHidden: 'Ocultos',
+    specialsSummary: { last: 'Especiais por último', hidden: 'Especiais ocultos' },
+    saved: (name: string) => `${name}: ordem dos episódios salva.`,
+  },
 }
 
 export default libraries
