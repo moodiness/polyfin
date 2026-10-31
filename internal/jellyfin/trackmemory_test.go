@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -206,4 +207,150 @@ func TestTrackChoicesByLanguage(t *testing.T) {
 func withChoice(t trackPreferences, choice preferences.TrackChoice) trackPreferences {
 	t.remembered = choice
 	return t
+}
+
+// A user preferring Quebec French who picks French on an episode gets the
+// Quebec track on the next ones, in a version holding both, wherever it
+// stands; one who then picks the French of France against their region
+// keeps it, until they forget their choices. A user with no region keeps
+// the first French track, as none is flagged default.
+func TestRememberedAudioFollowsTheRegion(t *testing.T) {
+	t.Parallel()
+	p := skipping(t)
+	var episodes QueryResult
+	p.get(t, "/Shows/"+p.series+"/Episodes", p.token, &episodes)
+	pilot := ""
+	for _, item := range episodes.Items {
+		if item.Name == "Pilot" {
+			pilot = item.Id
+		}
+	}
+	first, second := p.versions(t, pilot), p.versions(t, p.episode)
+	if len(first) < 2 || len(second) < 3 {
+		t.Fatalf("versions: %d and %d", len(first), len(second))
+	}
+	// English, flagged default, then French tracks titled as releases
+	// name them: VFF for France, VFQ for Quebec.
+	tracks := func(version library.Version, french ...string) {
+		t.Helper()
+		streams := []media.Stream{{Index: 0, Type: "video", Codec: "h264", Width: 1920, Height: 1080},
+			{Index: 1, Type: "audio", Codec: "aac", Language: "eng", Default: true, Channels: 2}}
+		for _, title := range french {
+			streams = append(streams, media.Stream{Index: len(streams), Type: "audio", Codec: "aac", Language: "fre", Title: title, Channels: 2})
+		}
+		p.storeAnalysis(t, version, media.Analysis{Format: "matroska,webm", Duration: 45 * time.Minute, Remote: true, Streams: streams})
+	}
+	tracks(first[0], "French")
+	tracks(first[1], "VFF", "VFQ")
+	tracks(second[1], "VFF", "VFQ")
+	tracks(second[2], "VFQ", "VFF")
+
+	signIn := func(name, region string) skipSetup {
+		t.Helper()
+		u := p
+		u.user = p.testServer.user(name, func(c *accounts.UserChanges) { c.AudioRegion = new(region) })
+		u.token = p.signIn(name, "tv")
+		if status := p.configure(t, "/Users/Configuration", u.token, map[string]any{"AudioLanguagePreference": "eng",
+			"PlayDefaultAudioTrack": true, "RememberAudioSelections": true}); status != http.StatusNoContent {
+			t.Fatalf("configuration of %s: %d", name, status)
+		}
+		return u
+	}
+	defaults := func(when string, u skipSetup, version library.Version, want int) {
+		t.Helper()
+		var episode BaseItemDto
+		p.get(t, "/Users/"+u.user.ID.String()+"/Items/"+p.episode, u.token, &episode)
+		for _, source := range *episode.MediaSources {
+			if source.ETag == version.ID.String() {
+				if !sameIndex(source.DefaultAudioStreamIndex, new(want)) {
+					t.Errorf("%s: audio %v, want %d", when, deref(source.DefaultAudioStreamIndex), want)
+				}
+				return
+			}
+		}
+		t.Fatalf("%s: version %s not described", when, version.Name)
+	}
+	report := func(u skipSetup, version library.Version, audio int) {
+		t.Helper()
+		status, data := p.call(http.MethodPost, "/Sessions/Playing", app("tv", u.token), map[string]any{"ItemId": pilot,
+			"MediaSourceId": version.ID.String(), "PositionTicks": 600_000_000, "AudioStreamIndex": audio, "SubtitleStreamIndex": -1})
+		if status != http.StatusNoContent {
+			t.Fatalf("report: %d %s", status, data)
+		}
+	}
+
+	quebec := signIn("quebec", "fr-CA")
+	defaults("English by default", quebec, second[1], 1)
+	report(quebec, first[0], 2)
+	defaults("French picked, France first", quebec, second[1], 3)
+	defaults("French picked, Quebec first", quebec, second[2], 2)
+
+	report(quebec, first[1], 2)
+	defaults("France picked, France first", quebec, second[1], 2)
+	defaults("France picked, Quebec first", quebec, second[2], 3)
+
+	if err := p.handler.ForgetTrackChoices(t.Context(), quebec.user.ID); err != nil {
+		t.Fatal(err)
+	}
+	defaults("forgotten", quebec, second[2], 1)
+	report(quebec, first[0], 2)
+	defaults("French picked again, the variant forgotten", quebec, second[1], 3)
+
+	plain := signIn("plain", "")
+	report(plain, first[1], 3)
+	defaults("no region, France first", plain, second[1], 2)
+	defaults("no region, Quebec first", plain, second[2], 2)
+}
+
+// Inside a remembered language, the variant the user chose against their
+// region comes first, else their region when it is of that language; a
+// track's variant is remembered only when it differs from their region.
+func TestRememberedAudioByRegion(t *testing.T) {
+	t.Parallel()
+	audio := func(index int, title string, flagged bool) playback.MediaStream {
+		return playback.MediaStream{Index: index, Type: "Audio", Language: "fre", Title: title, IsDefault: flagged}
+	}
+	video := playback.MediaStream{Index: 0, Type: "Video"}
+	english := playback.MediaStream{Index: 1, Type: "Audio", Language: "eng", IsDefault: true}
+	france, quebec, plain := audio(2, "VFF", false), audio(3, "Français (Québec)", false), audio(4, "", false)
+	streams := []playback.MediaStream{video, english, france, quebec, plain}
+	user := func(region string, choice preferences.TrackChoice) trackPreferences {
+		return trackPreferences{audioLanguage: "eng", region: region, rememberAudio: true, remembered: choice}
+	}
+	french, fromFrance := preferences.TrackChoice{AudioLanguage: "fre"}, preferences.TrackChoice{AudioLanguage: "fre", AudioVariant: "fr-FR"}
+	for name, test := range map[string]struct {
+		preferences trackPreferences
+		streams     []playback.MediaStream
+		want        int
+	}{
+		"the region":                      {user("fr-CA", french), streams, 3},
+		"the variant chosen":              {user("fr-CA", fromFrance), streams, 2},
+		"no known region next":            {user("fr-CA", french), []playback.MediaStream{video, english, france, plain}, 4},
+		"no region":                       {user("", french), streams, 2},
+		"no region, the flagged first":    {user("", french), []playback.MediaStream{video, france, audio(3, "VFQ", true)}, 3},
+		"a region of another language":    {user("es-419", french), streams, 2},
+		"the region among flagged tracks": {user("fr-CA", french), []playback.MediaStream{video, audio(2, "VFF", true), quebec}, 3},
+	} {
+		if got := test.preferences.audio(test.streams); !sameIndex(got, new(test.want)) {
+			t.Errorf("%s: %v, want %d", name, deref(got), test.want)
+		}
+	}
+
+	for name, test := range map[string]struct {
+		preferences trackPreferences
+		audio       int
+		want        preferences.TrackChoice
+	}{
+		"another region":               {user("fr-CA", preferences.TrackChoice{}), 2, fromFrance},
+		"the region":                   {user("fr-CA", preferences.TrackChoice{}), 3, french},
+		"no known region":              {user("fr-CA", preferences.TrackChoice{}), 4, french},
+		"no region":                    {user("", preferences.TrackChoice{}), 2, french},
+		"a region of another language": {user("es-419", preferences.TrackChoice{}), 2, french},
+		"the region picked back":       {user("fr-CA", fromFrance), 3, french},
+		"the default back":             {user("fr-CA", fromFrance), 1, preferences.TrackChoice{}},
+	} {
+		if got := test.preferences.chosen(streams, new(test.audio), nil); got != test.want {
+			t.Errorf("%s: %+v, want %+v", name, got, test.want)
+		}
+	}
 }

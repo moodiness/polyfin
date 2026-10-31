@@ -18,8 +18,10 @@ import (
 // (RememberAudioSelections, RememberSubtitleSelections): its next plays
 // show them by default, in whichever version, before the user's language
 // preferences, and after a track the app names. A choice is a language,
-// with a subtitle's forced and hearing-impaired flags, or no subtitles;
-// never a track's index, as versions number their tracks differently.
+// with an audio track's regional variant when it differs from the user's
+// audio region, a subtitle's forced and hearing-impaired flags, or no
+// subtitles; never a track's index, as versions number their tracks
+// differently.
 // Jellyfin 12.4 remembers the index per item (MediaSourceManager.cs
 // L493-L543, SessionManager.cs L1016-L1055).
 
@@ -122,7 +124,7 @@ func (h *Handler) titleTracks(ctx context.Context, user accounts.User, item libr
 	}
 	choice := choices[title]
 	if t.rememberAudio {
-		t.remembered.AudioLanguage = choice.AudioLanguage
+		t.remembered.AudioLanguage, t.remembered.AudioVariant = choice.AudioLanguage, choice.AudioVariant
 	}
 	if t.rememberSubtitles {
 		t.remembered.Subtitle = choice.Subtitle
@@ -151,7 +153,7 @@ func (h *Handler) rememberTracks(ctx context.Context, user accounts.User, item l
 	stored := choices[title]
 	choice := stored
 	if !configuration.RememberAudioSelections {
-		choice.AudioLanguage = ""
+		choice.AudioLanguage, choice.AudioVariant = "", ""
 	}
 	if !configuration.RememberSubtitleSelections {
 		choice.Subtitle = preferences.SubtitleChoice{}
@@ -193,8 +195,10 @@ func (h *Handler) reportedStreams(ctx context.Context, user accounts.User, item 
 // and subtitle among streams, either nil when not reported. A track
 // counts as chosen when the title would not play it by default: it
 // replaces the choice, unless its language is not stated; one the user's
-// preferences play by themselves forgets it. A subtitle's text copy counts
-// as its original. Only the kinds of selection t remembers change.
+// preferences play by themselves forgets it. An audio track's regional
+// variant is kept only when it differs from the user's region in its
+// language (see chosenVariant). A subtitle's text copy counts as its
+// original. Only the kinds of selection t remembers change.
 func (t trackPreferences) chosen(streams []playback.MediaStream, audio, subtitle *int) preferences.TrackChoice {
 	choice := t.remembered
 	plain := t
@@ -203,9 +207,9 @@ func (t trackPreferences) chosen(streams []playback.MediaStream, audio, subtitle
 		if stream, ok := streamAt(streams, "Audio", *audio); ok && !equalIndex(t.audio(streams), audio) {
 			switch {
 			case equalIndex(plain.audio(streams), audio):
-				choice.AudioLanguage = ""
+				choice.AudioLanguage, choice.AudioVariant = "", ""
 			case !undeterminedLanguage(stream.Language):
-				choice.AudioLanguage = stream.Language
+				choice.AudioLanguage, choice.AudioVariant = stream.Language, t.chosenVariant(stream)
 			}
 		}
 	}
@@ -242,23 +246,63 @@ func (t trackPreferences) chosen(streams []playback.MediaStream, audio, subtitle
 }
 
 // rememberedAudio is the audio track in the language the user chose on
-// the title, the one flagged default first. nil when nothing was chosen,
-// or no track is in that language.
+// the title. Its tracks rank as audio ranks those of the preferred
+// language (see audioRank), for the variant the user chose against their
+// region, else for their region when it is of that language: the
+// variant's first, then those of no known region, then those of another;
+// the one flagged default first among equals. With neither, the one
+// flagged default comes first. nil when nothing was chosen, or no track
+// is in that language.
 func (t trackPreferences) rememberedAudio(streams []playback.MediaStream) *int {
 	if t.remembered.AudioLanguage == "" {
 		return nil
 	}
-	best, flagged := -1, false
+	language := trackPreferences{audioLanguage: t.remembered.AudioLanguage, audioRegion: t.remembered.AudioVariant}
+	if language.audioRegion == "" {
+		language.audioRegion = t.regionOf(t.remembered.AudioLanguage)
+	}
+	best, bestRank := -1, 0
 	for _, stream := range streams {
-		if stream.Type == "Audio" && localization.SameLanguage(stream.Language, t.remembered.AudioLanguage) &&
-			(best < 0 || stream.IsDefault && !flagged) {
-			best, flagged = stream.Index, stream.IsDefault
+		rank := language.audioRank(stream)
+		if stream.Type != "Audio" || rank == 0 {
+			continue
+		}
+		r := rank << 1
+		if stream.IsDefault {
+			r |= 1
+		}
+		if r > bestRank {
+			best, bestRank = stream.Index, r
 		}
 	}
 	if best < 0 {
 		return nil
 	}
 	return new(best)
+}
+
+// regionOf is the user's audio region when it is of language, else "".
+func (t trackPreferences) regionOf(language string) string {
+	if t.region != "" && localization.SameLanguage(localization.VariantLanguage(t.region), language) {
+		return t.region
+	}
+	return ""
+}
+
+// chosenVariant is the regional variant of an audio track the user
+// picked that their next plays remember: the track's own when they have
+// a region in its language and the track is of another. Otherwise
+// nothing, as their region ranks the language's tracks by itself, and
+// a user with no region there keeps the track flagged default first.
+func (t trackPreferences) chosenVariant(stream playback.MediaStream) string {
+	region := t.regionOf(stream.Language)
+	if region == "" {
+		return ""
+	}
+	if variant := localization.AudioVariant(stream.Language, stream.Title); variant != region {
+		return variant
+	}
+	return ""
 }
 
 // rememberedSubtitle is the subtitle the user chose on the title, among

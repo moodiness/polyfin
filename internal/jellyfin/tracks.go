@@ -19,6 +19,10 @@ type trackPreferences struct {
 	// localization.AudioVariants, empty for none (see
 	// accounts.User.AudioRegion).
 	audioRegion string
+	// region is the user's audio region whatever their audio language,
+	// which ranks the tracks in a language they chose on a title (see
+	// rememberedAudio).
+	region string
 	// playDefaultAudio plays the audio track flagged default whatever its
 	// language.
 	playDefaultAudio bool
@@ -70,6 +74,7 @@ func (h *Handler) trackPreferences(ctx context.Context, user accounts.User) trac
 		configuration = defaultUserConfiguration()
 	}
 	preferences := newTrackPreferences(configuration)
+	preferences.region = user.AudioRegion
 	if user.AudioRegion != "" {
 		language := localization.VariantLanguage(user.AudioRegion)
 		if preferences.audioLanguage == "" {
