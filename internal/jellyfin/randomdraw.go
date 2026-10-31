@@ -49,20 +49,28 @@ func randomOrder(r *http.Request) bool {
 	return titlesThrough(r) && len(sorts) > 0 && strings.EqualFold(sorts[0], "Random")
 }
 
-// newDrawKey is the key of the draw a listing of r by user reads.
-func newDrawKey(r *http.Request, user accounts.User, parent accounts.ID, genre string) drawKey {
+// newDrawKey is the key of the draw a listing of r by user reads, with
+// the server's addons the user does not use (see
+// library.Service.WithheldAddons): a change of who uses an addon draws
+// anew.
+func (h *Handler) newDrawKey(r *http.Request, user accounts.User, parent accounts.ID, genre string) (drawKey, error) {
+	withheld, err := h.Library.WithheldAddons(r.Context(), user)
+	if err != nil {
+		return drawKey{}, err
+	}
 	limits, _ := json.Marshal(struct {
 		Parental        accounts.ParentalControl
 		BlockedGenres   []string
 		HiddenLibraries []accounts.ID
 		UseSharedAddons bool
-	}{user.Parental, user.BlockedGenres, user.HiddenLibraries, user.UseSharedAddons})
+		Withheld        []accounts.ID
+	}{user.Parental, user.BlockedGenres, user.HiddenLibraries, user.UseSharedAddons, withheld})
 	kinds := make([]string, 0)
 	for _, kind := range listQuery(r, "includeItemTypes") {
 		kinds = append(kinds, strings.ToLower(kind))
 	}
 	slices.Sort(kinds)
-	return drawKey{user: user.ID, limits: string(limits), parent: parent, genre: genre, kinds: strings.Join(kinds, ",")}
+	return drawKey{user: user.ID, limits: string(limits), parent: parent, genre: genre, kinds: strings.Join(kinds, ",")}, nil
 }
 
 // randomLibraryListing answers a listing of the titles of one of the
@@ -84,7 +92,11 @@ func (h *Handler) randomLibraryListing(w http.ResponseWriter, r *http.Request, u
 	if wholeListing(r) {
 		end, reach = library.WholeListing, library.WholeListing
 	}
-	key := newDrawKey(r, user, parent, genre)
+	key, err := h.newDrawKey(r, user, parent, genre)
+	if err != nil {
+		h.browseError(w, r, err)
+		return true
+	}
 	drawn, ok := h.draws.Get(key)
 	if !ok || start == 0 && reach > drawn.asked {
 		page, isLibrary, err := h.Library.DrawPool(listingContext(r, keep), user, parent, limit, reach, genre)

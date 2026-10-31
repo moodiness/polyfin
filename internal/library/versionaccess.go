@@ -11,7 +11,8 @@ import (
 // listedFor returns version, remembered from any user's listing, as the
 // user's own sources list it, and reports whether they list it: the
 // sources their view holds (see viewSources), their own addons and the
-// server's while they use them, enabled. A version an addon of theirs
+// server's while they use them, enabled, those of the server they use
+// (see addons.UsedBy). A version an addon of theirs
 // listed is theirs, with the mirrors their sources list only (see
 // withMirror). A version another addon listed first is the one of its
 // mirrors their sources list, in its place, with the mirrors after it
@@ -28,7 +29,7 @@ func (s *Service) listedFor(ctx context.Context, user accounts.User, version Ver
 			return false, err
 		}
 		if owner == (accounts.ID{}) {
-			return shared, nil
+			return shared && installed.UsedBy.Uses(user), nil
 		}
 		return personal && owner == user.ID, nil
 	}

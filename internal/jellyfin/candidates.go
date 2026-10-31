@@ -341,12 +341,12 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 	defer grace.Stop()
 	select {
 	case p.subtitles = <-listed:
-		h.subtitleFiles.Put(item.ID, p.subtitles)
+		h.keepSubtitles(user, item.ID, p.subtitles)
 	case <-grace.C:
 		if subtitles, all, err := h.Library.KnownSubtitles(ctx, user, item.ID); err == nil {
 			p.subtitles = subtitles
 			if all {
-				h.subtitleFiles.Put(item.ID, subtitles)
+				h.keepSubtitles(user, item.ID, subtitles)
 			}
 		}
 	}

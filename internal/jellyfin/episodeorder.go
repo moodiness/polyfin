@@ -60,7 +60,11 @@ func (h *Handler) episodeOrderListing(w http.ResponseWriter, r *http.Request, us
 	if wholeListing(r) {
 		end, reach = library.WholeListing, library.WholeListing
 	}
-	drawKey := newDrawKey(r, user, parent, genre)
+	drawKey, err := h.newDrawKey(r, user, parent, genre)
+	if err != nil {
+		h.browseError(w, r, err)
+		return true
+	}
 	drawKey.order = strings.ToLower(strings.Join(listQuery(r, "sortBy"), ",") + "|" + strings.Join(listQuery(r, "sortOrder"), ","))
 	sorted, ok := h.draws.Get(drawKey)
 	if !ok || start == 0 && reach > sorted.asked {

@@ -1208,15 +1208,21 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 	if owner, ok := h.Library.VersionOwner(opened); ok {
 		item = owner
 	}
-	files, ok := h.subtitleFiles.Get(item)
-	if !ok {
-		// Not described since the server started: describe the item again
-		// for a signed-in caller.
-		user, _, signedIn := h.streamAccess(r, servedToAnyone)
-		if !signedIn {
-			processingError(w, http.StatusNotFound)
-			return
-		}
+	// A signed-in caller gets the files described for them: users see
+	// different sources, and so different files (see keptSubtitles).
+	// A player without credentials gets those described last.
+	user, _, signedIn := h.streamAccess(r, servedToAnyone)
+	var files []library.ExternalSubtitle
+	kept, ok := h.subtitleFiles.Get(item)
+	switch {
+	case ok && (!signedIn || kept.User == user.ID):
+		files = kept.Files
+	case !signedIn:
+		processingError(w, http.StatusNotFound)
+		return
+	default:
+		// Not described for the caller since the server started: describe
+		// the item again for them.
 		title, err := h.title(r.Context(), user, item)
 		if err != nil {
 			processingError(w, http.StatusNotFound)

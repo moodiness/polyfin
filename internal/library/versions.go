@@ -244,7 +244,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 	if err != nil {
 		return target{}, view{}, err
 	}
-	if kept, _ := s.visible(ctx, v, []record{r}); len(kept) == 0 {
+	if kept, _ := s.visible(ctx, v, []record{r}); len(kept) == 0 || s.withholdsHolder(ctx, v, r) {
 		return target{}, view{}, ErrNotFound
 	}
 	switch {
@@ -459,8 +459,10 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 	var versions []Version
 	seen, remembered := map[accounts.ID]bool{}, map[accounts.ID]bool{}
 	// kept are the versions remembered, and listed where each is among
-	// versions, which take their mirrors as these come.
-	kept, listed := map[accounts.ID]Version{}, map[accounts.ID]int{}
+	// versions, which take their mirrors as these come. before are those
+	// remembered until now, from any user's listing: their links from
+	// addons this listing does not ask stay mirrors (see carryMirrors).
+	kept, listed, before := map[accounts.ID]Version{}, map[accounts.ID]int{}, map[accounts.ID]Version{}
 	add := func(version Version) {
 		// A version naming another title is hidden as the version rules
 		// hide others; it is told once, when first listed.
@@ -471,6 +473,9 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 		}
 		if !remembered[version.ID] {
 			remembered[version.ID] = true
+			if known, ok := s.versions.Get(version.ID); ok && known.Item == version.Item {
+				before[version.ID] = known
+			}
 			kept[version.ID] = version
 			s.versions.Put(version.ID, version)
 		} else if first, ok := withMirror(kept[version.ID], version); ok {
@@ -503,6 +508,20 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 			}
 		}
 	}
+	if len(before) > 0 {
+		asked := make(map[accounts.ID]bool, len(serving)+1)
+		for _, entry := range serving {
+			asked[entry.addon.ID] = true
+		}
+		if len(t.embedded) > 0 {
+			asked[t.embeddedBy.addon.ID] = true
+		}
+		for id, known := range before {
+			if merged, ok := carryMirrors(kept[id], known, asked, s.now()); ok {
+				s.versions.Put(id, merged)
+			}
+		}
+	}
 	return versions, unknown
 }
 
@@ -527,8 +546,9 @@ func (s *Service) Version(ctx context.Context, user accounts.User, item, id acco
 		}
 		if listed && mine.fresh(s.now()) {
 			// A version remembered from another user's listing is no way
-			// around the user's parental control or blocked genres.
-			if user.Restricted() {
+			// around the user's parental control or blocked genres, nor
+			// to a title only an addon they do not use knows.
+			if user.Restricted() || s.withholdsAny(ctx, user) {
 				if _, _, err := s.target(ctx, user, item); err != nil {
 					return Version{}, err
 				}

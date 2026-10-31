@@ -162,8 +162,9 @@ type Handler struct {
 	fonts    fontsFor
 	sessions *playback.Sessions
 	// subtitleFiles remembers the subtitle files described for each item,
-	// for players that fetch them without credentials.
-	subtitleFiles *cache.Cache[accounts.ID, []library.ExternalSubtitle]
+	// with the user they were described for, for players that fetch them
+	// without credentials (see keptSubtitles).
+	subtitleFiles *cache.Cache[accounts.ID, listedSubtitles]
 	subtitleCache *cache.Cache[accounts.ID, subtitleText]
 	// runtimes remembers, for the reports of a playback, the runtime of
 	// the version they name (see playedRuntime).
@@ -241,7 +242,7 @@ type Handler struct {
 func New(options Options) *Handler {
 	h := &Handler{
 		Options:        options,
-		subtitleFiles:  cache.New[accounts.ID, []library.ExternalSubtitle](5000, 12*time.Hour).Sized(16<<20, cache.JSONSize),
+		subtitleFiles:  cache.New[accounts.ID, listedSubtitles](5000, 12*time.Hour).Sized(16<<20, cache.JSONSize),
 		subtitleCache:  cache.New[accounts.ID, subtitleText](200, time.Hour).Sized(32<<20, subtitleText.size),
 		runtimes:       cache.New[string, time.Duration](2000, 12*time.Hour),
 		configurations: cache.New[accounts.ID, UserConfiguration](1000, 12*time.Hour),

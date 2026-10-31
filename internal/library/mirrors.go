@@ -1,6 +1,11 @@
 package library
 
-import "slices"
+import (
+	"slices"
+	"time"
+
+	"github.com/moodiness/polyfin/internal/accounts"
+)
 
 // maxMirrors bounds the mirrors a version keeps: each one a read tries
 // takes the source cache's tries before the next (see source.Mirror).
@@ -50,4 +55,25 @@ func (s *Service) keepMirrors(version Version) (renewed, kept Version) {
 	known.Mirrors = slices.Clone(known.Mirrors)
 	known.Mirrors[i] = version
 	return version, known
+}
+
+// carryMirrors returns version, just listed and remembered, with the
+// links of known, the version remembered before under its identifier,
+// that came from addons the listing did not ask, as more of its mirrors
+// (see withMirror), and whether it took one. Users see different addons
+// (see addons.UsedBy): a listing by a user who sees fewer of them keeps
+// the mirrors another user's listing found, for the users whose addons
+// list them (see listedFor). Links no longer fresh are left out.
+func carryMirrors(version, known Version, asked map[accounts.ID]bool, now time.Time) (Version, bool) {
+	carried := false
+	for _, link := range slices.Concat([]Version{known}, known.Mirrors) {
+		if asked[link.Origin.Addon] || !link.fresh(now) {
+			continue
+		}
+		var ok bool
+		if version, ok = withMirror(version, link); ok {
+			carried = true
+		}
+	}
+	return version, carried
 }

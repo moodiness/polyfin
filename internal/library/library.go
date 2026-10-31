@@ -453,6 +453,10 @@ type view struct {
 	// hidden are the titles the user hid, which listings leave out (see
 	// hidden.go).
 	hidden HiddenTitles
+	// withheld are the server's enabled addons the user does not use (see
+	// addons.UsedBy), in order: the view holds nothing of theirs, and the
+	// titles only they know are out of the user's reach (see withholds).
+	withheld []accounts.ID
 	// catalogLimit and channelLimit are the settings' limits when the
 	// request came (see limit).
 	catalogLimit int
@@ -552,7 +556,11 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 		}
 		byID := map[accounts.ID]installed{}
 		for _, addon := range list {
-			if addon.Enabled {
+			switch {
+			case !addon.Enabled:
+			case scope.Owner == nil && !addon.UsedBy.Uses(user):
+				v.withheld = append(v.withheld, addon.ID)
+			default:
 				entry := installed{addon: addon, confined: confined, shared: scope.Owner == nil}
 				v.addons = append(v.addons, entry)
 				byID[addon.ID] = entry
@@ -578,6 +586,19 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 			default:
 				visible = append(visible, l)
 				entries = append(entries, entry)
+			}
+		}
+	}
+	if !shared {
+		// The server's addons the user does not use withhold their titles
+		// as well when the user browses their own addons only.
+		list, err := s.addons.Addons(ctx, addons.Shared())
+		if err != nil {
+			return view{}, err
+		}
+		for _, addon := range list {
+			if addon.Enabled && !addon.UsedBy.Uses(user) {
+				v.withheld = append(v.withheld, addon.ID)
 			}
 		}
 	}
@@ -2199,6 +2220,11 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		s.addGenerated(ctx, v, items, []record{r})
 		return items[0], nil
 	case KindMovie, KindSeries, KindVideo, KindFolder:
+		// A title only an addon the user does not use knows is no title
+		// of theirs.
+		if s.withholdsHolder(ctx, v, r) {
+			return Item{}, ErrNotFound
+		}
 		if r.folderVideo() {
 			return s.folderVideoItem(ctx, v, r)
 		}
@@ -2299,7 +2325,7 @@ func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, str
 	// A series' seasons and episodes need its details: they open it.
 	ctx = iptv.Opening(ctx)
 	r, err := s.load(ctx, id)
-	if err != nil || r.Kind != KindSeries {
+	if err != nil || r.Kind != KindSeries || v.withholds(r) {
 		return Item{}, stremio.Meta{}, stremio.Meta{}, ErrNotFound
 	}
 	meta, ok := s.titleMeta(ctx, v, r)

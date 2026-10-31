@@ -92,7 +92,7 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 	})
 	wg.Wait()
 	p.versions = h.offered(ctx, user, p.versions)
-	h.subtitleFiles.Put(item.ID, p.subtitles)
+	h.keepSubtitles(user, item.ID, p.subtitles)
 	return p, versionsErr
 }
 
@@ -120,7 +120,7 @@ func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item li
 	if subtitles, listed, err := h.Library.SubtitlesNow(ctx, user, item.ID); err == nil {
 		p.subtitles = subtitles
 		if listed {
-			h.subtitleFiles.Put(item.ID, subtitles)
+			h.keepSubtitles(user, item.ID, subtitles)
 		}
 	}
 	return p, complete, err
@@ -139,7 +139,7 @@ func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item l
 	if versions, ok := h.Library.CachedVersions(ctx, user, item.ID); ok {
 		p.versions = h.offered(ctx, user, versions)
 	}
-	p.subtitles, _ = h.subtitleFiles.Get(item.ID)
+	p.subtitles, _ = h.keptSubtitles(user, item.ID)
 	return p
 }
 
