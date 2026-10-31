@@ -507,20 +507,29 @@ func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 	return v, err
 }
 
+// viewSources reports which addons a user's view holds: the server's, the
+// user's own, or both. A user under parental control or blocking genres
+// browses the server's addons only: their own addons could describe titles
+// without the ratings or genres that hide them. So does a user whose own
+// addons the server or their own permission turned off: their addons are
+// kept, but not used. A request without a user, made with an API key,
+// browses the server's addons too.
+func viewSources(user accounts.User, settings accounts.Settings) (shared, personal bool) {
+	if user.Restricted() || user.ID == (accounts.ID{}) || !settings.PersonalAddonsAllowed(user) {
+		return true, false
+	}
+	return user.UseSharedAddons, true
+}
+
 func (s *Service) buildView(ctx context.Context, user accounts.User) (view, error) {
 	settings := s.settings()
-	// A user under parental control or blocking genres browses the server's
-	// addons only: their own addons could describe titles without the
-	// ratings or genres that hide them. So does a user whose own addons the
-	// server or their own permission turned off: their addons are kept, but
-	// not used. A request without a user, made with an API key, browses the
-	// server's addons too.
-	scopes := []addons.Scope{addons.Shared()}
-	if !user.Restricted() && user.ID != (accounts.ID{}) && settings.PersonalAddonsAllowed(user) {
-		scopes = []addons.Scope{addons.Personal(user.ID)}
-		if user.UseSharedAddons {
-			scopes = append([]addons.Scope{addons.Shared()}, scopes...)
-		}
+	shared, personal := viewSources(user, settings)
+	var scopes []addons.Scope
+	if shared {
+		scopes = append(scopes, addons.Shared())
+	}
+	if personal {
+		scopes = append(scopes, addons.Personal(user.ID))
 	}
 	v := view{user: user.ID, parental: user.Parental, genres: user.BlockedGenres, deadline: time.Now().Add(s.ratingWait), lookups: new(atomic.Int32), held: new(atomic.Bool),
 		catalogLimit: settings.CatalogLimit, channelLimit: settings.ChannelLimit}
