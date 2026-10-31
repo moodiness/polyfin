@@ -13,8 +13,10 @@ import (
 )
 
 // videoExtensions are the files read as videos, by their extension.
+// .m2t, .tp and .trp are MPEG-TS, as .ts, .m2ts and .mts are.
 var videoExtensions = map[string]bool{
 	".mkv": true, ".mp4": true, ".m4v": true, ".avi": true, ".mov": true, ".ts": true, ".m2ts": true, ".mts": true,
+	".m2t": true, ".tp": true, ".trp": true,
 	".webm": true, ".wmv": true, ".mpg": true, ".mpeg": true, ".flv": true, ".ogv": true,
 }
 

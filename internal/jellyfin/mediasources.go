@@ -466,7 +466,7 @@ func containerOfName(filename string) string {
 		return "avi"
 	case "mov":
 		return "mov"
-	case "ts", "m2ts", "mts":
+	case "ts", "m2ts", "mts", "m2t", "tp", "trp":
 		return "ts"
 	case "m3u8":
 		return "hls"

@@ -118,6 +118,44 @@ func TestWebDAVFoldersAreScannedAndRead(t *testing.T) {
 	}
 }
 
+// MPEG-TS files are read by each of their extensions, in any letter case,
+// as Jellyfin reads .m2t and .tp: in a local folder and on a share.
+func TestMPEGTSFilesOfEachExtensionAreRead(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	box, err := secrets.New(bytes.Repeat([]byte{7}, secrets.KeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.service.box = box
+	files := map[string]int{
+		"Nosferatu (1922).m2t":                10,
+		"The General (1926).tp":               10,
+		"Night of the Living Dead (1968).TRP": 10,
+		"The Gold Rush (1925).ts":             10,
+	}
+	want := map[string]string{
+		"Nosferatu (1922).m2t":                "tt0013442",
+		"The General (1926).tp":               "tt0017925",
+		"Night of the Living Dead (1968).TRP": "tt0063350",
+		"The Gold Rush (1925).ts":             "tt0015864",
+	}
+	local, dir := e.folder(KindMovies, files)
+	if got := e.files(local.ID); !maps.Equal(got, want) {
+		t.Errorf("local folder: %v", got)
+	}
+	server := serveWebDAV(t, dir, "reader", "pass phrase")
+	share, err := e.service.Add(t.Context(), NewFolder{Name: "NAS", Path: server.URL + "/", Kind: KindMovies, User: "reader",
+		Password: "pass phrase"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.idle(share.ID)
+	if got := e.files(share.ID); !maps.Equal(got, want) {
+		t.Errorf("share: %v", got)
+	}
+}
+
 // A share refusing the password is reported as such, and read once the
 // right one is entered; a share that cannot be reached keeps the files
 // found before.
