@@ -283,8 +283,10 @@ type Cache struct {
 	// stop ends the sweep of the chunks kept too long (see sweep).
 	stop chan struct{}
 
-	// hits and misses count the bytes readers read that were cached when
-	// they asked for them, and those they waited for.
+	// hits and misses count the bytes readers read: misses those fetched
+	// since the start that no reader had read yet, waited for, read ahead
+	// or warmed alike, and hits the others, kept from before the start or
+	// read again.
 	hits, misses atomic.Int64
 	// free tells the space free on the disk of the cache's folder, and
 	// sleep waits between the pieces of a preload (see Preload): tests
@@ -461,9 +463,10 @@ type Usage struct {
 	// Open counts the sources being read, and Kept those the cache holds
 	// blocks of.
 	Open, Kept int
-	// Hits counts the bytes readers read that were cached when they asked
-	// for them, read ahead of them included, and Misses those they waited
-	// for.
+	// Misses counts the bytes readers read for the first time since they
+	// were fetched from the source, whether readers waited for them or
+	// they were read ahead, and Hits the bytes read again or kept from
+	// before the start.
 	Hits, Misses int64
 }
 
@@ -649,6 +652,10 @@ type Source struct {
 	status  int
 	learned chan struct{}
 	present []uint64
+	// unread holds, for each block fetched since the start, how many of
+	// its bytes no reader read yet: those count as misses once read (see
+	// firstRead). Blocks kept from before the start are not in it.
+	unread map[int64]int
 	// sizeChecked tells that the first answer was checked against the
 	// size the addon announced, and sizeNoted that it counted in the
 	// addon's record.
@@ -862,7 +869,7 @@ func (s *Source) discard() error {
 	s.halt()
 	defer s.writing.Unlock()
 	s.mu.Lock()
-	s.present, s.pending = nil, nil
+	s.present, s.pending, s.unread = nil, nil, nil
 	s.mu.Unlock()
 	return os.RemoveAll(s.dir)
 }
@@ -908,6 +915,7 @@ func (s *Source) forget(index int64) {
 	for block := index * s.cache.chunkBlocks; block < (index+1)*s.cache.chunkBlocks; block++ {
 		clearBit(s.present, block)
 		clearBit(s.pending, block)
+		delete(s.unread, block)
 	}
 }
 
@@ -953,6 +961,24 @@ func (s *Source) readChunk(index int64, part []byte, off int64) (int, error) {
 	return file.ReadAt(part, off)
 }
 
+// firstRead counts n bytes read from block, and returns how many of them
+// no reader had read since the block was fetched.
+func (s *Source) firstRead(block int64, n int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	left, ok := s.unread[block]
+	if !ok {
+		return 0
+	}
+	first := min(n, left)
+	if left -= first; left == 0 {
+		delete(s.unread, block)
+	} else {
+		s.unread[block] = left
+	}
+	return first
+}
+
 // wait waits until block is cached, asking for it to be fetched on behalf
 // of r. A streaming reader's read moves the window read ahead of it,
 // cached blocks included, when it is the newest one.
@@ -988,7 +1014,7 @@ func (s *Source) wait(ctx context.Context, r *Reader, block int64) error {
 		s.wanted[block] = w
 	}
 	w.waiters++
-	r.waiting, r.missed = block, true
+	r.waiting = block
 	s.kick()
 	s.mu.Unlock()
 	select {
@@ -1086,6 +1112,10 @@ func (s *Source) store(block int64, data []byte, last bool) error {
 			s.present = append(s.present, make([]uint64, grow)...)
 		}
 		s.present[word] |= 1 << (block % 64)
+		if s.unread == nil {
+			s.unread = map[int64]int{}
+		}
+		s.unread[block] = len(data)
 		added = len(data)
 	}
 	if s.failure != nil {

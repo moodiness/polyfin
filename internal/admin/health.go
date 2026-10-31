@@ -213,9 +213,10 @@ type databaseJSON struct {
 
 // cacheJSON is what the source cache keeps: Used bytes against its Limit,
 // Sources being read and Kept holding blocks, and Hits and Misses, the
-// bytes read since the start that were cached when asked for, and those
-// waited for, which give its hit ratio; Days is how long it keeps blocks
-// across restarts, 0 for not at all.
+// bytes read since the start that were read before or kept from before
+// the start, and those read for the first time since they were fetched,
+// which give its hit ratio; Days is how long it keeps blocks across
+// restarts, 0 for not at all.
 type cacheJSON struct {
 	Used    int64 `json:"used"`
 	Limit   int64 `json:"limit"`
