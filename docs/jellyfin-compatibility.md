@@ -190,6 +190,19 @@ The session of a device playing a version Polyfin streams, over HLS or as one fi
 
 **For app developers:** `GET /Sessions` fills `TranscodingInfo` once the play session's first encoding opened its source, from the play session the app reported in `/Sessions/Playing`; nothing for a play reported as `DirectPlay`.
 
+### Who a media URL plays for
+
+Polyfin serves a title's streams, subtitles and attached fonts for the user a media URL names: by the play session or grant Polyfin signed into it, else by the caller's access token. That user's parental control, blocked genres, visible libraries and allowed hours apply, and addon subtitles come synced to the version they play (see [Addon subtitles synced to the version](subtitles.md#addon-subtitles-synced-to-the-version)).
+
+The token is read as on any request: from the `Authorization` header or the `ApiKey` query parameter, and with legacy authorization from the legacy headers and `api_key`. On the routes Jellyfin serves to anyone, `api_key` counts even without legacy authorization, as some apps sign the addresses they build themselves with it: the streams of videos and audio tracks, subtitles, attachments and recordings under way.
+
+**Compared with Jellyfin:**
+
+- Jellyfin 12.4 reads `api_key` only with legacy authorization ([`AuthorizationContext.cs`, lines 108 to 110](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server.Implementations/Security/AuthorizationContext.cs#L108-L110)), but serves those routes without checking who asks, for example the subtitle streams ([`SubtitleController.cs`, lines 208 and 294](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SubtitleController.cs#L208)). Polyfin needs to know who plays, and refuses them without a user.
+- The routes Jellyfin serves to signed-in callers only keep its rule, and refuse `api_key` without legacy authorization: `/Items/{id}/Download` and `/Items/{id}/File`, `/Audio/{id}/universal`, and the HLS playlists and segments of audio tracks.
+
+**For app developers:** prefer the `ApiKey` query parameter, which Polyfin's own media URLs use. A token in an address never reaches the log: request paths are logged without their query, and the values of `api_key`, `ApiKey` and other tokens are hidden in log lines.
+
 ### Fallback fonts
 
 Fallback fonts are the fonts in `POLYFIN_FONTS_DIR`, folders within included. The image ships DejaVu (Latin, Greek and Cyrillic). Mount more fonts there for other scripts, for example CJK.
