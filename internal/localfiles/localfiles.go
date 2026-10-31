@@ -321,7 +321,8 @@ func (s *Service) Close() {
 // key and secret key; an SFTP folder a private key, with its passphrase
 // when it has one; an rclone remote the remote's name. PollMinutes is how
 // often such a folder is listed again for changes, 0 only at its scans,
-// nil for its kind's default (see defaultPollMinutes).
+// nil for its kind's default (see defaultPollMinutes). UsedBy is who uses
+// it (see addons.UsedBy).
 type NewFolder struct {
 	Name        string
 	Path        string
@@ -336,6 +337,7 @@ type NewFolder struct {
 	PrivateKey  string
 	Passphrase  string
 	PollMinutes *int
+	UsedBy      addons.UsedBy
 }
 
 // Folder describes a local folder: its addon, what it holds, the kind of
@@ -491,6 +493,7 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 	if err != nil {
 		return addons.Addon{}, err
 	}
+	usedBy := addons.UsedBy{Groups: []accounts.ID{}, Users: []accounts.ID{}}
 	addon, err := s.addons.Create(ctx, addons.Shared(), addons.KindLocal, location,
 		func(id accounts.ID) stremio.Manifest { return manifest(id, name, folder.Kind, share) },
 		func(tx pgx.Tx, addon addons.Addon) error {
@@ -506,11 +509,16 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`, addon.ID, folder.Kind, checked, failure, user,
 				s.box.Seal(password), useArtwork, readExtras, extra.endpoint, extra.region, extra.remote, s.box.Seal(extra.privateKey),
 				s.box.Seal(extra.passphrase), extra.pollMinutes)
+			if err != nil || !folder.UsedBy.Listed {
+				return err
+			}
+			usedBy, err = addons.WriteUsedBy(ctx, tx, addon.ID, folder.UsedBy)
 			return err
 		})
 	if err != nil {
 		return addons.Addon{}, err
 	}
+	addon.UsedBy = usedBy
 	s.StartScan(addon.ID)
 	s.watch.kick()
 	return addon, nil

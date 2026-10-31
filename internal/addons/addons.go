@@ -3,6 +3,7 @@
 package addons
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -61,6 +62,9 @@ var (
 	// ErrKindChanged reports a new address of an addon that serves another
 	// kind of addon than it did.
 	ErrKindChanged = errors.New("the address serves another kind of addon")
+	// ErrInvalidUsedBy reports a Used by setting given to a user's own
+	// addon, or naming a group or a user that does not exist.
+	ErrInvalidUsedBy = errors.New("invalid Used by setting")
 )
 
 // Scope owns addons: the server (no owner) or one user.
@@ -116,6 +120,33 @@ type Addon struct {
 	// titles for the users who chose that language only, not for others
 	// (see SetLanguage).
 	Language string
+	// UsedBy is who uses a server addon (see UsedBy); a user's own addon
+	// is used by everyone, its owner being the only one to see it.
+	UsedBy UsedBy
+}
+
+// UsedBy is who uses a server addon: everyone, the default, or only the
+// groups and users listed, which may leave every administrator out. A
+// user who does not use an addon gets nothing from it: no library, no
+// title only it knows, no version, subtitle or channel.
+type UsedBy struct {
+	// Listed limits the addon to Groups and Users; unset, everyone uses
+	// it, and the lists are empty.
+	Listed bool
+	Groups []accounts.ID
+	Users  []accounts.ID
+}
+
+// Uses reports whether user uses an addon set to u: always while everyone
+// does; otherwise when they are listed, or the group they belong to is,
+// whether they follow its settings or keep their own. A request without a
+// user, made with an API key or by the server's own work, uses every
+// addon.
+func (u UsedBy) Uses(user accounts.User) bool {
+	if !u.Listed || user.ID == (accounts.ID{}) {
+		return true
+	}
+	return slices.Contains(u.Users, user.ID) || user.GroupID != nil && slices.Contains(u.Groups, *user.GroupID)
 }
 
 // Stremio reports whether the addon is a Stremio addon, whose resources
@@ -323,7 +354,7 @@ func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	var addon Addon
 	var manifest []byte
 	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt,
-		&addon.LibraryKeyTypes, &addon.Language}, extra...)...)
+		&addon.LibraryKeyTypes, &addon.Language, &addon.UsedBy.Listed, &addon.UsedBy.Groups, &addon.UsedBy.Users}, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return addon, ErrNotFound
 	}
@@ -366,7 +397,11 @@ func localMusic(m stremio.Manifest) *eclipse.Manifest {
 	return music
 }
 
-const addonColumns = "id, kind, manifest_url, manifest, settings, enabled, refreshed_at, library_key_types, language"
+// addonColumns are the columns scanAddon reads, of the addons table, named
+// addons in the query.
+const addonColumns = `id, kind, manifest_url, manifest, settings, enabled, refreshed_at, library_key_types, language, used_by = 'listed',
+	ARRAY(SELECT u.group_id FROM addon_users u WHERE u.addon_id = addons.id AND u.group_id IS NOT NULL ORDER BY u.group_id),
+	ARRAY(SELECT u.user_id FROM addon_users u WHERE u.addon_id = addons.id AND u.user_id IS NOT NULL ORDER BY u.user_id)`
 
 // Addons lists the scope's addons in order. The addons, their manifests
 // and settings are shared with other callers: they must not be changed.
@@ -529,8 +564,18 @@ func eclipseManifestURL(raw string) (string, bool) {
 }
 
 // Install adds an addon at the end of the scope and enables some of its
-// catalogs as libraries (see enableDefaults).
+// catalogs as libraries (see enableDefaults). A server addon is used by
+// everyone.
 func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confined bool) (Addon, error) {
+	return s.InstallFor(ctx, scope, rawURL, confined, UsedBy{})
+}
+
+// InstallFor is Install for a server addon used by usedBy from the start
+// (see WriteUsedBy).
+func (s *Store) InstallFor(ctx context.Context, scope Scope, rawURL string, confined bool, usedBy UsedBy) (Addon, error) {
+	if usedBy.Listed && scope.Owner != nil {
+		return Addon{}, ErrInvalidUsedBy
+	}
 	defer s.changed()
 	f, err := s.fetch(ctx, rawURL, confined)
 	if err != nil {
@@ -551,7 +596,73 @@ func (s *Store) Install(ctx context.Context, scope Scope, rawURL string, confine
 		if err != nil {
 			return err
 		}
+		if usedBy.Listed {
+			if addon.UsedBy, err = WriteUsedBy(ctx, tx, addon.ID, usedBy); err != nil {
+				return err
+			}
+		}
 		return enableDefaults(ctx, tx, scope, addon)
+	})
+	return addon, err
+}
+
+// WriteUsedBy sets, in tx, who uses the server addon id, as SetUsedBy
+// does, and returns the setting as stored: each group and user once, in
+// order, and no list for everyone. Polyfin's own sources call it from
+// the setup they give Create, as they are added.
+func WriteUsedBy(ctx context.Context, tx pgx.Tx, id accounts.ID, usedBy UsedBy) (UsedBy, error) {
+	stored := UsedBy{Listed: usedBy.Listed, Groups: []accounts.ID{}, Users: []accounts.ID{}}
+	if usedBy.Listed {
+		stored.Groups, stored.Users = sortedIDs(usedBy.Groups), sortedIDs(usedBy.Users)
+	}
+	mode := "everyone"
+	if stored.Listed {
+		mode = "listed"
+	}
+	tag, err := tx.Exec(ctx, "UPDATE addons SET used_by = $2 WHERE id = $1 AND owner_id IS NULL", id, mode)
+	if err != nil {
+		return UsedBy{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		return UsedBy{}, ErrNotFound
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM addon_users WHERE addon_id = $1", id); err != nil {
+		return UsedBy{}, err
+	}
+	// The rows are written in the order of their keys, groups then users,
+	// as concurrent writers take them.
+	_, err = tx.Exec(ctx, `INSERT INTO addon_users (addon_id, group_id, user_id)
+		SELECT $1::uuid, g, NULL::uuid FROM unnest($2::uuid[]) g UNION ALL SELECT $1::uuid, NULL::uuid, u FROM unnest($3::uuid[]) u`,
+		id, stored.Groups, stored.Users)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		return UsedBy{}, ErrInvalidUsedBy
+	}
+	return stored, err
+}
+
+// sortedIDs returns ids sorted, each once.
+func sortedIDs(ids []accounts.ID) []accounts.ID {
+	sorted := append([]accounts.ID{}, ids...)
+	slices.SortFunc(sorted, func(a, b accounts.ID) int { return bytes.Compare(a[:], b[:]) })
+	return slices.Compact(sorted)
+}
+
+// SetUsedBy sets who uses one of the server's addons: everyone, or only
+// the groups and users listed. It answers ErrNotFound for an addon that
+// is not the server's, and ErrInvalidUsedBy for a group or a user that
+// does not exist.
+func (s *Store) SetUsedBy(ctx context.Context, id accounts.ID, usedBy UsedBy) (Addon, error) {
+	defer s.changed()
+	var addon Addon
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		stored, err := WriteUsedBy(ctx, tx, id, usedBy)
+		if err != nil {
+			return err
+		}
+		addon, err = s.addon(ctx, tx, Shared(), id)
+		addon.UsedBy = stored
+		return err
 	})
 	return addon, err
 }
