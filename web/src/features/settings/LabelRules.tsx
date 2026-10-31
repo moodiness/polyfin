@@ -83,7 +83,8 @@ export default function LabelRules({
                       : { hide: false, score: rule.score || 10 },
                   )
                 }
-                className="w-40"
+                className="w-60"
+                wrap
               />
               {!rule.hide && (
                 <NumberInput
