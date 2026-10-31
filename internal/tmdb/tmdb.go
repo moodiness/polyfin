@@ -2,9 +2,11 @@
 // people, with the server's own API key (Settings.TMDBKey), for
 // administrators to choose an item's artwork from (see the jellyfin
 // package's remote images), for the details of the people titles credit
-// (see the library package's people details), and for the studios and
+// (see the library package's people details), for the studios and
 // networks of titles, which smart lists may judge (see the library
-// package's studios.go).
+// package's studios.go), and for the release dates of movies, which the
+// wait for their digital release and smart lists judge (see the library
+// package's releases.go).
 //
 // TMDB is asked only while a key is saved. Its answers, and the titles and
 // people it did not know, are kept in memory for answerLife; at most
@@ -196,6 +198,64 @@ func (c *Client) Studios(ctx context.Context, kind Kind, id string) ([]string, e
 		}
 	}
 	return names, nil
+}
+
+// Releases are the release dates of a movie, the earliest TMDB knows of
+// each kind, in any country, each zero when it knows none: Home, its
+// first digital or physical release; Theatrical, its first in cinemas,
+// limited or wide; First, its first of any kind, premieres and television
+// included.
+type Releases struct {
+	Home, Theatrical, First time.Time
+}
+
+// TMDB's kinds of release dates.
+const (
+	releaseLimited  = 2
+	releaseCinemas  = 3
+	releaseDigital  = 4
+	releasePhysical = 5
+)
+
+// ReleaseDates returns the release dates of the movie TMDB identifies as
+// id, each counted from the day it falls on in UTC.
+func (c *Client) ReleaseDates(ctx context.Context, id string) (Releases, error) {
+	var answer struct {
+		Results []struct {
+			Dates []struct {
+				Date string `json:"release_date"`
+				Type int    `json:"type"`
+			} `json:"release_dates"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, "/movie/"+url.PathEscape(id)+"/release_dates", nil, &answer); err != nil {
+		return Releases{}, err
+	}
+	var releases Releases
+	earliest := func(kept *time.Time, date time.Time) {
+		if kept.IsZero() || date.Before(*kept) {
+			*kept = date
+		}
+	}
+	for _, country := range answer.Results {
+		for _, d := range country.Dates {
+			date, err := time.Parse(time.RFC3339Nano, d.Date)
+			if err != nil {
+				if date, err = time.Parse(time.DateOnly, d.Date); err != nil {
+					continue
+				}
+			}
+			date = date.UTC().Truncate(24 * time.Hour)
+			earliest(&releases.First, date)
+			switch d.Type {
+			case releaseDigital, releasePhysical:
+				earliest(&releases.Home, date)
+			case releaseLimited, releaseCinemas:
+				earliest(&releases.Theatrical, date)
+			}
+		}
+	}
+	return releases, nil
 }
 
 // SeasonPosters returns the posters of a series' season.

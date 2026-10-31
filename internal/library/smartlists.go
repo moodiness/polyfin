@@ -156,7 +156,8 @@ func (s *Service) IsSmartList(ctx context.Context, user accounts.User, id accoun
 // record that finds it again, and what is known of it, but what the user
 // did with it. described is set once its description was read; genre is
 // the genre its catalog was narrowed to, if any; episodes are the dates of
-// a series' episodes its description gives, when a sort needs them.
+// a series' episodes its description gives, when a sort needs them; held
+// is set for a movie the wait for its digital release holds back.
 type smartTitle struct {
 	item      Item
 	record    record
@@ -164,6 +165,7 @@ type smartTitle struct {
 	described bool
 	genre     string
 	episodes  episodeDates
+	held      bool
 }
 
 // smartKey identifies the titles read for a list, as it was saved, by the
@@ -241,9 +243,15 @@ func (s *Service) smartChildren(ctx context.Context, v view, l smartList, start,
 	items := make([]Item, 0, len(window))
 	records := make([]record, 0, len(window))
 	parent := l.item.ID
+	now := s.now()
 	for _, t := range window {
 		item, r := t.item, t.record
 		item.ParentID, r.Parent = parent, &parent
+		// A movie to come shows when it is out at home.
+		if out := t.title.HomeRelease; !t.title.Series && t.title.HomeReleaseKnown && out.After(now) {
+			item.PremiereDate = &out
+			homeReleaseNote(&item, v.words, out)
+		}
 		items, records = append(items, item), append(records, r)
 	}
 	return page(items, start, len(titles)), s.save(ctx, records)
@@ -252,7 +260,8 @@ func (s *Service) smartChildren(ctx context.Context, v view, l smartList, start,
 // smartMatches judges the titles a list reads for the user of v, sorts
 // those it keeps and cuts them to its maximum. Titles whose rules depend on
 // a description not read yet are left out, and their descriptions read in
-// the background.
+// the background. Movies waiting for their digital release are left out
+// but by lists of upcoming titles (see smartlists.Rule.Upcoming).
 func (s *Service) smartMatches(ctx context.Context, v view, list smartlists.List) (smartResult, error) {
 	candidates, complete, err := s.smartCandidates(ctx, v, list)
 	if err != nil {
@@ -265,6 +274,10 @@ func (s *Service) smartMatches(ctx context.Context, v view, list smartlists.List
 	if err := s.smartElsewhere(ctx, list, candidates); err != nil {
 		return smartResult{}, err
 	}
+	if err := s.smartReleases(ctx, v, list, candidates); err != nil {
+		return smartResult{}, err
+	}
+	upcoming := list.Rules.Upcoming()
 	result := smartResult{complete: complete}
 	var undescribed []record
 	today := s.now()
@@ -272,7 +285,7 @@ func (s *Service) smartMatches(ctx context.Context, v view, list smartlists.List
 		// The titles read for a list are those of every user who reads its
 		// catalogs the same way (see smartCandidates): the caller's hidden
 		// ones leave at each listing, as their played titles do.
-		if v.hidden.Hides(c.item) {
+		if v.hidden.Hides(c.item) || c.held && !upcoming {
 			continue
 		}
 		t := c.title
@@ -320,6 +333,9 @@ func (s *Service) smartCandidates(ctx context.Context, v view, list smartlists.L
 	}
 	reader := v
 	reader.hidden = nil
+	// Movies waiting for their digital release are read too: each listing
+	// tells whether the list keeps them (see smartMatches).
+	reader.upcoming = true
 	lists, complete := s.smartRead(ctx, reader, sources)
 	if ctx.Err() != nil {
 		return nil, false, ctx.Err()
@@ -540,13 +556,14 @@ func (t *smartTitle) narrow() {
 // needsDescription reports whether a list looks at what a title's listing
 // does not give: its language, or a series' episodes it sorts by, which
 // only its description gives, or its genres, year, rating, runtime,
-// content rating, people or release date when its listing lacks them.
+// content rating, people or release date when its listing lacks them, a
+// series' release date standing for its home release.
 func needsDescription(list smartlists.List, t smartlists.Title) bool {
 	return list.Uses(smartlists.FieldLanguage) || t.Series && sortsByEpisodes(list.Sort) ||
 		list.Uses(smartlists.FieldGenre) && !t.GenresKnown || list.Uses(smartlists.FieldYear) && t.Year == 0 ||
 		list.Uses(smartlists.FieldRating) && !t.Rated || list.Uses(smartlists.FieldRuntime) && t.Runtime == 0 ||
 		list.Uses(smartlists.FieldContentRating) && t.ContentRating == "" || list.Uses(smartlists.FieldPerson) && len(t.People) == 0 ||
-		list.Uses(smartlists.FieldReleased) && t.Released.IsZero()
+		(list.Uses(smartlists.FieldReleased) || t.Series && list.Uses(smartlists.FieldHomeRelease)) && t.Released.IsZero()
 }
 
 // smartDescribed completes the titles whose description the rules need,
@@ -637,6 +654,52 @@ func (s *Service) smartElsewhere(ctx context.Context, list smartlists.List, titl
 			titles[i].title.Studios, titles[i].title.StudiosKnown = names[i], known[i]
 		}
 	}
+	return nil
+}
+
+// smartReleases completes the movies a list judges with the day they are
+// out at home, from TMDB, when its rules look at it, and marks those the
+// wait for their digital release holds back for the user of v (see
+// releases.go). Those not known, or known for too long, are asked about in
+// the background: a movie not known yet is held back, and unknown to the
+// rules. Without TMDB key or identifier, a movie's home release cannot be
+// known: it has none.
+func (s *Service) smartReleases(ctx context.Context, v view, list smartlists.List, titles []smartTitle) error {
+	rule := list.Uses(smartlists.FieldHomeRelease)
+	if !rule && !v.waitRelease {
+		return nil
+	}
+	enabled := s.tmdb.Enabled()
+	keys := make([][]releaseKey, len(titles))
+	var all []releaseKey
+	for i, t := range titles {
+		if t.item.Kind == KindMovie && t.record.Meta != nil && enabled {
+			keys[i] = releaseKeys(providerIDs(*t.record.Meta))
+			all = append(all, keys[i]...)
+		}
+	}
+	kept, err := s.keptReleases(ctx, all)
+	if err != nil {
+		return err
+	}
+	now := s.now()
+	var due []releaseKey
+	for i := range titles {
+		t := &titles[i]
+		if t.item.Kind != KindMovie {
+			continue
+		}
+		known, ok := keptRelease(kept, keys[i])
+		waits := len(keys[i]) > 0 && s.waits(v, t.record)
+		if len(keys[i]) > 0 && (rule || waits) && (!ok || known.due(now)) {
+			due = append(due, keys[i][0])
+		}
+		if rule && (len(keys[i]) == 0 || ok) {
+			t.title.HomeRelease, t.title.HomeReleaseKnown = known.available, true
+		}
+		t.held = waits && (!ok || known.found && known.waiting(now))
+	}
+	s.releasesLater(ctx, due, smartLookups)
 	return nil
 }
 
