@@ -262,6 +262,8 @@ function why(t: Messages, stream: VersionStream): string {
           )
         case 'words':
           return rules.words(stream.detail)
+        case 'label':
+          return rules.label(stream.detail)
       }
       return rules.other(stream.rule, stream.detail)
     }
@@ -290,7 +292,28 @@ function tags(facts: VersionStream['facts'] | VersionStream['labels'], t: Messag
     facts.range === 'hdr' ? 'HDR' : facts.range === 'sdr' ? 'SDR' : '',
     ...facts.languages.map((language) => language.toUpperCase()),
     facts.multi ? t.versions.multi : '',
+    facts.tier === ''
+      ? ''
+      : (t.versions.tiers[facts.tier as keyof Messages['versions']['tiers']] ?? facts.tier),
+    facts.audio.lossless ? t.versions.lossless : '',
+    facts.audio.object ? t.versions.objectAudio : '',
+    channelLayout(facts.audio.channels),
+    facts.edition === ''
+      ? ''
+      : (t.settings.versionEditions[
+          facts.edition as keyof Messages['settings']['versionEditions']
+        ] ?? facts.edition),
+    'perMinute' in facts && facts.perMinute > 0
+      ? t.versions.perMinute(Math.round(facts.perMinute / 1e6))
+      : '',
   ].filter(Boolean)
+}
+
+/** Audio channels as a layout: 6 is 5.1, 8 is 7.1; empty when unknown. */
+function channelLayout(channels: number): string {
+  if (channels <= 0) return ''
+  if (channels >= 6) return `${channels - 1}.1`
+  return `${channels}.0`
 }
 
 /** A source's streams, each with what became of it and the actions on its version. */
@@ -399,6 +422,11 @@ function SourceStreams({
                       {stream.analyzed && known.length > 0 && known.join() !== labels.join() && (
                         <span className="block">
                           {text.facts}: {known.join(' · ')}
+                        </span>
+                      )}
+                      {stream.facts.labelRules.length > 0 && (
+                        <span className="block">
+                          {text.labelRules(stream.facts.labelRules, stream.facts.score)}
                         </span>
                       )}
                       {explanation !== '' && (

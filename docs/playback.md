@@ -76,7 +76,8 @@ Polyfin keeps no maximum of versions, and looks at no seeders, source, size or l
 
 **Content › Versions** finds a movie, or a series and then one of its episodes, as a user sees it: the administrator signed in, or the user picked under **As user**, since versions depend on the user's own addons, torrents, quality group and audio language. For that user, it lists every stream each addon listed, source by source, in the addons' order, with:
 
-- its labels as read (height, codec, HDR, audio languages, MULTI), and, once analyzed, what the version rules know of it;
+- its labels as read (height, codec, HDR, audio languages, MULTI, source tier, audio format, edition), and, once analyzed, what the version rules know of it, with its size per minute of runtime;
+- the [label rules](#label-rules) matching it, with its score under them;
 - what became of it: its place among the versions offered, or the step above that left it out: nothing to play, torrents off for the user, the same file listed before, a mirror, a blocked file, failed lately with why (without the source's address), the hide rule that hides it with what it matched, or the quality group. A torrent that did not start lately is marked so: it stays listed, and plays that pick no version pass it over;
 - how versions are ordered: the criteria of **Order versions by**, the user's quality group, and whether the hide rules would hide every version, so that none is hidden;
 - the title's last plays, by any user, kept in memory until a restart, the last 5 of each title: who played it on which device and app, whether the app picked a version in its version menu, each version tried and what came of it (plays, could not be read, did not start, the limit of torrents or conversions at once, a conversion the user may not have, not analyzed before), and the version chosen with how it plays.
