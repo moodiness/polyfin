@@ -194,26 +194,49 @@ type versionStreamJSON struct {
 
 // versionLabelsJSON is what the stream's labels tell: its height, video
 // codec, range ("sdr", "hdr" or empty), audio languages, whether they say
-// several, the kinds of low-quality release they tag and the other title
-// they name.
+// several, the kinds of low-quality release they tag, the other title
+// they name, its source tier, audio format and edition.
 type versionLabelsJSON struct {
-	Height    int      `json:"height"`
-	Codec     string   `json:"codec"`
-	Range     string   `json:"range"`
-	Languages []string `json:"languages"`
-	Multi     bool     `json:"multi"`
-	Releases  []string `json:"releases"`
-	Elsewhere string   `json:"elsewhere"`
+	Height    int              `json:"height"`
+	Codec     string           `json:"codec"`
+	Range     string           `json:"range"`
+	Languages []string         `json:"languages"`
+	Multi     bool             `json:"multi"`
+	Releases  []string         `json:"releases"`
+	Elsewhere string           `json:"elsewhere"`
+	Tier      string           `json:"tier"`
+	Audio     versionAudioJSON `json:"audio"`
+	Edition   string           `json:"edition"`
 }
 
-// versionFactsJSON is what the version rules know of the version.
+// versionFactsJSON is what the version rules know of the version, with
+// its size in bytes a minute of runtime, its score under the label rules
+// and the text of those matching it.
 type versionFactsJSON struct {
-	Height    int      `json:"height"`
-	Size      int64    `json:"size"`
-	Codec     string   `json:"codec"`
-	Range     string   `json:"range"`
-	Languages []string `json:"languages"`
-	Multi     bool     `json:"multi"`
+	Height     int              `json:"height"`
+	Size       int64            `json:"size"`
+	Codec      string           `json:"codec"`
+	Range      string           `json:"range"`
+	Languages  []string         `json:"languages"`
+	Multi      bool             `json:"multi"`
+	Tier       string           `json:"tier"`
+	Audio      versionAudioJSON `json:"audio"`
+	Edition    string           `json:"edition"`
+	PerMinute  int64            `json:"perMinute"`
+	Score      int              `json:"score"`
+	LabelRules []string         `json:"labelRules"`
+}
+
+// versionAudioJSON is an audio format: lossless, object based, and its
+// channels, 0 when unknown.
+type versionAudioJSON struct {
+	Lossless bool `json:"lossless"`
+	Object   bool `json:"object"`
+	Channels int  `json:"channels"`
+}
+
+func newVersionAudioJSON(audio library.AudioFormat) versionAudioJSON {
+	return versionAudioJSON{Lossless: audio.Lossless, Object: audio.Object, Channels: audio.Channels}
 }
 
 type versionPinJSON struct {
@@ -328,9 +351,12 @@ func (h *handler) titleVersions(w http.ResponseWriter, r *http.Request) {
 				Pinned: stream.Pinned, Unstarted: stream.Unstarted, Analyzed: stream.Analyzed,
 				Labels: versionLabelsJSON{Height: stream.Height, Codec: stream.Labels.Codec, Range: rangeName(stream.Labels.Range),
 					Languages: nonNil(stream.Labels.Languages), Multi: stream.Labels.Multi, Releases: nonNil(stream.Labels.Releases),
-					Elsewhere: stream.Labels.Elsewhere},
+					Elsewhere: stream.Labels.Elsewhere, Tier: stream.Labels.Tier, Audio: newVersionAudioJSON(stream.Labels.Audio),
+					Edition: stream.Labels.Edition},
 				Facts: versionFactsJSON{Height: stream.Facts.Height, Size: stream.Facts.Size, Codec: stream.Facts.Codec,
-					Range: rangeName(stream.Facts.Range), Languages: nonNil(stream.Facts.Languages), Multi: stream.Facts.Multi}}
+					Range: rangeName(stream.Facts.Range), Languages: nonNil(stream.Facts.Languages), Multi: stream.Facts.Multi,
+					Tier: stream.Facts.Tier, Audio: newVersionAudioJSON(stream.Facts.Audio), Edition: stream.Facts.Edition,
+					PerMinute: stream.Facts.PerMinute, Score: stream.Facts.Score, LabelRules: nonNil(stream.Facts.LabelRules)}}
 			if stream.Block != nil {
 				block := h.newVersionBlockJSON(r.Context(), *stream.Block, names)
 				listed.Block = &block

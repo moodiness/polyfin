@@ -101,14 +101,25 @@ type StreamExplanation struct {
 
 // ExplainedFacts are what the version rules know of a version: its
 // height, size and video codec, 0 or empty when unknown, its range, and
-// its audio languages, with multi when its labels say it has several.
+// its audio languages, with multi when its labels say it has several. Tier,
+// Audio and Edition are its source tier, best audio format and edition,
+// and PerMinute its size in bytes a minute of its runtime, empty or zero
+// when unknown (see versionFacts); Score is its score under the label
+// rules, and LabelRules the text of every label rule matching it, in the
+// settings' order (see versionRules.labelScore).
 type ExplainedFacts struct {
-	Height    int
-	Size      int64
-	Codec     string
-	Range     library.DynamicRange
-	Languages []string
-	Multi     bool
+	Height     int
+	Size       int64
+	Codec      string
+	Range      library.DynamicRange
+	Languages  []string
+	Multi      bool
+	Tier       string
+	Audio      library.AudioFormat
+	Edition    string
+	PerMinute  int64
+	Score      int
+	LabelRules []string
 }
 
 // ExplainVersions explains a movie's, a home video's or an episode's
@@ -196,8 +207,10 @@ func (h *Handler) ExplainVersions(ctx context.Context, user accounts.User, id ac
 		if stream.Step != library.StepVersion {
 			known = h.versionFacts(ctx, stream.Version)
 		}
+		score, matched := rules.labelScore(stream.Version)
 		explained.Facts = ExplainedFacts{Height: known.height, Size: known.size, Codec: known.codec, Range: known.hdr,
-			Languages: known.languages, Multi: known.multi}
+			Languages: known.languages, Multi: known.multi, Tier: known.tier, Audio: known.audio, Edition: known.edition,
+			PerMinute: known.perMinute, Score: score, LabelRules: matched}
 		_, explained.Analyzed = h.Playback.Analyzed(ctx, stream.Version.ID)
 		explained.Pinned = pinned && stream.Version.ID == pin.Version && stream.Step == library.StepVersion
 		if stream.Step != library.StepVersion {
