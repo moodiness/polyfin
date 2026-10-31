@@ -147,6 +147,9 @@ const users: typeof en = {
       'Erlaubt diesem Benutzer, in den Jellyfin-Apps anderer Benutzer die Wiedergabe zu starten, zu pausieren oder Nachrichten an sie zu senden. Seine eigenen Apps kann jeder steuern.',
     liveTvManagement: 'Darf Live-TV aufnehmen',
     liveTvManagementHelp: 'Aufnahmen planen und löschen.',
+    localFirst: 'Lokale Dateien zuerst abspielen',
+    localFirstHelp:
+      'Stellt die Versionen lokaler Ordner und Netzwerkfreigaben in den Versionsmenüs dieses Benutzers vor die anderen, unabhängig von „Versionen sortieren nach“, sodass die Wiedergabe mit ihnen beginnt. Andere Benutzer behalten die Reihenfolge des Servers.',
     savePlaybackAccess: 'Wiedergabe und Zugriff speichern',
     visibleLibrariesTitle: 'Sichtbare Bibliotheken',
     visibleLibrariesHelp:

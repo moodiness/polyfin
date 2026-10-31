@@ -207,6 +207,7 @@ export function PlaybackAccessForm({ target, id }: { target: LimitsTarget; id: s
     remoteControl: limits.remoteControl,
     liveTvManagement: limits.liveTvManagement,
     qualityGroup: limits.qualityGroup,
+    localFirst: limits.localFirst,
   })
 
   function update(change: Partial<typeof form>) {
@@ -296,6 +297,12 @@ export function PlaybackAccessForm({ target, id }: { target: LimitsTarget; id: s
           help={t.users.liveTvManagementHelp}
           checked={form.liveTvManagement}
           onChange={(liveTvManagement) => update({ liveTvManagement })}
+        />
+        <SwitchRow
+          title={t.users.localFirst}
+          help={t.users.localFirstHelp}
+          checked={form.localFirst}
+          onChange={(localFirst) => update({ localFirst })}
         />
       </div>
     </SectionForm>
@@ -970,6 +977,7 @@ function resetChanges(t: Messages, current: GroupLimits, defaults: GroupLimits) 
       ['maxPlaybacks', t.users.maxPlaybacks],
       ['maxBitrate', t.users.maxBitrate],
       ['qualityGroup', t.users.qualityGroup],
+      ['localFirst', t.users.localFirst],
       ['syncPlay', t.users.syncPlay],
       ['liveTv', t.users.liveTv],
       ['remoteControl', t.users.remoteControl],

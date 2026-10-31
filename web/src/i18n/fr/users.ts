@@ -147,6 +147,9 @@ const users: typeof en = {
       'Permet à cet utilisateur de lancer, mettre en pause ou envoyer des messages aux applications Jellyfin des autres utilisateurs. Chacun peut contrôler ses propres applications.',
     liveTvManagement: 'Peut enregistrer la TV en direct',
     liveTvManagementHelp: 'Programmer et supprimer des enregistrements.',
+    localFirst: 'Lire d’abord les fichiers locaux',
+    localFirstHelp:
+      'Place les versions des dossiers locaux et des partages réseau avant les autres dans les menus de versions de cet utilisateur, quoi que dise « Trier les versions par », pour que la lecture commence par elles. Les autres utilisateurs gardent l’ordre du serveur.',
     savePlaybackAccess: 'Enregistrer la lecture et l’accès',
     visibleLibrariesTitle: 'Bibliothèques visibles',
     visibleLibrariesHelp:

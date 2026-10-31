@@ -140,6 +140,9 @@ const users = {
       'Lets this user play, pause or send messages to the Jellyfin apps of other users. Everyone can control their own apps.',
     liveTvManagement: 'Can record Live TV',
     liveTvManagementHelp: 'Schedule and delete recordings.',
+    localFirst: 'Play local files first',
+    localFirstHelp:
+      'Puts the versions of local folders and network shares before the others in this user’s version menus, whatever "Order versions by" says, so that Play starts them. Other users keep the server’s order.',
     savePlaybackAccess: 'Save playback and access',
     visibleLibrariesTitle: 'Visible libraries',
     visibleLibrariesHelp:

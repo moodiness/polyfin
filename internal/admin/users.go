@@ -126,6 +126,9 @@ type limitsJSON struct {
 	// LiveTvChannels chooses the Live TV channels of the server's sources
 	// the user sees.
 	LiveTvChannels channelRuleJSON `json:"liveTvChannels"`
+	// LocalFirst offers the user the versions of local folders and network
+	// shares before the others, whatever the version order's criteria.
+	LocalFirst bool `json:"localFirst"`
 }
 
 func newLimitsJSON(limits accounts.Limits) limitsJSON {
@@ -154,6 +157,7 @@ func newLimitsJSON(limits accounts.Limits) limitsJSON {
 		RemoteAccess:         limits.RemoteAccess,
 		QualityGroup:         limits.QualityGroup,
 		LiveTvChannels:       newChannelRuleJSON(limits.LiveTvChannels),
+		LocalFirst:           limits.LocalFirst,
 	}
 }
 
@@ -181,6 +185,7 @@ type limitChanges struct {
 	LiveTvManagement     *bool                    `json:"liveTvManagement"`
 	QualityGroup         *int                     `json:"qualityGroup"`
 	LiveTvChannels       *channelRuleJSON         `json:"liveTvChannels"`
+	LocalFirst           *bool                    `json:"localFirst"`
 }
 
 // changes returns what l sets, or answers the request with its error and
@@ -204,6 +209,7 @@ func (l limitChanges) changes(w http.ResponseWriter) (accounts.UserChanges, bool
 		CanShare:             l.CanShare,
 		TorrentStreams:       l.TorrentStreams,
 		RemoteAccess:         l.RemoteAccess,
+		LocalFirst:           l.LocalFirst,
 	}
 	if p := l.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}

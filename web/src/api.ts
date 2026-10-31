@@ -103,6 +103,11 @@ export type User = {
   imageTag: string | null
   /** The tallest video the user is offered, in lines (480 to 2160); 0 for Original, no limit. */
   qualityGroup: QualityGroup
+  /**
+   * Whether the user is offered the versions of local folders and network shares before the
+   * others, whatever the version order's criteria.
+   */
+  localFirst: boolean
   /** The date the account ends, YYYY-MM-DD in the server's time zone; null for never. */
   endsOn: string | null
   /** Whether the end date has come: the account is refused as a disabled one is. */
@@ -145,6 +150,7 @@ export type GroupLimits = Pick<
   | 'maxPlaybacks'
   | 'maxBitrate'
   | 'qualityGroup'
+  | 'localFirst'
   | 'syncPlay'
   | 'liveTv'
   | 'remoteControl'
@@ -953,6 +959,7 @@ export type UserPatch = Partial<{
   remoteAccess: boolean
   liveTvChannels: ChannelRule
   qualityGroup: QualityGroup
+  localFirst: boolean
   /** YYYY-MM-DD, or null for never. */
   endsOn: string | null
   /** Joins this group and takes its values; '' leaves the group, keeping them as own settings. */
