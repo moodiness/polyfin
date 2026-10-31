@@ -1,5 +1,7 @@
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   ChatCircleTextIcon,
   CpuIcon,
   DownloadSimpleIcon,
@@ -13,6 +15,7 @@ import {
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  fetchBandwidth,
   fetchLiveSessions,
   messageLiveSession,
   queryClient,
@@ -83,6 +86,46 @@ export function useLiveSessions() {
   })
 }
 
+/** A rate in bytes per second as a bitrate, as the dashboard shows bitrates: "8.2 Mbps". */
+function rateText(bytesPerSecond: number, language: string): string {
+  return formatBitrate(bytesPerSecond * 8, language)
+}
+
+/**
+ * What every play moves now, sent to apps and received from sources, refreshed with Now playing:
+ * shown beside its title on Home.
+ */
+export function ServerBandwidth() {
+  const { language, t } = useI18n()
+  const text = t.dashboard.overview
+  const total = useQuery({
+    queryKey: queryKeys.bandwidth,
+    queryFn: ({ signal }) => fetchBandwidth(signal),
+    refetchInterval: 3_000,
+  })
+  if (total.data === undefined) return null
+  const sent = rateText(total.data.sent, language)
+  const received = rateText(total.data.received, language)
+  return (
+    <p className="figures flex items-center gap-3" aria-label={text.bandwidth}>
+      <span className="flex items-center gap-1" title={text.bandwidthSent(sent)}>
+        <ArrowUpIcon size={14} aria-hidden="true" />
+        <span className="sr-only">{text.bandwidthSent(sent)}</span>
+        <span aria-hidden="true" className="text-ink-2">
+          {sent}
+        </span>
+      </span>
+      <span className="flex items-center gap-1" title={text.bandwidthReceived(received)}>
+        <ArrowDownIcon size={14} aria-hidden="true" />
+        <span className="sr-only">{text.bandwidthReceived(received)}</span>
+        <span aria-hidden="true" className="text-ink-2">
+          {received}
+        </span>
+      </span>
+    </p>
+  )
+}
+
 /** The rows of what plays now, each over its blurred artwork, for administrators. */
 export function NowPlaying({ aside }: { aside?: ReactNode }) {
   const { t } = useI18n()
@@ -108,7 +151,11 @@ export function NowPlaying({ aside }: { aside?: ReactNode }) {
             </span>
           )}
         </h2>
-        {aside && <div className="flex items-center gap-2 text-small text-ink-3">{aside}</div>}
+        {aside && (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-small text-ink-3">
+            {aside}
+          </div>
+        )}
       </div>
       {sessions.isPending ? (
         <div role="status" aria-label={t.common.loading} className="flex flex-col gap-3">
@@ -198,6 +245,16 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
           : ''
   const app = [session.device.app, session.device.appVersion].filter(Boolean).join(' ')
   const DeliveryIcon = deliveryIcons[session.delivery] ?? PlayIcon
+  /** Where the version is read from: "Torrent · Its addon · 12 peers". */
+  const origin =
+    session.origin &&
+    [
+      live.origins[session.origin.kind] ?? session.origin.kind,
+      session.origin.name,
+      session.origin.kind === 'torrent' ? live.peers(session.origin.peers) : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
 
   return (
     <article
@@ -325,6 +382,18 @@ function SessionRow({ session, elapsed }: { session: LiveSession; elapsed: numbe
               ? live.deliveryHelp[session.delivery]
               : `${streamText(session.source, language, live.unknown)} → ${streamText(session.sent, language, live.unknown)}`}
           </p>
+          <p className="figures text-[12.5px] leading-snug text-ink-2">
+            {session.bandwidth.redirected
+              ? live.bandwidth.redirected
+              : live.bandwidth.sent(rateText(session.bandwidth.sent, language))}
+            {(session.origin !== null || session.bandwidth.received > 0) &&
+              ` · ${live.bandwidth.received(rateText(session.bandwidth.received, language))}`}
+          </p>
+          {origin && (
+            <p className="truncate text-[12.5px] text-ink-3" title={origin}>
+              {origin}
+            </p>
+          )}
           <div>
             <button
               type="button"

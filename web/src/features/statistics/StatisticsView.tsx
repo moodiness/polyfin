@@ -16,7 +16,14 @@ import {
   type StatisticsScope,
 } from '@/api'
 import { settingsPath } from '@/app/navigation'
-import { dateTime, errorMessage, formatClock, formatEpisode, formatSpan } from '@/format'
+import {
+  dateTime,
+  errorMessage,
+  formatBytes,
+  formatClock,
+  formatEpisode,
+  formatSpan,
+} from '@/format'
 import { useI18n } from '@/i18n'
 import {
   Badge,
@@ -164,12 +171,13 @@ function Figures({ scope, statistics }: { scope: StatisticsScope; statistics: St
   ]
   return (
     <>
-      <dl className={cx('grid gap-4', scope === 'server' ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
+      <dl className={cx('grid gap-4', scope === 'server' ? 'sm:grid-cols-4' : 'sm:grid-cols-3')}>
         <Figure label={text.figures.played} value={formatSpan(statistics.played, language)} />
         <Figure label={text.figures.plays} value={number.format(statistics.plays)} />
         {scope === 'server' && (
           <Figure label={text.figures.users} value={number.format(statistics.users.length)} />
         )}
+        <Figure label={text.figures.sent} value={formatBytes(statistics.sent, language)} />
       </dl>
       <Block title={statistics.unit === 'month' ? text.perMonth : text.perDay}>
         <TimeChart
@@ -301,7 +309,7 @@ function History({ scope, query }: { scope: StatisticsScope; query: PlaybacksQue
         <p className="text-small text-ink-3">{text.historyEmpty}</p>
       ) : (
         <>
-          <Table label={text.history} minWidth={scope === 'server' ? 760 : 640}>
+          <Table label={text.history} minWidth={scope === 'server' ? 860 : 740}>
             <thead>
               <tr>
                 <th scope="col">{text.columns.started}</th>
@@ -310,6 +318,9 @@ function History({ scope, query }: { scope: StatisticsScope; query: PlaybacksQue
                 <th scope="col">{text.columns.device}</th>
                 <th scope="col" className="text-right">
                   {text.columns.played}
+                </th>
+                <th scope="col" className="text-right">
+                  {text.columns.sent}
                 </th>
                 <th scope="col">{text.columns.method}</th>
               </tr>
@@ -339,6 +350,9 @@ function History({ scope, query }: { scope: StatisticsScope; query: PlaybacksQue
                     title={formatClock(entry.position)}
                   >
                     {formatSpan(entry.played, language)}
+                  </td>
+                  <td className="figures text-right whitespace-nowrap">
+                    {entry.sent > 0 ? formatBytes(entry.sent, language) : '–'}
                   </td>
                   <td className="whitespace-nowrap">{text.methodNames[entry.method]}</td>
                 </tr>

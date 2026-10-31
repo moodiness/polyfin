@@ -52,6 +52,10 @@ const home = {
       conversions: 'Video conversions',
       conversionsOf: (count: number, limit: number) =>
         limit > 0 ? `${count} of ${limit}` : `${count}, no limit`,
+      /** The server's bandwidth across every play, beside Now playing. */
+      bandwidth: 'Bandwidth',
+      bandwidthSent: (rate: string) => `${rate} sent to apps`,
+      bandwidthReceived: (rate: string) => `${rate} received from sources`,
       uptime: 'Running for',
       problems: 'To look at',
       problemsEmpty: 'Nothing to look at',
@@ -229,6 +233,20 @@ const home = {
       qualityPlayed: 'Quality played',
       /** The version the play went on from once its source failed. */
       switchedVersion: 'Switched version',
+      /** What a play moves now, and where its version is read from. */
+      bandwidth: {
+        sent: (rate: string) => `${rate} to the app`,
+        received: (rate: string) => `${rate} from the source`,
+        redirected: 'The app reads the source itself',
+      },
+      origins: {
+        addon: 'Addon',
+        torrent: 'Torrent',
+        localFolder: 'Local folder',
+        networkShare: 'Network share',
+        iptv: 'IPTV',
+      } as Record<string, string>,
+      peers: (count: number) => (count === 1 ? '1 peer' : `${count} peers`),
       qualityAmong: (played: string, offered: string) => `${played}, among ${offered}`,
       sizeLimits: {
         steppedDown: (height: string) => `The app stepped down from ${height}`,

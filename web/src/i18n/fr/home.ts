@@ -54,6 +54,9 @@ const home: typeof en = {
       conversions: 'Conversions vidéo',
       conversionsOf: (count: number, limit: number) =>
         limit > 0 ? `${count} sur ${limit}` : `${count}, sans limite`,
+      bandwidth: 'Bande passante',
+      bandwidthSent: (rate: string) => `${rate} envoyés aux applis`,
+      bandwidthReceived: (rate: string) => `${rate} reçus des sources`,
       uptime: 'En marche depuis',
       problems: 'À regarder',
       problemsEmpty: 'Rien à regarder',
@@ -228,6 +231,19 @@ const home: typeof en = {
       /** Shown when the app may switch between several qualities of converted video. */
       qualityPlayed: 'Qualité lue',
       switchedVersion: 'Version de relais',
+      bandwidth: {
+        sent: (rate: string) => `${rate} vers l’appli`,
+        received: (rate: string) => `${rate} depuis la source`,
+        redirected: 'L’appli lit la source elle-même',
+      },
+      origins: {
+        addon: 'Addon',
+        torrent: 'Torrent',
+        localFolder: 'Dossier local',
+        networkShare: 'Partage réseau',
+        iptv: 'IPTV',
+      } as Record<string, string>,
+      peers: (count: number) => (count === 1 ? '1 pair' : `${count} pairs`),
       qualityAmong: (played: string, offered: string) => `${played}, parmi ${offered}`,
       sizeLimits: {
         steppedDown: (height: string) => `L’appli est passée sous ${height}`,

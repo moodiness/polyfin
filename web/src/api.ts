@@ -4425,7 +4425,29 @@ export type LiveSession = {
   audio: { codec: string; channels: number; bitrate: number } | null
   /** The version the play went on from once its version's source failed; empty when it did not. */
   switchedVersion: string
+  bandwidth: PlayBandwidth
+  /** Where the version is read from; null when not known, as for a recording. */
+  origin: PlayOrigin | null
 }
+
+/**
+ * What a play moves now, in bytes per second averaged over the last 10 seconds: sent to the app,
+ * and received from its source. `redirected` is true when the app was sent to read the source
+ * itself, so that none of its bytes pass through Polyfin.
+ */
+export type PlayBandwidth = { sent: number; received: number; redirected: boolean }
+
+/** The kinds of source a play reads from. */
+export type OriginKind = 'addon' | 'torrent' | 'localFolder' | 'networkShare' | 'iptv'
+
+/** Where a play's version is read from: its addon, folder or IPTV source by name, and a torrent's peers. */
+export type PlayOrigin = { kind: OriginKind; name: string; peers: number }
+
+/** What every play moves now, in bytes per second: sent to apps, and received from sources. */
+export type ServerBandwidth = { sent: number; received: number }
+
+export const fetchBandwidth = (signal?: AbortSignal) =>
+  request<ServerBandwidth>('GET', '/bandwidth', undefined, signal)
 
 export const fetchLiveSessions = (signal?: AbortSignal) =>
   request<LiveSession[]>('GET', '/sessions', undefined, signal)
@@ -5306,6 +5328,8 @@ export type Statistics = {
   unit: 'day' | 'month'
   plays: number
   played: number
+  /** Bytes sent to the apps; playbacks Polyfin did not relay, or did not count, are left out. */
+  sent: number
   users: { id: string; name: string; plays: number; played: number }[]
   buckets: { start: string; played: number; users: { id: string; played: number }[] }[]
   movies: RankedTitle[]
@@ -5343,6 +5367,8 @@ export type HistoryEntry = {
   method: PlayMethod
   /** Whether a guest played it through the user's share link. */
   shared: boolean
+  /** Bytes sent to the app; 0 when none passed through Polyfin, or they were not counted. */
+  sent: number
 }
 
 export type HistoryPage = { items: HistoryEntry[]; total: number }
@@ -5484,6 +5510,7 @@ export const queryKeys = {
   catalogGuides: (scope: Scope, target: CatalogTarget) =>
     ['catalog-guides', scope, target.addonId, target.catalogType, target.catalogId] as const,
   liveSessions: ['live-sessions'] as const,
+  bandwidth: ['bandwidth'] as const,
   tasks: (language: Language) => ['tasks', language] as const,
   timers: ['timers'] as const,
   ownChannels: ['live-tv', 'channels'] as const,
