@@ -108,8 +108,15 @@ type Remux struct {
 	VideoTag string
 	// Encode converts the video; nil copies it.
 	Encode *VideoEncoding
-	Format Format
-	Plan   Plan
+	// Fast, when set, converts the video of the plan's fast segments (see
+	// Plan.FastFrom), quickly and smaller, and FastTag is its sample entry
+	// in MP4, as VideoTag is Encode's. Nil converts them as Encode does,
+	// which a plan with fast segments then needs: copied video starts its
+	// segments on the version's keyframes only.
+	Fast    *VideoEncoding
+	FastTag string
+	Format  Format
+	Plan    Plan
 	// Subtitles are the FFmpeg indexes of the text subtitle streams
 	// extracted into Extracted while remuxing, from the bytes FFmpeg reads
 	// anyway.
@@ -669,6 +676,10 @@ type Key struct {
 	// 0 for the first, then each lower one. Each variant of a playback
 	// runs its own FFmpeg (see playback).
 	Variant int
+	// FastStart marks the encoding of a play that starts with fast
+	// segments (see Plan.FastFrom): its video is never kept, the plan of
+	// a session taking it over having none, or others.
+	FastStart bool
 }
 
 func (k Key) name() string {
@@ -1070,7 +1081,8 @@ func (m *Manager) converting(shared *userVersion, leaving *live) int {
 	return n
 }
 
-// Init opens the initialization segment of a fragmented MP4 encoding.
+// Init opens the initialization segment of a fragmented MP4 encoding: that
+// of its segments other than the fast ones (see FastInit).
 func (m *Manager) Init(ctx context.Context, key Key, open Opener) (*os.File, error) {
 	if m.keeps(key) {
 		return m.keptFile(ctx, key, open, -1)
@@ -1079,10 +1091,26 @@ func (m *Manager) Init(ctx context.Context, key Key, open Opener) (*os.File, err
 	if err != nil {
 		return nil, err
 	}
-	if e.remux.Format != FMP4 {
+	if plan := e.remux.Plan; e.remux.Format != FMP4 || plan.fastFrom == 0 && plan.fastTo == plan.Len() {
 		return nil, ErrNotFound
 	}
 	return e.await(ctx, -1)
+}
+
+// FastInit opens the initialization segment of the fast segments of a
+// fragmented MP4 encoding (see Plan.FastFrom).
+func (m *Manager) FastInit(ctx context.Context, key Key, open Opener) (*os.File, error) {
+	if m.keeps(key) {
+		return nil, ErrNotFound
+	}
+	e, err := m.encoding(ctx, key, open)
+	if err != nil {
+		return nil, err
+	}
+	if e.remux.Format != FMP4 || e.remux.Plan.fastTo == 0 {
+		return nil, ErrNotFound
+	}
+	return e.await(ctx, FastInit)
 }
 
 // Segment opens segment n of an encoding, starting or moving FFmpeg to it
@@ -1230,10 +1258,13 @@ type encoding struct {
 
 	mu sync.Mutex
 	// changed is closed, then replaced, whenever a segment is ready, a job
-	// ends, or a player asks for another segment.
+	// ends, or a player asks for another segment. init and fastInit are
+	// set once the initialization segments of the segments other than the
+	// fast ones, and of those, are made.
 	changed   chan struct{}
 	ready     []bool
 	init      bool
+	fastInit  bool
 	job       *job
 	requested int
 	// playback is shared with the other variants of the playback; used is
@@ -1504,15 +1535,58 @@ func (e *encoding) lingered() {
 }
 
 func (e *encoding) path(n int) string {
-	if n < 0 {
+	switch {
+	case n == FastInit:
+		return filepath.Join(e.dir, "init-fast.mp4")
+	case n < 0:
 		return filepath.Join(e.dir, "init.mp4")
 	}
 	return filepath.Join(e.dir, strconv.Itoa(n)+"."+e.remux.Format.Extension())
 }
 
-// await opens segment n, or the initialization segment for n = -1, once
-// it is made. A job that makes no progress for the stall timeout is not
-// waited for longer: ErrStalled.
+// made reports whether segment n is made, or for n = -1 and FastInit,
+// that initialization segment. The caller holds e.mu.
+func (e *encoding) made(n int) bool {
+	switch {
+	case n == FastInit:
+		return e.fastInit
+	case n < 0:
+		return e.init
+	}
+	return e.ready[n]
+}
+
+// initStart is the segment a job making initialization segment n starts
+// at, the initialization segment coming with any segment of its kind:
+// where the player last asked, if it did, or the first fast segment when
+// the player last asked for another. A job starting at a fast segment
+// goes on with the others once the fast ones are made, if others follow;
+// else the others' starts at the one before them. The caller holds e.mu.
+func (e *encoding) initStart(n int) int {
+	plan := e.remux.Plan
+	switch {
+	case n == FastInit && !plan.Fast(e.requested):
+		return plan.fastFrom
+	case n != FastInit && plan.Fast(e.requested) && plan.fastTo == plan.Len():
+		return plan.fastFrom - 1
+	}
+	return e.requested
+}
+
+// makesInit reports whether job j makes initialization segment n, of its
+// own segments or of those it goes on with (see stretchEnd). The caller
+// holds e.mu.
+func (e *encoding) makesInit(j *job, n int) bool {
+	plan := e.remux.Plan
+	if n == FastInit {
+		return j.fast || plan.fastTo > 0 && j.end == plan.fastFrom
+	}
+	return !j.fast || j.end < plan.Len()
+}
+
+// await opens segment n, or the initialization segment for n = -1 or
+// FastInit, once it is made. A job that makes no progress for the stall
+// timeout is not waited for longer: ErrStalled.
 func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -1530,15 +1604,13 @@ func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 		if e.stopped {
 			return nil, ErrStopped
 		}
-		if (n < 0 && e.init) || (n >= 0 && e.ready[n]) {
+		if e.made(n) {
 			return os.Open(e.path(n))
 		}
 		j := e.job
 		start := n
 		if n < 0 {
-			// The initialization segment comes with any segment: start
-			// where the player last asked, if it did.
-			start = e.requested
+			start = e.initStart(n)
 		}
 		switch {
 		case e.switching:
@@ -1551,7 +1623,7 @@ func (e *encoding) await(ctx context.Context, n int) (*os.File, error) {
 		case j != nil && j.done && j.err == nil && n >= j.start && n >= j.next:
 			// FFmpeg reached the end of the version before this segment.
 			return nil, ErrNotFound
-		case j == nil || j.done || (n >= 0 && (n < j.next || n > j.next+reach)):
+		case j == nil || j.done || (n >= 0 && (n < j.next || n > j.next+reach)) || (n < 0 && !e.makesInit(j, n)):
 			e.start(start)
 		}
 		if err := e.waitProgress(ctx, since); err != nil {
@@ -1642,11 +1714,15 @@ func (e *encoding) stop() {
 	}
 }
 
-// job is one run of FFmpeg, from segment start onwards.
+// job is one run of FFmpeg, from segment start up to end excluded.
 type job struct {
 	start int
-	// next is the segment being made.
-	next   int
+	// next is the segment being made, and end the first one the job does
+	// not make: the first made otherwise (see Plan.stretchEnd), which
+	// another job makes, or the plan's length.
+	next, end int
+	// fast marks a job making fast segments (see Plan.FastFrom).
+	fast   bool
 	cancel context.CancelFunc
 	done   bool
 	err    error
@@ -1661,18 +1737,26 @@ type job struct {
 	lookback time.Duration
 	landed   bool
 	// input is what the job reads: the encoding's when it started (see
-	// carryOn).
+	// carryOn), converting the video as Remux.Fast says for fast segments.
 	input *Remux
 }
 
-// start replaces the running job with one starting at segment n. The
-// caller holds e.mu.
+// start replaces the running job with one starting at segment n, which
+// makes the segments up to the first made otherwise. The caller holds
+// e.mu.
 func (e *encoding) start(n int) {
 	if e.job != nil {
 		e.job.cancel()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	j := &job{start: n, next: n, cancel: cancel, progressed: time.Now(), lookback: e.lookback, input: e.input}
+	plan, input := e.remux.Plan, e.input
+	fast := plan.Fast(n)
+	if fast && input.Fast != nil {
+		faster := *input
+		faster.Encode, faster.VideoTag = input.Fast, input.FastTag
+		input = &faster
+	}
+	j := &job{start: n, next: n, end: plan.stretchEnd(n), fast: fast, cancel: cancel, progressed: time.Now(), lookback: e.lookback, input: input}
 	e.job = j
 	go e.run(ctx, j)
 }
@@ -1728,7 +1812,7 @@ func (e *encoding) run(ctx context.Context, j *job) {
 		})
 	}
 	started := time.Now()
-	e.m.logger.Debug("Started a remux", append([]any{"from", j.start, "variant", e.key.Variant, "video", e.remux.loggedVideo(), "audio", e.remux.loggedAudio()}, e.m.toneMapAttrs(e.remux.Encode)...)...)
+	e.m.logger.Debug("Started a remux", append([]any{"from", j.start, "variant", e.key.Variant, "fast", j.fast, "video", e.remux.loggedVideo(), "audio", e.remux.loggedAudio()}, e.m.toneMapAttrs(e.remux.Encode)...)...)
 	take := func(p piece) error { return e.take(ctx, j, p) }
 	if e.remux.Format == TS {
 		err = splitTS(output, take)
@@ -1778,13 +1862,21 @@ func (e *encoding) take(ctx context.Context, j *job, p piece) error {
 	}
 	j.progressed = time.Now()
 	if p.init {
-		if e.init {
+		which := -1
+		if j.fast {
+			which = FastInit
+		}
+		if e.made(which) {
 			return nil
 		}
-		if err := writeFile(e.path(-1), p.data); err != nil {
+		if err := writeFile(e.path(which), p.data); err != nil {
 			return err
 		}
-		e.init = true
+		if j.fast {
+			e.fastInit = true
+		} else {
+			e.init = true
+		}
 		e.signal()
 		return nil
 	}
@@ -1815,6 +1907,14 @@ func (e *encoding) take(ctx context.Context, j *job, p piece) error {
 			if e.job != j || e.stopped {
 				return errStale
 			}
+		}
+		// The segments from the job's end are made otherwise, by another
+		// job, from that keyframe on.
+		if j.next == j.end {
+			e.m.logger.Debug("A remux goes on otherwise", "segment", j.end, "fast", plan.Fast(j.end))
+			e.start(j.end)
+			e.signal()
+			return errStale
 		}
 		return e.begin(j, p.data)
 	}

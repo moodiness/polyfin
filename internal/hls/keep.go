@@ -78,12 +78,12 @@ func (k Key) sameDevice(other Key) bool {
 }
 
 // keeps reports whether the encoding of key is kept video: kept video is
-// on, key converts the video it describes, its session has no encoding
-// of its own already, and no other session plays the same video that did
-// not stop.
+// on, key converts the video it describes, without fast segments, its
+// session has no encoding of its own already, and no other session plays
+// the same video that did not stop.
 func (m *Manager) keeps(key Key) bool {
 	keep := m.keepVideo.Load()
-	if keep == nil || !(*keep)() || !key.Converts || key.Video == "" || key.Session == "" {
+	if keep == nil || !(*keep)() || !key.Converts || key.Video == "" || key.Session == "" || key.FastStart {
 		return false
 	}
 	m.mu.Lock()
