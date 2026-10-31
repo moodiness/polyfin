@@ -1,11 +1,11 @@
 import { DotsSixVerticalIcon, PlusIcon, XIcon } from '@phosphor-icons/react'
 import { useId, useState } from 'react'
-import type { VersionCodec, VersionCriterion, VersionSource } from '@/api'
+import type { VersionCodec, VersionCriterion, VersionEdition, VersionSource } from '@/api'
 import { useI18n } from '@/i18n'
 import { Button, cx, FieldError, IconButton, MoveButtons, Select } from '@/ui'
 
 /** The most criteria the server takes. */
-const maxCriteria = 4
+const maxCriteria = 6
 
 /** What a criterion looks at, whichever way it sorts: resolution for both resolution criteria. */
 function kind(criterion: VersionCriterion) {
@@ -14,7 +14,7 @@ function kind(criterion: VersionCriterion) {
 
 /**
  * The criteria ordering a title's versions, in order: each row chooses one, moved with the arrows
- * or removed, and a button adds the next kind not chosen yet, up to four. A row offers the
+ * or removed, and a button adds the next kind not chosen yet, up to six. A row offers the
  * criteria of its kind and of the kinds no other row has.
  */
 export default function VersionOrder({
@@ -75,7 +75,8 @@ export default function VersionOrder({
                 onValue={(chosen: VersionCriterion) =>
                   onChange(order.map((other, at) => (at === index ? chosen : other)))
                 }
-                className="min-w-0 flex-1 sm:max-w-sm"
+                className="min-w-0 flex-1"
+                wrap
               />
               <MoveButtons
                 name={text.criteria[criterion]}
@@ -123,8 +124,54 @@ export function CodecOrder({
   error?: string
 }) {
   const { t } = useI18n()
-  const text = t.settings.versionCodecOrder
-  const names = t.settings.versionCodecs
+  return (
+    <FixedOrder
+      order={order}
+      names={t.settings.versionCodecs}
+      text={t.settings.versionCodecOrder}
+      onChange={onChange}
+      error={error}
+    />
+  )
+}
+
+/** The order of the editions for the edition criterion, moved with the arrows. */
+export function EditionOrder({
+  order,
+  onChange,
+  error,
+}: {
+  order: VersionEdition[]
+  onChange: (order: VersionEdition[]) => void
+  error?: string
+}) {
+  const { t } = useI18n()
+  return (
+    <FixedOrder
+      order={order}
+      names={t.settings.versionEditions}
+      text={t.settings.versionEditionOrder}
+      onChange={onChange}
+      error={error}
+    />
+  )
+}
+
+/** An order of every one of a fixed set of values, moved with the arrows. */
+function FixedOrder<T extends string>({
+  order,
+  names,
+  text,
+  onChange,
+  error,
+}: {
+  order: T[]
+  names: Record<T, string>
+  text: { label: string; help: string }
+  onChange: (order: T[]) => void
+  error?: string
+}) {
+  const { t } = useI18n()
   const id = useId()
   const [announcement, setAnnouncement] = useState('')
 

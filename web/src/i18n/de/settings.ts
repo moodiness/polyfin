@@ -278,6 +278,11 @@ const settings: typeof en = {
         'hdr-first': 'HDR und Dolby Vision zuerst',
         'hdr-last': 'HDR und Dolby Vision zuletzt',
         source: 'Quelle, in der Reihenfolge unten',
+        'size-per-minute': 'Größe pro Minute Laufzeit, wie unten eingestellt',
+        tier: 'Quelle: Disc-Kopie, Blu-ray, Web, DVD, dann TV',
+        audio: 'Audio: verlustfrei und Atmos zuerst, dann die meisten Kanäle',
+        edition: 'Fassung, in der Reihenfolge unten',
+        labels: 'Punkte der Bezeichnungsregeln, höchste zuerst',
       },
     },
     versionCodecOrder: {
@@ -290,6 +295,19 @@ const settings: typeof en = {
       none: 'Noch keine Quelle des Servers liefert Versionen von Filmen oder Folgen.',
       dragHandle: (name: string) => `${name} ziehen`,
     },
+    versionEditionOrder: {
+      label: 'Reihenfolge der Fassungen',
+      help: 'Die Reihenfolge, in die das Kriterium Fassung die Versionen bringt, je nach der Fassung, die ihre Bezeichnungen nennen. Eine Version, deren Bezeichnungen keine nennen, gilt als Kinofassung.',
+    },
+    versionEditions: {
+      theatrical: 'Kinofassung',
+      extended: 'Erweiterte Fassung',
+      directors: 'Director’s Cut',
+      imax: 'IMAX',
+    },
+    versionMbPerMinute: 'Angestrebte Größe pro Minute (MB, 0 = die größte)',
+    versionMbPerMinuteHelp: (r: RangeText) =>
+      `Das Kriterium Größe pro Minute stellt die Versionen nach vorn, die dieser Anzahl Megabyte pro Minute Laufzeit am nächsten kommen, etwa 50 für eine gute 1080p-Kodierung; 0 stellt die größte nach vorn. Die Laufzeit ist die der Version, sobald sie analysiert ist, sonst die des Titels. Bis zu ${r.max}; standardmäßig ${r.default}.`,
     versionCodecs: {
       av1: 'AV1',
       hevc: 'HEVC (H.265)',
@@ -317,6 +335,22 @@ const settings: typeof en = {
       telecine: 'Telecines (TC, TELECINE)',
       screener: 'Screener (SCR, DVDSCR)',
       early: 'Frühe Fassungen (R5, WORKPRINT)',
+    },
+    versionLabelRules: {
+      label: 'Bezeichnungsregeln',
+      help: (max: string) =>
+        `Jede Regel liest Name, Beschreibung und Dateiname einer Version, unabhängig von Groß- und Kleinschreibung: ein Wort, das irgendwo darin vorkommt, oder einen regulären Ausdruck. Eine Regel blendet die Versionen aus, auf die sie passt, nach den Ausblenderegeln oben und nie alle Versionen eines Titels, oder addiert ihre Punkte, von −100 bis 100, zu deren Punkten. Das Kriterium Punkte der Bezeichnungsregeln stellt die höchsten nach vorn; ohne es sortieren die Punkte die Versionen nach den anderen Kriterien. Bis zu ${max} Regeln; standardmäßig keine.`,
+      none: 'Keine Regeln: Bezeichnungen zählen nicht.',
+      add: 'Regel hinzufügen',
+      remove: (position: number) => `Regel ${position} entfernen`,
+      text: (position: number) => `Wort oder Ausdruck von Regel ${position}`,
+      action: (position: number) => `Wirkung von Regel ${position}`,
+      points: (position: number) => `Punkte von Regel ${position}`,
+      regex: 'Regulärer Ausdruck',
+      score: 'Punkte vergeben',
+      hide: 'Ausblenden',
+      wordPlaceholder: 'Wort',
+      regexPlaceholder: 'Regulärer Ausdruck',
     },
     syncAddonSubtitles: 'Add-on-Untertitel synchronisieren',
     syncAddonSubtitlesHelp:
