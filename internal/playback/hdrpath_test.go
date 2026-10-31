@@ -143,3 +143,18 @@ func TestFFmpegFollowsWhereHDRIsToneMapped(t *testing.T) {
 		}
 	}
 }
+
+// Why a conversion tone maps HDR on the processor reaches its encoding,
+// whose log line tells it.
+func TestTheEncodingTellsWhyItToneMapsOnTheProcessor(t *testing.T) {
+	nvidia := &hls.Hardware{Method: "cuda", Encoders: []string{"h264_nvenc"}, ToneMapping: true}
+	hdr := MediaStream{Codec: "hevc", VideoRange: "HDR", VideoRangeType: "HDR10", ColorTransfer: "smpte2084", Width: new(3840), Height: new(2160)}
+	tuning := Tuning{CPUToneMapping: true}
+	off := Capabilities{Encoders: []string{"libx264"}, ToneMapping: true, Hardware: nvidia, HDR: gpuKeepsUpLower, Tuning: tuning}
+	remux := Remux{Format: hls.FMP4, ConvertVideo: ConvertVideo("h264", Limits{}, hdr, off)}
+	r := hls.Remux{Input: "hdr.mkv", Video: 0, Audio: -1, Format: hls.FMP4, Plan: hls.NewPlan([]time.Duration{0}, 6*time.Second)}
+	remux.convert(&r, media.Stream{Codec: "hevc", BitDepth: 10, AverageRate: 24}, tuning)
+	if r.Encode == nil || !r.Encode.ToneMapOnCPU || r.Encode.ToneMapReason != hls.ToneMapTurnedOff {
+		t.Fatalf("the encoding: %+v", r.Encode)
+	}
+}
