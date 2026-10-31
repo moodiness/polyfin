@@ -235,6 +235,7 @@ const libraries: typeof en = {
       rank: 'Place dans son catalogue',
       state: 'État de visionnage',
       released: 'Date de sortie',
+      homeRelease: 'Sortie en vidéo',
       votes: 'Votes IMDb',
       runtime: 'Durée',
       contentRating: 'Classification',
@@ -253,6 +254,11 @@ const libraries: typeof en = {
     atMost: 'Au plus',
     releasedWhen: 'Quand',
     releasedWithin: { last: 'Depuis', next: 'D’ici' } as Record<string, string>,
+    homeReleaseWithin: {
+      released: 'Sortie depuis',
+      upcoming: 'Sortie d’ici',
+      both: 'À moins de',
+    } as Record<string, string>,
     days: 'jours',
     namePlaceholder: { person: 'Son nom', studio: 'Son nom' } as Record<string, string>,
     types: { movie: 'Un film', series: 'Une série' } as Record<string, string>,
@@ -270,6 +276,8 @@ const libraries: typeof en = {
       'Les votes IMDb viennent de MDBList, avec la clé d’API MDBList des notes dans Paramètres › Contenu, cherchés en arrière-plan. Sans cette clé, aucun titre n’a de votes.',
     studioHelp:
       'Les studios et les chaînes viennent de TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, cherchés en arrière-plan et gardés : la liste grandit à mesure qu’ils arrivent. Sans cette clé, seuls comptent les studios qu’un administrateur a donnés dans les métadonnées d’un titre.',
+    homeReleaseHelp:
+      'La sortie en vidéo d’un film est sa première sortie numérique ou physique, sinon 90 jours après sa sortie en salles, selon TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, cherchée en arrière-plan et gardée : la liste grandit à mesure qu’elles arrivent. Celle d’une série est sa date de première diffusion. Avec « Attendre la sortie numérique », un film pas encore sorti n’apparaît que dans les listes avec une règle de titres à venir.',
     sort: 'Tri',
     sorts: {
       catalog: 'Comme ses catalogues les listent, un de chaque tour à tour',

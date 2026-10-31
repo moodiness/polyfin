@@ -626,6 +626,9 @@ const settings: typeof en = {
     tmdbKey: 'TMDB-API-Schlüssel',
     tmdbKeyHelp:
       'Optional. Mit einem API-Schlüssel oder einem Lesezugriffstoken eines TMDB-Kontos durchsucht „Bilder bearbeiten“ in jellyfin-web auch TMDB nach Postern, Hintergründen und Logos eines Titels, Standbildern einer Folge, Postern einer Staffel und Fotos einer Person, die Polyfin weiterleitet. Personen werden außerdem einmal auf TMDB nachgeschlagen: Personen ohne Foto erhalten ihres, und ihre Seiten zeigen Biografie, Geburts- und Sterbedatum und Geburtsort. Dateien eines lokalen Ordners, deren Suche bei allen Metadaten-Add-ons fehlschlägt, werden ebenfalls auf TMDB gesucht. Ohne Schlüssel listet „Bilder bearbeiten“ nur die Bilder der Add-ons auf und TMDB wird nie abgefragt.',
+    waitDigitalRelease: 'Auf die digitale Veröffentlichung warten',
+    waitDigitalReleaseHelp:
+      'Ein Film aus den Katalogen der Addons erscheint erst, wenn er fürs Heimkino erschienen ist: seine erste digitale oder physische Veröffentlichung laut TMDB, sonst 90 Tage nach dem Kinostart. Bis dahin fehlt er in Bibliotheken, Zeilen der Startseite, Suchen, ähnlichen Titeln und Personenseiten, hat keine Version und lässt sich nicht abspielen; intelligente Listen mit einer Regel für kommende Titel zeigen ihn mit diesem Tag. Ein Film, den TMDB nicht kennt oder der seit über einem Jahr erschienen ist, bleibt sichtbar. Benötigt den TMDB-API-Schlüssel.',
     mdblistRatingsKey: 'MDBList-API-Schlüssel für Bewertungen',
     mdblistRatingsKeyHelp:
       'Optional. Mit einem Schlüssel eines MDBList-Kontos zeigen Filme und Serien ihre IMDb-Bewertung, Kritikerwertung und Publikumswertung von MDBList, im Hintergrund abgerufen und für alle Benutzer gespeichert. Die eigenen MDBList-Schlüssel der Benutzer für das Tracking werden dafür nie verwendet. Ohne Schlüssel wird MDBList nie abgefragt.',
@@ -1135,6 +1138,7 @@ const settings: typeof en = {
       skip: 'Intro und Abspann überspringen',
       titlePages: 'Titelseiten',
       images: 'Bilder',
+      releases: 'Filmveröffentlichungen',
       ratings: 'Bewertungen',
       posters: 'Poster',
       music: 'Musik',

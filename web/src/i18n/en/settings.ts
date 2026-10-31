@@ -619,6 +619,9 @@ const settings = {
     tmdbKey: 'TMDB API key',
     tmdbKeyHelp:
       'Optional. With an API key or a read access token from a TMDB account, jellyfin-web’s Edit images also searches TMDB for a title’s posters, backdrops and logos, an episode’s stills, a season’s posters and a person’s photos, which Polyfin relays. People are also looked up on TMDB once: those without a photo get theirs, and their pages show their biography, birth and death dates and birthplace. A local folder’s files whose search every metadata addon fails are searched on TMDB too. Without a key, Edit images lists the addons’ images only and TMDB is never asked.',
+    waitDigitalRelease: 'Wait for the digital release',
+    waitDigitalReleaseHelp:
+      'A movie of the addons’ catalogs shows once it is out at home: its first digital or physical release, as TMDB tells, else 90 days after it came out in cinemas. Until then it is left out of libraries, home rows, searches, similar titles and person pages, has no version and does not play; smart lists with a rule of upcoming titles list it, with that day. A movie TMDB does not know, and one out for over a year, stays listed. Needs the TMDB API key.',
     mdblistRatingsKey: 'MDBList API key for ratings',
     mdblistRatingsKeyHelp:
       'Optional. With a key from an MDBList account, movies and series show their IMDb rating, critics’ score and audience score from MDBList, looked up in the background and kept for every user. Users’ own MDBList keys for tracking are never used for this. Without a key, MDBList is never asked.',
@@ -1116,6 +1119,7 @@ const settings = {
       skip: 'Skip intro and credits',
       titlePages: 'Title pages',
       images: 'Images',
+      releases: 'Movie releases',
       ratings: 'Ratings',
       posters: 'Posters',
       music: 'Music',

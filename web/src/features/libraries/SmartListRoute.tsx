@@ -57,6 +57,7 @@ const fields: Exclude<SmartField, 'group'>[] = [
   'genre',
   'year',
   'released',
+  'homeRelease',
   'rating',
   'votes',
   'language',
@@ -119,6 +120,8 @@ function newRule(field: Exclude<SmartField, 'group'>): SmartRule {
       return { field, value: 'PG-13' }
     case 'released':
       return { field, min: -30, max: 0 }
+    case 'homeRelease':
+      return { field, value: 'upcoming', max: 30 }
     case 'genre':
     case 'person':
     case 'studio':
@@ -142,6 +145,8 @@ function complete(rule: SmartRule, depth = 1): boolean {
       return (rule.value ?? '').trim() !== ''
     case 'released':
       return rule.min !== undefined && rule.max !== undefined && rule.min <= rule.max
+    case 'homeRelease':
+      return Boolean(rule.value) && rule.max !== undefined && rule.max >= 1
     case 'year':
     case 'rating':
     case 'runtime':
@@ -391,6 +396,9 @@ function Editor({
             {listUses(draft, 'votes') && <Notice className="mt-4">{t.smartLists.votesHelp}</Notice>}
             {listUses(draft, 'studio') && (
               <Notice className="mt-4">{t.smartLists.studioHelp}</Notice>
+            )}
+            {listUses(draft, 'homeRelease') && (
+              <Notice className="mt-4">{t.smartLists.homeReleaseHelp}</Notice>
             )}
             {listUses(draft, 'state') && <Notice className="mt-4">{t.smartLists.stateHelp}</Notice>}
             {errorFor(['invalid_smart_list_rules']) && (
@@ -756,6 +764,31 @@ function RuleEditor({
       )
       break
     }
+    case 'homeRelease':
+      value = (
+        <span className="flex items-center gap-2 text-small text-ink-2">
+          <Select
+            aria-label={t.smartLists.releasedWhen}
+            className="w-[200px]"
+            value={rule.value ?? 'upcoming'}
+            onValue={(when) => onChange({ ...rule, value: when })}
+            options={(['released', 'upcoming', 'both'] as const).map((v) => ({
+              value: v,
+              label: t.smartLists.homeReleaseWithin[v],
+            }))}
+          />
+          <NumberInput
+            aria-label={t.smartLists.days}
+            value={rule.max ?? null}
+            min={1}
+            max={36500}
+            step={1}
+            onValue={(n) => bound('max', n)}
+          />
+          {t.smartLists.days}
+        </span>
+      )
+      break
     case 'contentRating':
       value = (
         <span className="flex items-center gap-2 text-small text-ink-2">

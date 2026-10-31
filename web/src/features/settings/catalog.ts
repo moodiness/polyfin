@@ -604,6 +604,21 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'content',
+    anchor: 'wait-digital-release',
+    label: (t) => s(t).waitDigitalRelease,
+    help: (t) => s(t).waitDigitalReleaseHelp,
+    keywords: [
+      'TMDB',
+      'digital release',
+      'cinema',
+      'theatrical',
+      'upcoming',
+      'release date',
+      'movie',
+    ],
+  },
+  {
+    section: 'content',
     anchor: 'mdblist-ratings-key',
     label: (t) => s(t).mdblistRatingsKey,
     help: (t) => s(t).mdblistRatingsKeyHelp,

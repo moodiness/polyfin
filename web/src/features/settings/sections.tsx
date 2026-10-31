@@ -651,6 +651,16 @@ function Content({ form, update, error, number, range, limits }: SectionFormApi)
           />
         </SettingRow>
       </SettingsGroup>
+      <SettingsGroup title={groups.releases}>
+        <SwitchRow
+          anchor="wait-digital-release"
+          label={s.waitDigitalRelease}
+          help={s.waitDigitalReleaseHelp}
+          checked={form.waitDigitalRelease}
+          onChange={(waitDigitalRelease) => update({ waitDigitalRelease })}
+          disabled={!form.tmdbKeySet && !form.tmdbKey}
+        />
+      </SettingsGroup>
       <SettingsGroup title={groups.ratings}>
         <SettingRow
           anchor="mdblist-ratings-key"
