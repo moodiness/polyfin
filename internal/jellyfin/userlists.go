@@ -110,6 +110,40 @@ func (h *Handler) resumeItems(ctx context.Context, user accounts.User, entries [
 	}), nil
 }
 
+// homeExcluded returns those of titles that only the libraries user left
+// out of their home screen sections list (LatestItemsExcludes, see
+// library.Service.ListedOnlyIn). Jellyfin 12.4 leaves those libraries out
+// of Next Up and Continue Watching without a parent
+// (TVSeriesManager.GetNextUp, ItemsController.GetResumeItems).
+func (h *Handler) homeExcluded(ctx context.Context, user accounts.User, titles []accounts.ID) (map[accounts.ID]bool, error) {
+	configuration, err := h.userConfiguration(ctx, user.ID)
+	if err != nil || len(configuration.LatestItemsExcludes) == 0 {
+		return nil, err
+	}
+	excluded := make([]accounts.ID, 0, len(configuration.LatestItemsExcludes))
+	for _, text := range configuration.LatestItemsExcludes {
+		if id, ok := parseGUID(text); ok {
+			excluded = append(excluded, id)
+		}
+	}
+	return h.Library.ListedOnlyIn(ctx, user, titles, excluded)
+}
+
+// withoutHomeExcludes leaves out of items those whose title (an episode's
+// series) only the libraries user left out of their home screen sections
+// list (see homeExcluded).
+func (h *Handler) withoutHomeExcludes(ctx context.Context, user accounts.User, items []library.Item) ([]library.Item, error) {
+	titles := make([]accounts.ID, len(items))
+	for i, item := range items {
+		titles[i] = cmp.Or(item.SeriesID, item.ID)
+	}
+	excluded, err := h.homeExcluded(ctx, user, titles)
+	if err != nil || len(excluded) == 0 {
+		return items, err
+	}
+	return slices.DeleteFunc(items, func(item library.Item) bool { return excluded[cmp.Or(item.SeriesID, item.ID)] }), nil
+}
+
 // resume lists what the user can resume: movies, episodes and replays with
 // a resume point, played or not, most recently played first (see
 // resumeKinds), but the titles the user hid.
@@ -158,6 +192,9 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 	})
 	if hasParent {
 		items = h.keepWithin(r.Context(), user, items, parent, itself)
+	} else if items, err = h.withoutHomeExcludes(r.Context(), user, items); err != nil {
+		h.internalError(w, r, err)
+		return
 	}
 	page := window(items, start, limit)
 	total := len(items)
@@ -290,6 +327,20 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 		candidates = slices.DeleteFunc(candidates, func(c watching) bool {
 			return hidden[c.series] || cutoff != nil && c.latest.Before(*cutoff)
 		})
+		if parent == nil {
+			// As in Jellyfin 12.4, Next Up without a parent only looks in
+			// the libraries the user keeps in their home screen sections
+			// (TVSeriesManager.GetNextUp).
+			series := make([]accounts.ID, len(candidates))
+			for i, c := range candidates {
+				series[i] = c.series
+			}
+			excluded, err := h.homeExcluded(ctx, user, series)
+			if err != nil {
+				return nil, err
+			}
+			candidates = slices.DeleteFunc(candidates, func(c watching) bool { return excluded[c.series] })
+		}
 		candidates = candidates[:min(len(candidates), watchedSeriesLimit)]
 	}
 	type entry struct {
