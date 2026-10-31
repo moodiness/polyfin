@@ -19,7 +19,12 @@ const statistics: typeof en = {
     empty: 'Aucune lecture sur cette période',
     emptyHint:
       'Les vidéos lues au moins 10 secondes dans une appli Jellyfin apparaissent ici une fois arrêtées.',
-    figures: { played: 'Heures regardées', plays: 'Lectures', users: 'Utilisateurs' },
+    figures: {
+      played: 'Heures regardées',
+      plays: 'Lectures',
+      users: 'Utilisateurs',
+      sent: 'Données envoyées',
+    },
     perDay: 'Heures regardées par jour',
     perMonth: 'Heures regardées par mois',
     perUser: 'Heures regardées par utilisateur',
@@ -53,6 +58,7 @@ const statistics: typeof en = {
       title: 'Titre',
       device: 'Appli et appareil',
       played: 'Durée regardée',
+      sent: 'Données envoyées',
       method: 'Mode de lecture',
     },
     appOn: (app: string, device: string) =>
