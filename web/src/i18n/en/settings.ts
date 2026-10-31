@@ -274,6 +274,11 @@ const settings = {
         'hdr-first': 'HDR and Dolby Vision first',
         'hdr-last': 'HDR and Dolby Vision last',
         source: 'Source, in the order below',
+        'size-per-minute': 'Size per minute of runtime, as set below',
+        tier: 'Source: disc copy, Blu-ray, web, DVD, then TV',
+        audio: 'Audio: lossless and Atmos first, then most channels',
+        edition: 'Edition, in the order below',
+        labels: 'Score of the label rules, highest first',
       },
     },
     versionCodecOrder: {
@@ -286,6 +291,19 @@ const settings = {
       none: 'No source of the server gives versions of movies or episodes yet.',
       dragHandle: (name: string) => `Drag ${name}`,
     },
+    versionEditionOrder: {
+      label: 'Order of editions',
+      help: 'The order the Edition criterion puts versions in, as their labels name the edition. A version whose labels name none counts as the theatrical cut.',
+    },
+    versionEditions: {
+      theatrical: 'Theatrical cut',
+      extended: 'Extended cut',
+      directors: 'Director’s cut',
+      imax: 'IMAX',
+    },
+    versionMbPerMinute: 'Size per minute to aim at (MB, 0 = largest)',
+    versionMbPerMinuteHelp: (r: RangeText) =>
+      `The Size per minute criterion puts first the versions closest to this many megabytes a minute of runtime, such as 50 for a good 1080p encode; 0 puts the largest first. The runtime is a version’s own once it is analyzed, else the title’s. Up to ${r.max}; ${r.default} by default.`,
     versionCodecs: {
       av1: 'AV1',
       hevc: 'HEVC (H.265)',
@@ -312,6 +330,22 @@ const settings = {
       telecine: 'Telecines (TC, TELECINE)',
       screener: 'Screeners (SCR, DVDSCR)',
       early: 'Early copies (R5, WORKPRINT)',
+    },
+    versionLabelRules: {
+      label: 'Label rules',
+      help: (max: string) =>
+        `Each rule reads a version’s name, description and file name in any letter case: a word found anywhere in them, or a regular expression. A rule either hides the versions it matches, after the hiding rules above and never every version of a title, or adds its score, from −100 to 100, to theirs. The criterion Score of the label rules puts the highest first; without it, the score sorts versions after the other criteria. Up to ${max} rules; none by default.`,
+      none: 'No rules: labels score nothing.',
+      add: 'Add a rule',
+      remove: (position: number) => `Remove rule ${position}`,
+      text: (position: number) => `Word or expression of rule ${position}`,
+      action: (position: number) => `What rule ${position} does`,
+      points: (position: number) => `Score of rule ${position}`,
+      regex: 'Regular expression',
+      score: 'Add a score',
+      hide: 'Hide',
+      wordPlaceholder: 'Word',
+      regexPlaceholder: 'Regular expression',
     },
     syncAddonSubtitles: 'Sync addon subtitles',
     syncAddonSubtitlesHelp:

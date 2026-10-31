@@ -109,7 +109,7 @@ const common: typeof en = {
     invalid_version_attempts:
       'Le nombre de versions essayées doit être un nombre entier de 1 à 10.',
     invalid_version_order:
-      'Choisissez au plus quatre critères pour trier les versions, un de chaque sorte. Rechargez la page.',
+      'Choisissez au plus six critères pour trier les versions, un de chaque sorte. Rechargez la page.',
     invalid_version_codec_order:
       'L’ordre des codecs vidéo doit citer chaque codec une fois. Rechargez la page.',
     invalid_version_source_order:
@@ -122,6 +122,12 @@ const common: typeof en = {
       'Saisissez au plus 50 mots masquant des versions, un par ligne, de 100 caractères au plus chacun.',
     invalid_hidden_releases:
       'Cette liste de genres de sorties masqués n’est pas prise en charge. Rechargez la page.',
+    invalid_version_edition_order:
+      'L’ordre des éditions doit citer chaque édition une fois. Rechargez la page.',
+    invalid_version_mb_per_minute:
+      'La taille par minute doit être un nombre entier de Mo de 0 à 1 000.',
+    invalid_version_label_rules:
+      'Saisissez au plus 40 règles de libellés, chacune d’au plus 200 caractères, une expression régulière valide là où elle est cochée, et un score de −100 à 100 autre que 0 sauf pour masquer.',
     invalid_max_conversions:
       'Le nombre de conversions vidéo en même temps doit être un nombre entier de 0 à 32.',
     invalid_max_conversion_height: 'Choisissez la qualité max des vidéos converties dans la liste.',

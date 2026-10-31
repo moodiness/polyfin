@@ -101,7 +101,7 @@ const common = {
       'The time to analyze a version must be a whole number of seconds from 5 to 120.',
     invalid_version_attempts: 'Versions tried must be a whole number from 1 to 10.',
     invalid_version_order:
-      'Choose at most four criteria to order versions, one of each kind. Reload the page.',
+      'Choose at most six criteria to order versions, one of each kind. Reload the page.',
     invalid_version_codec_order:
       'The order of the video codecs must list each codec once. Reload the page.',
     invalid_version_source_order:
@@ -113,6 +113,12 @@ const common = {
       'Enter at most 50 words hiding versions, one a line, each at most 100 characters.',
     invalid_hidden_releases:
       'This list of hidden kinds of releases is not supported. Reload the page.',
+    invalid_version_edition_order:
+      'The order of editions must list each edition once. Reload the page.',
+    invalid_version_mb_per_minute:
+      'The size per minute must be a whole number of MB from 0 to 1,000.',
+    invalid_version_label_rules:
+      'Enter at most 40 label rules, each at most 200 characters, a valid regular expression where ticked, and a score from −100 to 100 other than 0 unless it hides.',
     invalid_max_conversions: 'Video conversions at once must be a whole number from 0 to 32.',
     invalid_max_conversion_height: 'Choose the maximum quality of converted video from the list.',
     invalid_subtitle_ocr: 'Choose from the list when picture subtitles are turned into text.',

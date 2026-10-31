@@ -105,7 +105,7 @@ const common: typeof en = {
       'El tiempo para analizar una versión debe ser un número entero de segundos entre 5 y 120.',
     invalid_version_attempts: 'Las versiones probadas deben ser un número entero entre 1 y 10.',
     invalid_version_order:
-      'Elija como máximo cuatro criterios para ordenar las versiones, uno de cada tipo. Recargue la página.',
+      'Elija como máximo seis criterios para ordenar las versiones, uno de cada tipo. Recargue la página.',
     invalid_version_codec_order:
       'El orden de los códecs de vídeo debe incluir cada códec una sola vez. Recargue la página.',
     invalid_version_source_order:
@@ -118,6 +118,12 @@ const common: typeof en = {
       'Introduzca como máximo 50 palabras que oculten versiones, una por línea, de 100 caracteres como máximo cada una.',
     invalid_hidden_releases:
       'Esta lista de tipos de versiones ocultos no es compatible. Recargue la página.',
+    invalid_version_edition_order:
+      'El orden de las ediciones debe incluir cada edición una sola vez. Recargue la página.',
+    invalid_version_mb_per_minute:
+      'El tamaño por minuto debe ser un número entero de MB entre 0 y 1000.',
+    invalid_version_label_rules:
+      'Introduzca como máximo 40 reglas de etiquetas, de 200 caracteres como máximo cada una, con una expresión regular válida donde esté marcada y una puntuación de −100 a 100 distinta de 0 salvo para ocultar.',
     invalid_max_conversions:
       'Las conversiones de vídeo simultáneas deben ser un número entero entre 0 y 32.',
     invalid_max_conversion_height: 'Elija de la lista la calidad máxima del vídeo convertido.',

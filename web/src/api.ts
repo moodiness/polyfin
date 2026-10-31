@@ -394,7 +394,7 @@ export type Settings = {
   /** Prefers the first version an app plays without conversion over the first that plays at all. */
   preferDirectPlay: boolean
   /**
-   * Up to four criteria ordering a title's versions, each grouping them and the next sorting within
+   * Up to six criteria ordering a title's versions, each grouping them and the next sorting within
    * them; none keeps the addons' order.
    */
   versionOrder: VersionCriterion[]
@@ -418,6 +418,12 @@ export type Settings = {
    * words after the title's own.
    */
   hiddenReleases: ReleaseKind[]
+  /** The order of the editions for the edition criterion, every edition once. */
+  versionEditionOrder: VersionEdition[]
+  /** The MB a minute the size-per-minute criterion puts the closest to first; 0 the largest. */
+  versionMbPerMinute: number
+  /** Rules scoring or hiding versions by a word or a regular expression in their labels. */
+  versionLabelRules: VersionLabelRule[]
   /** Ends version names with how the app asking plays each, as its last playback decides it. */
   nameHowVersionsPlay: boolean
   /** Times the addons' subtitles to the version played, against when it has speech. */
@@ -728,10 +734,23 @@ export type VersionCriterion =
   | 'resolution-low'
   | 'size-large'
   | 'size-small'
+  | 'size-per-minute'
   | 'codec'
   | 'hdr-first'
   | 'hdr-last'
   | 'source'
+  | 'tier'
+  | 'audio'
+  | 'edition'
+  | 'labels'
+/** A movie's editions: the theatrical cut, an extended cut, the director's cut, an IMAX cut. */
+export type VersionEdition = 'theatrical' | 'extended' | 'directors' | 'imax'
+/**
+ * A label rule: a word, or with `regex` a regular expression, matched in any letter case in a
+ * version's name, description and file name; it hides the versions it matches, or adds `score`
+ * (other than 0) to theirs.
+ */
+export type VersionLabelRule = { text: string; regex: boolean; score: number; hide: boolean }
 export type VersionCodec = 'av1' | 'hevc' | 'vp9' | 'h264' | 'vc1' | 'mpeg4' | 'mpeg2video'
 /** Kinds of low-quality releases: camera copies, telesyncs, telecines, screeners, early copies. */
 export type ReleaseKind = 'cam' | 'telesync' | 'telecine' | 'screener' | 'early'
