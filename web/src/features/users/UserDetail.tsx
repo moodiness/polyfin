@@ -11,6 +11,7 @@ import {
   ShareNetworkIcon,
   ShieldCheckIcon,
   TrashIcon,
+  TelevisionSimpleIcon,
   UserCircleDashedIcon,
   BooksIcon,
   SpeakerHighIcon,
@@ -79,6 +80,7 @@ import {
 import {
   AllowedHoursForm,
   BlockedGenresForm,
+  LiveTvChannelsForm,
   FollowedNotice,
   followedGroup,
   ParentalControlForm,
@@ -226,6 +228,12 @@ function UserPage({ user }: { user: User }) {
         { id: 'genres', label: t.users.blockedGenresTitle, icon: ProhibitIcon, to: '#genres' },
         { id: 'hours', label: t.users.allowedHoursTitle, icon: ClockIcon, to: '#hours' },
         {
+          id: 'channels',
+          label: t.users.liveTvChannelsTitle,
+          icon: TelevisionSimpleIcon,
+          to: '#channels',
+        },
+        {
           id: 'share-links',
           label: t.users.shareLinksTitle,
           icon: ShareNetworkIcon,
@@ -313,6 +321,7 @@ function UserPage({ user }: { user: User }) {
         <VisibleLibrariesForm key={`libraries:${formsKey}`} id="libraries" target={target} />
         <BlockedGenresForm key={`genres:${formsKey}`} id="genres" target={target} />
         <AllowedHoursForm key={`hours:${formsKey}`} id="hours" target={target} />
+        <LiveTvChannelsForm key={`channels:${formsKey}`} id="channels" target={target} />
         <ShareLinksSection user={user} />
         <section id="devices" aria-labelledby="devices-title" className={sectionClass}>
           <h2 id="devices-title" className="mb-4 text-h3 text-ink">
