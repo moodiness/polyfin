@@ -45,6 +45,12 @@ type fakeSessions struct {
 	err      error
 	stopped  []accounts.ID
 	messages []string
+	// sent and received are what Bandwidth answers.
+	sent, received float64
+}
+
+func (f *fakeSessions) Bandwidth() (sent, received float64) {
+	return f.sent, f.received
 }
 
 func (f *fakeSessions) LiveSessions(context.Context) ([]jellyfin.LiveSession, error) {
@@ -79,6 +85,7 @@ func TestDashboardRoutesAreForAdministratorsOnly(t *testing.T) {
 		{http.MethodGet, "/sessions"},
 		{http.MethodPost, "/sessions/" + id + "/stop"},
 		{http.MethodPost, "/sessions/" + id + "/message"},
+		{http.MethodGet, "/bandwidth"},
 		{http.MethodGet, "/tasks"},
 		{http.MethodPost, "/tasks/" + tasks.ID("Any") + "/run"},
 		{http.MethodPost, "/tasks/" + tasks.ID("Any") + "/stop"},
