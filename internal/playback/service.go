@@ -943,6 +943,19 @@ func (s *Service) RetryItem(addon, item accounts.ID) {
 	})
 }
 
+// RetryVersion forgets that a version failed lately, so that it is tried
+// again at once, its source's cooldown included: an administrator asked to
+// analyze it now.
+func (s *Service) RetryVersion(version library.Version) {
+	if _, failed := s.failures.Get(version.ID); !failed {
+		return
+	}
+	s.failures.Delete(version.ID)
+	src := s.open(version)
+	src.Retry()
+	src.Release()
+}
+
 // RetryUnstarted forgets that a torrent version did not start (see
 // Unstarted), so that it is tried again at once, its source's cooldown
 // included: a user picked it. Other failures stay.

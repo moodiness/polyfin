@@ -234,6 +234,9 @@ type Handler struct {
 	// titles are the play sessions devices reported for the title they
 	// play (see leftplayback.go).
 	titles *titleSessions
+	// decisions are the last plays of each title, what each tried and
+	// chose, for the admin app's Versions page (see playdecisions.go).
+	decisions *playDecisions
 	// draws are the orders listings of libraries' titles at random drew,
 	// kept for drawLife (see randomLibraryListing).
 	draws *cache.Cache[drawKey, draw]
@@ -264,6 +267,7 @@ func New(options Options) *Handler {
 		torrents:       newTorrentPlays(),
 		chosen:         newChosenVersions(),
 		titles:         newTitleSessions(),
+		decisions:      newPlayDecisions(),
 	}
 	// Sessions read the handler's clock, which tests set.
 	h.sessions = playback.NewSessions(func() time.Time { return h.now() })
