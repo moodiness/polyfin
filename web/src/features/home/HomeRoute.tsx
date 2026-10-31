@@ -28,7 +28,7 @@ import {
   StatusPill,
   TextLink,
 } from '@/ui'
-import { NowPlaying, useLiveSessions } from './NowPlaying'
+import { NowPlaying, ServerBandwidth, useLiveSessions } from './NowPlaying'
 import { RecentActivity } from './RecentActivity'
 import {
   ActionDialog,
@@ -119,18 +119,21 @@ function Overview({ name }: { name: string }) {
           )}
           <NowPlaying
             aside={
-              transcoder ? (
-                <Link
-                  to="/system/health#transcoder"
-                  className="flex items-center gap-2 rounded-md transition-colors duration-160 hover:text-ink"
-                >
-                  <CpuIcon size={16} aria-hidden="true" />
-                  {text.conversions}
-                  <span className="figures text-ink-2">
-                    {text.conversionsOf(transcoder.conversions, transcoder.limit)}
-                  </span>
-                </Link>
-              ) : undefined
+              <>
+                <ServerBandwidth />
+                {transcoder && (
+                  <Link
+                    to="/system/health#transcoder"
+                    className="flex items-center gap-2 rounded-md transition-colors duration-160 hover:text-ink"
+                  >
+                    <CpuIcon size={16} aria-hidden="true" />
+                    {text.conversions}
+                    <span className="figures text-ink-2">
+                      {text.conversionsOf(transcoder.conversions, transcoder.limit)}
+                    </span>
+                  </Link>
+                )}
+              </>
             }
           />
           <Problems
