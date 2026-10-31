@@ -3,8 +3,13 @@ package jellyfin
 import (
 	"cmp"
 	"context"
+	"fmt"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
@@ -42,15 +47,63 @@ type versionRules struct {
 	// releases are the kinds of low-quality releases hidden (see
 	// library.Labels.Releases).
 	releases []string
+	// editions is the order of the edition criterion; perMinute, the size
+	// in bytes a minute the size-per-minute criterion aims at, 0 for the
+	// largest.
+	editions  []string
+	perMinute int64
+	// labels are the label rules, in the settings' order.
+	labels []labelRule
 }
 
+// labelRule is a label rule with its word in lower case, or its regular
+// expression compiled.
+type labelRule struct {
+	accounts.VersionLabelRule
+	word    string
+	pattern *regexp.Regexp
+}
+
+// labelPatterns are the label rules' regular expressions compiled, by
+// their text: the rules are read for every list of versions, and change
+// rarely.
+var labelPatterns sync.Map
+
+// maxLabelBytes bounds the labels a label rule reads, as
+// accounts.CompileLabelRule bounds its expression: a version's name and
+// file name, cut beyond.
+const maxLabelBytes = 4096
+
 // newVersionRules returns the rules settings set, without the user's
-// preferred audio language.
+// preferred audio language. Scoring label rules order the versions by
+// their score after the criteria when the labels criterion is not among
+// them.
 func newVersionRules(settings accounts.Settings) versionRules {
 	rules := versionRules{order: settings.VersionOrder, codecs: settings.VersionCodecOrder, sources: settings.VersionSourceOrder,
-		larger: int64(settings.HideVersionsLargerGB) * 1e9, hiddenCodecs: settings.HiddenVersionCodecs, releases: settings.HiddenReleases}
+		larger: int64(settings.HideVersionsLargerGB) * 1e9, hiddenCodecs: settings.HiddenVersionCodecs, releases: settings.HiddenReleases,
+		editions: settings.VersionEditionOrder, perMinute: int64(settings.VersionMBPerMinute) * 1e6}
 	for _, word := range settings.HiddenVersionWords {
 		rules.words = append(rules.words, strings.ToLower(word))
+	}
+	scored := false
+	for _, setting := range settings.VersionLabelRules {
+		rule := labelRule{VersionLabelRule: setting, word: strings.ToLower(setting.Text)}
+		if setting.Regex {
+			compiled, ok := labelPatterns.Load(setting.Text)
+			if !ok {
+				pattern, err := accounts.CompileLabelRule(setting.Text)
+				if err != nil {
+					continue
+				}
+				compiled, _ = labelPatterns.LoadOrStore(setting.Text, pattern)
+			}
+			rule.pattern = compiled.(*regexp.Regexp)
+		}
+		rules.labels = append(rules.labels, rule)
+		scored = scored || !setting.Hide
+	}
+	if scored && !slices.Contains(rules.order, "labels") {
+		rules.order = append(slices.Clone(rules.order), "labels")
 	}
 	return rules
 }
@@ -67,21 +120,64 @@ func (h *Handler) rulesFor(ctx context.Context, user accounts.User) versionRules
 }
 
 // key names what orders versions under the rules: the criteria, the
-// order of the codecs, that of the sources and the language and region
-// the user prefers. A page keeps the versions it lists in place only while
+// order of the codecs, that of the sources, the language and region the
+// user prefers, the order of the editions, the size a minute aimed at and
+// the label rules. A page keeps the versions it lists in place only while
 // it stays the same.
 func (r versionRules) key() string {
 	sources := make([]string, len(r.sources))
 	for i, source := range r.sources {
 		sources[i] = source.String()
 	}
+	labels := make([]string, len(r.labels))
+	for i, rule := range r.labels {
+		labels[i] = fmt.Sprintf("%t:%d:%t:%s", rule.Regex, rule.Score, rule.Hide, rule.Text)
+	}
 	return strings.Join(r.order, ",") + "|" + strings.Join(r.codecs, ",") + "|" + strings.Join(sources, ",") + "|" + r.language +
-		"|" + r.region
+		"|" + r.region + "|" + strings.Join(r.editions, ",") + "|" + strconv.FormatInt(r.perMinute, 10) + "|" + strings.Join(labels, "\n")
 }
 
 // hides reports whether a rule may hide versions.
 func (r versionRules) hides() bool {
-	return r.larger > 0 || len(r.hiddenCodecs) > 0 || len(r.words) > 0 || len(r.releases) > 0
+	return r.larger > 0 || len(r.hiddenCodecs) > 0 || len(r.words) > 0 || len(r.releases) > 0 ||
+		slices.ContainsFunc(r.labels, func(rule labelRule) bool { return rule.Hide })
+}
+
+// labelText is what the label rules read of a version: its labels, its
+// name and description and its file name, cut at maxLabelBytes.
+func labelText(version library.Version) string {
+	text := version.Name + "\n" + version.Filename
+	if len(text) > maxLabelBytes {
+		text = strings.ToValidUTF8(text[:maxLabelBytes], "")
+	}
+	return text
+}
+
+// matches reports whether a label rule matches a version's labels (see
+// labelText), lower being them in lower case.
+func (rule labelRule) matches(text, lower string) bool {
+	if rule.pattern != nil {
+		return rule.pattern.MatchString(text)
+	}
+	return !rule.Regex && strings.Contains(lower, rule.word)
+}
+
+// labelScore is a version's score under the label rules, the sum of the
+// scores of those matching it, with the text of every rule matching it,
+// scoring or hiding, in the settings' order.
+func (r versionRules) labelScore(version library.Version) (score int, matched []string) {
+	if len(r.labels) == 0 {
+		return 0, nil
+	}
+	text := labelText(version)
+	lower := strings.ToLower(text)
+	for _, rule := range r.labels {
+		if rule.matches(text, lower) {
+			score += rule.Score
+			matched = append(matched, rule.Text)
+		}
+	}
+	return score, matched
 }
 
 // elsewhere reports whether a version's labels name another title than
@@ -124,7 +220,11 @@ func (h *Handler) hiddenVersion(ctx context.Context, user accounts.User, version
 // without naming them all; variants, its audio languages with their
 // regions, each a variant of localization.AudioVariants where its region
 // is known, else its language's code; and source, the rank of its source
-// for the source criterion (see sourceRanks).
+// for the source criterion (see sourceRanks). tier is its source tier, of
+// library.Tiers, audio its best audio format, edition its edition, of
+// accounts.VersionEditions, empty, zero or empty when unknown, and
+// perMinute its size in bytes a minute of its runtime, 0 when either is
+// unknown; score is its score under the label rules (see labelScore).
 type versionFacts struct {
 	height    int
 	size      int64
@@ -134,6 +234,11 @@ type versionFacts struct {
 	multi     bool
 	variants  []string
 	source    int
+	tier      string
+	audio     library.AudioFormat
+	edition   string
+	perMinute int64
+	score     int
 }
 
 // versionFacts finds what is known of a version without reading it: each
@@ -150,8 +255,15 @@ func (h *Handler) versionFacts(ctx context.Context, version library.Version) ver
 		known = append(known, described)
 	}
 	var facts versionFacts
-	ranged, spoken := false, false
+	ranged, spoken, heard := false, false, false
+	var runtime time.Duration
 	for _, analysis := range known {
+		if runtime == 0 {
+			runtime = analysis.Duration
+		}
+		if audio, ok := analysisAudio(analysis); ok && !heard {
+			facts.audio, heard = audio, true
+		}
 		facts.height = cmp.Or(facts.height, videoHeight(analysis))
 		if facts.size == 0 {
 			facts.size = analysis.Size
@@ -188,6 +300,14 @@ func (h *Handler) versionFacts(ctx context.Context, version library.Version) ver
 			}
 		}
 	}
+	facts.tier, facts.edition = labels.Tier, labels.Edition
+	if !heard {
+		facts.audio = labels.Audio
+	}
+	runtime = cmp.Or(runtime, version.Runtime)
+	if facts.size > 0 && runtime >= time.Minute {
+		facts.perMinute = int64(float64(facts.size) / runtime.Minutes())
+	}
 	return facts
 }
 
@@ -211,26 +331,73 @@ func audioLanguages(analysis media.Analysis) (languages, variants []string) {
 	return languages, variants
 }
 
-// hidden reports whether a rule hides a version: one naming another title
-// (see elsewhere), or one known to be larger than the limit, or in a codec
-// hidden, or whose labels, its name and description and its file name,
-// hold a word hiding it, or tag it as a kind of low-quality release
-// hidden.
+// analysisAudio is the best audio format of an analysis's audio tracks
+// (see library.AudioFormat.Better), false when it has none: lossless for
+// Dolby TrueHD, FLAC, ALAC, PCM and DTS-HD Master Audio, object based for
+// Dolby Atmos and DTS:X, which ffprobe names in the track's profile.
+func analysisAudio(analysis media.Analysis) (library.AudioFormat, bool) {
+	var best library.AudioFormat
+	found := false
+	for _, stream := range analysis.Streams {
+		if stream.Type != "audio" {
+			continue
+		}
+		profile := strings.ToLower(stream.Profile)
+		format := library.AudioFormat{
+			Lossless: slices.Contains([]string{"truehd", "mlp", "flac", "alac"}, stream.Codec) || strings.HasPrefix(stream.Codec, "pcm_") ||
+				stream.Codec == "dts" && strings.Contains(profile, "dts-hd ma"),
+			Object:   strings.Contains(profile, "atmos") || strings.Contains(profile, "dts:x"),
+			Channels: stream.Channels,
+		}
+		if !found || format.Better(best) {
+			best, found = format, true
+		}
+	}
+	return best, found
+}
+
+// hidden reports whether a rule hides a version (see hiddenBy).
 func (r versionRules) hidden(version library.Version, facts versionFacts) bool {
+	rule, _ := r.hiddenBy(version, facts)
+	return rule != ""
+}
+
+// hiddenBy tells the rule hiding a version, and what of the version it
+// reads, empty when none hides it: "elsewhere", the marker naming another
+// title (see elsewhere); "larger", the limit in GB, for a version known
+// to be larger; "codec", its codec, when hidden; "release", the kind of
+// low-quality release its labels tag it as, when hidden; "words", a word
+// hiding it, in lower case, that its labels, its name and description and
+// its file name, hold.
+func (r versionRules) hiddenBy(version library.Version, facts versionFacts) (rule, detail string) {
 	if elsewhere(version) {
-		return true
+		return "elsewhere", version.Labels.Elsewhere
 	}
-	if r.larger > 0 && facts.size > r.larger || facts.codec != "" && slices.Contains(r.hiddenCodecs, facts.codec) {
-		return true
+	if r.larger > 0 && facts.size > r.larger {
+		return "larger", strconv.FormatInt(r.larger/1e9, 10)
 	}
-	if slices.ContainsFunc(version.Labels.Releases, func(kind string) bool { return slices.Contains(r.releases, kind) }) {
-		return true
+	if facts.codec != "" && slices.Contains(r.hiddenCodecs, facts.codec) {
+		return "codec", facts.codec
 	}
-	if len(r.words) == 0 {
-		return false
+	if i := slices.IndexFunc(version.Labels.Releases, func(kind string) bool { return slices.Contains(r.releases, kind) }); i >= 0 {
+		return "release", version.Labels.Releases[i]
 	}
 	labels := strings.ToLower(version.Name + "\n" + version.Filename)
-	return slices.ContainsFunc(r.words, func(word string) bool { return strings.Contains(labels, word) })
+	if i := slices.IndexFunc(r.words, func(word string) bool { return strings.Contains(labels, word) }); i >= 0 {
+		return "words", r.words[i]
+	}
+	// "label", the text of the first label rule hiding it that matches its
+	// labels: the label rules come after the others.
+	if slices.ContainsFunc(r.labels, func(label labelRule) bool { return label.Hide }) {
+		text := labelText(version)
+		lower := strings.ToLower(text)
+		for _, label := range r.labels {
+			if label.Hide && label.matches(text, lower) {
+				return "label", label.Text
+			}
+		}
+	}
+	return "", ""
 }
 
 // compare orders two versions by the criteria, each grouping them and the
@@ -266,8 +433,68 @@ func (r versionRules) criterion(criterion string, a, b versionFacts) int {
 		return cmp.Compare(rangeRank(a.hdr, library.StandardRange), rangeRank(b.hdr, library.StandardRange))
 	case "source":
 		return cmp.Compare(a.source, b.source)
+	case "size-per-minute":
+		if r.perMinute == 0 {
+			return knownFirst(a.perMinute, b.perMinute, -1)
+		}
+		return knownFirst(r.perMinuteDistance(a.perMinute), r.perMinuteDistance(b.perMinute), 1)
+	case "tier":
+		return cmp.Compare(tierRank(a.tier), tierRank(b.tier))
+	case "audio":
+		return audioOrder(a.audio, b.audio)
+	case "edition":
+		return cmp.Compare(r.editionRank(a.edition), r.editionRank(b.edition))
+	case "labels":
+		return cmp.Compare(b.score, a.score)
 	}
 	return 0
+}
+
+// perMinuteDistance is how far a size a minute is from the one aimed at,
+// plus one so that 0 stays unknown: 0 for an unknown size.
+func (r versionRules) perMinuteDistance(perMinute int64) int64 {
+	if perMinute == 0 {
+		return 0
+	}
+	return max(perMinute-r.perMinute, r.perMinute-perMinute) + 1
+}
+
+// tierRank ranks a source tier in the order of library.Tiers, unknown
+// last.
+func tierRank(tier string) int {
+	if i := slices.Index(library.Tiers, tier); i >= 0 {
+		return i
+	}
+	return len(library.Tiers)
+}
+
+// audioOrder orders two audio formats for the audio criterion: lossless
+// and object based first (see library.AudioFormat.Rank), then those with
+// more channels, unknown last.
+func audioOrder(a, b library.AudioFormat) int {
+	var unknown library.AudioFormat
+	switch {
+	case a == unknown && b == unknown:
+		return 0
+	case a == unknown:
+		return 1
+	case b == unknown:
+		return -1
+	}
+	if c := cmp.Compare(b.Rank(), a.Rank()); c != 0 {
+		return c
+	}
+	return knownFirst(a.Channels, b.Channels, -1)
+}
+
+// editionRank ranks an edition in the order of the edition criterion; a
+// version whose labels name none counts as the theatrical cut, which
+// releases do not name.
+func (r versionRules) editionRank(edition string) int {
+	if i := slices.Index(r.editions, cmp.Or(edition, "theatrical")); i >= 0 {
+		return i
+	}
+	return len(r.editions)
 }
 
 // knownFirst compares two values, 0 being unknown, the known first, in
@@ -374,6 +601,7 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, versions []li
 	for _, version := range versions {
 		known := h.versionFacts(ctx, version)
 		known.source = sources[version.Origin.Addon]
+		known.score, _ = rules.labelScore(version)
 		facts[version.ID] = known
 	}
 	kept := versions
