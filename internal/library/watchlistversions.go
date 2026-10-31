@@ -18,7 +18,8 @@ import (
 // catalog page does, so that the checks that follow do not ask it either.
 // Only the answers of the addons asked count: complete is false when an
 // addon was not asked, failed, or answered only notices, in which case
-// versions are those of the others.
+// versions are those of the others. A movie waiting for its digital
+// release has none, and its addons are not asked.
 func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id accounts.ID) (versions []Version, complete bool, err error) {
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
@@ -26,6 +27,11 @@ func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id 
 	}
 	if t.kind != KindMovie && t.kind != KindEpisode {
 		return nil, false, ErrNotFound
+	}
+	if t.kind == KindMovie {
+		if _, held, err := s.upcoming(ctx, v, id); err != nil || held {
+			return nil, err == nil, err
+		}
 	}
 	s.embed(ctx, v, &t, true)
 	serving := s.streamServing(ctx, v, t)

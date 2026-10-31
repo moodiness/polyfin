@@ -53,6 +53,13 @@ const (
 	// today: Min -30 and Max 0 for the last 30 days, Min 0 and Max 60 for
 	// the next 60.
 	FieldReleased = "released"
+	// FieldHomeRelease matches a title out at home within Max days of
+	// today, released or upcoming as Value says (see HomeReleased): a
+	// movie by its first digital or physical release, TMDB tells, else 90
+	// days after it was first shown, a series by its premiere date. It is
+	// the one rule that lists the movies the wait for their digital
+	// release holds back (see Rule.Upcoming).
+	FieldHomeRelease = "homeRelease"
 )
 
 // What a state rule matches: a title the user played (a series once every
@@ -64,6 +71,14 @@ const (
 	StateUnplayed = "unplayed"
 	StateStarted  = "started"
 	StateFavorite = "favorite"
+)
+
+// What a home release rule matches: a title out at home in the last Max
+// days, today included, one out in the next Max days, or either.
+const (
+	HomeReleased = "released"
+	HomeUpcoming = "upcoming"
+	HomeEither   = "both"
 )
 
 // How a group combines its rules: a title matches all of them, or any.
@@ -163,6 +178,9 @@ func (r Rule) valid(depth int, count *int) bool {
 		return plain && r.Value == "" && whole(r.Min) && whole(r.Max) && bounded(0, maxVotes)
 	case FieldReleased:
 		return plain && r.Value == "" && whole(r.Min) && whole(r.Max) && bounded(-maxDays, maxDays)
+	case FieldHomeRelease:
+		return plain && (r.Value == HomeReleased || r.Value == HomeUpcoming || r.Value == HomeEither) && r.Min == nil &&
+			r.Max != nil && whole(r.Max) && *r.Max >= 1 && *r.Max <= maxDays
 	case FieldContentRating:
 		_, rated := localization.RatingScore(r.Value)
 		return plain && rated && r.Min == nil && r.Max == nil
@@ -181,6 +199,17 @@ func (r Rule) Uses(field string) bool {
 		}
 	}
 	return false
+}
+
+// Upcoming reports whether the rules may match a title not out at home
+// yet: they hold a home release rule, not negated, of upcoming titles or
+// of either. Only the lists whose rules do list the movies the wait for
+// their digital release holds back.
+func (r Rule) Upcoming() bool {
+	if r.Field == FieldHomeRelease && !r.Not && (r.Value == HomeUpcoming || r.Value == HomeEither) {
+		return true
+	}
+	return slices.ContainsFunc(r.Rules, Rule.Upcoming)
 }
 
 // Genres lists the genres every title the rules match has: those of the
@@ -244,6 +273,12 @@ type Title struct {
 	// Released is the day it was released, zero when not known to the
 	// day: a year alone does not tell it.
 	Released time.Time
+	// HomeRelease is the day a movie is out at home, as a home release
+	// rule judges it (see FieldHomeRelease), once HomeReleaseKnown: zero
+	// when it cannot be known, without TMDB key or identifier, or when
+	// TMDB knows no date of it.
+	HomeRelease      time.Time
+	HomeReleaseKnown bool
 	// Votes is how many votes its IMDb rating counts, once VotesKnown:
 	// MDBList answered for it, 0 when MDBList has none.
 	Votes      int
@@ -406,9 +441,27 @@ func (r Rule) judge(t Title) Verdict {
 		if t.Released.IsZero() {
 			return missing
 		}
-		day := func(at time.Time) time.Time { return time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC) }
-		days := math.Round(day(t.Released).Sub(day(t.Today)).Hours() / 24)
-		return verdictOf(within(days))
+		return verdictOf(within(daysAfter(t.Released, t.Today)))
+	case FieldHomeRelease:
+		out := t.HomeRelease
+		switch {
+		case t.Series && t.Released.IsZero():
+			return missing
+		case t.Series:
+			out = t.Released
+		case !t.HomeReleaseKnown:
+			return Unknown
+		case out.IsZero():
+			return Absent
+		}
+		days, most := daysAfter(out, t.Today), *r.Max
+		switch r.Value {
+		case HomeReleased:
+			return verdictOf(days >= -most && days <= 0)
+		case HomeUpcoming:
+			return verdictOf(days > 0 && days <= most)
+		}
+		return verdictOf(days >= -most && days <= most)
 	case FieldVotes:
 		switch {
 		case !t.VotesKnown:
@@ -429,6 +482,13 @@ func (r Rule) judge(t Title) Verdict {
 		return Absent
 	}
 	return No
+}
+
+// daysAfter counts the days from the day of today to the day of at,
+// negative for a day past.
+func daysAfter(at, today time.Time) float64 {
+	day := func(at time.Time) time.Time { return time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC) }
+	return math.Round(day(at).Sub(day(today)).Hours() / 24)
 }
 
 // judgeGroup judges a group: one of its rules not matched decides a group

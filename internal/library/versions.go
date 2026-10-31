@@ -350,7 +350,8 @@ const (
 )
 
 // versionsOf lists an item's versions, and reports whether every addon's
-// streams are in: known, and not asked again.
+// streams are in: known, and not asked again. A movie waiting for its
+// digital release has none, and its addons are not asked.
 func (s *Service) versionsOf(ctx context.Context, user accounts.User, id accounts.ID, mode listing) ([]Version, bool, error) {
 	// A channel Polyfin airs has one version: its playout.
 	if version, ok, err := s.virtualVersion(ctx, user, id); err != nil {
@@ -361,6 +362,11 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
 		return nil, false, err
+	}
+	if t.kind == KindMovie {
+		if _, held, err := s.upcoming(ctx, v, id); err != nil || held {
+			return nil, err == nil, err
+		}
 	}
 	if AudioKind(t.kind) {
 		// A track has one version: where its addon streams it.

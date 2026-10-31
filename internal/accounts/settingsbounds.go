@@ -297,6 +297,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"mdblistRatingsKey":     text(MaxRatingsKeyBytes, d.MDBListRatingsKey),
 		"criticRatingShows":     choice(d.CriticRatingShows, anys(CriticRatingChoices)),
 		"tmdbKey":               text(MaxTMDBKeyBytes, d.TMDBKey),
+		"waitDigitalRelease":    is(d.WaitDigitalRelease),
 		"lyrics":                is(d.Lyrics),
 		"evenVolume":            is(d.EvenVolume),
 		"measureLoudness":       choice(d.MeasureLoudness, anys(MeasureLoudnessChoices)),
