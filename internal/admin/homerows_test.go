@@ -4,11 +4,14 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/jellyfin"
+	"github.com/moodiness/polyfin/internal/library"
 )
 
 // fixedChoices offers one collection for home rows.
@@ -149,5 +152,111 @@ func TestHomeRowRoutes(t *testing.T) {
 	if status, body, _ := administrator.call(http.MethodPost, "/home-rows", map[string]any{"name": "New", "kind": "new", "place": "top",
 		"everyone": true}); status != http.StatusConflict || body["error"] != "too_many_home_rows" {
 		t.Errorf("one row too many: %d %v", status, body)
+	}
+}
+
+// A row keeps the schedule it is given, its days in order, and tells
+// whether it shows now; schedules that cannot be are refused.
+func TestHomeRowSchedules(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10, func(o *Options, d testDeps) {
+		o.HomeRows = homerows.New(d.pool)
+		o.HomeRowChoices = fixedChoices{}
+	})
+	administrator := api.signedIn("administrator", true)
+	start, end := time.Now().AddDate(0, 0, -20).Format(time.DateOnly), time.Now().AddDate(0, 0, -10).Format(time.DateOnly)
+	status, created, _ := administrator.call(http.MethodPost, "/home-rows", map[string]any{"name": "Past", "kind": "new", "place": "top",
+		"everyone": true, "schedule": map[string]any{"startDate": start, "endDate": end, "days": []int{5, 1, 5}, "startHour": 22, "endHour": 2}})
+	schedule, _ := created["schedule"].(map[string]any)
+	if status != http.StatusCreated || schedule["startDate"] != start || schedule["endDate"] != end || !slices.Equal(schedule["days"].([]any), []any{1.0, 5.0}) ||
+		schedule["startHour"] != 22.0 || schedule["endHour"] != 2.0 || created["shownNow"] != false {
+		t.Fatalf("a row with a schedule: %d %v", status, created)
+	}
+	_, always, _ := administrator.call(http.MethodPost, "/home-rows", map[string]any{"name": "Always", "kind": "new", "place": "top",
+		"everyone": true})
+	schedule, _ = always["schedule"].(map[string]any)
+	if schedule["startDate"] != "" || len(schedule["days"].([]any)) != 0 || schedule["startHour"] != nil || always["shownNow"] != true {
+		t.Errorf("a row without a schedule: %v", always)
+	}
+	for _, refused := range []map[string]any{
+		{"startDate": "2026-13-01"},
+		{"startDate": "2026-12-02", "endDate": "2026-12-01"},
+		{"startHour": 22},
+		{"days": []int{7}},
+		{"startHour": 8, "endHour": 8},
+		{"startHour": 20, "endHour": 0},
+	} {
+		if status, body, _ := administrator.call(http.MethodPatch, "/home-rows/"+always["id"].(string), map[string]any{"name": "Always",
+			"kind": "new", "place": "top", "everyone": true, "schedule": refused}); status != http.StatusBadRequest || body["error"] != "invalid_home_row" {
+			t.Errorf("%v: %d %v", refused, status, body)
+		}
+	}
+}
+
+// fixedPreviews previews a row of an episode and a movie, for whoever is
+// asked, and remembers who was.
+type fixedPreviews struct {
+	mu    sync.Mutex
+	asked []accounts.User
+}
+
+func (p *fixedPreviews) PreviewHomeRows(_ context.Context, user accounts.User) ([]jellyfin.HomeRowPreview, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.asked = append(p.asked, user)
+	id := func(raw string) accounts.ID {
+		parsed, _ := accounts.ParseID(raw)
+		return parsed
+	}
+	return []jellyfin.HomeRowPreview{{ID: id("10000000000000000000000000000000"), Name: "Because you watched Show",
+		Row: homerows.Row{ID: id("20000000000000000000000000000000"), Kind: homerows.KindBecause, Place: homerows.PlaceResume},
+		Titles: []library.Item{
+			{ID: id("30000000000000000000000000000000"), Kind: library.KindEpisode, Name: "Pilot", SeriesID: id("40000000000000000000000000000000")},
+			{ID: id("50000000000000000000000000000000"), Kind: library.KindMovie, Name: "Movie", ProductionYear: 2001},
+		}}}, nil
+}
+
+// Preview as asks for the rows of the user chosen, as their account is,
+// and answers each row with its titles, an episode's poster being its
+// series'. A user that does not exist is not found; members may not.
+func TestHomeRowPreview(t *testing.T) {
+	t.Parallel()
+	previews := &fixedPreviews{}
+	api := newTestAPI(t, 10, func(o *Options, d testDeps) {
+		o.HomeRows = homerows.New(d.pool)
+		o.HomeRowPreviews = previews
+	})
+	administrator := api.signedIn("administrator", true)
+	member := api.signedIn("member", false)
+	var me map[string]any
+	_, me, _ = member.call(http.MethodGet, "/session", nil)
+	memberID := me["user"].(map[string]any)["id"].(string)
+	id, _ := accounts.ParseID(memberID)
+	if _, err := api.store.UpdateUser(t.Context(), id, accounts.UserChanges{Parental: &accounts.ParentalControl{MaxRating: new(13)}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if status, _, _ := member.call(http.MethodGet, "/home-rows/preview/"+memberID, nil); status != http.StatusForbidden {
+		t.Errorf("a member's preview: %d", status)
+	}
+	if status, _, _ := administrator.call(http.MethodGet, "/home-rows/preview/0123456789abcdef0123456789abcdef", nil); status != http.StatusNotFound {
+		t.Errorf("a user that does not exist: %d", status)
+	}
+	status, answer, _ := administrator.call(http.MethodGet, "/home-rows/preview/"+memberID, nil)
+	rows, _ := answer["rows"].([]any)
+	if status != http.StatusOK || len(rows) != 1 {
+		t.Fatalf("the preview: %d %v", status, answer)
+	}
+	row := rows[0].(map[string]any)
+	titles := row["titles"].([]any)
+	if row["name"] != "Because you watched Show" || row["kind"] != "because" || row["place"] != "resume" ||
+		row["rowId"] != "20000000000000000000000000000000" || len(titles) != 2 ||
+		titles[0].(map[string]any)["posterId"] != "40000000000000000000000000000000" ||
+		titles[1].(map[string]any)["posterId"] != "50000000000000000000000000000000" || titles[1].(map[string]any)["year"] != 2001.0 {
+		t.Errorf("the preview's row: %v", row)
+	}
+	previews.mu.Lock()
+	defer previews.mu.Unlock()
+	if len(previews.asked) != 1 || previews.asked[0].ID != id || previews.asked[0].Parental.MaxRating == nil || *previews.asked[0].Parental.MaxRating != 13 {
+		t.Errorf("asked for %+v", previews.asked)
 	}
 }

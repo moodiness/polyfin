@@ -60,7 +60,7 @@ The web player's home keeps its rows for a minute. jellyfin-web 12.4 keeps what 
 
 ### Home rows
 
-**My account › Home rows** lists the rows the administrator added to the web player's home page for the user (see [Home rows](web-client.md#home-rows)), each with its kind and place, and a switch. Off, the row leaves the user's home page, and, when it is also a library in other apps, their libraries there. Other users keep it. jellyfin-web's own home sections stay under its **Settings › Home**. **Reset my preferences** turns every row on again (see [Your own preferences](#your-own-preferences)).
+**My account › Home rows** lists the rows the administrator added to the web player's home page for the user (see [Home rows](web-client.md#home-rows)), each with its kind and place, and a switch. A row with a schedule is listed outside its schedule too, so that the user can turn it off beforehand. Off, the row leaves the user's home page, and, when it is also a library in other apps, their libraries there. Other users keep it. jellyfin-web's own home sections stay under its **Settings › Home**. **Reset my preferences** turns every row on again (see [Your own preferences](#your-own-preferences)).
 
 ### Track choices
 

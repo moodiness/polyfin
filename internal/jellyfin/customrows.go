@@ -42,6 +42,11 @@ import (
 // libraries of the server hidden from them, whose catalogs and collections
 // make no row.
 //
+// A row shows only inside its schedule (homerows.Row.ShowsAt), at the time
+// h.now tells: outside it, it is no row, no library and no folder. A row
+// that is also a library follows its dates only, so that apps, which keep
+// the libraries they listed for a while, do not lose it by the hour.
+//
 // Each row is a folder of its own, a library without type, by an
 // identifier of its own (customRowID): its name, in the web player,
 // opens its list, /Items with the row as parentId. A row made a library
@@ -129,7 +134,7 @@ func (h *Handler) customRows(ctx context.Context, user accounts.User, keep func(
 	if h.HomeRows == nil || user.ID == (accounts.ID{}) {
 		return nil, nil
 	}
-	rows, err := h.HomeRows.Shown(ctx, user.ID)
+	rows, err := h.HomeRows.Shown(ctx, user.ID, h.now())
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +179,7 @@ func (h *Handler) customRowOf(ctx context.Context, user accounts.User, id accoun
 	if h.HomeRows == nil || user.ID == (accounts.ID{}) {
 		return customRow{}, false, nil
 	}
-	rows, err := h.HomeRows.Shown(ctx, user.ID)
+	rows, err := h.HomeRows.Shown(ctx, user.ID, h.now())
 	if err != nil {
 		return customRow{}, false, err
 	}
@@ -366,32 +371,17 @@ func (h *Handler) customRowsAnswer(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := h.customRows(r.Context(), user, nil)
+	rows, titles, err := h.firstCustomRowTitles(r.Context(), user, limit)
+	if r.Context().Err() != nil {
+		return
+	}
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	pages := make([]library.Page, len(rows))
-	var group errgroup.Group
-	group.SetLimit(customRowLookups)
-	for i, row := range rows {
-		group.Go(func() error {
-			var err error
-			pages[i], err = h.customRowTitles(r.Context(), user, row, 0, limit, true)
-			// A row that cannot be read is left out; the others show.
-			if err != nil && r.Context().Err() == nil {
-				h.Logger.Warn("A home row could not be read", "row", row.name, "error", err)
-			}
-			return nil
-		})
-	}
-	_ = group.Wait()
-	if r.Context().Err() != nil {
-		return
-	}
 	var all []library.Item
-	for _, page := range pages {
-		all = append(all, page.Items...)
+	for _, items := range titles {
+		all = append(all, items...)
 	}
 	state, err := h.userState(r.Context(), user, all)
 	if err != nil {
@@ -401,14 +391,72 @@ func (h *Handler) customRowsAnswer(w http.ResponseWriter, r *http.Request) {
 	fields := requestedFields(r)
 	result := []CustomRowDto{}
 	for i, row := range rows {
-		items := pages[i].Items[:min(limit, len(pages[i].Items))]
-		if len(items) == 0 {
-			continue
-		}
 		result = append(result, CustomRowDto{Id: row.id.String(), Name: row.name, Place: customRowPlaces[row.row.Place],
-			Kind: customRowKinds[row.row.Kind], Items: h.listDtos(r, user, items, fields, state)})
+			Kind: customRowKinds[row.row.Kind], Items: h.listDtos(r, user, titles[i], fields, state)})
 	}
 	writeJSON(w, http.StatusOK, struct{ Items []CustomRowDto }{result})
+}
+
+// firstCustomRowTitles lists the rows user sees, in order, each with its
+// first titles, up to limit. The rows without any are left out, and so
+// are those that cannot be read, which are logged.
+func (h *Handler) firstCustomRowTitles(ctx context.Context, user accounts.User, limit int) ([]customRow, [][]library.Item, error) {
+	rows, err := h.customRows(ctx, user, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	pages := make([]library.Page, len(rows))
+	var group errgroup.Group
+	group.SetLimit(customRowLookups)
+	for i, row := range rows {
+		group.Go(func() error {
+			var err error
+			pages[i], err = h.customRowTitles(ctx, user, row, 0, limit, true)
+			// A row that cannot be read is left out; the others show.
+			if err != nil && ctx.Err() == nil {
+				h.Logger.Warn("A home row could not be read", "row", row.name, "error", err)
+			}
+			return nil
+		})
+	}
+	_ = group.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	var shown []customRow
+	var titles [][]library.Item
+	for i, row := range rows {
+		if items := pages[i].Items[:min(limit, len(pages[i].Items))]; len(items) > 0 {
+			shown, titles = append(shown, row), append(titles, items)
+		}
+	}
+	return shown, titles, nil
+}
+
+// HomeRowPreview is a row of a user's home page in the web player, as GET
+// /Polyfin/HomeRows answers it for them: its folder's ID, its Name, the
+// Row it comes from, and its first Titles.
+type HomeRowPreview struct {
+	ID     accounts.ID
+	Name   string
+	Row    homerows.Row
+	Titles []library.Item
+}
+
+// PreviewHomeRows lists the rows user sees now on the web player's home
+// page, in order, each with its first titles, as GET /Polyfin/HomeRows
+// answers them to the web player signed in as user (Settings › Web player
+// › Home rows › Preview as).
+func (h *Handler) PreviewHomeRows(ctx context.Context, user accounts.User) ([]HomeRowPreview, error) {
+	rows, titles, err := h.firstCustomRowTitles(ctx, user, customRowItems)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]HomeRowPreview, 0, len(rows))
+	for i, row := range rows {
+		result = append(result, HomeRowPreview{ID: row.id, Name: row.name, Row: row.row, Titles: titles[i]})
+	}
+	return result, nil
 }
 
 // customRowFolder is the folder of a row.
