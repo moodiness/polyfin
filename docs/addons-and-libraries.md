@@ -874,10 +874,29 @@ Polyfin keeps your changes apart from what the addons say. Your changes win for 
 
 A series' name and ratings show on its seasons and episodes.
 
-Polyfin keeps these fields: name, original title, sort name, overview, tagline, genres, tags, studios, official and custom ratings, community and critic ratings, premiere and end dates, and production year.
+Polyfin keeps these fields: name, original title, sort name, overview, tagline, genres, tags, studios, official and custom ratings, community and critic ratings, premiere and end dates, production year, and a series' display order (see [Episode orders](#episode-orders)).
 
 - A field left empty, or set back to the addon's value, follows the addon again, so the addon's later changes show.
-- People, provider identifiers and the editor's other fields (locks, display order, content type, date added) are not kept: they stay the addons'. An IMDb identifier typed for a movie or show of a local folder links its files to that title instead (see [Identify in the web player](local-folders.md#identify-in-the-web-player)).
+- People, provider identifiers and the editor's other fields (locks, content type, date added) are not kept: they stay the addons'. An IMDb identifier typed for a movie or show of a local folder links its files to that title instead (see [Identify in the web player](local-folders.md#identify-in-the-web-player)).
+
+### Episode orders
+
+A series shows its seasons and episodes as its addon numbers them, as aired. An administrator can show a series in another order, for every user: one of the series' TMDB episode groups, such as DVD, absolute or story arc, read with the server's **TMDB API key**. Two places set it:
+
+- "Display order" in jellyfin-web's **Edit metadata**, by type: Original air date, Absolute, DVD, Digital, Story arc, Production or TV. The series shows in the first of its TMDB groups of that type. Aired, the default, and the TVDB orders the editor also offers (Alternate, Regional, Alternate DVD) show it as aired.
+- **Content › Libraries › Episode orders** in the admin app, which lists the series shown in an order of their own and finds others by name. It lists the series' TMDB groups by type and name, with their seasons and episodes, so that one group can be chosen among several of a type, and sets where the specials show: **First**, as Jellyfin lists season 0, **Last**, or **Hidden**. The editor's "Display order" then shows the group's type; saving the editor with the same type keeps the group and the specials' place, another type takes the first group of that type.
+
+In an order:
+
+- **Seasons:** the group's parts are the series' seasons, under their names: its part at place N is season N, as Jellyfin reads a group. They have identifiers of their own, and show the series' artwork.
+- **Episodes:** each shows the season and number the group gives it, the first of a part being episode 1. Episodes are matched with the group by TMDB's season and number: those the episode's identifier names when it is TMDB's (`tmdb:1399:1:2`), else the addon's.
+- **What the group leaves out stays:** the addon's specials it leaves out go to season 0, after its own specials, and its other episodes to a last season, "Other episodes".
+- **Where it applies:** the series' seasons and episodes in Jellyfin apps, an episode's details, Next Up, which follows the order and leaves out season 0, Continue Watching and Upcoming. A season of the order counts the episodes the user played in it.
+- **Presentation only:** an episode keeps its identifier, its watch state, its tracking, its history and the streams it plays: those of the addon's season and number. Changing the order back shows every played mark as it was. DLNA devices and Silo list the series as aired.
+- **Specials hidden:** season 0 and its episodes leave the series' listings, so Next Up and playing on never reach them; an episode of it still opens and plays from Continue Watching or a link.
+- **While TMDB cannot tell:** without a TMDB key, for a series TMDB does not know by its TMDB or IMDb identifier, or one without a group of the type, the series shows as aired. A listing waits for TMDB at most 5 seconds, then shows the series as aired until TMDB answered, whose answers are kept 24 hours.
+
+**Compared with Jellyfin:** Jellyfin keeps a series' `DisplayOrder` as the metadata editor sends it ([ItemUpdateController.cs, lines 412 to 415](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemUpdateController.cs#L412-L415)), and its TMDB provider reads the first group of that type ([TmdbClientManager.cs, lines 182 to 226](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbClientManager.cs#L182-L226)). Jellyfin's seasons and episodes come from the files, already numbered in that order: it only reads each episode's metadata at its place in the group, part N being season N and place N episode N+1 ([lines 286 to 297](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/TmdbClientManager.cs#L286-L297)). An addon numbers its episodes as aired, so Polyfin moves them to the group's places instead, with the same numbering, and keeps their identity. The choice of a group among several of a type and the place of the specials are Polyfin's own.
 
 ### Edit images
 
@@ -890,7 +909,7 @@ Posters are listed for Primary, backdrops for Backdrop and Thumb (with the addon
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Edit images searches TMDB with it, people's photos and biographies are looked up with it, local folders' files are matched through TMDB's search when every metadata addon's fails, and smart lists' **Studio or network** rules look titles' studios and networks up with it. Empty, only the addons' images are listed, people show what the addons give, such files stay unmatched, studio rules see only those an administrator set, and TMDB is never asked. |
+| **TMDB API key** | **Settings › Content** | Empty | The server's TMDB API key or read access token, checked with TMDB when saved. Edit images searches TMDB with it, people's photos and biographies are looked up with it, local folders' files are matched through TMDB's search when every metadata addon's fails, smart lists' **Studio or network** rules look titles' studios and networks up with it, and series' episode orders read TMDB's episode groups with it. Empty, only the addons' images are listed, people show what the addons give, such files stay unmatched, studio rules see only those an administrator set, every series shows as aired, and TMDB is never asked. |
 
 - Images are relayed by Polyfin, as all artwork is: apps never reach TMDB or an addon's artwork server. Polyfin relays only the images it listed for the item, and an addon's under the same limits as the addon: a user's own addon reaches public addresses only.
 - TMDB's answers are kept for 24 hours, and at most 4 requests go to TMDB at a time, its images included.
