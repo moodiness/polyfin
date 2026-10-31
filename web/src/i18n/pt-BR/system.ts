@@ -437,6 +437,10 @@ const system: typeof en = {
       goroutinesDownload: 'Baixar as goroutines',
       goroutinesHelp:
         'Quando uma solicitação nunca recebe resposta, baixe o que o servidor está fazendo e envie com seu relato. Não contém endereços nem segredos.',
+      lastCrash: 'Última falha',
+      noCrash: 'Nenhuma',
+      lastCrashHelp:
+        'O começo do rastreamento do erro que parou o Polyfin pela última vez, lido ao reiniciar. Os endereços mantêm apenas o host, e tokens e chaves ficam ocultos.',
       secretsTitle: 'Chaves armazenadas',
       secretsHelp:
         'As chaves do servidor, os tokens e chaves de rastreamento dos usuários e as senhas dos compartilhamentos de rede, criptografados no banco de dados com POLYFIN_SECRET_KEY (openssl rand -base64 32).',

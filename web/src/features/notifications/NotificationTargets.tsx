@@ -5,12 +5,14 @@ import {
   ApiError,
   createNotificationTarget,
   deleteNotificationTarget,
+  fetchNotificationDeliveries,
   fetchNotifications,
   queryClient,
   queryKeys,
   testNotificationTarget,
   updateNotificationTarget,
   type NotificationDraft,
+  type NotificationDelivery,
   type NotificationEvent,
   type NotificationKind,
   type NotificationScope,
@@ -135,6 +137,7 @@ function TargetRow({
   const text = t.notifications
   const toast = useToast()
   const [confirming, setConfirming] = useState(false)
+  const [logOpen, setLogOpen] = useState(false)
   const test = useMutation({
     mutationFn: () => testNotificationTarget(scope, target.id),
     onSuccess: (result) => {
@@ -209,6 +212,8 @@ function TargetRow({
           {target.events.length === 0
             ? text.noEvents
             : target.events.map((event) => text.eventNames[event]).join(', ')}
+          {target.perMinute !== null && ` · ${text.capped(target.perMinute)}`}
+          {target.groupMinutes !== null && ` · ${text.grouped(target.groupMinutes)}`}
           {' · '}
           {target.lastSentAt === null ? (
             text.nothingSent
@@ -233,6 +238,9 @@ function TargetRow({
           onClick={() => test.mutate()}
         >
           {test.isPending ? text.testing : text.test}
+        </Button>
+        <Button variant="ghost" onClick={() => setLogOpen(true)}>
+          {text.deliveries.open}
         </Button>
         <Button variant="ghost" onClick={onEdit}>
           {text.edit}
@@ -261,6 +269,7 @@ function TargetRow({
       >
         {text.deleteBody}
       </ConfirmDialog>
+      {logOpen && <Deliveries scope={scope} target={target} onClose={() => setLogOpen(false)} />}
     </li>
   )
 }
@@ -306,15 +315,20 @@ function TargetModal({
   const [userKey, setUserKey] = useState<string | undefined>(undefined)
   // A new target hears of everything but playbacks, a message each time anyone plays, guests'
   // plays through share links, and the month in review, which comes beside the weekly summary or
-  // in its place: those are chosen on purpose.
+  // in its place: those are chosen on purpose. Failed plays are told.
   const [chosen, setChosen] = useState<NotificationEvent[]>(
     target?.events ??
       events.filter(
         (event) =>
-          !event.startsWith('playback_') && event !== 'share_played' && event !== 'monthly_summary',
+          (!event.startsWith('playback_') || event === 'playback_failed') &&
+          event !== 'share_played' &&
+          event !== 'monthly_summary',
       ),
   )
   const [enabled, setEnabled] = useState(target?.enabled ?? true)
+  // Empty for no cap, and to send each message at once.
+  const [perMinute, setPerMinute] = useState(String(target?.perMinute ?? ''))
+  const [groupMinutes, setGroupMinutes] = useState(String(target?.groupMinutes ?? ''))
 
   const mutation = useMutation({
     mutationFn: (draft: NotificationDraft) =>
@@ -352,7 +366,13 @@ function TargetModal({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const draft: NotificationDraft = { name: name.trim(), events: chosen, enabled }
+    const draft: NotificationDraft = {
+      name: name.trim(),
+      events: chosen,
+      enabled,
+      perMinute: perMinute.trim() === '' ? 0 : Number(perMinute),
+      groupMinutes: groupMinutes.trim() === '' ? 0 : Number(groupMinutes),
+    }
     if (target === null) draft.kind = kind
     if (token !== undefined) draft.token = token.trim()
     switch (kind) {
@@ -487,6 +507,32 @@ function TargetModal({
             />
           ))}
         </fieldset>
+        <Field
+          label={text.perMinute}
+          help={text.perMinuteHelp}
+          error={fieldError(['invalid_per_minute'])}
+        >
+          <TextInput
+            value={perMinute}
+            onValue={change(setPerMinute)}
+            inputMode="numeric"
+            maxLength={2}
+            className="max-w-[8rem]"
+          />
+        </Field>
+        <Field
+          label={text.groupMinutes}
+          help={text.groupMinutesHelp}
+          error={fieldError(['invalid_group_minutes'])}
+        >
+          <TextInput
+            value={groupMinutes}
+            onValue={change(setGroupMinutes)}
+            inputMode="numeric"
+            maxLength={4}
+            className="max-w-[8rem]"
+          />
+        </Field>
         <Checkbox label={text.enabled} checked={enabled} onChange={change(setEnabled)} />
         {otherError && <Notice tone="danger">{otherError}</Notice>}
       </form>
@@ -692,4 +738,89 @@ function discordWebhook(address: string): boolean {
   } catch {
     return false
   }
+}
+
+/** The tone of each outcome in Recent deliveries. */
+const outcomeTones: Record<NotificationDelivery['outcome'], StatusTone> = {
+  delivered: 'ok',
+  refused: 'danger',
+  rejected: 'warn',
+  failed: 'warn',
+  dropped: 'warn',
+  unreadable: 'danger',
+}
+
+/** A target's recent deliveries, newest first, in a floating panel. */
+function Deliveries({
+  scope,
+  target,
+  onClose,
+}: {
+  scope: NotificationScope
+  target: NotificationTarget
+  onClose: () => void
+}) {
+  const { language, t } = useI18n()
+  const text = t.notifications.deliveries
+  const deliveries = useQuery({
+    queryKey: [...queryKeys.notifications(scope), 'deliveries', target.id],
+    queryFn: ({ signal }) => fetchNotificationDeliveries(scope, target.id, signal),
+  })
+  return (
+    <Modal open onClose={onClose} title={text.title(target.name)} width={720}>
+      <div className="space-y-4 p-5">
+        <p className="text-small text-ink-3">{text.help}</p>
+        {deliveries.isPending ? (
+          <SkeletonRows rows={3} label={text.loading} />
+        ) : deliveries.isError ? (
+          <InlineError onRetry={() => void deliveries.refetch()} retrying={deliveries.isFetching}>
+            {errorMessage(t, deliveries.error)}
+          </InlineError>
+        ) : deliveries.data.length === 0 ? (
+          <p className="text-control text-ink-2">{text.empty}</p>
+        ) : (
+          <table className="w-full text-left text-control">
+            <thead className="text-small text-ink-3">
+              <tr>
+                <th className="py-2 pr-3 font-medium">{text.when}</th>
+                <th className="py-2 pr-3 font-medium">{text.event}</th>
+                <th className="py-2 font-medium">{text.outcome}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deliveries.data.map((d) => (
+                <tr key={d.id} className="border-t border-line align-top">
+                  <td className="py-2 pr-3 whitespace-nowrap text-ink-2">
+                    <time dateTime={d.at}>{dateTime(d.at, language)}</time>
+                  </td>
+                  <td className="py-2 pr-3 break-words text-ink">
+                    {d.type === 'test' ? text.test : d.title}
+                    {d.events > 1 && (
+                      <span className="block text-small text-ink-3">{text.grouped(d.events)}</span>
+                    )}
+                  </td>
+                  <td className="py-2">
+                    <StatusPill tone={outcomeTones[d.outcome]}>
+                      {text.outcomes[d.outcome]}
+                    </StatusPill>
+                    {(d.status !== null || d.error !== null || d.attempts > 1) && (
+                      <span className="mt-1 block text-small break-words text-ink-3">
+                        {[
+                          d.status === null ? null : String(d.status),
+                          d.error,
+                          d.attempts > 1 ? text.attempts(d.attempts) : null,
+                        ]
+                          .filter((part) => part !== null)
+                          .join(' · ')}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </Modal>
+  )
 }

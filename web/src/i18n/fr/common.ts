@@ -441,6 +441,11 @@ const common: typeof en = {
     invalid_events: 'Un des événements choisis n’est pas disponible pour cette cible.',
     invalid_reminder_settings: 'Choisissez 1, 5, 10, 15, 30 ou 60 minutes.',
     too_many_targets: 'Il y a déjà 20 cibles. Supprimez-en une pour en ajouter une autre.',
+    invalid_per_minute: 'Messages par minute : de 1 à 60, ou vide pour aucune limite.',
+    invalid_group_minutes:
+      'Regroupement : de 1 à 1 440 minutes, ou vide pour tout envoyer aussitôt.',
+    invalid_summary:
+      'Seuls le résumé de la semaine, le bilan du mois et celui de l’année ont un aperçu.',
     target_unreadable:
       'L’adresse ou le jeton de cette cible ne peut pas être déchiffré avec POLYFIN_SECRET_KEY. Saisissez-le de nouveau.',
     invalid_source_name: 'Le nom d’une source doit faire de 1 à 64 caractères.',
