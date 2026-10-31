@@ -388,21 +388,27 @@ func (v *VideoEncoding) burnGraph(video int, from time.Duration, skip string) st
 		"[converted][subtitle]overlay=x=0:y=main_h-overlay_h:eof_action=pass," + v.Hardware.output() + v.tags() + "[video]"
 }
 
-// args are FFmpeg's encoder options for a job starting at segment n.
+// args are FFmpeg's encoder options for a job starting at segment n,
+// without lookback.
 func (v *VideoEncoding) args(plan Plan, n int) []string {
-	return v.shiftedArgs(plan, n, 0)
+	var from time.Duration
+	if n > 0 {
+		from = plan.seekTime(n, 0)
+	}
+	return v.shiftedArgs(plan, n, 0, from)
 }
 
 // shiftedArgs are args for an input whose times are shift past the
 // plan's (see Remux.Shift): its keyframes are asked at the plan's times
-// moved so, which FFmpeg compares with the input's own.
-func (v *VideoEncoding) shiftedArgs(plan Plan, n int, shift time.Duration) []string {
+// moved so, which FFmpeg compares with the input's own. FFmpeg reads the
+// input from from, zero for its start (see Remux.seekArgs).
+func (v *VideoEncoding) shiftedArgs(plan Plan, n int, shift, from time.Duration) []string {
 	lead := v.keyframeLead().Seconds()
 	times := make([]string, 0, plan.Len()-n)
 	for k := n; k < plan.Len(); k++ {
 		times = append(times, strconv.FormatFloat(max((plan.Start(k)+shift).Seconds()-lead, 0), 'f', 4, 64))
 	}
-	return v.encoderArgs(strings.Join(times, ","), v.skip(plan, n))
+	return v.encoderArgs(strings.Join(times, ","), v.skip(plan, n, from))
 }
 
 // skip is the filter leaving out, before they are converted, the frames a
@@ -416,12 +422,24 @@ func (v *VideoEncoding) shiftedArgs(plan Plan, n int, shift time.Duration) []str
 // times to its frame rate after the filters: the frame its keyframe is
 // asked of may come just before the time asked, as the source's frames
 // fall.
-func (v *VideoEncoding) skip(plan Plan, n int) string {
+//
+// A job reading the version from its start, from zero, keeps no first
+// frame: it never searches further back. Kept, that frame, then the gap to
+// the segment, would have the encoder date the segment's keyframe back to
+// the version's start, before any audio, whose first packet, before zero,
+// is left out (see audioFilters). Fragmented MP4 holds its first fragment
+// until every track has a packet: the segment's keyframe would then go
+// into the first frame's fragment, which take leaves out.
+func (v *VideoEncoding) skip(plan Plan, n int, from time.Duration) string {
 	if n == 0 || !plan.searched {
 		return ""
 	}
-	from := plan.Start(n) - v.keyframeLead() - v.frameDuration()
-	return "select=eq(n\\,0)+gte(t\\," + strconv.FormatFloat(max(from.Seconds(), 0), 'f', 4, 64) + "),"
+	first := "eq(n\\,0)+"
+	if from <= 0 {
+		first = ""
+	}
+	at := plan.Start(n) - v.keyframeLead() - v.frameDuration()
+	return "select=" + first + "gte(t\\," + strconv.FormatFloat(max(at.Seconds(), 0), 'f', 4, 64) + "),"
 }
 
 // frameDuration is how long a frame of the converted video lasts, at 24
@@ -1937,7 +1955,7 @@ func (r Remux) args(n int, lookback time.Duration) []string {
 		if r.Encode.BurnFile != "" {
 			args = append(args, "-i", r.Encode.BurnFile)
 		}
-		args = append(args, "-filter_complex", r.Encode.burnGraph(r.Video, from, r.Encode.skip(r.Plan, n)))
+		args = append(args, "-filter_complex", r.Encode.burnGraph(r.Video, from, r.Encode.skip(r.Plan, n, from)))
 		video = "[video]"
 	}
 	args = append(args, "-map", video)
@@ -1946,7 +1964,7 @@ func (r Remux) args(n int, lookback time.Duration) []string {
 	}
 	args = append(args, "-map_metadata", "-1", "-map_chapters", "-1", "-c", "copy")
 	if r.Encode != nil {
-		args = append(args, r.Encode.shiftedArgs(r.Plan, n, r.Shift)...)
+		args = append(args, r.Encode.shiftedArgs(r.Plan, n, r.Shift, from)...)
 	}
 	if r.VideoTag != "" {
 		args = append(args, "-tag:v", r.VideoTag)

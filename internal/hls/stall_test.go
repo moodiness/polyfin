@@ -230,7 +230,8 @@ func TestLaterJobsProbeLess(t *testing.T) {
 // on the first keyframe after the time asked in, is asked for the
 // previous segment's start, whether it is cut on keyframes or on a grid,
 // or as far before the segment as a job that landed past it taught, and
-// read from its start, without seeking, when that is before it.
+// read from its start, without seeking, when that is before it or when
+// the previous segment is the first.
 func TestSearchedVersionsSeekToThePreviousSegment(t *testing.T) {
 	plan := NewPlan(seconds(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13), 14*time.Second)
 	grid := NewGridPlan(30 * time.Second).Searched()
@@ -250,7 +251,7 @@ func TestSearchedVersionsSeekToThePreviousSegment(t *testing.T) {
 		{plan, 1, 0, "2.132000"},
 		{plan, 2, 0, "6.132000"},
 		{plan, 2, 9 * time.Second, "6.132000"},
-		{plan.Searched(), 1, 0, "0.132000"},
+		{plan.Searched(), 1, 0, "none"},
 		{plan.Searched(), 3, 0, "6.132000"},
 		{grid, 2, 0, "2.132000"},
 		{grid, 4, time.Second, "10.132000"},

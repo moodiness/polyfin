@@ -158,10 +158,14 @@ const seekPast = 132 * time.Millisecond
 // distance asked before it, as they are in a plan cut on them; a job that
 // lands past it starts again with a longer lookback (see
 // encoding.searchFurther). Zero, when lookback reaches the version's
-// start, has FFmpeg read it from there, without seeking.
+// start, or for segment 1, whose previous segment starts the version, has
+// FFmpeg read it from there, without seeking.
 func (p Plan) seekTime(n int, lookback time.Duration) time.Duration {
 	if !p.searched {
 		return p.starts[n] + seekPast
+	}
+	if n == 1 {
+		return 0
 	}
 	return max(min(p.starts[n-1]+seekPast, p.starts[n]-lookback), 0)
 }
