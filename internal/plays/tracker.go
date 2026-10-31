@@ -115,6 +115,10 @@ type Report struct {
 	// Shared is set for a guest playing through a share link of User's:
 	// Device is then the guest's playback.
 	Shared bool
+	// Sent is the bytes Polyfin sent the device so far, as its meter
+	// counts them (see the bandwidth package): a total that only grows,
+	// but when the meter starts again, 0 when nothing is counted.
+	Sent int64
 }
 
 // Playback is one playback of a title on a device, from its start to its
@@ -139,6 +143,12 @@ type Playback struct {
 	Method string
 	// Shared is set for a guest's playback through a share link.
 	Shared bool
+	// Sent is the bytes Polyfin sent the app for it: those the device was
+	// sent since its previous playback ended, as an app fetches the start
+	// of a file before it reports the playback. sentFrom is the device's
+	// total it counts from.
+	Sent     int64
+	sentFrom int64
 }
 
 // The changes of a playback.
@@ -186,6 +196,9 @@ type Tracker struct {
 
 	mu      sync.Mutex
 	playing map[accounts.ID]*Playback
+	// sentEnded is each device's total of bytes sent when its last
+	// playback ended, which the next one counts from.
+	sentEnded map[accounts.ID]int64
 	// telling keeps the changes told in order: it is taken before mu is
 	// released.
 	telling sync.Mutex
@@ -194,7 +207,7 @@ type Tracker struct {
 // NewTracker returns a tracker that tells listen each change, one at a
 // time, in order.
 func NewTracker(listen func(Change)) *Tracker {
-	return &Tracker{now: time.Now, listen: listen, playing: map[accounts.ID]*Playback{}}
+	return &Tracker{now: time.Now, listen: listen, playing: map[accounts.ID]*Playback{}, sentEnded: map[accounts.ID]int64{}}
 }
 
 // Report applies an app's report. A start, or a report of another title
@@ -224,6 +237,12 @@ func (t *Tracker) Report(r Report) {
 	case p == nil:
 		p = &Playback{User: r.User, UserName: r.UserName, App: r.App, DeviceName: r.DeviceName, Title: r.Title, Started: now,
 			LastReport: now, Paused: r.Paused, Shared: r.Shared}
+		p.sentFrom = t.sentEnded[r.Device]
+		delete(t.sentEnded, r.Device)
+		if p.sentFrom > r.Sent {
+			// The device's meter started again since.
+			p.sentFrom = 0
+		}
 		p.apply(r)
 		t.playing[r.Device] = p
 		changes = append(changes, Change{Kind: Started, Playback: *p})
@@ -242,12 +261,18 @@ func (t *Tracker) Report(r Report) {
 	t.tell(changes)
 }
 
-// apply takes what a report tells of a playback: its position and method.
+// apply takes what a report tells of a playback: its position, its method
+// and the bytes sent. A meter started again, as one forgotten while a
+// playback paused long, counts on from what was sent before.
 func (p *Playback) apply(r Report) {
 	if r.PositionKnown {
 		p.Position = max(r.Position, 0)
 	}
 	p.Method = heavier(p.Method, r.Method)
+	if r.Sent < p.sentFrom+p.Sent {
+		p.sentFrom = r.Sent - p.Sent
+	}
+	p.Sent = r.Sent - p.sentFrom
 }
 
 // advance counts the time played since the last report, unless paused,
@@ -264,8 +289,18 @@ func advance(p *Playback, now time.Time) {
 func (t *Tracker) end(device accounts.ID, p *Playback, now time.Time) Change {
 	advance(p, now)
 	p.Ended = now
-	delete(t.playing, device)
+	t.ended(device, p)
 	return Change{Kind: Stopped, Playback: *p}
+}
+
+// ended forgets the playback p of device, noting the device's total of
+// bytes sent, which its next playback counts from; a guest's playback,
+// whose device plays once, notes none. It is called with t.mu held.
+func (t *Tracker) ended(device accounts.ID, p *Playback) {
+	delete(t.playing, device)
+	if !p.Shared {
+		t.sentEnded[device] = p.sentFrom + p.Sent
+	}
 }
 
 // tell releases t.mu and tells changes, in order.
@@ -296,7 +331,7 @@ func (t *Tracker) Sweep() {
 // called with t.mu held.
 func (t *Tracker) endStale(device accounts.ID, p *Playback) Change {
 	p.Ended = p.LastReport
-	delete(t.playing, device)
+	t.ended(device, p)
 	return Change{Kind: Stopped, Playback: *p}
 }
 
