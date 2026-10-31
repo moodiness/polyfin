@@ -39,6 +39,7 @@ func model(t *testing.T, store *Store) User {
 		SubtitleManagement:   new(false),
 		LiveTvManagement:     new(true),
 		QualityGroup:         new(720),
+		LocalFirst:           new(true),
 		WebTheme:             new(WebThemeNone),
 		WebThemeLocked:       new(true),
 	}
