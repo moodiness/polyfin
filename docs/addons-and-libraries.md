@@ -780,7 +780,7 @@ A series' name and ratings show on its seasons and episodes.
 Polyfin keeps these fields: name, original title, sort name, overview, tagline, genres, tags, studios, official and custom ratings, community and critic ratings, premiere and end dates, and production year.
 
 - A field left empty, or set back to the addon's value, follows the addon again, so the addon's later changes show.
-- People, provider identifiers and the editor's other fields (locks, display order, content type, date added) are not kept: they stay the addons'.
+- People, provider identifiers and the editor's other fields (locks, display order, content type, date added) are not kept: they stay the addons'. An IMDb identifier typed for a movie or show of a local folder links its files to that title instead (see [Identify in the web player](local-folders.md#identify-in-the-web-player)).
 
 ### Edit images
 
@@ -811,12 +811,12 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 ### Identify
 
-**Identify** searches the server's addons that describe titles by name, for movies and series. It finds nothing for other types. Applying a result to a title an addon lists fails, because an item is its addon's title and cannot be bound to another. Applying it to a file a local folder left unmatched, a plain video, links the file, or its whole show folder, to the title chosen, as **Find the title** does on the folder's page (see [Identify in the web player](local-folders.md#identify-in-the-web-player)).
+**Identify** looks movies and series up by the IMDb, TMDB or TVDB identifier typed, then by name, in the server's addons that describe titles, TMDB turning TMDB and TVDB identifiers into IMDb ones with the server's **TMDB API key**. It finds nothing for other types. Applying a result to a title only addons list fails, because an item is its addon's title and cannot be bound to another. Applying it to a title of a local folder, a plain video or a title its files were matched to, links the file, or its whole show folder, to the title chosen, as **Find the title** does on the folder's page; an IMDb identifier typed in **Edit metadata** for such a movie or show does the same (see [Identify in the web player](local-folders.md#identify-in-the-web-player)).
 
 **Compared with Jellyfin:**
 
 - Jellyfin keeps any uploaded image file as sent; Polyfin refuses other types with 400.
-- Applying an **Identify** result to a title an addon lists fails as a failed identification does in Jellyfin (500). Applied to a plain video of a local folder, it answers 204 as Jellyfin does.
+- Applying an **Identify** result to a title only addons list fails as a failed identification does in Jellyfin (500). Applied to a title of a local folder, it answers 204 as Jellyfin does.
 - Jellyfin picks suggestions among everything; Polyfin picks among the first page of each library.
 
 **For app developers:**
