@@ -774,8 +774,8 @@ func (remux Remux) encoding(c *VideoConversion, video media.Stream, t Tuning) *h
 	// keeps (see hls.VideoEncoding.Colors).
 	colors := hls.Colors{Range: video.ColorRange, Matrix: video.ColorSpace, Transfer: video.ColorTransfer, Primaries: video.ColorPrimaries}
 	return &hls.VideoEncoding{Encoder: c.Encoder, Level: c.Level(rate), Width: c.Width, Height: c.Height, Bitrate: c.Bitrate, MaxRate: c.Peak,
-		FrameRate: rate, DropFrames: drop, Profile: c.Profile, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, Deinterlace: c.Deinterlace,
-		Burn: remux.Burn, BurnFile: remux.BurnFile, Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec),
+		FrameRate: rate, DropFrames: drop, Profile: c.Profile, ToneMap: c.ToneMap, ToneMapOnCPU: c.ToneMapOnCPU, ToneMapReason: c.ToneMapReason,
+		Deinterlace: c.Deinterlace, Burn: remux.Burn, BurnFile: remux.BurnFile, Colors: colors, Hardware: c.Hardware, Preset: t.Preset, Quality: t.quality(c.Codec),
 		ToneMapCurve: t.ToneMapCurve, ToneMapPeak: t.ToneMapPeak, ToneMapDesat: t.ToneMapDesat, Deinterlacer: t.Deinterlacer, DoubleRate: double,
 		DecodeOnCPU: !t.DecodesOnGPU(video.Codec, video.BitDepth)}
 }
