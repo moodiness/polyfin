@@ -25,6 +25,10 @@ const (
 	// longest access token.
 	maxAddress = 2048
 	maxToken   = 256
+	// MaxPerMinute bounds a target's cap of messages a minute, and
+	// MaxGroupMinutes how long it groups messages for: a day.
+	MaxPerMinute    = 60
+	MaxGroupMinutes = 1440
 	// DefaultNtfyServer is the ntfy server an ntfy target uses when none
 	// is given.
 	DefaultNtfyServer = "https://ntfy.sh"
@@ -66,14 +70,19 @@ type target struct {
 	problem       string
 	problemStatus *int
 	problemAt     *time.Time
+	// perMinute caps the messages sent to it in any minute, 0 for no cap;
+	// groupMinutes groups the plays and new episodes into one message
+	// every so many minutes, 0 to send each at once.
+	perMinute, groupMinutes int
 }
 
-const targetColumns = "id, user_id, kind, name, address, topic, secret, events, enabled, created_at, last_sent_at, coalesce(problem, ''), problem_status, problem_at"
+const targetColumns = "id, user_id, kind, name, address, topic, secret, events, enabled, created_at, last_sent_at, coalesce(problem, ''), problem_status, problem_at, " +
+	"coalesce(per_minute, 0), coalesce(group_minutes, 0)"
 
 func scanTarget(row pgx.Row) (target, error) {
 	var t target
 	err := row.Scan(&t.id, &t.owner, &t.kind, &t.name, &t.address, &t.topic, &t.secret, &t.events, &t.enabled, &t.createdAt,
-		&t.lastSent, &t.problem, &t.problemStatus, &t.problemAt)
+		&t.lastSent, &t.problem, &t.problemStatus, &t.problemAt, &t.perMinute, &t.groupMinutes)
 	return t, err
 }
 
@@ -110,12 +119,16 @@ type Target struct {
 	Problem       string
 	ProblemStatus *int
 	ProblemAt     *time.Time
+	// PerMinute caps the messages sent to it in any minute, 0 for no cap;
+	// GroupMinutes groups the plays and new episodes into one message every
+	// so many minutes, 0 to send each at once.
+	PerMinute, GroupMinutes int
 }
 
 func (s *Service) describe(t target) Target {
 	result := Target{ID: t.id, Kind: t.kind, Name: t.name, Address: t.address, Topic: t.topic, TokenSet: hasToken(t.kind) && t.secret != "",
 		Events: slices.Clone(t.events), Enabled: t.enabled, CreatedAt: t.createdAt, LastSentAt: t.lastSent,
-		Problem: t.problem, ProblemStatus: t.problemStatus, ProblemAt: t.problemAt}
+		Problem: t.problem, ProblemStatus: t.problemStatus, ProblemAt: t.problemAt, PerMinute: t.perMinute, GroupMinutes: t.groupMinutes}
 	if t.kind == Telegram {
 		result.Topic, result.Chat = "", t.topic
 	}
@@ -137,7 +150,8 @@ func hasToken(kind string) bool {
 // email target's recipient. Token is an ntfy target's access token, empty
 // for none, a Telegram bot's token, or a Gotify or Pushover application's
 // token. Chat is a Telegram target's chat, UserKey a Pushover target's
-// user key.
+// user key. PerMinute is 1 to MaxPerMinute, or 0 for no cap;
+// GroupMinutes 1 to MaxGroupMinutes, or 0 to send each message at once.
 type Draft struct {
 	Kind    string
 	Name    *string
@@ -148,6 +162,9 @@ type Draft struct {
 	UserKey *string
 	Events  []string
 	Enabled *bool
+	// PerMinute and GroupMinutes pace the messages (see Target).
+	PerMinute    *int
+	GroupMinutes *int
 }
 
 // ownerID is the identifier of owner, nil for the server.
@@ -259,9 +276,10 @@ func (s *Service) Create(ctx context.Context, owner *accounts.User, d Draft) (Ta
 		if count >= MaxTargets {
 			return ErrTooManyTargets
 		}
-		row := tx.QueryRow(ctx, `INSERT INTO notification_targets (user_id, kind, name, address, topic, secret, events, enabled, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING `+targetColumns,
-			t.owner, t.kind, t.name, t.address, t.topic, t.secret, t.events, t.enabled, s.now())
+		row := tx.QueryRow(ctx, `INSERT INTO notification_targets (user_id, kind, name, address, topic, secret, events, enabled, created_at,
+				per_minute, group_minutes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING `+targetColumns,
+			t.owner, t.kind, t.name, t.address, t.topic, t.secret, t.events, t.enabled, s.now(), nullZero(t.perMinute), nullZero(t.groupMinutes))
 		var err error
 		t, err = scanTarget(row)
 		return err
@@ -288,11 +306,12 @@ func (s *Service) Update(ctx context.Context, owner *accounts.User, id accounts.
 	// goes.
 	clear := t.secret != before.secret || t.address != before.address || t.topic != before.topic
 	row := s.db.QueryRow(ctx, `UPDATE notification_targets SET name = $2, address = $3, topic = $4, secret = $5, events = $6, enabled = $7,
+			per_minute = $9, group_minutes = $10,
 			problem = CASE WHEN $8 THEN NULL ELSE problem END,
 			problem_status = CASE WHEN $8 THEN NULL ELSE problem_status END,
 			problem_at = CASE WHEN $8 THEN NULL ELSE problem_at END
 		WHERE id = $1 RETURNING `+targetColumns,
-		id, t.name, t.address, t.topic, t.secret, t.events, t.enabled, clear)
+		id, t.name, t.address, t.topic, t.secret, t.events, t.enabled, clear, nullZero(t.perMinute), nullZero(t.groupMinutes))
 	if t, err = scanTarget(row); errors.Is(err, pgx.ErrNoRows) {
 		return Target{}, ErrNotFound
 	} else if err != nil {
@@ -315,6 +334,8 @@ func (s *Service) Delete(ctx context.Context, owner *accounts.User, id accounts.
 	if l := s.lanes[id]; l != nil {
 		l.queue = nil
 	}
+	delete(s.held, id)
+	delete(s.recent, id)
 	s.mu.Unlock()
 	s.reloadQuietly(ctx)
 	s.logger.Info("A notification target was deleted", "target", id.String(), "user_id", ownerLog(owner))
@@ -385,7 +406,27 @@ func (s *Service) apply(ctx context.Context, owner *accounts.User, t *target, d 
 	if d.Enabled != nil {
 		t.enabled = *d.Enabled
 	}
+	if d.PerMinute != nil {
+		if *d.PerMinute < 0 || *d.PerMinute > MaxPerMinute {
+			return ErrInvalidPerMinute
+		}
+		t.perMinute = *d.PerMinute
+	}
+	if d.GroupMinutes != nil {
+		if *d.GroupMinutes < 0 || *d.GroupMinutes > MaxGroupMinutes {
+			return ErrInvalidGroupMinutes
+		}
+		t.groupMinutes = *d.GroupMinutes
+	}
 	return nil
+}
+
+// nullZero is n, or NULL for 0.
+func nullZero(n int) *int {
+	if n == 0 {
+		return nil
+	}
+	return &n
 }
 
 // applyAddress checks address, the address of a target of t's kind, and

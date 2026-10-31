@@ -191,7 +191,7 @@ var emailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <head><meta charset="utf-8"><title>{{.Title}}</title></head>
 <body style="font-family: system-ui, sans-serif; color: #1f2328;">
 <h1 style="font-size: 18px;">{{.Title}}</h1>
-<p>{{.Message}}</p>
+<p style="white-space: pre-line;">{{.Message}}</p>
 {{if .URL}}<p><a href="{{.URL}}">{{.Open}}</a></p>
 {{end}}<p style="color: #6b7280; font-size: 12px;">{{.Footer}}</p>
 </body>
@@ -199,19 +199,17 @@ var emailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 `))
 
 // emailMessage writes ev as an email to the target t, in the server
-// language: its title as the subject, its message and link in plain text
-// and in HTML, or a summary whole (see summaryEmail).
+// language: its title as the subject, and its body (see emailBody).
 func (s *Service) emailMessage(settings accounts.Settings, t target, ev Event) ([]byte, error) {
 	from := mail.Address{Name: settings.SMTPFromName, Address: settings.SMTPFrom}
 	if from.Name == "" {
 		from.Name = settings.ServerName
 	}
 	domain := settings.SMTPFrom[strings.LastIndexByte(settings.SMTPFrom, '@')+1:]
-	url, open := "", s.phrase(i18n.Text{"Open", "Ouvrir", "Öffnen", "Abrir", "Apri", "Abrir"})
-	if ev.URL != nil {
-		url = *ev.URL
+	text, page, err := s.emailBody(settings, ev)
+	if err != nil {
+		return nil, err
 	}
-	footer := s.phrase(i18n.Text{"Sent by Polyfin from %s.", "Envoyé par Polyfin depuis %s.", "Gesendet von Polyfin auf %s.", "Enviado por Polyfin desde %s.", "Inviato da Polyfin da %s.", "Enviado pelo Polyfin de %s."}, settings.ServerName)
 
 	var message bytes.Buffer
 	body := multipart.NewWriter(&message)
@@ -226,23 +224,7 @@ func (s *Service) emailMessage(settings accounts.Settings, t target, ev Event) (
 	header("MIME-Version", "1.0")
 	header("Content-Type", `multipart/alternative; boundary="`+body.Boundary()+`"`)
 	message.WriteString("\r\n")
-
-	text := ev.Message + "\n"
-	if url != "" {
-		text += "\n" + url + "\n"
-	}
-	var page bytes.Buffer
-	if ev.Summary != nil {
-		var err error
-		if text, err = s.summaryEmail(&page, settings.Language, ev, footer); err != nil {
-			return nil, err
-		}
-	} else if err := emailHTML.Execute(&page, map[string]string{"Language": settings.Language, "Title": ev.Title, "Message": ev.Message,
-		"URL": url, "Open": open, "Footer": footer}); err != nil {
-		return nil, err
-	}
-	text += "\n-- \n" + footer + "\n"
-	for _, part := range []struct{ kind, content string }{{"text/plain", text}, {"text/html", page.String()}} {
+	for _, part := range []struct{ kind, content string }{{"text/plain", text}, {"text/html", page}} {
 		writer, err := body.CreatePart(textproto.MIMEHeader{
 			"Content-Type":              {part.kind + "; charset=utf-8"},
 			"Content-Transfer-Encoding": {"quoted-printable"},
@@ -262,6 +244,31 @@ func (s *Service) emailMessage(settings accounts.Settings, t target, ev Event) (
 		return nil, err
 	}
 	return message.Bytes(), nil
+}
+
+// emailBody is ev's email in plain text and in HTML, in the server
+// language: its message and link, or a summary whole (see summaryEmail),
+// and the footer. Previews show the same (see Preview).
+func (s *Service) emailBody(settings accounts.Settings, ev Event) (text, page string, err error) {
+	url, open := "", s.phrase(i18n.Text{"Open", "Ouvrir", "Öffnen", "Abrir", "Apri", "Abrir"})
+	if ev.URL != nil {
+		url = *ev.URL
+	}
+	footer := s.phrase(i18n.Text{"Sent by Polyfin from %s.", "Envoyé par Polyfin depuis %s.", "Gesendet von Polyfin auf %s.", "Enviado por Polyfin desde %s.", "Inviato da Polyfin da %s.", "Enviado pelo Polyfin de %s."}, settings.ServerName)
+	text = ev.Message + "\n"
+	if url != "" {
+		text += "\n" + url + "\n"
+	}
+	var html bytes.Buffer
+	if ev.Summary != nil {
+		if text, err = s.summaryEmail(&html, settings.Language, ev, footer); err != nil {
+			return "", "", err
+		}
+	} else if err := emailHTML.Execute(&html, map[string]string{"Language": settings.Language, "Title": ev.Title, "Message": ev.Message,
+		"URL": url, "Open": open, "Footer": footer}); err != nil {
+		return "", "", err
+	}
+	return text + "\n-- \n" + footer + "\n", html.String(), nil
 }
 
 // oneLine replaces the line breaks and other control characters of s with
