@@ -97,6 +97,8 @@ export type User = {
    * EnableRemoteAccess; without it, only from the local network, as Known proxies tells it.
    */
   remoteAccess: boolean
+  /** The Live TV channels of the server's line-ups the user sees. */
+  liveTvChannels: ChannelRule
   /** Identifies the user's profile picture, served at /UserImage; null without one. */
   imageTag: string | null
   /** The tallest video the user is offered, in lines (480 to 2160); 0 for Original, no limit. */
@@ -151,6 +153,7 @@ export type GroupLimits = Pick<
   | 'hiddenLibraries'
   | 'blockedGenres'
   | 'accessSchedules'
+  | 'liveTvChannels'
 >
 
 /** A group as Users › Groups lists it. */
@@ -170,6 +173,52 @@ export type QualityGroup = (typeof qualityGroups)[number]
 
 /** The range the server accepts for User.maxPlaybacks. */
 export const maxPlaybacksRange = { min: 0, max: 20 }
+
+/**
+ * Which Live TV channels of the server's line-ups a user, or a group's members, see: all of them,
+ * only the groups and channels listed, or all but those. Groups and channels are the keys
+ * fetchChannelChoices gives. With hideNewGroups, 'except' also hides the groups not among
+ * knownGroups, which saving sets to the groups the server's line-ups have then.
+ */
+export type ChannelRule = {
+  mode: 'all' | 'only' | 'except'
+  groups: string[]
+  channels: string[]
+  hideNewGroups: boolean
+  knownGroups: string[]
+}
+
+/** A channel group of the server's line-ups: an IPTV category, or a TV catalog's genre. */
+export type ChannelGroupChoice = { key: string; name: string; source: string; channels: number }
+
+/** A channel of the server's line-ups, with the key of its group. */
+export type ChannelChoice = { key: string; name: string; number: string; group: string }
+
+/** Every channel group of the server's line-ups, and a page of their channels. */
+export type ChannelChoices = {
+  groups: ChannelGroupChoice[]
+  channels: ChannelChoice[]
+  total: number
+  offset: number
+  limit: number
+}
+
+/**
+ * The channel groups of the server's line-ups and a page of their channels: those whose name or
+ * number holds q, of group, or with the keys listed.
+ */
+export const fetchChannelChoices = (
+  query: { q?: string; group?: string; keys?: string[]; offset?: number; limit?: number },
+  signal?: AbortSignal,
+) => {
+  const params = new URLSearchParams()
+  if (query.q) params.set('q', query.q)
+  if (query.group) params.set('group', query.group)
+  for (const key of query.keys ?? []) params.append('key', key)
+  if (query.offset !== undefined) params.set('offset', String(query.offset))
+  if (query.limit !== undefined) params.set('limit', String(query.limit))
+  return request<ChannelChoices>('GET', `/live-tv/channel-choices?${params}`, undefined, signal)
+}
 
 /** Jellyfin's DynamicDayOfWeek names, in its order. */
 export const scheduleDays = [
@@ -819,6 +868,7 @@ export type UserPatch = Partial<{
   canShare: boolean
   torrentStreams: boolean
   remoteAccess: boolean
+  liveTvChannels: ChannelRule
   qualityGroup: QualityGroup
   /** YYYY-MM-DD, or null for never. */
   endsOn: string | null
@@ -4739,6 +4789,8 @@ export const queryKeys = {
     ['scopes', scope, 'smart-preview', JSON.stringify(list)] as const,
   addonPreferences: ['account', 'addon-preferences'] as const,
   userContentChoices: ['user-content-choices'] as const,
+  channelChoices: (query: string, keys: readonly string[]) =>
+    ['channel-choices', query, ...keys] as const,
   apiKeys: ['api-keys'] as const,
   invites: ['invites'] as const,
   ownShareLinks: ['account', 'share-links'] as const,

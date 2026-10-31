@@ -216,6 +216,8 @@ const common: typeof en = {
       'L’elenco delle librerie è cambiato nel frattempo. Ricarica la pagina.',
     invalid_blocked_genres:
       'I generi devono contenere da 1 a 100 caratteri e se ne possono bloccare al massimo 100.',
+    invalid_live_tv_channels:
+      'La scelta dei canali non è valida: Tutti, Solo questi o Tutti tranne questi, con al massimo 10.000 gruppi e 10.000 canali.',
     invalid_access_schedules:
       'Gli orari vanno dalle 00:00 alle 24:00 e ogni fine deve venire dopo il rispettivo inizio (al massimo 50 righe).',
     outside_allowed_hours:

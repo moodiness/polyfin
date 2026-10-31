@@ -122,6 +122,9 @@ type limitsJSON struct {
 	// QualityGroup is the tallest video the user is offered, in lines: 480,
 	// 720, 1080, 1440 or 2160, or 0 for Original, no limit.
 	QualityGroup int `json:"qualityGroup"`
+	// LiveTvChannels chooses the Live TV channels of the server's sources
+	// the user sees.
+	LiveTvChannels channelRuleJSON `json:"liveTvChannels"`
 }
 
 func newLimitsJSON(limits accounts.Limits) limitsJSON {
@@ -149,6 +152,7 @@ func newLimitsJSON(limits accounts.Limits) limitsJSON {
 		TorrentStreams:       limits.TorrentStreams,
 		RemoteAccess:         limits.RemoteAccess,
 		QualityGroup:         limits.QualityGroup,
+		LiveTvChannels:       newChannelRuleJSON(limits.LiveTvChannels),
 	}
 }
 
@@ -175,6 +179,7 @@ type limitChanges struct {
 	RemoteAccess         *bool                    `json:"remoteAccess"`
 	LiveTvManagement     *bool                    `json:"liveTvManagement"`
 	QualityGroup         *int                     `json:"qualityGroup"`
+	LiveTvChannels       *channelRuleJSON         `json:"liveTvChannels"`
 }
 
 // changes returns what l sets, or answers the request with its error and
@@ -220,6 +225,9 @@ func (l limitChanges) changes(w http.ResponseWriter) (accounts.UserChanges, bool
 			schedules = append(schedules, accounts.AccessSchedule{Day: s.Day, StartHour: s.StartHour, EndHour: s.EndHour})
 		}
 		changes.AccessSchedules = &schedules
+	}
+	if l.LiveTvChannels != nil {
+		changes.LiveTvChannels = new(l.LiveTvChannels.rule())
 	}
 	return changes, true
 }
@@ -1322,6 +1330,12 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	changes, ok := body.changes(w)
 	if !ok {
+		return
+	}
+	if !h.knownChannelGroups(w, r, changes.LiveTvChannels, func() (accounts.ChannelRule, error) {
+		user, err := h.Accounts.User(r.Context(), id)
+		return user.LiveTvChannels, err
+	}) {
 		return
 	}
 	if id == session.User.ID && locksOutCaller(r, changes.RemoteAccess) {

@@ -1,7 +1,8 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { PlusIcon, TrashIcon, XIcon } from '@phosphor-icons/react'
 import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
 import {
+  fetchChannelChoices,
   fetchGroupDefaults,
   fetchUserContentChoices,
   fetchUserDefaults,
@@ -16,6 +17,7 @@ import {
   updateGroup,
   updateUser,
   type AccessSchedule,
+  type ChannelRule,
   type Group,
   type GroupLimits,
   type GroupPatch,
@@ -24,11 +26,13 @@ import {
   type SyncPlayAccess,
   type User,
 } from '@/api'
+import { useDebounced } from '@/features/iptv/shared'
 import { useSessionUser } from '@/app/session'
 import { useHealthProblems } from '@/features/system/problems'
 import { errorMessage } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import {
+  Badge,
   Button,
   Checkbox,
   ConfirmDialog,
@@ -40,9 +44,11 @@ import {
   NumberInput,
   Panel,
   PanelFooter,
+  Segmented,
   Select,
   Skeleton,
   SuggestInput,
+  TextInput,
   TextLink,
   useToast,
 } from '@/ui'
@@ -528,6 +534,254 @@ export function BlockedGenresForm({ target, id }: { target: LimitsTarget; id: st
   )
 }
 
+/** How many groups and channels the Live TV channels section lists at once; filters reach the rest. */
+const listedChannelGroups = 200
+const listedChannels = 50
+
+export function LiveTvChannelsForm({ target, id }: { target: LimitsTarget; id: string }) {
+  const { t } = useI18n()
+  const { save, error, submit } = useSectionSave(target)
+  const initial = limitsOf(target).liveTvChannels
+  const [mode, setMode] = useState<ChannelRule['mode']>(initial.mode)
+  const [groups, setGroups] = useState(initial.groups)
+  const [channels, setChannels] = useState(initial.channels)
+  const [hideNew, setHideNew] = useState(initial.hideNewGroups)
+  // The groups added since the rule was saved, which it hides while it hides new groups: shown
+  // ticked, unless unticked here.
+  const [released, setReleased] = useState<string[]>([])
+  const [groupFilter, setGroupFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const query = useDebounced(search.trim())
+  const choices = useQuery({
+    queryKey: queryKeys.channelChoices(query, []),
+    queryFn: ({ signal }) => fetchChannelChoices({ q: query, limit: listedChannels }, signal),
+    placeholderData: keepPreviousData,
+  })
+  const tickedKeys = channels.slice(0, listedChannels)
+  const ticked = useQuery({
+    queryKey: queryKeys.channelChoices('', tickedKeys),
+    queryFn: ({ signal }) =>
+      fetchChannelChoices({ keys: tickedKeys, limit: listedChannels }, signal),
+    enabled: tickedKeys.length > 0,
+    placeholderData: keepPreviousData,
+  })
+  const added = (key: string) =>
+    mode === 'except' &&
+    initial.mode === 'except' &&
+    initial.hideNewGroups &&
+    !initial.knownGroups.includes(key)
+  const allGroups = choices.data?.groups ?? []
+  const groupNames = new Map(allGroups.map((group) => [group.key, group.name]))
+  const filter = groupFilter.trim().toLowerCase()
+  const filtered = allGroups.filter(
+    (group) =>
+      filter === '' ||
+      group.name.toLowerCase().includes(filter) ||
+      group.source.toLowerCase().includes(filter),
+  )
+  const tickedNames = new Map((ticked.data?.channels ?? []).map((c) => [c.key, c]))
+
+  function tickGroup(key: string, on: boolean) {
+    save.reset()
+    if (added(key) && !groups.includes(key)) {
+      setReleased(on ? released.filter((k) => k !== key) : [...released, key])
+      return
+    }
+    setGroups(on ? [...groups, key] : groups.filter((k) => k !== key))
+  }
+
+  function tickChannel(key: string, on: boolean) {
+    save.reset()
+    setChannels(on ? [...channels, key] : channels.filter((k) => k !== key))
+  }
+
+  function onSubmit() {
+    const kept =
+      mode === 'except'
+        ? [
+            ...groups,
+            ...allGroups
+              .map((group) => group.key)
+              .filter((key) => added(key) && !released.includes(key) && !groups.includes(key)),
+          ]
+        : groups
+    submit({
+      liveTvChannels: {
+        mode,
+        groups: mode === 'all' ? [] : kept,
+        channels: mode === 'all' ? [] : channels,
+        hideNewGroups: mode === 'except' && hideNew,
+        knownGroups: initial.knownGroups,
+      },
+    })
+  }
+
+  return (
+    <SectionForm
+      id={id}
+      target={target}
+      title={t.users.liveTvChannelsTitle}
+      description={t.users.liveTvChannelsHelp}
+      onSubmit={onSubmit}
+      error={error}
+      saving={save.isPending}
+      saveLabel={t.users.saveLiveTvChannels}
+      disabled={mode !== 'all' && !choices.isSuccess}
+    >
+      <Field
+        label={t.users.channelsMode}
+        help={
+          mode === 'only'
+            ? t.users.channelsOnlyHelp
+            : mode === 'except'
+              ? t.users.channelsExceptHelp
+              : undefined
+        }
+      >
+        <Segmented
+          label={t.users.channelsMode}
+          value={mode}
+          onChange={(value) => {
+            save.reset()
+            setMode(value)
+          }}
+          options={[
+            { value: 'all', label: t.users.channelsAll },
+            { value: 'only', label: t.users.channelsOnly },
+            { value: 'except', label: t.users.channelsExcept },
+          ]}
+        />
+      </Field>
+      {mode !== 'all' &&
+        (choices.isError ? (
+          <InlineError onRetry={() => void choices.refetch()} retrying={choices.isFetching}>
+            {errorMessage(t, choices.error)}
+          </InlineError>
+        ) : choices.isPending ? (
+          <Skeleton className="h-40" />
+        ) : allGroups.length === 0 ? (
+          <EmptyState title={t.users.noChannelGroups} />
+        ) : (
+          <>
+            {mode === 'except' && (
+              <Checkbox
+                label={t.users.hideNewChannelGroups}
+                help={t.users.hideNewChannelGroupsHelp}
+                checked={hideNew}
+                onChange={(checked) => {
+                  save.reset()
+                  setHideNew(checked)
+                }}
+              />
+            )}
+            <div className="space-y-3">
+              <p className="font-medium text-ink">{t.users.channelGroups}</p>
+              <TextInput
+                aria-label={t.users.filterChannelGroups}
+                placeholder={t.users.filterChannelGroups}
+                value={groupFilter}
+                onValue={setGroupFilter}
+                className="sm:max-w-sm"
+              />
+              <div className="grid max-h-80 gap-3 overflow-y-auto sm:grid-cols-2">
+                {filtered.slice(0, listedChannelGroups).map((group) => (
+                  <Checkbox
+                    key={group.key}
+                    label={group.name}
+                    help={group.source}
+                    aside={
+                      <span className="flex items-center gap-2">
+                        {added(group.key) && <Badge tone="accent">{t.users.newChannelGroup}</Badge>}
+                        <span className="figures text-ink-3">{group.channels}</span>
+                      </span>
+                    }
+                    checked={
+                      groups.includes(group.key) ||
+                      (added(group.key) && !released.includes(group.key))
+                    }
+                    onChange={(on) => tickGroup(group.key, on)}
+                  />
+                ))}
+              </div>
+              {filtered.length > listedChannelGroups && (
+                <p className="text-small text-ink-3">
+                  {t.users.moreChannelGroups(filtered.length - listedChannelGroups)}
+                </p>
+              )}
+            </div>
+            <div className="space-y-3">
+              <p className="font-medium text-ink">{t.users.tickedChannels}</p>
+              {channels.length === 0 ? (
+                <p className="text-small text-ink-3">{t.users.noTickedChannels}</p>
+              ) : (
+                <ul className="flex flex-wrap gap-2" aria-label={t.users.tickedChannels}>
+                  {tickedKeys.map((key) => {
+                    const channel = tickedNames.get(key)
+                    const name =
+                      channel === undefined
+                        ? ticked.isSuccess
+                          ? t.users.goneChannel
+                          : '…'
+                        : `${channel.number} ${channel.name}`
+                    return (
+                      <li
+                        key={key}
+                        title={key}
+                        className="flex h-8 items-center gap-1 rounded-full border border-line-2 bg-s2 pr-1 pl-3 text-control text-ink"
+                      >
+                        {name}
+                        <IconButton
+                          size="sm"
+                          icon={XIcon}
+                          danger
+                          label={t.users.removeChannel(name)}
+                          className="size-6 rounded-full"
+                          onClick={() => tickChannel(key, false)}
+                        />
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              {channels.length > listedChannels && (
+                <p className="text-small text-ink-3">
+                  {t.users.moreChannels(channels.length - listedChannels)}
+                </p>
+              )}
+            </div>
+            <div className="space-y-3">
+              <p className="font-medium text-ink">{t.users.singleChannels}</p>
+              <TextInput
+                type="search"
+                aria-label={t.users.searchChannels}
+                placeholder={t.users.searchChannels}
+                value={search}
+                onValue={setSearch}
+                className="sm:max-w-sm"
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                {choices.data.channels.map((channel) => (
+                  <Checkbox
+                    key={channel.key}
+                    label={`${channel.number} ${channel.name}`}
+                    help={groupNames.get(channel.group)}
+                    checked={channels.includes(channel.key)}
+                    onChange={(on) => tickChannel(channel.key, on)}
+                  />
+                ))}
+              </div>
+              {choices.data.total > choices.data.channels.length && (
+                <p className="text-small text-ink-3">
+                  {t.users.moreChannels(choices.data.total - choices.data.channels.length)}
+                </p>
+              )}
+            </div>
+          </>
+        ))}
+    </SectionForm>
+  )
+}
+
 /** Every half hour from 00:00 to 24:00, as jellyfin-web offers them. */
 const halfHours = Array.from({ length: 49 }, (_, i) => i / 2)
 
@@ -756,6 +1010,14 @@ function resetChanges(t: Messages, current: GroupLimits, defaults: GroupLimits) 
       title: t.users.allowedHoursTitle,
       settings: [],
       changed: JSON.stringify(current.accessSchedules) !== JSON.stringify(defaults.accessSchedules),
+    },
+    {
+      title: t.users.liveTvChannelsTitle,
+      settings: [],
+      changed:
+        current.liveTvChannels.mode !== defaults.liveTvChannels.mode ||
+        !sameSet(current.liveTvChannels.groups, defaults.liveTvChannels.groups) ||
+        !sameSet(current.liveTvChannels.channels, defaults.liveTvChannels.channels),
     },
   ]
   return sections.filter((section) => section.changed)

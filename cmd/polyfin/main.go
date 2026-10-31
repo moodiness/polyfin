@@ -682,6 +682,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		// users saved, with what the Jellyfin API remembers of them.
 		LibraryOrders: jellyfinAPI,
 		Sharing:       lib,
+		// Users' and groups' Live TV channel rules name the channels of the
+		// server's line-ups.
+		ChannelChoices: lib,
 		Health: admin.HealthSources{
 			Addons:           addonClient,
 			SearchesLeaveOut: lib.SearchesLeaveOut,

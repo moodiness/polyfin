@@ -228,6 +228,8 @@ const common: typeof en = {
       'Die Bibliotheksliste hat sich inzwischen geändert. Lade die Seite neu.',
     invalid_blocked_genres:
       'Genres müssen 1 bis 100 Zeichen lang sein, und höchstens 100 können gesperrt werden.',
+    invalid_live_tv_channels:
+      'Die Senderauswahl ist ungültig: Alle, Nur diese oder Alle außer diesen, mit höchstens 10.000 Gruppen und 10.000 Sendern.',
     invalid_access_schedules:
       'Uhrzeiten reichen von 00:00 bis 24:00, und jedes Ende muss nach seinem Beginn liegen (höchstens 50 Zeilen).',
     outside_allowed_hours:
