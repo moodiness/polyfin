@@ -150,11 +150,29 @@ func (c *Client) ImageURL(path, size string) string {
 // FindByIMDb returns the TMDB identifier of the title of kind an IMDb
 // identifier names.
 func (c *Client) FindByIMDb(ctx context.Context, kind Kind, imdb string) (string, error) {
+	return c.find(ctx, kind, imdb, "imdb_id")
+}
+
+// FindByTVDB returns the TMDB identifier of the title of kind a TVDB
+// identifier names, as Jellyfin 12.4's TMDB providers find it
+// (TmdbSeriesProvider.cs lines 92-110, TmdbMovieProvider.cs lines
+// 104-113).
+func (c *Client) FindByTVDB(ctx context.Context, kind Kind, tvdb string) (string, error) {
+	return c.find(ctx, kind, tvdb, "tvdb_id")
+}
+
+// find returns the TMDB identifier of the title of kind TMDB's find gives
+// for an identifier of another source ("imdb_id", "tvdb_id").
+func (c *Client) find(ctx context.Context, kind Kind, id, source string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", ErrNotFound
+	}
 	var found struct {
 		Movies []struct{ ID int } `json:"movie_results"`
 		Series []struct{ ID int } `json:"tv_results"`
 	}
-	if err := c.get(ctx, "/find/"+url.PathEscape(imdb), url.Values{"external_source": {"imdb_id"}}, &found); err != nil {
+	if err := c.get(ctx, "/find/"+url.PathEscape(id), url.Values{"external_source": {source}}, &found); err != nil {
 		return "", err
 	}
 	results := found.Movies
