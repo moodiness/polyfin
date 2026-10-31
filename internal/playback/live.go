@@ -385,8 +385,9 @@ func (s *Service) serveLive(w http.ResponseWriter, r *http.Request, version libr
 		http.Error(w, "source unavailable", http.StatusBadGateway)
 		return err
 	}
-	defer response.Body.Close()
-	body := bufio.NewReaderSize(response.Body, 64<<10)
+	received := s.countReceived(version.ID, response.Body)
+	defer received.Close()
+	body := bufio.NewReaderSize(received, 64<<10)
 	switch response.StatusCode {
 	case http.StatusOK, http.StatusPartialContent, http.StatusRequestedRangeNotSatisfiable:
 	default:

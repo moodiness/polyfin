@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/bandwidth"
 	"github.com/moodiness/polyfin/internal/diskspace"
 )
 
@@ -305,6 +306,9 @@ type Cache struct {
 	// may take a source's lock, never the other way round.
 	slotsMu sync.Mutex
 	slots   map[string]*hostSlots
+	// received, when set, counts the bytes each source receives, by its
+	// identifier (see Count).
+	received *bandwidth.Meters
 }
 
 // protectedFor spares the chunks read lately from eviction.
@@ -349,6 +353,13 @@ func New(dir string, policy func() Policy, opener Opener, logger *slog.Logger) (
 // 256 MiB, a minute or two of a 4K remux, within an eighth of the cache.
 func aheadBudget(limit int64) int64 {
 	return max(32, min(256<<20, limit/8)/blockSize)
+}
+
+// Count has the bytes each source receives from its origin, its mirrors,
+// its swarm or its storage counted in meters, by the source's identifier.
+// It is called before the cache is used.
+func (c *Cache) Count(meters *bandwidth.Meters) {
+	c.received = meters
 }
 
 // Open returns the source identified by id, read from location, and
@@ -724,6 +735,10 @@ type Source struct {
 	// saved, and saveTimer the save to come, if any.
 	unsynced  map[int64]bool
 	saveTimer *time.Timer
+	// received counts the bytes the source receives, nil when the cache
+	// counts none (see Cache.Count). It is set once, as the source is
+	// made.
+	received *bandwidth.Meter
 }
 
 // Urge has the source read for a playback until done is called, as a
@@ -867,6 +882,9 @@ func (s *Source) Release() {
 // the source opened anew under the same identifier.
 func (s *Source) discard() error {
 	s.halt()
+	if s.received != nil {
+		s.cache.received.Release(s.received)
+	}
 	defer s.writing.Unlock()
 	s.mu.Lock()
 	s.present, s.pending, s.unread = nil, nil, nil

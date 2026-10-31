@@ -74,11 +74,27 @@ var (
 		Help:    "Scans of local folders, and how long they took.",
 		Buckets: []float64{1, 5, 15, 60, 300, 900, 3600},
 	})
+	bytesSent = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "polyfin_bytes_sent_total",
+		Help: "Bytes of media sent to apps, by delivery: direct_play when the app reads the file as it is, remux when Polyfin repackages it, conversion when it converts the video or the audio.",
+	}, []string{"delivery"})
+)
+
+// The deliveries bytes sent to apps are counted by (see BytesSent).
+const (
+	DeliveryDirectPlay = "direct_play"
+	DeliveryRemux      = "remux"
+	DeliveryConversion = "conversion"
 )
 
 func init() {
 	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		httpRequests, segments, encodingFailures, imports, trackingSent, notifications, scansRunning, scanDurations, addonRequests)
+		httpRequests, segments, encodingFailures, imports, trackingSent, notifications, scansRunning, scanDurations, addonRequests,
+		bytesSent)
+	// Every delivery is listed from the start, at 0.
+	for _, delivery := range []string{DeliveryDirectPlay, DeliveryRemux, DeliveryConversion} {
+		bytesSent.WithLabelValues(delivery)
+	}
 }
 
 // Register adds collectors that read the server's state when Prometheus
@@ -139,6 +155,14 @@ func ScanStarted() (finished func()) {
 		scansRunning.Dec()
 		scanDurations.Observe(time.Since(started).Seconds())
 	}
+}
+
+// BytesSent is the counter of the bytes of media sent to apps by delivery,
+// DeliveryDirectPlay, DeliveryRemux or DeliveryConversion. Its Add is an
+// atomic addition: a request keeps the counter, and counts each write
+// with no lookup.
+func BytesSent(delivery string) prometheus.Counter {
+	return bytesSent.WithLabelValues(delivery)
 }
 
 // Sample is a value read when Prometheus asks, with its label values.
