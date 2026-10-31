@@ -86,6 +86,8 @@ const versions: typeof en = {
       codec: (codec: string) => `Ocultar estos códecs de vídeo: ${codec}`,
       release: (kind: string) => `Ocultar publicaciones de baja calidad: ${kind}`,
       words: (word: string) => `Ocultar las versiones cuyas etiquetas contienen «${word}»`,
+      label: (text: string) =>
+        `Reglas de etiquetas: ocultar las versiones que coinciden con «${text}»`,
       other: (rule: string, detail: string) => (detail === '' ? rule : `${rule}: ${detail}`),
       none: 'Oculta por una regla cambiada desde entonces',
     },
@@ -94,6 +96,12 @@ const versions: typeof en = {
     facts: 'Lo que saben las reglas',
     analyzed: 'Analizada',
     multi: 'MULTI',
+    tiers: { disc: 'Copia de disco', bluray: 'Blu-ray', web: 'Web', dvd: 'DVD', tv: 'TV' },
+    lossless: 'Sin pérdida',
+    objectAudio: 'Atmos o DTS:X',
+    perMinute: (megabytes: number) => `${megabytes} MB/min`,
+    labelRules: (rules: string[], score: number) =>
+      `Reglas de etiquetas que coinciden: ${rules.map((rule) => `«${rule}»`).join(', ')}; puntuación ${score > 0 ? '+' : ''}${score}`,
     block: 'Bloquear',
     blockTitle: 'Bloquear este archivo',
     blockScope: 'Bloquearlo para',

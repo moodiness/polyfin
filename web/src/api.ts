@@ -2862,6 +2862,11 @@ export type VersionStream = {
     multi: boolean
     releases: string[]
     elsewhere: string
+    /** Its source tier (disc, bluray, web, dvd or tv), empty when they name none. */
+    tier: string
+    audio: VersionAudio
+    /** Its edition (theatrical, extended, directors or imax), empty when they name none. */
+    edition: string
   }
   /** What the version rules know of it: its analysis, else RemuxDB, else its labels. */
   facts: {
@@ -2871,9 +2876,20 @@ export type VersionStream = {
     range: VersionRange
     languages: string[]
     multi: boolean
+    tier: string
+    audio: VersionAudio
+    edition: string
+    /** Bytes a minute of its runtime, 0 when unknown. */
+    perMinute: number
+    /** Its score under the label rules, and the text of each rule matching it. */
+    score: number
+    labelRules: string[]
   }
   analyzed: boolean
 }
+
+/** A version's best audio format; channels is 0 when unknown. */
+export type VersionAudio = { lossless: boolean; object: boolean; channels: number }
 
 export type TitleVersionSource = {
   id: string
