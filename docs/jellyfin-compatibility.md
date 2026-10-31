@@ -51,6 +51,15 @@ Jellyfin apps have no button to take a title off Continue Watching without marki
 
 **For app developers:** `DELETE /Polyfin/UserItems/{id}/Resume` takes the item off Continue Watching, a series or a season its episodes, a folder of videos its videos, and answers its `UserItemData`. `POST /Polyfin/UserItems/{id}/Hidden` hides a movie, a home video, a series or a folder of videos (see [Folders of videos](addons-and-libraries.md#folders-of-videos)), a season or an episode standing for its series and a video for its folder, and `DELETE` shows it again; both answer 204. `GET /Polyfin/UserItems/Hidden` lists the hidden titles, the latest hidden first, as a listing describes them.
 
+### Home screen sections
+
+In the web player's **Settings › Home**, each user can untick, for a library, "Display in home screen sections such as 'Recently Added Media' and 'Continue Watching'" ([`homeScreenSettings.js`](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/homeScreenSettings/homeScreenSettings.js#L354-L368)). The web player then leaves the library's latest row off the home screen, and, as in Jellyfin 12.4, Next Up and Continue Watching leave out the titles only such libraries list, an episode going with its series ([`TVSeriesManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L71-L74), [`ItemsController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemsController.cs#L953-L961)). A title another library lists too, such as a show a local folder holds (see [Titles your catalogs list too](local-folders.md#titles-your-catalogs-list-too)), stays. The library itself still opens, and other users are not affected.
+
+- Asked within a library or for one series, as a library's or a series' page asks, Next Up and Continue Watching list its titles all the same, as in Jellyfin.
+- Jellyfin knows every library that holds an item. Polyfin knows, without asking an addon, the library a title was last listed in, the local folders that hold it, and the catalog pages it keeps: a title a catalog lists on a page no one opened since the pages were last kept counts as the other libraries' only. A title last listed in none of the user's libraries, such as one found by a search, stays.
+
+**For app developers:** the choice is the user's `Configuration.LatestItemsExcludes`, a list of library identifiers. `/Shows/NextUp` and `/UserItems/Resume` apply it when they have no `parentId`, and `/Shows/NextUp` when it has no `seriesId` either. `/Items/Latest` always needs a `parentId` in Polyfin: without one, it answers an empty list.
+
 ### Profile pictures
 
 A user changes their own profile picture from their app; an administrator can change anyone's.
