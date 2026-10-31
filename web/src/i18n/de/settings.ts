@@ -575,6 +575,9 @@ const settings: typeof en = {
       keepConvertedVideo: 'Konvertiertes Video beim Wechsel der Audiospur behalten',
       keepConvertedVideoHelp:
         'Konvertiert Bild und Ton getrennt, sodass bei Auswahl einer anderen Audiospur im Player nur der neue Ton vorbereitet wird: Das bereits konvertierte Bild läuft weiter, und die neue Spur startet schneller. Das Bild wird 30 Sekunden aufbewahrt, nachdem ein Player es beendet, und zählt in dieser Zeit als eine Konvertierung.',
+      fastStart: 'Wiedergaben aus entfernten Quellen schneller starten',
+      fastStartHelp:
+        'Beginnt eine neu verpackte oder konvertierte Wiedergabe eines Add-on-Links oder Torrents mit einem langen Segment, etwa bei einem Keyframe alle 10 Sekunden, wird dieses Segment in 2-Sekunden-Segmente geteilt, die schnell mit höchstens 720p konvertiert werden: Das Bild erscheint früher, in diesen Sekunden etwas weniger scharf, danach läuft die Wiedergabe wie gewohnt weiter. Gilt für die nächsten Wiedergaben.',
     },
     catalogsTitle: 'Kataloge',
     catalogLimit: 'Gelesene Titel pro Film- und Serienkatalog',

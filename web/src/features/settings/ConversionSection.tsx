@@ -591,6 +591,13 @@ export default function ConversionSection({
           checked={form.keepConvertedVideo}
           onChange={(keepConvertedVideo) => update({ keepConvertedVideo })}
         />
+        <SwitchRow
+          anchor="fast-start"
+          label={c.fastStart}
+          help={c.fastStartHelp}
+          checked={form.fastStart}
+          onChange={(fastStart) => update({ fastStart })}
+        />
       </SettingsGroup>
     </>
   )

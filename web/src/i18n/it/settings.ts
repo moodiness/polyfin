@@ -580,6 +580,9 @@ const settings: typeof en = {
       keepConvertedVideo: 'Mantieni il video convertito quando cambia la traccia audio',
       keepConvertedVideoHelp:
         'Converte immagine e audio separatamente, così scegliere un’altra traccia audio nel lettore prepara solo il nuovo audio: l’immagine già convertita continua e la nuova traccia parte prima. L’immagine viene mantenuta per 30 secondi dopo che un lettore la interrompe e nel frattempo conta come una conversione.',
+      fastStart: 'Avvia prima le riproduzioni da sorgenti remote',
+      fastStartHelp:
+        'Quando una riproduzione reimpacchettata o convertita del link di un add-on o di un torrent inizia con un segmento lungo, come con un fotogramma chiave ogni 10 secondi, quel segmento viene diviso in segmenti da 2 secondi convertiti rapidamente a 720p al massimo: l’immagine appare prima, un po’ meno nitida in quei secondi, poi la riproduzione continua come al solito. Vale per le riproduzioni successive.',
     },
     catalogsTitle: 'Cataloghi',
     catalogLimit: 'Titoli letti per catalogo di film e serie TV',

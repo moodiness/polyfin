@@ -579,6 +579,9 @@ const settings: typeof en = {
       keepConvertedVideo: 'Garder la vidéo convertie quand la piste audio change',
       keepConvertedVideoHelp:
         'Convertit l’image et le son à part : choisir une autre piste audio dans le lecteur ne prépare que le nouveau son, l’image déjà convertie continue, et la nouvelle piste démarre plus vite. L’image est gardée 30 secondes après l’arrêt du lecteur, et compte pendant ce temps pour une conversion.',
+      fastStart: 'Démarrer plus vite les lectures de sources distantes',
+      fastStartHelp:
+        'Quand une lecture réemballée ou convertie du lien d’un addon ou d’un torrent commence par un long segment, comme avec une image clé toutes les 10 secondes, ce segment est découpé en segments de 2 secondes convertis rapidement en 720p au plus : l’image s’affiche plus tôt, un peu moins nette pendant ces secondes, puis la lecture continue comme d’habitude. S’applique aux lectures suivantes.',
     },
     catalogsTitle: 'Catalogues',
     catalogLimit: 'Titres lus par catalogue de films et séries',
