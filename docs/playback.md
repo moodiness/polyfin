@@ -361,7 +361,7 @@ With **Say in version names how they play**, in **Settings › Playback** and on
 
 - "(direct play)": the app plays the file as it is.
 - "(direct stream)": its tracks are copied, without conversion, into HLS.
-- "(converted: reason)", with one reason, the first that applies: "HDR" when the app cannot show the video's HDR or Dolby Vision; "quality limit" when the app's quality setting, the user's **Maximum quality** or their quality group needs the video converted down; "subtitles" when a subtitle is burned into the video; "video" for any other reason about the video; "audio" when only the audio is converted. "(converted)" alone for any other reason.
+- "(converted: reason)", with one reason, the first that applies: "app’s request" when the app turned direct play off for a version it would play as it is (see [Direct play turned off by the app](transcoding.md#direct-play-turned-off-by-the-app)); "HDR" when the app cannot show the video's HDR or Dolby Vision; "quality limit" when the app's quality setting, the user's **Maximum quality** or their quality group needs the video converted down; "subtitles" when a subtitle is burned into the video; "video" for any other reason about the video; "audio" when only the audio is converted. "(converted)" alone for any other reason.
 - "(cannot play here)": the version needs a conversion the server or the user may not have (see [Transcoding](transcoding.md)).
 
 How names are decided:

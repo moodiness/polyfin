@@ -17,6 +17,17 @@ Converted video keeps the colors its source states: range, matrix, transfer and 
 
 With **Say in version names how they play** on, the default, apps see in each version's name which of these ways it takes: "(direct play)", "(direct stream)" when its tracks are copied into HLS, "(converted: reason)", or "(cannot play here)" when it needs a conversion the server or the user may not have. See [Version names](playback.md#version-names).
 
+### Direct play turned off by the app
+
+An app may ask for a title again with direct play turned off, as the Jellyfin app for Android's integrated player does after two playback errors within 30 seconds. Polyfin then still checks whether the app would play the file as it is:
+
+- **It would:** the file is repackaged or converted to what the app's conversion formats take, and **Direct play failed** joins the reasons: in **Home › Now playing › Details** under **Why**, and as `DirectPlayError` in the `TranscodeReasons` of the `TranscodingUrl`. A version converted so ends its name with "(converted: app’s request)". For instance, an HEVC Main 10 file with E-AC-3 audio, which the integrated player plays as it is, is converted to H.264 for its MPEG-TS format with the reasons "Video codec not supported" and "Direct play failed", where the codec alone would point at the wrong cause.
+- **It would not:** the reasons are those the check finds, such as "File format not supported" for an AVI file, as when direct play is on.
+
+Discs and DASH channels never play as they are, so they skip the check, as do DLNA devices and guests through share links, which Polyfin sends a stream itself: their reasons are those of their conversion alone, or "Direct play failed" when no other reason applies.
+
+**Compared with Jellyfin:** Jellyfin 12.4 runs the check too when the app turns direct play off ([`MediaInfoHelper.cs`, lines 227 to 230](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L227-L230); [`StreamBuilder.cs`, lines 1392 to 1426](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L1392-L1426)), and gives the same reasons. Version names are Polyfin's own.
+
 ### Audio in HLS segments
 
 The audio of a video repackaged or converted into HLS is copied only when the app takes its codec and the HLS segments carry it: AAC, AC-3, E-AC-3 and MP3 in MPEG-TS segments, and also ALAC, FLAC, Opus, DTS and TrueHD in fragmented MP4 ones. Another track is converted to a codec the app takes that the segments carry, even when the app's profile names its own codec: jellyfin-web names MP2 for Chrome, which refuses it in both kinds of segments, so in Chrome the MP2 of TV recordings and channels is converted to AAC, whether the video is copied or converted, and plays at the first try. The `TranscodingUrl` writes those codecs alone as `AudioCodec`. A stream sent as one file, to an app that asks for one or to a DLNA device, keeps to the app's codecs as they are.
