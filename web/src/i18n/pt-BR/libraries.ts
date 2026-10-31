@@ -228,6 +228,7 @@ const libraries: typeof en = {
       rank: 'Posição no catálogo',
       state: 'Estado de reprodução',
       released: 'Data de lançamento',
+      homeRelease: 'Lançamento em casa',
       votes: 'Votos no IMDb',
       runtime: 'Duração',
       contentRating: 'Classificação indicativa',
@@ -246,6 +247,11 @@ const libraries: typeof en = {
     atMost: 'No máximo',
     releasedWhen: 'Quando',
     releasedWithin: { last: 'Nos últimos', next: 'Nos próximos' } as Record<string, string>,
+    homeReleaseWithin: {
+      released: 'Lançado nos últimos',
+      upcoming: 'Lança nos próximos',
+      both: 'Em até',
+    } as Record<string, string>,
     days: 'dias',
     namePlaceholder: { person: 'O nome', studio: 'O nome' } as Record<string, string>,
     types: { movie: 'Um filme', series: 'Uma série' } as Record<string, string>,
@@ -263,6 +269,8 @@ const libraries: typeof en = {
       'Os votos no IMDb vêm do MDBList, com a chave da API do MDBList para avaliações em Configurações › Conteúdo, consultados em segundo plano. Sem essa chave, nenhum título tem votos.',
     studioHelp:
       'Os estúdios e as emissoras vêm do TMDB, com a chave da API do TMDB em Configurações › Conteúdo, consultados em segundo plano e guardados: a lista cresce à medida que chegam. Sem essa chave, contam apenas os estúdios que um administrador definiu nos metadados de um título.',
+    homeReleaseHelp:
+      'O lançamento em casa de um filme é seu primeiro lançamento digital ou físico, ou então 90 dias após a estreia nos cinemas, segundo o TMDB, com a chave da API do TMDB em Configurações › Conteúdo, consultado em segundo plano e guardado: a lista cresce à medida que chegam. O de uma série é sua data de estreia. Com Aguardar o lançamento digital ativado, um filme ainda não lançado só aparece nas listas com uma regra de títulos futuros.',
     sort: 'Ordenação',
     sorts: {
       catalog: 'Como os catálogos os listam, um de cada por vez',

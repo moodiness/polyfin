@@ -608,6 +608,9 @@ const settings: typeof en = {
     tmdbKey: 'Clave API de TMDB',
     tmdbKeyHelp:
       'Opcional. Con una clave API o un token de acceso de lectura de una cuenta de TMDB, «Edit images» de jellyfin-web también busca en TMDB pósteres, imágenes de fondo y logotipos de un título, fotogramas de un episodio, pósteres de una temporada y fotos de una persona, que Polyfin transmite. Además, las personas se buscan una vez en TMDB: las que no tienen foto reciben la suya, y sus páginas muestran su biografía, sus fechas de nacimiento y de fallecimiento y su lugar de nacimiento. Los archivos de una carpeta local cuya búsqueda falla en todas las extensiones de metadatos también se buscan en TMDB. Sin clave, «Edit images» solo muestra las imágenes de las extensiones y nunca se consulta TMDB.',
+    waitDigitalRelease: 'Esperar al estreno digital',
+    waitDigitalReleaseHelp:
+      'Una película de los catálogos de los addons aparece solo cuando ya está disponible en casa: su primer estreno digital o físico, según TMDB, o si no 90 días después de su estreno en cines. Hasta entonces no aparece en las bibliotecas, las filas de inicio, las búsquedas, los títulos similares ni las páginas de personas, no tiene ninguna versión y no se reproduce; las listas inteligentes con una regla de títulos próximos la muestran, con ese día. Una película que TMDB no conoce, o estrenada hace más de un año, sigue apareciendo. Necesita la clave API de TMDB.',
     mdblistRatingsKey: 'Clave API de MDBList para valoraciones',
     mdblistRatingsKeyHelp:
       'Opcional. Con una clave de una cuenta de MDBList, las películas y series muestran su valoración de IMDb, la puntuación de la crítica y la del público según MDBList, obtenidas en segundo plano y guardadas para todos los usuarios. Las claves de MDBList propias de los usuarios para el seguimiento nunca se usan para esto. Sin clave, nunca se consulta MDBList.',
@@ -1100,6 +1103,7 @@ const settings: typeof en = {
       skip: 'Saltar introducción y créditos',
       titlePages: 'Páginas de títulos',
       images: 'Imágenes',
+      releases: 'Estrenos de películas',
       ratings: 'Valoraciones',
       music: 'Música',
       thresholds: 'Umbrales de reproducción',

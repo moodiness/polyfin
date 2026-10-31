@@ -230,6 +230,7 @@ const libraries: typeof en = {
       rank: 'Posizione nel suo catalogo',
       state: 'Stato di visione',
       released: 'Data di uscita',
+      homeRelease: 'Uscita a casa',
       votes: 'Voti IMDb',
       runtime: 'Durata',
       contentRating: 'Classificazione per età',
@@ -248,6 +249,11 @@ const libraries: typeof en = {
     atMost: 'Al massimo',
     releasedWhen: 'Quando',
     releasedWithin: { last: 'Negli ultimi', next: 'Nei prossimi' } as Record<string, string>,
+    homeReleaseWithin: {
+      released: 'Uscito negli ultimi',
+      upcoming: 'Esce nei prossimi',
+      both: 'Entro',
+    } as Record<string, string>,
     days: 'giorni',
     namePlaceholder: { person: 'Il nome', studio: 'Il nome' } as Record<string, string>,
     types: { movie: 'Un film', series: 'Una serie TV' } as Record<string, string>,
@@ -265,6 +271,8 @@ const libraries: typeof en = {
       'I voti IMDb vengono da MDBList, con la chiave API MDBList per i voti in Impostazioni › Contenuti, cercati in background. Senza quella chiave, nessun titolo ha voti.',
     studioHelp:
       'Studi e reti vengono da TMDB, con la chiave API TMDB in Impostazioni › Contenuti, cercati in background e conservati: la lista cresce man mano che arrivano. Senza quella chiave, contano solo gli studi che un amministratore ha indicato nei metadati di un titolo.',
+    homeReleaseHelp:
+      'L’uscita a casa di un film è la sua prima uscita digitale o fisica, altrimenti 90 giorni dopo l’uscita al cinema, secondo TMDB, con la chiave API TMDB in Impostazioni › Contenuti, cercata in background e conservata: la lista cresce man mano che arrivano. Quella di una serie è la sua data di debutto. Con Attendi l’uscita digitale attivo, un film non ancora uscito compare solo nelle liste con una regola di titoli in arrivo.',
     sort: 'Ordina',
     sorts: {
       catalog: 'Come li elencano i suoi cataloghi, uno per ciascuno a turno',
