@@ -50,8 +50,8 @@ func (h *Handler) liveTvRoutes(rt *router) {
 	h.reminderRoutes(rt, signedIn)
 	// Players fetch these without credentials: see liveFile and
 	// liveSegment.
-	rt.handle(http.MethodGet, "/Videos/{itemId}/live/{file}", http.HandlerFunc(h.liveFile))
-	rt.handle(http.MethodGet, "/Videos/{itemId}/hls/{playlistId}/{file}", http.HandlerFunc(h.liveSegment))
+	rt.handle(http.MethodGet, "/Videos/{itemId}/live/{file}", h.meteredStream(h.liveFile))
+	rt.handle(http.MethodGet, "/Videos/{itemId}/hls/{playlistId}/{file}", h.meteredStream(h.liveSegment))
 }
 
 type LiveTvServiceInfo struct {

@@ -54,6 +54,9 @@ const home: typeof en = {
       conversions: 'Conversiones de vídeo',
       conversionsOf: (count: number, limit: number) =>
         limit > 0 ? `${count} de ${limit}` : `${count}, sin límite`,
+      bandwidth: 'Ancho de banda',
+      bandwidthSent: (rate: string) => `${rate} enviados a las aplicaciones`,
+      bandwidthReceived: (rate: string) => `${rate} recibidos de las fuentes`,
       uptime: 'En funcionamiento desde hace',
       problems: 'Para revisar',
       problemsEmpty: 'Nada que revisar',
@@ -189,6 +192,19 @@ const home: typeof en = {
       sizeLimit: 'Menor que la fuente',
       qualityPlayed: 'Calidad reproducida',
       switchedVersion: 'Versión de relevo',
+      bandwidth: {
+        sent: (rate: string) => `${rate} a la aplicación`,
+        received: (rate: string) => `${rate} desde la fuente`,
+        redirected: 'La aplicación lee la fuente directamente',
+      },
+      origins: {
+        addon: 'Extensión',
+        torrent: 'Torrent',
+        localFolder: 'Carpeta local',
+        networkShare: 'Recurso compartido de red',
+        iptv: 'IPTV',
+      } as Record<string, string>,
+      peers: (count: number) => (count === 1 ? '1 par' : `${count} pares`),
       qualityAmong: (played: string, offered: string) => `${played}, entre ${offered}`,
       sizeLimits: {
         steppedDown: (height: string) => `La aplicación bajó de ${height}`,

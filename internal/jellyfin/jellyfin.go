@@ -11,6 +11,7 @@ import (
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/audiosegments"
 	"github.com/moodiness/polyfin/internal/backup"
+	"github.com/moodiness/polyfin/internal/bandwidth"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/commercials"
@@ -145,6 +146,9 @@ type Options struct {
 	SharePlayed func(accounts.ShareLink)
 	// Reminders keeps the users' programme reminders; nil keeps none.
 	Reminders *reminders.Service
+	// Sent counts the bytes of media sent to apps, by the playback they
+	// serve (see metered); nil counts them for the metrics only.
+	Sent *bandwidth.Meters
 }
 
 // Handler serves the Jellyfin API.

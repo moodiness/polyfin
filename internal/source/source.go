@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/bandwidth"
 )
 
 const (
@@ -284,6 +285,9 @@ type Cache struct {
 	// may take a source's lock, never the other way round.
 	slotsMu sync.Mutex
 	slots   map[string]*hostSlots
+	// received, when set, counts the bytes each source receives, by its
+	// identifier (see Count).
+	received *bandwidth.Meters
 }
 
 // protectedFor spares the chunks read lately from eviction.
@@ -329,6 +333,13 @@ func aheadBudget(limit int64) int64 {
 	return max(32, min(256<<20, limit/8)/blockSize)
 }
 
+// Count has the bytes each source receives from its origin, its mirrors,
+// its swarm or its storage counted in meters, by the source's identifier.
+// It is called before the cache is used.
+func (c *Cache) Count(meters *bandwidth.Meters) {
+	c.received = meters
+}
+
 // Open returns the source identified by id, read from location, and
 // renewed by renew (which may be nil) when its link expires. A source is
 // shared by all its readers; each must Release it when done. A location
@@ -346,6 +357,9 @@ func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 		s = &Source{cache: c, id: id, dir: filepath.Join(c.dir, id.String()+".blocks"), ctx: ctx, cancel: cancel,
 			size: -1, wanted: map[int64]*want{}, wake: make(chan struct{}, 1), progress: make(chan struct{}),
 			failed: make(chan struct{}), learned: make(chan struct{})}
+		if c.received != nil {
+			s.received = c.received.Hold(id.String())
+		}
 		c.sources[id] = s
 	}
 	s.mu.Lock()
@@ -614,6 +628,10 @@ type Source struct {
 	slotWaits int
 	// joined counts the playbacks whose location's Playing returned.
 	joined int
+	// received counts the bytes the source receives, nil when the cache
+	// counts none (see Cache.Count). It is set once, as the source is
+	// made.
+	received *bandwidth.Meter
 }
 
 // Urge has the source read for a playback until done is called, as a
@@ -753,6 +771,9 @@ func (s *Source) Release() {
 // would remove that of the source opened anew under the same identifier.
 func (s *Source) discard() error {
 	s.cancel()
+	if s.received != nil {
+		s.cache.received.Release(s.received)
+	}
 	s.writing.Lock()
 	defer s.writing.Unlock()
 	s.mu.Lock()

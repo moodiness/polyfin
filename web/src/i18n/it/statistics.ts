@@ -19,7 +19,12 @@ const statistics: typeof en = {
     empty: 'Nessuna riproduzione in questo periodo',
     emptyHint:
       'I video riprodotti per almeno 10 secondi in un’applicazione Jellyfin compaiono qui una volta interrotti.',
-    figures: { played: 'Ore guardate', plays: 'Riproduzioni', users: 'Utenti' },
+    figures: {
+      played: 'Ore guardate',
+      plays: 'Riproduzioni',
+      users: 'Utenti',
+      sent: 'Dati inviati',
+    },
     perDay: 'Ore guardate al giorno',
     perMonth: 'Ore guardate al mese',
     perUser: 'Ore guardate per utente',
@@ -53,6 +58,7 @@ const statistics: typeof en = {
       title: 'Titolo',
       device: 'Applicazione e dispositivo',
       played: 'Durata riprodotta',
+      sent: 'Dati inviati',
       method: 'Modalità di riproduzione',
     },
     appOn: (app: string, device: string) => (app && device ? `${app} su ${device}` : app || device),

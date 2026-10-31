@@ -117,7 +117,11 @@ func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, err
 		n = int(max(0, total-off))
 	}
 	data := make([]byte, n)
-	if _, err := io.ReadFull(response.Body, data); err != nil {
+	read, err := io.ReadFull(response.Body, data)
+	if s.received != nil {
+		s.received.Add(read)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("%w: %w: %v", ErrUnavailable, errBroken, err)
 	}
 	return data, nil

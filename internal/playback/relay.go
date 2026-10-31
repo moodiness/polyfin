@@ -64,7 +64,8 @@ func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.
 		http.Error(w, "source unavailable", http.StatusBadGateway)
 		return err
 	}
-	defer response.Body.Close()
+	body := s.countReceived(version.ID, response.Body)
+	defer body.Close()
 	switch response.StatusCode {
 	case http.StatusOK, http.StatusPartialContent, http.StatusRequestedRangeNotSatisfiable:
 	default:
@@ -86,7 +87,7 @@ func (s *Service) relay(w http.ResponseWriter, r *http.Request, version library.
 	}
 	buffer := copyBuffers.Get().(*[256 << 10]byte)
 	defer copyBuffers.Put(buffer)
-	_, err = io.CopyBuffer(w, response.Body, buffer[:])
+	_, err = io.CopyBuffer(w, body, buffer[:])
 	return err
 }
 

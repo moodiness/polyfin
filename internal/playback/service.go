@@ -25,6 +25,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/bandwidth"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/container"
 	"github.com/moodiness/polyfin/internal/hls"
@@ -136,6 +137,9 @@ type Service struct {
 	// switches are the versions play sessions went on from once theirs
 	// failed (see switch.go).
 	switches switchState
+	// received counts the bytes the versions' sources send, nil when
+	// nothing is counted (see CountReceived).
+	received *bandwidth.Meters
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading

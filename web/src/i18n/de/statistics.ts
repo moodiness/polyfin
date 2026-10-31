@@ -18,7 +18,12 @@ const statistics: typeof en = {
     empty: 'Keine Wiedergabe in diesem Zeitraum',
     emptyHint:
       'Videos, die mindestens 10 Sekunden lang in einer Jellyfin-App abgespielt wurden, erscheinen hier, sobald sie beendet werden.',
-    figures: { played: 'Angesehene Stunden', plays: 'Wiedergaben', users: 'Benutzer' },
+    figures: {
+      played: 'Angesehene Stunden',
+      plays: 'Wiedergaben',
+      users: 'Benutzer',
+      sent: 'Gesendete Daten',
+    },
     perDay: 'Angesehene Stunden pro Tag',
     perMonth: 'Angesehene Stunden pro Monat',
     perUser: 'Angesehene Stunden pro Benutzer',
@@ -52,6 +57,7 @@ const statistics: typeof en = {
       title: 'Titel',
       device: 'App und Gerät',
       played: 'Abgespielt',
+      sent: 'Gesendete Daten',
       method: 'Wiedergabeart',
     },
     appOn: (app: string, device: string) =>

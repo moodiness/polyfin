@@ -259,7 +259,7 @@ func (h *Handler) followGuest(play guestPlay, kind int) {
 	}
 	h.Plays.Report(plays.Report{Kind: kind, Device: play.device, User: play.user, UserName: play.link.User.Name, App: guestApp,
 		DeviceName: guestDevice, Title: playedTitle(play.item), Position: play.position, PositionKnown: true, Paused: play.paused,
-		Method: h.playMethod(playback.PlayState{PlayMethod: play.method, PlaySessionID: play.id}), Shared: true})
+		Method: h.playMethod(playback.PlayState{PlayMethod: play.method, PlaySessionID: play.id}), Shared: true, Sent: h.sentSoFar(play.id)})
 }
 
 // Share serves the share links' routes, under /share/.
@@ -271,8 +271,8 @@ func (h *Handler) Share() http.Handler {
 	mux.HandleFunc("POST /share/{token}/play", h.startGuest)
 	mux.HandleFunc("POST /share/{token}/play/{session}/progress", h.guestProgress)
 	mux.HandleFunc("POST /share/{token}/play/{session}/stop", h.stopGuest)
-	mux.HandleFunc("GET /share/{token}/play/{session}/{file}", h.guestPlaylist)
-	mux.HandleFunc("GET /share/{token}/play/{session}/hls1/{playlistId}/{file}", h.guestSegment)
+	mux.HandleFunc("GET /share/{token}/play/{session}/{file}", h.meteredStream(h.guestPlaylist))
+	mux.HandleFunc("GET /share/{token}/play/{session}/hls1/{playlistId}/{file}", h.meteredStream(h.guestSegment))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
 		header.Set("X-Robots-Tag", "noindex, nofollow")

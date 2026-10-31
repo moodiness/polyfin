@@ -129,7 +129,7 @@ func (h *Handler) followDLNA(play dlnaPlay, kind int) {
 	}
 	h.Plays.Report(plays.Report{Kind: kind, Device: play.device.ID, User: play.user.ID, UserName: play.user.Name, App: dlnaApp,
 		DeviceName: play.device.DisplayName(), Title: playedTitle(play.item), Position: play.position, PositionKnown: true,
-		Method: play.method})
+		Method: play.method, Sent: h.sentSoFar(play.device.ID.String())})
 }
 
 // errDLNALimit reports a playback refused for the user's limit of
@@ -352,8 +352,12 @@ func audioMime(container string) string {
 	return "audio/" + container
 }
 
-// Play serves a DLNA device's request for an item's bytes.
+// Play serves a DLNA device's request for an item's bytes, counted for the
+// device's playback (see meteredDevice).
 func (h *Handler) Play(w http.ResponseWriter, r *http.Request, play dlna.Play) {
+	counted := h.meteredDevice(w, r, play.Device.ID)
+	defer counted.release()
+	w = counted
 	switch {
 	case play.Item.Kind == library.KindChannel:
 		h.playDLNAChannel(w, r, play)

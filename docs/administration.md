@@ -46,13 +46,34 @@ In a window 1280 pixels wide or more, **Home** has two columns: on the left, the
 
 **Compared with Jellyfin:** Jellyfin's dashboard also puts its activity log in a column beside the server's information, its running tasks and its devices, from 900 pixels wide, with alerts and paths in a third column from 1536 pixels ([index.tsx, lines 109 to 132](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/routes/index.tsx#L109-L132)). Polyfin's playbacks need more width than Jellyfin's devices, hence its wider breakpoint.
 
+### Bandwidth
+
+Each row of **Now playing** tells, under **How it plays**, what the play moves now, averaged over the last 10 seconds and shown as a bitrate: what Polyfin sends the app, and what the version's source sends Polyfin. Below, it tells where the version is read from:
+
+- an addon, by its name as installed;
+- a torrent, with its addon and the peers connected;
+- a local folder, or a network share, a folder whose location is an address such as `smb://` or `s3://`;
+- IPTV, for channels, programmes, Replay and the IPTV sources' videos.
+
+A recording made by Polyfin has no source to tell.
+
+- The rate to the app counts what the media routes answer: a direct play's file, HLS segments, live channels, downloads, share links and DLNA. The range requests of a direct play count for the device whose token they carry, the same device its reports come from; a guest's and a download's count for their play session; a DLNA device's for that device. Answers with an error count for nothing.
+- The rate from the source counts what the source cache and the relays read from the source. Several plays of the same version share it.
+- A play whose app Polyfin sent to read the source itself shows "The app reads the source itself" in place of its rate to the app: none of its bytes pass through Polyfin.
+
+Beside the title of **Now playing**, Home shows the server's totals, refreshed every 3 seconds: what every play sends to apps, and what Polyfin receives from sources, a version played on several devices counted once. The bytes sent for each playback are kept in its history: see [Statistics](statistics.md#the-history).
+
+**For app developers:** each playback of `GET /admin/api/sessions` has `bandwidth`, with `sent` and `received` in bytes per second, and `redirected`; and `origin`, with `kind` (`addon`, `torrent`, `localFolder`, `networkShare` or `iptv`), `name` and, for a torrent, `peers`, or null when not known. `GET /admin/api/bandwidth`, for administrators, answers the server's totals: `sent` and `received`, in bytes per second.
+
+**Compared with Jellyfin:** Jellyfin's sessions tell the bitrate of a conversion ([TranscodingInfo.cs, lines 37 to 40](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Session/TranscodingInfo.cs#L37-L40)), not what a play moves, nor where its file comes from. Polyfin measures both, and the server's totals.
+
 ### Stopping a playback or sending a message
 
 An administrator can stop a playback (**Stop**, which asks first), or show a message on its app (**Send a message**), when the app accepts remote control. This works as Jellyfin's remote control does. An administrator whose **Can control other users' apps** permission was taken away is refused. See [users](users.md) for permissions.
 
 ## Statistics
 
-**System › Statistics** shows how the server is used, for **7 days**, **30 days**, a **Year** or **All** the history, for everyone or one user: hours watched per user and per day, the most played movies, series and channels, the apps and devices, how videos play (direct play, remux or conversion) and the busiest hours of the week, then the recent playbacks, which **Export CSV** downloads. **Settings › Playback** turns the history off or sets how long it is kept. See [Statistics](statistics.md) for how playbacks are counted, the settings and the API.
+**System › Statistics** shows how the server is used, for **7 days**, **30 days**, a **Year** or **All** the history, for everyone or one user: hours watched per user and per day, the data sent to the apps, the most played movies, series and channels, the apps and devices, how videos play (direct play, remux or conversion) and the busiest hours of the week, then the recent playbacks, which **Export CSV** downloads. **Settings › Playback** turns the history off or sets how long it is kept. See [Statistics](statistics.md) for how playbacks are counted, the settings and the API.
 
 ## Schedule
 
@@ -347,6 +368,7 @@ The metrics name no user, title, address, device or token. Their labels take a f
 | `polyfin_scan_duration_seconds` | histogram | | Scans of local folders and how long they took. |
 | `polyfin_database_connections` | gauge | `state`: `in_use`, `idle`, `max` | Connections to PostgreSQL. |
 | `polyfin_disk_free_bytes` | gauge | `folder`: `cache`, `conversion`, `reading` (files being read), `recordings`, `backups` | Space free on the disks Polyfin writes to, those in use, as **System › Health** checks them: `conversion` and `reading` when they are other folders than the cache's. |
+| `polyfin_bytes_sent_total` | counter | `delivery`: `direct_play`, `remux`, `conversion` | Bytes of media sent to apps, by how they reach them: by the play session's encodings under way, else by the route, a file sent as it is counting as direct play and an HLS segment as repackaged. Answers with an error are left out. |
 
 Prometheus' own metrics of the process follow: memory, goroutines and garbage collection (`go_*`), and on Linux processor time, memory and open files (`process_*`).
 

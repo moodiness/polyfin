@@ -28,6 +28,7 @@ import (
 	stremioimport "github.com/moodiness/polyfin/internal/appimport/stremio"
 	"github.com/moodiness/polyfin/internal/audiosegments"
 	"github.com/moodiness/polyfin/internal/backup"
+	"github.com/moodiness/polyfin/internal/bandwidth"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/commercials"
 	"github.com/moodiness/polyfin/internal/config"
@@ -380,6 +381,12 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		return err
 	}
 	defer player.Close()
+	// What playbacks receive from sources and send to apps, sampled every
+	// second for Now playing (see the bandwidth package).
+	received, sent := bandwidth.New(), bandwidth.New()
+	player.CountReceived(received)
+	go received.Run(ctx)
+	go sent.Run(ctx)
 	// The files of local folders are read through the loopback interface,
 	// as the addons' files are; FFmpeg reads their discs and disc images
 	// itself.
@@ -569,6 +576,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	homeRows := homerows.New(pool)
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
 		ServerID:     serverID,
+		Sent:         sent,
 		Accounts:     store,
 		QuickConnect: quickConnect,
 		SignIns:      signIns,
