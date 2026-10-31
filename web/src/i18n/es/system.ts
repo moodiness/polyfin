@@ -337,7 +337,7 @@ const system: typeof en = {
       size: 'Tamaño',
       cacheTitle: 'Caché de fuentes',
       cacheHelp:
-        'Partes de los archivos en reproducción, guardadas en disco hasta el tamaño fijado en Ajustes › Reproducción. Es normal que la caché esté llena: las partes más antiguas dejan sitio.',
+        'Partes de los archivos reproducidos, guardadas en disco hasta el tamaño fijado en Ajustes › Reproducción, de un inicio al siguiente. Es normal que la caché esté llena: las partes leídas hace más tiempo dejan sitio, las de los títulos reproducidos de nuevo al final.',
       cacheUse: (used: string, limit: string) => `${used} de ${limit}`,
       imagesTitle: 'Caché de imágenes',
       imagesHelp:
@@ -349,6 +349,14 @@ const system: typeof en = {
         `Caché de imágenes vaciada: ${images} imágenes, ${bytes} liberados en disco.`,
       sourcesOpen: 'Archivos abiertos',
       torrentPieces: 'De ellos, piezas de torrents',
+      sourcesKept: 'Archivos conservados',
+      hitRatio: 'Leído del disco',
+      hitRatioValue: (percent: string, read: string) =>
+        `${percent} de los ${read} leídos desde el inicio`,
+      keptFor: (days: number) =>
+        days > 0
+          ? `Conservados ${days} días tras su última lectura, reinicios incluidos`
+          : 'Vaciada en cada inicio',
       torrentsTitle: 'Torrents',
       torrentsHelp:
         'Los torrents que la reproducción está leyendo ahora, solo por su ruta. Un torrent se detiene cuando termina su reproducción: sin más pares, sin más compartición.',

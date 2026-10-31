@@ -865,6 +865,45 @@ const settings: typeof en = {
     cacheSize: 'Espacio en disco para archivos en lectura (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Espacio que Polyfin puede usar para conservar las partes de los archivos que se están reproduciendo, para que los saltos y reinicios no vuelvan a descargarlas. Las partes leídas en los últimos 30 segundos se conservan incluso por encima de este límite. De ${r.min} a ${r.max} GB; ${r.default} de forma predeterminada.`,
+    sourceCacheGroup: 'Archivos en lectura',
+    sourceCachePreset: 'Espacio en disco y conservación',
+    sourceCachePresetHelp: (free: string) =>
+      `Cuánto de los archivos reproducidos conserva Polyfin en disco, y durante cuánto tiempo, de un inicio al siguiente: un título reproducido de nuevo, o reanudado tras un reinicio, se lee entonces del disco en lugar de su fuente. Un ajuste predefinido fija los campos de abajo; cambiar uno de ellos lo convierte en Personalizado. ${free}`,
+    sourceCacheFree: (free: string) =>
+      `${free} libres en el disco de la carpeta de archivos en lectura.`,
+    sourceCachePresetNames: {
+      off: 'Desactivado',
+      small: 'Pequeño',
+      everyday: 'Cotidiano',
+      large: 'Grande',
+      custom: 'Personalizado',
+    },
+    sourceCachePresetChoice: (name: string, size: string, days: number) =>
+      days > 0
+        ? `${name}: ${size} GB, conservado ${days} días`
+        : `${name}: ${size} GB, vaciado en cada inicio`,
+    sourceCacheDays: 'Conservar las partes leídas (días)',
+    sourceCacheDaysHelp: (r: RangeText) =>
+      `Cuánto tiempo se conserva una parte de un archivo tras su última lectura, reinicios incluidos. 0 no conserva nada tras un reinicio: cada inicio vacía la caché. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    sourceCacheCreditDays: 'Días extra por cada nueva reproducción',
+    sourceCacheCreditDaysHelp: (r: RangeText) =>
+      `Un título reproducido de nuevo, 6 horas o más después de su última reproducción, conserva sus partes estos días más por cada reproducción tras la primera, 8 como máximo, y dejan sitio después de las de los títulos reproducidos una sola vez. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    preloadGroup: 'Precarga de los siguientes episodios',
+    preloadNextEpisodes: 'Precargar los siguientes episodios',
+    preloadNextEpisodesHelp:
+      'Mientras no se reproduce nada, lee por adelantado los siguientes episodios de las series que cada usuario reprodujo o empezó en los últimos 14 días, 5 series por usuario como máximo: la primera versión que elegiría Reproducir, sus primeros 128 MiB y su final, o el archivo entero. Se detiene en cuanto algo se reproduce y lee como máximo una cuarta parte del espacio en disco de arriba cada 15 minutos. Los torrents nunca se precargan.',
+    preloadEpisodes: 'Episodios por serie',
+    preloadEpisodesHelp: (r: RangeText) =>
+      `De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    preloadMbps: 'Límite de velocidad (Mbit/s)',
+    preloadMbpsHelp: (r: RangeText) =>
+      `La velocidad media a la que lee la precarga, que deja el resto de la conexión al hogar. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    preloadReserveGb: 'Espacio libre que conservar (GB)',
+    preloadReserveGbHelp: (r: RangeText) =>
+      `La precarga se detiene antes de que el disco de la carpeta de archivos en lectura tenga menos de este espacio libre. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    preloadWholeFiles: 'Precargar archivos enteros',
+    preloadWholeFilesHelp:
+      'Lee episodios enteros en lugar de su comienzo y su final, para un disco grande. El ajuste Grande lo activa; cambiarlo convierte el ajuste en Personalizado.',
     workFolders: {
       conversionFolder: 'Carpeta de conversión',
       conversionFolderHelp:

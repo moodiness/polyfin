@@ -851,6 +851,44 @@ const settings = {
     cacheSize: 'Disk space for files being read (GB)',
     cacheSizeHelp: (r: RangeText) =>
       `Space Polyfin may use to keep the parts of the files being played, so that seeks and restarts do not download them again. Parts read in the last 30 seconds are kept even above it. From ${r.min} to ${r.max} GB; ${r.default} by default.`,
+    sourceCacheGroup: 'Files being read',
+    sourceCachePreset: 'Disk space and retention',
+    sourceCachePresetHelp: (free: string) =>
+      `How much of the files played Polyfin keeps on disk, and for how long, from one start to the next: a title played again, or resumed after a restart, then reads from the disk instead of its source. A preset sets the fields below; changing one of them makes it Custom. ${free}`,
+    sourceCacheFree: (free: string) =>
+      `${free} free on the disk of the folder for files being read.`,
+    sourceCachePresetNames: {
+      off: 'Off',
+      small: 'Small',
+      everyday: 'Everyday',
+      large: 'Large',
+      custom: 'Custom',
+    },
+    sourceCachePresetChoice: (name: string, size: string, days: number) =>
+      days > 0
+        ? `${name}: ${size} GB, kept ${days} days`
+        : `${name}: ${size} GB, emptied at each start`,
+    sourceCacheDays: 'Keep parts read for (days)',
+    sourceCacheDaysHelp: (r: RangeText) =>
+      `How long a part of a file is kept once last read, restarts included. 0 keeps nothing past a restart: each start empties the cache. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    sourceCacheCreditDays: 'Extra days for each play again',
+    sourceCacheCreditDaysHelp: (r: RangeText) =>
+      `A title played again, 6 hours or more after its last play, keeps its parts this many days longer for each play after the first, 8 at most, and they make room after those of titles played once. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    preloadGroup: 'Next-episode preloading',
+    preloadNextEpisodes: 'Preload the next episodes',
+    preloadNextEpisodesHelp:
+      'While nothing plays, reads ahead the next episodes of the series each user played or started in the last 14 days, 5 series per user at most: the first version Play would pick, its first 128 MiB and its end, or the whole file. It stops as soon as something plays, and reads at most a quarter of the disk space above every 15 minutes. Torrents are never preloaded.',
+    preloadEpisodes: 'Episodes per series',
+    preloadEpisodesHelp: (r: RangeText) => `From ${r.min} to ${r.max}; ${r.default} by default.`,
+    preloadMbps: 'Speed limit (Mbit/s)',
+    preloadMbpsHelp: (r: RangeText) =>
+      `The average speed preloading reads at, which leaves the rest of the connection to the household. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    preloadReserveGb: 'Free space to keep (GB)',
+    preloadReserveGbHelp: (r: RangeText) =>
+      `Preloading stops before the disk of the folder for files being read has less than this free. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    preloadWholeFiles: 'Preload whole files',
+    preloadWholeFilesHelp:
+      'Reads whole episodes rather than their opening and end, for a large disk. The Large preset turns it on; changing it makes the preset Custom.',
     workFolders: {
       conversionFolder: 'Conversion folder',
       conversionFolderHelp:

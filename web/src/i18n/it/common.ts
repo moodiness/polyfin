@@ -318,6 +318,10 @@ const common: typeof en = {
     invalid_torrent_trackers:
       'Inserisci al massimo 30 tracker, ognuno un URL di annuncio HTTP, HTTPS o UDP, UDP con la sua porta, di al massimo 500 caratteri.',
     invalid_cache_size: 'Lo spazio su disco deve essere un numero intero di GB da 1 a 2.000.',
+    invalid_source_cache:
+      'Le parti lette vengono conservate un numero intero di giorni da 0 a 365, con da 0 a 30 giorni in più per ogni nuova riproduzione.',
+    invalid_preload:
+      'Il precaricamento accetta da 1 a 3 episodi per serie, un limite di velocità da 1 a 1.000 Mbit/s e da 1 a 1.000 GB di spazio libero da mantenere.',
     invalid_vaapi_device: 'Scegli la scheda grafica dall’elenco.',
     invalid_recordings_folder:
       'La cartella delle registrazioni deve essere un percorso assoluto di una cartella in cui Polyfin può scrivere.',
