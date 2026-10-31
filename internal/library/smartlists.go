@@ -68,10 +68,13 @@ const (
 func SmartListItemID(id accounts.ID) accounts.ID { return itemID("smartlist|" + id.String()) }
 
 // smartList is a smart list a user sees, with its item: a library, or a
-// collection.
+// collection. search is set for the collection of a search in plain words
+// (see plainsearch.go), which is neither in the Collections view nor given
+// an image.
 type smartList struct {
-	item Item
-	list smartlists.List
+	item   Item
+	list   smartlists.List
+	search bool
 }
 
 func (v view) smartList(id accounts.ID) (smartList, bool) {
@@ -134,7 +137,7 @@ func (s *Service) SmartCollections(ctx context.Context, user accounts.User) ([]I
 	}
 	var items []Item
 	for _, l := range v.smart {
-		if l.item.Kind == KindCollection {
+		if l.item.Kind == KindCollection && !l.search {
 			items = append(items, l.item)
 		}
 	}
