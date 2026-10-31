@@ -305,13 +305,16 @@ The **Version order** group of **Settings › Playback** orders a movie's or an 
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Order versions by** | **Settings › Playback** | None | Up to four criteria, each grouping the versions and the next sorting within them: **Preferred audio language**; **Resolution, highest first** or **Resolution, lowest first**; **File size, largest first** or **File size, smallest first**; **Video codec, in the order below**; **HDR and Dolby Vision first** or **HDR and Dolby Vision last**; **Source, in the order below**. Versions that tie keep the addons' order. |
+| **Order versions by** | **Settings › Playback** | None | Up to six criteria, each grouping the versions and the next sorting within them: **Preferred audio language**; **Resolution, highest first** or **Resolution, lowest first**; **File size, largest first**, **File size, smallest first** or **Size per minute of runtime, as set below**; **Video codec, in the order below**; **HDR and Dolby Vision first** or **HDR and Dolby Vision last**; **Source, in the order below**; **Source: disc copy, Blu-ray, web, DVD, then TV**; **Audio: lossless and Atmos first, then most channels**; **Edition, in the order below**; **Score of the label rules, highest first**. Versions that tie keep the addons' order. |
 | **Order of video codecs** | **Settings › Playback** | AV1, HEVC, VP9, H.264, VC-1, MPEG-4 Part 2, MPEG-2 | The order the video codec criterion puts versions in. |
 | **Order of sources** | **Settings › Playback** | The order of **Content › Sources** | The order the source criterion puts versions in: the server's addons and folders that give versions of movies and episodes, moved by drag or with the arrows. |
+| **Order of editions** | **Settings › Playback** | Theatrical cut, Extended cut, Director's cut, IMAX | The order the edition criterion puts versions in. |
+| **Size per minute to aim at (MB, 0 = largest)** | **Settings › Playback** | 0 (up to 1,000) | The size per minute criterion puts first the versions closest to this many megabytes (10^6 bytes) a minute of runtime; 0 puts the largest a minute first. |
 | **Hide versions larger than (GB, 0 = no limit)** | **Settings › Playback** | 0 (up to 1,000) | Hides the versions known to be larger. |
 | **Hide these video codecs** | **Settings › Playback** | None | Hides the versions known to be in these codecs. |
 | **Hide versions whose labels contain** | **Settings › Playback** | None (up to 50 lines) | Hides the versions whose name, description or file name holds one of these words, one a line, in any letter case: for addons that say in their labels that a file is not ready to play yet. |
 | **Hide low-quality releases** | **Settings › Playback** | None | Hides the versions whose labels tag them as one of the kinds ticked: **Camera copies (CAM, HDCAM)**, **Telesyncs (TS, HDTS, TELESYNC)**, **Telecines (TC, TELECINE)**, **Screeners (SCR, DVDSCR)** and **Early copies (R5, WORKPRINT)**, read as told below. |
+| **Label rules** | **Settings › Playback** | None (up to 40 rules) | Each rule is a word or a regular expression, and either hides the versions whose labels it matches or adds its score, from -100 to 100, to theirs (see [Label rules](#label-rules)). |
 
 **What the rules know of a version.** Nothing is read from the source for them. For each thing they look at, they take the version's analysis when Polyfin has one, else the description of its file from [RemuxDB](#tracks-from-remuxdb) when it is on, else its addon's labels:
 
@@ -319,7 +322,11 @@ The **Version order** group of **Settings › Playback** orders a movie's or an 
 - the size the addon gives (`videoSize`);
 - the codec its labels name: HEVC, x265 or H.265; H.264, x264 or AVC; AV1; VP9; VC-1; MPEG-2; Xvid or DivX;
 - HDR when they name HDR, HDR10, HDR10+, HLG, DV, DoVi or Dolby Vision. Labels that name the height or the codec but no HDR count as SDR;
-- the audio languages they name: language names in English (French, German…), some others used by releases (TRUEFRENCH, VFF, Latino, Castellano…), ISO 639-2 codes in capitals (ENG, ITA, GER…) and flags, with their regional variants (see [Regional audio](#regional-audio)). MULTI and DUAL say a version has several languages. The languages named as the subtitles' (`Sub ITA`, `French Subs`) are not the audio's. A word of the movie's or the series' name is never taken for a language.
+- the audio languages they name: language names in English (French, German…), some others used by releases (TRUEFRENCH, VFF, Latino, Castellano…), ISO 639-2 codes in capitals (ENG, ITA, GER…) and flags, with their regional variants (see [Regional audio](#regional-audio)). MULTI and DUAL say a version has several languages. The languages named as the subtitles' (`Sub ITA`, `French Subs`) are not the audio's. A word of the movie's or the series' name is never taken for a language;
+- the source tier, from the words of its labels after the title's own (read as **Hide low-quality releases** reads its tags, below): a disc's full copy (a release's word for a full copy, `BDMV`, `BD25` to `BD100`, `DVD5`, `DVD9`, `COMPLETE BLURAY`), then a Blu-ray encode (`BluRay`, `Blu-ray`, `BDRip`, `BRRip`), a web copy (`WEB`, `WEB-DL`, `WEBRip`), a DVD encode (`DVD`, `DVDRip`) and a TV capture (`HDTV`, `PDTV`, `SDTV`, `TVRip`, `SATRip`, `DSR`). A DVD's full copy is a disc's full copy: the tier tells the source, not the height. When the labels name several, the best counts, so `BluRay` with a full copy's word is a full copy;
+- the audio format of its best track: lossless (Dolby TrueHD, DTS-HD Master Audio, FLAC, ALAC, PCM), object-based (Dolby Atmos, DTS:X), and its channels. An analysis reads them from the tracks, ffprobe naming Atmos and DTS:X in a track's profile; labels from `TrueHD`, `DTS-HD MA`, `FLAC`, `LPCM`, `Atmos`, `DTS-X` or `DTS:X`, and layouts such as `5.1`, `7.1`, `DDP5.1` or `AAC2.0`. `DTS-HD` without `MA` is lossy;
+- the edition its labels name after the title's own words, the first one: `Theatrical`, `Extended`, `Director's Cut` or `Directors.Cut`, `IMAX`. A version naming none counts as the theatrical cut, which releases do not name;
+- the size per minute: its size divided by its runtime, its analysis's once it has one, else the title's.
 
 A version a criterion knows nothing of comes after those it knows, and a hide rule never hides it.
 
@@ -335,10 +342,16 @@ A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. S
 
 **Source, in the order below** groups a title's versions by the addon or folder that gives them, the next criteria sorting each source's versions; placed after other criteria, it orders the versions they tie on. The sources **Order of sources** lists come first, in its order, then the others in the addons' order: a source added since the list was saved comes after those it lists, until it is moved there, and a user's own addons come after the server's sources. A source removed leaves the list. The list orders versions only: which addon describes a title, the order of the addons' subtitles and that of search results keep the order of **Content › Sources**, as versions do while the criterion is not chosen (see [Addons and libraries](addons-and-libraries.md)). It is how local files come first, whatever the other criteria (see [Local folders](local-folders.md#versions)).
 
+**Audio: lossless and Atmos first, then most channels** puts first the versions whose best track is both lossless and object-based (TrueHD with Atmos, DTS-HD Master Audio with DTS:X), then those that are one of them, then the others; within each, the most channels first. A version whose audio nothing tells comes last.
+
+**Edition, in the order below** groups the versions by their edition in the order of **Order of editions**: put **Extended cut** first to play the extended cut where a title has one, and the theatrical cut elsewhere.
+
+**Size per minute of runtime, as set below** compares versions of titles of any length alike: with **Size per minute to aim at** at 50, a two-hour movie's versions closest to 6 GB come first, and a 45-minute episode's closest to 2.25 GB. At 0 it puts the largest a minute first, which differs from **File size, largest first** only where the versions' runtimes differ, such as an extended cut's. It is one kind with the file size criteria: the order holds one of the three at most.
+
 **In what order things happen:** these steps follow steps 1 to 5 of [Which streams become versions](#which-streams-become-versions).
 
 1. The versions that failed lately are left out (see [Sources that fail](#sources-that-fail)), but the torrents that did not start in time, which stay in place (see [Which streams become versions](#which-streams-become-versions), step 6).
-2. The hide rules apply, with the versions of [another title](#versions-of-another-title), which are hidden whatever the rules. When they would hide every version of a title, none is hidden.
+2. The hide rules apply, with the versions of [another title](#versions-of-another-title), which are hidden whatever the rules, and the [label rules](#label-rules) that hide come last. When they would hide every version of a title, none is hidden.
 3. The user's [quality group](users.md#quality-groups) leaves out the taller versions. When no version fits, the closest height comes first, and the criteria order the versions of the same height.
 4. The criteria order the others.
 
@@ -351,6 +364,18 @@ A line ending with `.ts` names an MPEG-TS file: that extension is no telesync. S
 
 - Jellyfin 12.4 has no setting that hides versions: it lists every version of a title, whatever its size, codec or name (its server and library options have none, [`ServerConfiguration.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/ServerConfiguration.cs), [`LibraryOptions.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/LibraryOptions.cs)). The version order rules are Polyfin's own.
 - Jellyfin knows the same release tags only to cut them from a file's name when it finds a title's name: its first `CleanStrings` expression ([`NamingOptions.cs`, line 154](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Naming/Common/NamingOptions.cs#L152-L154)) ends the name at the first of `cam`, `ts`, `tc`, `r5`, `dvdscr`, `screener`, `telesync` or `telecine`, among many other tags, as a whole word after at least one word of the title, in any letter case. Polyfin reads tags the same way, after the title's words, to hide versions rather than to name titles.
+- Jellyfin 12.4 orders a title's versions itself, the same for every app: the version opened first, then files before disc folders, 2D before 3D, the widest first ([`BaseItem.cs`, lines 1209 to 1212](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/BaseItem.cs#L1209-L1212)). Polyfin orders them on the server too, so every app's version menu shows the order, but by the criteria chosen here. Jellyfin reads no source tier, audio format, edition or size per minute for the order, and has no label rules.
+
+#### Label rules
+
+**Label rules**, at the end of the **Version order** group, read each version's name, description and file name, as **Hide versions whose labels contain** does. A rule is a word, found anywhere in them in any letter case, or, with **Regular expression** ticked, a regular expression, matched in any letter case: `\bx265\b`, `^\[[^]]*\]`. Expressions take the usual syntax of classes, groups, alternatives, repeats and anchors, without back-references or look-around. Each rule either:
+
+- **Hide**: it hides the versions it matches, after the other hide rules and with them: when they would hide every version of a title, none is hidden;
+- **Add a score**: it adds its score, from -100 to 100 but not 0, to the versions it matches. A version's score is the sum of the scores of the rules it matches, 0 for none.
+
+The criterion **Score of the label rules, highest first** orders versions by their score where it stands among the criteria. With scoring rules and without that criterion, the score orders the versions after every criterion chosen, so that rules alone order them. Ties keep the addons' order.
+
+Up to 40 rules, of 200 characters each at most. A regular expression must be valid when saved, and not too large: Polyfin matches them in a time that grows only with the size of the expression and of the labels, both bounded (the labels read are the first 4,096 bytes), so that no rule can take long whatever it says. Rules apply to every user.
 
 ### Version names
 
