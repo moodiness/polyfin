@@ -660,11 +660,17 @@ function Database({ health }: { health: Health }) {
   )
 }
 
+/**
+ * The source cache against its limit, the files it reads and keeps, how long it keeps them, and its
+ * hit ratio: the share of the bytes read since the start that were on disk when asked for.
+ */
 function Cache({ health }: { health: Health }) {
   const { language, t } = useI18n()
   const text = t.system.health
   const cache = health.cache
   if (cache === null) return null
+  const read = cache.hits + cache.misses
+  const ratio = read > 0 ? cache.hits / read : 0
   return (
     <Anchor id="cache">
       <Panel title={text.cacheTitle} titleAs="h3" description={text.cacheHelp}>
@@ -678,10 +684,27 @@ function Cache({ health }: { health: Health }) {
             value={cache.used}
             max={cache.limit}
           />
+          <p className="text-small text-ink-3">{text.keptFor(cache.days)}</p>
           <p className="text-small text-ink-3 tabular-nums">
             {text.sourcesOpen}
             {t.common.colon} <span className="text-ink">{cache.sources}</span>
           </p>
+          <p className="text-small text-ink-3 tabular-nums">
+            {text.sourcesKept}
+            {t.common.colon} <span className="text-ink">{cache.kept}</span>
+          </p>
+          {read > 0 && (
+            <p className="text-small text-ink-3 tabular-nums">
+              {text.hitRatio}
+              {t.common.colon}{' '}
+              <span className="text-ink">
+                {text.hitRatioValue(
+                  ratio.toLocaleString(language, { style: 'percent', maximumFractionDigits: 1 }),
+                  formatBytes(read, language),
+                )}
+              </span>
+            </p>
+          )}
           {health.torrents !== null && (
             <p className="text-small text-ink-3 tabular-nums">
               {text.torrentPieces}

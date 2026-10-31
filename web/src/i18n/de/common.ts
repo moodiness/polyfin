@@ -302,6 +302,10 @@ const common: typeof en = {
     invalid_torrent_trackers:
       'Gib höchstens 30 Tracker ein, jeder eine HTTP-, HTTPS- oder UDP-Announce-URL, UDP mit Port, mit höchstens 500 Zeichen.',
     invalid_cache_size: 'Der Speicherplatz muss eine ganze Zahl von 1 bis 2.000 GB sein.',
+    invalid_source_cache:
+      'Gelesene Teile werden eine ganze Zahl von 0 bis 365 Tagen behalten, mit 0 bis 30 zusätzlichen Tagen je erneuter Wiedergabe.',
+    invalid_preload:
+      'Das Vorladen nimmt 1 bis 3 Folgen pro Serie, eine Geschwindigkeitsgrenze von 1 bis 1.000 Mbit/s und 1 bis 1.000 GB freizuhaltenden Speicherplatz.',
     invalid_vaapi_device: 'Wähle die Grafikkarte aus der Liste.',
     invalid_recordings_folder:
       'Der Aufnahmeordner muss ein absoluter Pfad zu einem Ordner sein, in den Polyfin schreiben kann.',

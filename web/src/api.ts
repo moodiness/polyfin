@@ -270,6 +270,18 @@ export type WireGuardConfigProblem = {
     | 'not_all'
 }
 
+/** The presets of the source cache, as `sourceCachePreset` takes them. */
+export const sourceCachePresets = ['off', 'small', 'everyday', 'large', 'custom'] as const
+export type SourceCachePreset = (typeof sourceCachePresets)[number]
+
+/** What a source cache preset sets. */
+export type SourceCacheLimits = {
+  cacheSizeGb: number
+  sourceCacheDays: number
+  sourceCacheCreditDays: number
+  preloadWholeFiles: boolean
+}
+
 export type Settings = {
   serverName: string
   quickConnectEnabled: boolean
@@ -460,6 +472,26 @@ export type Settings = {
   renderNodes: string[]
   /** Disk space, in GB, kept for the parts of the files being read. */
   cacheSizeGb: number
+  /** The source cache's preset, which sets the size, the days kept, their credit and whole-file preloading, but custom. */
+  sourceCachePreset: SourceCachePreset
+  /** Days a part read is kept, restarts included; 0 empties the cache at each start. */
+  sourceCacheDays: number
+  /** Extra days a title played again keeps its parts, for each play after the first. */
+  sourceCacheCreditDays: number
+  /** Whether the next episodes of the series users watch are read ahead while nothing plays. */
+  preloadNextEpisodes: boolean
+  /** Episodes preloaded per series. */
+  preloadEpisodes: number
+  /** Average speed of preloading, in megabits a second. */
+  preloadMbps: number
+  /** Free space, in GB, preloading leaves on the disk of the folder for files being read. */
+  preloadReserveGb: number
+  /** Whether preloading reads whole files rather than their opening and end. */
+  preloadWholeFiles: boolean
+  /** What each preset but custom sets (read-only). */
+  sourceCachePresetLimits: Record<Exclude<SourceCachePreset, 'custom'>, SourceCacheLimits>
+  /** Bytes free on the disk of the folder for files being read, null when unknown (read-only). */
+  readingFree: number | null
   /** Codecs the GPU decodes. */
   hardwareDecodingCodecs: HardwareDecodingCodec[]
   /** Converts HDR to SDR with toneMappingAlgorithm; peak (nits, 0 the video's) and desaturation on the processor only. */
@@ -3944,8 +3976,22 @@ export type Health = {
     goroutines: number
   }
   database: { reachable: boolean; size: number | null }
-  /** `torrents` is the part of `used` the pieces of torrents being played take. */
-  cache: { used: number; limit: number; sources: number; torrents: number } | null
+  /**
+   * `torrents` is the part of `used` the pieces of torrents being played take; `kept` counts the
+   * files the cache holds parts of, `hits` and `misses` the bytes read since the start that were on
+   * disk when asked for and those waited for, and `days` how long parts are kept, 0 for not past a
+   * restart.
+   */
+  cache: {
+    used: number
+    limit: number
+    sources: number
+    kept: number
+    hits: number
+    misses: number
+    days: number
+    torrents: number
+  } | null
   /** The image cache: images and bytes on disk against its limit, and in memory; null when unknown. */
   images: ImageCacheUsage | null
   /**
