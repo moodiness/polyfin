@@ -328,7 +328,7 @@ Where HDR goes, and why:
 Remuxes and conversions of files are cut into HLS segments on the source's own keyframes:
 
 - The first segment ends on the first keyframe at least 2 seconds in, and each next one on the first keyframe at least 4 seconds after its start. A file with a keyframe every 2 seconds plays its first segment after 2 seconds of picture; one with a keyframe every 10 seconds gets 10-second segments.
-- An MPEG-TS file, which has no keyframe index, is converted and cut the same way: 2 seconds, then every 4 seconds. Its segments count from its start, whatever time its first packet tells, such as an hour into a broadcast, and a seek lands where asked, however far apart its keyframes are.
+- An MPEG-TS file, which has no keyframe index, is converted and cut the same way: 2 seconds, then every 4 seconds, even when the app takes its video, as browsers take H.264. Its segments count from its start, whatever time its first packet tells, such as an hour into a broadcast, and a seek lands where asked, however far apart its keyframes are. A user who may not have video converted is not offered it over HLS, and its version's name says so (see [Version names](playback.md#version-names)). Apps that play MPEG-TS as it is, such as Android TV and Swiftfin, need no segments.
 - A Blu-ray disc is cut on the keyframes its clips' information files list, and its video copied when the app takes it; a DVD is converted and cut every few seconds, as an MPEG-TS file is. See [Local folders](local-folders.md#blu-ray-discs).
 - Polyfin makes segments up to **Seconds prepared ahead** past the last one the app asked for, then waits for the app.
 - An app asking for a segment whose source stopped sending anything for 20 seconds gets `503` at once, rather than waiting minutes. Its next request waits for the same conversion, which goes on when the source answers again. A source that fails for good reads on from a mirror of its file, or else the play goes on from another version of the title, at the same time and with the same segment numbers, converted into what the app plays (see [Carrying a play on](playback.md#carrying-a-play-on)); when neither can, its conversion ends, and the next request answers `503` too.
@@ -338,6 +338,7 @@ Remuxes and conversions of files are cut into HLS segments on the source's own k
 **Compared with Jellyfin:**
 
 - Jellyfin stops a remux or conversion one minute after its last segment request or playback report naming its play session, and never because its device started another title: a conversion left without a stop runs on for that minute. Polyfin keeps a paused conversion 3 minutes, and stops that of a title its device left at once.
+- Jellyfin copies the video of an MPEG-TS file the app takes into HLS, cutting segments of equal length that FFmpeg ends on the next keyframe ([`DynamicHlsController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/DynamicHlsController.cs#L1853-L1866)), so the lengths its playlist gives are approximate. Polyfin converts it, for segments of the lengths its playlist gives.
 
 **For app developers:**
 

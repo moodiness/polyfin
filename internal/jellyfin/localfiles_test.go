@@ -108,6 +108,106 @@ func TestLocalFilesAreVersions(t *testing.T) {
 	}
 }
 
+// An MPEG-TS file has no keyframe index: over HLS, its segments are cut
+// every few seconds, which needs its video converted, even H.264 the
+// browser takes. Its name says so for jellyfin-web, as PlaybackInfo
+// plays it, and that a user who may not have video converted cannot play
+// it; an app that plays MPEG-TS as it is plays it so.
+func TestLocalMPEGTSVersionsAreNamedAsTheyPlay(t *testing.T) {
+	t.Parallel()
+	needsEncoders(t)
+	var folders *localfiles.Service
+	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, pool *pgxpool.Pool) {
+		folders = localfiles.New(pool, addons.New(pool, stremio.NewClient("test")), o.Library, slog.New(slog.NewTextHandler(io.Discard, nil)),
+			o.Accounts.Settings, nil)
+		t.Cleanup(folders.Close)
+		o.Library.UseLocal(folders)
+		folders.UseFiles(o.Playback.LocalFiles(folders.Open), o.Playback.LocalInputs(folders))
+	})
+	p := playingOn(t, s)
+	// MPEG-TS packets, which hold no index; their tracks are the
+	// analysis's.
+	packets := make([]byte, 188*64)
+	for i := 0; i < len(packets); i += 188 {
+		packets[i] = 0x47
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Movie (2008) 1080p.ts"), packets, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	folder, err := folders.Add(t.Context(), localfiles.NewFolder{Name: "Shelf", Path: dir, Kind: localfiles.KindMovies})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := folders.Scan(t.Context(), folder.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := folders.Link(t.Context(), folder.ID, "Movie (2008) 1080p.ts", "tt1000"); err != nil {
+		t.Fatal(err)
+	}
+	var movie BaseItemDto
+	p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+p.movie, p.token, &movie)
+	i := slices.IndexFunc(*movie.MediaSources, func(s MediaSourceInfo) bool { return strings.HasPrefix(s.Name, "Shelf") })
+	if i < 0 {
+		t.Fatalf("media sources: %+v", movie.MediaSources)
+	}
+	local := (*movie.MediaSources)[i]
+	analysis := media.Analysis{Format: "mpegts", Duration: 20 * time.Second, Bitrate: 2_000_000,
+		Streams: []media.Stream{
+			{Index: 0, Type: "video", Codec: "h264", Profile: "High", Level: 40, Width: 1920, Height: 1080, FrameRate: 25, AverageRate: 25, PixelFormat: "yuv420p", BitDepth: 8},
+			{Index: 1, Type: "audio", Codec: "aac", Default: true, Channels: 2, SampleRate: 48000, ChannelLayout: "stereo"},
+		}}
+	data, _ := json.Marshal(analysis)
+	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_analyses (version_id, analysis) VALUES ($1, $2)", local.Id, data); err != nil {
+		t.Fatal(err)
+	}
+	named := func(answer playbackAnswer) (MediaSourceInfo, bool) {
+		i := slices.IndexFunc(answer.MediaSources, func(s MediaSourceInfo) bool { return s.Id == local.Id })
+		if i < 0 {
+			return MediaSourceInfo{}, false
+		}
+		return answer.MediaSources[i], true
+	}
+	details := func() string {
+		t.Helper()
+		var dto BaseItemDto
+		p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+p.movie, p.token, &dto)
+		for _, source := range *dto.MediaSources {
+			if source.Id == local.Id {
+				return source.Name
+			}
+		}
+		t.Fatalf("media sources: %+v", dto.MediaSources)
+		return ""
+	}
+
+	chrome := p.ask(t, p.token, p.movie, p.profile(t, "jellyfin-web-12.4-chrome"), map[string]any{"MediaSourceId": local.Id})
+	source, ok := named(chrome)
+	if !ok || source.Name != local.Name+" (converted)" || !strings.Contains(source.TranscodingUrl, "allowVideoStreamCopy=false") {
+		t.Errorf("jellyfin-web: %q %s", source.Name, source.TranscodingUrl)
+	}
+	if got := details(); got != local.Name+" (converted)" {
+		t.Errorf("item details for jellyfin-web: %q", got)
+	}
+	androidTV := p.ask(t, p.token, p.movie, p.profile(t, "androidtv"), map[string]any{"MediaSourceId": local.Id})
+	if source, ok := named(androidTV); !ok || source.Name != local.Name+" (direct play)" || !source.SupportsDirectPlay {
+		t.Errorf("Android TV: %q %+v", source.Name, source)
+	}
+	if got := details(); got != local.Name+" (direct play)" {
+		t.Errorf("item details for Android TV: %q", got)
+	}
+	if _, err := p.store.UpdateUser(t.Context(), p.user.ID, accounts.UserChanges{VideoTranscoding: new(false)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	refused := p.ask(t, p.token, p.movie, p.profile(t, "jellyfin-web-12.4-chrome"), map[string]any{"MediaSourceId": local.Id})
+	if source, ok := named(refused); ok {
+		t.Errorf("offered without video conversion: %+v", source)
+	}
+	if got := details(); got != local.Name+" (cannot play here)" {
+		t.Errorf("item details without video conversion: %q", got)
+	}
+}
+
 // goneStreamAddon serves the movie tt1000 with one stream, whose host
 // answers 404, as a link gone for good.
 func goneStreamAddon(t *testing.T) string {

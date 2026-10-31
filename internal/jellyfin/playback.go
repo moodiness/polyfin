@@ -653,9 +653,8 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 			return decided{unstarted: version.Torrent != nil && playback.TorrentUnstarted(err)}, false
 		}
 		if plan.Grid() && decision.Video == nil {
-			converted := options
-			converted.ConvertVideo = true
-			if decision = playback.Decide(request.DeviceProfile, described, converted); !decision.HLS || decision.Video == nil {
+			var ok bool
+			if decision, ok = gridDecision(request, described, options); !ok {
 				return decided{}, false
 			}
 		}
@@ -673,6 +672,15 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 		d.lowerable, d.lowerOverHLS = lowerable(request.DeviceProfile, described, options, allowed)
 	}
 	return d, true
+}
+
+// gridDecision decides again, with its video converted, a version played
+// over HLS whose plan is cut on a fixed grid (see hls.NewGridPlan): false
+// when the app then plays it neither over HLS nor converted.
+func gridDecision(request playbackInfoRequest, described playback.MediaSource, options playback.Options) (playback.Decision, bool) {
+	options.ConvertVideo = true
+	decision := playback.Decide(request.DeviceProfile, described, options)
+	return decision, decision.HLS && decision.Video != nil
 }
 
 // trackDecision decides how a version plays on the app, for its device

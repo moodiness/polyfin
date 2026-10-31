@@ -371,7 +371,8 @@ How names are decided:
 - `PlaybackInfo` names every version it lists for the device profile the app sends, not only the one chosen.
 - Item details know no device profile. Polyfin keeps in memory each device's last `PlaybackInfo` profile and bitrate, and names versions for that device with them: the web player's version menu, Android TV's **Select version** and Swiftfin's version menu read names there. Before a device's first play, after it signs out, or after a restart, names have no ending.
 - The decision uses the audio and subtitle tracks the user's preferences choose. Picking other tracks in the app may change how the version plays; the name cannot tell.
-- A file whose keyframe index turns out to be missing once played, such as some MPEG-TS files, has its video converted all the same, while its name said "(direct stream)": the index is not read for names.
+- An MPEG-TS file has no keyframe index, so over HLS its video is converted (see [HLS segments](transcoding.md#hls-segments)): in jellyfin-web its name says "(converted)", or "(converted: video)" for video the browser does not take, never "(direct stream)", and "(cannot play here)" for a user who may not have video converted. An app that plays MPEG-TS as it is, such as Android TV or Swiftfin, sees "(direct play)". A Blu-ray disc's MPEG-TS, whose keyframes its clips list, is named as other files are.
+- Another file whose keyframe index turns out to be missing or unreadable once played does not play over HLS as its name said: the index is not read for names.
 - Names are in the server language, **Language of generated names** (see [Getting started](getting-started.md#language-of-generated-names)): in French, "(lecture directe)", "(flux direct)", "(converti : HDR)" and so on, "(illisible ici)". An ending is 30 characters at most; apps that cut long names to one line may hide it.
 
 **For app developers:**

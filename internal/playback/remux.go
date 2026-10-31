@@ -143,6 +143,18 @@ func transportStream(analysis media.Analysis) bool {
 	return slices.Contains(strings.Split(analysis.Format, ","), "mpegts")
 }
 
+// GridPlanned reports, reading nothing, whether the HLS plan of a version
+// analyzed so is cut on a fixed grid, which needs its video converted (see
+// plan): an MPEG-TS file, not read from an input, whose keyframes are not
+// known. Version names tell with it how such a version plays.
+func (s *Service) GridPlanned(version library.Version, analysis media.Analysis) bool {
+	if s.ReadsInput(version) || !transportStream(analysis) {
+		return false
+	}
+	_, indexed := s.indexes.Get(version.ID)
+	return !indexed
+}
+
 // keyframesTime bounds a keyframe index read, which reads the file's head
 // and its index, a few blocks of it, through the source cache. Its
 // connections fail once their source sends nothing for their stall
