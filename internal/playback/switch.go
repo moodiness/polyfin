@@ -200,15 +200,18 @@ func (c *carry) candidates(ctx context.Context, from library.Version) []library.
 }
 
 // alike analyzes a version, and tells how the play goes on from it, or
-// errNotAlike: another length or frame shape, or tracks the play cannot
-// make into the app's.
+// errNotAlike: another length or frame shape, tracks the play cannot make
+// into the app's, or a file of a container whose index Polyfin does not
+// read (see unindexedFormat): it is searched from before the time asked,
+// and may start late, where the play's plan, cut on keyframes, reads the
+// file it goes on from at the time asked, from zero.
 func (c *carry) alike(ctx context.Context, version library.Version) (versionSwitch, error) {
 	analysis, err := c.s.Analyze(ctx, version)
 	if err != nil {
 		return versionSwitch{}, err
 	}
-	if transportStream(analysis) {
-		return versionSwitch{}, fmt.Errorf("%w: an MPEG-TS file", errNotAlike)
+	if unindexedFormat(analysis) {
+		return versionSwitch{}, fmt.Errorf("%w: a file without an index Polyfin reads", errNotAlike)
 	}
 	sw := versionSwitch{to: version, analysis: analysis}
 	if _, err := c.target(sw); err != nil {
