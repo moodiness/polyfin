@@ -383,6 +383,7 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/sessions", h.administrator(h.liveSessions))
 	mux.Handle("POST /admin/api/sessions/{id}/stop", h.administrator(h.stopSession))
 	mux.Handle("POST /admin/api/sessions/{id}/message", h.administrator(h.messageSession))
+	mux.Handle("GET /admin/api/bandwidth", h.administrator(h.bandwidth))
 	mux.Handle("GET /admin/api/tasks", h.administrator(h.scheduledTasks))
 	mux.Handle("POST /admin/api/tasks/{id}/run", h.administrator(h.runTask))
 	mux.Handle("POST /admin/api/tasks/{id}/stop", h.administrator(h.stopTask))

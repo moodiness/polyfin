@@ -23,6 +23,9 @@ type Sessions interface {
 	LiveSessions(ctx context.Context) ([]jellyfin.LiveSession, error)
 	StopPlayback(ctx context.Context, by accounts.User, session accounts.ID) error
 	SendMessage(ctx context.Context, by accounts.User, session accounts.ID, header, text string, timeout time.Duration) error
+	// Bandwidth is what every playback moves now, in bytes per second:
+	// sent to apps, and received from sources.
+	Bandwidth() (sent, received float64)
 }
 
 // How a playback reaches its app, as liveSessionJSON.Delivery tells it.
@@ -71,6 +74,29 @@ type liveSessionJSON struct {
 	// SwitchedVersion names the version the play went on from once its
 	// version's source failed, empty when it did not.
 	SwitchedVersion string `json:"switchedVersion"`
+	// Bandwidth is what the play moves now; Origin, where its version is
+	// read from, null when not known.
+	Bandwidth bandwidthJSON `json:"bandwidth"`
+	Origin    *originJSON   `json:"origin"`
+}
+
+// bandwidthJSON is what a play moves, in bytes per second averaged over
+// the last 10 seconds: Sent to the app, Received from its source; and
+// Redirected, true when the app was sent to read the source itself, none
+// of its bytes passing through Polyfin.
+type bandwidthJSON struct {
+	Sent       float64 `json:"sent"`
+	Received   float64 `json:"received"`
+	Redirected bool    `json:"redirected"`
+}
+
+// originJSON is where a play's version is read from: Kind is addon,
+// torrent, localFolder, networkShare or iptv; Name the addon, folder or
+// IPTV source as installed; Peers, for a torrent, the peers connected.
+type originJSON struct {
+	Kind  string `json:"kind"`
+	Name  string `json:"name"`
+	Peers int    `json:"peers"`
 }
 
 type liveUserJSON struct {
@@ -259,6 +285,7 @@ func newLiveSessionJSON(s jellyfin.LiveSession) liveSessionJSON {
 		}
 	}
 	result.Sent = sentStream(result)
+	result.Bandwidth, result.Origin = playBandwidth(s)
 	return result
 }
 
@@ -388,4 +415,31 @@ func (h *handler) answerCommand(w http.ResponseWriter, r *http.Request, err erro
 	default:
 		h.internalError(w, r, err)
 	}
+}
+
+// playBandwidth tells what a play moves now, and where its version is read
+// from: null when that is not known.
+func playBandwidth(s jellyfin.LiveSession) (bandwidthJSON, *originJSON) {
+	moved := bandwidthJSON{Sent: s.Sent, Received: s.Received, Redirected: s.Redirected}
+	if s.Origin.Kind == "" {
+		return moved, nil
+	}
+	return moved, &originJSON{Kind: s.Origin.Kind, Name: s.Origin.Name, Peers: s.Origin.Peers}
+}
+
+// totalBandwidthJSON is what every play moves now, in bytes per second
+// averaged over the last 10 seconds: sent to apps, and received from
+// sources.
+type totalBandwidthJSON struct {
+	Sent     float64 `json:"sent"`
+	Received float64 `json:"received"`
+}
+
+// bandwidth answers what every play moves now.
+func (h *handler) bandwidth(w http.ResponseWriter, _ *http.Request) {
+	var total totalBandwidthJSON
+	if h.Sessions != nil {
+		total.Sent, total.Received = h.Sessions.Bandwidth()
+	}
+	writeJSON(w, http.StatusOK, total)
 }

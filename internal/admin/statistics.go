@@ -24,13 +24,15 @@ const (
 // history. Times are played times in seconds, pauses left out. Hours are
 // the 168 hours of the week, from Monday 0:00, by the time zone asked.
 // HistoryEnabled and HistoryDays tell whether the history is kept, and
-// for how many days.
+// for how many days. Sent is the bytes sent to the apps for the
+// playbacks, those Polyfin did not relay or count left out.
 type statisticsJSON struct {
 	Period         string           `json:"period"`
 	Since          *time.Time       `json:"since"`
 	Unit           string           `json:"unit"`
 	Plays          int              `json:"plays"`
 	Played         int64            `json:"played"`
+	Sent           int64            `json:"sent"`
 	Users          []statUserJSON   `json:"users"`
 	Buckets        []statBucketJSON `json:"buckets"`
 	Movies         []statRankedJSON `json:"movies"`
@@ -113,6 +115,9 @@ type historyEntryJSON struct {
 	Method    string          `json:"method"`
 	// Shared is true for a guest's playback through a share link.
 	Shared bool `json:"shared"`
+	// Sent is the bytes sent to the app, 0 when none passed through
+	// Polyfin or they were not counted.
+	Sent int64 `json:"sent"`
 }
 
 type historyUserJSON struct {
@@ -203,7 +208,7 @@ func (s statisticsRoutes) statistics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings := s.h.Accounts.Settings()
-	result := statisticsJSON{Period: period, Unit: unit, Plays: st.Plays, Played: secondsOf(st.Played), Users: []statUserJSON{},
+	result := statisticsJSON{Period: period, Unit: unit, Plays: st.Plays, Played: secondsOf(st.Played), Sent: st.Sent, Users: []statUserJSON{},
 		Buckets: []statBucketJSON{}, Movies: ranked(st.Movies), Series: ranked(st.Series), Channels: ranked(st.Channels),
 		Apps: []statGroupJSON{}, Devices: []statDeviceJSON{}, Methods: []statMethodJSON{}, Hours: make([]int64, len(st.Hours)),
 		HistoryEnabled: settings.PlaybackHistory, HistoryDays: settings.PlaybackHistoryDays}
@@ -295,7 +300,7 @@ func (s statisticsRoutes) history(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, historyEntryJSON{ID: e.ID, User: historyUserJSON{ID: e.User.String(), Name: e.UserName}, Item: item, App: e.App,
 			Device: e.Device, StartedAt: e.Started.UTC(), EndedAt: e.Ended.UTC(), Played: secondsOf(e.Played),
-			Position: secondsOf(e.Position), Method: e.Method, Shared: e.Shared})
+			Position: secondsOf(e.Position), Method: e.Method, Shared: e.Shared, Sent: e.Sent})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total})
 }
