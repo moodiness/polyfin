@@ -48,6 +48,9 @@ type Version struct {
 	// Origin is where the stream was listed, to ask again for it when its
 	// link expires.
 	Origin Origin
+	// LocalFolder is set for a file of one of Polyfin's own local folders,
+	// a network share's included.
+	LocalFolder bool
 	// Confined is true when the stream may only be fetched from public
 	// addresses.
 	Confined bool
@@ -821,6 +824,7 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 			URL: subtitle.URL, Addon: entry.addon.Manifest.Name, Confined: entry.confined, Format: subtitle.Format, Title: subtitle.Title,
 			Forced: subtitle.Forced, HearingImpaired: subtitle.HearingImpaired, Default: subtitle.Default})
 	}
+	version.LocalFolder = entry.addon.Local()
 	return version
 }
 
