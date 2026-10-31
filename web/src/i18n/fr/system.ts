@@ -433,6 +433,10 @@ const system: typeof en = {
       goroutinesDownload: 'Télécharger les goroutines',
       goroutinesHelp:
         'Quand une requête ne reçoit jamais de réponse, téléchargez ce que fait le serveur et joignez-le à votre signalement. Il ne contient ni adresse ni secret.',
+      lastCrash: 'Dernier plantage',
+      noCrash: 'Aucun',
+      lastCrashHelp:
+        'Le début de la trace de l’erreur qui a arrêté Polyfin la dernière fois, lue au redémarrage. Les adresses ne gardent que leur hôte, et les jetons et clés sont masqués.',
       secretsTitle: 'Clés enregistrées',
       secretsHelp:
         'Les clés du serveur, les jetons et clés de suivi des utilisateurs, et les mots de passe des partages réseau, chiffrés dans la base de données avec POLYFIN_SECRET_KEY (openssl rand -base64 32).',

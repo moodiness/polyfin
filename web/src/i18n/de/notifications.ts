@@ -90,6 +90,8 @@ const notifications: typeof en = {
       own: 'Worüber es informiert wird, was dich betrifft.',
     },
     eventNames: {
+      server_crashed: 'Server abgestürzt',
+      playback_failed: 'Wiedergabe fehlgeschlagen',
       new_episode: 'Neue Folgen',
       recording_finished: 'Aufnahme beendet',
       recording_failed: 'Aufnahme fehlgeschlagen',
@@ -112,6 +114,10 @@ const notifications: typeof en = {
       title_available: 'Titel der Merkliste verfügbar',
     },
     eventHelp: {
+      server_crashed:
+        'Polyfin wurde durch einen Fehler beendet und neu gestartet: gemeldet beim Neustart, mit dem Anfang des Fehler-Traces, den auch System › Systemzustand zeigt.',
+      playback_failed:
+        'Eine Wiedergabe konnte nicht starten oder brach ab: Keine Version läuft in der App, ein Limit hat sie abgelehnt, oder ihr Stream ist ausgefallen. Einmal pro Stunde je Benutzer und Titel, mit App und Grund.',
       new_episode:
         'Eine Folge einer gesehenen oder als Favorit markierten Serie ist erschienen: einmal pro Folge, nie für bereits erschienene.',
       recording_finished: 'Eine Live-TV-Aufnahme ist beendet, vollständig oder mit fehlendem Teil.',
@@ -186,6 +192,52 @@ const notifications: typeof en = {
         'Die letzten Nachrichten konnten nicht zugestellt werden: Das Ziel hat nicht oder mit Fehlern geantwortet. Jede Nachricht wird eine Stunde lang erneut versucht.',
       unreadable:
         'Adresse, Token oder Schlüssel können mit POLYFIN_SECRET_KEY nicht entschlüsselt werden: Bis zur erneuten Eingabe wird nichts dorthin gesendet.',
+    },
+    perMinute: 'Nachrichten pro Minute, höchstens',
+    perMinuteHelp:
+      'Weitere Nachrichten warten der Reihe nach. Leer für keine Begrenzung; 1 bis 60.',
+    groupMinutes: 'Wiedergaben und neue Folgen bündeln, in Minuten',
+    groupMinutesHelp:
+      'Wiedergaben, abgespielte Freigabelinks und neue Folgen warten so lange und gehen dann als eine Nachricht. Alles andere geht weiterhin sofort. Leer, um alles sofort zu senden; 1 bis 1.440.',
+    capped: (n: number) => `Höchstens ${n} pro Minute`,
+    grouped: (n: number) => `Gebündelt alle ${n} Min.`,
+    deliveries: {
+      open: 'Letzte Zustellungen',
+      title: (name: string) => `Letzte Zustellungen an ${name}`,
+      help: 'Die letzten 100 Nachrichten, neueste zuerst, 30 Tage lang aufbewahrt.',
+      loading: 'Zustellungen werden geladen…',
+      empty: 'Noch keine Nachricht gesendet.',
+      when: 'Wann',
+      event: 'Nachricht',
+      outcome: 'Ergebnis',
+      test: 'Testnachricht',
+      grouped: (n: number) => `${n} Ereignisse in einer Nachricht`,
+      attempts: (n: number) => `${n} Versuche`,
+      outcomes: {
+        delivered: 'Zugestellt',
+        refused: 'Abgelehnt',
+        rejected: 'Nachricht abgelehnt',
+        failed: 'Nicht zugestellt',
+        dropped: 'Verworfen',
+        unreadable: 'Nicht entschlüsselbar',
+      },
+    },
+    preview: {
+      title: 'Vorschau',
+      help: 'Eine Zusammenfassung so sehen, wie ein E-Mail-Ziel sie jetzt erhielte, die des Servers oder eines Benutzers. Es wird nichts gesendet.',
+      summary: 'Zusammenfassung',
+      summaries: {
+        weekly_summary: 'Wochenzusammenfassung',
+        monthly_summary: 'Monatsrückblick',
+        yearly_summary: 'Jahresrückblick',
+      },
+      of: 'Für',
+      server: 'Den Server',
+      show: 'Vorschau',
+      loading: 'Vorschau wird erstellt…',
+      empty:
+        'Für diesen Zeitraum gibt es nichts zu berichten: Diese Zusammenfassung würde nicht gesendet.',
+      frame: 'Die E-Mail der Zusammenfassung',
     },
     lastSent: 'Letzte Nachricht ',
     nothingSent: 'Noch keine Nachricht gesendet',

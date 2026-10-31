@@ -314,6 +314,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/account/notifications/targets/{id}", h.signedIn(own.update))
 	mux.Handle("DELETE /admin/api/account/notifications/targets/{id}", h.signedIn(own.remove))
 	mux.Handle("POST /admin/api/account/notifications/targets/{id}/test", h.signedIn(own.test))
+	mux.Handle("GET /admin/api/account/notifications/targets/{id}/deliveries", h.signedIn(own.deliveries))
 	mux.Handle("GET /admin/api/account/reminders", h.signedIn(h.ownReminders))
 	mux.Handle("DELETE /admin/api/account/reminders/{id}", h.signedIn(h.deleteOwnReminder))
 	mux.Handle("GET /admin/api/account/reminders/settings", h.signedIn(h.ownReminderSettings))
@@ -508,6 +509,8 @@ func New(options Options) http.Handler {
 	mux.Handle("PATCH /admin/api/notifications/targets/{id}", h.administrator(server.update))
 	mux.Handle("DELETE /admin/api/notifications/targets/{id}", h.administrator(server.remove))
 	mux.Handle("POST /admin/api/notifications/targets/{id}/test", h.administrator(server.test))
+	mux.Handle("GET /admin/api/notifications/targets/{id}/deliveries", h.administrator(server.deliveries))
+	mux.Handle("GET /admin/api/notifications/preview", h.administrator(h.summaryPreview))
 	allPlays := statisticsRoutes{h: h, scope: func(*http.Request) *accounts.ID { return nil }}
 	mux.Handle("GET /admin/api/statistics", h.administrator(allPlays.statistics))
 	mux.Handle("GET /admin/api/history", h.administrator(allPlays.history))

@@ -449,6 +449,10 @@ const common: typeof en = {
     invalid_events: 'Eines der gewählten Ereignisse ist für dieses Ziel nicht verfügbar.',
     invalid_reminder_settings: 'Wähle 1, 5, 10, 15, 30 oder 60 Minuten.',
     too_many_targets: 'Es gibt bereits 20 Ziele. Lösche eines, um ein weiteres hinzuzufügen.',
+    invalid_per_minute: 'Nachrichten pro Minute: 1 bis 60, oder leer für keine Begrenzung.',
+    invalid_group_minutes: 'Bündeln: 1 bis 1.440 Minuten, oder leer, um alles sofort zu senden.',
+    invalid_summary:
+      'Nur die Wochenzusammenfassung, der Monats- und der Jahresrückblick haben eine Vorschau.',
     target_unreadable:
       'Adresse oder Token dieses Ziels kann mit POLYFIN_SECRET_KEY nicht entschlüsselt werden. Gib es erneut ein.',
     invalid_source_name: 'Quellennamen müssen 1 bis 64 Zeichen lang sein.',

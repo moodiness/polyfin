@@ -425,6 +425,10 @@ const system = {
       goroutinesDownload: 'Download the goroutines',
       goroutinesHelp:
         'When a request never answers, download what the server is doing and send it with your report. It holds no address or secret.',
+      lastCrash: 'Last crash',
+      noCrash: 'None',
+      lastCrashHelp:
+        'The start of the trace of the error that last stopped Polyfin, as it started again. Addresses keep only their host, and tokens and keys are hidden.',
       secretsTitle: 'Stored keys',
       secretsHelp:
         'The server’s keys, the users’ tracking tokens and keys, and the network shares’ passwords, encrypted in the database with POLYFIN_SECRET_KEY (openssl rand -base64 32).',
