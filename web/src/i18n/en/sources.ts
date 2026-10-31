@@ -559,6 +559,25 @@ const sources = {
       'An administrator turned your own sources off: your Jellyfin apps show the server’s sources and libraries only. Your own sources are kept but not used.',
     listTitle: 'Your sources',
   },
+  usedBy: {
+    title: 'Used by',
+    help: 'Who gets this source in their Jellyfin apps: its libraries, its titles, versions, subtitles and channels. Everyone includes the users created later; with Only these groups and users, a new user gets nothing from it until their group or they are ticked.',
+    everyone: 'Everyone',
+    listed: 'Only these groups and users',
+    groups: 'Groups',
+    users: 'Users',
+    members: (count: number) => (count === 1 ? '1 member' : `${count} members`),
+    noGroups: 'No group yet.',
+    nobody: 'No one uses this source until you tick a group or a user.',
+    selfLeftOut: 'You still manage this source here, but your own apps will not use it.',
+    ownAddons:
+      'A user who may add their own sources can still add the same addon for themselves: turn off Can add their own addons on their page or their group’s to prevent it.',
+    save: 'Save',
+    cancel: 'Cancel',
+    saved: (name: string) => `${name}: who uses it was saved.`,
+    chip: (names: string) => `Used by ${names}`,
+    chipNone: 'Used by no one',
+  },
   music: {
     content: { music: 'Music', audiobook: 'Audiobooks', podcast: 'Podcasts' } as Record<
       string,

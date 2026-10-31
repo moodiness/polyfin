@@ -64,6 +64,7 @@ import {
   type Entry,
 } from './model'
 import { SourceStatus, SourceTile } from './parts'
+import { SourceUsedBy } from './UsedBy'
 
 /** The tag of a source's kind, as in the list. */
 export function KindBadge({ addon }: { addon: Addon }) {
@@ -316,6 +317,12 @@ export function SourceDetail({
       {scope === 'shared' && (addon.kind === 'stremio' || addon.language !== '') && (
         <PanelSection>
           <AddonLanguage addon={addon} />
+        </PanelSection>
+      )}
+
+      {scope === 'shared' && (
+        <PanelSection>
+          <SourceUsedBy key={addon.id} addon={addon} />
         </PanelSection>
       )}
 

@@ -7,7 +7,7 @@ import {
 } from '@phosphor-icons/react'
 import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { installAddon, queryClient, queryKeys, type Addon, type Scope } from '@/api'
+import { installAddon, queryClient, queryKeys, type Addon, type Scope, type UsedBy } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import { Button, Modal, Field, Segmented, TextInput, useToast, type ToastOptions } from '@/ui'
@@ -15,6 +15,7 @@ import { addedParts, IptvAddFlow } from './IptvForms'
 import { LocalFolderAddForm } from './LocalFolders'
 import { invalidateScope } from './model'
 import { TunerAddFlow } from './TunerForms'
+import { everyone, UsedByPicker } from './UsedBy'
 
 export type AddKind = 'stremio' | 'music' | 'iptv' | 'tuner' | 'local'
 
@@ -42,6 +43,9 @@ export function AddSourceModal({
   const [kind, setKind] = useState<AddKind>(initialKind)
   // A new key per opening starts the forms empty.
   const [round, setRound] = useState(0)
+  // Who uses a server source, Everyone unless chosen otherwise; it applies to every kind.
+  const [usedBy, setUsedBy] = useState<UsedBy>(everyone)
+  const shared = scope === 'shared' ? usedBy : undefined
 
   /** An IPTV source or a tuner added: its toast tells what it brings. */
   function sourceAdded(source: Addon) {
@@ -81,16 +85,21 @@ export function AddSourceModal({
           ]}
           className="self-start max-sm:self-stretch"
         />
+        {scope === 'shared' && <UsedByPicker value={usedBy} onChange={setUsedBy} />}
         {kind === 'local' ? (
-          <LocalFolderAddForm onAdded={(added) => done(added, t.localFolders.added(added.name))} />
+          <LocalFolderAddForm
+            usedBy={usedBy}
+            onAdded={(added) => done(added, t.localFolders.added(added.name))}
+          />
         ) : kind === 'tuner' ? (
-          <TunerAddFlow onAdded={sourceAdded} />
+          <TunerAddFlow usedBy={usedBy} onAdded={sourceAdded} />
         ) : kind === 'iptv' ? (
-          <IptvAddFlow scope={scope} onAdded={sourceAdded} />
+          <IptvAddFlow scope={scope} usedBy={shared} onAdded={sourceAdded} />
         ) : (
           <InstallForm
             key={kind}
             scope={scope}
+            usedBy={shared}
             help={kind === 'music' ? text.musicHelp : text.stremioHelp}
             onInstalled={(added) => {
               const note = installedNote(text, scope, added)
@@ -133,10 +142,12 @@ function installedNote(text: Messages['sourceAdd'], scope: Scope, added: Addon):
 
 function InstallForm({
   scope,
+  usedBy,
   help,
   onInstalled,
 }: {
   scope: Scope
+  usedBy?: UsedBy
   help: string
   onInstalled: (added: Addon) => void
 }) {
@@ -144,7 +155,7 @@ function InstallForm({
   const text = t.sourceAdd
   const [manifestUrl, setManifestUrl] = useState('')
   const mutation = useMutation({
-    mutationFn: (url: string) => installAddon(scope, url),
+    mutationFn: (url: string) => installAddon(scope, url, usedBy),
     onSuccess: (installed) => {
       queryClient.setQueryData<Addon[]>(queryKeys.addons(scope), (old) =>
         old === undefined ? old : [...old, installed],

@@ -581,6 +581,26 @@ const sources: typeof en = {
       'Ein Administrator hat deine eigenen Quellen deaktiviert: Deine Jellyfin-Apps zeigen nur die Quellen und Bibliotheken des Servers. Deine eigenen Quellen bleiben erhalten, werden aber nicht verwendet.',
     listTitle: 'Deine Quellen',
   },
+  usedBy: {
+    title: 'Verwendet von',
+    help: 'Wer diese Quelle in seinen Jellyfin-Apps erhält: ihre Bibliotheken, ihre Titel, Versionen, Untertitel und Sender. Alle schließt später erstellte Benutzer ein; mit Nur diese Gruppen und Benutzer erhält ein neuer Benutzer nichts davon, bis seine Gruppe oder er selbst angehakt ist.',
+    everyone: 'Alle',
+    listed: 'Nur diese Gruppen und Benutzer',
+    groups: 'Gruppen',
+    users: 'Benutzer',
+    members: (count: number) => (count === 1 ? '1 Mitglied' : `${count} Mitglieder`),
+    noGroups: 'Noch keine Gruppe.',
+    nobody: 'Niemand verwendet diese Quelle, bis du eine Gruppe oder einen Benutzer anhakst.',
+    selfLeftOut:
+      'Du verwaltest diese Quelle weiterhin hier, aber deine eigenen Apps verwenden sie nicht.',
+    ownAddons:
+      'Ein Benutzer, der eigene Quellen hinzufügen darf, kann dasselbe Add-on weiterhin für sich hinzufügen: Deaktiviere „Darf eigene Add-ons hinzufügen“ auf seiner Seite oder der seiner Gruppe, um das zu verhindern.',
+    save: 'Speichern',
+    cancel: 'Abbrechen',
+    saved: (name: string) => `${name}: Wer es verwendet, wurde gespeichert.`,
+    chip: (names: string) => `Verwendet von ${names}`,
+    chipNone: 'Von niemandem verwendet',
+  },
   music: {
     content: { music: 'Musik', audiobook: 'Hörbücher', podcast: 'Podcasts' } as Record<
       string,
