@@ -618,6 +618,9 @@ const settings = {
       keepConvertedVideo: 'Keep the converted video when the audio track changes',
       keepConvertedVideoHelp:
         'Converts the picture and the sound apart, so that choosing another audio track in the player only prepares the new sound: the picture already converted plays on, and the new track starts sooner. The picture is kept 30 seconds after a player stops it, and counts as one conversion meanwhile.',
+      fastStart: 'Start remote plays faster',
+      fastStartHelp:
+        'When a repackaged or converted play of an addon’s link or a torrent starts on a long segment, as with a keyframe every 10 seconds, that segment is cut into 2-second ones converted quickly at 720p at most: the picture shows sooner, a little less sharp for those seconds, then the play goes on as usual. Applies to the next plays.',
     },
     catalogsTitle: 'Catalogs',
     catalogLimit: 'Titles read per movie and series catalog',
