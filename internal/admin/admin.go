@@ -181,9 +181,11 @@ type Options struct {
 	Playouts        Playouts
 	// HomeRows keeps the rows of the web player's home page, and the rows
 	// each user turned off; nil keeps none. HomeRowChoices tells the
-	// collections they may list.
-	HomeRows       *homerows.Store
-	HomeRowChoices HomeRowChoices
+	// collections they may list, and HomeRowPreviews a user's rows as the
+	// web player shows them; nil previews none.
+	HomeRows        *homerows.Store
+	HomeRowChoices  HomeRowChoices
+	HomeRowPreviews HomeRowPreviews
 	// Taste keeps the users' taste profiles, which My account shows each
 	// their own; nil keeps none.
 	Taste *taste.Service
@@ -481,6 +483,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/home-rows/order", homeRows(h.orderHomeRows))
 	mux.Handle("PATCH /admin/api/home-rows/{id}", homeRows(h.updateHomeRow))
 	mux.Handle("DELETE /admin/api/home-rows/{id}", homeRows(h.deleteHomeRow))
+	mux.Handle("GET /admin/api/home-rows/preview/{id}", homeRows(h.previewHomeRows))
 	server := notificationRoutes{h: h, owner: serverTargets}
 	mux.Handle("GET /admin/api/notifications", h.administrator(server.list))
 	mux.Handle("POST /admin/api/notifications/targets", h.administrator(server.create))

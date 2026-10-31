@@ -1,13 +1,15 @@
 // Package homerows keeps the rows the administrator adds to the web
-// player's home page (Settings › Web player › Home rows), and the rows
-// each user turned off (My account › Home rows). What a row lists, for
-// whom, is told by the Jellyfin API (see jellyfin's customrows.go).
+// player's home page (Settings › Web player › Home rows), when each shows
+// (Row.ShowsAt), and the rows each user turned off (My account › Home
+// rows). What a row lists, for whom, is told by the Jellyfin API (see
+// jellyfin's customrows.go).
 package homerows
 
 import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -102,18 +104,85 @@ type Row struct {
 	// Library makes the row a view of its own too, which other apps list
 	// among the user's libraries.
 	Library bool
+	// Schedule is when the row shows.
+	Schedule Schedule
+}
+
+// Schedule is when a row shows, in the server's time zone: from its Start
+// date to its End date, on its Days, in its Hours. What it leaves out
+// does not bound the row: the zero Schedule shows it all the time.
+type Schedule struct {
+	// Start and End are the first and the last dates the row shows on, as
+	// accounts.Day gives dates: midnight UTC of the date. Zero leaves that
+	// side open.
+	Start, End time.Time
+	// Days are the days of the week the row shows on, from Sunday, without
+	// repeats; none is every day.
+	Days []time.Weekday
+	// Hours are the hours of the day it shows in; nil is all day.
+	Hours *Hours
+}
+
+// Hours are the hours of the day a row shows in: from the start of hour
+// From, 0 to 23, to the start of hour To, 1 to 24 (midnight). A To before
+// From passes midnight, and that night belongs to the day it starts on:
+// from 22 to 2 on Fridays shows the row from Friday 22:00 to Saturday
+// 2:00.
+type Hours struct {
+	From, To int
+}
+
+// Valid reports whether s's fields go together: dates at midnight UTC, the
+// start not after the end, days of the week in order without repeats, and
+// hours that are a span.
+func (s Schedule) Valid() bool {
+	date := func(t time.Time) bool {
+		year, month, day := t.UTC().Date()
+		return t.IsZero() || t.Equal(time.Date(year, month, day, 0, 0, 0, 0, time.UTC))
+	}
+	if !date(s.Start) || !date(s.End) || !s.Start.IsZero() && !s.End.IsZero() && s.Start.After(s.End) {
+		return false
+	}
+	for i, day := range s.Days {
+		if day < time.Sunday || day > time.Saturday || i > 0 && day <= s.Days[i-1] {
+			return false
+		}
+	}
+	return s.Hours == nil || s.Hours.From >= 0 && s.Hours.From <= 23 && s.Hours.To >= 1 && s.Hours.To <= 24 && s.Hours.From != s.Hours.To
+}
+
+// ShowsAt reports whether the row shows at t, by its schedule, in the
+// server's time zone. A row that is also a library follows its dates only,
+// so that the libraries of other apps do not come and go by the hour.
+func (r Row) ShowsAt(t time.Time) bool {
+	s := r.Schedule
+	day := t.In(time.Local)
+	if h := s.Hours; h != nil && !r.Library {
+		switch hour := day.Hour(); {
+		case h.From < h.To && (hour < h.From || hour >= h.To), h.From > h.To && hour < h.From && hour >= h.To:
+			return false
+		case h.From > h.To && hour < h.To:
+			// After midnight, in the night of the day before.
+			day = day.AddDate(0, 0, -1)
+		}
+	}
+	date := accounts.Day(day)
+	if !s.Start.IsZero() && date.Before(s.Start) || !s.End.IsZero() && date.After(s.End) {
+		return false
+	}
+	return r.Library || len(s.Days) == 0 || slices.Contains(s.Days, day.Weekday())
 }
 
 // Valid reports whether r's fields go together: a known kind and place, a
 // name, a catalog for a catalog row and a collection for a collection row,
-// and nothing of either for the other kinds.
+// and nothing of either for the other kinds, and a valid schedule.
 func (r Row) Valid() bool {
 	name := []rune(r.Name)
 	catalog := r.Addon != (accounts.ID{}) && r.CatalogType != "" && r.CatalogID != ""
 	return slices.Contains(Kinds, r.Kind) && slices.Contains(Places, r.Place) && len(name) > 0 && len(name) <= MaxNameLength &&
 		r.Count >= 1 && r.Count <= MaxCount &&
 		catalog == (r.Kind == KindCatalog) && (r.Kind == KindCatalog || r.Addon == (accounts.ID{}) && r.CatalogType == "" && r.CatalogID == "") &&
-		(r.Collection != (accounts.ID{})) == (r.Kind == KindCollection)
+		(r.Collection != (accounts.ID{})) == (r.Kind == KindCollection) && r.Schedule.Valid()
 }
 
 // ShownTo reports whether the row is shown to user, before they turn it
@@ -150,19 +219,35 @@ func (s *Store) Row(ctx context.Context, id accounts.ID) (Row, error) {
 }
 
 func (s *Store) load(ctx context.Context, where string, args ...any) ([]Row, error) {
-	rows, _ := s.db.Query(ctx, `SELECT id, name, kind, place, addon_id, catalog_type, catalog_id, collection_id, count, everyone, library
+	rows, _ := s.db.Query(ctx, `SELECT id, name, kind, place, addon_id, catalog_type, catalog_id, collection_id, count, everyone, library,
+		start_date, end_date, days, start_hour, end_hour
 		FROM home_rows `+where+` ORDER BY position, created_at, id`, args...)
 	var result []Row
 	var r Row
 	var addon, collection *accounts.ID
+	var start, end *time.Time
+	var days []int16
+	var from, to *int16
 	if _, err := pgx.ForEachRow(rows, []any{&r.ID, &r.Name, &r.Kind, &r.Place, &addon, &r.CatalogType, &r.CatalogID, &collection, &r.Count,
-		&r.Everyone, &r.Library}, func() error {
+		&r.Everyone, &r.Library, &start, &end, &days, &from, &to}, func() error {
 		row := r
 		if addon != nil {
 			row.Addon = *addon
 		}
 		if collection != nil {
 			row.Collection = *collection
+		}
+		if start != nil {
+			row.Schedule.Start = *start
+		}
+		if end != nil {
+			row.Schedule.End = *end
+		}
+		for _, day := range days {
+			row.Schedule.Days = append(row.Schedule.Days, time.Weekday(day))
+		}
+		if from != nil && to != nil {
+			row.Schedule.Hours = &Hours{From: int(*from), To: int(*to)}
 		}
 		result = append(result, row)
 		return nil
@@ -202,10 +287,12 @@ func (s *Store) Create(ctx context.Context, r Row) (Row, error) {
 		if count >= MaxRows {
 			return ErrTooMany
 		}
+		start, end, days, from, to := scheduleColumns(r.Schedule)
 		if err := tx.QueryRow(ctx, `INSERT INTO home_rows (position, name, kind, place, addon_id, catalog_type, catalog_id, collection_id, count,
-			everyone, library) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+			everyone, library, start_date, end_date, days, start_hour, end_hour)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
 			last+1, r.Name, r.Kind, r.Place, nullable(r.Addon), r.CatalogType, r.CatalogID, nullable(r.Collection), r.Count, r.Everyone,
-			r.Library).Scan(&r.ID); err != nil {
+			r.Library, start, end, days, from, to).Scan(&r.ID); err != nil {
 			return err
 		}
 		return setUsers(ctx, tx, r)
@@ -221,10 +308,13 @@ func (s *Store) Update(ctx context.Context, r Row) (Row, error) {
 	if !r.Valid() {
 		return Row{}, ErrInvalid
 	}
+	start, end, days, from, to := scheduleColumns(r.Schedule)
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE home_rows SET name = $2, kind = $3, place = $4, addon_id = $5, catalog_type = $6, catalog_id = $7,
-			collection_id = $8, count = $9, everyone = $10, library = $11 WHERE id = $1`,
-			r.ID, r.Name, r.Kind, r.Place, nullable(r.Addon), r.CatalogType, r.CatalogID, nullable(r.Collection), r.Count, r.Everyone, r.Library)
+			collection_id = $8, count = $9, everyone = $10, library = $11, start_date = $12, end_date = $13, days = $14, start_hour = $15,
+			end_hour = $16 WHERE id = $1`,
+			r.ID, r.Name, r.Kind, r.Place, nullable(r.Addon), r.CatalogType, r.CatalogID, nullable(r.Collection), r.Count, r.Everyone, r.Library,
+			start, end, days, from, to)
 		if err != nil {
 			return err
 		}
@@ -310,9 +400,9 @@ func (s *Store) TurnAllOn(ctx context.Context, user accounts.ID) error {
 	return err
 }
 
-// Shown lists, in order, the rows shown to user that they did not turn
-// off.
-func (s *Store) Shown(ctx context.Context, user accounts.ID) ([]Row, error) {
+// Shown lists, in order, the rows shown to user at now that they did not
+// turn off.
+func (s *Store) Shown(ctx context.Context, user accounts.ID, now time.Time) ([]Row, error) {
 	rows, err := s.Rows(ctx)
 	if err != nil || len(rows) == 0 {
 		return nil, err
@@ -321,7 +411,7 @@ func (s *Store) Shown(ctx context.Context, user accounts.ID) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	return slices.DeleteFunc(rows, func(r Row) bool { return !r.ShownTo(user) || off[r.ID] }), nil
+	return slices.DeleteFunc(rows, func(r Row) bool { return !r.ShownTo(user) || off[r.ID] || !r.ShowsAt(now) }), nil
 }
 
 // nullable is nil for the zero identifier.
@@ -330,4 +420,23 @@ func nullable(id accounts.ID) *accounts.ID {
 		return nil
 	}
 	return &id
+}
+
+// scheduleColumns are the columns of s: its dates, null for none, its
+// days, and its hours, null for all day.
+func scheduleColumns(s Schedule) (start, end *time.Time, days []int16, from, to *int16) {
+	if !s.Start.IsZero() {
+		start = &s.Start
+	}
+	if !s.End.IsZero() {
+		end = &s.End
+	}
+	days = make([]int16, 0, len(s.Days))
+	for _, day := range s.Days {
+		days = append(days, int16(day))
+	}
+	if s.Hours != nil {
+		from, to = new(int16(s.Hours.From)), new(int16(s.Hours.To))
+	}
+	return start, end, days, from, to
 }

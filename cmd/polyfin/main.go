@@ -693,10 +693,11 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		VirtualChannels: ownChannels,
 		ChannelBuilder:  jellyfinAPI,
 		Playouts:        player,
-		// The rows of the web player's home page, and the collections they
-		// may list as the Jellyfin API tells them.
-		HomeRows:       homeRows,
-		HomeRowChoices: jellyfinAPI,
+		// The rows of the web player's home page, the collections they may
+		// list, and each user's rows as the Jellyfin API tells them.
+		HomeRows:        homeRows,
+		HomeRowChoices:  jellyfinAPI,
+		HomeRowPreviews: jellyfinAPI,
 		// Each user's taste profile, which My account shows them.
 		Taste: tastes,
 		// Settings › Content › Posters previews the badges over real
