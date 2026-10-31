@@ -716,6 +716,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidUpdateToolToken, http.StatusBadRequest, "invalid_update_tool_token"},
 		{accounts.ErrInvalidProvider, http.StatusBadRequest, "invalid_provider"},
 		{accounts.ErrInvalidCacheSize, http.StatusBadRequest, "invalid_cache_size"},
+		{accounts.ErrInvalidSourceCache, http.StatusBadRequest, "invalid_source_cache"},
+		{accounts.ErrInvalidPreload, http.StatusBadRequest, "invalid_preload"},
 		{accounts.ErrInvalidTorrentRoute, http.StatusBadRequest, "invalid_torrent_route"},
 		{accounts.ErrInvalidTorrentLimit, http.StatusBadRequest, "invalid_torrent_limit"},
 		{accounts.ErrInvalidTorrentTrackers, http.StatusBadRequest, "invalid_torrent_trackers"},

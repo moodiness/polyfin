@@ -1133,6 +1133,83 @@ const (
 	DefaultCacheSizeGB = 10
 )
 
+// ErrInvalidSourceCache reports a SourceCachePreset not among
+// SourceCachePresets, or a SourceCacheDays or SourceCacheCreditDays out of
+// their bounds; ErrInvalidPreload a PreloadEpisodes, PreloadMbps or
+// PreloadReserveGB out of theirs.
+var (
+	ErrInvalidSourceCache = errors.New("invalid source cache retention")
+	ErrInvalidPreload     = errors.New("invalid next-episode preloading")
+)
+
+// The presets of the source cache (see Settings.SourceCachePreset): Off
+// keeps nothing across restarts, Small, Everyday and Large keep more for
+// longer, and Custom keeps the values set one by one.
+const (
+	SourceCacheOff      = "off"
+	SourceCacheSmall    = "small"
+	SourceCacheEveryday = "everyday"
+	SourceCacheLarge    = "large"
+	SourceCacheCustom   = "custom"
+)
+
+// SourceCachePresets are the values SourceCachePreset takes.
+var SourceCachePresets = []string{SourceCacheOff, SourceCacheSmall, SourceCacheEveryday, SourceCacheLarge, SourceCacheCustom}
+
+// SourceCacheLimits are the values a source cache preset sets: the
+// settings' CacheSizeGB, SourceCacheDays, SourceCacheCreditDays and
+// PreloadWholeFiles.
+type SourceCacheLimits struct {
+	SizeGB, Days, CreditDays int
+	WholeFiles               bool
+}
+
+// SourceCachePresetLimits are the limits each preset but Custom sets. Off
+// keeps 2 GB, room for a playback's reads ahead, and nothing past a
+// restart; Large is for a disk of its own, and preloads whole episodes.
+var SourceCachePresetLimits = map[string]SourceCacheLimits{
+	SourceCacheOff:      {SizeGB: 2, Days: 0, CreditDays: 0},
+	SourceCacheSmall:    {SizeGB: 10, Days: 3, CreditDays: 1},
+	SourceCacheEveryday: {SizeGB: 50, Days: 14, CreditDays: 3},
+	SourceCacheLarge:    {SizeGB: 250, Days: 60, CreditDays: 7, WholeFiles: true},
+}
+
+// The bounds and defaults of SourceCacheDays and SourceCacheCreditDays,
+// and of the next-episode preloading's PreloadEpisodes, PreloadMbps and
+// PreloadReserveGB.
+const (
+	MaxSourceCacheDays           = 365
+	DefaultSourceCacheDays       = 3
+	MaxSourceCacheCreditDays     = 30
+	DefaultSourceCacheCreditDays = 1
+	MinPreloadEpisodes           = 1
+	MaxPreloadEpisodes           = 3
+	DefaultPreloadEpisodes       = 1
+	MinPreloadMbps               = 1
+	MaxPreloadMbps               = 1000
+	DefaultPreloadMbps           = 20
+	MinPreloadReserveGB          = 1
+	MaxPreloadReserveGB          = 1000
+	DefaultPreloadReserveGB      = 20
+)
+
+// applySourceCachePreset sets the limits of the source cache's preset,
+// unless it is Custom, and checks them.
+func (s *Settings) applySourceCachePreset() error {
+	if !slices.Contains(SourceCachePresets, s.SourceCachePreset) {
+		return ErrInvalidSourceCache
+	}
+	if limits, ok := SourceCachePresetLimits[s.SourceCachePreset]; ok {
+		s.CacheSizeGB, s.SourceCacheDays, s.SourceCacheCreditDays, s.PreloadWholeFiles =
+			limits.SizeGB, limits.Days, limits.CreditDays, limits.WholeFiles
+	}
+	if s.SourceCacheDays < 0 || s.SourceCacheDays > MaxSourceCacheDays ||
+		s.SourceCacheCreditDays < 0 || s.SourceCacheCreditDays > MaxSourceCacheCreditDays {
+		return ErrInvalidSourceCache
+	}
+	return nil
+}
+
 // vaapiDevice matches the render nodes VAAPI may open.
 var vaapiDevice = regexp.MustCompile(`^/dev/dri/renderD[0-9]{1,4}$`)
 
@@ -1681,8 +1758,26 @@ type Settings struct {
 	RemuxDBURL string
 	// CacheSizeGB bounds the space the blocks of the sources being played
 	// take, in gigabytes (10^9 bytes); lowered, the cache evicts down to it
-	// at its next write.
+	// at its next write. A SourceCachePreset other than Custom sets it.
 	CacheSizeGB int
+	// SourceCachePreset is one of SourceCachePresets, which sets
+	// CacheSizeGB, SourceCacheDays, SourceCacheCreditDays and
+	// PreloadWholeFiles as UpdateSettings saves them, but for Custom (see
+	// SourceCachePresetLimits).
+	SourceCachePreset string
+	// SourceCacheDays is how many days the source cache keeps a block once
+	// last read, across restarts; 0 empties it at each start.
+	// SourceCacheCreditDays is how many days longer it keeps those of a
+	// title for each time it was played again.
+	SourceCacheDays, SourceCacheCreditDays int
+	// PreloadNextEpisodes has the source cache read ahead the next
+	// PreloadEpisodes episodes of the series the users watch lately, while
+	// nothing plays, at PreloadMbps megabits a second at most, as long as
+	// the disk keeps PreloadReserveGB free: their opening, or the whole
+	// file with PreloadWholeFiles.
+	PreloadNextEpisodes                            bool
+	PreloadEpisodes, PreloadMbps, PreloadReserveGB int
+	PreloadWholeFiles                              bool
 	// VAAPIDevice is the render node VAAPI opens, such as
 	// /dev/dri/renderD128; empty tries each in turn (see ValidVAAPIDevice).
 	VAAPIDevice string
@@ -2067,7 +2162,9 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"silo_apps, " +
 	"poster_ratings, " +
 	"provider_issuer, provider_name, provider_client_id, provider_client_secret, provider_user_claim, provider_create_accounts, " +
-	"provider_admin_claim, provider_admin_value"
+	"provider_admin_claim, provider_admin_value, " +
+	"source_cache_preset, source_cache_days, source_cache_credit_days, " +
+	"preload_next_episodes, preload_episodes, preload_mbps, preload_reserve_gb, preload_whole_files"
 
 // updateSettingsQuery sets every column of settingsColumns, in order.
 var updateSettingsQuery = func() string {
@@ -2133,7 +2230,9 @@ func (settings *Settings) fields() []any {
 		&settings.SiloApps,
 		&settings.PosterRatings,
 		&settings.ProviderIssuer, &settings.ProviderName, &settings.ProviderClientID, &settings.ProviderClientSecret, &settings.ProviderUserClaim,
-		&settings.ProviderCreateAccounts, &settings.ProviderAdminClaim, &settings.ProviderAdminValue}
+		&settings.ProviderCreateAccounts, &settings.ProviderAdminClaim, &settings.ProviderAdminValue,
+		&settings.SourceCachePreset, &settings.SourceCacheDays, &settings.SourceCacheCreditDays,
+		&settings.PreloadNextEpisodes, &settings.PreloadEpisodes, &settings.PreloadMbps, &settings.PreloadReserveGB, &settings.PreloadWholeFiles}
 }
 
 func (s *Store) loadSettings(ctx context.Context) (Settings, error) {
@@ -2310,6 +2409,8 @@ func (s *Store) AdoptEnvironment(ctx context.Context, env Environment) error {
 			THEN $3::text[] ELSE segment_sources_off END,
 		cache_size_gb = CASE WHEN $4::integer > 0 AND 'cache_size_gb' = ANY(environment_pending)
 			THEN $4::integer ELSE cache_size_gb END,
+		source_cache_preset = CASE WHEN $4::integer > 0 AND 'cache_size_gb' = ANY(environment_pending)
+			THEN 'custom' ELSE source_cache_preset END,
 		detailed_log = CASE WHEN $5::boolean AND 'detailed_log' = ANY(environment_pending) THEN true ELSE detailed_log END,
 		vaapi_device = CASE WHEN $6::text <> '' AND 'vaapi_device' = ANY(environment_pending)
 			THEN $6::text ELSE vaapi_device END,
@@ -2561,8 +2662,16 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		return Settings{}, err
 	}
 	settings.CollectionLibraryApps = apps
+	if err := settings.applySourceCachePreset(); err != nil {
+		return Settings{}, err
+	}
 	if settings.CacheSizeGB < MinCacheSizeGB || settings.CacheSizeGB > MaxCacheSizeGB {
 		return Settings{}, ErrInvalidCacheSize
+	}
+	if settings.PreloadEpisodes < MinPreloadEpisodes || settings.PreloadEpisodes > MaxPreloadEpisodes ||
+		settings.PreloadMbps < MinPreloadMbps || settings.PreloadMbps > MaxPreloadMbps ||
+		settings.PreloadReserveGB < MinPreloadReserveGB || settings.PreloadReserveGB > MaxPreloadReserveGB {
+		return Settings{}, ErrInvalidPreload
 	}
 	if !ValidVAAPIDevice(settings.VAAPIDevice) {
 		return Settings{}, ErrInvalidVAAPIDevice

@@ -72,6 +72,9 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 		// Each way of serving HTTPS needs what it serves with.
 		changed.HTTPSCertificate, changed.HTTPSPrivateKey = systemPath("/certs/fullchain.pem"), systemPath("/certs/privkey.pem")
 		changed.ACMEHosts, changed.ACMETerms = []string{"media.example.org"}, true
+		// The source cache's limits are checked as set, which only the
+		// custom preset keeps.
+		changed.SourceCachePreset = SourceCacheCustom
 		field, _ := boundField(&changed, name)
 		field.Set(reflect.ValueOf(value).Convert(field.Type()))
 		_, err := store.UpdateSettings(ctx, changed)
