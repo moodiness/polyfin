@@ -2,11 +2,13 @@ package jellyfinimport
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -284,8 +286,17 @@ type Server struct {
 	// data whatever user is asked.
 	KeyOwner string
 	// MachineID is a Plex server's machine identifier, which plex.tv names
-	// it by among an account's servers; empty for other kinds.
+	// it by among an account's servers; empty for other kinds. ID is a
+	// Jellyfin or Emby server's own identifier; empty for Plex.
 	MachineID string
+	ID        string
+}
+
+// source names the server among those imports read, as the collections
+// and playlists brought from it remember it: its kind and its own
+// identifier.
+func (s Server) source() string {
+	return string(s.Kind) + ":" + cmp.Or(s.MachineID, s.ID)
 }
 
 // User is a user of a server.
@@ -382,7 +393,7 @@ func (c *client) open(ctx context.Context, credentials Credentials) (Server, err
 	if err != nil {
 		return Server{}, err
 	}
-	server := Server{Kind: c.kind, Name: info.ServerName, Version: info.Version, Address: c.address}
+	server := Server{Kind: c.kind, Name: info.ServerName, Version: info.Version, Address: c.address, ID: info.ID}
 	// A password goes only to a server that answered as the kind asked
 	// does.
 	if credentials.Name == "" {
@@ -497,13 +508,21 @@ type itemJSON struct {
 	IndexNumber       *int
 	IndexNumberEnd    *int
 	RunTimeTicks      int64
-	UserData          struct {
+	// MediaType is a playlist's: Audio for music, Video for movies and
+	// episodes.
+	MediaType string
+	UserData  struct {
 		Played                bool
 		PlayCount             int
 		PlaybackPositionTicks int64
 		PlayedPercentage      float64
 		IsFavorite            bool
 		LastPlayedDate        string
+		// Rating is the user's, from 0 to 10; Likes, which Jellyfin
+		// derives from it, a thumb up or down, which Emby may keep
+		// without a rating.
+		Rating *float64
+		Likes  *bool
 	}
 	// unmatchable is why an item cannot be matched whatever its
 	// identifiers, when it cannot (see plexLibrary.item); rating is the
@@ -518,40 +537,78 @@ type pageJSON struct {
 }
 
 // items reads, page by page, the items of user that types and filter
-// select, handing each to found. Emby leaves the play count and the date
-// last played out of a list's user data unless its fields name them.
+// select, handing each to found; an empty filter selects every item of
+// types. Emby leaves the play count and the date last played out of a
+// list's user data unless its fields name them.
 func (c *client) items(ctx context.Context, user, types, filter string, found func(itemJSON)) error {
-	path := "/Users/" + url.PathEscape(user) + "/Items"
 	fields := "ProviderIds"
 	if c.kind == Emby {
 		fields += ",UserDataPlayCount,UserDataLastPlayedDate"
 	}
+	query := url.Values{
+		"Recursive":        {"true"},
+		"IncludeItemTypes": {types},
+		"Fields":           {fields},
+		"EnableUserData":   {"true"},
+		"SortBy":           {"SortName"},
+		"SortOrder":        {"Ascending"},
+	}
+	if filter != "" {
+		query.Set("Filters", filter)
+	}
+	return c.pages(ctx, "/Users/"+url.PathEscape(user)+"/Items", query, found)
+}
+
+// pages reads, page by page, the items of the list at path with query,
+// without their images, handing each to found.
+func (c *client) pages(ctx context.Context, path string, query url.Values, found func(itemJSON)) error {
 	for start := 0; ; {
-		query := url.Values{
-			"Recursive":              {"true"},
-			"IncludeItemTypes":       {types},
-			"Filters":                {filter},
-			"Fields":                 {fields},
-			"EnableUserData":         {"true"},
-			"EnableImages":           {"false"},
-			"EnableTotalRecordCount": {"true"},
-			"SortBy":                 {"SortName"},
-			"SortOrder":              {"Ascending"},
-			"StartIndex":             {strconv.Itoa(start)},
-			"Limit":                  {strconv.Itoa(c.s.timing.pageSize)},
-		}
-		var page pageJSON
-		if err := c.get(ctx, path, query, &page); err != nil {
+		page := maps.Clone(query)
+		page.Set("EnableImages", "false")
+		page.Set("EnableTotalRecordCount", "true")
+		page.Set("StartIndex", strconv.Itoa(start))
+		page.Set("Limit", strconv.Itoa(c.s.timing.pageSize))
+		var list pageJSON
+		if err := c.get(ctx, path, page, &list); err != nil {
 			return err
 		}
-		for _, item := range page.Items {
+		for _, item := range list.Items {
 			found(item)
 		}
-		start += len(page.Items)
-		if len(page.Items) == 0 || start >= page.TotalRecordCount {
+		start += len(list.Items)
+		if len(list.Items) == 0 || start >= list.TotalRecordCount {
 			return nil
 		}
 	}
+}
+
+// The types of the items a collection or a playlist brings: Polyfin's
+// collections hold movies, series and episodes, and its playlists movies
+// and episodes.
+const (
+	collectionTypes = "Movie,Series,Episode"
+	playlistTypes   = "Movie,Episode"
+)
+
+// collection reads the titles of the collection id, a BoxSet, as user
+// sees them, in the collection's order.
+func (c *client) collection(ctx context.Context, user, id string, found func(itemJSON)) error {
+	return c.pages(ctx, "/Users/"+url.PathEscape(user)+"/Items", url.Values{
+		"ParentId":         {id},
+		"IncludeItemTypes": {collectionTypes},
+		"Fields":           {"ProviderIds"},
+		"EnableUserData":   {"false"},
+	}, found)
+}
+
+// playlist reads the entries of the playlist id, as user sees them, in the
+// playlist's order.
+func (c *client) playlist(ctx context.Context, user, id string, found func(itemJSON)) error {
+	return c.pages(ctx, "/Playlists/"+url.PathEscape(id)+"/Items", url.Values{
+		"UserId":         {user},
+		"Fields":         {"ProviderIds"},
+		"EnableUserData": {"false"},
+	}, found)
 }
 
 // providers reads the identifiers of the items ids name, as user sees

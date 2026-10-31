@@ -465,14 +465,15 @@ func (s *Service) DropPlexSignIn(user accounts.ID) {
 // ImportOwnPlex imports, in the background, into user's account, who
 // starts it, the watch data of the Plex profile they signed in to Plex
 // with on server, by its machine identifier: what it played, marked or
-// synced as played, its resume points and ratings, and, with watchlist,
-// its Watchlist. It reaches the server by the addresses plex.tv gives,
+// synced as played and its resume points, and, as extras ask, its ratings,
+// the collections of the server's library sections, its video playlists
+// and its Watchlist. It reaches the server by the addresses plex.tv gives,
 // local first, then remote, then relayed, each an address ParseAddress
 // takes, whose /identity names the server. The import takes the sign-in
 // over and signs it out of Plex once it ends. It fails with ErrRunning,
 // ErrPlexSignInEnded, ErrNotSignedIn before Plex signed the user in,
 // ErrPlexUnknownServer or ErrPlexServerUnreachable, keeping the sign-in.
-func (s *Service) ImportOwnPlex(ctx context.Context, user accounts.User, server string, watchlist bool) (*Status, error) {
+func (s *Service) ImportOwnPlex(ctx context.Context, user accounts.User, server string, extras Extras) (*Status, error) {
 	if !s.claim() {
 		return nil, ErrRunning
 	}
@@ -501,9 +502,9 @@ func (s *Service) ImportOwnPlex(ctx context.Context, user accounts.User, server 
 		return nil, err
 	}
 	// The import holds the tokens from now on.
-	plex := &ownPlex{account: held.token(), watchlist: watchlist}
+	plex := &ownPlex{account: held.token(), watchlist: extras.Watchlist}
 	signOut := s.takePlex(user.ID, held)
-	status := s.newStatus(Server{Kind: Plex, Name: resource.Name, Address: address}, user, true)
+	status := s.newStatus(Server{Kind: Plex, Name: resource.Name, Address: address, MachineID: resource.ClientIdentifier}, user, true, extras)
 	status.Users = []UserStatus{{JellyfinID: held.profile, JellyfinName: held.profileName, User: user.ID, UserName: user.Name,
 		State: UserWaiting}}
 	c := &client{s: s, kind: Plex, address: address, key: resource.AccessToken}

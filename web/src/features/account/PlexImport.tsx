@@ -12,6 +12,7 @@ import {
   type PlexSignIn,
   type PlexSignInFor,
 } from '@/api'
+import { allExtras, ExtrasChoice } from '@/features/users/ImportExtras'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -116,10 +117,13 @@ export function PlexSignInWaiting({ link }: { link: PlexSignIn }) {
  */
 export function PlexImportForm({
   header,
+  collections,
   onStarted,
 }: {
   /** The choice of the kind of server, shown first. */
   header: ReactNode
+  /** Whether the user may manage collections, and so bring the server's. */
+  collections: boolean
   onStarted: (started: JellyfinImportStatus) => void
 }) {
   const { t } = useI18n()
@@ -129,6 +133,7 @@ export function PlexImportForm({
   const [pin, setPin] = useState('')
   const [server, setServer] = useState('')
   const [watchlist, setWatchlist] = useState(true)
+  const [extras, setExtras] = useState(allExtras)
 
   function show(read: PlexAccount) {
     setAccount(read)
@@ -143,7 +148,14 @@ export function PlexImportForm({
     onSuccess: show,
   })
   const start = useMutation({
-    mutationFn: () => startOwnImport({ kind: 'plex', server, watchlist }),
+    mutationFn: () =>
+      startOwnImport({
+        kind: 'plex',
+        server,
+        watchlist,
+        ...extras,
+        collections: collections && extras.collections,
+      }),
     onSuccess: onStarted,
   })
 
@@ -230,6 +242,7 @@ export function PlexImportForm({
                   label={text.watchlist}
                   help={text.watchlistHelp}
                 />
+                <ExtrasChoice value={extras} onChange={setExtras} collections={collections} />
               </>
             )}
           </>

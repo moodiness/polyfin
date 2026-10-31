@@ -38,12 +38,15 @@ func (h *handler) ownImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// Collections tells whether the user's own import may bring the
+	// server's collections: only a user who may manage collections does.
 	writeJSON(w, http.StatusOK, struct {
-		Enabled    bool `json:"enabled"`
-		Letterboxd bool `json:"letterboxd"`
-		Searchable bool `json:"searchable"`
-		Import     any  `json:"import"`
-	}{enabled, enabled && h.Letterboxd != nil, searchable, current})
+		Enabled     bool `json:"enabled"`
+		Letterboxd  bool `json:"letterboxd"`
+		Searchable  bool `json:"searchable"`
+		Collections bool `json:"collections"`
+		Import      any  `json:"import"`
+	}{enabled, enabled && h.Letterboxd != nil, searchable, user.CollectionManagement, current})
 }
 
 // startOwnImport imports into the caller's account, in the background,
@@ -80,6 +83,7 @@ func (h *handler) startOwnImport(w http.ResponseWriter, r *http.Request) {
 		// comes too, by default.
 		Server    string `json:"server"`
 		Watchlist *bool  `json:"watchlist"`
+		extrasJSON
 	}
 	if !decode(w, r, &body) {
 		return
@@ -96,14 +100,16 @@ func (h *handler) startOwnImport(w http.ResponseWriter, r *http.Request) {
 	}
 	var status *jellyfinimport.Status
 	var err error
+	extras := body.extras()
 	if kind == jellyfinimport.Plex {
-		status, err = h.JellyfinImport.ImportOwnPlex(r.Context(), user, body.Server, body.Watchlist == nil || *body.Watchlist)
+		extras.Watchlist = body.Watchlist == nil || *body.Watchlist
+		status, err = h.JellyfinImport.ImportOwnPlex(r.Context(), user, body.Server, extras)
 		if plexSignInError(w, err) {
 			return
 		}
 	} else {
 		connection := jellyfinimport.Connection{Kind: kind, Address: body.Address,
-			Credentials: jellyfinimport.Credentials{Name: name, Password: body.Password}}
+			Credentials: jellyfinimport.Credentials{Name: name, Password: body.Password}, Extras: extras}
 		status, err = h.JellyfinImport.ImportOwn(r.Context(), connection, user)
 	}
 	if errors.Is(err, jellyfinimport.ErrRunning) {

@@ -51,7 +51,8 @@ func (s *Store) Create(ctx context.Context, name string, isLocked bool, items []
 		if err := tx.QueryRow(ctx, "INSERT INTO collections (name, is_locked) VALUES ($1, $2) RETURNING id", name, isLocked).Scan(&id); err != nil {
 			return err
 		}
-		return insertItems(ctx, tx, id, items)
+		_, err := insertItems(ctx, tx, id, items)
+		return err
 	})
 	return id, err
 }
@@ -112,7 +113,10 @@ func (s *Store) load(ctx context.Context, where string, args ...any) ([]Collecti
 // Add adds items after the collection's titles; those it already has keep
 // their place.
 func (s *Store) Add(ctx context.Context, id accounts.ID, items []accounts.ID) error {
-	return s.change(ctx, id, func(tx pgx.Tx) error { return insertItems(ctx, tx, id, items) })
+	return s.change(ctx, id, func(tx pgx.Tx) error {
+		_, err := insertItems(ctx, tx, id, items)
+		return err
+	})
 }
 
 // Remove takes items out of the collection; those it does not have are
@@ -148,17 +152,72 @@ func (s *Store) change(ctx context.Context, id accounts.ID, apply func(pgx.Tx) e
 }
 
 // insertItems adds the items the collection does not have yet, in order;
-// an item named twice is added once.
-func insertItems(ctx context.Context, tx pgx.Tx, id accounts.ID, items []accounts.ID) error {
+// an item named twice is added once. It counts the items added.
+func insertItems(ctx context.Context, tx pgx.Tx, id accounts.ID, items []accounts.ID) (int, error) {
 	if len(items) == 0 {
-		return nil
+		return 0, nil
 	}
 	tag, err := tx.Exec(ctx, `INSERT INTO collection_items (collection_id, item_id)
 		SELECT $1, item_id FROM (SELECT item_id, min(n) AS n FROM unnest($2::uuid[]) WITH ORDINALITY AS i(item_id, n) GROUP BY item_id) i
 		ORDER BY n ON CONFLICT DO NOTHING`, id, items)
 	if err != nil || tag.RowsAffected() == 0 {
-		return err
+		return 0, err
 	}
 	_, err = tx.Exec(ctx, "UPDATE collections SET last_added_at = now() WHERE id = $1", id)
-	return err
+	return int(tag.RowsAffected()), err
+}
+
+// Import brings a collection of another server, which server names by
+// its kind and its own identifier, and source names there: it adds items
+// after the titles of the collection an earlier import brought from it,
+// else creates one named name with them, which by's import brought. A
+// collection deleted since is created again. Without items, and none
+// brought before, it creates nothing, and returns the zero identifier. It
+// reports whether it created the collection, else how many items it added
+// to the one brought before.
+func (s *Store) Import(ctx context.Context, server, source string, by accounts.ID, name string,
+	items []accounts.ID) (id accounts.ID, created bool, added int, err error) {
+	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		// Locking the collection keeps it from being deleted meanwhile.
+		err := tx.QueryRow(ctx, `SELECT c.id FROM imported_collections i JOIN collections c ON c.id = i.collection_id
+			WHERE i.server = $1 AND i.source_id = $2 FOR UPDATE OF c`, server, source).Scan(&id)
+		switch {
+		case err == nil:
+			added, err = insertItems(ctx, tx, id, items)
+			return err
+		case !errors.Is(err, pgx.ErrNoRows):
+			return err
+		case len(items) == 0:
+			return nil
+		}
+		if err := tx.QueryRow(ctx, "INSERT INTO collections (name) VALUES ($1) RETURNING id",
+			truncate(name, MaxNameLength)).Scan(&id); err != nil {
+			return err
+		}
+		created = true
+		// A user deleted meanwhile leaves the collection without one.
+		if _, err := tx.Exec(ctx, `INSERT INTO imported_collections (server, source_id, collection_id, imported_by)
+			VALUES ($1, $2, $3, (SELECT id FROM users WHERE id = $4))
+			ON CONFLICT (server, source_id) DO UPDATE SET collection_id = EXCLUDED.collection_id,
+				imported_by = EXCLUDED.imported_by, imported_at = now()`, server, source, id, by); err != nil {
+			return err
+		}
+		_, err = insertItems(ctx, tx, id, items)
+		return err
+	})
+	if err != nil {
+		return accounts.ID{}, false, 0, err
+	}
+	return id, created, added, nil
+}
+
+// truncate is text cut to its first max characters.
+func truncate(text string, max int) string {
+	for i := range text {
+		if max == 0 {
+			return text[:i]
+		}
+		max--
+	}
+	return text
 }
