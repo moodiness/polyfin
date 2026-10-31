@@ -13,7 +13,11 @@ type TrackChoice struct {
 	// AudioLanguage is the language of the audio track chosen, as the
 	// track names it; empty when none was chosen.
 	AudioLanguage string
-	Subtitle      SubtitleChoice
+	// AudioVariant is the regional variant of that track, one of
+	// localization.AudioVariants, kept only when it differs from the
+	// user's audio region; empty otherwise, and without AudioLanguage.
+	AudioVariant string
+	Subtitle     SubtitleChoice
 }
 
 // SubtitleChoice is what a user chose of a title's subtitles: none when
@@ -38,7 +42,8 @@ func (c TrackChoice) Empty() bool {
 // TrackChoices returns the track choices user made, by title.
 func (s *Store) TrackChoices(ctx context.Context, user accounts.ID) (map[accounts.ID]TrackChoice, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT title_id, audio_language, subtitle, subtitle_language, subtitle_forced, subtitle_hearing_impaired
+		SELECT title_id, audio_language, audio_variant, subtitle, subtitle_language, subtitle_forced,
+			subtitle_hearing_impaired
 		FROM track_choices WHERE user_id = $1`, user)
 	if err != nil {
 		return nil, err
@@ -49,7 +54,8 @@ func (s *Store) TrackChoices(ctx context.Context, user accounts.ID) (map[account
 		var title accounts.ID
 		var c TrackChoice
 		var subtitle string
-		if err := rows.Scan(&title, &c.AudioLanguage, &subtitle, &c.Subtitle.Language, &c.Subtitle.Forced, &c.Subtitle.HearingImpaired); err != nil {
+		if err := rows.Scan(&title, &c.AudioLanguage, &c.AudioVariant, &subtitle, &c.Subtitle.Language, &c.Subtitle.Forced,
+			&c.Subtitle.HearingImpaired); err != nil {
 			return nil, err
 		}
 		c.Subtitle.Off = subtitle == "off"
@@ -74,14 +80,15 @@ func (s *Store) PutTrackChoice(ctx context.Context, user, title accounts.ID, cho
 		subtitle = "track"
 	}
 	_, err := s.db.Exec(ctx, `
-		INSERT INTO track_choices (user_id, title_id, audio_language, subtitle, subtitle_language,
-			subtitle_forced, subtitle_hearing_impaired)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO track_choices (user_id, title_id, audio_language, audio_variant, subtitle,
+			subtitle_language, subtitle_forced, subtitle_hearing_impaired)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (user_id, title_id) DO UPDATE SET audio_language = excluded.audio_language,
-			subtitle = excluded.subtitle, subtitle_language = excluded.subtitle_language,
+			audio_variant = excluded.audio_variant, subtitle = excluded.subtitle,
+			subtitle_language = excluded.subtitle_language,
 			subtitle_forced = excluded.subtitle_forced,
 			subtitle_hearing_impaired = excluded.subtitle_hearing_impaired, chosen_at = now()`,
-		user, title, choice.AudioLanguage, subtitle, choice.Subtitle.Language,
+		user, title, choice.AudioLanguage, choice.AudioVariant, subtitle, choice.Subtitle.Language,
 		choice.Subtitle.Forced, choice.Subtitle.HearingImpaired)
 	return err
 }
