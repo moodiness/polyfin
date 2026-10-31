@@ -278,6 +278,11 @@ const settings: typeof en = {
         'hdr-first': 'HDR et Dolby Vision d’abord',
         'hdr-last': 'HDR et Dolby Vision en dernier',
         source: 'Source, dans l’ordre ci-dessous',
+        'size-per-minute': 'Taille par minute de durée, selon le réglage ci-dessous',
+        tier: 'Source : copie de disque, Blu-ray, web, DVD, puis TV',
+        audio: 'Audio : sans perte et Atmos d’abord, puis le plus de canaux',
+        edition: 'Édition, dans l’ordre ci-dessous',
+        labels: 'Score des règles de libellés, le plus haut d’abord',
       },
     },
     versionCodecOrder: {
@@ -290,6 +295,19 @@ const settings: typeof en = {
       none: 'Aucune source du serveur ne donne encore de versions de films ou d’épisodes.',
       dragHandle: (name: string) => `Déplacer ${name}`,
     },
+    versionEditionOrder: {
+      label: 'Ordre des éditions',
+      help: 'L’ordre dans lequel le critère Édition range les versions, selon l’édition que nomment leurs libellés. Une version dont les libellés n’en nomment aucune compte comme la version cinéma.',
+    },
+    versionEditions: {
+      theatrical: 'Version cinéma',
+      extended: 'Version longue',
+      directors: 'Version du réalisateur',
+      imax: 'IMAX',
+    },
+    versionMbPerMinute: 'Taille par minute visée (Mo, 0 = la plus grande)',
+    versionMbPerMinuteHelp: (r: RangeText) =>
+      `Le critère Taille par minute met en premier les versions les plus proches de ce nombre de mégaoctets par minute de durée, par exemple 50 pour un bon encodage 1080p ; 0 met la plus grande en premier. La durée est celle de la version une fois analysée, sinon celle du titre. Jusqu’à ${r.max} ; ${r.default} par défaut.`,
     versionCodecs: {
       av1: 'AV1',
       hevc: 'HEVC (H.265)',
@@ -317,6 +335,22 @@ const settings: typeof en = {
       telecine: 'Télécinés (TC, TELECINE)',
       screener: 'Screeners (SCR, DVDSCR)',
       early: 'Copies anticipées (R5, WORKPRINT)',
+    },
+    versionLabelRules: {
+      label: 'Règles de libellés',
+      help: (max: string) =>
+        `Chaque règle lit le nom, la description et le nom de fichier d’une version, sans tenir compte de la casse : un mot trouvé n’importe où, ou une expression régulière. Une règle masque les versions qu’elle reconnaît, après les règles de masquage ci-dessus et jamais toutes les versions d’un titre, ou ajoute son score, de −100 à 100, au leur. Le critère Score des règles de libellés met le plus haut en premier ; sans lui, le score range les versions après les autres critères. Jusqu’à ${max} règles ; aucune par défaut.`,
+      none: 'Aucune règle : les libellés ne comptent pas.',
+      add: 'Ajouter une règle',
+      remove: (position: number) => `Supprimer la règle ${position}`,
+      text: (position: number) => `Mot ou expression de la règle ${position}`,
+      action: (position: number) => `Effet de la règle ${position}`,
+      points: (position: number) => `Score de la règle ${position}`,
+      regex: 'Expression régulière',
+      score: 'Ajouter un score',
+      hide: 'Masquer',
+      wordPlaceholder: 'Mot',
+      regexPlaceholder: 'Expression régulière',
     },
     syncAddonSubtitles: 'Recaler les sous-titres des addons',
     syncAddonSubtitlesHelp:
