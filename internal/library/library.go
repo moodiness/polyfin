@@ -190,6 +190,9 @@ type Service struct {
 	smartCache   *cache.Cache[smartKey, []smartTitle]
 	smartFetches chan struct{}
 	smartWait    time.Duration
+	// plain holds the searches in plain words users made lately, which
+	// stand for smart lists (see plainsearch.go).
+	plain plainSearches
 	// userData tells the users' state of titles, which smart lists judge
 	// by, and holds the titles each user hid, which their listings leave
 	// out (see hidden.go).
@@ -525,6 +528,13 @@ func viewSources(user accounts.User, settings accounts.Settings) (shared, person
 	return user.UseSharedAddons, true
 }
 
+// browsesOwnAddons reports whether user browses their own addons, and so
+// sees their own smart lists (see buildView).
+func browsesOwnAddons(user accounts.User, settings accounts.Settings) bool {
+	_, personal := viewSources(user, settings)
+	return personal
+}
+
 func (s *Service) buildView(ctx context.Context, user accounts.User) (view, error) {
 	settings := s.settings()
 	shared, personal := viewSources(user, settings)
@@ -635,6 +645,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 	if err := s.virtualChannels(ctx, &v, user); err != nil {
 		return view{}, err
 	}
+	s.plainSearchLists(&v, user.ID)
 	return v, nil
 }
 

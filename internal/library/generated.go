@@ -425,14 +425,15 @@ func descriptionsKept(ctx context.Context) bool {
 }
 
 // smartCollectionImages gives the smart lists shown as collections among
-// items their generated images.
+// items their generated images, but the collections of searches in plain
+// words: their images would be kept for each search made.
 func (s *Service) smartCollectionImages(ctx context.Context, v view, items []Item) {
 	if !s.generatesFor(v) {
 		return
 	}
 	for i := range items {
 		l, ok := v.smartList(items[i].ID)
-		if !ok || items[i].Kind != KindCollection || items[i].Images.Primary != "" {
+		if !ok || l.search || items[i].Kind != KindCollection || items[i].Images.Primary != "" {
 			continue
 		}
 		s.generate(ctx, v, &items[i], func() ([]candidate, bool, bool) { return s.smartListCandidates(ctx, v, l.list) })
