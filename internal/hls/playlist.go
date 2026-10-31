@@ -68,10 +68,14 @@ func WriteMaster(w io.Writer, variants []Variant, subtitles []Rendition) error {
 
 // WriteMedia writes the media playlist of a plan: every segment is listed
 // from the start, as players seek in it before FFmpeg reaches them. uri
-// gives the address of segment n, and of the initialization segment for
-// n = -1 when the segments are fragmented MP4. Each segment of
-// discontinuities, where the play went on from another version (see
-// Remux.Switch), follows an EXT-X-DISCONTINUITY.
+// gives the address of segment n, of the initialization segment for
+// n = -1 when the segments are fragmented MP4, and of that of the fast
+// segments for n = FastInit. Each segment of discontinuities, where the
+// play went on from another version (see Remux.Switch), follows an
+// EXT-X-DISCONTINUITY, and so do the plan's first fast segment and the
+// first after them (see Plan.FastFrom), with the initialization segment
+// of the segments that follow in fragmented MP4: the fast segments' video
+// is another size, in another encoder's parameters.
 func WriteMedia(w io.Writer, plan Plan, format Format, uri func(n int) string, discontinuities ...int) error {
 	var b strings.Builder
 	version := 3
@@ -79,12 +83,22 @@ func WriteMedia(w io.Writer, plan Plan, format Format, uri func(n int) string, d
 		version = 7
 	}
 	fmt.Fprintf(&b, "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-VERSION:%d\n#EXT-X-TARGETDURATION:%d\n#EXT-X-MEDIA-SEQUENCE:0\n", version, plan.TargetDuration())
+	initOf := func(n int) int {
+		if plan.Fast(n) {
+			return FastInit
+		}
+		return -1
+	}
 	if format == FMP4 {
-		fmt.Fprintf(&b, "#EXT-X-MAP:URI=\"%s\"\n", uri(-1))
+		fmt.Fprintf(&b, "#EXT-X-MAP:URI=\"%s\"\n", uri(initOf(0)))
 	}
 	for n := range plan.Len() {
-		if n > 0 && slices.Contains(discontinuities, n) {
+		switches := plan.switches(n)
+		if switches || n > 0 && slices.Contains(discontinuities, n) {
 			b.WriteString("#EXT-X-DISCONTINUITY\n")
+		}
+		if switches && format == FMP4 {
+			fmt.Fprintf(&b, "#EXT-X-MAP:URI=\"%s\"\n", uri(initOf(n)))
 		}
 		fmt.Fprintf(&b, "#EXTINF:%.6f, nodesc\n%s\n", (plan.End(n) - plan.Start(n)).Seconds(), uri(n))
 	}
@@ -92,6 +106,10 @@ func WriteMedia(w io.Writer, plan Plan, format Format, uri func(n int) string, d
 	_, err := io.WriteString(w, b.String())
 	return err
 }
+
+// FastInit is the number WriteMedia gives the initialization segment of
+// a plan's fast segments, -1 being that of the others.
+const FastInit = -2
 
 // Format is the container of the segments.
 type Format int
