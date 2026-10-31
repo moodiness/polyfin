@@ -335,10 +335,11 @@ func (s *Service) shownName(id accounts.ID, name string) string {
 }
 
 // unfiltered is v for reading an item's first titles for its generated
-// image: as everyone sees them, without parental control, blocked genres
-// or hidden titles, and without the request's state.
+// image: as everyone sees them, without parental control, blocked genres,
+// hidden titles or the titles local folders hold left out (see
+// skiplocal.go), and without the request's state.
 func (v view) unfiltered() view {
-	v.user, v.parental, v.genres, v.hidden = accounts.ID{}, accounts.ParentalControl{}, nil, nil
+	v.user, v.parental, v.genres, v.hidden, v.listedFolders = accounts.ID{}, accounts.ParentalControl{}, nil, nil, nil
 	v.lookups, v.held = new(atomic.Int32), new(atomic.Bool)
 	return v
 }
