@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -134,11 +135,13 @@ func TestRemuxDBSettings(t *testing.T) {
 }
 
 // The version rules start empty, the addons' order kept and nothing
-// hidden. Up to four criteria order versions, one of each kind, the source
-// a kind of its own; the codec order lists every codec once; the sources
-// are each placed once at most; the words are kept trimmed, each once
-// whatever its case, empty lines left out; and the database refuses what
-// the store refuses.
+// hidden. Up to six criteria order versions, one of each kind, the source
+// a kind of its own and the size per minute one with the file sizes; the
+// codec and edition orders list every value once; the sources are each
+// placed once at most; the words are kept trimmed, each once whatever its
+// case, empty lines left out; label rules are bounded, their regular
+// expressions valid and small, and a hiding rule scores nothing; and the
+// database refuses what the store refuses.
 func TestVersionRulesSettings(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
@@ -155,9 +158,10 @@ func TestVersionRulesSettings(t *testing.T) {
 		err    error
 	}{
 		{"two resolutions", func(s *Settings) { s.VersionOrder = []string{"resolution-high", "resolution-low"} }, ErrInvalidVersionOrder},
-		{"five criteria", func(s *Settings) {
-			s.VersionOrder = []string{"language", "resolution-high", "size-large", "codec", "hdr-first"}
+		{"seven criteria", func(s *Settings) {
+			s.VersionOrder = []string{"language", "resolution-high", "size-large", "codec", "hdr-first", "tier", "audio"}
 		}, ErrInvalidVersionOrder},
+		{"two sizes", func(s *Settings) { s.VersionOrder = []string{"size-per-minute", "size-large"} }, ErrInvalidVersionOrder},
 		{"an unknown criterion", func(s *Settings) { s.VersionOrder = []string{"bitrate"} }, ErrInvalidVersionOrder},
 		{"a codec missing from the order", func(s *Settings) { s.VersionCodecOrder = VersionCodecs[1:] }, ErrInvalidVersionCodecOrder},
 		{"a codec twice in the order", func(s *Settings) {
@@ -179,6 +183,34 @@ func TestVersionRulesSettings(t *testing.T) {
 		{"a control character", func(s *Settings) { s.HiddenVersionWords = []string{"a\tb"} }, ErrInvalidHiddenVersionWords},
 		{"an unknown kind of release", func(s *Settings) { s.HiddenReleases = []string{"bluray"} }, ErrInvalidHiddenReleases},
 		{"a kind of release twice", func(s *Settings) { s.HiddenReleases = []string{"cam", "cam"} }, ErrInvalidHiddenReleases},
+		{"an edition missing", func(s *Settings) { s.VersionEditionOrder = VersionEditions[1:] }, ErrInvalidVersionEditionOrder},
+		{"an edition twice", func(s *Settings) { s.VersionEditionOrder = []string{"imax", "extended", "directors", "imax"} },
+			ErrInvalidVersionEditionOrder},
+		{"an unknown edition", func(s *Settings) { s.VersionEditionOrder = []string{"imax", "extended", "directors", "unrated"} },
+			ErrInvalidVersionEditionOrder},
+		{"a negative size a minute", func(s *Settings) { s.VersionMBPerMinute = -1 }, ErrInvalidVersionMBPerMinute},
+		{"a size a minute too large", func(s *Settings) { s.VersionMBPerMinute = MaxVersionMBPerMinute + 1 }, ErrInvalidVersionMBPerMinute},
+		{"an empty label rule", func(s *Settings) { s.VersionLabelRules = []VersionLabelRule{{Text: " ", Score: 1}} }, ErrInvalidVersionLabelRules},
+		{"a label rule scoring nothing", func(s *Settings) { s.VersionLabelRules = []VersionLabelRule{{Text: "x264"}} }, ErrInvalidVersionLabelRules},
+		{"a label rule scoring too much", func(s *Settings) {
+			s.VersionLabelRules = []VersionLabelRule{{Text: "x264", Score: MaxVersionLabelScore + 1}}
+		}, ErrInvalidVersionLabelRules},
+		{"a label rule too long", func(s *Settings) {
+			s.VersionLabelRules = []VersionLabelRule{{Text: strings.Repeat("é", MaxVersionLabelRuleLength+1), Hide: true}}
+		}, ErrInvalidVersionLabelRules},
+		{"a label rule with a control character", func(s *Settings) { s.VersionLabelRules = []VersionLabelRule{{Text: "a\tb", Hide: true}} },
+			ErrInvalidVersionLabelRules},
+		{"no regular expression", func(s *Settings) { s.VersionLabelRules = []VersionLabelRule{{Text: "(x264", Regex: true, Hide: true}} },
+			ErrInvalidVersionLabelRules},
+		{"a regular expression too large", func(s *Settings) {
+			s.VersionLabelRules = []VersionLabelRule{{Text: "[a-z]{1000}[0-9]{1000}[a-z]{1000}", Regex: true, Hide: true}}
+		}, ErrInvalidVersionLabelRules},
+		{"too many label rules", func(s *Settings) {
+			s.VersionLabelRules = make([]VersionLabelRule, MaxVersionLabelRules+1)
+			for i := range s.VersionLabelRules {
+				s.VersionLabelRules[i] = VersionLabelRule{Text: "rule" + strconv.Itoa(i), Hide: true}
+			}
+		}, ErrInvalidVersionLabelRules},
 	} {
 		changed := store.Settings()
 		tc.change(&changed)
@@ -187,13 +219,17 @@ func TestVersionRulesSettings(t *testing.T) {
 		}
 	}
 	changed := store.Settings()
-	changed.VersionOrder = []string{"source", "language", "resolution-low", "codec"}
+	changed.VersionOrder = []string{"source", "language", "resolution-low", "codec", "edition", "labels"}
 	changed.VersionCodecOrder = []string{"h264", "hevc", "av1", "vp9", "vc1", "mpeg4", "mpeg2video"}
 	changed.VersionSourceOrder = []ID{two, one}
 	changed.HideVersionsLargerGB = 40
 	changed.HiddenVersionCodecs = []string{"mpeg4", "av1"}
 	changed.HiddenVersionWords = []string{" Downloading ", "", "downloading", "⏳ queued"}
 	changed.HiddenReleases = []string{"early", "cam"}
+	changed.VersionEditionOrder = []string{"extended", "directors", "imax", "theatrical"}
+	changed.VersionMBPerMinute = 60
+	changed.VersionLabelRules = []VersionLabelRule{{Text: " x265 ", Score: 20}, {Text: `\bHC\b`, Regex: true, Score: 5, Hide: true},
+		{Text: "YIFY", Score: -100}}
 	saved, err := store.UpdateSettings(ctx, changed)
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +238,10 @@ func TestVersionRulesSettings(t *testing.T) {
 		!slices.Equal(saved.VersionSourceOrder, []ID{two, one}) || !slices.Equal(saved.HiddenReleases, []string{"cam", "early"}) {
 		t.Errorf("saved: %v %v %v %v", saved.HiddenVersionCodecs, saved.HiddenVersionWords, saved.VersionSourceOrder, saved.HiddenReleases)
 	}
+	// A rule hiding versions scores none.
+	if want := []VersionLabelRule{{Text: "x265", Score: 20}, {Text: `\bHC\b`, Regex: true, Hide: true}, {Text: "YIFY", Score: -100}}; !slices.Equal(saved.VersionLabelRules, want) {
+		t.Errorf("label rules saved: %+v", saved.VersionLabelRules)
+	}
 	reopened, err := Open(ctx, store.db)
 	if err != nil {
 		t.Fatal(err)
@@ -209,10 +249,12 @@ func TestVersionRulesSettings(t *testing.T) {
 	if got := reopened.Settings(); !reflect.DeepEqual(got, saved) {
 		t.Errorf("after reopening: %+v, want %+v", got, saved)
 	}
-	for _, column := range []string{"version_order = '{bitrate}'", "version_order = '{language,codec,size-large,hdr-first,resolution-high}'",
-		"version_order = '{source,language,codec,size-large,hdr-first}'", "version_codec_order = '{theora}'",
+	for _, column := range []string{"version_order = '{bitrate}'",
+		"version_order = '{language,codec,size-large,hdr-first,resolution-high,tier,audio}'",
+		"version_order = '{source,language,codec,size-large,hdr-first,edition,labels}'", "version_codec_order = '{theora}'",
 		"version_source_order = array_fill('00000000-0000-0000-0000-000000000001'::uuid, ARRAY[501])", "hide_versions_larger_gb = 1001",
-		"hidden_version_codecs = '{theora}'", "hidden_releases = '{bluray}'"} {
+		"hidden_version_codecs = '{theora}'", "hidden_releases = '{bluray}'", "version_edition_order = '{unrated}'",
+		"version_mb_per_minute = 1001", `version_label_rules = '{"text": "x265"}'`} {
 		if _, err := store.db.Exec(ctx, "UPDATE settings SET "+column); err == nil {
 			t.Errorf("the database took %s", column)
 		}

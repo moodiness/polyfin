@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"regexp/syntax"
 	"runtime"
 	"slices"
 	"strconv"
@@ -318,28 +319,46 @@ var ConversionHeights = []int{0, 480, 720, 1080, 1440, 2160}
 // VersionCriteria are the values Settings.VersionOrder holds, each once
 // at most and one of each kind: the user's preferred audio language, the
 // height of the video, highest or lowest first, the size, largest or
-// smallest first, the video codec, in the order of
-// Settings.VersionCodecOrder, HDR or Dolby Vision, first or last, and the
-// source, in the order of Settings.VersionSourceOrder.
-var VersionCriteria = []string{"language", "resolution-high", "resolution-low", "size-large", "size-small", "codec", "hdr-first", "hdr-last",
-	"source"}
+// smallest first, or by minute (see Settings.VersionMBPerMinute), the
+// video codec, in the order of Settings.VersionCodecOrder, HDR or Dolby
+// Vision, first or last, the source, in the order of
+// Settings.VersionSourceOrder, the source tier, a disc's full copy
+// first, then a Blu-ray encode, web, DVD and TV, the audio format,
+// lossless and object-based first, then by channels, the edition, in the
+// order of Settings.VersionEditionOrder, and the score of the label rules
+// (see Settings.VersionLabelRules), highest first.
+var VersionCriteria = []string{"language", "resolution-high", "resolution-low", "size-large", "size-small", "size-per-minute", "codec",
+	"hdr-first", "hdr-last", "source", "tier", "audio", "edition", "labels"}
 
 // VersionCodecs are the video codecs the version rules know, by FFmpeg's
 // names, in the default order of Settings.VersionCodecOrder: the most
 // efficient first.
 var VersionCodecs = []string{"av1", "hevc", "vp9", "h264", "vc1", "mpeg4", "mpeg2video"}
 
+// VersionEditions are the editions of a movie the version rules know, in
+// the default order of Settings.VersionEditionOrder: the theatrical cut,
+// an extended cut, the director's cut and an IMAX cut.
+var VersionEditions = []string{"theatrical", "extended", "directors", "imax"}
+
 // The bounds of the version rules: MaxVersionCriteria criteria order the
 // versions at most, MaxVersionSources sources are placed at most, versions
 // are hidden above MaxHideVersionsLargerGB at most, and
 // MaxHiddenVersionWords words, of MaxHiddenVersionWordLength characters at
-// most, hide versions.
+// most, hide versions. The size-per-minute criterion aims at
+// MaxVersionMBPerMinute megabytes a minute at most. MaxVersionLabelRules
+// label rules, of MaxVersionLabelRuleLength characters at most, scoring
+// between -MaxVersionLabelScore and MaxVersionLabelScore, read versions'
+// labels.
 const (
-	MaxVersionCriteria         = 4
+	MaxVersionCriteria         = 6
 	MaxVersionSources          = 500
 	MaxHideVersionsLargerGB    = 1000
 	MaxHiddenVersionWords      = 50
 	MaxHiddenVersionWordLength = 100
+	MaxVersionMBPerMinute      = 1000
+	MaxVersionLabelRules       = 40
+	MaxVersionLabelRuleLength  = 200
+	MaxVersionLabelScore       = 100
 )
 
 // The errors of the version rules: ErrInvalidVersionOrder reports a
@@ -362,6 +381,14 @@ var (
 	ErrInvalidHideVersionsLarger  = errors.New("invalid size above which versions are hidden")
 	ErrInvalidHiddenVersionCodecs = errors.New("invalid hidden video codecs")
 	ErrInvalidHiddenVersionWords  = errors.New("invalid words hiding versions")
+	// ErrInvalidVersionEditionOrder reports a VersionEditionOrder that is
+	// not every one of VersionEditions once; ErrInvalidVersionMBPerMinute
+	// a VersionMBPerMinute outside [0, MaxVersionMBPerMinute]; and
+	// ErrInvalidVersionLabelRules VersionLabelRules not as
+	// VersionLabelRule tells.
+	ErrInvalidVersionEditionOrder = errors.New("invalid version edition order")
+	ErrInvalidVersionMBPerMinute  = errors.New("invalid size per minute of versions")
+	ErrInvalidVersionLabelRules   = errors.New("invalid version label rules")
 )
 
 // VersionCriterionKind is what a criterion of VersionCriteria looks at,
@@ -432,6 +459,74 @@ func canonicalHiddenVersionWords(words []string) ([]string, error) {
 	}
 	if len(canonical) > MaxHiddenVersionWords {
 		return nil, ErrInvalidHiddenVersionWords
+	}
+	return canonical, nil
+}
+
+// VersionLabelRule scores or hides the versions whose labels, their name
+// and description and their file name, match it. Text is a word, found
+// anywhere in them whatever its letter case, or, with Regex, a regular
+// expression in the syntax of package regexp, matched without case. A
+// rule with Hide hides the versions it matches, and scores none; another
+// adds Score, other than 0, to their score, which the labels criterion
+// orders by.
+type VersionLabelRule struct {
+	Text  string `json:"text"`
+	Regex bool   `json:"regex"`
+	Score int    `json:"score"`
+	Hide  bool   `json:"hide"`
+}
+
+// maxLabelRuleInstructions bounds a label rule's regular expression once
+// compiled. Package regexp matches in a time proportional to the
+// expression's size times the labels', so that, with both bounded, no
+// rule takes long to match however it is written.
+const maxLabelRuleInstructions = 2000
+
+// CompileLabelRule compiles the regular expression of a rule with Regex,
+// to be matched without case; ErrInvalidVersionLabelRules when it is not
+// one, or too large once compiled.
+func CompileLabelRule(text string) (*regexp.Regexp, error) {
+	parsed, err := syntax.Parse(text, syntax.Perl|syntax.FoldCase)
+	if err != nil {
+		return nil, ErrInvalidVersionLabelRules
+	}
+	program, err := syntax.Compile(parsed.Simplify())
+	if err != nil || len(program.Inst) > maxLabelRuleInstructions {
+		return nil, ErrInvalidVersionLabelRules
+	}
+	compiled, err := regexp.Compile("(?i)" + text)
+	if err != nil {
+		return nil, ErrInvalidVersionLabelRules
+	}
+	return compiled, nil
+}
+
+// canonicalVersionLabelRules checks the label rules and returns them with
+// their text trimmed; empty, not nil, for none, as the column holds no
+// NULL. A rule hiding versions is kept with no score.
+func canonicalVersionLabelRules(rules []VersionLabelRule) ([]VersionLabelRule, error) {
+	if len(rules) > MaxVersionLabelRules {
+		return nil, ErrInvalidVersionLabelRules
+	}
+	canonical := make([]VersionLabelRule, 0, len(rules))
+	for _, rule := range rules {
+		rule.Text = strings.TrimSpace(rule.Text)
+		if rule.Text == "" || !utf8.ValidString(rule.Text) || utf8.RuneCountInString(rule.Text) > MaxVersionLabelRuleLength ||
+			strings.ContainsFunc(rule.Text, unicode.IsControl) {
+			return nil, ErrInvalidVersionLabelRules
+		}
+		if rule.Regex {
+			if _, err := CompileLabelRule(rule.Text); err != nil {
+				return nil, err
+			}
+		}
+		if rule.Hide {
+			rule.Score = 0
+		} else if rule.Score == 0 || rule.Score < -MaxVersionLabelScore || rule.Score > MaxVersionLabelScore {
+			return nil, ErrInvalidVersionLabelRules
+		}
+		canonical = append(canonical, rule)
 	}
 	return canonical, nil
 }
@@ -1501,6 +1596,19 @@ type Settings struct {
 	// default. Like the rules above, it never hides every version of a
 	// title.
 	HiddenReleases []string
+	// VersionEditionOrder is the order of the editions for the edition
+	// criterion, every one of VersionEditions once; a version whose labels
+	// name no edition counts as the theatrical cut. VersionMBPerMinute is
+	// the size, in megabytes (10^6 bytes) a minute of the version's
+	// runtime, the size-per-minute criterion puts the closest to first; 0,
+	// the default, puts the largest a minute first.
+	VersionEditionOrder []string
+	VersionMBPerMinute  int
+	// VersionLabelRules score or hide versions by their labels, in this
+	// order, MaxVersionLabelRules at most; none by default. The rules
+	// hiding versions hide them after those above, and with them never
+	// every version of a title.
+	VersionLabelRules []VersionLabelRule
 	// NameHowVersionsPlay ends the names of a movie's or an episode's
 	// versions with how the app asking plays each, as the device profile of
 	// its last PlaybackInfo decides it.
@@ -2089,7 +2197,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
 	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
-	"hidden_releases, " +
+	"hidden_releases, version_edition_order, version_mb_per_minute, version_label_rules, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, " +
 	"default_audio_language, default_subtitle_language, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
@@ -2147,7 +2255,7 @@ func (settings *Settings) fields() []any {
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.VersionSourceOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs,
 		&settings.HiddenVersionWords,
 		&settings.NameHowVersionsPlay,
-		&settings.HiddenReleases,
+		&settings.HiddenReleases, &settings.VersionEditionOrder, &settings.VersionMBPerMinute, &settings.VersionLabelRules,
 		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads, &settings.SubtitleOCR, &settings.SubtitleOCRTracks,
 		&settings.DefaultAudioLanguage, &settings.DefaultSubtitleLanguage,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
@@ -2527,6 +2635,23 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 		}
 	}
 	settings.HiddenReleases = releases
+	if len(settings.VersionEditionOrder) != len(VersionEditions) {
+		return Settings{}, ErrInvalidVersionEditionOrder
+	}
+	for i, edition := range settings.VersionEditionOrder {
+		if !slices.Contains(VersionEditions, edition) || slices.Contains(settings.VersionEditionOrder[:i], edition) {
+			return Settings{}, ErrInvalidVersionEditionOrder
+		}
+	}
+	settings.VersionEditionOrder = slices.Clone(settings.VersionEditionOrder)
+	if settings.VersionMBPerMinute < 0 || settings.VersionMBPerMinute > MaxVersionMBPerMinute {
+		return Settings{}, ErrInvalidVersionMBPerMinute
+	}
+	labelRules, err := canonicalVersionLabelRules(settings.VersionLabelRules)
+	if err != nil {
+		return Settings{}, err
+	}
+	settings.VersionLabelRules = labelRules
 	if settings.MaxConversions < MinMaxConversions || settings.MaxConversions > MaxMaxConversions {
 		return Settings{}, ErrInvalidMaxConversions
 	}

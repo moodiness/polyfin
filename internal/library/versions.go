@@ -740,6 +740,8 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 		HoldsConnection: t.kind == KindReplay,
 	}
 	version.Labels.Releases = ReleaseKinds([]string{t.name, t.videoName}, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
+	version.Labels.Tier, version.Labels.Audio, version.Labels.Edition = ReadRelease([]string{t.name, t.videoName}, stream.Name, stream.Title,
+		stream.Description, stream.BehaviorHints.Filename)
 	version.Labels.Elsewhere = OtherTitle(t.name, t.season, t.episode, t.year, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
 	if stream.Torrent() {
 		version.URL = torrentLink(stream)
