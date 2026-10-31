@@ -144,6 +144,9 @@ const users: typeof en = {
       'Permite que este usuário reproduza, pause ou envie mensagens para os aplicativos Jellyfin de outros usuários. Todos podem controlar os próprios aplicativos.',
     liveTvManagement: 'Pode gravar TV ao Vivo',
     liveTvManagementHelp: 'Agendar e excluir gravações.',
+    localFirst: 'Reproduzir arquivos locais primeiro',
+    localFirstHelp:
+      'Coloca as versões das pastas locais e dos compartilhamentos de rede antes das outras nos menus de versões deste usuário, seja qual for “Ordenar versões por”, para que a reprodução comece por elas. Os outros usuários mantêm a ordem do servidor.',
     savePlaybackAccess: 'Salvar reprodução e acesso',
     visibleLibrariesTitle: 'Bibliotecas visíveis',
     visibleLibrariesHelp:
