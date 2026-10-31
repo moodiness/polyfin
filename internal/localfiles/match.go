@@ -822,6 +822,13 @@ func (s *Service) unit(ctx context.Context, id accounts.ID, path string) (Folder
 // artwork is then its new title's, and what users did with the plain
 // video it was follows its files (see follow).
 func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string) error {
+	return s.matchUnit(ctx, folder, unit, link, false)
+}
+
+// matchUnit is rematch; with keep set, a unit whose files are matched
+// keeps its title unless a title is found again, as a scan keeps it: an
+// addon failing, or finding no title, leaves it as it was.
+func (s *Service) matchUnit(ctx context.Context, folder Folder, unit, link string, keep bool) error {
 	entries, err := s.unitFiles(ctx, folder, unit)
 	if err != nil || len(entries) == 0 {
 		return err
@@ -835,6 +842,9 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 	if err != nil {
 		return err
 	}
+	if keep && m.stremioID == "" {
+		return nil
+	}
 	if err := s.noteLink(ctx, folder.Addon.ID, unit, link, m); err != nil {
 		return err
 	}
@@ -847,6 +857,166 @@ func (s *Service) rematch(ctx context.Context, folder Folder, unit, link string)
 	}
 	// The files not found are left to the scans: one may be under way.
 	return s.follow(ctx, folder.Addon.ID, []string{"."})
+}
+
+// unitOfTitle is a unit of a folder, the IMDb identifier it is linked to,
+// empty for none, and whether files of it are matched.
+type unitOfTitle struct {
+	folder  accounts.ID
+	unit    string
+	link    string
+	matched bool
+}
+
+// titleUnits lists, in the order of their keys, the units of the movies or
+// shows folders (kind) matched to the title of a Stremio identifier, or
+// the unit of the plain video it is.
+func (s *Service) titleUnits(ctx context.Context, kind library.Kind, stremioID string) ([]unitOfTitle, error) {
+	folderKind := KindMovies
+	switch kind {
+	case library.KindSeries:
+		folderKind = KindShows
+	case library.KindMovie:
+	default:
+		return nil, nil
+	}
+	rows, err := s.db.Query(ctx, `SELECT f.addon_id, f.unit, coalesce(min(k.imdb_id), ''), bool_or(f.stremio_id IS NOT NULL)
+		FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id
+		LEFT JOIN local_links k ON k.addon_id = f.addon_id AND k.unit = f.unit
+		WHERE l.kind = $2 AND (f.stremio_id = $1 OR f.plain_id = $1)
+		GROUP BY f.addon_id, f.unit ORDER BY f.addon_id, f.unit`, stremioID, folderKind)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (unitOfTitle, error) {
+		var u unitOfTitle
+		err := row.Scan(&u.folder, &u.unit, &u.link, &u.matched)
+		return u, err
+	})
+}
+
+// LinkMatched links every unit of the movies or shows folders (kind)
+// matched to the title of a Stremio identifier, by a scan or by hand, to
+// an IMDb identifier, as Link does from the folder's page: each of the
+// movie's files or discs, or each of the show's folders, in every folder
+// of kind, as they hold the same title. The title each unit leaves is
+// remembered (see Relinked), and what users did with it follows its files
+// (see rememberMatched). It answers addons.ErrNotFound when no unit
+// is matched to that title, ErrInvalidIMDb for an identifier that is not
+// IMDb's.
+func (s *Service) LinkMatched(ctx context.Context, kind library.Kind, stremioID, imdb string) error {
+	imdb = strings.ToLower(strings.TrimSpace(imdb))
+	if !imdbPattern.MatchString(imdb) {
+		return ErrInvalidIMDb
+	}
+	units, err := s.titleUnits(ctx, kind, stremioID)
+	if err != nil {
+		return err
+	}
+	var folders []accounts.ID
+	var paths []string
+	for _, u := range units {
+		if u.matched {
+			folders, paths = append(folders, u.folder), append(paths, u.unit)
+		}
+	}
+	if len(folders) == 0 {
+		return addons.ErrNotFound
+	}
+	if stremioID != imdb {
+		// In the order of their keys, as titleUnits lists them.
+		if _, err := s.db.Exec(ctx, `INSERT INTO local_relinked_units (addon_id, unit, former)
+			SELECT folder, unit, $3 FROM unnest($1::uuid[], $2::text[]) AS u (folder, unit)
+			ON CONFLICT (addon_id, unit) DO UPDATE SET former = excluded.former`, folders, paths, stremioID); err != nil {
+			return err
+		}
+		if err := s.rememberMatched(ctx, kind, stremioID); err != nil {
+			return err
+		}
+	}
+	for i, folder := range folders {
+		if err := s.Link(ctx, folder, paths[i], imdb); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rememberMatched keeps the items the files of the movies or shows folders
+// (kind) matched to the title of stremioID are the titles of, as their
+// former titles: what users did with them follows the files to the title
+// they are matched to next (see follow), as Jellyfin keeps an item's user
+// data when it is identified again.
+func (s *Service) rememberMatched(ctx context.Context, kind library.Kind, stremioID string) error {
+	folderKind := KindMovies
+	if kind == library.KindSeries {
+		folderKind = KindShows
+	}
+	rows, err := s.db.Query(ctx, `SELECT f.addon_id, f.path, f.season, f.episode, f.last_episode
+		FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id
+		WHERE f.stremio_id = $1 AND l.kind = $2 ORDER BY f.addon_id, f.path`, stremioID, folderKind)
+	if err != nil {
+		return err
+	}
+	var folders, items []accounts.ID
+	var paths []string
+	var folder accounts.ID
+	var rel string
+	var season, episode, last *int
+	if _, err := pgx.ForEachRow(rows, []any{&folder, &rel, &season, &episode, &last}, func() error {
+		for _, item := range titleItems(folderKind, stremioID, season, episode, last) {
+			folders, paths, items = append(folders, folder), append(paths, rel), append(items, item.ID)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	_, err = s.db.Exec(ctx, `INSERT INTO local_former_titles (addon_id, path, item_id)
+		SELECT * FROM unnest($1::uuid[], $2::text[], $3::uuid[]) ON CONFLICT DO NOTHING`, folders, paths, items)
+	return err
+}
+
+// Relinked tells the Stremio identifier of the title the files of a
+// folder relinked by LinkMatched from the title of stremioID are matched
+// to now, while none of the folder's files is matched to stremioID; empty
+// otherwise, as once a unit's link is removed and its files are matched
+// to that title again.
+func (s *Service) Relinked(ctx context.Context, folder accounts.ID, stremioID string) (string, error) {
+	var now string
+	err := s.db.QueryRow(ctx, `SELECT f.stremio_id FROM local_relinked_units r
+		JOIN local_files f ON f.addon_id = r.addon_id AND f.unit = r.unit AND f.stremio_id IS NOT NULL
+		WHERE r.addon_id = $1 AND r.former = $2
+			AND NOT EXISTS (SELECT 1 FROM local_files m WHERE m.addon_id = $1 AND m.stremio_id = $2)
+		ORDER BY f.path LIMIT 1`, folder, stremioID).Scan(&now)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return now, err
+}
+
+// Rematch matches again, as a scan matches a unit, every unit of the
+// movies or shows folders (kind) matched to the title of a Stremio
+// identifier, or the unit of the plain video it is: by its link, else by
+// its name, NFO file or a search. A unit matched keeps its title when no
+// title is found again.
+func (s *Service) Rematch(ctx context.Context, kind library.Kind, stremioID string) error {
+	units, err := s.titleUnits(ctx, kind, stremioID)
+	if err != nil {
+		return err
+	}
+	for _, u := range units {
+		folder, err := s.Folder(ctx, u.folder)
+		if errors.Is(err, addons.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := s.matchUnit(ctx, folder, u.unit, u.link, u.matched); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Unmatched is a file of a folder no title was matched to: its path, the

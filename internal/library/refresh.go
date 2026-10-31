@@ -15,9 +15,11 @@ import (
 // again as the title next shows. Its description (a season's or an
 // episode's is their series') is replaced only once an addon answered:
 // then the other addons' are forgotten, to be asked for again. While the
-// addons fail, the title keeps the description it had. Items that are not
-// titles have nothing to forget, but the server's libraries (see
-// RefreshItem). ErrNotFound is returned for an item the user cannot reach.
+// addons fail, the title keeps the description it had. The files of local
+// folders matched to the title, or a plain video's, are matched again
+// first. Items that are not titles have nothing to forget, but the
+// server's libraries (see RefreshItem). ErrNotFound is returned for an
+// item the user cannot reach.
 func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.ID) error {
 	return s.RefreshItem(ctx, user, id, true)
 }
@@ -65,6 +67,15 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 	}
 	if title.Meta == nil {
 		return nil
+	}
+	// The local files of the title are matched again, as Jellyfin reads an
+	// item's files again (ItemRefreshController.cs, RefreshItem): a plain
+	// video may be found now, or a title its folder's name, NFO file or
+	// link gives (see Local.Rematch).
+	if kind, stremioID, ok := title.titleOf(); ok && s.local != nil {
+		if err := s.local.Rematch(ctx, kind, stremioID); err != nil {
+			return err
+		}
 	}
 	// What addons are asked for the streams and subtitles of: the movie,
 	// home video or channel itself, the episode, or every episode of the

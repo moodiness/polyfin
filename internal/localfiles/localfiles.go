@@ -709,7 +709,7 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 			return err
 		}
 		for _, table := range []string{"local_tracks", "local_covers", "local_lyrics", "local_playlists", "local_artwork", "local_disc_episodes",
-			"local_extras"} {
+			"local_extras", "local_relinked_units"} {
 			if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE addon_id = $1", id); err != nil {
 				return err
 			}

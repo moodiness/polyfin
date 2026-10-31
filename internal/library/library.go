@@ -268,6 +268,17 @@ type Local interface {
 	// was matched to since, empty while it is not.
 	LinkPlain(ctx context.Context, plain, imdb string) error
 	PlainMatch(ctx context.Context, plain string) (accounts.ID, string, error)
+	// LinkMatched links, as LinkPlain does, every unit of the movies or
+	// shows folders (kind) matched to the title of a Stremio identifier;
+	// ErrNotFound when none is. Relinked tells the Stremio identifier of
+	// the title the files of a folder LinkMatched relinked from a title
+	// are matched to now, while none of its files is matched to that
+	// title, empty otherwise. Rematch matches again the units of those
+	// folders matched to a title, or the unit of the plain video it is,
+	// as Jellyfin reads an item's files again when it refreshes it.
+	LinkMatched(ctx context.Context, kind Kind, stremioID, imdb string) error
+	Relinked(ctx context.Context, folder accounts.ID, stremioID string) (string, error)
+	Rematch(ctx context.Context, kind Kind, stremioID string) error
 	// Episodes lists the episodes the files of folders hold for the
 	// series of a Stremio identifier, each named after its file, and
 	// NoteUnlisted records those of them a metadata addon's description
