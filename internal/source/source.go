@@ -356,10 +356,18 @@ func aheadBudget(limit int64) int64 {
 }
 
 // Count has the bytes each source receives from its origin, its mirrors,
-// its swarm or its storage counted in meters, by the source's identifier.
-// It is called before the cache is used.
+// its swarm or its storage counted in meters, by the source's identifier,
+// those kept from a previous run, which the cache made as it opened,
+// included. It is called before the cache is used.
 func (c *Cache) Count(meters *bandwidth.Meters) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.received = meters
+	for id, s := range c.sources {
+		if s.received == nil {
+			s.received = meters.Hold(id.String())
+		}
+	}
 }
 
 // Open returns the source identified by id, read from location, and
@@ -394,12 +402,17 @@ func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 	return s
 }
 
-// newSource returns the source of id, with nothing read yet.
+// newSource returns the source of id, with nothing read yet, counting
+// what it receives when the cache counts (see Count).
 func (c *Cache) newSource(id accounts.ID) *Source {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Source{cache: c, id: id, dir: filepath.Join(c.dir, id.String()+".blocks"), ctx: ctx, cancel: cancel,
+	s := &Source{cache: c, id: id, dir: filepath.Join(c.dir, id.String()+".blocks"), ctx: ctx, cancel: cancel,
 		size: -1, wanted: map[int64]*want{}, wake: make(chan struct{}, 1), progress: make(chan struct{}),
 		failed: make(chan struct{}), learned: make(chan struct{}), unsynced: map[int64]bool{}}
+	if c.received != nil {
+		s.received = c.received.Hold(id.String())
+	}
+	return s
 }
 
 // Answered reports when the source of id last answered with content at
@@ -737,7 +750,7 @@ type Source struct {
 	saveTimer *time.Timer
 	// received counts the bytes the source receives, nil when the cache
 	// counts none (see Cache.Count). It is set once, as the source is
-	// made.
+	// made, or by Count for a source kept from a previous run.
 	received *bandwidth.Meter
 }
 

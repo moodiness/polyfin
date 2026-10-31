@@ -42,3 +42,38 @@ func TestSourcesCountTheBytesTheyReceive(t *testing.T) {
 		t.Errorf("the first source's count moved with the other's: %d", got)
 	}
 }
+
+// A source a previous run kept counts what it receives once opened again,
+// as a source opened for the first time does.
+func TestKeptSourcesCountTheBytesTheyReceive(t *testing.T) {
+	o, server := newOrigin(t, 5*blockSize+12345)
+	dir := t.TempDir()
+	location := Location{URL: server.URL + "/file"}
+	before := keptCache(t, dir, 1<<30)
+	// Only the first blocks are read before the restart.
+	before.readahead, before.aheadBudget = 1, func() int64 { return 1 }
+	s := before.Open(accounts.ID{1}, location, nil)
+	head := make([]byte, 1000)
+	if _, err := s.ReadAt(t.Context(), head, 0); err != nil {
+		t.Fatal(err)
+	}
+	s.Release()
+	if err := before.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	after := keptCache(t, dir, 1<<30)
+	if usage := after.Usage(); usage.Kept != 1 || usage.Used >= int64(len(o.data)) {
+		t.Fatalf("after the restart: %+v", usage)
+	}
+	received := bandwidth.New()
+	after.Count(received)
+	s = after.Open(accounts.ID{1}, location, nil)
+	defer s.Release()
+	if got := readAll(t, s); !bytes.Equal(got, o.data) {
+		t.Fatal("content differs")
+	}
+	if got := received.Total(accounts.ID{1}.String()); got == 0 || got >= int64(len(o.data)) {
+		t.Errorf("the kept source received %d bytes of %d", got, len(o.data))
+	}
+}
