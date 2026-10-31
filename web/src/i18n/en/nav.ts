@@ -10,6 +10,7 @@ const nav = {
     sources: 'Sources',
     libraries: 'Libraries',
     liveTv: 'Live TV',
+    versions: 'Versions',
     health: 'Health',
     statistics: 'Statistics',
     schedule: 'Schedule',

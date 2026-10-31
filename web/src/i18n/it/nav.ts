@@ -11,6 +11,7 @@ const nav: typeof en = {
     sources: 'Origini',
     libraries: 'Librerie',
     liveTv: 'Diretta TV',
+    versions: 'Versioni',
     health: 'Stato di salute',
     statistics: 'Statistiche',
     schedule: 'Pianificazione',
