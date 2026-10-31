@@ -192,13 +192,14 @@ func (s *Service) OnChange(changed func(ctx context.Context, source accounts.ID)
 func (s *Service) UseRetry(retry func(source, channel accounts.ID)) { s.retry = retry }
 
 // NewSource is an IPTV source to add: its name, its account, the XMLTV
-// guide of its catalog (empty for none), and its import options (nil for
-// the defaults).
+// guide of its catalog (empty for none), its import options (nil for the
+// defaults), and, for a server source, who uses it (see addons.UsedBy).
 type NewSource struct {
 	Name    string
 	Account Account
 	Guide   string
 	Options *OptionsPatch
+	UsedBy  addons.UsedBy
 }
 
 // OptionsPatch changes import options: nil fields keep their values.
@@ -341,6 +342,10 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 			return addons.Addon{}, err
 		}
 	}
+	if source.UsedBy.Listed && scope.Owner != nil {
+		return addons.Addon{}, addons.ErrInvalidUsedBy
+	}
+	usedBy := addons.UsedBy{Groups: []accounts.ID{}, Users: []accounts.ID{}}
 	at := s.now()
 	addon, err := s.addons.Create(ctx, scope, source.Account.Kind, address,
 		func(id accounts.ID) stremio.Manifest { return manifest(id, source.Account.Kind, name, options, nil) },
@@ -358,11 +363,17 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 			if err := storeDownload(ctx, tx, addon.ID, list, at); err != nil {
 				return err
 			}
-			return reconcile(ctx, tx, addon.ID, at)
+			if err := reconcile(ctx, tx, addon.ID, at); err != nil || !source.UsedBy.Listed {
+				return err
+			}
+			stored, err := addons.WriteUsedBy(ctx, tx, addon.ID, source.UsedBy)
+			usedBy = stored
+			return err
 		})
 	if err != nil {
 		return addons.Addon{}, err
 	}
+	addon.UsedBy = usedBy
 	s.forget(addon.ID)
 	return addon, nil
 }
