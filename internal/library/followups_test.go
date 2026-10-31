@@ -317,21 +317,39 @@ func TestARefreshIsNotUndoneByAFollowUp(t *testing.T) {
 // list.
 func TestARefreshIsNotUndoneByARequestUnderWay(t *testing.T) {
 	t.Parallel()
-	// No follow-ups: the addon is asked only as the title is opened.
-	e := newFollowEnv(t)
+	// No follow-ups: the addon is asked only as the title is opened. It
+	// tells the test of each request it receives, then holds its answer.
+	replies := make(chan int, 10)
+	received := make(chan string, 10)
+	held := scriptedReplies(replies)
+	e := repliedEnv(t, func(w http.ResponseWriter, r *http.Request, resource string) {
+		select {
+		case received <- resource:
+		case <-r.Context().Done():
+			return
+		}
+		held(w, r, resource)
+	})
+	e.replies = replies
 	waiting := make(chan string, 10)
 	e.service.joined = func(key string) { waiting <- strings.Fields(key)[0] }
 	joins := func(list string, n int) {
 		t.Helper()
 		for range n {
-			select {
-			case key := <-waiting:
-				if key != list {
-					t.Fatalf("joined a request for %s, want %s", key, list)
-				}
-			case <-time.After(5 * time.Second):
-				t.Fatalf("no request waited for the %s", list)
+			if key := next(t, waiting, "a request to wait for the "+list); key != list {
+				t.Fatalf("joined a request for %s, want %s", key, list)
 			}
+		}
+	}
+	// reaches waits for the addon to receive a request for resource. A
+	// request joined may not have reached the addon yet: one that reaches
+	// it only after a refresh asks for the list after the refresh, and its
+	// answer is rightly kept. So each refresh waits for the addon to hold
+	// the request.
+	reaches := func(resource string) {
+		t.Helper()
+		if got := next(t, received, "the addon to be asked for "+resource); got != resource {
+			t.Fatalf("the addon was asked for %s, want %s", got, resource)
 		}
 	}
 
@@ -346,6 +364,7 @@ func TestARefreshIsNotUndoneByARequestUnderWay(t *testing.T) {
 		listed <- len(versions)
 	}()
 	joins("streams", 2)
+	reaches("stream")
 	if err := e.service.Refresh(t.Context(), e.member, e.movie); err != nil {
 		t.Fatal(err)
 	}
@@ -353,17 +372,14 @@ func TestARefreshIsNotUndoneByARequestUnderWay(t *testing.T) {
 	if _, _, err := e.service.VersionsNow(t.Context(), e.member, e.movie); err != nil {
 		t.Fatal(err)
 	}
+	// Both requests ask again, together: the answer comes only once each
+	// has joined the one request, the addon asked once more.
 	e.replies <- 1
-	e.eventually("the addon to be asked again", func() bool { return e.asked("stream") == 2 })
-	e.replies <- 2
 	joins("streams", 2)
-	select {
-	case n := <-listed:
-		if n != 2 {
-			t.Errorf("the request that waited lists %d versions, want those of the answer after the refresh, 2", n)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the request that waited did not answer")
+	reaches("stream")
+	e.replies <- 2
+	if n := next(t, listed, "the request that waited"); n != 2 {
+		t.Errorf("the request that waited lists %d versions, want those of the answer after the refresh, 2", n)
 	}
 	e.eventually("the addon to be asked no more", func() bool {
 		pending, err := e.service.Pending(t.Context(), e.member, e.movie)
@@ -382,24 +398,34 @@ func TestARefreshIsNotUndoneByARequestUnderWay(t *testing.T) {
 		listed <- len(subtitles)
 	}()
 	joins("subtitles", 1)
+	reaches("subtitles")
 	if err := e.service.Refresh(t.Context(), e.member, e.movie); err != nil {
 		t.Fatal(err)
 	}
 	e.replies <- 1
-	e.eventually("the addon to be asked again for subtitles", func() bool { return e.asked("subtitles") == 2 })
-	e.replies <- 2
 	joins("subtitles", 1)
-	select {
-	case n := <-listed:
-		if n != 2 {
-			t.Errorf("the request that waited lists %d subtitles, want 2", n)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the request for subtitles did not answer")
+	reaches("subtitles")
+	e.replies <- 2
+	if n := next(t, listed, "the request for subtitles"); n != 2 {
+		t.Errorf("the request that waited lists %d subtitles, want 2", n)
 	}
 	if subtitles, err := e.service.Subtitles(t.Context(), e.member, e.movie); err != nil || len(subtitles) != 2 || e.asked("subtitles") != 2 {
 		t.Errorf("subtitles kept after the refresh: %d, %v, addon asked %d times", len(subtitles), err, e.asked("subtitles"))
 	}
+}
+
+// next waits for what ch sends next, and fails the test if nothing comes
+// within a few seconds.
+func next[T any](t *testing.T, ch <-chan T, what string) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for %s", what)
+	}
+	var zero T
+	return zero
 }
 
 func TestSubtitleListsAreFollowedUp(t *testing.T) {
