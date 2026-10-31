@@ -244,7 +244,7 @@ function OrderEditor({ series, onClose }: { series: OrderedSeries; onClose: () =
         </>
       }
     >
-      {body}
+      <div className="p-5">{body}</div>
     </Modal>
   )
 }
