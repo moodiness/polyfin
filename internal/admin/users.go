@@ -12,6 +12,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/config"
+	"github.com/moodiness/polyfin/internal/diskspace"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/mediasegments"
@@ -793,6 +794,23 @@ type settingsJSON struct {
 	PosterBadges    *bool   `json:"posterBadges"`
 	PosterBadgeSize *string `json:"posterBadgeSize"`
 	PosterTemplate  *string `json:"posterTemplate"`
+	// The source cache and the next-episode preloading keep their current
+	// values when a PUT leaves them out. A preset other than custom sets
+	// cacheSizeGb, sourceCacheDays, sourceCacheCreditDays and
+	// preloadWholeFiles as SourceCachePresetLimits tell; a PUT setting one
+	// of them to another value without a preset makes it custom.
+	// ReadingFree is the space free on the disk of the folder for files
+	// being read, null when unknown; a PUT ignores it and the limits.
+	SourceCachePreset       *string                          `json:"sourceCachePreset"`
+	SourceCacheDays         *int                             `json:"sourceCacheDays"`
+	SourceCacheCreditDays   *int                             `json:"sourceCacheCreditDays"`
+	PreloadNextEpisodes     *bool                            `json:"preloadNextEpisodes"`
+	PreloadEpisodes         *int                             `json:"preloadEpisodes"`
+	PreloadMbps             *int                             `json:"preloadMbps"`
+	PreloadReserveGB        *int                             `json:"preloadReserveGb"`
+	PreloadWholeFiles       *bool                            `json:"preloadWholeFiles"`
+	SourceCachePresetLimits map[string]sourceCacheLimitsJSON `json:"sourceCachePresetLimits,omitempty"`
+	ReadingFree             *int64                           `json:"readingFree"`
 	// The identity provider keeps its current values when a PUT leaves
 	// them out; an empty issuer or client ID turns its sign-in off. The
 	// client secret is never sent back: ProviderClientSecretSet tells
@@ -1050,6 +1068,14 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		PosterBadges:            &settings.PosterBadges,
 		PosterBadgeSize:         &settings.PosterBadgeSize,
 		PosterTemplate:          &settings.PosterTemplate,
+		SourceCachePreset:       &settings.SourceCachePreset,
+		SourceCacheDays:         &settings.SourceCacheDays,
+		SourceCacheCreditDays:   &settings.SourceCacheCreditDays,
+		PreloadNextEpisodes:     &settings.PreloadNextEpisodes,
+		PreloadEpisodes:         &settings.PreloadEpisodes,
+		PreloadMbps:             &settings.PreloadMbps,
+		PreloadReserveGB:        &settings.PreloadReserveGB,
+		PreloadWholeFiles:       &settings.PreloadWholeFiles,
 
 		ProviderIssuer:          &settings.ProviderIssuer,
 		ProviderName:            &settings.ProviderName,
@@ -1553,7 +1579,35 @@ func (h *handler) settingsJSON(ctx context.Context, settings accounts.Settings) 
 		body.ConversionHardware.Bwdif = encoder.HasFilters("bwdif")
 		body.ConversionHardware.OlderDriverFFmpeg = newOlderDriverJSON(encoder)
 	}
+	body.SourceCachePresetLimits = map[string]sourceCacheLimitsJSON{}
+	for preset, limits := range accounts.SourceCachePresetLimits {
+		body.SourceCachePresetLimits[preset] = sourceCacheLimitsJSON{SizeGB: limits.SizeGB, Days: limits.Days,
+			CreditDays: limits.CreditDays, WholeFiles: limits.WholeFiles}
+	}
+	if reading := h.Health.Folders.Reading; reading != "" {
+		if free, _, _, ok := diskspace.Measure(reading); ok {
+			body.ReadingFree = &free
+		}
+	}
 	return body, nil
+}
+
+// sourceCacheLimitsJSON is what a source cache preset sets (see
+// accounts.SourceCacheLimits).
+type sourceCacheLimitsJSON struct {
+	SizeGB     int  `json:"cacheSizeGb"`
+	Days       int  `json:"sourceCacheDays"`
+	CreditDays int  `json:"sourceCacheCreditDays"`
+	WholeFiles bool `json:"preloadWholeFiles"`
+}
+
+// presetChanged reports whether settings set a limit of the source cache
+// to another value than their preset's: an older page, or an API client,
+// that changed the limit alone.
+func presetChanged(settings accounts.Settings) bool {
+	limits, ok := accounts.SourceCachePresetLimits[settings.SourceCachePreset]
+	return ok && limits != accounts.SourceCacheLimits{SizeGB: settings.CacheSizeGB, Days: settings.SourceCacheDays,
+		CreditDays: settings.SourceCacheCreditDays, WholeFiles: settings.PreloadWholeFiles}
 }
 
 // conversionHardwareJSON is what conversions run on: the GPU chosen, null
@@ -1820,6 +1874,15 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		PosterBadgeSize:      valueOr(body.PosterBadgeSize, current.PosterBadgeSize),
 		PosterTemplate:       valueOr(body.PosterTemplate, current.PosterTemplate),
 
+		SourceCachePreset:     valueOr(body.SourceCachePreset, current.SourceCachePreset),
+		SourceCacheDays:       valueOr(body.SourceCacheDays, current.SourceCacheDays),
+		SourceCacheCreditDays: valueOr(body.SourceCacheCreditDays, current.SourceCacheCreditDays),
+		PreloadNextEpisodes:   valueOr(body.PreloadNextEpisodes, current.PreloadNextEpisodes),
+		PreloadEpisodes:       valueOr(body.PreloadEpisodes, current.PreloadEpisodes),
+		PreloadMbps:           valueOr(body.PreloadMbps, current.PreloadMbps),
+		PreloadReserveGB:      valueOr(body.PreloadReserveGB, current.PreloadReserveGB),
+		PreloadWholeFiles:     valueOr(body.PreloadWholeFiles, current.PreloadWholeFiles),
+
 		ProviderIssuer:         valueOr(body.ProviderIssuer, current.ProviderIssuer),
 		ProviderName:           valueOr(body.ProviderName, current.ProviderName),
 		ProviderClientID:       valueOr(body.ProviderClientID, current.ProviderClientID),
@@ -1828,6 +1891,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ProviderCreateAccounts: valueOr(body.ProviderCreateAccounts, current.ProviderCreateAccounts),
 		ProviderAdminClaim:     valueOr(body.ProviderAdminClaim, current.ProviderAdminClaim),
 		ProviderAdminValue:     valueOr(body.ProviderAdminValue, current.ProviderAdminValue),
+	}
+	if body.SourceCachePreset == nil && presetChanged(next) {
+		next.SourceCachePreset = accounts.SourceCacheCustom
 	}
 	if code := h.unwritableFolder(next, current); code != "" {
 		writeError(w, http.StatusBadRequest, code)
