@@ -1976,10 +1976,24 @@ export type HomeRowKind = 'catalog' | 'collection' | 'because' | 'new' | 'availa
 export type HomeRowPlace = 'top' | 'resume' | 'nextup' | 'bottom'
 
 /**
+ * When a home row shows, in the server's time zone: from `startDate` to `endDate` (YYYY-MM-DD, empty
+ * for no bound), on `days` (0 for Sunday to 6, none for every day), from `startHour` (0 to 23) to
+ * `endHour` (1 to 24, before `startHour` past midnight), both null for all day. A row that is also a
+ * library follows its dates only.
+ */
+export type HomeRowSchedule = {
+  startDate: string
+  endDate: string
+  days: number[]
+  startHour: number | null
+  endHour: number | null
+}
+
+/**
  * A row of the web player's home page (Settings › Web player › Home rows). A catalog row names its
  * catalog, a collection row its collection; `count` is how many rows Because you watched makes;
  * `users` are those a row not shown to everyone is shown to; `library` also makes it a library in
- * other apps.
+ * other apps; `shownNow` tells whether its schedule shows it now.
  */
 export type HomeRow = {
   id: string
@@ -1994,9 +2008,11 @@ export type HomeRow = {
   everyone: boolean
   users: string[]
   library: boolean
+  schedule: HomeRowSchedule
+  shownNow: boolean
 }
 
-export type HomeRowDraft = Omit<HomeRow, 'id'>
+export type HomeRowDraft = Omit<HomeRow, 'id' | 'shownNow'>
 
 /** A catalog of the server's addons a home row may list. */
 export type HomeRowCatalog = {
@@ -2031,6 +2047,31 @@ export const deleteHomeRow = (id: string) => request<void>('DELETE', `/home-rows
 /** Puts the rows in this order, and answers them. */
 export const orderHomeRows = (ids: string[]) =>
   request<{ rows: HomeRow[] }>('PUT', '/home-rows/order', { ids })
+
+/** A title of a home row's preview; `posterId` is the item whose Primary image is its poster. */
+export type HomeRowPreviewTitle = {
+  id: string
+  kind: string
+  name: string
+  year: number
+  posterId: string
+}
+
+/**
+ * A row of a user's home page as the web player shows it to them now: its folder `id`, the row it
+ * comes from (`rowId`), its name there and its first titles.
+ */
+export type HomeRowPreview = {
+  id: string
+  rowId: string
+  name: string
+  kind: HomeRowKind
+  place: HomeRowPlace
+  titles: HomeRowPreviewTitle[]
+}
+
+export const fetchHomeRowPreview = (userId: string, signal?: AbortSignal) =>
+  request<{ rows: HomeRowPreview[] }>('GET', `/home-rows/preview/${seg(userId)}`, undefined, signal)
 
 /** A home row shown to the signed-in user, and whether they turned it off. */
 export type OwnHomeRow = {
@@ -4700,6 +4741,8 @@ export const queryKeys = {
   ownTrackChoices: ['account', 'track-choices'] as const,
   homeRows: ['home-rows'] as const,
   homeRowChoices: ['home-rows', 'choices'] as const,
+  /** Under homeRows: refreshed with the rows. */
+  homeRowPreview: (userId: string) => ['home-rows', 'preview', userId] as const,
   ownReminders: ['account', 'reminders'] as const,
   reminderSettings: ['account', 'reminders', 'settings'] as const,
   ownMetadataLanguage: ['account', 'metadata-language'] as const,
