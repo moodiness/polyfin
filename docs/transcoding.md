@@ -348,6 +348,37 @@ Remuxes and conversions of files are cut into HLS segments on the source's own k
 - When FFmpeg still lands past the segment's start, as in a file with a keyframe every 10 seconds, it starts again further back: as much further back as it went past the time asked, so at least twice as far, until it lands before the segment or reads the file from its start. Each try costs an FFmpeg start; the frames read before the segment are decoded but not converted.
 - Polyfin keeps that distance with the file, in its database: the playback's later seeks, and those of the next playbacks of the same file, by any user and after a restart too, start as far back, and land where asked with one FFmpeg start. It knows a local file by its folder, path, size and modification time, so that a file that changed learns the distance again; an addon's file by its version, which follows the file by its name and size, else its link (see [Playback](playback.md)); an IPTV catch-up programme by its channel, whose programmes usually come from the same encoder; a recording by itself. A playback that needs to start further back keeps the larger distance; a shorter one never replaces it. Files FFmpeg lands in where asked, such as Matroska and MP4 files, never use it.
 
+### A faster start for remote sources
+
+A play shows its first picture once its first segment is made, and a segment ends on a keyframe: from an addon's link or a torrent with a keyframe every 10 seconds, Polyfin first reads 10 seconds of the file, at its bitrate, from a host that may send it barely faster than it plays.
+
+With **Start remote plays faster** under **Settings › Conversion (transcoding) › Performance**, off by default:
+
+- **Which plays:** a repackaged or converted HLS play of an addon's link or a torrent, not of a local folder's file, a recording or Live TV, whose segment where it starts lasts more than 4 seconds: at the start, or where it resumes, as PlaybackInfo's `StartTimeTicks` tells.
+- **Fast segments:** that segment is cut into 2-second segments, its last part up to 4 seconds long. They are converted quickly (x264's `ultrafast`, or the graphics card's fastest preset), by bitrate, at 720p at most and 5 Mb/s at most, in the codec the app gets: the conversion's own, or the copied video's H.264 or HEVC. The first is ready once 2 seconds of the file are read and converted. The play then goes on as without the setting, copied or at full quality, from the keyframe the next segment starts on: one FFmpeg makes the fast segments, and hands over to another there.
+- **Playlist:** an `#EXT-X-DISCONTINUITY` comes before the first segment after the fast ones, and before the first fast one when the play resumes past the start. In fragmented MP4, the fast segments have their own initialization segment, `-2.mp4`, which an `#EXT-X-MAP` names after the discontinuity, `-1.mp4` naming the others'.
+- **Apps:** in MPEG-TS segments, which carry what decodes them, every app, as when a play goes on from another version (see [Carrying a play on](playback.md#carrying-a-play-on)); in fragmented MP4, jellyfin-web only, whose players load each initialization segment. Other apps in fragmented MP4 start as without the setting.
+- **Left as they were:** copied video that is HDR, 10-bit, or neither H.264 nor HEVC, which fast segments would show differently; converted video kept with **Keep the converted video when the audio track changes**, which a new session takes over with its segments; a user who may not have video converted. A setting changed applies to the next plays: a play keeps the segments its PlaybackInfo gave it.
+- **Seeks:** a seek inside a play gets no fast segments: the app loaded the playlist once, cut as it is. Apps that start a new play to change the audio track, as jellyfin-web does, get them where the new play starts.
+- **Conversions at once:** the fast segments of a repackaged play do not count toward **Video conversions at once**: they last a few seconds at 720p.
+
+Measured on a 1080p file of about 7 Mb/s with a keyframe every 10 seconds, from a host sending 1 MB/s per connection, from PlaybackInfo to the first segment played, median of 3 plays, each with an empty source cache:
+
+| Play | Off | On |
+|---|---|---|
+| Repackaged into MPEG-TS (Android TV's profile), from the start | 9.9 s | 3.9 s |
+| Repackaged, resumed 25 seconds in | 10.8 s | 7.7 s |
+| Converted into fragmented MP4 (jellyfin-web's profile), from the start | 7.2 s | 3.9 s |
+| Converted, resumed 25 seconds in | 14.5 s | 7.4 s |
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no faster start: its first segment is made at full quality, as long as the others.
+
+**For app developers:**
+
+- A play PlaybackInfo starts with fast segments has `FastStartTicks`, where it starts, last in its `TranscodingUrl`; every request of the play cuts it the same way.
+
 ### Changing the audio track
 
 Apps change the audio track of a converted video by playing it again: jellyfin-web asks `PlaybackInfo` for the new track, stops the old play session with `DELETE /Videos/ActiveEncodings`, and loads the new stream from the same position; Jellyfin Android TV, Swiftfin and Streamyfin stop the player and play again too. Off, as before, the new session converts the video again from the keyframe before the position, though the picture has not changed, and the segments already made are deleted.
@@ -434,6 +465,7 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 | **Processor threads per conversion (0 = automatic)** | **Settings › Conversion (transcoding)** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
 | **Seconds prepared ahead** | **Settings › Conversion (transcoding)** | 120 (range 30 to 600) | How many seconds of picture a remux or conversion of a file makes past the last segment the app asked for, before it waits. |
 | **Keep the converted video when the audio track changes** | **Settings › Conversion (transcoding)** | Off | Converts the video apart from its audio, and keeps it 30 seconds once its play session stops, for a new session asking for another audio track to take over. Off, a track change converts the video again, as before. See [Changing the audio track](#changing-the-audio-track). |
+| **Start remote plays faster** | **Settings › Conversion (transcoding)** | Off | Starts repackaged and converted plays of addon links and torrents whose first segment is long with 2-second segments converted quickly at 720p at most. See [A faster start for remote sources](#a-faster-start-for-remote-sources). |
 | **Conversion folder** | **Settings › Conversion (transcoding)** | Empty, `cache` in the data folder | The folder the segments of files converted or repackaged are written to, from the next start on. See [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache). |
 
 **Compared with Jellyfin:**
