@@ -299,6 +299,9 @@ type Local interface {
 	// folders' pages count (see fileepisodes.go).
 	Episodes(ctx context.Context, folders []accounts.ID, stremioID string) ([]stremio.Video, error)
 	NoteUnlisted(ctx context.Context, stremioID string, unlisted [][2]int) error
+	// HeldTitles reports which of the Stremio identifiers ids the
+	// catalogs of folders list as titles (see skiplocal.go).
+	HeldTitles(ctx context.Context, folders []accounts.ID, ids []string) (map[string]bool, error)
 }
 
 // UseLocal sets what answers for local folders; it is called before the
@@ -409,10 +412,11 @@ type installed struct {
 
 // library is a library of a user with its catalog, the genre it is
 // narrowed to and the most items it lists (see addons.Library), how it
-// finds its image (see addons.Library.Image), and whether the web player's
-// menus leave it out (see addons.Library.HideInMenus). serverName is its
-// name in the server's language, which its generated image shows whatever
-// the user's language.
+// finds its image (see addons.Library.Image), whether the web player's
+// menus leave it out (see addons.Library.HideInMenus) and whether it
+// leaves out the titles local folders hold (see skiplocal.go). serverName
+// is its name in the server's language, which its generated image shows
+// whatever the user's language.
 type library struct {
 	item        Item
 	serverName  string
@@ -422,12 +426,14 @@ type library struct {
 	maxItems    int
 	image       string
 	hideInMenus bool
+	skipLocal   bool
 }
 
 // catalogSource is the library's catalog as it lists it: narrowed to its
-// genre and limited to its maximum.
+// genre, limited to its maximum, and without the titles local folders
+// hold when it leaves them out.
 func (l library) catalogSource() source {
-	return source{addon: l.addon, catalog: l.catalog, genre: l.genre, max: l.maxItems}
+	return source{addon: l.addon, catalog: l.catalog, genre: l.genre, max: l.maxItems, skipLocal: l.skipLocal}
 }
 
 // view is what a user can browse: their enabled addons and libraries, the
@@ -446,6 +452,10 @@ type view struct {
 	// channelFilter is the user's channel rule, which hides channels of
 	// the server's sources (see channellimits.go); nil hides none.
 	channelFilter *accounts.ChannelFilter
+	// listedFolders are the local folders whose libraries the user sees,
+	// by the kind of their titles, which the libraries that leave out what
+	// local folders hold leave out (see skiplocal.go).
+	listedFolders map[Kind][]accounts.ID
 	// smart are the smart lists the user sees, in order (see
 	// smartlists.go).
 	smart []smartList
@@ -649,8 +659,10 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 			maxItems:    l.MaxItems,
 			image:       l.Image,
 			hideInMenus: l.HideInMenus,
+			skipLocal:   l.SkipLocal,
 		})
 	}
+	v.listedFolders = listedFolders(v.libraries)
 	if err := s.smartLists(ctx, &v, user, scopes); err != nil {
 		return view{}, err
 	}
@@ -818,6 +830,9 @@ type source struct {
 	// shows, in place of the catalog limit; 0 for that limit (see
 	// view.limit).
 	max int
+	// skipLocal leaves out the titles the local folders of the view hold
+	// (see skiplocal.go).
+	skipLocal bool
 }
 
 // paged reports whether the catalog can be read past its first page.
@@ -862,12 +877,15 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // short first page is only trusted once a second page confirms it, so
 // that a small catalog is not asked for many empty pages. Titles the
 // user's parental control hides, and those the user hid, are left out
-// before positions are counted. A restricted listing reads at most
-// hiddenReach times as far as an unrestricted one, and stops where titles
-// wait for their rating: it reports that more may follow, which apps ask
-// for later, once the ratings are known. A page the addon cannot give
-// ends the window there: it returns the items before it, counted as the
-// whole catalog, with errCutShort and why (see cutShort).
+// before positions are counted, and so are the titles local folders hold
+// for a library that leaves them out (see skiplocal.go): those do not
+// count toward the limit either, so that such a library lists as many
+// titles as another. A restricted listing reads at most hiddenReach times
+// as far as an unrestricted one, and stops where titles wait for their
+// rating: it reports that more may follow, which apps ask for later, once
+// the ratings are known. A page the addon cannot give ends the window
+// there: it returns the items before it, counted as the whole catalog,
+// with errCutShort and why (see cutShort).
 func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
 	// An IPTV source's movies and series are paged and counted from its
 	// stored lists, whole, but for a restricted user, or one who hid
@@ -889,10 +907,12 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	if v.restricted() {
 		reach = min(limit, hiddenReach*(start+count))
 	}
+	// skipped counts the titles left out as local folders hold them.
+	skipped := 0
 	var failed error
 	for len(collected) < start+count {
-		if received >= reach {
-			more = received < limit
+		if received-skipped >= reach {
+			more = received-skipped < limit
 			if more {
 				v.held.Store(true)
 			}
@@ -907,7 +927,7 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 			if _, ok := s.readyPage(ctx, src.key(received)); !ok {
 				uncached++
 			}
-			for next := received + size; next < min(received+needed, limit); next += size {
+			for next := received + size; next < min(received+needed, limit+skipped); next += size {
 				if kept, ok := s.cachedPage(src.key(offsets[len(offsets)-1])); ok && len(kept) == 0 {
 					break
 				}
@@ -961,7 +981,12 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 			}
 		}
 		trusted = trusted || filled >= 2
-		visible, held := s.visibleMetas(ctx, v, src, fresh)
+		kept, err := s.withoutLocal(ctx, v, src, fresh)
+		if err != nil {
+			return nil, 0, err
+		}
+		skipped += len(fresh) - len(kept)
+		visible, held := s.visibleMetas(ctx, v, src, kept)
 		collected = append(collected, visible...)
 		if held {
 			v.held.Store(true)

@@ -206,6 +206,13 @@ type Library struct {
 	// row, and other apps keep listing it. Always false for a live TV
 	// catalog, which makes no menu entry, and for a disabled catalog.
 	HideInMenus bool
+	// SkipLocal leaves out of an enabled library of movies or series the
+	// titles a local folder's library lists, by the same identifier, for
+	// the users who see that folder's library (see library.view); always
+	// false for a catalog that cannot (see Skippable). Skippable tells
+	// whether it can.
+	SkipLocal bool
+	Skippable bool
 	// Image is how an enabled library finds the image apps show on its
 	// tile: LibraryImageNone, LibraryImageAutomatic or
 	// LibraryImageGenerated. An image uploaded for the library's item wins
@@ -224,6 +231,15 @@ type Library struct {
 // music catalogs do not.
 func Filterable(addon Addon, catalog stremio.Catalog) bool {
 	return catalog.Type != "tv" && !addon.HasMusic()
+}
+
+// Skippable reports whether a library of a catalog of addon may leave out
+// the titles local folders hold (see Library.SkipLocal): a catalog of
+// movies or series of an addon, not of a local folder, an IPTV source or
+// a music addon, whose titles are their own.
+func Skippable(addon Addon, catalog stremio.Catalog) bool {
+	return !addon.Local() && !addon.IPTV() && !addon.HasMusic() &&
+		slices.Contains([]string{"movie", "anime.movie", "series", "anime.series", "anime"}, catalog.Type)
 }
 
 // Genres lists the genres a catalog offers in its genre filter, in order.
@@ -317,6 +333,7 @@ type LibraryChoice struct {
 	Genre       *string
 	MaxItems    *int
 	HideInMenus bool
+	SkipLocal   bool
 }
 
 // Store is the addons repository. Reads of the addons and libraries are
@@ -1143,20 +1160,21 @@ type libraryRow struct {
 	genre             *string
 	maxItems          *int
 	hideInMenus       bool
+	skipLocal         bool
 }
 
 // libraryRows reads the libraries filter selects, l being the library
 // and a its addon, in order.
 func libraryRows(ctx context.Context, db queryer, filter string, args ...any) ([]libraryRow, error) {
 	rows, err := db.Query(ctx, `SELECT a.owner_id, l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_channels, l.guide_matched, l.image,
-		l.genre, l.max_items, l.hide_in_menus FROM libraries l JOIN addons a ON a.id = l.addon_id`+filter+" ORDER BY l.position", args...)
+		l.genre, l.max_items, l.hide_in_menus, l.skip_local FROM libraries l JOIN addons a ON a.id = l.addon_id`+filter+" ORDER BY l.position", args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (libraryRow, error) {
 		var r libraryRow
 		err := row.Scan(&r.owner, &r.key.AddonID, &r.key.CatalogType, &r.key.CatalogID, &r.name, &r.channels, &r.matched, &r.image,
-			&r.genre, &r.maxItems, &r.hideInMenus)
+			&r.genre, &r.maxItems, &r.hideInMenus, &r.skipLocal)
 		return r, err
 	})
 }
@@ -1209,7 +1227,8 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 		chosen[row.key] = len(enabled)
 		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog, KeyType: addon.LibraryKeyTypes[catalog.ID],
 			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: row.image,
-			HideInMenus: row.hideInMenus}
+			HideInMenus: row.hideInMenus, Skippable: Skippable(addon, catalog)}
+		library.SkipLocal = row.skipLocal && library.Skippable
 		// A genre the catalog no longer offers lists the whole catalog.
 		if row.genre != nil && library.Filterable && slices.Contains(GenreChoices(catalog), *row.genre) {
 			library.Genre = *row.genre
@@ -1235,7 +1254,7 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 			}
 			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
 				KeyType: addon.LibraryKeyTypes[catalog.ID], AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog),
-				Image: NewLibraryImage(catalog.Type)})
+				Skippable: Skippable(addon, catalog), Image: NewLibraryImage(catalog.Type)})
 		}
 	}
 	return result
@@ -1244,7 +1263,8 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 // SetLibraries replaces the scope's libraries with choices, in order. A
 // choice's genre must be one its catalog offers, and its maximum from 1 to
 // MaxLibraryItems, on a Filterable catalog; an empty genre lists the whole
-// catalog. A live TV catalog may not be hidden from the menus.
+// catalog. A live TV catalog may not be hidden from the menus, and only a
+// Skippable catalog may leave out the titles local folders hold.
 func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []LibraryChoice) ([]Library, error) {
 	defer s.changed()
 	for i, choice := range choices {
@@ -1295,7 +1315,7 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 			if choice.MaxItems != nil && !filterable {
 				return ErrInvalidLibraryMaxItems
 			}
-			if choice.HideInMenus && catalog.Type == "tv" {
+			if choice.HideInMenus && catalog.Type == "tv" || choice.SkipLocal && !Skippable(installed[index], catalog) {
 				return ErrInvalidLibrary
 			}
 		}
@@ -1323,12 +1343,13 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 			}
 		}
 		for position, choice := range choices {
-			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position, genre, max_items, hide_in_menus, image)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE
+			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position, genre, max_items, hide_in_menus,
+				skip_local, image)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE
 				SET name = excluded.name, position = excluded.position, genre = excluded.genre, max_items = excluded.max_items,
-				hide_in_menus = excluded.hide_in_menus`,
+				hide_in_menus = excluded.hide_in_menus, skip_local = excluded.skip_local`,
 				choice.AddonID, choice.CatalogType, choice.CatalogID, choice.Name, position+1, choice.Genre, choice.MaxItems,
-				choice.HideInMenus, NewLibraryImage(choice.CatalogType)); err != nil {
+				choice.HideInMenus, choice.SkipLocal, NewLibraryImage(choice.CatalogType)); err != nil {
 				return err
 			}
 		}

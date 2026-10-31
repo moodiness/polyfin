@@ -212,8 +212,10 @@ func (s *Service) describedPage(ctx context.Context, v view, ids []accounts.ID, 
 // one of a library of the server hidden from them, is ErrNotFound. So is
 // a catalog that cannot be browsed: a live TV catalog, a collection
 // catalog, or one that needs a search. Its titles carry the library of
-// the catalog the user sees, if any; the titles the user may not see, by
-// parental control or blocked genres, and those they hid, are left out.
+// the catalog the user sees, if any, and leave out what local folders
+// hold when that library does (see skiplocal.go); the titles the user may
+// not see, by parental control or blocked genres, and those they hid, are
+// left out.
 // Titles show the user's language as far as it is kept (see translate).
 func (s *Service) CatalogTitles(ctx context.Context, user accounts.User, addon accounts.ID, catalogType, catalogID string, start, count int,
 	first bool) (Page, error) {
@@ -240,7 +242,7 @@ func (s *Service) CatalogTitles(ctx context.Context, user accounts.User, addon a
 		return l.addon.addon.ID == addon && l.catalog.Type == catalogType && l.catalog.ID == catalogID && l.genre == ""
 	}); j >= 0 {
 		parent = v.libraries[j].item.ID
-		src.max = v.libraries[j].maxItems
+		src.max, src.skipLocal = v.libraries[j].maxItems, v.libraries[j].skipLocal
 		count = withinMax(start, count, src.max)
 	}
 	metas, total, err := s.window(ctx, v, src, start, count)

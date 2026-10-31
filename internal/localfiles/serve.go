@@ -76,6 +76,23 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 	})
 }
 
+// HeldTitles reports which of the Stremio identifiers ids the catalogs of
+// folders list as titles: those the folders' files are matched or linked
+// to (see Catalog).
+func (s *Service) HeldTitles(ctx context.Context, folders []accounts.ID, ids []string) (map[string]bool, error) {
+	rows, err := s.db.Query(ctx, `SELECT DISTINCT stremio_id FROM local_files WHERE stremio_id = ANY($2) AND addon_id = ANY($1)`, folders, ids)
+	if err != nil {
+		return nil, err
+	}
+	held := map[string]bool{}
+	var id string
+	_, err = pgx.ForEachRow(rows, []any{&id}, func() error {
+		held[id] = true
+		return nil
+	})
+	return held, err
+}
+
 // Meta describes a title of a folder as its files tell, for when no
 // metadata addon describes it: its name, poster and year, and a show's
 // episodes found, named after their files. A plain video is described so
