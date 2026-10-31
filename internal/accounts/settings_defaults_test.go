@@ -178,6 +178,8 @@ func TestSettingsBoundsAreThoseChecked(t *testing.T) {
 					entries = append(entries, "App "+strconv.Itoa(i))
 				case field.Type().Elem() == reflect.TypeFor[ID]():
 					entries = append(entries, ID{byte(i >> 8), byte(i), 1})
+				case field.Type().Elem() == reflect.TypeFor[VersionLabelRule]():
+					entries = append(entries, VersionLabelRule{Text: "rule " + strconv.Itoa(i), Hide: true})
 				default:
 					entries = append(entries, netip.PrefixFrom(netip.AddrFrom4([4]byte{10, 0, byte(i >> 8), byte(i)}), 32))
 				}

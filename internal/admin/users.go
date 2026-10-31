@@ -544,7 +544,7 @@ type settingsJSON struct {
 	VersionAttempts  *int  `json:"versionAttempts"`
 	PreferDirectPlay *bool `json:"preferDirectPlay"`
 	// The version rules keep their current values when a PUT leaves them
-	// out: VersionOrder holds up to four criteria (see
+	// out: VersionOrder holds up to six criteria (see
 	// accounts.VersionCriteria), VersionCodecOrder every video codec once,
 	// VersionSourceOrder the IDs of some of VersionSources, each once, and
 	// HiddenVersionWords the words, one per entry. VersionSources are the
@@ -560,6 +560,14 @@ type settingsJSON struct {
 	// HiddenReleases are kinds of accounts.ReleaseKinds, each once; it keeps
 	// its current value when a PUT leaves it out.
 	HiddenReleases *[]string `json:"hiddenReleases"`
+	// VersionEditionOrder holds every edition once (see
+	// accounts.VersionEditions), VersionMBPerMinute the megabytes a minute
+	// the size-per-minute criterion aims at, 0 for the largest, and
+	// VersionLabelRules the label rules, in order; each keeps its current
+	// value when a PUT leaves it out.
+	VersionEditionOrder *[]string                    `json:"versionEditionOrder"`
+	VersionMBPerMinute  *int                         `json:"versionMbPerMinute"`
+	VersionLabelRules   *[]accounts.VersionLabelRule `json:"versionLabelRules"`
 	// NameHowVersionsPlay keeps its current value when a PUT leaves it out.
 	NameHowVersionsPlay *bool `json:"nameHowVersionsPlay"`
 	SyncAddonSubtitles  *bool `json:"syncAddonSubtitles"`
@@ -906,6 +914,9 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		HiddenVersionWords:    &settings.HiddenVersionWords,
 		NameHowVersionsPlay:   &settings.NameHowVersionsPlay,
 		HiddenReleases:        &settings.HiddenReleases,
+		VersionEditionOrder:   &settings.VersionEditionOrder,
+		VersionMBPerMinute:    &settings.VersionMBPerMinute,
+		VersionLabelRules:     &settings.VersionLabelRules,
 		SyncAddonSubtitles:    &settings.SyncAddonSubtitles,
 		MaxConversions:        &settings.MaxConversions,
 		MaxConversionHeight:   &settings.MaxConversionHeight,
@@ -1676,6 +1687,9 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		HiddenVersionWords:    valueOr(body.HiddenVersionWords, current.HiddenVersionWords),
 		NameHowVersionsPlay:   valueOr(body.NameHowVersionsPlay, current.NameHowVersionsPlay),
 		HiddenReleases:        valueOr(body.HiddenReleases, current.HiddenReleases),
+		VersionEditionOrder:   valueOr(body.VersionEditionOrder, current.VersionEditionOrder),
+		VersionMBPerMinute:    valueOr(body.VersionMBPerMinute, current.VersionMBPerMinute),
+		VersionLabelRules:     valueOr(body.VersionLabelRules, current.VersionLabelRules),
 		SyncAddonSubtitles:    valueOr(body.SyncAddonSubtitles, current.SyncAddonSubtitles),
 		MaxConversions:        valueOr(body.MaxConversions, current.MaxConversions),
 		MaxConversionHeight:   valueOr(body.MaxConversionHeight, current.MaxConversionHeight),
