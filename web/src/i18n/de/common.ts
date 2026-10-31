@@ -281,6 +281,12 @@ const common: typeof en = {
       'MDBList war zur Prüfung des Schlüssels nicht erreichbar. Es wurde nichts gespeichert: Versuche es später erneut.',
     invalid_tmdb_key:
       'TMDB hat diesen Schlüssel nicht akzeptiert. Kopiere den API-Schlüssel oder das Lesezugriffstoken erneut aus deinem TMDB-Konto. Es wurde nichts gespeichert.',
+    unknown_episode_group:
+      'TMDB bietet diese Reihenfolge für diese Serie nicht mehr an. Öffne sie erneut und wähle eine andere.',
+    episode_groups_unreachable:
+      'TMDB war nicht erreichbar, um die Reihenfolgen dieser Serie aufzulisten. Nichts wurde gespeichert: Versuche es später noch einmal.',
+    no_tmdb_key:
+      'Füge zuerst unter Einstellungen › Inhalte einen TMDB-Schlüssel hinzu: Die Reihenfolgen kommen von TMDB.',
     tmdb_unreachable:
       'TMDB war zur Prüfung des Schlüssels nicht erreichbar. Es wurde nichts gespeichert: Versuche es später erneut.',
     invalid_critic_rating_shows: 'Wähle aus der Liste, welchen Wert die Kritikerbewertung anzeigt.',

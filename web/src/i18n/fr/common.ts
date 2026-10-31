@@ -276,6 +276,12 @@ const common: typeof en = {
       'MDBList n’a pas pu être joint pour vérifier la clé. Rien n’a été enregistré : réessayez plus tard.',
     invalid_tmdb_key:
       'TMDB n’a pas accepté cette clé. Copiez de nouveau la clé d’API ou le jeton d’accès en lecture depuis votre compte TMDB. Rien n’a été enregistré.',
+    unknown_episode_group:
+      'TMDB ne donne plus cet ordre pour cette série. Rouvrez-la et choisissez-en un autre.',
+    episode_groups_unreachable:
+      'TMDB n’a pas pu être joint pour lister les ordres de cette série. Rien n’a été enregistré : réessayez plus tard.',
+    no_tmdb_key:
+      'Ajoutez d’abord une clé TMDB dans Paramètres › Contenu : les ordres viennent de TMDB.',
     tmdb_unreachable:
       'TMDB n’a pas pu être joint pour vérifier la clé. Rien n’a été enregistré : réessayez plus tard.',
     invalid_critic_rating_shows: 'Choisissez dans la liste le score qu’affiche la note critique.',

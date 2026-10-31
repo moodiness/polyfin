@@ -315,6 +315,51 @@ const libraries: typeof en = {
       languages: 'Sprache',
     },
   },
+  /** Episode orders: the order a series shows its seasons and episodes in, for every user. */
+  episodeOrders: {
+    title: 'Episodenreihenfolgen',
+    help: 'Eine Serie zeigt ihre Staffeln und Folgen so, wie ihr Addon sie nummeriert, in Ausstrahlungsreihenfolge. Zeige eine Serie für alle Nutzer in einer anderen Reihenfolge von TMDB, etwa DVD, absolut oder Handlungsbogen, wie es die Anzeigereihenfolge im Metadaten-Editor von jellyfin-web tut. Ihre Folgen behalten für Wiedergabe, Verlauf und Tracking ihre eigene Staffel und Nummer.',
+    loading: 'Episodenreihenfolgen werden geladen…',
+    emptyTitle: 'Alle Serien erscheinen in Ausstrahlungsreihenfolge',
+    emptyHow: 'Suche unten eine Serie, um sie in einer anderen Reihenfolge zu zeigen.',
+    search: 'Serie finden',
+    searchPlaceholder: 'Name der Serie',
+    searchButton: 'Suchen',
+    searching: 'Suche läuft…',
+    results: 'Gefundene Serien',
+    noSeries: 'Keine Serie trägt diesen Namen.',
+    editTitle: (name: string) => `Episodenreihenfolge von ${name}`,
+    order: 'Reihenfolge',
+    orderHelp:
+      'Die Episodengruppen, die TMDB für diese Serie kennt. Die Teile einer Gruppe werden ihre Staffeln.',
+    aired: 'Ausstrahlung',
+    types: {
+      originalAirDate: 'Erstausstrahlung',
+      absolute: 'Absolut',
+      dvd: 'DVD',
+      digital: 'Digital',
+      storyArc: 'Handlungsbogen',
+      production: 'Produktion',
+      tv: 'TV',
+    },
+    counts: (seasons: number, episodes: number) =>
+      `${seasons === 1 ? '1 Staffel' : `${seasons} Staffeln`}, ${episodes === 1 ? '1 Folge' : `${episodes} Folgen`}`,
+    lookup: {
+      no_key:
+        'Füge unter Einstellungen › Inhalte einen TMDB-Schlüssel hinzu, um die Reihenfolgen dieser Serie aufzulisten.',
+      unknown: 'TMDB kennt diese Serie nicht: Sie erscheint in Ausstrahlungsreihenfolge.',
+      failed:
+        'TMDB war nicht erreichbar, um die Reihenfolgen dieser Serie aufzulisten. Versuche es gleich noch einmal.',
+    },
+    specials: 'Specials',
+    specialsHelp:
+      'Wo Staffel 0 unter den Staffeln erscheint. Ausgeblendete Specials lassen sich weiter aus Weiterschauen oder über einen Link abspielen.',
+    specialsFirst: 'Zuerst',
+    specialsLast: 'Zuletzt',
+    specialsHidden: 'Ausgeblendet',
+    specialsSummary: { last: 'Specials zuletzt', hidden: 'Specials ausgeblendet' },
+    saved: (name: string) => `${name}: Episodenreihenfolge gespeichert.`,
+  },
 }
 
 export default libraries

@@ -1517,6 +1517,63 @@ export const libraryOrders = () =>
 export const applyLibraryOrder = () =>
   request<LibraryOrders>('DELETE', '/scopes/shared/libraries/user-orders')
 
+/** A series as Episode orders lists and finds it. */
+export type OrderedSeries = { id: string; name: string; year: number }
+
+/** The name Jellyfin gives a TMDB episode group's type, a series' DisplayOrder. */
+export type EpisodeGroupType =
+  'originalAirDate' | 'absolute' | 'dvd' | 'digital' | 'storyArc' | 'production' | 'tv'
+
+/** Where a series' specials show. */
+export type SpecialsPlacement = 'first' | 'last' | 'hidden'
+
+/** One of a series' TMDB episode groups. */
+export type EpisodeGroup = {
+  id: string
+  name: string
+  type: EpisodeGroupType
+  episodes: number
+  seasons: number
+}
+
+/**
+ * A series' order of episodes: `order` is its DisplayOrder, empty as aired (another value than a
+ * group type is set from a Jellyfin app, and shows as aired); `group` the group chosen here, empty
+ * for the first of its type. `lookup` tells why `groups` is empty when TMDB could not tell.
+ */
+export type EpisodeOrder = {
+  series: OrderedSeries
+  order: string
+  group: string
+  specials: SpecialsPlacement
+  groups: EpisodeGroup[]
+  lookup: '' | 'no_key' | 'unknown' | 'failed'
+}
+
+/** The series shown in an order of their own, or with their specials elsewhere than first. */
+export const fetchEpisodeOrders = (signal?: AbortSignal) =>
+  request<EpisodeOrder[]>('GET', '/episode-orders', undefined, signal)
+
+/** Searches the series to choose an order for. */
+export const searchOrderedSeries = (search: string, signal?: AbortSignal) =>
+  request<OrderedSeries[]>(
+    'GET',
+    `/episode-orders/series?${new URLSearchParams({ search })}`,
+    undefined,
+    signal,
+  )
+
+/** A series' order of episodes, with the TMDB episode groups it may show in. */
+export const fetchEpisodeOrder = (id: string, signal?: AbortSignal) =>
+  request<EpisodeOrder>('GET', `/titles/${encodeURIComponent(id)}/episode-order`, undefined, signal)
+
+/** Shows a series in a TMDB episode group, as aired when `group` is empty. */
+export const saveEpisodeOrder = (id: string, group: string, specials: SpecialsPlacement) =>
+  request<EpisodeOrder>('PUT', `/titles/${encodeURIComponent(id)}/episode-order`, {
+    group,
+    specials,
+  })
+
 /** The XMLTV guide of a TV catalog and how its last fetch went. */
 export type Guide = {
   /** Redacted address: the credentials it may embed are never returned. Empty: no guide. */
@@ -4733,6 +4790,9 @@ export const queryKeys = {
   addons: (scope: Scope) => ['scopes', scope, 'addons'] as const,
   libraries: (scope: Scope) => ['scopes', scope, 'libraries'] as const,
   smartLists: (scope: Scope) => ['scopes', scope, 'smart-lists'] as const,
+  episodeOrders: ['episode-orders'] as const,
+  episodeOrder: (id: string) => ['episode-orders', id] as const,
+  orderedSeries: (search: string) => ['episode-orders', 'series', search] as const,
   smartList: (scope: Scope, id: string) => ['scopes', scope, 'smart-lists', id] as const,
   smartChoices: (scope: Scope) => ['scopes', scope, 'smart-choices'] as const,
   smartPreview: (scope: Scope, list: SmartListDraft) =>

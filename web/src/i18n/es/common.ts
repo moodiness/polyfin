@@ -277,6 +277,12 @@ const common: typeof en = {
       'No se pudo contactar con MDBList para comprobar la clave. No se ha guardado nada: inténtelo de nuevo más tarde.',
     invalid_tmdb_key:
       'TMDB no ha aceptado esta clave. Copie de nuevo la clave API o el token de acceso de lectura desde su cuenta de TMDB. No se ha guardado nada.',
+    unknown_episode_group:
+      'TMDB ya no da este orden para esta serie. Ábrala de nuevo y elija otro.',
+    episode_groups_unreachable:
+      'No se pudo contactar con TMDB para ver los órdenes de esta serie. No se guardó nada: inténtelo más tarde.',
+    no_tmdb_key:
+      'Añada primero una clave de TMDB en Ajustes › Contenido: los órdenes vienen de TMDB.',
     tmdb_unreachable:
       'No se pudo contactar con TMDB para comprobar la clave. No se ha guardado nada: inténtelo de nuevo más tarde.',
     invalid_critic_rating_shows:
