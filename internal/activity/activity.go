@@ -484,6 +484,22 @@ func (s *Store) AddonRemoved(ctx context.Context, by accounts.User, name string,
 	s.record(ctx, Entry{Name: s.phrase(text, by.Name, name), Type: "AddonUninstalled", UserID: s.owner(by, shared)})
 }
 
+// AddonUsedBy records that by changed who uses the server addon name (see
+// addons.UsedBy): everyone, or only the groups and users users names,
+// none for no one.
+func (s *Store) AddonUsedBy(ctx context.Context, by accounts.User, name string, everyone bool, users []string) {
+	var entry string
+	switch {
+	case everyone:
+		entry = s.phrase(i18n.Text{"%s made the addon %s used by everyone", "%s a ouvert l’addon %s à tout le monde", "%s hat das Add-on %s für alle freigegeben", "%s ha hecho que todos usen la extensión %s", "%s ha reso l’add-on %s usato da tutti", "%s fez o complemento %s ser usado por todos"}, by.Name, name)
+	case len(users) == 0:
+		entry = s.phrase(i18n.Text{"%s made the addon %s used by no one", "%s a retiré l’addon %s à tout le monde", "%s hat das Add-on %s für niemanden freigegeben", "%s ha hecho que nadie use la extensión %s", "%s ha reso l’add-on %s usato da nessuno", "%s fez o complemento %s não ser usado por ninguém"}, by.Name, name)
+	default:
+		entry = s.phrase(i18n.Text{"%s limited the addon %s to %s", "%s a réservé l’addon %s à %s", "%s hat das Add-on %s auf %s beschränkt", "%s ha limitado la extensión %s a %s", "%s ha limitato l’add-on %s a %s", "%s limitou o complemento %s a %s"}, by.Name, name, strings.Join(users, ", "))
+	}
+	s.record(ctx, Entry{Name: entry, Type: "AddonUsedByChanged"})
+}
+
 // owner is the user an addon entry is about: the user whose own addon it
 // is, none for the server's.
 func (s *Store) owner(by accounts.User, shared bool) *accounts.ID {

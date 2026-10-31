@@ -208,6 +208,9 @@ type folderRequest struct {
 	RcloneRemote  *string `json:"rcloneRemote"`
 	PollMinutes   *int    `json:"pollMinutes"`
 	AcceptHostKey bool    `json:"acceptHostKey"`
+	// UsedBy is who uses the folder, on adding it; everyone when left
+	// out.
+	UsedBy *usedByJSON `json:"usedBy"`
 }
 
 // addFolder adds a local folder to the server's addons and scans it in
@@ -222,6 +225,9 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	folder := localfiles.NewFolder{Kind: body.Kind, UseArtwork: body.UseArtwork, ReadExtras: body.ReadExtras, PollMinutes: body.PollMinutes}
+	if folder.UsedBy, ok = usedBy(w, scope, body.UsedBy); !ok {
+		return
+	}
 	for _, field := range []struct {
 		from *string
 		to   *string
@@ -236,6 +242,9 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 	addon, err := h.Folders.Add(ctx, folder)
 	if err == nil {
 		h.Activity.AddonInstalled(ctx, sessionFrom(ctx).User, addon.Manifest.Name, addon.Manifest.Version, true)
+		if addon.UsedBy.Listed {
+			h.usedByChanged(ctx, addon)
+		}
 	}
 	h.answerAddon(w, r, scope, http.StatusCreated, addon, err)
 }

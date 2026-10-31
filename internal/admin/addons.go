@@ -42,6 +42,9 @@ type addonJSON struct {
 	// Language is the language of a server addon's descriptions, empty
 	// for none (see addons.Addon.Language).
 	Language string `json:"language"`
+	// UsedBy is who uses a server addon; a user's own addon is used by
+	// everyone, its owner being the only one to see it.
+	UsedBy usedByJSON `json:"usedBy"`
 	// EnabledLibraries is, in the answer to adding the addon only, how
 	// many of its catalogs that made libraries of.
 	EnabledLibraries *int `json:"enabledLibraries,omitempty"`
@@ -50,6 +53,87 @@ type addonJSON struct {
 	// because the scope had that many already, though some would have
 	// (see addons.Addon.EnabledByDefault); 0 otherwise.
 	LibraryLimit int `json:"libraryLimit,omitempty"`
+}
+
+// usedByJSON is who uses a server addon (see addons.UsedBy): Mode
+// "everyone", or "listed" for the groups and users listed by identifier,
+// which may be none.
+type usedByJSON struct {
+	Mode   string   `json:"mode"`
+	Groups []string `json:"groups"`
+	Users  []string `json:"users"`
+}
+
+func newUsedByJSON(usedBy addons.UsedBy) usedByJSON {
+	result := usedByJSON{Mode: "everyone", Groups: []string{}, Users: []string{}}
+	if usedBy.Listed {
+		result.Mode = "listed"
+	}
+	for _, id := range usedBy.Groups {
+		result.Groups = append(result.Groups, id.String())
+	}
+	for _, id := range usedBy.Users {
+		result.Users = append(result.Users, id.String())
+	}
+	return result
+}
+
+// usedBy reads a Used by setting, nil for none, answering 400
+// invalid_used_by for an unknown mode or identifier, and for a setting
+// given to a scope that is not the server's. Lists given with everyone
+// are not kept.
+func usedBy(w http.ResponseWriter, scope addons.Scope, body *usedByJSON) (addons.UsedBy, bool) {
+	if body == nil {
+		return addons.UsedBy{}, true
+	}
+	result := addons.UsedBy{Listed: body.Mode == "listed"}
+	if body.Mode != "everyone" && body.Mode != "listed" || scope.Owner != nil {
+		writeError(w, http.StatusBadRequest, "invalid_used_by")
+		return addons.UsedBy{}, false
+	}
+	if !result.Listed {
+		return result, true
+	}
+	for _, list := range []struct {
+		from []string
+		to   *[]accounts.ID
+	}{{body.Groups, &result.Groups}, {body.Users, &result.Users}} {
+		for _, raw := range list.from {
+			id, err := accounts.ParseID(raw)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid_used_by")
+				return addons.UsedBy{}, false
+			}
+			*list.to = append(*list.to, id)
+		}
+	}
+	return result, true
+}
+
+// usedByChanged writes to the activity log that the caller set who uses
+// the server addon addon, by the names of the groups, then the users,
+// listed.
+func (h *handler) usedByChanged(ctx context.Context, addon addons.Addon) {
+	var groups, users []string
+	if addon.UsedBy.Listed {
+		all, err := h.Accounts.Groups(ctx)
+		if err != nil {
+			h.Logger.Warn("The groups an addon is limited to could not be named", "error", err)
+		}
+		for _, group := range all {
+			if slices.Contains(addon.UsedBy.Groups, group.ID) {
+				groups = append(groups, group.Name)
+			}
+		}
+		for _, id := range addon.UsedBy.Users {
+			if user, err := h.Accounts.User(ctx, id); err == nil {
+				users = append(users, user.Name)
+			}
+		}
+		slices.Sort(groups)
+		slices.Sort(users)
+	}
+	h.Activity.AddonUsedBy(ctx, sessionFrom(ctx).User, addon.Manifest.Name, !addon.UsedBy.Listed, slices.Concat(groups, users))
 }
 
 // sourceJSON describes an IPTV source: its address, redacted, as it holds
@@ -163,6 +247,7 @@ func newAddonJSON(addon addons.Addon) addonJSON {
 		Kind:         addon.Kind,
 		Music:        newMusicJSON(addon),
 		Language:     addon.Language,
+		UsedBy:       newUsedByJSON(addon.UsedBy),
 	}
 }
 
@@ -350,20 +435,22 @@ func redactGuideURL(guideURL string) string {
 
 // writeLibraries answers a scope's libraries with the names apps show
 // them under. A user's own libraries follow the server's when they use
-// them, as in their apps; the server's are named as for a user without
+// them, as in their apps, those of the server's addons they use (see
+// addons.UsedBy); the server's are named as for a user without
 // libraries of their own. Live TV catalogs list channels, not a library:
 // they have no such name.
 func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope addons.Scope, libraries []addons.Library) {
 	var shown []addons.Library
 	// A scope with an owner is the caller's own (see scope).
-	if scope.Owner != nil && sessionFrom(r.Context()).User.UseSharedAddons {
+	if user := sessionFrom(r.Context()).User; scope.Owner != nil && user.UseSharedAddons {
 		list, err := h.Addons.Libraries(r.Context(), addons.Shared())
 		if err != nil {
 			h.internalError(w, r, err)
 			return
 		}
 		shown = slices.DeleteFunc(list, func(l addons.Library) bool {
-			return !l.Enabled || !l.AddonActive || library.LiveCatalog(l.Catalog.Type)
+			addon, err := h.Addons.Find(r.Context(), l.AddonID)
+			return !l.Enabled || !l.AddonActive || library.LiveCatalog(l.Catalog.Type) || err != nil || !addon.UsedBy.Uses(user)
 		})
 	}
 	first := len(shown)
@@ -517,6 +604,7 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{addons.ErrInvalidGuideURL, http.StatusBadRequest, "invalid_guide_url"},
 		{addons.ErrNotStremio, http.StatusBadRequest, "invalid_request"},
 		{addons.ErrInvalidLanguage, http.StatusBadRequest, "invalid_language"},
+		{addons.ErrInvalidUsedBy, http.StatusBadRequest, "invalid_used_by"},
 		{addons.ErrNotEclipse, http.StatusBadRequest, "invalid_request"},
 		{addons.ErrKindChanged, http.StatusUnprocessableEntity, "addon_kind_changed"},
 		{eclipse.ErrInvalidSettings, http.StatusBadRequest, "invalid_addon_settings"},
@@ -617,12 +705,17 @@ func (h *handler) installAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		ManifestURL string `json:"manifestUrl"`
+		ManifestURL string      `json:"manifestUrl"`
+		UsedBy      *usedByJSON `json:"usedBy"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	addon, err := h.Addons.Install(r.Context(), scope, body.ManifestURL, confined(r))
+	limited, ok := usedBy(w, scope, body.UsedBy)
+	if !ok {
+		return
+	}
+	addon, err := h.Addons.InstallFor(r.Context(), scope, body.ManifestURL, confined(r), limited)
 	if addonError(w, err) {
 		return
 	}
@@ -631,6 +724,9 @@ func (h *handler) installAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Activity.AddonInstalled(r.Context(), sessionFrom(r.Context()).User, addon.Manifest.Name, addon.Manifest.Version, scope.Owner == nil)
+	if addon.UsedBy.Listed {
+		h.usedByChanged(r.Context(), addon)
+	}
 	result, err := h.addonJSON(r, scope, addon)
 	if err != nil {
 		h.internalError(w, r, err)
@@ -671,15 +767,20 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Enabled     *bool   `json:"enabled"`
-		ManifestURL *string `json:"manifestUrl"`
-		Language    *string `json:"language"`
+		Enabled     *bool       `json:"enabled"`
+		ManifestURL *string     `json:"manifestUrl"`
+		Language    *string     `json:"language"`
+		UsedBy      *usedByJSON `json:"usedBy"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.ManifestURL == nil && body.Enabled == nil && body.Language == nil {
+	if body.ManifestURL == nil && body.Enabled == nil && body.Language == nil && body.UsedBy == nil {
 		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	limited, ok := usedBy(w, scope, body.UsedBy)
+	if !ok {
 		return
 	}
 	if (body.ManifestURL != nil || (body.Enabled != nil && *body.Enabled)) && h.personalAddonsRefused(w, r, scope) {
@@ -702,7 +803,22 @@ func (h *handler) updateAddon(w http.ResponseWriter, r *http.Request) {
 	if err == nil && body.Language != nil {
 		addon, err = h.Addons.SetLanguage(r.Context(), scope, id, *body.Language)
 	}
+	if err == nil && body.UsedBy != nil {
+		var before addons.Addon
+		if before, err = h.Addons.Find(r.Context(), id); err == nil {
+			addon, err = h.Addons.SetUsedBy(r.Context(), id, limited)
+		}
+		if err == nil && !sameUsedBy(before.UsedBy, addon.UsedBy) {
+			h.usedByChanged(r.Context(), addon)
+		}
+	}
 	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
+}
+
+// sameUsedBy reports whether two Used by settings, as stored, are the
+// same.
+func sameUsedBy(a, b addons.UsedBy) bool {
+	return a.Listed == b.Listed && slices.Equal(a.Groups, b.Groups) && slices.Equal(a.Users, b.Users)
 }
 
 func (h *handler) refreshAddon(w http.ResponseWriter, r *http.Request) {
