@@ -39,6 +39,10 @@ const (
 // Elsewhere is set when the labels name another title than the stream's:
 // the marker naming it, such as "S01E03", "S02" or "1998" (see
 // OtherTitle); empty for most.
+//
+// Tier, Audio and Edition are its source tier, of Tiers, its best audio
+// format and its edition, of accounts.VersionEditions, empty or zero when
+// the labels name none (see ReadRelease).
 type Labels struct {
 	Codec     string
 	Range     DynamicRange
@@ -47,6 +51,9 @@ type Labels struct {
 	Regions   []string
 	Releases  []string
 	Elsewhere string
+	Tier      string
+	Audio     AudioFormat
+	Edition   string
 }
 
 // labelCodecs are the video codecs labels name, by the words naming them;
