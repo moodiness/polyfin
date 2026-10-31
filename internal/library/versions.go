@@ -512,17 +512,29 @@ func (s *Service) listVersions(ctx context.Context, t target, serving []streamSo
 // the item. A torrent remembered under id, for a user who may not play
 // torrents, lists the versions again too: the user's version of that file
 // may be a link to it listed after the torrent (see listVersions).
+//
+// A version is remembered from any user's listing, while a user only
+// reaches the versions their own sources list (see listedFor): one
+// remembered from another user's sources lists the item again as the
+// user, and a file none of their sources lists is ErrNotFound, as a
+// version that does not exist.
 func (s *Service) Version(ctx context.Context, user accounts.User, item, id accounts.ID) (Version, error) {
 	if version, ok := s.versions.Get(id); ok && version.Item == item && version.fresh(s.now()) &&
 		(version.Torrent == nil || s.settings().TorrentsAllowed(user)) {
-		// A version remembered from another user's listing is no way around
-		// the user's parental control or blocked genres.
-		if user.Restricted() {
-			if _, _, err := s.target(ctx, user, item); err != nil {
-				return Version{}, err
-			}
+		mine, listed, err := s.listedFor(ctx, user, version)
+		if err != nil {
+			return Version{}, err
 		}
-		return version, nil
+		if listed && mine.fresh(s.now()) {
+			// A version remembered from another user's listing is no way
+			// around the user's parental control or blocked genres.
+			if user.Restricted() {
+				if _, _, err := s.target(ctx, user, item); err != nil {
+					return Version{}, err
+				}
+			}
+			return mine, nil
+		}
 	}
 	versions, err := s.Versions(ctx, user, item)
 	if err != nil {

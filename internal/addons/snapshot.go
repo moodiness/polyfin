@@ -32,8 +32,10 @@ type snapshot struct {
 	// scopes are the addons and libraries of each scope, by owner, the
 	// zero ID for the server's.
 	scopes map[accounts.ID]scoped
-	// addons are the addons of every scope, by identifier.
+	// addons are the addons of every scope, by identifier, and owners the
+	// key of the scope of each (see ownerOf).
 	addons map[accounts.ID]Addon
+	owners map[accounts.ID]accounts.ID
 }
 
 // scoped is what Addons and Libraries list for a scope.
@@ -127,11 +129,13 @@ func (s *Store) load(ctx context.Context) (*snapshot, error) {
 	}
 	owner := func(id *accounts.ID) accounts.ID { return ownerOf(Scope{Owner: id}) }
 	byScope := map[accounts.ID][]Addon{}
-	snap := &snapshot{scopes: map[accounts.ID]scoped{}, addons: make(map[accounts.ID]Addon, len(installed))}
+	snap := &snapshot{scopes: map[accounts.ID]scoped{}, addons: make(map[accounts.ID]Addon, len(installed)),
+		owners: make(map[accounts.ID]accounts.ID, len(installed))}
 	for _, owned := range installed {
 		key := owner(owned.owner)
 		byScope[key] = append(byScope[key], owned.addon)
 		snap.addons[owned.addon.ID] = owned.addon
+		snap.owners[owned.addon.ID] = key
 	}
 	rowsOf := map[accounts.ID][]libraryRow{}
 	for _, row := range rows {

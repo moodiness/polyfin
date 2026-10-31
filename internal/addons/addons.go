@@ -408,6 +408,21 @@ func (s *Store) Find(ctx context.Context, id accounts.ID) (Addon, error) {
 	return addon, nil
 }
 
+// FindOwner returns an installed addon by identifier, as Find does, and
+// the user who installed it, the zero ID for one of the server's. While
+// Watch follows the changes, it is answered from memory.
+func (s *Store) FindOwner(ctx context.Context, id accounts.ID) (Addon, accounts.ID, error) {
+	snap, err := s.current(ctx)
+	if err != nil {
+		return Addon{}, accounts.ID{}, err
+	}
+	addon, ok := snap.addons[id]
+	if !ok {
+		return Addon{}, accounts.ID{}, ErrNotFound
+	}
+	return addon, snap.owners[id], nil
+}
+
 // All returns every addon installed, by anyone, in no order.
 func (s *Store) All(ctx context.Context) ([]Addon, error) {
 	snap, err := s.current(ctx)
