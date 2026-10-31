@@ -19,6 +19,7 @@ import (
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
+	"github.com/moodiness/polyfin/internal/plays"
 	"github.com/moodiness/polyfin/internal/subtitles"
 )
 
@@ -343,7 +344,12 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	} else if reached {
-		rateLimitExceeded(w)
+		// The title is named to the notifications, as far as it is found.
+		var item library.Item
+		if h.PlayFailed != nil {
+			item, _ = h.played(r.Context(), user, opened)
+		}
+		h.refusePlay(w, r, user, item, "RateLimitExceeded", plays.FailedLimit)
 		return
 	}
 	h.rememberPlay(r.Context(), request)
@@ -402,7 +408,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		release, err := h.Playback.Hold(playback.ForUser(r.Context(), user.ID), version)
 		if err != nil {
 			h.Logger.Info("A replay could not play: its provider's connections are all in use", "addon", version.Addon)
-			writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
+			h.refusePlay(w, r, user, item, "NoCompatibleStream", plays.FailedLimit)
 			return
 		}
 		defer release()
@@ -471,10 +477,10 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			// tells as media that cannot be played at this time, rather than
 			// as media no app plays.
 			h.Logger.Info("No version plays now: a torrent version could not start, see System › Health", "item", item.ID)
-			writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "RateLimitExceeded"})
+			h.refusePlay(w, r, user, item, "RateLimitExceeded", plays.FailedNoStream)
 			return
 		}
-		writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "NoCompatibleStream"})
+		h.refusePlay(w, r, user, item, "NoCompatibleStream", plays.FailedNoStream)
 		return
 	}
 	chosen, unreadable, versions, at := choice.decided, choice.unreadable, p.versions, openedIndex(opened, p.versions)
@@ -1208,6 +1214,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.Playback.Serve(w, r, version, playback.Delivery{Relay: relay, ContentType: contentType}); err != nil && r.Context().Err() == nil {
 		h.Logger.Warn("A stream could not be served", "addon", version.Addon, "error", err)
+		h.streamFailed(r, user, item, query(r, "deviceId"))
 	}
 }
 

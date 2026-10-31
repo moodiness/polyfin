@@ -31,13 +31,6 @@ func (h *Handler) playbackLimitReached(ctx context.Context, c caller) (bool, err
 	return playing+h.guests.ofUser(c.User.ID) >= most, nil
 }
 
-// rateLimitExceeded answers a PlaybackInfo refused for the user's limit of
-// playbacks at once, with the code jellyfin-web explains as media that
-// cannot be played at this time.
-func rateLimitExceeded(w http.ResponseWriter) {
-	writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "RateLimitExceeded"})
-}
-
 // limitBitrate lowers the bitrate limit a PlaybackInfo plays under, the
 // app's, else its device profile's, to the user's MaxBitrate, and keeps that
 // in userLimit. Jellyfin's RemoteClientBitrateLimit applies to remote
