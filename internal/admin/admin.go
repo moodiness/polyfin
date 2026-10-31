@@ -195,6 +195,11 @@ type Options struct {
 	// Sharing finds the titles users give through share links; nil lets
 	// no one make a link.
 	Sharing Sharing
+	// Versions explains titles' versions, pins and blocks them, for the
+	// Versions page, and Titles finds the titles it explains; nil offers
+	// no page.
+	Versions Versions
+	Titles   Titles
 	// Restart stops Polyfin as a signal does, for its container's restart
 	// policy, its service manager or Polyfin Desktop to start it again; it
 	// returns at once. Nil offers no restart.
@@ -344,6 +349,19 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/share-titles/{id}/episodes", h.signedIn(h.shareEpisodes))
 	mux.Handle("GET /admin/api/quick-connect/{code}", h.signedIn(h.quickConnectRequest))
 	mux.Handle("POST /admin/api/quick-connect", h.signedIn(h.quickConnectApprove))
+	if options.Versions != nil && options.Titles != nil {
+		mux.Handle("GET /admin/api/titles", h.administrator(h.versionTitles))
+		mux.Handle("GET /admin/api/titles/{id}", h.administrator(h.versionTitle))
+		mux.Handle("GET /admin/api/titles/{id}/episodes", h.administrator(h.versionEpisodes))
+		mux.Handle("GET /admin/api/titles/{id}/versions", h.administrator(h.titleVersions))
+		mux.Handle("POST /admin/api/titles/{id}/versions/search", h.administrator(h.askVersionsAgain))
+		mux.Handle("PUT /admin/api/titles/{id}/versions/pin", h.administrator(h.pinVersion))
+		mux.Handle("DELETE /admin/api/titles/{id}/versions/pin", h.administrator(h.unpinVersion))
+		mux.Handle("POST /admin/api/titles/{id}/versions/blocks", h.administrator(h.blockVersion))
+		mux.Handle("POST /admin/api/titles/{id}/versions/{versionId}/analyze", h.administrator(h.analyzeVersion))
+		mux.Handle("GET /admin/api/version-blocks", h.administrator(h.versionBlocks))
+		mux.Handle("DELETE /admin/api/version-blocks/{id}", h.administrator(h.unblockVersion))
+	}
 
 	mux.Handle("GET /admin/api/users", h.administrator(h.users))
 	mux.Handle("POST /admin/api/users", h.administrator(h.createUser))
