@@ -28,6 +28,7 @@ import {
   unlinkLocalFile,
   updateLocalFolder,
   type Addon,
+  type UsedBy,
   type DiscKind,
   type FolderKind,
   type FolderShare,
@@ -218,7 +219,13 @@ function remoteFields(share: RemoteShare, draft: RemoteDraft, editing: boolean) 
 }
 
 /** The form adding a local folder or a network share to the server's sources. */
-export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => void }) {
+export function LocalFolderAddForm({
+  usedBy,
+  onAdded,
+}: {
+  usedBy: UsedBy
+  onAdded: (added: Addon) => void
+}) {
   const { t } = useI18n()
   const text = t.localFolders
   const [location, setLocation] = useState<Location>('local')
@@ -235,6 +242,7 @@ export function LocalFolderAddForm({ onAdded }: { onAdded: (added: Addon) => voi
   const mutation = useMutation({
     mutationFn: () =>
       addLocalFolder({
+        usedBy,
         name: name.trim(),
         path:
           share === 'rclone'

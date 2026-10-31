@@ -898,7 +898,16 @@ export type Addon = {
    * Users who chose that metadata language see its descriptions.
    */
   language: string
+  /** Who uses a server source; a user's own source is used by everyone, its owner alone seeing it. */
+  usedBy: UsedBy
 }
+
+/**
+ * Who uses a server source: everyone, or only the groups and users listed by id ('listed'), which
+ * may be none and may leave the administrators out. A user who does not use a source gets nothing
+ * from it.
+ */
+export type UsedBy = { mode: 'everyone' | 'listed'; groups: string[]; users: string[] }
 
 /** What a local folder holds. */
 export type FolderKind = 'movies' | 'shows' | 'music' | 'homevideos'
@@ -1100,6 +1109,8 @@ export type NewLocalFolder = {
   rcloneRemote?: string
   /** Minutes between the listings for changes, 0 only at scans; the kind's default when left out. */
   pollMinutes?: number
+  /** Who uses the folder; everyone when left out. */
+  usedBy?: UsedBy
 }
 
 /**
@@ -1445,6 +1456,8 @@ export type NewIptvSource = {
   /** Xtream only: use the guide the server publishes for the account. */
   providerGuide?: boolean
   options?: Partial<IptvOptions>
+  /** Who uses a server source; everyone when left out. */
+  usedBy?: UsedBy
 }
 
 /** What changes of an IPTV source; a password left empty keeps the current one. */
@@ -1458,7 +1471,12 @@ export type IptvSourcePatch = Partial<{
   options: Partial<IptvOptions>
 }>
 
-export type AddonPatch = Partial<{ enabled: boolean; manifestUrl: string; language: string }>
+export type AddonPatch = Partial<{
+  enabled: boolean
+  manifestUrl: string
+  language: string
+  usedBy: UsedBy
+}>
 
 export type Library = {
   addonId: string
@@ -3376,8 +3394,8 @@ const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
 export const fetchAddons = (scope: Scope, signal?: AbortSignal) =>
   request<Addon[]>('GET', `${scopePath(scope)}/addons`, undefined, signal)
 
-export const installAddon = (scope: Scope, manifestUrl: string) =>
-  request<Addon>('POST', `${scopePath(scope)}/addons`, { manifestUrl })
+export const installAddon = (scope: Scope, manifestUrl: string, usedBy?: UsedBy) =>
+  request<Addon>('POST', `${scopePath(scope)}/addons`, { manifestUrl, usedBy })
 
 export const updateAddon = (scope: Scope, id: string, patch: AddonPatch) =>
   request<Addon>('PATCH', `${scopePath(scope)}/addons/${seg(id)}`, patch)

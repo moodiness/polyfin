@@ -582,6 +582,25 @@ const sources: typeof en = {
       'Un amministratore ha disattivato le tue origini: le tue applicazioni Jellyfin mostrano solo le origini e le librerie del server. Le tue origini vengono conservate ma non usate.',
     listTitle: 'Le tue origini',
   },
+  usedBy: {
+    title: 'Usata da',
+    help: 'Chi riceve questa origine nelle proprie app Jellyfin: le sue librerie, i suoi titoli, versioni, sottotitoli e canali. Tutti include gli utenti creati in seguito; con Solo questi gruppi e utenti, un nuovo utente non ne riceve nulla finché il suo gruppo o lui stesso non è selezionato.',
+    everyone: 'Tutti',
+    listed: 'Solo questi gruppi e utenti',
+    groups: 'Gruppi',
+    users: 'Utenti',
+    members: (count: number) => (count === 1 ? '1 membro' : `${count} membri`),
+    noGroups: 'Ancora nessun gruppo.',
+    nobody: 'Nessuno usa questa origine finché non selezioni un gruppo o un utente.',
+    selfLeftOut: 'Gestisci ancora questa origine qui, ma le tue app non la useranno.',
+    ownAddons:
+      'Un utente che può aggiungere le proprie origini può ancora aggiungere lo stesso add-on per sé: disattiva «Può aggiungere i propri add-on» nella sua pagina o in quella del suo gruppo per impedirlo.',
+    save: 'Salva',
+    cancel: 'Annulla',
+    saved: (name: string) => `${name}: chi la usa è stato salvato.`,
+    chip: (names: string) => `Usata da ${names}`,
+    chipNone: 'Non usata da nessuno',
+  },
   music: {
     content: { music: 'Musica', audiobook: 'Audiolibri', podcast: 'Podcast' } as Record<
       string,

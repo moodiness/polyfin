@@ -587,6 +587,27 @@ const sources: typeof en = {
       'Un administrateur a désactivé vos propres sources : vos applications Jellyfin n’affichent que les sources et bibliothèques du serveur. Vos propres sources sont conservées mais pas utilisées.',
     listTitle: 'Vos sources',
   },
+  usedBy: {
+    title: 'Utilisé par',
+    help: 'Qui reçoit cette source dans ses applications Jellyfin : ses bibliothèques, ses titres, versions, sous-titres et chaînes. Tout le monde inclut les utilisateurs créés plus tard ; avec Seulement ces groupes et ces utilisateurs, un nouvel utilisateur n’en reçoit rien tant que son groupe ou lui-même n’est pas coché.',
+    everyone: 'Tout le monde',
+    listed: 'Seulement ces groupes et ces utilisateurs',
+    groups: 'Groupes',
+    users: 'Utilisateurs',
+    members: (count: number) => (count <= 1 ? `${count} membre` : `${count} membres`),
+    noGroups: 'Aucun groupe pour l’instant.',
+    nobody:
+      'Personne n’utilise cette source tant que vous ne cochez pas un groupe ou un utilisateur.',
+    selfLeftOut:
+      'Vous gérez toujours cette source ici, mais vos propres applications ne l’utiliseront pas.',
+    ownAddons:
+      'Un utilisateur autorisé à ajouter ses propres sources peut encore ajouter le même addon pour lui-même : désactivez « Peut ajouter ses propres addons » sur sa page ou celle de son groupe pour l’en empêcher.',
+    save: 'Enregistrer',
+    cancel: 'Annuler',
+    saved: (name: string) => `${name} : la liste de qui l’utilise a été enregistrée.`,
+    chip: (names: string) => `Utilisé par ${names}`,
+    chipNone: 'Utilisé par personne',
+  },
   music: {
     content: { music: 'Musique', audiobook: 'Livres audio', podcast: 'Podcasts' },
     library: {

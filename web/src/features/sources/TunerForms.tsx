@@ -1,7 +1,15 @@
 import { CellTowerIcon, MagnifyingGlassIcon } from '@phosphor-icons/react'
 import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { addIptvSource, ApiError, findTuners, queryClient, queryKeys, type Addon } from '@/api'
+import {
+  addIptvSource,
+  ApiError,
+  findTuners,
+  queryClient,
+  queryKeys,
+  type Addon,
+  type UsedBy,
+} from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import {
@@ -29,7 +37,13 @@ function addError(t: Messages, error: unknown): string {
  * Adds an HDHomeRun tuner to the server's sources: one the local network answers for, or one
  * given by its address. Tuners are the server's only, added by administrators.
  */
-export function TunerAddFlow({ onAdded }: { onAdded: (added: Addon) => void }) {
+export function TunerAddFlow({
+  usedBy,
+  onAdded,
+}: {
+  usedBy: UsedBy
+  onAdded: (added: Addon) => void
+}) {
   const { language, t } = useI18n()
   const text = t.sourceAdd
   const [favoritesOnly, setFavoritesOnly] = useState(false)
@@ -39,6 +53,7 @@ export function TunerAddFlow({ onAdded }: { onAdded: (added: Addon) => void }) {
   const add = useMutation({
     mutationFn: (tuner: { url: string; name: string; found: boolean }) =>
       addIptvSource('shared', {
+        usedBy,
         kind: 'hdhomerun',
         url: tuner.url,
         name: tuner.name,

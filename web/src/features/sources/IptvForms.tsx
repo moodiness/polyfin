@@ -8,6 +8,7 @@ import {
   queryKeys,
   updateIptvSource,
   type Addon,
+  type UsedBy,
   type IptvAccount,
   type IptvOptions,
   type IptvSource,
@@ -136,7 +137,16 @@ export function addedParts(t: Messages, language: string, source: IptvSource): s
  * Adds an IPTV source to a scope in two steps: the account (an M3U playlist or an Xtream Codes
  * account, with its guide), then which categories to import and how, from a preview of its list.
  */
-export function IptvAddFlow({ scope, onAdded }: { scope: Scope; onAdded: (added: Addon) => void }) {
+export function IptvAddFlow({
+  scope,
+  usedBy,
+  onAdded,
+}: {
+  scope: Scope
+  /** Who uses a server source; left out for a member's own. */
+  usedBy?: UsedBy
+  onAdded: (added: Addon) => void
+}) {
   const { t } = useI18n()
   const text = t.sourceAdd
   const files = useSessionUser().isAdministrator
@@ -162,6 +172,7 @@ export function IptvAddFlow({ scope, onAdded }: { scope: Scope; onAdded: (added:
   const mutation = useMutation({
     mutationFn: () =>
       addIptvSource(scope, {
+        usedBy,
         name: name.trim(),
         ...accountJSON,
         providerGuide: kind === 'xtream' && providerGuide,

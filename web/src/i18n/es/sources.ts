@@ -585,6 +585,25 @@ const sources: typeof en = {
       'Un administrador ha desactivado sus propias fuentes: sus aplicaciones de Jellyfin solo muestran las fuentes y bibliotecas del servidor. Sus propias fuentes se conservan, pero no se usan.',
     listTitle: 'Sus fuentes',
   },
+  usedBy: {
+    title: 'Usada por',
+    help: 'Quién recibe esta fuente en sus aplicaciones de Jellyfin: sus bibliotecas, sus títulos, versiones, subtítulos y canales. Todos incluye a los usuarios creados más tarde; con Solo estos grupos y usuarios, un usuario nuevo no recibe nada de ella hasta que se marque su grupo o a él mismo.',
+    everyone: 'Todos',
+    listed: 'Solo estos grupos y usuarios',
+    groups: 'Grupos',
+    users: 'Usuarios',
+    members: (count: number) => (count === 1 ? '1 miembro' : `${count} miembros`),
+    noGroups: 'Aún no hay grupos.',
+    nobody: 'Nadie usa esta fuente hasta que marque un grupo o un usuario.',
+    selfLeftOut: 'Sigue gestionando esta fuente aquí, pero sus propias aplicaciones no la usarán.',
+    ownAddons:
+      'Un usuario que puede añadir sus propias fuentes aún puede añadir la misma extensión para sí mismo: desactive «Puede añadir sus propias extensiones» en su página o en la de su grupo para impedirlo.',
+    save: 'Guardar',
+    cancel: 'Cancelar',
+    saved: (name: string) => `${name}: se ha guardado quién la usa.`,
+    chip: (names: string) => `Usada por ${names}`,
+    chipNone: 'No la usa nadie',
+  },
   music: {
     content: { music: 'Música', audiobook: 'Audiolibros', podcast: 'Podcasts' } as Record<
       string,

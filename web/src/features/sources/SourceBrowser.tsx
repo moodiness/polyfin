@@ -24,6 +24,7 @@ import {
 import { invalidateScope, isIptv, kindOf, lastTime, type Entry, type KindFilter } from './model'
 import { SourceStatus, SourceTile } from './parts'
 import { KindBadge, OwnerLabel, SourceDetail } from './SourceDetail'
+import { UsedByChip } from './UsedBy'
 
 const wideQuery = '(min-width: 1024px)'
 
@@ -331,6 +332,12 @@ export function SourceBrowser({
                 muted={!entry.addon.enabled}
                 meta={
                   <>
+                    {entry.owner === null && entry.addon.usedBy.mode === 'listed' && (
+                      <>
+                        <UsedByChip usedBy={entry.addon.usedBy} />
+                        <span aria-hidden="true">·</span>
+                      </>
+                    )}
                     {entry.owner !== null && (
                       <>
                         <OwnerLabel entry={entry} selfId={selfId} />
