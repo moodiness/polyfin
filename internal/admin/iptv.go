@@ -33,6 +33,9 @@ type sourceRequest struct {
 	// Groups, from v0.8, gave the groups shown: categories replaced them,
 	// and a request that still sends them is refused.
 	Groups json.RawMessage `json:"groups"`
+	// UsedBy is who uses a server source, on adding it; everyone when
+	// left out.
+	UsedBy *usedByJSON `json:"usedBy"`
 }
 
 func (body sourceRequest) account(kind string) iptv.Account {
@@ -77,9 +80,16 @@ func (h *handler) addSource(w http.ResponseWriter, r *http.Request) {
 	}
 	// The list is worth keeping when the admin app stops waiting.
 	ctx := context.WithoutCancel(r.Context())
-	addon, err := h.IPTV.Add(ctx, scope, iptv.NewSource{Name: name, Account: account, Guide: guide, Options: body.Options}, confined(r))
+	limited, ok := usedBy(w, scope, body.UsedBy)
+	if !ok {
+		return
+	}
+	addon, err := h.IPTV.Add(ctx, scope, iptv.NewSource{Name: name, Account: account, Guide: guide, Options: body.Options, UsedBy: limited}, confined(r))
 	if err == nil {
 		h.Activity.AddonInstalled(ctx, sessionFrom(ctx).User, addon.Manifest.Name, addon.Manifest.Version, scope.Owner == nil)
+		if addon.UsedBy.Listed {
+			h.usedByChanged(ctx, addon)
+		}
 		if guide != "" {
 			if err := h.fetchGuide(r, scope, addons.LibraryKey{AddonID: addon.ID, CatalogType: "tv", CatalogID: addon.Manifest.Catalogs[0].ID}); err != nil {
 				h.internalError(w, r, err)
