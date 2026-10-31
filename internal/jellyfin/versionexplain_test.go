@@ -199,3 +199,35 @@ func TestTheExplanationTellsWhyEachVersionIsLeftOut(t *testing.T) {
 		t.Errorf("a pin missing: %v", got)
 	}
 }
+
+// The explanation tells, for each version, the label rules matching it
+// and its score under them, and names the label rule hiding a version.
+func TestTheExplanationTellsTheLabelRules(t *testing.T) {
+	t.Parallel()
+	p := versionRulesOn(t, newTestServer(t, 10))
+	movie, _ := accounts.ParseID(p.movie)
+	p.setting(t, func(s *accounts.Settings) {
+		s.VersionLabelRules = []accounts.VersionLabelRule{{Text: "x264", Score: 5}, {Text: "1080p", Score: 2}, {Text: "AV1", Hide: true}}
+	})
+	explanation, err := p.handler.ExplainVersions(t.Context(), p.user, movie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	streams := explanation.Sources[0].Streams
+	if len(streams) != 6 {
+		t.Fatalf("streams: %+v", streams)
+	}
+	english, source, french, ita := streams[0], streams[1], streams[3], streams[5]
+	if english.Facts.Score != 7 || !slices.Equal(english.Facts.LabelRules, []string{"x264", "1080p"}) {
+		t.Errorf("English: score %d, rules %q", english.Facts.Score, english.Facts.LabelRules)
+	}
+	if french.Facts.Score != 5 || !slices.Equal(french.Facts.LabelRules, []string{"x264"}) {
+		t.Errorf("FRENCH: score %d, rules %q", french.Facts.Score, french.Facts.LabelRules)
+	}
+	if source.Facts.Score != 0 || len(source.Facts.LabelRules) != 0 {
+		t.Errorf("Source: score %d, rules %q", source.Facts.Score, source.Facts.LabelRules)
+	}
+	if ita.Step != StepHidden || ita.Rule != "label" || ita.Detail != "AV1" || !slices.Equal(ita.Facts.LabelRules, []string{"1080p", "AV1"}) {
+		t.Errorf("ITA: %s %s %q, rules %q", ita.Step, ita.Rule, ita.Detail, ita.Facts.LabelRules)
+	}
+}
