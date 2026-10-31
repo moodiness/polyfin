@@ -12,7 +12,7 @@ import (
 // none named, or not at all.
 type noteWords struct {
 	directPlay, directStream, converted, convertedFor, cannotPlay string
-	hdr, quality, subtitles, video, audio                         string
+	app, hdr, quality, subtitles, video, audio                    string
 }
 
 // playNotes are the notes of each server language. The French set the
@@ -21,17 +21,17 @@ type noteWords struct {
 // is feminine there.
 var playNotes = map[string]noteWords{
 	"en": {"(direct play)", "(direct stream)", "(converted)", "(converted: %s)", "(cannot play here)",
-		"HDR", "quality limit", "subtitles", "video", "audio"},
+		"app’s request", "HDR", "quality limit", "subtitles", "video", "audio"},
 	"fr": {"(lecture directe)", "(flux direct)", "(converti)", "(converti\u00a0: %s)", "(illisible ici)",
-		"HDR", "limite de qualité", "sous-titres", "vidéo", "audio"},
+		"demande de l’app", "HDR", "limite de qualité", "sous-titres", "vidéo", "audio"},
 	"de": {"(direktes Abspielen)", "(direkter Stream)", "(konvertiert)", "(konvertiert: %s)", "(hier nicht abspielbar)",
-		"HDR", "Qualitätslimit", "Untertitel", "Video", "Audio"},
+		"Wunsch der App", "HDR", "Qualitätslimit", "Untertitel", "Video", "Audio"},
 	"es": {"(reproducción directa)", "(transmisión directa)", "(convertida)", "(convertida: %s)", "(no se puede reproducir aquí)",
-		"HDR", "calidad máxima", "subtítulos", "vídeo", "audio"},
+		"pedido de la app", "HDR", "calidad máxima", "subtítulos", "vídeo", "audio"},
 	"it": {"(riproduzione diretta)", "(stream diretto)", "(convertita)", "(convertita: %s)", "(non riproducibile qui)",
-		"HDR", "limite qualità", "sottotitoli", "video", "audio"},
+		"richiesta app", "HDR", "limite qualità", "sottotitoli", "video", "audio"},
 	"pt-BR": {"(reprodução direta)", "(stream direto)", "(convertida)", "(convertida: %s)", "(não reproduzível aqui)",
-		"HDR", "qualidade", "legendas", "vídeo", "áudio"},
+		"pedido do app", "HDR", "qualidade", "legendas", "vídeo", "áudio"},
 }
 
 // videoReasons are the TranscodeReasons about the video.
@@ -43,8 +43,10 @@ var videoReasons = []string{"VideoCodecNotSupported", "VideoProfileNotSupported"
 // PlayNote is the ending of a version's name telling how a decision plays
 // it, in the server language: "(direct play)" as it is; "(direct stream)"
 // copied into HLS; "(converted: reason)" with the first reason that
-// applies of HDR (VideoRangeTypeNotSupported, the video converted), the
-// quality limit (VideoResolutionNotSupported, VideoBitrateNotSupported or
+// applies of the app's request (the app turned direct play off for a
+// version that would have played as it is, see Decision.DirectPlayOff),
+// HDR (VideoRangeTypeNotSupported, the video converted), the quality
+// limit (VideoResolutionNotSupported, VideoBitrateNotSupported or
 // ContainerBitrateExceedsLimit, the video converted), subtitles (a
 // subtitle burned into the video), the video (another reason about it),
 // or the audio (the audio converted, the video copied); "(converted)" for
@@ -68,6 +70,8 @@ func PlayNote(decision Decision, playable bool, language string) string {
 		return w.directPlay
 	case decision.Video == nil && decision.Audio == nil:
 		return w.directStream
+	case decision.DirectPlayOff:
+		reason = w.app
 	case decision.Video != nil && has("VideoRangeTypeNotSupported"):
 		reason = w.hdr
 	case decision.Video != nil && has("VideoResolutionNotSupported", "VideoBitrateNotSupported", "ContainerBitrateExceedsLimit"):
