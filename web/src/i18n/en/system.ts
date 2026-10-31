@@ -324,7 +324,7 @@ const system = {
       size: 'Size',
       cacheTitle: 'Source cache',
       cacheHelp:
-        'Parts of the files being played, kept on disk up to the size set under Settings › Playback. A full cache is normal: the oldest parts make room.',
+        'Parts of the files played, kept on disk up to the size set under Settings › Playback, from one start to the next. A full cache is normal: the parts read longest ago make room, those of titles played again last.',
       cacheUse: (used: string, limit: string) => `${used} of ${limit}`,
       imagesTitle: 'Image cache',
       imagesHelp:
@@ -336,6 +336,14 @@ const system = {
         `Image cache cleared: ${images} images, ${bytes} freed on disk.`,
       sourcesOpen: 'Files open',
       torrentPieces: 'Of which torrent pieces',
+      sourcesKept: 'Files kept',
+      hitRatio: 'Read from the disk',
+      hitRatioValue: (percent: string, read: string) =>
+        `${percent} of the ${read} read since the start`,
+      keptFor: (days: number) =>
+        days > 0
+          ? `Kept ${days} days after their last read, restarts included`
+          : 'Emptied at each start',
       torrentsTitle: 'Torrents',
       torrentsHelp:
         'The torrents playback reads now, over their route alone. A torrent stops when its playback ends: no more peers, no more sharing.',

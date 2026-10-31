@@ -114,6 +114,9 @@ func (r *Reader) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
 			continue
 		}
 		n += read
+		first := s.firstRead(block, read)
+		s.cache.misses.Add(int64(first))
+		s.cache.hits.Add(int64(read - first))
 		if err != nil && (!errors.Is(err, io.EOF) || read < len(part)) {
 			return n, err
 		}

@@ -229,6 +229,15 @@ func DefaultSettings() Settings {
 		ProviderCreateAccounts: false,
 		ProviderAdminClaim:     "",
 		ProviderAdminValue:     "",
+
+		SourceCachePreset:     SourceCacheSmall,
+		SourceCacheDays:       DefaultSourceCacheDays,
+		SourceCacheCreditDays: DefaultSourceCacheCreditDays,
+		PreloadNextEpisodes:   false,
+		PreloadEpisodes:       DefaultPreloadEpisodes,
+		PreloadMbps:           DefaultPreloadMbps,
+		PreloadReserveGB:      DefaultPreloadReserveGB,
+		PreloadWholeFiles:     false,
 	}
 }
 
@@ -468,6 +477,15 @@ func SettingsBounds() map[string]SettingBounds {
 		"providerCreateAccounts": is(d.ProviderCreateAccounts),
 		"providerAdminClaim":     text(MaxProviderClaimBytes, d.ProviderAdminClaim),
 		"providerAdminValue":     text(MaxProviderValueBytes, d.ProviderAdminValue),
+
+		"sourceCachePreset":     choice(d.SourceCachePreset, anys(SourceCachePresets)),
+		"sourceCacheDays":       between(0, MaxSourceCacheDays, d.SourceCacheDays),
+		"sourceCacheCreditDays": between(0, MaxSourceCacheCreditDays, d.SourceCacheCreditDays),
+		"preloadNextEpisodes":   is(d.PreloadNextEpisodes),
+		"preloadEpisodes":       between(MinPreloadEpisodes, MaxPreloadEpisodes, d.PreloadEpisodes),
+		"preloadMbps":           between(MinPreloadMbps, MaxPreloadMbps, d.PreloadMbps),
+		"preloadReserveGb":      between(MinPreloadReserveGB, MaxPreloadReserveGB, d.PreloadReserveGB),
+		"preloadWholeFiles":     is(d.PreloadWholeFiles),
 	}
 }
 

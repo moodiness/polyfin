@@ -437,6 +437,46 @@ The files of local folders go through it too. Those of S3 buckets, SFTP folders 
 - A file relayed to an app is served from the same cache: what was read before takes no request, and a seek reads only what is missing.
 - Before sending an app to a source for direct play, Polyfin checks that it answers, unless it answered Polyfin's own reads at that address within 2 minutes, as the analysis just did.
 
+### Keeping the files read across restarts
+
+The source cache keeps the parts of the files it read from one start to the next: a title played again, or resumed after a restart or an update, reads from the disk without a request to its source. **Disk space and retention** under **Settings › Playback** chooses a preset, which sets the fields below it; changing one of them makes the preset **Custom**. Its help tells the space free on the disk of the folder for files being read.
+
+| Preset | Disk space | Kept for | Extra days for each play again | Next episodes preloaded |
+|---|---|---|---|---|
+| **Off** | 2 GB | Emptied at each start, as before 0.57 | 0 | Opening and end |
+| **Small** (the default) | 10 GB | 3 days | 1 | Opening and end |
+| **Everyday** | 50 GB | 14 days | 3 | Opening and end |
+| **Large** | 250 GB | 60 days | 7 | Whole files |
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Disk space for files being read (GB)** | **Settings › Playback** | 10 GB | Bounds the parts kept, as above. |
+| **Keep parts read for (days)** | **Settings › Playback** | 3 (0 to 365) | How long a part is kept once last read, restarts included. 0 empties the cache at each start. |
+| **Extra days for each play again** | **Settings › Playback** | 1 (0 to 30) | How much longer the parts of a title played again are kept, for each play after the first. |
+
+- **What is kept:** the files of addons, and of S3 buckets, SFTP folders and rclone remotes, by their version, whatever link the addon gives for them next time. A torrent's file is never kept: its pieces are removed as it stops, by design (see [Torrents](torrents.md)). A file whose size was never told, such as a live video, is not kept either.
+- **A link that changed:** after a restart, a file opened at the same link is read from the disk at once. One its addon now gives another link for is asked once, for its size: the same size reads the parts kept, another size is another file, and its parts kept are removed (`A source's link now names a file of another size: the blocks kept of it were removed`, at Info).
+- **Plays again:** a title counts as played again when a playback reads it 6 hours or more after the last one. Each play after the first, 8 at most, adds the extra days to its parts, which are removed after those of titles played once, both when the disk space is full and when their days are over.
+- **Which parts go first:** past the disk space, the parts read longest ago go first, the extra days counted; those read in the last 30 seconds stay. Past their days, parts are removed at start and every hour.
+- **Crashes:** what each file keeps is written beside its parts 30 seconds after a change, and as Polyfin stops, once the parts reached the disk. After a crash, the parts read during the last 30 seconds are read again; a part never claimed is never served.
+- **Health:** **System › Health › Source cache** tells the space used against the disk space, how long parts are kept, the files open and the files kept, and **Read from the disk**: the share of the bytes FFmpeg, ffprobe and the apps read since the start that had been read once already, or were kept from before the start. Bytes fetched from the file's host since the start count as not from the disk the first time they are read, even when they were read ahead of the player or preloaded, so a first play reads close to 0% from the disk.
+
+**For app developers:** `GET /admin/api/health` gives the cache as `cache`: `used`, `limit`, `sources` (files open), `kept` (files with parts kept), `hits` and `misses` (bytes read since the start that were read before or kept from before the start, and bytes read for the first time since they were fetched), `days` and `torrents`. `GET /admin/api/settings` gives `sourceCachePreset`, `sourceCacheDays`, `sourceCacheCreditDays`, each preset's values as `sourceCachePresetLimits`, and `readingFree`, the bytes free on the disk of the folder for files being read. A `PUT` that sets `cacheSizeGb`, `sourceCacheDays`, `sourceCacheCreditDays` or `preloadWholeFiles` to another value than its preset's, without a preset, makes it `custom`.
+
+### Preloading the next episodes
+
+With **Preload the next episodes** on, under **Settings › Playback** and off by default, Polyfin reads ahead the next episodes of the series each user watches, so that they start from the disk, after a restart too:
+
+- every 15 minutes, starting 2 minutes after Polyfin starts, while nothing plays: no playback in **Home › Now playing**;
+- for each user who played or started an episode in the last 14 days, the first 5 series of their Next Up, the latest first: the episode Next Up offers and the ones after it, **Episodes per series** in all (1 by default, 3 at most);
+- the version Play would pick first, under the user's parental control, hidden titles, [version order](#version-order) and quality group: its first 128 MiB and its last 4 MiB, where many files keep their index, or the whole file with **Preload whole files**, which the **Large** preset turns on. A torrent version is never preloaded, nor a version that failed lately;
+- at most a quarter of **Disk space for files being read (GB)** a pass, so that what was played stays;
+- at **Speed limit (Mbit/s)** on average (20 by default), and only while the disk of the folder for files being read keeps **Free space to keep (GB)** free (20 by default).
+
+A playback starting stops it before the next 8 MiB. Its reads are background reads, which give way to playbacks on the same host (see above). What it read is kept as any part read, and preloading the same episodes again asks nothing.
+
+**Compared with Jellyfin:** Jellyfin reads files where they are, and has no source cache to keep or preload (see [Configuration](configuration.md#folders-for-conversion-files-being-read-and-the-cache)). Polyfin's apply to addons' and remote storages' files, which a restart would otherwise download again.
+
 ### Sources that fail
 
 - A source that sends no headers within 15 seconds fails.

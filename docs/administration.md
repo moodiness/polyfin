@@ -75,7 +75,7 @@ Schedule covers the server's addons, IPTV sources and guides first, then those u
 - Under **Server**:
   - the **Transcoder**: GPU, encoders, and conversions against the limit (see [transcoding](transcoding.md));
   - the **Database** and its size;
-  - the **Source cache**, against **Disk space for files being read (GB)**, with the part torrent pieces take;
+  - the **Source cache**, against **Disk space for files being read (GB)**, with how long it keeps parts, the files open and kept, the share of the bytes read since the start that came from the disk, and the part torrent pieces take (see [Keeping the files read across restarts](playback.md#keeping-the-files-read-across-restarts));
   - the **Image cache**, against its 1 GB on disk, with the images it keeps there and in memory, and **Clear the image cache** (see [Clearing the image cache](#clearing-the-image-cache));
   - **Torrents**, while they are on: the route, the torrents playing, against **Torrents at once** when it is set, their peers and those reached over uTP, and what was shared (see [Torrents](torrents.md));
   - **Disk space** for the cache, recordings and backups folders, and for the conversion folder and the folder for files being read when they are other folders than the cache's (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache));

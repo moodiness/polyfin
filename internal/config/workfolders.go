@@ -75,7 +75,8 @@ func ChooseFolders(dataDir string, settings accounts.Settings) Folders {
 func (f Folders) Segments() string { return filepath.Join(f.Conversion, "segments") }
 
 // Sources is the folder of the blocks of the addons' files being read,
-// emptied at start.
+// kept across starts as the source cache's policy says (see
+// source.Policy.Keep).
 func (f Folders) Sources() string { return filepath.Join(f.Reading, "sources") }
 
 // Torrents is the folder of the torrents' pieces, emptied at start.

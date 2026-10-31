@@ -810,6 +810,44 @@ const settings: typeof en = {
     cacheSize: 'Espace disque des fichiers en cours de lecture (Go)',
     cacheSizeHelp: (r: RangeText) =>
       `L’espace que Polyfin peut utiliser pour garder les parties des fichiers lus, afin que les retours en arrière et les reprises ne les téléchargent pas à nouveau. Les parties lues dans les 30 dernières secondes sont gardées même au-delà. De ${r.min} à ${r.max} Go ; ${r.default} par défaut.`,
+    sourceCacheGroup: 'Fichiers en cours de lecture',
+    sourceCachePreset: 'Espace disque et conservation',
+    sourceCachePresetHelp: (free: string) =>
+      `La part des fichiers lus que Polyfin garde sur le disque, et combien de temps, d’un démarrage à l’autre : un titre relu, ou repris après un redémarrage, est alors lu depuis le disque plutôt que depuis sa source. Un préréglage règle les champs ci-dessous ; en changer un le fait passer à « Personnalisé ». ${free}`,
+    sourceCacheFree: (free: string) =>
+      `${free} libres sur le disque du dossier des fichiers en cours de lecture.`,
+    sourceCachePresetNames: {
+      off: 'Désactivé',
+      small: 'Petit',
+      everyday: 'Quotidien',
+      large: 'Grand',
+      custom: 'Personnalisé',
+    },
+    sourceCachePresetChoice: (name: string, size: string, days: number) =>
+      days > 0
+        ? `${name} : ${size} Go, gardés ${days} jours`
+        : `${name} : ${size} Go, vidé à chaque démarrage`,
+    sourceCacheDays: 'Garder les parties lues (jours)',
+    sourceCacheDaysHelp: (r: RangeText) =>
+      `Combien de temps une partie d’un fichier est gardée après sa dernière lecture, redémarrages compris. 0 ne garde rien après un redémarrage : chaque démarrage vide le cache. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    sourceCacheCreditDays: 'Jours de plus par nouvelle lecture',
+    sourceCacheCreditDaysHelp: (r: RangeText) =>
+      `Un titre relu, 6 heures ou plus après sa dernière lecture, garde ses parties ce nombre de jours de plus pour chaque lecture après la première, 8 au plus, et elles laissent la place après celles des titres lus une seule fois. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    preloadGroup: 'Préchargement des épisodes suivants',
+    preloadNextEpisodes: 'Précharger les épisodes suivants',
+    preloadNextEpisodesHelp:
+      'Tant que rien n’est en lecture, lit à l’avance les épisodes suivants des séries que chaque utilisateur a lues ou commencées ces 14 derniers jours, 5 séries par utilisateur au plus : la première version que Lecture choisirait, ses 128 premiers Mio et sa fin, ou le fichier entier. Il s’arrête dès qu’une lecture commence, et lit au plus un quart de l’espace disque ci-dessus toutes les 15 minutes. Les torrents ne sont jamais préchargés.',
+    preloadEpisodes: 'Épisodes par série',
+    preloadEpisodesHelp: (r: RangeText) => `De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    preloadMbps: 'Limite de débit (Mbit/s)',
+    preloadMbpsHelp: (r: RangeText) =>
+      `Le débit moyen du préchargement, qui laisse le reste de la connexion au foyer. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    preloadReserveGb: 'Espace libre à garder (Go)',
+    preloadReserveGbHelp: (r: RangeText) =>
+      `Le préchargement s’arrête avant que le disque du dossier des fichiers en cours de lecture ait moins que cet espace libre. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
+    preloadWholeFiles: 'Précharger les fichiers entiers',
+    preloadWholeFilesHelp:
+      'Lit les épisodes entiers plutôt que leur début et leur fin, pour un grand disque. Le préréglage « Grand » l’active ; le changer fait passer le préréglage à « Personnalisé ».',
     workFolders: {
       conversionFolder: 'Dossier de conversion',
       conversionFolderHelp:

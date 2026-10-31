@@ -34,6 +34,8 @@ func TestEnvironmentSettingsAreChecked(t *testing.T) {
 	store := newStore(t)
 	ctx := t.Context()
 	base := store.Settings()
+	// The cache's size is set alone, as the custom preset keeps it.
+	base.SourceCachePreset = SourceCacheCustom
 	for _, tc := range []struct {
 		name   string
 		change func(*Settings)

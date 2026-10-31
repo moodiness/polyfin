@@ -20,9 +20,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/diskspace"
 )
 
 const (
@@ -203,6 +205,10 @@ type Location struct {
 	// Source.fail): the blocks cached stay valid, and the readers waiting
 	// get the blocks from the next copy rather than the failure.
 	Mirrors []Mirror
+	// Transient marks a source whose blocks are not kept across restarts,
+	// as a torrent's file, whose pieces are removed as it stops: the
+	// cache removes them as it closes (see Policy.Keep).
+	Transient bool
 }
 
 // Mirror is another copy of a source's file, where it is and how its link
@@ -221,14 +227,16 @@ type Opener interface {
 type Renewer func(ctx context.Context) (Location, error)
 
 // Cache keeps the sources being read and their blocks on disk, in files of
-// a chunk's blocks, within a size limit. The least recently read chunks
-// are evicted first, of any source, which bounds the disk a long file read
-// to its end takes; chunks read lately are kept, as readers are on them.
+// a chunk's blocks, within a size limit. The chunks read longest ago are
+// evicted first, of any source, those of a source played again later (see
+// Policy.Credit), which bounds the disk a long file read to its end takes;
+// chunks read lately are kept, as readers are on them. With a policy that
+// keeps them, the chunks stay across restarts (see persist.go).
 type Cache struct {
 	dir string
-	// limit gives the bytes the cache may keep, read at each use, so that
-	// a lower limit applies at the next write.
-	limit  func() int64
+	// policy gives the bytes the cache may keep and for how long, read at
+	// each use, so that a lower limit applies at the next write.
+	policy func() Policy
 	opener Opener
 	logger *slog.Logger
 	// chunkBlocks is how many blocks one file on disk holds; readahead how
@@ -272,6 +280,19 @@ type Cache struct {
 	// others gives the bytes kept beside the cache within its limit, as
 	// the pieces of torrents (see Share); nil for none.
 	others func() int64
+	// stop ends the sweep of the chunks kept too long (see sweep).
+	stop chan struct{}
+
+	// hits and misses count the bytes readers read: misses those fetched
+	// since the start that no reader had read yet, waited for, read ahead
+	// or warmed alike, and hits the others, kept from before the start or
+	// read again.
+	hits, misses atomic.Int64
+	// free tells the space free on the disk of the cache's folder, and
+	// sleep waits between the pieces of a preload (see Preload): tests
+	// set their own.
+	free  func() (int64, bool)
+	sleep func(ctx context.Context, d time.Duration) error
 
 	// hosts and sizes are what the cache learned of hosts and of the sizes
 	// addons announce, under their own lock, taken with a source's or
@@ -299,28 +320,29 @@ type chunkUse struct {
 	touched time.Time
 }
 
-// New returns a cache keeping blocks in dir, up to the bytes limit gives,
-// read whenever the limit is used. Blocks a previous run left there are
-// removed: they are not trusted.
-func New(dir string, limit func() int64, opener Opener, logger *slog.Logger) (*Cache, error) {
+// New returns a cache keeping blocks in dir, as policy gives, read
+// whenever it is used. The blocks a previous run kept there are read back
+// when the policy keeps them (see Policy.Keep), and removed otherwise.
+func New(dir string, policy func() Policy, opener Opener, logger *slog.Logger) (*Cache, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	stale, err := filepath.Glob(filepath.Join(dir, "*.blocks"))
-	if err != nil {
-		return nil, err
-	}
-	for _, path := range stale {
-		if err := os.RemoveAll(path); err != nil {
-			return nil, err
-		}
-	}
-	return &Cache{dir: dir, limit: limit, opener: opener, logger: logger, chunkBlocks: 64, readahead: 32,
-		aheadBudget: func() int64 { return aheadBudget(limit()) }, now: time.Now, fetchInterval: fetchInterval, attemptTime: attemptTime,
+	c := &Cache{dir: dir, policy: policy, opener: opener, logger: logger, chunkBlocks: 64, readahead: 32,
+		aheadBudget: func() int64 { return aheadBudget(policy().Limit) }, now: time.Now, fetchInterval: fetchInterval, attemptTime: attemptTime,
 		headerTimeout: headerTimeout, stallTimeout: stallTimeout, recoveryTimeout: recoveryTimeout, starveAfter: starveAfter,
 		linger: lingerDelay, attachedLinger: attachedLinger, connections: maxConnections, hostConnections: hostConnections,
 		sources: map[accounts.ID]*Source{}, chunks: map[chunkKey]*chunkUse{},
-		hosts: map[string]*hostState{}, sizes: map[string]*sizeRecord{}, slots: map[string]*hostSlots{}}, nil
+		hosts: map[string]*hostState{}, sizes: map[string]*sizeRecord{}, slots: map[string]*hostSlots{},
+		stop: make(chan struct{}), sleep: pause}
+	c.free = func() (int64, bool) {
+		free, _, _, ok := diskspace.Measure(c.dir)
+		return free, ok
+	}
+	if err := c.load(); err != nil {
+		return nil, err
+	}
+	go c.sweep(c.stop)
+	return c, nil
 }
 
 // aheadBudget is how many blocks a reader streaming long has read ahead:
@@ -342,10 +364,7 @@ func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 	defer c.mu.Unlock()
 	s := c.sources[id]
 	if s == nil {
-		ctx, cancel := context.WithCancel(context.Background())
-		s = &Source{cache: c, id: id, dir: filepath.Join(c.dir, id.String()+".blocks"), ctx: ctx, cancel: cancel,
-			size: -1, wanted: map[int64]*want{}, wake: make(chan struct{}, 1), progress: make(chan struct{}),
-			failed: make(chan struct{}), learned: make(chan struct{})}
+		s = c.newSource(id)
 		c.sources[id] = s
 	}
 	s.mu.Lock()
@@ -357,9 +376,19 @@ func (c *Cache) Open(id accounts.ID, location Location, renew Renewer) *Source {
 		s.mirrors = slices.DeleteFunc(slices.Clone(location.Mirrors), func(m Mirror) bool { return s.left[m.Location.URL] })
 		s.origin.Mirrors = nil
 	}
+	s.transient, s.link = location.Transient, linkDigest(location.URL)
+	s.restore()
 	s.mu.Unlock()
 	s.refs++
 	return s
+}
+
+// newSource returns the source of id, with nothing read yet.
+func (c *Cache) newSource(id accounts.ID) *Source {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Source{cache: c, id: id, dir: filepath.Join(c.dir, id.String()+".blocks"), ctx: ctx, cancel: cancel,
+		size: -1, wanted: map[int64]*want{}, wake: make(chan struct{}, 1), progress: make(chan struct{}),
+		failed: make(chan struct{}), learned: make(chan struct{}), unsynced: map[int64]bool{}}
 }
 
 // Answered reports when the source of id last answered with content at
@@ -426,12 +455,38 @@ func (c *Cache) Discard(id accounts.ID) bool {
 	return true
 }
 
-// Usage tells the bytes the cache keeps on disk, the sources open, and its
-// limit (the settings' CacheSizeGB).
-func (c *Cache) Usage() (used int64, sources int, limit int64) {
+// Usage is what the cache keeps, and how its reads went since the start.
+type Usage struct {
+	// Used is the bytes kept on disk, those Share counts included, and
+	// Limit those the policy allows.
+	Used, Limit int64
+	// Open counts the sources being read, and Kept those the cache holds
+	// blocks of.
+	Open, Kept int
+	// Misses counts the bytes readers read for the first time since they
+	// were fetched from the source, whether readers waited for them or
+	// they were read ahead, and Hits the bytes read again or kept from
+	// before the start.
+	Hits, Misses int64
+}
+
+// Usage tells what the cache keeps on disk, against its limit (the
+// settings' CacheSizeGB), and how its reads went.
+func (c *Cache) Usage() Usage {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.used + c.othersUsed(), len(c.sources), c.limit()
+	usage := Usage{Used: c.used + c.othersUsed(), Limit: c.policy().Limit, Hits: c.hits.Load(), Misses: c.misses.Load()}
+	kept := map[accounts.ID]bool{}
+	for key := range c.chunks {
+		kept[key.source] = true
+	}
+	usage.Kept = len(kept)
+	for _, s := range c.sources {
+		if s.refs > 0 {
+			usage.Open++
+		}
+	}
+	return usage
 }
 
 // Share has the cache count, within its limit and in its usage, the bytes
@@ -452,13 +507,24 @@ func (c *Cache) othersUsed() int64 {
 	return c.others()
 }
 
-// Close stops reading every source and removes their blocks.
+// Close stops reading every source. Their blocks are kept for the next
+// start when the policy keeps them, but those of transient sources and of
+// sources of an unknown size; the others are removed.
 func (c *Cache) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.stop != nil {
+		close(c.stop)
+		c.stop = nil
+	}
+	keep := c.policy().Keep > 0
 	var errs []error
 	for id, s := range c.sources {
-		errs = append(errs, s.discard())
+		if keep {
+			errs = append(errs, c.keep(s))
+		} else {
+			errs = append(errs, s.discard())
+		}
 		delete(c.sources, id)
 	}
 	clear(c.chunks)
@@ -475,8 +541,8 @@ func (c *Cache) touch(key chunkKey) {
 	}
 }
 
-// stored accounts for bytes written to a chunk, and evicts the least
-// recently read chunks until the cache fits its limit.
+// stored accounts for bytes written to a chunk, and evicts chunks until the
+// cache fits its limit (see fit).
 func (c *Cache) stored(key chunkKey, size int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -488,13 +554,25 @@ func (c *Cache) stored(key chunkKey, size int64) {
 	use.size += size
 	use.touched = c.now()
 	c.used += size
+	c.fit()
+}
+
+// fit evicts chunks until the cache fits its limit, those whose score is
+// the oldest first (see score), but those read lately. The cache's lock is
+// held.
+func (c *Cache) fit() {
+	policy := c.policy()
 	protected := c.now().Add(-protectedFor)
-	for limit := c.limit() - c.othersUsed(); c.used > limit; {
+	for limit := policy.Limit - c.othersUsed(); c.used > limit; {
 		var oldest chunkKey
 		var found *chunkUse
+		var score time.Time
 		for key, use := range c.chunks {
-			if use.touched.Before(protected) && (found == nil || use.touched.Before(found.touched)) {
-				oldest, found = key, use
+			if !use.touched.Before(protected) {
+				continue
+			}
+			if at := c.score(key, use, policy.Credit); found == nil || at.Before(score) {
+				oldest, found, score = key, use, at
 			}
 		}
 		if found == nil {
@@ -513,6 +591,7 @@ func (c *Cache) evict(key chunkKey, use *chunkUse) {
 	if s == nil {
 		return
 	}
+	c.unclaim(s, key.index)
 	s.forget(key.index)
 	if err := os.Remove(s.chunkPath(key.index)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		c.logger.Warn("A cached chunk could not be removed", "error", err)
@@ -537,11 +616,22 @@ type Source struct {
 	dir    string
 	ctx    context.Context
 	cancel context.CancelFunc
-	// refs is guarded by the cache's lock.
-	refs int
-	// writing is held to read while a block is written into dir, and to
-	// write while the source is discarded, which then waits for it.
+	// refs is guarded by the cache's lock, and so are plays, the plays of
+	// the source counted for its credit (see Policy.Credit), and playedAt,
+	// when a playback last read it.
+	refs     int
+	plays    int
+	playedAt time.Time
+	// writing is held to read while a block is written into dir, or the
+	// state saved there, and to write while the source is discarded or
+	// kept as the cache closes, which then waits for it.
 	writing sync.RWMutex
+	// saveMu orders the writes of the source's state file, saved is what
+	// it holds, nil while it holds nothing, and evictions counts the
+	// chunks evicted (see persist.go).
+	saveMu    sync.Mutex
+	saved     *keptState
+	evictions atomic.Int64
 
 	mu sync.Mutex
 	// origin is where the addon said the file is, and pinned where the
@@ -562,6 +652,10 @@ type Source struct {
 	status  int
 	learned chan struct{}
 	present []uint64
+	// unread holds, for each block fetched since the start, how many of
+	// its bytes no reader read yet: those count as misses once read (see
+	// firstRead). Blocks kept from before the start are not in it.
+	unread map[int64]int
 	// sizeChecked tells that the first answer was checked against the
 	// size the addon announced, and sizeNoted that it counted in the
 	// addon's record.
@@ -614,6 +708,22 @@ type Source struct {
 	slotWaits int
 	// joined counts the playbacks whose location's Playing returned.
 	joined int
+	// transient marks a source whose blocks are not kept across restarts
+	// (see Location.Transient), and link the digest of the URL it was
+	// opened at last (see linkDigest).
+	transient bool
+	link      string
+	// pending are the blocks a previous run kept of the source, read back
+	// at start, until a location opens it at the link they were read
+	// from, or an answer tells the file's size: they are then the
+	// source's, or removed when the size is not the one kept (see
+	// restore and learn). kept is what that run kept of the source.
+	pending []uint64
+	kept    keptState
+	// unsynced are the chunks written since the source's state was last
+	// saved, and saveTimer the save to come, if any.
+	unsynced  map[int64]bool
+	saveTimer *time.Timer
 }
 
 // Urge has the source read for a playback until done is called, as a
@@ -623,8 +733,11 @@ type Source struct {
 // Playing runs meanwhile. Without, the source is read in the background.
 // Once Playing returns, a failure that came while no playback had it run
 // is forgotten, and so is a stall, a torrent's swarm that sent nothing for
-// a while: what reads the source next tries it again at once.
+// a while: what reads the source next tries it again at once. A playback
+// coming replayGap or more after the last one counts as one more play of
+// the source (see Policy.Credit).
 func (s *Source) Urge() (done func()) {
+	s.cache.played(s)
 	s.mu.Lock()
 	s.urged++
 	s.nudgeConns()
@@ -736,35 +849,54 @@ type want struct {
 	since   time.Time
 }
 
-// Release tells the cache a reader is done with the source.
+// Release tells the cache a reader is done with the source. The last one
+// has the source's state saved soon, with the chunks it read.
 func (s *Source) Release() {
 	s.cache.mu.Lock()
-	s.refs--
-	s.cache.mu.Unlock()
+	defer s.cache.mu.Unlock()
+	if s.refs--; s.refs == 0 {
+		s.mu.Lock()
+		s.cache.saveLater(s)
+		s.mu.Unlock()
+	}
 }
 
 // discard stops reading the source and removes its blocks, once the
-// block being written, if any, is (see store). The readers waiting for a
-// block get errDiscarded, and so does any read after it (see wait): no
-// connection fetches a block of a source discarded, and they would wait
-// for good. It runs under the cache's lock, and may wait there for a
-// write, which never takes the cache's lock nor the source's (see store):
-// no wait can form a cycle. Removing the folder outside the cache's lock
-// would remove that of the source opened anew under the same identifier.
+// block being written, if any, is (see halt). It runs under the cache's
+// lock: removing the folder outside the cache's lock would remove that of
+// the source opened anew under the same identifier.
 func (s *Source) discard() error {
-	s.cancel()
-	s.writing.Lock()
+	s.halt()
 	defer s.writing.Unlock()
 	s.mu.Lock()
-	s.present = nil
+	s.present, s.pending, s.unread = nil, nil, nil
+	s.mu.Unlock()
+	return os.RemoveAll(s.dir)
+}
+
+// halt stops reading the source, once the block being written, if any,
+// is (see store), and returns with the source's writing lock held, so that
+// nothing is written in its folder any more. The readers waiting for a
+// block get errDiscarded, and so does any read after it (see wait): no
+// connection fetches a block of a source halted, and they would wait for
+// good. It runs under the cache's lock, and may wait there for a write,
+// which never takes the cache's lock nor the source's (see store and
+// save): no wait can form a cycle.
+func (s *Source) halt() {
+	s.cancel()
+	s.writing.Lock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.saveTimer != nil {
+		s.saveTimer.Stop()
+		s.saveTimer = nil
+	}
 	for block, w := range s.wanted {
 		w.err = errDiscarded
 		delete(s.wanted, block)
 		close(w.done)
 	}
 	s.signal()
-	s.mu.Unlock()
-	return os.RemoveAll(s.dir)
 }
 
 // errDiscarded reports a read of a source discarded: the cache was closed,
@@ -775,14 +907,15 @@ func (s *Source) chunkPath(index int64) string {
 	return filepath.Join(s.dir, strconv.FormatInt(index, 10))
 }
 
-// forget marks the blocks of an evicted chunk as no longer cached.
+// forget marks the blocks of an evicted chunk as no longer cached, those
+// kept from a previous run included.
 func (s *Source) forget(index int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for block := index * s.cache.chunkBlocks; block < (index+1)*s.cache.chunkBlocks; block++ {
-		if word := block / 64; word < int64(len(s.present)) {
-			s.present[word] &^= 1 << (block % 64)
-		}
+		clearBit(s.present, block)
+		clearBit(s.pending, block)
+		delete(s.unread, block)
 	}
 }
 
@@ -826,6 +959,24 @@ func (s *Source) readChunk(index int64, part []byte, off int64) (int, error) {
 	defer file.Close()
 	s.cache.touch(chunkKey{s.id, index})
 	return file.ReadAt(part, off)
+}
+
+// firstRead counts n bytes read from block, and returns how many of them
+// no reader had read since the block was fetched.
+func (s *Source) firstRead(block int64, n int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	left, ok := s.unread[block]
+	if !ok {
+		return 0
+	}
+	first := min(n, left)
+	if left -= first; left == 0 {
+		delete(s.unread, block)
+	} else {
+		s.unread[block] = left
+	}
+	return first
 }
 
 // wait waits until block is cached, asking for it to be fetched on behalf
@@ -961,6 +1112,10 @@ func (s *Source) store(block int64, data []byte, last bool) error {
 			s.present = append(s.present, make([]uint64, grow)...)
 		}
 		s.present[word] |= 1 << (block % 64)
+		if s.unread == nil {
+			s.unread = map[int64]int{}
+		}
+		s.unread[block] = len(data)
 		added = len(data)
 	}
 	if s.failure != nil {
@@ -977,6 +1132,8 @@ func (s *Source) store(block int64, data []byte, last bool) error {
 		s.wakePastEnd()
 	}
 	s.signal()
+	s.unsynced[index] = true
+	s.cache.saveLater(s)
 	s.mu.Unlock()
 	// A source discarded meanwhile keeps nothing: its folder is gone.
 	if added > 0 && s.ctx.Err() == nil {
@@ -1140,15 +1297,36 @@ func (s *Source) Failure() error {
 // is not the one an earlier response told, or the first one tells a size
 // more than 1% from the one its addon announced while that addon's sizes
 // are trusted: the response is not the file's, and nothing is recorded.
+// The first size told makes the blocks a previous run kept of the source
+// its own when it is the one kept, and removes them otherwise (see
+// restore): the link changed, and now names another file.
 func (s *Source) learn(status int, total int64, contentType string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	dropped, err := s.learnLocked(status, total, contentType)
+	s.mu.Unlock()
+	if dropped != nil {
+		s.cache.dropKept(s, dropped)
+	}
+	return err
+}
+
+// learnLocked is learn under the source's lock, which tells the chunks it
+// removed, those a previous run kept of another file, for the cache to
+// stop counting them.
+func (s *Source) learnLocked(status int, total int64, contentType string) (dropped []int64, err error) {
 	if total >= 0 && s.size >= 0 && total != s.size {
-		return fmt.Errorf("%w: %d bytes, not %d", errOtherFile, total, s.size)
+		return nil, fmt.Errorf("%w: %d bytes, not %d", errOtherFile, total, s.size)
 	}
 	if total >= 0 && s.size < 0 && s.origin.Size > 0 && s.origin.Announcer != "" && !s.sizeChecked {
 		if err := s.checkAnnounced(total); err != nil {
-			return err
+			return nil, err
+		}
+	}
+	if total >= 0 && s.size < 0 && s.pending != nil {
+		if total == s.kept.Size {
+			s.adopt()
+		} else {
+			dropped = s.dropPending()
 		}
 	}
 	if total >= 0 {
@@ -1164,7 +1342,7 @@ func (s *Source) learn(status int, total int64, contentType string) error {
 		s.status = status
 		close(s.learned)
 	}
-	return nil
+	return dropped, nil
 }
 
 // Learned returns a channel closed once an answer read as the source's

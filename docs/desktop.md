@@ -115,7 +115,7 @@ The data folder is Polyfin's `POLYFIN_DATA_DIR` (see [Configuration](configurati
 | `log` | The logs: `desktop.log`, the app's; `polyfin.log`, the server's, which **System › Logs** shows too; `postgresql.log`, the database's. Each is renamed with `.1` when it passes 10 MB, at a start |
 | `backups` | The database backups, while **Back up the database every day** is on, unless **Backups folder** names another (see [Backups](backups.md)) |
 | `recordings` | The Live TV recordings, unless **Recordings folder** names another (see [Live TV](live-tv.md)) |
-| `cache` | The parts of the files being read, the segments being played, and the guides and picture subtitles being read, emptied at each start, and the relayed images, unless **Conversion folder**, **Folder for files being read** or **Cache folder** names another (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
+| `cache` | The segments being played, and the guides and picture subtitles being read, emptied at each start, the parts of the files read, kept from one start to the next as **Settings › Playback** says (see [Keeping the files read across restarts](playback.md#keeping-the-files-read-across-restarts)), and the relayed images, unless **Conversion folder**, **Folder for files being read** or **Cache folder** names another (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
 | `themes` | The copy of a web player theme's files, when one is kept (see [Keeping a copy of a theme](web-client.md#keeping-a-copy-of-a-theme)) |
 | `desktop.json` | The app's choice of Start with the computer |
 
