@@ -36,8 +36,8 @@ func TestADiscardedSourceIsReadAnew(t *testing.T) {
 	if !cache.Discard(id) {
 		t.Fatal("a released source was kept")
 	}
-	if used, sources, _ := cache.Usage(); used != 0 || sources != 0 {
-		t.Errorf("after the discard: %d bytes, %d sources", used, sources)
+	if usage := cache.Usage(); usage.Used != 0 || usage.Kept != 0 || usage.Open != 0 {
+		t.Errorf("after the discard: %+v", usage)
 	}
 	s = cache.Open(id, Location{URL: server.URL + "/file"}, nil)
 	defer s.Release()

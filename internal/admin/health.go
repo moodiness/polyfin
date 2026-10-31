@@ -211,10 +211,19 @@ type databaseJSON struct {
 	Size *int64 `json:"size"`
 }
 
+// cacheJSON is what the source cache keeps: Used bytes against its Limit,
+// Sources being read and Kept holding blocks, and Hits and Misses, the
+// bytes read since the start that were cached when asked for, and those
+// waited for, which give its hit ratio; Days is how long it keeps blocks
+// across restarts, 0 for not at all.
 type cacheJSON struct {
 	Used    int64 `json:"used"`
 	Limit   int64 `json:"limit"`
 	Sources int   `json:"sources"`
+	Kept    int   `json:"kept"`
+	Hits    int64 `json:"hits"`
+	Misses  int64 `json:"misses"`
+	Days    int   `json:"days"`
 	// Torrents is the part of Used the pieces of torrents take.
 	Torrents int64 `json:"torrents"`
 }
@@ -421,8 +430,9 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		result.Images = newImageCacheJSON(h.Health.Images.ImageCache())
 	}
 	if h.Health.Cache != nil {
-		used, sources, limit := h.Health.Cache.Usage()
-		result.Cache = &cacheJSON{Used: used, Limit: limit, Sources: sources}
+		usage := h.Health.Cache.Usage()
+		result.Cache = &cacheJSON{Used: usage.Used, Limit: usage.Limit, Sources: usage.Open, Kept: usage.Kept, Hits: usage.Hits,
+			Misses: usage.Misses, Days: h.Accounts.Settings().SourceCacheDays}
 		if h.Health.Torrents != nil {
 			result.Cache.Torrents = h.Health.Torrents.Usage()
 		}

@@ -129,7 +129,7 @@ type pictureSetup struct {
 func newPictureService(t *testing.T, pool *pgxpool.Pool, reader *fakeReader, disk *localDisk, ffmpeg string) pictureSetup {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	sources, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, &fakeSource{}, logger)
+	sources, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, &fakeSource{}, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

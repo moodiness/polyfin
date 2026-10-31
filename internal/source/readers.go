@@ -25,6 +25,9 @@ type Reader struct {
 	waiting     int64
 	from, last  int64
 	sequentials int64
+	// missed tells that the last wait of a read waited for its block, not
+	// cached yet; only the goroutine reading uses it.
+	missed bool
 }
 
 // window is the read-ahead window of a streaming reader: the blocks from
@@ -96,9 +99,11 @@ func (r *Reader) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
 			return n, io.EOF
 		}
 		block := position / blockSize
+		r.missed = false
 		if err := s.wait(ctx, r, block); err != nil {
 			return n, err
 		}
+		missed := r.missed
 		end := (block + 1) * blockSize
 		if size, known := s.knownSize(); known {
 			end = min(end, size)
@@ -114,6 +119,11 @@ func (r *Reader) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
 			continue
 		}
 		n += read
+		if missed {
+			s.cache.misses.Add(int64(read))
+		} else {
+			s.cache.hits.Add(int64(read))
+		}
 		if err != nil && (!errors.Is(err, io.EOF) || read < len(part)) {
 			return n, err
 		}

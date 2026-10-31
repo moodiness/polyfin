@@ -107,7 +107,7 @@ func TestRemoteFoldersAreScannedAndRead(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "movies", "Night of the Living Dead (1968).mkv"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cache, err := source.New(t.TempDir(), func() int64 { return 1 << 30 }, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	cache, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}

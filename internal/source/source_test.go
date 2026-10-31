@@ -129,7 +129,7 @@ func (client) Open(ctx context.Context, method, target string, header http.Heade
 
 func newCache(t *testing.T, limit int64) *Cache {
 	t.Helper()
-	cache, err := New(t.TempDir(), func() int64 { return limit }, client{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	cache, err := New(t.TempDir(), func() Policy { return Policy{Limit: limit} }, client{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +375,7 @@ func TestALowerLimitEvictsAtTheNextWrite(t *testing.T) {
 	cache, clock := smallCache(t, 10*blockSize)
 	var limit atomic.Int64
 	limit.Store(10 * blockSize)
-	cache.limit = limit.Load
+	cache.policy = func() Policy { return Policy{Limit: limit.Load()} }
 	s := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
 	defer s.Release()
 	read := func(block int64) {
@@ -397,7 +397,7 @@ func TestALowerLimitEvictsAtTheNextWrite(t *testing.T) {
 	// the block, and evicts for it, just after.
 	waitFor(t, "the blocks read to be counted", func() bool { return used() >= 6*blockSize })
 	limit.Store(2 * blockSize)
-	if _, _, got := cache.Usage(); got != 2*blockSize {
+	if got := cache.Usage().Limit; got != 2*blockSize {
 		t.Errorf("usage tells a limit of %d", got)
 	}
 	// The next write evicts every chunk not read lately: only those the
@@ -512,7 +512,7 @@ func TestStaleBlocksAreRemovedAtStart(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := New(dir, func() int64 { return 1 << 20 }, client{}, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+	if _, err := New(dir, func() Policy { return Policy{Limit: 1 << 20} }, client{}, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
