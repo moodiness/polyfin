@@ -17,7 +17,7 @@ import (
 var videoExtensions = map[string]bool{
 	".mkv": true, ".mp4": true, ".m4v": true, ".avi": true, ".mov": true, ".ts": true, ".m2ts": true, ".mts": true,
 	".m2t": true, ".tp": true, ".trp": true,
-	".webm": true, ".wmv": true, ".mpg": true, ".mpeg": true, ".flv": true, ".ogv": true,
+	".webm": true, ".wmv": true, ".mpg": true, ".mpeg": true, ".vob": true, ".flv": true, ".ogv": true,
 }
 
 // Video reports whether name is a video's, by its extension.

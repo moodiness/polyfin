@@ -186,11 +186,16 @@ func walk(ctx context.Context, root, kind string) (listing, error) {
 // walked tells which files a walk of a folder of kind lists, by their
 // path, with slashes: those listed tells, and outside music folders, disc
 // images, a DVD's files and a Blu-ray disc's playlists, read as their disc
-// (see collapseImages, collapseDVDs, collapseDiscs).
+// (see collapseImages, collapseDVDs, collapseDiscs). The VOBs of a
+// VIDEO_TS folder are its DVD's alone, its menus' left out, rather than
+// videos of their own.
 func walked(kind, rel string) (file, side bool) {
-	name := path.Base(rel)
+	name, folder := path.Base(rel), path.Base(path.Dir(rel))
 	file, side = listed(kind, name)
-	file = file || kind != KindMusic && (imageFile(name) || dvdFile(path.Base(path.Dir(rel)), name) || playlistFile(rel) ||
+	if strings.EqualFold(folder, "VIDEO_TS") && strings.EqualFold(path.Ext(name), ".vob") {
+		file = false
+	}
+	file = file || kind != KindMusic && (imageFile(name) || dvdFile(folder, name) || playlistFile(rel) ||
 		kind != KindHomeVideos && themeAudio(rel))
 	return file, side
 }
