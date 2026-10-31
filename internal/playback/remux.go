@@ -69,13 +69,14 @@ type Remux struct {
 }
 
 // Plan returns how a version is cut into segments, reading its keyframe
-// index on first use. An MPEG-TS file, which has no index, is cut every
-// few seconds (see hls.NewGridPlan): it plays over HLS only converted, as
-// Jellyfin plays such files, with FFmpeg searching it from before the
-// time asked (see hls.Plan.Searched). So is a version read from its input
-// (see LocalInputs) whose keyframes the disc does not tell. The bytes of
-// its first segment are warmed meanwhile, unless a warm of the version ran
-// lately (see Warm), in the background when ctx is.
+// index on first use. A file of a container whose index Polyfin does not
+// read, MPEG-TS, an MPEG program stream or AVI (see unindexedFormat), is
+// cut every few seconds (see hls.NewGridPlan): it plays over HLS only
+// converted, as Jellyfin plays such files, with FFmpeg reading it from
+// before the time asked (see hls.Plan.Searched). So is a version read from
+// its input (see LocalInputs) whose keyframes the disc does not tell. The
+// bytes of its first segment are warmed meanwhile, unless a warm of the
+// version ran lately (see Warm), in the background when ctx is.
 func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, error) {
 	plan, err := s.plan(ctx, version)
 	if err == nil && !plan.Grid() {
@@ -86,17 +87,18 @@ func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, 
 
 // Segmented reports whether a version is known to be cut into HLS
 // segments (see Plan) from what is kept alone, reading nothing from its
-// source: a version read from its input, or an MPEG-TS file, always is;
-// another once its keyframe index was read, as preparing a play or a
-// play over HLS reads it. For a version played as it is, whose
-// conversion only a later request may ask for: its play does not wait
-// for its index, nor reads a torrent's pieces for it.
+// source: a version read from its input, or a file of a container whose
+// index Polyfin does not read, always is; another once its keyframe index
+// was read, as preparing a play or a play over HLS reads it. For a
+// version played as it is, whose conversion only a later request may ask
+// for: its play does not wait for its index, nor reads a torrent's pieces
+// for it.
 func (s *Service) Segmented(ctx context.Context, version library.Version) bool {
 	analysis, ok := s.Analyzed(ctx, version.ID)
 	if _, video := videoOf(analysis); !ok || !video || analysis.Duration <= 0 {
 		return false
 	}
-	if s.ReadsInput(version) || transportStream(analysis) {
+	if s.ReadsInput(version) || unindexedFormat(analysis) {
 		return true
 	}
 	if _, ok := s.indexes.Get(version.ID); ok {
@@ -123,13 +125,13 @@ func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, 
 		// FFmpeg reads a Blu-ray disc as an MPEG-TS stream, and a DVD on a
 		// share as an MPEG program stream: it seeks in both by searching
 		// their timestamps.
-		if transportStream(analysis) || slices.Contains(strings.Split(analysis.Format, ","), "mpeg") {
+		if searchedFormat(analysis) {
 			plan = plan.Searched()
 		}
 		return plan, nil
 	}
 	times, err := s.keyframes(ctx, version, analysis)
-	if errors.Is(err, container.ErrNoIndex) && transportStream(analysis) {
+	if errors.Is(err, container.ErrNoIndex) && unindexedFormat(analysis) {
 		return hls.NewGridPlan(analysis.Duration).Searched(), nil
 	}
 	if err != nil {
@@ -153,6 +155,27 @@ func (s *Service) GridPlanned(version library.Version, analysis media.Analysis) 
 	}
 	_, indexed := s.indexes.Get(version.ID)
 	return !indexed
+}
+
+// searchedFormat reports whether an analysis is of an MPEG-TS file or an
+// MPEG program stream, such as a .mpg or .vob file: FFmpeg seeks in both
+// by searching their timestamps (see hls.Plan.Searched), which may start
+// anywhere.
+func searchedFormat(analysis media.Analysis) bool {
+	formats := strings.Split(analysis.Format, ",")
+	return slices.Contains(formats, "mpegts") || slices.Contains(formats, "mpeg")
+}
+
+// unindexedFormat reports whether an analysis is of a file whose
+// container has no keyframe index Polyfin reads, which is cut every few
+// seconds and searched (see Plan): an MPEG-TS file or an MPEG program
+// stream, which have none, or an AVI file. An AVI index lists frames in
+// decoding order, without the times they show at, which B-frames
+// reorder: FFmpeg copies such video with wrong times, so its video is
+// converted, as Jellyfin converts the H.264 of AVI files; and a keyframe
+// FFmpeg seeks to may show after the time asked, as in a searched file.
+func unindexedFormat(analysis media.Analysis) bool {
+	return searchedFormat(analysis) || slices.Contains(strings.Split(analysis.Format, ","), "avi")
 }
 
 // keyframesTime bounds a keyframe index read, which reads the file's head
@@ -669,9 +692,10 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		// taking a body cut short for the end of the file.
 		failed := src.Failed()
 		r.Input, r.Failed, r.Failure = target, failed, func() error { return failureOf(src, failed) }
-		// An MPEG-TS file starts at the time its first packet tells, such
-		// as 1.4 seconds, or hours into a broadcast: its timestamps are
-		// shifted to start at zero, as a grid's times do.
+		// An MPEG-TS file or an MPEG program stream starts at the time its
+		// first packet tells, such as half a second, or hours into a
+		// broadcast: its timestamps are shifted to start at zero, as a
+		// grid's times do.
 		if plan.Grid() {
 			r.InputOptions = []string{"-start_at_zero"}
 		}

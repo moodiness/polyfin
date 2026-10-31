@@ -398,14 +398,15 @@ func (s *Service) queueTracks(ctx context.Context, version library.Version, anal
 
 // zeroOf is the FFmpeg index of the video track by which the remuxes of a
 // version shift its timestamps to start at zero, as the text copies of its
-// tracks must: those of a disc's title, read from its input, and of an
-// MPEG-TS file, such as a Blu-ray's .m2ts file (see remuxOpener and
+// tracks must: those of a disc's title, read from its input, and of a file
+// of a container whose index Polyfin does not read, such as a Blu-ray's
+// .m2ts file or a .vob file (see unindexedFormat, remuxOpener and
 // progressiveOpener). FFmpeg starts at zero the tracks it reads, the video
 // and audio for a remux: the video's start stands for theirs. -1 for a
 // version whose remuxes keep its timestamps.
 func (s *Service) zeroOf(version library.Version, analysis media.Analysis) int {
 	video, ok := videoOf(analysis)
-	if !ok || !s.ReadsInput(version) && !transportStream(analysis) {
+	if !ok || !s.ReadsInput(version) && !unindexedFormat(analysis) {
 		return -1
 	}
 	return video.Index

@@ -1179,6 +1179,7 @@ var mimeTypes = map[string]string{
 	"mov":  "video/quicktime",
 	"avi":  "video/x-msvideo",
 	"ts":   "video/mp2t",
+	"mpeg": "video/mpeg",
 	"m3u8": "application/vnd.apple.mpegurl",
 	"hls":  "application/vnd.apple.mpegurl",
 }
