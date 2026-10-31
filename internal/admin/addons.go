@@ -316,6 +316,11 @@ type libraryJSON struct {
 	// HideInMenus leaves an enabled library out of the web player's menus
 	// (see addons.Library.HideInMenus); false for any other catalog.
 	HideInMenus bool `json:"hideInMenus"`
+	// SkipLocal leaves out of an enabled library the titles local folders
+	// hold (see addons.Library.SkipLocal); Skippable tells whether the
+	// catalog takes it.
+	SkipLocal bool `json:"skipLocal"`
+	Skippable bool `json:"skippable"`
 	// ItemID is the library's item in Jellyfin apps, null for a catalog
 	// that is not an enabled library. Image is how it finds the image apps
 	// show on its tile: "none", "automatic", "generated", or "custom" when
@@ -501,6 +506,8 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 			Genres:      []string{},
 			Filterable:  l.Filterable,
 			HideInMenus: l.HideInMenus,
+			SkipLocal:   l.SkipLocal,
+			Skippable:   l.Skippable,
 			Image:       l.Image,
 			Guide:       h.newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
 			Guides:      h.newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
@@ -948,6 +955,7 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			// whole number is refused as a maximum, not as a request.
 			MaxItems    *float64 `json:"maxItems"`
 			HideInMenus bool     `json:"hideInMenus"`
+			SkipLocal   bool     `json:"skipLocal"`
 		} `json:"libraries"`
 	}
 	if !decode(w, r, &body) {
@@ -961,7 +969,7 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		choice := addons.LibraryChoice{AddonID: id, CatalogType: library.CatalogType, CatalogID: library.CatalogID,
-			Name: library.Name, Genre: library.Genre, HideInMenus: library.HideInMenus}
+			Name: library.Name, Genre: library.Genre, HideInMenus: library.HideInMenus, SkipLocal: library.SkipLocal}
 		if max := library.MaxItems; max != nil {
 			if *max != math.Trunc(*max) || *max < 1 || *max > addons.MaxLibraryItems {
 				writeError(w, http.StatusBadRequest, "invalid_library_max_items")
