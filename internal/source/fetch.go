@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/bandwidth"
 )
 
 // How a source's blocks are fetched.
@@ -714,7 +716,7 @@ func (s *Source) readBlock(c *conn, p []byte) (int, error) {
 	if progressing != nil {
 		progressing.onProgress(func() { timer.Reset(stall) })
 	}
-	n, err := io.ReadFull(watched{c.body, timer, stall}, p)
+	n, err := io.ReadFull(watched{c.body, timer, stall, s.received}, p)
 	timer.Stop()
 	if progressing != nil {
 		progressing.onProgress(nil)
@@ -725,17 +727,22 @@ func (s *Source) readBlock(c *conn, p []byte) (int, error) {
 	return n, err
 }
 
-// watched is a body whose reads push back a watchdog.
+// watched is a body whose reads push back a watchdog, and are counted by
+// meter unless it is nil.
 type watched struct {
 	body  io.Reader
 	timer *time.Timer
 	after time.Duration
+	meter *bandwidth.Meter
 }
 
 func (w watched) Read(p []byte) (int, error) {
 	n, err := w.body.Read(p)
 	if n > 0 {
 		w.timer.Reset(w.after)
+		if w.meter != nil {
+			w.meter.Add(n)
+		}
 	}
 	return n, err
 }
