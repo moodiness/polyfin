@@ -435,6 +435,15 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			found, err = append(found, live...), liveErr
 		}
+		// A search in plain words comes first as the collection it stands
+		// for, across the user's libraries.
+		if err == nil && !hasParent && keep(library.Item{Kind: library.KindCollection}) {
+			var plain library.Item
+			var understood bool
+			if plain, understood, err = h.Library.PlainSearch(r.Context(), user, term); understood {
+				found = append([]library.Item{plain}, found...)
+			}
+		}
 		if err != nil {
 			h.browseError(w, r, err)
 			return
