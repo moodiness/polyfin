@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/homerows"
@@ -18,29 +19,54 @@ type HomeRowChoices interface {
 	HomeRowCollections(ctx context.Context, user accounts.User) ([]jellyfin.HomeRowCollection, error)
 }
 
+// HomeRowPreviews tells the rows a user sees now on the web player's home
+// page, each with its first titles, as the Jellyfin API answers them to
+// the web player.
+type HomeRowPreviews interface {
+	PreviewHomeRows(ctx context.Context, user accounts.User) ([]jellyfin.HomeRowPreview, error)
+}
+
 // homeRowJSON is a row of the web player's home page (Settings › Web
 // player › Home rows, see package homerows). addonId, catalogType and
 // catalogId name a catalog row's catalog; collectionId a collection
 // row's collection; count is how many rows a Because you watched row
-// makes; users are those a row not shown to everyone is shown to.
+// makes; users are those a row not shown to everyone is shown to;
+// schedule is when it shows. shownNow, in answers only, tells whether the
+// schedule shows it now.
 type homeRowJSON struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Kind         string   `json:"kind"`
-	Place        string   `json:"place"`
-	AddonID      string   `json:"addonId"`
-	CatalogType  string   `json:"catalogType"`
-	CatalogID    string   `json:"catalogId"`
-	CollectionID string   `json:"collectionId"`
-	Count        int      `json:"count"`
-	Everyone     bool     `json:"everyone"`
-	Users        []string `json:"users"`
-	Library      bool     `json:"library"`
+	ID           string              `json:"id"`
+	Name         string              `json:"name"`
+	Kind         string              `json:"kind"`
+	Place        string              `json:"place"`
+	AddonID      string              `json:"addonId"`
+	CatalogType  string              `json:"catalogType"`
+	CatalogID    string              `json:"catalogId"`
+	CollectionID string              `json:"collectionId"`
+	Count        int                 `json:"count"`
+	Everyone     bool                `json:"everyone"`
+	Users        []string            `json:"users"`
+	Library      bool                `json:"library"`
+	Schedule     homeRowScheduleJSON `json:"schedule"`
+	ShownNow     bool                `json:"shownNow"`
 }
 
-func newHomeRowJSON(r homerows.Row) homeRowJSON {
+// homeRowScheduleJSON is when a row shows, in the server's time zone
+// (see homerows.Schedule): from startDate to endDate, YYYY-MM-DD, empty
+// for no bound; on its days, 0 for Sunday to 6 for Saturday, none for
+// every day; from startHour, 0 to 23, to endHour, 1 to 24, both null for
+// all day.
+type homeRowScheduleJSON struct {
+	StartDate string `json:"startDate"`
+	EndDate   string `json:"endDate"`
+	Days      []int  `json:"days"`
+	StartHour *int   `json:"startHour"`
+	EndHour   *int   `json:"endHour"`
+}
+
+func newHomeRowJSON(r homerows.Row, now time.Time) homeRowJSON {
 	result := homeRowJSON{ID: r.ID.String(), Name: r.Name, Kind: string(r.Kind), Place: string(r.Place), CatalogType: r.CatalogType,
-		CatalogID: r.CatalogID, Count: r.Count, Everyone: r.Everyone, Users: []string{}, Library: r.Library}
+		CatalogID: r.CatalogID, Count: r.Count, Everyone: r.Everyone, Users: []string{}, Library: r.Library,
+		Schedule: homeRowScheduleJSON{Days: []int{}}, ShownNow: r.ShowsAt(now)}
 	if r.Addon != (accounts.ID{}) {
 		result.AddonID = r.Addon.String()
 	}
@@ -50,7 +76,47 @@ func newHomeRowJSON(r homerows.Row) homeRowJSON {
 	for _, user := range r.Users {
 		result.Users = append(result.Users, user.String())
 	}
+	s := r.Schedule
+	if !s.Start.IsZero() {
+		result.Schedule.StartDate = s.Start.Format(time.DateOnly)
+	}
+	if !s.End.IsZero() {
+		result.Schedule.EndDate = s.End.Format(time.DateOnly)
+	}
+	for _, day := range s.Days {
+		result.Schedule.Days = append(result.Schedule.Days, int(day))
+	}
+	if s.Hours != nil {
+		result.Schedule.StartHour, result.Schedule.EndHour = &s.Hours.From, &s.Hours.To
+	}
 	return result
+}
+
+// schedule reads a schedule from its JSON, and reports whether it could:
+// dates that are not ones, or a single hour, cannot be read. Days come in
+// any order.
+func (j homeRowScheduleJSON) schedule() (homerows.Schedule, bool) {
+	var s homerows.Schedule
+	ok := true
+	date := func(raw string) time.Time {
+		if raw == "" {
+			return time.Time{}
+		}
+		t, err := time.Parse(time.DateOnly, raw)
+		ok = ok && err == nil
+		return t
+	}
+	s.Start, s.End = date(j.StartDate), date(j.EndDate)
+	for _, day := range slices.Compact(slices.Sorted(slices.Values(j.Days))) {
+		s.Days = append(s.Days, time.Weekday(day))
+	}
+	switch {
+	case j.StartHour != nil && j.EndHour != nil:
+		s.Hours = &homerows.Hours{From: *j.StartHour, To: *j.EndHour}
+	case j.StartHour != nil || j.EndHour != nil:
+		ok = false
+	}
+	return s, ok
 }
 
 // row reads a row from its JSON: a count left out is the default one, an
@@ -82,7 +148,9 @@ func (j homeRowJSON) row() (homerows.Row, bool) {
 	if r.Everyone {
 		r.Users = nil
 	}
-	return r, ok && r.Valid()
+	schedule, read := j.Schedule.schedule()
+	r.Schedule = schedule
+	return r, ok && read && r.Valid()
 }
 
 // homeRowError answers the errors of the rows' store, and reports whether
@@ -109,8 +177,9 @@ func (h *handler) homeRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result := make([]homeRowJSON, 0, len(rows))
+	now := h.now()
 	for _, row := range rows {
-		result = append(result, newHomeRowJSON(row))
+		result = append(result, newHomeRowJSON(row, now))
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Rows []homeRowJSON `json:"rows"`
@@ -228,7 +297,7 @@ func (h *handler) createHomeRow(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, newHomeRowJSON(created))
+	writeJSON(w, http.StatusCreated, newHomeRowJSON(created, h.now()))
 }
 
 // updateHomeRow changes a row.
@@ -249,7 +318,7 @@ func (h *handler) updateHomeRow(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newHomeRowJSON(updated))
+	writeJSON(w, http.StatusOK, newHomeRowJSON(updated, h.now()))
 }
 
 // deleteHomeRow deletes a row: 204.
@@ -291,6 +360,73 @@ func (h *handler) orderHomeRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.homeRows(w, r)
+}
+
+// homeRowPreviewJSON is a row of a user's home page in the web player:
+// its folder in Jellyfin apps (id), the row it comes from (rowId), its
+// name there, its kind and place as the admin API names them, and its
+// first titles.
+type homeRowPreviewJSON struct {
+	ID     string             `json:"id"`
+	RowID  string             `json:"rowId"`
+	Name   string             `json:"name"`
+	Kind   string             `json:"kind"`
+	Place  string             `json:"place"`
+	Titles []homeRowTitleJSON `json:"titles"`
+}
+
+// homeRowTitleJSON is a title of a row's preview. posterId is the item
+// whose Primary image is its poster: the series of an episode.
+type homeRowTitleJSON struct {
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Name     string `json:"name"`
+	Year     int    `json:"year"`
+	PosterID string `json:"posterId"`
+}
+
+// previewHomeRows answers the rows the user of the path sees now on the
+// web player's home page, in order, each with its first titles, as the web
+// player signed in as them shows them (Preview as).
+func (h *handler) previewHomeRows(w http.ResponseWriter, r *http.Request) {
+	if h.HomeRowPreviews == nil {
+		writeError(w, http.StatusNotFound, "not_found")
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	user, err := h.Accounts.User(r.Context(), id)
+	if accountError(w, err) {
+		return
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	rows, err := h.HomeRowPreviews.PreviewHomeRows(r.Context(), user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	result := make([]homeRowPreviewJSON, 0, len(rows))
+	for _, row := range rows {
+		preview := homeRowPreviewJSON{ID: row.ID.String(), RowID: row.Row.ID.String(), Name: row.Name, Kind: string(row.Row.Kind),
+			Place: string(row.Row.Place), Titles: make([]homeRowTitleJSON, 0, len(row.Titles))}
+		for _, title := range row.Titles {
+			poster := title.ID
+			if title.Kind == library.KindEpisode && title.SeriesID != (accounts.ID{}) {
+				poster = title.SeriesID
+			}
+			preview.Titles = append(preview.Titles, homeRowTitleJSON{ID: title.ID.String(), Kind: string(title.Kind), Name: title.Name,
+				Year: title.ProductionYear, PosterID: poster.String()})
+		}
+		result = append(result, preview)
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Rows []homeRowPreviewJSON `json:"rows"`
+	}{result})
 }
 
 // ownHomeRowJSON is a row shown to the user signed in, and whether they
