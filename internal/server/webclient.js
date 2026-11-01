@@ -223,6 +223,27 @@
 // again, and Polyfin's leaves them out. Its words follow jellyfin-web's
 // language, as the third's. Any error just stops it.
 //
+// With the tenth, it also has the home page's Next Up, Continue Watching
+// and Continue Listening rows (the home's rows that jellyfin-web refreshes
+// on a played mark: data-monitor names markplayed) ask Polyfin again for a
+// minute after a change of what the user played. jellyfin-web refreshes
+// these rows on a UserDataChanged message, 10 seconds later, but draws
+// them from its answers of the last minute, asking nothing
+// (jellyfin/jellyfin-web#8543): a card marked played stayed as it was.
+// Nor does that message come without legacy authorization, as
+// jellyfin-web 12.4 opens its socket with the token as api_key. When a
+// UserDataChanged message, or the answer of a played mark the page sends
+// (ApiClient.markPlayed and markUnplayed, as a card's ✓ does), changes
+// Played or the resume point of an item of these rows, as the script last
+// saw their answers, it refreshes the rows at once, and for a minute every
+// refresh of theirs asks Polyfin.
+// jellyfin-web's query client reuses an answer while Date.now() is less
+// than a minute after it came: during the row's own fetchData call only,
+// which asks the query client synchronously, Date.now() reads a minute
+// later, so the query client asks Polyfin with the row's own request and
+// keeps the new answer. Other rows, and anything else, are left as they
+// are. Any error just stops it.
+//
 // Eleventh, it adds to jellyfin-web's home page the rows the administrator
 // chose under Settings › Web player › Home rows, as
 // /Polyfin/HomeRows answers them for the user signed in: each with its
@@ -1079,6 +1100,11 @@
   // listen hears the messages of jellyfin-web's ApiClient, as its message
   // event gives them: jellyfin-web's events keep an object's listeners in
   // its _callbacks, by event, and call each with the event then the message.
+  // It also hears the answers of the played marks the page sends, as
+  // markPlayed and markUnplayed give them: what the user did with the item
+  // afterwards. jellyfin-web 12.4 opens its socket with the token as
+  // api_key, which only legacy authorization accepts, so that without it
+  // no UserDataChanged message comes.
   function listen() {
     var api = window.ApiClient
     if (!api || api === heard) return
@@ -1089,9 +1115,26 @@
         hear(message)
       } catch (error) {}
     })
+    ;['markPlayed', 'markUnplayed'].forEach(function (name) {
+      var mark = api[name]
+      if (typeof mark !== 'function') return
+      api[name] = function () {
+        var answer = mark.apply(this, arguments)
+        if (answer && typeof answer.then === 'function') {
+          answer.then(function (data) {
+            try {
+              if (data && data.ItemId) playedChanged({ UserDataList: [data] })
+            } catch (error) {}
+          }, function () {})
+        }
+        return answer
+      }
+    })
   }
-  // hear takes a pushed progress of the title followed as an answer.
+  // hear takes a pushed progress of the title followed as an answer, and
+  // a change of what the user played to the home rows (see playedChanged).
   function hear(message) {
+    if (message && message.MessageType === 'UserDataChanged') return playedChanged(message.Data)
     if (!message || message.MessageType !== 'PolyfinVersions' || !message.Data) return
     var progress = message.Data
     if (!title || String(progress.ItemId).toLowerCase() !== title) return
@@ -2222,11 +2265,15 @@
       set: function (fetch) {
         if (typeof fetch !== 'function') return fetchers.set(this, fetch)
         fetchers.set(this, function () {
-          var answer = fetch.apply(this, arguments)
+          var row = this
+          listen()
+          var refreshed = row && playedRow(row) && Date.now() < freshUntil
+          var answer = refreshed ? unstale(fetch, row, arguments) : fetch.apply(row, arguments)
           if (!answer || typeof answer.then !== 'function') return answer
           return answer.then(function (got) {
             try {
-              return screened(got)
+              if (row && playedRow(row)) seen.set(row, playState(got))
+              return screened(got, row)
             } catch (error) {
               return got
             }
@@ -2234,6 +2281,64 @@
         })
       },
     })
+  }
+  // The home rows jellyfin-web refreshes on a played mark ask Polyfin until
+  // freshUntil (see the header). seen keeps, for each, what the user did
+  // with the items of its last answer: Played and the resume point.
+  var freshFor = 60000
+  var freshUntil = 0
+  var seen = marks('map', 'Seen')
+  // playedRow tells a home row that jellyfin-web refreshes on a played
+  // mark: Next Up's and Continue Watching's.
+  function playedRow(row) {
+    if (!row.closest || !row.closest('.homeSectionsContainer')) return false
+    return (row.getAttribute('data-monitor') || '').split(',').indexOf('markplayed') >= 0
+  }
+  function playState(answer) {
+    var items = Array.isArray(answer) ? answer : answer && Array.isArray(answer.Items) ? answer.Items : []
+    var state = {}
+    items.forEach(function (item) {
+      if (!item || !item.Id) return
+      var data = item.UserData || {}
+      state[plainId(item.Id)] = { played: !!data.Played, position: data.PlaybackPositionTicks || 0 }
+    })
+    return state
+  }
+  // playedChanged refreshes the home rows at once, and has them ask
+  // Polyfin for a minute, when a UserDataChanged message changes Played or
+  // the resume point of one of their items.
+  function playedChanged(data) {
+    var changes = (data && data.UserDataList) || []
+    var rows = Array.prototype.filter.call(document.querySelectorAll('.homeSectionsContainer .itemsContainer'), playedRow)
+    var changed = rows.some(function (row) {
+      var state = seen.get(row)
+      return (
+        !!state &&
+        changes.some(function (change) {
+          var was = change && change.ItemId && state[plainId(change.ItemId)]
+          return !!was && (was.played !== !!change.Played || was.position !== (change.PlaybackPositionTicks || 0))
+        })
+      )
+    })
+    if (!changed) return
+    freshUntil = Date.now() + freshFor
+    rows.forEach(function (row) {
+      if (typeof row.notifyRefreshNeeded === 'function') row.notifyRefreshNeeded(true)
+    })
+  }
+  // unstale calls a row's fetchData as if its answers were older than a
+  // minute, jellyfin-web's query client then asking Polyfin (see the
+  // header).
+  function unstale(fetch, row, args) {
+    var now = Date.now
+    Date.now = function () {
+      return now() + freshFor + 1000
+    }
+    try {
+      return fetch.apply(row, args)
+    } finally {
+      Date.now = now
+    }
   }
   // dropCards takes cards off the page, and hides a home row left empty.
   function dropCards(cards) {
