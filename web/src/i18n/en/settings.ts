@@ -252,7 +252,7 @@ const settings = {
       `When an app plays a title without choosing a version, Polyfin tries the versions in order until one works, but analyzes no more than this many. Versions already analyzed are tried too, as they cost nothing. A higher number finds a working version more often, but a title that does not play takes longer to say so. From ${r.min} to ${r.max}; ${r.default} by default.`,
     preferDirectPlay: 'Prefer versions the app plays without conversion',
     preferDirectPlayHelp:
-      'When an app plays a title without choosing a version, Polyfin picks the first version the app plays as it is or simply repackaged, rather than the first that plays at all. The very first play of a title can be a little slower, as more versions may be analyzed; nothing changes once they are known.',
+      'When an app plays a title without choosing a version, Polyfin picks the first version the app plays as it is or simply repackaged, rather than the first that plays at all. Once an app has played since the server started, its version menus also list those versions first, so that Play starts the version the menu shows. Users given “Play local files first” keep their local files first. The very first play of a title can be a little slower, as more versions may be analyzed; nothing changes once they are known.',
     nameHowVersionsPlay: 'Say in version names how they play',
     nameHowVersionsPlayHelp:
       'Version names end with how the app plays each: “(direct play)”, “(direct stream)” when copied without conversion, “(converted: reason)” with the app’s request, HDR, the quality limit, subtitles, video or audio as the reason, or “(cannot play here)”. Polyfin decides it for the device profile the app sent at its last playback, so names say nothing before a device’s first play or after a restart, and nothing for a version not analyzed or described by RemuxDB yet. Names are in the language of generated names. Nothing is read for them.',
@@ -264,6 +264,8 @@ const settings = {
       add: 'Add a criterion',
       remove: (name: string) => `Remove ${name}`,
       criterion: (position: number) => `Criterion ${position}`,
+      sourceTiesOnly: (position: number) =>
+        `“Source, in the order below” is Criterion ${position}: it only orders the versions the criteria above it tie on, so the versions of a folder at the top of Order of sources can still come after others. Move it up to Criterion 1 to put a source’s versions first.`,
       criteria: {
         language: 'Preferred audio language',
         'resolution-high': 'Resolution, highest first',

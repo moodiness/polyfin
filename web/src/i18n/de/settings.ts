@@ -256,7 +256,7 @@ const settings: typeof en = {
       `Wenn eine App einen Titel ohne Wahl einer Version abspielt, versucht Polyfin die Versionen der Reihe nach, bis eine funktioniert, analysiert aber höchstens so viele. Bereits analysierte Versionen werden ebenfalls versucht, da sie nichts kosten. Ein höherer Wert findet öfter eine funktionierende Version, aber bei einem Titel, der nicht abspielbar ist, dauert es länger, bis das feststeht. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
     preferDirectPlay: 'Versionen bevorzugen, die die App ohne Konvertierung abspielt',
     preferDirectPlayHelp:
-      'Wenn eine App einen Titel ohne Wahl einer Version abspielt, wählt Polyfin die erste Version, die die App unverändert oder nur neu verpackt abspielt, statt der ersten, die überhaupt abspielbar ist. Die allererste Wiedergabe eines Titels kann etwas langsamer sein, da mehr Versionen analysiert werden können; sobald sie bekannt sind, ändert sich nichts mehr.',
+      'Wenn eine App einen Titel ohne Wahl einer Version abspielt, wählt Polyfin die erste Version, die die App unverändert oder nur neu verpackt abspielt, statt der ersten, die überhaupt abspielbar ist. Sobald eine App seit dem Start des Servers etwas abgespielt hat, listen auch ihre Versionsmenüs diese Versionen zuerst, sodass die Wiedergabe mit der Version beginnt, die das Menü zeigt. Benutzer mit „Lokale Dateien zuerst abspielen“ behalten ihre lokalen Dateien vorn. Die allererste Wiedergabe eines Titels kann etwas langsamer sein, da mehr Versionen analysiert werden können; sobald sie bekannt sind, ändert sich nichts mehr.',
     nameHowVersionsPlay: 'In Versionsnamen angeben, wie sie abgespielt werden',
     nameHowVersionsPlayHelp:
       'Versionsnamen enden damit, wie die App die jeweilige Version abspielt: „(Direktes Abspielen)“, „(Direktes Streamen)“, wenn sie ohne Umwandlung kopiert wird, „(umgewandelt: Grund)“ mit dem Wunsch der App, HDR, dem Qualitätslimit, Untertiteln, Video oder Audio als Grund, oder „(hier nicht abspielbar)“. Polyfin entscheidet das anhand des Geräteprofils, das die App bei ihrer letzten Wiedergabe gesendet hat. Vor der ersten Wiedergabe eines Geräts oder nach einem Neustart sagen die Namen daher nichts, ebenso bei einer Version, die noch nicht analysiert oder von RemuxDB beschrieben wurde. Die Namen stehen in der Sprache der generierten Namen. Dafür wird nichts gelesen.',
@@ -268,6 +268,8 @@ const settings: typeof en = {
       add: 'Kriterium hinzufügen',
       remove: (name: string) => `${name} entfernen`,
       criterion: (position: number) => `Kriterium ${position}`,
+      sourceTiesOnly: (position: number) =>
+        `„Quelle, in der Reihenfolge unten“ ist Kriterium ${position}: Es sortiert nur die Versionen, bei denen die Kriterien darüber gleichauf liegen, sodass die Versionen eines Ordners ganz oben in der Reihenfolge der Quellen trotzdem nach anderen kommen können. Verschiebe es auf Kriterium 1, um die Versionen einer Quelle zuerst zu zeigen.`,
       criteria: {
         language: 'Bevorzugte Audiosprache',
         'resolution-high': 'Auflösung, höchste zuerst',
