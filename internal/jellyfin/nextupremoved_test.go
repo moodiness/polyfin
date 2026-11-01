@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -210,5 +211,40 @@ func TestANewEpisodeBringsARemovedSeriesBack(t *testing.T) {
 	}
 	if got := tr.list(t, "/Shows/NextUp?seriesId="+series["Dateless"]); !slices.Equal(got, []string{episodes["Dateless 2"]}) {
 		t.Errorf("Dateless asked for: %v", got)
+	}
+}
+
+// A series being rewatched, taken off Next Up, leaves out both its next
+// unplayed episode and the next one of the rewatch, until a newer play;
+// asked for alone, it keeps both.
+func TestRemovingFromNextUpTakesARewatchOff(t *testing.T) {
+	t.Parallel()
+	tr := newTracking(t)
+	// The first two episodes played, then the first again.
+	for i, episode := range []string{tr.episodes[0], tr.episodes[1], tr.episodes[0]} {
+		tr.mark(t, http.MethodPost, "/UserPlayedItems/"+episode+"?datePlayed=2026-01-0"+strconv.Itoa(i+1)+"T20:00:00Z")
+	}
+	nextUp := func(query string) []string {
+		t.Helper()
+		return tr.list(t, "/Shows/NextUp?enableRewatching=true"+query)
+	}
+	both := []string{tr.episodes[1], tr.episodes[2]}
+	if got := nextUp(""); !slices.Equal(slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values(both))) {
+		t.Fatalf("before the removal: %v", got)
+	}
+	if status := tr.send(t, http.MethodDelete, "/Polyfin/UserItems/"+tr.series+"/NextUp", nil); status != http.StatusNoContent {
+		t.Fatalf("removing: %d", status)
+	}
+	if got := nextUp(""); len(got) != 0 {
+		t.Errorf("after the removal: %v", got)
+	}
+	if got := nextUp("&seriesId=" + tr.series); len(got) != 2 {
+		t.Errorf("the series asked for: %v", got)
+	}
+	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": 0})
+	// Played again past the start: the play is dated now.
+	tr.report(t, "/Sessions/Playing/Stopped", map[string]any{"ItemId": tr.episodes[1], "PositionTicks": 6_000_000_000})
+	if got := nextUp(""); len(got) == 0 {
+		t.Errorf("after a newer play: %v", got)
 	}
 }
