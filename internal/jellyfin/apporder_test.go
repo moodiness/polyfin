@@ -2,7 +2,9 @@ package jellyfin
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,8 +13,11 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/preferences"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // eac3 stores for a version the analysis of the Matroska file the
@@ -230,4 +235,118 @@ func TestKeptInPlaceFollowsTheQualityGroup(t *testing.T) {
 	check("local files first", "Shelf", "OneEnglish", "OneFrench", "TwoFrench", "TwoEnglish")
 	localFirst(false)
 	check("local files first taken away", "OneEnglish", "OneFrench", "TwoFrench", "TwoEnglish", "Shelf")
+}
+
+// twoCutsAddon serves the movie tt1000 with two streams, One and Two, each
+// listing a subtitle file of its own whose text is the stream's name.
+func twoCutsAddon(t *testing.T) string {
+	t.Helper()
+	var server *httptest.Server
+	movie := stremio.Meta{ID: "tt1000", Type: "movie", Name: "Movie", Runtime: "2h", Year: "2008"}
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch path := r.URL.EscapedPath(); {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "cuts", Name: "Cuts", Version: "1", Types: []string{"movie"}, IDPrefixes: []string{"tt"},
+				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}},
+				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}})
+		case strings.HasPrefix(path, "/catalog/movie/top"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{movie}})
+		case path == "/meta/movie/tt1000.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie})
+		case path == "/stream/movie/tt1000.json":
+			var streams []stremio.Stream
+			for _, name := range []string{"One", "Two"} {
+				streams = append(streams, stremio.Stream{Name: name, URL: server.URL + "/files/" + name + ".mkv",
+					BehaviorHints: stremio.StreamBehavior{Filename: "Movie.2008." + name + ".mkv", VideoSize: 4e9},
+					Subtitles:     []stremio.Subtitle{{ID: stremio.Text(name), Lang: "eng", URL: server.URL + "/subtitles/" + name + ".srt"}}})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
+		case strings.HasPrefix(path, "/subtitles/"):
+			name := strings.TrimSuffix(strings.TrimPrefix(path, "/subtitles/"), ".srt")
+			_, _ = io.WriteString(w, "1\r\n00:00:01,000 --> 00:00:04,000\r\n"+name+"\r\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// twoAudios stores for a version an analysis of H.264 in Matroska with
+// English audio, flagged default, and French audio, in those codecs.
+func (s testServer) twoAudios(t *testing.T, version library.Version, english, french string) {
+	t.Helper()
+	s.storeAnalysis(t, version, media.Analysis{Format: "matroska,webm", Duration: 2 * time.Hour, Size: 4e9, Bitrate: 4_000_000, Remote: true,
+		Streams: []media.Stream{
+			{Index: 0, Type: "video", Codec: "h264", Profile: "High", Level: 40, Width: 1920, Height: 1080, FrameRate: 24, AverageRate: 24, PixelFormat: "yuv420p", BitDepth: 8},
+			{Index: 1, Type: "audio", Codec: english, Language: "eng", Default: true, Channels: 6, SampleRate: 48000, ChannelLayout: "5.1(side)"},
+			{Index: 2, Type: "audio", Codec: french, Language: "fre", Channels: 6, SampleRate: 48000, ChannelLayout: "5.1(side)"},
+		}})
+}
+
+// A subtitle URL naming the title's own identifier serves the subtitles of
+// the version item details list first for the app, the user's remembered
+// audio choice on the title included: One, whose French audio is AAC,
+// comes first once French is remembered, though Two plays its default
+// English AAC track as it is.
+func TestSubtitlesOfTheTitleFollowTheRememberedTracks(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	user := s.user("member", nil)
+	if _, err := s.addons.Install(t.Context(), addons.Shared(), twoCutsAddon(t), false); err != nil {
+		t.Fatal(err)
+	}
+	token := s.signIn("member", "tv")
+	var views, page QueryResult
+	s.get(t, "/UserViews", token, &views)
+	s.get(t, "/Items?ParentId="+views.Items[0].Id, token, &page)
+	if len(page.Items) != 1 {
+		t.Fatalf("titles: %+v", page.Items)
+	}
+	movie := page.Items[0].Id
+	p := playbackSetup{testServer: s, token: token, user: user, movie: movie}
+	p.versions = p.versionsOf(t, movie)
+	one, two := p.versions[0], p.versions[1]
+	s.twoAudios(t, one, "eac3", "aac")
+	s.twoAudios(t, two, "aac", "eac3")
+	s.setting(t, func(settings *accounts.Settings) { settings.PreferDirectPlay = true })
+	if status := s.configure(t, "/Users/Configuration", token, map[string]any{"RememberAudioSelections": true}); status != http.StatusNoContent {
+		t.Fatalf("configuration: %d", status)
+	}
+	id, _ := accounts.ParseID(movie)
+	if err := s.handler.Preferences.PutTrackChoice(t.Context(), user.ID, id, preferences.TrackChoice{AudioLanguage: "fre"}); err != nil {
+		t.Fatal(err)
+	}
+	// The device's profile comes with its session's capabilities: nothing
+	// is played, which would read the versions.
+	if status, body := s.call(http.MethodPost, "/Sessions/Capabilities/Full", app("tv", token),
+		map[string]any{"PlayableMediaTypes": []string{"Video"}, "DeviceProfile": p.profile(t, "jellyfin-web-12.4-chrome")}); status != http.StatusNoContent {
+		t.Fatalf("capabilities: %d %s", status, body)
+	}
+	// Without the choice, as for another member, Two comes first.
+	other := s.user("other", nil)
+	otherToken := s.signIn("other", "tv")
+	if status, body := s.call(http.MethodPost, "/Sessions/Capabilities/Full", app("tv", otherToken),
+		map[string]any{"PlayableMediaTypes": []string{"Video"}, "DeviceProfile": p.profile(t, "jellyfin-web-12.4-chrome")}); status != http.StatusNoContent {
+		t.Fatalf("capabilities: %d %s", status, body)
+	}
+	q := p
+	q.user = other
+	if got, want := etags(q.detailsOn(t, "tv", otherToken, movie)), versionIDs(two, one); !slices.Equal(got, want) {
+		t.Fatalf("the menu without a choice: %v, want %v", got, want)
+	}
+
+	if got, want := etags(p.detailsOn(t, "tv", token, movie)), versionIDs(one, two); !slices.Equal(got, want) {
+		t.Fatalf("the menu with French remembered: %v, want %v", got, want)
+	}
+	// The page is no longer followed, as during a movie past watchedFor,
+	// when an app asks for another subtitle: its open-page order no longer
+	// holds the versions in place.
+	s.handler.watched.mu.Lock()
+	s.handler.watched.titles[id][user.ID].until = time.Now().Add(-time.Second)
+	s.handler.watched.mu.Unlock()
+	response, body := s.fetch(t, "/Videos/"+movie+"/"+movie+"/Subtitles/0/0/Stream.srt?ApiKey="+token)
+	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), "One") {
+		t.Errorf("the title's subtitles: %d %q, want One's", response.StatusCode, body)
+	}
 }
