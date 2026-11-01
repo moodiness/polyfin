@@ -39,7 +39,8 @@ const groupColumns = "max_parental_rating, max_parental_sub_rating, block_unrate
 	"video_transcoding, audio_transcoding, content_downloading, personal_addons, " +
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
-	"subtitle_management, live_tv_management, quality_group, can_share, torrent_streams, remote_access, live_tv_channels, local_first"
+	"subtitle_management, live_tv_management, quality_group, can_share, torrent_streams, remote_access, live_tv_channels, local_first, " +
+	"boost_volume, convert_sound"
 
 // Limits are the settings a group holds; see User for each.
 type Limits struct {
@@ -65,6 +66,8 @@ type Limits struct {
 	RemoteAccess         bool
 	LiveTvChannels       ChannelRule
 	LocalFirst           bool
+	BoostVolume          bool
+	ConvertSound         bool
 }
 
 // fields lists where the groupColumns of a row go.
@@ -73,7 +76,8 @@ func (l *Limits) fields() []any {
 		&l.VideoTranscoding, &l.AudioTranscoding, &l.ContentDownloading, &l.PersonalAddons,
 		&l.MaxPlaybacks, &l.MaxBitrate, &l.LiveTv, &l.SyncPlay, &l.RemoteControl,
 		&l.HiddenLibraries, &l.BlockedGenres, &l.AccessSchedules, &l.CollectionManagement,
-		&l.SubtitleManagement, &l.LiveTvManagement, &l.QualityGroup, &l.CanShare, &l.TorrentStreams, &l.RemoteAccess, &l.LiveTvChannels, &l.LocalFirst}
+		&l.SubtitleManagement, &l.LiveTvManagement, &l.QualityGroup, &l.CanShare, &l.TorrentStreams, &l.RemoteAccess, &l.LiveTvChannels, &l.LocalFirst,
+		&l.BoostVolume, &l.ConvertSound}
 }
 
 // Limits returns the settings of u a group holds.
@@ -84,7 +88,8 @@ func (u User) Limits() Limits {
 		HiddenLibraries: u.HiddenLibraries, BlockedGenres: u.BlockedGenres, AccessSchedules: u.AccessSchedules,
 		CollectionManagement: u.CollectionManagement, SubtitleManagement: u.SubtitleManagement,
 		LiveTvManagement: u.LiveTvManagement, QualityGroup: u.QualityGroup, CanShare: u.CanShare, TorrentStreams: u.TorrentStreams,
-		RemoteAccess: u.RemoteAccess, LiveTvChannels: u.LiveTvChannels, LocalFirst: u.LocalFirst}
+		RemoteAccess: u.RemoteAccess, LiveTvChannels: u.LiveTvChannels, LocalFirst: u.LocalFirst,
+		BoostVolume: u.BoostVolume, ConvertSound: u.ConvertSound}
 }
 
 // with returns l with the settings changes, prepared as u, sets.
@@ -113,6 +118,8 @@ func (l Limits) with(changes UserChanges, u userUpdate) Limits {
 	set(&l.RemoteAccess, changes.RemoteAccess)
 	set(&l.LiveTvChannels, u.channels)
 	set(&l.LocalFirst, changes.LocalFirst)
+	set(&l.BoostVolume, changes.BoostVolume)
+	set(&l.ConvertSound, changes.ConvertSound)
 	return l
 }
 
@@ -137,7 +144,7 @@ func (l Limits) equal(o Limits) bool {
 		l.SubtitleManagement == o.SubtitleManagement && l.LiveTvManagement == o.LiveTvManagement &&
 		l.QualityGroup == o.QualityGroup && l.CanShare == o.CanShare && l.TorrentStreams == o.TorrentStreams &&
 		l.RemoteAccess == o.RemoteAccess && l.LiveTvChannels.equal(o.LiveTvChannels) &&
-		l.LocalFirst == o.LocalFirst
+		l.LocalFirst == o.LocalFirst && l.BoostVolume == o.BoostVolume && l.ConvertSound == o.ConvertSound
 }
 
 func equalPointers(a, b *int) bool {
@@ -207,7 +214,8 @@ func (changes GroupChanges) Sections() []string {
 			l.PersonalAddons != nil || l.CollectionManagement != nil || l.SubtitleManagement != nil || l.CanShare != nil ||
 			l.TorrentStreams != nil || l.RemoteAccess != nil},
 		{SectionPlayback, l.MaxPlaybacks != nil || l.MaxBitrate != nil || l.QualityGroup != nil || l.SyncPlay != nil ||
-			l.LiveTv != nil || l.RemoteControl != nil || l.LiveTvManagement != nil || l.LocalFirst != nil},
+			l.LiveTv != nil || l.RemoteControl != nil || l.LiveTvManagement != nil || l.LocalFirst != nil ||
+			l.BoostVolume != nil || l.ConvertSound != nil},
 		{SectionParental, l.Parental != nil},
 		{SectionLibraries, l.HiddenLibraries != nil},
 		{SectionGenres, l.BlockedGenres != nil},
@@ -325,13 +333,16 @@ func (s *Store) UpdateGroup(ctx context.Context, id ID, changes GroupChanges) (G
 				torrent_streams = coalesce($24, torrent_streams),
 				remote_access = coalesce($25, remote_access),
 				live_tv_channels = coalesce($26::jsonb, live_tv_channels),
-				local_first = coalesce($27, local_first)
+				local_first = coalesce($27, local_first),
+				boost_volume = coalesce($28, boost_volume),
+				convert_sound = coalesce($29, convert_sound)
 			WHERE id = $1`,
 			id, name, l.Parental != nil, u.parental.MaxRating, u.parental.MaxSubRating, u.parental.BlockUnrated,
 			l.VideoTranscoding, l.AudioTranscoding, l.ContentDownloading, l.PersonalAddons,
 			l.MaxPlaybacks, l.MaxBitrate, l.LiveTv, l.SyncPlay, l.RemoteControl,
 			u.hidden, u.genres, u.schedules, l.CollectionManagement,
-			l.SubtitleManagement, l.LiveTvManagement, l.QualityGroup, l.CanShare, l.TorrentStreams, l.RemoteAccess, u.channels, l.LocalFirst)
+			l.SubtitleManagement, l.LiveTvManagement, l.QualityGroup, l.CanShare, l.TorrentStreams, l.RemoteAccess, u.channels, l.LocalFirst,
+			l.BoostVolume, l.ConvertSound)
 		if uniqueViolation(err) {
 			return ErrGroupNameTaken
 		}
