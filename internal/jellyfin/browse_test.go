@@ -163,6 +163,91 @@ func episodeStreams(t *testing.T) string {
 	return server.URL + "/manifest.json"
 }
 
+// checkNarrowedListings lists library view by each of want's item types,
+// recursively as apps ask for a library's titles, in pages of one and of
+// two from every start, and checks that the pages walk want's names in
+// order to the end and that each tells their number as its total. A
+// listing of every kind the library lists, which reads its catalog a
+// page at a time, may tell one more while the catalog may go on: unread
+// names it as the types for which that holds.
+func checkNarrowedListings(t *testing.T, s testServer, token, view, unread string, want map[string][]string) {
+	t.Helper()
+	for types, names := range want {
+		for _, limit := range []int{1, 2} {
+			var walked []string
+			for start := 0; start < len(names)+1; start += limit {
+				var page QueryResult
+				path := fmt.Sprintf("/Items?ParentId=%s&Recursive=true&IncludeItemTypes=%s&StartIndex=%d&Limit=%d", view, types, start, limit)
+				if status := s.get(t, path, token, &page); status != http.StatusOK {
+					t.Fatalf("%s: %d", path, status)
+				}
+				if total := page.TotalRecordCount; total != len(names) && (types != unread || total != len(names)+1) {
+					t.Errorf("%s: a total of %d, want %d", path, total, len(names))
+				}
+				for _, item := range page.Items {
+					walked = append(walked, item.Name)
+				}
+			}
+			if !slices.Equal(walked, names) {
+				t.Errorf("%s by %d: %v, want %v", types, limit, walked, names)
+			}
+		}
+	}
+}
+
+// A library of an anime catalog, whose type does not tell its titles'
+// kind, lists and counts only the kinds asked for, as Jellyfin counts a
+// mixed library's items of the types asked for, so that apps page
+// through movies or series to their end.
+func TestAnimeLibraryCountsTheKindsAsked(t *testing.T) {
+	t.Parallel()
+	titles := []stremio.Meta{
+		{ID: "kitsu:1", Type: "anime.series", Name: "Series One"},
+		{ID: "kitsu:2", Type: "anime.movie", Name: "Movie One"},
+		{ID: "kitsu:3", Type: "anime.series", Name: "Series Two"},
+		{ID: "kitsu:4", Type: "anime.movie", Name: "Movie Two"},
+		{ID: "kitsu:5", Type: "anime.series", Name: "Series Three"},
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch path := r.URL.EscapedPath(); {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "anime", Name: "Anime", Version: "1", Types: []string{"anime"},
+				Resources: []stremio.Resource{{Name: "catalog"}},
+				Catalogs:  []stremio.Catalog{{Type: "anime", ID: "mixed", Name: "Mixed", Extra: []stremio.Extra{{Name: "skip"}}}}})
+		case strings.HasPrefix(path, "/catalog/anime/mixed"):
+			metas := titles
+			if strings.Contains(path, "skip=") {
+				metas = nil
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": metas})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	s := newTestServer(t, 10)
+	s.user("member", nil)
+	addon, err := s.addons.Install(t.Context(), addons.Shared(), server.URL+"/manifest.json", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
+		{AddonID: addon.ID, CatalogType: "anime", CatalogID: "mixed"}}); err != nil {
+		t.Fatal(err)
+	}
+	token := s.signIn("member", "tv")
+	var views QueryResult
+	s.get(t, "/UserViews", token, &views)
+	if len(views.Items) != 1 {
+		t.Fatalf("the views: %+v", views.Items)
+	}
+	checkNarrowedListings(t, s, token, views.Items[0].Id, "", map[string][]string{
+		"Series":       {"Series One", "Series Two", "Series Three"},
+		"Movie":        {"Movie One", "Movie Two"},
+		"Movie,Series": {"Series One", "Movie One", "Series Two", "Movie Two", "Series Three"},
+	})
+}
+
 // jellyfin-web plays an episode with its series' episodes from it on,
 // asked from startItemId: the episode, or the version the user picked.
 func TestEpisodeListsStartAtTheItemAsked(t *testing.T) {

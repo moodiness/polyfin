@@ -71,7 +71,7 @@ func (v view) unhiddenMetas(src source, metas []stremio.Meta) []stremio.Meta {
 		return metas
 	}
 	return slices.DeleteFunc(slices.Clone(metas), func(meta stremio.Meta) bool {
-		kind, ok := titleKind(cmp.Or(meta.Type, src.catalog.Type))
+		kind, ok := catalogTitleKind(src.addon, src.catalog, cmp.Or(meta.Type, src.catalog.Type))
 		return ok && meta.ID != "" && v.hidden[itemID(titleKey(kind, meta.ID))]
 	})
 }

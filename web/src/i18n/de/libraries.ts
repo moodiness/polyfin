@@ -30,6 +30,10 @@ const libraries: typeof en = {
     skipLocalHelp:
       'Ein Film oder eine Serie, die die Bibliothek eines lokalen Ordners unter derselben Kennung auflistet, erscheint nur dort. Versionen und Gesehen-Status bleiben gleich, und die Suche findet den Titel einmal. Wer die Bibliothek des Ordners nicht sieht, findet ihn weiterhin hier.',
     skippedLocal: 'Ohne Titel lokaler Ordner',
+    showAsTitles: 'Als Filme und Serien anzeigen',
+    showAsTitlesHelp:
+      'Für Jellyfin-Apps, die nur Filme und Serien auflisten: Ein Titel mit mehreren Videos oder einem als Episode nummerierten wird zur Serie, seine Videos zu ihren Episoden; ein Titel ohne Videos oder mit einer Datei zum Film. Gesehen-Markierungen, Fortsetzungspunkte und Favoriten gehen beim Speichern mit.',
+    shownAsTitles: 'Als Filme und Serien angezeigt',
     remove: 'Entfernen',
     removeLabel: (name: string) => `${name} entfernen`,
     moreActions: (name: string) => `Weitere Aktionen für ${name}`,

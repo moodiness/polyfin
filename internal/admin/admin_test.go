@@ -88,6 +88,7 @@ func newTestAPI(t *testing.T, failures int, configure ...func(*Options, testDeps
 		IPTV:             channels,
 		LibraryImages:    lib,
 		LibraryRefreshes: lib,
+		ShownTitles:      lib,
 		SmartLists:       smartlists.New(pool),
 		SmartPreviews:    lib,
 		DataDir:          t.TempDir(),

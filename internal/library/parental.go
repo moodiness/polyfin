@@ -329,7 +329,7 @@ func (s *Service) visibleMetas(ctx context.Context, v view, src source, metas []
 	judged := make(map[accounts.ID]int, len(metas))
 	for i, meta := range metas {
 		// The listing saves its records with their folder afterwards.
-		if _, r, err := titleItem(src.addon.addon.ID, src.catalog, meta, accounts.ID{}, src.addon.confined); err == nil {
+		if _, r, err := titleItem(src.addon, src.catalog, meta, accounts.ID{}); err == nil {
 			r.Parent = nil
 			titles = append(titles, r)
 			judged[r.ID] = i

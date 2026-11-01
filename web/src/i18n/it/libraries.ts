@@ -31,6 +31,10 @@ const libraries: typeof en = {
     skipLocalHelp:
       'Un film o una serie che la libreria di una cartella locale elenca, collegato allo stesso identificativo, compare solo lì. Le sue versioni e il suo stato di visione restano gli stessi, e la ricerca lo trova una volta. Un utente che non vede la libreria della cartella lo trova ancora qui.',
     skippedLocal: 'Senza i titoli delle cartelle locali',
+    showAsTitles: 'Mostra come film e serie',
+    showAsTitlesHelp:
+      'Per le applicazioni Jellyfin che elencano solo film e serie: un titolo con più video, o con uno numerato come episodio, diventa una serie, i suoi video i suoi episodi; un titolo senza video, o con un solo file, un film. Gli stati di visione, i punti di ripresa e i preferiti li seguono al salvataggio.',
+    shownAsTitles: 'Mostrata come film e serie',
     remove: 'Rimuovi',
     removeLabel: (name: string) => `Rimuovi ${name}`,
     moreActions: (name: string) => `Altre azioni per ${name}`,

@@ -123,6 +123,21 @@ type Addon struct {
 	// UsedBy is who uses a server addon (see UsedBy); a user's own addon
 	// is used by everyone, its owner being the only one to see it.
 	UsedBy UsedBy
+	// titleCatalogs are its catalogs whose enabled library shows their
+	// titles as movies and shows (see Library.ShowAsTitles).
+	titleCatalogs []catalogRef
+}
+
+// catalogRef names a catalog of an addon by its type and identifier.
+type catalogRef struct {
+	catalogType, catalogID string
+}
+
+// ShowsAsTitles reports whether the enabled library of the addon's catalog
+// of catalogType and catalogID shows its titles as movies and shows (see
+// Library.ShowAsTitles), wherever they are listed or found.
+func (a Addon) ShowsAsTitles(catalogType, catalogID string) bool {
+	return slices.Contains(a.titleCatalogs, catalogRef{catalogType, catalogID})
 }
 
 // UsedBy is who uses a server addon: everyone, the default, or only the
@@ -213,6 +228,12 @@ type Library struct {
 	// whether it can.
 	SkipLocal bool
 	Skippable bool
+	// ShowAsTitles shows the titles of an enabled library of other videos
+	// as movies and shows rather than as home videos (see
+	// library.shownTitle); always false for a catalog that cannot (see
+	// OtherVideos). OtherVideos tells whether it can.
+	ShowAsTitles bool
+	OtherVideos  bool
 	// Image is how an enabled library finds the image apps show on its
 	// tile: LibraryImageNone, LibraryImageAutomatic or
 	// LibraryImageGenerated. An image uploaded for the library's item wins
@@ -240,6 +261,34 @@ func Filterable(addon Addon, catalog stremio.Catalog) bool {
 func Skippable(addon Addon, catalog stremio.Catalog) bool {
 	return !addon.Local() && !addon.IPTV() && !addon.HasMusic() &&
 		slices.Contains([]string{"movie", "anime.movie", "series", "anime.series", "anime"}, catalog.Type)
+}
+
+// OtherVideos reports whether a catalog of addon lists other videos, which
+// its library shows as home videos unless it shows them as movies and
+// shows (see Library.ShowAsTitles): a catalog of a type Polyfin has no use
+// of its own for (see OtherType), of an addon that is not a music addon.
+func OtherVideos(addon Addon, catalog stremio.Catalog) bool {
+	return !addon.HasMusic() && OtherType(catalog.Type)
+}
+
+// OtherType reports whether titles of a Stremio type are other videos:
+// other, channel, and every type Polyfin has no use of its own for (see
+// knownType).
+func OtherType(stremioType string) bool {
+	return stremioType == "other" || stremioType == "channel" || !knownType(stremioType)
+}
+
+// knownType reports whether Polyfin has a use of its own for a Stremio
+// type: movies, series and anime, other and channel videos, collections,
+// live TV, the rows of Eclipse music addons, and Polyfin's own types, as
+// its home videos' and extras'. A title without a type is not known
+// either way.
+func knownType(stremioType string) bool {
+	switch stremioType {
+	case "", "movie", "anime.movie", "series", "anime.series", "anime", "other", "channel", "collection", "tv":
+		return true
+	}
+	return eclipse.CatalogType(stremioType) || strings.HasPrefix(stremioType, "polyfin.")
 }
 
 // Genres lists the genres a catalog offers in its genre filter, in order.
@@ -326,14 +375,15 @@ type LibraryKey struct {
 // optionally narrowed to a genre and limited to MaxItems titles, and
 // possibly left out of the web player's menus (see Library).
 type LibraryChoice struct {
-	AddonID     accounts.ID
-	CatalogType string
-	CatalogID   string
-	Name        *string
-	Genre       *string
-	MaxItems    *int
-	HideInMenus bool
-	SkipLocal   bool
+	AddonID      accounts.ID
+	CatalogType  string
+	CatalogID    string
+	Name         *string
+	Genre        *string
+	MaxItems     *int
+	HideInMenus  bool
+	SkipLocal    bool
+	ShowAsTitles bool
 }
 
 // Store is the addons repository. Reads of the addons and libraries are
@@ -1161,20 +1211,21 @@ type libraryRow struct {
 	maxItems          *int
 	hideInMenus       bool
 	skipLocal         bool
+	showAsTitles      bool
 }
 
 // libraryRows reads the libraries filter selects, l being the library
 // and a its addon, in order.
 func libraryRows(ctx context.Context, db queryer, filter string, args ...any) ([]libraryRow, error) {
 	rows, err := db.Query(ctx, `SELECT a.owner_id, l.addon_id, l.catalog_type, l.catalog_id, l.name, l.guide_channels, l.guide_matched, l.image,
-		l.genre, l.max_items, l.hide_in_menus, l.skip_local FROM libraries l JOIN addons a ON a.id = l.addon_id`+filter+" ORDER BY l.position", args...)
+		l.genre, l.max_items, l.hide_in_menus, l.skip_local, l.show_as_titles FROM libraries l JOIN addons a ON a.id = l.addon_id`+filter+" ORDER BY l.position", args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (libraryRow, error) {
 		var r libraryRow
 		err := row.Scan(&r.owner, &r.key.AddonID, &r.key.CatalogType, &r.key.CatalogID, &r.name, &r.channels, &r.matched, &r.image,
-			&r.genre, &r.maxItems, &r.hideInMenus, &r.skipLocal)
+			&r.genre, &r.maxItems, &r.hideInMenus, &r.skipLocal, &r.showAsTitles)
 		return r, err
 	})
 }
@@ -1227,8 +1278,9 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 		chosen[row.key] = len(enabled)
 		library := Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog, KeyType: addon.LibraryKeyTypes[catalog.ID],
 			Name: row.name, Enabled: true, AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog), Image: row.image,
-			HideInMenus: row.hideInMenus, Skippable: Skippable(addon, catalog)}
+			HideInMenus: row.hideInMenus, Skippable: Skippable(addon, catalog), OtherVideos: OtherVideos(addon, catalog)}
 		library.SkipLocal = row.skipLocal && library.Skippable
+		library.ShowAsTitles = row.showAsTitles && library.OtherVideos
 		// A genre the catalog no longer offers lists the whole catalog.
 		if row.genre != nil && library.Filterable && slices.Contains(GenreChoices(catalog), *row.genre) {
 			library.Genre = *row.genre
@@ -1254,7 +1306,7 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 			}
 			result = append(result, Library{AddonID: addon.ID, AddonName: addon.Manifest.Name, Catalog: catalog,
 				KeyType: addon.LibraryKeyTypes[catalog.ID], AddonActive: addon.Enabled, Filterable: Filterable(addon, catalog),
-				Skippable: Skippable(addon, catalog), Image: NewLibraryImage(catalog.Type)})
+				Skippable: Skippable(addon, catalog), OtherVideos: OtherVideos(addon, catalog), Image: NewLibraryImage(catalog.Type)})
 		}
 	}
 	return result
@@ -1263,8 +1315,9 @@ func listLibraries(installed []Addon, rows []libraryRow, guides []guideRow) []Li
 // SetLibraries replaces the scope's libraries with choices, in order. A
 // choice's genre must be one its catalog offers, and its maximum from 1 to
 // MaxLibraryItems, on a Filterable catalog; an empty genre lists the whole
-// catalog. A live TV catalog may not be hidden from the menus, and only a
-// Skippable catalog may leave out the titles local folders hold.
+// catalog. A live TV catalog may not be hidden from the menus, only a
+// Skippable catalog may leave out the titles local folders hold, and only
+// a catalog of OtherVideos may show its titles as movies and shows.
 func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []LibraryChoice) ([]Library, error) {
 	defer s.changed()
 	for i, choice := range choices {
@@ -1315,7 +1368,8 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 			if choice.MaxItems != nil && !filterable {
 				return ErrInvalidLibraryMaxItems
 			}
-			if choice.HideInMenus && catalog.Type == "tv" || choice.SkipLocal && !Skippable(installed[index], catalog) {
+			if choice.HideInMenus && catalog.Type == "tv" || choice.SkipLocal && !Skippable(installed[index], catalog) ||
+				choice.ShowAsTitles && !OtherVideos(installed[index], catalog) {
 				return ErrInvalidLibrary
 			}
 		}
@@ -1344,12 +1398,12 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 		}
 		for position, choice := range choices {
 			if _, err := tx.Exec(ctx, `INSERT INTO libraries (addon_id, catalog_type, catalog_id, name, position, genre, max_items, hide_in_menus,
-				skip_local, image)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE
+				skip_local, show_as_titles, image)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE
 				SET name = excluded.name, position = excluded.position, genre = excluded.genre, max_items = excluded.max_items,
-				hide_in_menus = excluded.hide_in_menus, skip_local = excluded.skip_local`,
+				hide_in_menus = excluded.hide_in_menus, skip_local = excluded.skip_local, show_as_titles = excluded.show_as_titles`,
 				choice.AddonID, choice.CatalogType, choice.CatalogID, choice.Name, position+1, choice.Genre, choice.MaxItems,
-				choice.HideInMenus, choice.SkipLocal, NewLibraryImage(choice.CatalogType)); err != nil {
+				choice.HideInMenus, choice.SkipLocal, choice.ShowAsTitles, NewLibraryImage(choice.CatalogType)); err != nil {
 				return err
 			}
 		}

@@ -52,7 +52,7 @@ func (s *Service) recordArrivals(ctx context.Context, src source, skip int, meta
 	}
 	var records []record
 	for _, meta := range metas {
-		if _, r, err := titleItem(src.addon.addon.ID, src.catalog, meta, accounts.ID{}, src.addon.confined); err == nil {
+		if _, r, err := titleItem(src.addon, src.catalog, meta, accounts.ID{}); err == nil {
 			// The listing that reads the page saves its records with their
 			// folder; these keep any folder they have.
 			r.Parent = nil
@@ -252,7 +252,7 @@ func (s *Service) CatalogTitles(ctx context.Context, user accounts.User, addon a
 	var items []Item
 	var records []record
 	for _, meta := range metas {
-		item, r, err := titleItem(addon, catalog, meta, parent, entry.confined)
+		item, r, err := titleItem(entry, catalog, meta, parent)
 		if err != nil {
 			continue
 		}

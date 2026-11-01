@@ -185,13 +185,15 @@ An addon gives each catalog, and each title, a Stremio type, which decides what 
 | `movie`, `anime.movie` | Movies | `movies` |
 | `series`, `anime.series` | Shows, with their seasons and episodes | `tvshows` |
 | `anime` | Shows, or movies for its `anime.movie` titles | none (mixed) |
-| `other`, `channel` | Folders of videos, or videos | `homevideos` |
+| `other`, `channel` | Folders of videos, or videos; or shows and movies (see [Shown as movies and shows](#shown-as-movies-and-shows)) | `homevideos`; none (mixed) when shown as movies and shows |
 | `collection` | Collections (see [Collections from addons](#collections-from-addons)) | none (mixed) |
 | `tv` | Live TV channels, not a library (see [Live TV](live-tv.md)) | |
 | `track`, `album`, `artist`, `playlist` of a music addon | Music (see [Music addons](#music-addons)) | `music` |
-| Any other type, such as `sport` or `events` | Folders of videos, or videos, as for `other` | `homevideos` |
+| Any other type, such as `sport` or `events` | Folders of videos, or videos, as for `other`; or shows and movies | `homevideos`; none (mixed) when shown as movies and shows |
 
 A type Polyfin has no particular use for is listed as `other` is: Stremio apps show such types the same way. A sports addon's `sport` catalogs, for instance, become libraries of its matches and recaps, each a video, or a folder when its details list videos. A title without a type, in a catalog without one, is left out.
+
+A library whose titles are of several kinds, such as an `anime` library or one shown as movies and shows, lists and counts only the kinds a listing asks for. `/Items?ParentId=<library>&Recursive=true&IncludeItemTypes=Series` reads the catalog's first 500 titles, or its **Maximum titles** when lower, keeps its shows, and answers them a page at a time with a `TotalRecordCount` that counts them alone, so that apps page through them to the end. A title whose details are not known after 5 seconds has no kind yet: it is left out until they are, and the listing tells that more may follow. Jellyfin counts and pages the items of the types asked for in the same query ([ItemsController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemsController.cs#L381-L394), [L626-L629](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemsController.cs#L626-L629)); Polyfin counts them among the titles it reads, so a catalog longer than 500 titles counts its first 500.
 
 #### Folders of videos
 
@@ -200,10 +202,35 @@ A type Polyfin has no particular use for is listed as `other` is: Stremio apps s
 - A title whose details list videos is a folder. Apps open it to list its videos, in the order the addon gives them, each named after its video (or "Video 3" without a name), with its date and image when the addon gives them.
 - A title without videos is a video itself, which plays the streams the addon lists for the title.
 - Catalogs do not tell which titles have videos: their details do. Listing a library asks the addon for the details of the titles it does not know yet, a few at a time, for up to 5 seconds; a title still unknown then is listed as a folder, which lists itself as its one video when it turns out to have none, and is listed as it is from then on.
-- The library is a home videos library, as Jellyfin's for videos that are not movies nor shows: jellyfin-web shows it with its **Folders** view, the titles, and its **Videos** view, every video of the library, through its folders, for its first 500 titles, or its **Maximum titles** when lower (see [Genre and maximum](#genre-and-maximum)).
+- The library is a home videos library, as Jellyfin's for videos that are not movies nor shows: jellyfin-web shows it with its **Folders** view, the titles, and its **Videos** view, every video of the library, through its folders, for its first 500 titles, or its **Maximum titles** when lower (see [Genre and maximum](#genre-and-maximum)). It can show them as movies and shows instead (see [Shown as movies and shows](#shown-as-movies-and-shows)).
 - A folder shows how many of its videos are left to watch, and is played once all are. Marking it played, or unplayed, marks its videos; removing it from Continue Watching removes their resume points.
 - Videos play as movies do: directly, remuxed or converted, with their resume point and in Continue Watching. The tracking services hear nothing of them. A video whose stream has no end, such as a match on now, plays live (see [Live videos](playback.md#live-videos)).
 - Search finds them in the catalogs that offer it, as folders or videos. Parental control judges them as **Other**, unrated unless their details give a rating, and a video by its folder; blocked genres hide them by their details' genres. Hiding a folder, or one of its videos, hides the folder with its videos. A folder can be added to a collection.
+
+#### Shown as movies and shows
+
+Some Jellyfin apps list only movies and shows: they leave out every library that is not of movies, shows, collections or mixed, and ask libraries for `Movie` and `Series` items only. Others open a folder as a show and ask for its episodes. Under **Content › Libraries**, **Show as movies and shows** in the row of a library of other videos shows its titles as such apps expect. It is off by default, saved with the list's **Save**, like the library's name, and the row then says **Shown as movies and shows**. Users set the same for their own libraries under **My sources**.
+
+- The library has no content type, as Jellyfin's libraries of mixed movies and shows, so these apps keep it. jellyfin-web lists its titles in a plain list.
+- A title whose details list two videos or more, or a single video numbered as an episode (`S35E01`, a show of one episode), is a show. Its videos are its episodes, in the seasons and with the numbers the addon gives them: a video with neither is in season 1, and a video without a number comes after its season's numbered episodes, in the order the addon gives them. A video of season 0 with a number is a special. Addons of a store's downloads number the videos from their file names, when they tell one.
+- A title without videos is a movie, which plays the streams the addon lists for the title. So is a title of one video its details number as no episode, a movie's file: it plays that video's streams, as Stremio apps play a title's only video. A store's download of one movie is a movie, a download of one episode a show, and a season pack a show of its episodes.
+- As for folders, listing the library asks the addon for the details of the titles it does not know yet, for up to 5 seconds; a title still unknown then is listed as a show, which is a movie from then on when its details make it one.
+- Episodes and movies play as other episodes and movies do: the streams the title's details give the video (see [Streams in a title's details](#streams-in-a-title-s-details)), then those addons list for it, directly, repackaged or converted, with seeking. Watched state, resume points, Continue Watching, Next Up, favorites, played marks of a whole show or season, search and the filters by type and watched state work as for other movies and shows. A video whose stream has no end plays live, as a video does.
+- Parental control judges them as the movies and shows they are shown as, unrated unless their details give a rating: a user who blocks unrated movies or shows does not see them. Blocked genres and hidden titles apply as for folders.
+- They have no IMDb, TMDB or TVDB identifier: the tracking services hear nothing of them, no scrobble, played mark, resume point or rating, as for every title no service can identify. Imports from tracking services and other servers do not match them, and their details are the addon's only: TMDB is never asked about them.
+- A title is one item whether it is a show or a movie, so it stays the same when its details gain or lose videos. Its items are not those of home videos: when you save the option on or off, or turn the library off or on again, each user's played marks and favorites go to the items the titles and videos become, a movie's file's to the movie and back, and resume points move to them, as when a local folder changes what it holds (see [Changing what a folder holds](local-folders.md#changing-what-a-folder-holds)). The items they were are not found any more: apps that kept them, in a list open since, open nothing. Ratings, administrators' edits and uploaded images, playlists and collections stay with the former items.
+- A catalog of other videos alone has the choice: catalogs of movies, series, anime, collections, music and live TV do not.
+
+**Compared with Jellyfin:**
+
+- Jellyfin has no such option: its home videos stay folders and videos. A library made without a content type, jellyfin-web's mixed movies and shows, has no `CollectionType` ([LibraryManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/LibraryManager.cs#L3844-L3849)), as this one.
+- A folder of a home videos library answers `/Shows/{id}/Episodes` and `/Shows/{id}/Seasons` with 404 in Jellyfin ([TvShowsController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/TvShowsController.cs#L261-L264)) as in Polyfin; shown as a show, the title answers them.
+
+**For app developers:**
+
+- The library is a `CollectionFolder` without `CollectionType`. Its titles are `Series` and `Movie` items: `/Items?ParentId=<library>&Recursive=true&IncludeItemTypes=Movie,Series` lists them, `IncludeItemTypes=Movie` or `Series` alone lists and counts that kind only (see [What catalogs list](#what-catalogs-list)), and `/Shows/{id}/Seasons`, `/Shows/{id}/Episodes` and `/Shows/NextUp` answer a show as any other.
+- The `Id` of a title and of its videos changes when the option is switched; a title's `Id` stays when its details gain or lose videos.
+- The admin API's libraries carry `showAsTitles`, saved with `PUT /admin/api/scopes/{scope}/libraries`, and `otherVideos`, which tells the catalogs that take it. `showAsTitles` on another catalog is refused with `invalid_library`.
 
 #### Streams in a title's details
 

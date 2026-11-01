@@ -346,7 +346,7 @@ func (s *Service) releasedMetas(ctx context.Context, v view, src source, metas [
 	}
 	var movies []record
 	for _, meta := range metas {
-		if _, r, err := titleItem(src.addon.addon.ID, src.catalog, meta, accounts.ID{}, src.addon.confined); err == nil && r.Kind == KindMovie {
+		if _, r, err := titleItem(src.addon, src.catalog, meta, accounts.ID{}); err == nil && r.Kind == KindMovie {
 			movies = append(movies, r)
 		}
 	}

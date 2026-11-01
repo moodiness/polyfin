@@ -496,7 +496,7 @@ func (s *Service) libraryCandidates(ctx context.Context, v view, l library) ([]c
 	candidates := make([]candidate, 0, len(metas))
 	for _, meta := range metas {
 		if l.catalog.Type != "collection" {
-			if item, _, err := titleItem(addon, l.catalog, meta, l.item.ID, l.addon.confined); err == nil {
+			if item, _, err := titleItem(l.addon, l.catalog, meta, l.item.ID); err == nil {
 				candidates = append(candidates, candidate{item.ID, meta.Poster})
 			}
 			continue

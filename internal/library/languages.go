@@ -131,8 +131,8 @@ func standInCatalogs(v view, kinds []Kind, mine bool, offers func(installed, str
 	covered := map[Kind]bool{}
 	for _, entry := range v.addons {
 		for _, catalog := range entry.addon.Manifest.Catalogs {
-			kind, ok := titleKind(catalog.Type)
-			if !ok || !slices.Contains(kinds, kind) {
+			kind, ok := catalogOffers(entry, catalog, kinds)
+			if !ok {
 				continue
 			}
 			if src, ok := offers(entry, catalog); ok {

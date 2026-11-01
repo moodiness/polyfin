@@ -31,6 +31,10 @@ const libraries: typeof en = {
     skipLocalHelp:
       'Um filme ou série que a biblioteca de uma pasta local lista, vinculado ao mesmo identificador, aparece só lá. Suas versões e o estado de assistido continuam os mesmos, e a busca o encontra uma vez. Um usuário que não vê a biblioteca da pasta continua a encontrá-lo aqui.',
     skippedLocal: 'Sem os títulos das pastas locais',
+    showAsTitles: 'Mostrar como filmes e séries',
+    showAsTitlesHelp:
+      'Para os aplicativos Jellyfin que listam só filmes e séries: um título com vários vídeos, ou com um numerado como episódio, vira uma série, seus vídeos seus episódios; um título sem vídeos, ou com um só arquivo, um filme. As marcações de assistido, os pontos de retomada e os favoritos os acompanham ao salvar.',
+    shownAsTitles: 'Mostrada como filmes e séries',
     remove: 'Remover',
     removeLabel: (name: string) => `Remover ${name}`,
     moreActions: (name: string) => `Mais ações para ${name}`,

@@ -81,7 +81,8 @@ const nameMaxLength = 64
 /**
  * One enabled library being edited. `name` is the text of its name field: empty = catalog name.
  * `genre` and `maxItems` narrow it; null for none. `hideInMenus` leaves it out of the web
- * player's menus. `skipLocal` leaves out the titles local folders hold.
+ * player's menus. `skipLocal` leaves out the titles local folders hold. `showAsTitles` shows
+ * other videos as movies and shows.
  */
 type Entry = {
   key: string
@@ -91,6 +92,7 @@ type Entry = {
   maxItems: number | null
   hideInMenus: boolean
   skipLocal: boolean
+  showAsTitles: boolean
 }
 
 /** Whether the server takes this maximum: none, or a whole number from 1 to MAX_LIBRARY_ITEMS. */
@@ -115,7 +117,8 @@ function sameEntries(a: Entry[], b: Entry[]): boolean {
         entry.genre === b[i].genre &&
         entry.maxItems === b[i].maxItems &&
         entry.hideInMenus === b[i].hideInMenus &&
-        entry.skipLocal === b[i].skipLocal,
+        entry.skipLocal === b[i].skipLocal &&
+        entry.showAsTitles === b[i].showAsTitles,
     )
   )
 }
@@ -330,7 +333,7 @@ function LibraryForm({
     mutationFn: (entries: Entry[]) =>
       saveLibraries(
         scope,
-        entries.map(({ library, name, genre, maxItems, hideInMenus, skipLocal }) => ({
+        entries.map(({ library, name, genre, maxItems, hideInMenus, skipLocal, showAsTitles }) => ({
           addonId: library.addonId,
           catalogType: library.catalogType,
           catalogId: library.catalogId,
@@ -339,6 +342,7 @@ function LibraryForm({
           maxItems,
           hideInMenus,
           skipLocal,
+          showAsTitles,
         })),
       ),
     onSuccess: (saved, entries) => {
@@ -366,6 +370,7 @@ function LibraryForm({
       maxItems: library.maxItems,
       hideInMenus: library.hideInMenus,
       skipLocal: library.skipLocal,
+      showAsTitles: library.showAsTitles,
     }))
   const entries = draft ?? serverEntries
   const dirty = draft !== null
@@ -444,6 +449,10 @@ function LibraryForm({
     edit(entries.map((entry, i) => (i === index ? { ...entry, skipLocal: skip } : entry)))
   }
 
+  function showAsTitles(index: number, shown: boolean) {
+    edit(entries.map((entry, i) => (i === index ? { ...entry, showAsTitles: shown } : entry)))
+  }
+
   /** Opens the genre and maximum editor of `key`, or closes it with null, and the image editor. */
   function openNarrow(key: string | null) {
     setImageOpen(null)
@@ -480,7 +489,16 @@ function LibraryForm({
     ]
     edit([
       ...entries,
-      { key, library, name: '', genre: null, maxItems: null, hideInMenus: false, skipLocal: false },
+      {
+        key,
+        library,
+        name: '',
+        genre: null,
+        maxItems: null,
+        hideInMenus: false,
+        skipLocal: false,
+        showAsTitles: false,
+      },
     ])
     setAnnouncement(t.libraries.addedLive(library.catalogName, entries.length + 1))
   }
@@ -662,6 +680,9 @@ function LibraryForm({
                           {library.skippable && entry.skipLocal && (
                             <StatusPill tone="muted">{t.libraries.skippedLocal}</StatusPill>
                           )}
+                          {library.otherVideos && entry.showAsTitles && (
+                            <StatusPill tone="muted">{t.libraries.shownAsTitles}</StatusPill>
+                          )}
                         </p>
                         {library.refreshable && (
                           <RefreshStatus refresh={library.refresh} name={name} />
@@ -724,6 +745,15 @@ function LibraryForm({
                               onChange={(skip) => skipLocal(index, skip)}
                               label={t.libraries.skipLocal}
                               help={entry.skipLocal ? t.libraries.skipLocalHelp : undefined}
+                            />
+                          )}
+                          {library.otherVideos && (
+                            <Checkbox
+                              className="mt-2"
+                              checked={entry.showAsTitles}
+                              onChange={(shown) => showAsTitles(index, shown)}
+                              label={t.libraries.showAsTitles}
+                              help={entry.showAsTitles ? t.libraries.showAsTitlesHelp : undefined}
                             />
                           )}
                         </>
