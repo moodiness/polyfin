@@ -279,6 +279,12 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 		if r.Kind == KindMovie {
 			t.year = metaYear(*meta)
 		}
+		// A title shown as a movie of one video plays that video's streams
+		// (see shownKind).
+		if r.shownTitle() && len(meta.Videos) == 1 {
+			t.id, t.holder = meta.Videos[0].ID, &r
+			s.embed(ctx, v, &t, false)
+		}
 		return t, v, nil
 	case r.Kind == KindChannel && r.Meta != nil:
 		// A channel plays while the user reaches it: from one of their live

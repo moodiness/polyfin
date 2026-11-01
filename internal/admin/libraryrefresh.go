@@ -20,6 +20,13 @@ type LibraryRefreshes interface {
 	LibraryRefreshes() map[accounts.ID]library.LibraryRefresh
 }
 
+// ShownTitles gives what users did with the titles of the libraries that
+// switch between home videos and movies and shows to the items they
+// become (see library.Service.FollowTitles).
+type ShownTitles interface {
+	FollowTitles(ctx context.Context, before, after []addons.Library) error
+}
+
 // libraryRefreshJSON is how the refresh of a library's descriptions
 // stands: State is "queued", "running", "done", "stopped" or "failed";
 // Titles counts the titles it describes again, Done those described,

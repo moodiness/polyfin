@@ -644,7 +644,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 	serverNames := LibraryNames(visible, settings.Language)
 	for i, name := range LibraryNames(visible, v.words.language) {
 		l := visible[i]
-		collection := collectionType(l.Catalog.Type)
+		collection := libraryCollectionType(l)
 		if music := entries[i].addon.Music; music != nil && music.ContentType == eclipse.ContentAudiobook {
 			// Jellyfin keeps audiobooks in books libraries.
 			collection = "books"
@@ -754,8 +754,8 @@ func LibraryID(l addons.Library) accounts.ID {
 // ServerLibrary is one of the server's libraries, with the genres its
 // catalog can be narrowed to, which name its genre pages: only its own
 // when it is narrowed to one. CollectionType is the content its catalog
-// holds, as collectionType tells it: "movies", "tvshows", "boxsets" for
-// collections, "music", or another.
+// holds, as libraryCollectionType tells it: "movies", "tvshows",
+// "boxsets" for collections, "music", or another.
 type ServerLibrary struct {
 	ID             accounts.ID
 	Name           string
@@ -789,7 +789,7 @@ func ServerLibraries(ctx context.Context, store *addons.Store, lists *smartlists
 	}
 	result := make([]ServerLibrary, 0, len(shown))
 	for i, name := range LibraryNames(shown, language) {
-		library := ServerLibrary{ID: LibraryID(shown[i]), Name: name, Genres: []string{}, CollectionType: collectionType(shown[i].Catalog.Type)}
+		library := ServerLibrary{ID: LibraryID(shown[i]), Name: name, Genres: []string{}, CollectionType: libraryCollectionType(shown[i])}
 		if genre := shown[i].Genre; genre != "" {
 			library.Genres = append(library.Genres, genre)
 		} else {
@@ -1073,7 +1073,7 @@ type listed struct {
 // title describes a listed title as an item under parent, with the record
 // that finds it again through the catalog that listed it.
 func (l listed) title(parent accounts.ID) (Item, record, error) {
-	return titleItem(l.src.addon.addon.ID, l.src.catalog, l.meta, parent, l.src.addon.confined)
+	return titleItem(l.src.addon, l.src.catalog, l.meta, parent)
 }
 
 // merged interleaves several catalogs, one item of each in turn, without
@@ -1319,7 +1319,7 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 	if l.catalog.Type == "collection" && titlesThrough(ctx) {
 		return s.collectionLibraryTitles(ctx, v, l, src, start, count)
 	}
-	if otherType(l.catalog.Type) && titlesThrough(ctx) {
+	if otherType(l.catalog.Type) && titlesThrough(ctx) && !l.addon.addon.ShowsAsTitles(l.catalog.Type, l.catalog.ID) {
 		return s.otherLibraryVideos(ctx, v, l, src, start, count)
 	}
 	// A listing that keeps none of what the library lists, its collections
@@ -1342,7 +1342,7 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		var r record
 		if l.catalog.Type == "collection" {
 			item, r = collectionItem(addon, meta, l.item.ID, l.addon.confined)
-		} else if item, r, err = titleItem(addon, l.catalog, meta, l.item.ID, l.addon.confined); err != nil {
+		} else if item, r, err = titleItem(l.addon, l.catalog, meta, l.item.ID); err != nil {
 			continue
 		}
 		items, records = append(items, item), append(records, r)
@@ -1522,27 +1522,31 @@ func collectionItem(addon accounts.ID, meta stremio.Meta, parent accounts.ID, co
 
 var errUnsupported = errors.New("unsupported title type")
 
-func titleItem(addon accounts.ID, catalog stremio.Catalog, meta stremio.Meta, parent accounts.ID, confined bool) (Item, record, error) {
+// titleItem describes a title a catalog of entry lists, as an item under
+// parent, with the record that finds it again through that catalog.
+func titleItem(entry installed, catalog stremio.Catalog, meta stremio.Meta, parent accounts.ID) (Item, record, error) {
 	metaType := meta.Type
 	if metaType == "" {
 		metaType = catalog.Type
 	}
-	kind, ok := titleKind(metaType)
+	kind, ok := catalogTitleKind(entry, catalog, metaType)
 	if !ok || meta.ID == "" {
 		return Item{}, record{}, errUnsupported
 	}
 	meta.Type = metaType
 	key := titleKey(kind, meta.ID)
 	// Until its description tells (see shapeOthers), a title of the other
-	// or channel type is a folder: one without videos lists itself.
-	if otherType(metaType) {
+	// or channel type is a folder: one without videos lists itself. Shown
+	// as movies and shows, it is a series (see showastitles.go).
+	if otherType(metaType) && kind != KindSeries {
 		kind = KindFolder
 	}
 	item := Item{ID: itemID(key), Kind: kind, ParentID: parent, Available: true}
 	fromMeta(&item, meta)
 	preview := meta
+	addon := entry.addon.ID
 	return item, record{ID: item.ID, Key: key, Kind: kind, Addon: &addon, CatalogType: catalog.Type, CatalogID: catalog.ID,
-		Parent: &parent, Meta: &preview, Confined: confined}, nil
+		Parent: &parent, Meta: &preview, Confined: entry.confined}, nil
 }
 
 // collectionChildren lists an addon's collection: the titles of the
@@ -1933,7 +1937,8 @@ func notOwn(candidate installed, err error) bool {
 // completed is the description of r that candidate gave, completed as
 // describeBy returns it, an IPTV source's with the details of the
 // descriptions kept, a series' with the episodes local folders hold that
-// it does not list (see withFileEpisodes); one from one of the server's
+// it does not list (see withFileEpisodes), a title shown as a series with
+// its videos numbered (see shownMeta); one from one of the server's
 // addons gives the rating kept for the title.
 func (s *Service) completed(ctx context.Context, v view, r record, candidate installed, kept fetched[stremio.Meta], shared bool) stremio.Meta {
 	meta := kept.value
@@ -1947,7 +1952,7 @@ func (s *Service) completed(ctx context.Context, v view, r record, candidate ins
 	if candidate.shared && !candidate.addon.Local() {
 		s.learnTraits(ctx, r, meta, kept.at)
 	}
-	return s.withFileEpisodes(ctx, v, r, candidate, meta)
+	return shownMeta(r, s.withFileEpisodes(ctx, v, r, candidate, meta))
 }
 
 // describers lists the user's addons, the server's only when shared is
@@ -2010,7 +2015,7 @@ func (s *Service) describedMeta(ctx context.Context, v view, r record, shared bo
 		switch {
 		case !own(candidate.addon):
 			if meta, ok := s.keptDescription(ctx, candidate, metaKey{candidate.addon.ID, r.Meta.Type, r.Meta.ID}, how); ok {
-				return s.withFileEpisodes(ctx, v, r, candidate, meta), candidate, true
+				return shownMeta(r, s.withFileEpisodes(ctx, v, r, candidate, meta)), candidate, true
 			}
 		case r.Addon != nil && candidate.addon.ID == *r.Addon:
 			if candidate.addon.IPTV() {
@@ -2294,8 +2299,8 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		return items[0], nil
 	case KindMovie, KindSeries, KindVideo, KindFolder:
 		// A title only an addon the user does not use knows is no title
-		// of theirs.
-		if s.withholdsHolder(ctx, v, r) {
+		// of theirs, nor one its library no longer shows so.
+		if s.withholdsHolder(ctx, v, r) || v.misplaced(r) {
 			return Item{}, ErrNotFound
 		}
 		if r.folderVideo() {
@@ -2318,8 +2323,18 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		// Jellyfin answers a title the user may not see as one that does not
 		// exist.
 		kind := r.Kind
-		if described && r.otherTitle() {
+		switch {
+		case described && r.otherTitle():
 			kind = otherKind(meta)
+		case described && r.shownTitle():
+			kind = shownKind(meta)
+			// A title shown as a movie plays as one (see target).
+			if kind != r.Kind {
+				r.Kind = kind
+				if err := s.save(ctx, []record{r}); err != nil {
+					s.logger.Debug("The kind of a title could not be recorded", "title", r.Meta.ID, "error", err)
+				}
+			}
 		}
 		if !v.allows(kind, s.overriddenTraits(id, t)) {
 			return Item{}, ErrNotFound
@@ -2405,16 +2420,17 @@ func deref(id *accounts.ID) accounts.ID {
 
 // series returns a series item and its complete metadata, with videos, as
 // the user of v sees them (see shown), and its description itself, whose
-// facts and episodes are those Polyfin records.
+// facts and episodes are those Polyfin records. A title shown as movies
+// and shows is a series while its description has videos.
 func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, stremio.Meta, stremio.Meta, error) {
 	// A series' seasons and episodes need its details: they open it.
 	ctx = iptv.Opening(ctx)
 	r, err := s.load(ctx, id)
-	if err != nil || r.Kind != KindSeries || v.withholds(r) {
+	if err != nil || r.Kind != KindSeries && !r.shownTitle() || v.withholds(r) || v.misplaced(r) {
 		return Item{}, stremio.Meta{}, stremio.Meta{}, ErrNotFound
 	}
 	meta, ok := s.titleMeta(ctx, v, r)
-	if !ok || !v.allows(KindSeries, s.overriddenTraits(id, describedTraits(meta))) {
+	if !ok || r.shownTitle() && shownKind(meta) != KindSeries || !v.allows(KindSeries, s.overriddenTraits(id, describedTraits(meta))) {
 		return Item{}, stremio.Meta{}, stremio.Meta{}, ErrNotFound
 	}
 	shown := s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta)
@@ -2779,7 +2795,7 @@ func (s *Service) search(ctx context.Context, v view, term string, kinds []Kind,
 	var items []Item
 	var records, translated []record
 	for i, r := range listed {
-		if r.otherTitle() && !slices.Contains(kinds, found[i].Kind) {
+		if r.shapedTitle() && !slices.Contains(kinds, found[i].Kind) {
 			continue
 		}
 		items = append(items, found[i])

@@ -705,6 +705,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		LibraryImages: lib,
 		// Refreshing a library's descriptions, paced.
 		LibraryRefreshes: lib,
+		ShownTitles:      lib,
 		SmartLists:       smartlists.New(pool),
 		SmartPreviews:    lib,
 		// The channels Polyfin airs, built from what the Jellyfin API lists.

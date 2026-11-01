@@ -3,6 +3,7 @@ package addons
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -128,10 +129,22 @@ func (s *Store) load(ctx context.Context) (*snapshot, error) {
 		return nil, err
 	}
 	owner := func(id *accounts.ID) accounts.ID { return ownerOf(Scope{Owner: id}) }
+	// An addon tells which of its catalogs' libraries show their titles as
+	// movies and shows, wherever they are listed or found.
+	titled := map[accounts.ID][]catalogRef{}
+	for _, row := range rows {
+		if row.showAsTitles {
+			titled[row.key.AddonID] = append(titled[row.key.AddonID], catalogRef{row.key.CatalogType, row.key.CatalogID})
+		}
+	}
 	byScope := map[accounts.ID][]Addon{}
 	snap := &snapshot{scopes: map[accounts.ID]scoped{}, addons: make(map[accounts.ID]Addon, len(installed)),
 		owners: make(map[accounts.ID]accounts.ID, len(installed))}
 	for _, owned := range installed {
+		owned.addon.titleCatalogs = slices.DeleteFunc(titled[owned.addon.ID], func(ref catalogRef) bool {
+			catalog, ok := owned.addon.Manifest.Catalog(ref.catalogType, ref.catalogID)
+			return !ok || !OtherVideos(owned.addon, catalog)
+		})
 		key := owner(owned.owner)
 		byScope[key] = append(byScope[key], owned.addon)
 		snap.addons[owned.addon.ID] = owned.addon

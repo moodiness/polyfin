@@ -332,7 +332,7 @@ func (s *Service) refreshedTitles(ctx context.Context, l library) ([]record, err
 			if len(titles) == most {
 				return titles, nil
 			}
-			_, r, err := titleItem(l.addon.addon.ID, l.catalog, meta, l.item.ID, l.addon.confined)
+			_, r, err := titleItem(l.addon, l.catalog, meta, l.item.ID)
 			if err != nil || seen[r.ID] {
 				continue
 			}

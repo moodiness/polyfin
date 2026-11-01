@@ -246,7 +246,13 @@ func (s *Service) loadAll(ctx context.Context, ids []accounts.ID) ([]record, err
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	rows, err := s.db.Query(ctx, "SELECT id, key, data FROM items WHERE id = ANY($1::uuid[])", ids)
+	return s.loadWhere(ctx, "id = ANY($1::uuid[])", ids)
+}
+
+// loadWhere returns the records of the items condition, on the items
+// table, selects with args, in no particular order.
+func (s *Service) loadWhere(ctx context.Context, condition string, args ...any) ([]record, error) {
+	rows, err := s.db.Query(ctx, "SELECT id, key, data FROM items WHERE "+condition, args...)
 	if err != nil {
 		return nil, err
 	}

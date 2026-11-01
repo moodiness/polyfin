@@ -133,6 +133,10 @@ type Options struct {
 	// LibraryRefreshes reads the descriptions of the server's libraries
 	// again; nil offers it for none.
 	LibraryRefreshes LibraryRefreshes
+	// ShownTitles gives users' data to the items the titles of libraries
+	// become as they switch between home videos and movies and shows; nil
+	// gives nothing.
+	ShownTitles ShownTitles
 	// Health are what the health page reads.
 	Health HealthSources
 	// Variables are the POLYFIN_ environment variables in effect,

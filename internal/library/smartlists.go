@@ -472,7 +472,7 @@ func (s *Service) smartFacts(sources []source, lists [][]stremio.Meta) []smartTi
 				continue
 			}
 			seen[meta.ID] = true
-			item, r, err := titleItem(sources[i].addon.addon.ID, sources[i].catalog, meta, accounts.ID{}, sources[i].addon.confined)
+			item, r, err := titleItem(sources[i].addon, sources[i].catalog, meta, accounts.ID{})
 			if err != nil || item.Kind != KindMovie && item.Kind != KindSeries {
 				continue
 			}

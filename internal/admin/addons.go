@@ -321,6 +321,11 @@ type libraryJSON struct {
 	// catalog takes it.
 	SkipLocal bool `json:"skipLocal"`
 	Skippable bool `json:"skippable"`
+	// ShowAsTitles shows the titles of an enabled library of other videos
+	// as movies and shows (see addons.Library.ShowAsTitles); OtherVideos
+	// tells whether the catalog takes it.
+	ShowAsTitles bool `json:"showAsTitles"`
+	OtherVideos  bool `json:"otherVideos"`
 	// ItemID is the library's item in Jellyfin apps, null for a catalog
 	// that is not an enabled library. Image is how it finds the image apps
 	// show on its tile: "none", "automatic", "generated", or "custom" when
@@ -494,23 +499,25 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 	result := make([]libraryJSON, 0, len(libraries))
 	for i, l := range libraries {
 		entry := libraryJSON{
-			AddonID:     l.AddonID.String(),
-			AddonName:   l.AddonName,
-			CatalogType: l.Catalog.Type,
-			CatalogID:   l.Catalog.ID,
-			CatalogName: l.Catalog.Name,
-			Name:        l.Name,
-			AppName:     appNames[i],
-			Enabled:     l.Enabled,
-			Browsable:   l.Catalog.Browsable(),
-			Genres:      []string{},
-			Filterable:  l.Filterable,
-			HideInMenus: l.HideInMenus,
-			SkipLocal:   l.SkipLocal,
-			Skippable:   l.Skippable,
-			Image:       l.Image,
-			Guide:       h.newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
-			Guides:      h.newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
+			AddonID:      l.AddonID.String(),
+			AddonName:    l.AddonName,
+			CatalogType:  l.Catalog.Type,
+			CatalogID:    l.Catalog.ID,
+			CatalogName:  l.Catalog.Name,
+			Name:         l.Name,
+			AppName:      appNames[i],
+			Enabled:      l.Enabled,
+			Browsable:    l.Catalog.Browsable(),
+			Genres:       []string{},
+			Filterable:   l.Filterable,
+			HideInMenus:  l.HideInMenus,
+			SkipLocal:    l.SkipLocal,
+			Skippable:    l.Skippable,
+			ShowAsTitles: l.ShowAsTitles,
+			OtherVideos:  l.OtherVideos,
+			Image:        l.Image,
+			Guide:        h.newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
+			Guides:       h.newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
 		}
 		if l.Filterable {
 			entry.Genres = append(entry.Genres, addons.GenreChoices(l.Catalog)...)
@@ -953,9 +960,10 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			Genre       *string `json:"genre"`
 			// MaxItems is read as any number, so that one that is not a
 			// whole number is refused as a maximum, not as a request.
-			MaxItems    *float64 `json:"maxItems"`
-			HideInMenus bool     `json:"hideInMenus"`
-			SkipLocal   bool     `json:"skipLocal"`
+			MaxItems     *float64 `json:"maxItems"`
+			HideInMenus  bool     `json:"hideInMenus"`
+			SkipLocal    bool     `json:"skipLocal"`
+			ShowAsTitles bool     `json:"showAsTitles"`
 		} `json:"libraries"`
 	}
 	if !decode(w, r, &body) {
@@ -969,7 +977,8 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		choice := addons.LibraryChoice{AddonID: id, CatalogType: library.CatalogType, CatalogID: library.CatalogID,
-			Name: library.Name, Genre: library.Genre, HideInMenus: library.HideInMenus, SkipLocal: library.SkipLocal}
+			Name: library.Name, Genre: library.Genre, HideInMenus: library.HideInMenus, SkipLocal: library.SkipLocal,
+			ShowAsTitles: library.ShowAsTitles}
 		if max := library.MaxItems; max != nil {
 			if *max != math.Trunc(*max) || *max < 1 || *max > addons.MaxLibraryItems {
 				writeError(w, http.StatusBadRequest, "invalid_library_max_items")
@@ -979,6 +988,13 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 		}
 		choices = append(choices, choice)
 	}
+	// The libraries that switch between home videos and movies and shows
+	// give their users' data to the items their titles become.
+	before, err := h.Addons.Libraries(r.Context(), scope)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	libraries, err := h.Addons.SetLibraries(r.Context(), scope, choices)
 	if addonError(w, err) {
 		return
@@ -986,6 +1002,11 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	if h.ShownTitles != nil {
+		if err := h.ShownTitles.FollowTitles(r.Context(), before, libraries); err != nil {
+			h.Logger.Error("Users' data could not follow the titles of libraries shown otherwise", "error", err)
+		}
 	}
 	h.writeLibraries(w, r, scope, libraries)
 }

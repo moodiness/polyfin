@@ -114,7 +114,7 @@ func (s *Service) RemoteLookup(ctx context.Context, kind Kind, id string) (resul
 			meta.ID = id
 		}
 		meta.Videos = nil
-		item, _, err := titleItem(candidate.addon.ID, stremio.Catalog{Type: metaType}, meta, accounts.ID{}, candidate.confined)
+		item, _, err := titleItem(candidate, stremio.Catalog{Type: metaType}, meta, accounts.ID{})
 		if err != nil {
 			continue
 		}

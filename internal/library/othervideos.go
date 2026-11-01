@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/moodiness/polyfin/internal/accounts"
-	"github.com/moodiness/polyfin/internal/eclipse"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -26,7 +26,8 @@ import (
 // Video) that plays the streams the description embeds, then those the
 // stream resource lists for it; a title without videos is a video itself.
 // Their libraries are Jellyfin's homevideos, whose folders and videos
-// every Jellyfin app browses and plays.
+// every Jellyfin app browses and plays, unless the library shows them as
+// movies and shows (see showastitles.go).
 //
 // Catalogs give no videos, only their descriptions do: a listing looks
 // them up (see shapeOthers). Either way a title keeps the identifier of a
@@ -34,30 +35,15 @@ import (
 // item when its description gains or loses videos.
 
 // otherType reports whether titles of a Stremio type are videos or folders
-// of videos, as their descriptions tell: other, channel, and every type
-// Polyfin has no use of its own for (see knownType).
-func otherType(stremioType string) bool {
-	return stremioType == "other" || stremioType == "channel" || !knownType(stremioType)
-}
-
-// knownType reports whether Polyfin has a use of its own for a Stremio
-// type: movies, series and anime, other and channel videos, collections,
-// live TV, the rows of Eclipse music addons, and Polyfin's own types, as
-// its home videos' and extras'. A title without a type is not known
-// either way.
-func knownType(stremioType string) bool {
-	switch stremioType {
-	case "", "movie", "anime.movie", "series", "anime.series", "anime", "other", "channel", "collection", "tv":
-		return true
-	}
-	return eclipse.CatalogType(stremioType) || strings.HasPrefix(stremioType, "polyfin.")
-}
+// of videos, as their descriptions tell (see addons.OtherType).
+func otherType(stremioType string) bool { return addons.OtherType(stremioType) }
 
 // AddonVideo reports whether item is a video an addon lists as a title of
 // the other or channel type, or of a type Polyfin has no use of its own
-// for, or as one of such a title's videos (see otherType).
+// for, or as one of such a title's videos (see otherType), shown as a
+// video, or as a movie or an episode (see showastitles.go).
 func AddonVideo(item Item) bool {
-	return item.Kind == KindVideo && otherType(item.StremioType)
+	return (item.Kind == KindVideo || item.Kind == KindMovie || item.Kind == KindEpisode) && otherType(item.StremioType)
 }
 
 // AddonVideoVersion reports whether version is a stream of such a video,
@@ -71,6 +57,11 @@ func AddonVideoVersion(version Version) bool {
 func (r record) otherTitle() bool {
 	return (r.Kind == KindVideo || r.Kind == KindFolder) && r.Meta != nil && otherType(r.Meta.Type)
 }
+
+// shapedTitle reports whether r is a title of the other or channel type
+// whose kind its description gives: shown as a folder or a video, or as a
+// series or a movie (see shownTitle).
+func (r record) shapedTitle() bool { return r.otherTitle() || r.shownTitle() }
 
 // homeVideo reports whether r is a video of a local home videos folder.
 func (r record) homeVideo() bool {
@@ -184,13 +175,13 @@ const (
 
 // shapeOthers gives the titles of the other and channel types among a
 // listing's items, and their records at the same places, the kind their
-// descriptions give (see otherKind), and a folder what it holds. The
-// descriptions kept answer; the others are asked for, waiting at most
-// shapeWait, unless the listing asks no addon.
+// descriptions give (see otherKind and shownKind), and a folder or a
+// series what it holds. The descriptions kept answer; the others are
+// asked for, waiting at most shapeWait, unless the listing asks no addon.
 func (s *Service) shapeOthers(ctx context.Context, v view, items []Item, records []record) {
 	var unknown []int
 	for i := range records {
-		if !records[i].otherTitle() {
+		if !records[i].shapedTitle() {
 			continue
 		}
 		if meta, _, ok := s.describedMeta(ctx, v, records[i], false, inMemory); ok {
@@ -236,6 +227,14 @@ func (s *Service) shapeOthers(ctx context.Context, v view, items []Item, records
 // shape gives an item of the other or channel type, and its record, the
 // kind its description gives.
 func shape(item *Item, r *record, meta stremio.Meta, now time.Time) {
+	if r.shownTitle() {
+		item.Kind, r.Kind = shownKind(meta), shownKind(meta)
+		item.Contents = nil
+		if item.Kind == KindSeries {
+			item.Contents = contents(meta, nil, now)
+		}
+		return
+	}
 	item.Kind, r.Kind = otherKind(meta), otherKind(meta)
 	item.Contents = nil
 	if item.Kind == KindFolder {
@@ -245,10 +244,11 @@ func shape(item *Item, r *record, meta stremio.Meta, now time.Time) {
 
 // folder describes a title of the other or channel type as the user of v
 // sees it, a folder or a video, with its description: ErrNotFound when no
-// addon describes it or the user's parental control hides it.
+// addon describes it, the user's parental control hides it, or its library
+// shows it as movies and shows (see misplaced).
 func (s *Service) folder(ctx context.Context, v view, id accounts.ID) (Item, stremio.Meta, error) {
 	r, err := s.load(ctx, id)
-	if err != nil || !r.otherTitle() {
+	if err != nil || !r.otherTitle() || v.misplaced(r) {
 		return Item{}, stremio.Meta{}, ErrNotFound
 	}
 	meta, ok := s.titleMeta(ctx, v, r)
@@ -410,7 +410,7 @@ func (s *Service) otherLibraryVideos(ctx context.Context, v view, l library, src
 	titles := make([]Item, 0, len(metas))
 	records := make([]record, 0, len(metas))
 	for _, meta := range metas {
-		if item, r, err := titleItem(l.addon.addon.ID, l.catalog, meta, l.item.ID, l.addon.confined); err == nil {
+		if item, r, err := titleItem(l.addon, l.catalog, meta, l.item.ID); err == nil {
 			titles, records = append(titles, item), append(records, r)
 		}
 	}
