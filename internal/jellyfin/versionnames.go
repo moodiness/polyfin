@@ -69,6 +69,7 @@ func (h *Handler) knownPlay(ctx context.Context, user accounts.User) (playbackIn
 	request := playbackInfoRequest{DeviceProfile: play.profile, MaxStreamingBitrate: play.bitrate}
 	limitBitrate(&request, user)
 	h.limitHeight(&request, user)
+	request.convertSound = user.ConvertSound
 	return request, c.Device.ID, true
 }
 
@@ -94,6 +95,7 @@ func (h *Handler) detailsNamer(r *http.Request, item library.Item) *versionNamer
 	if !ok {
 		return nil
 	}
+
 	return h.playbackNamer(item, request, c.User)
 }
 

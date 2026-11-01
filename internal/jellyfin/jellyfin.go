@@ -226,6 +226,9 @@ type Handler struct {
 	// plays remembers each device's last PlaybackInfo profile and bitrate,
 	// which item details name versions for (see detailsNamer).
 	plays *cache.Cache[accounts.ID, devicePlay]
+	// scripted are the devices whose web player runs Polyfin's script, as
+	// they read the user's sound (see boostRelay).
+	scripted *cache.Cache[accounts.ID, struct{}]
 	// guests are the playbacks of guests through share links (see
 	// share.go).
 	guests *guestPlays
@@ -268,6 +271,7 @@ func New(options Options) *Handler {
 		qualities:      cache.New[string, []int](2000, 12*time.Hour),
 		transcodings:   cache.New[string, TranscodingInfo](2000, 12*time.Hour),
 		plays:          cache.New[accounts.ID, devicePlay](1000, 30*24*time.Hour),
+		scripted:       cache.New[accounts.ID, struct{}](1000, 30*24*time.Hour),
 		guests:         newGuestPlays(),
 		downloads:      newDownloadPlays(),
 		dlna:           newDLNAPlays(),
@@ -358,6 +362,7 @@ func New(options Options) *Handler {
 	h.rootRoutes(rt)
 	signedIn(http.MethodGet, "/Videos/{itemId}/Trickplay/{width}/{file}", h.trickplayFile)
 	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Share", h.mayShare)
+	h.soundRoutes(signedIn)
 
 	h.routes = cors(rt)
 	return h
