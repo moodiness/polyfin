@@ -12,6 +12,7 @@ The Docker image includes jellyfin-web 12.4. Polyfin serves it at `/web/`, as Je
 - The web client's scripts, styles and other text files go gzip-compressed to browsers that accept it. Each file is compressed once, on its first request, and kept in memory.
 - On a title's page, the web client shows the title's IMDb rating, critics' score and audience score while the server has an **MDBList API key for ratings**, in place of the star and critic rating it shows otherwise. See [Ratings](addons-and-libraries.md#ratings).
 - On the page of a Live TV programme that has not started, the web client shows **Remind me** after the record buttons, with a menu offering **Remind me of every airing**, and **Reminder set**, which removes it, for a programme with a reminder. When no target of the user receives reminders and their apps do not show them, a line under the button says so, with a link to **My account › Notifications**. See [Programme reminders](live-tv.md#programme-reminders).
+- For a user with **Boost the volume in the web player**, videos play louder, and the player's settings menu offers **Boost the volume**. See [Louder videos in the web player](#louder-videos-in-the-web-player).
 - On the search page, while the field is empty, the web client lists the user's recent searches above the Suggestions. See [Recent searches](#recent-searches).
 - While **Show ratings on posters** is on, a movie's or a series' poster shows its ratings as the pointer or the focus comes to it. See [Ratings on posters](#ratings-on-posters).
 
@@ -63,6 +64,28 @@ The first card the pointer or the focus comes to asks the server once for the ra
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Show ratings on posters** | **Settings › Web player** | Off | Shows a movie's or a series' ratings over its poster in the web client as the pointer or the focus comes to it, for every user. |
+
+### Louder videos in the web player
+
+For a user with **Boost the volume in the web player** (see [Louder sound](users.md#louder-sound)), Polyfin's script in jellyfin-web sends the sound of each video through Web Audio: a gain of 2, then a compressor that holds the peaks. Measured in Chrome on jellyfin-web 12.4, with the player's volume at 100%:
+
+| Passage | Before | After |
+|---|---|---|
+| Quiet | -28.9 dB RMS | -20.8 dB RMS (+8.2 dB) |
+| Loud | -15.1 dB RMS | -10.3 dB RMS (+4.8 dB) |
+| Peaks | -2.8 dBFS | +0.2 dBFS at most |
+
+The player's volume applies before the boost: at 50%, the sound is 6 dB lower, boosted or not. The script asks the server for the user's choice as they sign in and as each video starts, and builds the boost for a video's element once, as it starts playing after a click on Play. **Boost the volume**, in the player's settings menu, turns it on and off at once and saves the choice, as **My account › Sound** does.
+
+A browser plays silent the sound of another site's stream that Web Audio reads without that site's consent (CORS). So the script boosts only:
+
+- streams the page plays through its HLS player, hls.js, which fetches them itself;
+- files fetched with CORS, as jellyfin-web fetches the server's own;
+- streams the server relays and marks so (`PolyfinRelay=1` in their address). For a user who boosts, once the web player of a device has asked for their choice, the server relays the streams of addons it would otherwise send the player to fetch from their source, which takes the server's bandwidth.
+
+It never boosts HLS the browser plays itself, as Safari, an iPhone and an iPad do, whose sound Web Audio may not get: there, and in the apps' own players, nothing changes. A video started before the boost was turned on in the menu is boosted from the next one, which a message says. Once boosted, an element stays in Web Audio: turning the boost off sends its sound straight to the speakers.
+
+**Compared with Jellyfin:** jellyfin-web on a Jellyfin server plays videos at most at 100%; it sends only music through Web Audio, for its normalization.
 
 ## Dashboard links and single sign-on
 

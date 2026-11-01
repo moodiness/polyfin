@@ -508,6 +508,15 @@ Users who connected Trakt in Stremio can import their history from Trakt as well
 - An unmatched series whose episodes could not be read has the `reason` `episode_list`.
 - Polyfin asks for a link code with `GET https://link.stremio.com/api/v2/create?type=Create` and polls it with `GET https://link.stremio.com/api/v2/read?type=Read&code=…`, signs in with `POST https://api.strem.io/api/login` (`email`, `password`, `facebook` `false`), reads the account's email and profiles with `POST https://api.strem.io/api/getUser` (`premiumPrefs.userProfiles`, each with its `_id`, `name`, `isMaster` and `hasPin`), opens a profile's session with `POST https://api.strem.io/api/premiumPrefs/authenticateProfile` (`type` `AuthenticateProfile`, `profileId`, `pin`, `null` for none), which answers its `authKey`, reads the library with `POST https://api.strem.io/api/datastoreGet` (`collection` `libraryItem`, `ids` `[]`, `all` `true`) and the addons with `POST https://api.strem.io/api/addonCollectionGet` (`update` `true`), with the account's key or the profile's, and signs out with `POST https://api.strem.io/api/logout` the keys it obtained, never a key pasted. Keys and PINs go in bodies, `authKey` and `pin`, never in an address.
 
+## Louder sound
+
+Some players sound louder than the web player: they normalize the sound, or let the volume go past 100%, which jellyfin-web never does. Two options, both off, make a user's videos louder, each with its cost. The user turns them on and off under **My account › Sound**; an administrator sets them in the **Playback and access** section of the user's page or of a group's page. A member who follows their group keeps the group's: **My account** shows them, with "Your group sets these".
+
+- **Boost the volume in the web player** makes videos louder in jellyfin-web, in a browser and in the Jellyfin apps for Android and iOS that show it: about 8 dB on quiet passages and 5 dB on loud ones, through a gain and a compressor in the browser itself. The player's volume still works, and its settings menu gets **Boost the volume**, which turns it on and off. The browser can boost only sound it reads from the page's own server, or from another site that allows it: for a user who boosts, on a device where the web player has started, the server sends the streams of addons itself rather than sending the player to their source, which takes the server's bandwidth. It reaches no app's own player, nor streams Safari, an iPhone or an iPad plays as HLS. See [Louder videos in the web player](web-client.md#louder-videos-in-the-web-player).
+- **Convert the sound to even it** has the server convert the audio of the user's videos and channels and even it at -16 LUFS, the picture copied, so that every app plays it louder and evenly. Nothing plays directly for that user, each play takes a little of the server's processor, and surround sound reaches a receiver converted rather than as the original track. See [Louder sound for one user](transcoding.md#louder-sound-for-one-user).
+
+**Compared with Jellyfin:** Jellyfin has neither option: its web player plays videos at most at 100%, and it normalizes music only.
+
 ## User groups
 
 To give several accounts the same limits, such as a family's children, an administrator puts them in a group: a change to the group reaches all of them at once, rather than one page at a time.
@@ -515,7 +524,7 @@ To give several accounts the same limits, such as a family's children, an admini
 **Users › Groups** lists the groups with how many members each has, and **Create a group** asks for a **Name** and **Settings of**: a new user, as with **Create a user**, or a user whose settings the group copies when it is created. A group's page holds the sections of a user's page that set limits, each saved on its own as on a user's page:
 
 - **Access**: **Can use conversion (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles**, **Can share titles** and **Can play torrent streams**. **Administrator**, **Show on the sign-in screen**, **Disabled** and **Ends on** stay each user's own;
-- **Playback and access**, with the **Quality group**;
+- **Playback and access**, with the **Quality group** and the two options of [Louder sound](#louder-sound);
 - **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**.
 
 Its page also lists its **Members**, with **Add members**, and offers **Reset to defaults** (see [A group's limits](#a-group-s-limits)) and **Delete group**.
