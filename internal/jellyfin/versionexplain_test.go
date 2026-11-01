@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -229,5 +230,41 @@ func TestTheExplanationTellsTheLabelRules(t *testing.T) {
 	}
 	if ita.Step != StepHidden || ita.Rule != "label" || ita.Detail != "AV1" || !slices.Equal(ita.Facts.LabelRules, []string{"1080p", "AV1"}) {
 		t.Errorf("ITA: %s %s %q, rules %q", ita.Step, ita.Rule, ita.Detail, ita.Facts.LabelRules)
+	}
+}
+
+// The explanation for a user lists only the sources they use (see
+// addons.UsedBy), and an administrator cannot pin, as that user, a version
+// only a source they do not use lists.
+func TestTheExplanationListsOnlyTheUsersSources(t *testing.T) {
+	t.Parallel()
+	s := usedByOn(t)
+	movie, err := accounts.ParseID(s.titles(t, s.aliceToken, "Picks")["Movie"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	both, err := s.handler.ExplainVersions(t.Context(), s.boss, movie)
+	if err != nil || len(both.Sources) != 2 {
+		t.Fatalf("boss's explanation: %+v %v", both.Sources, err)
+	}
+	var two accounts.ID
+	for _, stream := range both.Sources[1].Streams {
+		if stream.Filename == "Two.mkv" {
+			two = stream.Version
+		}
+	}
+	explanation, err := s.handler.ExplainVersions(t.Context(), s.alice, movie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, source := range explanation.Sources {
+		names = append(names, source.Name)
+	}
+	if !slices.Equal(names, []string{"Family Picks"}) {
+		t.Errorf("alice's sources: %v", names)
+	}
+	if err := s.handler.PinVersion(t.Context(), s.boss, s.alice, movie, two); !errors.Is(err, library.ErrNotFound) {
+		t.Errorf("pinning, as alice, a version only bob's source lists: %v", err)
 	}
 }
