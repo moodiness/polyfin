@@ -367,6 +367,19 @@ func TestTitlesShownAsMoviesAndShows(t *testing.T) {
 	}
 }
 
+// A library shown as movies and shows lists and counts only the kinds
+// asked for, so that apps page through its movies or its shows to their
+// end, as Jellyfin counts a mixed library's items of the types asked for.
+func TestShownLibraryCountsTheKindsAsked(t *testing.T) {
+	t.Parallel()
+	p := newVaultLibrary(t, true)
+	checkNarrowedListings(t, p.testServer, p.token, p.view, "Movie,Series", map[string][]string{
+		"Series":       {"Ridge Show", "Loose Files", "Episode Only"},
+		"Movie":        {"Lone Clip", "Single Movie"},
+		"Movie,Series": {"Ridge Show", "Loose Files", "Lone Clip", "Single Movie", "Episode Only"},
+	})
+}
+
 // Switching a library between home videos and movies and shows gives
 // users' played marks, resume points and favorites to the items its
 // titles and videos become, both ways; the items they were are no longer

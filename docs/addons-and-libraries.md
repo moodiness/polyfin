@@ -193,6 +193,8 @@ An addon gives each catalog, and each title, a Stremio type, which decides what 
 
 A type Polyfin has no particular use for is listed as `other` is: Stremio apps show such types the same way. A sports addon's `sport` catalogs, for instance, become libraries of its matches and recaps, each a video, or a folder when its details list videos. A title without a type, in a catalog without one, is left out.
 
+A library whose titles are of several kinds, such as an `anime` library or one shown as movies and shows, lists and counts only the kinds a listing asks for. `/Items?ParentId=<library>&Recursive=true&IncludeItemTypes=Series` reads the catalog's first 500 titles, or its **Maximum titles** when lower, keeps its shows, and answers them a page at a time with a `TotalRecordCount` that counts them alone, so that apps page through them to the end. A title whose details are not known after 5 seconds has no kind yet: it is left out until they are, and the listing tells that more may follow. Jellyfin counts and pages the items of the types asked for in the same query ([ItemsController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemsController.cs#L381-L394), [L626-L629](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemsController.cs#L626-L629)); Polyfin counts them among the titles it reads, so a catalog longer than 500 titles counts its first 500.
+
 #### Folders of videos
 
 `other` is Stremio's type for what is neither a movie nor a series: the files of a cloud store, for instance, whose addon lists each download as a title and its files as the title's videos. `channel` is a channel's uploads, the same shape, and so is every type Polyfin has no particular use for, such as `sport`. Polyfin lists them as Stremio apps do:
@@ -226,7 +228,7 @@ Some Jellyfin apps list only movies and shows: they leave out every library that
 
 **For app developers:**
 
-- The library is a `CollectionFolder` without `CollectionType`. Its titles are `Series` and `Movie` items: `/Items?ParentId=<library>&Recursive=true&IncludeItemTypes=Movie,Series` lists them, and `/Shows/{id}/Seasons`, `/Shows/{id}/Episodes` and `/Shows/NextUp` answer a show as any other.
+- The library is a `CollectionFolder` without `CollectionType`. Its titles are `Series` and `Movie` items: `/Items?ParentId=<library>&Recursive=true&IncludeItemTypes=Movie,Series` lists them, `IncludeItemTypes=Movie` or `Series` alone lists and counts that kind only (see [What catalogs list](#what-catalogs-list)), and `/Shows/{id}/Seasons`, `/Shows/{id}/Episodes` and `/Shows/NextUp` answer a show as any other.
 - The `Id` of a title and of its videos changes when the option is switched; a title's `Id` stays when its details gain or lose videos.
 - The admin API's libraries carry `showAsTitles`, saved with `PUT /admin/api/scopes/{scope}/libraries`, and `otherVideos`, which tells the catalogs that take it. `showAsTitles` on another catalog is refused with `invalid_library`.
 

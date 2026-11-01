@@ -178,7 +178,9 @@ const (
 // descriptions give (see otherKind and shownKind), and a folder or a
 // series what it holds. The descriptions kept answer; the others are
 // asked for, waiting at most shapeWait, unless the listing asks no addon.
-func (s *Service) shapeOthers(ctx context.Context, v view, items []Item, records []record) {
+// It returns the places of the titles whose descriptions are still
+// unknown, whose kind is a guess.
+func (s *Service) shapeOthers(ctx context.Context, v view, items []Item, records []record) []int {
 	var unknown []int
 	for i := range records {
 		if !records[i].shapedTitle() {
@@ -191,17 +193,18 @@ func (s *Service) shapeOthers(ctx context.Context, v view, items []Item, records
 		unknown = append(unknown, i)
 	}
 	if len(unknown) == 0 {
-		return
+		return nil
 	}
 	// A read that asks no addon (see withKeptOnly) finds those kept in
 	// the database.
 	if keptOnly(ctx) {
-		for _, i := range unknown {
-			if meta, _, ok := s.describedMeta(ctx, v, records[i], false, inDatabase); ok {
+		return slices.DeleteFunc(unknown, func(i int) bool {
+			meta, _, ok := s.describedMeta(ctx, v, records[i], false, inDatabase)
+			if ok {
 				shape(&items[i], &records[i], meta, s.now())
 			}
-		}
-		return
+			return ok
+		})
 	}
 	ctx, cancel := context.WithTimeout(ctx, shapeWait)
 	defer cancel()
@@ -217,11 +220,15 @@ func (s *Service) shapeOthers(ctx context.Context, v view, items []Item, records
 		})
 	}
 	_ = g.Wait()
+	var left []int
 	for j, i := range unknown {
 		if found[j] != nil {
 			shape(&items[i], &records[i], *found[j], s.now())
+		} else {
+			left = append(left, i)
 		}
 	}
+	return left
 }
 
 // shape gives an item of the other or channel type, and its record, the

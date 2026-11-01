@@ -1328,6 +1328,14 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 		ok && !keepsKind(ctx, kind) {
 		return Page{}, nil
 	}
+	// One that keeps only some of the kinds its titles may be counts and
+	// pages those alone.
+	if kinds := mixedKinds(l); slices.ContainsFunc(kinds, func(kind Kind) bool { return !keepsKind(ctx, kind) }) {
+		if !slices.ContainsFunc(kinds, func(kind Kind) bool { return keepsKind(ctx, kind) }) {
+			return Page{}, nil
+		}
+		return s.narrowedLibraryTitles(ctx, v, l, src, start, count)
+	}
 	metas, total, err := s.window(ctx, v, src, start, count)
 	if cutShort(err, len(metas)) {
 		s.logger.Debug("A listing ends at a catalog page the addon could not give", "catalog", src.catalog.ID, "error", err)
@@ -1354,6 +1362,75 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 	result := page(items, start, totalWithinMax(total, l.maxItems))
 	if result.More && !first {
 		s.prefetch(ctx, v, l.addon, func(ctx context.Context) { _, _, _ = s.window(ctx, v, src, start+count, count) })
+	}
+	return result, s.save(ctx, records)
+}
+
+// mixedKinds is the kinds the titles of a library may be when its
+// catalog's type does not tell one (see listedKind): a movie or a series
+// for a catalog of other videos shown as movies and shows, a folder or a
+// video for one that is not, and any of them for another type, such as
+// anime, whose titles' own types tell theirs. It is none for a catalog of
+// movies, series or collections, or of no titles.
+func mixedKinds(l library) []Kind {
+	if _, ok := listedKind(l.catalog.Type); ok || l.catalog.Type == "collection" {
+		return nil
+	}
+	if otherType(l.catalog.Type) {
+		if l.addon.addon.ShowsAsTitles(l.catalog.Type, l.catalog.ID) {
+			return []Kind{KindMovie, KindSeries}
+		}
+		return []Kind{KindFolder, KindVideo}
+	}
+	if _, ok := titleKind(l.catalog.Type); ok {
+		return []Kind{KindMovie, KindSeries, KindFolder, KindVideo}
+	}
+	return nil
+}
+
+// narrowedLibraryTitles lists the titles of library l that the listing of
+// ctx keeps, when its catalog lists several kinds of titles and the
+// listing keeps only some (see mixedKinds and WithKinds), as Jellyfin
+// counts and pages a library's items of the types asked for: the
+// catalog's first WholeListing titles, or the library's maximum when
+// lower, are read whole and described as a listing describes them (see
+// shapeOthers), so that the total and the pages count the kept ones
+// alone. A title whose description is not known in time has no kind yet
+// and is left out, and so is the part of the catalog not read, such as
+// what a restricted user's listing has not reached: the listing then
+// tells that more may follow, as otherLibraryVideos does.
+func (s *Service) narrowedLibraryTitles(ctx context.Context, v view, l library, src source, start, count int) (Page, error) {
+	most := WholeListing
+	if l.maxItems > 0 {
+		most = min(most, l.maxItems)
+	}
+	metas, total, err := s.window(ctx, v, src, 0, most)
+	if cutShort(err, len(metas)) {
+		s.logger.Debug("A listing ends at a catalog page the addon could not give", "catalog", src.catalog.ID, "error", err)
+	} else if err != nil {
+		return Page{}, err
+	}
+	items := make([]Item, 0, len(metas))
+	records := make([]record, 0, len(metas))
+	for _, meta := range metas {
+		if item, r, err := titleItem(l.addon, l.catalog, meta, l.item.ID); err == nil {
+			items, records = append(items, item), append(records, r)
+		}
+	}
+	unknown := s.shapeOthers(ctx, v, items, records)
+	guessed := make([]bool, len(items))
+	for _, i := range unknown {
+		guessed[i] = true
+	}
+	kept := make([]Item, 0, len(items))
+	for i, item := range items {
+		if !guessed[i] && keepsKind(ctx, item.Kind) {
+			kept = append(kept, item)
+		}
+	}
+	result := slicePage(kept, start, count)
+	if len(unknown) > 0 || total > len(metas) && len(metas) < most {
+		result.More, result.Total = true, max(result.Total, start+len(result.Items)+1)
 	}
 	return result, s.save(ctx, records)
 }
@@ -1435,8 +1512,9 @@ type kindsKey struct{}
 // collection then reads only the catalogs whose titles it keeps, so that
 // its pages and its total count those alone, and a collection library
 // lists no collection when collections are not kept. The titles of a
-// catalog are told by its type, movies or series (see listedKind); other
-// catalogs are read as before.
+// catalog are told by its type, movies or series (see listedKind); a
+// library of a catalog of several kinds is read whole and narrowed (see
+// narrowedLibraryTitles); other catalogs are read as before.
 func WithKinds(ctx context.Context, keeps func(Kind) bool) context.Context {
 	return context.WithValue(ctx, kindsKey{}, keeps)
 }
