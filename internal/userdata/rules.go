@@ -247,15 +247,20 @@ func (d *Data) ImportResume(p ImportedResume, thresholds Thresholds) int {
 // Follow adds what the user did with another item, from, as an import
 // adds another service's: a played mark is added, with the larger play
 // count; a resume point is kept when it is newer than the item's own (see
-// ImportResume); a favorite is set. Nothing the item records is taken
-// back (see Store.Follow for what from loses).
+// ImportResume), and one Polyfin kept without a runtime, which an import
+// would drop, is kept as it is: it is a position in the same file; a
+// favorite is set. Nothing the item records is taken back (see
+// Store.Follow for what from loses).
 func (d *Data) Follow(from Data, thresholds Thresholds) {
 	switch {
 	case from.Played:
 		d.ImportPlayed(from.LastPlayed)
 		d.PlayCount = max(d.PlayCount, from.PlayCount)
 	case from.givesResume():
-		d.ImportResume(ImportedResume{Position: from.Position, Runtime: from.Runtime, At: *from.LastPlayed}, thresholds)
+		resume := ImportedResume{Position: from.Position, Runtime: from.Runtime, At: *from.LastPlayed}
+		if d.ImportResume(resume, thresholds) == ResumeDropped && from.Runtime <= 0 && d.Runtime <= 0 {
+			d.Position, d.LastPlayed = from.Position, new(from.LastPlayed.UTC())
+		}
 	}
 	if from.Favorite {
 		d.Favorite = true
