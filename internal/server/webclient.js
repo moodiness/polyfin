@@ -199,6 +199,13 @@
 //     a row whose cards all have a resume point, as /UserItems/Resume
 //     lists them, the libraries' own rows included. It deletes
 //     /Polyfin/UserItems/{id}/Resume and takes the card off the row;
+//   "Remove from Next Up", for an episode's card in a Next Up list: the
+//     home's section whose title links to the Next Up page
+//     (#/list?type=nextup), that page, the Next Up of a TV library's
+//     tab (#nextUpItems), or the Next Up of a series' page
+//     (.nextUpSection). It deletes /Polyfin/UserItems/{id}/NextUp, takes
+//     the card off a list (a series' page keeps its next episode) and says
+//     until when in a toast;
 //   "Hide this title", for a movie, a home video or a series, or a season
 //     or an episode of one, that the user has not hidden, as
 //     /Polyfin/UserItems/Hidden lists them. It posts to
@@ -220,10 +227,11 @@
 // browser's session storage, for the server and user, for 2 minutes, and
 // has every row's answers (their fetchData) leave out, meanwhile, the item
 // taken off Continue Watching from rows whose items all resume, unless
-// played since its last play then, and the titles hidden, with what is in
-// them, from every row. Nothing is kept longer: an older answer is asked
-// again, and Polyfin's leaves them out. Its words follow jellyfin-web's
-// language, as the third's. Any error just stops it.
+// played since its last play then, the episodes of a series taken off Next
+// Up from the Next Up lists, unless played since, and the titles hidden,
+// with what is in them, from every row. Nothing is kept longer: an older
+// answer is asked again, and Polyfin's leaves them out. Its words follow
+// jellyfin-web's language, as the third's. Any error just stops it.
 //
 // With the tenth, it also has the home page's Next Up, Continue Watching
 // and Continue Listening rows (the home's rows that jellyfin-web refreshes
@@ -1176,6 +1184,8 @@
       none: 'No source is available for this title.',
       again: 'Try again',
       removeResume: 'Remove from Continue Watching',
+      removeNextUp: 'Remove from Next Up',
+      removedNextUp: 'This series is off Next Up until you play one of its episodes or a new one comes out.',
       hide: 'Hide this title',
       show: 'Show this title again',
       hidden: 'This title is hidden from your lists.',
@@ -1186,6 +1196,8 @@
       none: 'Aucune source disponible pour ce titre.',
       again: 'Réessayer',
       removeResume: 'Retirer de « Continuer de regarder »',
+      removeNextUp: 'Retirer de « À suivre »',
+      removedNextUp: 'Cette série n’est plus dans « À suivre » jusqu’à ce que vous en lisiez un épisode ou qu’un nouvel épisode sorte.',
       hide: 'Masquer ce titre',
       show: 'Afficher de nouveau ce titre',
       hidden: 'Ce titre est masqué de vos listes.',
@@ -1196,6 +1208,8 @@
       none: 'Für diesen Titel ist keine Quelle verfügbar.',
       again: 'Erneut versuchen',
       removeResume: 'Aus „Weiterschauen“ entfernen',
+      removeNextUp: 'Aus „Als Nächstes“ entfernen',
+      removedNextUp: 'Diese Serie ist nicht mehr in „Als Nächstes“, bis du eine ihrer Folgen abspielst oder eine neue erscheint.',
       hide: 'Diesen Titel ausblenden',
       show: 'Diesen Titel wieder einblenden',
       hidden: 'Dieser Titel ist in deinen Listen ausgeblendet.',
@@ -1206,6 +1220,8 @@
       none: 'No hay ninguna fuente disponible para este título.',
       again: 'Reintentar',
       removeResume: 'Quitar de «Seguir viendo»',
+      removeNextUp: 'Quitar de «A continuación»',
+      removedNextUp: 'Esta serie ya no está en «A continuación» hasta que reproduzca uno de sus episodios o salga uno nuevo.',
       hide: 'Ocultar este título',
       show: 'Volver a mostrar este título',
       hidden: 'Este título está oculto en sus listas.',
@@ -1216,6 +1232,8 @@
       none: 'Nessuna origine disponibile per questo titolo.',
       again: 'Riprova',
       removeResume: 'Rimuovi da «Continua a guardare»',
+      removeNextUp: 'Rimuovi da «Prossimo»',
+      removedNextUp: 'Questa serie non è più in «Prossimo» finché non ne riproduci un episodio o ne esce uno nuovo.',
       hide: 'Nascondi questo titolo',
       show: 'Mostra di nuovo questo titolo',
       hidden: 'Questo titolo è nascosto dai tuoi elenchi.',
@@ -1226,6 +1244,8 @@
       none: 'Nenhuma fonte disponível para este título.',
       again: 'Tentar novamente',
       removeResume: 'Remover de “Continuar assistindo”',
+      removeNextUp: 'Remover de “A seguir”',
+      removedNextUp: 'Esta série saiu de “A seguir” até você reproduzir um dos episódios dela ou sair um novo.',
       hide: 'Ocultar este título',
       show: 'Mostrar este título novamente',
       hidden: 'Este título está oculto nas suas listas.',
@@ -2066,11 +2086,12 @@
     return String(id).replace(/-/g, '').toLowerCase()
   }
   // askFacts asks for what the entries of the item's menu depend on: its
-  // type and series, whether the user hid it or its series, and whether
-  // its card stands in a Continue Watching row.
+  // type and series, whether the user hid it or its series, whether its
+  // card stands in a Continue Watching row, and in which Next Up it does.
   function askFacts(api, id, card) {
     var user = api.getCurrentUserId()
     var row = card && card.getAttribute('data-positionticks') ? card.closest('.itemsContainer') : null
+    var nextUp = nextUpRow(card)
     var resume = row
       ? api.getJSON(api.getUrl('UserItems/Resume', { userId: user, Limit: 100, MediaTypes: 'Video', EnableImages: false }))
       : null
@@ -2097,6 +2118,7 @@
             Array.prototype.every.call(cards, function (other) {
               return resumable[plainId(other.getAttribute('data-id'))]
             }),
+          nextUp: item.Type === 'Episode' && series ? nextUp : '',
         }
       }
     )
@@ -2121,6 +2143,19 @@
                 // its last play, before the resume point went.
                 keepDrop({ kind: 'resume', id: entry.id, last: Date.parse((data && data.LastPlayedDate) || '') || 0 })
                 dropCards(entry.card ? [entry.card] : [])
+              })
+            })
+          )
+        }
+        if (facts.nextUp) {
+          scroller.appendChild(
+            menuItem(container, model, 'remove_from_queue', say('removeNextUp'), function () {
+              act(entry.id, 'DELETE', 'NextUp', function () {
+                keepDrop({ kind: 'nextup', id: facts.series, at: Date.now() })
+                // A series' page keeps its next episode: only Next Up's
+                // lists leave the series out.
+                if (facts.nextUp === 'list' && entry.card) dropCards([entry.card])
+                toast(say('removedNextUp'))
               })
             })
           )
@@ -2201,7 +2236,8 @@
   // session storage under dropsKey for dropsKept: jellyfin-web keeps its
   // answers for a minute. Each names the server and user it is for, and
   // the item: taken off Continue Watching (resume), with its last play
-  // then, or hidden (hidden), a series standing for what is in it.
+  // then, hidden (hidden), a series standing for what is in it, or a series
+  // taken off Next Up (nextup), with when.
   var dropsKey = 'polyfinDrops'
   var dropsKept = 120000
   var drops = []
@@ -2243,14 +2279,19 @@
     saveDrops()
   }
   // screened is a row's answer without what the drops of the user signed
-  // in take off; the answer itself is left as it is.
-  function screened(answer) {
+  // in take off; the answer itself is left as it is. row is the element
+  // that asked, which tells a Next Up list.
+  function screened(answer, row) {
     var viewer = viewerKey()
     var mine = liveDrops().filter(function (drop) {
       return drop.viewer === viewer
     })
     var items = Array.isArray(answer) ? answer : answer && Array.isArray(answer.Items) ? answer.Items : null
     if (!mine.length || !items) return answer
+    var nextUp =
+      mine.some(function (drop) {
+        return drop.kind === 'nextup'
+      }) && nextUpRow(row) === 'list'
     var resumes =
       items.length > 0 &&
       items.every(function (item) {
@@ -2263,6 +2304,11 @@
           if (drop.kind === 'hidden') {
             return plainId(item.Id) === drop.id || (!!item.SeriesId && plainId(item.SeriesId) === drop.id)
           }
+          if (drop.kind === 'nextup') {
+            // Kept when one of its episodes was played since.
+            var since = Date.parse((item.UserData && item.UserData.LastPlayedDate) || '') || 0
+            return nextUp && !!item.SeriesId && plainId(item.SeriesId) === drop.id && since <= drop.at
+          }
           var played = Date.parse((item.UserData && item.UserData.LastPlayedDate) || '') || 0
           return resumes && plainId(item.Id) === drop.id && played <= drop.last
         })
@@ -2270,6 +2316,21 @@
     })
     if (kept.length === items.length) return answer
     return Array.isArray(answer) ? kept : Object.assign({}, answer, { Items: kept })
+  }
+  // nextUpRow tells where an element stands: in a list of Next Up (list),
+  // the home's section whose title links to the Next Up page, that page,
+  // or the Next Up of a TV library's tab; in the Next Up of a series' page
+  // (series); or elsewhere (empty).
+  function nextUpRow(element) {
+    if (!element || !element.closest) return ''
+    if (element.closest('.nextUpSection')) return 'series'
+    if (element.closest('#nextUpItems')) return 'list'
+    var section = element.closest('.verticalSection')
+    if (section && section.querySelector && section.querySelector('.sectionTitleContainer a[href*="type=nextup"]')) {
+      return 'list'
+    }
+    if (/[?&]type=nextup(?:&|$)/i.test(location.hash) && element.closest('.itemsContainer')) return 'list'
+    return ''
   }
   // Every row's fetchData goes through screened, as jellyfin-web sets it on
   // the row: rows are divs, and the script runs before jellyfin-web.
