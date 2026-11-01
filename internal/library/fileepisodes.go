@@ -23,7 +23,10 @@ import (
 // that it does not list, by season and number. A metadata addon's
 // description also tells the folders which of their episodes it does not
 // list, and which it lists, which their pages show; a local folder's own
-// lists them all already, of its files.
+// lists them all already, of its files. A description from one of the
+// server's metadata addons is the catalog the files named by an absolute
+// number are the episodes of (see AbsoluteEpisodes): a user's own addon
+// numbering the series otherwise moves no file, which every user plays.
 func (s *Service) withFileEpisodes(ctx context.Context, v view, r record, describer installed, meta stremio.Meta) stremio.Meta {
 	if s.local == nil || r.Meta == nil || r.Meta.Type != string(KindSeries) || r.Kind != KindSeries {
 		return meta
@@ -37,7 +40,11 @@ func (s *Service) withFileEpisodes(ctx context.Context, v view, r record, descri
 	if len(folders) == 0 {
 		return meta
 	}
-	held, err := s.local.Episodes(ctx, folders, r.Meta.ID)
+	var catalog []stremio.Video
+	if describer.shared && !own(describer.addon) {
+		catalog = meta.Videos
+	}
+	held, err := s.local.Episodes(ctx, folders, r.Meta.ID, catalog)
 	if err != nil {
 		s.logger.Debug("The episodes local folders hold could not be read", "title", r.Meta.ID, "error", err)
 		return meta

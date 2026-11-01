@@ -179,3 +179,44 @@ func TestEpisodeFramesFailedAreNotTriedAtEachRequest(t *testing.T) {
 		t.Errorf("asked again: %d, FFmpeg ran %d times, then %d", response.StatusCode, tried, runs())
 	}
 }
+
+// A show's file named by an absolute number is a version of the catalog's
+// episode of that place, specials left out, in a season folder or at the
+// top of its show's folder; one whose number the catalog does not reach is
+// an episode of its own, named after it.
+func TestLocalEpisodesNamedByAbsoluteNumber(t *testing.T) {
+	t.Parallel()
+	p := newPlainSetup(t)
+	// The addon lists S01E01, S01E02 and S02E01: the third is S02E01.
+	p.write(t, "Shows/Harbor Show (2011)/Harbor Show - 3.mp4", p.video)
+	p.write(t, "Shows/Harbor Show (2011)/Season 02/Harbor Show 2.mp4", p.video)
+	p.write(t, "Shows/Harbor Show (2011)/Harbor Show - 7.mp4", p.video)
+	p.scan(t)
+	if err := p.folders.Link(t.Context(), p.shows, "Harbor Show (2011)", "tt0100"); err != nil {
+		t.Fatal(err)
+	}
+	var page QueryResult
+	p.get(t, "/Shows/"+p.series+"/Episodes?UserId="+p.user, p.token, &page)
+	episodes := map[[2]int]BaseItemDto{}
+	for _, episode := range page.Items {
+		episodes[[2]int{*episode.ParentIndexNumber, *episode.IndexNumber}] = episode
+	}
+	if len(episodes) != 4 || episodes[[2]int{2, 1}].Name != "Return" || episodes[[2]int{1, 7}].Name != "Harbor Show - 7" {
+		t.Fatalf("the show's episodes: %v", itemNames(page.Items))
+	}
+	for number, want := range map[[2]int]int{{2, 1}: 2, {1, 2}: 2, {1, 7}: 1} {
+		answer := p.playbackInfo(t, "tv", p.token, episodes[number].Id, nil)
+		if len(answer.MediaSources) != want {
+			t.Errorf("the versions of S%02dE%02d: %+v", number[0], number[1], answer.MediaSources)
+		}
+		for _, source := range answer.MediaSources {
+			if !strings.HasPrefix(source.Name, "Local shows") {
+				t.Errorf("a version of S%02dE%02d: %+v", number[0], number[1], source)
+			}
+		}
+	}
+	folder, err := p.folders.Folder(t.Context(), p.shows)
+	if err != nil || folder.Unlisted != 1 {
+		t.Errorf("the episodes the addon does not list: %d %v", folder.Unlisted, err)
+	}
+}

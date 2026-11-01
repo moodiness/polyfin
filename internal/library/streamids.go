@@ -323,6 +323,28 @@ func episodeSuffix(season, number int) string {
 	return ":" + strconv.Itoa(season) + ":" + strconv.Itoa(number)
 }
 
+// episodePlace is an episode's season and number.
+type episodePlace struct{ season, number int }
+
+// comparePlaces orders episodes by season, then number.
+func comparePlaces(a, b episodePlace) int {
+	return cmp.Or(cmp.Compare(a.season, b.season), cmp.Compare(a.number, b.number))
+}
+
+// regularEpisodes are the regular episodes of videos, specials left out,
+// once each, by season then number: TVDB's absolute numbering, as
+// tracking counts it (see episodeList.absolute).
+func regularEpisodes(videos []stremio.Video) []episodePlace {
+	var regular []episodePlace
+	for _, video := range videos {
+		if video.Season > 0 && video.EpisodeNumber() > 0 {
+			regular = append(regular, episodePlace{int(video.Season), video.EpisodeNumber()})
+		}
+	}
+	slices.SortFunc(regular, comparePlaces)
+	return slices.Compact(regular)
+}
+
 // absoluteEpisode is the place of episode number of season among the
 // regular episodes of videos, by season then number, from 1: TVDB's
 // absolute numbering. It is 0 for a special or an episode not listed.
@@ -330,21 +352,24 @@ func absoluteEpisode(videos []stremio.Video, season, number int) int {
 	if season <= 0 || number <= 0 {
 		return 0
 	}
-	type place struct{ season, number int }
-	var regular []place
-	for _, video := range videos {
-		if video.Season > 0 && video.EpisodeNumber() > 0 {
-			regular = append(regular, place{int(video.Season), video.EpisodeNumber()})
-		}
-	}
-	compare := func(a, b place) int { return cmp.Or(cmp.Compare(a.season, b.season), cmp.Compare(a.number, b.number)) }
-	slices.SortFunc(regular, compare)
-	regular = slices.Compact(regular)
-	i, found := slices.BinarySearchFunc(regular, place{season, number}, compare)
+	i, found := slices.BinarySearchFunc(regularEpisodes(videos), episodePlace{season, number}, comparePlaces)
 	if !found {
 		return 0
 	}
 	return i + 1
+}
+
+// AbsoluteEpisodes lists the season and number of the regular episodes
+// of videos, a series' description's, in the absolute numbering
+// absoluteEpisode counts: the nth is the series' episode n. Local folders
+// match the files named by an absolute number to them.
+func AbsoluteEpisodes(videos []stremio.Video) [][2]int {
+	regular := regularEpisodes(videos)
+	places := make([][2]int, len(regular))
+	for i, place := range regular {
+		places[i] = [2]int{place.season, place.number}
+	}
+	return places
 }
 
 // withMissing returns ids with the identifiers more gives that ids lacks.

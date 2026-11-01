@@ -78,6 +78,10 @@ type folderJSON struct {
 	// series' metadata addon does not list, as the series were last
 	// described; they are listed all the same, named after their files.
 	UnlistedEpisodes int `json:"unlistedEpisodes"`
+	// AbsoluteEpisodes counts its files named by an absolute number, as
+	// "Show - 41", that are versions of the catalog's episodes of their
+	// places.
+	AbsoluteEpisodes int `json:"absoluteEpisodes"`
 }
 
 // searchFailureJSON is a failed search of a title: the name of the addon
@@ -163,7 +167,7 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 		Endpoint: f.Endpoint, Region: f.Region, RcloneRemote: f.Remote, PrivateKeySet: f.PrivateKeySet, PassphraseSet: f.PassphraseSet,
 		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, PollMinutes: f.PollMinutes,
 		SearchFailed: f.SearchFailed, SearchFailure: newSearchFailureJSON(f.SearchAddon, f.SearchFailure), SearchRetryAt: f.SearchRetryAt,
-		NoSearch: f.NoSearch, UnlistedEpisodes: f.Unlisted}
+		NoSearch: f.NoSearch, UnlistedEpisodes: f.Unlisted, AbsoluteEpisodes: f.Absolute}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -362,9 +366,6 @@ type unmatchedJSON struct {
 	Year   *int   `json:"year"`
 	Size   int64  `json:"size"`
 	Reason string `json:"reason"`
-	// Number is the absolute number the name of a show's file tells, for
-	// "absolute_number"; null for another reason.
-	Number *int `json:"number"`
 	// Search tells, for a failed search ("search_failed"), the addon that
 	// failed it and why; null for another reason.
 	Search *searchFailureJSON `json:"search"`
@@ -417,9 +418,6 @@ func (h *handler) folderUnmatched(w http.ResponseWriter, r *http.Request) {
 	for _, u := range list {
 		file := unmatchedJSON{Path: u.Path, Unit: u.Unit, Title: u.Title, Size: u.Size, Reason: u.Reason, Disc: text(u.Disc),
 			Search: newSearchFailureJSON(u.SearchAddon, u.SearchFailure)}
-		if u.Number > 0 {
-			file.Number = new(u.Number)
-		}
 		if u.Year > 0 {
 			file.Year = new(u.Year)
 		}
