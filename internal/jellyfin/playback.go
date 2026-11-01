@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -233,9 +234,18 @@ func (h *Handler) title(ctx context.Context, user accounts.User, opened accounts
 	return item, err
 }
 
+// errNoSources is played's answer for an item the user sees that plays
+// nothing itself: a folder, a series, a season, a collection or a library.
+// It is library.ErrNotFound to every caller, but PlaybackInfo and the
+// stream answer it 400, as Jellyfin answers an item without media sources:
+// GetStaticMediaSources throws ArgumentException for it
+// (MediaSourceManager.cs at v12.4, lines 383-393), which the exception
+// middleware answers 400 (ExceptionMiddleware.cs, line 127).
+var errNoSources = fmt.Errorf("%w: the item has no media sources", library.ErrNotFound)
+
 // played resolves what a player opens: a movie, an episode, a replay, a
 // channel, a recording, a track or an audiobook, by its own identifier or
-// by one of its versions'.
+// by one of its versions'; errNoSources for an item of another kind.
 func (h *Handler) played(ctx context.Context, user accounts.User, opened accounts.ID) (library.Item, error) {
 	item, err := h.Library.Item(ctx, user, opened)
 	if errors.Is(err, library.ErrNotFound) {
@@ -248,12 +258,21 @@ func (h *Handler) played(ctx context.Context, user accounts.User, opened account
 	if err != nil {
 		return library.Item{}, err
 	}
-	switch item.Kind {
+	if !hasSources(item.Kind) {
+		return library.Item{}, errNoSources
+	}
+	return item, nil
+}
+
+// hasSources reports whether items of kind play, with versions of their
+// own: Jellyfin's IHasMediaSources.
+func hasSources(kind library.Kind) bool {
+	switch kind {
 	case library.KindMovie, library.KindVideo, library.KindEpisode, library.KindReplay, library.KindChannel, library.KindTrack, library.KindAudiobook,
 		library.KindExtra, library.KindThemeSong:
-		return item, nil
+		return true
 	}
-	return library.Item{}, library.ErrNotFound
+	return false
 }
 
 // looseInt reads a number that apps send as a JSON number or string.
@@ -361,6 +380,12 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	h.limitHeight(&request, user)
 	request.progressive = h.downloadsConverted(user)
 	item, err := h.played(r.Context(), user, opened)
+	// Jellyfin cannot process the request for an item without media
+	// sources, such as a folder (see errNoSources).
+	if errors.Is(err, errNoSources) {
+		processingError(w, http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return
@@ -1164,7 +1189,13 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := h.played(r.Context(), user, opened)
 	if err != nil {
-		processingError(w, http.StatusNotFound)
+		// An item without media sources is a request Jellyfin cannot
+		// process (see errNoSources).
+		status := http.StatusNotFound
+		if errors.Is(err, errNoSources) {
+			status = http.StatusBadRequest
+		}
+		processingError(w, status)
 		return
 	}
 	// The version: the one the app names by its ETag or media source id,

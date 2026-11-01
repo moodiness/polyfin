@@ -76,6 +76,14 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		h.internalError(w, r, err)
 		return
 	}
+	// Jellyfin refuses to download an item that is no file, a folder or a
+	// series, as a request it cannot process (BaseItem.CanDownload is
+	// false but for videos, audio, books and photos): no addon is asked
+	// for streams of it.
+	if !hasSources(item.Kind) {
+		processingError(w, http.StatusBadRequest)
+		return
+	}
 	wanted := opened
 	if opened == item.ID {
 		wanted = grant.Version
