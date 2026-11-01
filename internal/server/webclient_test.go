@@ -600,6 +600,10 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		// With held, jellyfin-web fills the menu of a reloaded page only at
 		// the step "render", as when its details come late.
 		held bool
+		// Pushes come as jellyfin-web 12.4 gives its socket's messages,
+		// through ApiClient.subscribe; with legacy, as jellyfin-web before
+		// 12.0 did, through ApiClient's message event, without subscribe.
+		legacy bool
 		// steps: a route the router moves to; "tick" runs the next timer,
 		// logging "idle" when there is none; "focus" and "blur" move focus
 		// to and from the version menu; "pick <id>" picks a version as a
@@ -704,6 +708,9 @@ func TestTitlePagesAddVersionsAsAddonsAnswer(t *testing.T) {
 		"a push after the last answer": {listed: 2, answers: []answer{{0, 2, nil}, {0, 2, nil}, {0, 2, nil}},
 			steps: []string{title, "tick", "tick", "tick", "push 0 3", "menu"},
 			want:  []string{ask, ask, ask, "idle", details, "menu *t v1 v2 shown"}},
+		"a push through the message event, without subscribe": {listed: 1, answers: []answer{{1, 1, nil}, {1, 3, nil}, {0, 3, nil}}, legacy: true,
+			steps: []string{title, "push 1 3", "menu", "tick", "clock", "tick", "clock", "tick"},
+			want:  []string{ask, details, "menu *t v1 v2 shown", ask, "clock 1", ask, "clock 11", "idle"}},
 		// A version listed first takes the title's identifier, and the
 		// former first one an identifier of its own: the version picked by
 		// jellyfin-web stays picked, under that identifier.
@@ -906,6 +913,8 @@ async function run(scenario) {
     },
   }
   const answers = (scenario.answers || []).slice()
+  // What the script subscribed to, by message type.
+  const subscribers = {}
   const ApiClient = {
     getUrl: (path) => 'http://polyfin.test/' + path,
     getCurrentUserId: () => 'user',
@@ -922,6 +931,12 @@ async function run(scenario) {
       log.push('details ' + short(id) + (user === 'user' ? '' : ' for ' + user))
       return Promise.resolve({ Id: id, Name: 'Movie', MediaSources: sources.map((source) => ({ ...source })) })
     },
+  }
+  if (!scenario.legacy) {
+    ApiClient.subscribe = (types, callback) => {
+      for (const type of types) (subscribers[type] ||= []).push(callback)
+      return () => {}
+    }
   }
   vm.runInNewContext(script, {
     location, history, URL, document, CustomEvent, Event, MutationObserver, window: { ApiClient },
@@ -945,12 +960,17 @@ async function run(scenario) {
     } else if (step === 'clock') log.push('clock ' + now / 1000)
     else if (step === 'render') fill(menu.value)
     else if (step.startsWith('push ')) {
-      // As jellyfin-web's events trigger ApiClient's message event.
+      // As jellyfin-web 12.4 gives its socket's messages to subscribers,
+      // or, with legacy, as its events trigger ApiClient's message event.
       const [, pending, count] = step.split(' ')
       const data = pending === 'other' ? { ItemId: 'f'.repeat(32), Pending: 0, Count: 5 } : { ItemId: TITLE.toUpperCase(), Pending: +pending, Count: +count, AddVersions: !scenario.off }
       if (pending !== 'other') sources = versions(+count)
       const message = { MessageType: 'PolyfinVersions', MessageId: 'm', Data: data }
-      for (const callback of ((ApiClient._callbacks || {}).message || []).slice()) callback.apply(ApiClient, [{ type: 'message' }, message])
+      if (scenario.legacy) {
+        for (const callback of ((ApiClient._callbacks || {}).message || []).slice()) callback.apply(ApiClient, [{ type: 'message' }, message])
+      } else {
+        for (const callback of (subscribers.PolyfinVersions || []).slice()) callback(message)
+      }
     } else if (step !== 'tick') history.pushState(null, '', step)
     else {
       let next = -1
@@ -984,11 +1004,12 @@ async function run(scenario) {
 		Forever    bool     `json:"forever"`
 		Off        bool     `json:"off"`
 		Held       bool     `json:"held"`
+		Legacy     bool     `json:"legacy"`
 		Steps      []string `json:"steps"`
 	}
 	inputs := map[string]input{}
 	for name, s := range scenarios {
-		inputs[name] = input{s.listed, s.options, s.picked, s.unplayable, s.noMenu, s.video, s.answers, s.forever, s.off, s.held, s.steps}
+		inputs[name] = input{s.listed, s.options, s.picked, s.unplayable, s.noMenu, s.video, s.answers, s.forever, s.off, s.held, s.legacy, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)

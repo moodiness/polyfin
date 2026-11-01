@@ -47,9 +47,11 @@
 // details list now (Count). Polyfin also pushes it, as it changes, on the
 // socket jellyfin-web keeps open, in a PolyfinVersions message whose Data
 // names the page's identifier (ItemId): the script hears it through
-// ApiClient's message event. It asks at once as the route changes, then
-// every second while addons are pending, every 10 seconds once a push came,
-// the socket then telling the changes,
+// ApiClient.subscribe, which gives the messages of jellyfin-web's socket
+// since 12.0 (ApiClient's message event before, without subscribe). It
+// asks at once as the route changes, then every second while addons are
+// pending, every 10 seconds once a push came, the socket then telling the
+// changes,
 // for at most 90 seconds: a first answer, which takes at most 15 seconds,
 // and both follow-ups, 10 and 30 seconds later and as long each, end within
 // 85. When the page lists fewer versions than Count, or a different number
@@ -1101,10 +1103,11 @@
   // event gives them: jellyfin-web's events keep an object's listeners in
   // its _callbacks, by event, and call each with the event then the message.
   // That event only fires for the socket of jellyfin-apiclient itself,
-  // which jellyfin-web 12.4 does not open: its socket is its SDK's, whose
-  // messages ApiClient.subscribe gives by type (ServerConnections.js). So
-  // UserDataChanged is heard there when jellyfin-web has it, through the
-  // message event otherwise.
+  // which jellyfin-web opens no more since 12.0: its socket is its SDK's,
+  // whose messages ApiClient.subscribe gives by type, any type
+  // (ServerConnections.js). So UserDataChanged and PolyfinVersions are
+  // heard there when jellyfin-web has it, through the message event
+  // otherwise.
   // It also hears the answers of the played marks the page sends, as
   // markPlayed and markUnplayed give them: what the user did with the item
   // afterwards. They come at once, before the socket's message.
@@ -1112,25 +1115,26 @@
     var api = window.ApiClient
     if (!api || api === heard) return
     heard = api
-    var subscribed = false
-    if (typeof api.subscribe === 'function') {
-      api.subscribe(['UserDataChanged'], function (message) {
-        try {
-          if (message) playedChanged(message.Data)
-        } catch (error) {}
-      })
-      subscribed = true
-    }
-    var callbacks = (api._callbacks = api._callbacks || {})
-    ;(callbacks.message = callbacks.message || []).push(function (event, message) {
+    function heardData(message) {
       try {
-        if (message && message.MessageType === 'UserDataChanged') {
-          if (!subscribed) playedChanged(message.Data)
-          return
-        }
+        if (message) playedChanged(message.Data)
+      } catch (error) {}
+    }
+    function heardVersions(message) {
+      try {
         hear(message)
       } catch (error) {}
-    })
+    }
+    if (typeof api.subscribe === 'function') {
+      api.subscribe(['UserDataChanged'], heardData)
+      api.subscribe(['PolyfinVersions'], heardVersions)
+    } else {
+      var callbacks = (api._callbacks = api._callbacks || {})
+      ;(callbacks.message = callbacks.message || []).push(function (event, message) {
+        if (message && message.MessageType === 'UserDataChanged') heardData(message)
+        else heardVersions(message)
+      })
+    }
     ;['markPlayed', 'markUnplayed'].forEach(function (name) {
       var mark = api[name]
       if (typeof mark !== 'function') return
