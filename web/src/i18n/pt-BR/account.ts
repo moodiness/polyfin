@@ -9,6 +9,7 @@ const account: typeof en = {
       statistics: 'Estatísticas',
       tracking: 'Acompanhamento',
       resume: 'Continuar assistindo',
+      nextUp: 'A seguir',
       hidden: 'Títulos ocultos',
       homeRows: 'Fileiras do início',
       trackChoices: 'Escolha de faixas',
@@ -125,6 +126,21 @@ const account: typeof en = {
       hiddenEmpty: 'Nenhum título oculto',
       hiddenEmptyHelp: 'Oculte um título pelo menu ⋮ dele no player web.',
       hiddenOn: 'Oculto',
+      nextUpHelp:
+        'O próximo episódio de cada série que você está assistindo, como seus aplicativos mostram A seguir. Remover tira uma série de A seguir sem alterar o que você assistiu, até você reproduzir um dos episódios dela ou sair um novo; a página dela continua abrindo no próximo episódio. No player web, o menu ⋮ de um cartão de A seguir faz o mesmo.',
+      nextUpRemoveLabel: (name: string) => `Remover ${name} de A seguir`,
+      nextUpRemoved: (name: string) => `${name} foi removido de A seguir.`,
+      nextUpEmpty: 'Nada a seguir',
+      nextUpEmptyHelp: 'As séries que você está assistindo aparecem aqui com o próximo episódio.',
+      nextUpRemovedList: 'Séries removidas de A seguir',
+      nextUpRemovedOn: 'Removida',
+      nextUpShowLabel: (name: string) => `Mostrar ${name} em A seguir novamente`,
+      nextUpShown: (name: string) => `${name} voltou para A seguir.`,
+      withResume: 'Remover de Continuar assistindo também tira a série de A seguir',
+      withResumeHelp:
+        'Tirar um episódio de Continuar assistindo passa a tirar também a série dele de A seguir, do mesmo jeito, até você reproduzir um dos episódios dela ou sair um novo.',
+      withResumeOn: 'Remover de Continuar assistindo agora também tira a série de A seguir.',
+      withResumeOff: 'Remover de Continuar assistindo não tira mais a série de A seguir.',
       kinds: {
         movie: 'Filme',
         series: 'Série',
@@ -718,6 +734,7 @@ const account: typeof en = {
       'Tema do player web: O do servidor, a menos que seu administrador tenha escolhido o seu',
     audioRegion: 'Região do áudio: Nenhuma',
     homeRows: 'Fileiras do início: todas as fileiras voltam a aparecer',
+    nextUpWithResume: 'Remover de Continuar assistindo: deixa A seguir como está',
     trackChoices: 'Escolha de faixas: esquecida para cada série e filme',
     appPreferences:
       'As preferências que os apps Jellyfin salvaram na sua conta: idiomas e modo do áudio e das legendas, preferências da tela inicial e de exibição',

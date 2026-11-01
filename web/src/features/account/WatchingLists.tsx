@@ -3,19 +3,24 @@ import {
   EyeIcon,
   EyeSlashIcon,
   FilmSlateIcon,
+  ListPlusIcon,
   RowsIcon,
   TelevisionSimpleIcon,
   XIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   fetchOwnHidden,
   fetchOwnHomeRows,
+  fetchOwnNextUp,
   fetchOwnResume,
+  putBackOwnNextUp,
   queryClient,
   queryKeys,
+  removeOwnNextUp,
   removeOwnResume,
+  setOwnNextUpWithResume,
   setOwnHomeRow,
   showOwnHidden,
   type AccountTitle,
@@ -84,7 +89,10 @@ export function ResumeList() {
   const removal = useMutation({
     mutationFn: (title: AccountTitle) => removeOwnResume(title.id),
     onSuccess: (_data, title) => toast(text.removed(titleName(title))),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.ownResume }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ownResume })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ownNextUp })
+    },
   })
 
   if (titles.isPending) return <SkeletonRows rows={2} boxed label={t.common.loading} />
@@ -142,6 +150,133 @@ export function ResumeList() {
   )
 }
 
+/**
+ * My account › Next Up: the episodes to watch next, each with Remove, which takes its series off
+ * Next Up without changing what was watched; the series taken off, each with Show again; and
+ * whether Remove from Continue Watching also takes a series off Next Up.
+ */
+export function NextUpList() {
+  const { t } = useI18n()
+  const text = t.account.watching
+  const toast = useToast()
+  const labelId = useId()
+  const helpId = useId()
+  const nextUp = useQuery({
+    queryKey: queryKeys.ownNextUp,
+    queryFn: ({ signal }) => fetchOwnNextUp(signal),
+  })
+  const removal = useMutation({
+    mutationFn: (title: AccountTitle) => removeOwnNextUp(title.id),
+    onSuccess: (_data, title) => toast(text.nextUpRemoved(title.seriesName || title.name)),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.ownNextUp }),
+  })
+  const putBack = useMutation({
+    mutationFn: (title: AccountTitle) => putBackOwnNextUp(title.id),
+    onSuccess: (_data, title) => toast(text.nextUpShown(title.name)),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.ownNextUp }),
+  })
+  const withResume = useMutation({
+    mutationFn: (on: boolean) => setOwnNextUpWithResume(on),
+    onSuccess: (data) => toast(data.withResume ? text.withResumeOn : text.withResumeOff),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.ownNextUp }),
+  })
+
+  if (nextUp.isPending) return <SkeletonRows rows={2} boxed label={t.common.loading} />
+  if (nextUp.isError) {
+    return (
+      <InlineError onRetry={() => void nextUp.refetch()} retrying={nextUp.isFetching}>
+        {errorMessage(t, nextUp.error)}
+      </InlineError>
+    )
+  }
+  const error = removal.error ?? putBack.error ?? withResume.error
+  return (
+    <div className="space-y-3">
+      {error && <Notice tone="danger">{errorMessage(t, error)}</Notice>}
+      {nextUp.data.items.length === 0 ? (
+        <EmptyState icon={ListPlusIcon} title={text.nextUpEmpty}>
+          {text.nextUpEmptyHelp}
+        </EmptyState>
+      ) : (
+        <RowList aria-label={t.account.sections.nextUp}>
+          {nextUp.data.items.map((item) => (
+            <Row
+              key={item.id}
+              leading={<TitlePoster title={item} />}
+              title={titleName(item)}
+              meta={<span className="truncate">{text.kinds[item.kind] ?? item.kind}</span>}
+              trailing={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={XIcon}
+                  aria-label={text.nextUpRemoveLabel(item.seriesName || item.name)}
+                  loading={removal.isPending && removal.variables.id === item.id}
+                  onClick={() => removal.mutate(item)}
+                >
+                  {text.remove}
+                </Button>
+              }
+            />
+          ))}
+        </RowList>
+      )}
+      {nextUp.data.removed.length > 0 && (
+        <>
+          <p className="text-small font-medium text-ink-2">{text.nextUpRemovedList}</p>
+          <RowList aria-label={text.nextUpRemovedList}>
+            {nextUp.data.removed.map((entry) => (
+              <Row
+                key={entry.item.id}
+                leading={<TitlePoster title={entry.item} />}
+                title={entry.item.name}
+                muted
+                meta={
+                  <span className="truncate">
+                    {text.kinds[entry.item.kind] ?? entry.item.kind}
+                    {' · '}
+                    {text.nextUpRemovedOn} <RelativeTime iso={entry.removedAt} />
+                  </span>
+                }
+                trailing={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={EyeIcon}
+                    aria-label={text.nextUpShowLabel(entry.item.name)}
+                    loading={putBack.isPending && putBack.variables.id === entry.item.id}
+                    onClick={() => putBack.mutate(entry.item)}
+                  >
+                    {text.showAgain}
+                  </Button>
+                }
+              />
+            ))}
+          </RowList>
+        </>
+      )}
+      <div className="flex max-w-xl items-start justify-between gap-6 rounded-row border border-line bg-bg px-[18px] py-4 max-sm:gap-4 max-sm:p-3.5">
+        <div className="min-w-0">
+          <p id={labelId} className="text-control font-medium text-ink">
+            {text.withResume}
+          </p>
+          <p id={helpId} className="mt-0.5 text-small text-ink-3">
+            {text.withResumeHelp}
+          </p>
+        </div>
+        <Switch
+          checked={nextUp.data.withResume}
+          disabled={withResume.isPending}
+          labelledBy={labelId}
+          describedById={helpId}
+          onChange={(on) => withResume.mutate(on)}
+          className="mt-0.5"
+        />
+      </div>
+    </div>
+  )
+}
+
 /** My account › Hidden titles: the titles hidden from the user's lists, each with Show again. */
 export function HiddenList() {
   const { t } = useI18n()
@@ -157,6 +292,7 @@ export function HiddenList() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownHidden })
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownResume })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ownNextUp })
     },
   })
 

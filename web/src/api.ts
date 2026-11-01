@@ -2398,6 +2398,27 @@ export const fetchOwnHidden = (signal?: AbortSignal) =>
 
 export const showOwnHidden = (id: string) => request<void>('DELETE', `/account/hidden/${seg(id)}`)
 
+/** A series taken off Next Up and still off it, and when. */
+export type NextUpRemoval = { item: AccountTitle; removedAt: string }
+
+/**
+ * The user's Next Up: its episodes, the series taken off it, and whether Remove from Continue
+ * Watching also takes a series off Next Up.
+ */
+export type OwnNextUp = { items: AccountTitle[]; removed: NextUpRemoval[]; withResume: boolean }
+
+export const fetchOwnNextUp = (signal?: AbortSignal) =>
+  request<OwnNextUp>('GET', '/account/next-up', undefined, signal)
+
+export const removeOwnNextUp = (id: string) =>
+  request<void>('DELETE', `/account/next-up/${seg(id)}`)
+
+export const putBackOwnNextUp = (id: string) =>
+  request<void>('DELETE', `/account/next-up/removed/${seg(id)}`)
+
+export const setOwnNextUpWithResume = (withResume: boolean) =>
+  request<{ withResume: boolean }>('PUT', '/account/next-up/settings', { withResume })
+
 /** A reminder of one programme, set from the web player. */
 export type ProgrammeReminder = {
   id: string
@@ -5495,6 +5516,7 @@ export const queryKeys = {
   ownTwoStep: ['account', 'two-step'] as const,
   ownResume: ['account', 'resume'] as const,
   ownHidden: ['account', 'hidden'] as const,
+  ownNextUp: ['account', 'next-up'] as const,
   ownHomeRows: ['account', 'home-rows'] as const,
   ownTrackChoices: ['account', 'track-choices'] as const,
   ownTaste: ['account', 'taste'] as const,

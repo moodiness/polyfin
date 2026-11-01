@@ -24,6 +24,7 @@ export default function ResetPreferences() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownWebTheme })
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownAudioRegion })
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownHomeRows })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ownNextUp })
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownTrackChoices })
       void queryClient.invalidateQueries({ queryKey: queryKeys.session })
       // An administrator's own page under Users shows their metadata language, theme and audio region.
@@ -62,6 +63,7 @@ export default function ResetPreferences() {
               <li>{text.webTheme}</li>
               <li>{text.audioRegion}</li>
               <li>{text.homeRows}</li>
+              <li>{text.nextUpWithResume}</li>
               <li>{text.trackChoices}</li>
               <li>{text.appPreferences}</li>
             </ul>
