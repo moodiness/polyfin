@@ -463,8 +463,6 @@ const sources: typeof en = {
       disc_title: 'Un altro film del disco: collegalo al suo titolo',
       disc_episode: 'Un titolo del disco di una serie TV: indica il suo episodio',
       lone_extra: 'Un extra senza il suo titolo accanto: collegalo per renderlo un titolo',
-      absolute_number:
-        'Il nome indica solo un numero di episodio assoluto, che Polyfin non legge: rinominalo con la stagione e il numero del catalogo, come S02E01, o Episode 1 nella cartella della sua stagione',
       no_season:
         'Il nome indica un numero di episodio ma nessuna stagione: mettilo nella cartella della sua stagione, come Season 02, o rinominalo con la sua stagione, come S02E05',
       air_date:
@@ -479,8 +477,6 @@ const sources: typeof en = {
       no_title: 'I tag e il nome non indicano alcun titolo',
       no_album: 'I tag e le cartelle non indicano alcun album',
     } as Record<string, string>,
-    absoluteNumber: (number: string) =>
-      `Il nome indica solo un numero di episodio assoluto, ${number}, che Polyfin non legge: rinominalo con la stagione e il numero del catalogo, come S02E01, o Episode 1 nella cartella della sua stagione`,
     searchFailedBy: (addon: string, failure: string) =>
       failure === ''
         ? `La ricerca di ${addon} non è riuscita`
@@ -500,6 +496,12 @@ const sources: typeof en = {
         : `Nessun add-on può cercare i titoli di ${figure} file`,
     noSearchHelp:
       'L’associazione richiede un add-on del server, in Contenuti › Origini, che descriva questi titoli e abbia un catalogo di ricerca. Gli add-on personali degli utenti, in Le mie origini, non contano. Una volta aggiunto, scansiona la cartella.',
+    absoluteTitle: (count: number, figure: string) =>
+      count === 1
+        ? '1 file è associato dal suo numero assoluto'
+        : `${figure} file sono associati dal loro numero assoluto`,
+    absoluteHelp:
+      'Con nomi come «Show - 41», sono versioni del 41° episodio elencato dall’addon di metadati della loro serie, speciali esclusi, con la stagione e il numero di quell’episodio.',
     searchFailedTitle: (count: number, figure: string) =>
       count === 1
         ? 'Non è stato possibile cercare il titolo di 1 file'

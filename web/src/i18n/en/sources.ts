@@ -442,8 +442,6 @@ const sources = {
       disc_title: 'Another movie of the disc: link it to its title',
       disc_episode: 'A title of a show’s disc: give its episode',
       lone_extra: 'An extra without its title beside it: link it to make it a title',
-      absolute_number:
-        'Its name gives only an absolute episode number, which Polyfin does not read: name it with the catalog’s season and number, such as S02E01, or Episode 1 in its season’s folder',
       no_season:
         'Its name gives an episode number but no season: put it in its season’s folder, such as Season 02, or name it with its season, such as S02E05',
       air_date:
@@ -458,8 +456,6 @@ const sources = {
       no_title: 'Its tags and name give no title',
       no_album: 'Its tags and folders give no album',
     } as Record<string, string>,
-    absoluteNumber: (number: string) =>
-      `Its name gives only an absolute episode number, ${number}, which Polyfin does not read: name it with the catalog’s season and number, such as S02E01, or Episode 1 in its season’s folder`,
     searchFailedBy: (addon: string, failure: string) =>
       failure === '' ? `The search of ${addon} failed` : `The search failed: ${addon} ${failure}`,
     searchFailures: {
@@ -477,6 +473,12 @@ const sources = {
         : `No addon can search the titles of ${figure} files`,
     noSearchHelp:
       'Matching needs an addon of the server, under Content › Sources, that describes these titles and has a search catalog. Users’ own addons, under My sources, do not count. Once one is added, scan the folder.',
+    absoluteTitle: (count: number, figure: string) =>
+      count === 1
+        ? '1 file is matched by its absolute number'
+        : `${figure} files are matched by their absolute number`,
+    absoluteHelp:
+      'Named as Show - 41, they are versions of the 41st episode their show’s metadata addon lists, specials left out, at that episode’s season and number.',
     searchFailedTitle: (count: number, figure: string) =>
       count === 1
         ? 'The title of 1 file could not be searched'
