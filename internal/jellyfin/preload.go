@@ -90,7 +90,7 @@ func (h *Handler) preloadNext(ctx context.Context) {
 // preloadSeries series of Next Up played or started since cutoff, the
 // episode Next Up offers and the count-1 after it.
 func (h *Handler) episodesToPreload(ctx context.Context, user accounts.User, cutoff time.Time, count int) []library.Item {
-	next, err := h.nextUpItems(ctx, user, nil, nil, &cutoff, true)
+	next, err := h.nextUpItems(ctx, user, nil, nil, &cutoff, true, false)
 	if err != nil {
 		h.Logger.Debug("Next Up could not be listed to preload the next episodes", "user", user.Name, "error", err)
 		return nil

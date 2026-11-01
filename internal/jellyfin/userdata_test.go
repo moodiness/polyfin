@@ -285,6 +285,78 @@ func TestNextUpFollowsTheFurthestPlayedEpisode(t *testing.T) {
 	}
 }
 
+// TestNextUpFollowsARewatch checks enableRewatching against Jellyfin
+// 12.4's rules (TVSeriesManager.GetNextUpBatched): the next played episode
+// after the one played last, beside the next unplayed one.
+func TestNextUpFollowsARewatch(t *testing.T) {
+	t.Parallel()
+	// played marks episodes played on the given days of January 2026.
+	played := func(t *testing.T, tr tracking, marks ...any) {
+		t.Helper()
+		for i := 0; i < len(marks); i += 2 {
+			tr.mark(t, http.MethodPost, fmt.Sprintf("/UserPlayedItems/%s?datePlayed=2026-01-%02dT20:00:00Z", marks[i], marks[i+1]))
+		}
+	}
+	nextUp := func(t *testing.T, tr tracking, query string) []string {
+		t.Helper()
+		return tr.list(t, "/Shows/NextUp?"+query)
+	}
+	t.Run("a series watched to the end and started again", func(t *testing.T) {
+		t.Parallel()
+		tr := newTracking(t)
+		if len(tr.episodes) != 3 {
+			t.Fatalf("episodes: %v", tr.episodes)
+		}
+		played(t, tr, tr.episodes[0], 1, tr.episodes[1], 2, tr.episodes[2], 3, tr.episodes[0], 4)
+		if got := nextUp(t, tr, ""); len(got) != 0 {
+			t.Errorf("without rewatching: %v", got)
+		}
+		if got := nextUp(t, tr, "enableRewatching=false"); len(got) != 0 {
+			t.Errorf("rewatching off: %v", got)
+		}
+		if got := nextUp(t, tr, "enableRewatching=true&enableResumable=false"); !slices.Equal(got, tr.episodes[1:2]) {
+			t.Errorf("rewatching: %v", got)
+		}
+		// A series asked for follows the parameter too, as in Jellyfin.
+		if got := nextUp(t, tr, "seriesId="+tr.series+"&enableRewatching=true"); !slices.Equal(got, tr.episodes[1:2]) {
+			t.Errorf("the series, rewatching: %v", got)
+		}
+	})
+	t.Run("a rewatch before the end lists both episodes", func(t *testing.T) {
+		t.Parallel()
+		tr := newTracking(t)
+		played(t, tr, tr.episodes[0], 1, tr.episodes[1], 2, tr.episodes[0], 3)
+		if got := nextUp(t, tr, ""); !slices.Equal(got, tr.episodes[2:3]) {
+			t.Errorf("without rewatching: %v", got)
+		}
+		// Each dated with the play it follows: the rewatch, played last,
+		// first.
+		if got := nextUp(t, tr, "enableRewatching=true"); !slices.Equal(got, []string{tr.episodes[1], tr.episodes[2]}) {
+			t.Errorf("rewatching: %v", got)
+		}
+	})
+	t.Run("a rewatch episode under way is left out", func(t *testing.T) {
+		t.Parallel()
+		tr := newTracking(t)
+		played(t, tr, tr.episodes[0], 1, tr.episodes[1], 2, tr.episodes[2], 3)
+		// The second episode, played, keeps a resume point from an older
+		// play.
+		if status, body := tr.call(http.MethodPost, "/UserItems/"+tr.episodes[1]+"/UserData", app("tv", tr.token),
+			map[string]any{"PlaybackPositionTicks": 10_000_000_000}); status != http.StatusOK {
+			t.Fatalf("a resume point: %d %s", status, body)
+		}
+		played(t, tr, tr.episodes[0], 4)
+		if got := nextUp(t, tr, "enableRewatching=true"); len(got) != 0 {
+			t.Errorf("rewatch under way: %v", got)
+		}
+		// Finishing it moves the rewatch on.
+		played(t, tr, tr.episodes[1], 5)
+		if got := nextUp(t, tr, "enableRewatching=true"); !slices.Equal(got, tr.episodes[2:3]) {
+			t.Errorf("rewatch past the second episode: %v", got)
+		}
+	})
+}
+
 // startedAddon serves a catalog of five series of 45-minute episodes, a
 // special and three regular ones each, aired long ago: Arc, Bend, Cove
 // (the only horror one), Dune and Eden.

@@ -243,8 +243,10 @@ type watching struct {
 // next: the first unplayed one after the furthest episode played, or the
 // first one when the user only started episodes of it. Series come in the
 // order their furthest played episode was played, then those with no
-// episode played, the latest started first. The series the user hid are
-// left out, unless asked for by seriesId, as their page does.
+// episode played, the latest started first. With enableRewatching, a
+// series the user plays again from an earlier episode also gets the next
+// episode of that rewatch (see rewatchEpisode). The series the user hid
+// are left out, unless asked for by seriesId, as their page does.
 func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -253,6 +255,12 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	resumable := true
 	if value, set := b.bool(r, "enableResumable"); set {
 		resumable = value
+	}
+	// As in Jellyfin 12.4, rewatching is off unless asked for
+	// (TvShowsController.GetNextUp, enableRewatching = false).
+	rewatching := false
+	if value, set := b.bool(r, "enableRewatching"); set {
+		rewatching = value
 	}
 	countAll := true
 	if value, set := b.bool(r, "enableTotalRecordCount"); set {
@@ -277,7 +285,7 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	if hasParent {
 		within = &parent
 	}
-	items, err := h.nextUpItems(r.Context(), user, series, within, cutoff, resumable)
+	items, err := h.nextUpItems(r.Context(), user, series, within, cutoff, resumable, rewatching)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -293,13 +301,16 @@ func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 
 // nextUpItems lists Next Up for user (see nextUp): of series alone when
 // set, of the series within parent when set, of those played or started
-// after cutoff when set, with the episodes they started when resumable.
+// after cutoff when set, with the episodes they started when resumable,
+// and with the next episode of each rewatch when rewatching.
 //
 // As in Jellyfin 12.4, a series is watched once one of its episodes has a
 // date, played or only started (NextUpService.GetNextUpSeriesKeys), and a
 // series none of whose episodes is played comes after the others, dated
-// as never played (TVSeriesManager.GetNextUpBatched).
-func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries, parent *accounts.ID, cutoff *time.Time, resumable bool) ([]library.Item, error) {
+// as never played (TVSeriesManager.GetNextUpBatched). A series being
+// rewatched can show twice, its next unplayed episode and the next one
+// of the rewatch, each dated with the play it follows.
+func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries, parent *accounts.ID, cutoff *time.Time, resumable, rewatching bool) ([]library.Item, error) {
 	entries, err := h.UserData.Episodes(ctx, user.ID)
 	if err != nil {
 		return nil, err
@@ -347,7 +358,7 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 		episode library.Item
 		date    *time.Time
 	}
-	found := make([]*entry, len(candidates))
+	found := make([][]entry, len(candidates))
 	var wg sync.WaitGroup
 	limiter := make(chan struct{}, 6)
 	for i, candidate := range candidates {
@@ -365,17 +376,18 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 				return
 			}
 			if episode, date, ok := nextEpisode(episodes, data, resumable); ok {
-				found[i] = &entry{episode: episode, date: date}
+				found[i] = append(found[i], entry{episode: episode, date: date})
+			}
+			if !rewatching {
+				return
+			}
+			if episode, date, ok := rewatchEpisode(episodes, data); ok {
+				found[i] = append(found[i], entry{episode: episode, date: date})
 			}
 		})
 	}
 	wg.Wait()
-	var next []entry
-	for _, e := range found {
-		if e != nil {
-			next = append(next, *e)
-		}
-	}
+	next := slices.Concat(found...)
 	// The latest played first; series with no episode played, without a
 	// date, last, in the order they were started.
 	slices.SortStableFunc(next, func(a, b entry) int {
@@ -507,6 +519,40 @@ func nextEpisode(episodes []library.Item, data map[accounts.ID]userdata.Data, re
 			continue
 		}
 		if d.Position > 0 && !resumable {
+			return library.Item{}, nil, false
+		}
+		return episode, date, true
+	}
+	return library.Item{}, nil, false
+}
+
+// rewatchEpisode picks the next episode of a rewatch among a series'
+// episodes, in order, as Jellyfin 12.4 does with rewatching on: the first
+// released, played episode after the played one the user played last
+// (NextUpService.GetNextUpEpisodesBatch, lastWatchedByDateInfo and
+// seriesNextPlayedIdMap). Specials are left out. When that episode has a
+// resume point, there is none: Jellyfin asks for it without resumable
+// episodes (TVSeriesManager.DetermineNextEpisodeForRewatching). date is
+// when the episode played last was played.
+func rewatchEpisode(episodes []library.Item, data map[accounts.ID]userdata.Data) (library.Item, *time.Time, bool) {
+	regular := regularEpisodes(episodes)
+	last := -1
+	var date *time.Time
+	for i, episode := range regular {
+		d := data[episode.ID]
+		if d.Played && d.LastPlayed != nil && (date == nil || d.LastPlayed.After(*date)) {
+			last, date = i, d.LastPlayed
+		}
+	}
+	if last < 0 {
+		return library.Item{}, nil, false
+	}
+	for _, episode := range regular[last+1:] {
+		d := data[episode.ID]
+		if !episode.Available || !d.Played {
+			continue
+		}
+		if d.Position > 0 {
 			return library.Item{}, nil, false
 		}
 		return episode, date, true
