@@ -276,6 +276,7 @@ export type Settings = {
   legacyAuthorization: boolean
   /** Asks GitHub once a day for Polyfin's latest release, to tell administrators of a new version. */
   updateCheck: boolean
+  includePrereleases: boolean
   /** Answers the discovery messages Jellyfin apps broadcast on the local network (UDP port 7359). */
   localDiscovery: boolean
   /**
@@ -4438,6 +4439,8 @@ export type HealthProblem = {
   | { code: 'nvidia_older_ffmpeg'; failure: 'download' | 'encode'; error: string }
   /** The copy kept of the Custom theme's files misses `missing` of its `files`. */
   | { code: 'theme_copy_missing'; missing: number; files: number }
+  /** Polyfin Desktop went back to `previous`, as `name` did not start, for `error`. */
+  | { code: 'desktop_rolled_back'; name: string; previous: string; error: string }
   /**
    * A folder the settings chose could not be written into at start: `path` is the folder, `error`
    * why; the cache in the data folder keeps its files until the next start.

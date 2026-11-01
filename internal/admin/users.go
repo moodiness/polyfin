@@ -452,6 +452,7 @@ type settingsJSON struct {
 	CatalogLimit        *int   `json:"catalogLimit"`
 	ChannelLimit        *int   `json:"channelLimit"`
 	UpdateCheck         *bool  `json:"updateCheck"`
+	IncludePrereleases  *bool  `json:"includePrereleases"`
 	// LocalDiscovery and LocalAddress keep their current values when a
 	// PUT leaves them out; an empty address announces the interface's.
 	LocalDiscovery *bool   `json:"localDiscovery"`
@@ -843,6 +844,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		CatalogLimit:        &settings.CatalogLimit,
 		ChannelLimit:        &settings.ChannelLimit,
 		UpdateCheck:         &settings.UpdateCheck,
+		IncludePrereleases:  &settings.IncludePrereleases,
 		LocalDiscovery:      &settings.LocalDiscovery,
 		LocalAddress:        &settings.LocalAddress,
 		DLNA:                &settings.DLNA,
@@ -1604,6 +1606,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		CatalogLimit:        valueOr(body.CatalogLimit, current.CatalogLimit),
 		ChannelLimit:        valueOr(body.ChannelLimit, current.ChannelLimit),
 		UpdateCheck:         valueOr(body.UpdateCheck, current.UpdateCheck),
+		IncludePrereleases:  valueOr(body.IncludePrereleases, current.IncludePrereleases),
 		LocalDiscovery:      valueOr(body.LocalDiscovery, current.LocalDiscovery),
 		LocalAddress:        valueOr(body.LocalAddress, current.LocalAddress),
 		DLNA:                valueOr(body.DLNA, current.DLNA),
@@ -1830,6 +1833,11 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if encoder := h.Health.Encoder; encoder != nil &&
 		(settings.HardwareAcceleration != current.HardwareAcceleration || settings.VAAPIDevice != current.VAAPIDevice) {
 		encoder.SelectHardware(settings.HardwareAcceleration, settings.VAAPIDevice)
+	}
+	// Pre-releases included, or the check turned on, are looked for at
+	// once rather than at the next daily check.
+	if settings.UpdateCheck && settings.IncludePrereleases && (!current.UpdateCheck || !current.IncludePrereleases) {
+		h.Health.Updates.Wake()
 	}
 	// Recording turned on, or moved, has the scheduler look at its timers.
 	if settings.RecordingsDir(h.DataDir) != current.RecordingsDir(h.DataDir) {

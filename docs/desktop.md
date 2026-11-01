@@ -117,7 +117,9 @@ The data folder is Polyfin's `POLYFIN_DATA_DIR` (see [Configuration](configurati
 | `recordings` | The Live TV recordings, unless **Recordings folder** names another (see [Live TV](live-tv.md)) |
 | `cache` | The parts of the files being read, the segments being played, and the guides and picture subtitles being read, emptied at each start, and the relayed images, unless **Conversion folder**, **Folder for files being read** or **Cache folder** names another (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)) |
 | `themes` | The copy of a web player theme's files, when one is kept (see [Keeping a copy of a theme](web-client.md#keeping-a-copy-of-a-theme)) |
+| `updates` | The downloaded update, and while the new version has not answered yet, the copy of the database's folder, `postgresql.previous` (see [Going back to the previous version](#going-back-to-the-previous-version)) |
 | `desktop.json` | The app's choice of Start with the computer |
+| `desktop-update-pending.json`, `desktop-update-rollback.json` | The update whose new version has not answered yet, with what was kept to go back; and the version the app went back from, and why |
 
 Uninstalling the app leaves the data folder: remove it to remove everything Polyfin kept. The database listens on `127.0.0.1` alone, on a port chosen at the first start and kept while it stays free; its port is in `postgresql/polyfin.port`, and its user is `polyfin`, with the password of `polyfin.password`, to reach it with your own tools.
 
@@ -135,17 +137,35 @@ When the key store cannot be read at a start, such as a Linux session without a 
 
 ## Updates
 
-While **Check for new versions** is on, under **Settings › General**, Polyfin looks for new releases, as for the Docker image (see [New versions](administration.md#new-versions)). When one is out, the app asks GitHub for the release's package for its system, and the menu offers to install it. Installing it downloads the package, checks it against the SHA-256 GitHub gives for it, refusing it otherwise, stops Polyfin and its database, then:
+While **Check for new versions** is on, under **Settings › General**, Polyfin looks for new releases, as for the Docker image, and for pre-releases too while **Include pre-releases** is on (see [New versions](administration.md#new-versions)). When one is out, the app asks GitHub for the release's package for its system and the release's signed manifest, checks the manifest (see [Signed manifests](#signed-manifests)), and the menu offers to install it. Installing it checks again that the manifest has not expired, downloads the package, checks it against the SHA-256 that both GitHub and the manifest give for it, refusing it otherwise, stops Polyfin and its database, keeps a copy of the database's folder and the previous app (see [Going back to the previous version](#going-back-to-the-previous-version)), then:
 
-- **Windows:** opens the installer's window, as a download does, and quits: choose Next to replace the app, and its last page offers to start the new version;
-- **macOS:** replaces the app with the one of the disk image, and starts it;
-- **Linux:** replaces the AppImage with the new one, and starts it, or opens the `.deb` in the system's package installer.
+- **Windows:** copies the install folder to `Polyfin.old` beside it, opens the installer's window, as a download does, and quits: choose Next to replace the app, and its last page offers to start the new version;
+- **macOS:** replaces the app with the one of the disk image, keeping the previous one as `Polyfin.app.old` beside it, and starts it;
+- **Linux:** replaces the AppImage with the new one, keeping the previous one with `.old` after its name, and starts it, or opens the `.deb` in the system's package installer, which keeps nothing.
 
-When the package cannot be downloaded, checked or installed, or the installer cannot start, Polyfin runs on as it was: the menu's second line says that the update could not be installed, and the menu offers it again.
+When the package cannot be downloaded, checked or installed, the copy of the database cannot be made, or the installer cannot start, Polyfin runs on as it was: the menu's second line says that the update could not be installed, and the menu offers it again. A release whose manifest is refused is not offered: the app's log, `desktop.log`, tells why.
 
 The data folder stays as it is: the new version upgrades the database's tables as it starts, as in Docker. When the new version's PostgreSQL sorts text with another ICU version, it first rebuilds the database's indexes, which follow the order of text, and records the new collation version, so that PostgreSQL stops warning of a mismatch: the menu's first line says so meanwhile, for seconds or a few minutes on a large library, and the log tells what was rebuilt. A development build offers no update.
 
 The admin app offers the same update, as **Install Polyfin `<version>`** in the notice of the new version on **Home**, to administrators, while the menu offers it (see [Restart and updates](administration.md#polyfin-desktop-s-update)). It does what the menu item does, through the data folder, which is yours alone: the app writes the update it offers to `desktop-update.json` while the server runs, with the download's progress and whether the last install failed, and the server, asked by an administrator, writes the app's token and the version to `desktop.install`, which the app looks for twice a second. A request left by a crash carries another run's token, and installs nothing; one for a version the app does not offer, or while Polyfin is not running, is ignored. The server knows it runs in the app from `POLYFIN_DESKTOP=1`, which the app sets.
+
+### Signed manifests
+
+Each release carries `polyfin-<version>.manifest.json`, which lists each package of Polyfin Desktop with its size and SHA-256, the time it was issued and the time it expires, 30 days later, signed with ed25519 by the release workflow. The app carries two public keys, the one the workflow signs with and a spare one, so that the signing key can change without a release that cannot install the next one. It installs a package only when:
+
+- a key it carries signed the manifest, and nothing in it changed since;
+- the manifest is the release's own, and has not expired;
+- the manifest lists the package with the size and SHA-256 GitHub gives for it, and the download matches them.
+
+This is on top of GitHub's own checksum: someone who could replace a package on GitHub, and its checksum with it, cannot sign a manifest that lists it. A workflow renews the manifests of the latest releases every week, so that a release stays installable while it is the latest; an expired one, such as a release's left behind, is refused, which also keeps an older manifest from being passed off again. A release without a manifest, as the releases before this one, is never offered: install it by hand from its release page.
+
+### Going back to the previous version
+
+Until the new version's server answers `/healthz`, the app keeps the previous app beside it and the copy of the database's folder, `updates/postgresql.previous` in the data folder, taken while the database was stopped: the new version may change the database's tables as it starts, and the previous version refuses tables newer than its own. Once the new server answers, both are removed. The copy takes as much room as the database: an update that cannot make it is not installed.
+
+When the new version's server ends before it answers, 3 starts in a row, quitting and opening the app counting too, the app goes back: it stops the database, puts the copy of the database and the previous app back, removing the new ones, and starts the previous version. **System › Health** then tells, under **Needs attention**, which version did not start and why, as the app's log tells it, while the previous version runs. That version is no longer offered; the next one is. A server that runs without answering, such as one still upgrading a large database, is left to finish.
+
+A `.deb` is replaced by the system's package installer, which keeps no previous app: the app cannot go back, and keeps no copy of the database. Reinstall the previous `.deb` from its release page, and restore a backup if the new version changed the database (see [Backups](backups.md)).
 
 ## Restart
 
@@ -202,3 +222,18 @@ The scripts of `scripts/packaging` build the packages into `dist/packages`, as C
 Each takes PostgreSQL 18 from a pinned build: EnterpriseDB's binaries for Windows x64 and macOS, which postgresql.org links, and for Linux a build from PostgreSQL's source made by `postgresql-linux.Dockerfile`, on Ubuntu 22.04 with ICU, which runs from any folder. EnterpriseDB makes none for Windows on Arm: `postgresql-windows.sh` builds it from the same source, with PostgreSQL's upstream change for Visual Studio on Arm applied (`postgresql-msvc-arm64.patch`), using Meson and Visual Studio 2022's ARM64 build tools, with ICU's own ARM64 build and zlib, and puts Visual Studio's runtime beside the programs. It then makes a cluster with ICU, and restores a backup made with `pg_dump`. `windows.sh arm64` runs it, and keeps the build in `dist/packaging/postgresql-windows-arm64` while its inputs stay the same: it needs Visual Studio 2022 with the ARM64 build tools, a native Perl such as Strawberry Perl, Ninja and NSIS, as GitHub's `windows-11-arm` runners have them, and Docker only when `POLYFIN_DESKTOP_FILES` names no folder made by `files.sh`. jellyfin-web and the fonts come from the Docker image's stages, through `files.sh`; a Mac without Docker is given the folder it made with `POLYFIN_DESKTOP_FILES`. Every download is checked against its checksum, and kept in `~/.cache/polyfin-packaging`.
 
 `scripts/packaging/test.sh <package>` installs or opens a package on the system it is for, checks what it holds, runs `desktop-smoke.py --installed` on the installed app, which then finds its programs itself, and removes it: CI runs it on Windows, macOS and Linux runners for every package, before a release gets them. On Windows it checks too that the version info of `polyfin.exe` and `polyfin-desktop.exe`, which `windows.sh` adds with Polyfin's icon using go-winres, is the package's. It changes the system it runs on: run it on a throwaway machine or container.
+
+### The release signing key
+
+The release workflow signs each release's manifest with the private key of the repository secret `POLYFIN_RELEASE_SIGNING_KEY`, and `.github/workflows/desktop-manifests.yml` renews the manifests of the 10 latest releases every Monday with it, each only once its signature checks. Both use `cmd/polyfin-release-sign`. The app carries the two public keys of `releaseKeys`, in `internal/desktop/update/manifest.go`. A release refuses to start, at its step `Check the release signing key`, while the secret is missing, or its public key is not one the app carries: the packages it would publish could never be installed by an update.
+
+Once, on a computer you trust, before the first release with signed manifests:
+
+1. Make two key pairs: `go run ./cmd/polyfin-release-sign keygen -out release.key`, then `go run ./cmd/polyfin-release-sign keygen -out spare.key`. Each writes its private key to the file, readable by you only, and prints its public key.
+2. Put both public keys in `releaseKeys`, separated by a comma, and commit them.
+3. Store the signing key as the secret: `gh secret set POLYFIN_RELEASE_SIGNING_KEY < release.key`, or paste the file's line under the repository's Settings › Secrets and variables › Actions. Then remove `release.key`, or keep it offline.
+4. Keep `spare.key` offline, never in the repository's secrets.
+
+`go run ./cmd/polyfin-release-sign key`, with the secret's value in `POLYFIN_RELEASE_SIGNING_KEY`, checks a key and prints its public key; `verify -in <manifest> [packages]` checks a manifest as the app does.
+
+To change the signing key, as when it may have leaked: store `spare.key` as the secret, make a new spare with `keygen`, put its public key in `releaseKeys` in place of the old signing key's, and release. Apps of earlier releases accept the spare's signatures, as they carry its key, and the new release no longer accepts the old key; apps that do not update meanwhile still accept it. GitHub stops the scheduled workflows of a repository without activity for 60 days: run the `Polyfin Desktop manifests` workflow by hand then, before the manifests expire.

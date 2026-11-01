@@ -218,6 +218,8 @@ const system: typeof en = {
           `Bilduntertitel in ${name} werden nicht in Text umgewandelt: Tesseract hat keine Daten für diese Sprache. Füge die Datei ${file} dem Ordner hinzu, den POLYFIN_TESSDATA_DIR angibt.`,
         metadataLanguages: (name: string) =>
           `${name}: Jedes Metadaten-Add-on des Servers hat eine Sprache, daher beschreiben sie Titel für jeden Benutzer in ihrer Sprache, unabhängig von seiner Metadatensprache. Belasse „Sprache der Beschreibungen“ bei diesem Add-on oder bei einem weiteren Metadaten-Add-on auf „Keine“.`,
+        desktopRolledBack: (version: string, previous: string, error: string) =>
+          `Polyfin Desktop ist zu Version ${previous} zurückgekehrt, da Version ${version} nicht gestartet ist: ${error}. Diese Version wird nicht mehr angeboten, die nächste schon.`,
         themeCopyMissing: (missing: number, files: number) =>
           `Der Kopie des Web-Player-Themes fehlen ${missing} ihrer ${files} Dateien im Datenordner von Polyfin, wie nach dem Wiederherstellen einer Sicherung auf einem anderen System: Browser laden sie bis dahin von ihren ursprünglichen Adressen, was Internet braucht. Aktualisiere die Kopie unter Einstellungen › Web-Player oder wähle ein anderes Theme.`,
         folderUnwritable: (name: string, path: string) =>

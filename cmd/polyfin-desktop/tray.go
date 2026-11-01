@@ -219,6 +219,13 @@ func runTray(options app.Options, logger *slog.Logger, asked requests) *exec.Cmd
 					installUpdate()
 				}
 				continue
+			case previous := <-a.RolledBack():
+				// The new version did not start: the previous one starts
+				// once the app has quit.
+				logger.Info("Quitting to start the previous version")
+				relaunchMu.Lock()
+				relaunch = previous
+				relaunchMu.Unlock()
 			case <-quitting:
 				return
 			}
