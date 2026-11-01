@@ -442,6 +442,14 @@ const sources = {
       disc_title: 'Another movie of the disc: link it to its title',
       disc_episode: 'A title of a show’s disc: give its episode',
       lone_extra: 'An extra without its title beside it: link it to make it a title',
+      absolute_number:
+        'Its name gives only an absolute episode number, which Polyfin does not read: name it with the catalog’s season and number, such as S02E01, or Episode 1 in its season’s folder',
+      no_season:
+        'Its name gives an episode number but no season: put it in its season’s folder, such as Season 02, or name it with its season, such as S02E05',
+      air_date:
+        'Its name gives an air date, which Polyfin does not read: name it with the catalog’s season and number, such as S02E05',
+      no_episode_number:
+        'Its name gives no episode number: name it with the catalog’s season and number, such as S02E05',
       not_found: 'The metadata addons know no title of this name',
       no_search: 'No addon of the server describes and searches titles of this kind',
       ambiguous: 'Several titles have this name: add the year to it, or link it',
@@ -450,6 +458,8 @@ const sources = {
       no_title: 'Its tags and name give no title',
       no_album: 'Its tags and folders give no album',
     } as Record<string, string>,
+    absoluteNumber: (number: string) =>
+      `Its name gives only an absolute episode number, ${number}, which Polyfin does not read: name it with the catalog’s season and number, such as S02E01, or Episode 1 in its season’s folder`,
     searchFailedBy: (addon: string, failure: string) =>
       failure === '' ? `The search of ${addon} failed` : `The search failed: ${addon} ${failure}`,
     searchFailures: {
@@ -518,7 +528,18 @@ const sources = {
     unlistedTitle: (count: number, figure: string) =>
       count === 1 ? '1 episode is only in the files' : `${figure} episodes are only in the files`,
     unlistedHelp:
-      'The metadata addon that describes their shows does not list them, as when it numbers seasons or specials otherwise. They are listed all the same, named after their files, and play.',
+      'The metadata addon that describes their shows does not list them, as when it numbers seasons or specials otherwise. They are listed all the same, named after their files, and play. Their shows and numbers are under Episodes only in the files.',
+    unlistedListTitle: 'Episodes only in the files',
+    unlistedListHelp:
+      'A file becomes a version of a catalog episode only when its season and episode number are the catalog’s. These files are numbered otherwise, so each is an episode of its own, next to the catalog’s. Rename them to the catalog’s numbers, then scan.',
+    unlistedSeason: (season: number) => (season === 0 ? 'Specials' : `Season ${season}`),
+    unlistedFiles: (episodes: string) => `In the files: ${episodes}`,
+    unlistedCatalog: (episodes: string) => `In the catalog: ${episodes}`,
+    unlistedCatalogNoSeason: (season: number, range: string) =>
+      `The catalog has ${season === 0 ? 'no specials' : `no season ${season}`}: ${range}`,
+    unlistedCatalogRange: (first: string, last: string) => `it lists ${first} to ${last}`,
+    unlistedCatalogEmpty: 'it lists no episodes',
+    unlistedNotDescribed: 'The catalog’s numbers show once an app opens the show again',
     linkNotDescribedShow:
       'No metadata addon of the server describes this identifier as a show. Check that it is the show’s, not an episode’s.',
     linkNotDescribedMovie:

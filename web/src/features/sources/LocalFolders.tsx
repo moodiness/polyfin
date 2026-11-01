@@ -20,6 +20,7 @@ import {
   fetchLooserMatches,
   fetchRcloneRemotes,
   fetchStatus,
+  fetchUnlistedEpisodes,
   fetchUnmatchedFiles,
   linkLocalFile,
   queryClient,
@@ -35,6 +36,8 @@ import {
   type LocalFolder,
   type MatchMethod,
   type ServerSystem,
+  type EpisodeRanges,
+  type UnlistedShow,
   type UnmatchedFile,
 } from '@/api'
 import { dateTime, errorMessage, formatBytes } from '@/format'
@@ -1074,6 +1077,9 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
           </>
         )}
       </PanelSection>
+      {folder.kind === 'shows' && folder.unlistedEpisodes > 0 && (
+        <UnlistedEpisodes addon={addon} folder={folder} />
+      )}
       <LooserMatches addon={addon} folder={folder} />
       {(folder.links.length > 0 || folder.episodes.length > 0) && (
         <PanelSection title={text.linksTitle}>
@@ -1126,6 +1132,87 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
         </PanelSection>
       )}
     </>
+  )
+}
+
+/** Episodes as ranges of numbers, such as `E4–E5, E7`. */
+function episodeRanges(ranges: EpisodeRanges): string {
+  return ranges
+    .map(([first, last]) => (first === last ? `E${first}` : `E${first}–E${last}`))
+    .join(', ')
+}
+
+/** An episode's season and number, such as `S02E05`. */
+function episodeCode({ season, episode }: { season: number; episode: number }): string {
+  return `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`
+}
+
+/**
+ * The shows of a folder whose files hold episodes their metadata addon does not list, each season
+ * with the files' numbers next to the addon's, so that the files can be renamed to the addon's.
+ */
+function UnlistedEpisodes({ addon, folder }: { addon: Addon; folder: LocalFolder }) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  const unlisted = useQuery({
+    // The count keys the list, as the figures key the unmatched files.
+    queryKey: [...queryKeys.unlisted(addon.id), folder.unlistedEpisodes, folder.scanning],
+    queryFn: ({ signal }) => fetchUnlistedEpisodes(addon.id, signal),
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === addon.id ? previous : undefined,
+  })
+
+  return (
+    <PanelSection title={text.unlistedListTitle} description={text.unlistedListHelp}>
+      {unlisted.isPending ? (
+        <Skeleton className="h-24 rounded-panel" />
+      ) : unlisted.isError ? (
+        <InlineError onRetry={() => void unlisted.refetch()} retrying={unlisted.isRefetching}>
+          {errorMessage(t, unlisted.error)}
+        </InlineError>
+      ) : (
+        <ul className="flex flex-col divide-y divide-line">
+          {unlisted.data.shows.map((show) => (
+            <UnlistedShowRow key={show.imdbId} show={show} folder={folder} />
+          ))}
+        </ul>
+      )}
+    </PanelSection>
+  )
+}
+
+/** A show whose files hold episodes its metadata addon does not list, season by season. */
+function UnlistedShowRow({ show, folder }: { show: UnlistedShow; folder: LocalFolder }) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  const range =
+    show.catalogFirst !== null && show.catalogLast !== null
+      ? text.unlistedCatalogRange(episodeCode(show.catalogFirst), episodeCode(show.catalogLast))
+      : text.unlistedCatalogEmpty
+  return (
+    <li className="py-3">
+      <p className="text-control text-ink">
+        {show.name} <Badge tone="accent">{show.imdbId}</Badge>
+      </p>
+      <p className="mt-0.5 font-mono text-small break-all text-ink-3">
+        {unitName(show.unit, folder, text.discTitle)}
+      </p>
+      <dl className="mt-2 grid grid-cols-[9rem_minmax(0,1fr)_minmax(0,1.5fr)] gap-x-6 gap-y-1 text-small">
+        {show.seasons.map((season) => (
+          <Fragment key={season.season}>
+            <dt className="text-ink-2">{text.unlistedSeason(season.season)}</dt>
+            <dd className="text-warn">{text.unlistedFiles(episodeRanges(season.files))}</dd>
+            <dd className="text-ink-3">
+              {!show.described
+                ? text.unlistedNotDescribed
+                : season.catalog.length > 0
+                  ? text.unlistedCatalog(episodeRanges(season.catalog))
+                  : text.unlistedCatalogNoSeason(season.season, range)}
+            </dd>
+          </Fragment>
+        ))}
+      </dl>
+    </li>
   )
 }
 
@@ -1269,7 +1356,9 @@ function UnmatchedRow({
                   file.search.addon,
                   text.searchFailures[file.search.failure] ?? '',
                 )
-              : (text.reasons[file.reason] ?? file.reason),
+              : file.reason === 'absolute_number' && file.number !== null
+                ? text.absoluteNumber(file.number.toLocaleString(language))
+                : (text.reasons[file.reason] ?? file.reason),
             title !== '' ? text.read(title) : '',
             file.discTitle
               ? titleName(file.disc, file.discTitle.discPath, file.discTitle.number, folder, text)

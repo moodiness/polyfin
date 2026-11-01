@@ -463,6 +463,14 @@ const sources: typeof en = {
       disc_title: 'Otra película del disco: asóciela a su título',
       disc_episode: 'Un título del disco de una serie: indique su episodio',
       lone_extra: 'Un extra sin su título al lado: asócielo para convertirlo en un título',
+      absolute_number:
+        'Su nombre solo indica un número de episodio absoluto, que Polyfin no lee: nómbrelo con la temporada y el número del catálogo, como S02E01, o Episode 1 en la carpeta de su temporada',
+      no_season:
+        'Su nombre indica un número de episodio pero ninguna temporada: póngalo en la carpeta de su temporada, como Season 02, o nómbrelo con su temporada, como S02E05',
+      air_date:
+        'Su nombre indica una fecha de emisión, que Polyfin no lee: nómbrelo con la temporada y el número del catálogo, como S02E05',
+      no_episode_number:
+        'Su nombre no indica ningún número de episodio: nómbrelo con la temporada y el número del catálogo, como S02E05',
       not_found: 'Las extensiones de metadatos no conocen ningún título con este nombre',
       no_search: 'Ninguna extensión del servidor describe ni busca títulos de este tipo',
       ambiguous: 'Varios títulos tienen este nombre: añádale el año o asócielo',
@@ -471,6 +479,8 @@ const sources: typeof en = {
       no_title: 'Sus etiquetas y su nombre no indican ningún título',
       no_album: 'Sus etiquetas y carpetas no indican ningún álbum',
     } as Record<string, string>,
+    absoluteNumber: (number: string) =>
+      `Su nombre solo indica un número de episodio absoluto, ${number}, que Polyfin no lee: nómbrelo con la temporada y el número del catálogo, como S02E01, o Episode 1 en la carpeta de su temporada`,
     searchFailedBy: (addon: string, failure: string) =>
       failure === ''
         ? `La búsqueda de ${addon} ha fallado`
@@ -543,7 +553,19 @@ const sources: typeof en = {
         ? '1 episodio solo está en los archivos'
         : `${figure} episodios solo están en los archivos`,
     unlistedHelp:
-      'El addon de metadatos que describe sus series no los incluye, como cuando numera de otra forma las temporadas o los especiales. Se muestran igualmente, con el nombre de su archivo, y se reproducen.',
+      'El addon de metadatos que describe sus series no los incluye, como cuando numera de otra forma las temporadas o los especiales. Se muestran igualmente, con el nombre de su archivo, y se reproducen. Sus series y números están en Episodios solo en los archivos.',
+    unlistedListTitle: 'Episodios solo en los archivos',
+    unlistedListHelp:
+      'Un archivo solo se convierte en una versión de un episodio del catálogo cuando su temporada y su número de episodio son los del catálogo. Estos archivos están numerados de otra forma, así que cada uno es un episodio propio, junto a los del catálogo. Renómbrelos con los números del catálogo y escanee.',
+    unlistedSeason: (season: number) => (season === 0 ? 'Especiales' : `Temporada ${season}`),
+    unlistedFiles: (episodes: string) => `En los archivos: ${episodes}`,
+    unlistedCatalog: (episodes: string) => `En el catálogo: ${episodes}`,
+    unlistedCatalogNoSeason: (season: number, range: string) =>
+      `El catálogo no tiene ${season === 0 ? 'especiales' : `temporada ${season}`}: ${range}`,
+    unlistedCatalogRange: (first: string, last: string) => `incluye de ${first} a ${last}`,
+    unlistedCatalogEmpty: 'no incluye ningún episodio',
+    unlistedNotDescribed:
+      'Los números del catálogo aparecen en cuanto una aplicación vuelve a abrir la serie',
     linkNotDescribedShow:
       'Ningún addon de metadatos del servidor describe este identificador como una serie. Comprueba que es el de la serie y no el de un episodio.',
     linkNotDescribedMovie:
