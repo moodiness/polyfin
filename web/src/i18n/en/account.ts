@@ -16,6 +16,7 @@ const account = {
       metadataLanguage: 'Metadata language',
       webTheme: 'Web player theme',
       audioRegion: 'Audio region',
+      sound: 'Sound',
       sharedLinks: 'Shared links',
       reminders: 'Reminders',
       import: 'Import from another server',
@@ -57,6 +58,18 @@ const account = {
         'pt-BR': 'Portuguese (Brazil)',
         'pt-PT': 'Portuguese (Portugal)',
       } as Record<string, string>,
+    },
+    /** My account › Sound. */
+    sound: {
+      help: 'Two ways to make your videos louder and more even than your apps play them, each with its cost. They apply from your next play.',
+      boostVolume: 'Boost the volume in the web player',
+      boostVolumeHelp:
+        'Makes videos louder in the web player, in a browser and in the Jellyfin apps for Android and iOS: about 8 dB on quiet passages and 5 dB on loud ones, a compressor holding the peaks, and the player’s volume still works. Your browser does the work, but for it to reach the streams of addons, the server sends your web player those streams itself rather than sending it to their source, which takes the server’s bandwidth. It does not reach the apps’ own players, nor streams an iPhone or iPad plays as HLS. The player’s settings menu turns it on and off too.',
+      convertSound: 'Convert the sound to even it',
+      convertSoundHelp:
+        'The server converts the audio of your videos and channels and evens it at -16 LUFS, the picture copied, so that every app plays it louder and evenly. The cost: nothing plays directly, each play takes a little of the server’s processor, and surround sound reaches a receiver converted rather than as the original track.',
+      saved: 'Sound saved.',
+      group: 'Your group sets these: an administrator changes them on the group’s page.',
     },
     /** My account › Taste profile. */
     taste: {

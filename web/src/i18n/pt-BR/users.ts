@@ -147,6 +147,12 @@ const users: typeof en = {
     localFirst: 'Reproduzir arquivos locais primeiro',
     localFirstHelp:
       'Coloca as versões das pastas locais e dos compartilhamentos de rede antes das outras nos menus de versões deste usuário, seja qual for “Ordenar versões por”, para que a reprodução comece por elas. Os outros usuários mantêm a ordem do servidor.',
+    boostVolume: 'Aumentar o volume no player web',
+    boostVolumeHelp:
+      'Deixa os vídeos mais altos no player web deste usuário, em um navegador e nos aplicativos Jellyfin para Android e iOS: cerca de 8 dB nas passagens calmas e 5 dB nas altas, com os picos contidos perto do fundo de escala. O navegador faz o trabalho, mas para que ele alcance as transmissões dos complementos, o servidor envia ele mesmo essas transmissões ao player web deste usuário em vez de mandá-lo à fonte delas, o que usa a banda do servidor. Não alcança os players próprios dos aplicativos, nem as transmissões que um iPhone ou iPad reproduz como HLS.',
+    convertSound: 'Converter o som para equalizá-lo',
+    convertSoundHelp:
+      'O servidor converte o áudio dos vídeos e canais deste usuário e o equaliza em -16 LUFS, com a imagem copiada, para que todo aplicativo o reproduza mais alto e uniforme. O custo: nada é reproduzido diretamente, cada reprodução usa um pouco do processador do servidor, e o som surround chega a um receiver convertido em vez de como a faixa original.',
     savePlaybackAccess: 'Salvar reprodução e acesso',
     visibleLibrariesTitle: 'Bibliotecas visíveis',
     visibleLibrariesHelp:

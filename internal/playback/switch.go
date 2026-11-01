@@ -314,6 +314,7 @@ func (c *carry) target(sw versionSwitch) (hls.Remux, error) {
 		return hls.Remux{}, fmt.Errorf("%w: another frame shape", errNotAlike)
 	}
 	tuning := TuningOf(c.s.settings())
+	tuning.Normalize = tuning.Normalize || c.remux.Normalize
 	var played hls.Remux
 	c.remux.convert(&played, first, tuning)
 	r := hls.Remux{Video: video.Index, Audio: -1, Format: c.remux.Format, Plan: c.plan, Threads: tuning.Threads}

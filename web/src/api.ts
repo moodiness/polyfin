@@ -108,6 +108,13 @@ export type User = {
    * others, whatever the version order's criteria.
    */
   localFirst: boolean
+  /** Whether the user's web player boosts the volume of videos, in the browser. */
+  boostVolume: boolean
+  /**
+   * Whether the server converts the audio of the user's videos and channels, evened at -16 LUFS,
+   * their video copied: louder in every app, without direct play.
+   */
+  convertSound: boolean
   /** The date the account ends, YYYY-MM-DD in the server's time zone; null for never. */
   endsOn: string | null
   /** Whether the end date has come: the account is refused as a disabled one is. */
@@ -151,6 +158,8 @@ export type GroupLimits = Pick<
   | 'maxBitrate'
   | 'qualityGroup'
   | 'localFirst'
+  | 'boostVolume'
+  | 'convertSound'
   | 'syncPlay'
   | 'liveTv'
   | 'remoteControl'
@@ -965,6 +974,8 @@ export type UserPatch = Partial<{
   liveTvChannels: ChannelRule
   qualityGroup: QualityGroup
   localFirst: boolean
+  boostVolume: boolean
+  convertSound: boolean
   /** YYYY-MM-DD, or null for never. */
   endsOn: string | null
   /** Joins this group and takes its values; '' leaves the group, keeping them as own settings. */
@@ -2196,6 +2207,18 @@ export const fetchOwnAudioRegion = (signal?: AbortSignal) =>
 
 export const saveOwnAudioRegion = (region: string) =>
   request<AudioRegion>('PUT', '/account/audio-region', { region })
+
+/**
+ * The signed-in user's sound options (see User), and whether their group holds them, which they
+ * then cannot change.
+ */
+export type OwnSound = { boostVolume: boolean; convertSound: boolean; followsGroup: boolean }
+
+export const fetchOwnSound = (signal?: AbortSignal) =>
+  request<OwnSound>('GET', '/account/sound', undefined, signal)
+
+export const saveOwnSound = (change: Partial<Pick<OwnSound, 'boostVolume' | 'convertSound'>>) =>
+  request<OwnSound>('PUT', '/account/sound', change)
 
 /**
  * Puts back the server's defaults for what the signed-in user chose: their metadata language, their
@@ -5533,6 +5556,7 @@ export const queryKeys = {
   reminderSettings: ['account', 'reminders', 'settings'] as const,
   ownMetadataLanguage: ['account', 'metadata-language'] as const,
   ownAudioRegion: ['account', 'audio-region'] as const,
+  ownSound: ['account', 'sound'] as const,
   /** The languages the server's addons were given: refreshed with the server's addons. */
   metadataLanguages: ['scopes', 'shared', 'metadata-languages'] as const,
   ownWebTheme: ['account', 'web-theme'] as const,

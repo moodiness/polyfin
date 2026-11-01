@@ -107,6 +107,20 @@ Tracks made by FFmpeg's own encoder carry no compression, and play the same with
 
 **Compared with Jellyfin:** Jellyfin 12.4 mixes down with the same filters at the same volume, 2 by default ([`EncodingOptions.cs`, lines 21 to 22](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/EncodingOptions.cs#L21-L22); [`EncodingHelper.cs`, lines 2975 to 2977](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs#L2975-L2977)), but without a limiter: its loud scenes pass full scale, and the encoder distorts them. It decodes AC-3 and E-AC-3 with FFmpeg's defaults, as **As encoded** does, and has no choice of dynamic range. It has no normalization of converted video's audio: its own loudness normalization is for music, as `NormalizationGain`.
 
+### Louder sound for one user
+
+**Convert the sound to even it**, a user's option (see [Louder sound](users.md#louder-sound)), sends every app of that user its sound converted and evened, through the same normalization as **Even the loudness of converted videos**, at -16 LUFS with the limiter, whether that setting is on or not:
+
+- A version the app would play as it is is streamed over HLS instead, its video copied and its audio converted, with the app's channels, 5.1 included. One whose video is converted anyway gets its audio converted and evened too. Its name ends "(converted: audio)", and its `TranscodeReasons` say `DirectPlayError`, as Jellyfin has no reason for a choice of the user.
+- The audio is converted only where it costs no video conversion: a version whose video the app plays only converted over HLS, such as an MPEG-TS file, or whose subtitle would then be burned in, or whose keyframe index cannot be read, plays as it does for other users. So does every version for a user who may not use conversion.
+- **Prefer versions the app plays without conversion** counts a version whose video is copied as one without conversion for that user: their every version has its audio converted.
+- Channels follow, converted as they come, their sound starting some 3 seconds later (see [Loudness](#loudness)); a source a play switches to keeps the normalization.
+- Music and audiobooks do not follow: apps even them with their own normalization. DLNA devices and guests of share links play as before.
+
+The cost is direct play: each play takes a little of the server's processor, a torrent's first play waits for its keyframe index, and surround sound reaches a receiver as converted AAC or AC-3 rather than as the original track. Measured through Polyfin with jellyfin-web 12.4's Chrome profile: a stereo scene at -29.6 LUFS plays at -17.3 LUFS, peaks at -1.6 dBTP, its H.264 copied; its one-pass normalization settles under the target on a one-minute scene with loud bursts, as above.
+
+**Compared with Jellyfin:** Jellyfin has no such option.
+
 ### Seeing how a play goes
 
 - **In jellyfin-web:** "Playback Info", in the player's settings menu, names how the play goes: "Direct playing", "Direct streaming" when the video is copied and the audio converted, "Remuxing" when both are copied into HLS, and "Transcoding" when the video is converted. A play streamed by Polyfin adds a section with the target codecs, "(direct)" beside a copied one, and the reasons, such as "The audio codec is not supported". The section shows once the play's first segment is made, and stays while the encoding waits between requests.

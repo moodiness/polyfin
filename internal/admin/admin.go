@@ -327,6 +327,8 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/web-themes", h.signedIn(h.webThemes))
 	mux.Handle("GET /admin/api/account/audio-region", h.signedIn(h.ownAudioRegion))
 	mux.Handle("PUT /admin/api/account/audio-region", h.signedIn(h.setOwnAudioRegion))
+	mux.Handle("GET /admin/api/account/sound", h.signedIn(h.ownSound))
+	mux.Handle("PUT /admin/api/account/sound", h.signedIn(h.setOwnSound))
 	ownPlays := statisticsRoutes{h: h, scope: ownPlaybacks}
 	mux.Handle("GET /admin/api/account/statistics", h.signedIn(ownPlays.statistics))
 	mux.Handle("GET /admin/api/account/history", h.signedIn(ownPlays.history))
