@@ -15,6 +15,7 @@ import {
   ShareNetworkIcon,
   ShieldCheckIcon,
   SpeakerHighIcon,
+  SpeakerSimpleHighIcon,
   SparkleIcon,
   TranslateIcon,
 } from '@phosphor-icons/react'
@@ -51,6 +52,7 @@ import { ReminderList, ReminderSettingsForm } from './Reminders'
 import { OwnMetadataLanguage } from './MetadataLanguage'
 import { OwnWebTheme } from './WebTheme'
 import { OwnAudioRegion } from './AudioRegion'
+import { OwnSoundOptions } from './Sound'
 import ResetPreferences from './ResetPreferences'
 import TasteProfile from './TasteProfile'
 import { HiddenList, HomeRowList, NextUpList, ResumeList } from './WatchingLists'
@@ -69,6 +71,7 @@ const sectionIds = [
   'metadata-language',
   'web-theme',
   'audio-region',
+  'sound',
   'shared-links',
   'reminders',
   'import',
@@ -215,6 +218,12 @@ export default function AccountRoute() {
               icon: SpeakerHighIcon,
               to: '#audio-region',
             },
+            {
+              id: 'sound',
+              label: text.sections.sound,
+              icon: SpeakerSimpleHighIcon,
+              to: '#sound',
+            },
             ...(sharing
               ? [
                   {
@@ -319,6 +328,9 @@ export default function AccountRoute() {
         help={text.audioRegion.help}
       >
         <OwnAudioRegion />
+      </AccountSection>
+      <AccountSection id="sound" title={text.sections.sound} help={text.sound.help}>
+        <OwnSoundOptions />
       </AccountSection>
       {sharing && (
         <AccountSection

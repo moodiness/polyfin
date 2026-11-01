@@ -17,6 +17,7 @@ const account: typeof en = {
       metadataLanguage: 'Metadatensprache',
       webTheme: 'Theme des Web-Players',
       audioRegion: 'Audioregion',
+      sound: 'Ton',
       sharedLinks: 'Freigabelinks',
       reminders: 'Erinnerungen',
       import: 'Von einem anderen Server importieren',
@@ -59,6 +60,17 @@ const account: typeof en = {
         'pt-BR': 'Portugiesisch (Brasilien)',
         'pt-PT': 'Portugiesisch (Portugal)',
       },
+    },
+    sound: {
+      help: 'Zwei Wege, Ihre Videos lauter und gleichmäßiger zu machen, als Ihre Apps sie abspielen, jeder mit seinem Preis. Sie gelten ab Ihrer nächsten Wiedergabe.',
+      boostVolume: 'Lautstärke im Web-Player anheben',
+      boostVolumeHelp:
+        'Macht Videos im Web-Player lauter, im Browser und in den Jellyfin-Apps für Android und iOS: etwa 8 dB bei leisen Stellen und 5 dB bei lauten, ein Kompressor hält die Spitzen, und die Lautstärke des Players funktioniert weiter. Die Arbeit macht Ihr Browser, doch damit sie die Streams der Add-ons erreicht, sendet der Server Ihrem Web-Player diese Streams selbst, statt ihn zu ihrer Quelle zu schicken, was Bandbreite des Servers beansprucht. Die eigenen Player der Apps erreicht es nicht, ebenso wenig Streams, die ein iPhone oder iPad als HLS abspielt. Das Einstellungsmenü des Players schaltet es ebenfalls ein und aus.',
+      convertSound: 'Ton konvertieren und angleichen',
+      convertSoundHelp:
+        'Der Server konvertiert den Ton Ihrer Videos und Sender und gleicht ihn auf -16 LUFS an, das Bild wird kopiert, sodass jede App ihn lauter und gleichmäßig abspielt. Der Preis: Nichts wird direkt abgespielt, jede Wiedergabe beansprucht etwas vom Prozessor des Servers, und Surround-Ton erreicht einen Receiver konvertiert statt als Originalspur.',
+      saved: 'Ton gespeichert.',
+      group: 'Ihre Gruppe legt diese fest: Ein Administrator ändert sie auf ihrer Seite.',
     },
     taste: {
       help: 'Was Polyfin über deinen Geschmack gelernt hat, aus den Filmen und Serien, die du zu Ende gesehen, erneut gesehen, früh abgebrochen, gemocht, nicht gemocht, zu Favoriten gemacht und ausgeblendet hast, die neuesten zählen am meisten. Sobald es dich gut genug kennt, ordnet es Top-Tipps für dich sowie ähnliche Titel und Vorschläge. Es bleibt auf dem Server: Nur du siehst es.',

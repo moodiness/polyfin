@@ -150,6 +150,12 @@ const users: typeof en = {
     localFirst: 'Lire d’abord les fichiers locaux',
     localFirstHelp:
       'Place les versions des dossiers locaux et des partages réseau avant les autres dans les menus de versions de cet utilisateur, quoi que dise « Trier les versions par », pour que la lecture commence par elles. Les autres utilisateurs gardent l’ordre du serveur.',
+    boostVolume: 'Augmenter le volume dans le lecteur web',
+    boostVolumeHelp:
+      'Rend les vidéos plus fortes dans le lecteur web de cet utilisateur, dans un navigateur et dans les applications Jellyfin pour Android et iOS : environ 8 dB sur les passages calmes et 5 dB sur les passages forts, les crêtes tenues près de la pleine échelle. Le navigateur fait le travail, mais pour qu’il atteigne les flux des addons, le serveur envoie lui-même ces flux au lecteur web de cet utilisateur au lieu de l’envoyer à leur source, ce qui prend de la bande passante au serveur. Les lecteurs propres aux applications ne sont pas concernés, ni les flux qu’un iPhone ou un iPad lit en HLS.',
+    convertSound: 'Convertir le son pour l’égaliser',
+    convertSoundHelp:
+      'Le serveur convertit le son des vidéos et des chaînes de cet utilisateur et l’égalise à -16 LUFS, l’image copiée, pour que chaque application le lise plus fort et de façon égale. Le prix : rien n’est lu directement, chaque lecture prend un peu du processeur du serveur, et le son multicanal arrive à un ampli converti plutôt que dans sa piste d’origine.',
     savePlaybackAccess: 'Enregistrer la lecture et l’accès',
     visibleLibrariesTitle: 'Bibliothèques visibles',
     visibleLibrariesHelp:

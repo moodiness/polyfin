@@ -17,6 +17,7 @@ const account: typeof en = {
       metadataLanguage: 'Idioma de los metadatos',
       webTheme: 'Tema del reproductor web',
       audioRegion: 'Región de audio',
+      sound: 'Sonido',
       sharedLinks: 'Enlaces compartidos',
       reminders: 'Recordatorios',
       import: 'Importar desde otro servidor',
@@ -59,6 +60,17 @@ const account: typeof en = {
         'pt-BR': 'Portugués (Brasil)',
         'pt-PT': 'Portugués (Portugal)',
       },
+    },
+    sound: {
+      help: 'Dos formas de que sus vídeos suenen más fuerte y más parejos de lo que los reproducen sus aplicaciones, cada una con su coste. Se aplican desde su próxima reproducción.',
+      boostVolume: 'Subir el volumen en el reproductor web',
+      boostVolumeHelp:
+        'Hace que los vídeos suenen más fuerte en el reproductor web, en un navegador y en las aplicaciones de Jellyfin para Android e iOS: unos 8 dB en los pasajes tranquilos y 5 dB en los fuertes, con un compresor que contiene los picos, y el volumen del reproductor sigue funcionando. El trabajo lo hace su navegador, pero para que llegue a las emisiones de las extensiones, el servidor envía él mismo esas emisiones a su reproductor web en lugar de mandarlo a su fuente, lo que consume ancho de banda del servidor. No llega a los reproductores propios de las aplicaciones, ni a las emisiones que un iPhone o un iPad reproduce como HLS. El menú de ajustes del reproductor también lo activa y lo desactiva.',
+      convertSound: 'Convertir el sonido para igualarlo',
+      convertSoundHelp:
+        'El servidor convierte el audio de sus vídeos y canales y lo iguala a -16 LUFS, con la imagen copiada, para que todas las aplicaciones lo reproduzcan más fuerte y parejo. El coste: nada se reproduce directamente, cada reproducción usa un poco del procesador del servidor, y el sonido envolvente llega a un receptor convertido en lugar de como la pista original.',
+      saved: 'Sonido guardado.',
+      group: 'Su grupo los define: un administrador los cambia en la página del grupo.',
     },
     taste: {
       help: 'Lo que Polyfin ha aprendido de sus gustos a partir de las películas y series que terminó, volvió a ver, dejó pronto, le gustaron, no le gustaron, marcó como favoritas y ocultó, contando más las más recientes. Cuando lo conoce lo suficiente, ordena Recomendados para usted, los títulos similares y las sugerencias. Se queda en el servidor: solo usted lo ve.',
