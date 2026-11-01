@@ -80,7 +80,7 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 	if opened == item.ID {
 		wanted = grant.Version
 		if wanted == (accounts.ID{}) {
-			wanted = h.firstWorkingVersion(r.Context(), user, item)
+			wanted = h.firstWorkingVersion(h.mediaContext(r, servedSignedIn, user), user, item)
 		}
 	}
 	version, err := h.Library.Version(r.Context(), user, item.ID, wanted)
@@ -130,7 +130,7 @@ func (h *Handler) firstWorkingVersion(ctx context.Context, user accounts.User, i
 	if err != nil {
 		return item.ID
 	}
-	versions = h.offered(ctx, user, versions)
+	versions = h.offered(ctx, user, item, versions)
 	if i := slices.IndexFunc(versions, func(v library.Version) bool { return !h.didNotStart(v) }); i >= 0 {
 		return versions[i].ID
 	}

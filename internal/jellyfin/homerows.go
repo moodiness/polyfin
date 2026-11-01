@@ -135,7 +135,7 @@ func (h *Handler) listVersions(user accounts.User, title accounts.ID, prepare bo
 		h.Logger.Debug("The versions of a title in a home row could not be listed ahead", "error", err)
 		return
 	}
-	if versions = h.offered(ctx, user, versions); prepare && len(versions) > 0 {
+	if versions = h.offered(ctx, user, library.Item{ID: title}, versions); prepare && len(versions) > 0 {
 		h.prepareVersions(ctx, preparationKey{user: user.ID, title: title, version: versions[0].ID}, versions[:1])
 	}
 }

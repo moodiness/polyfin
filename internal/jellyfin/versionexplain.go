@@ -136,7 +136,7 @@ func (h *Handler) ExplainVersions(ctx context.Context, user accounts.User, id ac
 	rules := h.rulesFor(ctx, user)
 	explanation := VersionsExplanation{Pending: listed.Pending, Criteria: slices.Clone(rules.order), Group: user.QualityGroup,
 		Blocks: h.Library.VersionBlocks(ctx, id), Decisions: h.PlayDecisions(id)}
-	offered := h.offered(ctx, user, slices.Clone(versions))
+	offered := h.offered(ctx, user, library.Item{ID: id}, slices.Clone(versions))
 	place := make(map[accounts.ID]int, len(offered))
 	for i, version := range offered {
 		place[version.ID] = i + 1
@@ -161,7 +161,7 @@ func (h *Handler) ExplainVersions(ctx context.Context, user accounts.User, id ac
 	for _, version := range versions {
 		facts[version.ID] = h.versionFacts(ctx, version)
 	}
-	if h.reordered(user) || slices.ContainsFunc(kept, elsewhere) {
+	if h.reordered(ctx, user) || slices.ContainsFunc(kept, elsewhere) {
 		if rules.hides() || slices.ContainsFunc(kept, elsewhere) {
 			hidden := map[accounts.ID]fate{}
 			for _, version := range kept {

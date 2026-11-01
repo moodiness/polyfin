@@ -99,13 +99,21 @@ type tried struct {
 
 // choose tries the candidates of p for a play, and returns the version
 // chosen. prefer looks for a version that plays without conversion among
-// those analyzed now, else takes the first that plays.
+// those analyzed now, else takes the first that plays; for a user given
+// Play local files first, among the local files while one plays (see
+// pick).
 func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened accounts.ID, request playbackInfoRequest,
 	c candidates, prefer bool) chosen {
 	result := chosen{unreadable: map[int]bool{}}
 	c = h.tryable(p, c)
 	at := openedIndex(opened, p.versions)
 	allowed := h.Accounts.Conversions(user)
+	sides := make([]int, len(c.order))
+	if user.LocalFirst {
+		for n, i := range c.order {
+			sides[n] = remoteRank(p.versions[i])
+		}
+	}
 	// What each candidate gave is kept with the title's last plays (see
 	// playdecisions.go), once the play is decided; a play the app gave up
 	// tells nothing.
@@ -251,9 +259,13 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	}
 	waitingOn := map[int]bool{}
 	for started > 0 {
-		if n, done := pick(states[:started], prefer, patient); done {
+		if n, done := pick(states[:started], sides, prefer, patient); done {
 			if n >= 0 {
 				result.decided = &states[n].decided
+				if n > 0 && states[0] != nil && states[0].plays {
+					h.Logger.Info("Prefer versions the app plays without conversion passed over the first version, which the app plays only converted",
+						"item", p.item.ID, "passed", p.versions[c.order[0]].Addon, "addon", states[n].decided.version.Addon)
+				}
 			}
 			break
 		}
@@ -320,9 +332,12 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 // pick picks among the candidates tried, in order, the one a play
 // chooses, and reports whether it is done: the first that plays, or with
 // prefer the first that plays without conversion, else the first that
-// plays. Until patient ends, it waits for each candidate before the one it
-// would pick; then those still being tried are passed over.
-func pick(states []*tried, prefer, patient bool) (int, bool) {
+// plays. sides parts the candidates, by their index: prefer looks no
+// further than the side of the first that plays, so that, for a user given
+// Play local files first, a local file that plays at all comes before a
+// remote stream. Until patient ends, it waits for each candidate before the
+// one it would pick; then those still being tried are passed over.
+func pick(states []*tried, sides []int, prefer, patient bool) (int, bool) {
 	first := -1
 	for n, t := range states {
 		switch {
@@ -331,6 +346,8 @@ func pick(states []*tried, prefer, patient bool) (int, bool) {
 				return -1, false
 			}
 		case !t.plays:
+		case first >= 0 && sides[n] != sides[first]:
+			return first, true
 		case !prefer || t.unconverted:
 			return n, true
 		case first < 0:
@@ -364,7 +381,7 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 	versions, complete, err := h.Library.VersionsToPlay(ctx, user, item.ID)
 	// Before offered, which leaves the failed out of versions in place.
 	p.unstarted = h.unstartedTorrent(versions)
-	p.versions = h.offered(ctx, user, versions)
+	p.versions = h.offered(ctx, user, item, versions)
 	grace := time.NewTimer(subtitleGrace)
 	defer grace.Stop()
 	select {

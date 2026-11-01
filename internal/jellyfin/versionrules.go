@@ -122,8 +122,7 @@ func (h *Handler) rulesFor(ctx context.Context, user accounts.User) versionRules
 // key names what orders versions under the rules: the criteria, the
 // order of the codecs, that of the sources, the language and region the
 // user prefers, the order of the editions, the size a minute aimed at and
-// the label rules. A page keeps the versions it lists in place only while
-// it stays the same.
+// the label rules.
 func (r versionRules) key() string {
 	sources := make([]string, len(r.sources))
 	for i, source := range r.sources {
@@ -135,6 +134,19 @@ func (r versionRules) key() string {
 	}
 	return strings.Join(r.order, ",") + "|" + strings.Join(r.codecs, ",") + "|" + strings.Join(sources, ",") + "|" + r.language +
 		"|" + r.region + "|" + strings.Join(r.editions, ",") + "|" + strconv.FormatInt(r.perMinute, 10) + "|" + strings.Join(labels, "\n")
+}
+
+// orderKey names what orders a user's versions of a title (see ordered):
+// the rules (see versionRules.key), the user's quality group, Play local
+// files first, and the app the order is made for (see appOrder). A page
+// keeps the versions it lists in place only while it stays the same.
+func orderKey(rules versionRules, user accounts.User, app *appOrder) string {
+	return rules.key() + "|" + strconv.Itoa(user.QualityGroup) + "|" + strconv.FormatBool(user.LocalFirst) + "|" + app.key()
+}
+
+// pageKey is the orderKey of the versions a user's app is offered.
+func (h *Handler) pageKey(ctx context.Context, user accounts.User) string {
+	return orderKey(h.rulesFor(ctx, user), user, h.appOrderFor(ctx, user))
 }
 
 // hides reports whether a rule may hide versions.
@@ -190,10 +202,11 @@ func elsewhere(version library.Version) bool {
 
 // reordered reports whether the versions a user is offered may be ordered
 // otherwise than by the addons, or some hidden: with the user's quality
-// group, Play local files first or the version rules (see offered).
-func (h *Handler) reordered(user accounts.User) bool {
+// group, Play local files first, the version rules, or an order for the
+// app asking (see appOrder, and offered).
+func (h *Handler) reordered(ctx context.Context, user accounts.User) bool {
 	rules := newVersionRules(h.Accounts.Settings())
-	return user.QualityGroup > 0 || user.LocalFirst || len(rules.order) > 0 || rules.hides()
+	return user.QualityGroup > 0 || user.LocalFirst || len(rules.order) > 0 || rules.hides() || h.appOrderFor(ctx, user) != nil
 }
 
 // hiddenVersion reports whether the hide rules hide a version among its
@@ -584,15 +597,17 @@ func rangeRank(hdr, first library.DynamicRange) int {
 }
 
 // ordered applies the rules and the user's quality group to a title's
-// versions, those that failed lately already left out: the hide rules
-// first, keeping every version when they would hide them all; then the
-// quality group, leaving out the versions taller than it while one fits
-// or has an unknown height, else keeping them all, the closest to the
-// group first; then the criteria, ties keeping the addons' order. With
-// criteria, a page of the title open keeps the versions it shows in place
-// (see keptInPlace). Last, Play local files first puts the local files
-// before the others for the users given it (see localFirst).
-func (h *Handler) ordered(ctx context.Context, user accounts.User, versions []library.Version) []library.Version {
+// versions, those of item that failed lately already left out: the hide
+// rules first, keeping every version when they would hide them all; then
+// the quality group, leaving out the versions taller than it while one
+// fits or has an unknown height, else keeping them all, the closest to the
+// group first; then the criteria, ties keeping the addons' order. Then, for
+// the app asking, the versions it plays without conversion come first (see
+// appOrder); last, Play local files first puts the local files before the
+// others for the users given it (see localfirst.go), each side keeping
+// the order above. With criteria or an order for the app, a page of the
+// title open keeps the versions it shows in place (see keptInPlace).
+func (h *Handler) ordered(ctx context.Context, user accounts.User, item library.Item, versions []library.Version) []library.Version {
 	rules := h.rulesFor(ctx, user)
 	var sources map[accounts.ID]int
 	if slices.Contains(rules.order, "source") {
@@ -622,11 +637,24 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, versions []li
 			closest = true
 		}
 	}
+	app := h.appOrderFor(ctx, user)
+	var unconverted map[accounts.ID]bool
+	if app != nil {
+		unconverted = h.playsUnconverted(ctx, app, user, item, kept)
+	}
 	place := make(map[accounts.ID]int, len(kept))
 	for i, version := range kept {
 		place[version.ID] = i
 	}
 	compare := func(a, b library.Version) int {
+		if user.LocalFirst {
+			if c := cmp.Compare(remoteRank(a), remoteRank(b)); c != 0 {
+				return c
+			}
+		}
+		if c := cmp.Compare(convertedRank(unconverted[a.ID]), convertedRank(unconverted[b.ID])); c != 0 {
+			return c
+		}
 		fa, fb := facts[a.ID], facts[b.ID]
 		if closest {
 			if c := cmp.Compare(fa.height, fb.height); c != 0 {
@@ -639,12 +667,21 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, versions []li
 		return cmp.Compare(place[a.ID], place[b.ID])
 	}
 	slices.SortFunc(kept, compare)
-	if len(rules.order) > 0 && len(kept) > 0 {
-		if shown := h.watched.shown(user.ID, kept[0].Item, rules.key()); len(shown) > 0 {
+	if (len(rules.order) > 0 || app != nil) && len(kept) > 0 {
+		if shown := h.watched.shown(user.ID, kept[0].Item, orderKey(rules, user, app)); len(shown) > 0 {
 			kept = keptInPlace(kept, shown, compare)
 		}
 	}
-	return localFirst(user, kept)
+	return kept
+}
+
+// convertedRank is 0 for a version the app plays without conversion, 1
+// for another (see appOrder).
+func convertedRank(unconverted bool) int {
+	if unconverted {
+		return 0
+	}
+	return 1
 }
 
 // keptInPlace keeps the versions of shown, those an open page lists, in

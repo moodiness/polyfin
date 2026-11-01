@@ -217,7 +217,7 @@ func (h *Handler) pushVersions(title accounts.ID) {
 		if !ok {
 			continue
 		}
-		offered := h.offered(ctx, p.user, versions)
+		offered := h.offered(ctx, p.user, library.Item{ID: title}, versions)
 		conns := h.webSockets(p.user.ID)
 		for _, opened := range p.opened {
 			progress := newProgress(pending, offered)
@@ -333,7 +333,7 @@ func (h *Handler) followedProgress(ctx context.Context, user accounts.User, id a
 		title = owner
 	}
 	h.watch(user, title, id)
-	return newProgress(pending, h.offered(ctx, user, versions)), true
+	return newProgress(pending, h.offered(ctx, user, library.Item{ID: title}, versions)), true
 }
 
 // versionedItem finds the item id names, the title of the version it
@@ -376,7 +376,7 @@ func (h *Handler) titleProgress(w http.ResponseWriter, r *http.Request, user acc
 		return VersionProgress{}, false
 	}
 	h.watch(user, title, opened)
-	return newProgress(pending, h.offered(r.Context(), user, versions)), true
+	return newProgress(pending, h.offered(r.Context(), user, library.Item{ID: title}, versions)), true
 }
 
 // versionSearches remembers when each user last had each title's addons

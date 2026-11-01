@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 )
 
@@ -178,13 +179,19 @@ func (h *Handler) capabilities(w http.ResponseWriter, r *http.Request) {
 	h.saveCapabilities(w, r, capabilities)
 }
 
-// fullCapabilities records the capabilities an app reports in a JSON body.
+// fullCapabilities records the capabilities an app reports in a JSON body,
+// and the device profile it may carry, as Jellyfin's ClientCapabilitiesDto
+// does (see rememberCapabilities).
 func (h *Handler) fullCapabilities(w http.ResponseWriter, r *http.Request) {
-	var body ClientCapabilities
+	var body struct {
+		ClientCapabilities
+		DeviceProfile *playback.DeviceProfile
+	}
 	if err := decode(r, &body); err != nil {
 		processingError(w, http.StatusBadRequest)
 		return
 	}
+	h.rememberCapabilities(r.Context(), body.DeviceProfile)
 	h.saveCapabilities(w, r, accounts.Capabilities{
 		PlayableMediaTypes:           body.PlayableMediaTypes,
 		SupportedCommands:            body.SupportedCommands,
