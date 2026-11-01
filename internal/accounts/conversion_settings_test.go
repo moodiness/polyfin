@@ -8,8 +8,8 @@ import (
 )
 
 // The settings tuning conversions start as Polyfin converted before they
-// were settings, the ahead limit at 120 s, and the administrator's setup
-// keeps them.
+// were settings, but the stereo mix at Jellyfin's volume, 2, the ahead
+// limit at 120 s, and the administrator's setup keeps them.
 func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 	store := newStore(t)
 	check := func(when string, got Settings) {
@@ -25,7 +25,7 @@ func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 		}
 	}
 	check("defaults", store.Settings())
-	if DefaultDownmixBoost != 1 || DefaultAheadSeconds != 120 || MinAheadSeconds != 30 || MaxAheadSeconds != 600 {
+	if DefaultDownmixBoost != 2 || DefaultAheadSeconds != 120 || MinAheadSeconds != 30 || MaxAheadSeconds != 600 {
 		t.Errorf("default constants: boost %v, %d s ahead in [%d, %d]", DefaultDownmixBoost, DefaultAheadSeconds, MinAheadSeconds, MaxAheadSeconds)
 	}
 	if _, err := store.CreateFirstAdministrator(t.Context(), "admin", "correct horse", "fr"); err != nil {

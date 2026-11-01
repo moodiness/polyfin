@@ -596,7 +596,7 @@ const settings = {
       },
       downmixBoost: 'Volume when mixing to stereo',
       downmixBoostHelp: (r: RangeText) =>
-        `Stereo mixes often sound quieter: the volume is multiplied by this number. From ${r.min} to ${r.max}; ${r.default} (no change) by default. Jellyfin uses 2.`,
+        `Stereo mixes often sound quieter: the volume is multiplied by this number, and 1 changes nothing. From ${r.min} to ${r.max}; ${r.default} by default, as in Jellyfin. Above 1, a limiter keeps loud scenes from distorting.`,
       maxAudioChannels: 'Most audio channels',
       maxAudioChannelsHelp:
         'Converted sound keeps at most this many channels, even if the app takes more.',

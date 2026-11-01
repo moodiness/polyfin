@@ -603,7 +603,7 @@ const settings: typeof en = {
       },
       downmixBoost: 'Lautstärke beim Stereo-Downmix',
       downmixBoostHelp: (r: RangeText) =>
-        `Stereo-Mixe klingen oft leiser: Die Lautstärke wird mit dieser Zahl multipliziert. Von ${r.min} bis ${r.max}; standardmäßig ${r.default} (keine Änderung). Jellyfin verwendet 2.`,
+        `Stereo-Mixe klingen oft leiser: Die Lautstärke wird mit dieser Zahl multipliziert, 1 ändert nichts. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}, wie in Jellyfin. Über 1 verhindert ein Limiter, dass laute Szenen verzerren.`,
       maxAudioChannels: 'Maximale Anzahl an Audiokanälen',
       maxAudioChannelsHelp:
         'Konvertierter Ton behält höchstens so viele Kanäle, auch wenn die App mehr annimmt.',

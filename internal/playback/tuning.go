@@ -41,7 +41,8 @@ type Tuning struct {
 	DoubleRate   bool
 	// Downmix is Jellyfin's name of the algorithm audio is mixed down to
 	// stereo with, empty for FFmpeg's own; DownmixBoost multiplies the
-	// volume of a downmix, 0 or 1 changing nothing.
+	// volume of a downmix, 0 or 1 changing nothing, above 1 through the
+	// limiter.
 	Downmix      string
 	DownmixBoost float64
 	// MaxAudioChannels caps converted audio, 0 for no cap but the app's.
@@ -74,7 +75,7 @@ func TuningOf(settings accounts.Settings) Tuning {
 		AudioBitrate:     int64(settings.AudioBitratePerChannel) * 1000,
 		Threads:          settings.EncodingThreads,
 	}
-	// The defaults are the zero values.
+	// The values that change nothing are the zero values.
 	if t.Preset == "auto" {
 		t.Preset = ""
 	}
@@ -142,21 +143,41 @@ var downmixFilters = map[[2]string]string{
 // is unknown, by channel count.
 var guessedLayouts = map[int]string{1: "mono", 2: "stereo", 3: "2.1", 4: "4.0", 5: "5.0", 6: "5.1", 7: "6.1", 8: "7.1"}
 
+// limiter keeps the peaks of audio made louder 1.5 dB under full scale,
+// sample by sample, with FFmpeg's lookahead limiter, its automatic level
+// off: FFmpeg's AAC and AC-3 encoders add some 0.2 dB to them, so loud
+// passages end at or under -1 dBTP. Without it, a volume above 1 overloads
+// the encoder on loud scenes, which distorts them.
+const limiter = "alimiter=limit=0.841395:level=disabled"
+
+// stereoFirst mixes audio down to stereo with FFmpeg's own downmix, as -ac
+// 2 would after the filters: before them, the volume and the limiter work
+// on the stereo the app gets.
+const stereoFirst = "aformat=channel_layouts=stereo"
+
 // downmix is the filter mixing audio of channels in layout, as ffprobe
 // names it, down to stereo, empty when FFmpeg's own downmix does: Jellyfin's
-// algorithm for the layout, then the boost. Like Jellyfin's probe, it reads
-// ffprobe's 5.1(side) as 5.1.
+// algorithm for the layout, else FFmpeg's downmix when a filter follows,
+// then the boost, then the limiter when the boost makes it louder. Like
+// Jellyfin's probe, it reads ffprobe's 5.1(side) as 5.1.
 func (t Tuning) downmix(channels int, layout string) string {
 	layout, _, _ = strings.Cut(layout, "(")
 	if layout == "" {
 		layout = guessedLayouts[channels]
 	}
 	var filters []string
+	mixed := false
 	if filter, ok := downmixFilters[[2]string{t.Downmix, layout}]; ok {
-		filters = append(filters, filter)
+		filters, mixed = append(filters, filter), true
 	}
 	if t.DownmixBoost != 0 && t.DownmixBoost != 1 {
 		filters = append(filters, "volume="+strconv.FormatFloat(t.DownmixBoost, 'f', -1, 64))
+	}
+	if t.DownmixBoost > 1 {
+		filters = append(filters, limiter)
+	}
+	if !mixed && len(filters) > 0 {
+		filters = append([]string{stereoFirst}, filters...)
 	}
 	return strings.Join(filters, ",")
 }

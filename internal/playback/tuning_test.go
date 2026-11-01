@@ -18,11 +18,12 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 )
 
-// A new server's settings tune nothing: conversions run as before they
-// were settings (see hls.TestDefaultSettingsKeepTheArguments).
-func TestDefaultSettingsTuneNothing(t *testing.T) {
+// A new server's settings tune nothing but the volume of stereo mixes,
+// Jellyfin's 2: conversions otherwise run as before they were settings
+// (see hls.TestDefaultSettingsKeepTheArguments).
+func TestDefaultSettingsTuneOnlyTheStereoVolume(t *testing.T) {
 	s := newService(t, &fakeSource{}, "ffprobe", nil)
-	if got := s.Capabilities().Tuning; !reflect.DeepEqual(got, Tuning{}) {
+	if got := s.Capabilities().Tuning; !reflect.DeepEqual(got, Tuning{DownmixBoost: 2}) {
 		t.Errorf("default tuning: %+v", got)
 	}
 }
@@ -57,8 +58,13 @@ func TestTuningChangesConversions(t *testing.T) {
 	}
 
 	// Audio: the channel cap, the bitrate per channel, Jellyfin's downmix
-	// and the boost, which apply only when mixing down to stereo.
+	// and the boost, which apply only when mixing down to stereo; a boost
+	// above 1 goes through the limiter, one below 1 needs none. Without an
+	// algorithm, FFmpeg's downmix comes first, so that the limiter works on
+	// the stereo sent.
 	dave := "pan=stereo|c0=0.5*c2+0.707*c0+0.707*c4+0.5*c3|c1=0.5*c2+0.707*c1+0.707*c5+0.5*c3"
+	ownMix := "aformat=channel_layouts=stereo,"
+	limited := "alimiter=limit=0.841395:level=disabled"
 	for _, tc := range []struct {
 		name     string
 		codecs   string
@@ -74,12 +80,16 @@ func TestTuningChangesConversions(t *testing.T) {
 		{"Dave750 downmix", "aac", 6, "5.1(side)", Tuning{MaxAudioChannels: 2, Downmix: "Dave750"},
 			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: dave}},
 		{"downmix with a guessed layout, boosted", "ac3", 6, "", Tuning{MaxAudioChannels: 2, Downmix: "Dave750", DownmixBoost: 1.5},
-			&AudioConversion{Codec: "ac3", Channels: 2, Bitrate: 384_000, Filter: dave + ",volume=1.5"}},
+			&AudioConversion{Codec: "ac3", Channels: 2, Bitrate: 384_000, Filter: dave + ",volume=1.5," + limited}},
+		{"FFmpeg's downmix at Jellyfin's volume", "aac", 6, "5.1(side)", Tuning{MaxAudioChannels: 2, DownmixBoost: 2},
+			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: ownMix + "volume=2," + limited}},
+		{"a quieter downmix is not limited", "aac", 6, "5.1(side)", Tuning{MaxAudioChannels: 2, Downmix: "Dave750", DownmixBoost: 0.5},
+			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: dave + ",volume=0.5"}},
 		{"7.1 downmixed through 5.1", "aac", 8, "7.1", Tuning{MaxAudioChannels: 2, Downmix: "Ac4"},
 			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000,
 				Filter: "pan=5.1(side)|c0=c0|c1=c1|c2=c2|c3=c3|c4=0.707*c4+0.707*c6|c5=0.707*c5+0.707*c7,pan=stereo|c0=c0+0.707*c2+0.707*c4|c1=c1+0.707*c2+0.707*c5"}},
 		{"a layout the algorithm lacks keeps FFmpeg's downmix, boosted", "aac", 6, "6.0", Tuning{MaxAudioChannels: 2, Downmix: "NightmodeDialogue", DownmixBoost: 2},
-			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: "volume=2"}},
+			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: ownMix + "volume=2," + limited}},
 		{"stereo is not mixed down", "aac", 2, "stereo", Tuning{Downmix: "Rfc7845", DownmixBoost: 2}, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
 		{"5.1 kept is not mixed down", "aac", 6, "5.1", Tuning{Downmix: "Rfc7845", DownmixBoost: 2}, &AudioConversion{Codec: "aac", Channels: 6, Bitrate: 640_000}},
 	} {

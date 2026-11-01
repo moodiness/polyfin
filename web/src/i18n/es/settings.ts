@@ -601,7 +601,7 @@ const settings: typeof en = {
       },
       downmixBoost: 'Volumen al mezclar a estéreo',
       downmixBoostHelp: (r: RangeText) =>
-        `Las mezclas estéreo suelen sonar más bajas: el volumen se multiplica por este número. De ${r.min} a ${r.max}; ${r.default} (sin cambios) por defecto. Jellyfin usa 2.`,
+        `Las mezclas estéreo suelen sonar más bajas: el volumen se multiplica por este número, y 1 no cambia nada. De ${r.min} a ${r.max}; ${r.default} por defecto, como en Jellyfin. Por encima de 1, un limitador evita que las escenas fuertes se distorsionen.`,
       maxAudioChannels: 'Máximo de canales de audio',
       maxAudioChannelsHelp:
         'El sonido convertido conserva como máximo este número de canales, aunque la aplicación admita más.',
