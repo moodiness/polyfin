@@ -87,8 +87,11 @@ func TestTheNextEpisodesArePreloaded(t *testing.T) {
 	if files := episodes.files(); len(files) != 0 {
 		t.Fatalf("switched off, read %v", files)
 	}
+	// The disk keeps the least reserve: the default, 20 GB, is more than
+	// some CI runners' disks have free, and preloading holds back below it
+	// (see source.Preloading), which the source cache's tests check.
 	tr.setting(t, func(s *accounts.Settings) {
-		s.PreloadNextEpisodes, s.PreloadEpisodes = true, 2
+		s.PreloadNextEpisodes, s.PreloadEpisodes, s.PreloadReserveGB = true, 2, accounts.MinPreloadReserveGB
 	})
 	// A playback under way holds preloading back.
 	tr.report(t, "/Sessions/Playing", map[string]any{"ItemId": tr.movie, "PositionTicks": 0, "PlayMethod": "DirectPlay"})
