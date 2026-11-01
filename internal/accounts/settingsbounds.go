@@ -133,6 +133,7 @@ func DefaultSettings() Settings {
 		KeepConvertedVideo:         false,
 		FastStart:                  false,
 		NormalizeConvertedAudio:    false,
+		DynamicRangeCompression:    DynamicRangeCompressions[0],
 
 		Trickplay:          false,
 		TrickplayInterval:  DefaultTrickplayInterval,
@@ -389,6 +390,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"keepConvertedVideo":         is(d.KeepConvertedVideo),
 		"fastStart":                  is(d.FastStart),
 		"normalizeConvertedAudio":    is(d.NormalizeConvertedAudio),
+		"dynamicRangeCompression":    choice(d.DynamicRangeCompression, anys(DynamicRangeCompressions)),
 
 		"trickplay":          is(d.Trickplay),
 		"trickplayInterval":  between(MinTrickplayInterval, MaxTrickplayInterval, d.TrickplayInterval),

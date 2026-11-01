@@ -69,6 +69,9 @@ type AudioConversion struct {
 	// Filter is the filter graph the audio goes through, such as a downmix
 	// to stereo, empty for none.
 	Filter string
+	// Decoder are the options of the source's decoder, as names and values
+	// (see hls.Remux.AudioDecoder).
+	Decoder []string
 }
 
 // audioEncoders are the audio encoders every FFmpeg build has, by
@@ -111,7 +114,7 @@ func ConvertAudio(codecs, maxChannels string, source AudioSource, limit int64, t
 	if codec != "flac" {
 		channels = min(channels, 6)
 	}
-	conversion := &AudioConversion{Codec: codec, Channels: channels, Filter: t.videoAudio(source, channels, 0)}
+	conversion := &AudioConversion{Codec: codec, Channels: channels, Filter: t.videoAudio(source, channels, 0), Decoder: t.decoder(source.Codec)}
 	switch {
 	case codec == "flac":
 	case t.AudioBitrate > 0:

@@ -612,6 +612,14 @@ const settings: typeof en = {
       normalizeConvertedAudio: 'Uniforma il volume dei video convertiti',
       normalizeConvertedAudioHelp:
         'Porta l’audio dei film, degli episodi e dei canali che il server converte allo stesso volume percepito, -16 LUFS, così i titoli bassi suonano più forte e quelli forti più piano, con un limitatore dopo. Se attivato, il volume nel missaggio in stereo non cambia più il livello. La riproduzione diretta, l’audio inviato così com’è e la musica non cambiano mai. Disattivato per impostazione predefinita.',
+      dynamicRangeCompression: 'Gamma dinamica dell’audio Dolby convertito',
+      dynamicRangeCompressionHelp:
+        'Come le tracce AC-3 ed E-AC-3 (Dolby Digital e Dolby Digital Plus) che il server converte applicano la compressione che contengono, che alza i passaggi tenui e abbassa quelli forti. «Come codificata» è il modo in cui FFmpeg e Jellyfin le decodificano. La riproduzione diretta e l’audio inviato così com’è restano all’applicazione.',
+      dynamicRangeCompressions: {
+        encoded: 'Come codificata',
+        none: 'Nessuna (gamma completa)',
+        night: 'Notte (passaggi tenui più forti)',
+      },
       maxAudioChannels: 'Numero massimo di canali audio',
       maxAudioChannelsHelp:
         'L’audio convertito mantiene al massimo questo numero di canali, anche se l’applicazione ne accetta di più.',

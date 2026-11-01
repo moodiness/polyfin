@@ -579,6 +579,8 @@ export type Settings = {
   downmixBoost: number
   /** Evens the loudness of converted video audio at -16 LUFS; direct play, copied audio and music keep theirs. */
   normalizeConvertedAudio: boolean
+  /** How converted AC-3 and E-AC-3 apply their tracks' dynamic range compression. */
+  dynamicRangeCompression: DynamicRangeCompression
   /** Most channels of converted audio, 0 for no limit but the app's. */
   maxAudioChannels: number
   /** Bitrate of converted audio per channel, in kb/s; 0 keeps Polyfin's. */
@@ -867,6 +869,7 @@ export type ToneMappingAlgorithm =
 export type DeinterlaceMethod = 'yadif' | 'bwdif'
 export type AdaptiveQuality = 'off' | 'remote' | 'always'
 export type DownmixAlgorithm = 'None' | 'Dave750' | 'NightmodeDialogue' | 'Rfc7845' | 'Ac4'
+export type DynamicRangeCompression = 'encoded' | 'none' | 'night'
 export type SubtitleOcr = 'off' | 'played' | 'scans'
 
 /** A GPU conversions run on. */

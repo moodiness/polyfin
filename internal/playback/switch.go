@@ -406,7 +406,7 @@ func (c *carry) audio(r *hls.Remux, analysis media.Analysis, played hls.Remux, t
 	}
 	if played.AudioCodec != "" {
 		r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioRate = played.AudioCodec, played.AudioChannels, played.AudioBitrate, rate
-		r.AudioFilter = t.videoAudio(AudioTrack(audio), played.AudioChannels, rate)
+		r.AudioFilter, r.AudioDecoder = t.videoAudio(AudioTrack(audio), played.AudioChannels, rate), t.decoder(audio.Codec)
 		return nil
 	}
 	if audio.Codec == first.Codec && audio.Channels == first.Channels && rate == 0 && strings.EqualFold(audio.Profile, first.Profile) {
@@ -420,7 +420,7 @@ func (c *carry) audio(r *hls.Remux, analysis media.Analysis, played hls.Remux, t
 		r.AudioBitrate = cmp.Or(audioBitrate(first), audioBitrateFor(r.AudioChannels, 0))
 	}
 	// Converted into what was copied, the audio is mixed down to stereo
-	// alone: the copy was not normalized.
+	// alone: the copy was neither normalized nor decoded by the server.
 	if r.AudioChannels == 2 && audio.Channels > 2 {
 		r.AudioFilter = t.downmix(audio.Channels, audio.ChannelLayout)
 	}

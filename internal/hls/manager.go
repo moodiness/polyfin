@@ -100,6 +100,11 @@ type Remux struct {
 	// AudioFilter is the filter graph converted audio goes through, such
 	// as a downmix to stereo, empty for none.
 	AudioFilter string
+	// AudioDecoder are options of the decoder of converted audio, as
+	// names and values in turn, such as AC-3's drc_scale and its value:
+	// FFmpeg gives them to the Audio stream alone, and none to copied
+	// audio.
+	AudioDecoder []string
 	// Threads is how many threads FFmpeg converts with, 0 letting it
 	// choose.
 	Threads int
@@ -2054,6 +2059,7 @@ func (r Remux) args(n int, lookback time.Duration) []string {
 		args = append(args, r.Encode.inputs()...)
 	}
 	args = append(args, r.InputOptions...)
+	args = append(args, r.decoderArgs()...)
 	args = append(args, "-copyts", "-i", r.Input)
 	video := "0:" + strconv.Itoa(r.Video)
 	if r.Encode != nil && r.Encode.Burns() {

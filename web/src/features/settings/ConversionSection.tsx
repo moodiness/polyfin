@@ -3,6 +3,7 @@ import type {
   AdaptiveQuality,
   DeinterlaceMethod,
   DownmixAlgorithm,
+  DynamicRangeCompression,
   EncoderPreset,
   HardwareAcceleration,
   HardwareDecodingCodec,
@@ -544,6 +545,22 @@ export default function ConversionSection({
           checked={form.normalizeConvertedAudio}
           onChange={(normalizeConvertedAudio) => update({ normalizeConvertedAudio })}
         />
+        <FieldRow
+          anchor="dynamic-range-compression"
+          label={c.dynamicRangeCompression}
+          help={c.dynamicRangeCompressionHelp}
+          error={error('dynamic-range-compression')}
+        >
+          <Select
+            value={form.dynamicRangeCompression}
+            options={choices<DynamicRangeCompression>('dynamicRangeCompression').map((choice) => ({
+              value: choice,
+              label: c.dynamicRangeCompressions[choice],
+            }))}
+            onValue={(dynamicRangeCompression) => update({ dynamicRangeCompression })}
+            className="max-w-xs"
+          />
+        </FieldRow>
         <FieldRow
           anchor="max-audio-channels"
           label={c.maxAudioChannels}

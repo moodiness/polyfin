@@ -745,6 +745,7 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidDeinterlaceMethod, http.StatusBadRequest, "invalid_deinterlace_method"},
 		{accounts.ErrInvalidDownmixAlgorithm, http.StatusBadRequest, "invalid_downmix_algorithm"},
 		{accounts.ErrInvalidDownmixBoost, http.StatusBadRequest, "invalid_downmix_boost"},
+		{accounts.ErrInvalidDynamicRange, http.StatusBadRequest, "invalid_dynamic_range_compression"},
 		{accounts.ErrInvalidMaxAudioChannels, http.StatusBadRequest, "invalid_max_audio_channels"},
 		{accounts.ErrInvalidAudioBitrate, http.StatusBadRequest, "invalid_audio_bitrate_per_channel"},
 		{accounts.ErrInvalidEncodingThreads, http.StatusBadRequest, "invalid_encoding_threads"},

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -87,7 +88,8 @@ func (m *Manager) newTrack(key Key, remux Remux, release func()) (*track, error)
 // sameTrack reports whether two remuxes make the same audio.
 func sameTrack(a, b Remux) bool {
 	return a.Audio == b.Audio && a.ADTS == b.ADTS && a.AudioCodec == b.AudioCodec && a.AudioChannels == b.AudioChannels &&
-		a.AudioBitrate == b.AudioBitrate && a.AudioFilter == b.AudioFilter && a.Format == b.Format && a.Plan.Len() == b.Plan.Len()
+		a.AudioBitrate == b.AudioBitrate && a.AudioFilter == b.AudioFilter && slices.Equal(a.AudioDecoder, b.AudioDecoder) &&
+		a.Format == b.Format && a.Plan.Len() == b.Plan.Len()
 }
 
 func (t *track) path(n int) string {
@@ -417,6 +419,7 @@ func (r Remux) trackArgs(n int) []string {
 	seek, _ := r.seekArgs(n, r.Lookback)
 	args = append(args, seek...)
 	args = append(args, r.InputOptions...)
+	args = append(args, r.decoderArgs()...)
 	args = append(args, "-copyts", "-i", r.Input, "-map", "0:"+strconv.Itoa(r.Audio), "-map_metadata", "-1", "-map_chapters", "-1", "-c", "copy")
 	args = append(args, r.audioArgs()...)
 	args = append(args, "-bsf:a", r.audioFilters())

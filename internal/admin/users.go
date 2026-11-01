@@ -617,6 +617,7 @@ type settingsJSON struct {
 	MaxAudioChannels           *int                   `json:"maxAudioChannels"`
 	AudioBitratePerChannel     *int                   `json:"audioBitratePerChannel"`
 	NormalizeConvertedAudio    *bool                  `json:"normalizeConvertedAudio"`
+	DynamicRangeCompression    *string                `json:"dynamicRangeCompression"`
 	EncodingThreads            *int                   `json:"encodingThreads"`
 	AheadSeconds               *int                   `json:"aheadSeconds"`
 	KeepConvertedVideo         *bool                  `json:"keepConvertedVideo"`
@@ -974,6 +975,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		MaxAudioChannels:           &settings.MaxAudioChannels,
 		AudioBitratePerChannel:     &settings.AudioBitratePerChannel,
 		NormalizeConvertedAudio:    &settings.NormalizeConvertedAudio,
+		DynamicRangeCompression:    &settings.DynamicRangeCompression,
 		EncodingThreads:            &settings.EncodingThreads,
 		AheadSeconds:               &settings.AheadSeconds,
 		KeepConvertedVideo:         &settings.KeepConvertedVideo,
@@ -1784,6 +1786,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		MaxAudioChannels:           valueOr(body.MaxAudioChannels, current.MaxAudioChannels),
 		AudioBitratePerChannel:     valueOr(body.AudioBitratePerChannel, current.AudioBitratePerChannel),
 		NormalizeConvertedAudio:    valueOr(body.NormalizeConvertedAudio, current.NormalizeConvertedAudio),
+		DynamicRangeCompression:    valueOr(body.DynamicRangeCompression, current.DynamicRangeCompression),
 		EncodingThreads:            valueOr(body.EncodingThreads, current.EncodingThreads),
 		AheadSeconds:               valueOr(body.AheadSeconds, current.AheadSeconds),
 		KeepConvertedVideo:         valueOr(body.KeepConvertedVideo, current.KeepConvertedVideo),

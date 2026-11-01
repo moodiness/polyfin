@@ -112,6 +112,32 @@ func TestTuningChangesConversions(t *testing.T) {
 	if got := ConvertAudio("aac", "", AudioSource{Channels: 2, SampleRate: 44_100}, 0, Tuning{Normalize: true}); got == nil || got.Filter != normalized+"44100,"+limited {
 		t.Errorf("normalized at 44.1 kHz: %+v", got)
 	}
+	// Converted AC-3 and E-AC-3 apply their dynamic range compression as
+	// chosen, through their decoder; other codecs have none to apply.
+	for _, tc := range []struct {
+		codec, drc string
+		want       []string
+	}{
+		{"eac3", "", nil},
+		{"eac3", "none", []string{"drc_scale", "0"}},
+		{"eac3", "night", []string{"drc_scale", "2"}},
+		{"ac3", "none", []string{"drc_scale", "0"}},
+		{"AC3", "night", []string{"drc_scale", "2"}},
+		{"aac", "none", nil},
+		{"truehd", "night", nil},
+	} {
+		got := ConvertAudio("aac", "2", AudioSource{Codec: tc.codec, Channels: 6, ChannelLayout: "5.1(side)"}, 0, Tuning{DRC: tc.drc})
+		if got == nil || !slices.Equal(got.Decoder, tc.want) {
+			t.Errorf("%s, %q: %+v, want the decoder's %q", tc.codec, tc.drc, got, tc.want)
+			continue
+		}
+		r := hls.Remux{Audio: 1}
+		(Remux{ConvertAudio: got}).convert(&r, media.Stream{Codec: "h264"}, Tuning{})
+		if !slices.Equal(r.AudioDecoder, tc.want) {
+			t.Errorf("%s, %q: the encoding's decoder %q, want %q", tc.codec, tc.drc, r.AudioDecoder, tc.want)
+		}
+	}
+
 	// A track converted on its own, progressively or into HLS segments,
 	// is mixed down to stereo the same way, as Jellyfin 12.2 does.
 	profile := &DeviceProfile{TranscodingProfiles: []TranscodingProfile{{Type: "Audio", Container: "mp3", AudioCodec: "mp3",
@@ -183,32 +209,33 @@ func TestUntunedConversionKeepsItsFrameRate(t *testing.T) {
 }
 
 // A source switched to during a play converts its audio as the play did:
-// normalized when the play's audio was converted, at the play's rate; only
-// mixed down to stereo when it stands for audio the play copied.
-func TestSwitchedSourceNormalizesAsThePlay(t *testing.T) {
+// normalized when the play's audio was converted, at the play's rate, with
+// the dynamic range compression chosen; only mixed down to stereo when it
+// stands for audio the play copied.
+func TestSwitchedSourceConvertsAsThePlay(t *testing.T) {
 	before := media.Analysis{Streams: []media.Stream{{Index: 1, Type: "audio", Codec: "aac", Channels: 2, SampleRate: 48_000}}}
 	after := media.Analysis{Streams: []media.Stream{{Index: 1, Type: "audio", Codec: "eac3", Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 44_100}}}
 	c := &carry{remux: Remux{Audio: 1, Format: hls.TS}, analysis: before}
-	tuning := Tuning{DownmixBoost: 2, Normalize: true}
+	tuning := Tuning{DownmixBoost: 2, Normalize: true, DRC: "night"}
 	var converted hls.Remux
 	if err := c.audio(&converted, after, hls.Remux{AudioCodec: "aac", AudioChannels: 2, AudioBitrate: 384_000}, tuning); err != nil {
 		t.Fatal(err)
 	}
 	if want := "aformat=channel_layouts=stereo,volume=2,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000,alimiter=limit=0.841395:level=disabled"; converted.AudioFilter != want ||
-		converted.AudioRate != 48_000 {
-		t.Errorf("after a conversion: %q at %d Hz, want %q", converted.AudioFilter, converted.AudioRate, want)
+		converted.AudioRate != 48_000 || !slices.Equal(converted.AudioDecoder, []string{"drc_scale", "2"}) {
+		t.Errorf("after a conversion: %q at %d Hz, decoder %q, want %q", converted.AudioFilter, converted.AudioRate, converted.AudioDecoder, want)
 	}
 	var copied hls.Remux
 	if err := c.audio(&copied, after, hls.Remux{}, tuning); err != nil {
 		t.Fatal(err)
 	}
-	if want := "aformat=channel_layouts=stereo,volume=2,alimiter=limit=0.841395:level=disabled"; copied.AudioFilter != want {
-		t.Errorf("after a copy: %q, want %q", copied.AudioFilter, want)
+	if want := "aformat=channel_layouts=stereo,volume=2,alimiter=limit=0.841395:level=disabled"; copied.AudioFilter != want || copied.AudioDecoder != nil {
+		t.Errorf("after a copy: %q, decoder %q, want %q", copied.AudioFilter, copied.AudioDecoder, want)
 	}
 }
 
 // A conversion with a slower preset, a quality factor, HEVC and a downmix
-// to stereo, normalized, plays.
+// to stereo, normalized, its AC-3 decoded with night compression, plays.
 func TestTunedConversionPlays(t *testing.T) {
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
@@ -229,16 +256,18 @@ func TestTunedConversionPlays(t *testing.T) {
 	if !slices.Contains(m.Encoders(), "libx265") {
 		t.Skip("FFmpeg has no libx265")
 	}
-	tuning := Tuning{Preset: "faster", HEVCQuality: 30, PreferHEVC: true, Downmix: "Dave750", DownmixBoost: 1.5, MaxAudioChannels: 2, Normalize: true}
+	tuning := Tuning{Preset: "faster", HEVCQuality: 30, PreferHEVC: true, Downmix: "Dave750", DownmixBoost: 1.5, MaxAudioChannels: 2, Normalize: true,
+		DRC: "night"}
 	can := Capabilities{Encoders: m.Encoders(), Tuning: tuning}
 	stream := media.Stream{Index: 0, Type: "video", Codec: "h264", Width: 320, Height: 180, AverageRate: 24, BitDepth: 8}
 	remux := Remux{Format: hls.FMP4,
 		ConvertVideo: ConvertVideo("hevc,h264", Limits{}, MediaStream{Codec: "h264", VideoRange: "SDR", Width: new(320), Height: new(180)}, can),
-		ConvertAudio: ConvertAudio("aac", "", AudioSource{Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 48_000}, 0, tuning)}
+		ConvertAudio: ConvertAudio("aac", "", AudioSource{Codec: "ac3", Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 48_000}, 0, tuning)}
 	plan := hls.NewPlan([]time.Duration{0, 6 * time.Second}, 12*time.Second)
 	r := hls.Remux{Input: input, Video: 0, Audio: 1, Format: hls.FMP4, Plan: plan}
 	remux.convert(&r, stream, tuning)
-	if e := r.Encode; e == nil || e.Encoder != "libx265" || e.Preset != "faster" || e.Quality != 30 || r.AudioChannels != 2 || !strings.HasPrefix(r.AudioFilter, "pan=stereo") {
+	if e := r.Encode; e == nil || e.Encoder != "libx265" || e.Preset != "faster" || e.Quality != 30 || r.AudioChannels != 2 || !strings.HasPrefix(r.AudioFilter, "pan=stereo") ||
+		!slices.Equal(r.AudioDecoder, []string{"drc_scale", "2"}) {
 		t.Fatalf("conversion: %+v, audio %s %d %q", e, r.AudioCodec, r.AudioChannels, r.AudioFilter)
 	}
 	open := func(context.Context) (hls.Remux, func(), error) { return r, func() {}, nil }

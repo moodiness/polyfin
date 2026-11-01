@@ -745,7 +745,7 @@ func (remux Remux) convert(r *hls.Remux, video media.Stream, t Tuning) {
 		r.Encode = remux.encoding(c, video, t)
 	}
 	if c := remux.ConvertAudio; c != nil && r.Audio >= 0 {
-		r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter = c.Codec, c.Channels, c.Bitrate, c.Filter
+		r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter, r.AudioDecoder = c.Codec, c.Channels, c.Bitrate, c.Filter, c.Decoder
 	}
 	if r.Encode != nil || r.AudioCodec != "" {
 		r.Threads = t.Threads

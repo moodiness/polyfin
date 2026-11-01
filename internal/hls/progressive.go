@@ -188,6 +188,7 @@ func (r Remux) progressiveArgs(start time.Duration) []string {
 		args = append(args, r.Encode.inputs()...)
 	}
 	args = append(args, r.InputOptions...)
+	args = append(args, r.decoderArgs()...)
 	args = append(args, "-copyts", "-i", r.Input)
 	video := "0:" + strconv.Itoa(r.Video)
 	if r.Encode != nil && r.Encode.Burns() {

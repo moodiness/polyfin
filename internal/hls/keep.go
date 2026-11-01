@@ -107,7 +107,7 @@ func (m *Manager) keeps(key Key) bool {
 func videoAlone(open Opener) Opener {
 	return func(ctx context.Context) (Remux, func(), error) {
 		r, release, err := open(ctx)
-		r.Audio, r.ADTS, r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter = -1, false, "", 0, 0, ""
+		r.Audio, r.ADTS, r.AudioCodec, r.AudioChannels, r.AudioBitrate, r.AudioFilter, r.AudioDecoder = -1, false, "", 0, 0, "", nil
 		r.Switch = nil
 		return r, release, err
 	}

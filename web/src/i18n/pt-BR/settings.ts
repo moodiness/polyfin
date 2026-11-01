@@ -603,6 +603,14 @@ const settings: typeof en = {
       normalizeConvertedAudio: 'Equalizar a intensidade sonora dos vídeos convertidos',
       normalizeConvertedAudioHelp:
         'Leva o som dos filmes, episódios e canais que o servidor converte à mesma intensidade sonora, -16 LUFS, para que títulos baixos toquem mais alto e títulos altos mais baixo, com um limitador depois. Enquanto ativado, o volume ao mixar para estéreo não muda mais o nível. A reprodução direta, o som enviado como está e a música nunca mudam. Desativado por padrão.',
+      dynamicRangeCompression: 'Faixa dinâmica do áudio Dolby convertido',
+      dynamicRangeCompressionHelp:
+        'Como as faixas AC-3 e E-AC-3 (Dolby Digital e Dolby Digital Plus) que o servidor converte aplicam a compressão que trazem, que aumenta os trechos baixos e reduz os altos. “Como codificada” é como o FFmpeg e o Jellyfin as decodificam. A reprodução direta e o som enviado como está ficam a cargo do aplicativo.',
+      dynamicRangeCompressions: {
+        encoded: 'Como codificada',
+        none: 'Nenhuma (faixa completa)',
+        night: 'Noite (trechos baixos mais altos)',
+      },
       maxAudioChannels: 'Máximo de canais de áudio',
       maxAudioChannelsHelp:
         'O som convertido mantém no máximo este número de canais, mesmo que o aplicativo aceite mais.',
