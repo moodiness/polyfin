@@ -2437,7 +2437,9 @@ async function run(scenario) {
 // The item menus jellyfin-web opens from a card's ⋮ button, a right click
 // on a card, or a title page's ⋮ button get Polyfin's entries: "Remove
 // from Continue Watching" for a card of a row whose cards all resume,
-// "Hide this title" for a title, or a season or an episode of one, and
+// "Remove from Next Up" for an episode's card in Next Up, whose series
+// then leaves Next Up's answers kept, unless played since, "Hide this
+// title" for a title, or a season or an episode of one, and
 // "Show this title again" for a hidden one, in the page's language. An
 // entry closes the menu as Back does, then sends its change. It runs in
 // Node.js, in a context that stands for the browser and jellyfin-web.
@@ -2465,6 +2467,8 @@ func TestItemMenusGetPolyfinsEntries(t *testing.T) {
 		"a title's page":                              "Hide this title => back, POST Polyfin/UserItems/" + page + "/Hidden, toast This title is hidden from your lists. | refreshed m1,m2" + untouched,
 		"an episode of a hidden series":               "Show this title again => back, DELETE Polyfin/UserItems/m1/Hidden, toast This title is back in your lists. | refreshed m1,m2" + untouched,
 		"an episode card whose series the user hides": "Hide this title => back, POST Polyfin/UserItems/m1/Hidden, card m1 gone, toast This title is hidden from your lists. | refreshed m3 | reloaded m3 | another user m1,m2,m3 | later m1,m2,m3",
+		"a Next Up card of an episode":                "Remove from Next Up | Hide this title => back, DELETE Polyfin/UserItems/m1/NextUp, card m1 gone, toast This series is off Next Up until you play one of its episodes or a new one comes out. | refreshed m2 | reloaded m2 | another user m1,m2 | later m1,m2",
+		"a Next Up card of an episode played again":   "Remove from Next Up | Hide this title => back, DELETE Polyfin/UserItems/m1/NextUp, card m1 gone, toast This series is off Next Up until you play one of its episodes or a new one comes out. | refreshed m1,m2" + untouched,
 		"a person's card":                             "",
 		"another click before the menu":               "",
 		"a menu too late":                             "",
@@ -2491,7 +2495,10 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
     }
     // A row of cards, the first the one the menu is for: a div, whose
     // fetchData jellyfin-web sets once the script runs.
-    const section = { classList: classes(['verticalSection']) }
+    // Next Up's section on the home page has its title link to the Next
+    // Up page.
+    const section = { classList: classes(['verticalSection']),
+      querySelector: (s) => (name.includes('Next Up') && s === '.sectionTitleContainer a[href*="type=nextup"]' ? {} : null) }
     class HTMLDivElement {}
     const row = Object.assign(Object.create(HTMLDivElement.prototype), { cards: [] })
     row.closest = (s) => (s === '.verticalSection' ? section : null)
@@ -2500,14 +2507,16 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
     // What the row drew last, as jellyfin-web keeps it, and draws again
     // when it refreshes within the minute: a Continue Watching row.
     const kept = { Items: [
-      { Id: 'm1', UserData: { PlaybackPositionTicks: 6000, LastPlayedDate: name.includes('played again') ? '2026-10-03T20:00:00.0000000Z' : '2026-10-01T20:00:00.0000000Z' } },
+      { Id: 'm1', SeriesId: name.includes('Next Up') ? 's1' : undefined, UserData: { PlaybackPositionTicks: 6000,
+        LastPlayedDate: name.includes('played again') ? '2026-10-03T20:00:00.0000000Z' : name.includes('Next Up') ? undefined : '2026-10-01T20:00:00.0000000Z' } },
       { Id: 'm2', SeriesId: name.includes('user hides') ? 's1' : undefined, UserData: { PlaybackPositionTicks: 6000 } },
       { Id: 'm3', UserData: { PlaybackPositionTicks: 6000 } },
     ].filter((item) => name.includes('user hides') || item.Id !== 'm3') }
     const card = (id, resumes) => {
       const c = { id, attributes: { 'data-id': id, 'data-positionticks': resumes ? '6000' : null } }
       c.getAttribute = (a) => c.attributes[a] || null
-      c.closest = (s) => (s === '.card[data-id]' || s === '.card[data-id], .listItem[data-id]' ? c : s === '.itemsContainer' ? row : null)
+      c.closest = (s) => (s === '.card[data-id]' || s === '.card[data-id], .listItem[data-id]' ? c : s === '.itemsContainer' ? row
+        : s === '.verticalSection' ? section : null)
       c.remove = () => { row.cards = row.cards.filter((x) => x !== c); did.push('card ' + id + ' gone') }
       return c
     }
@@ -2617,6 +2626,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve))
             localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } },
           Date: { now: () => now, parse: Date.parse }, setTimeout: () => {}, clearTimeout: () => {}, addEventListener: () => {},
         })
+        again.closest = row.closest
         again.fetchData = () => Promise.resolve(kept)
         return (await again.fetchData()).Items.map((item) => item.Id).join(',')
       }
