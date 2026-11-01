@@ -42,6 +42,7 @@ func (h *Handler) userDataRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Shows/NextUp", h.nextUp)
 	signedIn(http.MethodGet, "/Shows/Upcoming", h.upcoming)
 	h.hiddenTitleRoutes(signedIn)
+	h.nextUpRemovalRoutes(signedIn)
 	h.watchlistRoutes(signedIn)
 }
 
