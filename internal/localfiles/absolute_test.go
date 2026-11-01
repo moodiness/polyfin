@@ -207,3 +207,41 @@ func TestAbsoluteNamesFollowTheCatalog(t *testing.T) {
 		t.Errorf("the versions of an episode no longer listed: %v", got)
 	}
 }
+
+// A file named by an absolute number that a version before such names
+// were read stored unmatched, its name unreadable, is read again by the
+// next scan, unchanged as it is: it becomes the catalog's episode, in a
+// show whose other files are matched as in one none of whose files is.
+func TestAbsoluteNamesStoredUnreadBeforeAreReadAgain(t *testing.T) {
+	t.Parallel()
+	e := newEnvWith(t, newTalesAddon(t))
+	ctx := t.Context()
+	addon, _ := e.folder(KindShows, map[string]int{
+		"Harbor Tales [imdbid-tt0700003]/Season 01/Harbor Tales S01E05.mkv": 10,
+		"Harbor Tales [imdbid-tt0700003]/Season 02/Harbor Tales - 41.mkv":   10,
+		"Tales Again [imdbid-tt0700003]/Harbor Tales - 52.mkv":              10,
+	})
+	// As the files were stored before: unmatched, their names unreadable.
+	tag, err := e.pool.Exec(ctx, `UPDATE local_files SET stremio_id = NULL, imdb_id = '', tmdb_id = '', name = '', poster = '',
+		title_year = NULL, matched_by = '', reason = $2, season = NULL, episode = NULL, last_episode = NULL, absolute = NULL, numbering = ''
+		WHERE addon_id = $1 AND path LIKE '%Harbor Tales - %'`, addon.ID, reasonUnreadableName)
+	if err != nil || tag.RowsAffected() != 2 {
+		t.Fatalf("storing the files as before: %v %v", tag, err)
+	}
+	if got := e.streamFiles(addon.ID, "tt0700003:2:1"); len(got) != 0 {
+		t.Fatalf("the versions before the scan: %v", got)
+	}
+	if err := e.service.Scan(ctx, addon.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.streamFiles(addon.ID, "tt0700003:2:1"); len(got) != 1 || got[0] != "Harbor Tales - 41.mkv" {
+		t.Errorf("the versions of S02E01 after the scan: %v", got)
+	}
+	if got := e.streamFiles(addon.ID, "tt0700003:2:12"); len(got) != 1 || got[0] != "Harbor Tales - 52.mkv" {
+		t.Errorf("the versions of S02E12 after the scan: %v", got)
+	}
+	if got := e.files(addon.ID); got["Harbor Tales [imdbid-tt0700003]/Season 02/Harbor Tales - 41.mkv"] != "tt0700003" ||
+		got["Tales Again [imdbid-tt0700003]/Harbor Tales - 52.mkv"] != "tt0700003" {
+		t.Errorf("the files after the scan: %v", got)
+	}
+}

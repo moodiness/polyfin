@@ -177,6 +177,8 @@ Such a file, in a season folder or at the top of its show's folder, is the 41st 
 - The catalog is the one the server's metadata addons give: a user's own metadata addon numbering the show otherwise moves no file. A catalog missing an episode moves every file numbered after it onto the next one.
 - The folder's page under **Content › Sources** counts the files matched so: "3 files are matched by their absolute number".
 
+Polyfin reads absolute numbers from version 0.58.0 on. On a server upgraded from an earlier version, which left such files unmatched as their names could not be read, the scan at the first start reads them again, unchanged as they are: each becomes a version of the catalog's episode of its place, or an episode of its own, without the show's title being searched again when its other files are matched.
+
 ### Video files
 
 A scan reads videos by their extension, in any letter case: Matroska and WebM (`.mkv`, `.webm`), MP4 and QuickTime (`.mp4`, `.m4v`, `.mov`), MPEG-TS (`.ts`, `.m2ts`, `.mts`, and `.m2t`, `.tp` and `.trp`, as TV recordings are often named), MPEG program streams (`.mpg`, `.mpeg`, `.vob`), AVI (`.avi`), Windows Media (`.wmv`), Flash Video (`.flv`) and Ogg (`.ogv`). The `.VOB` files of a `VIDEO_TS` folder are its DVD's, never videos of their own (see [DVD folders](#dvd-folders)).
