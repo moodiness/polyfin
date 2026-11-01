@@ -266,17 +266,21 @@ func (s *Service) folder(ctx context.Context, v view, id accounts.ID) (Item, str
 
 // folderChildren lists a folder's videos, recording them. A title whose
 // description has no videos, listed as a folder before its description
-// was known, lists itself, the video it is.
+// was known, lists itself, the video it is. A listing narrowed by type
+// (see WithKinds) keeps only the items of the kinds it asks for, its
+// total counting them alone, as Jellyfin counts a folder's children.
 func (s *Service) folderChildren(ctx context.Context, v view, id accounts.ID, start, count int) (Page, error) {
 	folder, meta, err := s.folder(ctx, v, id)
 	if err != nil {
 		return Page{}, err
 	}
+	leftOut := func(item Item) bool { return !keepsKind(ctx, item.Kind) }
 	if folder.Kind != KindFolder {
-		return slicePage(s.overridden([]Item{folder}), start, count), nil
+		return slicePage(slices.DeleteFunc(s.overridden([]Item{folder}), leftOut), start, count), nil
 	}
 	videos := folderVideos(folder, meta, v.words, s.now())
-	return slicePage(s.overridden(videos), start, count), s.save(ctx, folderRecords(folder.ID, meta, videos))
+	listed := slices.DeleteFunc(slices.Clone(videos), leftOut)
+	return slicePage(s.overridden(listed), start, count), s.save(ctx, folderRecords(folder.ID, meta, videos))
 }
 
 // folderRecords are the records of a folder's videos, listed from its
