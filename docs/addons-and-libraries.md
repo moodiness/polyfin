@@ -214,6 +214,10 @@ A video, or an episode of a series, may carry its own streams in the title's det
 - A folder is a `Folder` item (`IsFolder` true) with `ChildCount`, `RecursiveItemCount` and `UserData.UnplayedItemCount`; its videos are `Video` items whose `ParentId` is the folder, and `/Items?ParentId=` lists them. A title without videos is a `Video` item of the library. The library's `CollectionType` is `homevideos`.
 - `/Items?ParentId=<library>&Recursive=true&IncludeItemTypes=Video` lists the videos through the folders, and tells more may follow while a folder's details are not known yet. `IncludeItemTypes=Folder` with `searchTerm` searches folders.
 - A title keeps its item when its details gain or lose videos: it is listed as a folder or a video as they tell.
+- A folder's videos listed with `IncludeItemTypes`, `ExcludeItemTypes`, `MediaTypes` or `Filters=IsFolder` count only those kept in `TotalRecordCount`, as Jellyfin counts a folder's children.
+- A folder plays nothing itself: its `PlaybackInfo`, `/Videos/{id}/stream` and `/Items/{id}/Download` answer 400, as Jellyfin's do for an item without media sources (see [Opening streams and downloading files](jellyfin-compatibility.md#opening-streams-and-downloading-files)). It is no series: `/Shows/{id}/Seasons` and `/Shows/{id}/Episodes` answer 404, as Jellyfin's do ([TvShowsController.cs, lines 261 to 263 and 351 to 355](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/TvShowsController.cs#L261-L355)). Apps open it with `/Items?ParentId=`, and play it as jellyfin-web does, through its videos.
+
+**Compared with Jellyfin:** a folder lists its videos in the order its addon gives them, whatever `SortBy` asks, unless the listing is `Recursive` and names item types, as jellyfin-web's **Videos** view does: Jellyfin sorts a folder's children as asked, and jellyfin-web asks a folder's page for them by name. The addon's order is that of the files or uploads it lists, which their names do not always keep.
 
 ### Library images
 
