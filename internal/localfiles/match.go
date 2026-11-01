@@ -1027,8 +1027,11 @@ func (s *Service) Rematch(ctx context.Context, kind library.Kind, stremioID stri
 // titles' (see titleUnit), or of the disc image it is (DiscDVDImage,
 // DiscBluRayImage); empty for any other file. A title of a show's disc has
 // the kind of its disc, its unit its show's folder, and DiscTitle telling
-// which it is. In a music folder, it is a track whose tags and names give
-// no title ("no_title") or no album ("no_album"), which no link links.
+// which it is. A show's file whose name tells no episode has, rather than
+// reasonUnreadableName, why (see episodeReason), and Number, for
+// reasonAbsoluteNumber, the absolute number its name tells. In a music
+// folder, it is a track whose tags and names give no title ("no_title")
+// or no album ("no_album"), which no link links.
 type Unmatched struct {
 	Path          string
 	Unit          string
@@ -1036,6 +1039,7 @@ type Unmatched struct {
 	Year          int
 	Size          int64
 	Reason        string
+	Number        int
 	SearchAddon   string
 	SearchFailure string
 	Disc          string
@@ -1054,11 +1058,11 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 		return nil, 0, err
 	}
 	query := `SELECT f.path, f.unit, f.title, coalesce(f.year, 0), f.size, f.reason, f.search_addon, f.search_failure,
-			coalesce(i.kind, '') AS image FROM local_files f
+			coalesce(i.kind, '') AS image, f.season IS NULL AS episodeless FROM local_files f
 		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = regexp_replace(f.path, '#[0-9]+$', '')
 		WHERE f.addon_id = $1 AND f.stremio_id IS NULL`
 	if folder.Kind == KindMusic {
-		query = `SELECT path, path, title, year, size, reason, '', '', '' AS image FROM local_tracks WHERE addon_id = $1 AND reason <> ''`
+		query = `SELECT path, path, title, year, size, reason, '', '', '' AS image, false FROM local_tracks WHERE addon_id = $1 AND reason <> ''`
 	}
 	var total int
 	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM ("+query+") u", id).Scan(&total); err != nil {
@@ -1071,7 +1075,8 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Unmatched, error) {
 		var u Unmatched
 		var image string
-		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason, &u.SearchAddon, &u.SearchFailure, &image)
+		var episodeless bool
+		err := row.Scan(&u.Path, &u.Unit, &u.Title, &u.Year, &u.Size, &u.Reason, &u.SearchAddon, &u.SearchFailure, &image, &episodeless)
 		u.Disc = imageKind(image)
 		if kind, disc, ok := discEntry(u.Path); ok && folder.Kind == KindMovies {
 			_, number, playlist := discPlaylist(u.Path)
@@ -1084,6 +1089,10 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 		}
 		if kind, _, ok := discEntry(u.Path); ok && folder.Kind == KindShows {
 			u.Disc = kind
+		}
+		// The show's name was read (its title), but not the episode's.
+		if folder.Kind == KindShows && u.Reason == reasonUnreadableName && episodeless && u.Title != "" && u.Disc == "" {
+			u.Reason, u.Number = episodeReason(u.Path)
 		}
 		return u, err
 	})

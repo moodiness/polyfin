@@ -362,6 +362,9 @@ type unmatchedJSON struct {
 	Year   *int   `json:"year"`
 	Size   int64  `json:"size"`
 	Reason string `json:"reason"`
+	// Number is the absolute number the name of a show's file tells, for
+	// "absolute_number"; null for another reason.
+	Number *int `json:"number"`
 	// Search tells, for a failed search ("search_failed"), the addon that
 	// failed it and why; null for another reason.
 	Search *searchFailureJSON `json:"search"`
@@ -414,6 +417,9 @@ func (h *handler) folderUnmatched(w http.ResponseWriter, r *http.Request) {
 	for _, u := range list {
 		file := unmatchedJSON{Path: u.Path, Unit: u.Unit, Title: u.Title, Size: u.Size, Reason: u.Reason, Disc: text(u.Disc),
 			Search: newSearchFailureJSON(u.SearchAddon, u.SearchFailure)}
+		if u.Number > 0 {
+			file.Number = new(u.Number)
+		}
 		if u.Year > 0 {
 			file.Year = new(u.Year)
 		}
@@ -424,6 +430,81 @@ func (h *handler) folderUnmatched(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		result.Files = append(result.Files, file)
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// unlistedShowJSON is a show of a local folder whose files hold episodes
+// its metadata addon does not list: its IMDb identifier, the name it was
+// matched to, a unit of its files, and those episodes' seasons, in order.
+// Described is false while the addon's own numbers are not known, until
+// the show is described again; catalogFirst and catalogLast are its first
+// and last episodes, specials left out unless it lists only specials,
+// null when it lists none or while they are not known.
+type unlistedShowJSON struct {
+	ImdbID       string               `json:"imdbId"`
+	Name         string               `json:"name"`
+	Unit         string               `json:"unit"`
+	Described    bool                 `json:"described"`
+	CatalogFirst *episodeNumberJSON   `json:"catalogFirst"`
+	CatalogLast  *episodeNumberJSON   `json:"catalogLast"`
+	Seasons      []unlistedSeasonJSON `json:"seasons"`
+}
+
+// episodeNumberJSON is an episode's season and number.
+type episodeNumberJSON struct {
+	Season  int `json:"season"`
+	Episode int `json:"episode"`
+}
+
+// unlistedSeasonJSON is a season of an unlistedShowJSON: the numbers its
+// files hold that the addon does not list, and those the addon lists in
+// the season, empty when it has no such season; each as ranges, [first,
+// last], of numbers that follow one another.
+type unlistedSeasonJSON struct {
+	Season  int      `json:"season"`
+	Files   [][2]int `json:"files"`
+	Catalog [][2]int `json:"catalog"`
+}
+
+// folderUnlisted lists the shows of a local folder whose files hold
+// episodes their metadata addon does not list, by name, with the files'
+// numbers next to the addon's.
+func (h *handler) folderUnlisted(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.folderScope(w, r); !ok {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	shows, err := h.Folders.Unlisted(r.Context(), id)
+	if h.answerFailure(w, r, err) {
+		return
+	}
+	ranges := func(list []localfiles.Range) [][2]int {
+		result := make([][2]int, len(list))
+		for i, r := range list {
+			result[i] = [2]int{r.First, r.Last}
+		}
+		return result
+	}
+	number := func(n *[2]int) *episodeNumberJSON {
+		if n == nil {
+			return nil
+		}
+		return &episodeNumberJSON{Season: n[0], Episode: n[1]}
+	}
+	result := struct {
+		Shows []unlistedShowJSON `json:"shows"`
+	}{Shows: make([]unlistedShowJSON, 0, len(shows))}
+	for _, show := range shows {
+		entry := unlistedShowJSON{ImdbID: show.StremioID, Name: show.Name, Unit: show.Unit, Described: show.Described,
+			CatalogFirst: number(show.First), CatalogLast: number(show.Last), Seasons: make([]unlistedSeasonJSON, len(show.Seasons))}
+		for i, season := range show.Seasons {
+			entry.Seasons[i] = unlistedSeasonJSON{Season: season.Season, Files: ranges(season.Files), Catalog: ranges(season.Listed)}
+		}
+		result.Shows = append(result.Shows, entry)
 	}
 	writeJSON(w, http.StatusOK, result)
 }

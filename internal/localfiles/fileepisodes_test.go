@@ -1,7 +1,10 @@
 package localfiles
 
 import (
+	"encoding/json"
+	"fmt"
 	"maps"
+	"reflect"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -88,6 +91,98 @@ func TestShowsListTheEpisodesTheirFilesHold(t *testing.T) {
 	folder, err := e.service.Folder(ctx, addon.ID)
 	if err != nil || folder.Unlisted != 4 {
 		t.Errorf("the episodes the addon does not list: %d %v", folder.Unlisted, err)
+	}
+}
+
+// A show linked to a series whose metadata addon lists fewer episodes
+// than its files hold is listed with the files' numbers next to the
+// addon's, once the series is described: those numbered after the
+// addon's last episode of a season beside the season's numbers, a season
+// the addon has not beside nothing but its range, specials left out. The
+// folder still counts them.
+func TestUnlistedEpisodesShowBothNumberings(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	ctx := t.Context()
+	admin, err := e.users.CreateUser(ctx, accounts.NewUser{Name: "admin", Password: "correct horse", IsAdministrator: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	addon, _ := e.folder(KindShows, map[string]int{
+		"Cisco Kid Files/Season 01/Cisco Kid S01E01.mkv": 10,
+		"Cisco Kid Files/Season 01/Cisco Kid S01E04.mkv": 10,
+		"Cisco Kid Files/Season 01/Cisco Kid S01E05.mkv": 10,
+		"Cisco Kid Files/Season 03/Cisco Kid S03E01.mkv": 10,
+	})
+	if err := e.service.Link(ctx, addon.ID, "Cisco Kid Files", "tt0042084"); err != nil {
+		t.Fatal(err)
+	}
+	show, ok := e.shelfSeries(admin)["The Cisco Kid"]
+	if !ok {
+		t.Fatalf("the folder's series: %v", e.shelfSeries(admin))
+	}
+	if _, err := e.library.Episodes(ctx, admin, show.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	shows, err := e.service.Unlisted(ctx, addon.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []UnlistedShow{{StremioID: "tt0042084", Name: "The Cisco Kid", Unit: "Cisco Kid Files", Described: true,
+		First: &[2]int{1, 1}, Last: &[2]int{2, 2}, Seasons: []UnlistedSeason{
+			{Season: 1, Files: []Range{{4, 5}}, Listed: []Range{{1, 3}}},
+			{Season: 3, Files: []Range{{1, 1}}},
+		}}}
+	if !reflect.DeepEqual(shows, want) {
+		t.Errorf("the shows with episodes only in the files:\n%s\nwant\n%s", printed(shows), printed(want))
+	}
+	folder, err := e.service.Folder(ctx, addon.ID)
+	if err != nil || folder.Unlisted != 3 {
+		t.Errorf("the episodes the addon does not list: %d %v", folder.Unlisted, err)
+	}
+}
+
+// printed is a value as JSON, its pointers followed.
+func printed(v any) string {
+	text, _ := json.Marshal(v)
+	return string(text)
+}
+
+// The files of a matched show whose names tell no episode are unmatched
+// with why: an absolute number only, with that number, an episode's
+// number outside a season's folder, an air date, or no number at all.
+func TestUnreadEpisodeNamesTellWhy(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	ctx := t.Context()
+	addon, _ := e.folder(KindShows, map[string]int{
+		"Cisco Kid Files/Season 01/Cisco Kid S01E01.mkv": 10,
+		"Cisco Kid Files/Season 02/Cisco Kid - 14.mkv":   10,
+		"Cisco Kid Files/Cisco Kid 15 [720p].mkv":        10,
+		"Cisco Kid Files/Cisco Kid E07.mkv":              10,
+		"Cisco Kid Files/Cisco Kid 1951-03-04.mkv":       10,
+		"Cisco Kid Files/Season 01/Cisco Kid Finale.mkv": 10,
+	})
+	if err := e.service.Link(ctx, addon.ID, "Cisco Kid Files", "tt0042084"); err != nil {
+		t.Fatal(err)
+	}
+	files, _, err := e.service.Unmatched(ctx, addon.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reasons := map[string]string{}
+	for _, file := range files {
+		reasons[file.Path] = fmt.Sprintf("%s %d", file.Reason, file.Number)
+	}
+	want := map[string]string{
+		"Cisco Kid Files/Season 02/Cisco Kid - 14.mkv":   "absolute_number 14",
+		"Cisco Kid Files/Cisco Kid 15 [720p].mkv":        "absolute_number 15",
+		"Cisco Kid Files/Cisco Kid E07.mkv":              "no_season 0",
+		"Cisco Kid Files/Cisco Kid 1951-03-04.mkv":       "air_date 0",
+		"Cisco Kid Files/Season 01/Cisco Kid Finale.mkv": "no_episode_number 0",
+	}
+	if !maps.Equal(reasons, want) {
+		t.Errorf("the unmatched files: %v, want %v", reasons, want)
 	}
 }
 

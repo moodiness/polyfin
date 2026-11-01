@@ -295,10 +295,11 @@ type Local interface {
 	// Episodes lists the episodes the files of folders hold for the
 	// series of a Stremio identifier, each named after its file, and
 	// NoteUnlisted records those of them a metadata addon's description
-	// of the series does not list, by season and number, which the
-	// folders' pages count (see fileepisodes.go).
+	// of the series does not list, by season and number, with those it
+	// lists, in order, which the folders' pages show (see
+	// fileepisodes.go).
 	Episodes(ctx context.Context, folders []accounts.ID, stremioID string) ([]stremio.Video, error)
-	NoteUnlisted(ctx context.Context, stremioID string, unlisted [][2]int) error
+	NoteUnlisted(ctx context.Context, stremioID string, unlisted, listed [][2]int) error
 	// HeldTitles reports which of the Stremio identifiers ids the
 	// catalogs of folders list as titles (see skiplocal.go).
 	HeldTitles(ctx context.Context, folders []accounts.ID, ids []string) (map[string]bool, error)
