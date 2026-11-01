@@ -129,6 +129,11 @@ type limitsJSON struct {
 	// LocalFirst offers the user the versions of local folders and network
 	// shares before the others, whatever the version order's criteria.
 	LocalFirst bool `json:"localFirst"`
+	// BoostVolume makes the user's web player louder in the browser;
+	// ConvertSound converts and evens the audio of their videos and
+	// channels, the video copied (see accounts.User).
+	BoostVolume  bool `json:"boostVolume"`
+	ConvertSound bool `json:"convertSound"`
 }
 
 func newLimitsJSON(limits accounts.Limits) limitsJSON {
@@ -158,6 +163,8 @@ func newLimitsJSON(limits accounts.Limits) limitsJSON {
 		QualityGroup:         limits.QualityGroup,
 		LiveTvChannels:       newChannelRuleJSON(limits.LiveTvChannels),
 		LocalFirst:           limits.LocalFirst,
+		BoostVolume:          limits.BoostVolume,
+		ConvertSound:         limits.ConvertSound,
 	}
 }
 
@@ -186,6 +193,8 @@ type limitChanges struct {
 	QualityGroup         *int                     `json:"qualityGroup"`
 	LiveTvChannels       *channelRuleJSON         `json:"liveTvChannels"`
 	LocalFirst           *bool                    `json:"localFirst"`
+	BoostVolume          *bool                    `json:"boostVolume"`
+	ConvertSound         *bool                    `json:"convertSound"`
 }
 
 // changes returns what l sets, or answers the request with its error and
@@ -210,6 +219,8 @@ func (l limitChanges) changes(w http.ResponseWriter) (accounts.UserChanges, bool
 		TorrentStreams:       l.TorrentStreams,
 		RemoteAccess:         l.RemoteAccess,
 		LocalFirst:           l.LocalFirst,
+		BoostVolume:          l.BoostVolume,
+		ConvertSound:         l.ConvertSound,
 	}
 	if p := l.ParentalControl; p != nil {
 		changes.Parental = &accounts.ParentalControl{MaxRating: p.MaxRating, MaxSubRating: p.MaxSubRating, BlockUnrated: p.BlockUnrated}
