@@ -520,7 +520,9 @@ func (s *Service) refreshMeta(ctx context.Context, addon installed, key metaKey,
 }
 
 // loadMeta reads a description kept in the database, and keeps it in
-// memory.
+// memory. An addon's notice kept as the title's description, before such
+// answers were refused (see stremio.Meta.Describes), is not read: the
+// title is described again.
 func (s *Service) loadMeta(ctx context.Context, addon installed, key metaKey) (fetched[stremio.Meta], bool) {
 	var data []byte
 	var kept fetched[stremio.Meta]
@@ -533,7 +535,7 @@ func (s *Service) loadMeta(ctx context.Context, addon installed, key metaKey) (f
 		}
 		return kept, false
 	}
-	if err := json.Unmarshal(data, &kept.value); err != nil {
+	if err := json.Unmarshal(data, &kept.value); err != nil || !kept.value.Describes(key.metaType, key.id) {
 		return kept, false
 	}
 	s.metas.Put(key, kept)
