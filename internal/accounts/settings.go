@@ -624,9 +624,10 @@ const (
 
 // The bounds and defaults of the numbers tuning conversions. The defaults
 // are what Polyfin did before they were settings: 0 quality aims for the
-// bitrate alone, 0 peak keeps the video's, a boost of 1 changes nothing,
-// 0 audio bitrate keeps Polyfin's per channel count, and 0 threads lets
-// FFmpeg choose.
+// bitrate alone, 0 peak keeps the video's, 0 audio bitrate keeps
+// Polyfin's per channel count, and 0 threads lets FFmpeg choose; but the
+// boost of a stereo mix, Jellyfin's 2 (EncodingOptions.cs), where 1 would
+// change nothing.
 const (
 	MinVideoQuality           = 1
 	MaxVideoQuality           = 51
@@ -635,7 +636,7 @@ const (
 	MaxToneMappingDesat       = 10
 	MinDownmixBoost           = 0.5
 	MaxDownmixBoost           = 3
-	DefaultDownmixBoost       = 1
+	DefaultDownmixBoost       = 2
 	MinAudioBitratePerChannel = 32
 	MaxAudioBitratePerChannel = 320
 	MaxEncodingThreads        = 64

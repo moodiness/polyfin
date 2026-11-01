@@ -43,7 +43,7 @@ func TestSettingsConversion(t *testing.T) {
 		"hardwareDecodingCodecs": []any{"h264", "hevc", "hevc_10bit", "vp9", "av1", "mpeg2video", "vc1"}, "toneMapping": true, "toneMappingAlgorithm": "auto",
 		"toneMappingPeak": 0.0, "toneMappingDesat": 0.0, "gpuToneMapping": true, "processorToneMappingHeight": 0.0,
 		"deinterlaceMethod": "yadif", "deinterlaceDoubleRate": false, "downmixAlgorithm": "None",
-		"downmixBoost": 1.0, "maxAudioChannels": 0.0, "audioBitratePerChannel": 0.0, "encodingThreads": 0.0, "aheadSeconds": 120.0,
+		"downmixBoost": 2.0, "maxAudioChannels": 0.0, "audioBitratePerChannel": 0.0, "encodingThreads": 0.0, "aheadSeconds": 120.0,
 		"adaptiveQuality": "off", "keepConvertedVideo": false, "fastStart": false}
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
 	if got := tuning(body); !reflect.DeepEqual(got, defaults) {

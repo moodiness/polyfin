@@ -608,7 +608,7 @@ const settings: typeof en = {
       },
       downmixBoost: 'Volume nel missaggio in stereo',
       downmixBoostHelp: (r: RangeText) =>
-        `I missaggi stereo spesso suonano più bassi: il volume viene moltiplicato per questo numero. Da ${r.min} a ${r.max}; ${r.default} (nessuna modifica) come predefinito. Jellyfin usa 2.`,
+        `I missaggi stereo spesso suonano più bassi: il volume viene moltiplicato per questo numero, e 1 non cambia nulla. Da ${r.min} a ${r.max}; ${r.default} come predefinito, come in Jellyfin. Sopra 1, un limitatore evita che le scene forti distorcano.`,
       maxAudioChannels: 'Numero massimo di canali audio',
       maxAudioChannelsHelp:
         'L’audio convertito mantiene al massimo questo numero di canali, anche se l’applicazione ne accetta di più.',
