@@ -254,7 +254,7 @@ const settings: typeof en = {
       `Quando um aplicativo reproduz um título sem escolher uma versão, o Polyfin tenta as versões em ordem até que uma funcione, mas não analisa mais do que esse número. As versões já analisadas também são tentadas, pois não custam nada. Um número maior encontra uma versão que funciona com mais frequência, mas um título que não é reproduzido demora mais para indicar isso. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
     preferDirectPlay: 'Preferir versões que o aplicativo reproduz sem conversão',
     preferDirectPlayHelp:
-      'Quando um aplicativo reproduz um título sem escolher uma versão, o Polyfin escolhe a primeira versão que o aplicativo reproduz como é ou apenas reempacotada, em vez da primeira que simplesmente reproduz. A primeiríssima reprodução de um título pode ser um pouco mais lenta, pois mais versões podem ser analisadas; nada muda depois que elas são conhecidas.',
+      'Quando um aplicativo reproduz um título sem escolher uma versão, o Polyfin escolhe a primeira versão que o aplicativo reproduz como é ou apenas reempacotada, em vez da primeira que simplesmente reproduz. Depois que um aplicativo reproduz algo desde o início do servidor, os menus de versões dele também listam essas versões primeiro, para que a reprodução comece pela versão que o menu mostra. Os usuários com “Reproduzir arquivos locais primeiro” mantêm os arquivos locais primeiro. A primeiríssima reprodução de um título pode ser um pouco mais lenta, pois mais versões podem ser analisadas; nada muda depois que elas são conhecidas.',
     nameHowVersionsPlay: 'Indicar no nome das versões como elas são reproduzidas',
     nameHowVersionsPlayHelp:
       'Os nomes das versões terminam com a forma como o aplicativo reproduz cada uma: “(reprodução direta)”, “(stream direta)” quando copiada sem conversão, “(convertida: motivo)” com o pedido do aplicativo, HDR, o limite de qualidade, as legendas, o vídeo ou o áudio como motivo, ou “(não reproduzível aqui)”. O Polyfin decide isso pelo perfil de dispositivo que o aplicativo enviou na última reprodução, então os nomes não dizem nada antes da primeira reprodução de um dispositivo nem após uma reinicialização, e nada para uma versão ainda não analisada nem descrita pelo RemuxDB. Os nomes ficam no idioma dos nomes gerados. Nada é lido para isso.',
@@ -266,6 +266,8 @@ const settings: typeof en = {
       add: 'Adicionar critério',
       remove: (name: string) => `Remover ${name}`,
       criterion: (position: number) => `Critério ${position}`,
+      sourceTiesOnly: (position: number) =>
+        `“Fonte, na ordem abaixo” é o critério ${position}: ele só ordena as versões em que os critérios acima empatam, então as versões de uma pasta no topo da ordem das fontes ainda podem vir depois de outras. Mova-o para o critério 1 para colocar primeiro as versões de uma fonte.`,
       criteria: {
         language: 'Idioma de áudio preferido',
         'resolution-high': 'Resolução, da maior para a menor',

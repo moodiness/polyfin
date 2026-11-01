@@ -254,7 +254,7 @@ const settings: typeof en = {
       `Cuando una aplicación reproduce un título sin elegir versión, Polyfin prueba las versiones en orden hasta que una funciona, pero no analiza más de este número. También se prueban las versiones ya analizadas, ya que no cuestan nada. Un número mayor encuentra con más frecuencia una versión que funcione, pero un título que no se reproduce tarda más en indicarlo. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
     preferDirectPlay: 'Preferir versiones que la aplicación reproduce sin conversión',
     preferDirectPlayHelp:
-      'Cuando una aplicación reproduce un título sin elegir versión, Polyfin escoge la primera versión que la aplicación reproduce tal cual o simplemente reempaquetada, en lugar de la primera que se pueda reproducir. La primera reproducción de un título puede ser algo más lenta, ya que pueden analizarse más versiones; no cambia nada una vez que se conocen.',
+      'Cuando una aplicación reproduce un título sin elegir versión, Polyfin escoge la primera versión que la aplicación reproduce tal cual o simplemente reempaquetada, en lugar de la primera que se pueda reproducir. Una vez que una aplicación ha reproducido algo desde que se inició el servidor, sus menús de versiones también muestran primero esas versiones, para que la reproducción empiece por la versión que muestra el menú. Los usuarios con «Reproducir primero los archivos locales» conservan primero sus archivos locales. La primera reproducción de un título puede ser algo más lenta, ya que pueden analizarse más versiones; no cambia nada una vez que se conocen.',
     nameHowVersionsPlay: 'Indicar en el nombre de las versiones cómo se reproducen',
     nameHowVersionsPlayHelp:
       'Los nombres de las versiones terminan indicando cómo las reproduce la aplicación: «(reproducción directa)», «(transmisión directa)» cuando se copia sin conversión, «(convertida: motivo)» con el pedido de la aplicación, HDR, el límite de calidad, los subtítulos, el vídeo o el audio como motivo, o «(no se puede reproducir aquí)». Polyfin lo decide según el perfil de dispositivo que la aplicación envió en su última reproducción, así que los nombres no indican nada antes de la primera reproducción de un dispositivo ni tras un reinicio, ni para una versión que aún no se haya analizado ni descrito en RemuxDB. Los nombres están en el idioma de los nombres generados. No se lee nada para ello.',
@@ -266,6 +266,8 @@ const settings: typeof en = {
       add: 'Añadir un criterio',
       remove: (name: string) => `Eliminar «${name}»`,
       criterion: (position: number) => `Criterio ${position}`,
+      sourceTiesOnly: (position: number) =>
+        `«Fuente, en el orden de abajo» es el criterio ${position}: solo ordena las versiones en las que empatan los criterios de arriba, así que las versiones de una carpeta situada en primer lugar en el orden de las fuentes pueden quedar detrás de otras. Muévalo al criterio 1 para poner primero las versiones de una fuente.`,
       criteria: {
         language: 'Idioma de audio preferido',
         'resolution-high': 'Resolución, la más alta primero',

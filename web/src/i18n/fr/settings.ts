@@ -256,7 +256,7 @@ const settings: typeof en = {
       `Quand une application lit un titre sans choisir de version, Polyfin essaie les versions dans l’ordre jusqu’à en trouver une qui marche, sans en analyser plus que ce nombre. Les versions déjà analysées sont aussi essayées, car elles ne coûtent rien. Un nombre plus grand trouve plus souvent une version qui marche, mais un titre qui ne se lit pas met plus longtemps à le dire. De ${r.min} à ${r.max} ; ${r.default} par défaut.`,
     preferDirectPlay: 'Préférer les versions lues sans conversion',
     preferDirectPlayHelp:
-      'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées ; rien ne change une fois qu’elles sont connues.',
+      'Quand une application lit un titre sans choisir de version, Polyfin prend la première version que l’application lit telle quelle ou simplement présentée autrement, plutôt que la première qui se lit tout court. Dès qu’une application a lu quelque chose depuis le démarrage du serveur, ses menus de versions placent aussi ces versions en premier, pour que la lecture commence par la version que montre le menu. Les utilisateurs qui ont « Lire d’abord les fichiers locaux » gardent leurs fichiers locaux en premier. La toute première lecture d’un titre peut être un peu plus lente, car plus de versions peuvent être analysées ; rien ne change une fois qu’elles sont connues.',
     nameHowVersionsPlay: 'Dire dans le nom des versions comment elles se lisent',
     nameHowVersionsPlayHelp:
       'Le nom des versions finit par la façon dont l’appli lit chacune : « (lecture directe) », « (flux direct) » quand elle est copiée sans conversion, « (converti : raison) » avec la demande de l’appli, HDR, la limite de qualité, les sous-titres, la vidéo ou l’audio pour raison, ou « (illisible ici) ». Polyfin le décide pour le profil d’appareil envoyé par l’appli à sa dernière lecture : les noms ne disent rien avant la première lecture d’un appareil ni après un redémarrage, et rien pour une version pas encore analysée ni décrite par RemuxDB. Les noms sont dans la langue des noms générés. Rien n’est lu pour cela.',
@@ -268,6 +268,8 @@ const settings: typeof en = {
       add: 'Ajouter un critère',
       remove: (name: string) => `Retirer « ${name} »`,
       criterion: (position: number) => `Critère ${position}`,
+      sourceTiesOnly: (position: number) =>
+        `« Source, dans l’ordre ci-dessous » est le critère ${position} : il ne range que les versions à égalité selon les critères au-dessus, si bien que les versions d’un dossier placé en tête de l’ordre des sources peuvent passer après d’autres. Remontez-le au critère 1 pour mettre en premier les versions d’une source.`,
       criteria: {
         language: 'Langue audio préférée',
         'resolution-high': 'Résolution, la plus haute d’abord',

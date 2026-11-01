@@ -34,6 +34,9 @@ export default function VersionOrder({
   const id = useId()
   const [announcement, setAnnouncement] = useState('')
   const unused = choices.filter((choice) => !order.some((chosen) => kind(chosen) === kind(choice)))
+  // Placed after another criterion, Source only orders the versions it ties on: a folder moved
+  // first in Order of sources may still come last.
+  const sourceAt = order.indexOf('source')
 
   function move(from: number, to: number) {
     const next = [...order]
@@ -94,6 +97,11 @@ export default function VersionOrder({
             </li>
           ))}
         </ol>
+      )}
+      {sourceAt > 0 && (
+        <p className="mt-2 max-w-[60ch] text-small text-ink-2">
+          {text.sourceTiesOnly(sourceAt + 1)}
+        </p>
       )}
       <Button
         className="mt-3"
