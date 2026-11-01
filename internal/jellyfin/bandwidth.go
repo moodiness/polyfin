@@ -229,13 +229,16 @@ func (h *Handler) measure(ctx context.Context, s *LiveSession) {
 	s.Origin = h.origin(ctx, s, version)
 }
 
-// origin tells where the version a session plays is read from.
+// origin tells where the version a session plays is read from: the source
+// of the session's user that lists it, as they play it (see
+// library.Service.KnownVersionFor), not the addon of another user's
+// listing.
 func (h *Handler) origin(ctx context.Context, s *LiveSession, id accounts.ID) Origin {
 	live := s.Found && slices.Contains([]library.Kind{library.KindChannel, library.KindProgram, library.KindReplay}, s.Item.Kind)
 	if h.Library == nil {
 		return Origin{}
 	}
-	version, known := h.Library.KnownVersion(id)
+	version, known := h.Library.KnownVersionFor(ctx, s.User, id)
 	if !known {
 		if live {
 			return Origin{Kind: OriginIPTV}

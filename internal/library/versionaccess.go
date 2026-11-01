@@ -75,3 +75,15 @@ func (s *Service) listedFor(ctx context.Context, user accounts.User, version Ver
 	}
 	return version, true, nil
 }
+
+// KnownVersionFor returns a version listed earlier, by its identifier, as
+// user's own sources list it (see listedFor), without asking addons; false
+// when it is not remembered, or none of their sources lists it.
+func (s *Service) KnownVersionFor(ctx context.Context, user accounts.User, id accounts.ID) (Version, bool) {
+	version, ok := s.versions.Get(id)
+	if !ok {
+		return Version{}, false
+	}
+	mine, listed, err := s.listedFor(ctx, user, version)
+	return mine, err == nil && listed
+}
