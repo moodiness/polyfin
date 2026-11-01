@@ -56,31 +56,73 @@ const frameExtension = "frame"
 // number, named after the first file holding it by path, without its
 // extension, as Jellyfin names an episode its provider does not know
 // (see plainEpisodeName), its video identifier the one Streams answers
-// (see episodeVideoID).
-func (s *Service) Episodes(ctx context.Context, folders []accounts.ID, stremioID string) ([]stremio.Video, error) {
-	rows, err := s.db.Query(ctx, `SELECT f.season, f.episode, coalesce(f.last_episode, f.episode), f.path FROM local_files f
-		JOIN local_folders l ON l.addon_id = f.addon_id JOIN addons a ON a.id = f.addon_id
+// (see episodeVideoID). catalog, unless nil, is the series' episodes as a
+// metadata addon of the server lists them: the files named by an
+// absolute number are then the catalog's episodes of their places, as
+// they are stored for Streams too (see absolute.go).
+func (s *Service) Episodes(ctx context.Context, folders []accounts.ID, stremioID string, catalog []stremio.Video) ([]stremio.Video, error) {
+	rows, err := s.db.Query(ctx, `SELECT f.id, f.season, f.episode, coalesce(f.last_episode, f.episode), f.path, f.absolute, f.numbering
+		FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id JOIN addons a ON a.id = f.addon_id
 		WHERE f.addon_id = ANY($1) AND f.stremio_id = $2 AND l.kind = $3 AND a.enabled AND f.season IS NOT NULL AND f.episode IS NOT NULL
 		ORDER BY f.season, f.episode, f.path`, folders, stremioID, KindShows)
 	if err != nil {
 		return nil, err
 	}
-	var videos []stremio.Video
-	seen := map[[2]int]bool{}
-	var season, first, last int
-	var rel string
-	_, err = pgx.ForEachRow(rows, []any{&season, &first, &last, &rel}, func() error {
-		for number := first; number <= last; number++ {
-			if seen[[2]int{season, number}] {
+	type held struct {
+		id                  accounts.ID
+		season, first, last int
+		rel                 string
+		absolute            *int
+		numbering           string
+	}
+	files, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (held, error) {
+		var h held
+		err := row.Scan(&h.id, &h.season, &h.first, &h.last, &h.rel, &h.absolute, &h.numbering)
+		return h, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	if catalog != nil {
+		places := library.AbsoluteEpisodes(catalog)
+		batch := &pgx.Batch{}
+		for i, h := range files {
+			if h.absolute == nil {
 				continue
 			}
-			seen[[2]int{season, number}] = true
-			videos = append(videos, stremio.Video{ID: episodeVideoID(stremioID, season, number), Title: plainEpisodeName(rel, number),
-				Season: stremio.Number(season), Episode: stremio.Number(number)})
+			_, named, _ := episodeName(h.rel)
+			season, number, numbering := absolutePlace(places, *h.absolute, named.season)
+			if season == h.season && number == h.first && numbering == h.numbering {
+				continue
+			}
+			files[i].season, files[i].first, files[i].last, files[i].numbering = season, number, number, numbering
+			batch.Queue("UPDATE local_files SET season = $2, episode = $3, last_episode = $3, numbering = $4 WHERE id = $1", h.id, season, number,
+				numbering)
 		}
-		return nil
-	})
-	return videos, err
+		if batch.Len() > 0 {
+			if err := s.db.SendBatch(ctx, batch).Close(); err != nil {
+				return nil, err
+			}
+			// The episodes' frames and images follow their files.
+			s.artworkChanged()
+			slices.SortStableFunc(files, func(a, b held) int {
+				return cmp.Or(cmp.Compare(a.season, b.season), cmp.Compare(a.first, b.first), strings.Compare(a.rel, b.rel))
+			})
+		}
+	}
+	var videos []stremio.Video
+	seen := map[[2]int]bool{}
+	for _, h := range files {
+		for number := h.first; number <= h.last; number++ {
+			if seen[[2]int{h.season, number}] {
+				continue
+			}
+			seen[[2]int{h.season, number}] = true
+			videos = append(videos, stremio.Video{ID: episodeVideoID(stremioID, h.season, number), Title: plainEpisodeName(h.rel, number),
+				Season: stremio.Number(h.season), Episode: stremio.Number(number)})
+		}
+	}
+	return videos, nil
 }
 
 // NoteUnlisted records the episodes, by season and number, of the series

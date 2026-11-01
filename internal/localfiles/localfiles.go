@@ -433,6 +433,9 @@ type Folder struct {
 	// they are listed all the same, named after their files (see
 	// NoteUnlisted), and Unlisted lists them by show and season.
 	Unlisted int
+	// Absolute counts its files named by an absolute number that are the
+	// catalog's episodes of their places (see absolute.go).
+	Absolute int
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
@@ -825,6 +828,10 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 		return Folder{}, err
 	}
 	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM local_files WHERE addon_id = $1 AND reason = $2", id, reasonNoSearch).Scan(&f.NoSearch); err != nil {
+		return Folder{}, err
+	}
+	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL AND numbering = $2", id,
+		numberingAbsolute).Scan(&f.Absolute); err != nil {
 		return Folder{}, err
 	}
 	// The addon that failed the most searches tells why.

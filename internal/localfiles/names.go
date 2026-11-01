@@ -126,12 +126,14 @@ func skippedIn(kind, name string) bool {
 // name is what a file's or folder's name tells: the title and year it
 // names, the IMDb ("tt…") and TMDB identifiers written in it, the season
 // and episodes of an episode (lastEpisode, the last of a file holding
-// several, is episode for one holding one), and its video's height.
+// several, is episode for one holding one), the absolute number of an
+// episode named by it (see episodeName), and its video's height.
 type name struct {
 	title                        string
 	year                         int
 	imdb, tmdb                   string
 	season, episode, lastEpisode int
+	absolute                     int
 	episodic                     bool
 	height                       int
 }
@@ -310,7 +312,14 @@ func completedName(file name, dir string) name {
 // says before the episode), the unit matched to a title (the show's
 // folder, or the file at the folder's top), and the episode's season and
 // numbers, from its name, its season folder giving the season of an
-// episode numbered alone.
+// episode numbered alone. A name telling an absolute number alone (see
+// episodename.Absolute) is numbered so in the specials' folder, as
+// Jellyfin reads it; elsewhere it tells its absolute number, the episode
+// being listed, until it is matched to the catalog's (see
+// absolutePlace), in its season folder's season, else the first, as
+// Jellyfin's TMDB provider reads an episode without a season
+// (MediaBrowser.Providers/Plugins/Tmdb/TV/TmdbEpisodeProvider.cs, lines
+// 99-100 at v12.4).
 func episodeName(rel string) (show name, episode name, unit string) {
 	episode = parseName(stem(rel))
 	parts := strings.Split(rel, "/")
@@ -328,6 +337,16 @@ func episodeName(rel string) (show name, episode name, unit string) {
 			episode.season = season
 			episode.episode, _ = strconv.Atoi(m[1])
 			episode.lastEpisode = episode.episode
+		}
+	}
+	if !episode.episodic {
+		if number, title, ok := episodename.Absolute(stem(rel)); ok {
+			episode.episodic = true
+			episode.season, episode.episode, episode.lastEpisode = season, number, number
+			if season != 0 {
+				episode.season, episode.absolute = max(season, 1), number
+			}
+			episode.title, episode.year = titleAndYear(title)
 		}
 	}
 	top := parts[0]
@@ -348,11 +367,9 @@ func stem(rel string) string {
 
 // Why the name of a show's file tells no episode, the reason Unmatched
 // gives such a file of a show in place of reasonUnreadableName, with how
-// to name it (see episodeReason).
+// to name it (see episodeReason). A name telling an absolute number alone
+// tells its episode (see absolute.go).
 const (
-	// reasonAbsoluteNumber: an absolute number only, as "Show - 41" (see
-	// episodename.Absolute), which local folders do not read.
-	reasonAbsoluteNumber = "absolute_number"
 	// reasonNoSeason: an episode's number alone, as "E05" or "Episode
 	// 5", outside a season's folder.
 	reasonNoSeason = "no_season"
@@ -370,17 +387,14 @@ var airDate = regexp.MustCompile(`(?:^|\D)(?:(?:19|20)\d{2}[._ -](?:0[1-9]|1[0-2
 	`(?:0[1-9]|[12]\d|3[01])[._ -](?:0[1-9]|1[0-2])[._ -](?:19|20)\d{2})(?:\D|$)`)
 
 // episodeReason is why the name of the file at rel, of a show, tells no
-// episode (see episodeName), and for an absolute number, that number.
-func episodeReason(rel string) (string, int) {
+// episode (see episodeName).
+func episodeReason(rel string) string {
 	text := stem(rel)
 	if episodeOnly.MatchString(text) {
-		return reasonNoSeason, 0
+		return reasonNoSeason
 	}
 	if airDate.MatchString(text) {
-		return reasonAirDate, 0
+		return reasonAirDate
 	}
-	if number, _, ok := episodename.Absolute(text); ok {
-		return reasonAbsoluteNumber, number
-	}
-	return reasonNoEpisodeNumber, 0
+	return reasonNoEpisodeNumber
 }

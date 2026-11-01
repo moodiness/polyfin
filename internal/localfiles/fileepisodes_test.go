@@ -149,8 +149,9 @@ func printed(v any) string {
 }
 
 // The files of a matched show whose names tell no episode are unmatched
-// with why: an absolute number only, with that number, an episode's
-// number outside a season's folder, an air date, or no number at all.
+// with why: an episode's number outside a season's folder, an air date,
+// or no number at all. Names telling an absolute number are read, never
+// unmatched (see absolute.go).
 func TestUnreadEpisodeNamesTellWhy(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
@@ -172,11 +173,9 @@ func TestUnreadEpisodeNamesTellWhy(t *testing.T) {
 	}
 	reasons := map[string]string{}
 	for _, file := range files {
-		reasons[file.Path] = fmt.Sprintf("%s %d", file.Reason, file.Number)
+		reasons[file.Path] = fmt.Sprintf("%s %d", file.Reason, 0)
 	}
 	want := map[string]string{
-		"Cisco Kid Files/Season 02/Cisco Kid - 14.mkv":   "absolute_number 14",
-		"Cisco Kid Files/Cisco Kid 15 [720p].mkv":        "absolute_number 15",
 		"Cisco Kid Files/Cisco Kid E07.mkv":              "no_season 0",
 		"Cisco Kid Files/Cisco Kid 1951-03-04.mkv":       "air_date 0",
 		"Cisco Kid Files/Season 01/Cisco Kid Finale.mkv": "no_episode_number 0",

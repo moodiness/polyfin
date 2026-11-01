@@ -52,6 +52,17 @@ const (
 	reasonLoneExtra = "lone_extra"
 )
 
+// How a show's file was given its season and episode, its numbering,
+// empty when its name tells them (see absolute.go).
+const (
+	// numberingAbsolute: its name tells an absolute number, and it is the
+	// catalog's episode of that place.
+	numberingAbsolute = "absolute"
+	// numberingAbsoluteBeyond: its name tells an absolute number the
+	// catalog does not reach, and it is an episode of its own.
+	numberingAbsoluteBeyond = "absolute_beyond"
+)
+
 // How a file was matched, its matched_by; a home video is its own title.
 // A search keeps a title by a looser rule when none matches exactly (see
 // chooseItem): byYear for a title of the year before or after the name's,
@@ -1028,10 +1039,9 @@ func (s *Service) Rematch(ctx context.Context, kind library.Kind, stremioID stri
 // DiscBluRayImage); empty for any other file. A title of a show's disc has
 // the kind of its disc, its unit its show's folder, and DiscTitle telling
 // which it is. A show's file whose name tells no episode has, rather than
-// reasonUnreadableName, why (see episodeReason), and Number, for
-// reasonAbsoluteNumber, the absolute number its name tells. In a music
-// folder, it is a track whose tags and names give no title ("no_title")
-// or no album ("no_album"), which no link links.
+// reasonUnreadableName, why (see episodeReason). In a music folder, it is
+// a track whose tags and names give no title ("no_title") or no album
+// ("no_album"), which no link links.
 type Unmatched struct {
 	Path          string
 	Unit          string
@@ -1039,7 +1049,6 @@ type Unmatched struct {
 	Year          int
 	Size          int64
 	Reason        string
-	Number        int
 	SearchAddon   string
 	SearchFailure string
 	Disc          string
@@ -1092,7 +1101,7 @@ func (s *Service) Unmatched(ctx context.Context, id accounts.ID) ([]Unmatched, i
 		}
 		// The show's name was read (its title), but not the episode's.
 		if folder.Kind == KindShows && u.Reason == reasonUnreadableName && episodeless && u.Title != "" && u.Disc == "" {
-			u.Reason, u.Number = episodeReason(u.Path)
+			u.Reason = episodeReason(u.Path)
 		}
 		return u, err
 	})
