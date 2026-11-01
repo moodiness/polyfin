@@ -202,6 +202,7 @@ Sources need no opening. A title's file download serves its first working versio
 
 - `/LiveStreams/Open` answers 400, as Jellyfin does without an open token; `/LiveStreams/Close` answers 204.
 - `/Items/{id}/File` serves the first working version.
+- PlaybackInfo, `/Videos/{id}/stream` and `/Items/{id}/Download` answer 400 `Error processing request.` for an item that plays nothing itself, such as a folder of videos, a series, a season or a collection, as Jellyfin does for an item without media sources ([MediaSourceManager.cs, lines 383 to 393](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L383-L393), answered 400 by [ExceptionMiddleware.cs, line 127](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Middleware/ExceptionMiddleware.cs#L127)). No addon is asked for streams of it. An item that does not exist, or that the user may not see, answers 404.
 - `/Videos/{id}/stream.mp4` and `/Videos/{id}/stream.ts` convert only for the `TranscodingUrl` of a converted download: with `static=true`, or without a play session and a `videoCodec`, or with **Converted downloads** off, they serve the version as it is, as before.
 
 ### What a streamed play sends
