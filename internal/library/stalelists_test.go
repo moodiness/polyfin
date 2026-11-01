@@ -178,7 +178,8 @@ func TestWaitingForVersionsWaitsForTheAnswerReplacingAStaleList(t *testing.T) {
 
 // An addon limiting requests answers with a notice that has nothing to
 // play: the versions it listed before stay listed, the addon is not asked
-// again meanwhile, and it is asked when the title opens again.
+// again meanwhile, and it is asked when the title opens again a minute
+// later.
 func TestANoticeKeepsTheVersionsOfAnExpiredList(t *testing.T) {
 	t.Parallel()
 	e := newStaleEnv(t, 20*time.Millisecond)
@@ -196,6 +197,7 @@ func TestANoticeKeepsTheVersionsOfAnExpiredList(t *testing.T) {
 	for len(e.numbers) > 0 {
 		<-e.numbers
 	}
+	e.wait(noticeLife + time.Second)
 	versions, complete, err := e.service.VersionsNow(t.Context(), e.member, e.movie)
 	if err != nil || complete || len(versions) != 3 {
 		t.Fatalf("opened again: %d versions, complete %v, %v", len(versions), complete, err)

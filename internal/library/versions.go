@@ -15,6 +15,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/drm"
+	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -461,8 +462,9 @@ func (s *Service) gatherStreams(ctx context.Context, t target, serving []streamS
 		case mode == waitAll || mode == staleNow:
 			wg.Go(func() {
 				streams, err := s.streams(ctx, entry.installed, entry.contentType, entry.id)
-				// An app that stops waiting cancels ctx: nothing failed.
-				if err != nil && ctx.Err() == nil {
+				// An app that stops waiting cancels ctx: nothing failed. An
+				// answer of notices alone is logged where it is asked, once.
+				if err != nil && ctx.Err() == nil && !errors.Is(err, errOnlyNotices) {
 					s.logger.Warn("An addon could not list streams", "addon", entry.addon.Manifest.Name, "error", err)
 				}
 				lists[i] = streams
@@ -886,13 +888,24 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 // and renewals included (see VersionsNow and Renew). An answer stored is
 // followed up; until the follow-ups end, it is listed with the items it
 // lacks of the stale list it replaced (see followUpList). An answer of
-// notices alone, nothing to play, is not stored over a list that has
-// streams to play: it is errOnlyNotices, an addon failing. A refresh of
-// the title while the addon is asked leaves its answer out: the addon is
-// asked again, for the callers waiting too (see forgetLists).
+// notices alone, nothing to play, is not stored: it is remembered for
+// noticeLife, during which the callers get it again without asking the
+// addon (see noticedAnswer). A refresh of the title while the addon is
+// asked leaves its answer out: the addon is asked again, for the callers
+// waiting too (see forgetLists).
 func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
 	for {
+		if streams, ok, err := s.noticedAnswer(ctx, key); ok {
+			return streams, err
+		}
 		streams, err := s.askStreamsOf(ctx, entry, key)
+		if errors.Is(err, errOnlyNotices) {
+			// Shared requests pass no answer with an error: the list kept
+			// is read here.
+			if kept, _, ok := s.streamListOf(ctx, key); ok {
+				streams = kept.items
+			}
+		}
 		if !errors.Is(err, errForgotten) {
 			return streams, err
 		}
@@ -900,7 +913,8 @@ func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamK
 }
 
 // askStreamsOf asks an addon for its streams for a title once, as
-// streamAnswer does.
+// streamAnswer does. An answer of notices alone is logged here, once
+// whoever waits for it, and remembered (see noticedAnswer).
 func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
 	return shared(ctx, s, streamsFlight(key), func(ctx context.Context) ([]stremio.Stream, error) {
 		asked, done := s.ask(followKey{listStreams, key})
@@ -911,20 +925,84 @@ func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamK
 			return nil, err
 		}
 		if len(streams) > 0 && streamKind.count(streams) == 0 {
-			if kept, _, ok := s.streamListOf(ctx, key); ok && streamKind.count(kept.items) > 0 {
-				return nil, errOnlyNotices
-			}
+			return s.noticesAnswered(ctx, entry, key, asked, streams)
 		}
 		return s.followStreams(ctx, entry, key, asked, streams)
 	})
 }
 
+// noticeLife is how long an addon's answer of notices alone for a title
+// is remembered: an addon limiting requests refuses at once, and asking
+// it again at once would only prolong the refusal.
+const noticeLife = time.Minute
+
+// noticesAnswered remembers notices, an addon's answer of notices alone
+// to request asked (see ask), and logs it, its notices' text redacted and
+// their links left out. A request a refresh forgot meanwhile is
+// errForgotten, its answer left out. It returns what noticedAnswer
+// returns.
+func (s *Service) noticesAnswered(ctx context.Context, entry installed, key streamKey, asked uint64, notices []stremio.Stream) ([]stremio.Stream, error) {
+	s.followUps.mu.Lock()
+	if s.followUps.asking[followKey{listStreams, key}] != asked {
+		s.followUps.mu.Unlock()
+		return nil, errForgotten
+	}
+	s.noticed.Put(key, notices)
+	s.followUps.mu.Unlock()
+	streams, _, err := s.noticedAnswer(ctx, key)
+	message := "An addon answered only notices, nothing to play; it is asked again in a minute"
+	if err != nil {
+		message = "An addon answered only notices, nothing to play; the streams it listed before are kept"
+	}
+	s.logger.Warn(message, "addon", entry.addon.Manifest.Name, "type", key.contentType, "id", key.id, "notice", noticeText(notices))
+	return streams, err
+}
+
+// noticedAnswer returns, while an addon's answer of notices alone for a
+// title is remembered (ok), what the callers get instead of asking it:
+// the list kept that has streams to play, with errOnlyNotices, else the
+// notices.
+func (s *Service) noticedAnswer(ctx context.Context, key streamKey) (streams []stremio.Stream, ok bool, err error) {
+	notices, ok := s.noticed.Get(key)
+	if !ok {
+		return nil, false, nil
+	}
+	if kept, _, ok := s.streamListOf(ctx, key); ok && streamKind.count(kept.items) > 0 {
+		return kept.items, true, errOnlyNotices
+	}
+	return notices, true, nil
+}
+
+// noticeText is what notices tell, for a log line: each one's name, title
+// and description, on one line, cut short and redacted. Their links are
+// left out.
+func noticeText(notices []stremio.Stream) string {
+	const most = 300
+	texts := make([]string, 0, len(notices))
+	for _, notice := range notices {
+		var parts []string
+		for _, part := range []string{notice.Name, notice.Title, notice.Description} {
+			if part = strings.Join(strings.Fields(part), " "); part != "" && !slices.Contains(parts, part) {
+				parts = append(parts, part)
+			}
+		}
+		if len(parts) > 0 {
+			texts = append(texts, strings.Join(parts, ": "))
+		}
+	}
+	text := strings.Join(texts, " | ")
+	if runes := []rune(text); len(runes) > most {
+		text = string(runes[:most]) + "…"
+	}
+	return logs.Redact(text)
+}
+
 // errOnlyNotices is an addon's answer listing only notices for a title it
 // listed streams for, such as a notice that it limits requests: it would
-// list them again a moment later. The list kept stays as it was, listed
-// while kept, and asked for again as it would have been. An empty answer
-// is the addon having nothing for the title any more: it replaces the
-// list as any answer does.
+// list them again a moment later. The list kept stays as it was, and the
+// callers get it with the error, the warning already logged once (see
+// noticesAnswered). An empty answer is the addon having nothing for the
+// title any more: it replaces the list as any answer does.
 var errOnlyNotices = errors.New("its answer has only notices, nothing to play: the streams it listed before are kept")
 
 // streamsFlight names the request asking an addon for its streams for a
