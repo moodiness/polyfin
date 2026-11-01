@@ -47,7 +47,7 @@ To play it without any conversion in such a browser, a version with AAC or Opus 
 How loud a title plays is decided in one place, which depends on how it plays:
 
 - **Direct play, and audio copied into HLS:** the app decides. Polyfin sends the track as it is, byte for byte, and the app's decoder sets the level: its own mix of surround sound down to its speakers and, for AC-3 and E-AC-3 (Dolby Digital and Dolby Digital Plus), whether it applies the track's dialogue level (dialnorm) and its dynamic range compression. Dolby decoders, in TVs, receivers, Apple devices and some phones, apply both: a track stating its dialogue at -27 dB plays 4 dB lower there than in a player built on FFmpeg, which ignores dialnorm. No server setting changes the level of these plays.
-- **Converted audio:** the server decides, with FFmpeg's decoder, which ignores dialnorm and applies the track's dynamic range compression as encoded.
+- **Converted audio:** the server decides, with FFmpeg's decoder, which ignores dialnorm and applies the track's dynamic range compression as **Dynamic range of converted Dolby audio** says, as encoded by default.
   - Converted with the source's channels, 5.1 to 5.1 or stereo to stereo, the audio keeps the source's level, to 0.1 dB, unless **Even the loudness of converted videos** is on.
   - Mixed down to stereo, when an app asks for 2 channels of a surround track, it goes through **Mix to stereo**, then **Volume when mixing to stereo**, then **Even the loudness of converted videos** when it is on, then a limiter.
 
@@ -87,7 +87,17 @@ The right channel mirrors the left. Night mode suits speech at a low volume; RFC
 
 In one pass, the normalizer reads 3 seconds ahead and settles over the first seconds of each conversion, so a short scene with a wide loudness range ends up to 2 LU under the target, and the sound of a live channel starts some 3 seconds later. A track whose peaks stand far above its loudness rises only as far as its peaks allow under -1.5 dBTP. Each seek starts a new conversion, which settles again.
 
-**Compared with Jellyfin:** Jellyfin 12.4 mixes down with the same filters at the same volume, 2 by default ([`EncodingOptions.cs`, lines 21 to 22](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/EncodingOptions.cs#L21-L22); [`EncodingHelper.cs`, lines 2975 to 2977](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs#L2975-L2977)), but without a limiter: its loud scenes pass full scale, and the encoder distorts them. It decodes AC-3 and E-AC-3 with FFmpeg's defaults, as Polyfin does. It has no normalization of converted video's audio: its own loudness normalization is for music, as `NormalizationGain`.
+**Dynamic range of converted Dolby audio** sets how converted AC-3 and E-AC-3 apply the dynamic range compression stored in the track, which lifts quiet passages and lowers loud ones: **As encoded**, the default, as FFmpeg and Jellyfin decode them; **None (full range)** (`-drc_scale 0`); or **Night (quiet passages louder)** (`-drc_scale 2`), which lifts quiet passages twice as much as encoded and lowers loud ones as encoded, as FFmpeg's decoder applies a scale above 1 to lifts alone ([`ac3dec.c`, lines 988 to 995](https://github.com/FFmpeg/FFmpeg/blob/n9.0.2/libavcodec/ac3dec.c#L988-L995)). It is a decoder option, so it never touches direct play or copied audio, nor other codecs, and comes before the mix and the normalizer. Measured through Polyfin in a browser taking stereo, on FFmpeg's test samples from movies and series, against **None**, as the gain on the loudest and the quietest tenth of their 100 ms windows:
+
+| Track | As encoded: loud / quiet | Night: loud / quiet | Range of levels, none / encoded / night |
+|---|---|---|---|
+| E-AC-3 7.1 from a movie | -0.3 / +5.8 dB | -0.2 / +11.6 dB | 16.8 / 14.0 / 11.5 dB |
+| AC-3 stereo from a movie | -0.3 / +5.5 dB | -0.2 / +11.6 dB | LRA 19.7 / 14.0 / 8.9 LU |
+| E-AC-3 stereo from a series | +0.1 / +0.6 dB | +0.2 / +1.1 dB | 22.8 / 22.4 / 21.9 dB |
+
+Tracks made by FFmpeg's own encoder carry no compression, and play the same with each choice.
+
+**Compared with Jellyfin:** Jellyfin 12.4 mixes down with the same filters at the same volume, 2 by default ([`EncodingOptions.cs`, lines 21 to 22](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/EncodingOptions.cs#L21-L22); [`EncodingHelper.cs`, lines 2975 to 2977](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs#L2975-L2977)), but without a limiter: its loud scenes pass full scale, and the encoder distorts them. It decodes AC-3 and E-AC-3 with FFmpeg's defaults, as **As encoded** does, and has no choice of dynamic range. It has no normalization of converted video's audio: its own loudness normalization is for music, as `NormalizationGain`.
 
 ### Seeing how a play goes
 
@@ -503,6 +513,7 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 | **Mix to stereo** | **Settings › Conversion (transcoding)** | FFmpeg's own | Or Jellyfin's Dave750, Night mode, RFC 7845 and AC-4, for the layouts Jellyfin lists for each, 5.1 and 7.1 among them. |
 | **Volume when mixing to stereo** | **Settings › Conversion (transcoding)** | 2, as in Jellyfin (range 0.5 to 3) | Volume of the stereo mix, 1 changing nothing. Above 1, a limiter follows it. A server left at 1, the default before, moves to 2 when it updates. See [Loudness](#loudness). |
 | **Even the loudness of converted videos** | **Settings › Conversion (transcoding)** | Off | Brings the audio of the videos and channels the server converts to -16 LUFS, then limits it. Direct play, copied audio and music never change. See [Loudness](#loudness). |
+| **Dynamic range of converted Dolby audio** | **Settings › Conversion (transcoding)** | **As encoded** | **None (full range)** or **Night (quiet passages louder)**: how converted AC-3 and E-AC-3 apply the compression their tracks carry. See [Loudness](#loudness). |
 | **Most audio channels** | **Settings › Conversion (transcoding)** | As many as the app takes | Or mono, stereo or 5.1. Shapes converted audio. |
 | **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion (transcoding)** | 0 (range 32 to 320 kb/s) | 0 gives Jellyfin's bitrates: 128 kb/s in mono, 384 kb/s from stereo to five channels, 640 kb/s in 5.1, less under a low bitrate limit (see [Audio bitrate](#audio-bitrate)). A number gives that much per channel, whatever the limit. Shapes converted audio. |
 
@@ -526,6 +537,6 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 - Jellyfin's HDR-to-SDR conversion is off by default; its peak brightness is 100 by default.
 - **Double the frame rate** works as in Jellyfin.
 - Jellyfin's stereo mix volume is 2 by default too, without a limiter.
-- Jellyfin has no **Most audio channels**, **Audio bitrate per channel** or **Even the loudness of converted videos** setting.
+- Jellyfin has no **Most audio channels**, **Audio bitrate per channel**, **Even the loudness of converted videos** or **Dynamic range of converted Dolby audio** setting.
 - **Processor threads per conversion** is Jellyfin's encoding thread count.
 - Jellyfin also throttles by seconds, but not by default.

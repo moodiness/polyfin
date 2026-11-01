@@ -492,6 +492,7 @@ func (piece PlayoutPiece) args(dir string, start int, burst, offset time.Duratio
 	default:
 		args = append(args, r.Encode.inputs()...)
 		args = append(args, r.InputOptions...)
+		args = append(args, r.decoderArgs()...)
 		args = append(args, pace...)
 		if piece.Offset > 0 {
 			args = append(args, "-ss", ffmpegSeconds(piece.Offset))

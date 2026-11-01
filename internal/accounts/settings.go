@@ -555,6 +555,7 @@ var (
 	ErrInvalidDeinterlaceMethod      = errors.New("invalid deinterlace method")
 	ErrInvalidDownmixAlgorithm       = errors.New("invalid downmix algorithm")
 	ErrInvalidDownmixBoost           = errors.New("invalid downmix boost")
+	ErrInvalidDynamicRange           = errors.New("invalid dynamic range compression")
 	ErrInvalidMaxAudioChannels       = errors.New("invalid maximum of audio channels")
 	ErrInvalidAudioBitrate           = errors.New("invalid audio bitrate")
 	ErrInvalidEncodingThreads        = errors.New("invalid encoding threads")
@@ -585,6 +586,9 @@ var (
 	// DownmixAlgorithms are the values of Settings.DownmixAlgorithm: None
 	// leaves FFmpeg's own downmix.
 	DownmixAlgorithms = []string{"None", "Dave750", "NightmodeDialogue", "Rfc7845", "Ac4"}
+	// DynamicRangeCompressions are the values of
+	// Settings.DynamicRangeCompression.
+	DynamicRangeCompressions = []string{"encoded", "none", "night"}
 	// AudioChannelLimits are the values of Settings.MaxAudioChannels: 0
 	// leaves the app's limit alone.
 	AudioChannelLimits = []int{0, 1, 2, 6}
@@ -1774,6 +1778,10 @@ type Settings struct {
 	// videos the server converts at -16 LUFS; direct play, copied audio,
 	// music and audiobooks keep theirs.
 	NormalizeConvertedAudio bool
+	// DynamicRangeCompression is how converted AC-3 and E-AC-3 apply the
+	// dynamic range compression their tracks carry: encoded as the track
+	// says, none, or night, which lifts quiet passages twice as much.
+	DynamicRangeCompression string
 	// EncodingThreads is how many threads FFmpeg converts with, 0 letting
 	// it choose.
 	EncodingThreads int
@@ -2309,7 +2317,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"adaptive_quality, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, keep_converted_video, fast_start, " +
-	"normalize_converted_audio, " +
+	"normalize_converted_audio, dynamic_range_compression, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, " +
 	"recording_commercials, " +
@@ -2372,7 +2380,7 @@ func (settings *Settings) fields() []any {
 		&settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSeconds,
 		&settings.KeepConvertedVideo, &settings.FastStart,
-		&settings.NormalizeConvertedAudio,
+		&settings.NormalizeConvertedAudio, &settings.DynamicRangeCompression,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays,
 		&settings.RecordingCommercials,
@@ -3059,6 +3067,8 @@ func validConversion(settings Settings) ([]string, error) {
 		return nil, ErrInvalidDownmixAlgorithm
 	case !(settings.DownmixBoost >= MinDownmixBoost && settings.DownmixBoost <= MaxDownmixBoost):
 		return nil, ErrInvalidDownmixBoost
+	case !slices.Contains(DynamicRangeCompressions, settings.DynamicRangeCompression):
+		return nil, ErrInvalidDynamicRange
 	case !slices.Contains(AudioChannelLimits, settings.MaxAudioChannels):
 		return nil, ErrInvalidMaxAudioChannels
 	case settings.AudioBitratePerChannel != 0 &&

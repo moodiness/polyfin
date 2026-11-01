@@ -150,3 +150,29 @@ func TestAudioConversionsTakeTheirDownmix(t *testing.T) {
 		t.Errorf("a filter without a downmix: %q", args)
 	}
 }
+
+// The options of converted audio's decoder go before the input, for its
+// stream alone, in every command line that converts it; copied audio gets
+// none, its decoder being the app's.
+func TestConvertedAudioTakesItsDecoderOptions(t *testing.T) {
+	plan := NewPlan([]time.Duration{0, 6 * time.Second}, 12*time.Second)
+	converted := Remux{Input: "http://127.0.0.1:1/a.mkv", Video: 0, Audio: 2, Format: TS, Plan: plan,
+		AudioCodec: "aac", AudioChannels: 2, AudioBitrate: 384_000, AudioDecoder: []string{"drc_scale", "0"}}
+	copied := converted
+	copied.AudioCodec, copied.AudioChannels, copied.AudioBitrate = "", 0, 0
+	lines := func(r Remux) map[string][]string {
+		return map[string][]string{"segments": r.args(0, 0), "live": r.liveArgs("/tmp/live", 0),
+			"progressive": r.progressiveArgs(0), "track": r.trackArgs(0)}
+	}
+	for name, args := range lines(converted) {
+		at, input := slices.Index(args, "-drc_scale:2"), slices.Index(args, "-i")
+		if at < 0 || args[at+1] != "0" || input < at {
+			t.Errorf("%s, converted: %q", name, args)
+		}
+	}
+	for name, args := range lines(copied) {
+		if slices.ContainsFunc(args, func(arg string) bool { return strings.HasPrefix(arg, "-drc_scale") }) {
+			t.Errorf("%s, copied: %q", name, args)
+		}
+	}
+}

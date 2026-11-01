@@ -611,6 +611,7 @@ func (r Remux) runArgs(dir string, start int, restart bool) []string {
 		args = append(args, r.Encode.inputs()...)
 	}
 	args = append(args, r.InputOptions...)
+	args = append(args, r.decoderArgs()...)
 	args = append(args, "-i", r.Input, "-map", "0:"+strconv.Itoa(r.Video))
 	if r.Audio >= 0 {
 		args = append(args, "-map", "0:"+strconv.Itoa(r.Audio))
@@ -643,6 +644,19 @@ func (r Remux) runArgs(dir string, start int, restart bool) []string {
 		args = append(args, "-hls_segment_type", "mpegts")
 	}
 	return append(args, "-hls_segment_filename", filepath.Join(dir, "%d."+r.Format.Extension()), filepath.Join(dir, livePlaylist))
+}
+
+// decoderArgs are FFmpeg's input options for the decoder of the converted
+// audio, for the Audio stream alone: none when it is copied.
+func (r Remux) decoderArgs() []string {
+	if r.Audio < 0 || r.AudioCodec == "" {
+		return nil
+	}
+	args := make([]string, 0, len(r.AudioDecoder))
+	for i := 0; i+1 < len(r.AudioDecoder); i += 2 {
+		args = append(args, "-"+r.AudioDecoder[i]+":"+strconv.Itoa(r.Audio), r.AudioDecoder[i+1])
+	}
+	return args
 }
 
 // audioArgs are FFmpeg's options converting the audio, none when it is

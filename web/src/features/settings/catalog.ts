@@ -589,6 +589,14 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'conversion',
+    anchor: 'dynamic-range-compression',
+    label: (t) => c(t).dynamicRangeCompression,
+    help: (t) => c(t).dynamicRangeCompressionHelp,
+    keywords: ['drc', 'dolby', 'night', 'dynamic range'],
+    codes: ['invalid_dynamic_range_compression'],
+  },
+  {
+    section: 'conversion',
     anchor: 'max-audio-channels',
     label: (t) => c(t).maxAudioChannels,
     help: (t) => c(t).maxAudioChannelsHelp,

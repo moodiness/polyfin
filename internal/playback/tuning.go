@@ -54,6 +54,10 @@ type Tuning struct {
 	// Normalize evens the loudness of the audio of converted videos (see
 	// normalizer).
 	Normalize bool
+	// DRC is how converted AC-3 and E-AC-3 apply their dynamic range
+	// compression, one of accounts.DynamicRangeCompressions, empty as
+	// encoded (see decoder).
+	DRC string
 	// Threads is how many threads FFmpeg converts with, 0 letting it
 	// choose.
 	Threads int
@@ -79,6 +83,7 @@ func TuningOf(settings accounts.Settings) Tuning {
 		AudioBitrate:     int64(settings.AudioBitratePerChannel) * 1000,
 		Threads:          settings.EncodingThreads,
 		Normalize:        settings.NormalizeConvertedAudio,
+		DRC:              settings.DynamicRangeCompression,
 	}
 	// The values that change nothing are the zero values.
 	if t.Preset == "auto" {
@@ -95,6 +100,9 @@ func TuningOf(settings accounts.Settings) Tuning {
 	}
 	if t.DownmixBoost == 1 {
 		t.DownmixBoost = 0
+	}
+	if t.DRC == "encoded" {
+		t.DRC = ""
 	}
 	for _, codec := range accounts.HardwareDecodingCodecs {
 		if !slices.Contains(settings.HardwareDecodingCodecs, codec) {
@@ -218,4 +226,23 @@ func (t Tuning) audioFilters(channels int, layout string, stereo, normalize bool
 		filters = append([]string{stereoFirst}, filters...)
 	}
 	return filters
+}
+
+// drcScales are FFmpeg's drc_scale of the AC-3 and E-AC-3 decoders for
+// each choice of Tuning.DRC: 0 drops the track's compression; 2 doubles
+// the gains that lift its quiet passages and keeps those that lower its
+// loud ones as encoded (FFmpeg's ac3dec.c, lines 988 to 995, applies a
+// scale above 1 to the former alone). As encoded, 1, is FFmpeg's default
+// and needs no option.
+var drcScales = map[string]string{"none": "0", "night": "2"}
+
+// decoder are the options, as names and values, of FFmpeg's decoder of
+// audio in codec, as ffprobe names it, when it is converted: the dynamic
+// range compression chosen, for AC-3 and E-AC-3 alone, none for others.
+func (t Tuning) decoder(codec string) []string {
+	scale, ok := drcScales[t.DRC]
+	if codec = strings.ToLower(codec); !ok || codec != "ac3" && codec != "eac3" {
+		return nil
+	}
+	return []string{"drc_scale", scale}
 }

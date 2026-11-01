@@ -600,6 +600,14 @@ const settings = {
       normalizeConvertedAudio: 'Even the loudness of converted videos',
       normalizeConvertedAudioHelp:
         'Brings the sound of the movies, episodes and channels the server converts to the same loudness, -16 LUFS, so that quiet titles play louder and loud ones quieter, with a limiter after it. While on, the volume when mixing to stereo no longer changes the level. Direct play, sound sent as it is, and music never change. Off by default.',
+      dynamicRangeCompression: 'Dynamic range of converted Dolby audio',
+      dynamicRangeCompressionHelp:
+        'How the AC-3 and E-AC-3 (Dolby Digital and Dolby Digital Plus) tracks the server converts apply the compression stored in them, which lifts quiet passages and lowers loud ones. As encoded is how FFmpeg and Jellyfin decode them. Direct play and sound sent as it is are left to the app.',
+      dynamicRangeCompressions: {
+        encoded: 'As encoded',
+        none: 'None (full range)',
+        night: 'Night (quiet passages louder)',
+      },
       maxAudioChannels: 'Most audio channels',
       maxAudioChannelsHelp:
         'Converted sound keeps at most this many channels, even if the app takes more.',

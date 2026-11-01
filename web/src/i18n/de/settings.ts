@@ -607,6 +607,14 @@ const settings: typeof en = {
       normalizeConvertedAudio: 'Lautheit konvertierter Videos angleichen',
       normalizeConvertedAudioHelp:
         'Bringt den Ton der Filme, Folgen und Kanäle, die der Server konvertiert, auf dieselbe Lautheit, -16 LUFS, sodass leise Titel lauter und laute leiser spielen, mit einem Limiter danach. Solange es an ist, ändert die Lautstärke beim Stereo-Downmix den Pegel nicht mehr. Direkte Wiedergabe, unverändert gesendeter Ton und Musik ändern sich nie. Standardmäßig aus.',
+      dynamicRangeCompression: 'Dynamik von konvertiertem Dolby-Ton',
+      dynamicRangeCompressionHelp:
+        'Wie AC-3- und E-AC-3-Spuren (Dolby Digital und Dolby Digital Plus), die der Server konvertiert, die in ihnen gespeicherte Kompression anwenden, die leise Stellen anhebt und laute absenkt. „Wie kodiert“ ist, wie FFmpeg und Jellyfin sie dekodieren. Direkte Wiedergabe und unverändert gesendeter Ton bleiben der App überlassen.',
+      dynamicRangeCompressions: {
+        encoded: 'Wie kodiert',
+        none: 'Keine (volle Dynamik)',
+        night: 'Nacht (leise Stellen lauter)',
+      },
       maxAudioChannels: 'Maximale Anzahl an Audiokanälen',
       maxAudioChannelsHelp:
         'Konvertierter Ton behält höchstens so viele Kanäle, auch wenn die App mehr annimmt.',
