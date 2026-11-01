@@ -163,6 +163,10 @@ type User struct {
 	// criteria: those of Order versions by, and their order of sources
 	// (see Settings.VersionOrder). Off for every user until given.
 	LocalFirst bool
+	// NextUpWithResume has taking an episode off Continue Watching also
+	// take its series off Next Up, as Remove from Next Up does. The
+	// user's own choice, off until they turn it on.
+	NextUpWithResume bool
 }
 
 // NewUser describes an account to create.
@@ -252,6 +256,8 @@ type UserChanges struct {
 	LiveTvChannels *ChannelRule
 	// LocalFirst, see User.
 	LocalFirst *bool
+	// NextUpWithResume, see User.
+	NextUpWithResume *bool
 }
 
 // Store is the accounts repository.
@@ -344,7 +350,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"max_playbacks, max_bitrate, live_tv, sync_play, remote_control, " +
 	"hidden_libraries, blocked_genres, access_schedules, collection_management, " +
 	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, can_share, group_id, follow_group, metadata_language, two_step, torrent_streams, " +
-	"provider_only, web_theme, web_theme_locked, audio_region, remote_access, live_tv_channels, local_first"
+	"provider_only, web_theme, web_theme_locked, audio_region, remote_access, live_tv_channels, local_first, next_up_with_resume"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -357,7 +363,8 @@ func (user *User) fields() []any {
 		&user.HiddenLibraries, &user.BlockedGenres, &user.AccessSchedules, &user.CollectionManagement,
 		&user.SubtitleManagement, &user.ImageTag, &user.LiveTvManagement, &user.QualityGroup, &user.EndsOn, &user.CanShare,
 		&user.GroupID, &user.FollowGroup, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
-		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked, &user.AudioRegion, &user.RemoteAccess, &user.LiveTvChannels, &user.LocalFirst}
+		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked, &user.AudioRegion, &user.RemoteAccess, &user.LiveTvChannels, &user.LocalFirst,
+		&user.NextUpWithResume}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -809,7 +816,8 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 			audio_region = coalesce($37, audio_region),
 			remote_access = coalesce($38, remote_access),
 			live_tv_channels = coalesce($39::jsonb, live_tv_channels),
-			local_first = coalesce($40, local_first)
+			local_first = coalesce($40, local_first),
+			next_up_with_resume = coalesce($41, next_up_with_resume)
 		WHERE id = $1 RETURNING `+userColumns,
 		id, u.name, u.hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 		changes.Parental != nil, u.parental.MaxRating, u.parental.MaxSubRating, u.parental.BlockUnrated,
@@ -819,7 +827,8 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		u.hidden, u.genres, u.schedules, changes.CollectionManagement,
 		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
 		membership.group, membership.follow, changes.MetadataLanguage, changes.TorrentStreams, changes.ProviderOnly,
-		changes.WebTheme, changes.WebThemeLocked, changes.AudioRegion, changes.RemoteAccess, u.channels, changes.LocalFirst))
+		changes.WebTheme, changes.WebThemeLocked, changes.AudioRegion, changes.RemoteAccess, u.channels, changes.LocalFirst,
+		changes.NextUpWithResume))
 	if uniqueViolation(err) {
 		return User{}, nil, ErrNameTaken
 	}
