@@ -73,6 +73,12 @@ func TestDirectPlaysCountWhatTheyMoveForTheirDevice(t *testing.T) {
 		o.Sent, o.Plays = sent, tracker
 		o.Playback.CountReceived(received)
 	}))
+	// The play alone reads the file. A version's first play has its speech
+	// found in the background (see playback.Service.FindSpeech): with
+	// FFmpeg, as CI has, that reads the whole small file into the source
+	// cache, before the first sample when the runner is busy, and the play
+	// then reads it from the cache, receiving nothing from the source.
+	p.setting(t, func(s *accounts.Settings) { s.SyncAddonSubtitles = false })
 	version := p.versions[1].ID.String()
 	// The test addon serves the version's file as these bytes.
 	const file = "\x1a\x45\xdf\xa3 media bytes"
