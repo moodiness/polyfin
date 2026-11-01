@@ -502,7 +502,7 @@ The source cache keeps the parts of the files it read from one start to the next
 
 | Preset | Disk space | Kept for | Extra days for each play again | Next episodes preloaded |
 |---|---|---|---|---|
-| **Off** | 2 GB | Emptied at each start, as before 0.57 | 0 | Opening and end |
+| **Off** | 2 GB | Emptied at each start, as before 0.58 | 0 | Opening and end |
 | **Small** (the default) | 10 GB | 3 days | 1 | Opening and end |
 | **Everyday** | 50 GB | 14 days | 3 | Opening and end |
 | **Large** | 250 GB | 60 days | 7 | Whole files |
