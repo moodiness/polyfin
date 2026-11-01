@@ -1394,7 +1394,8 @@ const trackWait = 2 * time.Minute
 // sourceVersion is the version a subtitle URL names, for a signed-in
 // caller: the URL carries the caller's token, as Jellyfin writes
 // DeliveryUrls. The title's own identifier stands for the version its
-// first media source describes (see firstWorkingVersion).
+// first media source describes (see firstWorkingVersion), as the app
+// asking is offered them, with the user's track choices on the title.
 func (h *Handler) sourceVersion(r *http.Request, item accounts.ID) (library.Version, bool) {
 	user, _, signedIn := h.streamAccess(r, servedToAnyone)
 	wanted, ok := parseGUID(r.PathValue("mediaSourceId"))
@@ -1402,7 +1403,11 @@ func (h *Handler) sourceVersion(r *http.Request, item accounts.ID) (library.Vers
 		return library.Version{}, false
 	}
 	if wanted == item {
-		wanted = h.firstWorkingVersion(h.mediaContext(r, servedToAnyone, user), user, library.Item{ID: item})
+		title, err := h.title(r.Context(), user, item)
+		if err != nil {
+			return library.Version{}, false
+		}
+		wanted = h.firstWorkingVersion(h.mediaContext(r, servedToAnyone, user), user, title)
 	}
 	version, err := h.Library.Version(r.Context(), user, item, wanted)
 	return version, err == nil
