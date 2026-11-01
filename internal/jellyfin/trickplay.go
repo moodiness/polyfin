@@ -95,7 +95,7 @@ func (h *Handler) trickplayVersion(ctx context.Context, user accounts.User, item
 	if versions := h.cachedPlayable(ctx, user, item).versions; len(versions) > 0 {
 		return versions[0].ID
 	}
-	if h.reordered(user) {
+	if h.reordered(ctx, user) {
 		if first := h.firstWorkingVersion(ctx, user, item); first != item.ID {
 			return first
 		}

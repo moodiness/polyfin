@@ -284,8 +284,8 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		// known already (see playback.Remux.Alternates).
 		remux.Alternates = func(ctx context.Context) []library.Version {
 			versions, ok := h.Library.CachedVersions(ctx, user, item.ID)
-			if ok && h.reordered(user) {
-				versions = h.ordered(ctx, user, versions)
+			if ok && h.reordered(ctx, user) {
+				versions = h.ordered(ctx, user, item, versions)
 			}
 			return h.pinnedFirst(ctx, versions)
 		}

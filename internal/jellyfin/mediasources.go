@@ -91,7 +91,7 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 		}
 	})
 	wg.Wait()
-	p.versions = h.offered(ctx, user, p.versions)
+	p.versions = h.offered(ctx, user, item, p.versions)
 	h.keepSubtitles(user, item.ID, p.subtitles)
 	return p, versionsErr
 }
@@ -113,9 +113,9 @@ func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item li
 		h.watch(user, item.ID, opened)
 	}
 	h.RemuxDB.Describe(ctx, versions)
-	p.versions = h.offered(ctx, user, versions)
+	p.versions = h.offered(ctx, user, item, versions)
 	if err == nil {
-		h.watched.show(user.ID, item.ID, p.versions, h.rulesFor(ctx, user).key())
+		h.watched.show(user.ID, item.ID, p.versions, h.pageKey(ctx, user))
 	}
 	if subtitles, listed, err := h.Library.SubtitlesNow(ctx, user, item.ID); err == nil {
 		p.subtitles = subtitles
@@ -137,23 +137,23 @@ func (h *Handler) cachedPlayable(ctx context.Context, user accounts.User, item l
 		return p
 	}
 	if versions, ok := h.Library.CachedVersions(ctx, user, item.ID); ok {
-		p.versions = h.offered(ctx, user, versions)
+		p.versions = h.offered(ctx, user, item, versions)
 	}
 	p.subtitles, _ = h.keptSubtitles(user, item.ID)
 	return p
 }
 
-// offered leaves out of a title's versions those that recently failed,
-// but the torrents that did not start in time (see playback.Unstarted),
-// which stay in place for the user to pick, a play that picks none
-// skipping them (see choose); and, with the version rules or the user's
-// quality group, or versions naming another title, those they hide,
-// ordering the others (see ordered). The version an administrator pinned
-// for the title comes first (see pinnedFirst).
-func (h *Handler) offered(ctx context.Context, user accounts.User, versions []library.Version) []library.Version {
+// offered leaves out of item's versions those that recently failed, but
+// the torrents that did not start in time (see playback.Unstarted), which
+// stay in place for the user to pick, a play that picks none skipping
+// them (see choose); and, with the version rules or the user's quality
+// group, or versions naming another title, those they hide, ordering the
+// others (see ordered), for the app asking (see appOrder). The version an
+// administrator pinned for the title comes first (see pinnedFirst).
+func (h *Handler) offered(ctx context.Context, user accounts.User, item library.Item, versions []library.Version) []library.Version {
 	versions = slices.DeleteFunc(versions, func(v library.Version) bool { return h.Playback.Failed(v.ID) && !h.didNotStart(v) })
-	if h.reordered(user) || slices.ContainsFunc(versions, elsewhere) {
-		versions = h.ordered(ctx, user, versions)
+	if h.reordered(ctx, user) || slices.ContainsFunc(versions, elsewhere) {
+		versions = h.ordered(ctx, user, item, versions)
 	}
 	return h.pinnedFirst(ctx, versions)
 }

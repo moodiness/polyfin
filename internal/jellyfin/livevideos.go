@@ -37,7 +37,7 @@ func (h *Handler) liveVideo(ctx context.Context, user accounts.User, item librar
 		return false
 	}
 	// offered drops versions in place: those it drops are read below.
-	if offered := h.offered(ctx, user, slices.Clone(versions)); len(offered) > 0 {
+	if offered := h.offered(ctx, user, item, slices.Clone(versions)); len(offered) > 0 {
 		endless, err := h.Playback.Endless(playback.ForUser(ctx, user.ID), offered[0])
 		return err == nil && endless
 	}

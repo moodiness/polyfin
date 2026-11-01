@@ -133,7 +133,7 @@ func (h *Handler) attachment(w http.ResponseWriter, r *http.Request) {
 	// The title's own identifier stands for the version its first media
 	// source describes (see firstWorkingVersion).
 	if wanted == item {
-		wanted = h.firstWorkingVersion(r.Context(), user, library.Item{ID: item})
+		wanted = h.firstWorkingVersion(h.mediaContext(r, servedToAnyone, user), user, library.Item{ID: item})
 	}
 	version, err := h.Library.Version(r.Context(), user, item, wanted)
 	if err != nil {

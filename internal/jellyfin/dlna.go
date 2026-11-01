@@ -403,7 +403,7 @@ func (h *Handler) chooseDLNA(w http.ResponseWriter, r *http.Request, play dlna.P
 			w.WriteHeader(http.StatusNotFound)
 			return dlnaChosen{}, false
 		}
-		p.versions = h.offered(ctx, play.User, versions)
+		p.versions = h.offered(ctx, play.User, play.Item, versions)
 		choice = h.choose(r, play.User, p, play.Item.ID, request, candidatesOf(p.versions), settings.PreferDirectPlay)
 	}
 	if choice.decided == nil || !choice.decided.decision.DirectPlay && !choice.decided.decision.HLS {

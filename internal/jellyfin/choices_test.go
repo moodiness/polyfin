@@ -194,21 +194,21 @@ func TestPreferDirectPlayChoosesAVersionThatNeedsNoConversion(t *testing.T) {
 		t.Errorf("by default, the first version plays, converted: %+v", source)
 	}
 	p.setting(t, func(settings *accounts.Settings) { settings.PreferDirectPlay = true })
-	// The first version, passed over, is left out rather than listed after
-	// the second: the versions keep their order.
+	// The device's profile is known: the version it plays as it is comes
+	// first, under the title's identifier, and the other follows it.
 	answer := p.ask(t, p.token, p.movie, minimal, nil)
-	if source := firstSource(t, answer); source.Id != p.versions[1].ID.String() || !source.SupportsDirectPlay || source.TranscodingUrl != "" ||
-		len(answer.MediaSources) != 1 {
+	if source := firstSource(t, answer); source.Id != p.movie || source.ETag != p.versions[1].ID.String() || !source.SupportsDirectPlay ||
+		source.TranscodingUrl != "" || len(answer.MediaSources) != 2 || answer.MediaSources[1].ETag != p.versions[0].ID.String() {
 		t.Errorf("preferring direct play: %+v", answer)
 	}
 	// Repackaged with its tracks copied, a version needs no conversion
 	// either.
-	if source := firstSource(t, p.ask(t, p.token, p.movie, minimal, map[string]any{"EnableDirectPlay": false})); source.Id != p.versions[1].ID.String() ||
+	if source := firstSource(t, p.ask(t, p.token, p.movie, minimal, map[string]any{"EnableDirectPlay": false})); source.ETag != p.versions[1].ID.String() ||
 		source.TranscodingUrl == "" || strings.Contains(source.TranscodingUrl, "StreamCopy=false") {
 		t.Errorf("preferring a copy: %+v", source)
 	}
 	// The version the app asks for plays, converted as it needs.
-	if source := firstSource(t, p.ask(t, p.token, p.movie, minimal, map[string]any{"MediaSourceId": p.versions[0].ID.String()})); source.Id != p.movie ||
+	if source := firstSource(t, p.ask(t, p.token, p.movie, minimal, map[string]any{"MediaSourceId": p.versions[0].ID.String()})); source.ETag != p.versions[0].ID.String() ||
 		!strings.HasSuffix(source.TranscodingUrl, "&allowAudioStreamCopy=false") {
 		t.Errorf("the version asked for: %+v", source)
 	}
@@ -226,7 +226,7 @@ func TestPreferDirectPlaySkipsRemuxesThatCannotStart(t *testing.T) {
 	p := playing(t)
 	p.remuxable(t)
 	p.setting(t, func(settings *accounts.Settings) { settings.PreferDirectPlay = true })
-	if source := firstSource(t, p.ask(t, p.token, p.movie, p.profile(t, "minimal"), map[string]any{"EnableDirectPlay": false})); source.Id != p.movie ||
+	if source := firstSource(t, p.ask(t, p.token, p.movie, p.profile(t, "minimal"), map[string]any{"EnableDirectPlay": false})); source.ETag != p.versions[0].ID.String() ||
 		!strings.HasSuffix(source.TranscodingUrl, "&allowAudioStreamCopy=false") {
 		t.Errorf("chosen: %+v", source)
 	}
@@ -242,7 +242,7 @@ func TestPreferDirectPlayKeepsUnderTheUsersBitrateLimit(t *testing.T) {
 	p.withBitrate(t, p.versions[1], "h264-aac-mp4", 3_000_000)
 	minimal := p.profile(t, "minimal")
 	p.setting(t, func(settings *accounts.Settings) { settings.PreferDirectPlay = true })
-	if source := firstSource(t, p.ask(t, p.token, p.movie, minimal, nil)); source.Id != p.versions[1].ID.String() || !source.SupportsDirectPlay {
+	if source := firstSource(t, p.ask(t, p.token, p.movie, minimal, nil)); source.ETag != p.versions[1].ID.String() || !source.SupportsDirectPlay {
 		t.Fatalf("without a limit: %+v", source)
 	}
 	p.limit(t, p.user, func(c *accounts.UserChanges) { c.MaxBitrate = new(2_000_000) })

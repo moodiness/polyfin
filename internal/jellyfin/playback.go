@@ -353,6 +353,9 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		h.refusePlay(w, r, user, item, "RateLimitExceeded", plays.FailedLimit)
 		return
 	}
+	// Whether the device's profile was known before this request: item
+	// details then listed the versions for it (see appOrder).
+	_, _, profileKnown := h.knownPlay(r.Context(), user)
 	h.rememberPlay(r.Context(), request)
 	limitBitrate(&request, user)
 	h.limitHeight(&request, user)
@@ -453,8 +456,14 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// is the first that plays without conversion, as it is or repackaged
 	// with its tracks copied, among those analyzed now; else the first that
 	// plays at all. Jellyfin 12.2 keeps the version opened first however
-	// it plays: the setting departs from it, and is off by default.
-	prefer := settings.PreferDirectPlay && !explicit
+	// it plays: the setting departs from it, and is off by default. The
+	// title's own identifier asks for no version, but for a device whose
+	// profile was known: its version menu was ordered for it, the versions
+	// it plays without conversion first (see appOrder), so the identifier,
+	// which it sends for the version the menu shows first, picked or not,
+	// names a version Play keeps even when it needs a conversion.
+	menuPick := request.MediaSourceId != "" && !explicit && profileKnown
+	prefer := settings.PreferDirectPlay && !explicit && !menuPick
 	c := plan(p.versions)
 	choice := h.choose(r, user, p, opened, request, c, prefer)
 	unstarted := choice.unstarted || p.unstarted
@@ -466,7 +475,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		unstarted = unstarted || h.unstartedTorrent(versions)
-		p.versions = h.offered(r.Context(), user, versions)
+		p.versions = h.offered(r.Context(), user, item, versions)
 		c = plan(p.versions)
 		choice = h.choose(r, user, p, opened, request, c, prefer)
 		unstarted = unstarted || choice.unstarted
@@ -1178,7 +1187,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// lately left out, and those the version rules or the user's quality
 	// group hide (see firstWorkingVersion).
 	if wanted == item.ID && versioned(item.Kind) {
-		wanted = h.firstWorkingVersion(r.Context(), user, item)
+		wanted = h.firstWorkingVersion(h.mediaContext(r, servedToAnyone, user), user, item)
 	}
 	version, err := h.version(r.Context(), user, item, wanted)
 	if err != nil {
@@ -1393,7 +1402,7 @@ func (h *Handler) sourceVersion(r *http.Request, item accounts.ID) (library.Vers
 		return library.Version{}, false
 	}
 	if wanted == item {
-		wanted = h.firstWorkingVersion(r.Context(), user, library.Item{ID: item})
+		wanted = h.firstWorkingVersion(h.mediaContext(r, servedToAnyone, user), user, library.Item{ID: item})
 	}
 	version, err := h.Library.Version(r.Context(), user, item, wanted)
 	return version, err == nil
