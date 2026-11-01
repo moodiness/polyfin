@@ -233,10 +233,12 @@ func (h *Handler) playingItems(r *http.Request, user accounts.User) map[accounts
 const watchedSeriesLimit = 50
 
 // watching is a series the user watches, and the latest date the user
-// played or started one of its episodes.
+// played or started one of its episodes. removed is when the user took it
+// off Next Up, when that still holds but for a new episode.
 type watching struct {
-	series accounts.ID
-	latest *time.Time
+	series  accounts.ID
+	latest  *time.Time
+	removed *time.Time
 }
 
 // nextUp lists, for each series the user is watching, the episode to watch
@@ -245,8 +247,10 @@ type watching struct {
 // order their furthest played episode was played, then those with no
 // episode played, the latest started first. With enableRewatching, a
 // series the user plays again from an earlier episode also gets the next
-// episode of that rewatch (see rewatchEpisode). The series the user hid
-// are left out, unless asked for by seriesId, as their page does.
+// episode of that rewatch (see rewatchEpisode). The series the user hid,
+// and those they took off Next Up (see nextupremoved.go), both entries of
+// a rewatch included, are left out, unless asked for by seriesId, as their
+// page does.
 func (h *Handler) nextUp(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -352,6 +356,15 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 			}
 			candidates = slices.DeleteFunc(candidates, func(c watching) bool { return excluded[c.series] })
 		}
+		removed, err := h.nextUpRemovals(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		for i, c := range candidates {
+			if at, ok := removed[c.series]; ok && !removalLifted(at, c.latest) {
+				candidates[i].removed = &at
+			}
+		}
 		candidates = candidates[:min(len(candidates), watchedSeriesLimit)]
 	}
 	type entry struct {
@@ -373,6 +386,9 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 			}
 			episodes, err := h.Library.Episodes(ctx, user, candidate.series, nil)
 			if err != nil {
+				return
+			}
+			if candidate.removed != nil && !releasedSince(episodes, *candidate.removed) {
 				return
 			}
 			if episode, date, ok := nextEpisode(episodes, data, resumable); ok {
