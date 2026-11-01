@@ -280,7 +280,7 @@ With **Turn picture subtitles into text** on, a PGS or VobSub track read into te
 ### Jellyfin 12.2 details
 
 - **Codec tags:** each track's `CodecTag` is the tag ffprobe reads, such as `avc1` or `mp4a` in MP4. Matroska's empty tags are left out, and live channels report none. Attached files report theirs as they are, `[0][0][0][0]` in Matroska. Direct play checks a profile's `VideoCodecTag` conditions against the file's tag.
-- **Rewatching:** starting a played movie, episode or audiobook again does not change its last played date. The date changes once the position passes the start, or when the title is played to the end. Next Up therefore does not move past an episode that was only just started.
+- **Rewatching:** starting a played movie, episode or audiobook again does not change its last played date. The date changes once the position passes the start, or when the title is played to the end. Next Up therefore does not move past an episode that was only just started. `/Shows/NextUp` with `enableRewatching=true` also lists, for a series played again, the played episode after the one played last, as Jellyfin 12.4 does (see [Continue Watching and Next Up](users.md#continue-watching-and-next-up)).
 - **Letter filters:** `nameStartsWith`, `nameLessThan` and `nameStartsWithOrGreater` ignore letter case. They narrow people, music, favorites and other personal lists, and playlists. Movie and series libraries come from addons' catalogs, so they are not narrowed.
 - **People counts:** `/Persons` counts only the people it can list.
 - **Downmix:** music and audiobooks converted to stereo go through the downmix chosen in the server settings, as the audio of converted video does.
