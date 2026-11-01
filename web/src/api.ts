@@ -577,6 +577,8 @@ export type Settings = {
   /** Stereo downmix, and the volume it is multiplied by. */
   downmixAlgorithm: DownmixAlgorithm
   downmixBoost: number
+  /** Evens the loudness of converted video audio at -16 LUFS; direct play, copied audio and music keep theirs. */
+  normalizeConvertedAudio: boolean
   /** Most channels of converted audio, 0 for no limit but the app's. */
   maxAudioChannels: number
   /** Bitrate of converted audio per channel, in kb/s; 0 keeps Polyfin's. */

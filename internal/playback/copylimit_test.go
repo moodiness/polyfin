@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -44,7 +45,7 @@ func TestCopiedAudioStaysWithinTheLimit(t *testing.T) {
 		if !d.HLS || d.Video == nil {
 			t.Fatalf("%s: HLS %v, video %+v", tc.name, d.HLS, d.Video)
 		}
-		if (d.Audio == nil) != (tc.convert == nil) || d.Audio != nil && *d.Audio != *tc.convert {
+		if !reflect.DeepEqual(d.Audio, tc.convert) {
 			t.Errorf("%s: audio %+v, want %+v", tc.name, d.Audio, tc.convert)
 		}
 		if budget := VideoLimit(tc.limit, SentAudioBitrate(&source.Streams[1], d.Audio)); budget != tc.videoBudget || tc.limit > 0 && d.Video.Bitrate > budget {
@@ -57,13 +58,14 @@ func TestCopiedAudioStaysWithinTheLimit(t *testing.T) {
 // a lossy codec it takes, whose bitrate the limit bounds; with no limit it
 // keeps the app's order.
 func TestAudioConvertedUnderALimitIsLossy(t *testing.T) {
-	if got := ConvertAudio("flac,aac", "6", 6, "5.1(side)", 3_000_000, Tuning{}); got == nil || got.Codec != "aac" || got.Bitrate != 448_000 {
+	surround := AudioSource{Channels: 6, ChannelLayout: "5.1(side)"}
+	if got := ConvertAudio("flac,aac", "6", surround, 3_000_000, Tuning{}); got == nil || got.Codec != "aac" || got.Bitrate != 448_000 {
 		t.Errorf("within 3 Mb/s: %+v", got)
 	}
-	if got := ConvertAudio("flac,aac", "6", 6, "5.1(side)", 0, Tuning{}); got == nil || got.Codec != "flac" {
+	if got := ConvertAudio("flac,aac", "6", surround, 0, Tuning{}); got == nil || got.Codec != "flac" {
 		t.Errorf("with no limit: %+v", got)
 	}
-	if got := ConvertAudio("flac", "6", 6, "5.1(side)", 3_000_000, Tuning{}); got == nil || got.Codec != "flac" {
+	if got := ConvertAudio("flac", "6", surround, 3_000_000, Tuning{}); got == nil || got.Codec != "flac" {
 		t.Errorf("FLAC only, within 3 Mb/s: %+v", got)
 	}
 }

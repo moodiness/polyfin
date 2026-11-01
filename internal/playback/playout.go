@@ -221,7 +221,7 @@ func (s *Service) programmePiece(ctx context.Context, version library.Version, o
 	audio := playoutAudio(analysis)
 	remux := Remux{ConvertVideo: conversion, Format: hls.TS}
 	if stream, ok := streamOf(analysis, audio); ok {
-		remux.ConvertAudio = ConvertAudio("aac", "2", stream.Channels, stream.ChannelLayout, 0, tuning)
+		remux.ConvertAudio = ConvertAudio("aac", "2", AudioTrack(stream), 0, tuning)
 	}
 	r := hls.Remux{Video: video.Index, Audio: audio, Format: hls.TS}
 	release := func() {}

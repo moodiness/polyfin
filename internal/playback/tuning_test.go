@@ -65,6 +65,7 @@ func TestTuningChangesConversions(t *testing.T) {
 	dave := "pan=stereo|c0=0.5*c2+0.707*c0+0.707*c4+0.5*c3|c1=0.5*c2+0.707*c1+0.707*c5+0.5*c3"
 	ownMix := "aformat=channel_layouts=stereo,"
 	limited := "alimiter=limit=0.841395:level=disabled"
+	normalized := "loudnorm=I=-16:TP=-1.5:LRA=11,aresample="
 	for _, tc := range []struct {
 		name     string
 		codecs   string
@@ -92,18 +93,35 @@ func TestTuningChangesConversions(t *testing.T) {
 			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: ownMix + "volume=2," + limited}},
 		{"stereo is not mixed down", "aac", 2, "stereo", Tuning{Downmix: "Rfc7845", DownmixBoost: 2}, &AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000}},
 		{"5.1 kept is not mixed down", "aac", 6, "5.1", Tuning{Downmix: "Rfc7845", DownmixBoost: 2}, &AudioConversion{Codec: "aac", Channels: 6, Bitrate: 640_000}},
+		// Normalized: after the downmix and its volume, back to the
+		// source's rate (48 kHz when unknown), then limited, whatever the
+		// volume.
+		{"mixed down at Jellyfin's volume, normalized", "aac", 6, "5.1(side)", Tuning{MaxAudioChannels: 2, DownmixBoost: 2, Normalize: true},
+			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: ownMix + "volume=2," + normalized + "48000," + limited}},
+		{"mixed down quieter, normalized", "aac", 6, "5.1(side)", Tuning{MaxAudioChannels: 2, Downmix: "Dave750", DownmixBoost: 0.5, Normalize: true},
+			&AudioConversion{Codec: "aac", Channels: 2, Bitrate: 384_000, Filter: dave + ",volume=0.5," + normalized + "48000," + limited}},
+		{"5.1 kept, normalized", "aac", 6, "5.1", Tuning{DownmixBoost: 2, Normalize: true},
+			&AudioConversion{Codec: "aac", Channels: 6, Bitrate: 640_000, Filter: normalized + "48000," + limited}},
+		{"stereo normalized", "ac3", 2, "stereo", Tuning{DownmixBoost: 2, Normalize: true},
+			&AudioConversion{Codec: "ac3", Channels: 2, Bitrate: 384_000, Filter: normalized + "48000," + limited}},
 	} {
-		if got := ConvertAudio(tc.codecs, "", tc.channels, tc.layout, 0, tc.tuning); !reflect.DeepEqual(got, tc.want) {
+		if got := ConvertAudio(tc.codecs, "", AudioSource{Channels: tc.channels, ChannelLayout: tc.layout}, 0, tc.tuning); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: %+v, want %+v", tc.name, got, tc.want)
 		}
 	}
-
+	if got := ConvertAudio("aac", "", AudioSource{Channels: 2, SampleRate: 44_100}, 0, Tuning{Normalize: true}); got == nil || got.Filter != normalized+"44100,"+limited {
+		t.Errorf("normalized at 44.1 kHz: %+v", got)
+	}
 	// A track converted on its own, progressively or into HLS segments,
 	// is mixed down to stereo the same way, as Jellyfin 12.2 does.
 	profile := &DeviceProfile{TranscodingProfiles: []TranscodingProfile{{Type: "Audio", Container: "mp3", AudioCodec: "mp3",
 		Protocol: "http", MaxAudioChannels: "2"}}}
 	source := AudioSource{Container: "flac", Codec: "flac", Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 48_000}
 	decision := DecideAudio(profile, source, AudioOptions{Can: Capabilities{Encoders: []string{"libmp3lame"}, Tuning: Tuning{Downmix: "Dave750"}}})
+	// Music is never normalized: apps even it with its NormalizationGain.
+	if d := DecideAudio(profile, source, AudioOptions{Can: Capabilities{Encoders: []string{"libmp3lame"}, Tuning: Tuning{Downmix: "Dave750", Normalize: true}}}); d.Target == nil || d.Target.Filter != dave {
+		t.Errorf("music normalized: %+v", d.Target)
+	}
 	if decision.Target == nil || decision.Target.Channels != 2 || decision.Target.Filter != dave {
 		t.Fatalf("progressive downmix: %+v", decision.Target)
 	}
@@ -164,8 +182,33 @@ func TestUntunedConversionKeepsItsFrameRate(t *testing.T) {
 	}
 }
 
+// A source switched to during a play converts its audio as the play did:
+// normalized when the play's audio was converted, at the play's rate; only
+// mixed down to stereo when it stands for audio the play copied.
+func TestSwitchedSourceNormalizesAsThePlay(t *testing.T) {
+	before := media.Analysis{Streams: []media.Stream{{Index: 1, Type: "audio", Codec: "aac", Channels: 2, SampleRate: 48_000}}}
+	after := media.Analysis{Streams: []media.Stream{{Index: 1, Type: "audio", Codec: "eac3", Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 44_100}}}
+	c := &carry{remux: Remux{Audio: 1, Format: hls.TS}, analysis: before}
+	tuning := Tuning{DownmixBoost: 2, Normalize: true}
+	var converted hls.Remux
+	if err := c.audio(&converted, after, hls.Remux{AudioCodec: "aac", AudioChannels: 2, AudioBitrate: 384_000}, tuning); err != nil {
+		t.Fatal(err)
+	}
+	if want := "aformat=channel_layouts=stereo,volume=2,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000,alimiter=limit=0.841395:level=disabled"; converted.AudioFilter != want ||
+		converted.AudioRate != 48_000 {
+		t.Errorf("after a conversion: %q at %d Hz, want %q", converted.AudioFilter, converted.AudioRate, want)
+	}
+	var copied hls.Remux
+	if err := c.audio(&copied, after, hls.Remux{}, tuning); err != nil {
+		t.Fatal(err)
+	}
+	if want := "aformat=channel_layouts=stereo,volume=2,alimiter=limit=0.841395:level=disabled"; copied.AudioFilter != want {
+		t.Errorf("after a copy: %q, want %q", copied.AudioFilter, want)
+	}
+}
+
 // A conversion with a slower preset, a quality factor, HEVC and a downmix
-// to stereo plays.
+// to stereo, normalized, plays.
 func TestTunedConversionPlays(t *testing.T) {
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
 	if ffmpeg == "" {
@@ -186,12 +229,12 @@ func TestTunedConversionPlays(t *testing.T) {
 	if !slices.Contains(m.Encoders(), "libx265") {
 		t.Skip("FFmpeg has no libx265")
 	}
-	tuning := Tuning{Preset: "faster", HEVCQuality: 30, PreferHEVC: true, Downmix: "Dave750", DownmixBoost: 1.5, MaxAudioChannels: 2}
+	tuning := Tuning{Preset: "faster", HEVCQuality: 30, PreferHEVC: true, Downmix: "Dave750", DownmixBoost: 1.5, MaxAudioChannels: 2, Normalize: true}
 	can := Capabilities{Encoders: m.Encoders(), Tuning: tuning}
 	stream := media.Stream{Index: 0, Type: "video", Codec: "h264", Width: 320, Height: 180, AverageRate: 24, BitDepth: 8}
 	remux := Remux{Format: hls.FMP4,
 		ConvertVideo: ConvertVideo("hevc,h264", Limits{}, MediaStream{Codec: "h264", VideoRange: "SDR", Width: new(320), Height: new(180)}, can),
-		ConvertAudio: ConvertAudio("aac", "", 6, "5.1(side)", 0, tuning)}
+		ConvertAudio: ConvertAudio("aac", "", AudioSource{Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 48_000}, 0, tuning)}
 	plan := hls.NewPlan([]time.Duration{0, 6 * time.Second}, 12*time.Second)
 	r := hls.Remux{Input: input, Video: 0, Audio: 1, Format: hls.FMP4, Plan: plan}
 	remux.convert(&r, stream, tuning)

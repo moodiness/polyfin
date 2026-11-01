@@ -607,6 +607,9 @@ const settings: typeof en = {
       downmixBoost: 'Volume du mixage stéréo',
       downmixBoostHelp: (r: RangeText) =>
         `Un mixage en stéréo sonne souvent moins fort : le volume est multiplié par ce nombre, et 1 ne change rien. De ${r.min} à ${r.max} ; ${r.default} par défaut, comme dans Jellyfin. Au-dessus de 1, un limiteur évite que les scènes fortes saturent.`,
+      normalizeConvertedAudio: 'Égaliser le volume des vidéos converties',
+      normalizeConvertedAudioHelp:
+        'Ramène le son des films, épisodes et chaînes que le serveur convertit à un même volume, -16 LUFS : les titres discrets sont joués plus fort et les titres forts moins fort, avec un limiteur après. Activé, le volume du mixage stéréo ne change plus le niveau. La lecture directe, le son envoyé tel quel et la musique ne changent jamais. Désactivé par défaut.',
       maxAudioChannels: 'Nombre max de canaux audio',
       maxAudioChannelsHelp:
         'Le son converti garde au plus ce nombre de canaux, même si l’application en accepte plus.',

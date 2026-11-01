@@ -616,6 +616,7 @@ type settingsJSON struct {
 	DownmixBoost               *float64               `json:"downmixBoost"`
 	MaxAudioChannels           *int                   `json:"maxAudioChannels"`
 	AudioBitratePerChannel     *int                   `json:"audioBitratePerChannel"`
+	NormalizeConvertedAudio    *bool                  `json:"normalizeConvertedAudio"`
 	EncodingThreads            *int                   `json:"encodingThreads"`
 	AheadSeconds               *int                   `json:"aheadSeconds"`
 	KeepConvertedVideo         *bool                  `json:"keepConvertedVideo"`
@@ -972,6 +973,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		DownmixBoost:               &settings.DownmixBoost,
 		MaxAudioChannels:           &settings.MaxAudioChannels,
 		AudioBitratePerChannel:     &settings.AudioBitratePerChannel,
+		NormalizeConvertedAudio:    &settings.NormalizeConvertedAudio,
 		EncodingThreads:            &settings.EncodingThreads,
 		AheadSeconds:               &settings.AheadSeconds,
 		KeepConvertedVideo:         &settings.KeepConvertedVideo,
@@ -1781,6 +1783,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		DownmixBoost:               valueOr(body.DownmixBoost, current.DownmixBoost),
 		MaxAudioChannels:           valueOr(body.MaxAudioChannels, current.MaxAudioChannels),
 		AudioBitratePerChannel:     valueOr(body.AudioBitratePerChannel, current.AudioBitratePerChannel),
+		NormalizeConvertedAudio:    valueOr(body.NormalizeConvertedAudio, current.NormalizeConvertedAudio),
 		EncodingThreads:            valueOr(body.EncodingThreads, current.EncodingThreads),
 		AheadSeconds:               valueOr(body.AheadSeconds, current.AheadSeconds),
 		KeepConvertedVideo:         valueOr(body.KeepConvertedVideo, current.KeepConvertedVideo),

@@ -600,6 +600,9 @@ const settings: typeof en = {
       downmixBoost: 'Volume ao mixar para estéreo',
       downmixBoostHelp: (r: RangeText) =>
         `Mixagens em estéreo costumam soar mais baixas: o volume é multiplicado por este número, e 1 não muda nada. De ${r.min} a ${r.max}; ${r.default} por padrão, como no Jellyfin. Acima de 1, um limitador evita que as cenas altas distorçam.`,
+      normalizeConvertedAudio: 'Equalizar a intensidade sonora dos vídeos convertidos',
+      normalizeConvertedAudioHelp:
+        'Leva o som dos filmes, episódios e canais que o servidor converte à mesma intensidade sonora, -16 LUFS, para que títulos baixos toquem mais alto e títulos altos mais baixo, com um limitador depois. Enquanto ativado, o volume ao mixar para estéreo não muda mais o nível. A reprodução direta, o som enviado como está e a música nunca mudam. Desativado por padrão.',
       maxAudioChannels: 'Máximo de canais de áudio',
       maxAudioChannelsHelp:
         'O som convertido mantém no máximo este número de canais, mesmo que o aplicativo aceite mais.',

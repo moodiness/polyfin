@@ -582,6 +582,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'conversion',
+    anchor: 'normalize-converted-audio',
+    label: (t) => c(t).normalizeConvertedAudio,
+    help: (t) => c(t).normalizeConvertedAudioHelp,
+    keywords: ['loudness', 'loudnorm', 'volume', 'quiet'],
+  },
+  {
+    section: 'conversion',
     anchor: 'max-audio-channels',
     label: (t) => c(t).maxAudioChannels,
     help: (t) => c(t).maxAudioChannelsHelp,

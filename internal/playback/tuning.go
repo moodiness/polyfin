@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 	"strings"
@@ -50,6 +51,9 @@ type Tuning struct {
 	// AudioBitrate is converted audio's bitrate for each channel, in bits
 	// per second, 0 for Polyfin's.
 	AudioBitrate int64
+	// Normalize evens the loudness of the audio of converted videos (see
+	// normalizer).
+	Normalize bool
 	// Threads is how many threads FFmpeg converts with, 0 letting it
 	// choose.
 	Threads int
@@ -74,6 +78,7 @@ func TuningOf(settings accounts.Settings) Tuning {
 		MaxAudioChannels: settings.MaxAudioChannels,
 		AudioBitrate:     int64(settings.AudioBitratePerChannel) * 1000,
 		Threads:          settings.EncodingThreads,
+		Normalize:        settings.NormalizeConvertedAudio,
 	}
 	// The values that change nothing are the zero values.
 	if t.Preset == "auto" {
@@ -147,37 +152,70 @@ var guessedLayouts = map[int]string{1: "mono", 2: "stereo", 3: "2.1", 4: "4.0", 
 // sample by sample, with FFmpeg's lookahead limiter, its automatic level
 // off: FFmpeg's AAC and AC-3 encoders add some 0.2 dB to them, so loud
 // passages end at or under -1 dBTP. Without it, a volume above 1 overloads
-// the encoder on loud scenes, which distorts them.
+// the encoder on loud scenes, which distorts them, and the normalizer lets
+// some peaks of its first seconds through.
 const limiter = "alimiter=limit=0.841395:level=disabled"
 
 // stereoFirst mixes audio down to stereo with FFmpeg's own downmix, as -ac
-// 2 would after the filters: before them, the volume and the limiter work
-// on the stereo the app gets.
+// 2 would after the filters: before them, the volume, the normalizer and
+// the limiter work on the stereo the app gets.
 const stereoFirst = "aformat=channel_layouts=stereo"
+
+// normalizer evens loudness at -16 LUFS, peaks at -1.5 dBTP and a range
+// of 11 LU at most, with FFmpeg's EBU R128 normalization in one pass: it
+// reads 3 seconds ahead, and settles over the first seconds of each
+// FFmpeg run. It works at 192 kHz, so a resampling follows it.
+const normalizer = "loudnorm=I=-16:TP=-1.5:LRA=11"
 
 // downmix is the filter mixing audio of channels in layout, as ffprobe
 // names it, down to stereo, empty when FFmpeg's own downmix does: Jellyfin's
-// algorithm for the layout, else FFmpeg's downmix when a filter follows,
-// then the boost, then the limiter when the boost makes it louder. Like
-// Jellyfin's probe, it reads ffprobe's 5.1(side) as 5.1.
+// algorithm for the layout, then the boost, then the limiter when the boost
+// makes it louder. Like Jellyfin's probe, it reads ffprobe's 5.1(side) as
+// 5.1. Music and audiobooks go through it alone, never normalized: apps
+// even their volume themselves, from their NormalizationGain.
 func (t Tuning) downmix(channels int, layout string) string {
-	layout, _, _ = strings.Cut(layout, "(")
-	if layout == "" {
-		layout = guessedLayouts[channels]
-	}
+	return strings.Join(t.audioFilters(channels, layout, true, false, 0), ",")
+}
+
+// videoAudio is the filter graph a video's audio track, source, goes
+// through when it is converted to channels at rate Hz, 0 keeping the
+// source's rate, empty for none: the downmix to stereo when channels
+// mixes it down, then, when the tuning normalizes, the normalizer.
+func (t Tuning) videoAudio(source AudioSource, channels, rate int) string {
+	return strings.Join(t.audioFilters(source.Channels, source.ChannelLayout, channels == 2 && source.Channels > 2, t.Normalize,
+		cmp.Or(rate, source.SampleRate, 48_000)), ",")
+}
+
+// audioFilters are the filters converted audio of channels in layout goes
+// through, in order: when stereo, Jellyfin's algorithm for the layout,
+// else FFmpeg's downmix when a filter follows, and the boost; when
+// normalize, the normalizer, resampled back to rate; then the limiter
+// after a boost above 1 or the normalizer.
+func (t Tuning) audioFilters(channels int, layout string, stereo, normalize bool, rate int) []string {
 	var filters []string
-	mixed := false
-	if filter, ok := downmixFilters[[2]string{t.Downmix, layout}]; ok {
-		filters, mixed = append(filters, filter), true
+	limit, mixed := false, !stereo
+	if stereo {
+		layout, _, _ = strings.Cut(layout, "(")
+		if layout == "" {
+			layout = guessedLayouts[channels]
+		}
+		if filter, ok := downmixFilters[[2]string{t.Downmix, layout}]; ok {
+			filters, mixed = append(filters, filter), true
+		}
+		if t.DownmixBoost != 0 && t.DownmixBoost != 1 {
+			filters = append(filters, "volume="+strconv.FormatFloat(t.DownmixBoost, 'f', -1, 64))
+		}
+		limit = t.DownmixBoost > 1
 	}
-	if t.DownmixBoost != 0 && t.DownmixBoost != 1 {
-		filters = append(filters, "volume="+strconv.FormatFloat(t.DownmixBoost, 'f', -1, 64))
+	if normalize {
+		filters = append(filters, normalizer, "aresample="+strconv.Itoa(rate))
+		limit = true
 	}
-	if t.DownmixBoost > 1 {
+	if limit {
 		filters = append(filters, limiter)
 	}
 	if !mixed && len(filters) > 0 {
 		filters = append([]string{stereoFirst}, filters...)
 	}
-	return strings.Join(filters, ",")
+	return filters
 }

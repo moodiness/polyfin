@@ -48,8 +48,8 @@ How loud a title plays is decided in one place, which depends on how it plays:
 
 - **Direct play, and audio copied into HLS:** the app decides. Polyfin sends the track as it is, byte for byte, and the app's decoder sets the level: its own mix of surround sound down to its speakers and, for AC-3 and E-AC-3 (Dolby Digital and Dolby Digital Plus), whether it applies the track's dialogue level (dialnorm) and its dynamic range compression. Dolby decoders, in TVs, receivers, Apple devices and some phones, apply both: a track stating its dialogue at -27 dB plays 4 dB lower there than in a player built on FFmpeg, which ignores dialnorm. No server setting changes the level of these plays.
 - **Converted audio:** the server decides, with FFmpeg's decoder, which ignores dialnorm and applies the track's dynamic range compression as encoded.
-  - Converted with the source's channels, 5.1 to 5.1 or stereo to stereo, the audio keeps the source's level, to 0.1 dB.
-  - Mixed down to stereo, when an app asks for 2 channels of a surround track, it goes through **Mix to stereo**, then **Volume when mixing to stereo**, then a limiter.
+  - Converted with the source's channels, 5.1 to 5.1 or stereo to stereo, the audio keeps the source's level, to 0.1 dB, unless **Even the loudness of converted videos** is on.
+  - Mixed down to stereo, when an app asks for 2 channels of a surround track, it goes through **Mix to stereo**, then **Volume when mixing to stereo**, then **Even the loudness of converted videos** when it is on, then a limiter.
 
 The app chooses the path. jellyfin-web in Chrome, Firefox and Android's web view cannot decode AC-3 or E-AC-3 (see [Dolby audio in browsers](#dolby-audio-in-browsers)), so their audio is converted, to stereo when the browser reports 2 speakers. jellyfin-web's **Maximum allowed audio channels**, in the app's playback settings and kept by each browser, overrides what the browser reports. The Jellyfin app for Android's integrated player, Android TV with bitstream output, and the iOS app receive E-AC-3 as it is. To tell which path a play takes, look at the end of its version's name, "(direct play)", "(direct stream)" or "(converted: audio)", or at jellyfin-web's Playback Info (see [Seeing how a play goes](#seeing-how-a-play-goes)).
 
@@ -73,7 +73,21 @@ Each **Mix to stereo** sets how loud voices are against effects, before the volu
 
 The right channel mirrors the left. Night mode suits speech at a low volume; RFC 7845 and Dave750 lower everything to stay under full scale. Music and audiobooks converted to stereo go through the same mix, volume and limiter.
 
-**Compared with Jellyfin:** Jellyfin 12.4 mixes down with the same filters at the same volume, 2 by default ([`EncodingOptions.cs`, lines 21 to 22](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/EncodingOptions.cs#L21-L22); [`EncodingHelper.cs`, lines 2975 to 2977](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs#L2975-L2977)), but without a limiter: its loud scenes pass full scale, and the encoder distorts them. It decodes AC-3 and E-AC-3 with FFmpeg's defaults, as Polyfin does.
+**Even the loudness of converted videos**, off by default, brings the audio of the movies, episodes and channels the server converts to -16 LUFS, with FFmpeg's EBU R128 normalization (`loudnorm`) in one pass: peaks at -1.5 dBTP at most and a loudness range of 11 LU at most. It comes after the stereo mix and its volume, and the limiter after it, so the normalizer measures what the volume made: with it on, **Volume when mixing to stereo** no longer changes the level, only the balance **Mix to stereo** sets. Direct play, copied audio, music and audiobooks never go through it; music has its own evening, **Even the volume between songs**, which apps apply. Measured through Polyfin:
+
+| Source | Sent | Off | On |
+|---|---|---|---|
+| Test scene, voices alone | Stereo | -22.3 LUFS | -15.9 LUFS |
+| Test scene, voices alone | 5.1 | -26.8 LUFS | -15.9 LUFS |
+| Test scene, 1 minute, loudness range 15 LU | Stereo | -13.3 LUFS | -18.2 LUFS |
+| Test scene 12 dB quieter | Stereo | -22.9 LUFS | -18.2 LUFS |
+| E-AC-3 7.1 from a movie | Stereo | -17.3 LUFS | -16.0 LUFS |
+| E-AC-3 stereo from a series | Stereo | -27.7 LUFS | -16.0 LUFS |
+| AC-3 stereo from a movie, peaks 19 dB above its loudness | Stereo | -31.5 LUFS | -20.8 LUFS |
+
+In one pass, the normalizer reads 3 seconds ahead and settles over the first seconds of each conversion, so a short scene with a wide loudness range ends up to 2 LU under the target, and the sound of a live channel starts some 3 seconds later. A track whose peaks stand far above its loudness rises only as far as its peaks allow under -1.5 dBTP. Each seek starts a new conversion, which settles again.
+
+**Compared with Jellyfin:** Jellyfin 12.4 mixes down with the same filters at the same volume, 2 by default ([`EncodingOptions.cs`, lines 21 to 22](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Configuration/EncodingOptions.cs#L21-L22); [`EncodingHelper.cs`, lines 2975 to 2977](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs#L2975-L2977)), but without a limiter: its loud scenes pass full scale, and the encoder distorts them. It decodes AC-3 and E-AC-3 with FFmpeg's defaults, as Polyfin does. It has no normalization of converted video's audio: its own loudness normalization is for music, as `NormalizationGain`.
 
 ### Seeing how a play goes
 
@@ -488,6 +502,7 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 |---|---|---|---|
 | **Mix to stereo** | **Settings › Conversion (transcoding)** | FFmpeg's own | Or Jellyfin's Dave750, Night mode, RFC 7845 and AC-4, for the layouts Jellyfin lists for each, 5.1 and 7.1 among them. |
 | **Volume when mixing to stereo** | **Settings › Conversion (transcoding)** | 2, as in Jellyfin (range 0.5 to 3) | Volume of the stereo mix, 1 changing nothing. Above 1, a limiter follows it. A server left at 1, the default before, moves to 2 when it updates. See [Loudness](#loudness). |
+| **Even the loudness of converted videos** | **Settings › Conversion (transcoding)** | Off | Brings the audio of the videos and channels the server converts to -16 LUFS, then limits it. Direct play, copied audio and music never change. See [Loudness](#loudness). |
 | **Most audio channels** | **Settings › Conversion (transcoding)** | As many as the app takes | Or mono, stereo or 5.1. Shapes converted audio. |
 | **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion (transcoding)** | 0 (range 32 to 320 kb/s) | 0 gives Jellyfin's bitrates: 128 kb/s in mono, 384 kb/s from stereo to five channels, 640 kb/s in 5.1, less under a low bitrate limit (see [Audio bitrate](#audio-bitrate)). A number gives that much per channel, whatever the limit. Shapes converted audio. |
 
@@ -511,6 +526,6 @@ See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-
 - Jellyfin's HDR-to-SDR conversion is off by default; its peak brightness is 100 by default.
 - **Double the frame rate** works as in Jellyfin.
 - Jellyfin's stereo mix volume is 2 by default too, without a limiter.
-- Jellyfin has no **Most audio channels** or **Audio bitrate per channel** setting.
+- Jellyfin has no **Most audio channels**, **Audio bitrate per channel** or **Even the loudness of converted videos** setting.
 - **Processor threads per conversion** is Jellyfin's encoding thread count.
 - Jellyfin also throttles by seconds, but not by default.

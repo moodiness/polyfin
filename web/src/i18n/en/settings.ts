@@ -597,6 +597,9 @@ const settings = {
       downmixBoost: 'Volume when mixing to stereo',
       downmixBoostHelp: (r: RangeText) =>
         `Stereo mixes often sound quieter: the volume is multiplied by this number, and 1 changes nothing. From ${r.min} to ${r.max}; ${r.default} by default, as in Jellyfin. Above 1, a limiter keeps loud scenes from distorting.`,
+      normalizeConvertedAudio: 'Even the loudness of converted videos',
+      normalizeConvertedAudioHelp:
+        'Brings the sound of the movies, episodes and channels the server converts to the same loudness, -16 LUFS, so that quiet titles play louder and loud ones quieter, with a limiter after it. While on, the volume when mixing to stereo no longer changes the level. Direct play, sound sent as it is, and music never change. Off by default.',
       maxAudioChannels: 'Most audio channels',
       maxAudioChannelsHelp:
         'Converted sound keeps at most this many channels, even if the app takes more.',

@@ -604,6 +604,9 @@ const settings: typeof en = {
       downmixBoost: 'Lautstärke beim Stereo-Downmix',
       downmixBoostHelp: (r: RangeText) =>
         `Stereo-Mixe klingen oft leiser: Die Lautstärke wird mit dieser Zahl multipliziert, 1 ändert nichts. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}, wie in Jellyfin. Über 1 verhindert ein Limiter, dass laute Szenen verzerren.`,
+      normalizeConvertedAudio: 'Lautheit konvertierter Videos angleichen',
+      normalizeConvertedAudioHelp:
+        'Bringt den Ton der Filme, Folgen und Kanäle, die der Server konvertiert, auf dieselbe Lautheit, -16 LUFS, sodass leise Titel lauter und laute leiser spielen, mit einem Limiter danach. Solange es an ist, ändert die Lautstärke beim Stereo-Downmix den Pegel nicht mehr. Direkte Wiedergabe, unverändert gesendeter Ton und Musik ändern sich nie. Standardmäßig aus.',
       maxAudioChannels: 'Maximale Anzahl an Audiokanälen',
       maxAudioChannelsHelp:
         'Konvertierter Ton behält höchstens so viele Kanäle, auch wenn die App mehr annimmt.',
