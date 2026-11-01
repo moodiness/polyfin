@@ -534,6 +534,7 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/scopes/{scope}/folders/{id}/scan", h.signedIn(h.startFolderScan))
 	mux.Handle("GET /admin/api/scopes/{scope}/folders/{id}/unmatched", h.signedIn(h.folderUnmatched))
 	mux.Handle("GET /admin/api/scopes/{scope}/folders/{id}/looser", h.signedIn(h.folderLooser))
+	mux.Handle("GET /admin/api/scopes/{scope}/folders/{id}/unlisted", h.signedIn(h.folderUnlisted))
 	mux.Handle("GET /admin/api/scopes/{scope}/folders/{id}/titles", h.signedIn(h.searchFolderTitles))
 	mux.Handle("PUT /admin/api/scopes/{scope}/folders/{id}/links", h.signedIn(h.linkFolderFile))
 	mux.Handle("DELETE /admin/api/scopes/{scope}/folders/{id}/links", h.signedIn(h.unlinkFolderFile))

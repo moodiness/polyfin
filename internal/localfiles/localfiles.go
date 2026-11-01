@@ -119,14 +119,15 @@ type Service struct {
 	// retry is told of a folder whose address, credentials or host key
 	// changed (see UseRetry), nil until set.
 	retry func(folder accounts.ID)
-	// unlisted keeps, by series, the episodes last recorded as not listed
-	// by its description (see NoteUnlisted), so that describing it again
-	// writes nothing unless they changed; unlistedMu guards it. frames
+	// unlisted keeps, by series, a hash of the episodes last recorded as
+	// not listed by its description and of those it lists (see
+	// NoteUnlisted), so that describing it again writes nothing unless
+	// they changed; unlistedMu guards it. frames
 	// bounds the episodes' frames made at once, and failedFrames keeps the
 	// files whose frame could not be made, which framesMu guards (see
 	// episodeFrame).
 	unlistedMu   sync.Mutex
-	unlisted     map[string]string
+	unlisted     map[string]uint64
 	frames       chan struct{}
 	framesMu     sync.Mutex
 	failedFrames map[accounts.ID]failedFrame
@@ -205,7 +206,7 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
 		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]scanning{},
 		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, kept: map[accounts.ID]int{},
-		shares: map[accounts.ID]*pooledRemote{}, measuring: map[accounts.ID]bool{}, unlisted: map[string]string{},
+		shares: map[accounts.ID]*pooledRemote{}, measuring: map[accounts.ID]bool{}, unlisted: map[string]uint64{},
 		frames: make(chan struct{}, episodeFrames), failedFrames: map[accounts.ID]failedFrame{}}
 }
 
@@ -430,7 +431,7 @@ type Folder struct {
 	// Unlisted counts the episodes its files hold that their series'
 	// metadata addon does not list, as the series were last described:
 	// they are listed all the same, named after their files (see
-	// NoteUnlisted).
+	// NoteUnlisted), and Unlisted lists them by show and season.
 	Unlisted int
 }
 

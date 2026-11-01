@@ -54,6 +54,14 @@ var metaTitles = []stremio.Meta{
 	{ID: "tt0017925", Type: "movie", Name: "The General", Year: "1926"},
 	{ID: "tt0015864", Type: "movie", Name: "The Gold Rush", Year: "1925", TmdbID: "962"},
 	{ID: "tt0041038", Type: "series", Name: "The Lone Ranger", Year: "1949–1957"},
+	{ID: "tt0042084", Type: "series", Name: "The Cisco Kid", Year: "1950–1956", Videos: []stremio.Video{
+		{ID: "tt0042084:0:1", Title: "Behind the Scenes", Season: 0, Episode: 1, Released: "1950-01-01T00:00:00.000Z"},
+		{ID: "tt0042084:1:1", Title: "The Gay Caballero", Season: 1, Episode: 1, Released: "1950-09-05T00:00:00.000Z"},
+		{ID: "tt0042084:1:2", Title: "Boomerang", Season: 1, Episode: 2, Released: "1950-09-12T00:00:00.000Z"},
+		{ID: "tt0042084:1:3", Title: "Counterfeit Money", Season: 1, Episode: 3, Released: "1950-09-19T00:00:00.000Z"},
+		{ID: "tt0042084:2:1", Title: "Phony Sheriff", Season: 2, Episode: 1, Released: "1951-09-04T00:00:00.000Z"},
+		{ID: "tt0042084:2:2", Title: "Water Rights", Season: 2, Episode: 2, Released: "1951-09-11T00:00:00.000Z"},
+	}},
 }
 
 // metaAddon is a metadata addon: searchable movie and series catalogs and

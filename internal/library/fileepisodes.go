@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"context"
 	"slices"
 
@@ -21,8 +22,8 @@ import (
 // describer gave, with the episodes the local folders of v hold for it
 // that it does not list, by season and number. A metadata addon's
 // description also tells the folders which of their episodes it does not
-// list, which their pages count; a local folder's own lists them all
-// already, of its files.
+// list, and which it lists, which their pages show; a local folder's own
+// lists them all already, of its files.
 func (s *Service) withFileEpisodes(ctx context.Context, v view, r record, describer installed, meta stremio.Meta) stremio.Meta {
 	if s.local == nil || r.Meta == nil || r.Meta.Type != string(KindSeries) || r.Kind != KindSeries {
 		return meta
@@ -60,7 +61,11 @@ func (s *Service) withFileEpisodes(ctx context.Context, v view, r record, descri
 		unlisted = append(unlisted, number)
 	}
 	if !describer.addon.Local() {
-		if err := s.local.NoteUnlisted(ctx, r.Meta.ID, unlisted); err != nil {
+		var numbers [][2]int
+		if len(unlisted) > 0 {
+			numbers = listedNumbers(meta.Videos)
+		}
+		if err := s.local.NoteUnlisted(ctx, r.Meta.ID, unlisted, numbers); err != nil {
 			s.logger.Debug("The episodes a description does not list could not be recorded", "title", r.Meta.ID, "error", err)
 		}
 	}
@@ -71,4 +76,15 @@ func (s *Service) withFileEpisodes(ctx context.Context, v view, r record, descri
 	// in place.
 	meta.Videos = append(slices.Clone(meta.Videos), added...)
 	return meta
+}
+
+// listedNumbers are the seasons and numbers of the episodes videos list,
+// in order, each once.
+func listedNumbers(videos []stremio.Video) [][2]int {
+	numbers := make([][2]int, 0, len(videos))
+	for _, video := range videos {
+		numbers = append(numbers, [2]int{int(video.Season), video.EpisodeNumber()})
+	}
+	slices.SortFunc(numbers, func(a, b [2]int) int { return cmp.Or(cmp.Compare(a[0], b[0]), cmp.Compare(a[1], b[1])) })
+	return slices.Compact(numbers)
 }

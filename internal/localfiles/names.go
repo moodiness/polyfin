@@ -345,3 +345,42 @@ func stem(rel string) string {
 	base := path.Base(rel)
 	return strings.TrimSuffix(base, path.Ext(base))
 }
+
+// Why the name of a show's file tells no episode, the reason Unmatched
+// gives such a file of a show in place of reasonUnreadableName, with how
+// to name it (see episodeReason).
+const (
+	// reasonAbsoluteNumber: an absolute number only, as "Show - 41" (see
+	// episodename.Absolute), which local folders do not read.
+	reasonAbsoluteNumber = "absolute_number"
+	// reasonNoSeason: an episode's number alone, as "E05" or "Episode
+	// 5", outside a season's folder.
+	reasonNoSeason = "no_season"
+	// reasonAirDate: an air date, as "2024-03-15", which local folders
+	// do not read.
+	reasonAirDate = "air_date"
+	// reasonNoEpisodeNumber: no number at all.
+	reasonNoEpisodeNumber = "no_episode_number"
+)
+
+// airDate is the date of a daily show's episode, "2024-03-15" or
+// "15.03.2024", as Jellyfin reads it
+// (Emby.Naming/Common/NamingOptions.cs, lines 332-351 at v12.4).
+var airDate = regexp.MustCompile(`(?:^|\D)(?:(?:19|20)\d{2}[._ -](?:0[1-9]|1[0-2])[._ -](?:0[1-9]|[12]\d|3[01])|` +
+	`(?:0[1-9]|[12]\d|3[01])[._ -](?:0[1-9]|1[0-2])[._ -](?:19|20)\d{2})(?:\D|$)`)
+
+// episodeReason is why the name of the file at rel, of a show, tells no
+// episode (see episodeName), and for an absolute number, that number.
+func episodeReason(rel string) (string, int) {
+	text := stem(rel)
+	if episodeOnly.MatchString(text) {
+		return reasonNoSeason, 0
+	}
+	if airDate.MatchString(text) {
+		return reasonAirDate, 0
+	}
+	if number, _, ok := episodename.Absolute(text); ok {
+		return reasonAbsoluteNumber, number
+	}
+	return reasonNoEpisodeNumber, 0
+}
