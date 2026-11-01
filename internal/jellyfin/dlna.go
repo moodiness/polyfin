@@ -240,7 +240,7 @@ func (h *Handler) ContinueWatching(ctx context.Context, user accounts.User) ([]l
 
 // NextUp lists what Next Up lists user.
 func (h *Handler) NextUp(ctx context.Context, user accounts.User) ([]library.Item, error) {
-	return h.nextUpItems(ctx, user, nil, nil, nil, true)
+	return h.nextUpItems(ctx, user, nil, nil, nil, true, false)
 }
 
 // dlnaRequest is the PlaybackInfo request a DLNA device stands for: its
