@@ -460,6 +460,14 @@ const sources: typeof en = {
       disc_episode: 'Ein Titel einer Serien-Disc: Gib seine Folge an',
       lone_extra:
         'Ein Extra ohne zugehörigen Titel daneben: Verknüpfe es, um es zu einem Titel zu machen',
+      absolute_number:
+        'Der Name nennt nur eine absolute Folgennummer, die Polyfin nicht liest: Benenne die Datei mit Staffel und Nummer des Katalogs, etwa S02E01, oder Episode 1 im Ordner ihrer Staffel',
+      no_season:
+        'Der Name nennt eine Folgennummer, aber keine Staffel: Lege die Datei in den Ordner ihrer Staffel, etwa Season 02, oder benenne sie mit ihrer Staffel, etwa S02E05',
+      air_date:
+        'Der Name nennt ein Ausstrahlungsdatum, das Polyfin nicht liest: Benenne die Datei mit Staffel und Nummer des Katalogs, etwa S02E05',
+      no_episode_number:
+        'Der Name nennt keine Folgennummer: Benenne die Datei mit Staffel und Nummer des Katalogs, etwa S02E05',
       not_found: 'Die Metadaten-Add-ons kennen keinen Titel mit diesem Namen',
       no_search: 'Kein Add-on des Servers beschreibt und sucht Titel dieser Art',
       ambiguous: 'Mehrere Titel haben diesen Namen: Ergänze das Jahr oder verknüpfe ihn',
@@ -468,6 +476,8 @@ const sources: typeof en = {
       no_title: 'Tags und Name ergeben keinen Titel',
       no_album: 'Tags und Ordner ergeben kein Album',
     } as Record<string, string>,
+    absoluteNumber: (number: string) =>
+      `Der Name nennt nur eine absolute Folgennummer, ${number}, die Polyfin nicht liest: Benenne die Datei mit Staffel und Nummer des Katalogs, etwa S02E01, oder Episode 1 im Ordner ihrer Staffel`,
     searchFailedBy: (addon: string, failure: string) =>
       failure === ''
         ? `Die Suche von ${addon} ist fehlgeschlagen`
@@ -540,7 +550,19 @@ const sources: typeof en = {
         ? '1 Folge gibt es nur in den Dateien'
         : `${figure} Folgen gibt es nur in den Dateien`,
     unlistedHelp:
-      'Das Metadaten-Addon, das ihre Serien beschreibt, führt sie nicht auf, etwa weil es Staffeln oder Specials anders nummeriert. Sie werden trotzdem aufgeführt, nach ihren Dateien benannt, und lassen sich abspielen.',
+      'Das Metadaten-Addon, das ihre Serien beschreibt, führt sie nicht auf, etwa weil es Staffeln oder Specials anders nummeriert. Sie werden trotzdem aufgeführt, nach ihren Dateien benannt, und lassen sich abspielen. Ihre Serien und Nummern stehen unter Folgen nur in den Dateien.',
+    unlistedListTitle: 'Folgen nur in den Dateien',
+    unlistedListHelp:
+      'Eine Datei wird nur dann eine Version einer Folge des Katalogs, wenn ihre Staffel und Folgennummer die des Katalogs sind. Diese Dateien sind anders nummeriert, daher ist jede eine eigene Folge neben denen des Katalogs. Benenne sie mit den Nummern des Katalogs um und scanne dann.',
+    unlistedSeason: (season: number) => (season === 0 ? 'Specials' : `Staffel ${season}`),
+    unlistedFiles: (episodes: string) => `In den Dateien: ${episodes}`,
+    unlistedCatalog: (episodes: string) => `Im Katalog: ${episodes}`,
+    unlistedCatalogNoSeason: (season: number, range: string) =>
+      `Der Katalog hat ${season === 0 ? 'keine Specials' : `keine Staffel ${season}`}: ${range}`,
+    unlistedCatalogRange: (first: string, last: string) => `er führt ${first} bis ${last}`,
+    unlistedCatalogEmpty: 'er führt keine Folgen',
+    unlistedNotDescribed:
+      'Die Nummern des Katalogs erscheinen, sobald eine App die Serie wieder öffnet',
     linkNotDescribedShow:
       'Kein Metadaten-Addon des Servers beschreibt diese Kennung als Serie. Prüfen Sie, dass es die der Serie ist, nicht die einer Folge.',
     linkNotDescribedMovie:

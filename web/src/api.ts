@@ -1185,6 +1185,9 @@ export type UnmatchedFile = {
     | 'disc_title'
     | 'disc_episode'
     | 'lone_extra'
+    | EpisodeNameReason
+  /** The absolute number the name of a show's file tells, for `absolute_number`; null otherwise. */
+  number: number | null
   /** For a failed search, the addon that failed it and why; null for another reason. */
   search: SearchFailure | null
   /**
@@ -1204,6 +1207,32 @@ export type UnmatchedFile = {
     episode: string | null
     suggested: string | null
   } | null
+}
+
+/**
+ * Why the name of a matched show's file tells no episode: an absolute number only, an episode's
+ * number outside a season's folder, an air date, or no number at all.
+ */
+export type EpisodeNameReason = 'absolute_number' | 'no_season' | 'air_date' | 'no_episode_number'
+
+/** Episodes as ranges of numbers that follow one another, `[first, last]`. */
+export type EpisodeRanges = [number, number][]
+
+/**
+ * A show of a local folder whose files hold episodes its metadata addon does not list: by season,
+ * the numbers its files hold that the addon does not list, and those the addon lists in the
+ * season, empty when it has no such season. `described` is false while the addon's numbers are not
+ * known yet; `catalogFirst` and `catalogLast` are the addon's first and last episodes, specials
+ * left out unless it lists only specials, null when it lists none.
+ */
+export type UnlistedShow = {
+  imdbId: string
+  name: string
+  unit: string
+  described: boolean
+  catalogFirst: { season: number; episode: number } | null
+  catalogLast: { season: number; episode: number } | null
+  seasons: { season: number; files: EpisodeRanges; catalog: EpisodeRanges }[]
 }
 
 export type NewLocalFolder = {
@@ -4001,6 +4030,15 @@ export const fetchLooserMatches = (id: string, signal?: AbortSignal) =>
     signal,
   )
 
+/** The shows of a local folder whose files hold episodes their metadata addon does not list. */
+export const fetchUnlistedEpisodes = (id: string, signal?: AbortSignal) =>
+  request<{ shows: UnlistedShow[] }>(
+    'GET',
+    `${scopePath('shared')}/folders/${seg(id)}/unlisted`,
+    undefined,
+    signal,
+  )
+
 /**
  * A title the metadata addons found for a local folder's unit, that a link can name: `posterId` is
  * the item whose Primary image is its poster, null without one.
@@ -5546,6 +5584,8 @@ export const queryKeys = {
   unmatched: (id: string) => ['unmatched', id] as const,
   /** The units of a local folder a looser rule matched. */
   looser: (id: string) => ['looser', id] as const,
+  /** The shows of a local folder whose files hold episodes their metadata addon does not list. */
+  unlisted: (id: string) => ['unlisted', id] as const,
   /** A title search for a local folder's unit. */
   folderTitles: (id: string, query: string, year: number | null) =>
     ['folder-titles', id, query, year] as const,
