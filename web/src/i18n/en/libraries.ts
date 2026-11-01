@@ -29,6 +29,10 @@ const libraries = {
     skipLocalHelp:
       'A movie or show that a local folder’s library lists, linked to the same identifier, shows only there. Its versions and watched state stay the same, and search finds it once. A user who does not see the folder’s library still finds it here.',
     skippedLocal: 'Without local folders’ titles',
+    showAsTitles: 'Show as movies and shows',
+    showAsTitlesHelp:
+      'For the Jellyfin apps that list only movies and shows: a title with several videos, or one numbered as an episode, becomes a show, its videos its episodes; a title without videos, or with one file, a movie. Played marks, resume points and favorites follow them when you save.',
+    shownAsTitles: 'Shown as movies and shows',
     remove: 'Remove',
     removeLabel: (name: string) => `Remove ${name}`,
     moreActions: (name: string) => `More actions for ${name}`,

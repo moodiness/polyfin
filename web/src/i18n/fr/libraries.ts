@@ -31,6 +31,10 @@ const libraries: typeof en = {
     skipLocalHelp:
       'Un film ou une série que liste la bibliothèque d’un dossier local, lié au même identifiant, n’apparaît que là. Ses versions et son état de lecture ne changent pas, et la recherche le trouve une fois. Un utilisateur qui ne voit pas la bibliothèque du dossier le trouve toujours ici.',
     skippedLocal: 'Sans les titres des dossiers locaux',
+    showAsTitles: 'Afficher comme films et séries',
+    showAsTitlesHelp:
+      'Pour les applis Jellyfin qui ne listent que des films et des séries : un titre avec plusieurs vidéos, ou une seule numérotée comme épisode, devient une série, ses vidéos ses épisodes ; un titre sans vidéo, ou avec un seul fichier, un film. Les vidéos vues, les reprises et les favoris les suivent à l’enregistrement.',
+    shownAsTitles: 'Affichée comme films et séries',
     remove: 'Retirer',
     removeLabel: (name: string) => `Retirer ${name}`,
     moreActions: (name: string) => `Autres actions pour ${name}`,

@@ -1679,6 +1679,17 @@ export type Library = {
    */
   skippable: boolean
   /**
+   * Whether the library shows its titles as movies and shows rather than as home videos: a title
+   * with videos as a series, one without as a movie, in a library without a content type. False for
+   * a catalog that is not an enabled library.
+   */
+  showAsTitles: boolean
+  /**
+   * Whether the library takes `showAsTitles`: a catalog of other videos, of a type Polyfin has no
+   * use of its own for, of an addon that is not a music addon.
+   */
+  otherVideos: boolean
+  /**
    * Whether an enabled library of the server's has its descriptions read again on request: a movie
    * or series library of a Stremio addon or a local folder. False in the users' own scopes.
    */
@@ -1800,7 +1811,7 @@ export const MAX_LIBRARY_ITEMS = 20000
 
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'> &
-  Partial<Pick<Library, 'genre' | 'maxItems' | 'hideInMenus' | 'skipLocal'>>
+  Partial<Pick<Library, 'genre' | 'maxItems' | 'hideInMenus' | 'skipLocal' | 'showAsTitles'>>
 
 export type LibraryImageChoice = 'none' | 'automatic' | 'generated' | 'custom'
 
