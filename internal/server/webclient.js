@@ -193,8 +193,11 @@
 // it.
 //
 // Tenth, it adds Polyfin's own entries to jellyfin-web's item menu, the
-// action sheet a card's ⋮ button or a right click on a card opens, and the
-// ⋮ button of a title's page (.btnMoreCommands):
+// action sheet a card's ⋮ button or a right click on a card opens, the ⋮
+// button of a title's page (.btnMoreCommands), and the ⋮ of a selection
+// (.btnSelectionPanelOptions) holding one card, which a long press makes
+// on a touch screen, where cards of the home's rows have no ⋮ and a long
+// press opens no menu; acting leaves the selection:
 //   "Remove from Continue Watching", for a card of a Continue Watching row:
 //     a row whose cards all have a resume point, as /UserItems/Resume
 //     lists them, the libraries' own rows included. It deletes
@@ -2074,6 +2077,11 @@
     } else if (target.closest('.btnMoreCommands')) {
       var route = titleRoute.exec(location.hash)
       id = route ? route[1] : ''
+    } else if (target.closest('.btnSelectionPanelOptions')) {
+      // On a touch screen, a long press selects a card instead of opening
+      // its menu: the selection's ⋮ stands for the card selected alone.
+      var selected = document.querySelectorAll('.chkItemSelect:checked')
+      card = selected.length === 1 ? selected[0].closest('.card[data-id]') : null
     } else {
       var button = target.closest('button[data-action="menu"]')
       card = button && button.closest('.card[data-id], .listItem[data-id]')
@@ -2187,11 +2195,18 @@
             })
           )
         }
-        // The menu was placed for its own entries: it moves up as far as
-        // the added ones need.
+        // The menu was placed for its own entries: it moves up, and left, as
+        // far as the added ones need.
         var box = sheet.getBoundingClientRect()
         if (sheet.style.top && box.bottom > window.innerHeight) {
           sheet.style.top = Math.max(0, window.innerHeight - box.height) + 'px'
+        }
+        // Measured without the transform of its opening animation.
+        var width = document.documentElement.clientWidth || window.innerWidth
+        var left = parseFloat(sheet.style.left)
+        var wide = sheet.offsetWidth || box.width
+        if (left > 0 && left + wide > width) {
+          sheet.style.left = Math.max(0, width - wide) + 'px'
         }
       })
       .catch(function () {})
@@ -2219,6 +2234,10 @@
         if (dialog && dialog.getAttribute('data-history') === 'true') history.back()
         else container.remove()
         run()
+        // A menu of the selection leaves the selection, as jellyfin-web's
+        // own commands do.
+        var unselect = document.querySelector('.selectionCommandsPanel .btnCloseSelectionPanel')
+        if (unselect) unselect.click()
       }),
       true
     )
