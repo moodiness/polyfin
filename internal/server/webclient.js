@@ -230,13 +230,13 @@
 // these rows on a UserDataChanged message, 10 seconds later, but draws
 // them from its answers of the last minute, asking nothing
 // (jellyfin/jellyfin-web#8543): a card marked played stayed as it was.
-// Nor does that message come without legacy authorization, as
-// jellyfin-web 12.4 opens its socket with the token as api_key. When a
-// UserDataChanged message, or the answer of a played mark the page sends
-// (ApiClient.markPlayed and markUnplayed, as a card's ✓ does), changes
-// Played or the resume point of an item of these rows, as the script last
-// saw their answers, it refreshes the rows at once, and for a minute every
-// refresh of theirs asks Polyfin.
+// When a UserDataChanged message, or the answer of a played mark the page
+// sends (ApiClient.markPlayed and markUnplayed, as a card's ✓ does),
+// changes Played or the resume point of an item of these rows, as the
+// script last saw their answers, it refreshes the rows at once, and for a
+// minute every refresh of theirs asks Polyfin. The change is kept as the
+// item's state, so that the same change heard both ways refreshes them
+// once.
 // jellyfin-web's query client reuses an answer while Date.now() is less
 // than a minute after it came: during the row's own fetchData call only,
 // which asks the query client synchronously, Date.now() reads a minute
@@ -1100,18 +1100,34 @@
   // listen hears the messages of jellyfin-web's ApiClient, as its message
   // event gives them: jellyfin-web's events keep an object's listeners in
   // its _callbacks, by event, and call each with the event then the message.
+  // That event only fires for the socket of jellyfin-apiclient itself,
+  // which jellyfin-web 12.4 does not open: its socket is its SDK's, whose
+  // messages ApiClient.subscribe gives by type (ServerConnections.js). So
+  // UserDataChanged is heard there when jellyfin-web has it, through the
+  // message event otherwise.
   // It also hears the answers of the played marks the page sends, as
   // markPlayed and markUnplayed give them: what the user did with the item
-  // afterwards. jellyfin-web 12.4 opens its socket with the token as
-  // api_key, which only legacy authorization accepts, so that without it
-  // no UserDataChanged message comes.
+  // afterwards. They come at once, before the socket's message.
   function listen() {
     var api = window.ApiClient
     if (!api || api === heard) return
     heard = api
+    var subscribed = false
+    if (typeof api.subscribe === 'function') {
+      api.subscribe(['UserDataChanged'], function (message) {
+        try {
+          if (message) playedChanged(message.Data)
+        } catch (error) {}
+      })
+      subscribed = true
+    }
     var callbacks = (api._callbacks = api._callbacks || {})
     ;(callbacks.message = callbacks.message || []).push(function (event, message) {
       try {
+        if (message && message.MessageType === 'UserDataChanged') {
+          if (!subscribed) playedChanged(message.Data)
+          return
+        }
         hear(message)
       } catch (error) {}
     })
@@ -1131,10 +1147,8 @@
       }
     })
   }
-  // hear takes a pushed progress of the title followed as an answer, and
-  // a change of what the user played to the home rows (see playedChanged).
+  // hear takes a pushed progress of the title followed as an answer.
   function hear(message) {
-    if (message && message.MessageType === 'UserDataChanged') return playedChanged(message.Data)
     if (!message || message.MessageType !== 'PolyfinVersions' || !message.Data) return
     var progress = message.Data
     if (!title || String(progress.ItemId).toLowerCase() !== title) return
@@ -2305,20 +2319,28 @@
     return state
   }
   // playedChanged refreshes the home rows at once, and has them ask
-  // Polyfin for a minute, when a UserDataChanged message changes Played or
-  // the resume point of one of their items.
+  // Polyfin for a minute, when a UserDataChanged message, or the answer of
+  // a played mark the page sent, changes Played or the resume point of one
+  // of their items. What it was told is kept as the item's state, so that
+  // the same change heard both ways, the answer then the message, or the
+  // other way round, refreshes the rows once.
   function playedChanged(data) {
     var changes = (data && data.UserDataList) || []
     var rows = Array.prototype.filter.call(document.querySelectorAll('.homeSectionsContainer .itemsContainer'), playedRow)
-    var changed = rows.some(function (row) {
+    var changed = false
+    rows.forEach(function (row) {
       var state = seen.get(row)
-      return (
-        !!state &&
-        changes.some(function (change) {
-          var was = change && change.ItemId && state[plainId(change.ItemId)]
-          return !!was && (was.played !== !!change.Played || was.position !== (change.PlaybackPositionTicks || 0))
-        })
-      )
+      if (!state) return
+      changes.forEach(function (change) {
+        var was = change && change.ItemId && state[plainId(change.ItemId)]
+        if (!was) return
+        var played = !!change.Played
+        var position = change.PlaybackPositionTicks || 0
+        if (was.played === played && was.position === position) return
+        was.played = played
+        was.position = position
+        changed = true
+      })
     })
     if (!changed) return
     freshUntil = Date.now() + freshFor
