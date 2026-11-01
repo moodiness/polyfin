@@ -460,8 +460,6 @@ const sources: typeof en = {
       disc_episode: 'Ein Titel einer Serien-Disc: Gib seine Folge an',
       lone_extra:
         'Ein Extra ohne zugehörigen Titel daneben: Verknüpfe es, um es zu einem Titel zu machen',
-      absolute_number:
-        'Der Name nennt nur eine absolute Folgennummer, die Polyfin nicht liest: Benenne die Datei mit Staffel und Nummer des Katalogs, etwa S02E01, oder Episode 1 im Ordner ihrer Staffel',
       no_season:
         'Der Name nennt eine Folgennummer, aber keine Staffel: Lege die Datei in den Ordner ihrer Staffel, etwa Season 02, oder benenne sie mit ihrer Staffel, etwa S02E05',
       air_date:
@@ -476,8 +474,6 @@ const sources: typeof en = {
       no_title: 'Tags und Name ergeben keinen Titel',
       no_album: 'Tags und Ordner ergeben kein Album',
     } as Record<string, string>,
-    absoluteNumber: (number: string) =>
-      `Der Name nennt nur eine absolute Folgennummer, ${number}, die Polyfin nicht liest: Benenne die Datei mit Staffel und Nummer des Katalogs, etwa S02E01, oder Episode 1 im Ordner ihrer Staffel`,
     searchFailedBy: (addon: string, failure: string) =>
       failure === ''
         ? `Die Suche von ${addon} ist fehlgeschlagen`
@@ -497,6 +493,12 @@ const sources: typeof en = {
         : `Kein Add-on kann die Titel von ${figure} Dateien suchen`,
     noSearchHelp:
       'Die Zuordnung braucht ein Add-on des Servers unter Inhalte › Quellen, das diese Titel beschreibt und einen Suchkatalog hat. Die eigenen Add-ons der Benutzer unter „Meine Quellen“ zählen nicht. Scanne den Ordner, sobald eines hinzugefügt ist.',
+    absoluteTitle: (count: number, figure: string) =>
+      count === 1
+        ? '1 Datei ist über ihre absolute Folgennummer zugeordnet'
+        : `${figure} Dateien sind über ihre absolute Folgennummer zugeordnet`,
+    absoluteHelp:
+      'Benannt wie „Show - 41“, sind sie Versionen der 41. Folge, die das Metadaten-Addon ihrer Serie aufführt, ohne Specials, mit deren Staffel und Nummer.',
     searchFailedTitle: (count: number, figure: string) =>
       count === 1
         ? 'Der Titel von 1 Datei konnte nicht gesucht werden'

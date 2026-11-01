@@ -984,6 +984,18 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
           {text.unlistedHelp}
         </Notice>
       )}
+      {folder.absoluteEpisodes > 0 && (
+        <Notice className="mt-5">
+          <strong className="font-medium">
+            {text.absoluteTitle(
+              folder.absoluteEpisodes,
+              folder.absoluteEpisodes.toLocaleString(language),
+            )}
+            .
+          </strong>{' '}
+          {text.absoluteHelp}
+        </Notice>
+      )}
     </PanelSection>
   )
 }
@@ -1356,9 +1368,7 @@ function UnmatchedRow({
                   file.search.addon,
                   text.searchFailures[file.search.failure] ?? '',
                 )
-              : file.reason === 'absolute_number' && file.number !== null
-                ? text.absoluteNumber(file.number.toLocaleString(language))
-                : (text.reasons[file.reason] ?? file.reason),
+              : (text.reasons[file.reason] ?? file.reason),
             title !== '' ? text.read(title) : '',
             file.discTitle
               ? titleName(file.disc, file.discTitle.discPath, file.discTitle.number, folder, text)

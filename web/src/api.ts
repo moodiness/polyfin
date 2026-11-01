@@ -1137,6 +1137,11 @@ export type LocalFolder = {
    * last described; they are listed all the same, named after their files.
    */
   unlistedEpisodes: number
+  /**
+   * Its files named by an absolute number, as "Show - 41", that are versions of the catalog's episodes
+   * of their places.
+   */
+  absoluteEpisodes: number
 }
 
 /**
@@ -1186,8 +1191,6 @@ export type UnmatchedFile = {
     | 'disc_episode'
     | 'lone_extra'
     | EpisodeNameReason
-  /** The absolute number the name of a show's file tells, for `absolute_number`; null otherwise. */
-  number: number | null
   /** For a failed search, the addon that failed it and why; null for another reason. */
   search: SearchFailure | null
   /**
@@ -1210,10 +1213,10 @@ export type UnmatchedFile = {
 }
 
 /**
- * Why the name of a matched show's file tells no episode: an absolute number only, an episode's
- * number outside a season's folder, an air date, or no number at all.
+ * Why the name of a matched show's file tells no episode: an episode's number outside a season's
+ * folder, an air date, or no number at all.
  */
-export type EpisodeNameReason = 'absolute_number' | 'no_season' | 'air_date' | 'no_episode_number'
+export type EpisodeNameReason = 'no_season' | 'air_date' | 'no_episode_number'
 
 /** Episodes as ranges of numbers that follow one another, `[first, last]`. */
 export type EpisodeRanges = [number, number][]
