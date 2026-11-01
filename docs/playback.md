@@ -66,7 +66,8 @@ Polyfin keeps no maximum of versions, and looks at no seeders, source, size or l
 
 **Why a stream is missing:** apps do not say why. **Content › Versions**, in the admin app, tells it for a movie or an episode (see [Versions of a title](#versions-of-a-title)). Besides:
 
-- An addon that failed, timed out or answered only a notice logs `An addon could not list streams`, at Warn, with the addon and the error, and **System › Health › Addons** shows its last failure.
+- An addon that failed or timed out logs `An addon could not list streams`, at Warn, with the addon and the error, and **System › Health › Addons** shows its last failure.
+- An addon that answered only notices logs `An addon answered only notices, nothing to play`, at Warn, once per answer, with the addon, the title's type and identifier, and the notices' text, its addresses and keys hidden. The notices' links are never logged.
 - A version a play could not analyze logs `A version could not be analyzed`, at Info, with the addon and why; a source that fails later in a play logs why too, never its address. A torrent that did not start logs `A torrent did not start in time`, and **System › Health** shows it under **Needs attention**.
 - A stream left out as another title's logs `A version names another title`, at Debug, with the addon and the marker that names it (`S01E03`, `S02`, `1998`), once while Polyfin remembers the version.
 - Streams with nothing to play, torrents left out, files listed twice, blocked files, and the hide rules and quality group log nothing: the Versions page shows them.
@@ -183,7 +184,7 @@ A title opened again once **Keep version lists for (minutes)** has passed shows 
 - Once Polyfin stops asking, the list is the addon's last answer alone: the versions the addon no longer lists disappear.
 - [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) drops the old lists too.
 - Subtitles from the addons are kept the same way.
-- An answer made only of notices, with nothing to play, as an addon sends when it limits requests, counts as the addon failing: the versions it listed before stay listed, and it is asked again as before. The log tells it (`An addon could not list streams`). An empty answer still replaces the list: the addon has nothing for the title any more.
+- An answer made only of notices, with nothing to play, as an addon sends when it limits requests, is not kept as the title's list. Polyfin remembers it for a minute, and does not ask the addon for the title again meanwhile: the versions it listed before stay listed, and a title it listed none for has none from it. After that minute, the addon is asked again when the title is; **Try again** and [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) ask it at once. The log tells it once per answer (see above). An empty answer still replaces the list: the addon has nothing for the title any more.
 
 Some addons gather other addons' streams. They answer the first request for a title with the streams that came in within their own time limit, and get the others moments later. So Polyfin asks an addon again 10 seconds after its first answer for a title, and once more 30 seconds later if that answer listed more playable streams:
 

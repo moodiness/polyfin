@@ -128,6 +128,9 @@ type Service struct {
 	streamLists   *cache.Cache[streamKey, list[stremio.Stream]]
 	subtitleLists *cache.Cache[streamKey, list[stremio.Subtitle]]
 	versions      *cache.Cache[accounts.ID, Version]
+	// noticed are the addons' answers of notices alone for each title,
+	// kept noticeLife (see noticedAnswer).
+	noticed *cache.Cache[streamKey, []stremio.Stream]
 	// asked counts, for each user's title, the addons still asked for its
 	// streams in the background (see VersionsNow).
 	asked *cache.Cache[askedKey, *asked]
@@ -375,6 +378,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.readAhead = true
 	s.streamLists = cache.NewLasting[streamKey, list[stremio.Stream]](2000, s.keptListLife, clock)
 	s.subtitleLists = cache.NewLasting[streamKey, list[stremio.Subtitle]](2000, s.keptListLife, clock)
+	s.noticed = cache.NewLasting[streamKey, []stremio.Stream](2000, func() time.Duration { return noticeLife }, clock)
 	s.musicCache = newMusicCaches(s)
 	s.warmed.opened = cache.New[accounts.ID, struct{}](openedLibraries, openedFor)
 	s.releaseStatuses = cache.NewLasting[string, ReleaseStatus](20000, func() time.Duration { return releaseStatusLife }, clock)
