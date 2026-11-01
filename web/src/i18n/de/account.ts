@@ -9,6 +9,7 @@ const account: typeof en = {
       statistics: 'Statistiken',
       tracking: 'Tracking',
       resume: 'Weiterschauen',
+      nextUp: 'Als Nächstes',
       hidden: 'Ausgeblendete Titel',
       homeRows: 'Startseitenzeilen',
       trackChoices: 'Spurauswahl',
@@ -125,6 +126,21 @@ const account: typeof en = {
       hiddenEmpty: 'Kein ausgeblendeter Titel',
       hiddenEmptyHelp: 'Blende einen Titel über sein ⋮-Menü im Web-Player aus.',
       hiddenOn: 'Ausgeblendet',
+      nextUpHelp:
+        'Die nächste Folge jeder Serie, die du schaust, wie deine Apps „Als Nächstes“ anzeigen. Entfernen nimmt eine Serie aus „Als Nächstes“, ohne zu ändern, was du gesehen hast, bis du eine ihrer Folgen abspielst oder eine neue erscheint; ihre Seite öffnet weiterhin ihre nächste Folge. Im Web-Player tut das ⋮-Menü einer Karte in „Als Nächstes“ dasselbe.',
+      nextUpRemoveLabel: (name: string) => `${name} aus „Als Nächstes“ entfernen`,
+      nextUpRemoved: (name: string) => `${name} ist nicht mehr in „Als Nächstes“.`,
+      nextUpEmpty: 'Nichts als Nächstes',
+      nextUpEmptyHelp: 'Die Serien, die du schaust, erscheinen hier mit ihrer nächsten Folge.',
+      nextUpRemovedList: 'Aus „Als Nächstes“ entfernte Serien',
+      nextUpRemovedOn: 'Entfernt',
+      nextUpShowLabel: (name: string) => `${name} wieder in „Als Nächstes“ anzeigen`,
+      nextUpShown: (name: string) => `${name} ist wieder in „Als Nächstes“.`,
+      withResume: 'Aus Weiterschauen entfernen nimmt die Serie auch aus „Als Nächstes“',
+      withResumeHelp:
+        'Eine Folge aus Weiterschauen zu entfernen nimmt dann auch ihre Serie aus „Als Nächstes“, auf dieselbe Weise, bis du eine ihrer Folgen abspielst oder eine neue erscheint.',
+      withResumeOn: 'Aus Weiterschauen entfernen nimmt die Serie jetzt auch aus „Als Nächstes“.',
+      withResumeOff: 'Aus Weiterschauen entfernen nimmt die Serie nicht mehr aus „Als Nächstes“.',
       kinds: {
         movie: 'Film',
         series: 'Serie',
@@ -716,6 +732,7 @@ const account: typeof en = {
     webTheme: 'Theme des Web-Players: Das des Servers, außer Ihr Administrator hat Ihres gewählt',
     audioRegion: 'Audioregion: Keine',
     homeRows: 'Startseitenzeilen: Alle Zeilen werden wieder angezeigt',
+    nextUpWithResume: 'Aus Weiterschauen entfernen: lässt „Als Nächstes“ unverändert',
     trackChoices: 'Spurauswahl: für alle Serien und Filme vergessen',
     appPreferences:
       'Die Einstellungen, die Jellyfin-Apps in Ihrem Konto gespeichert haben: Audio- und Untertitelsprachen und -modus, Startbildschirm- und Anzeigeeinstellungen',

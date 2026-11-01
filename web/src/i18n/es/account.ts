@@ -9,6 +9,7 @@ const account: typeof en = {
       statistics: 'Estadísticas',
       tracking: 'Seguimiento',
       resume: 'Seguir viendo',
+      nextUp: 'A continuación',
       hidden: 'Títulos ocultos',
       homeRows: 'Filas de inicio',
       trackChoices: 'Elección de pistas',
@@ -126,6 +127,21 @@ const account: typeof en = {
       hiddenEmpty: 'Ningún título oculto',
       hiddenEmptyHelp: 'Oculte un título desde su menú ⋮ en el reproductor web.',
       hiddenOn: 'Oculto',
+      nextUpHelp:
+        'El siguiente episodio de cada serie que está viendo, como sus aplicaciones muestran «A continuación». «Eliminar» quita una serie de «A continuación» sin cambiar lo que ha visto, hasta que reproduzca uno de sus episodios o salga uno nuevo; su página sigue abriéndose en su siguiente episodio. En el reproductor web, el menú ⋮ de una tarjeta de «A continuación» hace lo mismo.',
+      nextUpRemoveLabel: (name: string) => `Eliminar ${name} de «A continuación»`,
+      nextUpRemoved: (name: string) => `${name} se ha eliminado de «A continuación».`,
+      nextUpEmpty: 'Nada a continuación',
+      nextUpEmptyHelp: 'Las series que está viendo se muestran aquí con su siguiente episodio.',
+      nextUpRemovedList: 'Series eliminadas de «A continuación»',
+      nextUpRemovedOn: 'Eliminada',
+      nextUpShowLabel: (name: string) => `Volver a mostrar ${name} en «A continuación»`,
+      nextUpShown: (name: string) => `${name} vuelve a estar en «A continuación».`,
+      withResume: 'Eliminar de «Seguir viendo» también quita la serie de «A continuación»',
+      withResumeHelp:
+        'Quitar un episodio de «Seguir viendo» quita entonces también su serie de «A continuación», de la misma manera, hasta que reproduzca uno de sus episodios o salga uno nuevo.',
+      withResumeOn: 'Eliminar de «Seguir viendo» ahora también quita la serie de «A continuación».',
+      withResumeOff: 'Eliminar de «Seguir viendo» ya no quita la serie de «A continuación».',
       kinds: {
         movie: 'Película',
         series: 'Serie',
@@ -720,6 +736,7 @@ const account: typeof en = {
     webTheme: 'Tema del reproductor web: El del servidor, salvo si tu administrador eligió el tuyo',
     audioRegion: 'Región de audio: Ninguna',
     homeRows: 'Filas de inicio: todas las filas vuelven a mostrarse',
+    nextUpWithResume: 'Eliminar de «Seguir viendo»: deja «A continuación» como está',
     trackChoices: 'Elección de pistas: olvidada para cada serie y película',
     appPreferences:
       'Las preferencias que las aplicaciones de Jellyfin guardaron en tu cuenta: idiomas y modo del audio y los subtítulos, preferencias de la pantalla de inicio y de visualización',

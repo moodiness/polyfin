@@ -9,6 +9,7 @@ const account: typeof en = {
       statistics: 'Statistiques',
       tracking: 'Suivi',
       resume: 'Continuer de regarder',
+      nextUp: 'À suivre',
       hidden: 'Titres masqués',
       homeRows: 'Rangées d’accueil',
       trackChoices: 'Choix des pistes',
@@ -126,6 +127,23 @@ const account: typeof en = {
       hiddenEmpty: 'Aucun titre masqué',
       hiddenEmptyHelp: 'Masquez un titre depuis son menu ⋮ dans le lecteur web.',
       hiddenOn: 'Masqué',
+      nextUpHelp:
+        'Le prochain épisode de chaque série que vous regardez, comme vos applis listent « À suivre ». Retirer enlève une série de « À suivre » sans changer ce que vous avez vu, jusqu’à ce que vous en lisiez un épisode ou qu’un nouvel épisode sorte ; sa page s’ouvre toujours sur son prochain épisode. Dans le lecteur web, le menu ⋮ d’une carte « À suivre » fait de même.',
+      nextUpRemoveLabel: (name: string) => `Retirer ${name} de « À suivre »`,
+      nextUpRemoved: (name: string) => `${name} est retiré de « À suivre ».`,
+      nextUpEmpty: 'Rien à suivre',
+      nextUpEmptyHelp: 'Les séries que vous regardez s’affichent ici avec leur prochain épisode.',
+      nextUpRemovedList: 'Séries retirées de « À suivre »',
+      nextUpRemovedOn: 'Retirée',
+      nextUpShowLabel: (name: string) => `Afficher de nouveau ${name} dans « À suivre »`,
+      nextUpShown: (name: string) => `${name} est de retour dans « À suivre ».`,
+      withResume: 'Retirer de « Continuer de regarder » retire aussi la série de « À suivre »',
+      withResumeHelp:
+        'Retirer un épisode de « Continuer de regarder » retire alors aussi sa série de « À suivre », de la même façon, jusqu’à ce que vous en lisiez un épisode ou qu’un nouvel épisode sorte.',
+      withResumeOn:
+        'Retirer de « Continuer de regarder » retire désormais aussi la série de « À suivre ».',
+      withResumeOff:
+        'Retirer de « Continuer de regarder » ne retire plus la série de « À suivre ».',
       kinds: {
         movie: 'Film',
         series: 'Série',
@@ -718,6 +736,7 @@ const account: typeof en = {
       'Thème du lecteur web : Celui du serveur, sauf si votre administrateur a choisi le vôtre',
     audioRegion: 'Région audio : Aucune',
     homeRows: 'Rangées d’accueil : toutes les rangées s’affichent de nouveau',
+    nextUpWithResume: 'Retirer de « Continuer de regarder » : laisse « À suivre » tel quel',
     trackChoices: 'Choix des pistes : oubliés pour chaque série et chaque film',
     appPreferences:
       'Les préférences que les applications Jellyfin ont enregistrées dans votre compte : langues et mode de l’audio et des sous-titres, préférences de l’écran d’accueil et d’affichage',

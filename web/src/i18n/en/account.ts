@@ -8,6 +8,7 @@ const account = {
       statistics: 'Statistics',
       tracking: 'Tracking',
       resume: 'Continue Watching',
+      nextUp: 'Next Up',
       hidden: 'Hidden titles',
       homeRows: 'Home rows',
       trackChoices: 'Track choices',
@@ -125,6 +126,21 @@ const account = {
       hiddenEmpty: 'No hidden title',
       hiddenEmptyHelp: 'Hide a title from its ⋮ menu in the web player.',
       hiddenOn: 'Hidden',
+      nextUpHelp:
+        'The next episode of each series you are watching, as your apps list Next Up. Remove takes a series off Next Up without changing what you watched, until you play one of its episodes or a new one comes out; its page still opens on its next episode. In the web player, a Next Up card’s ⋮ menu does the same.',
+      nextUpRemoveLabel: (name: string) => `Remove ${name} from Next Up`,
+      nextUpRemoved: (name: string) => `${name} is off Next Up.`,
+      nextUpEmpty: 'Nothing up next',
+      nextUpEmptyHelp: 'The series you are watching show here with their next episode.',
+      nextUpRemovedList: 'Series taken off Next Up',
+      nextUpRemovedOn: 'Removed',
+      nextUpShowLabel: (name: string) => `Show ${name} in Next Up again`,
+      nextUpShown: (name: string) => `${name} is back in Next Up.`,
+      withResume: 'Remove from Continue Watching also takes the series off Next Up',
+      withResumeHelp:
+        'Taking an episode off Continue Watching then takes its series off Next Up too, the same way, until you play one of its episodes or a new one comes out.',
+      withResumeOn: 'Remove from Continue Watching now takes the series off Next Up too.',
+      withResumeOff: 'Remove from Continue Watching no longer takes the series off Next Up.',
       kinds: {
         movie: 'Movie',
         series: 'Series',
@@ -703,6 +719,7 @@ const account = {
     webTheme: 'Web player theme: The server’s, unless your administrator chose yours',
     audioRegion: 'Audio region: None',
     homeRows: 'Home rows: every row is shown again',
+    nextUpWithResume: 'Remove from Continue Watching: leaves Next Up as it is',
     trackChoices: 'Track choices: forgotten for every series and movie',
     appPreferences:
       'The preferences Jellyfin apps saved in your account: audio and subtitle languages and mode, home screen and display preferences',

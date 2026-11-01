@@ -9,6 +9,7 @@ const account: typeof en = {
       statistics: 'Statistiche',
       tracking: 'Monitoraggio',
       resume: 'Continua a guardare',
+      nextUp: 'Prossimo',
       hidden: 'Titoli nascosti',
       homeRows: 'Righe della Home',
       trackChoices: 'Scelta delle tracce',
@@ -124,6 +125,21 @@ const account: typeof en = {
       hiddenEmpty: 'Nessun titolo nascosto',
       hiddenEmptyHelp: 'Nascondi un titolo dal suo menu ⋮ nel player web.',
       hiddenOn: 'Nascosto',
+      nextUpHelp:
+        'Il prossimo episodio di ogni serie che stai guardando, come le tue applicazioni mostrano «Prossimo». Rimuovi toglie una serie da «Prossimo» senza cambiare ciò che hai guardato, finché non ne riproduci un episodio o ne esce uno nuovo; la sua pagina si apre comunque sul prossimo episodio. Nel player web, il menu ⋮ di una scheda di «Prossimo» fa lo stesso.',
+      nextUpRemoveLabel: (name: string) => `Rimuovi ${name} da «Prossimo»`,
+      nextUpRemoved: (name: string) => `${name} è stato rimosso da «Prossimo».`,
+      nextUpEmpty: 'Niente in «Prossimo»',
+      nextUpEmptyHelp: 'Le serie che stai guardando compaiono qui con il loro prossimo episodio.',
+      nextUpRemovedList: 'Serie rimosse da «Prossimo»',
+      nextUpRemovedOn: 'Rimossa',
+      nextUpShowLabel: (name: string) => `Mostra di nuovo ${name} in «Prossimo»`,
+      nextUpShown: (name: string) => `${name} è di nuovo in «Prossimo».`,
+      withResume: 'Rimuovere da «Continua a guardare» toglie anche la serie da «Prossimo»',
+      withResumeHelp:
+        'Rimuovere un episodio da «Continua a guardare» toglie allora anche la sua serie da «Prossimo», allo stesso modo, finché non ne riproduci un episodio o ne esce uno nuovo.',
+      withResumeOn: 'Rimuovere da «Continua a guardare» ora toglie anche la serie da «Prossimo».',
+      withResumeOff: 'Rimuovere da «Continua a guardare» non toglie più la serie da «Prossimo».',
       kinds: {
         movie: 'Film',
         series: 'Serie TV',
@@ -715,6 +731,7 @@ const account: typeof en = {
       'Tema del lettore web: Quello del server, se il tuo amministratore non ha scelto il tuo',
     audioRegion: 'Regione audio: Nessuna',
     homeRows: 'Righe della Home: tutte le righe tornano visibili',
+    nextUpWithResume: 'Rimuovi da «Continua a guardare»: lascia «Prossimo» com’è',
     trackChoices: 'Scelta delle tracce: dimenticata per ogni serie e film',
     appPreferences:
       'Le preferenze che le app Jellyfin hanno salvato nel tuo account: lingue e modalità di audio e sottotitoli, preferenze della schermata Home e di visualizzazione',
