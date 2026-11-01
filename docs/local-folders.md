@@ -608,9 +608,15 @@ An episode whose file has no intro or credits in its chapters, of a series or a 
 
 ### Listing local files first
 
-A folder's versions take its place among the sources: moving it up under **Content › Sources** puts its files before the addons' streams while no criterion orders versions. With criteria, such as **Preferred audio language**, a local file often ranks low: a scan does not analyze the files, so a file's audio languages are known only once it was played, or from its name or RemuxDB's description, and it counts as of unknown language until then. To list a folder's files first whatever the other criteria, choose **Source, in the order below** first under **Settings › Playback › Order versions by**, and move the folder to the top of **Order of sources**; the next criteria then sort each source's versions. Placed after the language, the criterion only orders the versions the language ties on. See [Version order](playback.md#version-order).
+A folder's versions take its place among the sources: moving it up under **Content › Sources** puts its files before the addons' streams while no criterion orders versions. With criteria, such as **Preferred audio language**, a local file often ranks low: a scan does not analyze the files, so a file's audio languages are known only once it was played, or from its name or RemuxDB's description, and it counts as of unknown language until then. To list local files first whatever the other criteria:
 
-To list local files first for some users only, give them **Play local files first**, in the **Playback and access** section of their page or their group's: their version menus list the files of local folders and network shares before the addons' streams, whatever the criteria, and **Play** starts one, while the other users keep the server's order (see [Local files first for some users](playback.md#local-files-first-for-some-users)).
+1. Under **Settings › Playback › Order versions by**, choose **Source, in the order below** and make it **Criterion 1**. **Add a criterion** adds it last, after the criteria already there: move it up with its arrow. Placed after the language, the criterion only orders the versions the language ties on, and the page says so under the criteria.
+2. Under **Order of sources**, move every local folder and network share to the top, above the addons, then **Save**. A second folder or share left below an addon keeps its versions after that addon's.
+3. Open the title again: a page left open keeps its version menu.
+
+The next criteria then sort each source's versions. With **Prefer versions the app plays without conversion** on, an app still lists first, and plays, the streams it plays as they are before a local file it would convert, such as one with E-AC-3 audio or an MPEG-TS file in a browser. See [Version order](playback.md#version-order) and [Prefer versions the app plays without conversion](playback.md#prefer-versions-the-app-plays-without-conversion).
+
+To list local files first for some users only, give them **Play local files first**, in the **Playback and access** section of their page or their group's: their version menus list the files of local folders and network shares before the addons' streams, whatever the criteria, and **Play** starts one, even with **Prefer versions the app plays without conversion** on, while the other users keep the server's order (see [Local files first for some users](playback.md#local-files-first-for-some-users)).
 
 ### Titles your catalogs list too
 
