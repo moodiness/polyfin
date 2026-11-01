@@ -203,14 +203,14 @@ function PinBlock({ id, explained }: { id: string; explained: TitleVersions }) {
               title={<span className="break-all">{pin.name}</span>}
               titleAside={pin.missing ? <Badge tone="warn">{text.pinMissing}</Badge> : undefined}
               meta={
-                <>
+                <span className="flex min-w-0 flex-col whitespace-normal break-words">
                   {[pin.filename, pin.size > 0 ? formatBytes(pin.size, language) : '']
                     .filter(Boolean)
                     .join(' · ')}
                   <span className="block">
                     {text.pinnedBy(pin.by)} · <RelativeTime iso={pin.at} />
                   </span>
-                </>
+                </span>
               }
               trailing={
                 <Button size="sm" loading={unpin.isPending} onClick={() => unpin.mutate()}>
@@ -406,7 +406,7 @@ function SourceStreams({
                     </>
                   }
                   meta={
-                    <>
+                    <span className="flex min-w-0 flex-col whitespace-normal break-words">
                       {[
                         stream.filename,
                         stream.size > 0 ? formatBytes(stream.size, language) : '',
@@ -435,7 +435,7 @@ function SourceStreams({
                       {stream.unstarted && (
                         <span className="block text-ink-2">{text.unstarted}</span>
                       )}
-                    </>
+                    </span>
                   }
                   trailing={
                     stream.step === 'blocked' && stream.block !== null ? (
@@ -608,14 +608,14 @@ function TitleBlocks({ id, user, blocks }: { id: string; user: string; blocks: V
                 leading={ProhibitIcon}
                 title={<span className="break-all">{block.name}</span>}
                 meta={
-                  <>
+                  <span className="flex min-w-0 flex-col whitespace-normal break-words">
                     {[block.filename, block.size > 0 ? formatBytes(block.size, language) : '']
                       .filter(Boolean)
                       .join(' · ')}
                     <span className="block">
                       {text.blockedBy(block.by, block.reason)} · <RelativeTime iso={block.at} />
                     </span>
-                  </>
+                  </span>
                 }
                 trailing={
                   <Button
@@ -672,10 +672,10 @@ function Decision({ decision }: { decision: PlayDecision }) {
       }
       titleAside={decision.picked ? <Badge>{text.picked}</Badge> : undefined}
       meta={
-        <>
+        <span className="flex min-w-0 flex-col whitespace-normal break-words">
           {text.decisionBy(decision.user, decision.device, decision.app)} ·{' '}
           <RelativeTime iso={decision.at} />
-        </>
+        </span>
       }
     >
       <ol className="mt-2 flex list-decimal flex-col gap-1 pl-5 text-small text-ink-2">
