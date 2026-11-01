@@ -91,8 +91,8 @@ const versions: typeof en = {
     },
     unstarted:
       'N’a pas démarré récemment : les lectures qui ne choisissent pas de version la passent',
-    labelsAsRead: 'Libellés',
-    facts: 'Ce que savent les règles',
+    labelsAsRead: 'Libellés :',
+    facts: 'Ce que savent les règles :',
     analyzed: 'Analysée',
     multi: 'MULTI',
     tiers: { disc: 'Copie de disque', bluray: 'Blu-ray', web: 'Web', dvd: 'DVD', tv: 'TV' },

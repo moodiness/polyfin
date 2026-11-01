@@ -416,12 +416,12 @@ function SourceStreams({
                         .join(' · ')}
                       {labels.length > 0 && (
                         <span className="block">
-                          {text.labelsAsRead}: {labels.join(' · ')}
+                          {text.labelsAsRead} {labels.join(' · ')}
                         </span>
                       )}
                       {stream.analyzed && known.length > 0 && known.join() !== labels.join() && (
                         <span className="block">
-                          {text.facts}: {known.join(' · ')}
+                          {text.facts} {known.join(' · ')}
                         </span>
                       )}
                       {stream.facts.labelRules.length > 0 && (
