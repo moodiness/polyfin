@@ -261,3 +261,36 @@ func TestCastMembersTellTheirTMDBIdentifier(t *testing.T) {
 		t.Errorf("identifiers %q, want %q", got, want)
 	}
 }
+
+// An addon that refuses a description answers with one of its own notices,
+// of another identifier and another type: that is no description of the
+// title. A description by another identifier, or without a type, is.
+func TestANoticeDescribedAsATitleIsNoDescription(t *testing.T) {
+	t.Parallel()
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/meta/other/library.item.1.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "addonerror.%7B%22errorDescription%22%3A%22Rate%20Limit%20Exceeded%22%7D",
+				"name": "[x] Addon - Error", "description": "Rate Limit Exceeded", "type": "movie"}}`))
+		case "/meta/other/library.item.2.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "library.item.2", "name": "Item", "type": "movie"}}`))
+		case "/meta/movie/tmdb:1.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "tt1", "name": "By IMDb", "type": "movie"}}`))
+		case "/meta/series/kitsu:1.json":
+			_, _ = w.Write([]byte(`{"meta": {"id": "kitsu:1:1", "name": "Untyped"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer addon.Close()
+	client := NewClient("test")
+	manifestURL := addon.URL + "/manifest.json"
+	if meta, err := client.Meta(t.Context(), manifestURL, "other", "library.item.1", false); !errors.Is(err, ErrInvalidResponse) {
+		t.Errorf("a notice: %v %+v", err, meta)
+	}
+	for _, asked := range [][2]string{{"other", "library.item.2"}, {"movie", "tmdb:1"}, {"series", "kitsu:1"}} {
+		if meta, err := client.Meta(t.Context(), manifestURL, asked[0], asked[1], false); err != nil || meta.Name == "" {
+			t.Errorf("%s %s: %v %+v", asked[0], asked[1], err, meta)
+		}
+	}
+}

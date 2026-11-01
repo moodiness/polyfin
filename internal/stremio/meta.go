@@ -446,7 +446,9 @@ func unmarshal(data []byte, v any) error {
 	return err
 }
 
-// Meta returns the complete description of a title.
+// Meta returns the complete description of a title. A description that
+// is not the title's (see Describes) is ErrInvalidResponse, a failed
+// description, so that it is never kept as the title's.
 func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, confined bool) (Meta, error) {
 	body, err := c.get(ctx, manifestURL, BaseURL(manifestURL)+"/meta/"+encodeComponent(metaType)+"/"+encodeComponent(id)+".json", confined)
 	if err != nil {
@@ -461,7 +463,20 @@ func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, con
 	if response.Meta == nil || response.Meta.ID == "" {
 		return Meta{}, ErrNotFound
 	}
+	if !response.Meta.Describes(metaType, id) {
+		return Meta{}, fmt.Errorf("%w: meta: asked for %s %q, the addon described %s %q", ErrInvalidResponse, metaType, id,
+			response.Meta.Type, response.Meta.Name)
+	}
 	meta := response.Meta.Meta
 	response.Meta.Links.credit(&meta)
 	return meta, nil
+}
+
+// Describes reports whether m may describe the title of type metaType
+// and identifier id. A description of another identifier and another
+// type is not the title's but the addon's notice, such as an error it
+// describes as a title when it refuses a request. An addon may describe a
+// title by another identifier, or say nothing of its type.
+func (m Meta) Describes(metaType, id string) bool {
+	return m.ID == id || m.Type == "" || m.Type == metaType
 }
