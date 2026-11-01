@@ -125,3 +125,119 @@ func folderSeason(folder string) (int, bool) {
 	season, _ := strconv.Atoi(m[1])
 	return season, true
 }
+
+// An absolute episode number is an episode's place among all the regular
+// episodes of its series, specials left out, as anime is often numbered:
+// "Show - 41.mkv" is its 41st episode, whatever its season. Jellyfin 12.4
+// reads such names with three of its episode expressions
+// (Emby.Naming/Common/NamingOptions.cs at v12.4): "Foo Bar 889", lines
+// 361-370, "[bar] Foo - 1 [baz]", lines 377-382, and "Name - 101",
+// "Name - 101 [720p]" or "Name - 101 (2020)", lines 384-390. Absolute
+// reads them so, but:
+//   - a number after a dash is read first, so that "Show 2 - 05" is
+//     episode 5, where Jellyfin's "Foo Bar 889" reads 2;
+//   - "Foo Bar 889" takes the last number of the name, so that a number
+//     in the show's title is not the episode's ("Station 100 05" is
+//     episode 5), and the words after it may hold an "x", but for "1x02"
+//     or "1920x1080";
+//   - a year, 1880 to 2100 written with four digits, and a resolution, a
+//     height followed by "p" or "i" or, in "Foo Bar 889", 2160, 1440,
+//     1080, 720, 576, 480 or 360 alone, are never episodes: Jellyfin
+//     reads "Show 2019" as episode 2019 and "Show 1080p" as 1080;
+//   - a number told as an episode's, a season's or a part's ("Show
+//     Episode 5", "Show S2 - 05", "Show Part 2") is no absolute number,
+//     nor is a range ("Show 41-42"): such a file holds one episode;
+//   - a name holding a season and an episode, S01E02 or 1x02, has no
+//     absolute number, as Jellyfin's "Foo Bar 889" guards (line 364).
+var (
+	// absoluteDash is a dash and the number after it, "v2" for a
+	// release's second version; the dash is between spaces or
+	// underscores, as Jellyfin's "Name - 101" reads it, but in a name
+	// with a tag between brackets, as its "[bar] Foo - 1 [baz]".
+	absoluteDash = regexp.MustCompile(`([ _]*)-([ _]*)(\d{1,4})(?:v\d{1,2})?`)
+	// absoluteWord is the number of "Foo Bar 889", a word of its own;
+	// titleWord a word of its title, letters and digits as Jellyfin's
+	// \w (with the underscore, read as a space here).
+	absoluteWord = regexp.MustCompile(`^(\d{1,4})(?:v\d{1,2})?$`)
+	titleWord    = regexp.MustCompile(`^[\p{L}\p{M}\p{N}]+$`)
+	// numberedWord makes the number after it another than an absolute
+	// episode's.
+	numberedWord = regexp.MustCompile(`(?i)^(?:e|ep|episode|s|season|series|saison|staffel|temporada|part|pt|vol|volume|disc|disk|cd)$`)
+	// seasonEnd is a season ending a title, as in "Show S2 - 05".
+	seasonEnd = regexp.MustCompile(`(?i)(?:^|[ ._-])(?:s|season[ ._-]?)\d{1,3}$`)
+	// otherCross is "1920x1080" or "1x02" among words.
+	otherCross = regexp.MustCompile(`\d[xX]\d`)
+	// bracketedTag is a tag between brackets or braces: a release
+	// group, a resolution, a checksum.
+	bracketedTag = regexp.MustCompile(`\[[^\]]*\]|\{[^}]*\}`)
+	// resolutionHeights are the heights a number alone may be.
+	resolutionHeights = map[int]bool{2160: true, 1440: true, 1080: true, 720: true, 576: true, 480: true, 360: true}
+)
+
+// Absolute reads the absolute episode number a video's name tells, stem
+// its name without its extension (see the rules above), with the title
+// before it: "Show - 41", "Show 41" and "[Group] Show - 041 [1080p]" are
+// the 41st episode of "Show". It is false for a name telling none, or a
+// season and an episode.
+func Absolute(stem string) (number int, title string, ok bool) {
+	if Tag.MatchString(stem) || Cross.MatchString(stem) {
+		return 0, "", false
+	}
+	text := bracketedTag.ReplaceAllString(stem, " ")
+	tagged := text != stem
+	text = strings.TrimSpace(text)
+	for _, m := range absoluteDash.FindAllStringSubmatchIndex(text, -1) {
+		title := strings.Trim(strings.ReplaceAll(text[:m[0]], "_", " "), " -")
+		spaced := m[3] > m[2] && m[5] > m[4]
+		if title == "" || !spaced && (!tagged || strings.ContainsRune("0123456789", rune(text[m[0]-1]))) {
+			continue
+		}
+		// The number ends the name, or a separator follows it: "Show -
+		// 1080p", "Show - 41.5" and "Show - 41-42" tell none.
+		if end := m[1]; end < len(text) {
+			next := text[end]
+			digit := end+1 < len(text) && text[end+1] >= '0' && text[end+1] <= '9'
+			if !strings.ContainsRune(" _-.", rune(next)) || (next == '.' || next == '-') && digit {
+				continue
+			}
+		}
+		digits := text[m[6]:m[7]]
+		n, _ := strconv.Atoi(digits)
+		if year(digits) || n == 0 {
+			continue
+		}
+		words := strings.Fields(title)
+		if seasonEnd.MatchString(title) || numberedWord.MatchString(words[len(words)-1]) {
+			return 0, "", false
+		}
+		return n, title, true
+	}
+	words := strings.Fields(strings.ReplaceAll(text, "_", " "))
+	for i := len(words) - 1; i > 0; i-- {
+		m := absoluteWord.FindStringSubmatch(words[i])
+		if m == nil {
+			continue
+		}
+		n, _ := strconv.Atoi(m[1])
+		if year(m[1]) || resolutionHeights[n] || n == 0 {
+			continue
+		}
+		if numberedWord.MatchString(words[i-1]) || otherCross.MatchString(strings.Join(words[i+1:], " ")) {
+			return 0, "", false
+		}
+		for _, word := range words[:i] {
+			if !titleWord.MatchString(word) {
+				return 0, "", false
+			}
+		}
+		return n, strings.Join(words[:i], " "), true
+	}
+	return 0, "", false
+}
+
+// year reports whether digits, an episode's number as written, are a
+// year's: four of them, from 1880 to 2100.
+func year(digits string) bool {
+	n, _ := strconv.Atoi(digits)
+	return len(digits) == 4 && n >= 1880 && n <= 2100
+}
