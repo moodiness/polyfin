@@ -725,11 +725,14 @@ func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int6
 	if copyable && !heavy {
 		return nil, true
 	}
-	channels := 0
+	source := AudioSource{Codec: audio.Codec, ChannelLayout: audio.ChannelLayout}
 	if audio.Channels != nil {
-		channels = *audio.Channels
+		source.Channels = *audio.Channels
 	}
-	conversion := ConvertAudio(StreamAudioCodecs(t), t.MaxAudioChannels, channels, audio.ChannelLayout, limit, options.Can.Tuning)
+	if audio.SampleRate != nil {
+		source.SampleRate = *audio.SampleRate
+	}
+	conversion := ConvertAudio(StreamAudioCodecs(t), t.MaxAudioChannels, source, limit, options.Can.Tuning)
 	if conversion == nil && copyable {
 		return nil, true
 	}

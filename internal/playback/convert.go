@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/hls"
+	"github.com/moodiness/polyfin/internal/media"
 )
 
 // Capabilities returns what the installed FFmpeg converts with, tuned as
@@ -74,17 +75,16 @@ type AudioConversion struct {
 // preference when a profile takes several.
 var audioEncoders = []string{"aac", "ac3", "eac3", "flac"}
 
-// ConvertAudio is the conversion of audio of channels in layout, as
-// ffprobe names it, for a transcoding profile taking codecs, as a
-// comma-separated list, and at most maxChannels channels when it is a
-// number, under a bitrate limit, 0 for none: the first codec of the list
-// FFmpeg encodes, a lossy one first under a limit, which bounds only
-// those, with the audio's channels up to the limit, to the tuning's and
-// to what the codec carries, mixed down to stereo as the tuning says, at
-// the tuning's bitrate a channel, else at Jellyfin's (see
-// audioBitrateFor). It is nil when the profile takes no codec Polyfin
-// encodes.
-func ConvertAudio(codecs, maxChannels string, channels int, layout string, limit int64, t Tuning) *AudioConversion {
+// ConvertAudio is the conversion of a video's audio track, source, for a
+// transcoding profile taking codecs, as a comma-separated list, and at
+// most maxChannels channels when it is a number, under a bitrate limit, 0
+// for none: the first codec of the list FFmpeg encodes, a lossy one first
+// under a limit, which bounds only those, with the audio's channels up to
+// the limit, to the tuning's and to what the codec carries, through the
+// tuning's filters (see Tuning.videoAudio), at the tuning's bitrate a
+// channel, else at Jellyfin's (see audioBitrateFor). It is nil when the
+// profile takes no codec Polyfin encodes.
+func ConvertAudio(codecs, maxChannels string, source AudioSource, limit int64, t Tuning) *AudioConversion {
 	codec := ""
 	for name := range strings.SplitSeq(codecs, ",") {
 		if name = strings.ToLower(strings.TrimSpace(name)); slices.Contains(audioEncoders, name) && (codec == "" || codec == "flac") {
@@ -97,7 +97,7 @@ func ConvertAudio(codecs, maxChannels string, channels int, layout string, limit
 	if codec == "" {
 		return nil
 	}
-	source := channels
+	channels := source.Channels
 	if channels <= 0 {
 		channels = 2
 	}
@@ -111,7 +111,7 @@ func ConvertAudio(codecs, maxChannels string, channels int, layout string, limit
 	if codec != "flac" {
 		channels = min(channels, 6)
 	}
-	conversion := &AudioConversion{Codec: codec, Channels: channels}
+	conversion := &AudioConversion{Codec: codec, Channels: channels, Filter: t.videoAudio(source, channels, 0)}
 	switch {
 	case codec == "flac":
 	case t.AudioBitrate > 0:
@@ -119,10 +119,12 @@ func ConvertAudio(codecs, maxChannels string, channels int, layout string, limit
 	default:
 		conversion.Bitrate = audioBitrateFor(channels, limit)
 	}
-	if channels == 2 && source > 2 {
-		conversion.Filter = t.downmix(source, layout)
-	}
 	return conversion
+}
+
+// AudioTrack is what ConvertAudio reads of an analyzed audio track.
+func AudioTrack(s media.Stream) AudioSource {
+	return AudioSource{Codec: s.Codec, Channels: s.Channels, ChannelLayout: s.ChannelLayout, SampleRate: s.SampleRate}
 }
 
 // audioBitrateFor is the bitrate Jellyfin's StreamBuilder gives audio

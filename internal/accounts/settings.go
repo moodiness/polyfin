@@ -1770,6 +1770,10 @@ type Settings struct {
 	DownmixBoost           float64
 	MaxAudioChannels       int
 	AudioBitratePerChannel int
+	// NormalizeConvertedAudio evens the loudness of the audio of the
+	// videos the server converts at -16 LUFS; direct play, copied audio,
+	// music and audiobooks keep theirs.
+	NormalizeConvertedAudio bool
 	// EncodingThreads is how many threads FFmpeg converts with, 0 letting
 	// it choose.
 	EncodingThreads int
@@ -2305,6 +2309,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"adaptive_quality, " +
 	"tone_mapping, tone_mapping_algorithm, tone_mapping_peak, tone_mapping_desat, gpu_tone_mapping, processor_tone_mapping_height, deinterlace_method, deinterlace_double_rate, " +
 	"downmix_algorithm, downmix_boost, max_audio_channels, audio_bitrate_per_channel, encoding_threads, ahead_seconds, keep_converted_video, fast_start, " +
+	"normalize_converted_audio, " +
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, " +
 	"recording_commercials, " +
@@ -2367,6 +2372,7 @@ func (settings *Settings) fields() []any {
 		&settings.DeinterlaceMethod, &settings.DeinterlaceDoubleRate,
 		&settings.DownmixAlgorithm, &settings.DownmixBoost, &settings.MaxAudioChannels, &settings.AudioBitratePerChannel, &settings.EncodingThreads, &settings.AheadSeconds,
 		&settings.KeepConvertedVideo, &settings.FastStart,
+		&settings.NormalizeConvertedAudio,
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays,
 		&settings.RecordingCommercials,

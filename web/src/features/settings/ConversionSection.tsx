@@ -537,6 +537,13 @@ export default function ConversionSection({
             )}
           />
         </FieldRow>
+        <SwitchRow
+          anchor="normalize-converted-audio"
+          label={c.normalizeConvertedAudio}
+          help={c.normalizeConvertedAudioHelp}
+          checked={form.normalizeConvertedAudio}
+          onChange={(normalizeConvertedAudio) => update({ normalizeConvertedAudio })}
+        />
         <FieldRow
           anchor="max-audio-channels"
           label={c.maxAudioChannels}

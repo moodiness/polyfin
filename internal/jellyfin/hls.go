@@ -336,13 +336,13 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		}
 	}
 	if strings.EqualFold(query(r, "allowAudioStreamCopy"), "false") {
-		channels, layout := 0, ""
+		var source playback.AudioSource
 		for _, stream := range analysis.Streams {
 			if stream.Index == remux.Audio {
-				channels, layout = stream.Channels, stream.ChannelLayout
+				source = playback.AudioTrack(stream)
 			}
 		}
-		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), channels, layout,
+		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), source,
 			limits.Bitrate, h.Playback.Capabilities().Tuning)
 	}
 	// PlaybackInfo copies no video above the user's bitrate limit, nor
