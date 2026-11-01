@@ -45,6 +45,10 @@ type Remux struct {
 	// converted to; nil copies them.
 	ConvertVideo *VideoConversion
 	ConvertAudio *AudioConversion
+	// Normalize evens converted audio whatever the settings, for a user
+	// who has their sound converted: ConvertAudio was tuned so, and a
+	// source the play switches to converts its own audio so too.
+	Normalize bool
 	// Variant is the quality played of converted video: 0 for
 	// ConvertVideo, else its lower step of that number (see
 	// VideoConversion.Steps), which the master playlist offers when apps

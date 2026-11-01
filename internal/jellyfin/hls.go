@@ -342,8 +342,14 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 				source = playback.AudioTrack(stream)
 			}
 		}
+		// A user who has their sound converted gets it evened, whatever
+		// the settings, and so does a source the play switches to.
+		tuning := h.Playback.Capabilities().Tuning
+		if user.ConvertSound {
+			tuning.Normalize, remux.Normalize = true, true
+		}
 		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), source,
-			limits.Bitrate, h.Playback.Capabilities().Tuning)
+			limits.Bitrate, tuning)
 	}
 	// PlaybackInfo copies no video above the user's bitrate limit, nor
 	// taller than their quality group: this guards URLs kept from before

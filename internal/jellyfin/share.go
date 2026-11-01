@@ -109,11 +109,12 @@ var guestProfile = playback.DeviceProfile{
 }
 
 // shareUser is the sharer as a guest plays for them: their quality group,
-// lowered to 1080p.
+// lowered to 1080p, without their own sound, which is not the guest's.
 func shareUser(user accounts.User) accounts.User {
 	if user.QualityGroup == 0 || user.QualityGroup > shareMaxHeight {
 		user.QualityGroup = shareMaxHeight
 	}
+	user.ConvertSound = false
 	return user
 }
 

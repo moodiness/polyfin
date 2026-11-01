@@ -828,6 +828,16 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 	decision := playback.Decision{DirectPlay: true, Container: container, AudioStreamIndex: -1, SubtitleStreamIndex: -1}
 	if request.DeviceProfile != nil {
 		decision = playback.Decide(request.DeviceProfile, described, options)
+		// A user who has their sound converted gets it for channels too,
+		// as for videos (see soundConverted); a live stream is never cut
+		// on a grid.
+		if request.convertSound {
+			converting := options
+			convertSound(&converting)
+			if converted := playback.Decide(request.DeviceProfile, described, converting); soundConverted(converted, decision, false, allowed) {
+				decision, options = converted, converting
+			}
+		}
 	}
 	if playback.DASH(analysis) && !decision.HLS {
 		return MediaSourceInfo{}, false

@@ -342,7 +342,7 @@ func (h *Handler) baseSource(r *http.Request, p playable, version library.Versio
 		RequiredHttpHeaders:    map[string]string{},
 		TranscodingSubProtocol: "http",
 	}
-	source.Path = h.streamURL(r, p.item.ID, id, version, source.Container, mustRelay(r, version))
+	source.Path = h.streamURL(r, p.item.ID, id, version, source.Container, mustRelay(r, version) || h.boostRelay(r))
 	// jellyfin-web asks for the segments of the version it plays only when
 	// the version says it has some: movies and episodes may, while the skip
 	// buttons are on and a segment database is asked, or the version's own
@@ -430,7 +430,8 @@ func textCopyOf(streams []playback.MediaStream, index int) int {
 // streamURL is the address players fetch a version from when they use a
 // media source's Path. Players send no credentials with it, so it carries a
 // grant signed for the caller, which tells whether Polyfin must relay the
-// source rather than redirect the player to it.
+// source rather than redirect the player to it; a relayed one also says
+// so in relayParameter, for Polyfin's script (see boostRelay).
 func (h *Handler) streamURL(r *http.Request, item, sourceID accounts.ID, version library.Version, container string, relay bool) string {
 	user := callerFrom(r.Context()).User
 	grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: relay})
@@ -439,6 +440,9 @@ func (h *Handler) streamURL(r *http.Request, item, sourceID accounts.ID, version
 		"mediaSourceId": {sourceID.String()},
 		"Tag":           {version.ID.String()},
 		grantParameter:  {grant},
+	}
+	if relay {
+		query.Set(relayParameter, "1")
 	}
 	extension := container
 	if container == "hls" {
@@ -450,6 +454,10 @@ func (h *Handler) streamURL(r *http.Request, item, sourceID accounts.ID, version
 
 // grantParameter carries a signed grant in the URLs Polyfin makes.
 const grantParameter = "PolyfinGrant"
+
+// relayParameter marks the address of a version Polyfin relays rather
+// than redirecting the player to its source.
+const relayParameter = "PolyfinRelay"
 
 // mustRelay reports whether a player cannot follow a redirect to the
 // version's source. Findroid's ExoPlayer refuses redirects from http to

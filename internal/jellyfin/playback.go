@@ -319,6 +319,10 @@ type playbackInfoRequest struct {
 	// than Polyfin for a DLNA device or a guest: the direct-play check
 	// still runs, and gives DirectPlayError (see playback.Options).
 	directPlayOff bool
+	// convertSound converts the audio of the user's videos and channels,
+	// evened, the video copied where it would play as it is (see
+	// soundConverted).
+	convertSound bool
 }
 
 // playbackInfo answers what an app needs to play an item: its version's
@@ -378,6 +382,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	h.rememberPlay(r.Context(), request)
 	limitBitrate(&request, user)
 	h.limitHeight(&request, user)
+	request.convertSound = user.ConvertSound
 	request.progressive = h.downloadsConverted(user)
 	item, err := h.played(r.Context(), user, opened)
 	// Jellyfin cannot process the request for an item without media
@@ -669,14 +674,16 @@ type decided struct {
 // unconverted reports whether the app plays a version without conversion:
 // as it is, or repackaged with its tracks copied, which needs its keyframe
 // index. A version above the user's bitrate limit never does: decide
-// refuses it unless its video is converted down to the limit.
+// refuses it unless its video is converted down to the limit. For a user
+// who has their sound converted, audio converted with the video copied
+// counts as copied: their every version converts it.
 func (h *Handler) unconverted(ctx context.Context, d decided, request playbackInfoRequest) bool {
 	switch {
 	case beyondUserLimit(request, d.analysis.Bitrate, d.decision):
 		return false
 	case d.decision.DirectPlay:
 		return true
-	case !d.decision.Streamed() || d.decision.Video != nil || d.decision.Audio != nil:
+	case !d.decision.Streamed() || d.decision.Video != nil || d.decision.Audio != nil && !request.convertSound:
 		return false
 	case d.decision.Progressive:
 		return true
@@ -707,13 +714,21 @@ func (h *Handler) decide(r *http.Request, p playable, index int, version library
 	// cannot be read, which nothing could stream.
 	if request.DeviceProfile != nil && decision.HLS {
 		plan, err := h.Playback.Plan(r.Context(), version)
+		// The sound converted alone needs the index too: a version that
+		// plays for others without it plays as for them.
+		if err != nil && request.convertSound && r.Context().Err() == nil {
+			request.convertSound = false
+			if usual, usualOptions, _ := h.trackDecision(p, version, source.MediaStreams, analysis, request, allowed, named); !usual.HLS {
+				decision, options, err = usual, usualOptions, nil
+			}
+		}
 		if err != nil {
 			if r.Context().Err() == nil {
 				h.Logger.Info("A version cannot be streamed over HLS", "addon", version.Addon, "error", err)
 			}
 			return decided{unstarted: version.Torrent != nil && playback.TorrentUnstarted(err)}, false
 		}
-		if plan.Grid() && decision.Video == nil {
+		if decision.HLS && plan.Grid() && decision.Video == nil {
 			var ok bool
 			if decision, ok = gridDecision(request, described, options); !ok {
 				return decided{}, false
@@ -749,9 +764,42 @@ func gridDecision(request playbackInfoRequest, described playback.MediaSource, o
 // the app asked for when named, else those the user's preferences choose.
 // It reads nothing, leaving to decide whether the version can be cut into
 // HLS segments. options are those the decision was made with, and
-// described the version as it saw it.
+// described the version as it saw it. For a user who has their sound
+// converted, the version is decided as for others, then with its audio
+// converted and evened, which plays when soundConverted lets it.
 func (h *Handler) trackDecision(p playable, version library.Version, streams []playback.MediaStream, analysis media.Analysis,
 	request playbackInfoRequest, allowed accounts.Conversions, named bool) (playback.Decision, playback.Options, playback.MediaSource) {
+	decision, options, described := h.decideTracks(p, version, streams, analysis, request, allowed, named, false)
+	if !request.convertSound || request.DeviceProfile == nil {
+		return decision, options, described
+	}
+	converted, convertedOptions, _ := h.decideTracks(p, version, streams, analysis, request, allowed, named, true)
+	if soundConverted(converted, decision, h.Playback.GridPlanned(version, analysis), allowed) {
+		return converted, convertedOptions, described
+	}
+	return decision, options, described
+}
+
+// soundConverted reports whether converted, a version's decision with its
+// audio converted and evened for a user who asked for it (see
+// accounts.User.ConvertSound), plays in place of usual, the decision
+// others get: it converts the audio, which the user may have converted,
+// and keeps the subtitle usual shows; and it converts the video only where
+// usual does, so that the sound never costs a video conversion, as a
+// subtitle burned in would, or a file cut on a fixed grid over HLS, which
+// grid tells (see playback.Service.GridPlanned).
+func soundConverted(converted, usual playback.Decision, grid bool, allowed accounts.Conversions) bool {
+	videoConverted := func(d playback.Decision) bool { return d.Video != nil || d.HLS && grid }
+	return converted.Streamed() && converted.Audio != nil && permitted(allowed, converted) &&
+		(!videoConverted(converted) || videoConverted(usual)) && converted.SubtitleStreamIndex == usual.SubtitleStreamIndex
+}
+
+// decideTracks is trackDecision, its audio converted and evened, never
+// played as it is, when sound is set: converted with the app's channels,
+// through the normalization of converted audio whatever the settings say
+// (see playback.Tuning.Normalize).
+func (h *Handler) decideTracks(p playable, version library.Version, streams []playback.MediaStream, analysis media.Analysis,
+	request playbackInfoRequest, allowed accounts.Conversions, named, sound bool) (playback.Decision, playback.Options, playback.MediaSource) {
 	notFile := h.Playback.ReadsInput(version)
 	options := playback.Options{
 		MaxStreamingBitrate: request.MaxStreamingBitrate.value,
@@ -765,6 +813,9 @@ func (h *Handler) trackDecision(p playable, version library.Version, streams []p
 		ConversionHeight:    request.conversionHeight,
 		Progressive:         request.progressive,
 		Can:                 h.Playback.Capabilities(),
+	}
+	if sound {
+		convertSound(&options)
 	}
 	// Like Jellyfin, chosen tracks only count with the version they belong
 	// to. The user's preferences choose the others. A decision plays the
@@ -840,9 +891,17 @@ func (h *Handler) trackDecision(p playable, version library.Version, streams []p
 	// convertible lets through, leaves no room for it at the limit.
 	if decision.Progressive && (!permitted(allowed, decision) || decision.Video != nil && !h.Playback.MayConvertAlone()) {
 		request.progressive = false
-		return h.trackDecision(p, version, streams, analysis, request, allowed, named)
+		return h.decideTracks(p, version, streams, analysis, request, allowed, named, sound)
 	}
 	return decision, options, described
+}
+
+// convertSound has options convert the audio and even it, never playing
+// the source as it is: the refusal is Polyfin's, as a disc's, and the
+// app's own direct-play check is not run (see playback.Options).
+func convertSound(options *playback.Options) {
+	options.EnableDirectPlay, options.DirectPlayOff, options.ConvertAudio = false, false, true
+	options.Can.Tuning.Normalize = true
 }
 
 // unplayable reports whether a decision does not play a version on the app:
