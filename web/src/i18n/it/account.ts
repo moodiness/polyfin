@@ -17,6 +17,7 @@ const account: typeof en = {
       metadataLanguage: 'Lingua dei metadati',
       webTheme: 'Tema del lettore web',
       audioRegion: 'Regione audio',
+      sound: 'Audio',
       sharedLinks: 'Link condivisi',
       reminders: 'Promemoria',
       import: 'Importa da un altro server',
@@ -59,6 +60,17 @@ const account: typeof en = {
         'pt-BR': 'Portoghese (Brasile)',
         'pt-PT': 'Portoghese (Portogallo)',
       },
+    },
+    sound: {
+      help: 'Due modi per rendere i tuoi video più forti e più uniformi di come li riproducono le tue app, ciascuno con il suo costo. Valgono dalla tua prossima riproduzione.',
+      boostVolume: 'Aumenta il volume nel lettore web',
+      boostVolumeHelp:
+        'Rende i video più forti nel lettore web, in un browser e nelle app Jellyfin per Android e iOS: circa 8 dB nei passaggi tranquilli e 5 dB in quelli forti, con un compressore che contiene i picchi, e il volume del lettore continua a funzionare. Il lavoro lo fa il tuo browser, ma perché raggiunga gli stream degli add-on, il server invia esso stesso quegli stream al tuo lettore web invece di mandarlo alla loro sorgente, il che usa la banda del server. Non raggiunge i lettori propri delle app, né gli stream che un iPhone o un iPad riproduce come HLS. Anche il menu delle impostazioni del lettore lo attiva e lo disattiva.',
+      convertSound: 'Converti l’audio per uniformarlo',
+      convertSoundHelp:
+        'Il server converte l’audio dei tuoi video e canali e lo uniforma a -16 LUFS, con l’immagine copiata, così ogni app lo riproduce più forte e in modo uniforme. Il costo: nulla viene riprodotto direttamente, ogni riproduzione usa un po’ del processore del server, e l’audio surround arriva a un amplificatore convertito invece che come traccia originale.',
+      saved: 'Audio salvato.',
+      group: 'Li imposta il tuo gruppo: un amministratore li cambia nella sua pagina.',
     },
     taste: {
       help: 'Ciò che Polyfin ha imparato dei tuoi gusti dai film e dalle serie che hai finito, rivisto, interrotto presto, apprezzato, non apprezzato, messo tra i preferiti e nascosto, i più recenti contano di più. Quando ti conosce abbastanza, ordina Scelti per te, i titoli simili e i suggerimenti. Resta sul server: lo vedi solo tu.',

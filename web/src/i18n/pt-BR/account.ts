@@ -17,6 +17,7 @@ const account: typeof en = {
       metadataLanguage: 'Idioma dos metadados',
       webTheme: 'Tema do player web',
       audioRegion: 'Região do áudio',
+      sound: 'Som',
       sharedLinks: 'Links compartilhados',
       reminders: 'Lembretes',
       import: 'Importar de outro servidor',
@@ -59,6 +60,17 @@ const account: typeof en = {
         'pt-BR': 'Português (Brasil)',
         'pt-PT': 'Português (Portugal)',
       },
+    },
+    sound: {
+      help: 'Duas formas de deixar seus vídeos mais altos e mais uniformes do que seus aplicativos os reproduzem, cada uma com seu custo. Elas valem a partir da sua próxima reprodução.',
+      boostVolume: 'Aumentar o volume no player web',
+      boostVolumeHelp:
+        'Deixa os vídeos mais altos no player web, em um navegador e nos aplicativos Jellyfin para Android e iOS: cerca de 8 dB nas passagens calmas e 5 dB nas altas, com um compressor contendo os picos, e o volume do player continua funcionando. Seu navegador faz o trabalho, mas para que ele alcance as transmissões dos complementos, o servidor envia ele mesmo essas transmissões ao seu player web em vez de mandá-lo à fonte delas, o que usa a banda do servidor. Não alcança os players próprios dos aplicativos, nem as transmissões que um iPhone ou iPad reproduz como HLS. O menu de configurações do player também o liga e desliga.',
+      convertSound: 'Converter o som para equalizá-lo',
+      convertSoundHelp:
+        'O servidor converte o áudio dos seus vídeos e canais e o equaliza em -16 LUFS, com a imagem copiada, para que todo aplicativo o reproduza mais alto e uniforme. O custo: nada é reproduzido diretamente, cada reprodução usa um pouco do processador do servidor, e o som surround chega a um receiver convertido em vez de como a faixa original.',
+      saved: 'Som salvo.',
+      group: 'Seu grupo define estas opções: um administrador as altera na página dele.',
     },
     taste: {
       help: 'O que o Polyfin aprendeu do seu gosto a partir dos filmes e séries que você terminou, reviu, largou cedo, curtiu, não curtiu, marcou como favoritos e ocultou, os mais recentes contando mais. Quando conhece você o suficiente, ele ordena Escolhas para você, os títulos semelhantes e as sugestões. Ele fica no servidor: só você o vê.',

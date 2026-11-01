@@ -150,6 +150,12 @@ const users: typeof en = {
     localFirst: 'Lokale Dateien zuerst abspielen',
     localFirstHelp:
       'Stellt die Versionen lokaler Ordner und Netzwerkfreigaben in den Versionsmenüs dieses Benutzers vor die anderen, unabhängig von „Versionen sortieren nach“, sodass die Wiedergabe mit ihnen beginnt. Andere Benutzer behalten die Reihenfolge des Servers.',
+    boostVolume: 'Lautstärke im Web-Player anheben',
+    boostVolumeHelp:
+      'Macht Videos im Web-Player dieses Benutzers lauter, im Browser und in den Jellyfin-Apps für Android und iOS: etwa 8 dB bei leisen Stellen und 5 dB bei lauten, Spitzen nahe der Vollaussteuerung gehalten. Die Arbeit macht der Browser, doch damit sie die Streams der Add-ons erreicht, sendet der Server dem Web-Player dieses Benutzers diese Streams selbst, statt den Player zu ihrer Quelle zu schicken, was Bandbreite des Servers beansprucht. Die eigenen Player der Apps erreicht es nicht, ebenso wenig Streams, die ein iPhone oder iPad als HLS abspielt.',
+    convertSound: 'Ton konvertieren und angleichen',
+    convertSoundHelp:
+      'Der Server konvertiert den Ton der Videos und Sender dieses Benutzers und gleicht ihn auf -16 LUFS an, das Bild wird kopiert, sodass jede App ihn lauter und gleichmäßig abspielt. Der Preis: Nichts wird direkt abgespielt, jede Wiedergabe beansprucht etwas vom Prozessor des Servers, und Surround-Ton erreicht einen Receiver konvertiert statt als Originalspur.',
     savePlaybackAccess: 'Wiedergabe und Zugriff speichern',
     visibleLibrariesTitle: 'Sichtbare Bibliotheken',
     visibleLibrariesHelp:

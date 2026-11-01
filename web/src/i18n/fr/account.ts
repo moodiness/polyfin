@@ -17,6 +17,7 @@ const account: typeof en = {
       metadataLanguage: 'Langue des métadonnées',
       webTheme: 'Thème du lecteur web',
       audioRegion: 'Région audio',
+      sound: 'Son',
       sharedLinks: 'Liens partagés',
       reminders: 'Rappels',
       import: 'Importer depuis un autre serveur',
@@ -59,6 +60,17 @@ const account: typeof en = {
         'pt-BR': 'Portugais (Brésil)',
         'pt-PT': 'Portugais (Portugal)',
       },
+    },
+    sound: {
+      help: 'Deux façons de rendre vos vidéos plus fortes et plus égales que vos applications ne les lisent, chacune avec son prix. Elles s’appliquent à votre prochaine lecture.',
+      boostVolume: 'Augmenter le volume dans le lecteur web',
+      boostVolumeHelp:
+        'Rend les vidéos plus fortes dans le lecteur web, dans un navigateur et dans les applications Jellyfin pour Android et iOS : environ 8 dB sur les passages calmes et 5 dB sur les passages forts, un compresseur tenant les crêtes, et le volume du lecteur fonctionne toujours. Votre navigateur fait le travail, mais pour qu’il atteigne les flux des addons, le serveur envoie lui-même ces flux à votre lecteur web au lieu de l’envoyer à leur source, ce qui prend de la bande passante au serveur. Les lecteurs propres aux applications ne sont pas concernés, ni les flux qu’un iPhone ou un iPad lit en HLS. Le menu des paramètres du lecteur l’active et le désactive aussi.',
+      convertSound: 'Convertir le son pour l’égaliser',
+      convertSoundHelp:
+        'Le serveur convertit le son de vos vidéos et de vos chaînes et l’égalise à -16 LUFS, l’image copiée, pour que chaque application le lise plus fort et de façon égale. Le prix : rien n’est lu directement, chaque lecture prend un peu du processeur du serveur, et le son multicanal arrive à un ampli converti plutôt que dans sa piste d’origine.',
+      saved: 'Son enregistré.',
+      group: 'Votre groupe les définit : un administrateur les change sur la page du groupe.',
     },
     taste: {
       help: 'Ce que Polyfin a appris de vos goûts à partir des films et des séries que vous avez terminés, revus, arrêtés tôt, aimés, pas aimés, mis en favoris et masqués, les plus récents comptant le plus. Une fois qu’il vous connaît assez, il classe Sélection pour vous et ordonne les titres similaires et les suggestions. Il reste sur le serveur : vous seul le voyez.',
