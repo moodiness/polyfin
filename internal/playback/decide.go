@@ -36,6 +36,12 @@ type Options struct {
 	// reasons the check found. Polyfin's own refusals, such as a disc's,
 	// leave it false and skip the check.
 	DirectPlayOff bool
+	// FailedDirectPlay, with DirectPlayOff, is the device profile of the
+	// app's direct play that failed before it turned direct play off. When
+	// that profile played the source's video as it is, the video is kept
+	// copied over HLS, though the app's conversion formats do not take it
+	// (see keptVideo): Polyfin's own step, where Jellyfin converts it.
+	FailedDirectPlay *DeviceProfile
 	// EnableDirectStream changes nothing on its own: Jellyfin 12.2 answers
 	// the same whether it is set or not.
 	EnableDirectStream bool
@@ -84,6 +90,10 @@ type Decision struct {
 	// source that would have played as it is (see Options.DirectPlayOff):
 	// DirectPlayError is then among the Reasons.
 	DirectPlayOff bool
+	// KeptVideo is set when the video is copied over HLS on a retry after a
+	// failed direct play, which the app's conversion formats alone would
+	// have converted (see Options.FailedDirectPlay).
+	KeptVideo bool
 	// AudioStreamIndex is the chosen audio track, -1 if none.
 	AudioStreamIndex int
 	// SubtitleStreamIndex is the chosen subtitle track, -1 if none.
@@ -225,6 +235,12 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 	d := decider{profile: profile, source: source}
 	d.locate(options)
 	decision := Decision{AudioStreamIndex: -1, SubtitleStreamIndex: -1, Transcoding: d.transcoding(options.Progressive)}
+	// On a retry after a failed direct play, the video the app played as it
+	// is may be kept: the profile streamed with then takes it.
+	kept := d.keptVideo(decision.Transcoding, options)
+	if kept != nil {
+		decision.Transcoding = kept
+	}
 	if d.played != nil {
 		decision.AudioStreamIndex = d.played.Index
 	}
@@ -270,6 +286,13 @@ func Decide(profile *DeviceProfile, source MediaSource, options Options) Decisio
 			streamed, video, audio, played := d.stream(t, options, limit, reasons&containerBitrateExceedsLimit != 0 || tall, caps)
 			decision.HLS, decision.Progressive = streamed && strings.EqualFold(t.Protocol, "hls"), streamed && !strings.EqualFold(t.Protocol, "hls")
 			decision.Video, decision.Audio = video, audio
+			// The video kept must be copied, else it is converted as the
+			// app's own profile asks.
+			if kept != nil && (!streamed || video != nil) {
+				options.FailedDirectPlay = nil
+				return Decide(profile, source, options)
+			}
+			decision.KeptVideo = kept != nil
 			if video != nil {
 				decision.Caps = caps
 				if played != limit {
@@ -517,6 +540,90 @@ func (d *decider) transcoding(progressive bool) *TranscodingProfile {
 		}
 	}
 	return best
+}
+
+// keptVideo is the profile a retry after a failed direct play streams
+// with to keep the video copied, nil when it does not: the app turned
+// direct play off, options.FailedDirectPlay, the profile of the direct
+// play that failed, played the source's video as it is (see playsVideo),
+// and t, the HLS profile the app converts with, does not take its codec.
+// It is t, else another of the app's HLS video profiles, in that order,
+// whose segments, MPEG-TS or fragmented MP4, the failed profile plays
+// the video in (see segmentsPlay), taking the video's codec besides its
+// own: the audio is then copied or converted as that profile takes it.
+// The Jellyfin app for Android, whose conversion formats take H.264
+// alone, asks so after two errors within 30 seconds (QueueManager.kt,
+// restartPlaybackWithFallback, L224-L255 at v2.7.3), and Jellyfin 12.4
+// converts its HEVC. A direct play that failed for want of the source's
+// bytes rather than of a decoder then plays without a video conversion.
+func (d *decider) keptVideo(t *TranscodingProfile, options Options) *TranscodingProfile {
+	if t == nil || options.FailedDirectPlay == nil || !options.DirectPlayOff || options.EnableDirectPlay || d.video == nil ||
+		!strings.EqualFold(t.Protocol, "hls") || listHas(t.VideoCodec, d.video.Codec) {
+		return nil
+	}
+	failed := decider{profile: options.FailedDirectPlay, source: d.source}
+	failed.locate(options)
+	if !failed.playsVideo() {
+		return nil
+	}
+	candidates := []*TranscodingProfile{t}
+	for i := range d.profile.TranscodingProfiles {
+		c := &d.profile.TranscodingProfiles[i]
+		if c != t && strings.EqualFold(c.Type, "Video") && strings.EqualFold(c.Protocol, "hls") &&
+			(c.Context == "" || strings.EqualFold(c.Context, "Streaming")) {
+			candidates = append(candidates, c)
+		}
+	}
+	for _, c := range candidates {
+		if !failed.segmentsPlay(c.Container) {
+			continue
+		}
+		kept := *c
+		if c.VideoCodec != "" {
+			kept.VideoCodec = d.video.Codec + "," + c.VideoCodec
+		}
+		return &kept
+	}
+	return nil
+}
+
+// playsVideo reports whether the device profile plays the source's video
+// as it is: a Video direct-play profile takes its codec in the source's
+// container, and no Video codec profile there refuses its profile, level,
+// bit depth or another of its properties.
+func (d *decider) playsVideo() bool {
+	return d.video != nil && d.listsVideo(d.source.Container) && d.codecProfileReasons("Video", d.video, d.source.Container) == 0
+}
+
+// segmentsPlay reports whether the device profile plays the source's
+// video as it is in HLS segments of container, "ts" for MPEG-TS or "mp4"
+// for fragmented MP4, as its Video direct-play profiles name them, with
+// the codec tag a repackaging writes, which its codec profiles there
+// accept.
+func (d *decider) segmentsPlay(container string) bool {
+	var names string
+	switch {
+	case strings.EqualFold(container, "ts"):
+		names = "ts,mpegts"
+	case strings.EqualFold(container, "mp4"):
+		names = "mp4,fmp4"
+	default:
+		return false
+	}
+	s := subject{video: d.video, codecTag: RemuxTag(d.video.Codec, container)}
+	return d.listsVideo(names) && !d.remuxFails("Video", d.video, names, s)
+}
+
+// listsVideo reports whether a Video direct-play profile takes the
+// source's video codec in one of containers.
+func (d *decider) listsVideo(containers string) bool {
+	for i := range d.profile.DirectPlayProfiles {
+		p := &d.profile.DirectPlayProfiles[i]
+		if strings.EqualFold(p.Type, "Video") && listMeets(p.Container, containers) && listHas(p.VideoCodec, d.video.Codec) {
+			return true
+		}
+	}
+	return false
 }
 
 // transcodeReasons are what transcoding with t cannot keep: a video codec

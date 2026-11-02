@@ -755,3 +755,73 @@ func TestDirectPlayTurnedOffByTheApp(t *testing.T) {
 		t.Errorf("Transcoding %+v, Video %+v, Audio %+v", got.Transcoding, got.Video, got.Audio)
 	}
 }
+
+// After a failed direct play, a retry with direct play turned off keeps the
+// video copied over HLS when the profile of the play that failed played
+// it as it is (#838), in the segments that profile plays it in, with the
+// audio copied or converted as the retry's profile takes it. Anything
+// else that needs the video converted still converts it, as the app's
+// conversion formats ask; Jellyfin 12.4 always does.
+func TestRetryAfterAFailedDirectPlayKeepsTheVideo(t *testing.T) {
+	t.Parallel()
+	// #838's file: HEVC Main in 1080p and E-AC-3 in 5.1, in Matroska.
+	source := func(audio string) MediaSource {
+		return MediaSource{Container: "mkv", Bitrate: 1_767_650, Streams: []MediaStream{
+			{Type: "Video", Index: 0, Codec: "hevc", Profile: "Main", Level: new(120.0), BitDepth: new(8), VideoRange: "SDR", VideoRangeType: "SDR",
+				Width: new(1920), Height: new(1080), AverageFrameRate: new(23.976), BitRate: new(int64(1_511_678))},
+			{Type: "Audio", Index: 1, Codec: audio, IsDefault: true, Channels: new(6), SampleRate: new(48000), BitRate: new(int64(256_000))},
+		}}
+	}
+	android := readDeviceProfile(t, "jellyfin-android-integrated")
+	// The same app on a device that does not decode HEVC.
+	noHEVC := readDeviceProfile(t, "jellyfin-android-integrated")
+	for i := range noHEVC.DirectPlayProfiles {
+		noHEVC.DirectPlayProfiles[i].VideoCodec = strings.ReplaceAll(noHEVC.DirectPlayProfiles[i].VideoCodec, "hevc,", "")
+	}
+	// One whose HEVC decoder stops below level 4.
+	lowLevel := readDeviceProfile(t, "jellyfin-android-integrated")
+	lowLevel.CodecProfiles = append(lowLevel.CodecProfiles, CodecProfile{Type: "Video", Codec: "hevc",
+		Conditions: []ProfileCondition{{Condition: "LessThanEqual", Property: "VideoLevel", Value: "93", IsRequired: true}}})
+	software := Capabilities{Encoders: []string{"libx264", "libx265", "aac", "ac3", "eac3"}}
+	retry := func(failed *DeviceProfile) Options {
+		return Options{DirectPlayOff: true, FailedDirectPlay: failed, Can: software}
+	}
+	t.Run("kept", func(t *testing.T) {
+		t.Parallel()
+		got := Decide(android, source("eac3"), retry(android))
+		if !got.HLS || !got.KeptVideo || got.Video != nil || got.Audio != nil || got.Transcoding.Container != "ts" ||
+			got.Transcoding.VideoCodec != "hevc,h264" || !slices.Equal(got.Reasons, []string{"DirectPlayError"}) || !got.DirectPlayOff {
+			t.Errorf("HLS %v, kept %v, Video %+v, Audio %+v, Transcoding %+v, Reasons %v", got.HLS, got.KeptVideo, got.Video, got.Audio,
+				got.Transcoding, got.Reasons)
+		}
+	})
+	t.Run("audio the segments do not carry", func(t *testing.T) {
+		t.Parallel()
+		got := Decide(android, source("dts"), retry(android))
+		if !got.HLS || !got.KeptVideo || got.Video != nil || got.Audio == nil || got.Transcoding.Container != "ts" ||
+			!slices.Equal(got.Reasons, []string{"AudioCodecNotSupported", "DirectPlayError"}) {
+			t.Errorf("HLS %v, kept %v, Video %+v, Audio %+v, Transcoding %+v, Reasons %v", got.HLS, got.KeptVideo, got.Video, got.Audio,
+				got.Transcoding, got.Reasons)
+		}
+	})
+	converted := []struct {
+		name    string
+		options Options
+	}{
+		{"no failed play known", retry(nil)},
+		{"a failed profile without the codec", retry(noHEVC)},
+		{"a failed profile below the level", retry(lowLevel)},
+		{"direct play turned off by Polyfin", Options{FailedDirectPlay: android, Can: software}},
+		{"video copy refused", Options{DirectPlayOff: true, FailedDirectPlay: android, ConvertVideo: true, Can: software}},
+		{"above the bitrate limit", Options{DirectPlayOff: true, FailedDirectPlay: android, MaxStreamingBitrate: 1_000_000, Can: software}},
+	}
+	for _, test := range converted {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			got := Decide(android, source("eac3"), test.options)
+			if !got.HLS || got.KeptVideo || got.Video == nil || got.Video.Codec != "h264" || got.Transcoding.VideoCodec != "h264" {
+				t.Errorf("HLS %v, kept %v, Video %+v, Transcoding %+v", got.HLS, got.KeptVideo, got.Video, got.Transcoding)
+			}
+		})
+	}
+}
