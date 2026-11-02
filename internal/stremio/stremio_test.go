@@ -294,3 +294,19 @@ func TestANoticeDescribedAsATitleIsNoDescription(t *testing.T) {
 		}
 	}
 }
+
+// An addon refusing a description for its rate may describe its notice
+// with the type asked for: it is no description either, and tells the
+// refusal.
+func TestARateLimitNoticeOfTheTypeAskedIsNoDescription(t *testing.T) {
+	t.Parallel()
+	addon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"meta": {"id": "addonerror.%7B%22errorDescription%22%3A%22Rate%20Limit%20Exceeded%22%7D",
+			"name": "[x] Addon - Error", "description": "Rate Limit Exceeded", "type": "movie"}}`))
+	}))
+	defer addon.Close()
+	meta, err := NewClient("test").Meta(t.Context(), addon.URL+"/manifest.json", "movie", "tt1", false)
+	if !errors.Is(err, ErrRateLimited) || !errors.Is(err, ErrInvalidResponse) {
+		t.Errorf("a rate-limit notice of a movie: %v %+v", err, meta)
+	}
+}

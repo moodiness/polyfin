@@ -448,7 +448,9 @@ func unmarshal(data []byte, v any) error {
 
 // Meta returns the complete description of a title. A description that
 // is not the title's (see Describes) is ErrInvalidResponse, a failed
-// description, so that it is never kept as the title's.
+// description, so that it is never kept as the title's; one of another
+// identifier that says the addon refused the request for its rate is,
+// whatever its type, and ErrRateLimited too.
 func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, confined bool) (Meta, error) {
 	body, err := c.get(ctx, manifestURL, BaseURL(manifestURL)+"/meta/"+encodeComponent(metaType)+"/"+encodeComponent(id)+".json", confined)
 	if err != nil {
@@ -462,6 +464,9 @@ func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, con
 	}
 	if response.Meta == nil || response.Meta.ID == "" {
 		return Meta{}, ErrNotFound
+	}
+	if response.Meta.ID != id && SaysRateLimited(response.Meta.Name, response.Meta.Description) {
+		return Meta{}, fmt.Errorf("%w: %w: meta: asked for %s %q", ErrInvalidResponse, ErrRateLimited, metaType, id)
 	}
 	if !response.Meta.Describes(metaType, id) {
 		return Meta{}, fmt.Errorf("%w: meta: asked for %s %q, the addon described %s %q", ErrInvalidResponse, metaType, id,
