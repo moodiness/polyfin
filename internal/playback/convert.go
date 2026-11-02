@@ -789,7 +789,7 @@ func (v *VideoConversion) level(rate float64) int {
 }
 
 // Level is the codec level a conversion declares for video of a frame
-// rate, as FFmpeg's encoders take it: "4.1", "5".
+// rate: "4.1", "5". internal/hls spells it as each encoder takes it.
 func (v *VideoConversion) Level(rate float64) string {
 	tenths := v.level(rate)
 	if tenths%10 == 0 {

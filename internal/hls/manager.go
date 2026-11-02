@@ -557,8 +557,10 @@ func videoToolboxQuality(factor int) int {
 	return min(max(100-2*factor, 1), 100)
 }
 
-// amfLevel is a codec level as AMF's encoders name it: "5.0" for "5".
-func amfLevel(level string) string {
+// decimalLevel is a codec level as AMF's and VideoToolbox's encoders name
+// it, always with a decimal: "5.0" for "5". VAAPI's take whole levels only
+// without one ("5"), and x264, x265 and NVENC take either.
+func decimalLevel(level string) string {
 	if level != "" && !strings.Contains(level, ".") {
 		return level + ".0"
 	}
@@ -625,7 +627,7 @@ func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 		// its HEVC encoder takes none.
 		args = append(args, "-profile:v", profile)
 		if h264 && v.Level <= "5.2" {
-			args = append(args, "-level:v", v.Level)
+			args = append(args, "-level:v", decimalLevel(v.Level))
 		}
 		if speed := videoToolboxSpeed[v.Preset]; speed != "" {
 			args = append(args, "-prio_speed", speed)
@@ -637,7 +639,7 @@ func (v *VideoEncoding) encoderArgs(keyframes, skip string) []string {
 			args = append(args, "-preset", preset)
 		}
 	case family == familyAMF:
-		args = append(args, "-rc", "vbr_peak", "-forced_idr", "1", "-profile:v", profile, "-level:v", amfLevel(v.Level))
+		args = append(args, "-rc", "vbr_peak", "-forced_idr", "1", "-profile:v", profile, "-level:v", decimalLevel(v.Level))
 		if preset := amfQualities[v.Preset]; preset != "" {
 			args = append(args, "-quality", preset)
 		}

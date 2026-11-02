@@ -366,6 +366,50 @@ func TestEachEncoderFamilyTakesItsOptions(t *testing.T) {
 	}
 }
 
+// Each encoder takes a level under the names FFmpeg 9.0.2 gives it:
+// VideoToolbox's H.264 encoder and AMF's only "5.0" for a whole level
+// (videotoolboxenc.c, amfenc_h264.c, amfenc_hevc.c), VAAPI's only "5"
+// (vaapi_encode_h264.c, vaapi_encode_h265.c), and x264, x265 and NVENC
+// either. VideoToolbox's HEVC encoder and QSV's take none.
+func TestEachEncoderSpellsLevelsItsWay(t *testing.T) {
+	plan := NewPlan(seconds(0, 6, 12), 18*time.Second)
+	level := func(args []string) string {
+		for i, a := range args {
+			if a == "-level:v" && i+1 < len(args) {
+				return args[i+1]
+			}
+			if a == "-x265-params" && i+1 < len(args) {
+				_, idc, _ := strings.Cut(args[i+1], "level-idc=")
+				return idc
+			}
+		}
+		return ""
+	}
+	for _, tc := range []struct {
+		encoder, whole, fraction string
+	}{
+		{"libx264", "5", "4.1"},
+		{"libx265", "5", "4.1"},
+		{"h264_nvenc", "5", "4.1"},
+		{"hevc_nvenc", "5", "4.1"},
+		{"h264_videotoolbox", "5.0", "4.1"},
+		{"hevc_videotoolbox", "", ""},
+		{"h264_qsv", "", ""},
+		{"hevc_qsv", "", ""},
+		{"h264_amf", "5.0", "4.1"},
+		{"hevc_amf", "5.0", "4.1"},
+		{"h264_vaapi", "5", "4.1"},
+		{"hevc_vaapi", "5", "4.1"},
+	} {
+		for _, c := range []struct{ level, want string }{{"5", tc.whole}, {"4.1", tc.fraction}} {
+			e := VideoEncoding{Encoder: tc.encoder, Level: c.level, Width: 1920, Height: 1080, FrameRate: 24, Bitrate: 8_000_000}
+			if got := level(e.args(plan, 0)); got != c.want {
+				t.Errorf("%s at %s: level %q, want %q", tc.encoder, c.level, got, c.want)
+			}
+		}
+	}
+}
+
 // Recordings are converted to HEVC by each method at the quality factor of
 // x265, VideoToolbox's on its own scale, decoded as conversions are.
 func TestFileConversionsOnEachMethod(t *testing.T) {
