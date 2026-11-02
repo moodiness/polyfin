@@ -157,8 +157,10 @@ func TestScansReadStoredEpisodesAgain(t *testing.T) {
 	ctx := t.Context()
 	rel := "The Lone Ranger (1949)/Season 01/The Lone Ranger S01E01-2022.mkv"
 	addon, _ := e.folder(KindShows, map[string]int{rel: 10})
-	// As an earlier version stored it.
-	if _, err := e.pool.Exec(ctx, "UPDATE local_files SET last_episode = 2022 WHERE addon_id = $1 AND path = $2", addon.ID, rel); err != nil {
+	// As an earlier version stored it, its numbers copied as those its name
+	// told on upgrading.
+	if _, err := e.pool.Exec(ctx, "UPDATE local_files SET last_episode = 2022, file_last_episode = 2022 WHERE addon_id = $1 AND path = $2",
+		addon.ID, rel); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.service.Scan(ctx, addon.ID); err != nil {

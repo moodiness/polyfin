@@ -301,7 +301,7 @@ type Local interface {
 	// of the series does not list, by season and number, with those it
 	// lists, in order, which the folders' pages show (see
 	// fileepisodes.go).
-	Episodes(ctx context.Context, folders []accounts.ID, stremioID string, catalog []stremio.Video) ([]stremio.Video, error)
+	Episodes(ctx context.Context, folders []accounts.ID, stremioID string, catalog *stremio.Meta) ([]stremio.Video, error)
 	NoteUnlisted(ctx context.Context, stremioID string, unlisted, listed [][2]int) error
 	// HeldTitles reports which of the Stremio identifiers ids the
 	// catalogs of folders list as titles (see skiplocal.go).

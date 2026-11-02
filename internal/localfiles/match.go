@@ -61,6 +61,12 @@ const (
 	// numberingAbsoluteBeyond: its name tells an absolute number the
 	// catalog does not reach, and it is an episode of its own.
 	numberingAbsoluteBeyond = "absolute_beyond"
+	// numberingMapped: its show's numbering mapped what it tells to the
+	// catalog's episode it is (see numbering.go).
+	numberingMapped = "mapped"
+	// numberingUnmapped: its show's numbering could not place it, and it
+	// is an episode of its own, its unmapped column telling why.
+	numberingUnmapped = "unmapped"
 )
 
 // How a file was matched, its matched_by; a home video is its own title.

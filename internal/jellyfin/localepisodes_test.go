@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/localfiles"
 )
 
 // A show matched to a series whose metadata addon lists only some of its
@@ -218,5 +219,62 @@ func TestLocalEpisodesNamedByAbsoluteNumber(t *testing.T) {
 	folder, err := p.folders.Folder(t.Context(), p.shows)
 	if err != nil || folder.Unlisted != 1 {
 		t.Errorf("the episodes the addon does not list: %d %v", folder.Unlisted, err)
+	}
+}
+
+// A show whose files number on across seasons plays them as the catalog's
+// episodes once an administrator says they are numbered by absolute
+// place: the file S01E03, after the catalog's two episodes of season 1, is
+// a version of S02E01, listed once and offered though its name tells
+// another episode, beside the file named by its absolute number 3; the
+// played mark of the episode it was listed as follows it.
+func TestLocalEpisodesNumberedAsTheAdministratorSays(t *testing.T) {
+	t.Parallel()
+	p := newPlainSetup(t)
+	if err := os.Remove(filepath.Join(p.dir, "Shows", "Harbor Show (2011)", "Season 02", "Harbor Show S02E01.mp4")); err != nil {
+		t.Fatal(err)
+	}
+	p.write(t, "Shows/Harbor Show (2011)/Season 01/Harbor Show S01E03.mp4", p.video)
+	p.write(t, "Shows/Harbor Show (2011)/Harbor Show - 3.mp4", p.video)
+	p.scan(t)
+	if err := p.folders.Link(t.Context(), p.shows, "Harbor Show (2011)", "tt0100"); err != nil {
+		t.Fatal(err)
+	}
+	episodes := func() map[[2]int]BaseItemDto {
+		t.Helper()
+		var page QueryResult
+		p.get(t, "/Shows/"+p.series+"/Episodes?UserId="+p.user, p.token, &page)
+		episodes := map[[2]int]BaseItemDto{}
+		for _, episode := range page.Items {
+			episodes[[2]int{*episode.ParentIndexNumber, *episode.IndexNumber}] = episode
+		}
+		return episodes
+	}
+	before := episodes()
+	if len(before) != 4 || before[[2]int{1, 3}].Name != "Harbor Show S01E03" {
+		t.Fatalf("the show's episodes as the catalog: %v", before)
+	}
+	if status, data := p.call(http.MethodPost, "/UserPlayedItems/"+before[[2]int{1, 3}].Id, app("tv", p.token), nil); status != http.StatusOK {
+		t.Fatalf("marking the file's episode played: %d %s", status, data)
+	}
+
+	if err := p.folders.SetNumbering(t.Context(), p.shows, "tt0100", localfiles.ShowNumbering{Numbering: localfiles.NumberedAbsolute}); err != nil {
+		t.Fatal(err)
+	}
+	after := episodes()
+	if len(after) != 3 || after[[2]int{2, 1}].Name != "Return" {
+		t.Fatalf("the show's episodes, absolute: %v", after)
+	}
+	answer := p.playbackInfo(t, "tv", p.token, after[[2]int{2, 1}].Id, nil)
+	if len(answer.MediaSources) != 2 {
+		t.Errorf("the versions of S02E01: %+v", answer.MediaSources)
+	}
+	for _, source := range answer.MediaSources {
+		if !strings.HasPrefix(source.Name, "Local shows") {
+			t.Errorf("a version of S02E01: %+v", source)
+		}
+	}
+	if !after[[2]int{2, 1}].UserData.Played {
+		t.Errorf("the played mark, with its file: %+v", after[[2]int{2, 1}].UserData)
 	}
 }

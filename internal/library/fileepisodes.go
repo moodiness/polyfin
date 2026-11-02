@@ -24,9 +24,11 @@ import (
 // description also tells the folders which of their episodes it does not
 // list, and which it lists, which their pages show; a local folder's own
 // lists them all already, of its files. A description from one of the
-// server's metadata addons is the catalog the files named by an absolute
-// number are the episodes of (see AbsoluteEpisodes): a user's own addon
-// numbering the series otherwise moves no file, which every user plays.
+// server's metadata addons is the catalog the files are mapped to: those
+// named by an absolute number (see AbsoluteEpisodes), and those of a show
+// whose files an administrator said are numbered otherwise than the
+// catalog (see FileOrder). A user's own addon numbering the series
+// otherwise moves no file, which every user plays.
 func (s *Service) withFileEpisodes(ctx context.Context, v view, r record, describer installed, meta stremio.Meta) stremio.Meta {
 	if s.local == nil || r.Meta == nil || r.Meta.Type != string(KindSeries) || r.Kind != KindSeries {
 		return meta
@@ -40,9 +42,9 @@ func (s *Service) withFileEpisodes(ctx context.Context, v view, r record, descri
 	if len(folders) == 0 {
 		return meta
 	}
-	var catalog []stremio.Video
+	var catalog *stremio.Meta
 	if describer.shared && !own(describer.addon) {
-		catalog = meta.Videos
+		catalog = &meta
 	}
 	held, err := s.local.Episodes(ctx, folders, r.Meta.ID, catalog)
 	if err != nil {
@@ -70,7 +72,7 @@ func (s *Service) withFileEpisodes(ctx context.Context, v view, r record, descri
 	if !describer.addon.Local() {
 		var numbers [][2]int
 		if len(unlisted) > 0 {
-			numbers = listedNumbers(meta.Videos)
+			numbers = ListedNumbers(meta.Videos)
 		}
 		if err := s.local.NoteUnlisted(ctx, r.Meta.ID, unlisted, numbers); err != nil {
 			s.logger.Debug("The episodes a description does not list could not be recorded", "title", r.Meta.ID, "error", err)
@@ -85,9 +87,9 @@ func (s *Service) withFileEpisodes(ctx context.Context, v view, r record, descri
 	return meta
 }
 
-// listedNumbers are the seasons and numbers of the episodes videos list,
+// ListedNumbers are the seasons and numbers of the episodes videos list,
 // in order, each once.
-func listedNumbers(videos []stremio.Video) [][2]int {
+func ListedNumbers(videos []stremio.Video) [][2]int {
 	numbers := make([][2]int, 0, len(videos))
 	for _, video := range videos {
 		numbers = append(numbers, [2]int{int(video.Season), video.EpisodeNumber()})

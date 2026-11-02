@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localfiles"
+	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
 // maxTitleQuery bounds the text of a title search, in bytes.
@@ -82,6 +84,9 @@ type folderJSON struct {
 	// "Show - 41", that are versions of the catalog's episodes of their
 	// places.
 	AbsoluteEpisodes int `json:"absoluteEpisodes"`
+	// UnmappedEpisodes counts its shows' files their numbering could not
+	// place, each an episode of its own.
+	UnmappedEpisodes int `json:"unmappedEpisodes"`
 }
 
 // searchFailureJSON is a failed search of a title: the name of the addon
@@ -167,7 +172,7 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 		Endpoint: f.Endpoint, Region: f.Region, RcloneRemote: f.Remote, PrivateKeySet: f.PrivateKeySet, PassphraseSet: f.PassphraseSet,
 		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, PollMinutes: f.PollMinutes,
 		SearchFailed: f.SearchFailed, SearchFailure: newSearchFailureJSON(f.SearchAddon, f.SearchFailure), SearchRetryAt: f.SearchRetryAt,
-		NoSearch: f.NoSearch, UnlistedEpisodes: f.Unlisted, AbsoluteEpisodes: f.Absolute}
+		NoSearch: f.NoSearch, UnlistedEpisodes: f.Unlisted, AbsoluteEpisodes: f.Absolute, UnmappedEpisodes: f.Unmapped}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -447,6 +452,8 @@ type unlistedShowJSON struct {
 	CatalogFirst *episodeNumberJSON   `json:"catalogFirst"`
 	CatalogLast  *episodeNumberJSON   `json:"catalogLast"`
 	Seasons      []unlistedSeasonJSON `json:"seasons"`
+	Numbering    string               `json:"numbering"`
+	Group        string               `json:"group"`
 }
 
 // episodeNumberJSON is an episode's season and number.
@@ -498,7 +505,8 @@ func (h *handler) folderUnlisted(w http.ResponseWriter, r *http.Request) {
 	}{Shows: make([]unlistedShowJSON, 0, len(shows))}
 	for _, show := range shows {
 		entry := unlistedShowJSON{ImdbID: show.StremioID, Name: show.Name, Unit: show.Unit, Described: show.Described,
-			CatalogFirst: number(show.First), CatalogLast: number(show.Last), Seasons: make([]unlistedSeasonJSON, len(show.Seasons))}
+			CatalogFirst: number(show.First), CatalogLast: number(show.Last), Seasons: make([]unlistedSeasonJSON, len(show.Seasons)),
+			Numbering: numberingName(show.Numbering.Numbering), Group: show.Numbering.Group}
 		for i, season := range show.Seasons {
 			entry.Seasons[i] = unlistedSeasonJSON{Season: season.Season, Files: ranges(season.Files), Catalog: ranges(season.Listed)}
 		}
@@ -688,4 +696,147 @@ func (h *handler) answerFolder(w http.ResponseWriter, r *http.Request, scope add
 	}
 	addon, err := h.Addons.Find(r.Context(), id)
 	h.answerAddon(w, r, scope, http.StatusOK, addon, err)
+}
+
+// numberingCatalog is how the admin API names the numbering of a show's
+// files that is the catalog's, localfiles.NumberedAsCatalog.
+const numberingCatalog = "catalog"
+
+// numberingName is the admin API's name of how a show's files are
+// numbered.
+func numberingName(numbering string) string {
+	if numbering == localfiles.NumberedAsCatalog {
+		return numberingCatalog
+	}
+	return numbering
+}
+
+// folderShowJSON is a show a shows folder holds: its series' identifier,
+// the name it was matched to, its first unit, how many files it has, how
+// they are numbered ("catalog", "per_season", "continuing", "absolute" or
+// "order", in the TMDB episode group group), how many of them that
+// numbering mapped to the catalog's episodes, and those it could not
+// place.
+type folderShowJSON struct {
+	ImdbID    string             `json:"imdbId"`
+	Name      string             `json:"name"`
+	Unit      string             `json:"unit"`
+	Files     int                `json:"files"`
+	Numbering string             `json:"numbering"`
+	Group     string             `json:"group"`
+	Mapped    int                `json:"mapped"`
+	Unmapped  []unmappedFileJSON `json:"unmapped"`
+}
+
+// unmappedFileJSON is a show's file its numbering could not place: its
+// path, the season and episodes it tells, its absolute number when its
+// name tells one alone, the episode of its own it is listed as, and why:
+// "no_catalog", "outside_season", "beyond_catalog", "not_in_order",
+// "not_listed" or "no_order".
+type unmappedFileJSON struct {
+	Path        string            `json:"path"`
+	Season      int               `json:"season"`
+	Episode     int               `json:"episode"`
+	LastEpisode int               `json:"lastEpisode"`
+	Absolute    *int              `json:"absolute"`
+	Listed      episodeNumberJSON `json:"listed"`
+	Reason      string            `json:"reason"`
+}
+
+// folderShows lists the shows of a shows folder, by name, with how their
+// files are numbered.
+func (h *handler) folderShows(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.folderScope(w, r); !ok {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	shows, err := h.Folders.Shows(r.Context(), id)
+	if h.answerFailure(w, r, err) {
+		return
+	}
+	result := struct {
+		Shows []folderShowJSON `json:"shows"`
+	}{Shows: make([]folderShowJSON, 0, len(shows))}
+	for _, show := range shows {
+		entry := folderShowJSON{ImdbID: show.StremioID, Name: show.Name, Unit: show.Unit, Files: show.Files,
+			Numbering: numberingName(show.Numbering.Numbering), Group: show.Numbering.Group, Mapped: show.Mapped,
+			Unmapped: make([]unmappedFileJSON, 0, len(show.Unmapped))}
+		for _, file := range show.Unmapped {
+			unmapped := unmappedFileJSON{Path: file.Path, Season: file.Season, Episode: file.First, LastEpisode: file.Last,
+				Listed: episodeNumberJSON{Season: file.Listed[0], Episode: file.Listed[1]}, Reason: file.Reason}
+			if file.Absolute > 0 {
+				unmapped.Absolute = &file.Absolute
+			}
+			entry.Unmapped = append(entry.Unmapped, unmapped)
+		}
+		result.Shows = append(result.Shows, entry)
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// setShowNumbering says how the files of a show of a shows folder are
+// numbered, {"numbering", "group"}, and answers the folder.
+func (h *handler) setShowNumbering(w http.ResponseWriter, r *http.Request) {
+	scope, ok := h.folderScope(w, r)
+	if !ok {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var body struct {
+		Numbering string `json:"numbering"`
+		Group     string `json:"group"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	choice := localfiles.ShowNumbering{Numbering: body.Numbering, Group: strings.TrimSpace(body.Group)}
+	switch body.Numbering {
+	case numberingCatalog:
+		choice.Numbering = localfiles.NumberedAsCatalog
+	case localfiles.NumberedAsCatalog:
+		writeError(w, http.StatusBadRequest, "invalid_numbering")
+		return
+	}
+	err := h.Folders.SetNumbering(context.WithoutCancel(r.Context()), id, r.PathValue("show"), choice)
+	h.answerFolder(w, r, scope, id, err)
+}
+
+// showNumberingGroups lists the TMDB episode groups a show of a shows
+// folder may be numbered in, with lookup telling why there are none when
+// TMDB could not tell: "no_key", "unknown" or "failed".
+func (h *handler) showNumberingGroups(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.folderScope(w, r); !ok {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	groups, err := h.Folders.NumberingGroups(r.Context(), id, r.PathValue("show"))
+	result := struct {
+		Groups []episodeGroupJSON `json:"groups"`
+		Lookup string             `json:"lookup"`
+	}{Groups: []episodeGroupJSON{}}
+	switch {
+	case errors.Is(err, tmdb.ErrNoKey):
+		result.Lookup = "no_key"
+	case errors.Is(err, library.ErrUnknownGroup):
+		result.Lookup = "unknown"
+	case errors.Is(err, localfiles.ErrNoGroups):
+		h.Logger.Warn("The episode groups of a show could not be read from TMDB", "title", r.PathValue("show"), "error", err)
+		result.Lookup = "failed"
+	case h.answerFailure(w, r, err):
+		return
+	}
+	for _, g := range groups {
+		result.Groups = append(result.Groups, episodeGroupJSON{ID: g.ID, Name: g.Name, Type: library.DisplayOrderOf(g.Type),
+			Episodes: g.Episodes, Seasons: g.Groups})
+	}
+	writeJSON(w, http.StatusOK, result)
 }

@@ -92,6 +92,10 @@ type Titles interface {
 	RemoteSearch(ctx context.Context, kind library.Kind, name string, limit int) ([]library.RemoteResult, error)
 	TitleMeta(ctx context.Context, metaType, id string) (stremio.Meta, bool)
 	RemoteSearches(ctx context.Context, kind library.Kind) (bool, error)
+	// EpisodeGroupsOf lists a series' TMDB episode groups, and FileOrder
+	// maps one's episodes to the catalog's (see numbering.go).
+	EpisodeGroupsOf(ctx context.Context, meta stremio.Meta) ([]tmdb.GroupSummary, error)
+	FileOrder(ctx context.Context, meta stremio.Meta, group string) (map[[2]int]library.OrderPlace, error)
 }
 
 // Service stores the local folders, scans them and answers for them as
@@ -436,6 +440,9 @@ type Folder struct {
 	// Absolute counts its files named by an absolute number that are the
 	// catalog's episodes of their places (see absolute.go).
 	Absolute int
+	// Unmapped counts its shows' files their numbering could not place,
+	// each an episode of its own (see numbering.go), which Shows lists.
+	Unmapped int
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
@@ -832,6 +839,10 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	}
 	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL AND numbering = $2", id,
 		numberingAbsolute).Scan(&f.Absolute); err != nil {
+		return Folder{}, err
+	}
+	if err := s.db.QueryRow(ctx, "SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL AND numbering = $2", id,
+		numberingUnmapped).Scan(&f.Unmapped); err != nil {
 		return Folder{}, err
 	}
 	// The addon that failed the most searches tells why.

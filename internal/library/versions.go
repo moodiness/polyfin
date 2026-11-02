@@ -814,7 +814,13 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 	version.Labels.Releases = ReleaseKinds([]string{t.name, t.videoName}, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
 	version.Labels.Tier, version.Labels.Audio, version.Labels.Edition = ReadRelease([]string{t.name, t.videoName}, stream.Name, stream.Title,
 		stream.Description, stream.BehaviorHints.Filename)
-	version.Labels.Elsewhere = OtherTitle(t.name, t.season, t.episode, t.year, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename)
+	// A local folder's file is the episode its folder placed it at, which
+	// its show's numbering may map from the numbers its name tells (see
+	// localfiles' numbering.go): its name names no other title.
+	if !entry.addon.Local() {
+		version.Labels.Elsewhere = OtherTitle(t.name, t.season, t.episode, t.year, stream.Name, stream.Title, stream.Description,
+			stream.BehaviorHints.Filename)
+	}
 	if stream.Torrent() {
 		version.URL = torrentLink(stream)
 		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources),

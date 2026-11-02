@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/serverfile"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/tmdb"
 )
 
 type addonJSON struct {
@@ -640,6 +641,10 @@ func addonError(w http.ResponseWriter, err error) bool {
 		{localfiles.ErrInvalidIMDb, http.StatusBadRequest, "invalid_imdb_id"},
 		{localfiles.ErrInvalidEpisode, http.StatusBadRequest, "invalid_episode"},
 		{localfiles.ErrSearchFailed, http.StatusBadGateway, "title_search_failed"},
+		{localfiles.ErrInvalidNumbering, http.StatusBadRequest, "invalid_numbering"},
+		{localfiles.ErrNoGroups, http.StatusBadGateway, "episode_groups_unreachable"},
+		{library.ErrUnknownGroup, http.StatusBadRequest, "unknown_episode_group"},
+		{tmdb.ErrNoKey, http.StatusConflict, "no_tmdb_key"},
 		{iptv.ErrInvalidList, http.StatusUnprocessableEntity, "invalid_channel_list"},
 		{iptv.ErrTooLarge, http.StatusUnprocessableEntity, "channel_list_too_large"},
 		{iptv.ErrLoginRefused, http.StatusUnprocessableEntity, "iptv_login_refused"},

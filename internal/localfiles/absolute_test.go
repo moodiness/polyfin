@@ -181,7 +181,7 @@ func TestAbsoluteNamesFollowTheCatalog(t *testing.T) {
 	}
 	held := func(catalog stremio.Meta) map[[2]int]bool {
 		t.Helper()
-		videos, err := e.service.Episodes(ctx, []accounts.ID{addon.ID}, "tt0700003", catalog.Videos)
+		videos, err := e.service.Episodes(ctx, []accounts.ID{addon.ID}, "tt0700003", &catalog)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,11 +1,6 @@
 package localfiles
 
-import (
-	"context"
-	"strconv"
-
-	"github.com/moodiness/polyfin/internal/library"
-)
+import "strconv"
 
 // A show's file named by an absolute number alone, as "Show - 41.mkv" or
 // "[Group] Show - 041 [1080p].mkv" (see episodename.Absolute), in a season
@@ -31,9 +26,12 @@ import (
 // as its own: it is matched to the catalog's instead.
 //
 // The catalog is read when a scan stores the file, from the server's
-// metadata addons (see catalogPlaces), and again each time the series is
+// metadata addons (see catalogOf), and again each time the series is
 // described (see Episodes): a catalog that lists more episodes later, as
-// of a show still airing, takes the files it then reaches.
+// of a show still airing, takes the files it then reaches, and what users
+// did with the file's own episode follows it (see placeFiles). A show
+// whose files an administrator said are numbered otherwise maps them as
+// told (see numbering.go).
 
 // absolutePlace is the season and number of the episode a file named by
 // the absolute number n is, places being the catalog's regular episodes
@@ -45,17 +43,6 @@ func absolutePlace(places [][2]int, n, fallback int) (season, episode int, numbe
 		return places[n-1][0], places[n-1][1], numberingAbsolute
 	}
 	return fallback, n, numberingAbsoluteBeyond
-}
-
-// catalogPlaces are the regular episodes the server's metadata addons
-// list for the series of stremioID, in their absolute numbering; none
-// when no addon describes it.
-func (s *Service) catalogPlaces(ctx context.Context, stremioID string) [][2]int {
-	meta, ok := s.titles.TitleMeta(ctx, "series", stremioID)
-	if !ok {
-		return nil
-	}
-	return library.AbsoluteEpisodes(meta.Videos)
 }
 
 // scannedEpisodes is what a scan compares of the episodes a file's name

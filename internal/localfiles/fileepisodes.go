@@ -56,70 +56,60 @@ const frameExtension = "frame"
 // number, named after the first file holding it by path, without its
 // extension, as Jellyfin names an episode its provider does not know
 // (see plainEpisodeName), its video identifier the one Streams answers
-// (see episodeVideoID). catalog, unless nil, is the series' episodes as a
-// metadata addon of the server lists them: the files named by an
-// absolute number are then the catalog's episodes of their places, as
-// they are stored for Streams too (see absolute.go).
-func (s *Service) Episodes(ctx context.Context, folders []accounts.ID, stremioID string, catalog []stremio.Video) ([]stremio.Video, error) {
-	rows, err := s.db.Query(ctx, `SELECT f.id, f.season, f.episode, coalesce(f.last_episode, f.episode), f.path, f.absolute, f.numbering
+// (see episodeVideoID). catalog, unless nil, is the series as a metadata
+// addon of the server describes it: the files are then placed among its
+// episodes as their show's numbering tells, the files named by an
+// absolute number at the catalog's episodes of their places, as they are
+// stored for Streams too (see numbering.go and absolute.go).
+func (s *Service) Episodes(ctx context.Context, folders []accounts.ID, stremioID string, catalog *stremio.Meta) ([]stremio.Video, error) {
+	rows, err := s.db.Query(ctx, `SELECT `+showFileColumns+`
 		FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id JOIN addons a ON a.id = f.addon_id
+		LEFT JOIN local_show_numbering n ON n.addon_id = f.addon_id AND n.stremio_id = f.stremio_id
 		WHERE f.addon_id = ANY($1) AND f.stremio_id = $2 AND l.kind = $3 AND a.enabled AND f.season IS NOT NULL AND f.episode IS NOT NULL
-		ORDER BY f.season, f.episode, f.path`, folders, stremioID, KindShows)
+		ORDER BY f.addon_id, f.path`, folders, stremioID, KindShows)
 	if err != nil {
 		return nil, err
 	}
-	type held struct {
-		id                  accounts.ID
-		season, first, last int
-		rel                 string
-		absolute            *int
-		numbering           string
-	}
-	files, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (held, error) {
-		var h held
-		err := row.Scan(&h.id, &h.season, &h.first, &h.last, &h.rel, &h.absolute, &h.numbering)
-		return h, err
-	})
+	files, err := pgx.CollectRows(rows, scanShowFile)
 	if err != nil {
 		return nil, err
 	}
 	if catalog != nil {
-		places := library.AbsoluteEpisodes(catalog)
-		batch := &pgx.Batch{}
-		for i, h := range files {
-			if h.absolute == nil {
+		for start := 0; start < len(files); {
+			end := start + 1
+			for end < len(files) && files[end].folder == files[start].folder {
+				end++
+			}
+			show := files[start:end]
+			start = end
+			choice := show[0].choice
+			if choice.Numbering == NumberedAsCatalog && !slices.ContainsFunc(show, func(f showFile) bool { return f.told.absolute > 0 }) {
 				continue
 			}
-			_, named, _ := episodeName(h.rel)
-			season, number, numbering := absolutePlace(places, *h.absolute, named.season)
-			if season == h.season && number == h.first && numbering == h.numbering {
+			n := s.numbererFor(ctx, choice, catalog)
+			if choice.Numbering == NumberedInOrder && !n.orderKnown {
+				// The places TMDB told last stay.
 				continue
 			}
-			files[i].season, files[i].first, files[i].last, files[i].numbering = season, number, number, numbering
-			batch.Queue("UPDATE local_files SET season = $2, episode = $3, last_episode = $3, numbering = $4 WHERE id = $1", h.id, season, number,
-				numbering)
-		}
-		if batch.Len() > 0 {
-			if err := s.db.SendBatch(ctx, batch).Close(); err != nil {
+			if err := s.placeFiles(ctx, show, n); err != nil {
 				return nil, err
 			}
-			// The episodes' frames and images follow their files.
-			s.artworkChanged()
-			slices.SortStableFunc(files, func(a, b held) int {
-				return cmp.Or(cmp.Compare(a.season, b.season), cmp.Compare(a.first, b.first), strings.Compare(a.rel, b.rel))
-			})
 		}
 	}
+	slices.SortStableFunc(files, func(a, b showFile) int {
+		return cmp.Or(cmp.Compare(a.place.season, b.place.season), cmp.Compare(a.place.first, b.place.first),
+			strings.Compare(a.told.path, b.told.path))
+	})
 	var videos []stremio.Video
 	seen := map[[2]int]bool{}
 	for _, h := range files {
-		for number := h.first; number <= h.last; number++ {
-			if seen[[2]int{h.season, number}] {
+		for number := h.place.first; number <= h.place.last; number++ {
+			if seen[[2]int{h.place.season, number}] {
 				continue
 			}
-			seen[[2]int{h.season, number}] = true
-			videos = append(videos, stremio.Video{ID: episodeVideoID(stremioID, h.season, number), Title: plainEpisodeName(h.rel, number),
-				Season: stremio.Number(h.season), Episode: stremio.Number(number)})
+			seen[[2]int{h.place.season, number}] = true
+			videos = append(videos, stremio.Video{ID: episodeVideoID(stremioID, h.place.season, number),
+				Title: plainEpisodeName(h.told.path, number), Season: stremio.Number(h.place.season), Episode: stremio.Number(number)})
 		}
 	}
 	return videos, nil
@@ -214,13 +204,15 @@ const unlistedCount = `(SELECT count(*) FROM (SELECT DISTINCT u.stremio_id, u.se
 // known: they are not for a series recorded by an older Polyfin until it
 // is described again. First and Last are the description's first and
 // last episodes, by season and number, specials left out unless it lists
-// nothing else; nil when it lists none.
+// nothing else; nil when it lists none. Numbering is how its files are
+// numbered (see numbering.go).
 type UnlistedShow struct {
 	StremioID   string
 	Name, Unit  string
 	Seasons     []UnlistedSeason
 	Described   bool
 	First, Last *[2]int
+	Numbering   ShowNumbering
 }
 
 // UnlistedSeason is a season of an UnlistedShow: the numbers its files
@@ -309,6 +301,18 @@ func (s *Service) Unlisted(ctx context.Context, id accounts.ID) ([]UnlistedShow,
 		return nil
 	})
 	if err != nil {
+		return nil, err
+	}
+	rows, err = s.db.Query(ctx, "SELECT stremio_id, numbering, episode_group FROM local_show_numbering WHERE addon_id = $1 AND stremio_id = ANY($2)",
+		id, ids)
+	if err != nil {
+		return nil, err
+	}
+	var numbering ShowNumbering
+	if _, err := pgx.ForEachRow(rows, []any{&stremioID, &numbering.Numbering, &numbering.Group}, func() error {
+		shows[index[stremioID]].Numbering = numbering
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 	slices.SortStableFunc(shows, func(a, b UnlistedShow) int {
