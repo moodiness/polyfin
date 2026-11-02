@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -352,5 +353,24 @@ func TestSiloTVCodesFollowTheSettings(t *testing.T) {
 	a.setting(t, func(settings *accounts.Settings) { settings.QuickConnectEnabled = true })
 	if state, token := a.poll(t, secret); state != "pending" || token != "" {
 		t.Errorf("a code approved while Quick Connect was off: %s", state)
+	}
+}
+
+// While too many TVs wait with a code, another is told to try again
+// later, as the apps read Silo's sign-in limit.
+func TestSiloTVCodesWhileTooManyWait(t *testing.T) {
+	t.Parallel()
+	store := quickconnect.New()
+	for n := range 10_000 {
+		if _, err := store.InitiateSilo("tv-"+strconv.Itoa(n), "TV", "tvos", "Silo", "1"); err != nil {
+			break
+		}
+	}
+	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, _ *pgxpool.Pool) { o.QuickConnect = store })
+	allowSilo(t, s)
+	a := servingSilo(t, s)
+	status, data := a.tvCall(t, http.MethodPost, "/api/v2/auth/device/start", map[string]string{"device_name": "Living room"})
+	if status != silotest.DeviceRefusals["busy"] || problemCode(data) != "rate_limited" {
+		t.Errorf("start: %d %s", status, data)
 	}
 }

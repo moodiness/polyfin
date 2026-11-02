@@ -225,5 +225,10 @@ func CheckDeviceDecision(data []byte, want string) error {
 //   - "unknown": a code the phone looks up or decides that no TV waits
 //     with (Apple TVApprovalModel.failure, Android
 //     DevicePairingViewModel.pairingError);
-//   - "decided": a code already approved, declined or withdrawn (the same).
-var DeviceRefusals = map[string]int{"off": 404, "gone": 404, "unknown": 404, "decided": 409}
+//   - "decided": a code already approved, declined or withdrawn (the same);
+//   - "busy": a start the server cannot take now, which the TV retries,
+//     backing off, and calls too many requests after a minute (Apple
+//     QRLoginViewModel's rateLimited, Android
+//     DeviceLoginErrorKind.RateLimited and DeviceSignInMachine's
+//     TooManyRequests).
+var DeviceRefusals = map[string]int{"off": 404, "gone": 404, "unknown": 404, "decided": 409, "busy": 429}

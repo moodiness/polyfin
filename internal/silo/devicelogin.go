@@ -149,7 +149,10 @@ func (s *Server) deviceStart(w http.ResponseWriter, r *http.Request) {
 	}
 	request, err := s.options.QuickConnect.InitiateSilo(device.DeviceID, device.DeviceName, platform, device.Client, device.ClientVersion)
 	if errors.Is(err, quickconnect.ErrFull) {
-		problem(w, http.StatusServiceUnavailable, "unavailable", "Too many devices are signing in; try again later.")
+		// Too many TVs wait with a code: the apps retry a 429 as Silo's
+		// sign-in limit, and tell the user after a minute of them.
+		w.Header().Set("Retry-After", "60")
+		problem(w, http.StatusTooManyRequests, "rate_limited", "Too many devices are signing in; try again later.")
 		return
 	}
 	if err != nil {
