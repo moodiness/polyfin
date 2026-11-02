@@ -87,10 +87,17 @@ type Service struct {
 	live       *cache.Cache[accounts.ID, struct{}]
 	hosts      *cache.Cache[string, bool]
 	// indexes are keyframe times, unindexed the versions whose index
-	// cannot be read, and offsets where the keyframes start in the file.
+	// cannot be read, unscanned those whose keyframes could not be read
+	// from the whole file (see scannedKeyframes), and offsets where the
+	// keyframes start in the file.
 	indexes   *cache.Cache[accounts.ID, []time.Duration]
 	unindexed *cache.Cache[accounts.ID, error]
+	unscanned *cache.Cache[accounts.ID, error]
 	offsets   *cache.Cache[accounts.ID, []container.Keyframe]
+	// playPlans are the plans the plays of files whose keyframes are read
+	// from the whole file started with, which they keep (see playPlan).
+	playPlansMu sync.Mutex
+	playPlans   *cache.Cache[playPlanKey, hls.Plan]
 	// warming are the warms under way, by version, and warmed the start
 	// each version was warmed from lately (see Warm).
 	warmMu  sync.Mutex
@@ -178,6 +185,8 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		hosts:       cache.New[string, bool](500, 5*time.Minute),
 		indexes:     cache.New[accounts.ID, []time.Duration](200, time.Hour),
 		unindexed:   cache.New[accounts.ID, error](2000, failureTTL),
+		unscanned:   cache.New[accounts.ID, error](2000, scanFailureTTL),
+		playPlans:   cache.New[playPlanKey, hls.Plan](2000, scanFailureTTL),
 		offsets:     cache.New[accounts.ID, []container.Keyframe](50, time.Hour),
 		warming:     map[accounts.ID]*warmRun{},
 		warmed:      cache.New[accounts.ID, time.Duration](500, warmedFor),

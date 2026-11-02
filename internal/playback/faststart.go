@@ -56,10 +56,13 @@ func (s *Service) FastStarts(ctx context.Context, version library.Version, conve
 // RemuxPlan is how a remux is cut: its version's plan (see Plan), with
 // fast segments where it starts when its play asked for them (see
 // FastStarts) and they can be made. The same request gives the same
-// plan, from the version's keyframes, whatever the settings say since.
+// plan, from the version's keyframes, whatever the settings say since; a
+// play of a file whose keyframes are read from the whole file keeps the
+// plan it started with (see playPlan). Fast segments are for remote
+// versions only, which are not read so.
 func (s *Service) RemuxPlan(ctx context.Context, remux Remux) (hls.Plan, error) {
 	if !remux.FastStart {
-		return s.Plan(ctx, remux.Version)
+		return s.playPlan(ctx, remux)
 	}
 	return s.fastPlan(ctx, remux.Version, remux.ConvertVideo == nil, remux.Start)
 }

@@ -126,10 +126,12 @@ func (s *Service) warm(version library.Version, start time.Duration, replace, ur
 }
 
 // warmFrom reads what a play of version from start reads first, as a
-// playback's reads unless ctx is marked Background.
+// playback's reads unless ctx is marked Background. A version cut on a
+// grid, or one FFmpeg searches (see hls.Plan.Searched), has no index
+// that tells where its keyframes are: it is not warmed.
 func (s *Service) warmFrom(ctx context.Context, version library.Version, start time.Duration) error {
 	plan, err := s.plan(ctx, version)
-	if err != nil || plan.Grid() {
+	if err != nil || plan.Grid() || plan.IsSearched() {
 		return err
 	}
 	analysis, err := s.Analyze(ctx, version)
