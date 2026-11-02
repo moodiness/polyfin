@@ -27,7 +27,7 @@ import (
 // with, and a spare kept offline (see docs/desktop.md). Without them,
 // the release workflow refuses to sign, and the app installs nothing. A
 // build pointing at a fake sets them with -ldflags "-X github.com/moodiness/polyfin/internal/desktop/update.releaseKeys=…".
-var releaseKeys = ""
+var releaseKeys = "yFN4bEd8ue5euFAR4rgd0dsNMQtQAHI/R/xx2fOo/Pg=,Zb/R8g4qSVQiE13HHa5dLAzTEu48ZYar6paVAdhFncc="
 
 // manifestContext comes before the manifest's bytes in what is signed:
 // a signature made for anything else never passes for a manifest's.
