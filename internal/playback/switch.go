@@ -27,10 +27,13 @@ import (
 // fragmented MP4, its initialization segment: the other version is made
 // into what the player had, the same codec, size and frame rate, its
 // video converted, and its audio track of the same language in the same
-// codec, converted when it must be. Its times are those of the first
-// version, moved by how much later its speech comes when both versions'
-// speech is known (see FindSpeech). The playlist served after the switch
-// marks it with a discontinuity, for players that load it again.
+// codec, converted when it must be. In fragmented MP4, its video is in
+// that segment's timescale, and when the first version's was copied, its
+// parameter sets come before each keyframe (see inBand). Its times are
+// those of the first version, moved by how much later its speech comes
+// when both versions' speech is known (see FindSpeech). The playlist
+// served after the switch marks it with a discontinuity, for players that
+// load it again.
 const (
 	// maxSwitches bounds the versions a play session goes on from.
 	maxSwitches = 3
@@ -112,9 +115,10 @@ type carry struct {
 
 // carries reports whether a playback of remux, of analysis and plan, may
 // go on from another version: one the app asked to be offered others,
-// cut on its keyframes, as an MPEG-TS file is not, and whose video it
-// takes converted, or copied as 8-bit SDR in MPEG-TS segments, which
-// carry what decodes them.
+// cut on its keyframes rather than on a grid, and whose video it
+// takes converted, or copied as 8-bit SDR: H.264 or HEVC in MPEG-TS
+// segments, which carry what decodes them, or H.264 in fragmented MP4
+// that the other version's conversion can match (see inBand).
 func carries(remux Remux, analysis media.Analysis, plan hls.Plan) bool {
 	if remux.Alternates == nil || plan.Grid() || plan.IsSearched() {
 		return false
@@ -123,7 +127,29 @@ func carries(remux Remux, analysis media.Analysis, plan hls.Plan) bool {
 		return true
 	}
 	video, ok := videoOf(analysis)
-	return ok && remux.Format == hls.TS && video.BitDepth <= 8 && hlsRange(video) == "SDR" && (video.Codec == "h264" || video.Codec == "hevc")
+	if !ok || video.BitDepth > 8 || hlsRange(video) != "SDR" {
+		return false
+	}
+	if remux.Format == hls.TS {
+		return video.Codec == "h264" || video.Codec == "hevc"
+	}
+	return inBand(video)
+}
+
+// inBand reports whether copied video in fragmented MP4 can be followed by
+// another version's converted into it. The player decodes it under the
+// initialization segment it has, the copy's, which keeps the parameter
+// sets the source has; the conversion repeats its own before each
+// keyframe, which replace them, in the same profile and frame size. Chrome
+// takes this in H.264, but stops on a decoding error in HEVC, even with
+// its parameter sets so repeated. A frame of odd size is converted a
+// pixel smaller.
+func inBand(video media.Stream) bool {
+	switch strings.ToLower(video.Profile) {
+	case "high", "main", "baseline", "constrained baseline":
+		return video.Codec == "h264" && video.Width%2 == 0 && video.Height%2 == 0
+	}
+	return false
 }
 
 // switchFrom is the hls.Remux.Switch of an input of version from: it
@@ -345,7 +371,8 @@ func (c *carry) target(sw versionSwitch) (hls.Remux, error) {
 // is copied. A conversion is the same, but the new video's colors, tone
 // mapping and deinterlacing; a picture subtitle of the first version's
 // own file is not burned in. Copied video is converted into its codec,
-// size, profile and frame rate.
+// size, profile and frame rate, its parameter sets repeated before each
+// keyframe in fragmented MP4 (see inBand).
 func (c *carry) video(first, video media.Stream, analysis media.Analysis, converted *hls.VideoEncoding, t Tuning) (*hls.VideoEncoding, error) {
 	codec := first.Codec
 	if converted != nil {
@@ -369,6 +396,7 @@ func (c *carry) video(first, video media.Stream, analysis media.Analysis, conver
 		alone.convert(&r, video, t)
 		converted = r.Encode
 		converted.Level = conversion.Level(rate)
+		converted.InBand = c.remux.Format == hls.FMP4
 	} else {
 		e := *converted
 		e.ToneMap, e.ToneMapOnCPU, e.Deinterlace, e.DoubleRate = conversion.ToneMap, conversion.ToneMapOnCPU, conversion.Deinterlace, false
@@ -390,7 +418,9 @@ func (c *carry) video(first, video media.Stream, analysis media.Analysis, conver
 // language of the track the app plays of the first version, else the
 // default one; as played, the app's stream, has it: converted into its
 // codec, channels and sample rate, or copied when alike, else converted
-// into what was copied.
+// into what was copied. In fragmented MP4, whose player keeps the audio's
+// configuration from the initialization segment it has, only AAC-LC is
+// converted into: the encoder writes no other profile.
 func (c *carry) audio(r *hls.Remux, analysis media.Analysis, played hls.Remux, t Tuning) error {
 	first, ok := streamOf(c.analysis, c.remux.Audio)
 	if !ok || first.Type != "audio" {
@@ -413,7 +443,7 @@ func (c *carry) audio(r *hls.Remux, analysis media.Analysis, played hls.Remux, t
 	if audio.Codec == first.Codec && audio.Channels == first.Channels && rate == 0 && strings.EqualFold(audio.Profile, first.Profile) {
 		return nil
 	}
-	if !slices.Contains(audioEncoders, first.Codec) || c.remux.Format == hls.FMP4 && first.Codec != "aac" {
+	if !slices.Contains(audioEncoders, first.Codec) || c.remux.Format == hls.FMP4 && (first.Codec != "aac" || !strings.EqualFold(cmp.Or(first.Profile, "LC"), "LC")) {
 		return fmt.Errorf("%w: its audio cannot be converted to %s", errNotAlike, first.Codec)
 	}
 	r.AudioCodec, r.AudioChannels, r.AudioRate = first.Codec, max(first.Channels, 1), rate

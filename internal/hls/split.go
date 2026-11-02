@@ -9,14 +9,16 @@ import (
 	"time"
 )
 
-// piece is a part of FFmpeg's output: the fMP4 initialization segment, or
-// media that starts on a video keyframe, at its presentation time, or that
-// continues the piece before it.
+// piece is a part of FFmpeg's output: the fMP4 initialization segment,
+// with the timescale of its video track, or media that starts on a video
+// keyframe, at its presentation time, or that continues the piece before
+// it.
 type piece struct {
-	data     []byte
-	init     bool
-	keyframe bool
-	at       time.Duration
+	data      []byte
+	init      bool
+	timescale uint64
+	keyframe  bool
+	at        time.Duration
 }
 
 // maxBox bounds the boxes read from FFmpeg: a fragment holds the media
@@ -50,7 +52,7 @@ func splitMP4(r io.Reader, emit func(piece) error) error {
 			if err != nil {
 				return err
 			}
-			if err := emit(piece{data: append(header, box...), init: true}); err != nil {
+			if err := emit(piece{data: append(header, box...), init: true, timescale: timescale}); err != nil {
 				return err
 			}
 		case "moof":

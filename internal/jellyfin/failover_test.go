@@ -273,15 +273,22 @@ func fetchSegment(t *testing.T, target string) string {
 // initialization segment, empty for MPEG-TS.
 func failoverPlay(t *testing.T, profile string, more map[string]any, upTo int, extension string) (string, []string, string) {
 	t.Helper()
-	ffmpeg, ffprobe := failoverFFmpeg(t)
-	colour, grey := failoverClip(t, ffmpeg, false, 48), failoverClip(t, ffmpeg, true, 72)
+	ffmpeg, _ := failoverFFmpeg(t)
+	return failoverPlayOf(t, failoverClip(t, ffmpeg, false, 48), failoverClip(t, ffmpeg, true, 72), "mp4", profile, more, upTo, extension)
+}
+
+// failoverPlayOf is failoverPlay with versions colour and grey, files of
+// container.
+func failoverPlayOf(t *testing.T, colour, grey []byte, container, profile string, more map[string]any, upTo int, extension string) (string, []string, string) {
+	t.Helper()
+	_, ffprobe := failoverFFmpeg(t)
 	first := newDyingHost(t, colour, len(colour)/2)
 	second, requests := steadyHost(t, grey)
 	p := failoverServer(t, ffprobe,
-		failoverAddon(t, "catalog", []stremio.Stream{{Name: "Colour", URL: first.URL + "/colour.mp4",
-			BehaviorHints: stremio.StreamBehavior{Filename: "Failover.2026.1080p.Colour.mp4", VideoSize: stremio.Number(len(colour))}}}),
-		failoverAddon(t, "other", []stremio.Stream{{Name: "Grey", URL: second.URL + "/grey.mp4",
-			BehaviorHints: stremio.StreamBehavior{Filename: "Failover.2026.1080p.Grey.mp4", VideoSize: stremio.Number(len(grey))}}}))
+		failoverAddon(t, "catalog", []stremio.Stream{{Name: "Colour", URL: first.URL + "/colour." + container,
+			BehaviorHints: stremio.StreamBehavior{Filename: "Failover.2026.1080p.Colour." + container, VideoSize: stremio.Number(len(colour))}}}),
+		failoverAddon(t, "other", []stremio.Stream{{Name: "Grey", URL: second.URL + "/grey." + container,
+			BehaviorHints: stremio.StreamBehavior{Filename: "Failover.2026.1080p.Grey." + container, VideoSize: stremio.Number(len(grey))}}}))
 	body := map[string]any{"MediaSourceId": p.movie, "EnableDirectPlay": false}
 	for key, value := range more {
 		body[key] = value
@@ -315,8 +322,9 @@ func failoverPlay(t *testing.T, profile string, more map[string]any, upTo int, e
 
 // checkSwitch checks that the segments of a play are the first version's
 // until one, from which they are the second's, the playlist marking it
-// alone with a discontinuity, and that the segments decode across it.
-func checkSwitch(t *testing.T, playlist string, segments []string, init string, upTo int) {
+// alone with a discontinuity, and that the segments decode across it. It
+// returns the first segment of the second version.
+func checkSwitch(t *testing.T, playlist string, segments []string, init string, upTo int) int {
 	t.Helper()
 	ffmpeg, _ := failoverFFmpeg(t)
 	switched := -1
@@ -346,6 +354,7 @@ func checkSwitch(t *testing.T, playlist string, segments []string, init string, 
 	if err != nil || len(bytes.TrimSpace(out)) > 0 {
 		t.Errorf("decoding across the switch: %v: %s", err, out)
 	}
+	return switched
 }
 
 // A play repackaged into MPEG-TS segments, as Android TV asks for, goes on
@@ -368,6 +377,54 @@ func TestAConvertedPlayGoesOnFromTheNextVersion(t *testing.T) {
 		t.Fatal("no initialization segment")
 	}
 	checkSwitch(t, playlist, segments, init, 1)
+}
+
+// A play copying its video into fragmented MP4 segments, jellyfin-web's
+// usual one in Chrome, goes on too: the player decodes the second
+// version's segments under the initialization segment of the copy, which
+// holds the first version's parameter sets and timescale. Those of the
+// first version here differ from any conversion's: High profile in CAVLC,
+// which the encoders write in CABAC, and a timescale of 90000. The
+// conversion repeats its own parameter sets before each keyframe, and
+// writes its times in that timescale.
+func TestACopiedPlayInFragmentedMP4GoesOnFromTheNextVersion(t *testing.T) {
+	t.Parallel()
+	ffmpeg, ffprobe := failoverFFmpeg(t)
+	colour := failoverCopy(t, ffmpeg, failoverClip(t, ffmpeg, false, 48), "mp4", "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast",
+		"-x264-params", "cabac=0:8x8dct=1:keyint=48:min-keyint=48:scenecut=0", "-b:v", "2M", "-video_track_timescale", "90000", "-movflags", "+faststart")
+	playlist, segments, init := failoverPlayOf(t, colour, failoverClip(t, ffmpeg, true, 72), "mp4", "jellyfin-web-chrome", nil, 1, "mp4")
+	if init == "" {
+		t.Fatal("no initialization segment")
+	}
+	switched := checkSwitch(t, playlist, segments, init, 1)
+	// The video's frames follow each other across the switch, 1/24 s
+	// apart in presentation order, in the initialization segment's
+	// timescale.
+	path := filepath.Join(t.TempDir(), "across")
+	if err := os.WriteFile(path, []byte(init+segments[switched-1]+segments[switched]), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(ffprobe, "-v", "error", "-select_streams", "v", "-show_entries", "packet=pts_time", "-of", "csv=p=0", path).Output()
+	if err != nil {
+		t.Fatalf("reading the frames across the switch: %v", err)
+	}
+	var times []float64
+	for line := range strings.FieldsSeq(string(out)) {
+		at, err := strconv.ParseFloat(strings.TrimSuffix(line, ","), 64)
+		if err != nil {
+			t.Fatalf("frame time %q: %v", line, err)
+		}
+		times = append(times, at)
+	}
+	if len(times) < 48 {
+		t.Fatalf("%d frames across the switch", len(times))
+	}
+	slices.Sort(times)
+	for i := 1; i < len(times); i++ {
+		if step := times[i] - times[i-1]; step < 0.03 || step > 0.06 {
+			t.Fatalf("frame %d at %.3f s follows one at %.3f s", i, times[i], times[i-1])
+		}
+	}
 }
 
 // A play never goes on from an MPEG program stream or an AVI file, which
