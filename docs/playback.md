@@ -101,7 +101,9 @@ Addons that gather releases from many places sometimes list, for an episode, a r
 
 Names without these markers are kept: `Some Show Complete Series`, an addon's `4K` line, or an episode numbered from the series' start, as in `Some Show - 25`. In a line naming the series, only what follows its name is read, so that a series named `1x1 Club` is not taken for its first episode; in a line that does not name it, every word is. When every version of a title names another, they are all kept, as with the hide rules: the addon may number episodes otherwise than the title's description.
 
-**Compared with Jellyfin:** Jellyfin 12.4 lists no addon's streams, so it has no such step: its versions are the files of a title it found in its folders. Polyfin's own folders are read the same way as addons' streams.
+A local folder's files are never left out so: each is the episode its folder placed it at, which its show's numbering may map from other numbers than its name tells, as `Show S02E13.mkv` played as S02E01 (see [How a show's files are numbered](local-folders.md#how-a-show-s-files-are-numbered)).
+
+**Compared with Jellyfin:** Jellyfin 12.4 lists no addon's streams, so it has no such step: its versions are the files of a title it found in its folders.
 
 ### Default audio and subtitle languages
 
