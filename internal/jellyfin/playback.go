@@ -540,6 +540,12 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		// app reads the answer.
 		h.Playback.Warm(chosen.version, time.Duration(request.StartTimeTicks.value)*100)
 	}
+	// The Jellyfin app for Android's integrated player plays a version
+	// as it is only when it is described as a file (see asFile).
+	asFile := integratedPlayer(r, request)
+	if asFile {
+		h.asFile(r.Context(), &chosenSource, chosen.version)
+	}
 	// An app that named a version, the title's own identifier included,
 	// gets the version chosen alone, as from Jellyfin.
 	if request.MediaSourceId != "" {
@@ -576,6 +582,9 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			// their quality group, is not offered as it is.
 			if described.Bitrate != nil && overUserLimit(request.userLimit, *described.Bitrate) || !user.FitsGroup(h.versionHeight(r.Context(), other)) {
 				described.SupportsDirectPlay, described.SupportsDirectStream = false, false
+			}
+			if asFile {
+				h.asFile(r.Context(), &described, other)
 			}
 			sources = append(sources, described)
 		}
