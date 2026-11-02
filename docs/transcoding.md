@@ -504,6 +504,7 @@ Every default but **Seconds prepared ahead**, **Tone map HDR on the graphics car
 |---|---|---|---|
 | **Turn picture subtitles into text** | **Settings › Conversion (transcoding)** | **Off** | **When played** or **Also after library scans**: PGS and VobSub tracks are read into text copies with Tesseract, which apps that cannot draw them play without a video conversion. |
 | **Picture subtitle tracks read at once** | **Settings › Conversion (transcoding)** | 1 (range 1 to 4) | How many tracks Tesseract reads at the same time, one processor thread each. |
+| **Download the data of missing languages automatically** | **Settings › Conversion (transcoding)** | **Off** | The first time a track is in a language Tesseract has no data for, its data is downloaded once into `POLYFIN_TESSDATA_DIR`, checked, and the track read. A failed download is tried again an hour later at the soonest. |
 
 See [Picture subtitles read into text](subtitles.md#picture-subtitles-read-into-text).
 

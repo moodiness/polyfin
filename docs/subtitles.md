@@ -166,6 +166,7 @@ Under **Settings › Conversion (transcoding)**, in **Picture subtitles**:
 |---|---|---|
 | **Turn picture subtitles into text** | **Off** | **When played** reads a version's picture tracks the first time an app that cannot draw them plays it, the chosen track first. **Also after library scans** also reads the tracks of the new or changed videos that scans of local folders find. |
 | **Picture subtitle tracks read at once** | 1 (range 1 to 4) | How many tracks Tesseract reads at the same time, each in one process using one processor thread. |
+| **Download the data of missing languages automatically** | **Off** | The first time a track is in a language Tesseract has no data for, Polyfin downloads that language's data once, in the background, then reads the track (see the languages below). |
 
 What is read:
 
@@ -192,8 +193,17 @@ When it runs:
 Languages:
 
 - Tesseract reads each track with its language's data: `fre` and `fra` both use `fra`. A track with no stated language uses the server's language.
-- The Docker image comes with the data of English, French, German, Spanish, Italian, Portuguese and Dutch. Data for other languages, `.traineddata` files, goes in the folder `POLYFIN_TESSDATA_DIR` names, `/data/tessdata` in the image (see [Configuration](configuration.md)).
-- A track whose language has no data is not read, and **System › Health** names the language and the file to add (see [Health](administration.md#health)).
+- The Docker image comes with the data of English, French, German, Spanish, Italian, Portuguese and Dutch. Data for other languages, `.traineddata` files, goes in the folder `POLYFIN_TESSDATA_DIR` names, `/data/tessdata` in the image (see [Configuration](configuration.md)). Polyfin can download it there.
+- A track whose language has no data is not read, and **System › Health** names the language and the file to add (see [Health](administration.md#health)). The track waits for it: once the file is there, the tracks waiting are read and the warning goes, at once for a file Polyfin downloads, and for a file added by hand when Health next looks, within 5 minutes or as its page opens.
+
+Downloading a language's data:
+
+- Polyfin downloads it from Tesseract's official data, the fast models of `tesseract-ocr/tessdata_fast`, at a commit pinned in Polyfin. Polyfin carries the list of the 126 language files at that commit with the SHA-256 of each, and keeps a file only when it matches.
+- From Health: the warning of a language of that list offers **Download** while `POLYFIN_TESSDATA_DIR` is set. Polyfin creates the folder if missing, writes the file under a temporary name, checks its size and SHA-256, and only then renames it into place, such as `fin.traineddata`. On success, the warning goes and the tracks waiting for the language are read.
+- By itself, with **Download the data of missing languages automatically** on: the first time a track needs a language Polyfin lacks, it downloads the data once, in the background, logs it at Info (`Downloading Tesseract's data for a language picture subtitles are in`, then `Downloaded Tesseract's data for a language`), and reads the track. Other tracks in that language meanwhile wait for the same download.
+- Failures: a folder that cannot be written, a download that fails, and a file whose SHA-256 differs, never kept, are named in the answer to **Download**, logged at Warn, and told in the Health warning, which keeps its button. After a failure, the download by itself is tried again an hour later at the soonest, when a track next needs the language.
+- A language outside the list, such as a code Tesseract has no data for, is refused: add its file by hand.
+- The files weigh a few megabytes each, 12 MB at most. `POLYFIN_TESSDATA_URL` names another address to download them from, such as a mirror (see [Configuration](configuration.md)); their SHA-256 is checked all the same. `scripts/tessdata-list.sh` builds the list from the pinned commit, which changes with Polyfin's versions only.
 
 Known limits: italics, colors and positions are lost, and the copy shows plain lines at the bottom. Stylized fonts and small DVD pictures can give misread letters. This is why the original stays, and the copy is marked.
 
