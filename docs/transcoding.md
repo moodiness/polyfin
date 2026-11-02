@@ -26,6 +26,8 @@ An app may ask for a title again with direct play turned off, as the Jellyfin ap
 
 Discs and DASH channels never play as they are, so they skip the check, as do DLNA devices and guests through share links, which Polyfin sends a stream itself: their reasons are those of their conversion alone, or "Direct play failed" when no other reason applies.
 
+Before 0.59, that player never played a version as it is on Polyfin: Polyfin described every version to it as a link (`Protocol` `Http`), which it loads as an HLS playlist. It failed at once on the file's bytes, twice, then asked with direct play off, and the file was converted with "Direct play failed" among the reasons. It now gets its versions described as files, and plays them as they are (see [The Jellyfin app for Android's integrated player](jellyfin-compatibility.md#the-jellyfin-app-for-android-s-integrated-player)).
+
 **Compared with Jellyfin:** Jellyfin 12.4 runs the check too when the app turns direct play off ([`MediaInfoHelper.cs`, lines 227 to 230](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L227-L230); [`StreamBuilder.cs`, lines 1392 to 1426](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L1392-L1426)), and gives the same reasons. Version names are Polyfin's own.
 
 ### Audio in HLS segments

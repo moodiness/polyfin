@@ -17,6 +17,7 @@ Whether a version plays directly or is converted decides how much bandwidth the 
 **For app developers:**
 
 - Direct play answers with a `302` redirect to the debrid or provider URL.
+- Media sources are `Protocol` `Http`, their `Path` Polyfin's signed address, except for the Jellyfin app for Android's integrated player, which plays a version as it is only from a source described as a file: PlaybackInfo describes its versions that are one file as `Protocol` `File` (see [The Jellyfin app for Android's integrated player](jellyfin-compatibility.md#the-jellyfin-app-for-android-s-integrated-player)).
 
 ## Versions and analysis
 
