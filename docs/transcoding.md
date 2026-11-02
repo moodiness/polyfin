@@ -42,6 +42,17 @@ To play it without any conversion in such a browser, a version with AAC or Opus 
 
 **Compared with Jellyfin:** Jellyfin 12.4 decides the same for the same file and browser, with the same reason, `AudioCodecNotSupported` (`StreamBuilder.BuildStreamVideoItem`).
 
+### Two players in the Jellyfin iOS app
+
+The Jellyfin app for iPhone and iPad has two players, and each tells the server something different:
+
+- Its web player, the default, is jellyfin-web in Safari's engine. It takes AC-3 and E-AC-3, in files and in both kinds of HLS segments, so their audio is copied.
+- Its native player, **Use Native Video Player** in the app's settings (beta), declares its own formats. In HLS it takes AAC, MP3, FLAC and ALAC only, so E-AC-3 and AC-3 are converted to AAC, in 5.1. With **Prefer fMP4 in HLS** on, its default, HEVC is copied into fragmented MP4 segments; with it off, the only HLS format is MPEG-TS with H.264, so HEVC is converted to H.264.
+
+Neither plays MKV as it is, so an MKV is always repackaged on iPhone and iPad, and HEVC is tagged `hvc1`, which Apple's players need. For the fewest conversions, turn **Use Native Video Player** off.
+
+**Compared with Jellyfin:** Jellyfin 12.4 decides the same for both players with **Prefer fMP4 in HLS** on. With it off, the native player ranks a progressive MP4, which keeps E-AC-3, above its MPEG-TS HLS format, and Jellyfin sends that file ([`StreamBuilder.cs`, lines 874 to 927](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L874-L927)). Polyfin streams a progressive conversion only with **Converted downloads** on (see [Converted downloads](#converted-downloads)); otherwise it ranks the app's progressive formats after its HLS ones, and the play goes over HLS, as H.264 with AAC 5.1.
+
 ### Loudness
 
 How loud a title plays is decided in one place, which depends on how it plays:
@@ -51,7 +62,7 @@ How loud a title plays is decided in one place, which depends on how it plays:
   - Converted with the source's channels, 5.1 to 5.1 or stereo to stereo, the audio keeps the source's level, to 0.1 dB, unless **Even the loudness of converted videos** is on.
   - Mixed down to stereo, when an app asks for 2 channels of a surround track, it goes through **Mix to stereo**, then **Volume when mixing to stereo**, then **Even the loudness of converted videos** when it is on, then a limiter.
 
-The app chooses the path. jellyfin-web in Chrome, Firefox and Android's web view cannot decode AC-3 or E-AC-3 (see [Dolby audio in browsers](#dolby-audio-in-browsers)), so their audio is converted, to stereo when the browser reports 2 speakers. jellyfin-web's **Maximum allowed audio channels**, in the app's playback settings and kept by each browser, overrides what the browser reports. The Jellyfin app for Android's integrated player, Android TV with bitstream output, and the iOS app receive E-AC-3 as it is. To tell which path a play takes, look at the end of its version's name, "(direct play)", "(direct stream)" or "(converted: audio)", or at jellyfin-web's Playback Info (see [Seeing how a play goes](#seeing-how-a-play-goes)).
+The app chooses the path. jellyfin-web in Chrome, Firefox and Android's web view cannot decode AC-3 or E-AC-3 (see [Dolby audio in browsers](#dolby-audio-in-browsers)), so their audio is converted, to stereo when the browser reports 2 speakers. jellyfin-web's **Maximum allowed audio channels**, in the app's playback settings and kept by each browser, overrides what the browser reports. The Jellyfin app for Android's integrated player, Android TV with bitstream output, and the iOS app's default web player receive E-AC-3 as it is; the iOS app's native player receives it converted to AAC 5.1 (see [Two players in the Jellyfin iOS app](#two-players-in-the-jellyfin-ios-app)). To tell which path a play takes, look at the end of its version's name, "(direct play)", "(direct stream)" or "(converted: audio)", or at jellyfin-web's Playback Info (see [Seeing how a play goes](#seeing-how-a-play-goes)).
 
 In direct play, nothing on the server changes the level; the app sets it:
 
