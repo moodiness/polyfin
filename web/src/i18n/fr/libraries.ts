@@ -31,10 +31,31 @@ const libraries: typeof en = {
     skipLocalHelp:
       'Un film ou une série que liste la bibliothèque d’un dossier local, lié au même identifiant, n’apparaît que là. Ses versions et son état de lecture ne changent pas, et la recherche le trouve une fois. Un utilisateur qui ne voit pas la bibliothèque du dossier le trouve toujours ici.',
     skippedLocal: 'Sans les titres des dossiers locaux',
-    showAsTitles: 'Afficher comme films et séries',
-    showAsTitlesHelp:
-      'Pour les applis Jellyfin qui ne listent que des films et des séries : un titre avec plusieurs vidéos, ou une seule numérotée comme épisode, devient une série, ses vidéos ses épisodes ; un titre sans vidéo, ou avec un seul fichier, un film. Les vidéos vues, les reprises et les favoris les suivent à l’enregistrement.',
-    shownAsTitles: 'Affichée comme films et séries',
+    showAs: {
+      label: 'Afficher comme',
+      choices: {
+        home_videos: 'Vidéos personnelles',
+        listed: 'Comme le catalogue',
+        movies_and_shows: 'Films et séries',
+      },
+      pill: {
+        home_videos: 'Affichée comme vidéos personnelles',
+        listed: 'Affichée comme le catalogue',
+        movies_and_shows: 'Affichée comme films et séries',
+      },
+      help: {
+        home_videos:
+          'Chaque titre est un dossier de ses vidéos, ou une seule vidéo, comme dans une bibliothèque de vidéos personnelles. Les applis qui ne listent que des films et des séries laissent la bibliothèque de côté.',
+        listed:
+          'Une bibliothèque de films ou de séries, selon le type du catalogue : un titre de l’autre sorte compte dans son total, mais aucun de ses onglets ne le montre.',
+        titles:
+          'Pour les applis Jellyfin qui ne listent que des films et des séries : un titre avec plusieurs vidéos, ou une seule numérotée comme épisode, devient une série, ses vidéos ses épisodes ; un titre sans vidéo, ou avec un seul fichier, un film. Les titres que le catalogue type comme films ou séries restent tels quels. Les vidéos vues, les reprises et les favoris les suivent à l’enregistrement.',
+        mixed:
+          'Une bibliothèque sans type, comme les bibliothèques mixtes de films et séries de Jellyfin : chaque titre est listé comme le film ou la série qu’il est, donc ses onglets montrent aussi une série qu’un catalogue de films liste, avec des totaux exacts. Les vidéos vues et les favoris restent.',
+      },
+      undecided:
+        'Polyfin l’affiche comme films et séries dès qu’il lit la première page du catalogue, si chaque titre y est un film ou une série.',
+    },
     remove: 'Retirer',
     removeLabel: (name: string) => `Retirer ${name}`,
     moreActions: (name: string) => `Autres actions pour ${name}`,

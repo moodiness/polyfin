@@ -31,10 +31,31 @@ const libraries: typeof en = {
     skipLocalHelp:
       'Um filme ou série que a biblioteca de uma pasta local lista, vinculado ao mesmo identificador, aparece só lá. Suas versões e o estado de assistido continuam os mesmos, e a busca o encontra uma vez. Um usuário que não vê a biblioteca da pasta continua a encontrá-lo aqui.',
     skippedLocal: 'Sem os títulos das pastas locais',
-    showAsTitles: 'Mostrar como filmes e séries',
-    showAsTitlesHelp:
-      'Para os aplicativos Jellyfin que listam só filmes e séries: um título com vários vídeos, ou com um numerado como episódio, vira uma série, seus vídeos seus episódios; um título sem vídeos, ou com um só arquivo, um filme. As marcações de assistido, os pontos de retomada e os favoritos os acompanham ao salvar.',
-    shownAsTitles: 'Mostrada como filmes e séries',
+    showAs: {
+      label: 'Mostrar como',
+      choices: {
+        home_videos: 'Vídeos caseiros',
+        listed: 'Como o catálogo',
+        movies_and_shows: 'Filmes e séries',
+      },
+      pill: {
+        home_videos: 'Mostrada como vídeos caseiros',
+        listed: 'Mostrada como o catálogo',
+        movies_and_shows: 'Mostrada como filmes e séries',
+      },
+      help: {
+        home_videos:
+          'Cada título é uma pasta dos seus vídeos, ou um só vídeo, como numa biblioteca de vídeos caseiros. Os aplicativos que listam só filmes e séries deixam a biblioteca de fora.',
+        listed:
+          'Uma biblioteca de filmes ou de séries, conforme o tipo do catálogo: um título do outro tipo conta no total, mas nenhuma das suas abas o mostra.',
+        titles:
+          'Para os aplicativos Jellyfin que listam só filmes e séries: um título com vários vídeos, ou com um numerado como episódio, vira uma série, seus vídeos seus episódios; um título sem vídeos, ou com um só arquivo, um filme. Os títulos que o catálogo marca como filmes ou séries ficam como estão. As marcações de assistido, os pontos de retomada e os favoritos os acompanham ao salvar.',
+        mixed:
+          'Uma biblioteca sem tipo, como as bibliotecas mistas de filmes e séries do Jellyfin: cada título aparece como o filme ou a série que é, então as suas abas mostram também uma série que um catálogo de filmes lista, com totais exatos. As marcações de assistido e os favoritos ficam.',
+      },
+      undecided:
+        'O Polyfin a mostra como filmes e séries assim que lê a primeira página do catálogo, se cada título ali for um filme ou uma série.',
+    },
     remove: 'Remover',
     removeLabel: (name: string) => `Remover ${name}`,
     moreActions: (name: string) => `Mais ações para ${name}`,

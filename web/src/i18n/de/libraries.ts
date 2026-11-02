@@ -30,10 +30,31 @@ const libraries: typeof en = {
     skipLocalHelp:
       'Ein Film oder eine Serie, die die Bibliothek eines lokalen Ordners unter derselben Kennung auflistet, erscheint nur dort. Versionen und Gesehen-Status bleiben gleich, und die Suche findet den Titel einmal. Wer die Bibliothek des Ordners nicht sieht, findet ihn weiterhin hier.',
     skippedLocal: 'Ohne Titel lokaler Ordner',
-    showAsTitles: 'Als Filme und Serien anzeigen',
-    showAsTitlesHelp:
-      'Für Jellyfin-Apps, die nur Filme und Serien auflisten: Ein Titel mit mehreren Videos oder einem als Episode nummerierten wird zur Serie, seine Videos zu ihren Episoden; ein Titel ohne Videos oder mit einer Datei zum Film. Gesehen-Markierungen, Fortsetzungspunkte und Favoriten gehen beim Speichern mit.',
-    shownAsTitles: 'Als Filme und Serien angezeigt',
+    showAs: {
+      label: 'Anzeigen als',
+      choices: {
+        home_videos: 'Heimvideos',
+        listed: 'Wie im Katalog',
+        movies_and_shows: 'Filme und Serien',
+      },
+      pill: {
+        home_videos: 'Als Heimvideos angezeigt',
+        listed: 'Wie im Katalog angezeigt',
+        movies_and_shows: 'Als Filme und Serien angezeigt',
+      },
+      help: {
+        home_videos:
+          'Jeder Titel ist ein Ordner seiner Videos oder ein einzelnes Video, wie in einer Heimvideo-Bibliothek. Apps, die nur Filme und Serien auflisten, lassen die Bibliothek weg.',
+        listed:
+          'Eine Film- oder Serienbibliothek, wie es der Typ des Katalogs sagt: Ein Titel der anderen Art zählt in ihrer Gesamtzahl, aber keiner ihrer Tabs zeigt ihn.',
+        titles:
+          'Für Jellyfin-Apps, die nur Filme und Serien auflisten: Ein Titel mit mehreren Videos oder einem als Episode nummerierten wird zur Serie, seine Videos zu ihren Episoden; ein Titel ohne Videos oder mit einer Datei zum Film. Titel, die der Katalog als Filme oder Serien angibt, bleiben, wie sie sind. Gesehen-Markierungen, Fortsetzungspunkte und Favoriten gehen beim Speichern mit.',
+        mixed:
+          'Eine Bibliothek ohne Typ, wie die gemischten Film- und Serienbibliotheken von Jellyfin: Jeder Titel wird als der Film oder die Serie aufgelistet, die er ist, sodass ihre Tabs auch eine Serie zeigen, die ein Filmkatalog listet, mit genauen Zahlen. Gesehen-Markierungen und Favoriten bleiben.',
+      },
+      undecided:
+        'Polyfin zeigt sie als Filme und Serien an, sobald es die erste Seite des Katalogs liest, wenn dort jeder Titel ein Film oder eine Serie ist.',
+    },
     remove: 'Entfernen',
     removeLabel: (name: string) => `${name} entfernen`,
     moreActions: (name: string) => `Weitere Aktionen für ${name}`,

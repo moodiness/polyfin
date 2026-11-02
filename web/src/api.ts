@@ -1732,16 +1732,17 @@ export type Library = {
    */
   skippable: boolean
   /**
-   * Whether the library shows its titles as movies and shows rather than as home videos: a title
-   * with videos as a series, one without as a movie, in a library without a content type. False for
-   * a catalog that is not an enabled library.
+   * How the library shows its catalog's titles, one of `showAsChoices`; null while none is chosen:
+   * a catalog of other videos is then shown as home videos until the server decides from its first
+   * page (movies and shows when its titles are all movies and series), the others as listed.
    */
-  showAsTitles: boolean
+  showAs: LibraryShowAs | null
   /**
-   * Whether the library takes `showAsTitles`: a catalog of other videos, of a type Polyfin has no
-   * use of its own for, of an addon that is not a music addon.
+   * The ways the library may show its titles, the default first: `home_videos` or
+   * `movies_and_shows` for a catalog of other videos, `listed` or `movies_and_shows` for a catalog of
+   * movies or series of an addon. Empty for any other catalog.
    */
-  otherVideos: boolean
+  showAsChoices: LibraryShowAs[]
   /**
    * Whether an enabled library of the server's has its descriptions read again on request: a movie
    * or series library of a Stremio addon or a local folder. False in the users' own scopes.
@@ -1864,7 +1865,15 @@ export const MAX_LIBRARY_ITEMS = 20000
 
 /** One enabled library in the list sent to PUT /scopes/{scope}/libraries. */
 export type LibrarySelection = Pick<Library, 'addonId' | 'catalogType' | 'catalogId' | 'name'> &
-  Partial<Pick<Library, 'genre' | 'maxItems' | 'hideInMenus' | 'skipLocal' | 'showAsTitles'>>
+  Partial<Pick<Library, 'genre' | 'maxItems' | 'hideInMenus' | 'skipLocal' | 'showAs'>>
+
+/**
+ * How a library shows its titles: as home videos (folders of videos, and videos); as its catalog
+ * lists them (a movie or series library); or as movies and shows, in a library without a type:
+ * the titles of other videos made movies and shows, or a movie or series catalog's titles each as
+ * its own type.
+ */
+export type LibraryShowAs = 'home_videos' | 'listed' | 'movies_and_shows'
 
 export type LibraryImageChoice = 'none' | 'automatic' | 'generated' | 'custom'
 
