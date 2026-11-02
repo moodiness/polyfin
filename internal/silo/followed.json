@@ -2,13 +2,13 @@
   "contract": {
     "repository": "Silo-Server/silo-server",
     "path": "contracts/api/v2/openapi.json",
-    "commit": "c03b2c2aaee00e9873c70ac0c31aa6b4dd99dd88",
-    "sha256": "de198769697222513c890413c8c9e0a5e0325e1fa32a3c234c7814027483145f"
+    "commit": "08d1f4d0d192a407b68278d74451787db62f34b3",
+    "sha256": "8dc174b4635f15183c1787199d66665a535431460ba1a5b170165570977aa53b"
   },
   "apps": [
     {
       "repository": "Silo-Server/silo-apple",
-      "commit": "876fbd31c53c17facfb2c09049bea86013c5f80d",
+      "commit": "eb65415997d60a4067f9db24829cd135251f588a",
       "files": [
         "iosApp/iosApp/Networking/APIv2/APIv2AuthModels.swift",
         "iosApp/iosApp/Networking/APIv2/APIv2CatalogModels.swift",
@@ -25,11 +25,14 @@
         "iosApp/iosApp/Networking/APIv2/APIv2SettingsModels.swift",
         "iosApp/iosApp/Networking/APIv2/APIv2SubtitleAIModels.swift",
         "iosApp/iosApp/Networking/APIv2/APIv2SubtitleModels.swift",
+        "iosApp/iosApp/Networking/APIv2/APIv2SupportModels.swift",
         "iosApp/iosApp/Networking/DeviceLoginModels.swift",
         "iosApp/iosApp/Networking/DeviceLoginPoller.swift",
         "iosApp/iosApp/Networking/HTTPClient.swift",
         "iosApp/iosApp/Networking/Models.swift",
         "iosApp/iosApp/Networking/RequestsModels.swift",
+        "iosApp/iosApp/Networking/SectionRowLimit.swift",
+        "iosApp/iosApp/Networking/SiloAPI.swift",
         "iosApp/iosApp/Pairing/Approver/TVApprovalModel.swift",
         "iosApp/iosApp/Pairing/PairingDeviceAPI.swift",
         "iosApp/iosApp/Screens/Auth/QRLoginViewModel.swift",
@@ -45,7 +48,7 @@
     },
     {
       "repository": "Silo-Server/silo-android",
-      "commit": "e9c410096e427ab7bba45cc89022120a35c9cfca",
+      "commit": "7e4580db185b1ae85af489f7017dfa9008f4f391",
       "files": [
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/AppNavigation.kt",
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/DeviceLoginRouteParser.kt",
