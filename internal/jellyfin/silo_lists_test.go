@@ -371,6 +371,8 @@ func TestSiloAppsStartupProbes(t *testing.T) {
 		State string `json:"state"`
 	}
 	r.get(t, "/api/v2/images/capabilities", r.token, r.profile, &images)
+	var home map[string]any
+	r.get(t, "/api/v2/home/capabilities", r.token, r.profile, &home)
 	for _, path := range []string{"/api/v2/capabilities/downloads", "/api/v2/capabilities/metadata-ai", "/api/v2/diagnostics/capabilities",
 		"/api/v2/devices/push/apple/capabilities", "/api/v2/playback/sessions/control/capabilities", "/api/v2/subtitles/providers/status",
 		"/api/v2/subtitles/ai/status", "/api/v2/requests/status", "/api/v2/settings/contract/capabilities",

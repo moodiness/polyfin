@@ -34,7 +34,8 @@ func complete(c *checker, o object, where string) {
 
 // CheckLibraries checks the user's libraries as the apps list them
 // (GET /api/v2/user/libraries): Apple APIv2UserLibrary and Library(v2:),
-// Android UserLibrariesV2.project.
+// Android UserLibrariesV2.project, whose box_sets_enabled is a boolean
+// when sent.
 func CheckLibraries(data []byte) error {
 	var doc object
 	if err := json.Unmarshal(data, &doc); err != nil {
@@ -65,14 +66,22 @@ func CheckLibraries(data []byte) error {
 				c.fail("%s poster_url %v", where, poster)
 			}
 		}
+		if boxSets, ok := library["box_sets_enabled"]; ok {
+			if _, flag := boxSets.(bool); !flag {
+				c.fail("%s box_sets_enabled %v", where, boxSets)
+			}
+		}
 	}
 	return c.err()
 }
 
 // checkSection checks a section as the apps read one: Apple
 // ResolvedSection and SectionItem, with the cards it keeps; Android
-// decodeSectionV2, which wants its items.
-func checkSection(c *checker, section object, where string) {
+// decodeSectionV2, which wants its items. A read with item_limit (limit,
+// 0 for none) answers at most that many cards, and an item_limit no
+// larger: Apple SiloAPI.withSectionItemLimit and SectionRowLimit.capped
+// (Networking/SectionRowLimit.swift), Android HomeSectionsV2Api.list.
+func checkSection(c *checker, section object, where string, limit int) {
 	c.has(section, where, map[string]string{"id": "s", "section_type": "s", "title": "s", "items": "a"})
 	if id, _ := section["id"].(string); strings.TrimSpace(id) == "" {
 		c.fail("%s has no id", where)
@@ -84,7 +93,13 @@ func checkSection(c *checker, section object, where string) {
 			}
 		}
 	}
+	if more, ok := section["has_more"]; ok && more != true && more != false {
+		c.fail("%s.has_more %v", where, more)
+	}
 	items, _ := section["items"].([]any)
+	if itemLimit, _ := section["item_limit"].(float64); limit > 0 && (len(items) > limit || int(itemLimit) > limit) {
+		c.fail("%s has %d cards, item_limit %v, asked at most %d", where, len(items), section["item_limit"], limit)
+	}
 	for n, entry := range items {
 		card, _ := entry.(object)
 		at := fmt.Sprintf("%s.items[%d]", where, n)
@@ -95,6 +110,11 @@ func checkSection(c *checker, section object, where string) {
 	}
 }
 
+// parentArtwork are the series' and season's art an episode card may
+// carry: Apple EpisodeParentArtwork (Networking/Models.swift), which draws
+// them for episodes only, Android SectionItem and BrowseItem.
+var parentArtwork = []string{"series_poster_url", "series_backdrop_url", "season_poster_url"}
+
 // checkCard checks a card's keys the apps require: Apple SectionItem and
 // BrowseItem, Android SectionItem and BrowseItem.
 func checkCard(c *checker, card object, where string) {
@@ -102,14 +122,23 @@ func checkCard(c *checker, card object, where string) {
 	if id, _ := card["content_id"].(string); strings.TrimSpace(id) == "" {
 		c.fail("%s has no content_id", where)
 	}
+	for _, key := range parentArtwork {
+		value, ok := card[key]
+		if !ok {
+			continue
+		}
+		if url, text := value.(string); !text || url == "" || card["type"] != "episode" {
+			c.fail("%s.%s %v on a card of type %v", where, key, value, card["type"])
+		}
+	}
 }
 
 // CheckSections checks sections as the apps show Home and a library's
-// landing (GET /api/v2/home/sections, GET /api/v2/library/{id}/sections):
-// Apple decodeSections, whose section identifiers are unique and not
-// empty, and SectionsResponse, which strips the cards of other types;
-// Android decodeSectionsV2.
-func CheckSections(data []byte) error {
+// landing (GET /api/v2/home/sections, GET /api/v2/library/{id}/sections),
+// read with item_limit limit, 0 for none: Apple decodeSections, whose
+// section identifiers are unique and not empty, and SectionsResponse,
+// which strips the cards of other types; Android decodeSectionsV2.
+func CheckSections(data []byte, limit int) error {
 	var doc object
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return err
@@ -121,7 +150,7 @@ func CheckSections(data []byte) error {
 	for n, entry := range sections {
 		section, _ := entry.(object)
 		where := fmt.Sprintf("sections[%d]", n)
-		checkSection(c, section, where)
+		checkSection(c, section, where, limit)
 		id, _ := section["id"].(string)
 		if seen[id] {
 			c.fail("%s id %q twice", where, id)
@@ -132,17 +161,39 @@ func CheckSections(data []byte) error {
 }
 
 // CheckSection checks one section, the answer of its items' read
-// (GET /api/v2/home/sections/{id}/items, GET /api/v2/library/{id}/sections/{section_id}/items):
-// Android wants the section asked.
-func CheckSection(data []byte, id string) error {
+// (GET /api/v2/home/sections/{id}/items, GET /api/v2/library/{id}/sections/{section_id}/items),
+// read with item_limit limit, 0 for none: Android wants the section asked.
+func CheckSection(data []byte, id string, limit int) error {
 	var section object
 	if err := json.Unmarshal(data, &section); err != nil {
 		return err
 	}
 	c := &checker{}
-	checkSection(c, section, "section")
+	checkSection(c, section, "section", limit)
 	if section["id"] != id {
 		c.fail("section %v, asked %q", section["id"], id)
+	}
+	return c.err()
+}
+
+// CheckHomeCapabilities checks what the apps read of Home's capabilities
+// (GET /api/v2/home/capabilities): Apple APIv2HomeCapabilities
+// (Networking/APIv2/APIv2SupportModels.swift) wants state and allowed;
+// both apps send item_limit to the section reads only when
+// section_item_limit_max is a positive number, at most it, and the Apple
+// app at most 20 (SectionItemLimitSupport.itemLimit; Android
+// HomeSectionsV2Api.sectionItemLimitMax).
+func CheckHomeCapabilities(data []byte) error {
+	doc, err := decode(data)
+	if err != nil {
+		return err
+	}
+	c := &checker{}
+	c.has(doc, "home", map[string]string{"state": "s", "allowed": "b"})
+	if most, ok := doc["section_item_limit_max"]; ok {
+		if n, number := most.(float64); !number || n < 1 || n != float64(int(n)) {
+			c.fail("section_item_limit_max %v", most)
+		}
 	}
 	return c.err()
 }

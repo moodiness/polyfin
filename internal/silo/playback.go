@@ -414,6 +414,9 @@ type (
 		Format       string  `json:"format"`
 		TimingOrigin float64 `json:"timing_origin_seconds"`
 	}
+	// subtitleRow is a subtitle of the inventory. A file's own track names
+	// its index among the file's streams, as the watch detail does, and is
+	// unplayable when FFmpeg did not recognize it (see unrecognized).
 	subtitleRow struct {
 		TrackID         string `json:"track_id"`
 		CombinedIndex   int    `json:"combined_index"`
@@ -426,6 +429,8 @@ type (
 		HearingImpaired bool   `json:"hearing_impaired"`
 		Delivery        string `json:"delivery"`
 		URL             string `json:"url,omitempty"`
+		StreamIndex     *int   `json:"stream_index,omitempty"`
+		Unplayable      bool   `json:"unplayable,omitempty"`
 	}
 	subtitlePlan struct {
 		Mode      string            `json:"mode"`
@@ -766,6 +771,8 @@ func (s *Server) subtitlePlan(found *session, source mediaSource, p *plan, selec
 			Default: stream.IsDefault, HearingImpaired: stream.IsHearingImpaired, Delivery: "burn_in_only"}
 		if stream.IsExternal {
 			row.Source = "external"
+		} else {
+			row.StreamIndex, row.Unplayable = new(fileIndex(source, stream)), unrecognized(stream)
 		}
 		if stream.IsTextSubtitleStream && stream.DeliveryUrl != "" && strings.EqualFold(stream.DeliveryMethod, "External") {
 			found.subtitles[n] = withoutKey(stream.DeliveryUrl)
@@ -792,6 +799,27 @@ func (s *Server) subtitlePlan(found *session, source mediaSource, p *plan, selec
 			p.SelectedTracks.Subtitle, p.Subtitle.TrackID, found.subtitle = nil, "", nil
 		}
 	}
+}
+
+// unrecognized reports whether a subtitle is a file's own track FFmpeg did
+// not recognize, which no route shows: it is neither converted to WebVTT
+// nor burned in, and the apps list it as unavailable.
+func unrecognized(stream playback.MediaStream) bool {
+	return !stream.IsExternal && strings.TrimSpace(stream.Codec) == ""
+}
+
+// unrecognizedAsked reports whether the subtitle c asks of a version is
+// one it cannot show (see unrecognized).
+func unrecognizedAsked(source mediaSource, c choice) bool {
+	subtitles := subtitleOrder(source)
+	return c.subtitle != nil && *c.subtitle < len(subtitles) && unrecognized(subtitles[*c.subtitle])
+}
+
+// subtitleRefused is the decision when the app asks a subtitle no route
+// shows, as Silo answers it: a replan refused leaves the session playing
+// as it was.
+func subtitleRefused() decision {
+	return unavailable("subtitle_codec_unsupported", "This subtitle's format cannot be shown.", false)
 }
 
 // report tells the Jellyfin API of the session's playback, as a Jellyfin
@@ -889,11 +917,15 @@ func sameID(sent string, id accounts.ID) bool {
 // asked, and makes its plan. The tracks the app asks by their place are
 // found among the version's streams: those of the session's last plan,
 // or of a first answer with the version's own audio and no subtitle,
-// given up when the app asked other tracks.
+// given up when the app asked other tracks. A subtitle no route shows is
+// refused.
 func (s *Server) plan(r *http.Request, found *session) (decision, error) {
 	asked := tracks{subtitle: -1}
 	if c := found.choice; c.audio != nil || c.subtitle != nil {
 		if len(found.source.MediaStreams) > 0 {
+			if unrecognizedAsked(found.source, c) {
+				return subtitleRefused(), nil
+			}
 			asked = tracksAt(found.source, c)
 		} else {
 			info, refused, err := s.ask(r, found, asked)
@@ -906,6 +938,9 @@ func (s *Server) plan(r *http.Request, found *session) (decision, error) {
 				return s.decide(r.Context(), found, info, wanted)
 			}
 			s.stopPlaySession(r, found, info.PlaySessionId)
+			if unrecognizedAsked(source, c) {
+				return subtitleRefused(), nil
+			}
 			asked = wanted
 		}
 	}

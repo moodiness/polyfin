@@ -194,8 +194,12 @@ const collectionReads = 4
 // librarySections answers a library's landing: for a library of
 // collections, a row of each of its first collections, with its first
 // titles; for the others, what the user is watching in it, and its
-// latest titles.
+// latest titles. item_limit cuts each to its first titles.
 func (s *Server) librarySections(w http.ResponseWriter, r *http.Request, v viewer) {
+	limit, ok := itemLimitAsked(w, r)
+	if !ok {
+		return
+	}
 	number := r.PathValue("id")
 	view, ok := s.library(w, r, v, number)
 	if !ok {
@@ -219,6 +223,9 @@ func (s *Server) librarySections(w http.ResponseWriter, r *http.Request, v viewe
 	if !a.ok() {
 		s.jellyfinRefusal(w, r, a)
 		return
+	}
+	for i := range sections {
+		sections[i].cut(limit)
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Sections []section `json:"sections"`

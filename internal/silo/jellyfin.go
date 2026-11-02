@@ -130,42 +130,44 @@ type queryResult struct {
 }
 
 type item struct {
-	Id                      string
-	Name                    string
-	OriginalTitle           string
-	Type                    string
-	CollectionType          string
-	Overview                *string
-	Taglines                []string
-	Genres                  []string
-	Studios                 []struct{ Name string }
-	OfficialRating          string
-	CommunityRating         *float64
-	CriticRating            *float64
-	RunTimeTicks            *int64
-	ProductionYear          *int
-	PremiereDate            *time.Time
-	EndDate                 *time.Time
-	DateCreated             *time.Time
-	IndexNumber             *int
-	ParentIndexNumber       *int
-	SeriesId                string
-	SeriesName              string
-	SeasonId                string
-	Status                  string
-	ProviderIds             map[string]string
-	People                  []person
-	UserData                *userData
-	ChildCount              *int
-	RecursiveItemCount      *int
-	ImageTags               map[string]string
-	BackdropImageTags       []string
-	ParentBackdropItemId    string
-	ParentBackdropImageTags []string
-	ParentLogoItemId        string
-	ParentLogoImageTag      string
-	SeriesPrimaryImageTag   string
-	MediaSources            []mediaSource
+	Id                       string
+	Name                     string
+	OriginalTitle            string
+	Type                     string
+	CollectionType           string
+	Overview                 *string
+	Taglines                 []string
+	Genres                   []string
+	Studios                  []struct{ Name string }
+	OfficialRating           string
+	CommunityRating          *float64
+	CriticRating             *float64
+	RunTimeTicks             *int64
+	ProductionYear           *int
+	PremiereDate             *time.Time
+	EndDate                  *time.Time
+	DateCreated              *time.Time
+	IndexNumber              *int
+	ParentIndexNumber        *int
+	SeriesId                 string
+	SeriesName               string
+	SeasonId                 string
+	Status                   string
+	ProviderIds              map[string]string
+	People                   []person
+	UserData                 *userData
+	ChildCount               *int
+	RecursiveItemCount       *int
+	ImageTags                map[string]string
+	BackdropImageTags        []string
+	ParentBackdropItemId     string
+	ParentBackdropImageTags  []string
+	ParentLogoItemId         string
+	ParentLogoImageTag       string
+	ParentPrimaryImageItemId string
+	ParentPrimaryImageTag    string
+	SeriesPrimaryImageTag    string
+	MediaSources             []mediaSource
 }
 
 type person struct {

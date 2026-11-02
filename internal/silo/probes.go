@@ -69,7 +69,7 @@ var unsupportedDocuments = map[string]map[string]any{
 		"kindle_conversion": false, "source_formats": []any{}, "served_format": "", "header": "", "header_failed_value": ""},
 	"/api/v2/diagnostics/capabilities": {"status": "", "server_instance_id": "", "accepted_schema_versions": []any{},
 		"max_bundle_bytes": 0, "max_manifest_bytes": 0, "retention_days": 0, "consent_notice_version": 0, "upload_chunk_bytes": 0},
-	"/api/v2/devices/push/apple/capabilities":         {"registration_available": false},
+	"/api/v2/devices/push/apple/capabilities":         {"registration_available": false, "installation_reset_available": false},
 	"/api/v2/notifications/push/devices/capabilities": {"registration_available": false, "platforms": []any{}},
 	"/api/v2/notifications/capabilities": {"in_app": map[string]any{"enabled": false},
 		"apple_push":   map[string]any{"available": false, "provider": "", "supported_modes": []any{}},
@@ -85,7 +85,7 @@ var unsupportedDocuments = map[string]map[string]any{
 	"/api/v2/subtitles/sync/status":                  {"auto_sync": false, "external": false},
 	"/api/v2/requests/status": {"requests_enabled": false, "rating_restrictions_enforced": false, "follow_supported": false,
 		"season_requests_supported": false, "missing_seasons_requestable": false, "download_progress_supported": false,
-		"watchlist_titles_supported": false, "watchlist_requests": false},
+		"watchlist_titles_supported": false, "watchlist_requests": false, "discover_rows_supported": false},
 	"/api/v2/auth/external-sign-in/capabilities": {"available": false, "identities": false, "admin_identities": false, "break_glass": false,
 		"connection_test": false, "live_provider_changes": false, "provider_recheck": false, "credentials_linking": false,
 		"network_sign_in": false, "network_link_keeps_password": false},
@@ -170,7 +170,8 @@ var artworkSlots = []string{"poster", "backdrop", "logo", "still", "photo"}
 // imageCapabilities tells the apps the artwork sizes they may ask: Polyfin
 // resizes artwork to the width asked, rounded up to the widths it keeps
 // (see the Jellyfin API's images), as the image sizes small, medium and
-// large, or the width of a slot.
+// large, or the width of a slot. Episode cards carry their series' and
+// season's art (see parentArtworkOf).
 func (s *Server) imageCapabilities(w http.ResponseWriter, _ *http.Request, _ viewer) {
 	widths := map[string]map[string]int{}
 	params := map[string]string{}
@@ -189,11 +190,12 @@ func (s *Server) imageCapabilities(w http.ResponseWriter, _ *http.Request, _ vie
 		SlotWidthParams        map[string]string         `json:"slot_width_params"`
 		SeasonListArtworkParam string                    `json:"season_list_artwork_param"`
 		EpisodeStillProvenance bool                      `json:"episode_still_provenance"`
+		EpisodeParentArtwork   bool                      `json:"episode_parent_artwork"`
 		ExtendedItemArtwork    bool                      `json:"extended_item_artwork"`
 		Delivery               string                    `json:"delivery"`
 		StorageBackend         string                    `json:"storage_backend"`
 	}{"available", true, revision, "image_size", []string{"small", "medium", "large", "original"}, widths, maxArtworkWidth, params,
-		"include_artwork", true, false, "server", "local"})
+		"include_artwork", true, true, false, "server", "local"})
 }
 
 // authProviders tells the apps how users sign in: with a password, there

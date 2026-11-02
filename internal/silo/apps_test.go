@@ -2,6 +2,7 @@ package silo
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -19,7 +20,15 @@ import (
 // It plays as it is unless conversion is asked: a picture subtitle burned
 // in, the file failed to play, or a bitrate below the file's. The user
 // prefers French subtitles, always.
-func richVersion(w http.ResponseWriter, c call) {
+var richVersion = versionWith()
+
+// versionWith answers as richVersion does, with more streams after its
+// own.
+func versionWith(more ...any) func(http.ResponseWriter, call) {
+	return func(w http.ResponseWriter, c call) { answerVersion(w, c, more) }
+}
+
+func answerVersion(w http.ResponseWriter, c call, more []any) {
 	streams := []any{
 		map[string]any{"Type": "Subtitle", "Index": 0, "Codec": "srt", "Language": "fre", "IsExternal": true, "IsTextSubtitleStream": true,
 			"DeliveryMethod": "External", "DeliveryUrl": "/Videos/" + testVersion + "/" + testVersion + "/Subtitles/0/0/Stream.vtt?ApiKey=" + testToken},
@@ -30,6 +39,7 @@ func richVersion(w http.ResponseWriter, c call) {
 		map[string]any{"Type": "Subtitle", "Index": 5, "Codec": "subrip", "Language": "eng", "IsTextSubtitleStream": true,
 			"DeliveryMethod": "External", "DeliveryUrl": "/Videos/" + testVersion + "/" + testVersion + "/Subtitles/5/0/Stream.vtt?ApiKey=" + testToken},
 	}
+	streams = append(streams, more...)
 	source := map[string]any{"Id": testVersion, "Container": "mp4", "RunTimeTicks": int64(7200) * 10_000_000, "Bitrate": 20_000_000,
 		"DefaultAudioStreamIndex": 3, "DefaultSubtitleStreamIndex": 5, "MediaStreams": streams}
 	switch {
@@ -313,5 +323,259 @@ func TestUnknownOperationsAreLogged(t *testing.T) {
 	ask()
 	if logged() != 2 {
 		t.Errorf("an hour later: %s", h.log.String())
+	}
+}
+
+// The embedded rows of a plan's subtitles name the streams the watch
+// detail gives their tracks: the Apple app finds a pick's row by them.
+func TestInventoryNamesTheWatchDetailsStreams(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, richVersion)
+	var detail struct {
+		Versions []struct {
+			Subtitles []struct {
+				Index *int `json:"index"`
+			} `json:"subtitle_tracks"`
+		} `json:"versions"`
+	}
+	w := h.do(http.MethodGet, "/api/v2/watch/"+testVersion, nil)
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &detail) != nil || len(detail.Versions) != 1 {
+		t.Fatalf("watch: %d %s", w.Code, w.Body)
+	}
+	var indexes []int
+	for _, track := range detail.Versions[0].Subtitles {
+		if track.Index != nil {
+			indexes = append(indexes, *track.Index)
+		}
+	}
+	for _, more := range []map[string]any{nil, {"subtitle_track_index": 2}} {
+		w := h.startAnswer(more)
+		if err := silotest.CheckSubtitleStreams(w.Body.Bytes(), indexes); w.Code != http.StatusCreated || err != nil {
+			t.Errorf("a start asking %v: %d %v", more, w.Code, err)
+		}
+	}
+}
+
+// A file's own subtitle FFmpeg did not recognize is listed unplayable,
+// and asking it is refused as Silo refuses it; a replan refused leaves
+// the playback as it was.
+func TestUnrecognizedSubtitlesAreRefused(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, versionWith(map[string]any{"Type": "Subtitle", "Index": 6, "Language": "jpn"}))
+	file := h.file()
+	refused := func(label string, w *httptest.ResponseRecorder, status int) {
+		t.Helper()
+		var d struct {
+			Outcome  string `json:"outcome"`
+			Terminal struct {
+				Reason string `json:"reason"`
+			} `json:"terminal"`
+		}
+		if w.Code != status || json.Unmarshal(w.Body.Bytes(), &d) != nil || d.Outcome != "adaptation_unavailable" ||
+			d.Terminal.Reason != "subtitle_codec_unsupported" {
+			t.Errorf("%s: %d %s", label, w.Code, w.Body)
+		}
+	}
+	refused("a start asking it", h.startAnswer(map[string]any{"subtitle_track_index": 3}), http.StatusCreated)
+	w := h.startAnswer(nil)
+	if err := silotest.CheckDecision(w.Body.Bytes(), []string{file}); w.Code != http.StatusCreated || err != nil {
+		t.Fatalf("a start: %d %v", w.Code, err)
+	}
+	var d struct {
+		SessionID string `json:"session_id"`
+		Plan      struct {
+			Subtitle struct {
+				Inventory []struct {
+					Unplayable  bool `json:"unplayable"`
+					StreamIndex *int `json:"stream_index"`
+				} `json:"inventory"`
+			} `json:"subtitle"`
+		} `json:"playback_plan"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &d)
+	if rows := d.Plan.Subtitle.Inventory; len(rows) != 4 || !rows[3].Unplayable || rows[3].StreamIndex == nil || *rows[3].StreamIndex != 5 ||
+		rows[1].Unplayable || rows[2].Unplayable {
+		t.Fatalf("inventory: %s", w.Body)
+	}
+	asked := len(h.jellyfin.called(http.MethodPost, "/Items/"+testVersion+"/PlaybackInfo"))
+	refused("a replan asking it", h.replan(d.SessionID, "replan-1", map[string]any{
+		"subtitle": map[string]any{"id": "file:" + file + ":subtitle:3", "index": 3}}), http.StatusOK)
+	if now := len(h.jellyfin.called(http.MethodPost, "/Items/"+testVersion+"/PlaybackInfo")); now != asked {
+		t.Errorf("the refused replan asked PlaybackInfo")
+	}
+	if w := h.replan(d.SessionID, "replan-2", map[string]any{}); w.Code != http.StatusOK || silotest.CheckDecision(w.Body.Bytes(), []string{file}) != nil {
+		t.Errorf("the playback after the refusal: %d %s", w.Code, w.Body)
+	}
+}
+
+// testLibrary is the Jellyfin view of browsing's library.
+const testLibrary = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+// browsing answers the Jellyfin API for a library of five movies, and two
+// episodes the user is watching: the first in a season with a poster of
+// its own, the second's in one without.
+func browsing(w http.ResponseWriter, c call) {
+	movies := []any{}
+	for n := range 5 {
+		movies = append(movies, map[string]any{"Id": fmt.Sprintf("%032x", n+1), "Name": "Movie " + strconv.Itoa(n+1), "Type": "Movie"})
+	}
+	episode := func(id, season, parent string) map[string]any {
+		return map[string]any{"Id": id, "Name": "Episode", "Type": "Episode", "SeriesId": "cccccccccccccccccccccccccccccccc",
+			"SeriesName": "Show", "SeasonId": season, "SeriesPrimaryImageTag": "series-poster", "ParentPrimaryImageItemId": parent,
+			"ParentPrimaryImageTag": "parent-poster", "ParentBackdropItemId": "cccccccccccccccccccccccccccccccc",
+			"ParentBackdropImageTags": []string{"series-backdrop"}, "ImageTags": map[string]string{"Primary": "still"}}
+	}
+	switch c.path {
+	case "/UserViews":
+		jsonAnswer(w, map[string]any{"Items": []any{map[string]any{"Id": testLibrary, "Name": "Films", "CollectionType": "movies"}}})
+	case "/Polyfin/HomeRows", "/Shows/NextUp":
+		jsonAnswer(w, map[string]any{"Items": []any{}})
+	case "/Users/Me":
+		jsonAnswer(w, map[string]any{"Configuration": map[string]any{}})
+	case "/Items/Latest":
+		jsonAnswer(w, movies)
+	case "/Items":
+		jsonAnswer(w, map[string]any{"Items": movies, "TotalRecordCount": len(movies)})
+	case "/UserItems/Resume":
+		jsonAnswer(w, map[string]any{"Items": []any{
+			episode("dddddddddddddddddddddddddddddddd", "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
+			episode("ffffffffffffffffffffffffffffffff", "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "cccccccccccccccccccccccccccccccc")}})
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
+// A section read with item_limit lists at most that many cards a
+// section, and tells, of one section, that it left cards out; Home's
+// capabilities say the reads take it.
+func TestSectionReadsTakeItemLimit(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, browsing)
+	read := func(path string, into any) []byte {
+		t.Helper()
+		w := h.do(http.MethodGet, path, nil)
+		if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), into) != nil {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
+		}
+		return w.Body.Bytes()
+	}
+	var capabilities struct {
+		Max int `json:"section_item_limit_max"`
+	}
+	if data := read("/api/v2/home/capabilities", &capabilities); silotest.CheckHomeCapabilities(data) != nil || capabilities.Max != 100 {
+		t.Errorf("Home's capabilities: %s", data)
+	}
+	var libraries struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	read("/api/v2/user/libraries", &libraries)
+	if len(libraries.Items) != 1 {
+		t.Fatalf("libraries: %+v", libraries)
+	}
+	library := libraries.Items[0].ID
+	type section struct {
+		ID         string            `json:"id"`
+		Items      []json.RawMessage `json:"items"`
+		ItemLimit  int               `json:"item_limit"`
+		TotalCount int               `json:"total_count"`
+		HasMore    *bool             `json:"has_more"`
+	}
+	for _, path := range []string{"/api/v2/home/sections", "/api/v2/library/" + library + "/sections"} {
+		var doc struct {
+			Sections []section `json:"sections"`
+		}
+		data := read(path+"?item_limit=1", &doc)
+		if err := silotest.CheckSections(data, 1); err != nil || len(doc.Sections) != 2 {
+			t.Errorf("%s: %v %s", path, err, data)
+		}
+		for _, sec := range doc.Sections {
+			if want := map[string]int{"continue_watching": 2, "resume-" + library: 2}[sec.ID]; want == 0 && sec.TotalCount != 5 ||
+				want != 0 && sec.TotalCount != want || sec.ItemLimit != 1 || sec.HasMore != nil {
+				t.Errorf("%s: section %s cut to %d of %d, item_limit %d, has_more %v", path, sec.ID, len(sec.Items), sec.TotalCount,
+					sec.ItemLimit, sec.HasMore)
+			}
+		}
+	}
+	for _, tc := range []struct {
+		query string
+		cards int
+		more  bool
+	}{{"?item_limit=2", 2, true}, {"?item_limit=5", 5, false}, {"", 5, false}} {
+		path := "/api/v2/home/sections/latest-" + library + "/items" + tc.query
+		var sec section
+		data := read(path, &sec)
+		limit, _ := strconv.Atoi(strings.TrimPrefix(tc.query, "?item_limit="))
+		if err := silotest.CheckSection(data, "latest-"+library, limit); err != nil || len(sec.Items) != tc.cards ||
+			(sec.HasMore != nil) != tc.more || sec.TotalCount != 5 {
+			t.Errorf("%s: %v %s", path, err, data)
+		}
+	}
+	for _, limit := range []string{"0", "101", "some"} {
+		if w := h.do(http.MethodGet, "/api/v2/home/sections?item_limit="+limit, nil); w.Code != http.StatusUnprocessableEntity {
+			t.Errorf("item_limit %s: %d %s", limit, w.Code, w.Body)
+		}
+	}
+}
+
+// An episode's card carries its series' poster and backdrop, and its
+// season's poster when the season has one: the apps draw them in place of
+// the episode's still.
+func TestEpisodeCardsCarryTheirParentsArtwork(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, browsing)
+	var images struct {
+		EpisodeParentArtwork bool `json:"episode_parent_artwork"`
+	}
+	w := h.do(http.MethodGet, "/api/v2/images/capabilities", nil)
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &images) != nil || !images.EpisodeParentArtwork {
+		t.Errorf("images: %d %s", w.Code, w.Body)
+	}
+	w = h.do(http.MethodGet, "/api/v2/home/sections/continue_watching/items?poster_width=300", nil)
+	var sec struct {
+		Items []struct {
+			SeriesPoster   string `json:"series_poster_url"`
+			SeriesBackdrop string `json:"series_backdrop_url"`
+			SeasonPoster   string `json:"season_poster_url"`
+		} `json:"items"`
+	}
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &sec) != nil || len(sec.Items) != 2 {
+		t.Fatalf("Continue Watching: %d %s", w.Code, w.Body)
+	}
+	if err := silotest.CheckSection(w.Body.Bytes(), "continue_watching", 0); err != nil {
+		t.Error(err)
+	}
+	series, season := "/api/v2/artwork/cccccccccccccccccccccccccccccccc/", "/api/v2/artwork/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/"
+	for n, want := range [][3]string{
+		{series + "Primary?tag=series-poster&width=300", series + "Backdrop?tag=series-backdrop", season + "Primary?tag=parent-poster&width=300"},
+		{series + "Primary?tag=series-poster&width=300", series + "Backdrop?tag=series-backdrop", ""},
+	} {
+		if got := [3]string{sec.Items[n].SeriesPoster, sec.Items[n].SeriesBackdrop, sec.Items[n].SeasonPoster}; got != want {
+			t.Errorf("episode %d: %q, want %q", n, got, want)
+		}
+	}
+}
+
+// The documents the apps read of features Polyfin does not offer hold the
+// keys the contract requires: no reset of an Apple push installation, no
+// Discover rows of requests, no box sets in a library or a search.
+func TestDocumentsSayWhatPolyfinDoesNotOffer(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, browsing)
+	for path, key := range map[string]string{"/api/v2/devices/push/apple/capabilities": "installation_reset_available",
+		"/api/v2/requests/status": "discover_rows_supported", "/api/v2/catalog/search/capabilities": "box_sets"} {
+		var doc map[string]any
+		if w := h.do(http.MethodGet, path, nil); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &doc) != nil || doc[key] != false {
+			t.Errorf("%s: %d %s", path, w.Code, w.Body)
+		}
+	}
+	w := h.do(http.MethodGet, "/api/v2/user/libraries", nil)
+	var libraries struct {
+		Items []map[string]any `json:"items"`
+	}
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &libraries) != nil || len(libraries.Items) != 1 ||
+		libraries.Items[0]["box_sets_enabled"] != false || silotest.CheckLibraries(w.Body.Bytes()) != nil {
+		t.Errorf("libraries: %d %s", w.Code, w.Body)
 	}
 }

@@ -218,8 +218,10 @@ var appRequired = map[string]map[string]string{
 		"consent_notice_version": "i", "upload_chunk_bytes": "i"},
 	"/api/v2/requests/status":                 {"requests_enabled": "b", "state": "s"},
 	"/api/v2/devices/push/apple/capabilities": {"allowed": "b", "registration_available": "b", "revision": "s", "state": "s"},
+	// supports_atomic_shortcuts is no longer decoded: the Apple apps do
+	// not edit shortcuts.
 	"/api/v2/settings/contract/capabilities": {"revision": "s", "state": "s", "allowed": "b", "manifest_revision": "i",
-		"client_families": "a", "supports_batched_effective": "b", "supports_atomic_shortcuts": "b"},
+		"client_families": "a", "supports_batched_effective": "b"},
 	"/api/v2/auth/oauth/capabilities":            {"state": "s"},
 	"/api/v2/auth/external-sign-in/capabilities": {"state": "s"},
 }

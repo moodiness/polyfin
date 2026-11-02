@@ -19,6 +19,7 @@ func (s *Server) browseRoutes() {
 	s.mux.HandleFunc("GET /api/v2/user/libraries", s.signedIn(s.libraries))
 	s.mux.HandleFunc("GET /api/v2/home/sections", s.profiled(s.homeSections))
 	s.mux.HandleFunc("GET /api/v2/home/sections/{id}/items", s.profiled(s.homeSection))
+	s.mux.HandleFunc("GET /api/v2/home/capabilities", s.profiled(s.homeCapabilities))
 	s.mux.HandleFunc("GET /api/v2/catalog", s.profiled(s.catalog))
 	s.mux.HandleFunc("GET /api/v2/catalog/search/capabilities", s.profiled(s.searchCapabilities))
 	s.mux.HandleFunc("GET /api/v2/catalog/items/{id}", s.profiled(s.catalogItem))
@@ -63,6 +64,9 @@ type catalogItem struct {
 	PosterURL         string     `json:"poster_url,omitempty"`
 	BackdropURL       string     `json:"backdrop_url,omitempty"`
 	LogoURL           string     `json:"logo_url,omitempty"`
+	SeriesPosterURL   string     `json:"series_poster_url,omitempty"`
+	SeriesBackdropURL string     `json:"series_backdrop_url,omitempty"`
+	SeasonPosterURL   string     `json:"season_poster_url,omitempty"`
 	SeriesID          string     `json:"series_id,omitempty"`
 	SeriesTitle       string     `json:"series_title,omitempty"`
 	SeasonNumber      *int       `json:"season_number,omitempty"`
@@ -181,8 +185,11 @@ func catalogItemOf(r *http.Request, i item) catalogItem {
 		c.SeasonNumber = i.IndexNumber
 	}
 	c.PosterURL, c.BackdropURL, c.LogoURL = artworkOf(r, i)
-	if i.Type == "Episode" && c.PosterURL != "" {
-		c.PosterIsStill = new(true)
+	if i.Type == "Episode" {
+		c.SeriesPosterURL, c.SeriesBackdropURL, c.SeasonPosterURL = parentArtworkOf(r, i)
+		if c.PosterURL != "" {
+			c.PosterIsStill = new(true)
+		}
 	}
 	if i.UserData != nil {
 		c.UserState = &userState{IsFavorite: i.UserData.IsFavorite, Played: i.UserData.Played, InWatchlist: inWatchlist(r, i)}
@@ -216,6 +223,21 @@ func artworkOf(r *http.Request, i item) (poster, backdrop, logo string) {
 	return poster, backdrop, logo
 }
 
+// parentArtworkOf is an episode's series poster and backdrop, and its
+// season's poster, as the Jellyfin API names them for it: the season's is
+// the episode's nearest parent poster when that is its season's, which an
+// episode of another order shows none of (see the Jellyfin API's items).
+func parentArtworkOf(r *http.Request, i item) (seriesPoster, seriesBackdrop, seasonPoster string) {
+	seriesPoster = artworkURL(i.SeriesId, "Primary", i.SeriesPrimaryImageTag, artworkWidth(r, "poster"))
+	if i.ParentBackdropItemId == i.SeriesId && len(i.ParentBackdropImageTags) > 0 {
+		seriesBackdrop = artworkURL(i.SeriesId, "Backdrop", i.ParentBackdropImageTags[0], artworkWidth(r, "backdrop"))
+	}
+	if i.SeasonId != "" && i.ParentPrimaryImageItemId == i.SeasonId {
+		seasonPoster = artworkURL(i.SeasonId, "Primary", i.ParentPrimaryImageTag, artworkWidth(r, "poster"))
+	}
+	return seriesPoster, seriesBackdrop, seasonPoster
+}
+
 // browsable are the Jellyfin API's types Silo's apps browse and play.
 var browsable = []string{"Movie", "Series", "Season", "Episode", "Video"}
 
@@ -229,12 +251,16 @@ func cards(r *http.Request, items []item) []catalogItem {
 	return result
 }
 
+// userLibrary is a library as the apps list it. BoxSetsEnabled is always
+// false: Polyfin does not group a library's movies into box sets, so the
+// apps never ask group=box_set of it (see docs/silo-apps.md).
 type userLibrary struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	SortOrder int    `json:"sort_order"`
-	PosterURL string `json:"poster_url,omitempty"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	SortOrder      int    `json:"sort_order"`
+	PosterURL      string `json:"poster_url,omitempty"`
+	BoxSetsEnabled bool   `json:"box_sets_enabled"`
 }
 
 // libraryTypes are the types of the libraries Silo's apps list, by the
@@ -325,10 +351,59 @@ type section struct {
 	Customized bool          `json:"customized"`
 	Featured   bool          `json:"featured"`
 	IsCustom   bool          `json:"is_custom"`
+	// HasMore tells, of a section read alone with item_limit, that the
+	// limit left cards out.
+	HasMore bool `json:"has_more,omitempty"`
 }
 
 // sectionLimit is how many titles a Home section lists.
 const sectionLimit = 24
+
+// maxItemLimit is the largest item_limit the section reads take, as the
+// contract's: each section then lists at most that many of its titles.
+const maxItemLimit = 100
+
+// itemLimitAsked is the item_limit a section read asks, 0 for none,
+// answering the request when it cannot read it.
+func itemLimitAsked(w http.ResponseWriter, r *http.Request) (int, bool) {
+	text := r.URL.Query().Get("item_limit")
+	if text == "" {
+		return 0, true
+	}
+	limit, err := strconv.Atoi(text)
+	if err != nil || limit < 1 || limit > maxItemLimit {
+		validationProblem(w, "query.item_limit", "out_of_range", "item_limit is between 1 and 100.")
+		return 0, false
+	}
+	return limit, true
+}
+
+// cut keeps the first limit cards of a section, all of them for 0, its
+// item_limit the smaller of its own and limit, its total_count still
+// counting them all. It reports whether it left cards out.
+func (sec *section) cut(limit int) bool {
+	if limit == 0 {
+		return false
+	}
+	sec.ItemLimit = min(sec.ItemLimit, limit)
+	if len(sec.Items) <= limit {
+		return false
+	}
+	sec.Items = sec.Items[:limit]
+	return true
+}
+
+// homeCapabilities tells the apps the section reads take item_limit, up to
+// maxItemLimit: the apps then ask each row's first cards only.
+func (s *Server) homeCapabilities(w http.ResponseWriter, _ *http.Request, _ viewer) {
+	writeJSON(w, http.StatusOK, struct {
+		State               string `json:"state"`
+		Allowed             bool   `json:"allowed"`
+		Revision            string `json:"revision"`
+		SectionItemLimitMax int    `json:"section_item_limit_max"`
+		RowItemLimitMax     int    `json:"row_item_limit_max"`
+	}{"available", true, revision, maxItemLimit, maxItemLimit})
+}
 
 // sectionTitles are the titles of the Home sections, by the server's
 // language: Continue Watching, Next Up, and the latest of a library.
@@ -424,8 +499,13 @@ func (s *Server) sectionOf(r *http.Request, v viewer, id, title string, library 
 // homeSections are the sections of the Home page: those with titles. The
 // row of each library follows the user's home screen settings, as
 // jellyfin-web's latest titles do: the libraries in the order they set,
-// without those they left out of their latest titles.
+// without those they left out of their latest titles. item_limit cuts
+// each to its first titles.
 func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) {
+	limit, ok := itemLimitAsked(w, r)
+	if !ok {
+		return
+	}
 	views, numbers, a, err := s.views(r, v)
 	var rows []homeRow
 	if err == nil && a.ok() {
@@ -465,6 +545,7 @@ func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) 
 	sections := []section{}
 	add := func(sec section) {
 		if len(sec.Items) > 0 {
+			sec.cut(limit)
 			sections = append(sections, sec)
 		}
 	}
@@ -503,10 +584,16 @@ func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) 
 	}{sections})
 }
 
-// homeSection is one section of the Home page, by its identifier.
+// homeSection is one section of the Home page, by its identifier, cut to
+// its first titles by item_limit.
 func (s *Server) homeSection(w http.ResponseWriter, r *http.Request, v viewer) {
+	limit, ok := itemLimitAsked(w, r)
+	if !ok {
+		return
+	}
 	sec, ok := s.namedSection(w, r, v, r.PathValue("id"))
 	if ok {
+		sec.HasMore = sec.cut(limit)
 		writeJSON(w, http.StatusOK, sec)
 	}
 }
@@ -769,7 +856,7 @@ func (s *Server) catalogOf(w http.ResponseWriter, r *http.Request, v viewer, q u
 	switch {
 	case l.section != nil:
 		if f.narrows() {
-			validationProblem(w, in+".groups", "unsupported", "This server does not filter the sections of Home and of a library.")
+			problem(w, http.StatusNotImplemented, "capability_unsupported", "This server does not filter the sections of Home and of a library.")
 			return
 		}
 		writeJSON(w, http.StatusOK, pageOf(l.section.Items, start, limit, len(l.section.Items)))
@@ -835,14 +922,16 @@ func pageOf(all []catalogItem, start, limit, total int) catalogPage {
 // searchCapabilities tells the apps searches are available, through the
 // catalog's q, and people searches, among the people credited in titles
 // the user may see (people_media_scope: the Apple app searches people only
-// then).
+// then); box sets are not (box_sets: the Apple app reads a movie's box set
+// only then).
 func (s *Server) searchCapabilities(w http.ResponseWriter, _ *http.Request, _ viewer) {
 	writeJSON(w, http.StatusOK, struct {
 		Allowed          bool   `json:"allowed"`
 		State            string `json:"state"`
 		Revision         string `json:"revision"`
 		PeopleMediaScope bool   `json:"people_media_scope"`
-	}{true, "available", "polyfin-1", true})
+		BoxSets          bool   `json:"box_sets"`
+	}{true, "available", "polyfin-1", true, false})
 }
 
 // itemOf reads an item's description, answering the request when the

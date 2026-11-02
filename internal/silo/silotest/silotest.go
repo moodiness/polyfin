@@ -311,7 +311,13 @@ func checkPlan(c *checker, p object, session string, files []string) {
 
 // checkSubtitles checks a plan's subtitles as the apps show them: Apple's
 // subtitle decision decoding and plan adapter, Android's validateForMedia3
-// (PlaybackProtocolV3.kt).
+// (PlaybackProtocolV3.kt). A row's stream_index names an embedded track,
+// a stream index the apps select it by (Apple
+// PlaybackV3SubtitleInventoryItem.embeddedStreamIndex, Android
+// nativeSwitchTrackId), once; a row the apps list as unplayable, an
+// embedded track without a codec or one marked unplayable (Apple
+// SubtitleTrack.hasUnsupportedFormat, Android isUnplayableSubtitle), is
+// never the one selected.
 func checkSubtitles(c *checker, subtitle, selected object, session string) {
 	c.has(subtitle, "subtitle", map[string]string{"mode": "s", "inventory": "a"})
 	mode, _ := subtitle["mode"].(string)
@@ -332,6 +338,8 @@ func checkSubtitles(c *checker, subtitle, selected object, session string) {
 	}
 	inventory, _ := subtitle["inventory"].([]any)
 	ids := map[string]int{}
+	streams := map[float64]bool{}
+	unplayable := map[string]bool{}
 	for n, entry := range inventory {
 		row, _ := entry.(object)
 		where := fmt.Sprintf("subtitle.inventory[%d]", n)
@@ -358,6 +366,15 @@ func checkSubtitles(c *checker, subtitle, selected object, session string) {
 				c.fail("%s burned in, with url %q", where, url)
 			}
 		}
+		if index, ok := row["stream_index"]; ok {
+			n, number := index.(float64)
+			if !number || n < 0 || n != math.Trunc(n) || row["source"] != "embedded" || streams[n] {
+				c.fail("%s stream_index %v of a %v track", where, index, row["source"])
+			}
+			streams[n] = true
+		}
+		codec, _ := row["codec"].(string)
+		unplayable[id] = row["unplayable"] == true || row["source"] == "embedded" && strings.TrimSpace(codec) == ""
 	}
 	if track, ok := selected["subtitle"].(object); ok {
 		id, _ := track["id"].(string)
@@ -367,6 +384,45 @@ func checkSubtitles(c *checker, subtitle, selected object, session string) {
 			c.fail("the selected subtitle %q is not in the inventory", id)
 		case track["index"] != nil && track["index"] != float64(n):
 			c.fail("the selected subtitle %q has index %v, listed %d", id, track["index"], n)
+		case unplayable[id]:
+			c.fail("the selected subtitle %q is one the apps list as unplayable", id)
 		}
 	}
+}
+
+// CheckSubtitleStreams checks the embedded rows of a decision's subtitle
+// inventory against indexes, the index each embedded subtitle track of the
+// version has in the watch detail, in their order: the Apple app takes a
+// row's stream_index as that index to find a pick's row
+// (ApplePlaybackV3PlanAdapter.serverCombinedSubtitleIndex and
+// ffmpegSubtitleStreamIndex), and a row that names another stream as none.
+func CheckSubtitleStreams(data []byte, indexes []int) error {
+	var d struct {
+		Plan struct {
+			Subtitle struct {
+				Inventory []struct {
+					Source      string `json:"source"`
+					StreamIndex *int   `json:"stream_index"`
+				} `json:"inventory"`
+			} `json:"subtitle"`
+		} `json:"playback_plan"`
+	}
+	if err := json.Unmarshal(data, &d); err != nil {
+		return err
+	}
+	c := &checker{}
+	var named []int
+	for n, row := range d.Plan.Subtitle.Inventory {
+		switch {
+		case row.Source != "embedded":
+		case row.StreamIndex == nil:
+			c.fail("subtitle.inventory[%d] names no stream", n)
+		default:
+			named = append(named, *row.StreamIndex)
+		}
+	}
+	if !slices.Equal(named, indexes) {
+		c.fail("the embedded rows name streams %v, the watch detail %v", named, indexes)
+	}
+	return c.err()
 }

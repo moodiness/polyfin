@@ -141,23 +141,29 @@ func versionOf(source mediaSource, number string, added time.Time) fileVersion {
 		}
 	}
 	// The apps count a version's subtitles as subtitleOrder lists them,
-	// and find the file's own tracks by their index among its streams,
-	// which the Jellyfin API numbers after the files beside it.
+	// and find the file's own tracks by their index among its streams.
 	for _, stream := range subtitleOrder(source) {
 		track := subtitleTrack{Codec: stream.Codec, Language: languageTag(stream.Language), Title: stream.Title, Default: stream.IsDefault,
 			External: stream.IsExternal, Forced: stream.IsForced, HearingImpaired: stream.IsHearingImpaired}
 		if !stream.IsExternal {
-			index := stream.Index
-			for _, other := range source.MediaStreams {
-				if other.IsExternal && other.Index < stream.Index {
-					index--
-				}
-			}
-			track.Index = &index
+			track.Index = new(fileIndex(source, stream))
 		}
 		v.SubtitleTracks = append(v.SubtitleTracks, track)
 	}
 	return v
+}
+
+// fileIndex is the index of a file's own track among its streams, as
+// FFmpeg numbers them: the Jellyfin API numbers the files beside it
+// first.
+func fileIndex(source mediaSource, stream playback.MediaStream) int {
+	index := stream.Index
+	for _, other := range source.MediaStreams {
+		if other.IsExternal && other.Index < stream.Index {
+			index--
+		}
+	}
+	return index
 }
 
 // versionsOf describes an item's versions, as the Jellyfin API describes

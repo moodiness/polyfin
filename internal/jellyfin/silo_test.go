@@ -103,15 +103,19 @@ func (a siloApps) get(t *testing.T, path, token, profile string, into any) {
 func appsAccept(path string, data []byte) error {
 	target, _ := url.Parse(path)
 	segments := strings.Split(strings.TrimPrefix(target.Path, "/api/v2/"), "/")
+	// The cards a section read asks at most, 0 for none.
+	limit, _ := strconv.Atoi(target.Query().Get("item_limit"))
 	switch {
 	case target.Path == "/api/v2/user/libraries":
 		return silotest.CheckLibraries(data)
 	case target.Path == "/api/v2/home/sections", len(segments) == 3 && segments[0] == "library" && segments[2] == "sections":
-		return silotest.CheckSections(data)
+		return silotest.CheckSections(data, limit)
 	case len(segments) == 4 && segments[0] == "home" && segments[3] == "items":
-		return silotest.CheckSection(data, segments[2])
+		return silotest.CheckSection(data, segments[2], limit)
 	case len(segments) == 5 && segments[0] == "library" && segments[2] == "sections" && segments[4] == "items":
-		return silotest.CheckSection(data, segments[3])
+		return silotest.CheckSection(data, segments[3], limit)
+	case target.Path == "/api/v2/home/capabilities":
+		return silotest.CheckHomeCapabilities(data)
 	case target.Path == "/api/v2/catalog":
 		return silotest.CheckCatalogPage(data)
 	case target.Path == "/api/v2/catalog/filters":
@@ -428,6 +432,14 @@ func TestSiloAppsBrowseUnderTheUsersLimits(t *testing.T) {
 	a.get(t, "/api/v2/library/"+libraries[0].ID+"/sections/"+latest+"/items", token, profile, &alone)
 	if !slices.Equal(cardTitles(alone.Items), cardTitles(landing.Sections[0].Items)) {
 		t.Errorf("the latest alone: %v", cardTitles(alone.Items))
+	}
+	var cut struct {
+		Items   []siloCard `json:"items"`
+		HasMore bool       `json:"has_more"`
+	}
+	a.get(t, "/api/v2/home/sections/"+latest+"/items?item_limit=1", token, profile, &cut)
+	if len(cut.Items) != 1 || !cut.HasMore || cut.Items[0].ContentID != landing.Sections[0].Items[0].ContentID {
+		t.Errorf("the latest cut to one: %+v", cut)
 	}
 	if status, _ := a.do(t, http.MethodGet, "/api/v2/library/"+libraries[0].ID+"/sections/latest-999/items", token, profile, nil); status != http.StatusNotFound {
 		t.Errorf("another library's section: %d", status)
