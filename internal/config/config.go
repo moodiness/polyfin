@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/dlna"
 	"github.com/moodiness/polyfin/internal/https"
 	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/ocr"
 	"github.com/moodiness/polyfin/internal/secrets"
 )
 
@@ -51,9 +52,13 @@ type Config struct {
 	FFmpeg  string
 	// Tesseract is the executable picture subtitles are read into text
 	// with; TessdataDir a folder of .traineddata files for the languages
-	// Tesseract's own data lacks, empty for none.
+	// Tesseract's own data lacks, empty for none. TessdataURL is the
+	// address those files are downloaded from into it, followed by their
+	// name: Tesseract's own data at a pinned commit (ocr.DataURL), unless
+	// a mirror or tests choose another.
 	Tesseract   string
 	TessdataDir string
+	TessdataURL string
 	// DataDir is the folder Polyfin keeps its files in, an absolute path:
 	// the cache, unless the settings choose other folders for what it holds
 	// (see ChooseFolders), and the default recordings and backups folders.
@@ -132,6 +137,7 @@ func Load(getenv func(string) string) (Config, error) {
 		FFmpeg:        strings.TrimSpace(getenv("POLYFIN_FFMPEG")),
 		Tesseract:     strings.TrimSpace(getenv("POLYFIN_TESSERACT")),
 		TessdataDir:   strings.TrimSpace(getenv("POLYFIN_TESSDATA_DIR")),
+		TessdataURL:   strings.TrimSpace(getenv("POLYFIN_TESSDATA_URL")),
 		DataDir:       strings.TrimSpace(getenv("POLYFIN_DATA_DIR")),
 		FontsDir:      strings.TrimSpace(getenv("POLYFIN_FONTS_DIR")),
 		WebDir:        strings.TrimSpace(getenv("POLYFIN_WEB_DIR")),
@@ -206,6 +212,11 @@ func Load(getenv func(string) string) (Config, error) {
 		cfg.ACMEDirectory = https.LetsEncrypt
 	} else if address, err := url.Parse(cfg.ACMEDirectory); err != nil || address.Scheme != "https" && address.Scheme != "http" || address.Host == "" {
 		errs = append(errs, fmt.Errorf("POLYFIN_ACME_DIRECTORY: %q is not an http or https address", cfg.ACMEDirectory))
+	}
+	if cfg.TessdataURL == "" {
+		cfg.TessdataURL = ocr.DataURL
+	} else if address, err := url.Parse(cfg.TessdataURL); err != nil || address.Scheme != "https" && address.Scheme != "http" || address.Host == "" {
+		errs = append(errs, fmt.Errorf("POLYFIN_TESSDATA_URL: %q is not an http or https address", cfg.TessdataURL))
 	}
 	switch {
 	case cfg.DataDir == "":

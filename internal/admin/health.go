@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/https"
 	"github.com/moodiness/polyfin/internal/jellyfin"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -75,10 +76,13 @@ type HealthSources struct {
 	DLNA func() dlna.Status
 	// HTTPS tells how HTTPS stands; nil tells nothing.
 	HTTPS func() https.Status
-	// MissingLanguages lists the languages, by Tesseract's codes, of the
-	// picture subtitle tracks left unread for want of their data; nil
-	// lists none.
-	MissingLanguages func(context.Context) []string
+	// MissingLanguages lists the languages of the picture subtitle tracks
+	// left unread for want of their data; nil lists none.
+	// DownloadLanguage downloads the data of one, a Tesseract code, as
+	// Health's Download button asks (playback.Service.DownloadLanguage);
+	// nil downloads none.
+	MissingLanguages func(context.Context) []playback.MissingLanguage
+	DownloadLanguage func(ctx context.Context, language string) error
 	// Torrents plays the torrent streams; nil tells nothing.
 	Torrents *torrent.Engine
 	// Images keeps the artwork relayed, resized and drawn for apps

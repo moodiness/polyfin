@@ -176,6 +176,8 @@ type healthProblemJSON struct {
 	Missing   int              `json:"missing,omitempty"`
 	Files     int              `json:"files,omitempty"`
 	Previous  string           `json:"previous,omitempty"`
+	// Download offers to download the data of a language Tesseract lacks.
+	Download bool `json:"download,omitempty"`
 }
 
 // peerCountsJSON counts the peers a torrent that did not start found:
@@ -476,9 +478,12 @@ func (h *handler) healthProblems(ctx context.Context, language string) ([]health
 		}
 	}
 	if h.Health.MissingLanguages != nil {
-		for _, code := range h.Health.MissingLanguages(ctx) {
-			add(healthProblemJSON{Key: "subtitle_ocr_language:" + code, Code: problemOCRLanguage, Tone: notifications.SeverityWarning,
-				To: "/settings/conversion#subtitle-ocr", Name: ocrLanguageName(code), File: code + ".traineddata"})
+		// A language whose data can be downloaded has the Download button,
+		// and tells why its last download failed.
+		for _, l := range h.Health.MissingLanguages(ctx) {
+			add(healthProblemJSON{Key: "subtitle_ocr_language:" + l.Language, Code: problemOCRLanguage, Tone: notifications.SeverityWarning,
+				To: "/settings/conversion#subtitle-ocr", Name: ocrLanguageName(l.Language), File: l.Language + ".traineddata",
+				Download: l.Downloadable, Error: l.Error})
 		}
 	}
 
@@ -952,10 +957,16 @@ func (p healthProblemJSON) text(language string) string {
 		}
 		return say(i18n.Text{"The HTTPS certificate expires on %s.", "Le certificat HTTPS expire le %s.", "Das HTTPS-Zertifikat läuft am %s ab.", "El certificado HTTPS caduca el %s.", "Il certificato HTTPS scade il %s.", "O certificado HTTPS expira em %s."}, p.Expires.Format(time.DateOnly))
 	case problemOCRLanguage:
+		failed := ""
+		if p.Error != "" {
+			failed = " " + say(i18n.Text{"The last download of its data failed: %s", "Le dernier téléchargement de ses données a échoué : %s",
+				"Der letzte Download der Daten ist fehlgeschlagen: %s", "La última descarga de sus datos falló: %s",
+				"L’ultimo download dei suoi dati non è riuscito: %s", "O último download dos dados falhou: %s"}, p.Error)
+		}
 		return say(i18n.Text{"Picture subtitles in %s are not read into text: Tesseract has no data for this language. " +
 			"Add the file %s to the folder POLYFIN_TESSDATA_DIR names.",
 			"Les sous-titres en images en %s ne sont pas lus en texte : Tesseract n’a pas de données pour cette langue. " +
-				"Ajoutez le fichier %s au dossier que nomme POLYFIN_TESSDATA_DIR.", "Bilduntertitel in %s werden nicht in Text umgewandelt: Tesseract hat keine Daten für diese Sprache. Füge die Datei %s dem Ordner hinzu, den POLYFIN_TESSDATA_DIR angibt.", "Los subtítulos en imagen en %s no se convierten a texto: Tesseract no tiene datos para este idioma. Añada el archivo %s a la carpeta que indica POLYFIN_TESSDATA_DIR.", "I sottotitoli grafici in %s non vengono convertiti in testo: Tesseract non ha dati per questa lingua. Aggiungi il file %s alla cartella indicata da POLYFIN_TESSDATA_DIR.", "As legendas em imagem em %s não são convertidas em texto: o Tesseract não tem dados para este idioma. Adicione o arquivo %s à pasta indicada por POLYFIN_TESSDATA_DIR."}, p.Name, p.File)
+				"Ajoutez le fichier %s au dossier que nomme POLYFIN_TESSDATA_DIR.", "Bilduntertitel in %s werden nicht in Text umgewandelt: Tesseract hat keine Daten für diese Sprache. Füge die Datei %s dem Ordner hinzu, den POLYFIN_TESSDATA_DIR angibt.", "Los subtítulos en imagen en %s no se convierten a texto: Tesseract no tiene datos para este idioma. Añada el archivo %s a la carpeta que indica POLYFIN_TESSDATA_DIR.", "I sottotitoli grafici in %s non vengono convertiti in testo: Tesseract non ha dati per questa lingua. Aggiungi il file %s alla cartella indicata da POLYFIN_TESSDATA_DIR.", "As legendas em imagem em %s não são convertidas em texto: o Tesseract não tem dados para este idioma. Adicione o arquivo %s à pasta indicada por POLYFIN_TESSDATA_DIR."}, p.Name, p.File) + failed
 	case problemMetadataLanguages:
 		return say(i18n.Text{"%s: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. " +
 			"Keep Language of its descriptions at None on this addon, or on one more metadata addon.",

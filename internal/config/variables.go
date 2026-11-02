@@ -56,6 +56,7 @@ func Variables(environ []string, cfg Config) []Variable {
 		"POLYFIN_FFMPEG":              cfg.FFmpeg,
 		"POLYFIN_TESSERACT":           cfg.Tesseract,
 		"POLYFIN_TESSDATA_DIR":        cfg.TessdataDir,
+		"POLYFIN_TESSDATA_URL":        cfg.TessdataURL,
 		"POLYFIN_DATA_DIR":            cfg.DataDir,
 		"POLYFIN_FONTS_DIR":           cfg.FontsDir,
 		"POLYFIN_WEB_DIR":             cfg.WebDir,

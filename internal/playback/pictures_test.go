@@ -35,8 +35,11 @@ import (
 // read waits for a value from it, having told started.
 type fakeReader struct {
 	languages []string
-	hold      chan struct{}
-	started   chan struct{}
+	// dir is a folder of .traineddata files, whose languages it has data
+	// for too; empty for none.
+	dir     string
+	hold    chan struct{}
+	started chan struct{}
 
 	mu            sync.Mutex
 	reads         []string
@@ -45,7 +48,19 @@ type fakeReader struct {
 	held []int
 }
 
-func (f *fakeReader) Languages(context.Context) ([]string, error) { return f.languages, nil }
+func (f *fakeReader) Languages(context.Context) ([]string, error) {
+	f.mu.Lock()
+	languages := slices.Clone(f.languages)
+	f.mu.Unlock()
+	// The data a test downloads into dir counts too.
+	if f.dir != "" {
+		files, _ := filepath.Glob(filepath.Join(f.dir, "*.traineddata"))
+		for _, file := range files {
+			languages = append(languages, strings.TrimSuffix(filepath.Base(file), ".traineddata"))
+		}
+	}
+	return languages, nil
+}
 
 func (f *fakeReader) Read(_ context.Context, pictures []ocr.Picture, language string) ([]subtitles.Cue, error) {
 	held := 0
@@ -301,16 +316,26 @@ func TestLanguagesWithoutDataAreNotRead(t *testing.T) {
 	if !slices.Equal(reads, []string{"fra", "fra"}) {
 		t.Errorf("read in %v", reads)
 	}
-	if missing := p.MissingLanguages(t.Context()); !slices.Equal(missing, []string{"jpn"}) {
+	if missing := p.MissingLanguages(t.Context()); !slices.Equal(missing, []MissingLanguage{{Language: "jpn"}}) {
 		t.Errorf("missing languages: %v", missing)
 	}
 	if copies := p.TextCopies(t.Context(), version, videoAnalysis, files); len(copies) != 2 {
 		t.Errorf("copies: %+v", copies)
 	}
-	// Once its data is there, the language is no longer missing.
+	// Once its data is there, added by hand, the language is no longer
+	// missing, and its track is read.
+	p.reader.mu.Lock()
 	p.reader.languages = append(p.reader.languages, "jpn")
+	p.reader.mu.Unlock()
 	if missing := p.MissingLanguages(t.Context()); len(missing) != 0 {
 		t.Errorf("missing languages with the data: %v", missing)
+	}
+	p.waitReads(t)
+	p.reader.mu.Lock()
+	reads = slices.Clone(p.reader.reads)
+	p.reader.mu.Unlock()
+	if !slices.Equal(reads, []string{"fra", "fra", "jpn"}) {
+		t.Errorf("read in %v once the data was added", reads)
 	}
 }
 

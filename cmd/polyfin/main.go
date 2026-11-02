@@ -438,6 +438,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		return fmt.Errorf("prepare the OCR directory: %w", err)
 	}
 	player.UseTesseract(cfg.FFmpeg, ocrDir, &ocr.Tesseract{Path: cfg.Tesseract, DataDir: cfg.TessdataDir, TempDir: ocrDir})
+	// The data of the languages Tesseract lacks is downloaded into
+	// POLYFIN_TESSDATA_DIR from Health, or by itself as the settings ask.
+	player.FetchLanguagesWith(&ocr.Downloader{Dir: cfg.TessdataDir, URL: cfg.TessdataURL})
 	folders.UseScanned(player.QueueScanned)
 	if _, err := exec.LookPath(cfg.Tesseract); err != nil && store.Settings().SubtitleOCR != "off" {
 		logger.Warn("Tesseract was not found: picture subtitles are not read into text", "tesseract", cfg.Tesseract)
@@ -758,6 +761,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			DLNA:             sharing.Status,
 			HTTPS:            secure.Status,
 			MissingLanguages: player.MissingLanguages,
+			DownloadLanguage: player.DownloadLanguage,
 			Torrents:         torrents,
 			Images:           jellyfinAPI,
 

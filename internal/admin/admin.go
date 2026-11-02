@@ -462,6 +462,7 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/health/addons/{id}/check", h.administrator(h.checkAddon))
 	mux.Handle("GET /admin/api/health/goroutines", h.administrator(h.downloadGoroutines))
 	mux.Handle("POST /admin/api/health/images/clear", h.administrator(h.clearImageCache))
+	mux.Handle("POST /admin/api/health/languages/{language}/download", h.administrator(h.downloadLanguage))
 	mux.Handle("GET /admin/api/sources", h.administrator(h.sources))
 	mux.Handle("GET /admin/api/logs", h.administrator(h.logLines))
 	mux.Handle("GET /admin/api/logs/download", h.administrator(h.downloadLog))
