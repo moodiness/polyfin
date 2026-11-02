@@ -131,7 +131,14 @@ func filterAsked(w http.ResponseWriter, q url.Values, in string) (filter, bool) 
 		}
 		for _, wire := range g.Rules {
 			r, code, detail := ruleOf(wire)
-			if code != "" {
+			switch code {
+			case "":
+			case "unsupported":
+				// A field Polyfin cannot tell of its titles: Silo answers
+				// a query its catalog cannot serve as not implemented.
+				problem(w, http.StatusNotImplemented, "capability_unsupported", detail)
+				return filter{}, false
+			default:
 				validationProblem(w, in+".groups", code, detail)
 				return filter{}, false
 			}
@@ -199,7 +206,7 @@ func ruleOf(w wireRule) (rule, string, string) {
 		if w.Op != "is" {
 			return rule{}, "invalid", invalidOp
 		}
-		// The Apple apps send a boolean, the Android apps its text.
+		// The apps send a boolean, older Android apps its text.
 		var flag bool
 		var text string
 		switch {

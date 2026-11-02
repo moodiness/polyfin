@@ -277,8 +277,13 @@ func TestSiloAppsFilterAPage(t *testing.T) {
 	}
 	status, data := f.do(t, http.MethodGet, "/api/v2/catalog?"+silotest.AppleCatalog(films, silotest.Facets{HDR: true}, "title", 50).Encode(),
 		f.token, f.profile, nil)
-	if status != http.StatusUnprocessableEntity || !strings.Contains(string(data), `"code":"unsupported"`) {
+	if status != http.StatusNotImplemented || problemCode(data) != "capability_unsupported" {
 		t.Errorf("HDR: %d %s", status, data)
+	}
+	status, data = f.do(t, http.MethodPost, "/api/v2/catalog/query", f.token, f.profile,
+		silotest.AndroidCatalog(films, silotest.Facets{HDR: true}, "", "", 50))
+	if status != http.StatusNotImplemented || problemCode(data) != "capability_unsupported" {
+		t.Errorf("HDR, as Android asks: %d %s", status, data)
 	}
 }
 

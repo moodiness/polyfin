@@ -91,18 +91,16 @@ var watchRules = map[string][2]string{"unwatched": {"watched", "false"}, "in_pro
 // the watch status alone, as the Apple apps' CatalogQueryBuilder.build
 // (Screens/Browse/Filtering/CatalogQueryBuilder.swift) and the Android
 // apps' CatalogFilterQueryBuilder.buildGroups (shared
-// catalog/filter/CatalogFilterState.kt) build them. The Apple apps type
-// their values, years as numbers and flags as booleans; the Android apps
-// send each as a text (toV2Groups, shared network/api/CatalogApi.kt).
+// catalog/filter/CatalogFilterState.kt) build them. Both send flags as
+// booleans (Android toV2Groups and its BOOLEAN_RULE_FIELDS, shared
+// network/api/CatalogApi.kt); the Apple apps send years as numbers, the
+// Android apps each other value as a text.
 func (f Facets) groups(typed bool) []any {
 	rule := func(field, op string, value any) map[string]any {
 		return map[string]any{"field": field, "op": op, "value": value}
 	}
 	flag := func(value string) any {
-		if typed {
-			return value == "true"
-		}
-		return value
+		return value == "true"
 	}
 	year := func(value int) any {
 		if typed {
