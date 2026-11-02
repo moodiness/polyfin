@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"encoding/base64"
 	"errors"
 	"strings"
 	"testing"
@@ -33,5 +34,31 @@ func TestGrantsRoundTripAndResistForgery(t *testing.T) {
 		if _, err := signer.Verify(token); !errors.Is(err, ErrInvalidGrant) {
 			t.Errorf("%s: got %v", name, err)
 		}
+	}
+}
+
+// A grant given to a device names it; one given to none is as grants were
+// before they named devices, so that the addresses given out before still
+// play.
+func TestGrantsNameTheirDevice(t *testing.T) {
+	signer := NewSigner([]byte("a secret of the server, 32 bytes"))
+	given := Grant{Version: accounts.ID{1, 2, 3}, User: accounts.ID{9, 8, 7}, Device: accounts.ID{4, 5, 6}}
+	token := signer.Sign(given)
+	if got, err := signer.Verify(token); err != nil || got != given {
+		t.Fatalf("verify: %+v %v, want %+v", got, err, given)
+	}
+	tampered := []byte(token)
+	tampered[len(token)/2] ^= 1
+	if _, err := signer.Verify(string(tampered)); !errors.Is(err, ErrInvalidGrant) {
+		t.Errorf("a grant whose device was changed: got %v", err)
+	}
+	// A grant signed before devices: version, user, flags, nonce, MAC.
+	old := make([]byte, 16+16+1+8, 16+16+1+8+16)
+	copy(old[0:16], given.Version[:])
+	copy(old[16:32], given.User[:])
+	old[32] = 1
+	old = append(old, signer.mac(old)...)
+	if got, err := signer.Verify(base64.RawURLEncoding.EncodeToString(old)); err != nil || got != (Grant{Version: given.Version, User: given.User, Relay: true}) {
+		t.Errorf("a grant signed before devices: %+v %v", got, err)
 	}
 }

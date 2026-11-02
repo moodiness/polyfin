@@ -20,14 +20,25 @@ var ErrInvalidGrant = errors.New("invalid playback grant")
 type Grant struct {
 	Version accounts.ID
 	User    accounts.ID
+	// Device is the sign-in the grant was given to, zero when it was
+	// given to none: the media requests made with it are that device's
+	// playback, as those carrying its token are.
+	Device accounts.ID
 	// Relay makes Polyfin relay the bytes instead of redirecting the player
 	// to the source, for players that cannot follow the redirect.
 	Relay bool
 }
 
+// A grant is its version, its user, its flags, its device when it has
+// one, and a nonce, then their MAC. A grant without a device is as grants
+// were before they had one, so that those given out before still verify.
 const (
 	grantPayload = 16 + 16 + 1 + 8 // version, user, flags, nonce
+	grantDevice  = 16
 	grantMAC     = 16
+
+	grantRelay     = 1
+	grantHasDevice = 2
 )
 
 // Signer signs and checks grants with the server's secret.
@@ -43,27 +54,43 @@ func NewSigner(secret []byte) Signer {
 // Sign encodes a grant as a URL-safe token. Two signatures of the same grant
 // differ, so that each play session has its own identifier.
 func (s Signer) Sign(grant Grant) string {
-	var token [grantPayload + grantMAC]byte
+	var token [grantPayload + grantDevice + grantMAC]byte
 	copy(token[0:16], grant.Version[:])
 	copy(token[16:32], grant.User[:])
 	if grant.Relay {
-		token[32] = 1
+		token[32] |= grantRelay
 	}
-	_, _ = rand.Read(token[33:grantPayload])
-	copy(token[grantPayload:], s.mac(token[:grantPayload]))
-	return base64.RawURLEncoding.EncodeToString(token[:])
+	nonce, size := 33, grantPayload
+	if grant.Device != (accounts.ID{}) {
+		token[32] |= grantHasDevice
+		copy(token[33:33+grantDevice], grant.Device[:])
+		nonce, size = 33+grantDevice, grantPayload+grantDevice
+	}
+	_, _ = rand.Read(token[nonce:size])
+	copy(token[size:], s.mac(token[:size]))
+	return base64.RawURLEncoding.EncodeToString(token[:size+grantMAC])
 }
 
 // Verify decodes a token signed by Sign.
 func (s Signer) Verify(token string) (Grant, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(raw) != grantPayload+grantMAC || !hmac.Equal(raw[grantPayload:], s.mac(raw[:grantPayload])) {
+	if err != nil || len(raw) < grantPayload+grantMAC {
+		return Grant{}, ErrInvalidGrant
+	}
+	size := grantPayload
+	if raw[32]&grantHasDevice != 0 {
+		size += grantDevice
+	}
+	if len(raw) != size+grantMAC || !hmac.Equal(raw[size:], s.mac(raw[:size])) {
 		return Grant{}, ErrInvalidGrant
 	}
 	var grant Grant
 	copy(grant.Version[:], raw[0:16])
 	copy(grant.User[:], raw[16:32])
-	grant.Relay = raw[32]&1 == 1
+	grant.Relay = raw[32]&grantRelay != 0
+	if raw[32]&grantHasDevice != 0 {
+		copy(grant.Device[:], raw[33:33+grantDevice])
+	}
 	return grant, nil
 }
 
