@@ -422,10 +422,12 @@ type installed struct {
 // library is a library of a user with its catalog, the genre it is
 // narrowed to and the most items it lists (see addons.Library), how it
 // finds its image (see addons.Library.Image), whether the web player's
-// menus leave it out (see addons.Library.HideInMenus) and whether it
-// leaves out the titles local folders hold (see skiplocal.go). serverName
-// is its name in the server's language, which its generated image shows
-// whatever the user's language.
+// menus leave it out (see addons.Library.HideInMenus), whether it leaves
+// out the titles local folders hold (see skiplocal.go), and whether it
+// shows a catalog of movies or series as movies and shows (see
+// addons.Library.ShowAs and mixedKinds). serverName is its name in the
+// server's language, which its generated image shows whatever the user's
+// language.
 type library struct {
 	item        Item
 	serverName  string
@@ -436,6 +438,7 @@ type library struct {
 	image       string
 	hideInMenus bool
 	skipLocal   bool
+	mixed       bool
 }
 
 // catalogSource is the library's catalog as it lists it: narrowed to its
@@ -669,6 +672,7 @@ func (s *Service) buildView(ctx context.Context, user accounts.User) (view, erro
 			image:       l.Image,
 			hideInMenus: l.HideInMenus,
 			skipLocal:   l.SkipLocal,
+			mixed:       l.ShowAs == addons.ShowAsMoviesAndShows,
 		})
 	}
 	v.listedFolders = listedFolders(v.libraries)
@@ -1329,7 +1333,7 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 	// A listing that keeps none of what the library lists, its collections
 	// or its titles, lists nothing, out of none.
 	if kind, ok := listedKind(l.catalog.Type); l.catalog.Type == "collection" && !keepsKind(ctx, KindCollection) ||
-		ok && !keepsKind(ctx, kind) {
+		ok && !l.mixed && !keepsKind(ctx, kind) {
 		return Page{}, nil
 	}
 	// One that keeps only some of the kinds its titles may be counts and
@@ -1374,10 +1378,12 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 // catalog's type does not tell one (see listedKind): a movie or a series
 // for a catalog of other videos shown as movies and shows, a folder or a
 // video for one that is not, and any of them for another type, such as
-// anime, whose titles' own types tell theirs. It is none for a catalog of
-// movies, series or collections, or of no titles.
+// anime, whose titles' own types tell theirs, or for a catalog of movies
+// or series shown as movies and shows, which lists each title as its own
+// type tells, as a movie catalog that also lists series. It is none for
+// another catalog of movies, series or collections, or of no titles.
 func mixedKinds(l library) []Kind {
-	if _, ok := listedKind(l.catalog.Type); ok || l.catalog.Type == "collection" {
+	if _, ok := listedKind(l.catalog.Type); ok && !l.mixed || l.catalog.Type == "collection" {
 		return nil
 	}
 	if otherType(l.catalog.Type) {

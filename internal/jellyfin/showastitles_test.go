@@ -207,7 +207,10 @@ func (p vaultLibrary) show(t *testing.T, titles bool) {
 		t.Fatal(err)
 	}
 	choice := p.choice
-	choice.ShowAsTitles = titles
+	choice.ShowAs = addons.ShowAsHomeVideos
+	if titles {
+		choice.ShowAs = addons.ShowAsMoviesAndShows
+	}
 	after, err := p.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{choice})
 	if err != nil {
 		t.Fatal(err)

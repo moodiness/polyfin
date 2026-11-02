@@ -134,8 +134,9 @@ type Options struct {
 	// again; nil offers it for none.
 	LibraryRefreshes LibraryRefreshes
 	// ShownTitles gives users' data to the items the titles of libraries
-	// become as they switch between home videos and movies and shows; nil
-	// gives nothing.
+	// become as they switch between home videos and movies and shows, and
+	// decides how libraries of other videos show their titles while none
+	// chose; nil does neither.
 	ShownTitles ShownTitles
 	// Health are what the health page reads.
 	Health HealthSources

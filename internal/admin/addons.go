@@ -322,11 +322,13 @@ type libraryJSON struct {
 	// catalog takes it.
 	SkipLocal bool `json:"skipLocal"`
 	Skippable bool `json:"skippable"`
-	// ShowAsTitles shows the titles of an enabled library of other videos
-	// as movies and shows (see addons.Library.ShowAsTitles); OtherVideos
-	// tells whether the catalog takes it.
-	ShowAsTitles bool `json:"showAsTitles"`
-	OtherVideos  bool `json:"otherVideos"`
+	// ShowAs is how an enabled library shows its catalog's titles, one of
+	// ShowAsChoices (see addons.Library.ShowAs), null while none is chosen:
+	// a catalog of other videos then shows as home videos until Polyfin
+	// decides from its first page, the others as listed. ShowAsChoices is
+	// empty for a catalog that takes none.
+	ShowAs        *string  `json:"showAs"`
+	ShowAsChoices []string `json:"showAsChoices"`
 	// ItemID is the library's item in Jellyfin apps, null for a catalog
 	// that is not an enabled library. Image is how it finds the image apps
 	// show on its tile: "none", "automatic", "generated", or "custom" when
@@ -500,31 +502,36 @@ func (h *handler) writeLibraries(w http.ResponseWriter, r *http.Request, scope a
 	result := make([]libraryJSON, 0, len(libraries))
 	for i, l := range libraries {
 		entry := libraryJSON{
-			AddonID:      l.AddonID.String(),
-			AddonName:    l.AddonName,
-			CatalogType:  l.Catalog.Type,
-			CatalogID:    l.Catalog.ID,
-			CatalogName:  l.Catalog.Name,
-			Name:         l.Name,
-			AppName:      appNames[i],
-			Enabled:      l.Enabled,
-			Browsable:    l.Catalog.Browsable(),
-			Genres:       []string{},
-			Filterable:   l.Filterable,
-			HideInMenus:  l.HideInMenus,
-			SkipLocal:    l.SkipLocal,
-			Skippable:    l.Skippable,
-			ShowAsTitles: l.ShowAsTitles,
-			OtherVideos:  l.OtherVideos,
-			Image:        l.Image,
-			Guide:        h.newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
-			Guides:       h.newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
+			AddonID:     l.AddonID.String(),
+			AddonName:   l.AddonName,
+			CatalogType: l.Catalog.Type,
+			CatalogID:   l.Catalog.ID,
+			CatalogName: l.Catalog.Name,
+			Name:        l.Name,
+			AppName:     appNames[i],
+			Enabled:     l.Enabled,
+			Browsable:   l.Catalog.Browsable(),
+			Genres:      []string{},
+			Filterable:  l.Filterable,
+			HideInMenus: l.HideInMenus,
+			SkipLocal:   l.SkipLocal,
+			Skippable:   l.Skippable,
+			Image:       l.Image,
+			Guide:       h.newLibraryGuideJSON(l, h.Accounts.Settings().LiveTvRefreshHours),
+			Guides:      h.newGuidesJSON(l.Guides, h.Accounts.Settings().LiveTvRefreshHours),
 		}
 		if l.Filterable {
 			entry.Genres = append(entry.Genres, addons.GenreChoices(l.Catalog)...)
 		}
 		if l.Genre != "" {
 			entry.Genre = new(l.Genre)
+		}
+		if l.ShowAs != "" {
+			entry.ShowAs = new(l.ShowAs)
+		}
+		entry.ShowAsChoices = l.ShowAsChoices
+		if entry.ShowAsChoices == nil {
+			entry.ShowAsChoices = []string{}
 		}
 		if l.MaxItems > 0 {
 			entry.MaxItems = new(l.MaxItems)
@@ -965,10 +972,12 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			Genre       *string `json:"genre"`
 			// MaxItems is read as any number, so that one that is not a
 			// whole number is refused as a maximum, not as a request.
-			MaxItems     *float64 `json:"maxItems"`
-			HideInMenus  bool     `json:"hideInMenus"`
-			SkipLocal    bool     `json:"skipLocal"`
-			ShowAsTitles bool     `json:"showAsTitles"`
+			MaxItems    *float64 `json:"maxItems"`
+			HideInMenus bool     `json:"hideInMenus"`
+			SkipLocal   bool     `json:"skipLocal"`
+			// ShowAs is one of the catalog's showAsChoices, null to keep
+			// the one the library has, which may not be chosen yet.
+			ShowAs *string `json:"showAs"`
 		} `json:"libraries"`
 	}
 	if !decode(w, r, &body) {
@@ -982,8 +991,10 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		choice := addons.LibraryChoice{AddonID: id, CatalogType: library.CatalogType, CatalogID: library.CatalogID,
-			Name: library.Name, Genre: library.Genre, HideInMenus: library.HideInMenus, SkipLocal: library.SkipLocal,
-			ShowAsTitles: library.ShowAsTitles}
+			Name: library.Name, Genre: library.Genre, HideInMenus: library.HideInMenus, SkipLocal: library.SkipLocal}
+		if library.ShowAs != nil {
+			choice.ShowAs = *library.ShowAs
+		}
 		if max := library.MaxItems; max != nil {
 			if *max != math.Trunc(*max) || *max < 1 || *max > addons.MaxLibraryItems {
 				writeError(w, http.StatusBadRequest, "invalid_library_max_items")
@@ -1011,6 +1022,15 @@ func (h *handler) saveLibraries(w http.ResponseWriter, r *http.Request) {
 	if h.ShownTitles != nil {
 		if err := h.ShownTitles.FollowTitles(r.Context(), before, libraries); err != nil {
 			h.Logger.Error("Users' data could not follow the titles of libraries shown otherwise", "error", err)
+		}
+		// A library of other videos made now is shown as its first page
+		// tells, unless one chose how.
+		if err := h.ShownTitles.DecideShowAs(r.Context(), scope); err != nil {
+			h.Logger.Error("How libraries show their titles could not be decided", "error", err)
+		}
+		if libraries, err = h.Addons.Libraries(r.Context(), scope); err != nil {
+			h.internalError(w, r, err)
+			return
 		}
 	}
 	h.writeLibraries(w, r, scope, libraries)

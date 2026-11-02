@@ -118,23 +118,24 @@ func TestLibrariesShowTheNameAppsShow(t *testing.T) {
 }
 
 // narrowedLibrary is what the admin app reads of a library's genre and
-// maximum, of whether the web player's menus leave it out, and of whether
-// it leaves out the titles local folders hold.
+// maximum, of whether the web player's menus leave it out, of whether it
+// leaves out the titles local folders hold, and of how it shows its
+// titles.
 type narrowedLibrary struct {
-	AddonID      string   `json:"addonId"`
-	CatalogType  string   `json:"catalogType"`
-	CatalogID    string   `json:"catalogId"`
-	AppName      *string  `json:"appName"`
-	Enabled      bool     `json:"enabled"`
-	Genre        *string  `json:"genre"`
-	Genres       []string `json:"genres"`
-	MaxItems     *int     `json:"maxItems"`
-	Filterable   bool     `json:"filterable"`
-	HideInMenus  bool     `json:"hideInMenus"`
-	SkipLocal    bool     `json:"skipLocal"`
-	Skippable    bool     `json:"skippable"`
-	ShowAsTitles bool     `json:"showAsTitles"`
-	OtherVideos  bool     `json:"otherVideos"`
+	AddonID       string   `json:"addonId"`
+	CatalogType   string   `json:"catalogType"`
+	CatalogID     string   `json:"catalogId"`
+	AppName       *string  `json:"appName"`
+	Enabled       bool     `json:"enabled"`
+	Genre         *string  `json:"genre"`
+	Genres        []string `json:"genres"`
+	MaxItems      *int     `json:"maxItems"`
+	Filterable    bool     `json:"filterable"`
+	HideInMenus   bool     `json:"hideInMenus"`
+	SkipLocal     bool     `json:"skipLocal"`
+	Skippable     bool     `json:"skippable"`
+	ShowAs        *string  `json:"showAs"`
+	ShowAsChoices []string `json:"showAsChoices"`
 }
 
 // saveLibraries puts a scope's libraries, and answers the status, the
@@ -350,17 +351,21 @@ func TestLibrariesSkipLocal(t *testing.T) {
 	}
 }
 
-// An administrator sets a library of other videos to show its titles as
-// movies and shows: the option reads back on it, and the catalogs of
-// other videos, of the other type or a type of the addon's own, offer it.
-// Catalogs of movies and of live TV neither offer nor take it.
-func TestLibrariesShowAsTitles(t *testing.T) {
+// An administrator chooses how libraries show their titles, among the
+// choices of their catalog's type: home videos or movies and shows for a
+// catalog of other videos, of the other type or a type of the addon's
+// own; as listed or movies and shows for a catalog of movies or series.
+// The choice reads back, and a library saved without one keeps it.
+// Anime and live TV catalogs offer none, and a choice a catalog does not
+// offer is refused.
+func TestLibrariesShowAs(t *testing.T) {
 	t.Parallel()
 	api := newTestAPI(t, 10)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"id": "vault", "name": "Vault", "version": "1.0.0", "resources": ["catalog"],
 			"catalogs": [{"type": "library", "id": "store", "name": "Store"}, {"type": "other", "id": "clips", "name": "Clips"},
-				{"type": "movie", "id": "top", "name": "Top"}, {"type": "tv", "id": "channels", "name": "Channels"}]}`))
+				{"type": "movie", "id": "top", "name": "Top"}, {"type": "series", "id": "shows", "name": "Shows"},
+				{"type": "anime", "id": "mixed", "name": "Mixed"}, {"type": "tv", "id": "channels", "name": "Channels"}]}`))
 	}))
 	defer server.Close()
 	administrator := api.signedIn("administrator", true)
@@ -369,30 +374,47 @@ func TestLibrariesShowAsTitles(t *testing.T) {
 		t.Fatalf("installing: %d %v", status, body)
 	}
 	addonID, _ := body["id"].(string)
-	library := func(catalogType, catalogID string, titles bool) map[string]any {
-		return map[string]any{"addonId": addonID, "catalogType": catalogType, "catalogId": catalogID, "name": nil, "showAsTitles": titles}
+	library := func(catalogType, catalogID string, showAs any) map[string]any {
+		return map[string]any{"addonId": addonID, "catalogType": catalogType, "catalogId": catalogID, "name": nil, "showAs": showAs}
 	}
-	status, saved, code := administrator.saveLibraries("shared", library("library", "store", true), library("other", "clips", false),
-		library("movie", "top", false), library("tv", "channels", false))
-	if status != http.StatusOK {
-		t.Fatalf("saving: %d %s", status, code)
+	others, titles := []string{"home_videos", "movies_and_shows"}, []string{"listed", "movies_and_shows"}
+	want := map[string]struct {
+		showAs  string
+		choices []string
+	}{
+		"library/store": {"movies_and_shows", others}, "other/clips": {"home_videos", others},
+		"movie/top": {"listed", titles}, "series/shows": {"movies_and_shows", titles},
+		"anime/mixed": {"", []string{}}, "tv/channels": {"", []string{}},
 	}
-	for when, listed := range map[string]map[string]narrowedLibrary{"saved": byCatalog(saved), "read": byCatalog(administrator.libraries("shared"))} {
-		if l := listed["library/store"]; !l.ShowAsTitles || !l.OtherVideos {
-			t.Errorf("%s: the library set to show movies and shows: %+v", when, l)
-		}
-		if l := listed["other/clips"]; l.ShowAsTitles || !l.OtherVideos {
-			t.Errorf("%s: a library of other videos saved without the option: %+v", when, l)
-		}
-		for _, key := range []string{"movie/top", "tv/channels"} {
-			if l := listed[key]; l.ShowAsTitles || l.OtherVideos {
+	check := func(when string, listed map[string]narrowedLibrary) {
+		t.Helper()
+		for key, w := range want {
+			l := listed[key]
+			if showAs := l.ShowAs; (showAs == nil) != (w.showAs == "") || showAs != nil && *showAs != w.showAs ||
+				!slices.Equal(l.ShowAsChoices, w.choices) {
 				t.Errorf("%s: %s: %+v", when, key, l)
 			}
 		}
 	}
-	for _, refused := range []map[string]any{library("movie", "top", true), library("tv", "channels", true)} {
+	status, saved, code := administrator.saveLibraries("shared", library("library", "store", "movies_and_shows"),
+		library("other", "clips", "home_videos"), library("movie", "top", "listed"), library("series", "shows", "movies_and_shows"),
+		library("anime", "mixed", nil), library("tv", "channels", nil))
+	if status != http.StatusOK {
+		t.Fatalf("saving: %d %s", status, code)
+	}
+	check("saved", byCatalog(saved))
+	check("read", byCatalog(administrator.libraries("shared")))
+	// Saved again without a choice, each keeps its own.
+	status, saved, code = administrator.saveLibraries("shared", library("library", "store", nil), library("other", "clips", nil),
+		library("movie", "top", nil), library("series", "shows", nil), library("anime", "mixed", nil), library("tv", "channels", nil))
+	if status != http.StatusOK {
+		t.Fatalf("saving again: %d %s", status, code)
+	}
+	check("kept", byCatalog(saved))
+	for _, refused := range []map[string]any{library("library", "store", "listed"), library("movie", "top", "home_videos"),
+		library("series", "shows", "movies"), library("anime", "mixed", "movies_and_shows"), library("tv", "channels", "listed")} {
 		if status, _, code := administrator.saveLibraries("shared", refused); status != http.StatusBadRequest || code != "invalid_library" {
-			t.Errorf("%s/%s with the option: %d %s", refused["catalogType"], refused["catalogId"], status, code)
+			t.Errorf("%s/%s shown as %s: %d %s", refused["catalogType"], refused["catalogId"], refused["showAs"], status, code)
 		}
 	}
 }

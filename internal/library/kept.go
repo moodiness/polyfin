@@ -712,10 +712,12 @@ const WarmInterval = time.Hour
 // it, with the automatic images of those that find their own, so that no
 // home screen waits for an addon: those of the server's addons, and of
 // users' own addons when the settings allow them. Pages already fresh are
-// not asked again; stale ones are refreshed. Then it tells those pages
-// are read (see OnFirstPagesRead). It also forgets the pages and
-// descriptions kept in the database that no one read for long, and the
-// catalogs and titles no read saw for long (see arrivals.go).
+// not asked again; stale ones are refreshed. A library of other videos
+// for which none chose how it shows its titles is decided from that page
+// (see decideShowAs). Then it tells those pages are read (see
+// OnFirstPagesRead). It also forgets the pages and descriptions kept in
+// the database that no one read for long, and the catalogs and titles no
+// read saw for long (see arrivals.go).
 func (s *Service) Warm(ctx context.Context) error {
 	scopes := []struct {
 		scope    addons.Scope
@@ -767,8 +769,14 @@ func (s *Service) Warm(ctx context.Context) error {
 			// narrowed to one.
 			src := source{addon: entry, catalog: l.Catalog, genre: l.Genre}
 			group.Go(func() error {
-				if _, err := s.page(ctx, src, 0); err != nil && ctx.Err() == nil {
+				first, err := s.page(ctx, src, 0)
+				switch {
+				case err != nil && ctx.Err() == nil:
 					s.logger.Debug("A library's first page could not be read", "addon", addon.Manifest.Name, "catalog", l.Catalog.ID, "error", err)
+				case err == nil:
+					if err := s.decideShowAs(ctx, l, first); err != nil {
+						s.logger.Warn("How a library shows its titles could not be decided", "catalog", l.Catalog.ID, "error", err)
+					}
 				}
 				if l.Image == addons.LibraryImageAutomatic {
 					s.lookUpImage(ctx, src)

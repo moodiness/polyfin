@@ -13,7 +13,7 @@ import (
 )
 
 // A library of other videos (see othervideos.go) may show its titles as
-// movies and shows (addons.Library.ShowAsTitles), for the Jellyfin apps
+// movies and shows (addons.ShowAsMoviesAndShows), for the Jellyfin apps
 // that keep only libraries of movies and shows, and list only Movie and
 // Series items. The library then has no content type, as Jellyfin's mixed
 // libraries. A title whose description has two videos or more, or one its
@@ -63,12 +63,80 @@ func catalogOffers(entry installed, catalog stremio.Catalog, kinds []Kind) (Kind
 
 // libraryCollectionType is the content of a library (see collectionType):
 // none, as Jellyfin's mixed libraries, for one that shows its titles as
-// movies and shows.
+// movies and shows: a library of other videos shown so, or of movies or
+// series that lists each title as its own type tells (see mixedKinds).
 func libraryCollectionType(l addons.Library) string {
-	if l.ShowAsTitles {
+	if l.ShowAs == addons.ShowAsMoviesAndShows {
 		return ""
 	}
 	return collectionType(l.Catalog.Type)
+}
+
+// undecidedShowAs reports whether an enabled library of other videos shows
+// its titles as none chose, as home videos until Polyfin decides from its
+// catalog's first page (see addons.DecidedShowAs).
+func undecidedShowAs(l addons.Library) bool {
+	return l.Enabled && l.ShowAs == "" && slices.Contains(l.ShowAsChoices, addons.ShowAsHomeVideos)
+}
+
+// DecideShowAs decides how the enabled libraries of other videos of scope
+// for which none chose show their titles, from their catalog's first page
+// (see addons.DecidedShowAs), as Warm does for every scope at start and
+// then hourly: the admin API calls it once it saved a scope's libraries,
+// so that a library made then shows as decided at once. A library whose
+// first page cannot be read now is left to the next.
+func (s *Service) DecideShowAs(ctx context.Context, scope addons.Scope) error {
+	libraries, err := s.addons.Libraries(ctx, scope)
+	if err != nil || !slices.ContainsFunc(libraries, undecidedShowAs) {
+		return err
+	}
+	list, err := s.addons.Addons(ctx, scope)
+	if err != nil {
+		return err
+	}
+	// A user's own addons may reach the local network only if that user
+	// is an administrator (see view).
+	confined := false
+	if scope.Owner != nil {
+		if err := s.db.QueryRow(ctx, "SELECT NOT is_administrator FROM users WHERE id = $1", *scope.Owner).Scan(&confined); err != nil {
+			return err
+		}
+	}
+	var errs []error
+	for _, l := range libraries {
+		i := slices.IndexFunc(list, func(a addons.Addon) bool { return a.ID == l.AddonID })
+		if !undecidedShowAs(l) || i < 0 || !list[i].Enabled || !list[i].Stremio() {
+			continue
+		}
+		entry := installed{addon: list[i], confined: confined, shared: scope.Owner == nil}
+		first, err := s.page(ctx, source{addon: entry, catalog: l.Catalog, genre: l.Genre}, 0)
+		if err != nil {
+			s.logger.Debug("A library's first page could not be read", "addon", list[i].Manifest.Name, "catalog", l.Catalog.ID, "error", err)
+			continue
+		}
+		errs = append(errs, s.decideShowAs(ctx, l, first))
+	}
+	return errors.Join(errs...)
+}
+
+// decideShowAs stores how library l of other videos, for which none chose,
+// shows its titles, as first, its catalog's first page, tells (see
+// addons.DecidedShowAs). One decided as movies and shows lists its movies
+// and series as the same items, but its titles of other types, past the
+// first page, become series or movies: users' data follows them as when an
+// administrator switches it (see followTitles).
+func (s *Service) decideShowAs(ctx context.Context, l addons.Library, first []stremio.Meta) error {
+	showAs := addons.DecidedShowAs(first)
+	if showAs == "" || !undecidedShowAs(l) {
+		return nil
+	}
+	key := addons.LibraryKey{AddonID: l.AddonID, CatalogType: l.Catalog.Type, CatalogID: l.Catalog.ID}
+	decided, err := s.addons.DecideShowAs(ctx, key, showAs)
+	if err != nil || !decided || showAs != addons.ShowAsMoviesAndShows {
+		return err
+	}
+	s.logger.Info("A library of other videos lists movies and shows, and shows them so", "catalog", l.Catalog.ID)
+	return s.followTitles(ctx, key, true)
 }
 
 // shownTitle reports whether r is a title of the other or channel type
@@ -165,20 +233,21 @@ func numberVideos(meta stremio.Meta) stremio.Meta {
 	return meta
 }
 
-// FollowTitles gives, for each library that switched between showing its
-// titles as home videos and as movies and shows from before to after, the
-// libraries of a scope before and after a change, what users did with its
-// titles and their videos to the items they become: the series or movie a
-// folder or a video becomes, the episode a folder's video becomes, and
-// back. Played marks and favorites are given, resume points move, by an
-// import's rules (see userdata.Store.Follow). A library turned off or on
-// switches as well: its titles are found again as home videos while it is
-// off.
+// FollowTitles gives, for each library of other videos that switched
+// between showing its titles as home videos and as movies and shows from
+// before to after, the libraries of a scope before and after a change,
+// what users did with its titles and their videos to the items they
+// become: the series or movie a folder or a video becomes, the episode a
+// folder's video becomes, and back. Played marks and favorites are given,
+// resume points move, by an import's rules (see userdata.Store.Follow). A
+// library turned off or on switches as well: its titles are found again as
+// home videos while it is off. A library of movies or series shown as
+// movies and shows keeps its items, so it has nothing to follow.
 func (s *Service) FollowTitles(ctx context.Context, before, after []addons.Library) error {
 	shows := func(libraries []addons.Library) map[addons.LibraryKey]bool {
 		result := map[addons.LibraryKey]bool{}
 		for _, l := range libraries {
-			if l.Enabled && l.ShowAsTitles {
+			if l.Enabled && l.ShowAs == addons.ShowAsMoviesAndShows && otherType(l.Catalog.Type) {
 				result[addons.LibraryKey{AddonID: l.AddonID, CatalogType: l.Catalog.Type, CatalogID: l.Catalog.ID}] = true
 			}
 		}

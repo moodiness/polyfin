@@ -22,9 +22,12 @@ type LibraryRefreshes interface {
 
 // ShownTitles gives what users did with the titles of the libraries that
 // switch between home videos and movies and shows to the items they
-// become (see library.Service.FollowTitles).
+// become (see library.Service.FollowTitles), and decides how the libraries
+// of other videos for which none chose show their titles (see
+// library.Service.DecideShowAs).
 type ShownTitles interface {
 	FollowTitles(ctx context.Context, before, after []addons.Library) error
+	DecideShowAs(ctx context.Context, scope addons.Scope) error
 }
 
 // libraryRefreshJSON is how the refresh of a library's descriptions

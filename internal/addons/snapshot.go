@@ -129,11 +129,11 @@ func (s *Store) load(ctx context.Context) (*snapshot, error) {
 		return nil, err
 	}
 	owner := func(id *accounts.ID) accounts.ID { return ownerOf(Scope{Owner: id}) }
-	// An addon tells which of its catalogs' libraries show their titles as
-	// movies and shows, wherever they are listed or found.
+	// An addon tells which of its catalogs of other videos' libraries show
+	// their titles as movies and shows, wherever they are listed or found.
 	titled := map[accounts.ID][]catalogRef{}
 	for _, row := range rows {
-		if row.showAsTitles {
+		if row.showAs != nil && *row.showAs == ShowAsMoviesAndShows {
 			titled[row.key.AddonID] = append(titled[row.key.AddonID], catalogRef{row.key.CatalogType, row.key.CatalogID})
 		}
 	}
