@@ -533,7 +533,7 @@ const sources = {
       'The metadata addon that describes their shows does not list them, as when it numbers seasons or specials otherwise. They are listed all the same, named after their files, and play. Their shows and numbers are under Episodes only in the files.',
     unlistedListTitle: 'Episodes only in the files',
     unlistedListHelp:
-      'A file becomes a version of a catalog episode only when its season and episode number are the catalog’s. These files are numbered otherwise, so each is an episode of its own, next to the catalog’s. Rename them to the catalog’s numbers, then scan.',
+      'A file becomes a version of a catalog episode only when its season and episode number are the catalog’s. These files are numbered otherwise, so each is an episode of its own, next to the catalog’s. Rename them to the catalog’s numbers, then scan. Or choose how the show’s files are numbered: they then become versions of the catalog’s episodes without renaming.',
     unlistedSeason: (season: number) => (season === 0 ? 'Specials' : `Season ${season}`),
     unlistedFiles: (episodes: string) => `In the files: ${episodes}`,
     unlistedCatalog: (episodes: string) => `In the catalog: ${episodes}`,
@@ -542,6 +542,48 @@ const sources = {
     unlistedCatalogRange: (first: string, last: string) => `it lists ${first} to ${last}`,
     unlistedCatalogEmpty: 'it lists no episodes',
     unlistedNotDescribed: 'The catalog’s numbers show once an app opens the show again',
+    numberingTitle: 'How shows’ files are numbered',
+    numberingHelp:
+      'A file is a version of the catalog’s episode of its season and number. When a show’s files are numbered otherwise, choose how: Polyfin maps them to the catalog’s episodes without renaming them, and played marks, resume points and favorites move with them. A file the numbering cannot place stays an episode of its own, with why.',
+    numberingLabel: (name: string) => `How the files of ${name} are numbered`,
+    numberings: {
+      catalog: 'As the catalog',
+      per_season: 'Per season',
+      continuing: 'Continuing from season 1',
+      absolute: 'Absolute',
+      order: 'An episode order',
+    },
+    numberingHints: {
+      catalog: 'S02E05 is the catalog’s S02E05.',
+      per_season:
+        'Each season starts at 1: S02E01 is the first episode the catalog lists in season 2.',
+      continuing:
+        'The numbers run on across seasons: after 12 episodes in season 1, S02E13 is the catalog’s S02E01.',
+      absolute:
+        'Each number is the episode’s place among all the show’s episodes, specials left out: E41 is the 41st.',
+      order: 'The files follow one of the show’s TMDB episode groups, such as its DVD order.',
+    },
+    numberingGroupLabel: (name: string) => `The episode order the files of ${name} follow`,
+    numberingGroupPlaceholder: 'Choose an episode order',
+    numberingLookup: {
+      no_key: 'Add a TMDB key in Settings › Content first: the episode orders come from TMDB.',
+      unknown: 'TMDB does not know this show, or no metadata addon of the server describes it.',
+      failed: 'TMDB could not be reached to list the show’s episode orders. Try again in a moment.',
+      none: 'TMDB gives this show no episode order.',
+    },
+    numberingSaved: (name: string) => `The files of ${name} are numbered anew`,
+    numberingFileCount: (files: number) => (files === 1 ? '1 file' : `${files} files`),
+    numberingMapped: (mapped: number, files: number) =>
+      `${mapped} of ${files} files mapped to the catalog’s episodes`,
+    unmappedReasons: {
+      no_catalog: 'No metadata addon of the server describes the show',
+      outside_season: 'The catalog’s season has no episode at that place',
+      beyond_catalog: 'The catalog lists fewer episodes than that number',
+      not_in_order: 'The episode order has no episode at that place',
+      not_listed: 'The catalog does not list the episode order’s episode at that place',
+      no_order: 'TMDB cannot tell the episode order for now',
+    } as Record<string, string>,
+    unmappedListed: (listed: string) => `Listed as an episode of its own, ${listed}`,
     linkNotDescribedShow:
       'No metadata addon of the server describes this identifier as a show. Check that it is the show’s, not an episode’s.',
     linkNotDescribedMovie:

@@ -558,7 +558,7 @@ const sources: typeof en = {
       'El addon de metadatos que describe sus series no los incluye, como cuando numera de otra forma las temporadas o los especiales. Se muestran igualmente, con el nombre de su archivo, y se reproducen. Sus series y números están en Episodios solo en los archivos.',
     unlistedListTitle: 'Episodios solo en los archivos',
     unlistedListHelp:
-      'Un archivo solo se convierte en una versión de un episodio del catálogo cuando su temporada y su número de episodio son los del catálogo. Estos archivos están numerados de otra forma, así que cada uno es un episodio propio, junto a los del catálogo. Renómbrelos con los números del catálogo y escanee.',
+      'Un archivo solo se convierte en una versión de un episodio del catálogo cuando su temporada y su número de episodio son los del catálogo. Estos archivos están numerados de otra forma, así que cada uno es un episodio propio, junto a los del catálogo. Renómbrelos con los números del catálogo y escanee. O elija cómo están numerados los archivos de la serie: se convierten entonces en versiones de los episodios del catálogo sin renombrarlos.',
     unlistedSeason: (season: number) => (season === 0 ? 'Especiales' : `Temporada ${season}`),
     unlistedFiles: (episodes: string) => `En los archivos: ${episodes}`,
     unlistedCatalog: (episodes: string) => `En el catálogo: ${episodes}`,
@@ -568,6 +568,52 @@ const sources: typeof en = {
     unlistedCatalogEmpty: 'no incluye ningún episodio',
     unlistedNotDescribed:
       'Los números del catálogo aparecen en cuanto una aplicación vuelve a abrir la serie',
+    numberingTitle: 'Numeración de los archivos de las series',
+    numberingHelp:
+      'Un archivo es una versión del episodio del catálogo con su temporada y su número. Si los archivos de una serie están numerados de otra forma, elija cómo: Polyfin los asocia a los episodios del catálogo sin renombrarlos, y las marcas de visto, los puntos de reanudación y los favoritos los siguen. Un archivo que la numeración no puede ubicar sigue siendo un episodio propio, con el motivo.',
+    numberingLabel: (name: string) => `Cómo están numerados los archivos de ${name}`,
+    numberings: {
+      catalog: 'Como el catálogo',
+      per_season: 'Por temporada',
+      continuing: 'Seguida desde la temporada 1',
+      absolute: 'Absoluta',
+      order: 'Un orden de episodios',
+    },
+    numberingHints: {
+      catalog: 'S02E05 es el S02E05 del catálogo.',
+      per_season:
+        'Cada temporada empieza en 1: S02E01 es el primer episodio que el catálogo incluye en la temporada 2.',
+      continuing:
+        'Los números siguen de una temporada a otra: tras 12 episodios en la temporada 1, S02E13 es el S02E01 del catálogo.',
+      absolute:
+        'Cada número es el lugar del episodio entre todos los de la serie, sin contar los especiales: E41 es el 41.º.',
+      order:
+        'Los archivos siguen uno de los grupos de episodios de TMDB de la serie, como su orden DVD.',
+    },
+    numberingGroupLabel: (name: string) =>
+      `El orden de episodios que siguen los archivos de ${name}`,
+    numberingGroupPlaceholder: 'Elegir un orden de episodios',
+    numberingLookup: {
+      no_key:
+        'Añada primero una clave de TMDB en Ajustes › Contenido: los órdenes de episodios vienen de TMDB.',
+      unknown: 'TMDB no conoce esta serie, o ningún addon de metadatos del servidor la describe.',
+      failed:
+        'No se pudo contactar con TMDB para listar los órdenes de episodios de la serie. Vuelva a intentarlo en un momento.',
+      none: 'TMDB no da ningún orden de episodios para esta serie.',
+    },
+    numberingSaved: (name: string) => `Los archivos de ${name} se han numerado de nuevo`,
+    numberingFileCount: (files: number) => (files === 1 ? '1 archivo' : `${files} archivos`),
+    numberingMapped: (mapped: number, files: number) =>
+      `${mapped} de ${files} archivos asociados a los episodios del catálogo`,
+    unmappedReasons: {
+      no_catalog: 'Ningún addon de metadatos del servidor describe la serie',
+      outside_season: 'La temporada del catálogo no tiene episodio en ese lugar',
+      beyond_catalog: 'El catálogo incluye menos episodios que ese número',
+      not_in_order: 'El orden de episodios no tiene episodio en ese lugar',
+      not_listed: 'El catálogo no incluye el episodio del orden en ese lugar',
+      no_order: 'TMDB no puede dar el orden de episodios por ahora',
+    } as Record<string, string>,
+    unmappedListed: (listed: string) => `Aparece como un episodio propio, ${listed}`,
     linkNotDescribedShow:
       'Ningún addon de metadatos del servidor describe este identificador como una serie. Comprueba que es el de la serie y no el de un episodio.',
     linkNotDescribedMovie:

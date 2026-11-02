@@ -277,6 +277,8 @@ const common = {
       'TMDB no longer gives this series this order. Open it again and choose another one.',
     episode_groups_unreachable:
       'TMDB could not be reached to list this series’ orders. Nothing was saved: try again later.',
+    invalid_numbering:
+      'Choose as the catalog, per season, continuing from season 1, absolute, or an episode order.',
     no_tmdb_key: 'Add a TMDB key in Settings › Content first: the orders come from TMDB.',
     tmdb_unreachable:
       'TMDB could not be reached to check the key. Nothing was saved: try again later.',

@@ -300,6 +300,8 @@ const common: typeof en = {
       'TMDB ya no da este orden para esta serie. Ábrala de nuevo y elija otro.',
     episode_groups_unreachable:
       'No se pudo contactar con TMDB para ver los órdenes de esta serie. No se guardó nada: inténtelo más tarde.',
+    invalid_numbering:
+      'Elija como el catálogo, por temporada, seguida desde la temporada 1, absoluta o un orden de episodios.',
     no_tmdb_key:
       'Añada primero una clave de TMDB en Ajustes › Contenido: los órdenes vienen de TMDB.',
     tmdb_unreachable:

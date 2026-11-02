@@ -306,6 +306,8 @@ const common: typeof en = {
       'TMDB bietet diese Reihenfolge für diese Serie nicht mehr an. Öffne sie erneut und wähle eine andere.',
     episode_groups_unreachable:
       'TMDB war nicht erreichbar, um die Reihenfolgen dieser Serie aufzulisten. Nichts wurde gespeichert: Versuche es später noch einmal.',
+    invalid_numbering:
+      'Wähle wie der Katalog, pro Staffel, fortlaufend ab Staffel 1, absolut oder eine Folgenreihenfolge.',
     no_tmdb_key:
       'Füge zuerst unter Einstellungen › Inhalte einen TMDB-Schlüssel hinzu: Die Reihenfolgen kommen von TMDB.',
     tmdb_unreachable:

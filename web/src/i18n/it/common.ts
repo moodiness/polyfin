@@ -294,6 +294,8 @@ const common: typeof en = {
       'TMDB non fornisce più questo ordine per questa serie. Riaprila e scegline un altro.',
     episode_groups_unreachable:
       'Impossibile raggiungere TMDB per elencare gli ordini di questa serie. Non è stato salvato nulla: riprova più tardi.',
+    invalid_numbering:
+      'Scegli come il catalogo, per stagione, di seguito dalla stagione 1, assoluta o un ordine degli episodi.',
     no_tmdb_key:
       'Aggiungi prima una chiave TMDB in Impostazioni › Contenuti: gli ordini vengono da TMDB.',
     tmdb_unreachable:

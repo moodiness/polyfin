@@ -1158,6 +1158,8 @@ export type LocalFolder = {
    * of their places.
    */
   absoluteEpisodes: number
+  /** Its shows' files their numbering could not place, each an episode of its own. */
+  unmappedEpisodes: number
 }
 
 /**
@@ -1252,6 +1254,43 @@ export type UnlistedShow = {
   catalogFirst: { season: number; episode: number } | null
   catalogLast: { season: number; episode: number } | null
   seasons: { season: number; files: EpisodeRanges; catalog: EpisodeRanges }[]
+  numbering: ShowNumbering
+  group: string
+}
+
+/**
+ * How a show's files are numbered: as its catalog, per season, continuing from season 1, by
+ * absolute number, or in one of the series' TMDB episode groups.
+ */
+export type ShowNumbering = 'catalog' | 'per_season' | 'continuing' | 'absolute' | 'order'
+
+/** Why a show's numbering could not place a file, which is then an episode of its own. */
+export type UnmappedReason =
+  'no_catalog' | 'outside_season' | 'beyond_catalog' | 'not_in_order' | 'not_listed' | 'no_order'
+
+/**
+ * A show a shows folder holds: how its files are numbered (`group` the TMDB episode group of
+ * `order`), how many its numbering mapped to the catalog's episodes, and those it could not place,
+ * each with the season and episodes it tells, its absolute number when its name tells one alone,
+ * the episode of its own it is listed as, and why.
+ */
+export type FolderShow = {
+  imdbId: string
+  name: string
+  unit: string
+  files: number
+  numbering: ShowNumbering
+  group: string
+  mapped: number
+  unmapped: {
+    path: string
+    season: number
+    episode: number
+    lastEpisode: number
+    absolute: number | null
+    listed: { season: number; episode: number }
+    reason: UnmappedReason
+  }[]
 }
 
 export type NewLocalFolder = {
@@ -4093,6 +4132,37 @@ export const fetchLooserMatches = (id: string, signal?: AbortSignal) =>
     signal,
   )
 
+/** The shows of a shows folder, with how their files are numbered. */
+export const fetchFolderShows = (id: string, signal?: AbortSignal) =>
+  request<{ shows: FolderShow[] }>(
+    'GET',
+    `${scopePath('shared')}/folders/${seg(id)}/shows`,
+    undefined,
+    signal,
+  )
+
+/** Says how a show's files are numbered, and answers the folder. */
+export const setShowNumbering = (
+  id: string,
+  imdbId: string,
+  numbering: ShowNumbering,
+  group = '',
+) =>
+  request<Addon>(
+    'PUT',
+    `${scopePath('shared')}/folders/${seg(id)}/shows/${seg(imdbId)}/numbering`,
+    { numbering, group },
+  )
+
+/** The TMDB episode groups a show of a folder may be numbered in. */
+export const fetchShowNumberingGroups = (id: string, imdbId: string, signal?: AbortSignal) =>
+  request<{ groups: EpisodeGroup[]; lookup: '' | 'no_key' | 'unknown' | 'failed' }>(
+    'GET',
+    `${scopePath('shared')}/folders/${seg(id)}/shows/${seg(imdbId)}/groups`,
+    undefined,
+    signal,
+  )
+
 /** The shows of a local folder whose files hold episodes their metadata addon does not list. */
 export const fetchUnlistedEpisodes = (id: string, signal?: AbortSignal) =>
   request<{ shows: UnlistedShow[] }>(
@@ -5651,6 +5721,10 @@ export const queryKeys = {
   looser: (id: string) => ['looser', id] as const,
   /** The shows of a local folder whose files hold episodes their metadata addon does not list. */
   unlisted: (id: string) => ['unlisted', id] as const,
+  /** The shows of a shows folder, with how their files are numbered. */
+  folderShows: (id: string) => ['folderShows', id] as const,
+  /** The TMDB episode groups a show of a folder may be numbered in. */
+  numberingGroups: (id: string, imdbId: string) => ['numberingGroups', id, imdbId] as const,
   /** A title search for a local folder's unit. */
   folderTitles: (id: string, query: string, year: number | null) =>
     ['folder-titles', id, query, year] as const,
