@@ -593,10 +593,12 @@ type settingsJSON struct {
 	MaxConversions      *int  `json:"maxConversions"`
 	MaxConversionHeight *int  `json:"maxConversionHeight"`
 	ConvertedDownloads  *bool `json:"convertedDownloads"`
-	// SubtitleOCR ("off", "played" or "scans") and SubtitleOCRTracks keep
-	// their current values when a PUT leaves them out.
-	SubtitleOCR       *string `json:"subtitleOcr"`
-	SubtitleOCRTracks *int    `json:"subtitleOcrTracks"`
+	// SubtitleOCR ("off", "played" or "scans"), SubtitleOCRTracks and
+	// SubtitleOCRDownload keep their current values when a PUT leaves them
+	// out.
+	SubtitleOCR         *string `json:"subtitleOcr"`
+	SubtitleOCRTracks   *int    `json:"subtitleOcrTracks"`
+	SubtitleOCRDownload *bool   `json:"subtitleOcrDownload"`
 	// DefaultAudioLanguage and DefaultSubtitleLanguage, "" or one of the
 	// ISO 639-2/B codes of TrackLanguages, keep their current values when
 	// a PUT leaves them out. TrackLanguages are the languages they offer,
@@ -963,6 +965,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		ConvertedDownloads:    &settings.ConvertedDownloads,
 		SubtitleOCR:           &settings.SubtitleOCR,
 		SubtitleOCRTracks:     &settings.SubtitleOCRTracks,
+		SubtitleOCRDownload:   &settings.SubtitleOCRDownload,
 
 		DefaultAudioLanguage:    &settings.DefaultAudioLanguage,
 		DefaultSubtitleLanguage: &settings.DefaultSubtitleLanguage,
@@ -1776,6 +1779,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ConvertedDownloads:    valueOr(body.ConvertedDownloads, current.ConvertedDownloads),
 		SubtitleOCR:           valueOr(body.SubtitleOCR, current.SubtitleOCR),
 		SubtitleOCRTracks:     valueOr(body.SubtitleOCRTracks, current.SubtitleOCRTracks),
+		SubtitleOCRDownload:   valueOr(body.SubtitleOCRDownload, current.SubtitleOCRDownload),
 
 		DefaultAudioLanguage:    valueOr(body.DefaultAudioLanguage, current.DefaultAudioLanguage),
 		DefaultSubtitleLanguage: valueOr(body.DefaultSubtitleLanguage, current.DefaultSubtitleLanguage),

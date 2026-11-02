@@ -115,6 +115,7 @@ func DefaultSettings() Settings {
 		ConvertedDownloads:  false,
 		SubtitleOCR:         SubtitleOCRModes[0],
 		SubtitleOCRTracks:   DefaultSubtitleOCRTracks,
+		SubtitleOCRDownload: false,
 
 		EncoderPreset:              EncoderPresets[0],
 		AllowHevcEncoding:          false,
@@ -364,6 +365,7 @@ func SettingsBounds() map[string]SettingBounds {
 		"convertedDownloads":  is(d.ConvertedDownloads),
 		"subtitleOcr":         choice(d.SubtitleOCR, anys(SubtitleOCRModes)),
 		"subtitleOcrTracks":   between(MinSubtitleOCRTracks, MaxSubtitleOCRTracks, d.SubtitleOCRTracks),
+		"subtitleOcrDownload": is(d.SubtitleOCRDownload),
 		// "" or the ISO 639-2/B code of a language (see TrackLanguages).
 		"defaultAudioLanguage":    choice(d.DefaultAudioLanguage, anys(TrackLanguages())),
 		"defaultSubtitleLanguage": choice(d.DefaultSubtitleLanguage, anys(TrackLanguages())),

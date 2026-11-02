@@ -1716,8 +1716,11 @@ type Settings struct {
 	ConvertedDownloads bool
 	// SubtitleOCR reads picture subtitles into text with Tesseract, one of
 	// SubtitleOCRModes; SubtitleOCRTracks bounds the tracks read at once.
-	SubtitleOCR       string
-	SubtitleOCRTracks int
+	// SubtitleOCRDownload downloads the data of a language Tesseract lacks
+	// the first time a track needs it.
+	SubtitleOCR         string
+	SubtitleOCRTracks   int
+	SubtitleOCRDownload bool
 	// DefaultAudioLanguage and DefaultSubtitleLanguage are the audio and
 	// subtitle languages of the users who chose none, ISO 639-2/B codes
 	// as their own preferences take them, empty for none (see
@@ -2315,7 +2318,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"analysis_timeout, version_attempts, prefer_direct_play, " +
 	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, " +
 	"hidden_releases, version_edition_order, version_mb_per_minute, version_label_rules, " +
-	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, " +
+	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, subtitle_ocr_download, " +
 	"default_audio_language, default_subtitle_language, " +
 	"encoder_preset, h264_quality, hevc_quality, allow_hevc_encoding, hardware_acceleration, hardware_decoding_codecs, " +
 	"adaptive_quality, " +
@@ -2378,6 +2381,7 @@ func (settings *Settings) fields() []any {
 		&settings.NameHowVersionsPlay,
 		&settings.HiddenReleases, &settings.VersionEditionOrder, &settings.VersionMBPerMinute, &settings.VersionLabelRules,
 		&settings.SyncAddonSubtitles, &settings.MaxConversions, &settings.MaxConversionHeight, &settings.ConvertedDownloads, &settings.SubtitleOCR, &settings.SubtitleOCRTracks,
+		&settings.SubtitleOCRDownload,
 		&settings.DefaultAudioLanguage, &settings.DefaultSubtitleLanguage,
 		&settings.EncoderPreset, &settings.H264Quality, &settings.HevcQuality, &settings.AllowHevcEncoding, &settings.HardwareAcceleration, &settings.HardwareDecodingCodecs,
 		&settings.AdaptiveQuality,
