@@ -447,6 +447,9 @@ const settings: typeof en = {
       subtitleOcrTracks: 'Tracce di sottotitoli in immagini lette contemporaneamente',
       subtitleOcrTracksHelp: (r: RangeText) =>
         `Ogni traccia viene letta da un processo Tesseract che usa un core del processore. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
+      subtitleOcrDownload: 'Scarica automaticamente i dati delle lingue mancanti',
+      subtitleOcrDownloadHelp:
+        'La prima volta che una traccia è in una lingua per cui Tesseract non ha dati, Polyfin scarica il file della lingua dai dati ufficiali di Tesseract nella cartella indicata da POLYFIN_TESSDATA_DIR, lo verifica e poi legge la traccia. Un download non riuscito viene ritentato non prima di un’ora, e Sistema › Stato di salute indica il motivo. Disattivata, Stato di salute offre un pulsante Scarica per ogni lingua mancante.',
       hardwareAcceleration: 'Scheda grafica usata per la conversione',
       hardwareAccelerationHelp:
         'Una scheda grafica (GPU) converte i video molto più velocemente del processore. Ogni sistema offre le proprie: NVIDIA e VAAPI su Linux, VideoToolbox su macOS, NVIDIA, Intel e AMD su Windows. Senza una scheda funzionante, converte il processore. Una modifica si applica appena salvata, senza riavvio.',

@@ -153,6 +153,14 @@ export default function ConversionSection({
             )}
           />
         </FieldRow>
+        <SwitchRow
+          anchor="subtitle-ocr-download"
+          label={c.subtitleOcrDownload}
+          help={c.subtitleOcrDownloadHelp}
+          checked={form.subtitleOcrDownload}
+          disabled={form.subtitleOcr === 'off'}
+          onChange={(subtitleOcrDownload) => update({ subtitleOcrDownload })}
+        />
       </SettingsGroup>
 
       <SettingsGroup title={c.groups.gpu}>

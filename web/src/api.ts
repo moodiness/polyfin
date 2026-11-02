@@ -525,6 +525,8 @@ export type Settings = {
   subtitleOcr: SubtitleOcr
   /** Picture subtitle tracks read at once. */
   subtitleOcrTracks: number
+  /** Downloads the Tesseract data of a language the first time a track needs it. */
+  subtitleOcrDownload: boolean
   /**
    * The audio and subtitle languages of the users who chose none, ISO 639-2/B codes as their own
    * preferences take them, or '' for none.
@@ -5082,7 +5084,17 @@ export type HealthProblem = {
   | { code: 'https_files'; failure: 'missing' | 'unreadable' | 'mismatch'; file: string }
   | { code: 'https_renewal'; error: string }
   | { code: 'https_expiry'; expires: string }
-  | { code: 'subtitle_ocr_language'; name: string; file: string }
+  /**
+   * Tesseract has no data for a language tracks are in: `file` is the file to add, `download` tells
+   * that Polyfin can download it, and `error` why its last download failed.
+   */
+  | {
+      code: 'subtitle_ocr_language'
+      name: string
+      file: string
+      download?: boolean
+      error?: string
+    }
   /** Every metadata addon of the server has a language: `name` is the first one's. */
   | { code: 'metadata_languages'; name: string }
   /** NVENC needs a newer NVIDIA driver than the GPU's: `name` is the version it needs. */
@@ -5432,6 +5444,10 @@ export type ImageCacheUsage = {
 
 /** Empties the image cache, answering what it freed. */
 export const clearImageCache = () => request<ImageCacheUsage>('POST', '/health/images/clear')
+
+/** Downloads the Tesseract data of a language, its code as in jpn.traineddata, into POLYFIN_TESSDATA_DIR. */
+export const downloadLanguage = (language: string) =>
+  request<void>('POST', `/health/languages/${seg(language)}/download`)
 
 export const checkAddon = (id: string) =>
   request<AddonHealth>('POST', `/health/addons/${seg(id)}/check`)

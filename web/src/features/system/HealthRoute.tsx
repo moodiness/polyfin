@@ -15,14 +15,17 @@ import {
   WarningIcon,
 } from '@phosphor-icons/react'
 import {
+  ApiError,
   checkAddon,
   clearImageCache,
+  downloadLanguage,
   fetchSources,
   goroutinesDownloadUrl,
   queryClient,
   queryKeys,
   type AddonHealth,
   type Health,
+  type HealthProblem,
   type ShareHealth,
   type Sources,
 } from '@/api'
@@ -51,6 +54,7 @@ import {
 import { lineupPath } from '@/features/iptv/lineup'
 import { hdrPathText } from '@/features/settings/hdrPath'
 import {
+  ocrLanguageName,
   problemText,
   unreadableName,
   useHealth,
@@ -151,6 +155,12 @@ function Problems({ health }: { health: Health }) {
   const text = t.system.health
   const query = useHealthProblems()
   const problems = query.data ?? []
+  // A language's data downloaded, its warning goes, and the tracks waiting for it are read.
+  const download = useMutation({
+    mutationFn: downloadLanguage,
+    onSettled: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.healthProblems(language) }),
+  })
   const items = problems.length + (health.update ? 1 : 0)
   const checked = text.checkedAt(
     new Intl.DateTimeFormat(language, { timeStyle: 'medium' }).format(new Date(health.checkedAt)),
@@ -170,50 +180,101 @@ function Problems({ health }: { health: Health }) {
       ) : problems.length === 0 && !health.update ? (
         <Notice tone="ok">{text.allGood}</Notice>
       ) : (
-        <RowList aria-label={text.problemsTitle}>
-          {problems.map((problem) => (
-            <Row
-              key={problem.key}
-              to={problem.to}
-              leading={
-                <IconTile
-                  icon={problem.tone === 'error' ? WarningCircleIcon : WarningIcon}
-                  tone="warn"
-                />
-              }
-              title={<span className="whitespace-normal">{problemText(t, language, problem)}</span>}
-              trailing={
+        <>
+          {download.isError && (
+            <InlineError className="mb-3">{downloadError(t, download.error)}</InlineError>
+          )}
+          <RowList aria-label={text.problemsTitle}>
+            {problems.map((problem) => {
+              const pill =
                 problem.tone === 'error' ? (
                   <StatusPill tone="danger">{text.error}</StatusPill>
                 ) : (
                   <StatusPill tone="warn">{text.warning}</StatusPill>
                 )
-              }
-              className="[&_.truncate]:whitespace-normal"
-            />
-          ))}
-          {health.update && (
-            <Row
-              leading={ArrowCircleUpIcon}
-              title={text.update(health.update.version)}
-              meta={text.updateRunning(health.process.version)}
-              trailing={
-                <ExternalButtonLink
-                  href={health.update.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  size="sm"
-                  iconEnd={ArrowSquareOutIcon}
-                >
-                  {text.releaseNotes}
-                </ExternalButtonLink>
-              }
-            />
-          )}
-        </RowList>
+              const missing = downloadable(problem, language)
+              const downloading = download.isPending && download.variables === missing?.code
+              return (
+                <Row
+                  key={problem.key}
+                  // A row with a button is not a link (see Row).
+                  to={missing === null ? problem.to : undefined}
+                  leading={
+                    <IconTile
+                      icon={problem.tone === 'error' ? WarningCircleIcon : WarningIcon}
+                      tone="warn"
+                    />
+                  }
+                  title={
+                    <span className="whitespace-normal">{problemText(t, language, problem)}</span>
+                  }
+                  trailing={
+                    missing === null ? (
+                      pill
+                    ) : (
+                      <>
+                        {pill}
+                        <Button
+                          size="sm"
+                          icon={DownloadSimpleIcon}
+                          aria-label={text.downloadLanguageLabel(missing.name)}
+                          loading={downloading}
+                          disabled={download.isPending && !downloading}
+                          onClick={() => download.mutate(missing.code)}
+                        >
+                          {downloading ? text.downloadingLanguage : text.downloadLanguage}
+                        </Button>
+                      </>
+                    )
+                  }
+                  className="[&_.truncate]:whitespace-normal"
+                />
+              )
+            })}
+            {health.update && (
+              <Row
+                leading={ArrowCircleUpIcon}
+                title={text.update(health.update.version)}
+                meta={text.updateRunning(health.process.version)}
+                trailing={
+                  <ExternalButtonLink
+                    href={health.update.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    size="sm"
+                    iconEnd={ArrowSquareOutIcon}
+                  >
+                    {text.releaseNotes}
+                  </ExternalButtonLink>
+                }
+              />
+            )}
+          </RowList>
+        </>
       )}
     </Block>
   )
+}
+
+/**
+ * The Tesseract code and name of a missing language Polyfin can download the data of, named in
+ * `language`; null for any other problem.
+ */
+function downloadable(
+  problem: HealthProblem,
+  language: string,
+): { code: string; name: string } | null {
+  if (problem.code !== 'subtitle_ocr_language' || !problem.download) return null
+  return {
+    code: problem.file.replace(/\.traineddata$/, ''),
+    name: ocrLanguageName(language, problem),
+  }
+}
+
+/** Why a download failed, with the cause the server names: the folder, or the download's error. */
+function downloadError(t: Messages, error: unknown): string {
+  const message = errorMessage(t, error)
+  return error instanceof ApiError && error.detail ? `${message} ${error.detail}` : message
 }
 
 function addonTone(

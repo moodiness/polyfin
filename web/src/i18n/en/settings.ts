@@ -440,6 +440,9 @@ const settings = {
       subtitleOcrTracks: 'Picture subtitle tracks read at once',
       subtitleOcrTracksHelp: (r: RangeText) =>
         `Each track is read by one Tesseract process using one processor core. From ${r.min} to ${r.max}; ${r.default} by default.`,
+      subtitleOcrDownload: 'Download the data of missing languages automatically',
+      subtitleOcrDownloadHelp:
+        'The first time a track is in a language Tesseract has no data for, Polyfin downloads the language’s file from Tesseract’s official data into the folder POLYFIN_TESSDATA_DIR names, checks it, then reads the track. A download that fails is tried again an hour later at the soonest, and System › Health tells why. Off, Health offers a Download button for each missing language.',
       hardwareAcceleration: 'Graphics card used to convert',
       hardwareAccelerationHelp:
         'A graphics card (GPU) converts video much faster than the processor. Each system offers its own: NVIDIA and VAAPI on Linux, VideoToolbox on macOS, NVIDIA, Intel and AMD on Windows. Without a card that works, the processor converts. A change applies once saved, without a restart.',

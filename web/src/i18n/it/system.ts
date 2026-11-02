@@ -216,6 +216,8 @@ const system: typeof en = {
         httpsExpired: (date: string) => `Il certificato HTTPS è scaduto il ${date}.`,
         subtitleOcrLanguage: (name: string, file: string) =>
           `I sottotitoli grafici in ${name} non vengono convertiti in testo: Tesseract non ha dati per questa lingua. Aggiungi il file ${file} alla cartella indicata da POLYFIN_TESSDATA_DIR.`,
+        subtitleOcrDownloadFailed: (error: string) =>
+          `L’ultimo download dei suoi dati non è riuscito: ${error}`,
         metadataLanguages: (name: string) =>
           `${name}: ogni add-on di metadati del server ha una lingua, quindi descrivono i titoli nella propria lingua per tutti gli utenti, qualunque sia la loro lingua dei metadati. Lascia Lingua delle descrizioni su Nessuna in questo add-on, o in un altro add-on di metadati.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
@@ -274,6 +276,9 @@ const system: typeof en = {
       check: 'Verifica',
       checkLabel: (name: string) => `Verifica ${name} ora`,
       checking: 'Verifica in corso…',
+      downloadLanguage: 'Scarica',
+      downloadLanguageLabel: (name: string) => `Scarica i dati di Tesseract per ${name}`,
+      downloadingLanguage: 'Download in corso…',
       iptvTitle: 'Origini IPTV',
       guidesTitle: 'Guide dei programmi',
       sharesTitle: 'Condivisioni di rete',

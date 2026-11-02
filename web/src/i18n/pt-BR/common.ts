@@ -128,6 +128,13 @@ const common: typeof en = {
     invalid_subtitle_ocr: 'Escolha na lista quando as legendas em imagem são convertidas em texto.',
     invalid_subtitle_ocr_tracks:
       'As faixas de legendas em imagem lidas simultaneamente devem ser um número inteiro de 1 a 4.',
+    tessdata_unknown_language: 'O Polyfin não tem dados do Tesseract para baixar neste idioma.',
+    tessdata_no_folder:
+      'Defina em POLYFIN_TESSDATA_DIR a pasta dos dados do Tesseract e inicie o Polyfin de novo.',
+    tessdata_folder: 'Não é possível gravar na pasta indicada por POLYFIN_TESSDATA_DIR.',
+    tessdata_download: 'Não foi possível baixar os dados do idioma.',
+    tessdata_checksum:
+      'O arquivo baixado não são os dados do Tesseract, pois o SHA-256 dele é diferente: ele não foi mantido.',
     invalid_default_language: 'Escolha um idioma padrão da lista.',
     invalid_encoder_preset: 'Escolha uma velocidade de codificação da lista.',
     invalid_video_quality: 'A qualidade de vídeo deve ser 0, ou um número inteiro de 1 a 51.',

@@ -203,6 +203,8 @@ const system = {
         httpsExpired: (date: string) => `The HTTPS certificate expired on ${date}.`,
         subtitleOcrLanguage: (name: string, file: string) =>
           `Picture subtitles in ${name} are not read into text: Tesseract has no data for this language. Add the file ${file} to the folder POLYFIN_TESSDATA_DIR names.`,
+        subtitleOcrDownloadFailed: (error: string) =>
+          `The last download of its data failed: ${error}`,
         metadataLanguages: (name: string) =>
           `${name}: every metadata addon of the server has a language, so they describe titles in their language for every user, whatever their metadata language. Keep Language of its descriptions at None on this addon, or on one more metadata addon.`,
         desktopRolledBack: (version: string, previous: string, error: string) =>
@@ -260,6 +262,9 @@ const system = {
       check: 'Check',
       checkLabel: (name: string) => `Check ${name} now`,
       checking: 'Checking…',
+      downloadLanguage: 'Download',
+      downloadLanguageLabel: (name: string) => `Download Tesseract’s data for ${name}`,
+      downloadingLanguage: 'Downloading…',
       iptvTitle: 'IPTV sources',
       guidesTitle: 'Programme guides',
       sharesTitle: 'Network shares',

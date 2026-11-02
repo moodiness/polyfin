@@ -453,6 +453,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'conversion',
+    anchor: 'subtitle-ocr-download',
+    label: (t) => c(t).subtitleOcrDownload,
+    help: (t) => c(t).subtitleOcrDownloadHelp,
+    keywords: ['OCR', 'Tesseract', 'traineddata', 'tessdata', 'download', 'télécharger'],
+  },
+  {
+    section: 'conversion',
     anchor: 'hardware-acceleration',
     label: (t) => c(t).hardwareAcceleration,
     help: (t) => c(t).hardwareAccelerationHelp,

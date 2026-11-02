@@ -443,6 +443,9 @@ const settings: typeof en = {
       subtitleOcrTracks: 'Faixas de legendas em imagem lidas ao mesmo tempo',
       subtitleOcrTracksHelp: (r: RangeText) =>
         `Cada faixa é lida por um processo do Tesseract usando um núcleo do processador. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
+      subtitleOcrDownload: 'Baixar automaticamente os dados dos idiomas que faltam',
+      subtitleOcrDownloadHelp:
+        'Na primeira vez que uma faixa está em um idioma sem dados do Tesseract, o Polyfin baixa o arquivo do idioma dos dados oficiais do Tesseract para a pasta indicada por POLYFIN_TESSDATA_DIR, verifica-o e então lê a faixa. Um download que falha é tentado de novo no mínimo uma hora depois, e Sistema › Integridade diz o motivo. Desativado, Integridade oferece um botão Baixar para cada idioma que falta.',
       hardwareAcceleration: 'Placa de vídeo usada para converter',
       hardwareAccelerationHelp:
         'Uma placa de vídeo (GPU) converte vídeo muito mais rápido que o processador. Cada sistema oferece as suas: NVIDIA e VAAPI no Linux, VideoToolbox no macOS, NVIDIA, Intel e AMD no Windows. Sem uma placa que funcione, o processador faz a conversão. Uma alteração é aplicada ao salvar, sem reiniciar.',
