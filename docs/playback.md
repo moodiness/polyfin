@@ -295,7 +295,8 @@ It costs a few more requests to the sources, also for titles opened but not play
 
 - at most 2 preparations run at once; the others wait, the newest first, so that the title opened last is prepared first. Beyond 4 waiting, the oldest is skipped;
 - a title is prepared once per user every 10 minutes, unless its preparation failed;
-- the titles of Continue Watching and Next Up are listed 2 at a time over the server, apart from the preparations above, in the order the rows asked for them. A title waiting or being listed is not queued again, and a title whose versions are still kept (**Keep version lists for (minutes)**) asks nothing.
+- the titles of Continue Watching and Next Up are listed 2 at a time over the server, apart from the preparations above, in the order the rows asked for them. A title waiting or being listed is not queued again, and a title whose versions are still kept (**Keep version lists for (minutes)**) asks nothing;
+- all of this is background work, whose requests to each addon are paced, never ahead of what users open, and pause after the addon refuses one for its rate (see [How Polyfin paces addons](addons-and-libraries.md#how-polyfin-paces-addons)).
 
 A torrent version is left out of these preparations while no playback runs its torrent: only a playback joins a torrent's swarm, and its first play analyzes it (see [How a torrent starts](torrents.md#how-a-torrent-starts)). Opening a title's page then neither reads it nor logs it.
 
