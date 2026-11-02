@@ -295,6 +295,51 @@ func TestRemuxesCopyTheVideoAndConvertWhatAudioTheAppCannotTake(t *testing.T) {
 	}
 }
 
+// The Jellyfin iOS app's native player with Prefer fMP4 in HLS off ranks
+// a progressive MP4 that keeps E-AC-3 above its MPEG-TS HLS profile.
+// Polyfin streams http profiles only when progressive is allowed, so
+// without it the play goes over HLS, as H.264 and AAC 5.1, instead of not
+// at all. With fMP4 on, the HEVC is copied.
+func TestExpoNativePlayerStreamsMatroskaWithEAC3OverHLS(t *testing.T) {
+	t.Parallel()
+	source := MediaSource{
+		Container: "mkv",
+		Bitrate:   1_767_650,
+		Streams: []MediaStream{
+			{Type: "Video", Index: 0, Codec: "hevc", Profile: "Main", Level: new(120.0), VideoRangeType: "SDR",
+				Width: new(1920), Height: new(1080), AverageFrameRate: new(23.976)},
+			{Type: "Audio", Index: 1, Codec: "eac3", IsDefault: true, Channels: new(6)},
+		},
+	}
+	aac51 := &AudioConversion{Codec: "aac", Channels: 6, Bitrate: 640_000}
+	can := Capabilities{Encoders: []string{"libx264", "libx265"}}
+	for _, test := range []struct {
+		name, profile       string
+		progressive         bool
+		hls, progressiveOut bool
+		container, video    string
+		audio               *AudioConversion
+	}{
+		{"fMP4 off", "jellyfin-expo-native", false, true, false, "ts", "h264", aac51},
+		{"fMP4 off, progressive allowed", "jellyfin-expo-native", true, false, true, "mp4", "h264", nil},
+		{"fMP4 on", "jellyfin-expo-native-fmp4", false, true, false, "mp4", "", aac51},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			options := Options{EnableDirectPlay: true, EnableDirectStream: true, Progressive: test.progressive, Can: can}
+			got := Decide(readDeviceProfile(t, test.profile), source, options)
+			video := ""
+			if got.Video != nil {
+				video = got.Video.Codec
+			}
+			if got.DirectPlay || got.HLS != test.hls || got.Progressive != test.progressiveOut || got.Transcoding == nil ||
+				got.Transcoding.Container != test.container || video != test.video || !reflect.DeepEqual(got.Audio, test.audio) {
+				t.Errorf("HLS %v, Progressive %v, Transcoding %+v, Video %+v, Audio %+v", got.HLS, got.Progressive, got.Transcoding, got.Video, got.Audio)
+			}
+		})
+	}
+}
+
 // Jellyfin 12.4 keeps the audio a video streams over HLS with to the
 // codecs its segments carry (StreamBuilder.BuildStreamVideoItem):
 // jellyfin-web's Chrome profile names MP2, which Chrome refuses in

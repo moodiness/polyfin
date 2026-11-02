@@ -1,0 +1,251 @@
+{
+  "Name": "iOS 13+ Native Profile + fMP4",
+  "MaxStaticBitrate": 100000000,
+  "MaxStreamingBitrate": 120000000,
+  "MusicStreamingTranscodingBitrate": 384000,
+  "CodecProfiles": [
+    {
+      "Codec": "h264",
+      "Conditions": [
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsAnamorphic",
+          "Value": "true"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": false,
+          "Property": "VideoProfile",
+          "Value": "high|main|baseline|constrained baseline"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": false,
+          "Property": "VideoRangeType",
+          "Value": "SDR"
+        },
+        {
+          "Condition": "LessThanEqual",
+          "IsRequired": false,
+          "Property": "VideoLevel",
+          "Value": "52"
+        },
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsInterlaced",
+          "Value": "true"
+        }
+      ],
+      "Type": "Video"
+    },
+    {
+      "Codec": "hevc",
+      "Conditions": [
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsAnamorphic",
+          "Value": "true"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": false,
+          "Property": "VideoProfile",
+          "Value": "main|main 10"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": false,
+          "Property": "VideoRangeType",
+          "Value": "SDR|HDR10"
+        },
+        {
+          "Condition": "LessThanEqual",
+          "IsRequired": false,
+          "Property": "VideoLevel",
+          "Value": "153"
+        },
+        {
+          "Condition": "NotEquals",
+          "IsRequired": false,
+          "Property": "IsInterlaced",
+          "Value": "true"
+        },
+        {
+          "Condition": "EqualsAny",
+          "IsRequired": true,
+          "Property": "VideoCodecTag",
+          "Value": "hvc1"
+        },
+        {
+          "Condition": "LessThanEqual",
+          "IsRequired": true,
+          "Property": "VideoFramerate",
+          "Value": "60"
+        }
+      ],
+      "Type": "Video"
+    }
+  ],
+  "ContainerProfiles": [],
+  "DirectPlayProfiles": [
+    {
+      "AudioCodec": "aac,mp3,ac3,eac3,flac,alac",
+      "Container": "mp4,m4v",
+      "Type": "Video",
+      "VideoCodec": "hevc,h264"
+    },
+    {
+      "AudioCodec": "aac,mp3,ac3,eac3,flac,alac",
+      "Container": "mov",
+      "Type": "Video",
+      "VideoCodec": "hevc,h264"
+    },
+    {
+      "Container": "mp3",
+      "Type": "Audio"
+    },
+    {
+      "Container": "aac",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "aac",
+      "Container": "m4a",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "aac",
+      "Container": "m4b",
+      "Type": "Audio"
+    },
+    {
+      "Container": "flac",
+      "Type": "Audio"
+    },
+    {
+      "Container": "alac",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "alac",
+      "Container": "m4a",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "alac",
+      "Container": "m4b",
+      "Type": "Audio"
+    },
+    {
+      "Container": "wav",
+      "Type": "Audio"
+    }
+  ],
+  "SubtitleProfiles": [
+    {
+      "Format": "vtt",
+      "Method": "Hls"
+    }
+  ],
+  "TranscodingProfiles": [
+    {
+      "AudioCodec": "aac",
+      "BreakOnNonKeyFrames": true,
+      "Container": "aac",
+      "Context": "Streaming",
+      "MaxAudioChannels": "6",
+      "MinSegments": 2,
+      "Protocol": "hls",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "aac",
+      "Container": "aac",
+      "Context": "Streaming",
+      "MaxAudioChannels": "6",
+      "Protocol": "http",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "mp3",
+      "Container": "mp3",
+      "Context": "Streaming",
+      "MaxAudioChannels": "6",
+      "Protocol": "http",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "wav",
+      "Container": "wav",
+      "Context": "Streaming",
+      "MaxAudioChannels": "6",
+      "Protocol": "http",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "mp3",
+      "Container": "mp3",
+      "Context": "Static",
+      "MaxAudioChannels": "6",
+      "Protocol": "http",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "aac",
+      "Container": "aac",
+      "Context": "Static",
+      "MaxAudioChannels": "6",
+      "Protocol": "http",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "wav",
+      "Container": "wav",
+      "Context": "Static",
+      "MaxAudioChannels": "6",
+      "Protocol": "http",
+      "Type": "Audio"
+    },
+    {
+      "AudioCodec": "aac,mp3,flac,alac",
+      "BreakOnNonKeyFrames": true,
+      "Container": "mp4",
+      "Context": "Streaming",
+      "MaxAudioChannels": "6",
+      "MinSegments": 2,
+      "Protocol": "hls",
+      "Type": "Video",
+      "VideoCodec": "hevc,h264"
+    },
+    {
+      "AudioCodec": "aac,mp3",
+      "BreakOnNonKeyFrames": true,
+      "Container": "ts",
+      "Context": "Streaming",
+      "MaxAudioChannels": "6",
+      "MinSegments": 2,
+      "Protocol": "hls",
+      "Type": "Video",
+      "VideoCodec": "h264"
+    },
+    {
+      "AudioCodec": "aac,mp3,ac3,eac3,flac,alac",
+      "Container": "mp4",
+      "Context": "Static",
+      "Protocol": "http",
+      "Type": "Video",
+      "VideoCodec": "h264"
+    },
+    {
+      "AudioCodec": "aac,mp3,ac3,eac3,flac,alac",
+      "Container": "mp4",
+      "Context": "Streaming",
+      "Protocol": "http",
+      "Type": "Video",
+      "VideoCodec": "h264"
+    }
+  ]
+}
