@@ -102,7 +102,8 @@ func (p *preparations) add(key preparationKey, work func(ctx context.Context) bo
 }
 
 // work runs the preparations waiting, the newest first, until none is.
-// Each runs detached from the request that triggered it.
+// Each runs detached from the request that triggered it, as background
+// work, whose requests to addons are paced (see library.Background).
 func (p *preparations) work() {
 	for {
 		p.mu.Lock()
@@ -117,7 +118,7 @@ func (p *preparations) work() {
 		p.queue = p.queue[1:]
 		p.running[next.key] = true
 		p.mu.Unlock()
-		ctx, cancel := context.WithTimeout(context.Background(), preparationTimeout)
+		ctx, cancel := context.WithTimeout(library.Background(context.Background()), preparationTimeout)
 		done := next.work(ctx)
 		cancel()
 		p.mu.Lock()
@@ -228,7 +229,7 @@ func (h *Handler) prepareListed(ctx context.Context, user accounts.User, item li
 		return
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), preparationTimeout)
+		ctx, cancel := context.WithTimeout(library.Background(context.WithoutCancel(ctx)), preparationTimeout)
 		defer cancel()
 		if p, err := h.playable(ctx, user, item); err == nil {
 			h.prepareOpened(ctx, user, item, p.versions, opened)

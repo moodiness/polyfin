@@ -153,6 +153,9 @@ func rowsOn(t *testing.T, held bool) rowsSetup {
 func rowsOnServer(t *testing.T, s testServer, held bool) rowsSetup {
 	t.Helper()
 	member := s.user("member", nil)
+	// These tests count what home rows ask, not its pace, which the
+	// library's tests prove: a row's 20 titles go at once.
+	s.library.SetPacing(1000, time.Minute)
 	a := newRowsAddon(t, held)
 	// Registered after the server's and the addon's, this runs first: the
 	// listings under way end before the addon and the database go.

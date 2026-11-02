@@ -126,9 +126,10 @@ func (h *Handler) listAhead(user accounts.User, items []library.Item) {
 // every addon: lists still kept cost nothing, and an addon asked for the
 // title already, by details opened meanwhile, is joined, not asked again.
 // With prepare, the first version a play would read is then analyzed (see
-// prepareVersions).
+// prepareVersions). It is background work, whose requests to addons are
+// paced (see library.Background).
 func (h *Handler) listVersions(user accounts.User, title accounts.ID, prepare bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), preparationTimeout)
+	ctx, cancel := context.WithTimeout(library.Background(context.Background()), preparationTimeout)
 	defer cancel()
 	versions, err := h.Library.Versions(ctx, user, title)
 	if err != nil {

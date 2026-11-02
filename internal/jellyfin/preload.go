@@ -27,8 +27,10 @@ const (
 	preloadSeries = 5
 )
 
-// preloadLoop runs the preload passes until ctx is done.
+// preloadLoop runs the preload passes until ctx is done, as background
+// work, whose requests to addons are paced (see library.Background).
 func (h *Handler) preloadLoop(ctx context.Context) {
+	ctx = library.Background(ctx)
 	timer := time.NewTimer(preloadFirst)
 	defer timer.Stop()
 	for {

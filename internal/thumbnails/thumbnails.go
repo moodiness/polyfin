@@ -163,7 +163,8 @@ func New(options Options) *Service {
 		budget:     budget,
 	}
 	var wg sync.WaitGroup
-	wg.Go(func() { s.run(ctx) })
+	// Renewing a link the images read is background work, paced.
+	wg.Go(func() { s.run(library.Background(ctx)) })
 	if options.Cached != nil {
 		wg.Go(func() { s.live(ctx) })
 	}
