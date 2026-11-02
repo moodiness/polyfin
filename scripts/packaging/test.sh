@@ -169,7 +169,7 @@ check_version_info() {
 }
 
 test_windows() {
-	local local_data install programs marker run_key uninstall_key machine package_version
+	local local_data install programs marker run_key uninstall_key machine package_version left
 	case "$package" in
 	*-windows-arm64-setup.exe) machine=0xAA64 ;;
 	*-windows-x64-setup.exe) machine=0x8664 ;;
@@ -210,19 +210,31 @@ test_windows() {
 	MSYS_NO_PATHCONV=1 reg add "$run_key" /v io.github.moodiness.polyfin-desktop /d "\"$(cygpath -w "$install/polyfin-desktop.exe")\" --background" /f > /dev/null
 	MSYS_NO_PATHCONV=1 "$install/Uninstall.exe" /S
 	# The uninstaller runs from a copy of itself, which returns at once.
+	# polyfin.nsi's Uninstall section removes the programs and the
+	# install folder, then the Start menu shortcut, the login item and
+	# last the uninstall key: wait for all of them within the same 60 s.
+	# uninstall_left prints the first one still there, and fails when
+	# none is.
+	uninstall_left() {
+		if [ -e "$install" ]; then
+			echo "$install"
+		elif [ -e "$programs/Polyfin.lnk" ]; then
+			echo "the Start menu shortcut $programs/Polyfin.lnk"
+		elif MSYS_NO_PATHCONV=1 reg query "$run_key" /v io.github.moodiness.polyfin-desktop > /dev/null 2>&1; then
+			echo "the login item in $run_key"
+		elif MSYS_NO_PATHCONV=1 reg query "$uninstall_key" > /dev/null 2>&1; then
+			echo "the uninstall key $uninstall_key"
+		else
+			return 1
+		fi
+	}
 	for _ in $(seq 60); do
-		[ -e "$install" ] || break
+		uninstall_left > /dev/null || break
 		sleep 1
 	done
-	if [ -e "$install" ]; then
-		echo "the uninstaller left $install:" >&2
-		find "$install" >&2
-		exit 1
-	fi
-	test ! -e "$programs/Polyfin.lnk"
-	if reg query "$uninstall_key" > /dev/null 2>&1; then echo "the uninstaller left $uninstall_key" >&2; exit 1; fi
-	if MSYS_NO_PATHCONV=1 reg query "$run_key" /v io.github.moodiness.polyfin-desktop > /dev/null 2>&1; then
-		echo "the uninstaller left the login item" >&2
+	if left="$(uninstall_left)"; then
+		echo "the uninstaller left $left after 60 s" >&2
+		if [ -e "$install" ]; then find "$install" >&2; fi
 		exit 1
 	fi
 	test -d "$local_data/Polyfin"
