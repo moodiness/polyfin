@@ -21,12 +21,24 @@ With **Say in version names how they play** on, the default, apps see in each ve
 
 An app may ask for a title again with direct play turned off, as the Jellyfin app for Android's integrated player does after two playback errors within 30 seconds. Polyfin then still checks whether the app would play the file as it is:
 
-- **It would:** the file is repackaged or converted to what the app's conversion formats take, and **Direct play failed** joins the reasons: in **Home › Now playing › Details** under **Why**, and as `DirectPlayError` in the `TranscodeReasons` of the `TranscodingUrl`. A version converted so ends its name with "(converted: app’s request)". For instance, an HEVC Main 10 file with E-AC-3 audio, which the integrated player plays as it is, is converted to H.264 for its MPEG-TS format with the reasons "Video codec not supported" and "Direct play failed", where the codec alone would point at the wrong cause.
+- **It would:** the file is repackaged or converted to what the app's conversion formats take, apart from the video kept below, and **Direct play failed** joins the reasons: in **Home › Now playing › Details** under **Why**, and as `DirectPlayError` in the `TranscodeReasons` of the `TranscodingUrl`. A version converted so ends its name with "(converted: app’s request)". For instance, an HEVC Main 10 file with E-AC-3 audio, which the integrated player plays as it is, is converted to H.264 for its MPEG-TS format, once the video kept has failed too, with the reasons "Video codec not supported" and "Direct play failed", where the codec alone would point at the wrong cause.
 - **It would not:** the reasons are those the check finds, such as "File format not supported" for an AVI file, as when direct play is on.
 
 Discs and DASH channels never play as they are, so they skip the check, as do DLNA devices and guests through share links, which Polyfin sends a stream itself: their reasons are those of their conversion alone, or "Direct play failed" when no other reason applies.
 
-**Compared with Jellyfin:** Jellyfin 12.4 runs the check too when the app turns direct play off ([`MediaInfoHelper.cs`, lines 227 to 230](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L227-L230); [`StreamBuilder.cs`, lines 1392 to 1426](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L1392-L1426)), and gives the same reasons. Version names are Polyfin's own.
+#### The video kept after a failed direct play
+
+An app's conversion formats may take less than it plays as it is: those of the Jellyfin app for Android's integrated player take H.264 video alone, though it plays HEVC. When Polyfin had answered the device direct play for that version, and the profile it answered with played the video's codec, profile and level as it is, the retry keeps the video copied:
+
+- The version is repackaged into HLS, in MPEG-TS segments when that profile plays the video in MPEG-TS, else in fragmented MP4 when it plays it there and the app takes such segments. The audio is copied or converted as the app's conversion formats take it: the E-AC-3 of the example above is copied into MPEG-TS.
+- Its reasons are "Direct play failed", with "Audio codec not supported" when the audio is converted, and its name ends "(direct stream)", or "(converted: app’s request)" when the audio is converted.
+- If that play fails too, the app's next retry for the same version converts the video as its formats ask, and so do the retries after it, until 10 minutes pass without Polyfin answering that device direct play for that version or sending it the video kept. A device's direct plays are forgotten when it signs out.
+- A direct play the app gave up within 5 seconds of Polyfin's answer failed at once, as when the device cannot decode the video: the copy would fail the same way, and the Jellyfin app for Android stops asking after a converted stream fails, so the video is converted at once.
+- Above the bitrate limit, beyond the user's quality group, or when the app asks for the video converted, it is converted as before.
+
+The server log tells each such choice at the Info level: "After a failed direct play, a version plays over HLS with the video it played kept copied", or "… with its video converted" and why.
+
+**Compared with Jellyfin:** Jellyfin 12.4 runs the check too when the app turns direct play off ([`MediaInfoHelper.cs`, lines 227 to 230](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/MediaInfoHelper.cs#L227-L230); [`StreamBuilder.cs`, lines 1392 to 1426](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L1392-L1426)), and gives the same reasons. Version names are Polyfin's own. Keeping the video after a failed direct play goes beyond Jellyfin, which converts any video the app's conversion formats do not take ([`StreamBuilder.cs`, lines 945 to 964](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L945-L964)): the Jellyfin app for Android's retry then always gets its HEVC converted to H.264.
 
 ### Audio in HLS segments
 
