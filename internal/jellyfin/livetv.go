@@ -768,7 +768,7 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		}
 		manifest := playback.Manifest(analysis)
 		relay := mustRelay(r, version) || manifest && (webApp(r) || !h.Playback.Redirectable(r.Context(), version))
-		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: relay})
+		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID, Relay: relay})
 		permits := h.convertible(allowed, user, version)
 		source, ok := h.liveSource(r, channel, version, id, analysis, request, session, relay, permits)
 		if !ok {
@@ -902,7 +902,8 @@ func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user acco
 	if !playback.Manifest(analysis) {
 		err = h.Playback.ServeChannel(w, r, version, relay)
 	} else if relay {
-		grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: true})
+		// The files the playlist names are the same play's.
+		grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Device: h.mediaDevice(r), Relay: true})
 		err = h.Playback.ServeLive(w, r, version, "", h.liveLink(r, channel.ID, grant))
 	} else {
 		err = h.Playback.Serve(w, r, version, playback.Delivery{})

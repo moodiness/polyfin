@@ -185,8 +185,8 @@ func relayTrack(r *http.Request, version library.Version) bool {
 // audioURL is the address players fetch a track from as it is, with a
 // grant signed for the caller (see streamURL).
 func (h *Handler) audioURL(r *http.Request, item accounts.ID, version library.Version, container string, relay bool) string {
-	user := callerFrom(r.Context()).User
-	grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: relay})
+	caller := callerFrom(r.Context())
+	grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: caller.User.ID, Device: caller.Device.ID, Relay: relay})
 	query := url.Values{"static": {"true"}, "mediaSourceId": {item.String()}, "Tag": {version.ID.String()}, grantParameter: {grant}}
 	extension := container
 	if extension == "" || strings.Contains(extension, ",") {
@@ -223,7 +223,7 @@ func (h *Handler) audioPlaybackInfo(w http.ResponseWriter, r *http.Request, user
 		h.refusePlay(w, r, user, item, "NoCompatibleStream", plays.FailedNoStream)
 		return
 	}
-	session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: relayTrack(r, version)})
+	session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID, Relay: relayTrack(r, version)})
 	source := h.audioSource(r, item, version, d)
 	// Jellyfin names the default track in a song's details, not here.
 	source.DefaultAudioStreamIndex = nil

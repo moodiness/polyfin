@@ -160,18 +160,43 @@ func (w *meteredWriter) release() {
 	}
 }
 
-// meterKey is whose playback a media request serves: the device of the
-// token it carries, which LiveSessions finds a device's playback by, else
-// its play session, as a guest's or a converted download's; empty when it
-// names neither. The token only tells whose bytes these are: streamAccess
-// decides what the request gets.
+// meterKey is whose playback a media request serves: its device (see
+// mediaDevice), which LiveSessions finds a device's playback by, else its
+// play session, as a guest's or a converted download's; empty when it
+// names neither.
 func (h *Handler) meterKey(r *http.Request) string {
-	if token := readCredentials(r, true).Token; token != "" {
-		if device, _, err := h.Accounts.DeviceByToken(r.Context(), token, forwarded.Client(r)); err == nil {
-			return device.ID.String()
-		}
+	if device := h.mediaDevice(r); device != (accounts.ID{}) {
+		return device.String()
 	}
 	return cmp.Or(r.PathValue("session"), query(r, "playSessionId"))
+}
+
+// mediaDevice is the device whose playback a media request serves: the
+// device of the token it carries; else the one its grant was given to, as
+// PlaybackInfo and item details give one with the Path of each media
+// source, which apps fetch as it is, with no token (see streamURL); else,
+// for a file asked as it is (static), the one its play session was given
+// to. Zero when it names none, as a converted download's request with no
+// token. The token or grant only tells whose bytes these are:
+// streamAccess decides what the request gets.
+func (h *Handler) mediaDevice(r *http.Request) accounts.ID {
+	if token := readCredentials(r, true).Token; token != "" {
+		if device, _, err := h.Accounts.DeviceByToken(r.Context(), token, forwarded.Client(r)); err == nil {
+			return device.ID
+		}
+	}
+	if h.Playback == nil {
+		return accounts.ID{}
+	}
+	if grant, err := h.Playback.Signer().Verify(query(r, grantParameter)); err == nil && grant.Device != (accounts.ID{}) {
+		return grant.Device
+	}
+	if static, _ := boolQuery(r, "static"); static {
+		if grant, err := h.Playback.Signer().Verify(query(r, "playSessionId")); err == nil {
+			return grant.Device
+		}
+	}
+	return accounts.ID{}
 }
 
 // sentDelivery is how the bytes of a media request of a play session reach

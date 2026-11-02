@@ -431,10 +431,12 @@ func textCopyOf(streams []playback.MediaStream, index int) int {
 // media source's Path. Players send no credentials with it, so it carries a
 // grant signed for the caller, which tells whether Polyfin must relay the
 // source rather than redirect the player to it; a relayed one also says
-// so in relayParameter, for Polyfin's script (see boostRelay).
+// so in relayParameter, for Polyfin's script (see boostRelay). The grant
+// names the caller's device: the bytes of the address are that device's
+// playback's (see mediaDevice).
 func (h *Handler) streamURL(r *http.Request, item, sourceID accounts.ID, version library.Version, container string, relay bool) string {
-	user := callerFrom(r.Context()).User
-	grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Relay: relay})
+	caller := callerFrom(r.Context())
+	grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: caller.User.ID, Device: caller.Device.ID, Relay: relay})
 	query := url.Values{
 		"static":        {"true"},
 		"mediaSourceId": {sourceID.String()},

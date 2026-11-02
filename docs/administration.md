@@ -58,9 +58,13 @@ Each row of **Now playing** tells, under **How it plays**, what the play moves n
 
 A recording made by Polyfin has no source to tell.
 
-- The rate to the app counts what the media routes answer: a direct play's file, HLS segments, live channels, downloads, share links and DLNA. The range requests of a direct play count for the device whose token they carry, the same device its reports come from; a guest's and a download's count for their play session; a DLNA device's for that device. Answers with an error count for nothing.
+- The rate to the app counts what the media routes answer: a direct play's file, HLS segments, live channels, downloads, share links and DLNA. A direct play's requests count for its device, whatever address the app fetches:
+  - the device whose token they carry, as the `Authorization` header, `ApiKey` or `api_key`;
+  - else the device that asked for the address: the `Path` of each media source, which some apps fetch as it is, carries no token but a grant naming the device that asked PlaybackInfo or the item's details for it, and so does the play session, for an address of the file as it is (`static=true`) that carries the play session alone.
+
+  A guest's, and a converted download's without a token, count for their play session; a DLNA device's for that device. Answers with an error count for nothing.
 - The rate from the source counts what the source cache and the relays read from the source. Several plays of the same version share it.
-- A play whose app Polyfin sent to read the source itself shows "The app reads the source itself" in place of its rate to the app: none of its bytes pass through Polyfin.
+- A play whose app Polyfin sent to read the source itself shows "The app reads the source itself" in place of its rate to the app, whatever address the app asked: none of its bytes pass through Polyfin.
 
 Beside the title of **Now playing**, Home shows the server's totals, refreshed every 3 seconds: what every play sends to apps, and what Polyfin receives from sources, a version played on several devices counted once. The bytes sent for each playback are kept in its history: see [Statistics](statistics.md#the-history).
 

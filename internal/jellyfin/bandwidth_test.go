@@ -1,17 +1,27 @@
 package jellyfin
 
 import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/bandwidth"
 	"github.com/moodiness/polyfin/internal/metrics"
 	"github.com/moodiness/polyfin/internal/plays"
+	"github.com/moodiness/polyfin/internal/source"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // An answer counts its bytes for its playback when it succeeds; an error
@@ -150,5 +160,210 @@ func TestDirectPlaysCountWhatTheyMoveForTheirDevice(t *testing.T) {
 	defer mu.Unlock()
 	if len(changes) != 2 || changes[1].Kind != plays.Stopped || changes[1].Playback.Sent != int64(len(file)) {
 		t.Errorf("changes %+v, want a start and a stop with the %d bytes sent", changes, len(file))
+	}
+}
+
+// publicSource is the host of the source a play is redirected to: a
+// public address, which the test server reaches at a local one (see
+// reachedAt), so that no request leaves the machine.
+const publicSource = "203.0.113.10"
+
+// reachedAt sends the requests for publicSource to the server at local.
+type reachedAt struct {
+	source.Opener
+	local string
+}
+
+func (o reachedAt) Open(ctx context.Context, method, target string, header http.Header, confined bool) (*http.Response, error) {
+	if parsed, err := url.Parse(target); err == nil && parsed.Host == publicSource {
+		parsed.Host = o.local
+		target = parsed.String()
+	}
+	return o.Opener.Open(ctx, method, target, header, confined)
+}
+
+// directPlayAddon lists one movie with two streams: the first on the
+// local network, which Polyfin relays, the second on publicSource, which
+// Polyfin sends the app to. It returns its manifest's address and the
+// host it listens at.
+func directPlayAddon(t *testing.T, file string) (manifest, host string) {
+	t.Helper()
+	var server *httptest.Server
+	movie := stremio.Meta{ID: "tt3000", Type: "movie", Name: "Played", Runtime: "2h", Year: "2010", Released: "2010-01-01T00:00:00.000Z"}
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.EscapedPath()
+		switch {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "direct", Name: "Direct", Version: "1", Types: []string{"movie"}, IDPrefixes: []string{"tt"},
+				Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}},
+				Catalogs:  []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}})
+		case strings.HasPrefix(path, "/catalog/movie/top"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{movie}})
+		case path == "/meta/movie/tt3000.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie})
+		case path == "/stream/movie/tt3000.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{
+				{Name: "Relayed", URL: server.URL + "/files/relayed.mp4", BehaviorHints: stremio.StreamBehavior{Filename: "Played.relayed.mp4"}},
+				{Name: "Redirected", URL: "http://" + publicSource + "/files/redirected.mp4", BehaviorHints: stremio.StreamBehavior{Filename: "Played.redirected.mp4"}},
+			}})
+		case strings.HasPrefix(path, "/files/"):
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader(file))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json", strings.TrimPrefix(server.URL, "http://")
+}
+
+// A direct play's bytes count for its play whatever address the app
+// fetches: the media source's Path, which carries a grant and no token,
+// as the apps that play it as given fetch it; the stream route the app
+// builds, with its token as ApiKey, as api_key with or without legacy
+// authorization, or in the Authorization header; or with the play
+// session alone. A relayed source shows the play's rate to the app, and
+// its history keeps the bytes; a source the app is sent to shows that
+// the app reads it itself, and its history keeps none. The header makes
+// Polyfin relay even a public source (see stream).
+func TestDirectPlaysCountForTheirPlayWhateverTheAddress(t *testing.T) {
+	t.Parallel()
+	const file = "\x1a\x45\xdf\xa3 media bytes"
+	type address struct {
+		target string
+		header http.Header
+	}
+	type play struct {
+		path, stream, device, token, session string
+	}
+	for _, form := range []struct {
+		name    string
+		legacy  bool
+		relays  bool
+		address func(p play) address
+	}{
+		{name: "the media source's Path", address: func(p play) address { return address{target: p.path} }},
+		{name: "ApiKey", address: func(p play) address { return address{target: p.stream + "&ApiKey=" + p.token} }},
+		{name: "api_key without legacy authorization", address: func(p play) address { return address{target: p.stream + "&api_key=" + p.token} }},
+		{name: "api_key with legacy authorization", legacy: true, address: func(p play) address { return address{target: p.stream + "&api_key=" + p.token} }},
+		{name: "the Authorization header", relays: true, address: func(p play) address {
+			return address{target: p.stream, header: http.Header{"Authorization": {app(p.device, p.token)}}}
+		}},
+		{name: "the play session", address: func(p play) address {
+			return address{target: p.stream + "&playSessionId=" + url.QueryEscape(p.session)}
+		}},
+	} {
+		t.Run(form.name, func(t *testing.T) {
+			t.Parallel()
+			manifest, host := directPlayAddon(t, file)
+			sent := bandwidth.New()
+			var mu sync.Mutex
+			var stopped []plays.Change
+			tracker := plays.NewTracker(func(c plays.Change) {
+				mu.Lock()
+				defer mu.Unlock()
+				if c.Kind == plays.Stopped {
+					stopped = append(stopped, c)
+				}
+			})
+			s := newServerReaching(t, 10, "ffprobe-not-installed", func(o source.Opener) source.Opener { return reachedAt{Opener: o, local: host} },
+				func(o *Options, _ *pgxpool.Pool) { o.Sent, o.Plays = sent, tracker })
+			user := s.user("member", nil)
+			if _, err := s.addons.Install(t.Context(), addons.Shared(), manifest, false); err != nil {
+				t.Fatal(err)
+			}
+			s.setting(t, func(settings *accounts.Settings) {
+				settings.SyncAddonSubtitles = false
+				settings.LegacyAuthorization = form.legacy
+				settings.PlaybackHistory = true
+			})
+			token := s.signIn("member", "tv")
+			var views, page QueryResult
+			s.get(t, "/UserViews", token, &views)
+			s.get(t, "/Items?ParentId="+views.Items[0].Id, token, &page)
+			movie := page.Items[0].Id
+			p := playbackSetup{testServer: s, token: token, user: user, movie: movie}
+			p.versions = p.versionsOf(t, movie)
+			p.listed(t, user, movie)
+			for _, version := range p.versions {
+				p.analyzed(t, version, "h264-aac-mp4")
+			}
+			history := plays.NewHistory(s.pool, s.store.Settings, slog.New(slog.DiscardHandler))
+
+			// Each source plays on its own device, whose rate is its own.
+			for i, redirected := range []bool{false, !form.relays} {
+				version, name := p.versions[i].ID.String(), []string{"tv", "phone"}[i]
+				token := s.signIn("member", name)
+				status, body := s.call(http.MethodPost, "/Items/"+movie+"/PlaybackInfo", app(name, token), map[string]any{"MediaSourceId": version})
+				var info playbackInfoResponse
+				if err := json.Unmarshal(body, &info); status != http.StatusOK || err != nil || len(info.MediaSources) != 1 {
+					t.Fatalf("playback info of %s: %d %s", p.versions[i].Name, status, body)
+				}
+				if status, body := s.call(http.MethodPost, "/Sessions/Playing", app(name, token), map[string]any{"ItemId": movie, "MediaSourceId": version,
+					"PlaySessionId": info.PlaySessionId, "PositionTicks": 0, "PlayMethod": "DirectPlay"}); status != http.StatusNoContent {
+					t.Fatalf("start: %d %s", status, body)
+				}
+				sessions, err := s.handler.LiveSessions(t.Context())
+				if err != nil || len(sessions) != 1 {
+					t.Fatalf("live sessions: %+v %v", sessions, err)
+				}
+				device := sessions[0].Device.ID.String()
+				// A rate needs two samples: before the play reads, and after.
+				// Now playing adds the meter of the play session to the
+				// device's, as that of a guest or a download.
+				sent.Release(sent.Hold(device))
+				sent.Release(sent.Hold(info.PlaySessionId))
+				sent.Sample()
+				a := form.address(play{path: info.MediaSources[0].Path, device: name, token: token, session: info.PlaySessionId,
+					stream: s.url + "/Videos/" + movie + "/stream?static=true&mediaSourceId=" + version})
+				request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, a.target, nil)
+				for name, values := range a.header {
+					request.Header[name] = values
+				}
+				response, err := noRedirects.Do(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, _ := io.ReadAll(response.Body)
+				response.Body.Close()
+				switch {
+				case redirected && (response.StatusCode != http.StatusFound || response.Header.Get("Location") != "http://"+publicSource+"/files/redirected.mp4"):
+					t.Fatalf("%s: %d to %q, want a redirection to the source", p.versions[i].Name, response.StatusCode, response.Header.Get("Location"))
+				case !redirected && (response.StatusCode != http.StatusOK || string(got) != file):
+					t.Fatalf("%s: %d %q, want the file", p.versions[i].Name, response.StatusCode, got)
+				}
+				sent.Sample()
+
+				sessions, err = s.handler.LiveSessions(t.Context())
+				if err != nil || len(sessions) != 1 {
+					t.Fatalf("live sessions: %+v %v", sessions, err)
+				}
+				tv := sessions[0]
+				if redirected && (tv.Sent != 0 || !tv.Redirected) || !redirected && (tv.Sent <= 0 || tv.Redirected) {
+					t.Errorf("%s: the play sends %v B/s to the app, redirected %v; want %v", p.versions[i].Name, tv.Sent, tv.Redirected,
+						map[bool]string{true: "none, redirected", false: "some, not redirected"}[redirected])
+				}
+				if status, body := s.call(http.MethodPost, "/Sessions/Playing/Stopped", app(name, token), map[string]any{"ItemId": movie, "MediaSourceId": version,
+					"PlaySessionId": info.PlaySessionId, "PositionTicks": 600_000_000}); status != http.StatusNoContent {
+					t.Fatalf("stop: %d %s", status, body)
+				}
+				mu.Lock()
+				stop := stopped[len(stopped)-1]
+				mu.Unlock()
+				// The play lasted no time: it is kept as one that played
+				// long enough.
+				stop.Playback.Played = plays.MinPlayed
+				history.Record(t.Context(), stop)
+				var kept *int64
+				if err := s.pool.QueryRow(t.Context(), "SELECT sent_bytes FROM playback_history ORDER BY ended_at DESC, started_at DESC LIMIT 1").Scan(&kept); err != nil {
+					t.Fatal(err)
+				}
+				switch {
+				case redirected && kept != nil:
+					t.Errorf("%s: the history keeps %d bytes sent, want none", p.versions[i].Name, *kept)
+				case !redirected && (kept == nil || *kept != int64(len(file))):
+					t.Errorf("%s: the history keeps %v bytes sent, want %d", p.versions[i].Name, kept, len(file))
+				}
+			}
+		})
 	}
 }

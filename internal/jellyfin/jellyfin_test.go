@@ -126,6 +126,15 @@ func newTestServer(t *testing.T, failures int) testServer {
 // ffprobe. configure, if any, completes the handler's options.
 func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...func(*Options, *pgxpool.Pool)) testServer {
 	t.Helper()
+	return newServerReaching(t, failures, ffprobe, nil, configure...)
+}
+
+// newServerReaching is newProbingServer whose requests to sources go
+// through reach, when set: a test serves a source on a public address
+// from a local server with it, never reaching that address.
+func newServerReaching(t *testing.T, failures int, ffprobe string, reach func(source.Opener) source.Opener,
+	configure ...func(*Options, *pgxpool.Pool)) testServer {
+	t.Helper()
 	pool := migrated.New(t)
 	store, err := accounts.Open(t.Context(), pool)
 	if err != nil {
@@ -146,7 +155,11 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 	if err != nil {
 		t.Fatal(err)
 	}
-	sources, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, client, logger)
+	var opener source.Opener = client
+	if reach != nil {
+		opener = reach(client)
+	}
+	sources, err := source.New(t.TempDir(), func() source.Policy { return source.Policy{Limit: 1 << 30} }, opener, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +181,7 @@ func newProbingServer(t *testing.T, failures int, ffprobe string, configure ...f
 		t.Fatal(err)
 	}
 	t.Cleanup(segments.Close)
-	player, err := playback.New(pool, client, ffprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger, store.Settings)
+	player, err := playback.New(pool, opener, ffprobe, playback.NewSigner(secret), sources, segments, lib.Renew, logger, store.Settings)
 	if err != nil {
 		t.Fatal(err)
 	}
