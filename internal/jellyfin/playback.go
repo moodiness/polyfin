@@ -319,6 +319,11 @@ type playbackInfoRequest struct {
 	// than Polyfin for a DLNA device or a guest: the direct-play check
 	// still runs, and gives DirectPlayError (see playback.Options).
 	directPlayOff bool
+	// failedDirectPlay, set when the app turned direct play off, gives the
+	// device profile of the direct play of a version that failed before,
+	// for which the video is kept copied, or nil and why not (see
+	// Handler.failedDirectPlay).
+	failedDirectPlay func(version accounts.ID) (*playback.DeviceProfile, string)
 	// convertSound converts the audio of the user's videos and channels,
 	// evened, the video copied where it would play as it is (see
 	// soundConverted).
@@ -360,6 +365,11 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request.directPlayOff = request.EnableDirectPlay != nil && !*request.EnableDirectPlay
+	if c := callerFrom(r.Context()); request.directPlayOff && c.APIKey == nil && c.Device.ID != (accounts.ID{}) {
+		request.failedDirectPlay = func(version accounts.ID) (*playback.DeviceProfile, string) {
+			return h.failedDirectPlay(c.Device.ID, version)
+		}
+	}
 	user, ok := h.viewer(w, r, b, notFoundProblem)
 	if !ok {
 		return
@@ -528,6 +538,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	h.choseVersion(callerFrom(r.Context()).Device.ID, h.titleOf(item.ID), chosen.version.ID)
 	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Relay: mustRelay(r, chosen.version)})
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
+	h.noteDirectPlay(r, request, item.ID, *chosen)
 	// Every version listed is named for the profile sent: the one chosen
 	// from its decision, the others from what is known of them.
 	namer := h.playbackNamer(item, request, user)
@@ -813,6 +824,9 @@ func (h *Handler) decideTracks(p playable, version library.Version, streams []pl
 		ConversionHeight:    request.conversionHeight,
 		Progressive:         request.progressive,
 		Can:                 h.Playback.Capabilities(),
+	}
+	if options.DirectPlayOff && request.failedDirectPlay != nil {
+		options.FailedDirectPlay, _ = request.failedDirectPlay(version.ID)
 	}
 	if sound {
 		convertSound(&options)

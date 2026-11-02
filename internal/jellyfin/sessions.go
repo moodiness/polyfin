@@ -154,12 +154,13 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 
 // signedOut ends the sessions of devices signed out, however they were, as
 // Jellyfin does: their sockets close, and they leave their SyncPlay group.
-// Their last PlaybackInfo profile is forgotten.
+// Their last PlaybackInfo profile, and their direct plays, are forgotten.
 func (h *Handler) signedOut(devices []accounts.ID) {
 	for _, device := range devices {
 		h.sockets.close(device)
 		h.syncPlay.sessionLeft(device)
 		h.plays.Delete(device)
+		h.directPlays.DeleteFunc(func(key playKey, _ directPlayed) bool { return key.device == device })
 	}
 }
 

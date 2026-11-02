@@ -226,6 +226,10 @@ type Handler struct {
 	// plays remembers each device's last PlaybackInfo profile and bitrate,
 	// which item details name versions for (see detailsNamer).
 	plays *cache.Cache[accounts.ID, devicePlay]
+	// directPlays remembers each device's last direct play of a version,
+	// which a retry after it fails keeps the video for (see
+	// failedplays.go).
+	directPlays *cache.Cache[playKey, directPlayed]
 	// scripted are the devices whose web player runs Polyfin's script, as
 	// they read the user's sound (see boostRelay).
 	scripted *cache.Cache[accounts.ID, struct{}]
@@ -285,6 +289,8 @@ func New(options Options) *Handler {
 	// So do the draws of listings at random, which hold the titles drawn.
 	h.draws = cache.NewLasting[drawKey, draw](1000, func() time.Duration { return drawLife }, func() time.Time { return h.now() }).
 		Sized(64<<20, func(d draw) int { return cache.JSONSize(d.items) })
+	// So do the direct plays a retry looks back at.
+	h.directPlays = cache.NewLasting[playKey, directPlayed](1000, func() time.Duration { return directPlayMemory }, func() time.Time { return h.now() })
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, options.Logger)
 	h.listings = newListings(h.listVersions)
 	if options.Library != nil {
