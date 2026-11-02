@@ -223,6 +223,14 @@ func (s *Service) ask(key followKey) (asked uint64, done func()) {
 	}
 }
 
+// askingFor reports whether a request for a list is under way (see ask).
+func (s *Service) askingFor(key followKey) bool {
+	s.followUps.mu.Lock()
+	defer s.followUps.mu.Unlock()
+	_, ok := s.followUps.asking[key]
+	return ok
+}
+
 // SetFollowUps replaces the delays of the follow-ups, 10 and 30 seconds,
 // before the service is used. Tests shorten them, or give none to ask no
 // addon again; the server keeps them.
@@ -264,7 +272,9 @@ func (s *Service) followSubtitles(ctx context.Context, entry installed, key stre
 // brings it back. The list just stored is a new first answer: its
 // schedule replaces the one running for key, which stops. changed, unless
 // nil, runs after the list is stored, after each answer that replaces it,
-// and once the schedule ends.
+// and once the schedule ends. Follow-ups are background work, paced after
+// the rest (see laterBackground), but for one hurried by a renewal, which
+// a play waits for.
 func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[streamKey, list[T]], kind listKind[T], key streamKey, addon string,
 	asked uint64, answer []T, fetch func(context.Context) ([]T, error), changed func()) ([]T, error) {
 	notify := func() {
@@ -304,16 +314,18 @@ func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[str
 			notify()
 		}()
 		for _, delay := range delays {
+			asking := laterBackground(detached)
 			timer := time.NewTimer(delay)
 			select {
 			case <-timer.C:
 			case <-f.hurry:
 				timer.Stop()
+				asking = foreground(detached)
 			}
 			if _, fresh, _ := listOf(s, lists, key); !fresh || !s.followingUp(followed, f) {
 				return
 			}
-			answer, err := shared(detached, s, flightKey, fetch)
+			answer, err := shared(asking, s, flightKey, fetch)
 			if err != nil {
 				s.logger.Debug("An addon asked again for a list failed", "addon", addon, "list", kind.name, "error", err)
 				return

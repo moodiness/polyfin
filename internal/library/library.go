@@ -161,6 +161,9 @@ type Service struct {
 	catalogWaits    catalogWaits
 	catalogSlots    *addonSlots[string]
 	failedRefreshes *cache.Cache[pageKey, time.Time]
+	// pace paces the background requests for streams and descriptions
+	// to each addon's server (see pacing.go).
+	pace *pacing
 	// guideDir is where XMLTV guides in ZIP archives are spooled while they
 	// are read (see SpoolGuidesIn); empty, they are not read.
 	guideDir string
@@ -373,6 +376,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.libraryImages = cache.NewLasting[pageKey, fetched[foundImage]](1000, s.keptCatalogLife, clock)
 	s.catalogSlots = &addonSlots[string]{size: catalogHostFetches, slots: map[string]chan struct{}{}}
 	s.failedRefreshes = cache.NewLasting[pageKey, time.Time](4000, func() time.Duration { return failedRefreshWait }, clock)
+	s.pace = newPacing(clock)
 	s.prefetches = make(chan struct{}, prefetchLimit)
 	s.translations = make(chan struct{}, translationReaders)
 	s.readAhead = true
@@ -1956,11 +1960,14 @@ func (s *Service) listingLimit(ctx context.Context, user accounts.User, parent a
 }
 
 // fetchMeta asks an addon, an IPTV source or a local folder for its
-// description of a title.
+// description of a title. Background work's requests to an addon are
+// paced (see request).
 func (s *Service) fetchMeta(ctx context.Context, addon installed, metaType, id string) (stremio.Meta, error) {
 	switch {
 	case addon.addon.Stremio():
-		meta, err := s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
+		meta, err := request(ctx, s, addon.addon, paceMetas, func(ctx context.Context) (stremio.Meta, error) {
+			return s.client.Meta(ctx, addon.addon.ManifestURL, metaType, id, addon.confined)
+		})
 		withoutGenerated(&meta)
 		return meta, failedAt(addon, "", err)
 	case addon.addon.Local():

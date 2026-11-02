@@ -904,13 +904,24 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 // noticeLife, during which the callers get it again without asking the
 // addon (see noticedAnswer). A refresh of the title while the addon is
 // asked leaves its answer out: the addon is asked again, for the callers
-// waiting too (see forgetLists).
+// waiting too (see forgetLists). Background work's request waits for its
+// turn before it is shared (see streamTurn), so that a user's request
+// never waits behind it.
 func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
 	for {
 		if streams, ok, err := s.noticedAnswer(ctx, key); ok {
 			return streams, err
 		}
-		streams, err := s.askStreamsOf(ctx, entry, key)
+		asking, release, answered, err := s.streamTurn(ctx, entry, key)
+		if err != nil {
+			return nil, err
+		}
+		if answered != nil {
+			release()
+			return answered()
+		}
+		streams, err := s.askStreamsOf(asking, entry, key)
+		release()
 		if errors.Is(err, errOnlyNotices) {
 			// Shared requests pass no answer with an error: the list kept
 			// is read here.
@@ -922,6 +933,30 @@ func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamK
 			return streams, err
 		}
 	}
+}
+
+// streamTurn waits, for background work's request for an addon's streams
+// for a title, for its turn (see pacing), and returns the context to ask
+// on, with what ends the turn. A request under way for them is joined at
+// once instead. When another request answered while this one waited,
+// answered returns that answer, as streamAnswer would. Any other request
+// asks at once.
+func (s *Service) streamTurn(ctx context.Context, entry installed, key streamKey) (asking context.Context, release func(),
+	answered func() ([]stremio.Stream, error), err error) {
+	if !paces(ctx, entry.addon) || s.askingFor(followKey{listStreams, key}) {
+		return ctx, func() {}, nil, nil
+	}
+	waited := s.now()
+	if asking, release, err = s.turn(ctx, entry.addon, paceStreams); err != nil {
+		return ctx, nil, nil, err
+	}
+	if l, _, ok := s.streamListOf(ctx, key); ok && !l.at.Before(waited) {
+		return asking, release, func() ([]stremio.Stream, error) { return l.items, nil }, nil
+	}
+	if streams, ok, err := s.noticedAnswer(ctx, key); ok {
+		return asking, release, func() ([]stremio.Stream, error) { return streams, err }, nil
+	}
+	return asking, release, nil, nil
 }
 
 // askStreamsOf asks an addon for its streams for a title once, as
@@ -1068,11 +1103,19 @@ func shared[T any](ctx context.Context, s *Service, key string, fetch func(conte
 }
 
 // fetchStreams asks an addon, an IPTV source or a local folder for the
-// streams of a title.
+// streams of a title. Background work's requests to an addon are paced
+// (see request), and an answer of notices alone saying the addon refused
+// it for its rate pauses them.
 func (s *Service) fetchStreams(ctx context.Context, entry installed, contentType, id string) ([]stremio.Stream, error) {
 	switch {
 	case entry.addon.Stremio():
-		return s.client.Streams(ctx, entry.addon.ManifestURL, contentType, id, entry.confined)
+		streams, err := request(ctx, s, entry.addon, paceStreams, func(ctx context.Context) ([]stremio.Stream, error) {
+			return s.client.Streams(ctx, entry.addon.ManifestURL, contentType, id, entry.confined)
+		})
+		if len(streams) > 0 && streamKind.count(streams) == 0 && refusedNotices(streams) {
+			s.refusedFor(entry.addon, paceWait)
+		}
+		return streams, err
 	case entry.addon.Local():
 		if s.local == nil {
 			return nil, nil

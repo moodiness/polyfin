@@ -207,14 +207,14 @@ type untranslated struct {
 
 // readTranslations reads the descriptions of titles in the background,
 // one at a time, unless translationReaders reads are under way already:
-// the next listing asks again.
+// the next listing asks again. Its requests are paced (see Background).
 func (s *Service) readTranslations(ctx context.Context, titles []untranslated) {
 	select {
 	case s.translations <- struct{}{}:
 	default:
 		return
 	}
-	detached := context.WithoutCancel(ctx)
+	detached := Background(context.WithoutCancel(ctx))
 	go func() {
 		defer func() { <-s.translations }()
 		for _, t := range titles {

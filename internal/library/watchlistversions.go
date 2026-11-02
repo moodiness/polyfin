@@ -16,11 +16,14 @@ import (
 // to wait is not asked, and an addon that answers "too many requests"
 // (429, or 503 with Retry-After) starts its server's wait, as a refused
 // catalog page does, so that the checks that follow do not ask it either.
-// Only the answers of the addons asked count: complete is false when an
-// addon was not asked, failed, or answered only notices, in which case
-// versions are those of the others. A movie waiting for its digital
-// release has none, and its addons are not asked.
+// They are background work, paced (see pacing): an addon whose server's
+// background requests pause is not asked either. Only the answers of the
+// addons asked count: complete is false when an addon was not asked,
+// failed, or answered only notices, in which case versions are those of
+// the others. A movie waiting for its digital release has none, and its
+// addons are not asked.
 func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id accounts.ID) (versions []Version, complete bool, err error) {
+	ctx = Background(ctx)
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
 		return nil, false, err
@@ -46,7 +49,8 @@ func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id 
 			answered[i] = true
 			continue
 		}
-		if _, waits := s.catalogWaitLeft(stremio.HostOf(entry.addon.ManifestURL)); waits {
+		host := stremio.HostOf(entry.addon.ManifestURL)
+		if _, waits := s.catalogWaitLeft(host); waits || s.pace.paused(host) {
 			continue
 		}
 		wg.Go(func() {

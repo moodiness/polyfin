@@ -83,9 +83,10 @@ func (s *Service) shared(ctx context.Context, key string, fetch func(context.Con
 // background runs fetch for key on its own, unless it runs already, and
 // does not wait for it. due, checked once it runs, tells whether it is
 // still to be done: a refresh that ended between the caller's read and
-// this one already did it.
+// this one already did it. Its requests to addons are paced (see
+// Background).
 func (s *Service) background(ctx context.Context, key string, due func() bool, fetch func(context.Context) error) {
-	detached := context.WithoutCancel(ctx)
+	detached := Background(context.WithoutCancel(ctx))
 	s.flight.DoChan(key, func() (any, error) {
 		if !due() {
 			return nil, nil
@@ -415,7 +416,8 @@ func (s *Service) meta(ctx context.Context, addon installed, metaType, id string
 // the addon gave it: the one kept, refreshed in the background once past
 // metaTTL, or past the catalog refresh age when an app opens the title
 // (see iptv.Opening), else the one kept in the database, else the addon's
-// answer.
+// answer. Background work's request waits for its turn (see pacing)
+// before it is shared, so that a user's request never waits behind it.
 func (s *Service) keptMeta(ctx context.Context, addon installed, metaType, id string) (fetched[stremio.Meta], error) {
 	// An IPTV source describes its titles from its database, with details
 	// once a title was opened: it is not cached here, lest a listing's
@@ -431,6 +433,24 @@ func (s *Service) keptMeta(ctx context.Context, addon installed, metaType, id st
 			s.refreshMeta(ctx, addon, key, kept.at)
 		}
 		return kept, nil
+	}
+	if paces(ctx, addon.addon) {
+		// A description kept in the database takes no turn.
+		if kept, ok := s.loadMeta(ctx, addon, key); ok {
+			if s.metaStale(ctx, kept) {
+				s.refreshMeta(ctx, addon, key, kept.at)
+			}
+			return kept, nil
+		}
+		var release func()
+		var err error
+		if ctx, release, err = s.turn(ctx, addon.addon, paceMetas); err != nil {
+			return fetched[stremio.Meta]{}, err
+		}
+		defer release()
+		if kept, ok := s.metas.Get(key); ok {
+			return kept, nil
+		}
 	}
 	result, err := s.shared(ctx, fmt.Sprintf("meta %v", key), func(ctx context.Context) (any, error) {
 		if kept, ok := s.loadMeta(ctx, addon, key); ok {
