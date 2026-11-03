@@ -6,14 +6,18 @@
 // networks of titles, which smart lists may judge (see the library
 // package's studios.go), for the release dates of movies, which the
 // wait for their digital release and smart lists judge (see the library
-// package's releases.go), and for the episode groups series may show in
-// (see the library package's episodeorder.go).
+// package's releases.go), for the episode groups series may show in
+// (see the library package's episodeorder.go), and for the collections
+// movies belong to, which Silo's apps show as box sets (see the boxset
+// package).
 //
 // TMDB is asked only while a key is saved. Its answers, and the titles and
 // people it did not know, are kept in memory for answerLife; at most
 // maxRequests requests go to TMDB at once, its image server's included
 // (see Hold). A key is sent as TMDB's API key, or as a bearer token when
-// it is a read access token. Errors never hold the key.
+// it is a read access token. Errors never hold the key. A request TMDB
+// refuses for its rate fails with RateLimited, which tells how long it
+// asks to wait.
 package tmdb
 
 import (
@@ -63,6 +67,15 @@ var (
 	// ErrNoKey reports that no key is saved.
 	ErrNoKey = errors.New("no TMDB key")
 )
+
+// RateLimited reports a request TMDB refused for its rate (HTTP 429):
+// RetryAfter is how long its Retry-After asks to wait, 0 when it asks
+// nothing.
+type RateLimited struct {
+	RetryAfter time.Duration
+}
+
+func (e *RateLimited) Error() string { return "TMDB refused the request for its rate" }
 
 // Kind is the kind of a title as TMDB names it.
 type Kind string
@@ -217,6 +230,32 @@ func (c *Client) Studios(ctx context.Context, kind Kind, id string) ([]string, e
 		}
 	}
 	return names, nil
+}
+
+// CollectionRef is the TMDB collection a movie belongs to, as the movie's
+// details name it: its identifier, its name, and the paths of its poster
+// and backdrop on the image server, empty when TMDB has none.
+type CollectionRef struct {
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	PosterPath   string `json:"poster_path"`
+	BackdropPath string `json:"backdrop_path"`
+}
+
+// MovieCollection returns the collection the movie TMDB identifies as id
+// belongs to, nil for none. It reads the movie's details, which Studios
+// reads too: one answer serves both.
+func (c *Client) MovieCollection(ctx context.Context, id string) (*CollectionRef, error) {
+	var details struct {
+		Collection *CollectionRef `json:"belongs_to_collection"`
+	}
+	if err := c.get(ctx, "/movie/"+url.PathEscape(id), nil, &details); err != nil {
+		return nil, err
+	}
+	if details.Collection == nil || details.Collection.ID <= 0 || strings.TrimSpace(details.Collection.Name) == "" {
+		return nil, nil
+	}
+	return details.Collection, nil
 }
 
 // Releases are the release dates of a movie, the earliest TMDB knows of
@@ -561,7 +600,7 @@ func (c *Client) CheckKey(ctx context.Context, key string) error {
 		return err
 	}
 	defer release()
-	status, _, err := c.ask(ctx, key, "/authentication", nil)
+	status, _, _, err := c.ask(ctx, key, "/authentication", nil)
 	switch {
 	case err != nil:
 		return err
@@ -594,7 +633,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, into an
 				return answer{}, err
 			}
 			defer release()
-			status, body, err := c.ask(detached, key, path, query)
+			status, header, body, err := c.ask(detached, key, path, query)
 			switch {
 			case err != nil:
 				return answer{}, err
@@ -604,6 +643,12 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, into an
 				return kept, nil
 			case status == http.StatusUnauthorized:
 				return answer{}, ErrKeyRefused
+			case status == http.StatusTooManyRequests:
+				limited := &RateLimited{}
+				if seconds, err := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After"))); err == nil && seconds > 0 {
+					limited.RetryAfter = time.Duration(seconds) * time.Second
+				}
+				return answer{}, limited
 			case status != http.StatusOK:
 				return answer{}, fmt.Errorf("TMDB answered %d", status)
 			}
@@ -625,8 +670,9 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, into an
 	return nil
 }
 
-// ask sends one request with key and returns TMDB's status and answer.
-func (c *Client) ask(ctx context.Context, key, path string, query url.Values) (int, []byte, error) {
+// ask sends one request with key and returns TMDB's status, headers and
+// answer.
+func (c *Client) ask(ctx context.Context, key, path string, query url.Values) (int, http.Header, []byte, error) {
 	values := url.Values{}
 	for name, value := range query {
 		values[name] = slices.Clone(value)
@@ -641,7 +687,7 @@ func (c *Client) ask(ctx context.Context, key, path string, query url.Values) (i
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return 0, nil, errors.New("invalid TMDB request")
+		return 0, nil, nil, errors.New("invalid TMDB request")
 	}
 	if bearer {
 		request.Header.Set("Authorization", "Bearer "+key)
@@ -650,14 +696,14 @@ func (c *Client) ask(ctx context.Context, key, path string, query url.Values) (i
 	request.Header.Set("User-Agent", c.userAgent)
 	response, err := c.http.Do(request)
 	if err != nil {
-		return 0, nil, fmt.Errorf("TMDB could not be asked: %w", withoutURL(err))
+		return 0, nil, nil, fmt.Errorf("TMDB could not be asked: %w", withoutURL(err))
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxAnswer))
 	if err != nil {
-		return 0, nil, fmt.Errorf("TMDB's answer could not be read: %w", withoutURL(err))
+		return 0, nil, nil, fmt.Errorf("TMDB's answer could not be read: %w", withoutURL(err))
 	}
-	return response.StatusCode, body, nil
+	return response.StatusCode, response.Header, body, nil
 }
 
 // withoutURL drops the URL, which holds the key, from a request's error.
