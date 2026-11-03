@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -732,7 +733,8 @@ func webClient(client string) bool {
 // live media source, played as it is when the app takes it, else
 // converted into HLS by FFmpeg as it comes. Unlike Jellyfin's tuners, a
 // channel's source needs no opening (RequiresOpening is false): Polyfin
-// keeps nothing open for it until a player asks for its stream.
+// keeps nothing open for it until a player asks for its stream. A source
+// slow to send its first bytes keeps the app waiting (see patientWriter).
 func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user accounts.User, channel library.Item, opened accounts.ID, request playbackInfoRequest) {
 	versions, err := h.Library.Versions(r.Context(), user, channel.ID)
 	if err != nil {
@@ -749,6 +751,10 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		}
 		return failure != nil
 	}))
+	// Every answer from here on is a 200.
+	patient := newPatientWriter(w, playbackInfoPatience)
+	defer patient.stop()
+	w = patient
 	requested, asked := parseGUID(request.MediaSourceId)
 	allowed := h.Accounts.Conversions(user)
 	attempts, tries := 0, h.Accounts.Settings().VersionAttempts
@@ -784,6 +790,77 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 	}
 	h.refusePlay(w, r, user, channel, "NoCompatibleStream", plays.FailedNoStream)
 }
+
+// playbackInfoPatience is how long PlaybackInfo of a channel waits before
+// it sends its answer's status and headers, then a space each time again,
+// while the channel's source has not sent its first bytes: JSON allows
+// spaces before a value, and Swiftfin gives up on an answer after 20
+// seconds without a byte (URLSessionConfiguration.swift, line 16), while a
+// source may take as long to start (see playback's liveTimes).
+const playbackInfoPatience = 5 * time.Second
+
+// patientWriter sends an answer's status, 200, and its headers once wait
+// passed with nothing written, then a space after each wait, until the
+// handler writes its answer, whose status must then be 200 too.
+type patientWriter struct {
+	http.ResponseWriter
+	wait time.Duration
+
+	mu    sync.Mutex
+	timer *time.Timer
+	sent  bool
+	done  bool
+}
+
+func newPatientWriter(w http.ResponseWriter, wait time.Duration) *patientWriter {
+	p := &patientWriter{ResponseWriter: w, wait: wait}
+	p.mu.Lock()
+	p.timer = time.AfterFunc(wait, p.keep)
+	p.mu.Unlock()
+	return p
+}
+
+// keep sends the status and headers, the first time, and a space.
+func (p *patientWriter) keep() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.done {
+		return
+	}
+	if !p.sent {
+		p.Header().Set("Content-Type", "application/json; charset=utf-8")
+		p.ResponseWriter.WriteHeader(http.StatusOK)
+		p.sent = true
+	}
+	if _, err := io.WriteString(p.ResponseWriter, " "); err != nil {
+		return
+	}
+	_ = http.NewResponseController(p.ResponseWriter).Flush()
+	p.timer.Reset(p.wait)
+}
+
+// stop sends no more spaces; it reports whether the status was sent.
+func (p *patientWriter) stop() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.done = true
+	p.timer.Stop()
+	return p.sent
+}
+
+func (p *patientWriter) WriteHeader(status int) {
+	if !p.stop() {
+		p.ResponseWriter.WriteHeader(status)
+	}
+}
+
+func (p *patientWriter) Write(data []byte) (int, error) {
+	p.stop()
+	return p.ResponseWriter.Write(data)
+}
+
+// Unwrap returns the underlying writer, for http.ResponseController.
+func (p *patientWriter) Unwrap() http.ResponseWriter { return p.ResponseWriter }
 
 // liveSource describes a channel's stream with the decision for the app's
 // device profile. Subtitles in live streams are not offered. Only the

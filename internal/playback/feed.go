@@ -53,8 +53,8 @@ type liveTimes struct {
 	// stall ends a feed that received nothing for that long: its readers
 	// see the stream end, and FFmpeg reads it again.
 	stall time.Duration
-	// A source must answer within answer, and send its first sniffSize
-	// bytes within body.
+	// A source must answer, and send its first sniffSize bytes, within
+	// answer of the request; its bytes have body at least once it answered.
 	answer, body time.Duration
 	// slotWait is how long an open refused right after Polyfin closed
 	// another stream of the same source is tried again: providers count a
@@ -64,8 +64,14 @@ type liveTimes struct {
 
 // defaultLiveTimes are the times of live streams; tests shorten them.
 // Providers that redirect to the stream take a few seconds to answer, more
-// when busy.
-var defaultLiveTimes = liveTimes{grace: 20 * time.Second, stall: 10 * time.Second, answer: 10 * time.Second, body: 3 * time.Second,
+// when busy; proxies that share a provider's stream between apps answer
+// once they hold a buffer of it, which a low bitrate channel fills in ten
+// seconds or more, or once they gave up a silent stream for the next one.
+// answer is as long as apps wait for PlaybackInfo, which waits for the
+// first bytes then analyzes them (liveProbeCap at most): the Android apps'
+// client gives a request 30 seconds in all, and Swiftfin gives up after 20
+// seconds without a byte, which PlaybackInfo's spaces keep from happening.
+var defaultLiveTimes = liveTimes{grace: 20 * time.Second, stall: 10 * time.Second, answer: 20 * time.Second, body: 3 * time.Second,
 	slotWait: 5 * time.Second}
 
 // timingLocked returns the times of the service's live streams. The
@@ -792,16 +798,17 @@ func (s *Service) makeRoom(ctx context.Context, source accounts.ID, self occupan
 }
 
 // sniff opens a live stream and checks it is one before anything reads
-// it: the source must answer within times.answer with a success, and its
-// first sniffSize bytes (times.body to come) must start an HLS playlist
-// (errManifest, the connection closed), a DASH manifest (errDASH, the
-// same), MPEG-TS packets or an MP4 box. It returns the body and the bytes
-// already read of it.
+// it: the source must answer, and send its first sniffSize bytes, within
+// times.answer (its bytes have times.body at least once it answered), and
+// they must start an HLS playlist (errManifest, the connection closed), a
+// DASH manifest (errDASH, the same), MPEG-TS packets or an MP4 box. It
+// returns the body and the bytes already read of it.
 func (s *Service) sniff(ctx context.Context, version library.Version, times liveTimes) (io.ReadCloser, []byte, error) {
 	header := http.Header{}
 	for name, value := range version.RequestHeaders() {
 		header.Set(name, value)
 	}
+	asked := time.Now()
 	answerCtx, cancelAnswer := context.WithCancel(ctx)
 	answered := time.AfterFunc(times.answer, cancelAnswer)
 	response, err := s.opener.Open(answerCtx, http.MethodGet, version.URL, header, version.Confined)
@@ -826,7 +833,7 @@ func (s *Service) sniff(ctx context.Context, version library.Version, times live
 		body.Close()
 		return nil, nil, err
 	}
-	head, rest, err := readHead(body, times.body)
+	head, rest, err := readHead(body, max(times.body, times.answer-time.Since(asked)))
 	if err != nil {
 		body.Close()
 		return nil, nil, err

@@ -42,6 +42,10 @@ type liveSource struct {
 	// more asks for, telling sent once they were read, and nothing else.
 	more chan int
 	sent chan struct{}
+	// late holds the first bytes of "late" addresses, which answer at
+	// once, until it is closed: a proxy that answers before it has
+	// buffered the channel.
+	late chan struct{}
 
 	mu     sync.Mutex
 	open   int
@@ -80,6 +84,14 @@ func (l *liveSource) Open(ctx context.Context, _, target string, _ http.Header, 
 		return answer(http.StatusOK, "video/mp2t", io.MultiReader(bytes.NewReader(bytes.Repeat(tsChunk, 4)), failing{})), nil
 	case strings.HasPrefix(name, "paced"):
 		return l.paced(ctx), nil
+	case strings.HasPrefix(name, "late"):
+		response := l.stream(ctx, -1)
+		body := response.Body
+		response.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.MultiReader(heldUntil(ctx, l.late), body), body}
+		return response, nil
 	default:
 		return l.stream(ctx, -1), nil
 	}
@@ -92,6 +104,22 @@ func (failing) Read([]byte) (int, error) { return 0, errors.New("connection rese
 func answer(status int, contentType string, body io.Reader) *http.Response {
 	return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {contentType}}, Body: io.NopCloser(body)}
 }
+
+// heldUntil reads nothing until released is closed, or ctx ends.
+func heldUntil(ctx context.Context, released <-chan struct{}) io.Reader {
+	return readerFunc(func([]byte) (int, error) {
+		select {
+		case <-released:
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+		return 0, io.EOF
+	})
+}
+
+type readerFunc func([]byte) (int, error)
+
+func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
 
 // stream answers an MPEG-TS stream sending chunks chunks, then nothing
 // (keeping the connection open); -1 sends forever. It counts as open until
@@ -270,7 +298,7 @@ func TestDeadLiveStreamsFailAtOnce(t *testing.T) {
 		{"empty", LiveDead, time.Second},
 		{"forbidden", LiveRefused, time.Second},
 		{"garbage", LiveDead, time.Second},
-		{"silent", LiveTimeout, shortLiveTimes.body + time.Second},
+		{"silent", LiveTimeout, shortLiveTimes.answer + time.Second},
 	} {
 		version := channelVersion(byte(n+1), tc.name+".ts", accounts.ID{})
 		started := time.Now()
@@ -293,6 +321,39 @@ func TestDeadLiveStreamsFailAtOnce(t *testing.T) {
 	}
 	if runs() != 0 {
 		t.Errorf("ffprobe ran %d times for dead streams", runs())
+	}
+}
+
+// A source that answers at once but sends its first bytes later, as a
+// proxy does while it buffers the channel for its first viewer, plays when
+// they come within the time the source has to answer, however long after
+// its answer.
+func TestLateFirstBytesStillPlay(t *testing.T) {
+	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := fakeProbe(t, string(probe), false)
+	src := &liveSource{late: make(chan struct{})}
+	s := newService(t, src, path, nil)
+	s.feeds.times = liveTimes{grace: 200 * time.Millisecond, stall: time.Minute, answer: time.Minute, body: 100 * time.Millisecond,
+		slotWait: 2 * time.Second}
+	analyzed := make(chan error, 1)
+	go func() {
+		_, err := s.AnalyzeLive(t.Context(), channelVersion(1, "late.ts", accounts.ID{9}))
+		analyzed <- err
+	}()
+	// Well past the time bytes have once the source answered, they are
+	// still waited for.
+	time.Sleep(time.Second)
+	select {
+	case err := <-analyzed:
+		t.Fatalf("the analysis ended before the first bytes came: %v", err)
+	default:
+	}
+	close(src.late)
+	if err := <-analyzed; err != nil {
+		t.Errorf("a stream whose first bytes came late: %v", err)
 	}
 }
 

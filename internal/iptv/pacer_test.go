@@ -217,8 +217,8 @@ func TestFailedListsAreTriedAgainSooner(t *testing.T) {
 
 // How a stream answered orders its channel's streams: those that failed
 // come last, dead ones are left out for their backoff, silent ones too when
-// they never played or were silent twice in a row, refused ones are not; a
-// new address forgets it, when the stream played included.
+// silent twice in a row, refused ones are not; a new address forgets it,
+// when the stream played included.
 func TestStreamHealthOrdersAndHidesStreams(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
@@ -282,14 +282,22 @@ func TestStreamHealthOrdersAndHidesStreams(t *testing.T) {
 	if got := addresses(); !slices.Equal(got, []string{"fhd.ts", "sd.ts", "hd.ts"}) {
 		t.Errorf("after the silent stream's backoff: %q", got)
 	}
-	// One that never played is left out at once.
+	// One that never played is no different: a source slow once, as a
+	// proxy starting a channel for its first viewer is, is not left out.
+	_ = e.service.ReportStream(t.Context(), addon.ID, channel, base+"sd.ts", FailureTimeout)
+	if got := addresses(); !slices.Equal(got, []string{"fhd.ts", "hd.ts", "sd.ts"}) {
+		t.Errorf("after a stream that never played was silent once: %q", got)
+	}
+	if h := e.lineup(addon.ID)[0].Streams[2].Health; h.Failure != FailureTimeout || h.OKAt != nil || h.HiddenUntil != nil {
+		t.Errorf("the line-up's health of a stream that never played, silent once: %+v", h)
+	}
 	_ = e.service.ReportStream(t.Context(), addon.ID, channel, base+"sd.ts", FailureTimeout)
 	if got := addresses(); !slices.Equal(got, []string{"fhd.ts", "hd.ts"}) {
-		t.Errorf("after a stream that never played was silent: %q", got)
+		t.Errorf("after a stream that never played was silent twice in a row: %q", got)
 	}
 	// A list that gives streams other addresses forgets what was known,
-	// when they played included: silent once at its new address, a stream
-	// that played at its old one only is left out.
+	// when they played included: a stream silent at its new address counts
+	// from one.
 	list.set("#EXTM3U\n"+entry("News", "Zeb One FHD", "fhd.ts")+entry("News", "Zeb One HD", "hd2.ts")+entry("News", "Zeb One SD", "sd2.ts"), 0)
 	if err := e.service.Refresh(t.Context(), addons.Shared(), addon.ID, false); err != nil {
 		t.Fatal(err)
@@ -298,8 +306,8 @@ func TestStreamHealthOrdersAndHidesStreams(t *testing.T) {
 		t.Errorf("streams at a new address are still left out or last: %q", got)
 	}
 	_ = e.service.ReportStream(t.Context(), addon.ID, channel, base+"hd2.ts", FailureTimeout)
-	if got := addresses(); !slices.Equal(got, []string{"fhd.ts", "sd2.ts"}) {
-		t.Errorf("after a stream that played at its old address only was silent at its new one: %q", got)
+	if got := addresses(); !slices.Equal(got, []string{"fhd.ts", "sd2.ts", "hd2.ts"}) {
+		t.Errorf("after a stream was silent once at its new address: %q", got)
 	}
 	// The administrator's "try again" clears it all, and has playback try
 	// the channel's streams again at once.
