@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -345,7 +346,10 @@ type track struct {
 }
 
 // describe is what RemuxDB's files of a title tell of a version: the
-// analysis of the file it is (see match), if any lists tracks.
+// analysis of the file it is (see match), if any lists tracks. A file
+// listed with video and no audio is left undescribed, as if absent: the
+// version would show as silent until its own analysis, which finds the
+// audio of such files.
 func describe(files []file, version library.Version) description {
 	f := match(files, version)
 	if f == nil {
@@ -356,7 +360,10 @@ func describe(files []file, version library.Version) description {
 		return description{}
 	}
 	analysis := f.analysis(tracks)
-	if len(analysis.Streams) == 0 {
+	has := func(kind string) bool {
+		return slices.ContainsFunc(analysis.Streams, func(s media.Stream) bool { return s.Type == kind })
+	}
+	if len(analysis.Streams) == 0 || has("video") && !has("audio") {
 		return description{}
 	}
 	return description{Analysis: analysis, Found: true}
