@@ -376,13 +376,13 @@ func fetchXtreamLive(ctx context.Context, client requester, account Account, con
 			if stream.ID == "" || heading(name) {
 				return nil
 			}
-			number, _ := strconv.Atoi(string(stream.Number))
+			number, guideNumber := channelNumber(string(stream.Number))
 			var catchup Catchup
 			if strings.TrimSpace(string(stream.Archive)) == "1" {
 				days, _ := strconv.Atoi(strings.TrimSpace(string(stream.Days)))
 				catchup = Catchup{Type: CatchupXtream, Days: days}.normalized()
 			}
-			return add(Entry{ID: string(stream.ID), Name: name, Number: max(number, 0), Logo: strings.TrimSpace(stream.Icon),
+			return add(Entry{ID: string(stream.ID), Name: name, Number: number, GuideNumber: guideNumber, Logo: strings.TrimSpace(stream.Icon),
 				Group: names[stream.Category], GuideID: strings.TrimSpace(stream.Guide), URL: account.streamURL(string(stream.ID), hls),
 				Catchup: catchup})
 		})

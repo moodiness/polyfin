@@ -142,7 +142,7 @@ export default function Mappings({
             >
               <div className="flex min-w-0 items-baseline gap-3">
                 <span className="figures w-10 shrink-0 text-right text-[12.5px] text-ink-3">
-                  {item.number ?? '–'}
+                  {item.number}
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-[14px] font-medium text-ink" title={item.name}>

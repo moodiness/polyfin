@@ -232,7 +232,7 @@ func (h *handler) guideChannels(w http.ResponseWriter, r *http.Request) {
 type channelMappingJSON struct {
 	ChannelID string       `json:"channelId"`
 	Name      string       `json:"name"`
-	Number    int          `json:"number"`
+	Number    string       `json:"number"`
 	GuideID   string       `json:"guideId"`
 	Mapping   *mappingJSON `json:"mapping"`
 }

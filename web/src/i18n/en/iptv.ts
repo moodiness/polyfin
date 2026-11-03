@@ -321,7 +321,7 @@ const iptv = {
       title: (name: string) => `Edit ${name}`,
       shownInApps: 'Shown in Jellyfin apps',
       notShownInApps: 'Not shown in Jellyfin apps',
-      numberNow: (number: number) => `number ${number}`,
+      numberNow: (number: string) => `number ${number}`,
       name: 'Name',
       providerValue: (value: string) => `Provider’s: ${value}`,
       resetName: 'Use the provider’s name',

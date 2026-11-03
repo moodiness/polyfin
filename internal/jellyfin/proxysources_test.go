@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -70,6 +71,40 @@ func addProxy(t *testing.T, s testServer, base string) addons.LibraryKey {
 		t.Fatal(err)
 	}
 	return key
+}
+
+// A decimal number a playlist gives ("104.5") shows as written in apps,
+// as Jellyfin's ChannelNumber does, and orders the channel after 104: in
+// the guide, and among the programmes airing now.
+func TestDecimalChannelNumbersShowInApps(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	s.user("member", nil)
+	token := s.signIn("member", "tv")
+	addProxy(t, s, proxyServer(t))
+
+	var channels QueryResult
+	s.get(t, "/LiveTv/Channels", token, &channels)
+	numbers, names := map[string]string{}, map[string]string{}
+	for _, c := range channels.Items {
+		numbers[c.Name], names[c.Id] = c.Number+"/"+c.ChannelNumber, c.Name
+	}
+	if numbers["Orb Sport"] != "104.5/104.5" || numbers["Zeb News"] != "104/104" || numbers["Kids Box"] != "103/103" {
+		t.Errorf("channel numbers: %v", numbers)
+	}
+	for _, path := range []string{"/LiveTv/Programs", "/LiveTv/Programs/Recommended?IsAiring=true"} {
+		var programs QueryResult
+		s.get(t, path, token, &programs)
+		var order []string
+		for _, p := range programs.Items {
+			if p.ChannelId != nil {
+				order = append(order, names[*p.ChannelId])
+			}
+		}
+		if !slices.Equal(order, []string{"Kids Box", "Zeb News", "Orb Sport"}) {
+			t.Errorf("%s: programmes by channel %q", path, order)
+		}
+	}
 }
 
 // PlaybackInfo of a channel whose source is slow to send its first bytes,

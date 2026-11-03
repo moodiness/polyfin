@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -411,12 +412,14 @@ type channelJSON struct {
 	Moved              bool                `json:"moved"`
 	Enabled            bool                `json:"enabled"`
 	Shown              bool                `json:"shown"`
-	Number             *int                `json:"number"`
-	ProviderNumber     *int                `json:"providerNumber"`
-	FixedNumber        *int                `json:"fixedNumber"`
-	GuideID            string              `json:"guideId"`
-	Mapping            *mappingJSON        `json:"mapping"`
-	Streams            []lineupStreamJSON  `json:"streams"`
+	// Number is the number the channel shows, and ProviderNumber the
+	// provider's, as written ("104.5"); FixedNumber the administrator's.
+	Number         *string            `json:"number"`
+	ProviderNumber *string            `json:"providerNumber"`
+	FixedNumber    *int               `json:"fixedNumber"`
+	GuideID        string             `json:"guideId"`
+	Mapping        *mappingJSON       `json:"mapping"`
+	Streams        []lineupStreamJSON `json:"streams"`
 	// ArchiveDays is how many days back the provider keeps the channel's
 	// past programmes, played from Replay; 0 for no archive.
 	ArchiveDays int `json:"archiveDays"`
@@ -457,9 +460,17 @@ func newMappingJSON(guide *accounts.ID, guideChannel *string, name string, manua
 func newChannelJSON(c iptv.Channel) channelJSON {
 	result := channelJSON{ID: c.ID.String(), Name: c.Name, ProviderName: c.ProviderName, Renamed: c.Renamed, Logo: c.Logo,
 		ProviderLogo: c.ProviderLogo, Description: c.Description, Category: channelCategoryJSON{ID: c.Category.String(), Name: c.CategoryName},
-		ProviderCategoryID: c.ProviderCategory.String(), Moved: c.Moved, Enabled: c.Enabled, Shown: c.Shown, Number: c.Number,
-		ProviderNumber: c.ProviderNumber, FixedNumber: c.FixedNumber, GuideID: c.GuideID, Streams: make([]lineupStreamJSON, 0, len(c.Streams)),
-		ArchiveDays: c.ArchiveDays}
+		ProviderCategoryID: c.ProviderCategory.String(), Moved: c.Moved, Enabled: c.Enabled, Shown: c.Shown, FixedNumber: c.FixedNumber,
+		GuideID: c.GuideID, Streams: make([]lineupStreamJSON, 0, len(c.Streams)), ArchiveDays: c.ArchiveDays}
+	if c.ProviderNumber != nil {
+		result.ProviderNumber = new(cmp.Or(c.GuideNumber, strconv.Itoa(*c.ProviderNumber)))
+	}
+	switch {
+	case c.FixedNumber != nil:
+		result.Number = new(strconv.Itoa(*c.FixedNumber))
+	case c.Number != nil:
+		result.Number = new(cmp.Or(c.GuideNumber, strconv.Itoa(*c.Number)))
+	}
 	if m := c.Mapping; m != nil {
 		result.Mapping = newMappingJSON(m.Guide, m.GuideChannel, m.GuideChannelName, m.Manual)
 	}

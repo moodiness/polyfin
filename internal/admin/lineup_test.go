@@ -99,11 +99,11 @@ func TestLineupRoutesValidate(t *testing.T) {
 		t.Errorf("a custom stream: %d %s", status, encoded)
 	}
 	if status, body, _ := administrator.call(http.MethodPatch, channel, map[string]any{"name": "Zeb", "number": 12, "category": kids["id"]}); status != http.StatusOK ||
-		body["name"] != "Zeb" || body["renamed"] != true || body["number"] != 12.0 || body["moved"] != true {
+		body["name"] != "Zeb" || body["renamed"] != true || body["number"] != "12" || body["fixedNumber"] != 12.0 || body["moved"] != true {
 		t.Errorf("a channel edit: %d %v", status, body)
 	}
 	if status, body, _ := administrator.call(http.MethodPatch, channel, map[string]any{"name": nil, "category": nil}); status != http.StatusOK ||
-		body["name"] != "Zeb One" || body["moved"] != false || body["number"] != 12.0 {
+		body["name"] != "Zeb One" || body["moved"] != false || body["number"] != "12" {
 		t.Errorf("back to the provider's: %d %v", status, body)
 	}
 	if status, body, _ := administrator.call(http.MethodPost, base+"/channels/bulk", map[string]any{"enabled": false, "q": "ORBE", "dryRun": true}); status != http.StatusOK ||

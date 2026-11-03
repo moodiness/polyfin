@@ -301,7 +301,7 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 		if c := a.StartDate.Compare(*b.StartDate); c != 0 {
 			return c
 		}
-		return comparedNumbers(a.Channel.Number, b.Channel.Number)
+		return CompareChannelNumbers(a.Channel.Number, b.Channel.Number)
 	})
 	if q.Limit > 0 && len(programs) > q.Limit {
 		programs = programs[:q.Limit]
@@ -321,9 +321,9 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 	return s.overridden(programs), s.save(ctx, records)
 }
 
-// comparedNumbers orders channel numbers, a tuner's "5.1" after "5" and
-// before "5.2" and "6".
-func comparedNumbers(a, b string) int {
+// CompareChannelNumbers orders channel numbers, a tuner's "5.1" or a
+// list's "104.5" after "5" or "104" and before "5.2" or "105".
+func CompareChannelNumbers(a, b string) int {
 	majorA, minorA, _ := strings.Cut(a, ".")
 	majorB, minorB, _ := strings.Cut(b, ".")
 	x, _ := strconv.Atoi(majorA)

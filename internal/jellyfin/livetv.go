@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -626,9 +625,7 @@ func (h *Handler) programs(recommended bool) http.HandlerFunc {
 		// come by start time.
 		if recommended && airing {
 			slices.SortStableFunc(programs, func(a, b library.Item) int {
-				x, _ := strconv.Atoi(a.Channel.Number)
-				y, _ := strconv.Atoi(b.Channel.Number)
-				return x - y
+				return library.CompareChannelNumbers(a.Channel.Number, b.Channel.Number)
 			})
 		} else if byName {
 			slices.SortStableFunc(programs, func(a, b library.Item) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })

@@ -228,7 +228,7 @@ function Details({
         label={text.number}
         help={
           channel.providerNumber !== null
-            ? `${text.numberHint} ${text.providerValue(String(channel.providerNumber))}`
+            ? `${text.numberHint} ${text.providerValue(channel.providerNumber)}`
             : text.numberHint
         }
         error={numberInvalid ? text.numberInvalid : undefined}

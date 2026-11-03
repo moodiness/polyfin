@@ -349,11 +349,12 @@ func (s *Service) GuideChannels(ctx context.Context, scope addons.Scope, key add
 	return total, channels, err
 }
 
-// ChannelMapping is a catalog's channel with the guide channel it takes.
+// ChannelMapping is a catalog's channel with the guide channel it takes;
+// Number is the number it shows ("104.5").
 type ChannelMapping struct {
 	Channel accounts.ID
 	Name    string
-	Number  int
+	Number  string
 	GuideID string
 	Mapping *Mapping
 }
@@ -445,7 +446,8 @@ func (s *Service) Mappings(ctx context.Context, scope addons.Scope, key addons.L
 		if number == 0 {
 			number = i + 1
 		}
-		matching = append(matching, ChannelMapping{Channel: id, Name: meta.Name, Number: number, GuideID: meta.GuideID})
+		matching = append(matching, ChannelMapping{Channel: id, Name: meta.Name, Number: cmp.Or(meta.GuideNumber, strconv.Itoa(number)),
+			GuideID: meta.GuideID})
 	}
 	total := len(matching)
 	offset = min(max(offset, 0), total)
@@ -473,7 +475,7 @@ func (s *Service) catalogChannel(ctx context.Context, c addons.LiveCatalog, chan
 	for i, meta := range metas {
 		if itemID(channelKey(meta.ID)) == channel {
 			number := cmp.Or(meta.ChannelNumber, i+1)
-			return ChannelMapping{Channel: channel, Name: meta.Name, Number: number, GuideID: meta.GuideID}, nil
+			return ChannelMapping{Channel: channel, Name: meta.Name, Number: cmp.Or(meta.GuideNumber, strconv.Itoa(number)), GuideID: meta.GuideID}, nil
 		}
 	}
 	return ChannelMapping{}, ErrNotFound

@@ -333,7 +333,7 @@ const iptv: typeof en = {
       title: (name: string) => `Modifica ${name}`,
       shownInApps: 'Visibile nelle applicazioni Jellyfin',
       notShownInApps: 'Non visibile nelle applicazioni Jellyfin',
-      numberNow: (number: number) => `numero ${number}`,
+      numberNow: (number: string) => `numero ${number}`,
       name: 'Nome',
       providerValue: (value: string) => `Del provider: ${value}`,
       resetName: 'Usa il nome del provider',

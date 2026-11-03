@@ -1,15 +1,16 @@
 package library
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"slices"
-	"strconv"
 	"sync"
 	"time"
 
@@ -560,12 +561,15 @@ func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string
 	if len(mapped) == 0 {
 		return nil, nil
 	}
-	var channelIDs, guideIDs []accounts.ID
-	var xmltvIDs []string
-	var numbers []int
-	for id, m := range mapped {
-		number, _ := strconv.Atoi(byID[id].Number)
-		channelIDs, guideIDs, xmltvIDs, numbers = append(channelIDs, id), append(guideIDs, m.guide), append(xmltvIDs, m.xmltvID), append(numbers, number)
+	// The channels in the order of their numbers ("104.5" after "104"),
+	// which programmes of the same start follow: each one's rank.
+	channelIDs := slices.Collect(maps.Keys(mapped))
+	slices.SortFunc(channelIDs, func(a, b accounts.ID) int {
+		return cmp.Or(CompareChannelNumbers(byID[a].Number, byID[b].Number), bytes.Compare(a[:], b[:]))
+	})
+	guideIDs, xmltvIDs, ranks := make([]accounts.ID, len(channelIDs)), make([]string, len(channelIDs)), make([]int, len(channelIDs))
+	for i, id := range channelIDs {
+		guideIDs[i], xmltvIDs[i], ranks[i] = mapped[id].guide, mapped[id].xmltvID, i
 	}
 	var items []Item
 	type start struct {
@@ -576,10 +580,10 @@ func (s *Service) guidePrograms(ctx context.Context, v view, channels map[string
 	read := func(from, to time.Time) error {
 		rows, err := s.db.Query(ctx, `SELECT c.channel_id, p.guide_id, p.xmltv_id, p.starts_at, p.ends_at, p.title, p.subtitle, p.description,
 			p.categories, coalesce(p.season, 0), coalesce(p.episode, 0), p.icon, p.is_new, p.previously_shown
-			FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::int[]) AS c (channel_id, guide_id, xmltv_id, number)
+			FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::int[]) AS c (channel_id, guide_id, xmltv_id, rank)
 			JOIN live_guides g ON g.id = c.guide_id
 			JOIN live_guide_programmes p ON p.guide_id = g.id AND p.generation = g.generation AND p.xmltv_id = c.xmltv_id
-			WHERE p.ends_at > $5 AND p.starts_at < $6 ORDER BY p.starts_at, c.number, c.channel_id`, channelIDs, guideIDs, xmltvIDs, numbers, from, to)
+			WHERE p.ends_at > $5 AND p.starts_at < $6 ORDER BY p.starts_at, c.rank`, channelIDs, guideIDs, xmltvIDs, ranks, from, to)
 		if err != nil {
 			return err
 		}

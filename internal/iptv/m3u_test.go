@@ -2,6 +2,7 @@ package iptv
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -74,6 +75,31 @@ func TestM3UPlaylistsAreRead(t *testing.T) {
 	}
 	if plain := entries[3]; plain.Number != 0 || plain.GuideID != "" {
 		t.Errorf("a number that is not one: %+v", plain)
+	}
+}
+
+// A decimal channel number is kept as written, as proxies that manage
+// channels number them ("104.5"), its whole part ordering the channel;
+// lists that name the number otherwise are read too.
+func TestDecimalChannelNumbersAreKept(t *testing.T) {
+	t.Parallel()
+	entries, err := parse(t, "#EXTM3U\n"+
+		"#EXTINF:-1 tvg-chno=\"104\",Whole\nhttp://live.example/1.ts\n"+
+		"#EXTINF:-1 tvg-chno=\"104.5\",Decimal\nhttp://live.example/2.ts\n"+
+		"#EXTINF:-1 channel-number=\"12.10\",Other Name\nhttp://live.example/3.ts\n"+
+		"#EXTINF:-1 tvg-chno=\"none\" tvg-channel-no=\"9\",Fallback\nhttp://live.example/4.ts\n"+
+		"#EXTINF:-1 tvg-chno=\"1.2.3\",Not One\nhttp://live.example/5.ts\n"+
+		"#EXTINF:-1 tvg-chno=\"-4.5\",Negative\nhttp://live.example/6.ts\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range entries {
+		got = append(got, fmt.Sprintf("%s %d %q", e.Name, e.Number, e.GuideNumber))
+	}
+	want := []string{`Whole 104 ""`, `Decimal 104 "104.5"`, `Other Name 12 "12.10"`, `Fallback 9 ""`, `Not One 0 ""`, `Negative 0 ""`}
+	if !slices.Equal(got, want) {
+		t.Errorf("numbers: %q, want %q", got, want)
 	}
 }
 

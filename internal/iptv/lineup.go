@@ -293,9 +293,13 @@ type Channel struct {
 	Number           *int
 	ProviderNumber   *int
 	FixedNumber      *int
-	GuideID          string
-	Mapping          *Mapping
-	Streams          []Stream
+	// GuideNumber is the provider's number as written, when it is not a
+	// whole one ("104.5") or the channel is a tuner's ("5.1"), "" otherwise:
+	// ProviderNumber is its whole part, and Number is it unless fixed.
+	GuideNumber string
+	GuideID     string
+	Mapping     *Mapping
+	Streams     []Stream
 	// ArchiveDays is how many days back the provider keeps the channel's
 	// past programmes, played from Replay; 0 for no archive.
 	ArchiveDays int
@@ -314,7 +318,7 @@ type ChannelFilter struct {
 const channelQuery = `SELECT l.id, l.item_id, coalesce(l.name, l.provider_name), l.provider_name, l.name IS NOT NULL,
 	coalesce(l.logo, l.provider_logo), l.provider_logo, l.description, c.id, coalesce(c.name, c.provider_name), l.category_id,
 	l.moved_to IS NOT NULL, l.enabled, ` + shownSQL + `,
-	coalesce(l.number, CASE WHEN i.numbering = 'provider' THEN l.provider_number END), l.provider_number, l.number, l.guide_id,
+	coalesce(l.number, CASE WHEN i.numbering = 'provider' THEN l.provider_number END), l.provider_number, l.number, l.provider_guide_number, l.guide_id,
 	m.manual, m.guide_id, m.xmltv_id, coalesce(gc.names[1], ''), coalesce(` + archiveSQL + `, 0), count(*) OVER ()
 	` + channelJoins + `
 	LEFT JOIN live_guide_maps m ON m.addon_id = l.addon_id AND m.catalog_type = 'tv' AND m.catalog_id = '` + catalogID + `' AND m.channel_id = l.item_id
@@ -340,7 +344,7 @@ func (s *Service) channels(ctx context.Context, source accounts.ID, filter strin
 		var xmltvID *string
 		var mappedName string
 		if err := row.Scan(&c.key, &c.ID, &c.Name, &c.ProviderName, &c.Renamed, &c.Logo, &c.ProviderLogo, &c.Description, &c.Category,
-			&c.CategoryName, &c.ProviderCategory, &c.Moved, &c.Enabled, &c.Shown, &c.Number, &c.ProviderNumber, &c.FixedNumber, &c.GuideID,
+			&c.CategoryName, &c.ProviderCategory, &c.Moved, &c.Enabled, &c.Shown, &c.Number, &c.ProviderNumber, &c.FixedNumber, &c.GuideNumber, &c.GuideID,
 			&manual, &guide, &xmltvID, &mappedName, &c.ArchiveDays, &total); err != nil {
 			return Channel{}, err
 		}

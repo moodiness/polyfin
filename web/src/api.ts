@@ -1572,8 +1572,9 @@ export type LineupChannel = {
   moved: boolean
   enabled: boolean
   shown: boolean
-  number: number | null
-  providerNumber: number | null
+  /** The number the channel shows, and the provider's, as written (`104.5`). */
+  number: string | null
+  providerNumber: string | null
   fixedNumber: number | null
   /** The provider's tvg-id, empty without. */
   guideId: string
@@ -1644,7 +1645,7 @@ export type MappingState = 'all' | 'mapped' | 'unmapped' | 'manual'
 export type MappingItem = {
   channelId: string
   name: string
-  number: number | null
+  number: string
   guideId: string
   mapping: GuideMapping | null
 }

@@ -42,8 +42,10 @@ type Entry struct {
 	// Catchup is how the provider's archive of the channel's past
 	// programmes is reached; the zero value for none.
 	Catchup Catchup
-	// GuideNumber is a tuner's number of the channel ("5.1"), and
-	// Favorite tells a channel marked favorite on the tuner.
+	// GuideNumber is the number the channel shows when it is not a whole
+	// one: a tuner's ("5.1"), or a list's decimal one ("104.5"), whose
+	// whole part is Number. Favorite tells a channel marked favorite on
+	// the tuner.
 	GuideNumber string
 	Favorite    bool
 	// Protection is how the list says the stream is encrypted, by its
@@ -56,22 +58,23 @@ type Entry struct {
 const maxLine = 1 << 20
 
 // ParseM3U reads an M3U playlist, handing each channel to entry in order:
-// the #EXTINF line's tvg-id, tvg-name, tvg-logo, tvg-chno and group-title
-// attributes (quoted with double or single quotes, or not at all) and the
-// name after its comma, its catch-up attributes over those the #EXTM3U
-// line gives every channel (see catchupOf), then the headers its stream is
-// requested with, then the stream's address. The headers are those the
-// players that read such lists take, in this order, a later one replacing
-// an earlier one of the same name: the #EXTINF line's http-user-agent,
-// http-referrer and http-origin attributes, then #EXTVLCOPT lines' options
-// of the same names and #EXTHTTP lines' JSON object, as the lines come,
-// then the manifest and stream headers of #KODIPROP lines, then the
-// Name=value pairs after a | ending the address (see cutHeaders). The
-// #KODIPROP lines since the previous address are the entry's, before its
-// #EXTINF line or after it (see kodiProperty). A byte order mark and CRLF
-// line ends are accepted. Headings that are not channels are skipped (see
-// heading), as are entries without an address. A playlist that does not
-// start with #EXTM3U, or whose lines are too long, is not M3U.
+// the #EXTINF line's tvg-id, tvg-name, tvg-logo, number (see listNumber)
+// and group-title attributes (quoted with double or single quotes, or not
+// at all) and the name after its comma, its catch-up attributes over those
+// the #EXTM3U line gives every channel (see catchupOf), then the headers
+// its stream is requested with, then the stream's address. The headers are
+// those the players that read such lists take, in this order, a later one
+// replacing an earlier one of the same name: the #EXTINF line's
+// http-user-agent, http-referrer and http-origin attributes, then
+// #EXTVLCOPT lines' options of the same names and #EXTHTTP lines' JSON
+// object, as the lines come, then the manifest and stream headers of
+// #KODIPROP lines, then the Name=value pairs after a | ending the address
+// (see cutHeaders). The #KODIPROP lines since the previous address are the
+// entry's, before its #EXTINF line or after it (see kodiProperty). A byte
+// order mark and CRLF line ends are accepted. Headings that are not
+// channels are skipped (see heading), as are entries without an address. A
+// playlist that does not start with #EXTM3U, or whose lines are too long,
+// is not M3U.
 func ParseM3U(r io.Reader, entry func(Entry) error) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64<<10), maxLine)
@@ -302,14 +305,15 @@ func parseExtinf(text string, header Catchup) Entry {
 	if i < len(text) {
 		name = strings.TrimSpace(text[i+1:])
 	}
-	number, _ := strconv.Atoi(attributes["tvg-chno"])
+	number, guideNumber := listNumber(attributes)
 	e := Entry{
-		Name:    cmpOr(name, attributes["tvg-name"]),
-		Number:  max(number, 0),
-		Logo:    attributes["tvg-logo"],
-		Group:   attributes["group-title"],
-		GuideID: attributes["tvg-id"],
-		Catchup: catchupOf(attributes, header),
+		Name:        cmpOr(name, attributes["tvg-name"]),
+		Number:      number,
+		GuideNumber: guideNumber,
+		Logo:        attributes["tvg-logo"],
+		Group:       attributes["group-title"],
+		GuideID:     attributes["tvg-id"],
+		Catchup:     catchupOf(attributes, header),
 	}
 	for _, option := range slices.Sorted(maps.Keys(vlcOptions)) {
 		if value, ok := attributes[option]; ok {
@@ -317,6 +321,49 @@ func parseExtinf(text string, header Catchup) Entry {
 		}
 	}
 	return e
+}
+
+// numberAttributes are the #EXTINF attributes lists number channels by, in
+// the order they are read: tvg-chno, as Jellyfin reads it, and the names
+// some lists use instead.
+var numberAttributes = []string{"tvg-chno", "channel-number", "tvg-channel-no"}
+
+// listNumber reads an #EXTINF line's channel number: the first of
+// numberAttributes that holds one (see channelNumber).
+func listNumber(attributes map[string]string) (int, string) {
+	for _, name := range numberAttributes {
+		if number, guideNumber := channelNumber(attributes[name]); number > 0 || guideNumber != "" {
+			return number, guideNumber
+		}
+	}
+	return 0, ""
+}
+
+// channelNumber reads a channel number a list gives: a whole one ("7"), or
+// a decimal one ("104.5"), as proxies that manage channels number them,
+// which the channel shows as written, its whole part ordering it; Jellyfin
+// keeps it as written too (M3uParser.cs, GetChannelNumber, lines 170-181:
+// ChannelInfo.Number is a string). It returns the whole part, and the
+// number as written when it is decimal; 0 and "" for no number.
+func channelNumber(raw string) (int, string) {
+	raw = strings.TrimSpace(raw)
+	whole, fraction, decimal := strings.Cut(raw, ".")
+	if !digits(whole) || decimal && !digits(fraction) {
+		return 0, ""
+	}
+	number, err := strconv.Atoi(whole)
+	if err != nil {
+		return 0, ""
+	}
+	if !decimal {
+		return number, ""
+	}
+	return number, raw
+}
+
+// digits reports whether text is ASCII digits, at least one.
+func digits(text string) bool {
+	return text != "" && strings.Trim(text, "0123456789") == ""
 }
 
 // readAttributes reads attributes, key=value pairs whose value is quoted
