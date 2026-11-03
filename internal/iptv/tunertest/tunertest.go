@@ -40,11 +40,14 @@ type Options struct {
 	Channels []Channel
 	// Scanned is the line-up a channel scan finds.
 	Scanned []Channel
+	// Path is where it serves its documents and streams, as proxies that
+	// act as a tuner do ("/hdhr"); empty for the root, as tuners do.
+	Path string
 }
 
 // Tuner is a running fake tuner.
 type Tuner struct {
-	// URL is its address, http://127.0.0.1:port.
+	// URL is its address, http://127.0.0.1:port and its Path.
 	URL string
 	// Discovery is where it answers discovery, 127.0.0.1:port.
 	Discovery string
@@ -65,7 +68,7 @@ func Start(t testing.TB, options Options) *Tuner {
 	tuner := &Tuner{options: options, channels: options.Channels, stream: Stream(t)}
 	server := httptest.NewServer(tuner)
 	t.Cleanup(server.Close)
-	tuner.URL = server.URL
+	tuner.URL = server.URL + options.Path
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
@@ -132,12 +135,17 @@ func (t *Tuner) Streams() (playing, most int) {
 }
 
 func (t *Tuner) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path, ok := strings.CutPrefix(r.URL.Path, t.options.Path)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	switch {
-	case r.URL.Path == "/discover.json":
+	case path == "/discover.json":
 		writeJSON(w, map[string]any{"FriendlyName": t.options.Name, "ModelNumber": t.options.Model,
 			"DeviceID": fmt.Sprintf("%08X", t.options.DeviceID), "TunerCount": t.options.Tuners, "BaseURL": t.URL,
 			"LineupURL": t.URL + "/lineup.json"})
-	case r.URL.Path == "/lineup.json":
+	case path == "/lineup.json":
 		t.mu.Lock()
 		lineup := make([]map[string]any, 0, len(t.channels))
 		for _, c := range t.channels {
@@ -152,10 +160,10 @@ func (t *Tuner) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		t.mu.Unlock()
 		writeJSON(w, lineup)
-	case r.URL.Path == "/lineup_status.json":
+	case path == "/lineup_status.json":
 		// A scan ends at once.
 		writeJSON(w, map[string]any{"ScanInProgress": 0, "ScanPossible": 1, "Source": "Antenna", "SourceList": []string{"Antenna"}})
-	case r.URL.Path == "/lineup.post" && r.Method == http.MethodPost:
+	case path == "/lineup.post" && r.Method == http.MethodPost:
 		if r.URL.Query().Get("scan") != "start" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -166,8 +174,8 @@ func (t *Tuner) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			t.channels = t.options.Scanned
 		}
 		t.mu.Unlock()
-	case strings.HasPrefix(r.URL.Path, "/auto/v"):
-		t.play(w, r, strings.TrimPrefix(r.URL.Path, "/auto/v"))
+	case strings.HasPrefix(path, "/auto/v"):
+		t.play(w, r, strings.TrimPrefix(path, "/auto/v"))
 	default:
 		http.NotFound(w, r)
 	}

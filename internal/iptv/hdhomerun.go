@@ -69,7 +69,11 @@ type Tuner struct {
 }
 
 // tunerAddress checks a tuner's address, "192.168.1.20" or "http://…", and
-// returns the address it is stored under: its scheme and host.
+// returns the address it is stored under: its scheme, host and path. A
+// path is kept, as Jellyfin keeps it (HdHomerunHost.cs, GetApiUrl, lines
+// 165-180): proxies that act as a tuner serve its documents under one
+// ("http://host:9191/hdhr"). An address given as the tuner's discover.json
+// or lineup.json is the tuner's, as is one with a final "/".
 func tunerAddress(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || len(raw) > maxAddress {
@@ -80,15 +84,16 @@ func tunerAddress(raw string) (string, error) {
 	}
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil ||
-		parsed.RawQuery != "" || parsed.Fragment != "" {
+		parsed.Opaque != "" || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
 		return "", ErrInvalidAddress
 	}
-	switch strings.TrimSuffix(parsed.Path, "/") {
-	case "", "/discover.json", "/lineup.json":
-	default:
-		return "", ErrInvalidAddress
+	path := strings.TrimSuffix(parsed.EscapedPath(), "/")
+	if document, ok := strings.CutSuffix(path, "/discover.json"); ok {
+		path = document
+	} else if document, ok := strings.CutSuffix(path, "/lineup.json"); ok {
+		path = document
 	}
-	return parsed.Scheme + "://" + parsed.Host, nil
+	return parsed.Scheme + "://" + parsed.Host + path, nil
 }
 
 // flag reads a lineup.json flag, which tuners write 1, and some true.

@@ -170,6 +170,35 @@ func TestTunersAreFoundAddedAndListed(t *testing.T) {
 	}
 }
 
+// A tuner served under a path, as proxies that act as a tuner serve it, is
+// added by its address with that path, given as its discover.json too: its
+// documents and its line-up are read under the path, its channels listed.
+func TestATunerUnderAPathIsAdded(t *testing.T) {
+	t.Parallel()
+	s, admin, member := administrated(t)
+	tuner := tunertest.Start(t, tunertest.Options{DeviceID: 0x0BADCAFE, Name: "Proxy Tuner", Model: "HDTC-2US", Tuners: 2, Path: "/hdhr",
+		Channels: []tunertest.Channel{{Number: "101", Name: "Zeb News"}, {Number: "104.5", Name: "Orb Sport"}}})
+	var added TunerHostInfo
+	status, body := s.call(http.MethodPost, "/LiveTv/TunerHosts", admin, map[string]any{"Type": "hdhomerun", "Url": tuner.URL + "/discover.json"})
+	if err := json.Unmarshal(body, &added); status != http.StatusOK || err != nil || added.Id == nil || added.Url != tuner.URL ||
+		added.FriendlyName != "Proxy Tuner" || added.TunerCount != 2 {
+		t.Fatalf("tuner added: %d %s", status, body)
+	}
+	var channels QueryResult
+	_, body = s.call(http.MethodGet, "/LiveTv/Channels", member, nil)
+	if err := json.Unmarshal(body, &channels); err != nil {
+		t.Fatal(err)
+	}
+	var listed []string
+	for _, c := range channels.Items {
+		listed = append(listed, c.Number+" "+c.Name)
+	}
+	slices.Sort(listed)
+	if !slices.Equal(listed, []string{"101 Zeb News", "104.5 Orb Sport"}) {
+		t.Errorf("channels: %q", listed)
+	}
+}
+
 // A recording that takes the tuner a viewer's channel played on refuses
 // the viewer's stream, a normal event: the viewer's app hears a 503, which
 // tells it to ask again later, and nothing is logged as a failure.
