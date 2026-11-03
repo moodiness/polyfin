@@ -265,12 +265,22 @@ func (s *Service) run(ctx context.Context) {
 // next takes the first waiting version that may start, and marks it as
 // worked on: the playback that asked for it stopped, nobody plays from its
 // host, its host is neither paused nor out of requests for the hour, and
-// no play extends its thumbnails now.
+// no play extends its thumbnails now. Only the versions waiting before the
+// playbacks are read are weighed: one queued as its playback starts would
+// otherwise be let through by playbacks read before that playback began.
+// Queue wakes the next check, which weighs it.
 func (s *Service) next() (job, bool) {
+	s.mu.Lock()
+	waiting := len(s.jobs)
+	s.mu.Unlock()
+	if waiting == 0 {
+		return job{}, false
+	}
 	playing := s.playbacks()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for i, j := range s.jobs {
+	// Queue appends: versions queued meanwhile follow those counted.
+	for i, j := range s.jobs[:min(waiting, len(s.jobs))] {
 		blocked := j.version.ID == s.extending || slices.ContainsFunc(playing, func(p Playing) bool {
 			return p.Device == j.after || busyHost(p, j.host)
 		})

@@ -526,6 +526,53 @@ func TestGenerateWaitsForPlaybacks(t *testing.T) {
 	t.Error("no thumbnails were made once the host was free")
 }
 
+// A version queued as its playback starts, while the queue reads the
+// playbacks for a check, waits for that playback all the same: the
+// playbacks read before it started do not let the version through.
+func TestQueuedDuringACheckWaitsForItsPlayback(t *testing.T) {
+	ts := newTestService(t, "")
+	var mu sync.Mutex
+	viewer, watcher := accounts.ID{7}, accounts.ID{8}
+	playing := []Playing{{Device: watcher, URL: "https://third.example/x.mkv"}}
+	// hold has the next read of the playbacks send a channel, and answer
+	// what they were before it once the test closes it.
+	var hold atomic.Bool
+	reads := make(chan chan struct{})
+	ts.WatchPlaybacks(func() []Playing {
+		mu.Lock()
+		now := slices.Clone(playing)
+		mu.Unlock()
+		if hold.CompareAndSwap(true, false) {
+			release := make(chan struct{})
+			reads <- release
+			<-release
+		}
+		return now
+	})
+	// A version waits for the watcher's playback, so that the queue is
+	// checked.
+	ts.Queue(library.Version{ID: accounts.ID{5}, Item: accounts.ID{6}, URL: "https://other.example/w.mkv"}, watcher)
+	hold.Store(true)
+	release := <-reads
+	// The viewer's playback starts, and queues its version, as the queue
+	// reads the playbacks.
+	mu.Lock()
+	playing = append(playing, Playing{Device: viewer, URL: "https://other.example/a.mkv"})
+	mu.Unlock()
+	ts.Queue(testVersion, viewer)
+	hold.Store(true)
+	close(release)
+	// The next read of the playbacks comes once that check is over.
+	release = <-reads
+	ts.Service.mu.Lock()
+	queued := slices.ContainsFunc(ts.jobs, func(j job) bool { return j.version.ID == testVersion.ID })
+	ts.Service.mu.Unlock()
+	close(release)
+	if !queued {
+		t.Error("the version started during its playback")
+	}
+}
+
 // rangeSource is a countingSource serving several ranges with one
 // request, as some hosts do.
 type rangeSource struct{ *countingSource }
