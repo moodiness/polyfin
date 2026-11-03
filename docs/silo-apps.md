@@ -19,7 +19,7 @@ Each answer of Silo's API is made of the Jellyfin API's answer for the same user
 
 A signed-in app is a device of the user, listed with the others and signed out the same ways. Its playbacks show in the dashboard and the statistics, and its played state and resume points are the user's, shared with Jellyfin apps.
 
-When a source of the server fails to answer, the app is told to try again later (503) rather than that the server failed. The media of a playback (its file, playlists, segments and subtitles) are fetched with the app's token and are never kept by a cache. Artwork needs no token, as Jellyfin's images do not. Polyfin reads the bodies the apps send as JSON whatever their `Content-Type`.
+When a source of the server fails to answer, the app is told to try again later (503) rather than that the server failed. The media of a playback (its file, playlists, segments and subtitles) are fetched with the app's token and are never kept by a cache. A repackaged or converted playback's playlists name only the addresses the apps send their token to: `master.m3u8` itself, with `silo_rendition` (and `silo_track` for a subtitle track), and `segment/` beside it. They offer the one quality the plan plays: the apps change quality by asking for another plan, so [**Several qualities when converting**](transcoding.md#adaptive-quality) does not apply to them. Artwork needs no token, as Jellyfin's images do not. Polyfin reads the bodies the apps send as JSON whatever their `Content-Type`.
 
 ## What works
 
@@ -55,6 +55,7 @@ When a source of the server fails to answer, the app is told to try again later 
   - converted to HLS otherwise, as the user's conversion permissions allow;
   - audio tracks chosen by the app, or the user's preferred one;
   - text subtitles as WebVTT files beside the video, picture subtitles burned in when chosen. The app chooses a playback's subtitle itself, from the user's subtitle language and mode, which Polyfin tells it: a playback the app starts without a subtitle shows none. A track of the file FFmpeg did not recognize is listed as unavailable, and asking for it is refused, as Silo refuses it: a playback already playing goes on as it was;
+  - in a repackaged or converted playback, the text tracks inside the file as subtitle tracks of its HLS stream, which the app's own player lists and switches between without loading the video again (see [Subtitle tracks of the stream](#subtitle-tracks-of-the-stream));
   - lower qualities, 1080p, 720p and 480p, below a taller file: converted to that height, at 8, 4 and 1.5 Mb/s at most;
   - another plan when the app asks for other tracks, another quality, or a conversion after the file failed to play.
 - Skip buttons for the intro, recap and credits, and in the Android apps for previews, those Jellyfin apps get (see [Skip markers](#skip-markers)).
@@ -70,7 +71,7 @@ When a source of the server fails to answer, the app is told to try again later 
 - The apps' own collections: the app lists none, and making or changing one is refused as not supported. Collections are made in Jellyfin apps or the web player.
 - Box sets, a card standing for the movies of one TMDB collection in a library's grid: the libraries are told they have none, and the apps list each movie. Polyfin's collections show in the Collections tab instead.
 - Taking a series off Next Up (refused as not supported: playing it moves it on), hiding watches from the history (mark a title unplayed instead), refreshing a person's details, trending or popular titles, and trickplay.
-- Playback features the apps can use but Polyfin does not offer, and so does not announce: the app's own player showing the file's subtitles, subtitles as tracks of the HLS stream, quality adapting itself to buffering and to the measured speed during a playback, a playback moving to another screen or output without a new plan, and the apps' device fixes chosen by the server. Their plans still play: the app keeps to what Polyfin announces.
+- Playback features the apps can use but Polyfin does not offer, and so does not announce: the app's own player showing the file's subtitles when it plays the file as it is, quality adapting itself to buffering and to the measured speed during a playback, a playback moving to another screen or output without a new plan, and the apps' device fixes chosen by the server. Their plans still play: the app keeps to what Polyfin announces.
 - Music, audiobooks, books and Live TV: Silo's apps have no Live TV, and Polyfin lists its libraries of movies and series only.
 - Operations not listed here answer 404. Polyfin logs each, as it does for Jellyfin apps: "A Silo app asked for something Polyfin does not serve", with its method and path, at most once an hour each.
 
@@ -98,6 +99,16 @@ The Apple apps offer to skip intros, recaps and credits; the Android apps previe
 `GET /api/v2/home/layout` lists Home's rows, in order, without their titles: each row's `id`, `section_type`, `title` and `item_limit`, the rows `GET /api/v2/home/sections` lists, under the user's limits. Each is read alone at `GET /api/v2/home/sections/{id}/items`, which answers the same `section_type`. Continue Watching is `continue_watching` and Next Up `next_up`: the Android TV app mirrors those two rows on the TV's Watch Next row, the Apple TV app on its Top Shelf, reading the layout and then those rows only, as Home whole is too large for them.
 
 `include_items`, from 0 to 4, also answers the first rows with their titles in `included_sections`, each as its own read answers it, cut by `item_limit` as that read is. `GET /api/v2/home/capabilities` says so (`include_items_max`); the apps do not ask for it yet.
+
+## Subtitle tracks of the stream
+
+Silo's apps ask for text subtitles as subtitle tracks of the HLS stream (Silo's `hls_subtitle_renditions_v1`, with `hls_remux_subtitle_renditions_v1` and `hls_subtitle_renditions_all_v1`), which Polyfin offers. When a playback is repackaged or converted, each text track inside the file that the app would otherwise get as a WebVTT file becomes a WebVTT track of the stream: the HLS master playlist lists them, by their number in the file (a Matroska file's track number, an MP4 file's track ID), under their title, else their language. The app's player shows them like any other track, and switching between them, or turning subtitles off, keeps the video playing as it is, with no new conversion. The playback's subtitle list still gives each track's file, which the app falls back to.
+
+- The tracks are those Polyfin's conversions already extract as WebVTT, cut like the video: the same text the web player shows.
+- Picture subtitles, which are burned in when chosen, and subtitle files beside the video stay as they are. While a subtitle is burned in, the stream has no subtitle tracks.
+- An app that asks only for the chosen track gets that track alone in the stream. One whose player cannot show the tracks says so, and gets files for the rest of the playback.
+- A track's number is read from the file's head the first time the file plays, once: a track whose number cannot be read within 3 seconds stays a file for that playback.
+- The playback's subtitle list gives every track inside the file its number in the file, when known. No track is offered for the app's own player to pick from the file (Silo's `native_selectable`), as Polyfin does not have the app's player show the file's own tracks.
 
 ## Signing a TV in with a code
 
