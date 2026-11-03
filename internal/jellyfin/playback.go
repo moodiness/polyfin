@@ -360,6 +360,11 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request.directPlayOff = request.EnableDirectPlay != nil && !*request.EnableDirectPlay
+	// The Jellyfin iOS app's native player gets over HLS what Jellyfin
+	// would stream it as one file (see iosNativeOverHLS).
+	if iosNativePlayer(r, request.DeviceProfile) {
+		request.DeviceProfile = iosNativeOverHLS(request.DeviceProfile)
+	}
 	user, ok := h.viewer(w, r, b, notFoundProblem)
 	if !ok {
 		return
