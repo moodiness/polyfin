@@ -85,7 +85,10 @@ type Service struct {
 	// (see LearnMasteringDisplay).
 	unmastered *cache.Cache[accounts.ID, error]
 	live       *cache.Cache[accounts.ID, struct{}]
-	hosts      *cache.Cache[string, bool]
+	// silent are the versions whose analysis was logged as finding video
+	// and no audio, so that it is logged once (see keepAnalysis).
+	silent sync.Map
+	hosts  *cache.Cache[string, bool]
 	// indexes are keyframe times, unindexed the versions whose index
 	// cannot be read, unscanned those whose keyframes could not be read
 	// from the whole file (see scannedKeyframes), and offsets where the
@@ -764,6 +767,15 @@ func (s *Service) keepAnalysis(ctx context.Context, version library.Version, ana
 	}
 	s.analyses.Put(version.ID, analysis)
 	s.logger.Debug("Analyzed a version", "addon", version.Addon, "duration", time.Since(started))
+	// A file with video and no audio plays silent everywhere: said once
+	// per version, for a user who reports it to tell the file from a play.
+	video := slices.ContainsFunc(analysis.Streams, func(s media.Stream) bool { return s.Type == "video" && !s.AttachedPicture })
+	audio := slices.ContainsFunc(analysis.Streams, func(s media.Stream) bool { return s.Type == "audio" })
+	if video && !audio {
+		if _, logged := s.silent.LoadOrStore(version.ID, struct{}{}); !logged {
+			s.logger.Info("A version has no audio track", "version", version.Name, "addon", version.Addon, "tracks", len(analysis.Streams))
+		}
+	}
 	return analysis
 }
 
