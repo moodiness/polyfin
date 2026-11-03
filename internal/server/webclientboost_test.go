@@ -60,6 +60,24 @@ func TestVideosAreBoostedForTheUsersWhoAsk(t *testing.T) {
 		"in French":       {answers: []bool{false}, lang: "fr-FR", steps: []string{"video " + relayed, "play", "menu", "entry"}, want: []string{"Augmenter le volume: Désactivé"}},
 		"no Web Audio":    {answers: []bool{true}, steps: []string{"no audio", "video " + relayed, "play", "show"}, want: []string{alone}},
 		"an element gone": {answers: []bool{true, true}, steps: []string{"video " + relayed, "play", "remove", "video " + relayed, "play", "show", "count"}, want: []string{boosted, "2 sources, 1 contexts"}},
+		// Safari starts a context only inside a click or a tap, and the video
+		// starts playing later, after jellyfin-web's PlaybackInfo.
+		"a context that starts only in a tap": {answers: []bool{true}, steps: []string{"gesture only", "video " + relayed, "tap", "play", "show", "count"},
+			want: []string{boosted, "1 sources, 1 contexts"}},
+		"a tap without the boost": {answers: []bool{false}, steps: []string{"gesture only", "video " + relayed, "tap", "play", "show", "count"},
+			want: []string{alone, "0 sources, 0 contexts"}},
+		"native HLS after a tap": {answers: []bool{true}, steps: []string{"gesture only", "video cors http://polyfin.test/videos/a/master.m3u8?x=1", "tap", "play", "show", "count"},
+			want: []string{alone, "0 sources, 1 contexts"}},
+		"taps and plays": {answers: []bool{true, true}, steps: []string{"gesture only", "video " + relayed, "tap", "play", "tap", "remove", "video " + relayed, "tap", "play", "show", "count"},
+			want: []string{boosted, "2 sources, 1 contexts"}},
+		// The context started by a tap rests 3 s later while no video it
+		// boosts plays, and resumes outside a gesture, which a tap allows.
+		"a context that rests until a play": {answers: []bool{true}, steps: []string{"gesture only", "video " + relayed, "tap", "wait", "state", "play", "show", "state", "count"},
+			want: []string{"suspended", boosted, "running", "1 sources, 1 contexts"}},
+		"running while a video plays": {answers: []bool{true}, steps: []string{"gesture only", "video " + relayed, "tap", "play", "tap", "wait", "state"},
+			want: []string{"running"}},
+		"a pause lets it rest": {answers: []bool{true, true}, steps: []string{"gesture only", "video " + relayed, "tap", "play", "pause", "wait", "state", "play", "state", "show"},
+			want: []string{"suspended", "running", boosted}},
 	}
 	const harness = `
 const vm = require('node:vm')
@@ -149,14 +167,25 @@ async function run(scenario) {
   let sources = 0
   let state = 'running'
   let resumes = true
+  let gestureOnly = false
+  let inGesture = false
+  // WebKit: a context resumed inside a tap unlocks the page, whose
+  // contexts may then resume without one.
+  let unlocked = false
+  let context = null
+  let timers = []
   class Node {
     constructor(name) { this.name = name; this.outputs = [] }
     connect(other) { this.outputs = [other]; return other }
     disconnect() { this.outputs = [] }
   }
   class AudioContext {
-    constructor() { contexts++; this.state = state; this.destination = new Node('speakers') }
-    resume() { if (resumes) this.state = 'running'; return Promise.resolve() }
+    constructor() { contexts++; context = this; this.state = state; this.destination = new Node('speakers') }
+    resume() {
+      if (resumes && (!gestureOnly || inGesture || unlocked)) { this.state = 'running'; if (inGesture) unlocked = true }
+      return Promise.resolve()
+    }
+    suspend() { this.state = 'suspended'; return Promise.resolve() }
     createGain() { const n = new Node('gain'); n.gain = { value: 1 }; return n }
     createDynamicsCompressor() { const n = new Node('compressor'); for (const k of ['threshold', 'knee', 'ratio', 'attack', 'release']) n[k] = { value: 0 }; return n }
     createMediaElementSource(element) {
@@ -187,7 +216,7 @@ async function run(scenario) {
   vm.runInNewContext(script, {
     location, history, document, MutationObserver, window, addEventListener,
     CustomEvent: class { constructor(type) { this.type = type } }, Event: class { constructor(type) { this.type = type } },
-    setTimeout: (run, delay) => (delay < 1000 ? 0 : 0), clearTimeout: () => {},
+    setTimeout: (run, delay) => (delay >= 3000 ? timers.push(run) : 0), clearTimeout: (id) => { if (id) timers[id - 1] = null },
     Date: { now: () => 100000 },
   })
   await flush()
@@ -210,13 +239,18 @@ async function run(scenario) {
   for (const step of steps) {
     if (step === 'suspended') state = 'suspended'
     else if (step === 'stuck') { state = 'suspended'; resumes = false }
+    else if (step === 'gesture only') { state = 'suspended'; gestureOnly = true }
+    else if (step === 'tap') { inGesture = true; fire('click', { type: 'click', target: body.appendChild(new Element('button', 'btnPlay')) }); inGesture = false }
     else if (step.startsWith('video ')) {
       const words = step.split(' ')
       video = body.appendChild(new Element('video', 'video'))
       if (words.length === 3) video.setAttribute('crossorigin', 'anonymous')
       video.currentSrc = words[words.length - 1]
     } else if (step === 'remove') video.remove()
-    else if (step === 'play') fire('play', { type: 'play', target: video })
+    else if (step === 'play') { video.paused = false; fire('play', { type: 'play', target: video }) }
+    else if (step === 'pause') { video.paused = true; fire('pause', { type: 'pause', target: video }) }
+    else if (step === 'wait') { for (let i = 0, n = timers.length; i < n; i++) { const run = timers[i]; timers[i] = null; if (run) run() } }
+    else if (step === 'state') log.push(context ? context.state : 'no context')
     else if (step === 'show') log.push(graph(video))
     else if (step === 'count') log.push(sources + ' sources, ' + contexts + ' contexts')
     else if (step === 'menu') { fire('click', { type: 'click', target: settingsButton }); sheet(['aspectratio', 'playbackrate', 'quality', 'stats']) }

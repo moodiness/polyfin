@@ -509,10 +509,16 @@
 // in, as the route changes, and again as each video starts, which also
 // tells the server that this device runs the script: the server then
 // relays the user's direct plays rather than sending the player to their
-// source, and marks their address (PolyfinRelay=1). As a video starts
-// playing, the script builds the graph for its element, once, on one
-// AudioContext for the page, which the click on Play lets run; an element
-// whose sound Web Audio would play silent is left alone: a stream from
+// source, and marks their address (PolyfinRelay=1). For a user who
+// boosts, the page's one AudioContext is made and started at their first
+// click or tap, inside it: Safari starts a context only there, and the
+// video starts later, once jellyfin-web has asked the server how to play
+// it. The context is suspended again 3 s after a click, a pause or an end
+// while no video it boosts plays, so that it holds no audio session, and
+// resumed as one plays, which Safari allows once a tap started it. As a
+// video starts playing, the script builds the graph for its element,
+// once, on that context; an element whose sound Web Audio would play
+// silent is left alone: a stream from
 // another site fetched without CORS, as one jellyfin-web plays from its
 // source unless the address is marked or the element fetched it with CORS
 // (crossorigin, set for the server's own files); and HLS the browser plays
@@ -4882,6 +4888,25 @@
     apply(video)
     ask()
   }
+  // idle suspends the context while no video it boosts plays, so that an
+  // idle context holds no audio session, as on an iPhone, where it could
+  // stop another app's music. A tap having started it once, Safari lets
+  // the page resume it later without one, as build and apply do.
+  var resting = 0
+  function idle() {
+    if (!context || context.state !== 'running' || typeof context.suspend !== 'function') return
+    for (var i = 0; i < graphs.length; i++) {
+      if (attached(graphs[i].video) && !graphs[i].video.paused) return
+    }
+    context.suspend().then(null, function () {})
+  }
+  function rest() {
+    clearTimeout(resting)
+    resting = setTimeout(quietly(idle), 3000)
+  }
+  function stopped(event) {
+    if (graphOf(event.target)) rest()
+  }
   function close(container) {
     var dialog = container.querySelector('.dialog')
     if (dialog && dialog.getAttribute('data-history') === 'true') history.back()
@@ -4972,9 +4997,19 @@
     )
     scroller.appendChild(item)
   }
+  // aim notes a click on the player's settings button, and starts the
+  // page's context inside the click for a user who boosts: Safari and iOS
+  // start an AudioContext only there, not when the video starts playing,
+  // after jellyfin-web's PlaybackInfo, so the first video would stay
+  // unboosted. build reuses the context; idle suspends it again 3 s later
+  // when no video it boosts plays.
   function aim(event) {
     var target = event.target
     menuAt = target && target.closest && target.closest('.btnVideoOsdSettings') ? Date.now() : 0
+    if (!wanted()) return
+    if (!context) context = new Context()
+    if (context.state !== 'running' && typeof context.resume === 'function') context.resume().then(null, function () {})
+    rest()
   }
   function watch() {
     if (typeof MutationObserver !== 'function' || !document.body) return
@@ -4990,6 +5025,8 @@
     ).observe(document.body, { childList: true })
   }
   addEventListener('play', quietly(played), true)
+  addEventListener('pause', quietly(stopped), true)
+  addEventListener('ended', quietly(stopped), true)
   addEventListener('click', quietly(aim), true)
   ;['pushState', 'replaceState'].forEach(function (name) {
     var original = history[name]
