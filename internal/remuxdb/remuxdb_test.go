@@ -372,3 +372,46 @@ func TestAFileListedWithoutAudioDescribesNothing(t *testing.T) {
 		}
 	}
 }
+
+// The versions an answer describes are told once Describe stopped waiting
+// for it, those RemuxDB knows only: item details listed them without
+// tracks. An answer Describe waited for is not told, its versions already
+// listed with their tracks.
+func TestALateAnswerIsTold(t *testing.T) {
+	db := newRemuxDB(t)
+	s := service(db, &accounts.Settings{})
+	var told [][]library.Version
+	s.OnDescribed(func(versions []library.Version) { told = append(told, versions) })
+	known := version(1, "tt0133093", "The.Movie.2160p.mkv", 10_000_000_000)
+	unknown := version(2, "tt0133093", "Another.Movie.mkv", 1_000)
+	// Within the wait: the hook runs before Describe hears the answer.
+	s.wait = time.Minute
+	s.Describe(t.Context(), []library.Version{known})
+	if told != nil {
+		t.Fatalf("an answer in time told %+v", told)
+	}
+
+	other := version(3, "tt0903747:1:2", "Show.S01E02.mkv", 1_000)
+	hold := make(chan struct{})
+	db.set(0, hold)
+	s.descriptions.Delete(known.ID)
+	s.wait = 20 * time.Millisecond
+	s.Describe(t.Context(), []library.Version{known, unknown, other})
+	s.mu.Lock()
+	asking := []*lookup{s.asking["tt0133093"], s.asking["tt0903747:1:2"]}
+	s.mu.Unlock()
+	close(hold)
+	for _, l := range asking {
+		<-l.done
+	}
+	var ids []accounts.ID
+	for _, versions := range told {
+		for _, v := range versions {
+			ids = append(ids, v.ID)
+		}
+	}
+	slices.SortFunc(ids, func(a, b accounts.ID) int { return slices.Compare(a[:], b[:]) })
+	if !slices.Equal(ids, []accounts.ID{known.ID}) {
+		t.Errorf("told %v, want the known version alone", ids)
+	}
+}

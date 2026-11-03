@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -150,6 +151,8 @@ type Service struct {
 	// received counts the bytes the versions' sources send, nil when
 	// nothing is counted (see CountReceived).
 	received *bandwidth.Meters
+	// analyzed is told each version analyzed (see OnAnalyzed).
+	analyzed atomic.Pointer[func(version library.Version)]
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading
@@ -754,8 +757,15 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 	return result.(media.Analysis), nil
 }
 
+// OnAnalyzed has analyzed told each version analyzed, once its analysis
+// is kept: the tracks item details list for it may have changed. analyzed
+// runs on the goroutine that analyzed it, so it must return quickly.
+func (s *Service) OnAnalyzed(analyzed func(version library.Version)) {
+	s.analyzed.Store(&analyzed)
+}
+
 // keepAnalysis saves and remembers the analysis of a version, started at
-// a time, and returns it.
+// a time, tells it (see OnAnalyzed), and returns it.
 func (s *Service) keepAnalysis(ctx context.Context, version library.Version, analysis media.Analysis, started time.Time) media.Analysis {
 	data, err := json.Marshal(analysis)
 	if err == nil {
@@ -775,6 +785,9 @@ func (s *Service) keepAnalysis(ctx context.Context, version library.Version, ana
 		if _, logged := s.silent.LoadOrStore(version.ID, struct{}{}); !logged {
 			s.logger.Info("A version has no audio track", "version", version.Name, "addon", version.Addon, "tracks", len(analysis.Streams))
 		}
+	}
+	if analyzed := s.analyzed.Load(); analyzed != nil {
+		(*analyzed)(version)
 	}
 	return analysis
 }
