@@ -11,6 +11,7 @@ import {
   type OrderedSeries,
   type SpecialsPlacement,
 } from '@/api'
+import { TitlePoster } from '@/features/account/WatchingLists'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -81,7 +82,7 @@ export default function EpisodeOrders() {
         {orders.data.map((order) => (
           <Row
             key={order.series.id}
-            leading={ListNumbersIcon}
+            leading={<TitlePoster title={{ kind: 'series', posterId: order.series.posterId }} />}
             onClick={() => setEditing(order.series)}
             title={order.series.name}
             titleAside={order.series.year > 0 && <Badge>{order.series.year}</Badge>}
@@ -135,6 +136,7 @@ export default function EpisodeOrders() {
               {found.data.map((series) => (
                 <Row
                   key={series.id}
+                  leading={<TitlePoster title={{ kind: 'series', posterId: series.posterId }} />}
                   onClick={() => setEditing(series)}
                   title={series.name}
                   titleAside={series.year > 0 && <Badge>{series.year}</Badge>}

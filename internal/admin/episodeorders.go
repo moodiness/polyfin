@@ -26,11 +26,13 @@ type EpisodeOrders interface {
 const maxOrderedSeriesResults = 20
 
 // orderedSeriesJSON is a series as Content › Libraries lists it under
-// Episode orders.
+// Episode orders. PosterID is the item whose Primary image is its poster,
+// served by Polyfin's own image route as Content › Versions' titles are.
 type orderedSeriesJSON struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Year int    `json:"year"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Year     int    `json:"year"`
+	PosterID string `json:"posterId"`
 }
 
 // episodeGroupJSON is one of a series' TMDB episode groups: its type is
@@ -57,7 +59,7 @@ type episodeOrderJSON struct {
 }
 
 func newOrderedSeriesJSON(item library.Item) orderedSeriesJSON {
-	return orderedSeriesJSON{ID: item.ID.String(), Name: item.Name, Year: item.ProductionYear}
+	return orderedSeriesJSON{ID: item.ID.String(), Name: item.Name, Year: item.ProductionYear, PosterID: item.ID.String()}
 }
 
 func newEpisodeOrderJSON(series library.Item, order library.EpisodeOrder) episodeOrderJSON {

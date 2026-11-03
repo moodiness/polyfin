@@ -41,8 +41,11 @@ import {
   useToast,
 } from '@/ui'
 
-/** The poster of a title, or the icon of its kind when it has none or fails to load. */
-export function TitlePoster({ title }: { title: AccountTitle }) {
+/**
+ * The poster of a title, or the icon of its kind when it has none or fails to load. Shared by My
+ * account, Content › Versions and Content › Libraries › Episode orders.
+ */
+export function TitlePoster({ title }: { title: Pick<AccountTitle, 'kind' | 'posterId'> }) {
   const [failed, setFailed] = useState(false)
   const KindIcon =
     title.kind === 'series' || title.kind === 'episode' ? TelevisionSimpleIcon : FilmSlateIcon

@@ -1788,8 +1788,8 @@ export const libraryOrders = () =>
 export const applyLibraryOrder = () =>
   request<LibraryOrders>('DELETE', '/scopes/shared/libraries/user-orders')
 
-/** A series as Episode orders lists and finds it. */
-export type OrderedSeries = { id: string; name: string; year: number }
+/** A series as Episode orders lists and finds it; `posterId` as `AccountTitle`'s. */
+export type OrderedSeries = { id: string; name: string; year: number; posterId: string }
 
 /** The name Jellyfin gives a TMDB episode group's type, a series' DisplayOrder. */
 export type EpisodeGroupType =
