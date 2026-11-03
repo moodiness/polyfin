@@ -898,6 +898,12 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 		ConversionHeight:    request.conversionHeight,
 		Can:                 h.Playback.Capabilities(),
 	}
+	// No app names a channel's audio track: when none is flagged default,
+	// the one that plays is passed for the decision to check it (see
+	// flaggedAudio).
+	if !flaggedAudio(streams) {
+		options.AudioStreamIndex = defaultAudio(streams)
+	}
 	described := playback.MediaSource{Container: container, Bitrate: analysis.Bitrate, Streams: streams}
 	decision := playback.Decision{DirectPlay: true, Container: container, AudioStreamIndex: -1, SubtitleStreamIndex: -1}
 	if request.DeviceProfile != nil {

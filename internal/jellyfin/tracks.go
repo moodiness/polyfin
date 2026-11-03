@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"context"
+	"slices"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/localization"
@@ -100,6 +101,17 @@ func (h *Handler) trackPreferences(ctx context.Context, user accounts.User) trac
 // the one flagged default, else the first. nil when there is none.
 func defaultAudio(streams []playback.MediaStream) *int {
 	return trackPreferences{playDefaultAudio: true}.audio(streams)
+}
+
+// flaggedAudio reports whether one of the audio tracks is flagged
+// default. When none is, playback.Decide checks no audio track unless one
+// is passed, as Jellyfin's StreamBuilder does (StreamBuilder.cs, lines
+// 675-707 and 1362-1372, at 12.4); so the track that plays is passed for
+// it to be checked: an app may name none because its page lists none, as
+// jellyfin-web does for a torrent version not analyzed yet, and would get
+// a direct play whose audio it may not decode, silently.
+func flaggedAudio(streams []playback.MediaStream) bool {
+	return slices.ContainsFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Audio" && s.IsDefault })
 }
 
 // audio is the audio track played unless the app asks for another, as

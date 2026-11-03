@@ -39,6 +39,8 @@ A title's details list every stream the addons offer as a version (see [Title pa
 
 - Jellyfin 12.4 lists first the version an app opens as an item. jellyfin-web's version menu does this once a version is picked, so the menu reorders itself there. Polyfin keeps the menu as it was.
 - Jellyfin lists all versions in PlaybackInfo, including the ones that cannot be read or played.
+- When the app names no audio track and the file flags none as default, Polyfin still checks the track that plays, the first, against the app's profile: a track the app cannot decode is converted, and the version's name no longer says "(direct play)". Jellyfin 12.4 checks no audio then and plays the file as it is ([`StreamBuilder.cs`, lines 675 to 707](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L675-L707) and [1362 to 1372](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L1362-L1372)), which jellyfin-web never meets on Jellyfin, as its pages always list the tracks. On Polyfin a version not analyzed yet lists none, so jellyfin-web names no track, and a browser played AC-3, E-AC-3 or DTS without sound. The same applies to channels.
+- An analysis that finds video and no audio track is logged at Info once per version, as "A version has no audio track", with the number of tracks found.
 
 **For app developers:**
 
@@ -244,6 +246,7 @@ Until a version is played, Polyfin knows only what its addon says of it. With **
 
 - When a title's page opens, Polyfin asks RemuxDB about the title by its IMDb identifier, with the season and episode numbers for an episode. It waits for the answer one second at most; a later answer shows from the next opening. Titles the addons know by other identifiers are not asked about.
 - Polyfin finds each version among the files RemuxDB lists by the name of its file, as the addon gives it, folders left out and case ignored. When the addon gives the file's size, the sizes must agree within 64 MiB or 1%, the larger, as addons round sizes. When several files share the name, the one of the closest size wins; without a size, a shared name describes nothing. A file under a tenth of the title's runtime, a sample, describes nothing either.
+- A file RemuxDB lists with video and no audio track describes nothing, as if RemuxDB did not know it: the page would show a silent version until it is analyzed.
 - What RemuxDB said of a version, whether it knew the file or not, is kept in memory for 6 hours. A version listed since has the title asked about again. After RemuxDB fails to answer, it is not asked for a minute, or for as long as its `Retry-After` says.
 - Playback still analyzes each version with ffprobe, and the analysis then replaces the description. The tracks keep the numbers ffprobe gives them, so a track picked before the first play stays the same track.
 - Until the version is analyzed, the height RemuxDB found places it in the user's quality group (see [How the height of a version is found](users.md#how-the-height-of-a-version-is-found)).

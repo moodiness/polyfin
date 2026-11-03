@@ -830,12 +830,14 @@ func (h *Handler) decideTracks(p playable, version library.Version, streams []pl
 	// Like Jellyfin, chosen tracks only count with the version they belong
 	// to. The user's preferences choose the others. A decision plays the
 	// audio track flagged default, else the first, by itself: another
-	// preferred one is passed as if asked, so that the decision checks it.
+	// preferred one is passed as if asked, so that the decision checks it,
+	// and so is the track that plays when none is flagged (see
+	// flaggedAudio).
 	audio := p.tracks.audio(streams)
 	if named && request.AudioStreamIndex.set {
 		audio = new(int(request.AudioStreamIndex.value))
 		options.AudioStreamIndex = audio
-	} else if audio != nil && *audio != *defaultAudio(streams) {
+	} else if audio != nil && (*audio != *defaultAudio(streams) || !flaggedAudio(streams)) {
 		options.AudioStreamIndex = audio
 	}
 	if named && request.SubtitleStreamIndex.set {
