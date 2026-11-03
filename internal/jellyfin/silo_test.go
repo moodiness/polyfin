@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/media"
+	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/silo"
 	"github.com/moodiness/polyfin/internal/silo/silotest"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -116,6 +117,12 @@ func appsAccept(path string, data []byte) error {
 		return silotest.CheckSection(data, segments[3], limit)
 	case target.Path == "/api/v2/home/capabilities":
 		return silotest.CheckHomeCapabilities(data)
+	case target.Path == "/api/v2/home/layout":
+		include, _ := strconv.Atoi(target.Query().Get("include_items"))
+		_, err := silotest.CheckHomeLayout(data, include, limit)
+		return err
+	case len(segments) == 2 && segments[0] == "watch":
+		return silotest.CheckWatchMarkers(data)
 	case target.Path == "/api/v2/catalog":
 		return silotest.CheckCatalogPage(data)
 	case target.Path == "/api/v2/catalog/filters":
@@ -444,6 +451,31 @@ func TestSiloAppsBrowseUnderTheUsersLimits(t *testing.T) {
 	if status, _ := a.do(t, http.MethodGet, "/api/v2/library/"+libraries[0].ID+"/sections/latest-999/items", token, profile, nil); status != http.StatusNotFound {
 		t.Errorf("another library's section: %d", status)
 	}
+	// Home's layout names Home's rows, under the limits Home is read with.
+	layoutIDs := func() []string {
+		t.Helper()
+		var home, layout struct {
+			Sections []struct {
+				ID string `json:"id"`
+			} `json:"sections"`
+		}
+		a.get(t, "/api/v2/home/sections", token, profile, &home)
+		a.get(t, "/api/v2/home/layout?include_items=1&item_limit=1", token, profile, &layout)
+		var ids, want []string
+		for _, sec := range layout.Sections {
+			ids = append(ids, sec.ID)
+		}
+		for _, sec := range home.Sections {
+			want = append(want, sec.ID)
+		}
+		if !slices.Equal(ids, want) {
+			t.Errorf("layout %v, Home %v", ids, want)
+		}
+		return ids
+	}
+	if ids := layoutIDs(); !slices.Contains(ids, latest) {
+		t.Errorf("layout without the latest titles: %v", ids)
+	}
 	var detail struct {
 		siloCard
 		ContentRating string `json:"content_rating"`
@@ -497,6 +529,9 @@ func TestSiloAppsBrowseUnderTheUsersLimits(t *testing.T) {
 	a.get(t, library, token, profile, &page)
 	if len(page.Items) != 0 {
 		t.Errorf("under parental control: %v", cardTitles(page.Items))
+	}
+	if ids := layoutIDs(); len(ids) != 0 {
+		t.Errorf("layout under parental control: %v", ids)
 	}
 	var views QueryResult
 	p.get(t, "/UserViews", p.token, &views)
@@ -563,6 +598,76 @@ func TestSiloAppsBrowseSeries(t *testing.T) {
 	a.get(t, "/api/v2/catalog/series/"+series+"/seasons/2/episodes", token, profile, &none)
 	if len(none.Items) != 0 {
 		t.Errorf("episodes of a season the series lacks: %+v", none.Items)
+	}
+}
+
+// Silo's apps get the skip markers Jellyfin apps get for each version,
+// with where each comes from: TheIntroDB's intro, SkipDB's recap with
+// SkipDB's confidence, and the credits of a version's chapters in place of
+// the database's. With the skip buttons off, they get none.
+func TestSiloAppsGetSkipMarkers(t *testing.T) {
+	t.Parallel()
+	p := skipping(t, mediasegments.TheIntroDB, mediasegments.SkipDB)
+	versions := p.versions(t, p.third)
+	if len(versions) != 4 {
+		t.Fatalf("versions %+v", versions)
+	}
+	p.storeAnalysis(t, versions[2], lasting(3_150_000,
+		chapter("Chapter 1", 0, 3_080_000), chapter("Credits", 3_080_000, 3_148_500), chapter("Chapter 3", 3_148_500, 3_150_000)))
+	allowSilo(t, p.testServer)
+	a := servingSilo(t, p.testServer)
+	token, profile := a.signIn(t, "member")
+	type marker struct {
+		Start      float64  `json:"start_seconds"`
+		End        float64  `json:"end_seconds"`
+		Source     string   `json:"source"`
+		Provider   string   `json:"provider"`
+		Algorithm  string   `json:"algorithm"`
+		Confidence *float64 `json:"confidence"`
+	}
+	type markers struct {
+		Intro    *marker           `json:"intro"`
+		Credits  *marker           `json:"credits"`
+		Recap    *marker           `json:"recap"`
+		Segments []json.RawMessage `json:"marker_segments"`
+	}
+	var detail struct {
+		markers
+		Versions []markers `json:"versions"`
+	}
+	a.get(t, "/api/v2/watch/"+p.third, token, profile, &detail)
+	if len(detail.Versions) != 4 {
+		t.Fatalf("versions: %+v", detail.Versions)
+	}
+	database := marker{321.4, 400.4, "online", mediasegments.TheIntroDB, "polyfin.database:v1", nil}
+	same := func(got *marker, want marker) bool {
+		return got != nil && (got.Confidence == nil) == (want.Confidence == nil) &&
+			(got.Confidence == nil || *got.Confidence == *want.Confidence) &&
+			marker{got.Start, got.End, got.Source, got.Provider, got.Algorithm, nil} ==
+				marker{want.Start, want.End, want.Source, want.Provider, want.Algorithm, nil}
+	}
+	recap := marker{0, 20, "online", mediasegments.SkipDB, "polyfin.database:v1", new(0.85)}
+	for n, version := range detail.Versions {
+		credits := marker{3072, 3304, "online", mediasegments.TheIntroDB, "polyfin.database:v1", nil}
+		if n == 2 {
+			credits = marker{3080, 3149, "scanner", "", "polyfin.chapters:v1", nil}
+		}
+		if !same(version.Intro, database) || !same(version.Credits, credits) || !same(version.Recap, recap) || len(version.Segments) != 3 {
+			t.Errorf("version %d: intro %+v, credits %+v, recap %+v, %d segments", n, version.Intro, version.Credits, version.Recap,
+				len(version.Segments))
+		}
+	}
+	if !same(detail.Intro, database) || !same(detail.Recap, recap) {
+		t.Errorf("detail's intro %+v, recap %+v", detail.Intro, detail.Recap)
+	}
+
+	p.setting(t, func(settings *accounts.Settings) { settings.SkipButtons = false })
+	detail.Versions = nil
+	detail.markers = markers{}
+	a.get(t, "/api/v2/watch/"+p.third, token, profile, &detail)
+	if detail.Intro != nil || len(detail.Versions) != 4 || detail.Versions[0].Intro != nil || detail.Versions[0].Segments == nil ||
+		len(detail.Versions[0].Segments) != 0 {
+		t.Errorf("with the skip buttons off: %+v", detail)
 	}
 }
 
