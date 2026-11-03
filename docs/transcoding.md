@@ -53,11 +53,27 @@ To play it without any conversion in such a browser, a version with AAC or Opus 
 The Jellyfin app for iPhone and iPad has two players, and each tells the server something different:
 
 - Its web player, the default, is jellyfin-web in Safari's engine. It takes AC-3 and E-AC-3, in files and in both kinds of HLS segments, so their audio is copied.
-- Its native player, **Use Native Video Player** in the app's settings (beta), declares its own formats. In HLS it takes AAC, MP3, FLAC and ALAC only, so E-AC-3 and AC-3 are converted to AAC, in 5.1. With **Prefer fMP4 in HLS** on, its default, HEVC is copied into fragmented MP4 segments; with it off, the only HLS format is MPEG-TS with H.264, so HEVC is converted to H.264.
+- Its native player, **Use Native Video Player** in the app's settings (beta), declares its own formats. Its HLS format takes AAC, MP3, FLAC and ALAC; after it comes a progressive MP4 taking H.264 with AC-3 and E-AC-3 too. With **Prefer fMP4 in HLS** on, its default, the HLS segments are fragmented MP4 and HEVC is copied into them; with it off, they are MPEG-TS with H.264, so HEVC is converted to H.264.
 
-Neither plays MKV as it is, so an MKV is always repackaged on iPhone and iPad, and HEVC is tagged `hvc1`, which Apple's players need. For the fewest conversions, turn **Use Native Video Player** off.
+Polyfin ranks the native player's formats as Jellyfin does, and where the progressive MP4 wins, it sends what that MP4 would carry over HLS instead, in the segments the app chose, MPEG-TS or fragmented MP4. The progressive MP4 wins where it keeps what the HLS format would convert, so AC-3 and E-AC-3 are copied:
 
-**Compared with Jellyfin:** Jellyfin 12.4 decides the same for both players with **Prefer fMP4 in HLS** on. With it off, the native player ranks a progressive MP4, which keeps E-AC-3, above its MPEG-TS HLS format, and Jellyfin sends that file ([`StreamBuilder.cs`, lines 874 to 927](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L874-L927)). Polyfin streams a progressive conversion only with **Converted downloads** on (see [Converted downloads](#converted-downloads)); otherwise it ranks the app's progressive formats after its HLS ones, and the play goes over HLS, as H.264 with AAC 5.1.
+| Source | **Prefer fMP4 in HLS** on | Off |
+|---|---|---|
+| HEVC with E-AC-3, in MKV | HEVC copied, E-AC-3 converted to AAC 5.1 (the HLS format wins, as it copies the video) | H.264, E-AC-3 copied, in MPEG-TS |
+| H.264 with E-AC-3 or AC-3, in MKV | Both copied, in fragmented MP4 | Both copied, in MPEG-TS |
+
+The native player's plays are never sent as one file, even with **Converted downloads** on. Its downloads, which ask under another profile name and without HLS, get a converted MP4 as any app's (see [Converted downloads](#converted-downloads)).
+
+Neither player plays MKV as it is, so an MKV is always repackaged on iPhone and iPad, and HEVC is tagged `hvc1`, which Apple's players need. For the fewest conversions, turn **Use Native Video Player** off.
+
+**Compared with Jellyfin:** Jellyfin 12.4 ranks the formats the same way ([`StreamBuilder.cs`, lines 874 to 927](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Model/Dlna/StreamBuilder.cs#L874-L927)), and sends the native player the progressive MP4 itself. Polyfin does not, on purpose: the native player is Apple's AVPlayer, which cannot play a conversion sent as one file.
+
+- Sent without byte ranges, as Jellyfin sends a conversion (`Accept-Ranges: none`, [`FileStreamResponseHelpers.cs`, line 135](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Helpers/FileStreamResponseHelpers.cs#L135)), it stops AVPlayer at once with "The server is not correctly configured". Before 0.60, Polyfin sent the native player that file with **Converted downloads** on, and the play failed the same way.
+- Sent with byte ranges, it is read by AVPlayer fragment by fragment, every one of them, before the play starts, so a conversion made as it plays would start only once the whole title is converted.
+
+Over HLS, the same tracks start at once, and seeking, the bandwidth in **Now playing** and stopping work as for any HLS play.
+
+**For app developers:** the native player is told by its device profile's `Name`, `iOS 11+ Native Profile`, `iOS 13+ Native Profile` or `iOS 13+ Native Profile + fMP4` (jellyfin-expo 1.8.0.5's [`utils/profiles`](https://github.com/jellyfin/jellyfin-expo/tree/v1.8.0.5/utils/profiles)), with the client `Jellyfin iOS` or `Jellyfin iPadOS` in the request's `Authorization` header; both are required. Its `TranscodingProfile`s with `Protocol` `http` and `Context` `Streaming` are read as HLS, with the `Container`, `MinSegments` and `BreakOnNonKeyFrames` of its first HLS video profile.
 
 ### Loudness
 
@@ -68,7 +84,7 @@ How loud a title plays is decided in one place, which depends on how it plays:
   - Converted with the source's channels, 5.1 to 5.1 or stereo to stereo, the audio keeps the source's level, to 0.1 dB, unless **Even the loudness of converted videos** is on.
   - Mixed down to stereo, when an app asks for 2 channels of a surround track, it goes through **Mix to stereo**, then **Volume when mixing to stereo**, then **Even the loudness of converted videos** when it is on, then a limiter.
 
-The app chooses the path. jellyfin-web in Chrome, Firefox and Android's web view cannot decode AC-3 or E-AC-3 (see [Dolby audio in browsers](#dolby-audio-in-browsers)), so their audio is converted, to stereo when the browser reports 2 speakers. jellyfin-web's **Maximum allowed audio channels**, in the app's playback settings and kept by each browser, overrides what the browser reports. The Jellyfin app for Android's integrated player, Android TV with bitstream output, and the iOS app's default web player receive E-AC-3 as it is; the iOS app's native player receives it converted to AAC 5.1 (see [Two players in the Jellyfin iOS app](#two-players-in-the-jellyfin-ios-app)). To tell which path a play takes, look at the end of its version's name, "(direct play)", "(direct stream)" or "(converted: audio)", or at jellyfin-web's Playback Info (see [Seeing how a play goes](#seeing-how-a-play-goes)).
+The app chooses the path. jellyfin-web in Chrome, Firefox and Android's web view cannot decode AC-3 or E-AC-3 (see [Dolby audio in browsers](#dolby-audio-in-browsers)), so their audio is converted, to stereo when the browser reports 2 speakers. jellyfin-web's **Maximum allowed audio channels**, in the app's playback settings and kept by each browser, overrides what the browser reports. The Jellyfin app for Android's integrated player, Android TV with bitstream output, and the iOS app's default web player receive E-AC-3 as it is; the iOS app's native player receives it as it is too, except with HEVC video and **Prefer fMP4 in HLS** on, where it is converted to AAC 5.1 (see [Two players in the Jellyfin iOS app](#two-players-in-the-jellyfin-ios-app)). To tell which path a play takes, look at the end of its version's name, "(direct play)", "(direct stream)" or "(converted: audio)", or at jellyfin-web's Playback Info (see [Seeing how a play goes](#seeing-how-a-play-goes)).
 
 In direct play, nothing on the server changes the level; the app sets it:
 
@@ -299,6 +315,7 @@ With it on, an app that asks for a smaller copy, as Streamyfin's download sheet 
 **For app developers:**
 
 - A device profile whose video `TranscodingProfile` has `Protocol` `http` and `Container` `mp4` or `ts` gets, when the version does not direct play, a `TranscodingUrl` of the form `/videos/{id}/stream.mp4?…`, with `TranscodingSubProtocol` `http`, as from Jellyfin. Polyfin sends one fragmented MP4 file, or MPEG-TS for `ts`, as FFmpeg writes it, without `Content-Length` and without byte ranges: a request with a `Range` header gets the whole file (200).
+- The Jellyfin iOS app's native player never gets one: its plays go over HLS (see [Two players in the Jellyfin iOS app](#two-players-in-the-jellyfin-ios-app)).
 - `startTimeTicks` starts the copy later; the file then starts at zero.
 - The `TranscodingUrl` stands for the user PlaybackInfo answered, through its play session. With another user's token, it is refused (403).
 - `DELETE /Videos/ActiveEncodings?playSessionId=` stops it.
