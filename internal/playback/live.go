@@ -203,7 +203,10 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 		cancel()
 	}
 	if err != nil {
-		if timedOut {
+		if evicted := reader.evictedBy(); evicted != nil {
+			// Another stream took the connection as it was analyzed.
+			err = fmt.Errorf("%w: the stream was closed as it was analyzed: %w", evicted, context.Canceled)
+		} else if timedOut {
 			err = fmt.Errorf("%w: %w", ErrLiveTimeout, err)
 		} else if dash && !s.readsDASH(ctx) {
 			err = fmt.Errorf("%w: this server's FFmpeg has no DASH demuxer: %v", ErrLiveDead, err)
@@ -228,8 +231,14 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 
 // liveFailed records a live stream's failure: told to LiveSources' health
 // and, when kept and not a refusal, kept among the failures, which the
-// next starts skip.
+// next starts skip. A start stopped or replaced as it opened or was
+// analyzed (context.Canceled) is no failure of the stream's: it is
+// recorded as none.
 func (s *Service) liveFailed(ctx context.Context, version library.Version, err error, kept bool) {
+	if errors.Is(err, context.Canceled) {
+		s.logger.Debug("A channel's stream was left as it started", "addon", version.Addon, "stream", version.Name, "error", err)
+		return
+	}
 	s.logger.Info("A channel's stream failed", "addon", version.Addon, "stream", version.Name, "failure", LiveFailure(err), "error", err)
 	s.report(ctx, version, err)
 	if kept && LiveFailure(err) != LiveRefused {

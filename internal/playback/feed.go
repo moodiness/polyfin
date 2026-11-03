@@ -199,12 +199,13 @@ func (s *Service) LiveSources(connections func(ctx context.Context, source accou
 
 // report tells LiveSources' health how a stream answered. A tuner's plain
 // 503 is busy, as its error 805 is: proxies acting as a tuner answer so
-// once their connections are all in use.
+// once their connections are all in use. A start stopped or replaced as it
+// opened (context.Canceled) tells nothing of the stream, and is not told.
 func (s *Service) report(ctx context.Context, version library.Version, err error) {
 	s.feeds.mu.Lock()
 	health, connections := s.feeds.health, s.feeds.connections
 	s.feeds.mu.Unlock()
-	if health == nil {
+	if health == nil || errors.Is(err, context.Canceled) {
 		return
 	}
 	failure := LiveFailure(err)
@@ -598,6 +599,14 @@ func (f *feed) open(user accounts.ID, recording bool) {
 			time.Sleep(time.Second)
 		}
 	}
+	if err != nil && ctx.Err() != nil {
+		// The feed was closed as it opened: its readers left, or another
+		// stream took its connection. That tells nothing of the stream.
+		err = fmt.Errorf("the stream was closed as it opened: %w", context.Canceled)
+		if evicted := f.evictedBy(); evicted != nil {
+			err = fmt.Errorf("%w: %w", evicted, err)
+		}
+	}
 	if errors.Is(err, errManifest) {
 		f.s.feeds.mu.Lock()
 		f.s.feeds.manifests[f.version.ID] = true
@@ -644,6 +653,15 @@ func (f *feed) evictedBy() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.evicted
+}
+
+// evictedBy is why the reader's feed was evicted, nil if it was not or
+// there is no reader.
+func (r *feedReader) evictedBy() error {
+	if r == nil {
+		return nil
+	}
+	return r.f.evictedBy()
 }
 
 // write adds bytes to the ring, indexes them, and wakes the readers.

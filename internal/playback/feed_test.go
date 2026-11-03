@@ -793,3 +793,105 @@ func TestReadersOfStreamsWithoutKeyframesStillStart(t *testing.T) {
 		t.Errorf("read %q", got)
 	}
 }
+
+// healthReports records what LiveSources' health is told, by version.
+type healthReports struct {
+	mu       sync.Mutex
+	reported map[accounts.ID][]string
+}
+
+func (h *healthReports) tell(_ context.Context, version library.Version, failure string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.reported == nil {
+		h.reported = map[accounts.ID][]string{}
+	}
+	h.reported[version.ID] = append(h.reported[version.ID], failure)
+}
+
+func (h *healthReports) of(version accounts.ID) []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.reported[version])
+}
+
+// heldProbe writes an ffprobe stand-in that tells it started by creating
+// started, then fails once released exists.
+func heldProbe(t *testing.T) (path, started, released string) {
+	skipWithoutShell(t)
+	t.Helper()
+	dir := t.TempDir()
+	started, released = filepath.Join(dir, "started"), filepath.Join(dir, "released")
+	script := "#!/bin/sh\ntouch " + started + "\nwhile [ ! -e " + released + " ]; do sleep 0.05; done\n" +
+		"echo 'Invalid data found when processing input' >&2\nexit 1\n"
+	path = filepath.Join(dir, "ffprobe")
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path, started, released
+}
+
+// A channel's start that its user replaces by another channel of a tuner
+// of one tuner, while the first opens or is analyzed, is no failure of
+// the stream's: its health is told nothing, so the tuner shows no problem,
+// and the next start tries it again at once.
+func TestAReplacedStartIsNoFailure(t *testing.T) {
+	source := accounts.ID{7}
+	for _, tc := range []struct {
+		name string
+		// stream is the first channel's: a "late" one sends nothing until
+		// it is closed.
+		stream string
+		// held runs an ffprobe that waits until the channel is replaced,
+		// then fails.
+		held bool
+	}{
+		{name: "opening", stream: "late1.ts"},
+		{name: "analyzed", stream: "1.ts", held: true},
+	} {
+		src := &liveSource{late: make(chan struct{}), interval: 5 * time.Millisecond}
+		probe, started, released := "ffprobe-not-installed", "", ""
+		if tc.held {
+			probe, started, released = heldProbe(t)
+		}
+		s := newService(t, src, probe, nil)
+		s.feeds.times = liveTimes{grace: 200 * time.Millisecond, stall: time.Minute, answer: time.Minute, body: time.Minute,
+			slotWait: 2 * time.Second}
+		health := &healthReports{}
+		s.LiveSources(func(context.Context, accounts.ID) (iptv.Limit, error) {
+			return iptv.Limit{Connections: 1, Tuners: true}, nil
+		}, health.tell)
+		alice := ForUser(t.Context(), accounts.ID{1})
+		first := channelVersion(1, tc.stream, source)
+		analyzed := make(chan error, 1)
+		go func() {
+			_, err := s.AnalyzeLive(alice, first)
+			analyzed <- err
+		}()
+		if tc.held {
+			eventually(t, tc.name+": the analysis to start", func() bool { _, err := os.Stat(started); return err == nil })
+		} else {
+			eventually(t, tc.name+": the stream to be asked for", func() bool { _, opened, _ := src.counts(); return opened == 1 })
+		}
+		second, err := s.openFeed(alice, channelVersion(2, "2.ts", source))
+		if err != nil {
+			t.Fatalf("%s: switching channels: %v", tc.name, err)
+		}
+		if tc.held {
+			if err := os.WriteFile(released, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := <-analyzed; !errors.Is(err, ErrSlotsInUse) {
+			t.Errorf("%s: the replaced start: %v, want the tuner in use", tc.name, err)
+		}
+		if reported := health.of(first.ID); len(reported) > 0 {
+			t.Errorf("%s: the replaced start was told as %q", tc.name, reported)
+		}
+		if s.Failed(first.ID) {
+			t.Errorf("%s: the replaced stream is left out", tc.name)
+		}
+		_ = second.Close()
+		close(src.late)
+	}
+}
