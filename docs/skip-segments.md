@@ -19,6 +19,7 @@ This page covers the buttons that let viewers skip intros, recaps, credits, prev
 - Turned off, `/MediaSegments/{id}` lists none.
 - Turned on, the media sources of movies and episodes say `HasSegments: true` while a database is asked, when the version's own chapters name an intro, a recap, a preview or credits (see [Segments of each version](#segments-of-each-version)), or when an intro or credits were found in the audio of an episode's local file (see [Intros and credits found in local episodes' audio](#intros-and-credits-found-in-local-episodes-audio)). The media source of a recording says it when commercial breaks were found in it (see [Commercials of recordings](#commercials-of-recordings)). jellyfin-web asks for segments only then, by the identifier of the version it plays, which `/MediaSegments/{id}` takes as well as the title's. The title's identifier stands for its first version.
 - `/MediaSegments/{id}` answers Jellyfin's `MediaSegmentDto` list, in ticks, filtered by `includeSegmentTypes`, repeated or comma-separated. Apps choose what to do with each type; the server has no setting per type.
+- `GET /Polyfin/MediaSegments/{id}` lists the same segments, every type, each with its `Type`, `StartTicks` and `EndTicks` and where it comes from, which Jellyfin's segments do not tell: `Found`, `database`, `chapters` or `audio`, absent for the commercials of recordings; `Database`, the database of a `database` segment, as `POLYFIN_SEGMENTS` names it; and `Confidence`, from 0 to 1, the database's own rating of the segment, which only SkipDB gives. Credits split around a scene keep where they come from. [Silo's apps](silo-apps.md#skip-markers) get them this way.
 
 ## The four databases
 
@@ -211,6 +212,7 @@ The key is kept secret, shown and stored like PublicMetaDB's, and applied at onc
 - Polyfin sends the title's runtime, in seconds, when it knows it, as it does to TheIntroDB. For each kind of segment, SkipDB then gives the one timed on the release of the closest duration, moved earlier, never later, when the durations differ by a few seconds.
 - A segment SkipDB matched `out-of-range`, timed on a release whose duration differs too much, is left out: its times may not fit the version played. The next database in the order may give that kind instead.
 - Its intro, recap, outro and preview become Jellyfin's `Intro`, `Recap`, `Outro` and `Preview` segments.
+- SkipDB rates each segment from 0 to 1. Polyfin keeps that rating with the segment and gives it to Silo's apps (see [Silo's apps](silo-apps.md#skip-markers)); a rating outside 0 to 1 is left out. Answers kept before Polyfin read the rating have none until they are asked again.
 - SkipDB allows 120 requests a minute. Beyond, it answers 429 with a `Retry-After`, which Polyfin waits out (see [Caching](#caching)).
 
 ### SkipDB's data license
