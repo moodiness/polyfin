@@ -50,7 +50,7 @@ An HDHomeRun tuner plays as many channels at once as it has tuners, which its `d
 
 #### Starting a channel
 
-Before anything reads a channel's stream, Polyfin checks its first bytes. A source that answers with an error, a web page, a JSON or text answer, an empty or short body, or bytes of no video container fails within a second, and the channel's next stream is tried at once. A source that sends nothing within 3 seconds (10 for its answer, as providers that redirect to the stream can take several seconds) fails as silent. What the stream holds is then analyzed from about a second of it, within **Maximum time to analyze a version** but never more than 8 seconds, and kept: later starts of the channel, even after a restart, skip the analysis for a week, and analyze it again on the way, from the stream already read, once it is an hour old. FFmpeg then reads it with a second and a half of probing at most, enough for audio that comes a second after the video, as in streams FFmpeg itself muxed, and keeps what it probed as the start of what it writes; if FFmpeg fails within 10 seconds, the stream is analyzed again in full.
+Before anything reads a channel's stream, Polyfin checks its first bytes. A source that answers with an error, a web page, a JSON or text answer, an empty or short body, or bytes of no video container fails within a second, and the channel's next stream is tried at once. A source that sends nothing within 20 seconds of the request (and 3 seconds after its answer at least) fails as silent: providers that redirect to the stream take several seconds, and proxies that share a channel between apps send nothing until they buffered it, which a low-bitrate channel can take 10 seconds or more to do. 20 seconds, with the analysis below, stays within what the Android apps' client gives PlaybackInfo (30 seconds in all). While it waits, PlaybackInfo sends its answer's status after 5 seconds, then a space every 5 seconds, which JSON allows before the answer: Swiftfin gives up on an answer after 20 seconds without a byte. What the stream holds is then analyzed from about a second of it, within **Maximum time to analyze a version** but never more than 8 seconds, and kept: later starts of the channel, even after a restart, skip the analysis for a week, and analyze it again on the way, from the stream already read, once it is an hour old. FFmpeg then reads it with a second and a half of probing at most, enough for audio that comes a second after the video, as in streams FFmpeg itself muxed, and keeps what it probed as the start of what it writes; if FFmpeg fails within 10 seconds, the stream is analyzed again in full.
 
 Interlaced channels, such as most TV sports in 1080i50, are converted for the apps that do not take interlaced video, jellyfin-web among them. They are deinterlaced to 25 frames a second by default, which looks jerky in sports: **Double the frame rate** under **Settings › Conversion (transcoding)** makes them 50 frames a second, for about 15% more processor time on a 1080i50 stream (see [Transcoding](transcoding.md)).
 
@@ -191,6 +191,10 @@ Many guides list the same channel for several countries, so the candidates are r
 3. The catalog's guide listed first.
 4. Within a guide, the guide channel with the most distinct programme titles in the window kept. A placeholder repeating one title ("No Data", or "Name 4K" advertising itself) loses to a real guide.
 5. The first one listed.
+
+#### Logos from the guide
+
+A channel whose catalog or line-up gives no logo, such as a tuner's, shows the icon of the guide channel it is mapped to. Jellyfin uses the guide's icon even over the channel's own logo ([ListingsManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/Listings/ListingsManager.cs#L303-L305)); Polyfin keeps the logo the source, or the administrator, gives.
 
 #### Remapping and mapping by hand
 

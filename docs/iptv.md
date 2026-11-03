@@ -15,7 +15,7 @@ Adding a source takes two steps in the admin app: the **Account**, then **What t
 
 An **M3U playlist** source takes a **Name**, the **Playlist address** and, optionally, a **User agent** (see [Headers and user agent](#headers-and-user-agent)) and a **Programme guide address (XMLTV, optional)**. For an administrator, they are **Playlist address or file** and **Programme guide address or file (XMLTV, optional)**: each takes a file of the server too (see below).
 
-- A playlist's `#EXTINF` lines give each channel its `tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno` and `group-title` (quoted with double or single quotes, or not), and its name after the comma.
+- A playlist's `#EXTINF` lines give each channel its `tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno` and `group-title` (quoted with double or single quotes, or not), and its name after the comma. A list without `tvg-chno` may give the number as `channel-number` or `tvg-channel-no`. A decimal number, such as `104.5`, shows as written in apps and orders the channel after 104 and before 105, as Jellyfin keeps it ([M3uParser.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/M3uParser.cs#L170-L181)); so does an Xtream account's decimal `num`.
 - The header attributes of its `#EXTINF` lines, its `#EXTVLCOPT` and `#EXTHTTP` lines, and the `|` ending an address, give the headers its stream is requested with (see [Headers and user agent](#headers-and-user-agent)).
 - Its `#KODIPROP` lines tell a DASH stream's manifest type, and how it is encrypted (see [DASH channels and encryption](#dash-channels-and-encryption)).
 - A byte order mark, CRLF line ends and `#EXTGRP` lines are accepted.
@@ -119,7 +119,7 @@ An HDHomeRun tuner on the local network, with an antenna or a cable, is a source
 **Add a source** under **Content › Sources** has an **HDHomeRun tuner** tab:
 
 - **Find tuners** asks the tuners of the local network to answer (HDHomeRun's discovery, a UDP broadcast on port 65001) and lists those that do, with their name, model and tuner count. A tuner already added says so.
-- **Add by address** takes the tuner's address, `192.168.1.20` or `http://192.168.1.20`, and reads its `discover.json`.
+- **Add by address** takes the tuner's address, `192.168.1.20` or `http://192.168.1.20`, and reads its `discover.json`. An address with a path, such as `http://192.168.1.30:9191/hdhr` for a proxy that acts as a tuner, keeps it: `discover.json` and `lineup.json` are read under it, as Jellyfin does ([HdHomerunHost.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/TunerHosts/HdHomerun/HdHomerunHost.cs#L165-L180)). The address of its `discover.json` or `lineup.json` names the same tuner. An address with a login, a query or a fragment is refused.
 
 In Docker, the broadcast reaches the local network only with host networking (see [Installation](installation.md#find-hdhomerun-tuners)): the tab says so when no tuner answers, and an address always works. `POLYFIN_HDHOMERUN_ADDRESSES` has **Find tuners** ask given addresses instead of broadcasting (see [Configuration](configuration.md)).
 
@@ -132,7 +132,7 @@ A tuner is added under the name it gives itself, with its Live TV catalog only, 
 - **Only the tuner's favorite channels**, off by default, keeps the channels marked favorite on the tuner. It is in the **Tuner** panel of the source page's **Summary**, with the tuner's model and tuner count.
 - **Scan for channels** asks the tuner to scan for channels again (on its first source, such as its antenna), shows its progress, then reads its line-up.
 - The line-up is read again with **Refresh Live TV lists and guides every**, and kept as an IPTV line-up is, edits included (see [How the line-up is kept](#how-the-line-up-is-kept)).
-- XMLTV guides attach to its catalog as to any catalog. A guide channel named by the channel's number takes it (see [How channels are matched to the guide](live-tv.md#how-channels-are-matched-to-the-guide)).
+- XMLTV guides attach to its catalog as to any catalog. A guide channel named by the channel's number takes it (see [How channels are matched to the guide](live-tv.md#how-channels-are-matched-to-the-guide)). A tuner's line-up gives no logos: its channels show their guide channel's icon (see [Logos from the guide](live-tv.md#logos-from-the-guide)).
 
 ### Tuners in use
 
@@ -140,7 +140,7 @@ Each channel watched or recorded takes one of the tuner's tuners, whoever reads 
 
 Streams play as IPTV channels do: as they come when the app takes them, else converted. Terrestrial video is often MPEG-2 and interlaced: a conversion deinterlaces it with **Deinterlacing method** (see [Transcoding](transcoding.md)). The user's **Live TV** permission, quality group and limits apply.
 
-A tuner that does not answer, or refuses a stream for another reason than its tuners being in use, shows under **System › Health** until one of its streams plays. A stream refused because every tuner was in use, by Polyfin or another app, is **Refused by the provider** (see [Stream health](#stream-health)), and is no fault of the tuner's.
+A tuner that does not answer, or refuses a stream for another reason than its tuners being in use, shows under **System › Health** until one of its streams plays. A stream refused because every tuner was in use, by Polyfin or another app, is **Refused by the provider** (see [Stream health](#stream-health)), and is no fault of the tuner's. A tuner tells this with HDHomeRun's error 805; a plain 503, which proxies acting as a tuner answer once their connections are all in use, counts as the same.
 
 ## What to import
 
@@ -217,7 +217,7 @@ A list read a page of 100 at a time from the server, filtered by category, state
 Each stream shows how it last answered when its channel was opened:
 
 - **No live stream**: an error, a web page, an empty answer or bytes of no video. It is left out of its channel for an hour, then 6 hours, then a day while it keeps failing.
-- **Nothing came**: left out for 10 minutes when it never played at its address, or after nothing came twice in a row. A stream that played and was silent once, as when its provider was slow, is tried again at the next start, after the channel's other streams.
+- **Nothing came**: left out for 10 minutes after nothing came twice in a row. A stream silent once, as when its provider was slow, or a proxy was starting the channel for its first viewer, is tried again at the next start, after the channel's other streams, whether it played before or not.
 - **Refused by the provider**: the provider would not serve it then (connections in use, too many requests). It is tried again at the next start.
 - **Needs a DRM Polyfin does not support**, and **The list's keys do not decrypt it**: see [DASH channels and encryption](#dash-channels-and-encryption). They are left out as a dead stream is.
 
@@ -397,3 +397,45 @@ The list is downloaded:
 - for a list that is a file of the server, within 5 minutes once the file changed, or became unreadable (see [Lists and guides that are files of the server](#lists-and-guides-that-are-files-of-the-server)).
 
 A download that fails keeps the previous channels and tells why, and is tried again after 5 minutes, then 15 minutes, then every hour (never later than the setting). After every list refresh and change of options, channels are mapped to the guides again.
+
+## Using Dispatcharr
+
+Dispatcharr is an IPTV channel and guide manager: it gathers providers' lists into channels with numbers, logos, groups and a guide, shares one provider connection per channel between every app that watches it, keeps within each provider's connection limit, and fails over to a channel's next stream when one breaks. Polyfin takes its channels three ways. Replace `nas.lan:9191` with Dispatcharr's address and port.
+
+### As an M3U playlist with its guide (advised)
+
+Add an **M3U playlist** source with:
+
+- **Playlist address:** `http://nas.lan:9191/output/m3u`, or `http://nas.lan:9191/output/m3u/<channel profile>` for a profile's channels only.
+- **Programme guide (XMLTV):** `http://nas.lan:9191/output/epg`, with the same profile when the playlist has one. Its channel ids match the playlist's `tvg-id`, so every channel takes its guide.
+
+Dispatcharr's options go in the addresses' query:
+
+- `tvg_id_source=channel_number` (its default), `tvg_id` or `gracenote`: what `tvg-id` holds. Give the playlist and the guide the same one.
+- `cachedlogos=false` gives the provider's logo addresses instead of Dispatcharr's cached logos.
+- `direct=true` gives the provider's own stream addresses: Dispatcharr then neither shares connections nor fails over. Leave it off.
+- `days` and `prev_days` bound the guide.
+
+Dispatcharr serves these addresses to local networks only by default, and Polyfin reaches a local network address only from a source an administrator adds to the server. Channels keep Dispatcharr's numbers, decimals included, logos, groups as categories, and guide.
+
+This is the advised way: it carries everything Dispatcharr curates, decimal numbers and groups included, needs no login, and Dispatcharr enforces the connection limits itself.
+
+### As an Xtream Codes account
+
+Add an **Xtream Codes account** with the server `http://nas.lan:9191`, a Dispatcharr user, and that user's XC password (set on the user in Dispatcharr), with **Use the provider's programme guide**. Polyfin then knows the connection limit Dispatcharr gives the user (`max_connections`), and may import Dispatcharr's movies and series. Dispatcharr rounds decimal numbers here: 104.5 shows as 105.
+
+### As an HDHomeRun tuner
+
+Add an **HDHomeRun tuner** by address: `http://nas.lan:9191/hdhr`, or `http://nas.lan:9191/hdhr/<channel profile>`. **Find tuners** does not see Dispatcharr, which does not answer HDHomeRun's discovery. Its line-up gives numbers and names only: add the XMLTV guide `http://nas.lan:9191/output/epg` to the tuner's catalog under **Live TV**, whose icons give the channels their logos; the channels have no groups. Its tuner count is the sum of Dispatcharr's account limits, 10 when one has none.
+
+### Connection limits and failover
+
+Dispatcharr shares one provider connection per channel between Polyfin and its other apps, and keeps within each provider account's limit. When every connection is in use, it refuses a new channel (HTTP 503): Polyfin tells the app no stream suits and the stream shows **Refused by the provider**, but is not left out. On an M3U source Polyfin knows no limit and lets Dispatcharr decide; on an Xtream account Polyfin also keeps within the user's `max_connections`, closing a stream no one watches first.
+
+Dispatcharr fails over inside the one channel address: a stream that breaks while playing switches to the next one without Polyfin noticing. Keep **Merge quality variants** off for its sources: Dispatcharr's channels are already merged.
+
+Dispatcharr sends nothing until it holds about 1 MB of a channel, which a low-bitrate channel can take 10 seconds or more to fill, and waits on a silent stream before it fails over. Polyfin waits 20 seconds for a channel's first bytes (see [How a channel plays](live-tv.md#how-a-channel-plays)), and a channel that took longer is tried again at the next start rather than left out: Dispatcharr keeps starting it meanwhile, so the next try is quick.
+
+### Recording
+
+Record with Polyfin's DVR, from any Jellyfin app's guide, as for any channel (see [Recordings](live-tv.md#recordings)): each recording takes one Dispatcharr connection while it runs, shared with anyone watching the same channel. Dispatcharr's own recordings are not shown in Polyfin.
