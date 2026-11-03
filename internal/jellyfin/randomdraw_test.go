@@ -97,6 +97,21 @@ func TestRandomListingsDrawAmongALibrarysFirstTitles(t *testing.T) {
 		}
 		return page
 	}
+	// A listing for a user who blocks genres waits a few seconds for the
+	// descriptions that tell its titles' genres, then leaves out those
+	// still unknown (see ratingWait in internal/library): the calm user's
+	// listing of 100 would need 100 descriptions within that wait, which a
+	// busy machine misses. The member first opens the titles it reaches,
+	// Movie 001 to Movie 101, whose genres are then known as after any
+	// user's visit, so that the listings below know them all at once.
+	var reached []string
+	for _, item := range listing("member", "&Limit=101").Items {
+		reached = append(reached, item.Id)
+	}
+	var opened QueryResult
+	if status := s.get(t, "/Items?Ids="+strings.Join(reached, ","), tokens["member"], &opened); status != http.StatusOK || len(opened.Items) != 101 {
+		t.Fatalf("opening the first 101 titles: %d, %d opened", status, len(opened.Items))
+	}
 	// Each user's listing reads the library's first 100 titles, as a
 	// listing of 100 asks: the draws then find them kept.
 	for name := range tokens {
