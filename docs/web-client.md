@@ -104,6 +104,7 @@ The entry is named "Polyfin" in every language. Administrators never see it, and
 Polyfin does this with one script of its own added to jellyfin-web's page, `/web/polyfin.js`, which follows the client's routes. It changes none of jellyfin-web's files. On a movie's or an episode's page, the same script:
 
 - adds the title's versions to the page's version menu as the addons answer, without reloading the page. The version selected, the first by default or the one the user picked, stays selected, even when a version that comes is listed before it;
+- fills the page's Video, Audio and Subtitles menus once the version selected is analyzed, as a play analyzes it, or described by RemuxDB after the page opened, without reloading the browser tab. It keeps the version selected, and the audio and subtitle tracks you picked on the page where the menus still list them. A version analyzed during a play shows its tracks once you are back on the page. See [Title pages](playback.md#title-pages);
 - keeps the Play, Resume and Play from the start buttons disabled, with a spinner and the tooltip "Looking for sources…", until a version is known, then gives them back in place;
 - when every addon has answered without a version, says "No source is available for this title." under the buttons, with a **Try again** button that has Polyfin ask the addons again;
 - ends a long version, audio or subtitle name with "…" before its menu's arrow, which stream addons' detailed version names used to run under. The open menu shows whole names.

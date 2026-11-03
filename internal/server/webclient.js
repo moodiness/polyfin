@@ -74,6 +74,22 @@
 // a menu that lists the placeholder to the versions: the others show when
 // the page opens again. Any error just stops it.
 //
+// The same page refreshes its track menus once a version is analyzed:
+// jellyfin-web fills them from the details it got when the page opened, or
+// from its own copy of them when the page is shown again after a video,
+// so a version analyzed since, as a play analyzes it, shows no track until
+// the browser tab reloads. Polyfin's push then says Tracks: a second
+// later, gathering the pushes of the versions analyzed together, the
+// script asks for the title's details, and when they list other tracks
+// for the version picked than its menus, reloads the page's details and,
+// once jellyfin-web has listed the versions anew, tells it the version was
+// picked, as picking it does: jellyfin-web fills the track menus from
+// those details, and from the version's own once it has them. The version
+// picked stays picked, and so do the audio and subtitle tracks the user
+// picked on the page, by name, where the menus still list them. A push
+// heard while a video plays is kept for the page shown again; the check
+// waits for the video to end, and for the page's menus to lose focus.
+//
 // Third, on the same page, it holds the play buttons (.btnPlay, .btnResume,
 // .btnReplay) until a version is known, as /Polyfin/Items/{id}/Versions and
 // its push tell (Known, the placeholder left out). While none is known and
@@ -983,6 +999,20 @@
   // observer that waits for jellyfin-web's options, and the identifier of
   // the version picked.
   var picking = null
+  // The title whose track menus Polyfin told may lack tracks, until they
+  // are checked; the title the route left last; the timer that gathers
+  // Polyfin's pushes before the check; the refill of the version menu a
+  // refresh waits for; the tracks the user picked on the page shown, and
+  // those a refresh keeps through jellyfin-web's renders; and whether the
+  // script is telling jellyfin-web of a pick.
+  var tracksDue = ''
+  var left = ''
+  var tracksTimer = null
+  var refreshing = null
+  var chosen = {}
+  var keeping = null
+  var dispatching = false
+  var trackMenus = ['.selectSource', '.selectVideo', '.selectAudio', '.selectSubtitles']
   // shownPage returns the title page shown, unless a video is.
   function shownPage() {
     if (document.querySelector('.videoPlayerContainer')) return null
@@ -992,6 +1022,7 @@
   // is shown again: it asks for them, lists their versions keeping the one
   // picked, and fills the track menus.
   function reload(page) {
+    stopKeeping()
     page.dispatchEvent(new CustomEvent('viewbeforehide', { detail: {} }))
     page.dispatchEvent(new CustomEvent('viewshow', { detail: { isRestored: false } }))
   }
@@ -1116,7 +1147,7 @@
   function update(progress) {
     var id = title
     var page = shownPage()
-    if (!id || !page || asking || progress.Count < 1 || progress.Count === updatedFor) return
+    if (!id || !page || asking || refreshing || progress.Count < 1 || progress.Count === updatedFor) return
     var adding = progress.AddVersions !== false
     var menu = page.querySelector('.selectSource')
     if (!adding && (!menu || !placeholder(page))) return
@@ -1197,11 +1228,19 @@
       }
     })
   }
-  // hear takes a pushed progress of the title followed as an answer.
+  // hear takes a pushed progress of the title followed as an answer. One
+  // that tells the tracks of its versions changed (Tracks) has the track
+  // menus checked, as soon as the page is shown for the title the route
+  // left, as for a video.
   function hear(message) {
     if (!message || message.MessageType !== 'PolyfinVersions' || !message.Data) return
     var progress = message.Data
-    if (!title || String(progress.ItemId).toLowerCase() !== title) return
+    var id = String(progress.ItemId).toLowerCase()
+    if (progress.Tracks && id && (id === title || id === left)) {
+      tracksDue = id
+      dueTracks()
+    }
+    if (!title || id !== title) return
     pushed = true
     unsure = false
     take(progress)
@@ -1213,6 +1252,7 @@
     early = null
     hold()
     update(progress)
+    dueTracks()
   }
   // The words the script adds to a page, in jellyfin-web's language, which
   // it gives the document; English for any other.
@@ -1490,6 +1530,7 @@
     if (id === title) return
     clearTimeout(timer)
     timer = null
+    if (title) left = title
     title = id
     latest = null
     updatedFor = 0
@@ -1507,6 +1548,15 @@
     clearTimeout(againTimer)
     againTimer = null
     againAt = 0
+    // A check due waits through the routes that show no title, as a
+    // video's, for its page to be shown again.
+    if (id && tracksDue !== id) tracksDue = ''
+    clearTimeout(tracksTimer)
+    tracksTimer = null
+    if (refreshing) refreshing.observer.disconnect()
+    refreshing = null
+    chosen = {}
+    stopKeeping()
     if (!id) return
     // Until the first answer, the page is looked for as jellyfin-web renders
     // it, in case it lists only the placeholder.
@@ -1584,10 +1634,186 @@
     entry.observer.observe(menu, { childList: true })
     reload(page)
   }
-  // A version menu that had focus is updated as soon as it loses it.
+  // A version menu that had focus is updated as soon as it loses it, and
+  // track menus due a check are checked once none has focus.
   function leave(event) {
     var menu = event.target
     if (latest && menu && menu.matches && menu.matches('.selectSource')) update(latest)
+    dueTracks()
+  }
+  // dueTracks checks the track menus of the title page shown a second
+  // later, when Polyfin told the tracks of the title's versions changed:
+  // the pushes of versions analyzed together come within it, and
+  // jellyfin-web is done showing a page shown again.
+  function dueTracks() {
+    if (!title || tracksDue !== title || tracksTimer) return
+    tracksTimer = setTimeout(function () {
+      tracksTimer = null
+      try {
+        checkTracks()
+      } catch (error) {}
+    }, 1000)
+  }
+  // checkTracks asks for the title's details, and refreshes the track menus
+  // of its page when they list other tracks than the details list for the
+  // version picked. It waits while a video plays and while one of the
+  // menus has focus, where it could be open: the next answer or push, a
+  // show of the page or a loss of focus checks again. While the script
+  // asks for the details or reloads them already, it checks once done.
+  function checkTracks() {
+    var id = title
+    var page = shownPage()
+    if (!id || tracksDue !== id || !page || refreshing || trackFocus(page)) return
+    if (asking) return dueTracks()
+    var menu = page.querySelector('.selectSource')
+    var selections = page.querySelector('.trackSelections')
+    tracksDue = ''
+    if (!menu || !menu.value || !selections || selections.classList.contains('hide')) return
+    var api = window.ApiClient
+    asking = true
+    api.getItem(api.getCurrentUserId(), id).then(
+      function (item) {
+        asking = false
+        if (title !== id) return
+        if (shownPage() !== page || page.querySelector('.selectSource') !== menu || trackFocus(page)) {
+          tracksDue = id
+          return
+        }
+        var sources = item.MediaSources || []
+        for (var i = 0; i < sources.length; i++) {
+          if (sources[i].Id === menu.value) {
+            if (lacking(page, sources[i])) refresh(page, menu)
+            return
+          }
+        }
+      },
+      function () {
+        asking = false
+      }
+    )
+  }
+  // trackFocus tells whether one of the menus of page has focus.
+  function trackFocus(page) {
+    var focused = document.activeElement
+    return (
+      !!focused &&
+      trackMenus.some(function (selector) {
+        return page.querySelector(selector) === focused
+      })
+    )
+  }
+  // lacking tells whether the track menus of page list other tracks than
+  // source has, of each type: jellyfin-web lists them by their Index,
+  // after "Off" (-1) for subtitles.
+  function lacking(page, source) {
+    var menus = { Video: '.selectVideo', Audio: '.selectAudio', Subtitle: '.selectSubtitles' }
+    var streams = source.MediaStreams || []
+    for (var type in menus) {
+      var select = page.querySelector(menus[type])
+      if (!select) continue
+      var listed = []
+      for (var i = 0; i < select.options.length; i++) {
+        if (String(select.options[i].value) !== '-1') listed.push(String(select.options[i].value))
+      }
+      var known = []
+      for (var j = 0; j < streams.length; j++) {
+        if (streams[j].Type === type) known.push(String(streams[j].Index))
+      }
+      if (listed.sort().join() !== known.sort().join()) return true
+    }
+    return false
+  }
+  // refresh fills the track menus of page anew, as picking a version does:
+  // the page's details are reloaded, which keeps the version picked, and
+  // once jellyfin-web has listed the versions anew, the version menu tells
+  // it that version was picked, which fills the track menus from those
+  // details. The tracks the user picked are kept where the menus still
+  // list them (see keepPicks).
+  function refresh(page, menu) {
+    var picks = chosen
+    var entry = { observer: null }
+    entry.observer = new MutationObserver(function () {
+      entry.observer.disconnect()
+      if (refreshing !== entry) return
+      refreshing = null
+      if (shownPage() !== page) {
+        tracksDue = title
+        return
+      }
+      keepPicks(page, picks)
+      dispatching = true
+      try {
+        menu.dispatchEvent(new Event('change', { bubbles: true }))
+      } finally {
+        dispatching = false
+      }
+      restorePicks()
+      // Polyfin may have told of other tracks meanwhile.
+      dueTracks()
+    })
+    refreshing = entry
+    entry.observer.observe(menu, { childList: true })
+    reload(page)
+  }
+  // keepPicks has the audio and subtitle menus of page keep the tracks the
+  // user picked, picks, through jellyfin-web's renders of them, until the
+  // user picks again or the page hides: jellyfin-web renders them once the
+  // version is picked, then again once it has that version's own details.
+  function keepPicks(page, picks) {
+    stopKeeping()
+    var kept = []
+    for (var selector in picks) {
+      var select = page.querySelector(selector)
+      if (select) kept.push({ select: select, pick: picks[selector] })
+    }
+    if (!kept.length) return
+    keeping = { observer: new MutationObserver(restorePicks), kept: kept }
+    kept.forEach(function (entry) {
+      keeping.observer.observe(entry.select, { childList: true })
+    })
+  }
+  // restorePicks picks again in each menu kept the track the user picked:
+  // the one option with its name, or the one with its name and index.
+  function restorePicks() {
+    if (!keeping) return
+    keeping.kept.forEach(function (entry) {
+      var select = entry.select
+      var named = []
+      for (var i = 0; i < select.options.length; i++) {
+        if (select.options[i].textContent === entry.pick.text) named.push(select.options[i])
+      }
+      var found = named.length === 1 ? named[0] : null
+      for (var j = 0; j < named.length; j++) if (named[j].value === entry.pick.value) found = named[j]
+      if (found && select.value !== found.value) select.value = found.value
+    })
+  }
+  function stopKeeping() {
+    if (keeping) keeping.observer.disconnect()
+    keeping = null
+  }
+  // choose notes the tracks the user picks on the title page shown, and
+  // forgets them as they pick a version, for which jellyfin-web lists its
+  // default tracks. Either stops the picks a refresh keeps.
+  function choose(event) {
+    var select = event.target
+    if (dispatching || !select || !select.matches || !title || !select.closest || !select.closest('.itemDetailPage')) return
+    if (select.matches('.selectSource')) {
+      chosen = {}
+      stopKeeping()
+      return
+    }
+    ;['.selectAudio', '.selectSubtitles'].forEach(function (selector) {
+      if (!select.matches(selector)) return
+      var option = select.options[select.selectedIndex]
+      if (option) chosen[selector] = { value: option.value, text: option.textContent }
+      stopKeeping()
+    })
+  }
+  // hidden forgets the tracks the user picked as a page hides, as for a
+  // video: jellyfin-web shows the page again with its default tracks.
+  function hidden() {
+    chosen = {}
+    stopKeeping()
   }
   // quietly runs a listener, an error leaving the event to jellyfin-web.
   function quietly(listener) {
@@ -2611,9 +2837,13 @@
   })
   addEventListener('hashchange', follow)
   addEventListener('popstate', follow)
-  // Both run before jellyfin-web's own listeners on the version menu.
+  // These run before jellyfin-web's own listeners on the version menu.
+  addEventListener('change', quietly(choose), true)
   addEventListener('change', quietly(pick), true)
   addEventListener('blur', quietly(leave), true)
+  // jellyfin-web's views tell as they show and hide.
+  addEventListener('viewshow', quietly(dueTracks))
+  addEventListener('viewbeforehide', quietly(hidden))
   // Both run before jellyfin-web follows the link.
   addEventListener('mousedown', quietly(chosenScreen), true)
   addEventListener('click', quietly(chosenScreen), true)
