@@ -135,6 +135,17 @@ func (tunersInUse) Is(target error) bool { return target == ErrSlotsInUse }
 
 func (tunersInUse) Unwrap() error { return ErrLiveRefused }
 
+// errUnavailable is an ErrLiveRefused answered by a plain 503, without
+// HDHomeRun's error 805.
+var errUnavailable error = unavailable{}
+
+// unavailable is errUnavailable.
+type unavailable struct{}
+
+func (unavailable) Error() string { return ErrLiveRefused.Error() }
+
+func (unavailable) Unwrap() error { return ErrLiveRefused }
+
 // LiveFailure classifies an error of a live stream: LiveDead, LiveRefused,
 // LiveTimeout, LiveDRM, LiveKeys, or "" for none of these.
 func LiveFailure(err error) string {
@@ -186,10 +197,12 @@ func (s *Service) LiveSources(connections func(ctx context.Context, source accou
 	s.feeds.connections, s.feeds.health = connections, health
 }
 
-// report tells LiveSources' health how a stream answered.
+// report tells LiveSources' health how a stream answered. A tuner's plain
+// 503 is busy, as its error 805 is: proxies acting as a tuner answer so
+// once their connections are all in use.
 func (s *Service) report(ctx context.Context, version library.Version, err error) {
 	s.feeds.mu.Lock()
-	health := s.feeds.health
+	health, connections := s.feeds.health, s.feeds.connections
 	s.feeds.mu.Unlock()
 	if health == nil {
 		return
@@ -198,6 +211,10 @@ func (s *Service) report(ctx context.Context, version library.Version, err error
 	switch {
 	case errors.Is(err, ErrSlotsInUse), errors.Is(err, ErrTunersBusy):
 		failure = iptv.TunerFailureBusy
+	case errors.Is(err, errUnavailable) && connections != nil:
+		if limit, err := connections(ctx, version.Origin.Addon); err == nil && limit.Tuners {
+			failure = iptv.TunerFailureBusy
+		}
 	case err != nil && failure == "":
 		failure = LiveDead
 	}
@@ -889,8 +906,9 @@ func statusFailure(response *http.Response) error {
 		return nil
 	case status == http.StatusServiceUnavailable && strings.HasPrefix(strings.TrimSpace(response.Header.Get("X-HDHomeRun-Error")), "805"):
 		return fmt.Errorf("%w: HTTP %d", ErrTunersBusy, status)
-	case status == http.StatusUnauthorized, status == http.StatusForbidden, status == http.StatusTooManyRequests,
-		status == 458, status == http.StatusServiceUnavailable:
+	case status == http.StatusServiceUnavailable:
+		return fmt.Errorf("%w: HTTP %d", errUnavailable, status)
+	case status == http.StatusUnauthorized, status == http.StatusForbidden, status == http.StatusTooManyRequests, status == 458:
 		return fmt.Errorf("%w: HTTP %d", ErrLiveRefused, status)
 	case status >= 500:
 		return fmt.Errorf("%w: HTTP %d", ErrLiveTimeout, status)

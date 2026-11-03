@@ -72,6 +72,8 @@ func (l *liveSource) Open(ctx context.Context, _, target string, _ http.Header, 
 		return answer(http.StatusOK, "video/mp2t", strings.NewReader("")), nil
 	case strings.HasPrefix(name, "forbidden"):
 		return answer(http.StatusForbidden, "text/plain", strings.NewReader("max connections reached")), nil
+	case strings.HasPrefix(name, "unavailable"):
+		return answer(http.StatusServiceUnavailable, "application/json", strings.NewReader(`{"error":"all connections in use"}`)), nil
 	case strings.HasPrefix(name, "garbage"):
 		return answer(http.StatusOK, "video/mp2t", bytes.NewReader(bytes.Repeat([]byte{1, 2, 3, 4}, 512))), nil
 	case strings.HasPrefix(name, "playlist"):

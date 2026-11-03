@@ -5,11 +5,13 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/library"
 )
 
 // tunerService is a service whose sources are all a tuner of limit.
@@ -25,6 +27,38 @@ func tunerService(t *testing.T, limit iptv.Limit) (*Service, *liveSource) {
 func reads(r *feedReader) error {
 	_, err := r.Read(make([]byte, 10))
 	return err
+}
+
+// A tuner that answers a plain 503, without HDHomeRun's error 805, as a
+// proxy acting as a tuner does once its connections are all in use, is
+// busy: no fault of the tuner's. Another source's 503 stays a refusal.
+func TestATunersPlainUnavailableIsBusy(t *testing.T) {
+	path, _ := fakeProbe(t, "{}", false)
+	s := liveService(t, &liveSource{}, path)
+	tuner, provider := accounts.ID{7}, accounts.ID{8}
+	var mu sync.Mutex
+	reported := map[accounts.ID]string{}
+	s.LiveSources(func(_ context.Context, source accounts.ID) (iptv.Limit, error) {
+		return iptv.Limit{Connections: 2, Tuners: source == tuner}, nil
+	}, func(_ context.Context, version library.Version, failure string) {
+		mu.Lock()
+		reported[version.ID] = failure
+		mu.Unlock()
+	})
+	for n, tc := range []struct {
+		source accounts.ID
+		want   string
+	}{{tuner, iptv.TunerFailureBusy}, {provider, LiveRefused}} {
+		version := channelVersion(byte(n+1), "unavailable.ts", tc.source)
+		if _, err := s.AnalyzeLive(t.Context(), version); LiveFailure(err) != LiveRefused {
+			t.Errorf("source %v: %v, want a refusal", tc.source, err)
+		}
+		mu.Lock()
+		if reported[version.ID] != tc.want {
+			t.Errorf("source %v: reported %q, want %q", tc.source, reported[version.ID], tc.want)
+		}
+		mu.Unlock()
+	}
 }
 
 // A channel's stream is read once for every viewer, so two users on one
