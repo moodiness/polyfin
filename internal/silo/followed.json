@@ -40,6 +40,7 @@
         "iosApp/iosApp/Screens/Browse/FilterView.swift",
         "iosApp/iosApp/Screens/Browse/Filtering/CatalogQueryBuilder.swift",
         "iosApp/iosApp/Screens/Calendar/CalendarModels.swift",
+        "iosApp/iosApp/Screens/Player/PlaybackMediaAuthorization.swift",
         "iosApp/iosApp/Screens/Player/PlaybackSessionBridge.swift",
         "iosApp/iosApp/Screens/Player/PlayerMarkerTimeline.swift",
         "iosApp/iosApp/Screens/Player/ProtocolV3/ApplePlaybackV3PlanAdapter.swift",

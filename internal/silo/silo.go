@@ -61,6 +61,13 @@ type Options struct {
 	// (see deviceLoginRoutes).
 	QuickConnect *quickconnect.Store
 	Logger       *slog.Logger
+	// ContainerTracks returns the container's own numbers of the tracks of
+	// the version a Jellyfin play session plays (a Matroska file's
+	// TrackNumbers, an MP4 file's track IDs), by their index among the
+	// file's streams, as FFmpeg numbers them: the subtitle tracks of an
+	// HLS stream are named by them (see renditions.go). Nil, or a track
+	// left out, is a number not known.
+	ContainerTracks func(ctx context.Context, playSession string) map[int]uint64
 
 	// now is the clock; time.Now by default.
 	now func() time.Time

@@ -306,6 +306,7 @@ func checkPlan(c *checker, p object, session string, files []string) {
 	}
 	if subtitle, ok := p["subtitle"].(object); ok {
 		checkSubtitles(c, subtitle, selected, session)
+		checkRenditions(c, p, subtitle, selected)
 	}
 }
 
@@ -333,7 +334,9 @@ func checkSubtitles(c *checker, subtitle, selected object, session string) {
 		if url, _ := artifact["url"].(string); !strings.HasPrefix(url, sidecars) || !mediaPath(url) {
 			c.fail("subtitle artifact url %q", url)
 		}
-	} else if mode == "render" || mode == "convert" {
+	} else if (mode == "render" || mode == "convert") && subtitle["hls_rendition"] == nil {
+		// A track shown is a file, or a rendition of the stream (see
+		// checkRenditions).
 		c.fail("subtitle mode %s without artifact", mode)
 	}
 	inventory, _ := subtitle["inventory"].([]any)

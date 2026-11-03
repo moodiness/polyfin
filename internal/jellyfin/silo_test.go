@@ -42,7 +42,7 @@ type siloApps struct {
 func servingSilo(t *testing.T, s testServer) siloApps {
 	t.Helper()
 	api := silo.New(silo.Options{ServerID: testServerID, Version: "test", Accounts: s.store, Jellyfin: s.handler, DB: s.pool,
-		QuickConnect: s.handler.QuickConnect, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		QuickConnect: s.handler.QuickConnect, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), ContainerTracks: s.handler.ContainerTracks})
 	site := httptest.NewServer(api)
 	t.Cleanup(site.Close)
 	return siloApps{testServer: s, site: site.URL}
@@ -924,19 +924,11 @@ func TestSiloAppsPlayRepackagedOrConverted(t *testing.T) {
 		d.Plan.Stream.URL != "/api/v2/playback/transcode/"+d.SessionID+"/master.m3u8" {
 		t.Fatalf("repackaged: %+v %+v", d, d.Plan)
 	}
+	// Without subtitle renditions, the master playlist is the video
+	// playlist, whose segments the Apple app fetches with its token.
 	status, master := a.fetch(t, d.Plan.Stream.URL, token)
-	if status != http.StatusOK || !strings.HasPrefix(master, "#EXTM3U") {
-		t.Fatalf("master playlist: %d %s", status, master)
-	}
-	variant := ""
-	for line := range strings.SplitSeq(master, "\n") {
-		if line != "" && !strings.HasPrefix(line, "#") {
-			variant = line
-		}
-	}
-	if status, media := a.fetch(t, "/api/v2/playback/transcode/"+d.SessionID+"/"+variant, token); status != http.StatusOK ||
-		!strings.Contains(media, "#EXT-X-ENDLIST") {
-		t.Errorf("media playlist %s: %d %s", variant, status, media)
+	if err := silotest.CheckMediaPlaylist([]byte(master), d.Plan.Stream.URL); status != http.StatusOK || err != nil {
+		t.Fatalf("master playlist: %d %v %s", status, err, master)
 	}
 
 	converted := a.start(t, token, profile, siloStart(file, profile, installation, []string{"mp4"}, []string{"hevc"}, []string{"aac"},
@@ -949,6 +941,108 @@ func TestSiloAppsPlayRepackagedOrConverted(t *testing.T) {
 		map[string]any{"playback_attempt_id": "attempt-3"}))
 	if refused.Outcome != "adaptation_unavailable" || refused.Plan != nil || refused.SessionID != "" || refused.Terminal == nil {
 		t.Errorf("without conversions allowed: %+v", refused)
+	}
+}
+
+// A client that takes text subtitles as renditions of the HLS stream gets
+// the text tracks inside a converted file that it would get as WebVTT
+// files so, named by their Matroska track numbers; the player loads the
+// master playlist, the video playlist and the track's, and its segments
+// are WebVTT cut like the video, which FFmpeg extracts. Turning subtitles
+// off keeps the stream.
+func TestSiloAppsPlayTextTracksAsRenditions(t *testing.T) {
+	t.Parallel()
+	s, _, _, movie := playingFile(t, subtitledFile)
+	allowSilo(t, s)
+	a := servingSilo(t, s)
+	token, profile := a.signIn(t, "member")
+	installation := a.installation(t, token, profile)
+	file := a.fileOf(t, movie.String(), token, profile, 0)
+	start := siloStart(file, profile, installation, []string{"mp4"}, []string{"h264"}, []string{"aac"}, map[string]any{
+		"client_features": []string{"playback_plan_v3", "hls_subtitle_renditions_v1", "hls_remux_subtitle_renditions_v1",
+			"hls_subtitle_renditions_all_v1"}, "subtitle_track_index": 0})
+	status, data := a.do(t, http.MethodPost, "/api/v2/playback/start", token, profile, start)
+	if status != http.StatusCreated {
+		t.Fatalf("start: %d %s", status, data)
+	}
+	if err := silotest.CheckDecision(data, []string{file}); err != nil {
+		t.Errorf("decision: %v: %s", err, data)
+	}
+	type rendition struct {
+		GroupID string `json:"group_id"`
+		Name    string `json:"name"`
+		Index   int    `json:"index"`
+	}
+	type decision struct {
+		SessionID string `json:"session_id"`
+		Plan      struct {
+			ExpiresAt string `json:"expires_at"`
+			Stream    struct {
+				URL string `json:"url"`
+			} `json:"stream"`
+			Subtitle struct {
+				HLSRendition *rendition `json:"hls_rendition"`
+				Inventory    []struct {
+					ContainerTrackID string     `json:"container_track_id"`
+					HLSRendition     *rendition `json:"hls_rendition"`
+				} `json:"inventory"`
+			} `json:"subtitle"`
+		} `json:"playback_plan"`
+	}
+	var d decision
+	_ = json.Unmarshal(data, &d)
+	rows := d.Plan.Subtitle.Inventory
+	if len(rows) != 2 || rows[0].ContainerTrackID != "2" || rows[1].ContainerTrackID != "3" || rows[0].HLSRendition == nil ||
+		*rows[0].HLSRendition != (rendition{"subs", "Français", 1}) || rows[1].HLSRendition != nil ||
+		d.Plan.Subtitle.HLSRendition == nil || *d.Plan.Subtitle.HLSRendition != *rows[0].HLSRendition {
+		t.Fatalf("subtitles: %s", data)
+	}
+	status, master := a.fetch(t, d.Plan.Stream.URL, token)
+	if err := silotest.CheckMultivariant([]byte(master), data); status != http.StatusOK || err != nil ||
+		!strings.Contains(master, `URI="master.m3u8?silo_rendition=subtitles&silo_track=2"`) {
+		t.Fatalf("master playlist: %d %v\n%s", status, err, master)
+	}
+	base := d.Plan.Stream.URL[:strings.LastIndex(d.Plan.Stream.URL, "/")+1]
+	status, video := a.fetch(t, base+"master.m3u8?silo_rendition=video", token)
+	if err := silotest.CheckMediaPlaylist([]byte(video), d.Plan.Stream.URL); status != http.StatusOK || err != nil {
+		t.Errorf("video playlist: %d %v\n%s", status, err, video)
+	}
+	status, french := a.fetch(t, base+"master.m3u8?silo_rendition=subtitles&silo_track=2", token)
+	if err := silotest.CheckMediaPlaylist([]byte(french), d.Plan.Stream.URL); status != http.StatusOK || err != nil ||
+		!strings.Contains(french, "\nsegment/sub_2_0.vtt\n") {
+		t.Errorf("subtitle playlist: %d %v\n%s", status, err, french)
+	}
+	if os.Getenv("POLYFIN_TEST_FFMPEG") != "" {
+		var cues strings.Builder
+		for line := range strings.SplitSeq(french, "\n") {
+			if !strings.HasPrefix(line, "segment/") {
+				continue
+			}
+			status, segment := a.fetch(t, base+line, token)
+			if err := silotest.CheckSubtitleSegment([]byte(segment)); status != http.StatusOK || err != nil {
+				t.Fatalf("%s: %d %v\n%s", line, status, err, segment)
+			}
+			cues.WriteString(segment)
+		}
+		srt, _ := os.ReadFile(filepath.Join("..", "container", "testdata", "subtitles.srt"))
+		first := strings.TrimSpace(strings.Split(string(srt), "\n")[2])
+		if !strings.Contains(cues.String(), first) {
+			t.Errorf("the French track's segments lack %q:\n%s", first, cues.String())
+		}
+	}
+
+	off := map[string]any{"installation_id": installation, "playback_attempt_id": "attempt-1", "replan_request_id": "replan-1",
+		"operation": "track_change", "quality_preference": "auto", "position_seconds": 5, "selected_tracks": map[string]any{},
+		"client_capabilities": start["client_capabilities"], "client_playback_context": start["client_playback_context"]}
+	status, data = a.do(t, http.MethodPost, "/api/v2/playback/"+d.SessionID+"/replan", token, profile, off)
+	if err := silotest.CheckDecision(data, []string{file}); status != http.StatusOK || err != nil {
+		t.Fatalf("replan: %d %v %s", status, err, data)
+	}
+	var after decision
+	_ = json.Unmarshal(data, &after)
+	if after.Plan.Stream.URL != d.Plan.Stream.URL || after.Plan.ExpiresAt != d.Plan.ExpiresAt || after.Plan.Subtitle.HLSRendition != nil ||
+		len(after.Plan.Subtitle.Inventory) != 2 || after.Plan.Subtitle.Inventory[0].HLSRendition == nil {
+		t.Errorf("subtitles off: %s", data)
 	}
 }
 

@@ -269,7 +269,7 @@ func TestSessionMediaAreNotStored(t *testing.T) {
 		}
 	})
 	session, _ = converting.start(nil)
-	for _, path := range []string{"master.m3u8", "main.m3u8?PlaySessionId=play-1", "hls1/main/0.mp4?PlaySessionId=play-1"} {
+	for _, path := range []string{"master.m3u8", "master.m3u8?silo_rendition=video", "segment/0.mp4"} {
 		w := converting.do(http.MethodGet, "/api/v2/playback/transcode/"+session+"/"+path, nil)
 		if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "private, no-store" {
 			t.Errorf("%s: %d, Cache-Control %q", path, w.Code, w.Header().Get("Cache-Control"))

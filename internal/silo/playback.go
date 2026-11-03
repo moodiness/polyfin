@@ -43,9 +43,11 @@ const (
 // planFeatures are the features of the protocol Polyfin's plans honor,
 // which each decision names: the plan itself; its neutral contract, plan
 // attempt keys the server mints and replans for a change of tracks or
-// quality apart from those after a failure; and media fetched with the
-// apps' bearer token, no credential in their addresses.
-var planFeatures = []string{"playback_plan_v3", "neutral_playback_v3_contract_v1", headerAuthenticate}
+// quality apart from those after a failure; media fetched with the apps'
+// bearer token, no credential in their addresses; and text subtitles as
+// renditions of a converted or repackaged stream (see renditions.go).
+var planFeatures = []string{"playback_plan_v3", "neutral_playback_v3_contract_v1", headerAuthenticate, subtitleRenditions,
+	repackagedRenditions, allSubtitleRenditions}
 
 // capabilityFeatures are what the capabilities document advertises, the
 // apps' condition to start a playback: the plans' features, and progress
@@ -73,7 +75,7 @@ func (s *Server) playbackCapabilities(w http.ResponseWriter, _ *http.Request, v 
 		Deliveries       []string `json:"deliveries"`
 		Revision         string   `json:"revision"`
 	}{"available", true, v.device.ID.String(), []int{planProtocol}, capabilityFeatures,
-		[]string{originalHTTP, repackaged, converted}, "polyfin-2"})
+		[]string{originalHTTP, repackaged, converted}, "polyfin-3"})
 }
 
 // The client's capabilities, as the start and replan bodies give them.
@@ -112,6 +114,7 @@ type selectedTracks struct {
 
 type startBody struct {
 	ProtocolVersion    int                `json:"protocol_version"`
+	ClientFeatures     []string           `json:"client_features"`
 	FileID             string             `json:"file_id"`
 	ProfileID          string             `json:"profile_id"`
 	InstallationID     string             `json:"installation_id"`
@@ -129,10 +132,13 @@ type startBody struct {
 }
 
 type replanBody struct {
-	InstallationID    string             `json:"installation_id"`
-	PlaybackAttemptID string             `json:"playback_attempt_id"`
-	ReplanRequestID   string             `json:"replan_request_id"`
-	Operation         string             `json:"operation"`
+	InstallationID    string `json:"installation_id"`
+	PlaybackAttemptID string `json:"playback_attempt_id"`
+	ReplanRequestID   string `json:"replan_request_id"`
+	Operation         string `json:"operation"`
+	Failure           *struct {
+		Classification string `json:"classification"`
+	} `json:"failure"`
 	QualityPreference string             `json:"quality_preference"`
 	PositionSeconds   float64            `json:"position_seconds"`
 	SelectedTracks    selectedTracks     `json:"selected_tracks"`
@@ -152,9 +158,11 @@ type choice struct {
 	// audio is the audio track asked, by its place among the version's
 	// audio tracks, nil for the server's choice; subtitle is the subtitle
 	// asked, by its place among the version's subtitles (see
-	// subtitleOrder), nil for none, as the apps mean them.
 	audio, subtitle *int
 	original        bool
+	// renditions are the subtitle renditions the app negotiated as the
+	// playback started.
+	renditions renditionModes
 }
 
 // session is a playback the apps started, with the Jellyfin API's play
@@ -184,18 +192,25 @@ type session struct {
 }
 
 // playState is what a plan is decided from, and the current plan: the
-// Jellyfin play session and version, how it plays, and where its stream
-// and subtitles are.
+// Jellyfin play session and version, as PlaybackInfo answered, how it
+// plays, where its stream and subtitles are, and when the stream, started
+// with the play session, expires. renditions are the subtitle renditions
+// of its HLS stream; allRenditions tells that they are every embedded
+// text track's, which the app switches among on the same stream.
 type playState struct {
-	choice      choice
-	position    float64
-	playSession string
-	source      mediaSource
-	method      string
-	stream      string
-	subtitles   map[int]string
-	audio       *int
-	subtitle    *int
+	choice        choice
+	position      float64
+	playSession   string
+	info          playbackInfo
+	source        mediaSource
+	method        string
+	stream        string
+	expires       time.Time
+	subtitles     map[int]string
+	renditions    []rendition
+	allRenditions bool
+	audio         *int
+	subtitle      *int
 }
 
 type sample struct {
@@ -415,28 +430,36 @@ type (
 		TimingOrigin float64 `json:"timing_origin_seconds"`
 	}
 	// subtitleRow is a subtitle of the inventory. A file's own track names
-	// its index among the file's streams, as the watch detail does, and is
-	// unplayable when FFmpeg did not recognize it (see unrecognized).
+	// its index among the file's streams, as the watch detail does, and
+	// its number in the container when known; it is unplayable when FFmpeg
+	// did not recognize it (see unrecognized). A track an HLS stream
+	// carries names its rendition there (see renditionPlan). Polyfin never
+	// has the app's player show a file's own track (subtitle.embedded), so
+	// no row is native_selectable, which the contract leaves out when
+	// false.
 	subtitleRow struct {
-		TrackID         string `json:"track_id"`
-		CombinedIndex   int    `json:"combined_index"`
-		Source          string `json:"source"`
-		Codec           string `json:"codec,omitempty"`
-		Language        string `json:"language,omitempty"`
-		Label           string `json:"label,omitempty"`
-		Forced          bool   `json:"forced"`
-		Default         bool   `json:"default"`
-		HearingImpaired bool   `json:"hearing_impaired"`
-		Delivery        string `json:"delivery"`
-		URL             string `json:"url,omitempty"`
-		StreamIndex     *int   `json:"stream_index,omitempty"`
-		Unplayable      bool   `json:"unplayable,omitempty"`
+		TrackID          string              `json:"track_id"`
+		CombinedIndex    int                 `json:"combined_index"`
+		Source           string              `json:"source"`
+		Codec            string              `json:"codec,omitempty"`
+		Language         string              `json:"language,omitempty"`
+		Label            string              `json:"label,omitempty"`
+		Forced           bool                `json:"forced"`
+		Default          bool                `json:"default"`
+		HearingImpaired  bool                `json:"hearing_impaired"`
+		Delivery         string              `json:"delivery"`
+		URL              string              `json:"url,omitempty"`
+		StreamIndex      *int                `json:"stream_index,omitempty"`
+		ContainerTrackID string              `json:"container_track_id,omitempty"`
+		HLSRendition     *inventoryRendition `json:"hls_rendition,omitempty"`
+		Unplayable       bool                `json:"unplayable,omitempty"`
 	}
 	subtitlePlan struct {
-		Mode      string            `json:"mode"`
-		TrackID   string            `json:"track_id,omitempty"`
-		Artifact  *subtitleArtifact `json:"artifact,omitempty"`
-		Inventory []subtitleRow     `json:"inventory"`
+		Mode         string            `json:"mode"`
+		TrackID      string            `json:"track_id,omitempty"`
+		Artifact     *subtitleArtifact `json:"artifact,omitempty"`
+		HLSRendition *hlsRendition     `json:"hls_rendition,omitempty"`
+		Inventory    []subtitleRow     `json:"inventory"`
 	}
 	qualityRung struct {
 		Label           string `json:"label"`
@@ -464,6 +487,7 @@ type (
 		SessionID              string         `json:"session_id"`
 		Delivery               string         `json:"delivery"`
 		Stream                 streamPlan     `json:"stream"`
+		ExpiresAt              string         `json:"expires_at,omitempty"`
 		Timeline               timelinePlan   `json:"timeline"`
 		SelectedTracks         selectedTracks `json:"selected_tracks"`
 		EffectiveRecipe        recipePlan     `json:"effective_recipe"`
@@ -655,10 +679,15 @@ func codecsAllowed(values url.Values, name string) []string {
 }
 
 // decide makes the plan of the session's play session, which plays the
-// tracks asked.
+// tracks asked. A play session PlaybackInfo just started starts a stream,
+// which expires once the session would be forgotten; a replan keeping the
+// play session keeps the stream and its expiry.
 func (s *Server) decide(ctx context.Context, found *session, info playbackInfo, asked tracks) (decision, error) {
 	source := info.MediaSources[0]
-	found.playSession, found.source = info.PlaySessionId, source
+	if info.PlaySessionId != found.playSession || found.expires.IsZero() {
+		found.expires = s.options.now().Add(sessionLifetime)
+	}
+	found.playSession, found.info, found.source = info.PlaySessionId, info, source
 	video := streamsOf(source, "Video")
 	audio := streamsOf(source, "Audio")
 	audioTrack, hasAudio := defaultAudio(source)
@@ -670,7 +699,7 @@ func (s *Server) decide(ctx context.Context, found *session, info playbackInfo, 
 	p := plan{ProtocolVersion: planProtocol, PlanID: randomID(), PlanAttemptKey: randomID(), SessionID: found.id,
 		Stream:   streamPlan{Headers: map[string]string{}, HeaderRefresh: "session"},
 		Timeline: timelinePlan{PlayerStart: found.position, CanSeekAnywhere: true, SeekRestoration: "player_position"},
-		Subtitle: subtitlePlan{Mode: "off", Inventory: []subtitleRow{}}, SubtitleFidelityPolicy: "compatible",
+		Subtitle: subtitlePlan{Mode: "off", Inventory: []subtitleRow{}}, SubtitleFidelityPolicy: "compatible", ExpiresAt: instant(found.expires),
 		Transformations: []struct{}{}, AppliedQuirks: []struct{}{}, RuntimeCorrections: []string{}, AvailableQualities: []qualityRung{},
 		DegradationWarnings: []struct{}{}, RequestedMediaFileID: found.file, EffectiveMediaFileID: found.file}
 	if id, err := accounts.ParseID(source.Id); err == nil {
@@ -741,11 +770,17 @@ func (s *Server) decide(ctx context.Context, found *session, info playbackInfo, 
 		p.Stream.URL, p.Stream.Protocol = "/api/v2/playback/transcode/"+found.id+"/master.m3u8", "hls"
 		p.Stream.Container, p.Stream.MimeType = cmp.Or(source.TranscodingContainer, "ts"), "application/vnd.apple.mpegurl"
 	}
-	s.subtitlePlan(found, source, &p, asked.subtitle)
+	subtitles := subtitleOrder(source)
+	var numbers map[int]uint64
+	if slices.ContainsFunc(subtitles, func(m playback.MediaStream) bool { return !m.IsExternal }) {
+		numbers = s.containerTracks(ctx, info.PlaySessionId)
+	}
+	s.subtitlePlan(found, source, &p, asked.subtitle, numbers)
 	if p.Subtitle.Mode == "burn_in" {
 		// A subtitle burned in converts the video.
 		found.method, p.Delivery, p.DecisionReason = "Transcode", converted, "subtitle_burn_in"
 	}
+	renditionPlan(found, &p, subtitles, numbers)
 	if q, ok := rungOf(found.choice.quality); ok && p.Delivery == converted && height > q.height {
 		// The conversion keeps to the rung asked, which the plan delivers.
 		p.ActiveQuality = q.label
@@ -761,8 +796,9 @@ var mimeTypes = map[string]string{"mp4": "video/mp4", "m4v": "video/mp4", "mov":
 // subtitlePlan lists the version's subtitles, in the order the apps count
 // them: text ones as WebVTT files beside the video, picture ones burned
 // in when chosen, as the Jellyfin API delivers them. selected is the
-// Jellyfin index of the one the play session shows, -1 for none.
-func (s *Server) subtitlePlan(found *session, source mediaSource, p *plan, selected int) {
+// Jellyfin index of the one the play session shows, -1 for none; numbers
+// the container numbers of the file's tracks, by FFmpeg index.
+func (s *Server) subtitlePlan(found *session, source mediaSource, p *plan, selected int, numbers map[int]uint64) {
 	found.subtitles = map[int]string{}
 	found.subtitle = nil
 	for n, stream := range subtitleOrder(source) {
@@ -773,6 +809,9 @@ func (s *Server) subtitlePlan(found *session, source mediaSource, p *plan, selec
 			row.Source = "external"
 		} else {
 			row.StreamIndex, row.Unplayable = new(fileIndex(source, stream)), unrecognized(stream)
+			if number := numbers[*row.StreamIndex]; number > 0 {
+				row.ContainerTrackID = strconv.FormatUint(number, 10)
+			}
 		}
 		if stream.IsTextSubtitleStream && stream.DeliveryUrl != "" && strings.EqualFold(stream.DeliveryMethod, "External") {
 			found.subtitles[n] = withoutKey(stream.DeliveryUrl)
@@ -870,9 +909,9 @@ func (s *Server) startPlayback(w http.ResponseWriter, r *http.Request, v viewer)
 	found := &session{id: newSessionID(), user: v.user.ID, device: v.device.DeviceInfo, token: v.token, installation: body.InstallationID,
 		attempt: body.PlaybackAttemptID, file: body.FileID, version: version.String(), replans: map[string][]byte{}, seen: s.options.now(),
 		playState: playState{choice: choice{capabilities: body.Capabilities, context: body.Context, quality: body.QualityPreference, original: true,
-			bitrateKbps: bitrateOf(body.BandwidthCapKbps, body.BandwidthEstimate),
-			audio:       trackPlace(body.AudioTrackID, body.AudioTrackIndex, "audio"),
-			subtitle:    trackPlace(body.SubtitleTrackID, body.SubtitleTrackIndex, "subtitle")}}}
+			bitrateKbps: bitrateOf(body.BandwidthCapKbps, body.BandwidthEstimate), renditions: negotiated(body.ClientFeatures),
+			audio:    trackPlace(body.AudioTrackID, body.AudioTrackIndex, "audio"),
+			subtitle: trackPlace(body.SubtitleTrackID, body.SubtitleTrackIndex, "subtitle")}}}
 	if body.StartPosition != nil && *body.StartPosition > 0 {
 		found.position = *body.StartPosition
 	}
@@ -1000,11 +1039,29 @@ func (s *Server) replan(w http.ResponseWriter, r *http.Request, v viewer) {
 	if selected := body.SelectedTracks.Subtitle; selected != nil {
 		c.subtitle = trackPlace(&selected.ID, selected.Index, "subtitle")
 	}
-	if body.Operation == "failure_recovery" || body.Operation == "seek_failure_recovery" {
+	classification := ""
+	if body.Failure != nil {
+		classification = body.Failure.Classification
+	}
+	switch {
+	case classification == renditionFailed:
+		// The app's player could not offer the stream's subtitle
+		// renditions: its subtitles are files for the rest of the playback.
+		c.renditions = renditionModes{}
+	case classification == trackChanged:
+		// The app's player switched subtitles itself: a track change.
+	case body.Operation == "failure_recovery" || body.Operation == "seek_failure_recovery":
 		// The file failed to play as it is: it is converted from now on.
 		c.original = false
 	}
-	d, err := s.plan(r, found)
+	var d decision
+	var err error
+	if (body.Operation == "track_change" || classification == trackChanged) && found.keepsStream(saved.choice) {
+		// Another of the stream's renditions, or none: the stream plays on.
+		d, err = s.decide(r.Context(), found, found.info, tracksAt(found.source, *c))
+	} else {
+		d, err = s.plan(r, found)
+	}
 	if err != nil || d.Plan == nil {
 		found.playState = saved
 	}
@@ -1182,13 +1239,16 @@ func (s *Server) routeEvent(w http.ResponseWriter, r *http.Request, v viewer) {
 	}{body.EventID, "accepted"})
 }
 
-// mediaView is what a session's media are served from.
+// mediaView is what a session's media are served from: selected is the
+// Jellyfin index of the subtitle shown, nil for none.
 type mediaView struct {
-	device    accounts.DeviceInfo
-	token     string
-	method    string
-	stream    string
-	subtitles map[int]string
+	device     accounts.DeviceInfo
+	token      string
+	method     string
+	stream     string
+	subtitles  map[int]string
+	renditions []rendition
+	selected   *int
 }
 
 // media finds the session whose media a request fetches.
@@ -1198,7 +1258,8 @@ func (s *Server) media(w http.ResponseWriter, r *http.Request, v viewer) (mediaV
 		problem(w, http.StatusNotFound, "not_found", "No such playback.")
 		return mediaView{}, false
 	}
-	view := mediaView{device: found.device, token: found.token, method: found.method, stream: found.stream, subtitles: found.subtitles}
+	view := mediaView{device: found.device, token: found.token, method: found.method, stream: found.stream, subtitles: found.subtitles,
+		renditions: found.renditions, selected: found.subtitle}
 	done()
 	if view.stream == "" {
 		problem(w, http.StatusNotFound, "not_found", "This playback stopped.")
@@ -1220,8 +1281,11 @@ func (s *Server) original(w http.ResponseWriter, r *http.Request, v viewer) {
 	s.relay(private(w), r, found.stream, authorization(found.device, found.token))
 }
 
-// converted serves the playlists and segments of a converted plan, which
-// the playlists name below the master playlist.
+// converted serves the playlists and segments of a converted or
+// repackaged plan under the names Silo gives them (see renditions.go):
+// master.m3u8, which with silo_rendition answers the video playlist or a
+// subtitle rendition's, and segment/{name}, the Jellyfin API's segments of
+// the play session's stream.
 func (s *Server) converted(w http.ResponseWriter, r *http.Request, v viewer) {
 	found, ok := s.media(w, r, v)
 	if !ok {
@@ -1231,18 +1295,69 @@ func (s *Server) converted(w http.ResponseWriter, r *http.Request, v viewer) {
 		problem(w, http.StatusNotFound, "not_found", "This playback is not converted.")
 		return
 	}
-	path := r.PathValue("path")
-	if strings.Contains(path, "..") {
-		problem(w, http.StatusNotFound, "not_found", "Not found.")
-		return
-	}
 	base, query, _ := strings.Cut(found.stream, "?")
 	folder := base[:strings.LastIndex(base, "/")+1]
-	target := folder + path + "?" + r.URL.RawQuery
-	if path == "master.m3u8" {
-		target = base + "?" + query
+	at := func(file string) string { return folder + file + "?" + query }
+	auth := authorization(found.device, found.token)
+	name, isSegment := strings.CutPrefix(r.PathValue("path"), "segment/")
+	switch {
+	case r.PathValue("path") == "master.m3u8":
+		s.hlsPlaylist(w, r, found, at)
+	case !isSegment:
+		problem(w, http.StatusNotFound, "not_found", "Not found.")
+	case segmentURI.MatchString(name):
+		s.relay(private(w), r, at("hls1/main/"+name), auth)
+	default:
+		track, n, ok := subtitleSegment(name)
+		chosen, listed := renditionOf(found.renditions, track)
+		if !ok || !listed {
+			problem(w, http.StatusNotFound, "not_found", "Not found.")
+			return
+		}
+		s.relay(private(w), r, at("hls1/subtitles"+strconv.Itoa(chosen.stream)+"/"+strconv.Itoa(n)+".vtt"), auth)
 	}
-	s.relay(private(w), r, target, authorization(found.device, found.token))
+}
+
+// hlsPlaylist answers master.m3u8: with silo_rendition=video, the video
+// playlist; with silo_rendition=subtitles, the playlist of the rendition
+// of the container track silo_track names, or of the single rendition;
+// alone, the multivariant playlist of a stream with renditions, else the
+// video playlist itself.
+func (s *Server) hlsPlaylist(w http.ResponseWriter, r *http.Request, found mediaView, at func(file string) string) {
+	asked := r.URL.Query()
+	switch rendition := asked.Get("silo_rendition"); {
+	case rendition == "video", rendition == "" && len(found.renditions) == 0:
+		s.servePlaylist(w, r, found, at("main.m3u8"), func(playlist string) string {
+			return segmentsUnder(playlist, func(file string) string { return file })
+		})
+	case rendition == "":
+		s.servePlaylist(w, r, found, at("master.m3u8"), func(playlist string) string {
+			return multivariant(playlist, found.renditions, found.selected)
+		})
+	case rendition == "subtitles":
+		var track uint64
+		if raw := asked.Get("silo_track"); raw != "" {
+			var err error
+			if track, err = strconv.ParseUint(raw, 10, 64); err != nil || track == 0 {
+				problem(w, http.StatusNotFound, "not_found", "No such subtitle.")
+				return
+			}
+		}
+		chosen, ok := renditionOf(found.renditions, track)
+		if !ok {
+			problem(w, http.StatusNotFound, "not_found", "No such subtitle.")
+			return
+		}
+		prefix := "sub_"
+		if track > 0 {
+			prefix += strconv.FormatUint(track, 10) + "_"
+		}
+		s.servePlaylist(w, r, found, at("hls1/subtitles"+strconv.Itoa(chosen.stream)+"/main.m3u8"), func(playlist string) string {
+			return segmentsUnder(playlist, func(file string) string { return prefix + file })
+		})
+	default:
+		problem(w, http.StatusNotFound, "not_found", "Not found.")
+	}
 }
 
 // subtitle serves a text subtitle of a plan as WebVTT.
