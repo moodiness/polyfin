@@ -116,10 +116,12 @@ func TestADownloadedLanguageIsNoLongerMissingAndItsTracksAreRead(t *testing.T) {
 }
 
 // fakeFetcher downloads the data of Finnish into dir, failing with fail
-// when set. With hold set, each download waits for it to close.
+// when set. With started set, each download tells it has started; with
+// hold set, it then waits for it to close.
 type fakeFetcher struct {
-	dir  string
-	hold chan struct{}
+	dir     string
+	started chan struct{}
+	hold    chan struct{}
 
 	mu    sync.Mutex
 	fail  error
@@ -132,6 +134,9 @@ func (f *fakeFetcher) Download(_ context.Context, language string) error {
 	f.mu.Lock()
 	f.calls++
 	f.mu.Unlock()
+	if f.started != nil {
+		f.started <- struct{}{}
+	}
 	if f.hold != nil {
 		<-f.hold
 	}
@@ -156,7 +161,7 @@ func TestMissingLanguagesAreDownloadedOnceWithTheSetting(t *testing.T) {
 	tessdata := t.TempDir()
 	disk := &localDisk{dir: t.TempDir(), states: map[string]string{}}
 	p := newPictureService(t, migrated.New(t), &fakeReader{languages: []string{"eng"}, dir: tessdata}, disk, "ffmpeg")
-	fetcher := &fakeFetcher{dir: tessdata, hold: make(chan struct{})}
+	fetcher := &fakeFetcher{dir: tessdata, started: make(chan struct{}), hold: make(chan struct{})}
 	p.FetchLanguagesWith(fetcher)
 	version := library.Version{ID: accounts.ID{1}, URL: p.base + "video.mkv"}
 	// Off, nothing is downloaded.
@@ -172,6 +177,8 @@ func TestMissingLanguagesAreDownloadedOnceWithTheSetting(t *testing.T) {
 	files := finnishFiles(t, p, "a.sup", "b.sup")
 	p.queueTracks(t.Context(), library.Version{ID: accounts.ID{2}, URL: p.base + "other.mkv"}, videoAnalysis, files, -1)
 	p.waitReads(t)
+	// The download starts in the background, once the reads end.
+	await(t, fetcher.started, "the download")
 	if calls := fetcher.count(); calls != 1 {
 		t.Fatalf("%d downloads", calls)
 	}
