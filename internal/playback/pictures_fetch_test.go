@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -237,5 +238,68 @@ func TestFailedDownloadsAreRetriedHourly(t *testing.T) {
 	}
 	if missing := p.MissingLanguages(t.Context()); len(missing) != 0 {
 		t.Errorf("missing languages once downloaded: %+v", missing)
+	}
+}
+
+// await waits for c to tell, failing t when it does not within a minute,
+// as waitReads.
+func await(t *testing.T, c <-chan struct{}, what string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	select {
+	case <-c:
+	case <-ctx.Done():
+		t.Fatalf("%s did not happen", what)
+	}
+}
+
+// A track whose read found its language missing just before its data
+// arrived, too late to wait for it, is read: with the setting on, it
+// starts no second download, and with it off, it is read without Health
+// being looked at.
+func TestATrackCheckedJustBeforeItsDataArrivesIsRead(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		download bool
+	}{{"setting on", true}, {"setting off", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tessdata := t.TempDir()
+			disk := &localDisk{dir: t.TempDir(), states: map[string]string{}}
+			// The read is paused once it has Tesseract's languages,
+			// without Finnish, until resumed, by the end of the test at
+			// the latest.
+			checked, resume := make(chan struct{}), make(chan struct{})
+			release := sync.OnceFunc(func() { close(resume) })
+			var lists atomic.Int32
+			reader := &fakeReader{languages: []string{"eng"}, dir: tessdata, listed: func([]string) {
+				if lists.Add(1) == 1 {
+					close(checked)
+					<-resume
+				}
+			}}
+			p := newPictureService(t, migrated.New(t), reader, disk, "ffmpeg")
+			t.Cleanup(release)
+			p.set(func(s *accounts.Settings) { s.SubtitleOCRDownload = tc.download })
+			fetcher := &fakeFetcher{dir: tessdata}
+			p.FetchLanguagesWith(fetcher)
+			version := library.Version{ID: accounts.ID{1}, URL: p.base + "video.mkv"}
+			p.queueTracks(t.Context(), version, videoAnalysis, finnishFiles(t, p, "a.sup"), -1)
+			await(t, checked, "the track's check of its language")
+			// The data arrives from Health meanwhile.
+			if err := p.DownloadLanguage(t.Context(), "fin"); err != nil {
+				t.Fatal(err)
+			}
+			release()
+			p.waitFetches(t)
+			if reads := p.reads(); !slices.Equal(reads, []string{"fin"}) {
+				t.Errorf("read in %v", reads)
+			}
+			if calls := fetcher.count(); calls != 1 {
+				t.Errorf("%d downloads", calls)
+			}
+		})
 	}
 }

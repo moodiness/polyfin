@@ -40,6 +40,9 @@ type fakeReader struct {
 	dir     string
 	hold    chan struct{}
 	started chan struct{}
+	// listed, when set, is called with each list of languages before it
+	// is returned, as a test pauses a read that has its list.
+	listed func(languages []string)
 
 	mu            sync.Mutex
 	reads         []string
@@ -58,6 +61,9 @@ func (f *fakeReader) Languages(context.Context) ([]string, error) {
 		for _, file := range files {
 			languages = append(languages, strings.TrimSuffix(filepath.Base(file), ".traineddata"))
 		}
+	}
+	if f.listed != nil {
+		f.listed(languages)
 	}
 	return languages, nil
 }

@@ -150,6 +150,10 @@ type pictureReader struct {
 	// waiting are the tracks left unread for want of a language's data, by
 	// language, read once it is there.
 	waiting map[string][]ocrJob
+	// languagesAdded counts the languages whose data arrived, downloaded
+	// or added by hand, which tells a read that found its language
+	// missing whether data arrived since it began.
+	languagesAdded int
 	// fetcher downloads the data of missing languages, nil for none;
 	// fetching are the languages it downloads by itself, and fetchFailed
 	// how their last download failed, which now times.
@@ -510,6 +514,7 @@ func (s *Service) startReads() {
 		job := s.pictures.queue[0]
 		s.pictures.queue = s.pictures.queue[1:]
 		s.pictures.running++
+		added := s.pictures.languagesAdded
 		go func() {
 			missing := s.runJob(job)
 			s.pictures.mu.Lock()
@@ -518,7 +523,14 @@ func (s *Service) startReads() {
 			// A track left unread for want of its language's data waits
 			// for it in the same step as it stops counting as queued: the
 			// download ending with the data queues the tracks waiting, and
-			// would skip one still counted, leaving it unread.
+			// would skip one still counted, leaving it unread. Data that
+			// arrived since its read began came too late to queue it, and
+			// may be its language's: it is queued again instead, as the
+			// next read finds the data there or waits for it.
+			if missing != "" && s.pictures.languagesAdded != added {
+				s.queueJobs([]ocrJob{job})
+				missing = ""
+			}
 			fetch := missing != "" && s.waitForLanguage(missing, job)
 			s.startReads()
 			s.pictures.mu.Unlock()
@@ -936,8 +948,10 @@ func (s *Service) languageFetched(language string, err error, byItself bool) {
 }
 
 // languageAdded queues the tracks waiting for the data of language, now
-// there, downloaded or added by hand. The caller holds s.pictures.mu.
+// there, downloaded or added by hand, and counts it among the languages
+// added. The caller holds s.pictures.mu.
 func (s *Service) languageAdded(language string) {
+	s.pictures.languagesAdded++
 	s.queueJobs(s.pictures.waiting[language])
 	delete(s.pictures.waiting, language)
 	delete(s.pictures.missing, language)
