@@ -115,6 +115,11 @@ type Service struct {
 	// unlocated the versions whose index could not be read.
 	locations *cache.Cache[accounts.ID, []int]
 	unlocated *cache.Cache[accounts.ID, error]
+	// numbered are the container's own numbers of versions' tracks, by
+	// FFmpeg index (see ContainerTracks), and unnumbered the versions whose
+	// numbers could not be read.
+	numbered   *cache.Cache[accounts.ID, map[int]uint64]
+	unnumbered *cache.Cache[accounts.ID, error]
 	// tracks are subtitle tracks read whole through indexes, untracked
 	// those that could not be, and trackReads and hostReads bound the
 	// reads under way, over every host and from each.
@@ -199,6 +204,8 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		extractions: cache.New[accounts.ID, *extracted](200, 6*time.Hour),
 		locations:   cache.New[accounts.ID, []int](2000, time.Hour),
 		unlocated:   cache.New[accounts.ID, error](2000, failureTTL),
+		numbered:    cache.New[accounts.ID, map[int]uint64](2000, time.Hour),
+		unnumbered:  cache.New[accounts.ID, error](2000, failureTTL),
 		tracks:      cache.New[trackKey, Track](100, time.Hour).Sized(maxKeptTracks, func(t Track) int { return len(t.Data) }),
 		untracked:   cache.New[trackKey, error](2000, failureTTL),
 		trackReads:  make(chan struct{}, maxTrackReads),
