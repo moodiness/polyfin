@@ -8,6 +8,7 @@ Stremio TV catalogs (the `tv` type) become Jellyfin Live TV. A TV catalog enable
 
 - Polyfin reads at most **Channels read per Live TV catalog** channels from each TV catalog, and as many programmes from each day of its guide.
 - Who can watch is set per user with the **Live TV** permission on [Users](users.md), and which channels of the server's sources each user, or each group's members, see with **Live TV channels**: all of them, only some groups and channels, or all but some, optionally hiding the groups sources add later (see [Live TV channels](users.md#live-tv-channels)). A hidden channel is left out of the channel lists, the guide, searches, Replay, timers, reminders and the recordings shown, and does not play.
+- A channel of an IPTV source opens and plays by its identifier, the one its line-up gives in the admin app, as soon as the source is added, before any app listed the channels.
 
 ### The Live TV page
 

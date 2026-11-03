@@ -212,6 +212,33 @@ func (s *Service) channel(ctx context.Context, v view, r record) (Item, error) {
 	return channelItem(meta, r.Number), nil
 }
 
+// loadListed is load, which also finds a channel of one of the user's IPTV
+// sources that no listing recorded yet: apps may open it by the identifier
+// its line-up gives, as the admin app shows it, before any app listed the
+// channels. The user's channels are then listed and recorded, as Channels
+// does, which numbers the channel; one the user does not see stays
+// ErrNotFound.
+func (s *Service) loadListed(ctx context.Context, v view, id accounts.ID) (record, error) {
+	r, err := s.load(ctx, id)
+	if !errors.Is(err, ErrNotFound) || s.iptv == nil || len(v.channels) == 0 {
+		return r, err
+	}
+	addon, err := s.iptv.ChannelSource(ctx, id)
+	if errors.Is(err, stremio.ErrNotFound) {
+		return record{}, ErrNotFound
+	} else if err != nil {
+		return record{}, err
+	}
+	if !slices.ContainsFunc(v.channels, func(src source) bool { return src.addon.addon.ID == addon }) {
+		return record{}, ErrNotFound
+	}
+	_, records := s.channels(ctx, v)
+	if err := s.save(ctx, records); err != nil {
+		return record{}, err
+	}
+	return s.load(ctx, id)
+}
+
 // Programs lists the programmes of the user's channels that overlap
 // [from, to), by start time (see Guide).
 func (s *Service) Programs(ctx context.Context, user accounts.User, from, to time.Time) ([]Item, error) {

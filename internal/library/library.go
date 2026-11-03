@@ -239,6 +239,7 @@ type IPTV interface {
 	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
 	MappingChannels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
 	Logo(ctx context.Context, item accounts.ID) (string, bool, error)
+	ChannelSource(ctx context.Context, item accounts.ID) (accounts.ID, error)
 	Archives(ctx context.Context, source accounts.ID) (map[string]int, error)
 	GuideArchives(ctx context.Context, guide accounts.ID) (map[string]int, error)
 }
@@ -2342,7 +2343,7 @@ func (s *Service) item(ctx context.Context, v view, id accounts.ID) (Item, error
 	if id == WatchlistViewID {
 		return s.watchlistView(ctx, v)
 	}
-	r, err := s.load(ctx, id)
+	r, err := s.loadListed(ctx, v, id)
 	if errors.Is(err, ErrNotFound) {
 		if extra, err := s.extra(ctx, v, id); !errors.Is(err, ErrNotFound) {
 			return extra, err

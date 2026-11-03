@@ -924,6 +924,18 @@ func (s *Service) Logo(ctx context.Context, item accounts.ID) (string, bool, err
 	return logo, confined, err
 }
 
+// ChannelSource finds the source whose line-up has a channel, by its item
+// identifier, shown or not. A channel no line-up has is
+// stremio.ErrNotFound.
+func (s *Service) ChannelSource(ctx context.Context, item accounts.ID) (accounts.ID, error) {
+	var source accounts.ID
+	err := s.db.QueryRow(ctx, "SELECT addon_id FROM iptv_lineup WHERE item_id = $1", item).Scan(&source)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return accounts.ID{}, stremio.ErrNotFound
+	}
+	return source, err
+}
+
 // Meta describes a channel, a movie or a series of a source by its
 // Stremio identifier, while it shows: the others play no more than they
 // are listed (see titleMeta for movies and series).

@@ -239,7 +239,7 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 	if err != nil {
 		return target{}, view{}, err
 	}
-	r, err := s.load(ctx, id)
+	r, err := s.loadListed(ctx, v, id)
 	if errors.Is(err, ErrNotFound) {
 		// An extra plays its file, as its folder streams it.
 		extra, err := s.extra(ctx, v, id)

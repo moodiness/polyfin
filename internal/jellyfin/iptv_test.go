@@ -327,3 +327,47 @@ func TestTryingAChannelAgainPlaysItsFailedStreams(t *testing.T) {
 		t.Errorf("%s, not tried again, was played", orbe.Name)
 	}
 }
+
+// An app may open a channel of a source just added by the identifier its
+// line-up gives, as the admin app shows it, before any app listed the
+// channels: it is found, numbered as the listing numbers it, and plays,
+// while users who cannot see the source still find no such item.
+func TestAChannelOpensBeforeItIsListed(t *testing.T) {
+	t.Parallel()
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/get.php" {
+			_, _ = fmt.Fprintf(w, "#EXTM3U\r\n#EXTINF:-1,Zeb One\r\n%[1]s/live/one.m3u8\r\n#EXTINF:-1,Orbe Junior\r\n%[1]s/live/two.m3u8\r\n", server.URL)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+	s := newTestServer(t, 10)
+	member := s.user("member", nil)
+	s.user("other", nil)
+	token := s.signIn("member", "tv")
+	otherToken := s.signIn("other", "tv")
+	scope := addons.Personal(member.ID)
+	addon, err := s.iptv.Add(t.Context(), scope, iptv.NewSource{Name: "Mine",
+		Account: iptv.Account{Kind: addons.KindM3U, URL: server.URL + "/get.php"}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, lineup, err := s.iptv.ListChannels(t.Context(), scope, addon.ID, iptv.ChannelFilter{})
+	if err != nil || len(lineup) != 2 {
+		t.Fatalf("line-up: %+v %v", lineup, err)
+	}
+	orbe := lineup[1]
+	if status, body := s.call(http.MethodGet, "/Items/"+orbe.ID.String(), app("tv", otherToken), nil); status != http.StatusNotFound {
+		t.Errorf("another user's channel: %d %s", status, body)
+	}
+	if status, body := s.call(http.MethodPost, "/Items/"+orbe.ID.String()+"/PlaybackInfo", app("tv", token), map[string]any{"IsPlayback": true}); status != http.StatusOK {
+		t.Errorf("PlaybackInfo of a channel never listed: %d %s", status, body)
+	}
+	var item BaseItemDto
+	s.get(t, "/Items/"+orbe.ID.String(), token, &item)
+	if item.Name != "Orbe Junior" || item.Type != "TvChannel" || item.ChannelNumber != "2" {
+		t.Errorf("the channel never listed: %+v", item)
+	}
+}
