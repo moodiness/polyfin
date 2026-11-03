@@ -14,8 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/iptv"
+	"github.com/moodiness/polyfin/internal/iptv/tunertest"
 )
 
 // proxyGuide serves an XMLTV guide of three channels, each airing a
@@ -103,6 +105,61 @@ func TestDecimalChannelNumbersShowInApps(t *testing.T) {
 		}
 		if !slices.Equal(order, []string{"Kids Box", "Zeb News", "Orb Sport"}) {
 			t.Errorf("%s: programmes by channel %q", path, order)
+		}
+	}
+}
+
+// A channel without a logo shows its guide channel's icon, as Jellyfin's
+// do: a playlist's, and a tuner's, whose line-up gives none. A channel
+// with a logo keeps its own.
+func TestChannelsWithoutALogoShowTheirGuideIcon(t *testing.T) {
+	t.Parallel()
+	s, admin, member := administrated(t)
+	base := proxyServer(t)
+	addProxy(t, s, base)
+	tuner := tunertest.Start(t, tunertest.Options{DeviceID: 0x0DECAF00, Name: "Attic Tuner", Model: "HDTC-2US", Tuners: 2,
+		Channels: []tunertest.Channel{{Number: "201", Name: "Zeb News"}, {Number: "203", Name: "Kids Box"}}})
+	var added TunerHostInfo
+	status, body := s.call(http.MethodPost, "/LiveTv/TunerHosts", admin, map[string]any{"Type": "hdhomerun", "Url": tuner.URL})
+	if err := json.Unmarshal(body, &added); status != http.StatusOK || err != nil || added.Id == nil {
+		t.Fatalf("tuner added: %d %s", status, body)
+	}
+	id, err := accounts.ParseID(*added.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := addons.LibraryKey{AddonID: id, CatalogType: "tv", CatalogID: "channels"}
+	if _, err := s.addons.SetGuide(t.Context(), addons.Shared(), key, base+"/output/epg"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.library.RefreshGuide(t.Context(), addons.Shared(), key); err != nil {
+		t.Fatal(err)
+	}
+
+	var channels QueryResult
+	_, body = s.call(http.MethodGet, "/LiveTv/Channels", member, nil)
+	if err := json.Unmarshal(body, &channels); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"104 Zeb News": "/logo/zeb.png", "104.5 Orb Sport": "/logo/orb.png", "103 Kids Box": "/icon/kids.zz.png",
+		"201 Zeb News": "/icon/zeb.zz.png", "203 Kids Box": "/icon/kids.zz.png"}
+	if len(channels.Items) != len(want) {
+		t.Fatalf("channels: %d", len(channels.Items))
+	}
+	for _, c := range channels.Items {
+		name := c.Number + " " + c.Name
+		if c.ImageTags["Primary"] == "" {
+			t.Errorf("%s: no image", name)
+			continue
+		}
+		response, err := http.Get(s.url + "/Items/" + c.Id + "/Images/Primary")
+		if err != nil {
+			t.Fatal(err)
+		}
+		image, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK || !strings.HasSuffix(string(image), want[name]) {
+			t.Errorf("%s: image %d %q, want %s", name, response.StatusCode, image, want[name])
 		}
 	}
 }

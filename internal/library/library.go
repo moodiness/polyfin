@@ -3088,10 +3088,14 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		}
 	}
 	// An IPTV channel shows its line-up's logo at once, listed or not: the
-	// admin app shows those of hidden channels too.
+	// admin app shows those of hidden channels too. One without a logo
+	// shows its guide channel's icon (see guideIcons).
 	if s.iptv != nil && strings.EqualFold(imageType, "Primary") && (errors.Is(err, ErrNotFound) || err == nil && r.Kind == KindChannel &&
 		r.Meta != nil && strings.HasPrefix(r.Meta.ID, iptv.IDPrefix)) {
 		logo, confined, lineupErr := s.iptv.Logo(ctx, id)
+		if lineupErr == nil && logo == "" {
+			logo, lineupErr = s.guideIcon(ctx, id)
+		}
 		switch {
 		case lineupErr == nil && logo == "":
 			return Artwork{}, ErrNotFound

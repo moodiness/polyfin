@@ -56,6 +56,7 @@ func (s *Service) Channels(ctx context.Context, user accounts.User) ([]Item, err
 // numbered after all of them.
 func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 	lists := make([][]stremio.Meta, len(v.channels))
+	icons := make([]map[accounts.ID]string, len(v.channels))
 	var group errgroup.Group
 	group.SetLimit(catalogFetches)
 	for i, src := range v.channels {
@@ -65,6 +66,9 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 				s.logger.Warn("A live TV catalog could not be listed", "catalog", src.catalog.ID, "error", err)
 			}
 			lists[i] = metas
+			if icons[i], err = s.guideIcons(ctx, src, metas); err != nil && ctx.Err() == nil {
+				s.logger.Warn("A live TV catalog's guide icons could not be read", "catalog", src.catalog.ID, "error", err)
+			}
 			return nil
 		})
 	}
@@ -84,6 +88,9 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 				meta.Type = src.catalog.Type
 			}
 			group, _ := channelGroup(src, meta)
+			if meta.Poster == "" && meta.Logo == "" {
+				meta.Logo = icons[i][itemID(channelKey(meta.ID))]
+			}
 			if !v.allowsChannel(src, group, meta.ID) {
 				place++
 				continue
@@ -125,6 +132,47 @@ func channelItem(meta stremio.Meta, number int) Item {
 
 func channelImages(meta stremio.Meta) Images {
 	return Images{Primary: cmp.Or(meta.Poster, meta.Logo), Backdrop: meta.Background}
+}
+
+// guideIcons finds the icons of the guide channels a catalog's channels
+// without a logo are mapped to, by channel: such a channel shows its guide
+// channel's icon, as in Jellyfin (ListingsManager.cs, AddMetadata, lines
+// 303-305), which tuners' channels need, their line-up giving no logo.
+func (s *Service) guideIcons(ctx context.Context, src source, metas []stremio.Meta) (map[accounts.ID]string, error) {
+	var bare []accounts.ID
+	for _, meta := range metas {
+		if meta.ID != "" && meta.Poster == "" && meta.Logo == "" {
+			bare = append(bare, itemID(channelKey(meta.ID)))
+		}
+	}
+	if !src.guide || len(bare) == 0 {
+		return nil, nil
+	}
+	rows, err := s.db.Query(ctx, `SELECT m.channel_id, gc.icon FROM live_guide_maps m JOIN live_guides g ON g.id = m.guide_id
+		JOIN live_guide_channels gc ON gc.guide_id = g.id AND gc.generation = g.generation AND gc.xmltv_id = m.xmltv_id
+		WHERE m.addon_id = $1 AND m.catalog_type = $2 AND m.catalog_id = $3 AND m.channel_id = ANY($4) AND gc.icon <> ''`,
+		src.addon.addon.ID, src.catalog.Type, src.catalog.ID, bare)
+	if err != nil {
+		return nil, err
+	}
+	icons := map[accounts.ID]string{}
+	var channel accounts.ID
+	var icon string
+	_, err = pgx.ForEachRow(rows, []any{&channel, &icon}, func() error { icons[channel] = icon; return nil })
+	return icons, err
+}
+
+// guideIcon finds the icon of the guide channel a channel is mapped to, ""
+// for none (see guideIcons): that of its first catalog's mapping.
+func (s *Service) guideIcon(ctx context.Context, channel accounts.ID) (string, error) {
+	var icon string
+	err := s.db.QueryRow(ctx, `SELECT gc.icon FROM live_guide_maps m JOIN live_guides g ON g.id = m.guide_id
+		JOIN live_guide_channels gc ON gc.guide_id = g.id AND gc.generation = g.generation AND gc.xmltv_id = m.xmltv_id
+		WHERE m.channel_id = $1 AND gc.icon <> '' ORDER BY m.addon_id, m.catalog_type, m.catalog_id LIMIT 1`, channel).Scan(&icon)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return icon, err
 }
 
 // channel describes a channel listed before, from what Polyfin remembers
