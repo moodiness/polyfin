@@ -165,10 +165,14 @@ func splitCredits(segments []mediasegments.Segment, stingers []stinger) []medias
 					continue
 				}
 				if s.Start > part.Start {
-					next = append(next, mediasegments.Segment{Type: part.Type, Start: part.Start, End: s.Start})
+					before := part
+					before.End = s.Start
+					next = append(next, before)
 				}
 				if s.End < part.End {
-					next = append(next, mediasegments.Segment{Type: part.Type, Start: s.End, End: part.End})
+					after := part
+					after.Start = s.End
+					next = append(next, after)
 				}
 			}
 			parts = next

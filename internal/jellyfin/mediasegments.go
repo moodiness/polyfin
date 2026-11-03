@@ -55,56 +55,11 @@ var segmentTypes = map[string]string{
 // buttons turned off in the settings, no database is asked and every item
 // has none, as on a Jellyfin server without a segment provider.
 func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
-	b := bindErrors{}
-	opened := b.pathID(r, "itemId")
-	if len(b) > 0 {
-		validationProblem(w, b)
+	opened, segments, ok := h.openedSegments(w, r)
+	if !ok {
 		return
 	}
-	user := callerFrom(r.Context()).User
 	result := MediaSegmentDtoQueryResult{Items: []MediaSegmentDto{}}
-	item, err := h.title(r.Context(), user, opened)
-	if errors.Is(err, library.ErrNotFound) {
-		// Jellyfin answers an empty list for an item without segments,
-		// such as a series, and Not Found for an unknown one.
-		if _, err := h.Library.Item(r.Context(), user, opened); err != nil {
-			h.browseError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, result)
-		return
-	}
-	if err != nil {
-		h.browseError(w, r, err)
-		return
-	}
-	if !h.Accounts.Settings().SkipButtons {
-		writeJSON(w, http.StatusOK, result)
-		return
-	}
-	var segments []mediasegments.Segment
-	if item.Kind == library.KindRecording {
-		segments = h.Commercials.Segments(r.Context(), item.ID)
-	} else if h.Segments.Asks() {
-		title, err := h.segmentTitle(r.Context(), user, item)
-		if err != nil {
-			h.browseError(w, r, err)
-			return
-		}
-		segments = h.Segments.Segments(r.Context(), title)
-	}
-	if version, ok := h.segmentVersion(r.Context(), user, item, opened); ok {
-		analysis, analyzed := h.Playback.Analyzed(r.Context(), version)
-		if analyzed {
-			segments = versionSegments(segments, analysis, item.Runtime)
-		}
-		if item.Kind == library.KindEpisode {
-			segments = h.audioSegments(r.Context(), segments, version, analysis.Duration, item.Runtime)
-		}
-		if analyzed {
-			segments = h.splitAtStingers(r.Context(), segments, version, analysis, item.Runtime)
-		}
-	}
 	wanted := map[string]bool{}
 	included := listQuery(r, "includeSegmentTypes")
 	for _, name := range included {
@@ -126,6 +81,91 @@ func (h *Handler) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	}
 	result.TotalRecordCount = len(result.Items)
 	writeJSON(w, http.StatusOK, result)
+}
+
+// SegmentOriginDto is a segment as GET /Polyfin/MediaSegments/{itemId}
+// lists it: its Type and times as Jellyfin's, and where it comes from (see
+// mediasegments.Origin): Found, how it was found, empty when unknown;
+// Database, which database gave it; Confidence, that database's rating of
+// it, from 0 to 1, absent when it gives none.
+type SegmentOriginDto struct {
+	Type       string
+	StartTicks int64
+	EndTicks   int64
+	Found      string   `json:",omitempty"`
+	Database   string   `json:",omitempty"`
+	Confidence *float64 `json:",omitempty"`
+}
+
+// segmentOrigins answers GET /Polyfin/MediaSegments/{itemId}: the segments
+// GET /MediaSegments/{itemId} answers, of every type, each with where it
+// comes from, which Jellyfin's segments do not tell. Silo's apps show it
+// (see package silo).
+func (h *Handler) segmentOrigins(w http.ResponseWriter, r *http.Request) {
+	_, segments, ok := h.openedSegments(w, r)
+	if !ok {
+		return
+	}
+	result := struct{ Items []SegmentOriginDto }{Items: []SegmentOriginDto{}}
+	for _, segment := range segments {
+		result.Items = append(result.Items, SegmentOriginDto{Type: string(segment.Type), StartTicks: int64(segment.Start / 100),
+			EndTicks: int64(segment.End / 100), Found: string(segment.Origin.Found), Database: segment.Origin.Database,
+			Confidence: segment.Origin.Confidence})
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// openedSegments are the segments of the item a request's itemId opens, as
+// mediaSegments describes them, answering the request when it cannot.
+func (h *Handler) openedSegments(w http.ResponseWriter, r *http.Request) (accounts.ID, []mediasegments.Segment, bool) {
+	b := bindErrors{}
+	opened := b.pathID(r, "itemId")
+	if len(b) > 0 {
+		validationProblem(w, b)
+		return opened, nil, false
+	}
+	user := callerFrom(r.Context()).User
+	item, err := h.title(r.Context(), user, opened)
+	if errors.Is(err, library.ErrNotFound) {
+		// Jellyfin answers an empty list for an item without segments,
+		// such as a series, and Not Found for an unknown one.
+		if _, err := h.Library.Item(r.Context(), user, opened); err != nil {
+			h.browseError(w, r, err)
+			return opened, nil, false
+		}
+		return opened, nil, true
+	}
+	if err != nil {
+		h.browseError(w, r, err)
+		return opened, nil, false
+	}
+	if !h.Accounts.Settings().SkipButtons {
+		return opened, nil, true
+	}
+	var segments []mediasegments.Segment
+	if item.Kind == library.KindRecording {
+		segments = h.Commercials.Segments(r.Context(), item.ID)
+	} else if h.Segments.Asks() {
+		title, err := h.segmentTitle(r.Context(), user, item)
+		if err != nil {
+			h.browseError(w, r, err)
+			return opened, nil, false
+		}
+		segments = h.Segments.Segments(r.Context(), title)
+	}
+	if version, ok := h.segmentVersion(r.Context(), user, item, opened); ok {
+		analysis, analyzed := h.Playback.Analyzed(r.Context(), version)
+		if analyzed {
+			segments = versionSegments(segments, analysis, item.Runtime)
+		}
+		if item.Kind == library.KindEpisode {
+			segments = h.audioSegments(r.Context(), segments, version, analysis.Duration, item.Runtime)
+		}
+		if analyzed {
+			segments = h.splitAtStingers(r.Context(), segments, version, analysis, item.Runtime)
+		}
+	}
+	return opened, segments, true
 }
 
 // segmentVersion is the version a movie's or an episode's segments are
@@ -301,7 +341,8 @@ func chapterSegments(analysis media.Analysis) []mediasegments.Segment {
 			last := &segments[len(segments)-1]
 			last.End = max(last.End, end)
 		default:
-			segments = append(segments, mediasegments.Segment{Type: kind, Start: chapter.Start, End: end})
+			segments = append(segments, mediasegments.Segment{Type: kind, Start: chapter.Start, End: end,
+				Origin: mediasegments.Origin{Found: mediasegments.InChapters}})
 			previous = kind
 		}
 	}

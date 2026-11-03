@@ -63,10 +63,13 @@ func TestStingerChapterNames(t *testing.T) {
 
 // Chapters named as a scene during or after the credits are not credits,
 // and split the credits; a short chapter right after credits chapters
-// already ends them.
+// already ends them. Credits keep where they come from, split or not:
+// the chapters, or the database.
 func TestChapterLayouts(t *testing.T) {
 	t.Parallel()
-	databases := []mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_200_000)}}
+	database := mediasegments.Origin{Found: mediasegments.InDatabase, Database: mediasegments.SkipDB, Confidence: new(0.8)}
+	chapters := mediasegments.Origin{Found: mediasegments.InChapters}
+	databases := []mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_200_000), Origin: database}}
 	for _, test := range []struct {
 		name     string
 		analysis media.Analysis
@@ -74,26 +77,26 @@ func TestChapterLayouts(t *testing.T) {
 	}{
 		{"credits then a post-credits scene", lasting(7_200_000, chapter("Movie", 0, 6_900_000),
 			chapter("Credits", 6_900_000, 7_100_000), chapter("Post-Credits Scene", 7_100_000, 7_200_000)),
-			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_100_000)}}},
+			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_100_000), Origin: chapters}}},
 		{"a mid-credits scene between two credits", lasting(7_200_000, chapter("Movie", 0, 6_900_000),
 			chapter("End Credits", 6_900_000, 7_000_000), chapter("Mid-credits scene", 7_000_000, 7_060_000),
 			chapter("Credits", 7_060_000, 7_200_000)),
-			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_000_000)},
-				{Type: mediasegments.Outro, Start: ms(7_060_000), End: ms(7_199_000)}}},
+			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_000_000), Origin: chapters},
+				{Type: mediasegments.Outro, Start: ms(7_060_000), End: ms(7_199_000), Origin: chapters}}},
 		{"a scene named in generic chapters splits the databases' credits", lasting(7_200_000,
 			chapter("Chapter 1", 0, 3_600_000), chapter("Chapter 2", 3_600_000, 7_000_000),
 			chapter("Post-credits", 7_000_000, 7_060_000), chapter("Chapter 4", 7_060_000, 7_200_000)),
-			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_000_000)},
-				{Type: mediasegments.Outro, Start: ms(7_060_000), End: ms(7_199_000)}}},
+			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_000_000), Origin: database},
+				{Type: mediasegments.Outro, Start: ms(7_060_000), End: ms(7_199_000), Origin: database}}},
 		{"a scene at the end", lasting(7_200_000, chapter("Chapter 1", 0, 7_150_000), chapter("Stinger", 7_150_000, 7_200_000)),
-			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_150_000)}}},
+			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_150_000), Origin: database}}},
 		{"a short chapter after credits", lasting(7_200_000, chapter("Chapter 1", 0, 6_900_000),
 			chapter("End Credits", 6_900_000, 7_080_000), chapter("Chapter 9", 7_080_000, 7_140_000),
 			chapter("Chapter 10", 7_140_000, 7_200_000)),
-			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_080_000)}}},
+			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_080_000), Origin: chapters}}},
 		{"a scene ending 2 s before the credits' end leaves no credits after it", lasting(7_200_000,
 			chapter("Chapter 1", 0, 7_100_000), chapter("After Credits", 7_100_000, 7_197_000), chapter("Logo", 7_197_000, 7_200_000)),
-			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_100_000)}}},
+			[]mediasegments.Segment{{Type: mediasegments.Outro, Start: ms(6_900_000), End: ms(7_100_000), Origin: database}}},
 	} {
 		segments := versionSegments(slices.Clone(databases), test.analysis, ms(7_200_000))
 		segments = splitCredits(segments, chapterStingers(test.analysis))

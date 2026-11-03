@@ -81,8 +81,8 @@ func skipAddon(t *testing.T, reads *atomic.Int64) string {
 	return server.URL + "/manifest.json"
 }
 
-// segmentDatabases stands in for TheIntroDB (/media) and IntroDB
-// (/segments), and records what they were asked.
+// segmentDatabases stands in for TheIntroDB (/media), IntroDB (/segments)
+// and SkipDB (/api/segments), and records what they were asked.
 type segmentDatabases struct {
 	url   string
 	mu    sync.Mutex
@@ -112,6 +112,10 @@ func newSegmentDatabases(t *testing.T) *segmentDatabases {
 			_, _ = io.WriteString(w, `{"imdb_id":"tt1234567","media_type":"movie","is_movie":true,"season":0,"episode":0,
 				"intro":{"start_ms":10000,"end_ms":50000},"recap":{"start_ms":5000,"end_ms":45000},"outro":null,
 				"post_credits":{"start_ms":7100000,"end_ms":7150000}}`)
+		case r.URL.Path == "/api/segments" && q.Get("imdb_id") == "tt7654321" && q.Get("season") == "1" && q.Get("episode") == "3":
+			_, _ = io.WriteString(w, `{"imdb_id":"tt7654321","season":1,"episode":3,"segments":{
+				"recap":{"start_ms":0,"end_ms":20000,"match":"exact","confidence":0.85},
+				"intro":{"start_ms":321000,"end_ms":400000,"match":"exact","confidence":0.9}}}`)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.WriteString(w, `{"error":"media not found"}`)
@@ -501,6 +505,45 @@ func TestChaptersGiveTheirVersionsSegments(t *testing.T) {
 		if got := spans(p.segments(t, "/MediaSegments/"+test.path)); !slices.Equal(got, test.want) {
 			t.Errorf("%s: got %v, want %v", test.name, got, test.want)
 		}
+	}
+}
+
+// GET /Polyfin/MediaSegments/{itemId} lists the segments Jellyfin apps get,
+// each with where it comes from: the version's chapters, or the database
+// that gave it, which does not rate its segments.
+func TestPolyfinMediaSegmentsTellWhereTheyComeFrom(t *testing.T) {
+	t.Parallel()
+	p := skipping(t, mediasegments.TheIntroDB)
+	versions := p.versions(t, p.third)
+	if len(versions) != 4 {
+		t.Fatalf("versions %+v", versions)
+	}
+	p.storeAnalysis(t, versions[2], lasting(3_150_000,
+		chapter("Chapter 1", 0, 3_080_000), chapter("Credits", 3_080_000, 3_148_500), chapter("Chapter 3", 3_148_500, 3_150_000)))
+	database := func(kind string, from, to int64) SegmentOriginDto {
+		return SegmentOriginDto{Type: kind, StartTicks: from * 10_000, EndTicks: to * 10_000, Found: "database",
+			Database: mediasegments.TheIntroDB}
+	}
+	for _, test := range []struct {
+		name, path string
+		want       []SegmentOriginDto
+	}{
+		{"credits from the chapters", versions[2].ID.String(), []SegmentOriginDto{database("Intro", 321_400, 400_400),
+			{Type: "Outro", StartTicks: 3_080_000 * 10_000, EndTicks: 3_149_000 * 10_000, Found: "chapters"}}},
+		{"not analyzed", versions[3].ID.String(), []SegmentOriginDto{database("Intro", 321_400, 400_400),
+			database("Outro", 3_072_000, 3_304_000)}},
+	} {
+		var result struct{ Items []SegmentOriginDto }
+		if status := p.get(t, "/Polyfin/MediaSegments/"+test.path, p.token, &result); status != http.StatusOK ||
+			!slices.Equal(result.Items, test.want) {
+			t.Errorf("%s: %d %+v, want %+v", test.name, status, result.Items, test.want)
+		}
+	}
+	if status := p.get(t, "/Polyfin/MediaSegments/0123456789abcdef0123456789abcdef", p.token, nil); status != http.StatusNotFound {
+		t.Errorf("unknown item: %d", status)
+	}
+	if status := p.get(t, "/Polyfin/MediaSegments/"+p.third, "", nil); status != http.StatusUnauthorized {
+		t.Errorf("signed out: %d", status)
 	}
 }
 

@@ -85,10 +85,39 @@ const (
 // commercials).
 const Commercial Type = "Commercial"
 
-// Segment is a part of a title that apps offer to skip.
+// Segment is a part of a title that apps offer to skip, and where it
+// comes from.
 type Segment struct {
 	Type       Type
 	Start, End time.Duration
+	Origin     Origin
+}
+
+// Finder is how a segment was found.
+type Finder string
+
+// The ways Polyfin finds segments.
+const (
+	// InDatabase is a segment a database gave (see Service.Segments).
+	InDatabase Finder = "database"
+	// InChapters is one a version's chapters name.
+	InChapters Finder = "chapters"
+	// InAudio is one found in the audio of a season's episodes (see
+	// package audiosegments).
+	InAudio Finder = "audio"
+)
+
+// Origin tells where a segment comes from: how it was found, empty when
+// unknown, and for a database's, which one and its own rating of the
+// segment.
+type Origin struct {
+	Found Finder
+	// Database names the database of a segment found InDatabase, by the
+	// name POLYFIN_SEGMENTS gives it.
+	Database string
+	// Confidence is the database's rating of the segment, from 0 to 1;
+	// nil when it gives none.
+	Confidence *float64
 }
 
 // Title identifies a movie or an episode to the databases.
@@ -186,6 +215,9 @@ type mark struct {
 	StartMS int64 `json:"start_ms"`
 	// EndMS is nil for a segment that lasts until the end of the title.
 	EndMS *int64 `json:"end_ms,omitempty"`
+	// Confidence is the database's rating of the segment, from 0 to 1,
+	// when it gives one. Answers kept before it was read have none.
+	Confidence *float64 `json:"confidence,omitempty"`
 }
 
 // answer is what a database said about a title, and when to ask again.
@@ -382,7 +414,8 @@ func merge(answers map[string]answer, sources []Source, runtime time.Duration) [
 				if m.Type != kind {
 					continue
 				}
-				segment := Segment{Type: kind, Start: time.Duration(m.StartMS) * time.Millisecond, End: runtime}
+				segment := Segment{Type: kind, Start: time.Duration(m.StartMS) * time.Millisecond, End: runtime,
+					Origin: Origin{Found: InDatabase, Database: source.Name, Confidence: m.Confidence}}
 				if m.EndMS != nil {
 					segment.End = time.Duration(*m.EndMS) * time.Millisecond
 				}
@@ -634,12 +667,22 @@ func compareBool(a, b bool) int {
 }
 
 // skipDBSegment is a segment as SkipDB gives it, in milliseconds, with how
-// it was matched to the duration asked with.
+// it was matched to the duration asked with, and SkipDB's confidence in it.
 type skipDBSegment struct {
 	StartMS float64 `json:"start_ms"`
 	// EndMS is nil for credits or a preview lasting until the end.
-	EndMS *float64 `json:"end_ms"`
-	Match string   `json:"match"`
+	EndMS      *float64 `json:"end_ms"`
+	Match      string   `json:"match"`
+	Confidence *float64 `json:"confidence"`
+}
+
+// rating is a database's confidence in a segment when it is one, from 0
+// to 1; nil otherwise.
+func rating(confidence *float64) *float64 {
+	if confidence == nil || !(*confidence >= 0 && *confidence <= 1) {
+		return nil
+	}
+	return new(*confidence)
 }
 
 // skipDBTypes are SkipDB's segment types, by the keys of its answers.
@@ -676,15 +719,15 @@ func (s *Service) askSkipDB(ctx context.Context, base string, title Title) ([]ma
 		if !ok || sg == nil || sg.Match == "out-of-range" {
 			continue
 		}
-		start := int64(math.Round(sg.StartMS))
+		start, confidence := int64(math.Round(sg.StartMS)), rating(sg.Confidence)
 		if sg.EndMS == nil {
 			if (kind == Outro || kind == Preview) && start > 0 {
-				marks = append(marks, mark{Type: kind, StartMS: start})
+				marks = append(marks, mark{Type: kind, StartMS: start, Confidence: confidence})
 			}
 			continue
 		}
 		if end := int64(math.Round(*sg.EndMS)); start >= 0 && end > start {
-			marks = append(marks, mark{Type: kind, StartMS: start, EndMS: &end})
+			marks = append(marks, mark{Type: kind, StartMS: start, EndMS: &end, Confidence: confidence})
 		}
 	}
 	return marks, nil

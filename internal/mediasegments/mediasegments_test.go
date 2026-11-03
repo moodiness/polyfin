@@ -159,6 +159,19 @@ var episode = Title{Item: accounts.ID{1}, IMDb: "tt0903747", TMDB: "1396", Seaso
 
 func at(seconds float64) time.Duration { return time.Duration(seconds * float64(time.Second)) }
 
+// spans are segments without where they come from, which
+// TestSegmentsTellWhereTheyComeFrom checks.
+func spans(segments []Segment) []Segment {
+	if segments == nil {
+		return nil
+	}
+	plain := make([]Segment, len(segments))
+	for i, segment := range segments {
+		plain[i] = Segment{Type: segment.Type, Start: segment.Start, End: segment.End}
+	}
+	return plain
+}
+
 func TestSegmentsMergeTheDatabasesByPreference(t *testing.T) {
 	d := newDatabases(t)
 	// TheIntroDB has an intro from the start, credits to the end, and
@@ -177,7 +190,7 @@ func TestSegmentsMergeTheDatabasesByPreference(t *testing.T) {
 		"post_credits":{"start_ms":3550000,"end_ms":3590000,"start_sec":3550,"end_sec":3590,"confidence":1,"submission_count":1}}`)
 
 	s, _ := service(t, d, TheIntroDB, IntroDB)
-	got := s.Segments(t.Context(), episode)
+	got := spans(s.Segments(t.Context(), episode))
 	want := []Segment{
 		{Type: Recap, Start: 0, End: at(25)},
 		{Type: Intro, Start: 0, End: at(30.5)},
@@ -203,7 +216,7 @@ func TestSegmentsMergeTheDatabasesByPreference(t *testing.T) {
 		{Type: Intro, Start: at(40), End: at(70)},
 		{Type: Outro, Start: at(3400), End: at(3500)},
 	}
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, want) {
 		t.Errorf("preferring IntroDB: got %+v, want %+v", got, want)
 	}
 }
@@ -223,7 +236,7 @@ func TestMoviesAreAskedAsMovies(t *testing.T) {
 		{Type: Preview, Start: at(100), End: at(160)},
 		{Type: Outro, Start: at(5900), End: at(6100)},
 	}
-	if got := s.Segments(t.Context(), movie); !slices.Equal(got, want) {
+	if got := spans(s.Segments(t.Context(), movie)); !slices.Equal(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
 	if q := d.last("/media"); q.Get("imdb_id") != "tt0111161" || q.Has("tmdb_id") || q.Has("season") || q.Has("duration_ms") {
@@ -238,7 +251,7 @@ func TestAnswersAreKeptUntilTheyExpire(t *testing.T) {
 	d := newDatabases(t)
 	d.reply("/media", http.StatusOK, `{"tmdb_id":1396,"type":"tv","season":1,"episode":2,"intro":[{"start_ms":1000,"end_ms":31000}]}`)
 	s, c := service(t, d, TheIntroDB, IntroDB)
-	first := s.Segments(t.Context(), episode)
+	first := spans(s.Segments(t.Context(), episode))
 	if len(first) != 1 {
 		t.Fatalf("segments %+v", first)
 	}
@@ -246,7 +259,7 @@ func TestAnswersAreKeptUntilTheyExpire(t *testing.T) {
 	if a, b := d.calls(); a != 1 || b != 1 {
 		t.Fatalf("asked %d and %d times", a, b)
 	}
-	if again := s.Segments(t.Context(), episode); !slices.Equal(again, first) {
+	if again := spans(s.Segments(t.Context(), episode)); !slices.Equal(again, first) {
 		t.Errorf("kept segments %+v, first %+v", again, first)
 	}
 	if a, b := d.calls(); a != 1 || b != 1 {
@@ -254,13 +267,13 @@ func TestAnswersAreKeptUntilTheyExpire(t *testing.T) {
 	}
 	// A day later, IntroDB is asked again, not TheIntroDB.
 	c.advance(24*time.Hour + time.Minute)
-	s.Segments(t.Context(), episode)
+	spans(s.Segments(t.Context(), episode))
 	if a, b := d.calls(); a != 1 || b != 2 {
 		t.Errorf("after a day: asked %d and %d times", a, b)
 	}
 	// After 30 days, TheIntroDB is asked again.
 	c.advance(29 * 24 * time.Hour)
-	s.Segments(t.Context(), episode)
+	spans(s.Segments(t.Context(), episode))
 	if a, _ := d.calls(); a != 2 {
 		t.Errorf("after 30 days: TheIntroDB asked %d times", a)
 	}
@@ -272,11 +285,11 @@ func TestEmptyAnswersCountAsNothingFound(t *testing.T) {
 	d.reply("/segments", http.StatusOK, `{"imdb_id":"tt0903747","media_type":"tv","is_movie":false,"season":1,"episode":2,
 		"intro":null,"recap":null,"outro":null,"post_credits":null}`)
 	s, c := service(t, d, TheIntroDB, IntroDB)
-	if got := s.Segments(t.Context(), episode); len(got) != 0 {
+	if got := spans(s.Segments(t.Context(), episode)); len(got) != 0 {
 		t.Errorf("segments %+v", got)
 	}
 	c.advance(23 * time.Hour)
-	s.Segments(t.Context(), episode)
+	spans(s.Segments(t.Context(), episode))
 	if a, b := d.calls(); a != 1 || b != 1 {
 		t.Errorf("nothing found was asked again within a day: %d and %d times", a, b)
 	}
@@ -288,12 +301,12 @@ func TestAFailingDatabaseLeavesTheOtherAnswering(t *testing.T) {
 	d.reply("/segments", http.StatusOK, `{"imdb_id":"tt0903747","intro":{"start_ms":40000,"end_ms":70000},"recap":null,"outro":null}`)
 	s, c := service(t, d, TheIntroDB, IntroDB)
 	want := []Segment{{Type: Intro, Start: at(40), End: at(70)}}
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
 	// The refusal is not repeated within the hour.
 	c.advance(59 * time.Minute)
-	s.Segments(t.Context(), episode)
+	spans(s.Segments(t.Context(), episode))
 	if a, b := d.calls(); a != 1 || b != 1 {
 		t.Errorf("within the hour: asked %d and %d times", a, b)
 	}
@@ -302,7 +315,7 @@ func TestAFailingDatabaseLeavesTheOtherAnswering(t *testing.T) {
 	d.reply("/media", http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":20000}]}`)
 	c.advance(2 * time.Minute)
 	want = []Segment{{Type: Intro, Start: 0, End: at(20)}}
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, want) {
 		t.Errorf("after the hour: got %+v, want %+v", got, want)
 	}
 	if a, b := d.calls(); a != 2 || b != 1 {
@@ -312,13 +325,13 @@ func TestAFailingDatabaseLeavesTheOtherAnswering(t *testing.T) {
 	// is still used.
 	d.reply("/media", http.StatusInternalServerError, `{"error":"down"}`)
 	c.advance(31 * 24 * time.Hour)
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, want) {
 		t.Errorf("after a failure: got %+v, want %+v", got, want)
 	}
 	// A body that is not the expected JSON is a failure too.
 	d.reply("/media", http.StatusOK, `<html>maintenance</html>`)
 	c.advance(2 * time.Hour)
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, want) {
 		t.Errorf("after a broken answer: got %+v, want %+v", got, want)
 	}
 }
@@ -326,7 +339,7 @@ func TestAFailingDatabaseLeavesTheOtherAnswering(t *testing.T) {
 func TestNothingIsAskedWithoutDatabasesOrIdentifiers(t *testing.T) {
 	d := newDatabases(t)
 	s, _ := service(t, d)
-	if got := s.Segments(t.Context(), episode); got != nil {
+	if got := spans(s.Segments(t.Context(), episode)); got != nil {
 		t.Errorf("disabled: %+v", got)
 	}
 	s, _ = service(t, d, TheIntroDB, IntroDB)
@@ -334,12 +347,12 @@ func TestNothingIsAskedWithoutDatabasesOrIdentifiers(t *testing.T) {
 		{Item: accounts.ID{3}, IMDb: "tt12", TMDB: "abc"},
 		{Item: accounts.ID{4}, IMDb: "tt0903747", Season: 0, Episode: 3},
 	} {
-		if got := s.Segments(t.Context(), title); got != nil {
+		if got := spans(s.Segments(t.Context(), title)); got != nil {
 			t.Errorf("%+v: %+v", title, got)
 		}
 	}
 	// IntroDB knows titles by IMDb identifier only.
-	s.Segments(t.Context(), Title{Item: accounts.ID{5}, TMDB: "550"})
+	spans(s.Segments(t.Context(), Title{Item: accounts.ID{5}, TMDB: "550"}))
 	if a, b := d.calls(); a != 1 || b != 0 {
 		t.Errorf("asked %d and %d times", a, b)
 	}
@@ -391,7 +404,7 @@ func TestPublicMetaDBJoinsTheOtherDatabasesByPreference(t *testing.T) {
 		{Type: Outro, Start: at(3431), End: time.Hour},
 		{Type: Preview, Start: at(3540), End: at(3570)},
 	}
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
 	if q := d.last(publicMetaDBPath); q.Get("tmdb_id") != "1396" || q.Get("media_type") != "tv" || q.Get("season") != "1" || q.Get("episode") != "2" {
@@ -415,7 +428,7 @@ func TestPublicMetaDBJoinsTheOtherDatabasesByPreference(t *testing.T) {
 		{Type: Outro, Start: at(3431), End: time.Hour},
 		{Type: Preview, Start: at(3540), End: at(3570)},
 	}
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, want) {
 		t.Errorf("preferring PublicMetaDB: got %+v, want %+v", got, want)
 	}
 }
@@ -426,7 +439,7 @@ func TestPublicMetaDBIsAskedOnlyWithAKey(t *testing.T) {
 	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
 	s, _ := service(t, d, TheIntroDB, PublicMetaDB)
 	theIntroDBOnly := []Segment{{Type: Intro, Start: 0, End: at(30.5)}}
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, theIntroDBOnly) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, theIntroDBOnly) {
 		t.Errorf("without a key: got %+v", got)
 	}
 	if auth := d.publicMetaDB(); len(auth) != 0 {
@@ -441,21 +454,21 @@ func TestPublicMetaDBIsAskedOnlyWithAKey(t *testing.T) {
 		{Type: Intro, Start: 0, End: at(30.5)},
 		{Type: Preview, Start: at(3540), End: at(3570)},
 	}
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, withPublicMetaDB) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, withPublicMetaDB) {
 		t.Errorf("once a key is saved: got %+v, want %+v", got, withPublicMetaDB)
 	}
-	s.Segments(t.Context(), episode)
+	spans(s.Segments(t.Context(), episode))
 	if a, _ := d.calls(); a != 1 || !slices.Equal(d.publicMetaDB(), []string{"Bearer " + goodKey}) {
 		t.Errorf("asked TheIntroDB %d times, PublicMetaDB with %q", a, d.publicMetaDB())
 	}
 	// Once the key is removed, PublicMetaDB's segments go and it is not
 	// asked; saved again, they come back from what it answered.
 	useKey(s, "")
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, theIntroDBOnly) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, theIntroDBOnly) {
 		t.Errorf("key removed: got %+v", got)
 	}
 	useKey(s, goodKey)
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, withPublicMetaDB) || len(d.publicMetaDB()) != 1 {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, withPublicMetaDB) || len(d.publicMetaDB()) != 1 {
 		t.Errorf("key saved again: got %+v, PublicMetaDB asked %d times", got, len(d.publicMetaDB()))
 	}
 }
@@ -469,14 +482,14 @@ func TestPublicMetaDBKnowsTitlesByTMDBIdentifier(t *testing.T) {
 	s, _ := service(t, d, IntroDB, PublicMetaDB)
 	useKey(s, goodKey)
 	movie := Title{Item: accounts.ID{2}, IMDb: "tt0137523", TMDB: "550"}
-	if got, want := s.Segments(t.Context(), movie), []Segment{{Type: Outro, Start: at(7900), End: at(8300)}}; !slices.Equal(got, want) {
+	if got, want := spans(s.Segments(t.Context(), movie)), []Segment{{Type: Outro, Start: at(7900), End: at(8300)}}; !slices.Equal(got, want) {
 		t.Errorf("movie: got %+v, want %+v", got, want)
 	}
 	if q := d.last(publicMetaDBPath); q.Get("tmdb_id") != "550" || q.Get("media_type") != "movie" || q.Has("season") || q.Has("episode") {
 		t.Errorf("PublicMetaDB was asked %v", q)
 	}
 	// Without a TMDB identifier, only IntroDB is asked.
-	s.Segments(t.Context(), Title{Item: accounts.ID{3}, IMDb: "tt0903747", Season: 1, Episode: 1})
+	spans(s.Segments(t.Context(), Title{Item: accounts.ID{3}, IMDb: "tt0903747", Season: 1, Episode: 1}))
 	if _, b := d.calls(); b != 2 || len(d.publicMetaDB()) != 1 {
 		t.Errorf("asked IntroDB %d times and PublicMetaDB %d times", b, len(d.publicMetaDB()))
 	}
@@ -496,10 +509,10 @@ func TestARefusedKeyIsNotAskedWithAgain(t *testing.T) {
 		{Item: accounts.ID{3}, TMDB: "1396", Season: 1, Episode: 3},
 	}
 	for _, title := range titles {
-		s.Segments(t.Context(), title)
+		spans(s.Segments(t.Context(), title))
 	}
 	c.advance(48 * time.Hour)
-	s.Segments(t.Context(), episode)
+	spans(s.Segments(t.Context(), episode))
 	if asked := len(d.publicMetaDB()); asked != 1 {
 		t.Errorf("a refused key was asked with %d times", asked)
 	}
@@ -510,7 +523,7 @@ func TestARefusedKeyIsNotAskedWithAgain(t *testing.T) {
 	d.reply(publicMetaDBPath, http.StatusForbidden, `{"error":"Forbidden"}`)
 	useKey(s, goodKey+"2")
 	for _, title := range titles {
-		s.Segments(t.Context(), title)
+		spans(s.Segments(t.Context(), title))
 	}
 	if asked := len(d.publicMetaDB()); asked != 2 {
 		t.Errorf("with a second key: asked %d times", asked)
@@ -519,7 +532,7 @@ func TestARefusedKeyIsNotAskedWithAgain(t *testing.T) {
 	// to answer were not asked.
 	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
 	useKey(s, goodKey)
-	if got := s.Segments(t.Context(), episode); len(got) != 3 {
+	if got := spans(s.Segments(t.Context(), episode)); len(got) != 3 {
 		t.Errorf("with an accepted key: %+v", got)
 	}
 	if auth := d.publicMetaDB(); len(auth) != 3 || auth[2] != "Bearer "+goodKey {
@@ -530,12 +543,12 @@ func TestARefusedKeyIsNotAskedWithAgain(t *testing.T) {
 	const restored = "pm-Restored0000000000000000000000000000000000000000000000000000"
 	d.reply(publicMetaDBPath, http.StatusUnauthorized, `{"error":"Invalid or missing API key"}`)
 	useKey(s, restored)
-	s.Segments(t.Context(), titles[1])
+	spans(s.Segments(t.Context(), titles[1]))
 	d.reply(publicMetaDBPath, http.StatusOK, skipPage())
 	if err := s.CheckKey(t.Context(), PublicMetaDB, restored); err != nil {
 		t.Fatal(err)
 	}
-	s.Segments(t.Context(), titles[1])
+	spans(s.Segments(t.Context(), titles[1]))
 	if auth := d.publicMetaDB(); len(auth) != 6 || auth[5] != "Bearer "+restored {
 		t.Errorf("after the check: %d requests", len(auth))
 	}
@@ -550,8 +563,8 @@ func TestARateLimitHoldsForEveryTitle(t *testing.T) {
 	s, c := service(t, d, TheIntroDB, PublicMetaDB)
 	useKey(s, goodKey)
 	movie := Title{Item: accounts.ID{2}, TMDB: "550"}
-	s.Segments(t.Context(), episode)
-	s.Segments(t.Context(), movie)
+	spans(s.Segments(t.Context(), episode))
+	spans(s.Segments(t.Context(), movie))
 	if asked := len(d.publicMetaDB()); asked != 1 {
 		t.Errorf("during the rate limit: asked %d times", asked)
 	}
@@ -563,21 +576,21 @@ func TestARateLimitHoldsForEveryTitle(t *testing.T) {
 	// asked again an hour later, as after any failure.
 	d.reply(publicMetaDBPath, http.StatusOK, skipPage(episodeRecords...))
 	c.advance(3 * time.Minute)
-	s.Segments(t.Context(), movie)
-	s.Segments(t.Context(), episode)
+	spans(s.Segments(t.Context(), movie))
+	spans(s.Segments(t.Context(), episode))
 	if asked := len(d.publicMetaDB()); asked != 2 {
 		t.Errorf("after the rate limit: asked %d times", asked)
 	}
 	c.advance(time.Hour)
-	if got := s.Segments(t.Context(), episode); len(got) != 3 || len(d.publicMetaDB()) != 3 {
+	if got := spans(s.Segments(t.Context(), episode)); len(got) != 3 || len(d.publicMetaDB()) != 3 {
 		t.Errorf("an hour later: %+v, asked %d times", got, len(d.publicMetaDB()))
 	}
 	// Retry-After may be a date.
 	d.limit(publicMetaDBPath, c.now.Add(10*time.Minute).Format(http.TimeFormat))
-	s.Segments(t.Context(), Title{Item: accounts.ID{3}, TMDB: "1396", Season: 2, Episode: 1})
-	s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 2, Episode: 2})
+	spans(s.Segments(t.Context(), Title{Item: accounts.ID{3}, TMDB: "1396", Season: 2, Episode: 1}))
+	spans(s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 2, Episode: 2}))
 	c.advance(11 * time.Minute)
-	s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 2, Episode: 2})
+	spans(s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 2, Episode: 2}))
 	if asked := len(d.publicMetaDB()); asked != 5 {
 		t.Errorf("with a date: asked %d times", asked)
 	}
@@ -593,7 +606,7 @@ func TestTheSavedOrderChangesWhichDatabaseWins(t *testing.T) {
 	intro := func(order ...string) Segment {
 		t.Helper()
 		useSettings(s, accounts.Settings{PublicMetaDBKey: goodKey, SegmentOrder: order})
-		for _, segment := range s.Segments(t.Context(), episode) {
+		for _, segment := range spans(s.Segments(t.Context(), episode)) {
 			if segment.Type == Intro {
 				return segment
 			}
@@ -625,7 +638,7 @@ func TestTheSavedOrderChangesWhichDatabaseWins(t *testing.T) {
 	// The order does not bring PublicMetaDB in without a key.
 	s, _ = service(t, d, TheIntroDB, IntroDB, PublicMetaDB)
 	useSettings(s, accounts.Settings{SegmentOrder: []string{PublicMetaDB, IntroDB, TheIntroDB}})
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{introDB}) || len(d.publicMetaDB()) != 1 {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, []Segment{introDB}) || len(d.publicMetaDB()) != 1 {
 		t.Errorf("without a key: %+v, asked %d times", got, len(d.publicMetaDB()))
 	}
 }
@@ -643,7 +656,7 @@ func TestOnlyTheDatabasesTurnedOnAreAsked(t *testing.T) {
 	if !s.Asks() {
 		t.Error("asks nothing with two databases on")
 	}
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{{Type: Intro, Start: 0, End: at(30.5)}}) ||
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, []Segment{{Type: Intro, Start: 0, End: at(30.5)}}) ||
 		len(d.publicMetaDB()) != 0 {
 		t.Errorf("PublicMetaDB off: %+v, asked %d times", got, len(d.publicMetaDB()))
 	}
@@ -652,7 +665,7 @@ func TestOnlyTheDatabasesTurnedOnAreAsked(t *testing.T) {
 	}
 	// Turned back on, it is asked, and wins where it has segments.
 	useSettings(s, accounts.Settings{PublicMetaDBKey: goodKey, SegmentOrder: order, SegmentSourcesOff: []string{}})
-	if got := s.Segments(t.Context(), episode); len(got) == 0 || got[1] != (Segment{Type: Intro, Start: at(15), End: at(62)}) ||
+	if got := spans(s.Segments(t.Context(), episode)); len(got) == 0 || got[1] != (Segment{Type: Intro, Start: at(15), End: at(62)}) ||
 		len(d.publicMetaDB()) != 1 {
 		t.Errorf("PublicMetaDB back on: %+v, asked %d times", got, len(d.publicMetaDB()))
 	}
@@ -661,7 +674,7 @@ func TestOnlyTheDatabasesTurnedOnAreAsked(t *testing.T) {
 	if s.Asks() {
 		t.Error("asks with every database off")
 	}
-	if got := s.Segments(t.Context(), Title{Item: accounts.ID{9}, IMDb: "tt0111161"}); got != nil {
+	if got := spans(s.Segments(t.Context(), Title{Item: accounts.ID{9}, IMDb: "tt0111161"})); got != nil {
 		t.Errorf("every database off: %+v", got)
 	}
 	if a, b := d.calls(); a != 1 || b != 1 || len(d.publicMetaDB()) != 1 {
@@ -681,10 +694,10 @@ func TestTheIntroDBKeyIsUsedUntilRefused(t *testing.T) {
 	want := []Segment{{Type: Intro, Start: 0, End: at(30.5)}}
 	title := func(n byte) Title { return Title{Item: accounts.ID{n}, TMDB: "1396", Season: 1, Episode: int(n)} }
 
-	s.Segments(t.Context(), title(1))
+	spans(s.Segments(t.Context(), title(1)))
 	const key = "tidb-Accepted"
 	useSettings(s, accounts.Settings{TheIntroDBKey: key})
-	s.Segments(t.Context(), title(2))
+	spans(s.Segments(t.Context(), title(2)))
 	if auth := d.authorizations(theIntroDBPath); !slices.Equal(auth, []string{"", "Bearer " + key}) {
 		t.Fatalf("without, then with a key: %q", auth)
 	}
@@ -696,7 +709,7 @@ func TestTheIntroDBKeyIsUsedUntilRefused(t *testing.T) {
 	d.refuse(theIntroDBPath, refused)
 	useSettings(s, accounts.Settings{TheIntroDBKey: refused})
 	for n := byte(3); n <= 5; n++ {
-		if got := s.Segments(t.Context(), title(n)); !slices.Equal(got, want) {
+		if got := spans(s.Segments(t.Context(), title(n))); !slices.Equal(got, want) {
 			t.Errorf("episode %d with a refused key: %+v", n, got)
 		}
 	}
@@ -708,7 +721,7 @@ func TestTheIntroDBKeyIsUsedUntilRefused(t *testing.T) {
 	}
 	// Another key is sent at once.
 	useSettings(s, accounts.Settings{TheIntroDBKey: key})
-	s.Segments(t.Context(), title(6))
+	spans(s.Segments(t.Context(), title(6)))
 	if auth := d.authorizations(theIntroDBPath); auth[len(auth)-1] != "Bearer "+key {
 		t.Errorf("with another key: %q", auth[len(auth)-1])
 	}
@@ -800,7 +813,7 @@ func TestSkipDBGivesItsSegmentsButThoseOutOfRange(t *testing.T) {
 		{Type: Intro, Start: at(61), End: at(91)},
 		{Type: Outro, Start: at(3420), End: at(3540)},
 	}
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, want) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
 	// An episode is asked by its series' IMDb identifier, its numbers and
@@ -821,14 +834,14 @@ func TestSkipDBGivesItsSegmentsButThoseOutOfRange(t *testing.T) {
 		"outro":{"start_ms":6000000,"end_ms":null,"match":"agnostic","confidence":1},
 		"preview":{"start_ms":100000,"end_ms":160000,"match":"agnostic","confidence":0.5}}}`)
 	movie := Title{Item: accounts.ID{2}, IMDb: "tt0111161"}
-	if got := s.Segments(t.Context(), movie); !slices.Equal(got, []Segment{{Type: Preview, Start: at(100), End: at(160)}}) {
+	if got := spans(s.Segments(t.Context(), movie)); !slices.Equal(got, []Segment{{Type: Preview, Start: at(100), End: at(160)}}) {
 		t.Errorf("movie: %+v", got)
 	}
 	if q := d.last(skipDBPath); q.Get("imdb_id") != "tt0111161" || len(q) != 1 {
 		t.Errorf("SkipDB was asked %v", q)
 	}
 	movie.Item, movie.Runtime = accounts.ID{3}, 6100*time.Second
-	if got := s.Segments(t.Context(), movie); !slices.Equal(got, []Segment{
+	if got := spans(s.Segments(t.Context(), movie)); !slices.Equal(got, []Segment{
 		{Type: Preview, Start: at(100), End: at(160)}, {Type: Outro, Start: at(6000), End: at(6100)},
 	}) {
 		t.Errorf("movie with its runtime: %+v", got)
@@ -836,7 +849,7 @@ func TestSkipDBGivesItsSegmentsButThoseOutOfRange(t *testing.T) {
 
 	// A title known by its TMDB identifier only is not asked about.
 	before := len(d.authorizations(skipDBPath))
-	if got := s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 1, Episode: 2}); got != nil {
+	if got := spans(s.Segments(t.Context(), Title{Item: accounts.ID{4}, TMDB: "1396", Season: 1, Episode: 2})); got != nil {
 		t.Errorf("TMDB only: %+v", got)
 	}
 	if asked := len(d.authorizations(skipDBPath)); asked != before {
@@ -853,20 +866,65 @@ func TestSkipDBTakesItsPlaceInTheOrder(t *testing.T) {
 	skipDB := Segment{Type: Intro, Start: at(61), End: at(91)}
 	credits := Segment{Type: Outro, Start: at(3420), End: at(3540)}
 	// Last, SkipDB fills the gaps: the credits TheIntroDB lacks.
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{theIntroDB, credits}) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, []Segment{theIntroDB, credits}) {
 		t.Errorf("last: %+v", got)
 	}
 	// First, its intro wins too.
 	useSettings(s, accounts.Settings{SegmentOrder: []string{SkipDB, TheIntroDB, IntroDB, PublicMetaDB}})
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{skipDB, credits}) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, []Segment{skipDB, credits}) {
 		t.Errorf("first: %+v", got)
 	}
 	// Turned off, it gives nothing, and a title is not asked about.
 	useSettings(s, accounts.Settings{SegmentOrder: []string{SkipDB, TheIntroDB, IntroDB, PublicMetaDB}, SegmentSourcesOff: []string{SkipDB}})
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{theIntroDB}) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, []Segment{theIntroDB}) {
 		t.Errorf("off: %+v", got)
 	}
 	s.Segments(t.Context(), Title{Item: accounts.ID{5}, IMDb: "tt0903747", Season: 1, Episode: 3})
+	if asked := len(d.authorizations(skipDBPath)); asked != 1 {
+		t.Errorf("SkipDB asked %d times", asked)
+	}
+}
+
+// Each segment tells the database it comes from, and SkipDB's its
+// confidence in it, also once read back from the answers kept; those
+// outside 0 to 1 are none.
+func TestSegmentsTellWhereTheyComeFrom(t *testing.T) {
+	d := newDatabases(t)
+	d.reply(theIntroDBPath, http.StatusOK, `{"intro":[{"start_ms":null,"end_ms":30500}]}`)
+	d.reply(skipDBPath, http.StatusOK, `{"imdb_id":"tt0903747","season":1,"episode":2,"segments":{
+		"intro":{"start_ms":61000,"end_ms":91000,"match":"exact","confidence":0.93},
+		"outro":{"start_ms":3420000,"end_ms":3540000,"match":"shifted","confidence":0.8},
+		"recap":{"start_ms":0,"end_ms":20000,"match":"exact","confidence":7}}}`)
+	s, _ := service(t, d, TheIntroDB, SkipDB)
+	type origin struct {
+		Type       Type
+		Database   string
+		Confidence float64
+		Rated      bool
+	}
+	origins := func(segments []Segment) []origin {
+		var found []origin
+		for _, segment := range segments {
+			o := origin{Type: segment.Type, Database: segment.Origin.Database}
+			if segment.Origin.Found != InDatabase {
+				o.Database = "found " + string(segment.Origin.Found)
+			}
+			if c := segment.Origin.Confidence; c != nil {
+				o.Confidence, o.Rated = *c, true
+			}
+			found = append(found, o)
+		}
+		return found
+	}
+	want := []origin{{Recap, SkipDB, 0, false}, {Intro, TheIntroDB, 0, false}, {Outro, SkipDB, 0.8, true}}
+	if got := origins(s.Segments(t.Context(), episode)); !slices.Equal(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+	again := New(s.db, s.sources, "test", s.logger, s.settings)
+	again.now = s.now
+	if got := origins(again.Segments(t.Context(), episode)); !slices.Equal(got, want) {
+		t.Errorf("read back: got %+v, want %+v", got, want)
+	}
 	if asked := len(d.authorizations(skipDBPath)); asked != 1 {
 		t.Errorf("SkipDB asked %d times", asked)
 	}
@@ -880,10 +938,10 @@ func TestSkipDBRateLimitIsWaitedOut(t *testing.T) {
 	other := Title{Item: accounts.ID{6}, IMDb: "tt0903747", Season: 1, Episode: 3}
 	// Limited, SkipDB leaves TheIntroDB's intro, and is asked about no
 	// other title until Retry-After ends; TheIntroDB is not held back.
-	if got := s.Segments(t.Context(), episode); !slices.Equal(got, []Segment{{Type: Intro, Start: 0, End: at(30.5)}}) {
+	if got := spans(s.Segments(t.Context(), episode)); !slices.Equal(got, []Segment{{Type: Intro, Start: 0, End: at(30.5)}}) {
 		t.Errorf("limited: %+v", got)
 	}
-	s.Segments(t.Context(), other)
+	spans(s.Segments(t.Context(), other))
 	if asked, a := len(d.authorizations(skipDBPath)), len(d.authorizations(theIntroDBPath)); asked != 1 || a != 2 {
 		t.Errorf("during the rate limit: SkipDB asked %d times, TheIntroDB %d", asked, a)
 	}
@@ -891,21 +949,21 @@ func TestSkipDBRateLimitIsWaitedOut(t *testing.T) {
 	// after a failure.
 	d.reply(skipDBPath, http.StatusOK, skipDBEpisode)
 	c.advance(2 * time.Minute)
-	if got := s.Segments(t.Context(), other); len(got) != 2 || got[0] != (Segment{Type: Intro, Start: at(61), End: at(91)}) {
+	if got := spans(s.Segments(t.Context(), other)); len(got) != 2 || got[0] != (Segment{Type: Intro, Start: at(61), End: at(91)}) {
 		t.Errorf("after the rate limit: %+v", got)
 	}
-	s.Segments(t.Context(), episode)
+	spans(s.Segments(t.Context(), episode))
 	if asked := len(d.authorizations(skipDBPath)); asked != 2 {
 		t.Errorf("after the rate limit: asked %d times", asked)
 	}
 	c.advance(time.Hour)
-	if got := s.Segments(t.Context(), episode); len(got) != 2 || len(d.authorizations(skipDBPath)) != 3 {
+	if got := spans(s.Segments(t.Context(), episode)); len(got) != 2 || len(d.authorizations(skipDBPath)) != 3 {
 		t.Errorf("an hour later: %+v, asked %d times", got, len(d.authorizations(skipDBPath)))
 	}
 	// A failure later keeps what it found before.
 	d.reply(skipDBPath, http.StatusServiceUnavailable, `{"error":"down"}`)
 	c.advance(31 * 24 * time.Hour)
-	if got := s.Segments(t.Context(), episode); len(got) != 2 || len(d.authorizations(skipDBPath)) != 4 {
+	if got := spans(s.Segments(t.Context(), episode)); len(got) != 2 || len(d.authorizations(skipDBPath)) != 4 {
 		t.Errorf("after a failure: %+v, asked %d times", got, len(d.authorizations(skipDBPath)))
 	}
 }

@@ -357,6 +357,7 @@ func New(options Options) *Handler {
 	h.configurationRoutes(rt)
 	h.localizationRoutes(rt)
 	signedIn(http.MethodGet, "/MediaSegments/{itemId}", h.mediaSegments)
+	signedIn(http.MethodGet, "/Polyfin/MediaSegments/{itemId}", h.segmentOrigins)
 	h.playlistRoutes(rt)
 	h.syncPlayRoutes(rt)
 	h.collectionRoutes(rt)

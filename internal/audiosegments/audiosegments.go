@@ -180,7 +180,8 @@ func (s *Service) Segments(ctx context.Context, address string) []mediasegments.
 			return nil
 		}
 		segments = append(segments, mediasegments.Segment{Type: mediasegments.Type(kind),
-			Start: time.Duration(start) * time.Millisecond, End: time.Duration(end) * time.Millisecond})
+			Start: time.Duration(start) * time.Millisecond, End: time.Duration(end) * time.Millisecond,
+			Origin: mediasegments.Origin{Found: mediasegments.InAudio}})
 	}
 	if err := rows.Err(); err != nil {
 		s.Logger.Warn("The segments found in a local episode's audio could not be read", "error", err)
