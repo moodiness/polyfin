@@ -20,6 +20,7 @@ func (s *Server) browseRoutes() {
 	s.mux.HandleFunc("GET /api/v2/home/sections", s.profiled(s.homeSections))
 	s.mux.HandleFunc("GET /api/v2/home/sections/{id}/items", s.profiled(s.homeSection))
 	s.mux.HandleFunc("GET /api/v2/home/capabilities", s.profiled(s.homeCapabilities))
+	s.mux.HandleFunc("GET /api/v2/home/layout", s.profiled(s.homeLayout))
 	s.mux.HandleFunc("GET /api/v2/catalog", s.profiled(s.catalog))
 	s.mux.HandleFunc("GET /api/v2/catalog/search/capabilities", s.profiled(s.searchCapabilities))
 	s.mux.HandleFunc("GET /api/v2/catalog/items/{id}", s.profiled(s.catalogItem))
@@ -394,7 +395,8 @@ func (sec *section) cut(limit int) bool {
 }
 
 // homeCapabilities tells the apps the section reads take item_limit, up to
-// maxItemLimit: the apps then ask each row's first cards only.
+// maxItemLimit, and the layout include_items, up to maxIncludeItems: the
+// apps then ask each row's first cards only.
 func (s *Server) homeCapabilities(w http.ResponseWriter, _ *http.Request, _ viewer) {
 	writeJSON(w, http.StatusOK, struct {
 		State               string `json:"state"`
@@ -402,7 +404,8 @@ func (s *Server) homeCapabilities(w http.ResponseWriter, _ *http.Request, _ view
 		Revision            string `json:"revision"`
 		SectionItemLimitMax int    `json:"section_item_limit_max"`
 		RowItemLimitMax     int    `json:"row_item_limit_max"`
-	}{"available", true, revision, maxItemLimit, maxItemLimit})
+		IncludeItemsMax     int    `json:"include_items_max"`
+	}{"available", true, revision, maxItemLimit, maxItemLimit, maxIncludeItems})
 }
 
 // sectionTitles are the titles of the Home sections, by the server's
@@ -496,16 +499,87 @@ func (s *Server) sectionOf(r *http.Request, v viewer, id, title string, library 
 	return sec, a, nil
 }
 
-// homeSections are the sections of the Home page: those with titles. The
-// row of each library follows the user's home screen settings, as
-// jellyfin-web's latest titles do: the libraries in the order they set,
-// without those they left out of their latest titles. item_limit cuts
-// each to its first titles.
+// homeSections are the sections of the Home page (see homeList), each cut
+// to its first titles by item_limit.
 func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) {
 	limit, ok := itemLimitAsked(w, r)
 	if !ok {
 		return
 	}
+	sections, ok := s.homeList(w, r, v)
+	if !ok {
+		return
+	}
+	for i := range sections {
+		sections[i].cut(limit)
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Sections []section `json:"sections"`
+	}{sections})
+}
+
+// layoutEntry is a Home section as the layout names it, without its
+// cards.
+type layoutEntry struct {
+	ID         string `json:"id"`
+	Type       string `json:"section_type"`
+	Title      string `json:"title"`
+	Featured   bool   `json:"featured"`
+	ItemLimit  int    `json:"item_limit"`
+	IsCustom   bool   `json:"is_custom"`
+	Customized bool   `json:"customized"`
+}
+
+// maxIncludeItems is the largest include_items the layout takes, as the
+// contract's.
+const maxIncludeItems = 4
+
+// homeLayout names the sections of the Home page, in order, without their
+// cards: those homeSections lists, under the same identifiers and types
+// as their own reads (GET /api/v2/home/sections/{id}/items), which Silo's
+// Android TV app compares to fill the system's Watch Next row and Apple
+// TV's Top Shelf. include_items also answers the first sections with
+// their cards, each as its own read with the same item_limit answers it;
+// item_limit cuts only those.
+func (s *Server) homeLayout(w http.ResponseWriter, r *http.Request, v viewer) {
+	include := 0
+	if text := r.URL.Query().Get("include_items"); text != "" {
+		n, err := strconv.Atoi(text)
+		if err != nil || n < 0 || n > maxIncludeItems {
+			validationProblem(w, "query.include_items", "out_of_range", "include_items is between 0 and 4.")
+			return
+		}
+		include = n
+	}
+	limit, ok := itemLimitAsked(w, r)
+	if !ok {
+		return
+	}
+	sections, ok := s.homeList(w, r, v)
+	if !ok {
+		return
+	}
+	layout := struct {
+		Sections []layoutEntry `json:"sections"`
+		Included []section     `json:"included_sections"`
+	}{Sections: make([]layoutEntry, 0, len(sections)), Included: []section{}}
+	for i, sec := range sections {
+		layout.Sections = append(layout.Sections, layoutEntry{ID: sec.ID, Type: sec.Type, Title: sec.Title, Featured: sec.Featured,
+			ItemLimit: sec.ItemLimit, IsCustom: sec.IsCustom, Customized: sec.Customized})
+		if i < include {
+			sec.HasMore = sec.cut(limit)
+			layout.Included = append(layout.Included, sec)
+		}
+	}
+	writeJSON(w, http.StatusOK, layout)
+}
+
+// homeList are the sections of the Home page: those with titles. The row
+// of each library follows the user's home screen settings, as
+// jellyfin-web's latest titles do: the libraries in the order they set,
+// without those they left out of their latest titles. It answers the
+// request when they cannot be read.
+func (s *Server) homeList(w http.ResponseWriter, r *http.Request, v viewer) ([]section, bool) {
 	views, numbers, a, err := s.views(r, v)
 	var rows []homeRow
 	if err == nil && a.ok() {
@@ -519,11 +593,11 @@ func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) 
 	}
 	if err == nil && !a.ok() {
 		s.jellyfinRefusal(w, r, a)
-		return
+		return nil, false
 	}
 	if err != nil {
 		s.internalError(w, r, err)
-		return
+		return nil, false
 	}
 	views = slices.DeleteFunc(views, func(view item) bool { return slices.Contains(me.Configuration.LatestItemsExcludes, view.Id) })
 	libraries := make([]section, len(views))
@@ -540,12 +614,11 @@ func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) 
 	}
 	if err := group.Wait(); err != nil {
 		s.internalError(w, r, err)
-		return
+		return nil, false
 	}
 	sections := []section{}
 	add := func(sec section) {
 		if len(sec.Items) > 0 {
-			sec.cut(limit)
 			sections = append(sections, sec)
 		}
 	}
@@ -562,11 +635,11 @@ func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) 
 		sec, a, err := s.sectionOf(r, v, want.id, want.title, "")
 		if err != nil {
 			s.internalError(w, r, err)
-			return
+			return nil, false
 		}
 		if !a.ok() {
 			s.jellyfinRefusal(w, r, a)
-			return
+			return nil, false
 		}
 		add(sec)
 		rowsAt(want.rowsAfter)
@@ -574,14 +647,12 @@ func (s *Server) homeSections(w http.ResponseWriter, r *http.Request, v viewer) 
 	for i, sec := range libraries {
 		if !answers[i].ok() {
 			s.jellyfinRefusal(w, r, answers[i])
-			return
+			return nil, false
 		}
 		add(sec)
 	}
 	rowsAt("Bottom")
-	writeJSON(w, http.StatusOK, struct {
-		Sections []section `json:"sections"`
-	}{sections})
+	return sections, true
 }
 
 // homeSection is one section of the Home page, by its identifier, cut to
