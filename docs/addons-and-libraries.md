@@ -244,6 +244,8 @@ Polyfin decides once rather than at each listing so that a library keeps its typ
 - Videos play as movies do: directly, remuxed or converted, with their resume point and in Continue Watching. The tracking services hear nothing of them. A video whose stream has no end, such as a match on now, plays live (see [Live videos](playback.md#live-videos)).
 - Search finds them in the catalogs that offer it, as folders or videos. Parental control judges them as **Other**, unrated unless their details give a rating, and a video by its folder; blocked genres hide them by their details' genres. Hiding a folder, or one of its videos, hides the folder with its videos. A folder can be added to a collection.
 
+<a id="shown-as-movies-and-shows"></a>
+
 #### Other videos as movies and shows
 
 Some Jellyfin apps list only movies and shows: they leave out every library that is not of movies, shows, collections or mixed, and ask libraries for `Movie` and `Series` items only. Others open a folder as a show and ask for its episodes. **Show as** **Movies and shows**, in the row of a library of other videos, shows its titles as such apps expect (see [Show as](#show-as)).
