@@ -622,6 +622,11 @@ func (f *feed) open(user accounts.ID, recording bool) {
 	}
 	f.write(head)
 	close(f.ready)
+	if _, known := f.s.analyses.Get(f.version.ID); known {
+		// A stream analyzed before is not analyzed again, which would tell
+		// how it answered: it played once it answered with a live stream.
+		f.s.report(ctx, f.version, nil)
+	}
 	defer body.Close()
 	stall := time.AfterFunc(f.times.stall, cancel)
 	defer stall.Stop()

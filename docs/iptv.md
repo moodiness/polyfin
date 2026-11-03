@@ -140,7 +140,7 @@ Each channel watched or recorded takes one of the tuner's tuners, whoever reads 
 
 Streams play as IPTV channels do: as they come when the app takes them, else converted. Terrestrial video is often MPEG-2 and interlaced: a conversion deinterlaces it with **Deinterlacing method** (see [Transcoding](transcoding.md)). The user's **Live TV** permission, quality group and limits apply.
 
-A tuner that does not answer, or refuses a stream for another reason than its tuners being in use, shows under **System › Health** until one of its streams plays. A stream refused because every tuner was in use, by Polyfin or another app, is **Refused by the provider** (see [Stream health](#stream-health)), and is no fault of the tuner's. A tuner tells this with HDHomeRun's error 805; a plain 503, which proxies acting as a tuner answer once their connections are all in use, counts as the same.
+A tuner that does not answer, or refuses a stream for another reason than its tuners being in use, shows under **System › Health** until one of its streams plays, whether Polyfin knew the stream already or analyzed it for this play. A stream refused because every tuner was in use, by Polyfin or another app, is **Refused by the provider** (see [Stream health](#stream-health)), and is no fault of the tuner's. A tuner tells this with HDHomeRun's error 805; a plain 503, which proxies acting as a tuner answer once their connections are all in use, counts as the same.
 
 ## What to import
 
@@ -221,7 +221,7 @@ Each stream shows how it last answered when its channel was opened:
 - **Refused by the provider**: the provider would not serve it then (connections in use, too many requests). It is tried again at the next start.
 - **Needs a DRM Polyfin does not support**, and **The list's keys do not decrypt it**: see [DASH channels and encryption](#dash-channels-and-encryption). They are left out as a dead stream is.
 
-Streams that failed come after the others in their channel. A stream that plays, or that the list gives a new address, is healthy again. A start stopped or replaced while the stream opens or is analyzed, as when its viewer switches channels on a source of one connection, tells nothing of the stream: it records no failure, and the next start tries it again. **Try every stream again** forgets it all for the channel: its next start tries every stream at once, those that failed within the last 15 minutes included.
+Streams that failed come after the others in their channel. A stream that plays, or that the list gives a new address, is healthy again: a stream Polyfin analyzed before plays without another analysis, and counts as played once it answers with a live stream. A start stopped or replaced while the stream opens or is analyzed, as when its viewer switches channels on a source of one connection, tells nothing of the stream: it records no failure, and the next start tries it again. **Try every stream again** forgets it all for the channel: its next start tries every stream at once, those that failed within the last 15 minutes included.
 
 Edits work one by one or in bulk, by selection, category or keyword, with a count of what would change first. Lists are paged and searched by the server, so line-ups of tens of thousands of channels stay quick. An added stream's address follows the source's rule for local network addresses and is never shown in full.
 

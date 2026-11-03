@@ -895,3 +895,35 @@ func TestAReplacedStartIsNoFailure(t *testing.T) {
 		close(src.late)
 	}
 }
+
+// A stream analyzed before plays without being analyzed again: its health
+// is told it played once it answers, as the analysis would have told, so
+// that a tuner's problem clears on any play.
+func TestAPlayOfAStreamAnalyzedBeforeTellsItPlayed(t *testing.T) {
+	probe, err := os.ReadFile(filepath.Join(playbackFixtures, "probes", "h264-aac-mp4.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, runs := fakeProbe(t, string(probe), false)
+	src := &liveSource{interval: 5 * time.Millisecond}
+	s := liveService(t, src, path)
+	health := &healthReports{}
+	s.LiveSources(nil, health.tell)
+	version := channelVersion(1, "1.ts", accounts.ID{9})
+	if _, err := s.AnalyzeLive(t.Context(), version); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the analysis's connection to close", func() bool { open, _, _ := src.counts(); return open == 0 })
+	if reported := health.of(version.ID); !slices.Equal(reported, []string{""}) {
+		t.Fatalf("the analysis told %q", reported)
+	}
+	if _, err := s.AnalyzeLive(t.Context(), version); err != nil || runs() != 1 {
+		t.Fatalf("the stream was analyzed again: %d runs, %v", runs(), err)
+	}
+	reader, err := s.openFeed(t.Context(), version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	eventually(t, "the play to be told", func() bool { return slices.Equal(health.of(version.ID), []string{"", ""}) })
+}
