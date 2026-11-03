@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -518,5 +520,58 @@ func TestAnExpiredVersionPlaysByItsIdentifierUntilTheFollowUpsEnd(t *testing.T) 
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("PlaybackInfo did not answer")
+	}
+}
+
+// A title page is told, on the user's jellyfin-web sockets, once a version
+// it lists is analyzed: its track menus lack the tracks details list for
+// the version from then on, which Polyfin's script then shows.
+func TestAnAnalysisIsPushedToTheTitlePage(t *testing.T) {
+	t.Parallel()
+	probe := newFakeProbe(t, false)
+	addon := newHeldAddon(t, "Alpha", false)
+	h := heldOn(t, newProbingServer(t, 10, probe.path), addon.url)
+	// Only the play below analyzes a version.
+	h.setting(t, func(s *accounts.Settings) { s.PrepareAhead = false })
+	socket := h.openWebSocket(t, "member")
+	h.sources(t)
+	addon.answer()
+	h.reaches(t, VersionProgress{Pending: 0, Count: 2, Known: 2}, "Alpha", "Alpha")
+	audio := func(source MediaSourceInfo) bool {
+		return slices.ContainsFunc(source.MediaStreams, func(s playback.MediaStream) bool { return s.Type == "Audio" })
+	}
+	if audio(h.sources(t)[0]) {
+		t.Fatal("an audio track listed before any analysis")
+	}
+	probe.release(t)
+	answered := h.askPlaybackInfo(t, "")
+	deadline := time.After(10 * time.Second)
+	for told := false; !told; {
+		select {
+		case message := <-socket.messages:
+			if message.MessageType != versionsMessage {
+				continue
+			}
+			data, _ := json.Marshal(message.Data)
+			var pushed versionsPush
+			if err := json.Unmarshal(data, &pushed); err != nil {
+				t.Fatal(err)
+			}
+			if !pushed.Tracks {
+				continue
+			}
+			if pushed.ItemId != h.movie || pushed.Count != 2 {
+				t.Errorf("pushed %+v", pushed)
+			}
+			told = true
+		case <-deadline:
+			t.Fatal("no push of the analysis")
+		}
+	}
+	if !audio(h.sources(t)[0]) {
+		t.Error("details list no audio track once told")
+	}
+	if a := <-answered; a.err != nil || a.status != http.StatusOK {
+		t.Errorf("PlaybackInfo: %d %v", a.status, a.err)
 	}
 }

@@ -291,6 +291,14 @@ func New(options Options) *Handler {
 		options.Library.OnVersionsChanged(h.versionsChanged)
 		options.Library.OnFirstPagesRead(h.warmPosters)
 	}
+	if options.Playback != nil {
+		options.Playback.OnAnalyzed(func(version library.Version) { h.tracksChanged(version.Item) })
+	}
+	options.RemuxDB.OnDescribed(func(versions []library.Version) {
+		for _, version := range versions {
+			h.tracksChanged(version.Item)
+		}
+	})
 	options.Accounts.OnSignOut(h.signedOut)
 	if options.Thumbnails != nil {
 		options.Thumbnails.WatchPlaybacks(h.thumbnailPlaybacks)

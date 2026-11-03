@@ -58,13 +58,17 @@ const (
 	searchInterval = 20 * time.Second
 )
 
-// versionsPush is the data of a PolyfinVersions message.
+// versionsPush is the data of a PolyfinVersions message. Tracks tells
+// that a version of the title was analyzed, or described by RemuxDB,
+// since the last push: the tracks details list for it may have changed,
+// which the script then shows in the page's track menus.
 type versionsPush struct {
 	ItemId      string
 	Pending     int
 	Count       int
 	Known       int
 	AddVersions bool
+	Tracks      bool
 }
 
 // versionsAnswer answers /Polyfin/Items/{itemId}/Versions and its search:
@@ -84,11 +88,12 @@ func (h *Handler) writeProgress(w http.ResponseWriter, progress VersionProgress)
 // watchedPages are the title pages users opened lately, by title, then by
 // user, each with the identifiers it was opened with, the versions it
 // lists and until when it is watched; scheduled holds the titles whose
-// push is due.
+// push is due, and tracks those whose push tells their tracks changed.
 type watchedPages struct {
 	mu        sync.Mutex
 	titles    map[accounts.ID]map[accounts.ID]*pageWatch
 	scheduled map[accounts.ID]bool
+	tracks    map[accounts.ID]bool
 }
 
 type pageWatch struct {
@@ -103,7 +108,7 @@ type pageWatch struct {
 }
 
 func newWatchedPages() *watchedPages {
-	return &watchedPages{titles: map[accounts.ID]map[accounts.ID]*pageWatch{}, scheduled: map[accounts.ID]bool{}}
+	return &watchedPages{titles: map[accounts.ID]map[accounts.ID]*pageWatch{}, scheduled: map[accounts.ID]bool{}, tracks: map[accounts.ID]bool{}}
 }
 
 // watch has a user's page of a title, opened as opened, told of the
@@ -170,10 +175,31 @@ func (w *watchedPages) show(user, title accounts.ID, versions []library.Version,
 // changed. The pages that watch the title are told their progress a moment
 // later (see pushVersions).
 func (h *Handler) versionsChanged(title accounts.ID) {
+	h.schedulePush(title, false)
+}
+
+// tracksChanged is told that a version of a title was analyzed, or
+// described by RemuxDB once item details had stopped waiting for it. The
+// pages that watch the title are told so with their progress a moment
+// later, as their track menus may lack the version's tracks.
+func (h *Handler) tracksChanged(title accounts.ID) {
+	h.schedulePush(title, true)
+}
+
+// schedulePush has the pages that watch a title told their progress, and
+// with tracks that its tracks changed, after pushDelay: the changes that
+// come meanwhile join the same push.
+func (h *Handler) schedulePush(title accounts.ID, tracks bool) {
 	w := h.watched
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if len(w.titles[title]) == 0 || w.scheduled[title] {
+	if len(w.titles[title]) == 0 {
+		return
+	}
+	if tracks {
+		w.tracks[title] = true
+	}
+	if w.scheduled[title] {
 		return
 	}
 	w.scheduled[title] = true
@@ -189,6 +215,8 @@ func (h *Handler) pushVersions(title accounts.ID) {
 	now := time.Now()
 	w.mu.Lock()
 	delete(w.scheduled, title)
+	tracks := w.tracks[title]
+	delete(w.tracks, title)
 	type page struct {
 		user   accounts.User
 		opened []accounts.ID
@@ -222,7 +250,7 @@ func (h *Handler) pushVersions(title accounts.ID) {
 		for _, opened := range p.opened {
 			progress := newProgress(pending, offered)
 			payload := socketPayload(versionsMessage, versionsPush{ItemId: opened.String(), Pending: progress.Pending, Count: progress.Count, Known: progress.Known,
-				AddVersions: settings.AddVersionsToOpenPage})
+				AddVersions: settings.AddVersionsToOpenPage, Tracks: tracks})
 			for _, conn := range conns {
 				_ = conn.Write(ctx, websocket.MessageText, payload)
 			}
