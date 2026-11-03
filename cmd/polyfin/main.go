@@ -29,6 +29,7 @@ import (
 	"github.com/moodiness/polyfin/internal/audiosegments"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/bandwidth"
+	"github.com/moodiness/polyfin/internal/boxset"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/commercials"
 	"github.com/moodiness/polyfin/internal/config"
@@ -368,6 +369,10 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	// while the settings hold the server's TMDB key.
 	imageSearch := tmdb.New(tmdb.API, tmdb.Images, version, store.Settings)
 	lib.UseTMDB(imageSearch)
+	// Silo's apps show the TMDB collections of movies as box sets, learnt
+	// in the background while the settings hold the server's TMDB key.
+	movieCollections := boxset.New(pool, imageSearch, boxset.Options{Catalog: lib, Logger: logger})
+	defer movieCollections.Close()
 	// Local folders match their files through the library's searches of
 	// the metadata addons, and TMDB's when every addon's search fails.
 	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings, box)
@@ -628,6 +633,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		RemuxDB:        remuxdb.New(serverID, version, logger, store.Settings),
 		Lyrics:         lyrics.New(pool, lyrics.LRCLIB, version, logger, store.Settings),
 		TMDB:           imageSearch,
+		BoxSets:        movieCollections,
 		Loudness:       songLoudness,
 		Playlists:      playlists.New(pool),
 		Collections:    collections.New(pool),
@@ -843,7 +849,7 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			// Silo's apps, while the settings allow them, through the
 			// Jellyfin API's answers.
 			Silo: silo.New(silo.Options{ServerID: serverID, Version: version, Accounts: store, Jellyfin: jellyfinAPI,
-				DB: pool, QuickConnect: quickConnect, Logger: logger, ContainerTracks: jellyfinAPI.ContainerTracks}),
+				DB: pool, QuickConnect: quickConnect, BoxSets: movieCollections, Logger: logger, ContainerTracks: jellyfinAPI.ContainerTracks}),
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),

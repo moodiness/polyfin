@@ -39,6 +39,7 @@ When a source of the server fails to answer, the app is told to try again later 
 - **Collections**, read-only: a library's Collections tab lists the collections with a title in it, as the Jellyfin API lists a library's collections, and for a library of collections its own; each opens on its titles. Each user sees, and counts, only the titles they may see, without those they hid.
 
   Where to find them: open **Libraries**, then a library, then its **Collections** chip. Home shows the titles of collections, in the rows of collections the administrator adds and in the row of a library of collections, but not the collections themselves: the Apple app shows on Home only cards of movies, series and episodes.
+- **Box sets:** while the server has a **TMDB API key**, a movie's page shows its box set, the movies of its TMDB collection, and a search the box sets it finds (see [Box sets](#box-sets)).
 - **Title pages:** details, cast and crew, versions, series with their seasons and episodes, artwork, and titles similar to it, as the web player shows them, without those the user played. An episode's card also carries its series' poster and backdrop, and its season's poster when the season has one, which the apps show in place of the episode's still.
 - **Favorites:** the heart of a title page adds it to the user's favorites, those of Jellyfin apps, and takes it off; the Favorites screen lists them by name. Polyfin does not record when a title became a favorite: the apps are told the day it joined the server.
 - **Watchlist:** the watchlist button puts a movie or a series on the user's [Watchlist](tracking.md#the-watchlist), a season or an episode its series, and takes it off, off every list holding it: a list read again whole, such as Trakt's watchlist, puts back a title it still holds. The Watchlist screen lists the Watchlist view, as Jellyfin apps show it: a title the user started leaves it, and shows in Continue Watching or Next Up.
@@ -69,7 +70,6 @@ When a source of the server fails to answer, the app is told to try again later 
 - Editing profiles, PINs, several profiles per user, avatars.
 - Downloads, watch-together, remote control, notifications and push, requests, subtitle searches and AI subtitles or translations, books, diagnostics uploads, external sign-in, settings synced from the app and the app's welcome tour: the app is told each is not supported, and hides it. The account tells the apps downloads are not allowed, whatever the user's permission to download in Jellyfin apps.
 - The apps' own collections: the app lists none, and making or changing one is refused as not supported. Collections are made in Jellyfin apps or the web player.
-- Box sets, a card standing for the movies of one TMDB collection in a library's grid: the libraries are told they have none, and the apps list each movie. Polyfin's collections show in the Collections tab instead.
 - Taking a series off Next Up (refused as not supported: playing it moves it on), hiding watches from the history (mark a title unplayed instead), refreshing a person's details, trending or popular titles, and trickplay.
 - Playback features the apps can use but Polyfin does not offer, and so does not announce: the app's own player showing the file's subtitles when it plays the file as it is, quality adapting itself to buffering and to the measured speed during a playback, a playback moving to another screen or output without a new plan, and the apps' device fixes chosen by the server. Their plans still play: the app keeps to what Polyfin announces.
 - Music, audiobooks, books and Live TV: Silo's apps have no Live TV, and Polyfin lists its libraries of movies and series only.
@@ -109,6 +109,32 @@ Silo's apps ask for text subtitles as subtitle tracks of the HLS stream (Silo's 
 - An app that asks only for the chosen track gets that track alone in the stream. One whose player cannot show the tracks says so, and gets files for the rest of the playback.
 - A track's number is read from the file's head the first time the file plays, once: a track whose number cannot be read within 3 seconds stays a file for that playback.
 - The playback's subtitle list gives every track inside the file its number in the file, when known. No track is offered for the app's own player to pick from the file (Silo's `native_selectable`), as Polyfin does not have the app's player show the file's own tracks.
+
+## Box sets
+
+A box set is a TMDB collection, the movies of a series of movies such as a trilogy, of which a library shows the user two or more. While the server has a **TMDB API key** (under **Settings › Content**, see [Edit images](addons-and-libraries.md#edit-images)), every library of movies has them, and the apps show them on their own:
+
+- **A movie's page:** its box set, named after the collection, its "Collection" read "Box Set", with the collection's poster and backdrop from TMDB, else its first movie's, the years of its movies, how many it holds and how many the user played. It opens on its movies in the order they came out. Polyfin downloads the artwork from TMDB once and relays it, as it relays titles' artwork: the apps never reach TMDB.
+- **A search:** beside the titles, the box sets whose name holds every word searched, "box set" or "collection" among them, then those two of whose movies' titles do.
+- **A library's grid:** each movie, as Silo's lists them. Silo's apps of before late 2026 ask for a grid of box set cards; Polyfin answers them the grid it gives without them.
+
+Addons do not tell which collection a movie is in, so Polyfin asks TMDB, in the background, while the key is saved:
+
+- **Ahead:** a minute after Polyfin starts, or after the key is saved, then each day, it lists the first 2,000 movies of each of the server's libraries of movies, as its addons list them, and looks up those it does not know. A first pass takes about five minutes per 1,000 movies, a lookup taking a quarter of a second at least; the daily passes ask only for the answers grown old.
+- **First:** the movies a movie's page or a search reads are asked ahead of the pass. A movie's page waits up to a second for its own movie, so that its first visit shows its box set once the other movies are known.
+
+Each movie is looked up by its TMDB identifier, else its IMDb one, at most four movies a second, and the lookups pause as long as TMDB asks when it says to slow down. The answers are kept for every user, and asked again after three months, or a month for a movie TMDB did not know.
+
+- A library's box sets are those of its first 2,000 movies, as many as a catalog lists by default.
+- Each user sees and counts only the movies they may see: parental control, blocked genres and the titles they hid leave movies out, as everywhere. A box set left with one movie for them is none.
+- Libraries of series, of both, and of collections have none.
+- Without the key, no library has box sets, and TMDB is never asked.
+
+**For app developers:** `UserLibrary.box_sets_enabled` is true on the libraries of movies, and `box_sets` true in `GET /api/v2/catalog/search/capabilities`, while the key is saved. `GET /api/v2/catalog/box-sets/{id}` needs `library_id` (422 without), and answers 404 for a box set the library does not show the user; `GET /api/v2/catalog/items/{id}/box-set` answers `{}` for a movie in none, and 404 for a season or an episode. `group=box_set` is answered as without it, in `GET /api/v2/catalog` and `POST /api/v2/catalog/query`, as Silo's contract has had since it dropped it. Without the key, the three operations answer 404, as on a server without box sets. A box set's artwork is at `/api/v2/artwork/box-sets/{id}/Primary` and `Backdrop`, at the width the app asks, as titles' artwork is at `/api/v2/artwork/{id}/{kind}`.
+
+**Compared with Silo:** Silo's administrators turn box sets on for each library, with the least number of movies; Polyfin has them in every library of movies while the TMDB key is saved, from two movies, with no setting: the key is the setting. Silo gives the collections' overview; Polyfin does not.
+
+**Compared with Jellyfin:** Jellyfin keeps the collection TMDB names for a movie ([TmdbMovieProvider.cs, lines 218 to 221](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/Tmdb/Movies/TmdbMovieProvider.cs#L218-L221)) and, for a library whose "Automatically add to collection" is on, makes a collection of each with two or more of its movies ([CollectionPostScanTask.cs, lines 53 to 123](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/Validators/CollectionPostScanTask.cs#L53-L123)). Polyfin makes no collections of them: its box sets are for Silo's apps, and Jellyfin apps see the collections users and addons make.
 
 ## Signing a TV in with a code
 

@@ -12,6 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/audiosegments"
 	"github.com/moodiness/polyfin/internal/backup"
 	"github.com/moodiness/polyfin/internal/bandwidth"
+	"github.com/moodiness/polyfin/internal/boxset"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/commercials"
@@ -157,6 +158,9 @@ type Options struct {
 	// Sent counts the bytes of media sent to apps, by the playback they
 	// serve (see metered); nil counts them for the metrics only.
 	Sent *bandwidth.Meters
+	// BoxSets knows the TMDB collections of movies, whose artwork Silo's
+	// apps load through Polyfin (see boxsetimages.go); nil knows none.
+	BoxSets *boxset.Store
 }
 
 // Handler serves the Jellyfin API.
@@ -369,6 +373,7 @@ func New(options Options) *Handler {
 	h.backupRoutes(rt)
 	h.metadataRoutes(rt)
 	h.rootRoutes(rt)
+	h.boxSetImageRoutes(rt)
 	signedIn(http.MethodGet, "/Videos/{itemId}/Trickplay/{width}/{file}", h.trickplayFile)
 	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Share", h.mayShare)
 	h.soundRoutes(signedIn)

@@ -30,6 +30,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/boxset"
 	"github.com/moodiness/polyfin/internal/forwarded"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 )
@@ -60,7 +61,10 @@ type Options struct {
 	// QuickConnect holds the requests TVs sign in with a code through
 	// (see deviceLoginRoutes).
 	QuickConnect *quickconnect.Store
-	Logger       *slog.Logger
+	// BoxSets knows the TMDB collections of movies, which the apps show as
+	// box sets (see boxsets.go); nil for none.
+	BoxSets *boxset.Store
+	Logger  *slog.Logger
 	// ContainerTracks returns the container's own numbers of the tracks of
 	// the version a Jellyfin play session plays (a Matroska file's
 	// TrackNumbers, an MP4 file's track IDs), by their index among the
@@ -94,6 +98,7 @@ func New(options Options) *Server {
 	s.browseRoutes()
 	s.filterRoutes()
 	s.libraryRoutes()
+	s.boxSetRoutes()
 	s.playbackRoutes()
 	s.collectionRoutes()
 	s.personalRoutes()

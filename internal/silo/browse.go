@@ -252,9 +252,10 @@ func cards(r *http.Request, items []item) []catalogItem {
 	return result
 }
 
-// userLibrary is a library as the apps list it. BoxSetsEnabled is always
-// false: Polyfin does not group a library's movies into box sets, so the
-// apps never ask group=box_set of it (see docs/silo-apps.md).
+// userLibrary is a library as the apps list it. BoxSetsEnabled is set on
+// the libraries of movies while box sets are on: their movies' pages and
+// searches show their box sets, and their grids list each movie (see
+// boxsets.go).
 type userLibrary struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
@@ -309,7 +310,8 @@ func (s *Server) libraries(w http.ResponseWriter, r *http.Request, v viewer) {
 		id, _ := accounts.ParseID(view.Id)
 		libraries = append(libraries, userLibrary{ID: strconv.Itoa(int(numbers[id])), Name: view.Name,
 			Type: libraryTypes[view.CollectionType], SortOrder: i,
-			PosterURL: artworkURL(view.Id, "Primary", view.ImageTags["Primary"], artworkWidth(r, "poster"))})
+			PosterURL:      artworkURL(view.Id, "Primary", view.ImageTags["Primary"], artworkWidth(r, "poster")),
+			BoxSetsEnabled: s.boxSetLibrary(view)})
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Items []userLibrary `json:"items"`
@@ -993,8 +995,8 @@ func pageOf(all []catalogItem, start, limit, total int) catalogPage {
 // searchCapabilities tells the apps searches are available, through the
 // catalog's q, and people searches, among the people credited in titles
 // the user may see (people_media_scope: the Apple app searches people only
-// then); box sets are not (box_sets: the Apple app reads a movie's box set
-// only then).
+// then), and box sets while they are on (box_sets: the Apple app reads a
+// movie's box set only then).
 func (s *Server) searchCapabilities(w http.ResponseWriter, _ *http.Request, _ viewer) {
 	writeJSON(w, http.StatusOK, struct {
 		Allowed          bool   `json:"allowed"`
@@ -1002,7 +1004,7 @@ func (s *Server) searchCapabilities(w http.ResponseWriter, _ *http.Request, _ vi
 		Revision         string `json:"revision"`
 		PeopleMediaScope bool   `json:"people_media_scope"`
 		BoxSets          bool   `json:"box_sets"`
-	}{true, "available", "polyfin-1", true, false})
+	}{true, "available", "polyfin-1", true, s.boxSetsOn()})
 }
 
 // itemOf reads an item's description, answering the request when the
