@@ -526,8 +526,13 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	chosen, unreadable, versions, at := choice.decided, choice.unreadable, p.versions, openedIndex(opened, p.versions)
 	picked = &chosen.version
 	h.choseVersion(callerFrom(r.Context()).Device.ID, h.titleOf(item.ID), chosen.version.ID)
+	// The Jellyfin app for Android's integrated player plays a version
+	// as it is only when it is described as a file (see asFile); before
+	// 2.6.3, it fetches that file with its play session alone, which then
+	// asks Polyfin to relay it.
+	asFile, tokenless := integratedPlayer(r, request)
 	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID,
-		Relay: mustRelay(r, chosen.version)})
+		Relay: tokenless || mustRelay(r, chosen.version)})
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
 	// Every version listed is named for the profile sent: the one chosen
 	// from its decision, the others from what is known of them.
@@ -540,9 +545,6 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		// app reads the answer.
 		h.Playback.Warm(chosen.version, time.Duration(request.StartTimeTicks.value)*100)
 	}
-	// The Jellyfin app for Android's integrated player plays a version
-	// as it is only when it is described as a file (see asFile).
-	asFile := integratedPlayer(r, request)
 	if asFile {
 		h.asFile(r.Context(), &chosenSource, chosen.version)
 	}

@@ -28,7 +28,9 @@ const (
 )
 
 // integratedPlayer reports whether a PlaybackInfo request comes from the
-// Jellyfin app for Android's integrated player.
+// Jellyfin app for Android's integrated player, and whether that player
+// sends no token with the address it plays a file from, so that its play
+// session must make Polyfin relay the file.
 //
 // That player reads the Protocol of the source it plays as it is
 // (QueueManager.kt, createVideoMediaSource, lines 342 to 367 at v2.7.3):
@@ -47,26 +49,35 @@ const (
 // Versions 2.6.3 to 2.6.4, named androidAppBefore27, play both protocols
 // so and send the header too (QueueManager.kt, lines 206 to 229, and
 // AppModule.kt, lines 115 to 131, at v2.6.4). Versions 2.4.0 to 2.6.2
-// read Protocol so, but send no token with the file's address, in the
-// header or in the address (getVideoStreamUrl's includeCredentials is
-// false in their SDK, 1.1.0 to 1.4.7): Polyfin would know the play by
-// its session alone, and redirect the player to an addon's link rather
-// than relay it, a redirect from http to https that ExoPlayer's own
-// HTTP stack refuses, which those versions use where Cronet is missing
-// (AppModule.kt, lines 89 to 103, at v2.6.2). They keep Http. Versions
-// before 2.4.0 do not read Protocol, and always play the file's address.
-func integratedPlayer(r *http.Request, request playbackInfoRequest) bool {
+// build the same address (MediaQueueManager.kt, lines 146 to 156, at
+// v2.4.0; QueueManager.kt, lines 210 to 220, at v2.6.2), but send no
+// token with it, in a header or in the address: their data source sends
+// a user agent alone (ApplicationModule.kt, line 61, at v2.4.0;
+// AppModule.kt, lines 82 to 105, at v2.6.2), and getVideoStreamUrl's
+// includeCredentials is false in their SDK, 1.1.0 to 1.4.7. Their play
+// session, the only credential that address carries, then asks Polyfin to
+// relay (tokenless): a redirect to an addon's link may go from http to
+// https, which ExoPlayer's own HTTP stack refuses. The bytes count for
+// the device the session was signed for (see mediaDevice). Versions
+// before 2.4.0 build the file's address with no play session
+// (MediaQueueManager.kt, lines 140 to 149, at v2.3.0), which tells
+// Polyfin no user. They keep Http.
+func integratedPlayer(r *http.Request, request playbackInfoRequest) (integrated, tokenless bool) {
 	if request.DeviceProfile == nil {
-		return false
+		return false, false
 	}
 	app := readCredentials(r, true)
 	switch {
 	case request.DeviceProfile.Name == androidApp:
-		return strings.EqualFold(app.Client, androidApp)
-	case request.DeviceProfile.Name == androidAppBefore27:
-		return strings.EqualFold(app.Client, androidAppBefore27) && atLeast(app.Version, 2, 6, 3)
+		return strings.EqualFold(app.Client, androidApp), false
+	case request.DeviceProfile.Name != androidAppBefore27 || !strings.EqualFold(app.Client, androidAppBefore27):
+		return false, false
+	case atLeast(app.Version, 2, 6, 3):
+		return true, false
+	case atLeast(app.Version, 2, 4, 0):
+		return true, true
 	}
-	return false
+	return false, false
 }
 
 // atLeast reports whether version, such as 2.6.3 or 2.6.3-beta.1, is at

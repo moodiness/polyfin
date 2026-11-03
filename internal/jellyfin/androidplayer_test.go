@@ -5,10 +5,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +18,9 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/bandwidth"
 	"github.com/moodiness/polyfin/internal/localfiles"
+	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/torrent/torrenttest"
 )
@@ -82,24 +86,33 @@ func integratedPlayerURL(base, item, session string, source MediaSourceInfo) str
 	return base + "/Videos/" + item + "/stream?" + query.Encode()
 }
 
+// authorized is the header the app sends with the file's address from
+// 2.6.3 on: its Authorization header.
+func authorized(authorization string) http.Header {
+	return http.Header{"Authorization": {authorization}}
+}
+
+// oldPlayerHeader is what the integrated player of versions 2.4.0 to
+// 2.6.2 sends with the file's address: ExoPlayer's user agent, which the
+// app names (ApplicationModule.kt, line 61, at v2.4.0; AppModule.kt,
+// lines 82 to 105, at v2.6.2), and no token.
+func oldPlayerHeader(version string) http.Header {
+	return http.Header{"User-Agent": {androidAppBefore27 + "/" + version + " (Linux;Android 14) ExoPlayerLib/2.18.1"}}
+}
+
 // playsAsFile checks that the source the integrated player chooses
 // (MediaSourceResolver.kt, lines 66 and 67: the one with the item's own
 // id, else the first) plays as it is from a file, and that the URL the
 // app builds for it serves want whole, then from a resume point, with
-// the app's Authorization header only.
-func playsAsFile(t *testing.T, base, item, authorization string, answer playbackInfoResponse, want []byte) {
+// the header the app sends only.
+func playsAsFile(t *testing.T, base, item string, header http.Header, answer playbackInfoResponse, want []byte) {
 	t.Helper()
-	source := answer.MediaSources[0]
-	for _, s := range answer.MediaSources {
-		if id, _ := parseGUID(s.Id); id.String() == mustGUID(t, item) {
-			source = s
-		}
-	}
+	source := integratedSource(t, item, answer)
 	if source.Protocol != "File" || !source.SupportsDirectPlay {
 		t.Fatalf("the integrated player's source: Protocol %q, direct play %v, %+v", source.Protocol, source.SupportsDirectPlay, source)
 	}
 	target := integratedPlayerURL(base, item, answer.PlaySessionId, source)
-	header := http.Header{"Authorization": {authorization}}
+	header = header.Clone()
 	response, body := fetchURL(t, target, header)
 	if response.StatusCode != http.StatusOK || body != string(want) {
 		t.Fatalf("the app's URL: %d, %d bytes of %d", response.StatusCode, len(body), len(want))
@@ -110,6 +123,20 @@ func playsAsFile(t *testing.T, base, item, authorization string, answer playback
 	if response.StatusCode != http.StatusPartialContent || body != string(want[resume:]) {
 		t.Fatalf("the app's URL from a resume point: %d, %d bytes of %d", response.StatusCode, len(body), len(want)-resume)
 	}
+}
+
+// integratedSource is the source the integrated player plays of answer
+// (MediaSourceResolver.kt, lines 66 and 67 at v2.7.3): the one with the
+// item's own id, else the first.
+func integratedSource(t *testing.T, item string, answer playbackInfoResponse) MediaSourceInfo {
+	t.Helper()
+	source := answer.MediaSources[0]
+	for _, s := range answer.MediaSources {
+		if id, _ := parseGUID(s.Id); id.String() == mustGUID(t, item) {
+			source = s
+		}
+	}
+	return source
 }
 
 // mustGUID is id as Polyfin writes identifiers.
@@ -147,7 +174,7 @@ func TestTheAndroidIntegratedPlayerPlaysAddonLinksAsFiles(t *testing.T) {
 	if len(answer.MediaSources) != 2 || answer.MediaSources[1].Protocol != "Http" {
 		t.Errorf("an HLS version to the integrated player: %+v", answer.MediaSources)
 	}
-	playsAsFile(t, p.url, p.movie, androidHeader(token), answer, file)
+	playsAsFile(t, p.url, p.movie, authorized(androidHeader(token)), answer, file)
 
 	for _, ask := range []struct{ name, authorization, profile string }{
 		{"the app's web view", androidHeader(token), "jellyfin-web-chrome"},
@@ -167,7 +194,8 @@ func TestTheAndroidIntegratedPlayerPlaysAddonLinksAsFiles(t *testing.T) {
 }
 
 // A local file is described to the integrated player as a file, as
-// Jellyfin describes it, and plays from the URL the app builds.
+// Jellyfin describes it, and plays from the URL the app builds: with the
+// app's token from 2.6.3 on, with its play session alone before (#867).
 func TestTheAndroidIntegratedPlayerPlaysLocalFilesAsFiles(t *testing.T) {
 	t.Parallel()
 	var folders *localfiles.Service
@@ -215,16 +243,25 @@ func TestTheAndroidIntegratedPlayerPlaysLocalFilesAsFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := p.signInAndroid(t, "member")
-	answer := p.androidPlaybackInfo(t, androidHeader(token), p.movie, local.Id, "jellyfin-android-2.7.3-integrated", 7*time.Second)
-	if len(answer.MediaSources) != 1 || answer.MediaSources[0].Id != local.Id {
-		t.Fatalf("the local version: %+v", answer.MediaSources)
+	for _, play := range []struct {
+		authorization, profile string
+		header                 http.Header
+	}{
+		{androidHeader(token), "jellyfin-android-2.7.3-integrated", authorized(androidHeader(token))},
+		{androidHeaderOf(androidAppBefore27, "2.6.2", token), "jellyfin-android-integrated", oldPlayerHeader("2.6.2")},
+	} {
+		answer := p.androidPlaybackInfo(t, play.authorization, p.movie, local.Id, play.profile, 7*time.Second)
+		if len(answer.MediaSources) != 1 || answer.MediaSources[0].Id != local.Id {
+			t.Fatalf("the local version: %+v", answer.MediaSources)
+		}
+		// The app plays the source it named, the only one.
+		playsAsFile(t, p.url, p.movie, play.header, answer, file)
 	}
-	// The app plays the source it named, the only one.
-	playsAsFile(t, p.url, p.movie, androidHeader(token), answer, file)
 }
 
 // A torrent's file is described to the integrated player as a file, and
-// plays from the URL the app builds, its bytes read from the swarm.
+// plays from the URL the app builds, its bytes read from the swarm: with
+// the app's token from 2.6.3 on, with its play session alone before.
 func TestTheAndroidIntegratedPlayerPlaysTorrentsAsFiles(t *testing.T) {
 	t.Parallel()
 	ffmpeg, file := vodFile(t, "a-movie.mkv")
@@ -238,15 +275,18 @@ func TestTheAndroidIntegratedPlayerPlaysTorrentsAsFiles(t *testing.T) {
 	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 0, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
 	token := p.signInAndroid(t, "allowed")
 	answer := p.androidPlaybackInfo(t, androidHeader(token), p.movie, "", "jellyfin-android-2.7.3-integrated", 10*time.Second)
-	playsAsFile(t, p.url, p.movie, androidHeader(token), answer, data)
+	playsAsFile(t, p.url, p.movie, authorized(androidHeader(token)), answer, data)
+	answer = p.androidPlaybackInfo(t, androidHeaderOf(androidAppBefore27, "2.4.0", token), p.movie, "", "jellyfin-android-integrated", 10*time.Second)
+	playsAsFile(t, p.url, p.movie, oldPlayerHeader("2.4.0"), answer, data)
 }
 
 // Before 2.7.0, the app and its integrated player's profile were named
-// "Jellyfin Android". From 2.6.3 it plays File and Http as 2.7.3 does,
-// and sends its token in the header, and gets its versions described as
-// files; 2.6.2 and older send no token with the file's address and keep
-// Http. An app updated to 2.7.3 since its sign-in, which keeps its
-// token and the name it signed in with, is told by its header.
+// "Jellyfin Android". From 2.4.0 it reads Protocol as 2.7.3 does, and
+// gets its versions described as files: from 2.6.3 it sends its token
+// in the header, before only its play session in the address (#867).
+// 2.3.2 and 2.3.3 read Protocol too, but send no play session, and keep
+// Http. An app updated to 2.7.3 since its sign-in, which keeps its token
+// and the name it signed in with, is told by its header.
 func TestTheAndroidIntegratedPlayerBefore27(t *testing.T) {
 	t.Parallel()
 	p := playing(t)
@@ -259,9 +299,13 @@ func TestTheAndroidIntegratedPlayerBefore27(t *testing.T) {
 	for _, version := range []string{"2.6.3", "2.6.3-beta.1", "2.6.4"} {
 		header := androidHeaderOf(androidAppBefore27, version, token)
 		answer := p.androidPlaybackInfo(t, header, p.movie, "", "jellyfin-android-integrated", 7*time.Second)
-		playsAsFile(t, p.url, p.movie, header, answer, file)
+		playsAsFile(t, p.url, p.movie, authorized(header), answer, file)
 	}
-	for _, version := range []string{"2.6.2", "2.4.0", "2.3.3"} {
+	for _, version := range []string{"2.4.0", "2.5.0-beta.1", "2.6.2"} {
+		answer := p.androidPlaybackInfo(t, androidHeaderOf(androidAppBefore27, version, token), p.movie, "", "jellyfin-android-integrated", 7*time.Second)
+		playsAsFile(t, p.url, p.movie, oldPlayerHeader(version), answer, file)
+	}
+	for _, version := range []string{"2.3.3", "2.3.2"} {
 		header := androidHeaderOf(androidAppBefore27, version, token)
 		for _, source := range p.androidPlaybackInfo(t, header, p.movie, "", "jellyfin-android-integrated", 0).MediaSources {
 			if source.Protocol != "Http" || source.Path == "" {
@@ -271,5 +315,92 @@ func TestTheAndroidIntegratedPlayerBefore27(t *testing.T) {
 	}
 	// The same sign-in, the app updated to 2.7.3.
 	answer := p.androidPlaybackInfo(t, androidHeader(token), p.movie, "", "jellyfin-android-2.7.3-integrated", 7*time.Second)
-	playsAsFile(t, p.url, p.movie, androidHeader(token), answer, file)
+	playsAsFile(t, p.url, p.movie, authorized(androidHeader(token)), answer, file)
+}
+
+// Versions 2.4.0 to 2.6.2 of the app fetch a file with no token, its
+// play session alone in the address (#867): an addon's link on a public
+// address, which Polyfin sends other apps to, is relayed to them, as
+// their player refuses a redirect from http to https, and its bytes
+// count for the device that asked PlaybackInfo, as Now playing shows.
+// 2.4.x names no version, later versions the title's own identifier.
+func TestTheOldAndroidIntegratedPlayerRelaysAddonLinksForItsDevice(t *testing.T) {
+	t.Parallel()
+	const file = "\x1a\x45\xdf\xa3 media bytes"
+	host := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "", time.Time{}, strings.NewReader(file))
+	}))
+	t.Cleanup(host.Close)
+	manifest := failoverAddon(t, "catalog", []stremio.Stream{{Name: "Linked", URL: "http://" + publicSource + "/files/movie.mp4",
+		BehaviorHints: stremio.StreamBehavior{Filename: "Movie.2026.mp4"}}})
+	sent, local := bandwidth.New(), strings.TrimPrefix(host.URL, "http://")
+	s := newServerReaching(t, 10, "ffprobe-not-installed", func(o source.Opener) source.Opener { return reachedAt{Opener: o, local: local} },
+		func(o *Options, _ *pgxpool.Pool) { o.Sent = sent })
+	user := s.user("member", nil)
+	if _, err := s.addons.Install(t.Context(), addons.Shared(), manifest, false); err != nil {
+		t.Fatal(err)
+	}
+	s.setting(t, func(settings *accounts.Settings) { settings.SyncAddonSubtitles = false })
+	token := s.signInAs(t, "member", androidHeaderOf(androidAppBefore27, "2.4.0", ""))
+	var views, page QueryResult
+	s.get(t, "/UserViews", token, &views)
+	s.get(t, "/Items?ParentId="+views.Items[0].Id, token, &page)
+	movie := page.Items[0].Id
+	id, _ := accounts.ParseID(movie)
+	versions, err := s.library.Versions(t.Context(), user, id)
+	if err != nil || len(versions) != 1 {
+		t.Fatalf("versions: %+v %v", versions, err)
+	}
+	s.listed(t, user, movie)
+	playbackSetup{testServer: s, user: user}.analyzed(t, versions[0], "h264-aac-mp4")
+
+	for _, version := range []string{"2.4.0", "2.5.3", "2.6.2"} {
+		header := androidHeaderOf(androidAppBefore27, version, token)
+		named := ""
+		if version != "2.4.0" {
+			named = strings.ReplaceAll(mustGUID(t, movie), "-", "")
+		}
+		answer := s.androidPlaybackInfo(t, header, movie, named, "jellyfin-android-integrated", 0)
+		played := integratedSource(t, movie, answer)
+		if played.Protocol != "File" || !played.SupportsDirectPlay {
+			t.Fatalf("%s: Protocol %q, direct play %v", version, played.Protocol, played.SupportsDirectPlay)
+		}
+		if status, body := s.call(http.MethodPost, "/Sessions/Playing", header, map[string]any{"ItemId": movie, "MediaSourceId": played.Id,
+			"PlaySessionId": answer.PlaySessionId, "PositionTicks": 0, "PlayMethod": "DirectPlay"}); status != http.StatusNoContent {
+			t.Fatalf("%s: start: %d %s", version, status, body)
+		}
+		sessions, err := s.handler.LiveSessions(t.Context())
+		if err != nil || len(sessions) != 1 {
+			t.Fatalf("%s: live sessions: %+v %v", version, sessions, err)
+		}
+		device := sessions[0].Device.ID.String()
+		// A rate needs two samples: before the play reads, and after.
+		sent.Release(sent.Hold(device))
+		sent.Sample()
+		before := sent.Total(device)
+
+		request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, integratedPlayerURL(s.url, movie, answer.PlaySessionId, played), nil)
+		request.Header = oldPlayerHeader(version)
+		response, err := noRedirects.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK || string(got) != file {
+			t.Fatalf("%s: %d to %q, %q; want the file relayed", version, response.StatusCode, response.Header.Get("Location"), got)
+		}
+		sent.Sample()
+		if total := sent.Total(device) - before; total != int64(len(file)) {
+			t.Errorf("%s: the device was sent %d bytes, want %d", version, total, len(file))
+		}
+		sessions, err = s.handler.LiveSessions(t.Context())
+		if err != nil || len(sessions) != 1 || sessions[0].Sent <= 0 || sessions[0].Redirected {
+			t.Errorf("%s: Now playing %+v %v, want the play sending bytes, not redirected", version, sessions, err)
+		}
+		if status, body := s.call(http.MethodPost, "/Sessions/Playing/Stopped", header, map[string]any{"ItemId": movie, "MediaSourceId": played.Id,
+			"PlaySessionId": answer.PlaySessionId, "PositionTicks": 0}); status != http.StatusNoContent {
+			t.Fatalf("%s: stop: %d %s", version, status, body)
+		}
+	}
 }
