@@ -155,6 +155,8 @@ An hour with failures also logs one INFO line, `Artwork downloads failed in the 
 
 **People** tells how the photos and biographies of people from TMDB stand (see [Photos and biographies from TMDB](addons-and-libraries.md#photos-and-biographies-from-tmdb)): whether a **TMDB API key** is saved under **Settings › Content**, the people TMDB found and did not find, those whose last lookup failed, the lookups waiting or under way, and TMDB's last rate limit (`429`) since the server started, with the wait it asked.
 
+With no key saved, **People** lists what a key brings, as Polyfin bundles none: people's photos and biographies, each title's cast and crew from TMDB in billing order with photos (see [Cast and crew from TMDB](addons-and-libraries.md#cast-and-crew-from-tmdb)), person pages listing every library title they are credited in, box sets in Silo's apps (see [Box sets](silo-apps.md#box-sets)) and TMDB images in **Edit images**. Its link opens the key's setting under **Settings › Content**. Jellyfin bundles a key; Polyfin asks the administrator for one (see [Edit images](addons-and-libraries.md#edit-images)).
+
 **For app developers:** `GET /admin/api/health` gives them as `artwork`, with `failed`, `kinds` (`not_found`, `rate_limited`, `timeout`, `server_error`, `other`), `hosts` (`host`, `failed`), `waiting` and `spared` (`host`, `until`); and `people`, with `keySaved`, `found`, `notFound`, `failing`, `waiting`, `limitedAt` (`null` for none) and `limitWait` (seconds, `0` for none).
 
 ### Clearing the image cache
