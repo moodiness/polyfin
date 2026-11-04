@@ -22,10 +22,12 @@ const (
 )
 
 // Run stops, until ctx is done, the playbacks of devices whose apps
-// stopped reporting (see endIdlePlayback), and preloads the next episodes
-// of the series users watch while it is on (see preloadNext).
+// stopped reporting (see endIdlePlayback), preloads the next episodes of
+// the series users watch while it is on (see preloadNext), and logs how
+// the artwork downloads fared every hour (see summarizeArtwork).
 func (h *Handler) Run(ctx context.Context) {
 	go h.preloadLoop(ctx)
+	go h.summarizeArtwork(ctx)
 	ticker := time.NewTicker(idleCheck)
 	defer ticker.Stop()
 	for {

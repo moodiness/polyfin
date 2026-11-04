@@ -523,7 +523,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 	}
 	describeEdited(&dto, item, fields, detail)
 	if detail || fields.has("People") {
-		dto.People = new(people(item.People))
+		dto.People = new(h.people(item.People))
 	}
 	if detail || fields.has("Chapters") {
 		dto.Chapters = &[]ChapterInfo{}
@@ -617,8 +617,9 @@ func describeEdited(dto *BaseItemDto, item library.Item, fields fieldSet, detail
 
 // setImages sets the tags of an item's images on its DTO: its Primary
 // image's is the badged one (see badgedTag) when badges holds what its
-// badges show.
+// badges show. Artwork found dead is left out (see withoutDead).
 func (h *Handler) setImages(dto *BaseItemDto, item library.Item, badges map[accounts.ID]string) {
+	item.Images = h.withoutDead(item.Images)
 	if item.Images.Primary != "" {
 		dto.ImageTags["Primary"] = library.ImageTag(item.Images.Primary)
 		if shown, ok := badges[item.ID]; ok {
@@ -675,12 +676,14 @@ func (h *Handler) setImages(dto *BaseItemDto, item library.Item, badges map[acco
 	}
 }
 
-func people(credits []library.Person) []BaseItemPerson {
+// people describes a title's credits, without the tags of photos found
+// dead (see withoutDead).
+func (h *Handler) people(credits []library.Person) []BaseItemPerson {
 	result := make([]BaseItemPerson, 0, len(credits))
 	for _, person := range credits {
 		entry := BaseItemPerson{Name: person.Name, Id: person.ID.String(), Role: person.Role, Type: person.Type}
-		if person.Image != "" {
-			entry.PrimaryImageTag = library.ImageTag(person.Image)
+		if photo := h.withoutDead(library.Images{Primary: person.Image}).Primary; photo != "" {
+			entry.PrimaryImageTag = library.ImageTag(photo)
 		}
 		result = append(result, entry)
 	}

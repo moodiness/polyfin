@@ -48,12 +48,21 @@ import (
 // download short for the others. At most imageHostFetches downloads go to
 // one host at once, imageSlowHostFetches to a host that serves an IPTV
 // source or its logos, often the provider's panel, and to a host that
-// showed it was overloaded, for imageSlowDown. A download that failed
-// answers the same for imageFailureLife without asking again, its error
-// telling the first one's cause. Downloaded images are kept in
-// memory, the most recently used up to imageCacheBytes, and on disk under
-// the cache folder's images folder, up to imageDiskBytes, which a restart
-// keeps. An app asking for an image much smaller than the original (see
+// showed it was overloaded, for imageSlowDown. A host that asked to wait
+// (429 or 503 with a Retry-After) is asked nothing until then,
+// imageHostWaitMost at most: its images answer 503 at once. A download
+// that failed answers the same without asking again, its error telling
+// the first one's cause: an image its server does not have for
+// imageMissingLife, else for imageFailureLife, doubled with each failure
+// running up to imageFailureMost, or as long as the host asked to wait.
+// An image whose server does not have it, or that failed imageDeadAfter
+// times running, is dead: its item stops advertising it (see deadImages),
+// as Jellyfin drops a remote image that answers 404 from its item
+// (LibraryManager.cs, at 12.4), so that apps draw their placeholder rather
+// than an empty card. Downloaded images are kept in memory, the most
+// recently used up to imageCacheBytes, and on disk under the cache
+// folder's images folder, up to imageDiskBytes, which a restart keeps. An
+// app asking for an image much smaller than the original (see
 // resizedWidth) gets it resized, kept the same way. Posters are also
 // warmed ahead of any request (see warmedposters.go).
 
@@ -74,8 +83,24 @@ const (
 	// warming posters take at most, one at least: 1 in imageWarmShare.
 	imageWarmShare = 4
 	// imageFailureLife is how long a failed download answers again without
-	// asking, with the same status and cause.
+	// asking, with the same status and cause, the first time it fails;
+	// each failure running doubles it, up to imageFailureMost. An image
+	// its server does not have answers so for imageMissingLife.
 	imageFailureLife = 2 * time.Minute
+	imageFailureMost = time.Hour
+	imageMissingLife = time.Hour
+	// imageHostWaitMost bounds the wait a host asks for.
+	imageHostWaitMost = 15 * time.Minute
+	// imageDeadAfter is the failures running past which an image is dead,
+	// and imageFailureMemory how long failures are remembered: those
+	// running are counted, and a dead image stays dead, that long after
+	// the last one.
+	imageDeadAfter     = 3
+	imageFailureMemory = 24 * time.Hour
+	// imageFailureWindow is the time the failures Health and the summary
+	// line count are in, and maxImageFailureEvents bounds those kept.
+	imageFailureWindow    = time.Hour
+	maxImageFailureEvents = 10_000
 	// immutableImage is how apps may keep an image they asked for by its
 	// tag, which changes with the image.
 	immutableImage = "public, max-age=31536000, immutable"
@@ -98,13 +123,18 @@ type artwork struct {
 
 // imageCache keeps the artwork relayed recently, in memory and on disk,
 // and shares and bounds its downloads. Its zero value is ready to use
-// once opened.
+// once opened; now, when set before, is its clock.
 type imageCache struct {
-	once     sync.Once
-	dir      string
-	logger   *slog.Logger
-	flight   singleflight.Group
-	failures *cache.Cache[string, downloadError]
+	once   sync.Once
+	now    func() time.Time
+	dir    string
+	logger *slog.Logger
+	flight singleflight.Group
+	// failures are the downloads that failed, by address, remembered for
+	// imageFailureMemory, and dead the images found dead since (see
+	// markDead).
+	failures *cache.Cache[string, failedDownload]
+	dead     *cache.Cache[string, struct{}]
 	resizes  chan struct{}
 	// warmResizes holds a place for each resize warming a poster, half of
 	// resizes at most (see warmImage).
@@ -128,6 +158,9 @@ type imageCache struct {
 	warmed map[string][]string
 	// hosts are the downloads under way from each host.
 	hosts map[string]*hostFetches
+	// events are the downloads that failed in the last
+	// imageFailureWindow, the oldest first.
+	events []failureEvent
 }
 
 type memoryImage struct {
@@ -146,7 +179,12 @@ type diskImage struct {
 func (c *imageCache) open(dir string, logger *slog.Logger) {
 	c.once.Do(func() {
 		c.logger = logger
-		c.failures = cache.New[string, downloadError](5000, imageFailureLife)
+		if c.now == nil {
+			c.now = time.Now
+		}
+		memory := func() time.Duration { return imageFailureMemory }
+		c.failures = cache.NewLasting[string, failedDownload](5000, memory, c.now)
+		c.dead = cache.NewLasting[string, struct{}](5000, memory, c.now)
 		c.resizes = make(chan struct{}, imageResizes)
 		c.warmResizes = make(chan struct{}, max(1, imageResizes/2))
 		c.memory, c.order = map[string]*list.Element{}, list.New()
@@ -311,8 +349,9 @@ func (c *imageCache) usage() ImageCacheUsage {
 }
 
 // clear forgets every image kept, in memory and on disk, the downloads
-// remembered as failed and the posters warmed, and returns what it freed.
-// A download or resize under way keeps its image once it ends, as for any
+// remembered as failed, the images found dead and the posters warmed, and
+// returns what it freed. A host that asked to wait still waits. A
+// download or resize under way keeps its image once it ends, as for any
 // request.
 func (c *imageCache) clear() ImageCacheUsage {
 	c.mu.Lock()
@@ -333,7 +372,8 @@ func (c *imageCache) clear() ImageCacheUsage {
 	c.warmFull = false
 	dir := c.dir
 	c.mu.Unlock()
-	c.failures.DeleteFunc(func(string, downloadError) bool { return true })
+	c.failures.DeleteFunc(func(string, failedDownload) bool { return true })
+	c.dead.DeleteFunc(func(string, struct{}) bool { return true })
 	for _, name := range names {
 		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			c.logger.Debug("A cached image could not be deleted", "error", err)
@@ -531,12 +571,13 @@ func (c *imageCache) fetchFor(ctx context.Context, key string, warming bool, pro
 }
 
 // hostFetches are the downloads under way from a host: active of them,
-// warming of those warming posters, those waiting woken when one ends, and
-// the host spared until slowUntil.
+// warming of those warming posters, those waiting woken when one ends,
+// the host spared until slowUntil, and asked nothing until waitUntil.
 type hostFetches struct {
 	active    int
 	warming   int
 	slowUntil time.Time
+	waitUntil time.Time
 	ended     chan struct{}
 }
 
@@ -545,7 +586,7 @@ type hostFetches struct {
 // for a host to spare, iptv telling a host that serves an IPTV source. A
 // download warming a poster takes one of those places only while the
 // downloads warming take less than 1 in imageWarmShare of them: the others
-// stay for apps.
+// stay for apps. While the host asked to wait, it answers 503 at once.
 func (c *imageCache) host(ctx context.Context, target string, iptv, warming bool) (func(), error) {
 	parsed, err := url.Parse(target)
 	if err != nil {
@@ -558,8 +599,13 @@ func (c *imageCache) host(ctx context.Context, target string, iptv, warming bool
 			fetches = &hostFetches{ended: make(chan struct{})}
 			c.hosts[parsed.Host] = fetches
 		}
+		now := c.now()
+		if left := fetches.waitUntil.Sub(now); left > 0 {
+			c.mu.Unlock()
+			return nil, downloadError{http.StatusServiceUnavailable, stremio.AskedToWait(left)}
+		}
 		places := imageHostFetches
-		if iptv || time.Now().Before(fetches.slowUntil) {
+		if iptv || now.Before(fetches.slowUntil) {
 			places = imageSlowHostFetches
 		}
 		if fetches.active < places && (!warming || fetches.warming < max(1, places/imageWarmShare)) {
@@ -598,7 +644,20 @@ func (c *imageCache) spare(target string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if fetches, ok := c.hosts[parsed.Host]; ok {
-		fetches.slowUntil = time.Now().Add(imageSlowDown)
+		fetches.slowUntil = c.now().Add(imageSlowDown)
+	}
+}
+
+// wait has target's host asked nothing for wait.
+func (c *imageCache) wait(target string, wait time.Duration) {
+	parsed, err := url.Parse(target)
+	if err != nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if fetches, ok := c.hosts[parsed.Host]; ok {
+		fetches.waitUntil = c.now().Add(wait)
 	}
 }
 
@@ -620,6 +679,83 @@ type downloadError struct {
 
 func (e downloadError) Error() string { return e.err.Error() }
 
+func (e downloadError) Unwrap() error { return e.err }
+
+// failedDownload is a download that failed as it is remembered: failures
+// counts the downloads of its image that failed running, this one
+// included, and until is when it is asked for again.
+type failedDownload struct {
+	downloadError
+	failures int
+	until    time.Time
+}
+
+func (f failedDownload) Unwrap() error { return f.downloadError }
+
+// dead reports an image found dead: its server does not have it, or its
+// downloads failed imageDeadAfter times running.
+func (f failedDownload) dead() bool {
+	return f.status == http.StatusNotFound || f.failures >= imageDeadAfter
+}
+
+// failed remembers that the download of target failed with err, answering
+// status, for as long as imageCache tells, and counts it (see
+// failureEvent): a host that asked to wait is asked nothing meanwhile,
+// and one that showed it was overloaded is spared.
+func (c *imageCache) failed(target string, status int, err error) failedDownload {
+	now := c.now()
+	failures := 1
+	if before, ok := c.failures.Get(target); ok {
+		failures = before.failures + 1
+	}
+	life := imageMissingLife
+	if status != http.StatusNotFound {
+		life = min(imageFailureLife<<min(failures-1, 10), imageFailureMost)
+	}
+	if wait, ok := stremio.RetryAfter(err); ok {
+		life = min(wait, imageHostWaitMost)
+		c.wait(target, life)
+	}
+	if overloaded(err) {
+		c.spare(target)
+	}
+	failed := failedDownload{downloadError{status, err}, failures, now.Add(life)}
+	c.failures.Put(target, failed)
+	c.count(target, status, err, now)
+	return failed
+}
+
+// markDead remembers an image found dead, for imageFailureMemory: items
+// stop advertising it (see withoutDead).
+func (c *imageCache) markDead(target string) { c.dead.Put(target, struct{}{}) }
+
+// isDead reports an image found dead.
+func (c *imageCache) isDead(target string) bool {
+	_, dead := c.dead.Get(target)
+	return dead
+}
+
+// forget forgets the failures of the images at targets, and whether they
+// were found dead, and has their hosts that asked to wait asked again:
+// each is downloaded at its next request.
+func (c *imageCache) forget(targets []string) {
+	hosts := map[string]bool{}
+	for _, target := range targets {
+		c.failures.Delete(target)
+		c.dead.Delete(target)
+		if parsed, err := url.Parse(target); err == nil && parsed.Host != "" {
+			hosts[parsed.Host] = true
+		}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for host := range hosts {
+		if fetches, ok := c.hosts[host]; ok {
+			fetches.waitUntil = time.Time{}
+		}
+	}
+}
+
 // fetchArtwork returns the artwork at target, downloaded once (see
 // imageCache); iptv tells that its host serves an IPTV source. Artwork its
 // server does not have (404 or 410) is not found, as an image the item
@@ -637,8 +773,9 @@ func (h *Handler) fetchArtworkHeld(ctx context.Context, target string, confined,
 // downloadArtwork is fetchArtworkHeld, for warming a poster when warming
 // (see fetchFor and host).
 func (h *Handler) downloadArtwork(ctx context.Context, target string, confined, iptv, warming bool, hold func(context.Context) (func(), error)) (artwork, error) {
-	if failed, ok := h.images.failures.Get(target); ok {
-		return artwork{}, downloadError{failed.status, fmt.Errorf("the last download failed: %w", failed.err)}
+	if failed, ok := h.images.failures.Get(target); ok && h.images.now().Before(failed.until) {
+		failed.downloadError = downloadError{failed.status, fmt.Errorf("the last download failed: %w", failed.err)}
+		return artwork{}, failed
 	}
 	return h.images.fetchFor(ctx, target, warming, func(ctx context.Context) (artwork, error) {
 		release, err := h.images.host(ctx, target, iptv, warming)
@@ -662,13 +799,9 @@ func (h *Handler) downloadArtwork(ctx context.Context, target string, confined, 
 			case stremio.StatusOf(err) == http.StatusNotFound, stremio.StatusOf(err) == http.StatusGone:
 				status = http.StatusNotFound
 			}
-			if overloaded(err) {
-				h.images.spare(target)
-			}
-			failed := downloadError{status, err}
-			h.images.failures.Put(target, failed)
-			return artwork{}, failed
+			return artwork{}, h.images.failed(target, status, err)
 		}
+		h.images.failures.Delete(target)
 		return artwork{body: body, contentType: contentType}, nil
 	})
 }
@@ -941,12 +1074,16 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 	// source is the address of the image downloaded: url, else its
 	// fallback.
 	source := url
+	// relayed tells artwork downloaded from its server, which may be
+	// found dead.
+	relayed := false
 	// Only an image Polyfin chose is drawn, whatever an artwork URL says.
 	if found.Generated != nil {
 		image, err = h.generatedArtwork(r.Context(), url, *found.Generated, found.Confined)
 	} else if key, ok := library.LocalArtworkKey(url); ok {
 		image, err = h.localArtwork(r.Context(), url, key)
 	} else {
+		relayed = true
 		// The poster address template is an administrator's: its posters
 		// are not confined as the addons' may be.
 		image, err = h.fetchArtwork(r.Context(), url, found.Confined && !found.Templated, h.iptvHost(r.Context(), url))
@@ -967,6 +1104,15 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 		status := http.StatusBadGateway
 		if failed, ok := errors.AsType[downloadError](err); ok {
 			status = failed.status
+		}
+		// A host that asked to wait tells apps how long.
+		if wait, ok := stremio.RetryAfter(err); ok && status == http.StatusServiceUnavailable {
+			header.Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
+		}
+		// Artwork relayed that is found dead, the poster address
+		// template's with its fallback, stops being advertised.
+		if failed, ok := errors.AsType[failedDownload](err); ok && relayed && failed.dead() {
+			h.artworkDead(r.Context(), id, found, url)
 		}
 		if r.Context().Err() == nil {
 			h.Logger.Debug("Artwork could not be downloaded", "item", id.String(), "error", err)

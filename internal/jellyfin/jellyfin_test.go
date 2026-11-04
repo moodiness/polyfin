@@ -228,6 +228,11 @@ func newServerReaching(t *testing.T, failures int, ffprobe string, reach func(so
 		c(&options, pool)
 	}
 	handler := New(options)
+	// Refresh metadata forgets the artwork failures the handler remembers,
+	// as in main.
+	if options.Library != nil {
+		options.Library.UseArtworkFailures(handler)
+	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	return testServer{t: t, store: store, addons: addonStore, library: lib, pool: pool, url: server.URL, handler: handler,
