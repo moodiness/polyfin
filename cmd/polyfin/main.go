@@ -770,6 +770,8 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 			DownloadLanguage: player.DownloadLanguage,
 			Torrents:         torrents,
 			Images:           jellyfinAPI,
+			Artwork:          jellyfinAPI.ArtworkStatus,
+			People:           lib.PeopleStatus,
 
 			// The FFmpeg for NVIDIA drivers older than 610 (#542).
 			OlderDriverFFmpeg: segments.OlderDriverFFmpeg,
@@ -814,6 +816,9 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 		Reaches: func(user accounts.ID) bool { return notifier.Receives(user, notifications.ProgrammeReminder) },
 		Ready:   notifier.Loaded(), Logger: logger})
 	jellyfinAPI.Reminders = programmeReminders
+	// Refresh metadata forgets the failed downloads of the artwork the
+	// image relay remembers.
+	lib.UseArtworkFailures(jellyfinAPI)
 	adminOptions.Reminders = programmeReminders
 	registerWatchlistTask(registry, store, watchlist.New(pool), jellyfinAPI, notifier, logger)
 	// Playbacks under way when Polyfin stops are kept in the history, as

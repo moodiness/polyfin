@@ -4975,7 +4975,36 @@ export type Health = {
     waiting: number
     kept: number
   } | null
+  /**
+   * How artwork downloads fared in the last hour, null when unknown: those that failed, by kind and
+   * by host name (ten at most, most first), and the hosts that asked to wait, asked nothing until
+   * then, or showed they were overloaded, asked less at once until then. No address is told.
+   */
+  artwork: {
+    failed: number
+    kinds: Partial<Record<ArtworkFailureKind, number>>
+    hosts: { host: string; failed: number }[]
+    waiting: { host: string; until: string }[]
+    spared: { host: string; until: string }[]
+  } | null
+  /**
+   * How people's lookups on TMDB stand, null when unknown: whether a TMDB key is saved, the people
+   * TMDB found and did not find, those whose last lookup failed, the lookups waiting or under way,
+   * and TMDB's last 429 since the start, with the seconds it asked to wait (0 for none).
+   */
+  people: {
+    keySaved: boolean
+    found: number
+    notFound: number
+    failing: number
+    waiting: number
+    limitedAt: string | null
+    limitWait: number
+  } | null
 }
+
+/** The kinds of artwork download failures System › Health counts. */
+export type ArtworkFailureKind = 'not_found' | 'rate_limited' | 'timeout' | 'server_error' | 'other'
 
 /**
  * A stored secret POLYFIN_SECRET_KEY cannot decrypt: a server setting (the SMTP password is one,

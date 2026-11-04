@@ -417,6 +417,38 @@ const system: typeof en = {
       notHeld: 'Dès maintenant',
       titlesWaiting: 'Titres en attente',
       titlesKept: 'Titres dont les notes sont gardées',
+      artworkTitle: 'Illustrations',
+      artworkHelp:
+        'Les téléchargements d’illustrations depuis les serveurs d’images des addons qui ont échoué dans la dernière heure. Une image en échec est redemandée plus tard, d’autant plus tard qu’elle échoue souvent ; un serveur qui demande d’attendre n’est plus sollicité jusque-là.',
+      artworkFailed: 'Échecs dans la dernière heure',
+      artworkKinds: {
+        not_found: 'Introuvables',
+        rate_limited: 'Demandes de ralentir',
+        timeout: 'Délais dépassés',
+        server_error: 'Erreurs du serveur',
+        other: 'Autres échecs',
+      } as Record<string, string>,
+      artworkHosts: 'Serveurs en échec',
+      artworkNoFailures: 'Aucun téléchargement d’illustration n’a échoué dans la dernière heure.',
+      artworkWaiting: 'Serveurs attendus',
+      artworkNoWaiting: 'Aucun serveur n’est attendu.',
+      artworkWaitingUntil: (time: string) => `plus sollicité jusqu’à ${time}`,
+      artworkSparedUntil: (time: string) => `moins sollicité à la fois jusqu’à ${time}`,
+      peopleTitle: 'Personnes',
+      peopleHelp:
+        'Photos et biographies des personnes depuis TMDB. Une personne est cherchée dès que la distribution d’un titre l’affiche sans photo, ou que sa page s’ouvre.',
+      peopleNoKey:
+        'Aucune clé d’API TMDB n’est enregistrée dans Paramètres › Contenu : les personnes n’affichent que ce que donnent les addons.',
+      tmdbKey: 'Clé d’API TMDB',
+      tmdbKeySaved: 'Enregistrée',
+      peopleFound: 'Trouvées sur TMDB',
+      peopleNotFound: 'Introuvables',
+      peopleFailing: 'Recherches en échec',
+      peopleWaiting: 'Recherches en attente',
+      tmdbLimited: 'Dernière limite de TMDB',
+      tmdbNeverLimited: 'Aucune depuis le démarrage du serveur',
+      tmdbLimitedAt: (time: string, wait: string) =>
+        wait ? `${time}, attente demandée de ${wait}` : time,
       backupTitle: 'Sauvegardes',
       backupOff: 'Les sauvegardes sont désactivées. Activez-les dans Paramètres › Sauvegardes.',
       backup: {

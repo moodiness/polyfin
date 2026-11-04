@@ -421,6 +421,38 @@ const system: typeof en = {
       notHeld: 'Agora',
       titlesWaiting: 'Títulos aguardando',
       titlesKept: 'Títulos com avaliações guardadas',
+      artworkTitle: 'Artes',
+      artworkHelp:
+        'Downloads de artes dos servidores de imagens dos complementos que falharam na última hora. Uma imagem que falhou é pedida de novo mais tarde, cada vez mais tarde se continuar falhando; um servidor que pede para esperar não recebe pedidos até lá.',
+      artworkFailed: 'Falhas na última hora',
+      artworkKinds: {
+        not_found: 'Não encontradas',
+        rate_limited: 'Pediram para desacelerar',
+        timeout: 'Tempo esgotado',
+        server_error: 'Erros do servidor',
+        other: 'Outras falhas',
+      } as Record<string, string>,
+      artworkHosts: 'Servidores com falhas',
+      artworkNoFailures: 'Nenhum download de arte falhou na última hora.',
+      artworkWaiting: 'Servidores aguardados',
+      artworkNoWaiting: 'Nenhum servidor é aguardado.',
+      artworkWaitingUntil: (time: string) => `sem pedidos até ${time}`,
+      artworkSparedUntil: (time: string) => `menos pedidos de uma vez até ${time}`,
+      peopleTitle: 'Pessoas',
+      peopleHelp:
+        'Fotos e biografias de pessoas do TMDB. Uma pessoa é consultada assim que o elenco de um título a mostra sem foto, ou sua página é aberta.',
+      peopleNoKey:
+        'Nenhuma chave da API do TMDB está salva em Configurações › Conteúdo: as pessoas mostram só o que os complementos dão.',
+      tmdbKey: 'Chave da API do TMDB',
+      tmdbKeySaved: 'Salva',
+      peopleFound: 'Encontradas no TMDB',
+      peopleNotFound: 'Não encontradas',
+      peopleFailing: 'Consultas com falha',
+      peopleWaiting: 'Consultas aguardando',
+      tmdbLimited: 'Último limite do TMDB',
+      tmdbNeverLimited: 'Nenhum desde que o servidor iniciou',
+      tmdbLimitedAt: (time: string, wait: string) =>
+        wait ? `${time}, pediu para esperar ${wait}` : time,
       backupTitle: 'Backups',
       backupOff: 'Os backups estão desativados. Ative-os em Configurações › Backups.',
       backup: {

@@ -410,6 +410,38 @@ const system = {
       notHeld: 'Now',
       titlesWaiting: 'Titles waiting',
       titlesKept: 'Titles with ratings kept',
+      artworkTitle: 'Artwork',
+      artworkHelp:
+        'Artwork downloads from addons’ image servers that failed in the last hour. A failed image is asked for again later, longer each time it fails; a server that asks to wait is asked nothing until then.',
+      artworkFailed: 'Failed in the last hour',
+      artworkKinds: {
+        not_found: 'Not found',
+        rate_limited: 'Asked to slow down',
+        timeout: 'Timed out',
+        server_error: 'Server errors',
+        other: 'Other failures',
+      } as Record<string, string>,
+      artworkHosts: 'Servers that failed',
+      artworkNoFailures: 'No artwork download failed in the last hour.',
+      artworkWaiting: 'Servers waited for',
+      artworkNoWaiting: 'No server is waited for.',
+      artworkWaitingUntil: (time: string) => `asked nothing until ${time}`,
+      artworkSparedUntil: (time: string) => `asked less at once until ${time}`,
+      peopleTitle: 'People',
+      peopleHelp:
+        'Photos and biographies of people from TMDB. A person is looked up once a title’s cast shows them without a photo, or their page opens.',
+      peopleNoKey:
+        'No TMDB API key is saved under Settings › Content: people show only what the addons give.',
+      tmdbKey: 'TMDB API key',
+      tmdbKeySaved: 'Saved',
+      peopleFound: 'Found on TMDB',
+      peopleNotFound: 'Not found',
+      peopleFailing: 'Lookups failing',
+      peopleWaiting: 'Lookups waiting',
+      tmdbLimited: 'TMDB’s last rate limit',
+      tmdbNeverLimited: 'None since the server started',
+      tmdbLimitedAt: (time: string, wait: string) =>
+        wait ? `${time}, asked to wait ${wait}` : time,
       backupTitle: 'Backups',
       backupOff: 'Backups are off. Turn them on under Settings › Backups.',
       backup: {

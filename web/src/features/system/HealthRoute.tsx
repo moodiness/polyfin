@@ -116,6 +116,8 @@ export default function HealthRoute() {
               <Backups health={health.data} />
               <Thumbnails health={health.data} />
               <Ratings health={health.data} />
+              <Artwork health={health.data} />
+              <People health={health.data} />
               <Process health={health.data} />
               <Secrets health={health.data} />
               <ProxyNames health={health.data} />
@@ -1137,6 +1139,141 @@ function Ratings({ health }: { health: Health }) {
             { label: text.titlesKept, value: number.format(ratings.kept) },
           ]}
         />
+      </Panel>
+    </Anchor>
+  )
+}
+
+/** The kinds of artwork download failures, in the order the server tells them. */
+const artworkKinds = ['not_found', 'rate_limited', 'timeout', 'server_error', 'other'] as const
+
+/**
+ * How artwork downloads fared in the last hour: those that failed, by kind and by server, and the
+ * servers waited for. Only host names are shown, never an address.
+ */
+function Artwork({ health }: { health: Health }) {
+  const { language, t } = useI18n()
+  const text = t.system.health
+  const artwork = health.artwork
+  if (artwork === null) return null
+  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
+  const number = new Intl.NumberFormat(language)
+  const held = [
+    ...artwork.waiting.map((host) => ({
+      ...host,
+      kind: 'waiting',
+      label: text.artworkWaitingUntil,
+    })),
+    ...artwork.spared.map((host) => ({ ...host, kind: 'spared', label: text.artworkSparedUntil })),
+  ]
+  return (
+    <Anchor id="artwork">
+      <Panel title={text.artworkTitle} titleAs="h3" description={text.artworkHelp}>
+        <div className="space-y-5">
+          {artwork.failed === 0 ? (
+            <p className="text-body text-ink">{text.artworkNoFailures}</p>
+          ) : (
+            <>
+              <Facts
+                items={[
+                  { label: text.artworkFailed, value: number.format(artwork.failed) },
+                  ...artworkKinds
+                    .filter((kind) => (artwork.kinds[kind] ?? 0) > 0)
+                    .map((kind) => ({
+                      label: text.artworkKinds[kind] ?? kind,
+                      value: number.format(artwork.kinds[kind] ?? 0),
+                    })),
+                ]}
+              />
+              <div>
+                <h4 className="text-small text-ink-3">{text.artworkHosts}</h4>
+                <ul className="mt-1.5 space-y-1.5">
+                  {artwork.hosts.map((host) => (
+                    <li key={host.host} className="flex flex-wrap justify-between gap-2">
+                      <span className="font-mono text-small text-ink">{host.host}</span>
+                      <span className="text-small text-ink-3 tabular-nums">
+                        {number.format(host.failed)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+          <div>
+            <h4 className="text-small text-ink-3">{text.artworkWaiting}</h4>
+            {held.length === 0 ? (
+              <p className="mt-1 text-body text-ink">{text.artworkNoWaiting}</p>
+            ) : (
+              <ul className="mt-1.5 space-y-1.5">
+                {held.map((host) => (
+                  <li
+                    key={`${host.kind} ${host.host}`}
+                    className="flex flex-wrap justify-between gap-2"
+                  >
+                    <span className="inline-flex items-center gap-1.5 font-mono text-small text-warn">
+                      <WarningIcon size={14} aria-hidden="true" />
+                      {host.host}
+                    </span>
+                    <span className="text-small text-ink-3 tabular-nums">
+                      {host.label(time.format(new Date(host.until)))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </Panel>
+    </Anchor>
+  )
+}
+
+/** How people's lookups on TMDB stand: their photos and biographies, while a TMDB key is saved. */
+function People({ health }: { health: Health }) {
+  const { language, t } = useI18n()
+  const text = t.system.health
+  const people = health.people
+  if (people === null) return null
+  const time = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' })
+  const number = new Intl.NumberFormat(language)
+  return (
+    <Anchor id="people">
+      <Panel title={text.peopleTitle} titleAs="h3" description={text.peopleHelp}>
+        {!people.keySaved ? (
+          <p className="text-small text-ink-2">{text.peopleNoKey}</p>
+        ) : (
+          <Facts
+            items={[
+              {
+                label: text.tmdbKey,
+                value: <StatusPill tone="live">{text.tmdbKeySaved}</StatusPill>,
+              },
+              { label: text.peopleFound, value: number.format(people.found) },
+              { label: text.peopleNotFound, value: number.format(people.notFound) },
+              {
+                label: text.peopleFailing,
+                value:
+                  people.failing > 0 ? (
+                    <StatusPill tone="warn">{number.format(people.failing)}</StatusPill>
+                  ) : (
+                    number.format(0)
+                  ),
+              },
+              { label: text.peopleWaiting, value: number.format(people.waiting) },
+              {
+                label: text.tmdbLimited,
+                value:
+                  people.limitedAt !== null
+                    ? text.tmdbLimitedAt(
+                        time.format(new Date(people.limitedAt)),
+                        people.limitWait > 0 ? formatSpan(people.limitWait, language) : '',
+                      )
+                    : text.tmdbNeverLimited,
+              },
+            ]}
+          />
+        )}
       </Panel>
     </Anchor>
   )

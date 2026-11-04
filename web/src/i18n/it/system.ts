@@ -425,6 +425,38 @@ const system: typeof en = {
       notHeld: 'Ora',
       titlesWaiting: 'Titoli in attesa',
       titlesKept: 'Titoli con voti conservati',
+      artworkTitle: 'Artwork',
+      artworkHelp:
+        'I download di artwork dai server di immagini degli add-on falliti nell’ultima ora. Un’immagine fallita viene richiesta di nuovo più tardi, sempre più tardi se continua a fallire; a un server che chiede di attendere non viene chiesto nulla fino ad allora.',
+      artworkFailed: 'Falliti nell’ultima ora',
+      artworkKinds: {
+        not_found: 'Non trovate',
+        rate_limited: 'Richiesto di rallentare',
+        timeout: 'Tempo scaduto',
+        server_error: 'Errori del server',
+        other: 'Altri errori',
+      } as Record<string, string>,
+      artworkHosts: 'Server con errori',
+      artworkNoFailures: 'Nessun download di artwork è fallito nell’ultima ora.',
+      artworkWaiting: 'Server in attesa',
+      artworkNoWaiting: 'Nessun server è in attesa.',
+      artworkWaitingUntil: (time: string) => `nessuna richiesta fino alle ${time}`,
+      artworkSparedUntil: (time: string) => `meno richieste insieme fino alle ${time}`,
+      peopleTitle: 'Persone',
+      peopleHelp:
+        'Foto e biografie delle persone da TMDB. Una persona viene cercata quando il cast di un titolo la mostra senza foto, o quando si apre la sua pagina.',
+      peopleNoKey:
+        'Nessuna chiave API TMDB è salvata in Impostazioni › Contenuti: le persone mostrano solo ciò che danno gli add-on.',
+      tmdbKey: 'Chiave API TMDB',
+      tmdbKeySaved: 'Salvata',
+      peopleFound: 'Trovate su TMDB',
+      peopleNotFound: 'Non trovate',
+      peopleFailing: 'Ricerche fallite',
+      peopleWaiting: 'Ricerche in attesa',
+      tmdbLimited: 'Ultimo limite di TMDB',
+      tmdbNeverLimited: 'Nessuno dall’avvio del server',
+      tmdbLimitedAt: (time: string, wait: string) =>
+        wait ? `${time}, attesa richiesta di ${wait}` : time,
       backupTitle: 'Backup',
       backupOff: 'I backup sono disattivati. Attivali in Impostazioni › Backup.',
       backup: {

@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/https"
 	"github.com/moodiness/polyfin/internal/jellyfin"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/source"
@@ -88,6 +89,12 @@ type HealthSources struct {
 	// Images keeps the artwork relayed, resized and drawn for apps
 	// (jellyfin.Handler); nil tells nothing.
 	Images ImageCache
+	// Artwork tells how the artwork downloads fared in the last hour
+	// (jellyfin.Handler.ArtworkStatus); nil tells nothing.
+	Artwork func() jellyfin.ArtworkStatus
+	// People tells how people's lookups on TMDB stand
+	// (library.Service.PeopleStatus); nil tells nothing.
+	People func(context.Context) (library.PeopleStatus, error)
 }
 
 // ImageCache keeps the images relayed, resized and drawn for apps, and can
@@ -127,6 +134,92 @@ type healthJSON struct {
 	// Ratings is how the lookups of titles' ratings on MDBList stand,
 	// null while no key is saved.
 	Ratings *ratingsHealthJSON `json:"ratings"`
+	// Artwork is how the artwork downloads fared in the last hour, and
+	// People how people's lookups on TMDB stand, each null when unknown.
+	Artwork *artworkHealthJSON `json:"artwork"`
+	People  *peopleHealthJSON  `json:"people"`
+}
+
+// artworkHealthJSON is how the artwork downloads fared in the last hour:
+// Failed of them failed, by kind ("not_found", "rate_limited", "timeout",
+// "server_error", "other") and by host, most first; Waiting are the hosts
+// that asked to wait, asked nothing until then, and Spared those that
+// showed they were overloaded, asked less at once until then. Only host
+// names are told, never an address.
+type artworkHealthJSON struct {
+	Failed  int               `json:"failed"`
+	Kinds   map[string]int    `json:"kinds"`
+	Hosts   []artworkHostJSON `json:"hosts"`
+	Waiting []artworkWaitJSON `json:"waiting"`
+	Spared  []artworkWaitJSON `json:"spared"`
+}
+
+type artworkHostJSON struct {
+	Host   string `json:"host"`
+	Failed int    `json:"failed"`
+}
+
+type artworkWaitJSON struct {
+	Host  string    `json:"host"`
+	Until time.Time `json:"until"`
+}
+
+// artworkHostsShown bounds the hosts Health tells the failures of.
+const artworkHostsShown = 10
+
+// artworkHealth describes how the artwork downloads fared, nil when
+// unknown.
+func (h *handler) artworkHealth() *artworkHealthJSON {
+	if h.Health.Artwork == nil {
+		return nil
+	}
+	status := h.Health.Artwork()
+	result := &artworkHealthJSON{Failed: status.Failed, Kinds: status.Kinds, Hosts: []artworkHostJSON{},
+		Waiting: []artworkWaitJSON{}, Spared: []artworkWaitJSON{}}
+	for _, host := range status.Hosts[:min(artworkHostsShown, len(status.Hosts))] {
+		result.Hosts = append(result.Hosts, artworkHostJSON{Host: host.Host, Failed: host.Failed})
+	}
+	for _, host := range status.Waiting {
+		result.Waiting = append(result.Waiting, artworkWaitJSON{Host: host.Host, Until: host.Until})
+	}
+	for _, host := range status.Spared {
+		result.Spared = append(result.Spared, artworkWaitJSON{Host: host.Host, Until: host.Until})
+	}
+	return result
+}
+
+// peopleHealthJSON is how people's lookups on TMDB stand: KeySaved while
+// the settings hold a TMDB key; the people TMDB found (Found) and did not
+// (NotFound), those whose last lookup failed (Failing), the lookups
+// waiting or under way (Waiting), and TMDB's last 429 since the start,
+// LimitedAt, null for none, with the seconds its Retry-After asked then,
+// LimitWait, 0 for none.
+type peopleHealthJSON struct {
+	KeySaved  bool       `json:"keySaved"`
+	Found     int        `json:"found"`
+	NotFound  int        `json:"notFound"`
+	Failing   int        `json:"failing"`
+	Waiting   int        `json:"waiting"`
+	LimitedAt *time.Time `json:"limitedAt"`
+	LimitWait int        `json:"limitWait"`
+}
+
+// peopleHealth describes how people's lookups on TMDB stand, nil when
+// unknown or the database cannot tell.
+func (h *handler) peopleHealth(ctx context.Context) *peopleHealthJSON {
+	if h.Health.People == nil {
+		return nil
+	}
+	status, err := h.Health.People(ctx)
+	if err != nil {
+		return nil
+	}
+	result := &peopleHealthJSON{KeySaved: status.Enabled, Found: status.Found, NotFound: status.NotFound, Failing: status.Failing,
+		Waiting: status.Waiting, LimitWait: int(status.LimitWait.Seconds())}
+	if !status.LimitedAt.IsZero() {
+		result.LimitedAt = new(status.LimitedAt.UTC().Truncate(time.Second))
+	}
+	return result
 }
 
 // proxyNameJSON is a host name of Known proxies and the addresses it
@@ -593,6 +686,10 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	}
 	result.Secrets = h.secretsHealth(r.Context())
 	result.Ratings = h.ratingsHealth()
+	result.Artwork = h.artworkHealth()
+	if result.Database.Reachable {
+		result.People = h.peopleHealth(ctx)
+	}
 	if release, ok := h.Health.Updates.Available(); ok {
 		result.Update = &updateJSON{Version: release.Version, URL: release.URL}
 	}

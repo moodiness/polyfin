@@ -423,6 +423,38 @@ const system: typeof en = {
       notHeld: 'Ahora',
       titlesWaiting: 'Títulos en espera',
       titlesKept: 'Títulos con valoraciones conservadas',
+      artworkTitle: 'Ilustraciones',
+      artworkHelp:
+        'Las descargas de ilustraciones desde los servidores de imágenes de las extensiones que fallaron en la última hora. Una imagen fallida se vuelve a pedir más tarde, cada vez más tarde si sigue fallando; a un servidor que pide esperar no se le pide nada hasta entonces.',
+      artworkFailed: 'Fallidas en la última hora',
+      artworkKinds: {
+        not_found: 'No encontradas',
+        rate_limited: 'Pidieron ir más despacio',
+        timeout: 'Tiempo agotado',
+        server_error: 'Errores del servidor',
+        other: 'Otros fallos',
+      } as Record<string, string>,
+      artworkHosts: 'Servidores que fallaron',
+      artworkNoFailures: 'Ninguna descarga de ilustraciones falló en la última hora.',
+      artworkWaiting: 'Servidores en espera',
+      artworkNoWaiting: 'No se espera a ningún servidor.',
+      artworkWaitingUntil: (time: string) => `sin peticiones hasta las ${time}`,
+      artworkSparedUntil: (time: string) => `menos peticiones a la vez hasta las ${time}`,
+      peopleTitle: 'Personas',
+      peopleHelp:
+        'Fotos y biografías de personas desde TMDB. Una persona se busca en cuanto el reparto de un título la muestra sin foto, o se abre su página.',
+      peopleNoKey:
+        'No hay ninguna clave API de TMDB guardada en Ajustes › Contenido: las personas solo muestran lo que dan las extensiones.',
+      tmdbKey: 'Clave API de TMDB',
+      tmdbKeySaved: 'Guardada',
+      peopleFound: 'Encontradas en TMDB',
+      peopleNotFound: 'No encontradas',
+      peopleFailing: 'Búsquedas fallidas',
+      peopleWaiting: 'Búsquedas en espera',
+      tmdbLimited: 'Último límite de TMDB',
+      tmdbNeverLimited: 'Ninguno desde que se inició el servidor',
+      tmdbLimitedAt: (time: string, wait: string) =>
+        wait ? `${time}, pidió esperar ${wait}` : time,
       backupTitle: 'Copias de seguridad',
       backupOff:
         'Las copias de seguridad están desactivadas. Actívelas en Ajustes › Copias de seguridad.',
