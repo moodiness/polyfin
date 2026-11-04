@@ -1059,6 +1059,12 @@ type Proxy struct {
 	udpTargets map[string]bool
 	// refuse are the targets whose next request is refused.
 	refuse map[string]bool
+	// stalled holds the new connections unanswered, and frozen the
+	// relays open too, until opened is closed; held counts the
+	// connections a stall held.
+	stalled, frozen bool
+	opened          chan struct{}
+	held            int
 }
 
 // StartProxy starts a SOCKS5 proxy; udp offers UDP ASSOCIATE, and user,
@@ -1096,6 +1102,73 @@ func (p *Proxy) RefuseFirst(target netip.AddrPort) {
 	p.refuse[target.String()] = true
 }
 
+// Stall has the proxy answer no new connection, as a proxy that no longer
+// answers a dial, until Answer: each is accepted, and held before its
+// greeting is read. The relays already open go on.
+func (p *Proxy) Stall() { p.block(true, false) }
+
+// Freeze is Stall with the relays open carrying nothing either, TCP or
+// UDP, as when the proxy's host sleeps.
+func (p *Proxy) Freeze() { p.block(true, true) }
+
+// Answer ends a stall or a freeze: what was held goes on.
+func (p *Proxy) Answer() { p.block(false, false) }
+
+// Held counts the connections a stall or a freeze held.
+func (p *Proxy) Held() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.held
+}
+
+func (p *Proxy) block(stalled, frozen bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.blockLocked(stalled, frozen)
+}
+
+func (p *Proxy) blockLocked(stalled, frozen bool) {
+	switch {
+	case stalled && !p.stalled:
+		p.opened = make(chan struct{})
+	case !stalled && p.stalled:
+		close(p.opened)
+	}
+	p.stalled, p.frozen = stalled, frozen
+}
+
+// hold waits while the proxy stalls, for a new connection, or while it is
+// frozen, for a relay's bytes.
+func (p *Proxy) hold(relay bool) {
+	p.mu.Lock()
+	held := p.frozen || !relay && p.stalled
+	if held && !relay {
+		p.held++
+	}
+	opened := p.opened
+	p.mu.Unlock()
+	if held {
+		<-opened
+	}
+}
+
+// copy relays src to dst, each read held while the proxy is frozen.
+func (p *Proxy) copy(dst io.Writer, src io.Reader) {
+	buffer := make([]byte, 32<<10)
+	for {
+		n, err := src.Read(buffer)
+		if n > 0 {
+			p.hold(true)
+			if _, err := dst.Write(buffer[:n]); err != nil {
+				return
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
 // Resume starts the proxy again on its address, once stopped.
 func (p *Proxy) Resume(tb testing.TB) {
 	tb.Helper()
@@ -1130,7 +1203,8 @@ func (p *Proxy) Targets() []string {
 	return slices.Clone(p.targets)
 }
 
-// Stop stops the proxy and every connection through it.
+// Stop stops the proxy and every connection through it, a stall or a
+// freeze ended.
 func (p *Proxy) Stop() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -1138,6 +1212,7 @@ func (p *Proxy) Stop() {
 	for _, c := range p.conns {
 		c.Close()
 	}
+	p.blockLocked(false, false)
 }
 
 func (p *Proxy) record(target string) {
@@ -1199,6 +1274,7 @@ func readAddress(r io.Reader) (string, error) {
 
 func (p *Proxy) serve(conn net.Conn) {
 	defer conn.Close()
+	p.hold(false)
 	var greeting [2]byte
 	if _, err := io.ReadFull(conn, greeting[:]); err != nil {
 		return
@@ -1262,10 +1338,10 @@ func (p *Proxy) serve(conn net.Conn) {
 		p.mu.Unlock()
 		_, _ = conn.Write(append([]byte{5, 0, 0}, bound...))
 		go func() {
-			_, _ = io.Copy(upstream, conn)
+			p.copy(upstream, conn)
 			upstream.Close()
 		}()
-		_, _ = io.Copy(conn, upstream)
+		p.copy(conn, upstream)
 	case request[1] == 3 && p.udp:
 		p.mu.Lock()
 		delay := p.udpDelay
@@ -1294,6 +1370,7 @@ func (p *Proxy) relay(relay *net.UDPConn) {
 		if err != nil {
 			return
 		}
+		p.hold(true)
 		if from.Addr().IsLoopback() && (client == from || !client.IsValid()) && n > 3 && buffer[0] == 0 && buffer[1] == 0 &&
 			buffer[2] == 0 && !p.isTarget(from) {
 			r := bytes.NewReader(buffer[3:n])
