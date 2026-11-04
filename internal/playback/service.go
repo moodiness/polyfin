@@ -460,7 +460,8 @@ func (s *Service) torrentWaited(version library.Version, since time.Time) bool {
 // TorrentReceiving reports whether the torrent of a torrent version
 // receives its pieces: a byte of them arrived within a piece's wait, the
 // time a read waits before it is taken as stalled (see
-// torrent.PieceTimeout).
+// torrent.PieceTimeout), or its route, found down within a piece's wait,
+// is still within its grace (see torrent.Engine.Received).
 func (s *Service) TorrentReceiving(version library.Version) bool {
 	if version.Torrent == nil || s.torrents == nil {
 		return false

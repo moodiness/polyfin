@@ -268,3 +268,41 @@ func TestATorrentPlaysOverHLSThroughAProxyStall(t *testing.T) {
 		t.Fatal("the torrent stopped during the stall")
 	}
 }
+
+// A torrent version whose proxy freezes for 40 seconds, longer than a
+// piece's wait, as its first play's analysis reads it, plays once the
+// proxy answers again: the play waits on while the torrent waits for its
+// route within its grace, as it does while pieces come.
+func TestATorrentWhoseProxyFreezesAtItsFirstPlayPlaysOnceItAnswers(t *testing.T) {
+	t.Parallel()
+	ffmpeg, tor := slowTorrent(t)
+	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
+	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
+	// A start of 5 seconds: the play's first wait ends 35 seconds in, and
+	// it waits at most 70 seconds.
+	p := newTorrentPlay(t, filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), 5*time.Second, []*torrenttest.Torrent{tor}, []string{tracker.URL()})
+	picked := p.details(t)
+	// One block of 16 KiB every 100 ms: the head and the index of the file
+	// take several seconds. The proxy freezes as the first block comes.
+	seeder.Delay(100 * time.Millisecond)
+	answered, done := make(chan struct{}), make(chan struct{})
+	t.Cleanup(func() { <-done })
+	go func() {
+		defer close(done)
+		for deadline := time.Now().Add(time.Minute); seeder.Sent() == 0 && time.Now().Before(deadline); {
+			time.Sleep(10 * time.Millisecond)
+		}
+		p.proxy.Freeze()
+		time.Sleep(40 * time.Second)
+		p.proxy.Answer()
+		close(answered)
+	}()
+	if code := p.playHLS(t, picked); code != "" {
+		t.Fatalf("with the proxy frozen during the play's analysis, PlaybackInfo answered %q", code)
+	}
+	select {
+	case <-answered:
+	default:
+		t.Fatal("the play answered before the proxy did: the freeze did not hold its analysis")
+	}
+}

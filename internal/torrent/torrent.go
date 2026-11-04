@@ -119,10 +119,12 @@ type torrent struct {
 	files      []File
 	changed    chan struct{}
 	// flowing is closed, and replaced, as a block of a piece arrives, and
-	// as the route is found down within its grace: the reads waiting for
-	// pieces tell their callers to wait on (see Reader.ReadAtProgress and
-	// guard).
+	// as the route is found down within its grace, at waitedOn: the reads
+	// waiting for pieces tell their callers to wait on (see
+	// Reader.ReadAtProgress and guard), and the torrent counts as
+	// receiving (see Engine.Received).
 	flowing   chan struct{}
+	waitedOn  time.Time
 	err       error
 	upBytes   int64
 	downBytes int64
@@ -390,10 +392,11 @@ func (t *torrent) watch() {
 // failed check and the last byte received: meanwhile the connections open
 // go on through it, new ones are dialed through it alone, failing while
 // it does not answer, and each failed check tells the reads waiting for
-// pieces to wait on, as a block arriving does, so that the source cache
-// does not take them for stalled before the grace is over. Once the route
-// answers again, the peers waiting to be dialed again are dialed at once
-// (see redialNow). A panic stops the torrent too.
+// pieces to wait on, as a block arriving does, so that the source cache,
+// and a play waiting for the torrent, do not take them for stalled before
+// the grace is over. Once the route answers again, the peers waiting to be
+// dialed again are dialed at once (see redialNow). A panic stops the
+// torrent too.
 func (t *torrent) guard() {
 	defer t.recovered("route check", func(err error) {
 		t.engine.failed(err)
@@ -449,6 +452,7 @@ func (t *torrent) guard() {
 		t.mu.Lock()
 		close(t.flowing)
 		t.flowing = make(chan struct{})
+		t.waitedOn = now
 		t.mu.Unlock()
 	}
 }

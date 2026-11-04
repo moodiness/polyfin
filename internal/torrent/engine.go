@@ -826,7 +826,9 @@ func (e *Engine) Running(hash Hash) bool {
 }
 
 // Received returns when the torrent of hash last received a byte of its
-// pieces from a peer, zero when it does not run or received none.
+// pieces from a peer, or last found its route down within its grace,
+// while it waits for its route as it would for bytes on their way (see
+// torrent.guard); zero when it does not run or did neither.
 func (e *Engine) Received(hash Hash) time.Time {
 	e.mu.Lock()
 	t := e.torrents[hash]
@@ -836,7 +838,7 @@ func (e *Engine) Received(hash Hash) time.Time {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	var last time.Time
+	last := t.waitedOn
 	for _, p := range t.peers {
 		if p.heard.After(last) {
 			last = p.heard
