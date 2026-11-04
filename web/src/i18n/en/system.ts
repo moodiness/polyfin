@@ -436,6 +436,8 @@ const system = {
         'People’s photos and biographies',
         'Each title’s cast and crew from TMDB, in billing order, with photos',
         'Person pages listing every library title they are credited in',
+        'The titles TMDB knows each person best for, on their page, beyond the libraries',
+        'Posters for movies and series whose addon gives none',
         'Box sets in Silo’s apps',
         'TMDB images in Edit images',
       ],

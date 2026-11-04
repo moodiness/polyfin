@@ -451,6 +451,8 @@ const system: typeof en = {
         'Foto e biografie delle persone',
         'Cast e troupe di ogni titolo da TMDB, nell’ordine dei titoli di coda, con foto',
         'Pagine delle persone con ogni titolo delle librerie in cui compaiono',
+        'I titoli per cui TMDB conosce meglio ogni persona, nella sua pagina, oltre le librerie',
+        'Locandine di film e serie il cui add-on non ne fornisce',
         'Cofanetti nelle app di Silo',
         'Immagini di TMDB in «Modifica immagini»',
       ],

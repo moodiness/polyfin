@@ -443,6 +443,8 @@ const system: typeof en = {
         'Les photos et biographies des personnes',
         'La distribution et l’équipe de chaque titre depuis TMDB, dans l’ordre du générique, avec photos',
         'Des pages de personnes listant chaque titre des bibliothèques où elles sont créditées',
+        'Les titres pour lesquels TMDB connaît le mieux chaque personne, sur sa page, au-delà des bibliothèques',
+        'Les affiches des films et séries dont l’addon n’en donne aucune',
         'Les coffrets dans les applications de Silo',
         'Les images de TMDB dans « Modifier les images »',
       ],

@@ -447,6 +447,8 @@ const system: typeof en = {
         'Fotos e biografias das pessoas',
         'Elenco e equipe de cada título do TMDB, na ordem dos créditos, com fotos',
         'Páginas de pessoas com cada título das bibliotecas em que aparecem',
+        'Os títulos pelos quais o TMDB mais conhece cada pessoa, na página dela, além das bibliotecas',
+        'Pôsteres de filmes e séries cujo complemento não fornece nenhum',
         'Coleções nos apps do Silo',
         'Imagens do TMDB no Editar imagens',
       ],
