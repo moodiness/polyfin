@@ -32,6 +32,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -111,6 +112,12 @@ type Client struct {
 	slots                  chan struct{}
 	answers                *cache.Cache[string, answer]
 	flight                 singleflight.Group
+	now                    func() time.Time
+	// limitedAt is when TMDB last refused a request for its rate, and
+	// limitedFor the wait its Retry-After asked then.
+	mu         sync.Mutex
+	limitedAt  time.Time
+	limitedFor time.Duration
 }
 
 // answer is what TMDB answered for a path: its body, or nothing for what
@@ -130,6 +137,7 @@ func New(api, images, version string, settings func() accounts.Settings) *Client
 // newClient is New, keeping answers by the clock now.
 func newClient(api, images, version string, settings func() accounts.Settings, now func() time.Time) *Client {
 	return &Client{
+		now:       now,
 		api:       strings.TrimRight(api, "/"),
 		images:    images,
 		userAgent: "Polyfin/" + version,
@@ -155,6 +163,39 @@ func (c *Client) Hold(ctx context.Context) (func(), error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// LastRateLimit tells when TMDB last refused a request for its rate
+// (HTTP 429) since the start, zero for never, and the wait its
+// Retry-After asked then, 0 when it asked none.
+func (c *Client) LastRateLimit() (time.Time, time.Duration) {
+	if c == nil {
+		return time.Time{}, 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.limitedAt, c.limitedFor
+}
+
+// ForgetPerson forgets the answers kept about the person of TMDB
+// identifier id, 0 for none, and the searches of name, so that they are
+// asked for again, as a refresh of the person asks.
+func (c *Client) ForgetPerson(id int, name string) {
+	if c == nil {
+		return
+	}
+	person := "/person/" + strconv.Itoa(id)
+	search := url.Values{"query": {name}}.Encode()
+	c.answers.DeleteFunc(func(key string, _ answer) bool {
+		path, query, _ := strings.Cut(key, "?")
+		switch {
+		case id > 0 && (path == person || strings.HasPrefix(path, person+"/")):
+			return true
+		case path == "/search/person":
+			return slices.Contains(strings.Split(query, "&"), search)
+		}
+		return false
+	})
 }
 
 // ImageURL is the address of an image on TMDB's image server, at size
@@ -648,6 +689,9 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, into an
 				if seconds, err := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After"))); err == nil && seconds > 0 {
 					limited.RetryAfter = time.Duration(seconds) * time.Second
 				}
+				c.mu.Lock()
+				c.limitedAt, c.limitedFor = c.now(), limited.RetryAfter
+				c.mu.Unlock()
 				return answer{}, limited
 			case status != http.StatusOK:
 				return answer{}, fmt.Errorf("TMDB answered %d", status)
