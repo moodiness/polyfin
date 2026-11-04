@@ -37,8 +37,11 @@ JELLYFIN := github.com/moodiness/polyfin/internal/jellyfin
 test:
 	$(GO) test -race ./...
 
+# Under the race detector this package takes about 9 minutes on CI's
+# runners, near go test's default of 10, so a slower runner timed out with
+# no test failing. Its CI job allows 20 minutes; the run takes 18 of them.
 test-jellyfin:
-	$(GO) test -race $(JELLYFIN)
+	$(GO) test -race -timeout 18m $(JELLYFIN)
 
 test-others:
 	$(GO) test -race $$($(GO) list ./... | grep -vxF $(JELLYFIN))
