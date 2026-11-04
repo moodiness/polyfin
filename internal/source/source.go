@@ -140,12 +140,24 @@ func (e *finalError) Error() string { return e.err.Error() }
 
 func (e *finalError) Unwrap() error { return e.err }
 
+// RouteFailure is the error of a route that carries a source's requests,
+// as the proxy or the tunnel of torrents (see torrent.RouteError): it
+// tells nothing of the source, which was not asked.
+type RouteFailure interface {
+	error
+	RouteFailure()
+}
+
 // Answer describes what a source answered to make a request fail, for
 // logs: its status, the range ignored, an answer cut short, or none. Never
-// the source's URL.
+// the source's URL. A route failure tells the route: the source was not
+// asked.
 func Answer(err error) string {
 	var status *StatusError
+	var route RouteFailure
 	switch {
+	case errors.As(err, &route):
+		return "the route for torrents does not answer"
 	case errors.As(err, &status) && status.Reply != nil:
 		return "HTTP " + strconv.Itoa(status.Status) + ", " + status.Reply.String()
 	case errors.As(err, &status):

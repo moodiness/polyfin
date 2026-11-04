@@ -83,6 +83,10 @@ func (e *RouteError) Unwrap() error {
 	return e.Err
 }
 
+// RouteFailure marks a route's failure for the source cache: the source
+// of a torrent's file was not asked (see source.RouteFailure).
+func (*RouteError) RouteFailure() {}
+
 // Route carries every socket of the torrents, and nothing is sent another
 // way: a socket the route cannot open is not opened.
 type Route interface {

@@ -16,6 +16,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/source"
+	"github.com/moodiness/polyfin/internal/torrent"
 )
 
 // Reading ahead of a play what it reads first.
@@ -255,7 +256,8 @@ func matroskaName(name string) bool {
 
 // watchSource keeps a version as failed once its source fails, until done
 // is closed: the next PlaybackInfo plays another version. A host asking to
-// slow down tells nothing of the file: the version is kept.
+// slow down tells nothing of the file: the version is kept. A torrent's
+// route failing is told as such, without the addon, which was not asked.
 func (s *Service) watchSource(version library.Version, src *source.Source, done <-chan struct{}) {
 	failed := src.Failed()
 	select {
@@ -263,6 +265,10 @@ func (s *Service) watchSource(version library.Version, src *source.Source, done 
 		err := failureOf(src, failed)
 		if errors.Is(err, source.ErrUnavailable) && !errors.Is(err, source.ErrSlowDown) {
 			s.fail(version, err)
+		}
+		if torrent.RouteFailure(err) {
+			s.logger.Info("A version's source failed while it played", "answer", source.Answer(err), "error", err)
+			return
 		}
 		s.logger.Info("A version's source failed while it played", "addon", version.Addon, "answer", source.Answer(err))
 	case <-done:

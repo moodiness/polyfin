@@ -78,3 +78,29 @@ func TestStatusErrorsTellWhatCameWithThem(t *testing.T) {
 		t.Errorf("an answer whose headers tell nothing: %v", bare)
 	}
 }
+
+// routeDown fails every request as the route of torrents does when its
+// proxy does not answer a dial before its deadline.
+type routeDown struct{}
+
+func (routeDown) Error() string { return "the proxy does not answer" }
+
+func (routeDown) Unwrap() error { return context.DeadlineExceeded }
+
+func (routeDown) RouteFailure() {}
+
+func (routeDown) Open(context.Context, string, string, http.Header, bool) (*http.Response, error) {
+	return nil, routeDown{}
+}
+
+// A request failing as its route does not answer tells the route, not a
+// source that gave no answer in time: the source was not asked.
+func TestARouteFailureTellsTheRoute(t *testing.T) {
+	t.Parallel()
+	s := newCache(t, 1<<30).Open(accounts.ID{2}, Location{URL: "https://93.184.216.34/movie.mkv", Opener: routeDown{}}, nil)
+	defer s.Release()
+	_, err := s.ReadAt(t.Context(), make([]byte, 10), 0)
+	if !errors.Is(err, ErrUnavailable) || Answer(err) != "the route for torrents does not answer" {
+		t.Fatalf("%v (%q)", err, Answer(err))
+	}
+}
