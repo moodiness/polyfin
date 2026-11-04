@@ -391,8 +391,9 @@ func (t *torrent) watch() {
 // go on through it, new ones are dialed through it alone, failing while
 // it does not answer, and each failed check tells the reads waiting for
 // pieces to wait on, as a block arriving does, so that the source cache
-// does not take them for stalled before the grace is over. A panic stops
-// the torrent too.
+// does not take them for stalled before the grace is over. Once the route
+// answers again, the peers waiting to be dialed again are dialed at once
+// (see redialNow). A panic stops the torrent too.
 func (t *torrent) guard() {
 	defer t.recovered("route check", func(err error) {
 		t.engine.failed(err)
@@ -428,6 +429,7 @@ func (t *torrent) guard() {
 			if !downSince.IsZero() {
 				downSince = time.Time{}
 				t.engine.routeUp(t)
+				t.redialNow()
 			}
 			continue
 		}
@@ -577,6 +579,28 @@ func (t *torrent) redial(address netip.AddrPort, last outcome, fails int) {
 	t.signal()
 }
 
+// redialNow has the peers waiting to be dialed again dialed at once, but
+// those given up for their silence, as the route answers again after an
+// outage: their dials, and connections, failed for the route rather than
+// for them, and they may take a connection now. The dials go through the
+// route, as every other.
+func (t *torrent) redialNow() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	now := time.Now()
+	waiting := false
+	for _, address := range t.redials {
+		if c := t.known[address]; c.fails < givenUpFails && c.retryAt.After(now) {
+			c.retryAt, waiting = now, true
+			t.known[address] = c
+		}
+	}
+	if waiting {
+		t.nextRedial = now
+		t.signal()
+	}
+}
+
 // dial connects to a peer, and reads it until the connection ends. A peer
 // that sent nothing for the engine's idleTimeout is given up.
 func (t *torrent) dial(address netip.AddrPort) {
@@ -623,7 +647,15 @@ func (t *torrent) join(address netip.AddrPort) *peer {
 			conn.Close()
 		}
 		if err != nil {
-			t.redial(address, outcomeOf(err), t.known[address].fails+1)
+			// A dial the route did not carry tells nothing of the peer:
+			// it does not count among its failures, and the peer is
+			// dialed at once when the route answers again (see
+			// redialNow).
+			fails := t.known[address].fails
+			if !RouteFailure(err) {
+				fails++
+			}
+			t.redial(address, outcomeOf(err), fails)
 		}
 		return nil
 	}

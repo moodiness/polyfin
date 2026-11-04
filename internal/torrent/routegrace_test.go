@@ -232,3 +232,39 @@ func TestATorrentStoppedForItsRouteKeepsItsPieces(t *testing.T) {
 		t.Fatalf("the seeder sent %d bytes again", again)
 	}
 }
+
+// A proxy that restarts closes the connection to the seeder, whose dials
+// then fail until it answers again: they failed for the route, not for
+// the peer, so they pile up no wait, and once the route answers again the
+// torrent dials the seeder at once, through the route.
+func TestATorrentDialsItsPeersAgainAsItsRouteAnswers(t *testing.T) {
+	t.Parallel()
+	_, seeder, spec := graceSwarm(t)
+	proxy := torrenttest.StartProxy(t, false, "", "")
+	e := graceEngine(t, proxy, RouteGrace, 64<<20)
+	// A peer whose dial or connection failed waits 2 seconds, then twice
+	// as long for each failure in a row.
+	e.redialWait = 2 * time.Second
+	defer e.Play(spec)()
+	readAll(t, e, spec)
+
+	proxy.Stop()
+	waitFor(t, "the seeder's connection to close", func() bool { return seeder.Open() == 0 })
+	// Down for 15 seconds: counted as the seeder's, its dials failing at
+	// 2, 6 and 14 seconds would have the next one wait until 30.
+	time.Sleep(15 * time.Second)
+	proxy.Resume(t)
+	answered := time.Now()
+	for seeder.Open() == 0 {
+		if time.Since(answered) > 6*time.Second {
+			t.Fatal("the seeder was not dialed again within 6 seconds of the proxy answering")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !e.Running(spec.Hash) {
+		t.Fatal("the torrent stopped")
+	}
+	if got, relayed := len(seeder.Remotes()), countPrefix(proxy.Targets(), "tcp "+seeder.Address().String()); got != relayed {
+		t.Fatalf("the seeder saw %d connections, the proxy relayed %d", got, relayed)
+	}
+}
