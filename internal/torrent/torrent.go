@@ -1282,7 +1282,10 @@ func (f File) pieces(length int64) (first, last int) {
 }
 
 // window is how many pieces past a read are fetched: readWindow, within
-// room in the store for the pieces read now. The lock is held.
+// room in the store for the pieces read now. A read asks for them again
+// each time it moves past the back half of the window last asked (see
+// Reader.ReadAtProgress), so the window rolls ahead of it, never past
+// its bound. The lock is held.
 func (t *torrent) window() int {
 	length := t.info.PieceLength
 	return int(max(1, min(max(4, readWindow/length), t.engine.store.budget()/length/2)))
@@ -1645,12 +1648,16 @@ func (t *torrent) receivedMetadata(index int64, data []byte) {
 // Reader reads a file of a torrent being played, as a source of the
 // source cache: each read asks for its pieces first. whole marks a read
 // of a file whole (see Engine.ReadFile), which fetches its pieces alone.
+// ahead is the piece the read-ahead was last asked from, once rolled
+// tells it was; the torrent's lock guards them.
 type Reader struct {
-	t     *torrent
-	file  File
-	ctx   context.Context
-	size  int64
-	whole bool
+	t      *torrent
+	file   File
+	ctx    context.Context
+	size   int64
+	whole  bool
+	ahead  int
+	rolled bool
 }
 
 // Size is the file's size.
@@ -1690,7 +1697,14 @@ func (r *Reader) ReadAtProgress(p []byte, off int64, progress func()) (int, erro
 		chunk := min(end-position, length-within)
 		has := t.have[index]
 		err, changed, flowing := t.err, t.changed, t.flowing
-		if !has {
+		// The read-ahead rolls: a read that misses its piece, or moves
+		// past the back half of the window asked last, or before it, has
+		// the peers asked for the pieces ahead of it now. Otherwise the
+		// next window would be asked only once a read misses its first
+		// piece, and a reader paced by playback would wait for it at each
+		// step of the window, the swarm idle meanwhile.
+		if !has || !r.rolled || index < r.ahead || index-r.ahead >= max(1, t.window()/2) {
+			r.ahead, r.rolled = index, true
 			for _, peer := range t.peers {
 				t.fill(peer)
 			}
