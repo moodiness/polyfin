@@ -67,6 +67,27 @@ const (
 	maxKeptInfo = 64 << 20
 )
 
+// RouteGrace is how long a torrent that plays waits for its route once it
+// stops answering: the torrent stops once the route gave no answer, and
+// its peers no byte, for that long, counted from the later of the route's
+// first failed check and the last byte received (see torrent.guard).
+// Meanwhile it keeps its peers, whose connections go on through the
+// route, and dials new ones through the route alone. maxOutages bounds the
+// outages Status tells.
+const (
+	RouteGrace = 60 * time.Second
+	maxOutages = 8
+)
+
+// Outage is a time the route did not answer while torrents played, which
+// went on through it: from At, for For. Route is the route's String, as
+// Status.Route.
+type Outage struct {
+	Route string
+	At    time.Time
+	For   time.Duration
+}
+
 // keptRun is what a stopped torrent learned, for its next run until
 // until: the peers it connected to, the latest first, its info
 // dictionary, nil when none came, and the DHT nodes nearest it that
@@ -127,8 +148,12 @@ type Engine struct {
 	// checkEvery is how often a running torrent's route is checked.
 	checkEvery time.Duration
 	// tunnelFresh and tunnelWait, when set, replace a WireGuard tunnel's
-	// times (see tunnelFresh).
+	// times (see tunnelFresh), and proxyWait and proxyFresh a SOCKS5
+	// proxy's proxyTimeout and checkedFor.
 	tunnelFresh, tunnelWait time.Duration
+	proxyWait, proxyFresh   time.Duration
+	// routeGrace is RouteGrace, which tests shorten.
+	routeGrace time.Duration
 	// noEndgame turns the endgame off, to measure what it brings.
 	noEndgame bool
 	// dropWait is how long a request a peer skipped waits before it is
@@ -152,12 +177,24 @@ type Engine struct {
 	// routeKey and route are the route of the settings last read.
 	routeKey routeSettings
 	route    Route
-	// failure is why torrents last could not play, and when.
+	// failure is why torrents last could not play, and when; stopped is
+	// why a torrent that played last stopped for its route, its grace
+	// over, and when.
 	failure   error
 	failedAt  time.Time
-	noUDP     bool
-	udpRoute  Route
-	sharedOut atomic.Int64
+	stopped   error
+	stoppedAt time.Time
+	// unanswered are the torrents running whose route does not answer,
+	// since downSince, when the first of them found it so; answered tells
+	// that one of them found it answer again since. outages are the
+	// outages the torrents playing went through, the latest last.
+	unanswered map[*torrent]bool
+	downSince  time.Time
+	answered   bool
+	outages    []Outage
+	noUDP      bool
+	udpRoute   Route
+	sharedOut  atomic.Int64
 	// unstarted is the last torrent that did not start in time, and when;
 	// nil once another started since.
 	unstarted   *StartError
@@ -182,7 +219,7 @@ func New(config Config) (*Engine, error) {
 		return nil, err
 	}
 	e := &Engine{config: config, store: s, torrents: map[Hash]*torrent{}, removed: make(chan struct{}), checkEvery: checkEvery, dropWait: dropWait,
-		idleTimeout: idleTimeout, kept: map[Hash]keptRun{}}
+		idleTimeout: idleTimeout, routeGrace: RouteGrace, kept: map[Hash]keptRun{}, unanswered: map[*torrent]bool{}}
 	e.peerID = newPeerID()
 	mbps := func(n int) int64 { return int64(n) * 1_000_000 / 8 }
 	e.up = newLimiter(func() int64 { return mbps(config.Settings().UploadMbps) }, true)
@@ -221,6 +258,9 @@ func (e *Engine) currentRoute() (Route, error) {
 		if tunnel, ok := route.(*wireGuardRoute); ok && e.tunnelFresh != 0 {
 			tunnel.fresh, tunnel.wait = e.tunnelFresh, e.tunnelWait
 		}
+		if proxy, ok := route.(*proxyRoute); ok && e.proxyWait != 0 {
+			proxy.timeout, proxy.fresh = e.proxyWait, e.proxyFresh
+		}
 		e.route, e.routeKey = route, key
 	}
 	e.mu.Unlock()
@@ -236,6 +276,76 @@ func (e *Engine) failed(err error) {
 	e.failure, e.failedAt = err, time.Now()
 	e.mu.Unlock()
 	e.config.Logger.Warn("A torrent could not play over its route", "error", err)
+}
+
+// routeDown notes that the route of t, which runs, does not answer: the
+// first torrent to find it so starts an outage, logged once.
+func (e *Engine) routeDown(t *torrent, err error) {
+	e.mu.Lock()
+	first := len(e.unanswered) == 0
+	if first {
+		e.downSince, e.answered = time.Now(), false
+	}
+	e.unanswered[t] = true
+	e.mu.Unlock()
+	if first {
+		e.config.Logger.Warn("The route for torrents does not answer: the torrents playing keep their peers meanwhile", "grace", e.routeGrace,
+			"error", err)
+	}
+}
+
+// routeUp notes that the route of t, which found it down, answers again.
+func (e *Engine) routeUp(t *torrent) {
+	e.mu.Lock()
+	e.answered = e.answered || e.unanswered[t]
+	ended, ok := e.leftDownLocked(t)
+	e.mu.Unlock()
+	e.outageEnded(ended, ok)
+}
+
+// leftDownLocked takes t out of the torrents that find their route down,
+// as its route answers again or it stops. Once none is left, the outage
+// ends, and is kept for Status when a torrent went on through it: it is
+// returned then, with true. e.mu is held.
+func (e *Engine) leftDownLocked(t *torrent) (Outage, bool) {
+	if !e.unanswered[t] {
+		return Outage{}, false
+	}
+	delete(e.unanswered, t)
+	if len(e.unanswered) > 0 {
+		return Outage{}, false
+	}
+	outage, answered := Outage{Route: t.route.String(), At: e.downSince, For: time.Since(e.downSince)}, e.answered
+	e.downSince, e.answered = time.Time{}, false
+	if !answered {
+		return Outage{}, false
+	}
+	e.outages = append(e.outages, outage)
+	if len(e.outages) > maxOutages {
+		e.outages = slices.Delete(e.outages, 0, len(e.outages)-maxOutages)
+	}
+	return outage, true
+}
+
+// outageEnded logs an outage the torrents playing went through, once it
+// ended, when ok.
+func (e *Engine) outageEnded(outage Outage, ok bool) {
+	if ok {
+		e.config.Logger.Info("The route for torrents answers again: the torrents playing went on", "down", outage.For.Round(time.Second))
+	}
+}
+
+// routeStopped records that a torrent that played stopped for its route,
+// which gave no answer, and its peers no byte, for the grace, err telling
+// why; it found the route down at since.
+func (e *Engine) routeStopped(err error, since time.Time) {
+	e.mu.Lock()
+	now := time.Now()
+	e.failure, e.failedAt = err, now
+	e.stopped, e.stoppedAt = err, now
+	e.mu.Unlock()
+	e.config.Logger.Warn("A torrent stopped: its route gave no answer, and its peers no byte, for the grace", "grace", e.routeGrace,
+		"down", now.Sub(since).Round(time.Second), "error", err)
 }
 
 // Play joins the torrent of spec, for a playback, until stop is called and
@@ -260,6 +370,12 @@ func (e *Engine) start(spec Spec) *torrent {
 		}
 		return nil
 	}
+	// A torrent that runs is joined before the route is checked: it
+	// watches its route itself, and plays on through an outage (see
+	// torrent.guard).
+	if t := e.join(spec, extra); t != nil {
+		return t
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), proxyTimeout)
 	defer cancel()
 	if err := route.Check(ctx); err != nil {
@@ -267,18 +383,6 @@ func (e *Engine) start(spec Spec) *torrent {
 		return nil
 	}
 	e.mu.Lock()
-	t := e.torrents[spec.Hash]
-	if t != nil {
-		t.mu.Lock()
-		if t.err == nil {
-			t.joined()
-			t.mu.Unlock()
-			e.mu.Unlock()
-			t.merge(spec, extra)
-			return t
-		}
-		t.mu.Unlock()
-	}
 	if e.fullLocked(spec.Hash, limit) {
 		e.mu.Unlock()
 		e.capped(limit)
@@ -286,7 +390,7 @@ func (e *Engine) start(spec Spec) *torrent {
 	}
 	e.mu.Unlock()
 	udp := e.carriesUDP(ctx, route)
-	t = newTorrent(e, spec, route, udp)
+	t := newTorrent(e, spec, route, udp)
 	t.refs = 1
 	e.mu.Lock()
 	if old := e.torrents[spec.Hash]; old != nil && old != t {
@@ -320,6 +424,27 @@ func (e *Engine) start(spec Spec) *torrent {
 		t.seed(kept)
 	}
 	t.start(extra)
+	return t
+}
+
+// join joins the torrent of spec for one playback more, with the trackers
+// and nodes spec adds and extra, when it runs; nil when it does not.
+func (e *Engine) join(spec Spec, extra []string) *torrent {
+	e.mu.Lock()
+	t := e.torrents[spec.Hash]
+	running := false
+	if t != nil {
+		t.mu.Lock()
+		if running = t.err == nil; running {
+			t.joined()
+		}
+		t.mu.Unlock()
+	}
+	e.mu.Unlock()
+	if !running {
+		return nil
+	}
+	t.merge(spec, extra)
 	return t
 }
 
@@ -545,9 +670,12 @@ func (e *Engine) stop(t *torrent) {
 	e.remove(t, errStopped)
 }
 
-// remove stops a torrent, telling its readers why, and removes its pieces.
-// What it learned is kept for its next run (see keepLocked) as it leaves
-// the engine: a run started once Running tells it stopped starts from it.
+// remove stops a torrent, telling its readers why. What it learned is kept
+// for its next run (see keepLocked) as it leaves the engine: a run started
+// once Running tells it stopped starts from it. The pieces of a torrent
+// whose playbacks ended are removed. Those of one stopped while played,
+// as for its route, are kept for keptFor within the budget, and the next
+// run of the torrent reads them (see store.mark).
 func (e *Engine) remove(t *torrent, err error) {
 	e.mu.Lock()
 	if e.torrents[t.hash] == t {
@@ -556,12 +684,19 @@ func (e *Engine) remove(t *torrent, err error) {
 		e.removed = make(chan struct{})
 	}
 	e.keepLocked(t)
+	ended, ok := e.leftDownLocked(t)
 	e.mu.Unlock()
+	e.outageEnded(ended, ok)
 	if e.left != nil {
 		e.left(t.hash)
 	}
 	t.fail(err)
-	e.store.drop(t.hash, t.run)
+	hash, run := t.hash, t.run
+	if err == errStopped {
+		e.store.drop(hash, run)
+		return
+	}
+	time.AfterFunc(keptFor, func() { e.store.drop(hash, run) })
 }
 
 // Open returns a reader of the file of spec, once a playback joined its
@@ -605,13 +740,18 @@ func (e *Engine) ReadFile(ctx context.Context, spec Spec, index int, limit int64
 	return t.readFile(ctx, index, limit)
 }
 
-// playing returns the torrent of hash once its route is checked: a
-// torrent no playback joined is ErrNotPlaying; one whose route fails,
-// why.
+// playing returns the torrent of hash: a torrent no playback joined is
+// ErrNotPlaying. One that runs over the route set is returned at once: it
+// watches its route itself, and plays on through an outage (see
+// torrent.guard). Otherwise the route is checked first, and its failure
+// returned.
 func (e *Engine) playing(ctx context.Context, hash Hash) (*torrent, error) {
 	route, err := e.currentRoute()
 	if err != nil {
 		return nil, err
+	}
+	if t := e.runningOver(hash, route); t != nil {
+		return t, nil
 	}
 	if err := route.Check(ctx); err != nil {
 		return nil, err
@@ -628,6 +768,17 @@ func (e *Engine) playing(ctx context.Context, hash Hash) (*torrent, error) {
 	return t, nil
 }
 
+// runningOver returns the torrent of hash while it runs over route, nil
+// otherwise.
+func (e *Engine) runningOver(hash Hash, route Route) *torrent {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if t := e.torrents[hash]; t != nil && t.route == route {
+		return t
+	}
+	return nil
+}
+
 // StartTimeout is how long a torrent is waited for to start: its peers
 // found and its info dictionary received (see Open).
 func (e *Engine) StartTimeout() time.Duration {
@@ -640,6 +791,20 @@ func (e *Engine) Ready(ctx context.Context) error {
 	route, err := e.currentRoute()
 	if err != nil {
 		return err
+	}
+	return route.Check(ctx)
+}
+
+// ReadyFor is Ready for the torrent of hash: nil at once while it runs
+// over the route set, as it watches its route itself, and plays on
+// through an outage (see torrent.guard).
+func (e *Engine) ReadyFor(ctx context.Context, hash Hash) error {
+	route, err := e.currentRoute()
+	if err != nil {
+		return err
+	}
+	if e.runningOver(hash, route) != nil {
+		return nil
 	}
 	return route.Check(ctx)
 }
@@ -705,6 +870,17 @@ type Status struct {
 	// Failure is why a torrent last could not play, at FailedAt.
 	Failure  error
 	FailedAt time.Time
+	// Stopped is why a torrent that played last stopped for its route, at
+	// StoppedAt: the route gave no answer, and its peers no byte, for
+	// RouteGrace. Failure tells it too, until a later failure.
+	Stopped   error
+	StoppedAt time.Time
+	// RouteDownSince is when the route of the torrents running stopped
+	// answering, zero while it answers: they play on meanwhile, within
+	// RouteGrace. Outages are the times the route did not answer that
+	// torrents went on through, the latest last, maxOutages at most.
+	RouteDownSince time.Time
+	Outages        []Outage
 	// Unstarted is the last torrent that did not start in time, at
 	// UnstartedAt; nil once another started since.
 	Unstarted   *StartError
@@ -742,6 +918,8 @@ func (e *Engine) Status(ctx context.Context) Status {
 	}
 	e.mu.Lock()
 	status.Failure, status.FailedAt = e.failure, e.failedAt
+	status.Stopped, status.StoppedAt = e.stopped, e.stoppedAt
+	status.RouteDownSince, status.Outages = e.downSince, slices.Clone(e.outages)
 	status.Unstarted, status.UnstartedAt = e.unstarted, e.unstartedAt
 	torrents := make([]*torrent, 0, len(e.torrents))
 	for _, t := range e.torrents {

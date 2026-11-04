@@ -161,6 +161,9 @@ func interfaceGoingDown(t *testing.T, ip func(...string), name, host string, tor
 	tracker := torrenttest.HTTPTracker(t, host, seeder.Address())
 	settings := &testSettings{s: Settings{Enabled: true, Interface: name, DownloadMbps: 1}}
 	e := newEngine(t, settings, 64<<20)
+	// The torrent stops once its route gave no answer, and its peer no
+	// byte, for the grace, shortened here.
+	e.routeGrace = time.Second
 	spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
 	if err != nil {
 		t.Fatal(err)

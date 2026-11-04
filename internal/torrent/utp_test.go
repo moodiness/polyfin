@@ -211,8 +211,8 @@ func TestLostUTPPeerIsReplaced(t *testing.T) {
 	}
 }
 
-// With the route down, nothing goes out over uTP either: the torrent stops,
-// and a playback starts nothing.
+// With the route down, nothing goes out over uTP either: the torrent stops
+// once its grace, shortened here, is over, and a playback starts nothing.
 func TestUTPStopsWithTheRoute(t *testing.T) {
 	t.Parallel()
 	for _, route := range []string{"proxy", "wireguard"} {
@@ -235,6 +235,7 @@ func TestUTPStopsWithTheRoute(t *testing.T) {
 			settings.set(func(s *Settings) { s.DownloadMbps = 1 })
 			e := newEngine(t, settings, 64<<20)
 			e.tunnelFresh, e.tunnelWait = 6*time.Second, 5*time.Second
+			e.routeGrace = time.Second
 			tracker := torrenttest.HTTPTracker(t, "127.0.0.1", listed)
 			spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + trackerURL(settings, tracker.URL())})
 			if err != nil {

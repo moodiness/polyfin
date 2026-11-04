@@ -124,8 +124,10 @@ func TestWireGuardKillSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The server goes away during a playback: the torrent stops, and
-	// nothing reaches the swarm another way.
+	// The server goes away during a playback: the torrent stops once it
+	// gave no answer, and the peer no byte, for the grace, shortened here,
+	// and nothing reaches the swarm another way.
+	e.routeGrace = time.Second
 	settings.set(func(s *Settings) { s.DownloadMbps = 1 })
 	stop := e.Play(spec)
 	defer stop()

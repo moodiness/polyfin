@@ -163,6 +163,20 @@ func (s *store) drop(hash Hash, run uint64) {
 	_ = os.Remove(filepath.Join(s.dir, hash.String()))
 }
 
+// mark sets have[i] for each piece of the torrent of hash the store keeps,
+// as a run stopped while played leaves them for the next (see
+// Engine.remove): they were checked against their hashes as they were
+// kept.
+func (s *store) mark(hash Hash, have []bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key := range s.pieces {
+		if key.hash == hash && key.index >= 0 && key.index < len(have) {
+			have[key.index] = true
+		}
+	}
+}
+
 // errClosed reports a piece kept once the engine closed.
 var errClosed = errors.New("the torrent engine closed")
 

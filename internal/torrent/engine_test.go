@@ -312,8 +312,10 @@ func TestKillSwitch(t *testing.T) {
 		}
 	})
 
-	// The proxy drops during a playback: the torrent stops, and nothing is
-	// sent another way.
+	// The proxy drops during a playback: the torrent stops once it gave no
+	// answer, and the peer no byte, for the grace, shortened here, and
+	// nothing is sent another way.
+	e.routeGrace = time.Second
 	settings.set(func(s *Settings) { s.DownloadMbps = 1 })
 	stop := e.Play(spec)
 	defer stop()
@@ -335,7 +337,7 @@ func TestKillSwitch(t *testing.T) {
 		t.Fatal("the torrent opened with the proxy down")
 	}
 	status := e.Status(ctx)
-	if status.RouteError == nil || status.Failure == nil || status.Playing != 0 {
+	if status.RouteError == nil || status.Failure == nil || status.Stopped == nil || status.Playing != 0 {
 		t.Fatalf("Health does not tell the proxy is down: %+v", status)
 	}
 	// The torrent stopped: its peers all came through the proxy.

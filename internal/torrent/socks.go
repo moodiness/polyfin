@@ -62,48 +62,75 @@ const (
 // ASSOCIATE when the proxy offers it. Names are looked up by the proxy.
 // Nothing listens: no peer can connect in.
 func ProxyRoute(address, user, password string) Route {
-	return &proxyRoute{address: address, user: user, password: password}
+	return &proxyRoute{address: address, user: user, password: password, timeout: proxyTimeout, fresh: checkedFor}
 }
 
 type proxyRoute struct {
 	address, user, password string
+	// timeout bounds a handshake, and fresh is how long a check's result
+	// is kept: proxyTimeout and checkedFor, which tests shorten.
+	timeout, fresh time.Duration
 
 	mu        sync.Mutex
 	checkedAt time.Time
 	checkErr  error
+	// checking is closed as the handshake of the check running ends; nil
+	// while none runs.
+	checking chan struct{}
 }
 
 func (r *proxyRoute) String() string { return "SOCKS5 proxy " + r.address }
 
 func (r *proxyRoute) Close() error { return nil }
 
+// Check makes one handshake at a time: a check while one runs waits for
+// its result rather than making another, and the result is kept for
+// r.fresh. A check whose ctx ends first tells the proxy unreachable for
+// that reason, which is not kept: the handshake goes on for the next
+// check, as a WireGuard tunnel's check does.
 func (r *proxyRoute) Check(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return r.unreachable(err)
+	}
 	r.mu.Lock()
-	if !r.checkedAt.IsZero() && time.Since(r.checkedAt) < checkedFor {
+	if !r.checkedAt.IsZero() && time.Since(r.checkedAt) < r.fresh {
 		err := r.checkErr
 		r.mu.Unlock()
 		return err
 	}
+	done := r.checking
+	if done == nil {
+		done = make(chan struct{})
+		r.checking = done
+		go r.check(done)
+	}
 	r.mu.Unlock()
-	conn, err := r.handshake(ctx)
+	select {
+	case <-done:
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return r.checkErr
+	case <-ctx.Done():
+		return r.unreachable(ctx.Err())
+	}
+}
+
+// check makes the handshake of a check, within r.timeout whoever waits
+// for it, keeps its result, and closes done.
+func (r *proxyRoute) check(done chan struct{}) {
+	conn, err := r.handshake(context.Background())
 	if err == nil {
 		conn.Close()
 	}
-	if err != nil && ctx.Err() != nil {
-		// Cut short, as by a torrent stopping, the check tells nothing of
-		// the proxy: its failure is not kept for the next check, as a
-		// WireGuard tunnel's is not.
-		return err
-	}
 	r.mu.Lock()
-	r.checkedAt, r.checkErr = time.Now(), err
+	r.checking, r.checkedAt, r.checkErr = nil, time.Now(), err
 	r.mu.Unlock()
-	return err
+	close(done)
 }
 
 // handshake connects to the proxy and authenticates.
 func (r *proxyRoute) handshake(ctx context.Context) (net.Conn, error) {
-	ctx, cancel := context.WithTimeout(ctx, proxyTimeout)
+	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "tcp", r.address)
@@ -258,7 +285,7 @@ func (r *proxyRoute) Dial(ctx context.Context, address string) (net.Conn, error)
 	}
 	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Now()) })
 	defer stop()
-	_ = conn.SetDeadline(time.Now().Add(proxyTimeout))
+	_ = conn.SetDeadline(time.Now().Add(r.timeout))
 	if _, err := command(conn, socksConnect, address); err != nil {
 		conn.Close()
 		if ctx.Err() != nil {
@@ -293,7 +320,7 @@ func (r *proxyRoute) ListenPacket(ctx context.Context) (PacketConn, error) {
 		r.failed(ctx, err)
 		return nil, err
 	}
-	_ = control.SetDeadline(time.Now().Add(proxyTimeout))
+	_ = control.SetDeadline(time.Now().Add(r.timeout))
 	bound, err := command(control, socksAssociate, "0.0.0.0:0")
 	if err != nil {
 		control.Close()
