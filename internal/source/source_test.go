@@ -388,14 +388,6 @@ func TestALowerLimitEvictsAtTheNextWrite(t *testing.T) {
 	for block := range int64(6) {
 		read(block)
 	}
-	used := func() int64 {
-		cache.mu.Lock()
-		defer cache.mu.Unlock()
-		return cache.used
-	}
-	// A read is answered as soon as its block is stored: the cache counts
-	// the block, and evicts for it, just after.
-	waitFor(t, "the blocks read to be counted", func() bool { return used() >= 6*blockSize })
 	limit.Store(2 * blockSize)
 	if got := cache.Usage().Limit; got != 2*blockSize {
 		t.Errorf("usage tells a limit of %d", got)
@@ -448,39 +440,20 @@ func TestIdleSourcesLeaveWithTheirLastChunk(t *testing.T) {
 	first := cache.Open(accounts.ID{1}, Location{URL: server.URL + "/first"}, nil)
 	readAll(t, first)
 	first.Release()
-	// Counted before the clock moves, the first source's blocks are read
-	// long ago when the second one's are stored.
-	waitCounted(t, cache, accounts.ID{1}, 2*blockSize)
+	// Counted as they were read, before the clock moves, the first
+	// source's blocks are read long ago when the second one's are stored.
 	clock.advance(time.Hour)
 	second := cache.Open(accounts.ID{2}, Location{URL: server.URL + "/second"}, nil)
 	defer second.Release()
+	// The cache evicts for a block as it counts it, before its reader gets
+	// it.
 	readAll(t, second)
-	// The cache evicts for a block as it counts it.
-	waitCounted(t, cache, accounts.ID{2}, 2*blockSize)
 	cache.mu.Lock()
 	_, kept := cache.sources[accounts.ID{1}]
 	cache.mu.Unlock()
 	if _, err := os.Stat(filepath.Join(cache.dir, accounts.ID{1}.String()+".blocks")); kept || !os.IsNotExist(err) {
 		t.Errorf("the idle source is still cached: %v %v", kept, err)
 	}
-}
-
-// waitCounted waits for the cache to count size bytes of the source id. A
-// read is answered as soon as its block is stored: the cache counts the
-// block, and evicts for it, just after.
-func waitCounted(t *testing.T, cache *Cache, id accounts.ID, size int64) {
-	t.Helper()
-	waitFor(t, fmt.Sprintf("%d bytes of source %v to be counted", size, id), func() bool {
-		cache.mu.Lock()
-		defer cache.mu.Unlock()
-		var counted int64
-		for key, use := range cache.chunks {
-			if key.source == id {
-				counted += use.size
-			}
-		}
-		return counted == size
-	})
 }
 
 func TestSourcesAreServedWithRanges(t *testing.T) {

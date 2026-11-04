@@ -268,9 +268,6 @@ func TestPreloadKeepsItsRateAndReserve(t *testing.T) {
 		t.Errorf("again: %d %v", fetched, err)
 	}
 
-	// A block stored is counted just after Warm returns: the counts are
-	// read once they all are.
-	waitFor(t, "the blocks preloaded to be counted", func() bool { return c.Usage().Used == 40*blockSize })
 	// 20 MiB free, 4 MiB to keep: two pieces of 8 MiB fit, a third does
 	// not.
 	other := c.Open(accounts.ID{2}, Location{URL: server.URL + "/other"}, nil)
@@ -281,7 +278,6 @@ func TestPreloadKeepsItsRateAndReserve(t *testing.T) {
 	if !errors.Is(err, ErrPreloadHeld) || fetched != 16<<20 {
 		t.Errorf("with a reserve: fetched %d: %v", fetched, err)
 	}
-	waitFor(t, "the blocks preloaded to be counted", func() bool { return c.Usage().Used-used >= 16<<20 })
 	if cached := c.Usage().Used - used; cached != 16<<20 {
 		t.Errorf("with a reserve: %d bytes cached", cached)
 	}
