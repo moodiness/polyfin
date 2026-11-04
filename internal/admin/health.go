@@ -84,8 +84,9 @@ type HealthSources struct {
 	// nil downloads none.
 	MissingLanguages func(context.Context) []playback.MissingLanguage
 	DownloadLanguage func(ctx context.Context, language string) error
-	// Torrents plays the torrent streams; nil tells nothing.
-	Torrents *torrent.Engine
+	// Torrents plays the torrent streams (torrent.Engine); nil tells
+	// nothing.
+	Torrents Torrents
 	// Images keeps the artwork relayed, resized and drawn for apps
 	// (jellyfin.Handler); nil tells nothing.
 	Images ImageCache
@@ -102,6 +103,15 @@ type HealthSources struct {
 type ImageCache interface {
 	ImageCache() jellyfin.ImageCacheUsage
 	ClearImageCache() jellyfin.ImageCacheUsage
+}
+
+// Torrents is what Health tells of the torrent streams (see
+// torrent.Engine): their route and what runs, the bytes their pieces take,
+// and the bytes shared.
+type Torrents interface {
+	Status(ctx context.Context) torrent.Status
+	Usage() int64
+	Uploaded() int64
 }
 
 type healthJSON struct {
@@ -366,17 +376,40 @@ func (h *handler) clearImageCache(w http.ResponseWriter, r *http.Request) {
 // playing, their peers, those of them reached over uTP, and the bytes
 // shared since the server started. Over a WireGuard tunnel, Addresses are
 // the tunnel's addresses and LastHandshake when its last handshake was,
-// null for none yet.
+// null for none yet. Outages are those of the route the plays went on
+// through lately, oldest first (see recentOutages).
 type torrentHealthJSON struct {
-	Route         string     `json:"route"`
-	Name          string     `json:"name"`
-	Addresses     []string   `json:"addresses,omitempty"`
-	LastHandshake *time.Time `json:"lastHandshake,omitempty"`
-	Playing       int        `json:"playing"`
-	AtOnce        int        `json:"atOnce"`
-	Peers         int        `json:"peers"`
-	UTPPeers      int        `json:"utpPeers"`
-	Uploaded      int64      `json:"uploaded"`
+	Route         string              `json:"route"`
+	Name          string              `json:"name"`
+	Addresses     []string            `json:"addresses,omitempty"`
+	LastHandshake *time.Time          `json:"lastHandshake,omitempty"`
+	Playing       int                 `json:"playing"`
+	AtOnce        int                 `json:"atOnce"`
+	Peers         int                 `json:"peers"`
+	UTPPeers      int                 `json:"utpPeers"`
+	Uploaded      int64               `json:"uploaded"`
+	Outages       []torrentOutageJSON `json:"outages,omitempty"`
+}
+
+// torrentOutageJSON is an outage of the route a play went on through: At,
+// when the route stopped answering, and Seconds, how long until it
+// answered again.
+type torrentOutageJSON struct {
+	At      time.Time `json:"at"`
+	Seconds int       `json:"seconds"`
+}
+
+// recentOutages are the outages of the route set the plays survived that
+// ended within routeStoppedFor of now, oldest first: one of a route set
+// before tells nothing of this one.
+func recentOutages(status torrent.Status, now time.Time) []torrentOutageJSON {
+	var recent []torrentOutageJSON
+	for _, outage := range status.Outages {
+		if outage.Route == status.Route && now.Sub(outage.At.Add(outage.For)) < routeStoppedFor {
+			recent = append(recent, torrentOutageJSON{At: outage.At, Seconds: int(outage.For.Round(time.Second) / time.Second)})
+		}
+	}
+	return recent
 }
 
 // diskJSON is the disk one of the server's folders is on: Folder is
@@ -592,7 +625,7 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 		cancelRoute()
 		if status.Enabled {
 			result.Torrents = &torrentHealthJSON{Playing: status.Playing, AtOnce: status.AtOnce, Peers: status.Peers, UTPPeers: status.UTPPeers,
-				Uploaded: h.Health.Torrents.Uploaded()}
+				Uploaded: h.Health.Torrents.Uploaded(), Outages: recentOutages(status, h.now())}
 			switch settings := h.Accounts.Settings(); {
 			case settings.TorrentInterface != "":
 				result.Torrents.Route, result.Torrents.Name = "interface", settings.TorrentInterface

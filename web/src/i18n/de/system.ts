@@ -151,6 +151,8 @@ const system: typeof en = {
           `Polyfin kann nicht auf UDP-Port ${port} lauschen, daher finden Jellyfin-Apps im lokalen Netzwerk den Server nicht von selbst. Wahrscheinlich nutzt ein anderes Programm den Port, etwa ein Jellyfin-Server auf demselben Host. Beim Speichern der Einstellungen wird es erneut versucht.`,
         torrentRoute: (why: string) =>
           `Torrent-Streams werden nicht abgespielt: ${why}. Es wird nichts auf anderem Weg gesendet; prüfe die Route unter Einstellungen › Torrents.`,
+        torrentRouteRiding: (why: string, seconds: number) =>
+          `${why}. Laufende Torrents spielen bis zu ${seconds} s weiter; neue können nicht starten. Es wird nichts auf anderem Weg gesendet; prüfe die Route unter Einstellungen › Torrents.`,
         torrentWhy: {
           interface_missing: (name: string) => `die Netzwerkschnittstelle ${name} fehlt`,
           interface_down: (name: string) => `die Netzwerkschnittstelle ${name} ist deaktiviert`,
@@ -180,6 +182,23 @@ const system: typeof en = {
           no_trackers:
             'das Add-on hat keinen Tracker genannt, und das DHT hat keinen Peer gefunden',
           silent: 'es wurden Peers gefunden, aber keiner hat ihn gesendet',
+        },
+        torrentStopped: (at: string, why: string) =>
+          `Ein Torrent wurde um ${at} während der Wiedergabe beendet: ${why}. Es wurde nichts auf anderem Weg gesendet. Prüfe, ob die Route erreichbar bleibt; die nächste Wiedergabe startet den Torrent erneut.`,
+        torrentStoppedWhy: {
+          interface_missing: (name: string) => `die Netzwerkschnittstelle ${name} ist verschwunden`,
+          interface_down: (name: string) => `die Netzwerkschnittstelle ${name} wurde deaktiviert`,
+          interface_no_address: (name: string) =>
+            `die Netzwerkschnittstelle ${name} hat ihre Adresse verloren`,
+          proxy_unreachable: (name: string) => `der SOCKS5-Proxy ${name} hat nicht geantwortet`,
+          proxy_refused: (name: string) =>
+            `der SOCKS5-Proxy ${name} hat Benutzer und Passwort abgelehnt`,
+          wireguard_endpoint: (name: string) =>
+            `der WireGuard-Server ${name} konnte nicht aufgelöst werden`,
+          wireguard_down: (name: string) => `der WireGuard-Tunnel zu ${name} wurde beendet`,
+          wireguard_handshake: (name: string) =>
+            `der WireGuard-Server ${name} hat nicht auf den Handshake geantwortet`,
+          route: () => 'seine Route hat nicht geantwortet',
         },
         torrentStartPeers: (found: number, why: string) =>
           `${found} ${found === 1 ? 'Peer' : 'Peers'} gefunden: ${why}`,
@@ -384,6 +403,17 @@ const system: typeof en = {
       torrentPeers: 'Peers',
       torrentUTPPeers: 'Peers über uTP',
       torrentsShared: 'Geteilt seit dem Start',
+      torrentOutageAt: (at: string) => `Ausfall um ${at}`,
+      torrentOutage: {
+        interface: (span: string) =>
+          `die Netzwerkschnittstelle hat ${span} lang nicht geantwortet; die Wiedergabe lief weiter`,
+        proxy: (span: string) =>
+          `der Proxy hat ${span} lang nicht geantwortet; die Wiedergabe lief weiter`,
+        wireguard: (span: string) =>
+          `der WireGuard-Server hat ${span} lang nicht geantwortet; die Wiedergabe lief weiter`,
+        '': (span: string) =>
+          `die Route hat ${span} lang nicht geantwortet; die Wiedergabe lief weiter`,
+      },
       disksTitle: 'Speicherplatz',
       folders: {
         cache: 'Cache',

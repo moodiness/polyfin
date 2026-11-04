@@ -151,6 +151,8 @@ const system: typeof en = {
           `Polyfin ne peut pas écouter sur le port UDP ${port} : les applications Jellyfin du réseau local ne le trouvent donc pas d’elles-mêmes. Un autre programme l’utilise sans doute, comme un serveur Jellyfin sur le même hôte. Enregistrer les paramètres réessaie.`,
         torrentRoute: (why: string) =>
           `Les flux torrent ne sont pas lus : ${why}. Rien n’est envoyé par un autre chemin ; vérifiez la route dans Paramètres › Torrents.`,
+        torrentRouteRiding: (why: string, seconds: number) =>
+          `${why}. Les torrents en lecture continuent jusqu’à ${seconds} s ; les nouveaux ne peuvent pas démarrer. Rien n’est envoyé par un autre chemin ; vérifiez la route dans Paramètres › Torrents.`,
         torrentWhy: {
           interface_missing: (name: string) => `l’interface réseau ${name} est absente`,
           interface_down: (name: string) => `l’interface réseau ${name} est désactivée`,
@@ -177,6 +179,22 @@ const system: typeof en = {
           no_peers: 'ses trackers et le DHT n’ont trouvé aucun pair',
           no_trackers: 'l’addon n’a indiqué aucun tracker, et le DHT n’a trouvé aucun pair',
           silent: 'des pairs ont été trouvés, mais aucun ne l’a envoyé',
+        },
+        torrentStopped: (at: string, why: string) =>
+          `Un torrent s’est arrêté pendant la lecture à ${at} : ${why}. Rien n’a été envoyé par un autre chemin. Vérifiez que la route reste joignable ; la prochaine lecture relance le torrent.`,
+        torrentStoppedWhy: {
+          interface_missing: (name: string) => `l’interface réseau ${name} a disparu`,
+          interface_down: (name: string) => `l’interface réseau ${name} s’est désactivée`,
+          interface_no_address: (name: string) => `l’interface réseau ${name} a perdu son adresse`,
+          proxy_unreachable: (name: string) => `le proxy SOCKS5 ${name} n’a pas répondu`,
+          proxy_refused: (name: string) =>
+            `le proxy SOCKS5 ${name} a refusé l’utilisateur et le mot de passe`,
+          wireguard_endpoint: (name: string) =>
+            `le serveur WireGuard ${name} est devenu introuvable`,
+          wireguard_down: (name: string) => `le tunnel WireGuard vers ${name} s’est arrêté`,
+          wireguard_handshake: (name: string) =>
+            `le serveur WireGuard ${name} n’a pas répondu à la négociation`,
+          route: () => 'sa route n’a pas répondu',
         },
         torrentStartPeers: (found: number, why: string) =>
           `${found} ${found > 1 ? 'pairs trouvés' : 'pair trouvé'} : ${why}`,
@@ -375,6 +393,15 @@ const system: typeof en = {
       torrentPeers: 'Pairs',
       torrentUTPPeers: 'Pairs joints en uTP',
       torrentsShared: 'Partagé depuis le démarrage',
+      torrentOutageAt: (at: string) => `Coupure à ${at}`,
+      torrentOutage: {
+        interface: (span: string) =>
+          `l’interface réseau n’a pas répondu pendant ${span} ; la lecture a continué`,
+        proxy: (span: string) => `le proxy n’a pas répondu pendant ${span} ; la lecture a continué`,
+        wireguard: (span: string) =>
+          `le serveur WireGuard n’a pas répondu pendant ${span} ; la lecture a continué`,
+        '': (span: string) => `la route n’a pas répondu pendant ${span} ; la lecture a continué`,
+      },
       disksTitle: 'Espace disque',
       folders: {
         cache: 'du cache',

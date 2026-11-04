@@ -144,6 +144,8 @@ const system = {
           `Polyfin cannot listen on UDP port ${port}, so Jellyfin apps on the local network do not find it by themselves. Another program probably uses it, such as a Jellyfin server on the same host. Saving the settings tries again.`,
         torrentRoute: (why: string) =>
           `Torrent streams do not play: ${why}. Nothing is sent another way; check the route under Settings › Torrents.`,
+        torrentRouteRiding: (why: string, seconds: number) =>
+          `${why}. The torrents playing go on for up to ${seconds} s; new ones cannot start. Nothing is sent another way; check the route under Settings › Torrents.`,
         torrentWhy: {
           interface_missing: (name: string) => `the network interface ${name} is missing`,
           interface_down: (name: string) => `the network interface ${name} is down`,
@@ -168,6 +170,21 @@ const system = {
           no_peers: 'its trackers and the DHT found no peer',
           no_trackers: 'the addon named no tracker, and the DHT found no peer',
           silent: 'peers were found, but none sent it',
+        },
+        torrentStopped: (at: string, why: string) =>
+          `A torrent stopped while playing at ${at}: ${why}. Nothing was sent another way. Check that the route stays reachable; the next play starts the torrent again.`,
+        torrentStoppedWhy: {
+          interface_missing: (name: string) => `the network interface ${name} went missing`,
+          interface_down: (name: string) => `the network interface ${name} went down`,
+          interface_no_address: (name: string) => `the network interface ${name} lost its address`,
+          proxy_unreachable: (name: string) => `the SOCKS5 proxy ${name} did not answer`,
+          proxy_refused: (name: string) => `the SOCKS5 proxy ${name} refused the user and password`,
+          wireguard_endpoint: (name: string) =>
+            `the WireGuard server ${name} could not be looked up`,
+          wireguard_down: (name: string) => `the WireGuard tunnel to ${name} stopped`,
+          wireguard_handshake: (name: string) =>
+            `the WireGuard server ${name} did not answer the handshake`,
+          route: () => 'its route did not answer',
         },
         torrentStartPeers: (found: number, why: string) =>
           `${found} ${found === 1 ? 'peer' : 'peers'} found: ${why}`,
@@ -368,6 +385,15 @@ const system = {
       torrentPeers: 'Peers',
       torrentUTPPeers: 'Peers over uTP',
       torrentsShared: 'Shared since the start',
+      torrentOutageAt: (at: string) => `Outage at ${at}`,
+      torrentOutage: {
+        interface: (span: string) =>
+          `the network interface did not answer for ${span}; the play went on`,
+        proxy: (span: string) => `the proxy did not answer for ${span}; the play went on`,
+        wireguard: (span: string) =>
+          `the WireGuard server did not answer for ${span}; the play went on`,
+        '': (span: string) => `the route did not answer for ${span}; the play went on`,
+      },
       disksTitle: 'Disk space',
       folders: {
         cache: 'cache',

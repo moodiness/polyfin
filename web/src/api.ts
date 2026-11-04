@@ -4889,7 +4889,9 @@ export type Health = {
    * How torrent streams play, null while they are off: their route ('' for none) and its name,
    * the WireGuard server for a tunnel, the torrents playing, their peers, those of them reached
    * over uTP, and the bytes shared since the server started. Over a tunnel, `addresses` are its
-   * addresses and `lastHandshake` when its last handshake was, absent for none yet.
+   * addresses and `lastHandshake` when its last handshake was, absent for none yet. `outages` are
+   * those of the route the plays went on through in the last 15 minutes, oldest first: when the
+   * route stopped answering, and for how many seconds.
    */
   torrents: {
     route: 'interface' | 'proxy' | 'wireguard' | ''
@@ -4902,6 +4904,7 @@ export type Health = {
     peers: number
     utpPeers: number
     uploaded: number
+    outages?: { at: string; seconds: number }[]
   } | null
   disks: {
     folder: WorkFolderName | 'recordings' | 'backups'
@@ -5076,7 +5079,8 @@ export type HealthProblem = {
   | { code: 'dlna_port'; port: number }
   /**
    * Torrent streams do not play: their route cannot carry them, `failure` tells why, `name` names
-   * the interface or the proxy; or the proxy offers no UDP ASSOCIATE.
+   * the interface or the proxy, and `grace`, while torrents playing ride the outage out, how long
+   * they go on for; or the proxy offers no UDP ASSOCIATE.
    */
   | {
       code: 'torrent_route'
@@ -5092,6 +5096,8 @@ export type HealthProblem = {
         | 'wireguard_handshake'
         | 'no_route'
       name?: string
+      /** While torrents play through the outage, the seconds they go on for, the most. */
+      grace?: number
     }
   | { code: 'torrent_udp'; name: string }
   /**
@@ -5102,6 +5108,26 @@ export type HealthProblem = {
       code: 'torrent_start'
       failure: 'no_udp' | 'refused' | 'no_trackers' | 'no_peers' | 'silent'
       peers?: TorrentPeerCounts
+    }
+  /**
+   * A torrent stopped while it played lately, `at`, as its route did not answer: `failure` tells
+   * why, a route failure's kind, or 'route' for another; `name` names the interface, the proxy or
+   * the WireGuard server.
+   */
+  | {
+      code: 'torrent_stopped'
+      failure:
+        | 'interface_missing'
+        | 'interface_down'
+        | 'interface_no_address'
+        | 'proxy_unreachable'
+        | 'proxy_refused'
+        | 'wireguard_endpoint'
+        | 'wireguard_down'
+        | 'wireguard_handshake'
+        | 'route'
+      name?: string
+      at: string
     }
   | { code: 'proxy_name_unresolved'; name: string }
   | { code: 'secrets_unreadable'; secrets: UnreadableSecret[] }

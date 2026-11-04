@@ -871,7 +871,8 @@ function ImageCache({ health }: { health: Health }) {
 
 /**
  * How torrent streams play: their route, a WireGuard tunnel's addresses and last handshake, the
- * torrents playing, their peers and those reached over uTP, what was shared.
+ * torrents playing, their peers and those reached over uTP, what was shared, and the outages of
+ * the route the plays went on through lately.
  */
 function Torrents({ health }: { health: Health }) {
   const { language, t } = useI18n()
@@ -890,6 +891,14 @@ function Torrents({ health }: { health: Health }) {
           ],
         ]
       : []
+  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short' })
+  const outages = (torrents.outages ?? []).map(
+    (outage) =>
+      [
+        text.torrentOutageAt(time.format(new Date(outage.at))),
+        text.torrentOutage[torrents.route](formatSpan(outage.seconds, language)),
+      ] as const,
+  )
   const rows = [
     [text.torrentRoute[torrents.route], torrents.name],
     ...tunnel,
@@ -902,13 +911,14 @@ function Torrents({ health }: { health: Health }) {
     [text.torrentPeers, String(torrents.peers)],
     [text.torrentUTPPeers, String(torrents.utpPeers)],
     [text.torrentsShared, formatBytes(torrents.uploaded, language)],
+    ...outages,
   ] as const
   return (
     <Anchor id="torrents">
       <Panel title={text.torrentsTitle} titleAs="h3" description={text.torrentsHelp}>
         <ul className="space-y-1.5">
-          {rows.map(([label, value]) => (
-            <li key={label} className="text-small text-ink-3 tabular-nums">
+          {rows.map(([label, value], index) => (
+            <li key={`${index}-${label}`} className="text-small text-ink-3 tabular-nums">
               {label}
               {value !== '' && (
                 <>

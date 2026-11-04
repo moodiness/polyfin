@@ -149,6 +149,8 @@ const system: typeof en = {
           `O Polyfin não consegue escutar na porta UDP ${port}, então os aplicativos Jellyfin na rede local não o encontram sozinhos. Provavelmente outro programa a está usando, como um servidor Jellyfin no mesmo host. Salvar as configurações tenta novamente.`,
         torrentRoute: (why: string) =>
           `As streams de torrent não são reproduzidas: ${why}. Nada é enviado por outro caminho; verifique a rota em Configurações › Torrents.`,
+        torrentRouteRiding: (why: string, seconds: number) =>
+          `${why}. Os torrents em reprodução continuam por até ${seconds} s; os novos não podem começar. Nada é enviado por outro caminho; verifique a rota em Configurações › Torrents.`,
         torrentWhy: {
           interface_missing: (name: string) => `a interface de rede ${name} não existe`,
           interface_down: (name: string) => `a interface de rede ${name} está inativa`,
@@ -176,6 +178,21 @@ const system: typeof en = {
           no_trackers:
             'o complemento não indicou nenhum tracker, e a DHT não encontrou nenhum peer',
           silent: 'foram encontrados peers, mas nenhum o enviou',
+        },
+        torrentStopped: (at: string, why: string) =>
+          `Um torrent parou durante a reprodução às ${at}: ${why}. Nada foi enviado por outro caminho. Verifique se a rota continua acessível; a próxima reprodução inicia o torrent de novo.`,
+        torrentStoppedWhy: {
+          interface_missing: (name: string) => `a interface de rede ${name} desapareceu`,
+          interface_down: (name: string) => `a interface de rede ${name} ficou inativa`,
+          interface_no_address: (name: string) => `a interface de rede ${name} perdeu o endereço`,
+          proxy_unreachable: (name: string) => `o proxy SOCKS5 ${name} não respondeu`,
+          proxy_refused: (name: string) => `o proxy SOCKS5 ${name} recusou o usuário e a senha`,
+          wireguard_endpoint: (name: string) =>
+            `não foi possível encontrar o servidor WireGuard ${name}`,
+          wireguard_down: (name: string) => `o túnel WireGuard para ${name} parou`,
+          wireguard_handshake: (name: string) =>
+            `o servidor WireGuard ${name} não respondeu ao handshake`,
+          route: () => 'a rota não respondeu',
         },
         torrentStartPeers: (found: number, why: string) =>
           `${found} ${found === 1 ? 'peer encontrado' : 'peers encontrados'}: ${why}`,
@@ -379,6 +396,15 @@ const system: typeof en = {
       torrentPeers: 'Pares',
       torrentUTPPeers: 'Pares via uTP',
       torrentsShared: 'Compartilhado desde o início',
+      torrentOutageAt: (at: string) => `Queda às ${at}`,
+      torrentOutage: {
+        interface: (span: string) =>
+          `a interface de rede não respondeu por ${span}; a reprodução continuou`,
+        proxy: (span: string) => `o proxy não respondeu por ${span}; a reprodução continuou`,
+        wireguard: (span: string) =>
+          `o servidor WireGuard não respondeu por ${span}; a reprodução continuou`,
+        '': (span: string) => `a rota não respondeu por ${span}; a reprodução continuou`,
+      },
       disksTitle: 'Espaço em disco',
       folders: {
         cache: 'cache',
