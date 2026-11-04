@@ -447,7 +447,15 @@ const system: typeof en = {
       peopleHelp:
         'Fotos und Biografien von Personen von TMDB. Eine Person wird nachgeschlagen, sobald die Besetzung eines Titels sie ohne Foto zeigt oder ihre Seite geöffnet wird.',
       peopleNoKey:
-        'Unter Einstellungen › Inhalte ist kein TMDB-API-Schlüssel gespeichert: Personen zeigen nur, was die Add-ons liefern.',
+        'Unter Einstellungen › Inhalte ist kein TMDB-API-Schlüssel gespeichert: Personen und Besetzungen zeigen nur, was die Add-ons liefern. Ein Schlüssel eines kostenlosen TMDB-Kontos bringt:',
+      peopleNoKeyBrings: [
+        'Fotos und Biografien von Personen',
+        'Besetzung und Stab jedes Titels von TMDB, in der Reihenfolge des Abspanns, mit Fotos',
+        'Personenseiten mit jedem Bibliothekstitel, in dem sie genannt werden',
+        'Box-Sets in den Apps von Silo',
+        'TMDB-Bilder in „Bilder bearbeiten“',
+      ],
+      peopleNoKeyLink: 'Schlüssel unter Einstellungen › Inhalte hinzufügen',
       tmdbKey: 'TMDB-API-Schlüssel',
       tmdbKeySaved: 'Gespeichert',
       peopleFound: 'Auf TMDB gefunden',

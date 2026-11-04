@@ -30,6 +30,7 @@ import {
   type Sources,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
+import { settingsPath } from '@/app/navigation'
 import {
   Badge,
   Block,
@@ -49,6 +50,7 @@ import {
   StatusPill,
   type StatusTone,
   RelativeTime,
+  TextLink,
   useToast,
 } from '@/ui'
 import { lineupPath } from '@/features/iptv/lineup'
@@ -1241,7 +1243,19 @@ function People({ health }: { health: Health }) {
     <Anchor id="people">
       <Panel title={text.peopleTitle} titleAs="h3" description={text.peopleHelp}>
         {!people.keySaved ? (
-          <p className="text-small text-ink-2">{text.peopleNoKey}</p>
+          <div className="space-y-2 text-small text-ink-2">
+            <p>{text.peopleNoKey}</p>
+            <ul className="list-disc space-y-1 pl-5">
+              {text.peopleNoKeyBrings.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <p>
+              <TextLink to={settingsPath('content', 'tmdb-key')} arrow>
+                {text.peopleNoKeyLink}
+              </TextLink>
+            </p>
+          </div>
         ) : (
           <Facts
             items={[

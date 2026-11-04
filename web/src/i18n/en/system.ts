@@ -431,7 +431,15 @@ const system = {
       peopleHelp:
         'Photos and biographies of people from TMDB. A person is looked up once a title’s cast shows them without a photo, or their page opens.',
       peopleNoKey:
-        'No TMDB API key is saved under Settings › Content: people show only what the addons give.',
+        'No TMDB API key is saved under Settings › Content: people and casts show only what the addons give. A key from a free TMDB account brings:',
+      peopleNoKeyBrings: [
+        'People’s photos and biographies',
+        'Each title’s cast and crew from TMDB, in billing order, with photos',
+        'Person pages listing every library title they are credited in',
+        'Box sets in Silo’s apps',
+        'TMDB images in Edit images',
+      ],
+      peopleNoKeyLink: 'Add the key in Settings › Content',
       tmdbKey: 'TMDB API key',
       tmdbKeySaved: 'Saved',
       peopleFound: 'Found on TMDB',

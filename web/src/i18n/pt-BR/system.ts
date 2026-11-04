@@ -442,7 +442,15 @@ const system: typeof en = {
       peopleHelp:
         'Fotos e biografias de pessoas do TMDB. Uma pessoa é consultada assim que o elenco de um título a mostra sem foto, ou sua página é aberta.',
       peopleNoKey:
-        'Nenhuma chave da API do TMDB está salva em Configurações › Conteúdo: as pessoas mostram só o que os complementos dão.',
+        'Nenhuma chave da API do TMDB está salva em Configurações › Conteúdo: as pessoas e os elencos mostram só o que os complementos dão. Uma chave de uma conta gratuita do TMDB traz:',
+      peopleNoKeyBrings: [
+        'Fotos e biografias das pessoas',
+        'Elenco e equipe de cada título do TMDB, na ordem dos créditos, com fotos',
+        'Páginas de pessoas com cada título das bibliotecas em que aparecem',
+        'Coleções nos apps do Silo',
+        'Imagens do TMDB no Editar imagens',
+      ],
+      peopleNoKeyLink: 'Adicionar a chave em Configurações › Conteúdo',
       tmdbKey: 'Chave da API do TMDB',
       tmdbKeySaved: 'Salva',
       peopleFound: 'Encontradas no TMDB',

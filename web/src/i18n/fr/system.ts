@@ -438,7 +438,15 @@ const system: typeof en = {
       peopleHelp:
         'Photos et biographies des personnes depuis TMDB. Une personne est cherchée dès que la distribution d’un titre l’affiche sans photo, ou que sa page s’ouvre.',
       peopleNoKey:
-        'Aucune clé d’API TMDB n’est enregistrée dans Paramètres › Contenu : les personnes n’affichent que ce que donnent les addons.',
+        'Aucune clé d’API TMDB n’est enregistrée dans Paramètres › Contenu : les personnes et les distributions n’affichent que ce que donnent les addons. Une clé d’un compte TMDB gratuit apporte :',
+      peopleNoKeyBrings: [
+        'Les photos et biographies des personnes',
+        'La distribution et l’équipe de chaque titre depuis TMDB, dans l’ordre du générique, avec photos',
+        'Des pages de personnes listant chaque titre des bibliothèques où elles sont créditées',
+        'Les coffrets dans les applications de Silo',
+        'Les images de TMDB dans « Modifier les images »',
+      ],
+      peopleNoKeyLink: 'Ajouter la clé dans Paramètres › Contenu',
       tmdbKey: 'Clé d’API TMDB',
       tmdbKeySaved: 'Enregistrée',
       peopleFound: 'Trouvées sur TMDB',
