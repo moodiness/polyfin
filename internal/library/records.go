@@ -50,9 +50,12 @@ type record struct {
 	// Person is the name and photo of a person.
 	Person *Person `json:"person,omitempty"`
 	// TMDBID is a person's TMDB identifier as an addon gave it, and TMDB
-	// what TMDB told of them (see persondetails.go).
-	TMDBID string         `json:"tmdbId,omitempty"`
-	TMDB   *personDetails `json:"tmdb,omitempty"`
+	// what TMDB told of them (see persondetails.go). DeadPhotos are the
+	// photos of theirs found dead, by address, each with when (see
+	// PhotoFailed).
+	TMDBID     string               `json:"tmdbId,omitempty"`
+	TMDB       *personDetails       `json:"tmdb,omitempty"`
+	DeadPhotos map[string]time.Time `json:"deadPhotos,omitempty"`
 	// Credits maps the titles a person is credited in, by item identifier,
 	// to their credits there ("Actor", "Director", "Writer").
 	Credits map[string][]string `json:"credits,omitempty"`

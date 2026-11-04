@@ -20,16 +20,21 @@ func PersonID(name string) accounts.ID { return itemID(personKey(name)) }
 
 // mergedPerson is the record a person's upsert stores: the new one, with the
 // credits of both, the stored photo when the new one has none, the TMDB
-// identifier an addon gave before when the new one gives none, and what
-// TMDB told of the person (see persondetails.go), which credits never
-// carry.
+// identifier an addon gave before when the new one gives none, what TMDB
+// told of the person (see persondetails.go), which credits never carry,
+// and the photos found dead (see PhotoFailed) the person still shows: a
+// new photo from the addon is not.
 const mergedPerson = `excluded.data
 	|| jsonb_build_object('credits', COALESCE(items.data->'credits', '{}'::jsonb) || COALESCE(excluded.data->'credits', '{}'::jsonb))
 	|| CASE WHEN excluded.data->'person' ? 'image' OR NOT COALESCE(items.data->'person' ? 'image', false) THEN '{}'::jsonb
 		ELSE jsonb_build_object('person', items.data->'person', 'confined', COALESCE(items.data->'confined', 'false'::jsonb)) END
 	|| CASE WHEN excluded.data ? 'tmdbId' OR NOT items.data ? 'tmdbId' THEN '{}'::jsonb
 		ELSE jsonb_build_object('tmdbId', items.data->'tmdbId') END
-	|| CASE WHEN items.data ? 'tmdb' THEN jsonb_build_object('tmdb', items.data->'tmdb') ELSE '{}'::jsonb END`
+	|| CASE WHEN items.data ? 'tmdb' THEN jsonb_build_object('tmdb', items.data->'tmdb') ELSE '{}'::jsonb END
+	|| COALESCE((SELECT jsonb_build_object('deadPhotos', jsonb_object_agg(dead.key, dead.value))
+		FROM jsonb_each(items.data->'deadPhotos') AS dead
+		WHERE dead.key IN (COALESCE(excluded.data->'person'->>'image', items.data->'person'->>'image'), items.data->'tmdb'->>'photo')
+		HAVING count(*) > 0), '{}'::jsonb)`
 
 // saveCredits records the people a title credits, so that apps can open
 // them by identifier, and so that a person lists the titles Polyfin knows
@@ -396,6 +401,7 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 	}
 	defer rows.Close()
 	var people []Item
+	now := s.now()
 	for rows.Next() {
 		var id accounts.ID
 		var r record
@@ -407,7 +413,7 @@ func (s *Service) People(ctx context.Context, user accounts.User, q PeopleQuery)
 			return nil, 0, err
 		}
 		if r.Person != nil {
-			people = append(people, Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.personPhoto()}})
+			people = append(people, Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.personPhoto(now)}})
 		}
 	}
 	return s.overridden(people), total, rows.Err()

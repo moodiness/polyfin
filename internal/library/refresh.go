@@ -1,8 +1,10 @@
 package library
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -17,9 +19,13 @@ import (
 // then the other addons' are forgotten, to be asked for again. While the
 // addons fail, the title keeps the description it had. The files of local
 // folders matched to the title, or a plain video's, are matched again
-// first. Items that are not titles have nothing to forget, but the
-// server's libraries (see RefreshItem). ErrNotFound is returned for an
-// item the user cannot reach.
+// first. The failed downloads of its artwork and of its people's photos
+// are forgotten, and its people without a working photo are looked up on
+// TMDB again (see refreshPeople). A person is looked up on TMDB again, as
+// Jellyfin's refresh of a person runs its TmdbPersonProvider again. Other
+// items have nothing to forget, but the server's libraries (see
+// RefreshItem). ErrNotFound is returned for an item the user cannot
+// reach.
 func (s *Service) Refresh(ctx context.Context, user accounts.User, id accounts.ID) error {
 	return s.RefreshItem(ctx, user, id, true)
 }
@@ -64,6 +70,9 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 		if title, err = s.load(ctx, r.seriesItemID()); err != nil {
 			return err
 		}
+	}
+	if r.Kind == KindPerson && r.Person != nil {
+		return s.refreshPeople(ctx, user, []record{r}, nil, true)
 	}
 	if title.Meta == nil {
 		return nil
@@ -142,10 +151,122 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 	// An addon that fails leaves the title as it was: that is no failure
 	// of the refresh.
 	described, keptBy, err := s.describeAgain(ctx, v, title)
-	if described {
+	if !described {
+		s.keptBefore(title, keptBy, err)
+		err = nil
+	}
+	if refreshErr := s.refreshArtwork(ctx, user, v, title); err == nil {
+		err = refreshErr
+	}
+	return err
+}
+
+// ArtworkFailures remembers the artwork downloads that failed (the image
+// relay, jellyfin.Handler): ArtworkFailing reports one that failed last,
+// or was found dead, and ForgetArtwork forgets those of urls, each then
+// downloaded at its next request.
+type ArtworkFailures interface {
+	ArtworkFailing(url string) bool
+	ForgetArtwork(urls []string)
+}
+
+// UseArtworkFailures sets what remembers the artwork downloads that
+// failed, which Refresh forgets; it is called before the service is used.
+// Without it, Refresh forgets none.
+func (s *Service) UseArtworkFailures(f ArtworkFailures) { s.artwork = f }
+
+// refreshArtwork forgets the failed downloads of a title's artwork, as its
+// listing and its description give it, and refreshes its people (see
+// refreshPeople): Jellyfin's refresh downloads an item's images again.
+func (s *Service) refreshArtwork(ctx context.Context, user accounts.User, v view, title record) error {
+	urls := metaArtwork(*title.Meta)
+	if full, _, ok := s.describedMeta(ctx, v, title, false, inDatabase); ok {
+		urls = append(urls, metaArtwork(full)...)
+	}
+	var item Item
+	fromMeta(&item, *title.Meta)
+	if poster, ok := PosterAddress(s.settings().PosterTemplate, title.Kind, item.ProviderIDs); ok {
+		urls = append(urls, poster)
+	}
+	people, err := s.loadWhere(ctx, "kind = 'person' AND data->'credits' ? $1", title.ID.String())
+	if err != nil {
 		return err
 	}
-	s.keptBefore(title, keptBy, err)
+	return s.refreshPeople(ctx, user, people, urls, false)
+}
+
+// metaArtwork lists the addresses of the artwork a description gives: the
+// title's and its episodes'.
+func metaArtwork(meta stremio.Meta) []string {
+	urls := []string{meta.Poster, meta.Background, meta.Logo, meta.LandscapePoster}
+	for _, video := range meta.Videos {
+		urls = append(urls, video.Thumbnail)
+	}
+	return urls
+}
+
+// refreshPeople forgets the failed downloads of people's photos, and of
+// the artwork at urls, and the photos found dead (see PhotoFailed): each
+// is downloaded again at its next request. The people without a working
+// photo, or all of them when all is set, are due for a TMDB lookup, which
+// starts now, paced as others are (see lookUp), TMDB's answers kept about
+// them forgotten.
+func (s *Service) refreshPeople(ctx context.Context, user accounts.User, people []record, urls []string, all bool) error {
+	now := s.now()
+	var due, changed []accounts.ID
+	for _, r := range people {
+		if r.Person == nil {
+			continue
+		}
+		urls = append(urls, r.Person.Image)
+		if r.TMDB != nil {
+			urls = append(urls, r.TMDB.Photo)
+		}
+		for photo := range r.DeadPhotos {
+			urls = append(urls, photo)
+		}
+		photo := r.personPhoto(now)
+		working := photo != "" && (s.artwork == nil || !s.artwork.ArtworkFailing(photo))
+		if all || !working {
+			due = append(due, r.ID)
+		}
+		if all || !working || len(r.DeadPhotos) > 0 {
+			changed = append(changed, r.ID)
+		}
+	}
+	// The rows are taken in the order of their keys, as other writers of
+	// several people take them.
+	slices.SortFunc(changed, func(a, b accounts.ID) int { return bytes.Compare(a[:], b[:]) })
+	if len(changed) > 0 {
+		if _, err := s.db.Exec(ctx, `WITH locked AS (SELECT id FROM items WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE)
+			UPDATE items SET data = CASE WHEN items.id = ANY($2::uuid[])
+					THEN jsonb_set(items.data - 'deadPhotos', '{tmdb}', (COALESCE(items.data->'tmdb', '{}'::jsonb) - 'failedAt' - 'failures')
+						|| '{"due": true}'::jsonb)
+					ELSE items.data - 'deadPhotos' END,
+				updated_at = now()
+			FROM locked WHERE items.id = locked.id`, changed, due); err != nil {
+			return err
+		}
+	}
+	if s.artwork != nil {
+		urls = slices.DeleteFunc(urls, func(url string) bool { return url == "" })
+		s.artwork.ForgetArtwork(urls)
+	}
+	if !s.tmdb.Enabled() {
+		return nil
+	}
+	language := peopleLanguage(user, s.settings())
+	for _, r := range people {
+		if !slices.Contains(due, r.ID) {
+			continue
+		}
+		id := 0
+		if r.TMDB != nil {
+			id = r.TMDB.ID
+		}
+		s.tmdb.ForgetPerson(id, r.Person.Name)
+		s.lookUp(r.ID, language)
+	}
 	return nil
 }
 

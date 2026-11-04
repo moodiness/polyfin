@@ -36,9 +36,12 @@ import (
 // the same name.
 //
 // The addon's photo wins over TMDB's, and an image an administrator chose
-// over both (see overridden). Each biography is asked in the language of
-// the user who opens the page, their metadata language else the server's,
-// with TMDB's English one when TMDB has none in it.
+// over both (see overridden). A photo found dead (see PhotoFailed) gives
+// way to the next one for a day, and the person shows none when it was
+// the last, so that apps draw their placeholder. Each biography is asked
+// in the language of the user who opens the page, their metadata language
+// else the server's, with TMDB's English one when TMDB has none in it.
+// Refresh metadata has a person looked up again (see refreshPeople).
 
 const (
 	// personLookupWait bounds how long a person's page waits for their
@@ -63,6 +66,8 @@ const (
 	// englishBiography is the language of the biography shown when TMDB
 	// has none in the user's.
 	englishBiography = "en"
+	// deadPhotoFor is how long a photo found dead is not shown.
+	deadPhotoFor = 24 * time.Hour
 )
 
 // personDetails is what TMDB told of a person, kept on their record: their
@@ -70,7 +75,7 @@ const (
 // photo's address, birth and death dates ("2006-01-02"), place of birth,
 // IMDb identifier, and biographies by the language they were asked in, an
 // empty one when TMDB had none. FailedAt and Failures tell the lookups
-// that failed since.
+// that failed since, and Due a lookup asked for by Refresh metadata.
 type personDetails struct {
 	ID          int               `json:"id,omitempty"`
 	FoundAt     *time.Time        `json:"foundAt,omitempty"`
@@ -82,6 +87,7 @@ type personDetails struct {
 	Biographies map[string]string `json:"biographies,omitempty"`
 	FailedAt    *time.Time        `json:"failedAt,omitempty"`
 	Failures    int               `json:"failures,omitempty"`
+	Due         bool              `json:"due,omitempty"`
 }
 
 // UseTMDB sets what looks people up; it is called before the service is
@@ -94,20 +100,47 @@ func peopleLanguage(user accounts.User, settings accounts.Settings) string {
 	return cmp.Or(user.MetadataLanguage, settings.Language, englishBiography)
 }
 
-// personPhoto is the photo a person shows: the addon's, else TMDB's.
-func (r record) personPhoto() string {
+// personPhoto is the photo a person shows at now: the addon's, else
+// TMDB's, but for those found dead.
+func (r record) personPhoto(now time.Time) string {
 	if r.Person == nil {
 		return ""
 	}
-	if r.Person.Image != "" || r.TMDB == nil {
-		return r.Person.Image
+	photos := []string{r.Person.Image}
+	if r.TMDB != nil {
+		photos = append(photos, r.TMDB.Photo)
 	}
-	return r.TMDB.Photo
+	for _, photo := range photos {
+		if photo != "" && !r.photoDead(photo, now) {
+			return photo
+		}
+	}
+	return ""
 }
 
-// personItem describes a person, with what TMDB told of them in language.
-func personItem(id accounts.ID, r record, language string) Item {
-	item := Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.personPhoto()}}
+// photoDead reports whether a photo of the person was found dead less than
+// deadPhotoFor before now.
+func (r record) photoDead(photo string, now time.Time) bool {
+	at, dead := r.DeadPhotos[photo]
+	return dead && now.Before(at.Add(deadPhotoFor))
+}
+
+// PhotoFailed marks a person's photo dead, as the image relay found it
+// (jellyfin's artworkDead): its server does not have it, or failed it
+// several times running. For deadPhotoFor, the person shows TMDB's in its
+// place, looking it up as for a person without one, else none, unless the
+// addon gives a new one.
+func (s *Service) PhotoFailed(ctx context.Context, id accounts.ID, photo string) error {
+	_, err := s.db.Exec(ctx, `UPDATE items SET data = jsonb_set(data, '{deadPhotos}',
+			COALESCE(data->'deadPhotos', '{}'::jsonb) || jsonb_build_object($2::text, $3::timestamptz)), updated_at = now()
+		WHERE id = $1 AND kind = 'person'`, id, photo, s.now())
+	return err
+}
+
+// personItem describes a person at now, with what TMDB told of them in
+// language.
+func personItem(id accounts.ID, r record, language string, now time.Time) Item {
+	item := Item{ID: id, Kind: KindPerson, Name: r.Person.Name, Images: Images{Primary: r.personPhoto(now)}}
 	d := r.TMDB
 	if d == nil || d.ID == 0 {
 		return item
@@ -152,9 +185,9 @@ func (r record) lookupDue(language string, now time.Time) bool {
 }
 
 // identityDue reports whether a person is to be looked up whatever the
-// language: never looked up, a failed lookup due again, an identifier the
-// addon gives that is not the one found, or someone TMDB did not find a
-// while ago.
+// language: never looked up, a failed lookup due again, a lookup Refresh
+// metadata asked for, an identifier the addon gives that is not the one
+// found, or someone TMDB did not find a while ago.
 func (r record) identityDue(now time.Time) bool {
 	d := r.TMDB
 	switch {
@@ -163,6 +196,8 @@ func (r record) identityDue(now time.Time) bool {
 	case d.FailedAt != nil:
 		wait := personRetry << min(max(d.Failures-1, 0), 8)
 		return !now.Before(d.FailedAt.Add(min(wait, personRetryMost)))
+	case d.Due:
+		return true
 	case d.FoundAt == nil:
 		return true
 	case r.TMDBID != "" && r.TMDBID != strconv.Itoa(d.ID):
@@ -254,20 +289,19 @@ func (s *Service) LookUpPerson(ctx context.Context, user accounts.User, id accou
 }
 
 // CastPhotos returns the people of a title's cast with the photos Polyfin
-// keeps of those the title gives none of: another title's addon gave it,
-// or TMDB. Those who have none and were never looked up are looked up in
-// the background, for the next time the cast shows.
+// keeps of those the title gives none of, or one found dead of (see
+// PhotoFailed): another title's addon gave it, or TMDB. Those left without
+// one, and not looked up yet, are looked up in the background, for the
+// next time the cast shows; those left without any show none.
 func (s *Service) CastPhotos(ctx context.Context, user accounts.User, people []Person) []Person {
-	var missing []accounts.ID
-	for _, p := range people {
-		if p.Image == "" {
-			missing = append(missing, p.ID)
-		}
-	}
-	if len(missing) == 0 {
+	if len(people) == 0 {
 		return people
 	}
-	records, err := s.loadAll(ctx, missing)
+	ids := make([]accounts.ID, len(people))
+	for i, p := range people {
+		ids[i] = p.ID
+	}
+	records, err := s.loadAll(ctx, ids)
 	if err != nil {
 		return people
 	}
@@ -283,10 +317,10 @@ func (s *Service) CastPhotos(ctx context.Context, user accounts.User, people []P
 	people = slices.Clone(people)
 	for i, p := range people {
 		r, ok := byID[p.ID]
-		if p.Image != "" || !ok {
+		if !ok || p.Image != "" && !r.photoDead(p.Image, now) {
 			continue
 		}
-		people[i].Image = r.personPhoto()
+		people[i].Image = r.personPhoto(now)
 		// The photo is what the cast lacks: the biography waits for the
 		// person's page.
 		if people[i].Image == "" && lookups && r.identityDue(now) {
@@ -335,7 +369,7 @@ func (s *Service) lookUpPerson(ctx context.Context, id accounts.ID, language str
 	}
 	switch {
 	case errors.Is(err, tmdb.ErrNotFound):
-		return s.keepPersonDetails(ctx, id, map[string]any{"id": 0, "foundAt": now, "failedAt": nil, "failures": 0,
+		return s.keepPersonDetails(ctx, id, map[string]any{"id": 0, "foundAt": now, "failedAt": nil, "failures": 0, "due": nil,
 			"photo": nil, "birth": nil, "death": nil, "place": nil, "imdb": nil}, nil, 0)
 	case errors.Is(err, tmdb.ErrNoKey):
 		return nil
@@ -349,7 +383,7 @@ func (s *Service) lookUpPerson(ctx context.Context, id accounts.ID, language str
 		}
 		return err
 	}
-	fields := map[string]any{"id": found, "foundAt": now, "failedAt": nil, "failures": 0,
+	fields := map[string]any{"id": found, "foundAt": now, "failedAt": nil, "failures": 0, "due": nil,
 		"photo": nil, "birth": nil, "death": nil, "place": nil, "imdb": nil}
 	if person.ProfilePath != "" {
 		fields["photo"] = s.tmdb.ImageURL(person.ProfilePath, "original")
@@ -545,4 +579,39 @@ func (t personTitle) matches(c tmdb.Credit) bool {
 	}
 	year := c.Year()
 	return t.year == 0 || year == 0 || max(year, t.year)-min(year, t.year) <= 1
+}
+
+// PeopleStatus is how people's lookups on TMDB stand: Enabled while the
+// settings hold a TMDB key; of the people looked up, Found those TMDB
+// found and NotFound those it did not, Failing those whose last lookup
+// failed, and Waiting the lookups waiting or under way. LimitedAt is when
+// TMDB last refused a request for its rate since the start, zero for
+// never, with the wait it asked then, LimitWait.
+type PeopleStatus struct {
+	Enabled   bool
+	Found     int
+	NotFound  int
+	Failing   int
+	Waiting   int
+	LimitedAt time.Time
+	LimitWait time.Duration
+}
+
+// PeopleStatus tells how people's lookups on TMDB stand.
+func (s *Service) PeopleStatus(ctx context.Context) (PeopleStatus, error) {
+	status := PeopleStatus{Enabled: s.tmdb.Enabled()}
+	status.LimitedAt, status.LimitWait = s.tmdb.LastRateLimit()
+	err := s.db.QueryRow(ctx, `SELECT
+			count(*) FILTER (WHERE data->'tmdb' ? 'foundAt' AND COALESCE((data->'tmdb'->>'id')::int, 0) > 0),
+			count(*) FILTER (WHERE data->'tmdb' ? 'foundAt' AND COALESCE((data->'tmdb'->>'id')::int, 0) = 0),
+			count(*) FILTER (WHERE data->'tmdb' ? 'failedAt')
+		FROM items WHERE kind = 'person' AND data ? 'tmdb'`).Scan(&status.Found, &status.NotFound, &status.Failing)
+	if err != nil {
+		return PeopleStatus{}, err
+	}
+	l := &s.personLookups
+	l.mu.Lock()
+	status.Waiting = len(l.running)
+	l.mu.Unlock()
+	return status, nil
 }

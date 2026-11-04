@@ -225,6 +225,9 @@ type Service struct {
 	// looked up (see persondetails.go).
 	tmdb          *tmdb.Client
 	personLookups personLookups
+	// artwork remembers the artwork downloads that failed, which Refresh
+	// forgets (see refreshArtwork).
+	artwork ArtworkFailures
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
@@ -2487,7 +2490,7 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		if _, err := s.credited(ctx, v, r); err != nil {
 			return Item{}, err
 		}
-		return personItem(id, r, v.peopleLanguage), nil
+		return personItem(id, r, v.peopleLanguage, s.now()), nil
 	case KindChannel:
 		return s.channel(ctx, v, r)
 	case KindProgram:
@@ -3052,13 +3055,15 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 // GeneratedImage): only Polyfin's own choice is one, never an artwork URL
 // in the scheme of generated images. Templated tells the poster address
 // template gave URL (see templatePoster), which is not confined then, and
-// Fallback is the addon's poster to download when URL cannot be.
+// Fallback is the addon's poster to download when URL cannot be. Photo
+// tells a person's photo, which PhotoFailed marks dead.
 type Artwork struct {
 	URL       string
 	Confined  bool
 	Generated *GeneratedImage
 	Templated bool
 	Fallback  string
+	Photo     bool
 }
 
 // Artwork returns an item's image: the artwork an administrator uploaded,
@@ -3161,7 +3166,7 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 			confined = series.Confined
 		}
 	case r.Kind == KindPerson && r.Person != nil:
-		images.Primary = r.personPhoto()
+		images.Primary = r.personPhoto(s.now())
 	case r.Kind == KindLibrary:
 		// A library's automatic or generated image, when it was last
 		// looked up.
@@ -3221,7 +3226,7 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 	if url == "" || strings.HasPrefix(url, generatedScheme) {
 		return Artwork{}, ErrNotFound
 	}
-	return Artwork{URL: url, Confined: confined, Templated: templated, Fallback: fallback}, nil
+	return Artwork{URL: url, Confined: confined, Templated: templated, Fallback: fallback, Photo: r.Kind == KindPerson}, nil
 }
 
 // artworkView is the view a title's artwork is found with (see
