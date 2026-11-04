@@ -31,7 +31,8 @@ const (
 	KindSeries     Kind = "series"
 	KindSeason     Kind = "season"
 	KindEpisode    Kind = "episode"
-	// KindPerson is someone credited for titles, known by name.
+	// KindPerson is someone credited for titles, known by their TMDB
+	// identifier, else by name (see PersonID).
 	KindPerson Kind = "person"
 	// KindChannel is a live TV channel, listed by a tv catalog; KindProgram
 	// a programme of its guide.
@@ -311,6 +312,9 @@ func episodeKey(videoID string) string { return "episode|" + videoID }
 
 func personKey(name string) string { return "person|" + strings.ToLower(name) }
 
+// personTMDBKey is the key of the person TMDB identifies as id.
+func personTMDBKey(id string) string { return "persontmdb|" + id }
+
 func channelKey(stremioID string) string { return "channel|" + stremioID }
 
 func programKey(channel, programme string) string { return "program|" + channel + "|" + programme }
@@ -505,10 +509,12 @@ func fromMeta(item *Item, meta stremio.Meta) {
 	item.StremioType, item.StremioID = meta.Type, meta.ID
 }
 
+// people are the people a description credits, by name, with the TMDB
+// identifier the addon gives (see creditedAs).
 func people(meta stremio.Meta) []Person {
 	var result []Person
 	add := func(name, role, kind, image, tmdb string) {
-		result = append(result, Person{ID: itemID(personKey(name)), Name: name, Role: role, Type: kind, Image: image, TMDB: tmdb})
+		result = append(result, Person{ID: PersonID(name), Name: name, Role: role, Type: kind, Image: image, TMDB: tmdb})
 	}
 	if meta.Extras != nil && len(meta.Extras.Cast) > 0 {
 		for _, member := range meta.Extras.Cast {

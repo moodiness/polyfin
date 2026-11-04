@@ -57,8 +57,12 @@ type record struct {
 	TMDB       *personDetails       `json:"tmdb,omitempty"`
 	DeadPhotos map[string]time.Time `json:"deadPhotos,omitempty"`
 	// Credits maps the titles a person is credited in, by item identifier,
-	// to their credits there ("Actor", "Director", "Writer").
+	// to their credits there ("Actor", "Director", "Writer", "Producer").
 	Credits map[string][]string `json:"credits,omitempty"`
+	// SameAs is the identifier of the record a person kept by name
+	// became, once they were known by their TMDB identifier (see
+	// people.go and sameAs): the name's record then only points to it.
+	SameAs string `json:"sameAs,omitempty"`
 	// Confined is true when the addon may only reach public addresses, which
 	// also applies to its artwork.
 	Confined bool `json:"confined,omitempty"`

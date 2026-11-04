@@ -57,7 +57,9 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 		}
 		return err
 	}
-	r, err := s.load(ctx, id)
+	// A person's name, once they are known by their TMDB identifier,
+	// refreshes the person it became (see people.go).
+	r, err := s.person(ctx, id)
 	if errors.Is(err, ErrNotFound) {
 		// An item Polyfin does not record, such as a smart list.
 		return nil
@@ -143,6 +145,13 @@ func (s *Service) RefreshItem(ctx context.Context, user accounts.User, id accoun
 	}
 	if t, ok := ratingsTitle(Item{Kind: title.Kind, ProviderIDs: providerIDs(*title.Meta)}); ok {
 		if err := s.ratings.Forget(ctx, t); err != nil {
+			return err
+		}
+	}
+	// So are its TMDB credits, which make its people (see
+	// titlecredits.go).
+	if r.Kind == KindMovie || r.Kind == KindSeries {
+		if err := s.refreshTitleCredits(ctx, title); err != nil {
 			return err
 		}
 	}

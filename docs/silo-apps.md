@@ -123,7 +123,7 @@ Addons do not tell which collection a movie is in, so Polyfin asks TMDB, in the 
 - **Ahead:** a minute after Polyfin starts, or after the key is saved, then each day, it lists the first 2,000 movies of each of the server's libraries of movies, as its addons list them, and looks up those it does not know. A first pass takes about five minutes per 1,000 movies, a lookup taking a quarter of a second at least; the daily passes ask only for the answers grown old.
 - **First:** the movies a movie's page or a search reads are asked ahead of the pass. A movie's page waits up to a second for its own movie, so that its first visit shows its box set once the other movies are known.
 
-Each movie is looked up by its TMDB identifier, else its IMDb one, at most four movies a second, and the lookups pause as long as TMDB asks when it says to slow down. The answers are kept for every user, and asked again after three months, or a month for a movie TMDB did not know.
+Each movie is looked up by its TMDB identifier, else its IMDb one, at most four movies a second, a pace box sets share with titles' credits (see [Cast and crew from TMDB](addons-and-libraries.md#cast-and-crew-from-tmdb)), and the lookups pause as long as TMDB asks when it says to slow down. The answers are kept for every user, and asked again after three months, or a month for a movie TMDB did not know.
 
 - A library's box sets are those of its first 2,000 movies, as many as a catalog lists by default.
 - Each user sees and counts only the movies they may see: parental control, blocked genres and the titles they hid leave movies out, as everywhere. A box set left with one movie for them is none.

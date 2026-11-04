@@ -94,6 +94,16 @@ type personDetails struct {
 // used. Without it, or without a key, people show what the addons give.
 func (s *Service) UseTMDB(c *tmdb.Client) { s.tmdb = c }
 
+// person loads the record of a person: the one a name's record points to
+// once the person is known by their TMDB identifier (see people.go).
+func (s *Service) person(ctx context.Context, id accounts.ID) (record, error) {
+	r, err := s.load(ctx, id)
+	if same, ok := r.sameAs(); err == nil && r.Kind == KindPerson && ok {
+		return s.load(ctx, same)
+	}
+	return r, err
+}
+
 // peopleLanguage is the language a user is told people's biographies in:
 // their metadata language, else the server's.
 func peopleLanguage(user accounts.User, settings accounts.Settings) string {
@@ -268,12 +278,12 @@ func (s *Service) LookUpPerson(ctx context.Context, user accounts.User, id accou
 	if !s.tmdb.Enabled() {
 		return false
 	}
-	r, err := s.load(ctx, id)
+	r, err := s.person(ctx, id)
 	language := peopleLanguage(user, s.settings())
 	if err != nil || r.Kind != KindPerson || r.Person == nil || !r.lookupDue(language, s.now()) {
 		return false
 	}
-	done := s.lookUp(id, language)
+	done := s.lookUp(r.ID, language)
 	if done == nil {
 		return false
 	}

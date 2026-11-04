@@ -371,8 +371,14 @@ func serve(ctx context.Context, restore *pendingRestore) error {
 	lib.UseTMDB(imageSearch)
 	// Silo's apps show the TMDB collections of movies as box sets, learnt
 	// in the background while the settings hold the server's TMDB key.
-	movieCollections := boxset.New(pool, imageSearch, boxset.Options{Catalog: lib, Logger: logger})
+	// What Polyfin learns from TMDB in the background waits its turn in one
+	// queue, at TMDB's pace: box sets, and titles' credits, which make
+	// their people.
+	tmdbLookups := tmdb.NewQueue(imageSearch, tmdb.QueueOptions{Logger: logger})
+	defer tmdbLookups.Close()
+	movieCollections := boxset.New(pool, imageSearch, boxset.Options{Catalog: lib, Queue: tmdbLookups, Logger: logger})
 	defer movieCollections.Close()
+	lib.UseTitleCredits(tmdbLookups)
 	// Local folders match their files through the library's searches of
 	// the metadata addons, and TMDB's when every addon's search fails.
 	folders := localfiles.New(pool, addonStore, lib, logger, store.Settings, box)

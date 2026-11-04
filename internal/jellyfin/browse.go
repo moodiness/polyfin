@@ -778,6 +778,13 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		// a button for: a song never looked up is, for a moment at most.
 		_, _ = h.Lyrics.Lyrics(r.Context(), track, detailsWait)
 	}
+	// A movie's or series' page waits a moment for its credits from TMDB,
+	// which then make its people.
+	if h.Library.AwaitTitleCredits(r.Context(), item) {
+		if again, err := h.Library.Item(r.Context(), user, item.ID); err == nil {
+			item = again
+		}
+	}
 	state, err := h.userState(r.Context(), user, []library.Item{item})
 	if err != nil {
 		h.internalError(w, r, err)

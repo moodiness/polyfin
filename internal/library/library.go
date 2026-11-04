@@ -228,6 +228,9 @@ type Service struct {
 	// artwork remembers the artwork downloads that failed, which Refresh
 	// forgets (see refreshArtwork).
 	artwork ArtworkFailures
+	// lookups queues the lookups of titles' credits on TMDB (see
+	// titlecredits.go); nil makes none.
+	lookups *tmdb.Queue
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
@@ -2454,6 +2457,9 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 				return item, s.saveCredits(ctx, id, item.People, r.Confined)
 			}
 		}
+		// While TMDB credits the title, its people are TMDB's (see
+		// titlecredits.go).
+		item.People = s.titlePeople(ctx, id, kind, item.ProviderIDs, item.People)
 		return item, nil
 	case KindSeason, KindEpisode:
 		series, meta, full, err := s.series(ctx, v, r.seriesItemID())
@@ -2487,10 +2493,16 @@ func (s *Service) described(ctx context.Context, v view, r record) (Item, error)
 		}
 		return Item{}, ErrNotFound
 	case KindPerson:
+		if same, ok := r.sameAs(); ok {
+			var err error
+			if r, err = s.load(ctx, same); err != nil || r.Kind != KindPerson {
+				return Item{}, ErrNotFound
+			}
+		}
 		if _, err := s.credited(ctx, v, r); err != nil {
 			return Item{}, err
 		}
-		return personItem(id, r, v.peopleLanguage, s.now()), nil
+		return personItem(r.ID, r, v.peopleLanguage, s.now()), nil
 	case KindChannel:
 		return s.channel(ctx, v, r)
 	case KindProgram:
