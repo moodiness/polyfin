@@ -124,7 +124,7 @@ func (h *Handler) posterOf(ctx context.Context, id accounts.ID) (warmedPoster, b
 	if !strings.HasPrefix(found.URL, "http://") && !strings.HasPrefix(found.URL, "https://") {
 		return warmedPoster{}, false
 	}
-	return warmedPoster{url: found.URL, confined: found.Confined, iptv: h.iptvHost(ctx, found.URL)}, true
+	return warmedPoster{url: found.URL, confined: found.URLConfined(), iptv: h.iptvHost(ctx, found.URL)}, true
 }
 
 // warmImages warms posters, posterWarmers at once, until the disk has no

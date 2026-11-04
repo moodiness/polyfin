@@ -559,6 +559,44 @@ func TestMergedTitlesKeepTheCatalogThatListedThem(t *testing.T) {
 	}
 }
 
+// The poster address template is the administrator's, which may point to
+// a server of the local network: the poster it gives a title of a user's
+// own addon is told templated, so that it is not confined to public
+// addresses as the addon's artwork is, and the addon's poster, which
+// stands in when the template's cannot be downloaded, stays confined.
+func TestTemplatedPostersAreToldTemplated(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	search := []stremio.Extra{{Name: "search", IsRequired: true}}
+	server := httptest.NewServer(&fakeAddon{manifest: stremio.Manifest{ID: "own", Name: "Own", Version: "1",
+		Resources: []stremio.Resource{{Name: "catalog"}}, Catalogs: []stremio.Catalog{{Type: "movie", ID: "mine", Name: "Mine", Extra: search}}}})
+	t.Cleanup(server.Close)
+	own, err := e.addons.Install(t.Context(), addons.Personal(e.member.ID), server.URL+"/manifest.json", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The member's own addon only reaches public addresses; its page comes
+	// from cache, as from an addon on a public host.
+	mine := stremio.Meta{ID: "tt0895001", Type: "movie", Name: "movie own", Poster: "http://192.168.1.2/poster.jpg"}
+	e.service.searchPages.Put(pageKey{own.ID, "movie", "mine", "", "movie", "", 0}, fetched[[]stremio.Meta]{[]stremio.Meta{mine}, time.Now()})
+	e.setting(func(s *accounts.Settings) { s.PosterTemplate = "http://192.168.1.3/{type}/{imdb_id}.jpg" })
+	found, err := e.service.Search(t.Context(), e.member, "movie", []Kind{KindMovie}, 10)
+	if got := names(found); err != nil || !slices.Equal(got, []string{"movie own"}) {
+		t.Fatalf("search: %v %v", got, err)
+	}
+	art, err := e.service.Artwork(t.Context(), found[0].ID, "Primary")
+	if err != nil || art.URL != "http://192.168.1.3/movie/tt0895001.jpg" || !art.Templated || art.URLConfined() ||
+		!art.Confined || art.Fallback != mine.Poster {
+		t.Errorf("the templated poster: %+v, confined %t, %v", art, art.URLConfined(), err)
+	}
+	// Without the template, the addon's poster is confined.
+	e.setting(func(s *accounts.Settings) { s.PosterTemplate = "" })
+	art, err = e.service.Artwork(t.Context(), found[0].ID, "Primary")
+	if err != nil || art.URL != mine.Poster || art.Templated || !art.URLConfined() {
+		t.Errorf("the addon's poster: %+v, %v", art, err)
+	}
+}
+
 func TestUsersOnlyReachTheirLibraries(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)

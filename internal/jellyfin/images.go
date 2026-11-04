@@ -1085,8 +1085,8 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 	} else {
 		relayed = true
 		// The poster address template is an administrator's: its posters
-		// are not confined as the addons' may be.
-		image, err = h.fetchArtwork(r.Context(), url, found.Confined && !found.Templated, h.iptvHost(r.Context(), url))
+		// are not confined as the addons' may be (see URLConfined).
+		image, err = h.fetchArtwork(r.Context(), url, found.URLConfined(), h.iptvHost(r.Context(), url))
 		// The poster address template's poster that cannot be downloaded
 		// gives way to the addon's, which apps keep for a while only.
 		if err != nil && found.Fallback != "" && r.Context().Err() == nil {

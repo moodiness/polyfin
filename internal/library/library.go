@@ -3062,13 +3062,14 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 }
 
 // Artwork is an item's image as Artwork finds it. URL stands for it (see
-// ImageTag); downloading it is confined to public addresses when Confined.
-// Generated, when set, is the image Polyfin draws for the item (see
-// GeneratedImage): only Polyfin's own choice is one, never an artwork URL
-// in the scheme of generated images. Templated tells the poster address
-// template gave URL (see templatePoster), which is not confined then, and
-// Fallback is the addon's poster to download when URL cannot be. Photo
-// tells a person's photo, which PhotoFailed marks dead.
+// ImageTag); downloading it is confined to public addresses when Confined,
+// unless Templated (see URLConfined). Generated, when set, is the image
+// Polyfin draws for the item (see GeneratedImage): only Polyfin's own
+// choice is one, never an artwork URL in the scheme of generated images.
+// Templated tells the poster address template gave URL (see
+// templatePoster), and Fallback is the addon's poster to download when
+// URL cannot be, confined when Confined. Photo tells a person's photo,
+// which PhotoFailed marks dead.
 type Artwork struct {
 	URL       string
 	Confined  bool
@@ -3077,6 +3078,11 @@ type Artwork struct {
 	Fallback  string
 	Photo     bool
 }
+
+// URLConfined reports whether downloading URL is confined to public
+// addresses: the poster address template is an administrator's, which may
+// point to a server of the local network, so that its posters never are.
+func (a Artwork) URLConfined() bool { return a.Confined && !a.Templated }
 
 // Artwork returns an item's image: the artwork an administrator uploaded,
 // else a local folder's (see Local.Artwork), else the addon's (see
@@ -3150,8 +3156,8 @@ func (s *Service) Artwork(ctx context.Context, id accounts.ID, imageType string)
 		fromMeta(&item, *r.Meta)
 		images = item.Images
 		template := s.settings().PosterTemplate
-		_, templated := PosterAddress(template, r.Kind, item.ProviderIDs)
-		if images.URL(imageType) == "" || template != "" && !templated && strings.EqualFold(imageType, "Primary") {
+		_, templatable := PosterAddress(template, r.Kind, item.ProviderIDs)
+		if images.URL(imageType) == "" || template != "" && !templatable && strings.EqualFold(imageType, "Primary") {
 			// The description may give what the listing lacks: the image,
 			// or the identifier the poster address template names.
 			v, err := s.artworkView(ctx, r)
